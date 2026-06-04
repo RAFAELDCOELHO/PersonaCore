@@ -1,0 +1,22 @@
+# PersonaCore — documented venv dependency list (ENV-02).
+# Kept consistent with pyproject.toml. For the canonical installable package, prefer:
+#   pip install -e ".[cpu,dev]" --extra-index-url https://download.pytorch.org/whl/cpu
+#
+# Core runtime dependency:
+numpy~=2.4
+
+# --- CPU PyTorch (laptop / CI only) ---
+# Uncomment the line below to install a CPU torch wheel locally:
+#   --extra-index-url https://download.pytorch.org/whl/cpu
+#   torch==2.7.*
+#
+# On Kaggle NEVER `pip install torch`: the pre-installed Pascal-compatible wheel
+# (CUDA <=12.6, sm_60 kernels) must stay untouched. A cu128+ wheel would brick the P100.
+
+# --- Dev tooling ---
+# pytest~=9.0
+# ruff~=0.15
+
+# --- Demo (Phase 8) ---
+# gradio>=5,<6
+# matplotlib~=3.10
