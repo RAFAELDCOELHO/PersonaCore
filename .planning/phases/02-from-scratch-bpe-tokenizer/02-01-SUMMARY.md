@@ -156,3 +156,7 @@ None - no external service configuration required. (A local Python 3.11 `.venv` 
 ---
 *Phase: 02-from-scratch-bpe-tokenizer*
 *Completed: 2026-06-04*
+
+## Self-Check: PASSED
+
+All 13 created/modified files exist on disk; all 4 commits (`3f08d1b`, `877db8c`, `7ba75fc`, `7ebcb83`) exist in git history.

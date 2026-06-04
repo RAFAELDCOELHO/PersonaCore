@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-06-04T19:23:07.609Z"
-last_activity: 2026-06-04 -- Phase 02 execution started
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-06-04T19:33:38.003Z"
+last_activity: 2026-06-04
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
   percent: 13
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 ## Current Position
 
 Phase: 02 (from-scratch-bpe-tokenizer) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 02
-Last activity: 2026-06-04 -- Phase 02 execution started
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-04
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [██████████] 100%
 | Phase 01 P01 | 9 | 3 tasks | 8 files |
 | Phase 01 P02 | 14 | 2 tasks | 10 files |
 | Phase 01 P03 | 4 | 2 tasks | 3 files |
+| Phase 02 P01 | 8 | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [01-02]: preflight_p100(require_p100=False) degrades to a CPU summary instead of raising when CUDA is absent (demo runs on a laptop); require_p100=True still fails loud on Kaggle.
 - [Phase ?]: [01-03]: CI pins Python 3.11 (Kaggle parity), never the local 3.14 dev box, so install-parity is validated against the real runtime target.
 - [Phase ?]: [01-03]: ENV-06 docs appended OUTSIDE the GSD marker blocks in CLAUDE.md; CPU-only CI (no GPU/training) is the phase gate re-validating ENV-01/ENV-02.
+- [Phase ?]: [02-01]: vocab_size=8192 + eos_id=8184 locked in ModelConfig (D-01/D-03); Phases 3-4 size around them and they never move.
+- [Phase ?]: [02-01]: regex is a core runtime dep (GPT-2 pre-tok primitive, not a from-scratch violation); tiktoken is [dev]-only with a no-runtime-import guard (T-02-01).
+- [Phase ?]: [02-01]: Wave-0 tokenizer tests written RED first; go green in Plan 02 (train/roundtrip/special) and Plan 03 (io/oracle).
 
 ### Pending Todos
 
@@ -98,6 +102,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T18:44:10.071Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-from-scratch-bpe-tokenizer/02-CONTEXT.md
+Last session: 2026-06-04T19:33:37.998Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None

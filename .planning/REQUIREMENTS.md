@@ -16,11 +16,11 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [x] **ENV-06**: `CLAUDE.md` documents project structure, setup, and the Kaggle/local workflow
 
 ### Tokenizer (from scratch)
-- [ ] **TOK-01**: Byte-level BPE tokenizer implemented from scratch — train merges from a corpus, with deterministic lowest-rank-first merge replay
-- [ ] **TOK-02**: `encode`/`decode` with verified round-trip correctness (decode(encode(x)) == x) over unit tests
-- [ ] **TOK-03**: Atomic special-token handling including a single shared EOS id stored in config
-- [ ] **TOK-04**: Tokenizer is serializable (save/load) and `vocab_size` is locked before model sizing
-- [ ] **TOK-05**: A from-scratch-vs-reference equivalence test (tiktoken/HF as a test-only oracle, never a runtime dependency)
+- [x] **TOK-01**: Byte-level BPE tokenizer implemented from scratch — train merges from a corpus, with deterministic lowest-rank-first merge replay
+- [x] **TOK-02**: `encode`/`decode` with verified round-trip correctness (decode(encode(x)) == x) over unit tests
+- [x] **TOK-03**: Atomic special-token handling including a single shared EOS id stored in config
+- [x] **TOK-04**: Tokenizer is serializable (save/load) and `vocab_size` is locked before model sizing
+- [x] **TOK-05**: A from-scratch-vs-reference equivalence test (tiktoken/HF as a test-only oracle, never a runtime dependency)
 
 ### Model (from scratch)
 - [ ] **MODEL-01**: Bigram language-model baseline from scratch, used to de-risk the training/sampling harness before attention exists
@@ -98,11 +98,11 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | ENV-04 | Phase 1 | Complete |
 | ENV-05 | Phase 1 | Complete |
 | ENV-06 | Phase 1 | Complete |
-| TOK-01 | Phase 2 | Pending |
-| TOK-02 | Phase 2 | Pending |
-| TOK-03 | Phase 2 | Pending |
-| TOK-04 | Phase 2 | Pending |
-| TOK-05 | Phase 2 | Pending |
+| TOK-01 | Phase 2 | Complete |
+| TOK-02 | Phase 2 | Complete |
+| TOK-03 | Phase 2 | Complete |
+| TOK-04 | Phase 2 | Complete |
+| TOK-05 | Phase 2 | Complete |
 | MODEL-01 | Phase 3 | Pending |
 | TRAIN-01 | Phase 3 | Pending |
 | TRAIN-02 | Phase 3 | Pending |
