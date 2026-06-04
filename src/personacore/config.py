@@ -65,11 +65,14 @@ class RuntimeConfig:
 class ModelConfig:
     """Model-sizing hyperparameters.
 
-    ``vocab_size`` is a placeholder default here; Phase 2 (the BPE tokenizer) locks the real
-    value. Do not finalize it in Phase 1.
+    ``vocab_size`` is now LOCKED by Phase 2 (the BPE tokenizer): 8192 is the load-bearing
+    deliverable Phases 3-4 size the model around (D-01) and must never move. ``eos_id`` is the
+    single shared atomic end-of-text id (D-03), top-pinned at 8184 (D-03a); it travels into the
+    checkpoint automatically because ``save_checkpoint`` already ``asdict``s ``model_config``.
     """
 
-    vocab_size: int = 50304  # placeholder — locked by Phase 2.
+    vocab_size: int = 8192  # LOCKED by Phase 2 (was the Phase-1 placeholder).
+    eos_id: int = 8184  # shared atomic EOS id, recorded in checkpoint (D-03); top-pinned (D-03a).
     block_size: int = 256
     n_layer: int = 6
     n_head: int = 6

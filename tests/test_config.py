@@ -43,3 +43,10 @@ def test_configs_are_dataclasses():
     assert hasattr(train, "lr")
     assert hasattr(train, "grad_accum_steps")
     assert hasattr(train, "seed")
+
+
+def test_vocab_size_and_eos_locked():
+    # Phase 2 locks the load-bearing deliverable: vocab_size=8192 (D-01) and eos_id=8184 (D-03).
+    model = ModelConfig()
+    assert model.vocab_size == 8192
+    assert model.eos_id == 8184
