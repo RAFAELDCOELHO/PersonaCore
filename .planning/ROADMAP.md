@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 1: Scaffolding & Reproducible Environment
 **Goal**: A reproducible, installable PersonaCore package that imports identically on Kaggle, laptop, and pytest, with centralized device/precision handling and Kaggle-survivable checkpoint/resume infrastructure in place before any long training run.
-**Mode:** mvp
+**Mode:** standard
 **Depends on**: Nothing (first phase)
 **Requirements**: ENV-01, ENV-02, ENV-03, ENV-04, ENV-05, ENV-06, QA-02
 **Success Criteria** (what must be TRUE):
@@ -34,7 +34,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A kill-and-resume test against the open-dict checkpoint skeleton restores model + optimizer + scheduler + step + RNG and continues the same trajectory (not a fresh run)
   4. A Kaggle cell-1 preflight asserts CUDA is active and the device is a Tesla P100 (fails loudly otherwise), and seeds are set across `random`/`numpy`/`torch` with the config + git SHA recorded
   5. `CLAUDE.md` and `requirements.txt` document the project structure and the Kaggle-train / laptop-CPU-infer workflow, reproducible from a clean virtual env
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 01-01-PLAN.md — Installable package (pyproject src-layout) + config layer (RuntimeConfig fp32/bf16-guard, ModelConfig, TrainConfig) [ENV-01, ENV-02, ENV-03]
+- [ ] 01-02-PLAN.md — Runtime primitives: open-dict checkpoint/resume, seeding, git-SHA provenance, P100 preflight, CSV logger [ENV-04, ENV-05, QA-02]
+- [ ] 01-03-PLAN.md — Dev tooling: Makefile, CPU-only GitHub Actions CI (Python 3.11), CLAUDE.md workflow docs [ENV-06, ENV-01, ENV-02]
 
 ### Phase 2: From-Scratch BPE Tokenizer
 **Goal**: A correct, from-scratch byte-level BPE tokenizer whose `vocab_size` is locked before any model is sized, so a later tokenizer change can never invalidate a trained checkpoint.
@@ -131,7 +135,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Scaffolding & Reproducible Environment | 0/TBD | Not started | - |
+| 1. Scaffolding & Reproducible Environment | 0/3 | Planned | - |
 | 2. From-Scratch BPE Tokenizer | 0/TBD | Not started | - |
 | 3. Bigram Baseline & Training Harness | 0/TBD | Not started | - |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |
