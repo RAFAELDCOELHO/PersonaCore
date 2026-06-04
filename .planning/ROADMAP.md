@@ -97,7 +97,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Wave-0 RED test scaffold + committed corpus fixture (failing tests for all 7 seams) [MODEL-01, TRAIN-01..06]
+- [x] 03-01-PLAN.md — Wave-0 RED test scaffold + committed corpus fixture (failing tests for all 7 seams) [MODEL-01, TRAIN-01..06]
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -194,7 +194,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |-------|----------------|--------|-----------|
 | 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
 | 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
-| 3. Bigram Baseline & Training Harness | 0/4 | Not started | - |
+| 3. Bigram Baseline & Training Harness | 1/4 | In Progress|  |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |
 | 5. TinyStories Pretraining | 0/TBD | Not started | - |
 | 6. Generation & Sampling | 0/TBD | Not started | - |

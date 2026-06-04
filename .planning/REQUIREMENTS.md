@@ -23,7 +23,7 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [x] **TOK-05**: A from-scratch-vs-reference equivalence test (tiktoken/HF as a test-only oracle, never a runtime dependency)
 
 ### Model (from scratch)
-- [ ] **MODEL-01**: Bigram language-model baseline from scratch, used to de-risk the training/sampling harness before attention exists
+- [x] **MODEL-01**: Bigram language-model baseline from scratch, used to de-risk the training/sampling harness before attention exists
 - [ ] **MODEL-02**: GPT-style decoder (~10–15M params): causal multi-head self-attention (masked before softmax, scaled by √d_k), MLP blocks, pre-norm LayerNorm, learned positional embeddings
 - [ ] **MODEL-03**: Weight tying between token embedding and output head, verified by tensor-identity test
 - [ ] **MODEL-04**: GPT-2-style weight initialization, verified by per-tensor init-std check
@@ -32,12 +32,12 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [ ] **MODEL-07** *(M2 seam)*: Every adaptable projection is a named `nn.Linear` so LoRA can later wrap it without a model rewrite
 
 ### Training
-- [ ] **TRAIN-01**: Training loop with AdamW, warmup + cosine LR schedule, gradient clipping, and configurable gradient accumulation
-- [ ] **TRAIN-02**: fp32 training by default; optional fp16 AMP + GradScaler path available only as a memory measure (correct scale→unscale-before-clip→step discipline)
-- [ ] **TRAIN-03**: Train/validation split with periodic validation loss; no train/val leakage
-- [ ] **TRAIN-04**: Offline experiment logging (CSV + matplotlib) that survives restarts; loss curves reproducible from the log
-- [ ] **TRAIN-05**: Overfit-a-single-batch test passes (harness correctness gate)
-- [ ] **TRAIN-06** *(M2 seam)*: Loss is assembled via an `assemble_loss(..., extra_penalties=())` seam and checkpoints are open dicts, so EWC can later add a Fisher penalty without touching the loop
+- [x] **TRAIN-01**: Training loop with AdamW, warmup + cosine LR schedule, gradient clipping, and configurable gradient accumulation
+- [x] **TRAIN-02**: fp32 training by default; optional fp16 AMP + GradScaler path available only as a memory measure (correct scale→unscale-before-clip→step discipline)
+- [x] **TRAIN-03**: Train/validation split with periodic validation loss; no train/val leakage
+- [x] **TRAIN-04**: Offline experiment logging (CSV + matplotlib) that survives restarts; loss curves reproducible from the log
+- [x] **TRAIN-05**: Overfit-a-single-batch test passes (harness correctness gate)
+- [x] **TRAIN-06** *(M2 seam)*: Loss is assembled via an `assemble_loss(..., extra_penalties=())` seam and checkpoints are open dicts, so EWC can later add a Fisher penalty without touching the loop
 
 ### Pretraining
 - [ ] **PRE-01**: TinyStories data is obtained, encoded once into a `uint16` memmap, and pinned/persisted as a versioned Kaggle Dataset
@@ -103,13 +103,13 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | TOK-03 | Phase 2 | Complete |
 | TOK-04 | Phase 2 | Complete |
 | TOK-05 | Phase 2 | Complete |
-| MODEL-01 | Phase 3 | Pending |
-| TRAIN-01 | Phase 3 | Pending |
-| TRAIN-02 | Phase 3 | Pending |
-| TRAIN-03 | Phase 3 | Pending |
-| TRAIN-04 | Phase 3 | Pending |
-| TRAIN-05 | Phase 3 | Pending |
-| TRAIN-06 | Phase 3 | Pending |
+| MODEL-01 | Phase 3 | Complete |
+| TRAIN-01 | Phase 3 | Complete |
+| TRAIN-02 | Phase 3 | Complete |
+| TRAIN-03 | Phase 3 | Complete |
+| TRAIN-04 | Phase 3 | Complete |
+| TRAIN-05 | Phase 3 | Complete |
+| TRAIN-06 | Phase 3 | Complete |
 | MODEL-02 | Phase 4 | Pending |
 | MODEL-03 | Phase 4 | Pending |
 | MODEL-04 | Phase 4 | Pending |

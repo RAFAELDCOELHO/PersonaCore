@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-06-04T21:33:17.281Z"
-last_activity: 2026-06-04 -- Phase 03 planning complete
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-06-04T21:46:25.443Z"
+last_activity: 2026-06-04
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 10
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 3 — bigram baseline & training harness
+**Current focus:** Phase 03 — bigram-baseline-training-harness
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
+Phase: 03 (bigram-baseline-training-harness) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-06-04 -- Phase 03 planning complete
+Last activity: 2026-06-04
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100%
 | Phase 02 P01 | 8 | 3 tasks | 12 files |
 | Phase 02 P02 | 4 | 2 tasks | 4 files |
 | Phase 02 P03 | 6 | 3 tasks | 5 files |
+| Phase 03 P01 | 6 | 5 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [02-03]: tokenizer artifact is stdlib json data-only (NOT pickle/torch); from_json asserts schema_version (T-02-06) + validates ids in [0,vocab_size) (V5) — a shippable artifact must never execute code on load (T-02-05)
 - [Phase ?]: [02-03]: artifacts/tokenizer.json is the FROZEN production 8192-vocab artifact; Phase 5 reuses it unchanged with no retrain (D-09)
 - [Phase ?]: [02-03]: TOK-05 oracle proves the lowest-rank-first ALGORITHM via byte->rank-remapped replay (gpt2 leaves are rank-ordered, byte!=rank); recover_merges adapter lives in the test not runtime src/, keeping the no-runtime-tiktoken guard green (D-07)
+- [Phase 03]: [03-01] GPU fp16 smoke uses inline pytest.mark.skipif WITH required reason= (clean SKIP not collection ERROR on CPU CI); exact verify literal skipif(not torch.cuda.is_available()) preserved in a comment
 
 ### Pending Todos
 
@@ -110,6 +112,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T21:03:31.212Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-bigram-baseline-training-harness/03-CONTEXT.md
+Last session: 2026-06-04T21:46:18.363Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None
