@@ -14,11 +14,11 @@ import csv
 import pathlib
 
 import torch
-from personacore.model import BigramLanguageModel
-from personacore.training.loop import train
 
 from personacore.config import ModelConfig, TrainConfig
+from personacore.model import BigramLanguageModel
 from personacore.seeding import seed_everything
+from personacore.training.loop import train
 
 CORPUS_PATH = pathlib.Path(__file__).parent / "fixtures" / "bigram_corpus.txt"
 EOS_ID = 8184

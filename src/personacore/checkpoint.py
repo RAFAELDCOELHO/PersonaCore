@@ -39,6 +39,7 @@ def save_checkpoint(
     model_config,
     train_config,
     git_sha,
+    scaler=None,
     val_loss=None,
     **extra,
 ) -> None:
@@ -47,12 +48,18 @@ def save_checkpoint(
     Captures model/optimizer/scheduler state_dicts, the step counter, the COMPLETE RNG
     generator state (python/numpy/torch/cuda), the embedded configs (D-03 / QA-02), the
     git SHA (provenance), and any ``**extra`` keys (the M2 EWC seam).
+
+    The ``GradScaler`` state (CLAUDE.md's named ``scaler`` checkpoint field) is serialized too:
+    on the fp16/P100 path the scale factor + growth tracker EVOLVE during training, so a resume
+    that re-creates a fresh default-scale scaler would diverge from an uninterrupted run. On CPU
+    (or any fp32 run) the scaler is disabled and ``state_dict()`` is an empty dict — harmless.
     """
     ckpt = {
         "schema_version": CKPT_SCHEMA_VERSION,
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict() if scheduler is not None else None,
+        "scaler": scaler.state_dict() if scaler is not None else None,
         "step": step,
         "val_loss": val_loss,
         "model_config": asdict(model_config),  # config travels WITH weights (QA-02)
@@ -70,12 +77,17 @@ def save_checkpoint(
     torch.save(ckpt, path)
 
 
-def load_checkpoint(path, *, model, optimizer=None, scheduler=None, map_location="cpu"):
+def load_checkpoint(
+    path, *, model, optimizer=None, scheduler=None, scaler=None, map_location="cpu"
+):
     """Restore full training state from ``path`` and return the checkpoint dict.
 
-    Loads model/optimizer/scheduler state, then RESTORES the captured RNG generator STATE
+    Loads model/optimizer/scheduler/scaler state, then RESTORES the captured RNG generator STATE
     (NOT a re-seed — Pitfall 2) so the random stream continues from the saved step. Returns
     the full dict so the caller can read ``step`` / configs / ``git_sha`` / extra keys.
+
+    ``scaler`` restore uses ``ckpt.get("scaler")`` so a pre-fix (scaler-less) checkpoint resumes
+    cleanly without it — the open-dict format stays backward compatible.
     """
     # weights_only=False: the resume checkpoint carries pickled optimizer/RNG/numpy
     # objects that the torch>=2.6 weights_only=True default rejects. TRUSTED-only file
@@ -86,6 +98,8 @@ def load_checkpoint(path, *, model, optimizer=None, scheduler=None, map_location
         optimizer.load_state_dict(ckpt["optimizer"])
     if scheduler is not None and ckpt.get("scheduler") is not None:
         scheduler.load_state_dict(ckpt["scheduler"])
+    if scaler is not None and ckpt.get("scaler") is not None:
+        scaler.load_state_dict(ckpt["scaler"])
 
     rng = ckpt["rng"]  # RESTORE state -> continue the same stream (NOT re-seed)
     random.setstate(rng["python"])

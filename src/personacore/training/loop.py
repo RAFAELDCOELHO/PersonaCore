@@ -233,7 +233,9 @@ def train(
     # --- Resume: restore full state + RNG, continue the step counter (NEVER re-seed) ---
     start_step = 0
     if resume_from is not None:
-        ckpt = load_checkpoint(resume_from, model=model, optimizer=optimizer, scheduler=scheduler)
+        ckpt = load_checkpoint(
+            resume_from, model=model, optimizer=optimizer, scheduler=scheduler, scaler=scaler
+        )
         start_step = ckpt["step"]
 
     csv = CSVLogger(log_path, fieldnames=CSV_FIELDNAMES) if log_path is not None else None
@@ -284,6 +286,7 @@ def train(
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
+            scaler=scaler,
             step=step,
             model_config=model_cfg,
             train_config=train_config,
