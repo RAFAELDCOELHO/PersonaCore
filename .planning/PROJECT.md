@@ -14,15 +14,14 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — ship to validate)
+- [x] Project scaffolding: repo structure, `CLAUDE.md`, reproducible environment (`requirements.txt`, virtual env), runnable on Kaggle P100 and laptop CPU — _Validated in Phase 01: scaffolding-reproducible-environment_
+- [x] BPE tokenizer implemented from scratch (train/encode/decode), with unit tests — _Validated in Phase 02: from-scratch-bpe-tokenizer (vocab locked at 8192/eos 8184; tiktoken-equivalence oracle green; production `tokenizer.json` to be regenerated from a TinyStories slice before Phase 5 — see 02-VERIFICATION.md WR-04)_
 
 ### Active
 
 <!-- Milestone 1: Foundation — a from-scratch language model. -->
 
-- [ ] Project scaffolding: repo structure, `CLAUDE.md`, reproducible environment (`requirements.txt`, virtual env), runnable on Kaggle P100 and laptop CPU
 - [ ] Bigram language model from scratch as a baseline foundation, with unit tests
-- [ ] BPE tokenizer implemented from scratch (train/encode/decode), with unit tests
 - [ ] GPT-style transformer decoder (~10–15M params) from scratch: attention, MLP, blocks, positional embeddings, with unit tests
 - [ ] Training loop with checkpointing, loss logging, and resumability (Kaggle 30h/week-aware)
 - [ ] Pretrain on TinyStories to fluent, coherent generation
@@ -93,4 +92,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after initialization*
+*Last updated: 2026-06-04 after Phase 02 (from-scratch-bpe-tokenizer) completion*
