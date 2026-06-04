@@ -13,7 +13,7 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [x] **ENV-03**: A single `RuntimeConfig` centralizes device/precision handling — fp32 by default, bf16 guarded to error on Pascal/P100
 - [x] **ENV-04**: Kaggle checkpoint/resume infrastructure: full training state (model + optimizer + scheduler + step + RNG) saves to `/kaggle/working` and resumes exactly after a session kill
 - [x] **ENV-05**: A preflight check asserts GPU/Pascal-compatible CUDA is active before any long training run, and seeds are set for reproducibility
-- [ ] **ENV-06**: `CLAUDE.md` documents project structure, setup, and the Kaggle/local workflow
+- [x] **ENV-06**: `CLAUDE.md` documents project structure, setup, and the Kaggle/local workflow
 
 ### Tokenizer (from scratch)
 - [ ] **TOK-01**: Byte-level BPE tokenizer implemented from scratch — train merges from a corpus, with deterministic lowest-rank-first merge replay
@@ -97,7 +97,7 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | ENV-03 | Phase 1 | Complete |
 | ENV-04 | Phase 1 | Complete |
 | ENV-05 | Phase 1 | Complete |
-| ENV-06 | Phase 1 | Pending |
+| ENV-06 | Phase 1 | Complete |
 | TOK-01 | Phase 2 | Pending |
 | TOK-02 | Phase 2 | Pending |
 | TOK-03 | Phase 2 | Pending |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
+status: verifying
 stopped_at: Phase 1 context gathered
-last_updated: "2026-06-04T18:15:50.302Z"
+last_updated: "2026-06-04T18:20:03.566Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 13
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 Phase: 01 (scaffolding-reproducible-environment) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-04
 
-Progress: [███████░░░] 67%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [███████░░░] 67%
 *Updated after each plan completion*
 | Phase 01 P01 | 9 | 3 tasks | 8 files |
 | Phase 01 P02 | 14 | 2 tasks | 10 files |
+| Phase 01 P03 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [01-02]: Resume checkpoint loads with weights_only=False (trusted own-file; torch>=2.6 default flipped to True). Slim inference checkpoint (Phase 8) uses weights_only=True.
 - [Phase ?]: [01-02]: Checkpoint is an open dict; load restores RNG STATE (not re-seed) -> kill-and-resume trajectory equality within 1e-6. Also the M2 EWC seam (fisher/theta_star add with no format change).
 - [Phase ?]: [01-02]: preflight_p100(require_p100=False) degrades to a CPU summary instead of raising when CUDA is absent (demo runs on a laptop); require_p100=True still fails loud on Kaggle.
+- [Phase ?]: [01-03]: CI pins Python 3.11 (Kaggle parity), never the local 3.14 dev box, so install-parity is validated against the real runtime target.
+- [Phase ?]: [01-03]: ENV-06 docs appended OUTSIDE the GSD marker blocks in CLAUDE.md; CPU-only CI (no GPU/training) is the phase gate re-validating ENV-01/ENV-02.
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T18:15:37.762Z
+Last session: 2026-06-04T18:19:56.234Z
 Stopped at: Phase 1 context gathered
 Resume file: None

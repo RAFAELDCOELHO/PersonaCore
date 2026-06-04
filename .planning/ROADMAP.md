@@ -13,7 +13,7 @@ Milestone 1 builds a correct, from-scratch ~10–15M-parameter GPT-style languag
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Scaffolding & Reproducible Environment** - Installable package, RuntimeConfig (fp32-default, bf16-guard), Kaggle checkpoint/resume infra, GPU preflight, seeds
+- [x] **Phase 1: Scaffolding & Reproducible Environment** - Installable package, RuntimeConfig (fp32-default, bf16-guard), Kaggle checkpoint/resume infra, GPU preflight, seeds (completed 2026-06-04)
 - [ ] **Phase 2: From-Scratch BPE Tokenizer** - Byte-level BPE train/encode/decode with deterministic merges, atomic EOS, locked vocab_size, round-trip tests
 - [ ] **Phase 3: Bigram Baseline & Training Harness** - Thin end-to-end slice: bigram trains/samples through a resumable loop with the assemble_loss + open-dict-checkpoint seams proven
 - [ ] **Phase 4: GPT Transformer Decoder** - From-scratch ~10–15M GPT (causal MHA, pre-norm blocks, weight tying, GPT-2 init) with silent-bug gates and the LoRA seam
@@ -47,7 +47,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 01-02-PLAN.md — Runtime primitives: open-dict checkpoint/resume, seeding, git-SHA provenance, P100 preflight, CSV logger [ENV-04, ENV-05, QA-02]
-- [ ] 01-03-PLAN.md — Dev tooling: Makefile, CPU-only GitHub Actions CI (Python 3.11), CLAUDE.md workflow docs [ENV-06, ENV-01, ENV-02]
+- [x] 01-03-PLAN.md — Dev tooling: Makefile, CPU-only GitHub Actions CI (Python 3.11), CLAUDE.md workflow docs [ENV-06, ENV-01, ENV-02]
 
 ### Phase 2: From-Scratch BPE Tokenizer
 
@@ -165,7 +165,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Scaffolding & Reproducible Environment | 2/3 | In Progress|  |
+| 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
 | 2. From-Scratch BPE Tokenizer | 0/TBD | Not started | - |
 | 3. Bigram Baseline & Training Harness | 0/TBD | Not started | - |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |
