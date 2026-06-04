@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-06-04T18:07:27.326Z"
+last_updated: "2026-06-04T18:15:50.302Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 ## Current Position
 
 Phase: 01 (scaffolding-reproducible-environment) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-04
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [███░░░░░░░] 33%
 
 *Updated after each plan completion*
 | Phase 01 P01 | 9 | 3 tasks | 8 files |
+| Phase 01 P02 | 14 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - [Roadmap]: Document-as-we-go (DOC-01) consolidated lightly in Phase 8, not a heavy standalone block.
 - [Phase ?]: [01-01]: torch excluded from core deps; offered only as [cpu] extra (D-10) — prevents a cu128+ wheel bricking the Kaggle P100.
 - [Phase ?]: [01-01]: RuntimeConfig is the single device/precision source — fp32 default, AMP off on CPU, bf16 raises on Pascal/P100 (cc < 7.0).
+- [Phase ?]: [01-02]: Resume checkpoint loads with weights_only=False (trusted own-file; torch>=2.6 default flipped to True). Slim inference checkpoint (Phase 8) uses weights_only=True.
+- [Phase ?]: [01-02]: Checkpoint is an open dict; load restores RNG STATE (not re-seed) -> kill-and-resume trajectory equality within 1e-6. Also the M2 EWC seam (fisher/theta_star add with no format change).
+- [Phase ?]: [01-02]: preflight_p100(require_p100=False) degrades to a CPU summary instead of raising when CUDA is absent (demo runs on a laptop); require_p100=True still fails loud on Kaggle.
 
 ### Pending Todos
 
@@ -91,6 +95,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T18:07:05.811Z
+Last session: 2026-06-04T18:15:37.762Z
 Stopped at: Phase 1 context gathered
 Resume file: None

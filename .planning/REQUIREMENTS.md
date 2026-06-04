@@ -11,8 +11,8 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [x] **ENV-01**: Repo is an installable package (`pip install -e .`) so `personacore` imports identically on Kaggle, laptop, and pytest
 - [x] **ENV-02**: Reproducible environment via `requirements.txt` and a documented virtual-env setup, runnable on Kaggle P100 (training) and laptop CPU (inference)
 - [x] **ENV-03**: A single `RuntimeConfig` centralizes device/precision handling — fp32 by default, bf16 guarded to error on Pascal/P100
-- [ ] **ENV-04**: Kaggle checkpoint/resume infrastructure: full training state (model + optimizer + scheduler + step + RNG) saves to `/kaggle/working` and resumes exactly after a session kill
-- [ ] **ENV-05**: A preflight check asserts GPU/Pascal-compatible CUDA is active before any long training run, and seeds are set for reproducibility
+- [x] **ENV-04**: Kaggle checkpoint/resume infrastructure: full training state (model + optimizer + scheduler + step + RNG) saves to `/kaggle/working` and resumes exactly after a session kill
+- [x] **ENV-05**: A preflight check asserts GPU/Pascal-compatible CUDA is active before any long training run, and seeds are set for reproducibility
 - [ ] **ENV-06**: `CLAUDE.md` documents project structure, setup, and the Kaggle/local workflow
 
 ### Tokenizer (from scratch)
@@ -62,7 +62,7 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 ### Documentation & Quality
 - [ ] **DOC-01**: Polished technical writeup (README/report) covering design decisions, architecture, training, and results — written as we go
 - [ ] **QA-01**: Per-component unit tests (tokenizer, model, training, generation) run green via pytest as a first-class deliverable
-- [ ] **QA-02**: Reproducibility discipline: config saved with each checkpoint, seeds fixed, git SHA recorded
+- [x] **QA-02**: Reproducibility discipline: config saved with each checkpoint, seeds fixed, git SHA recorded
 
 ---
 
@@ -95,8 +95,8 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | ENV-01 | Phase 1 | Complete |
 | ENV-02 | Phase 1 | Complete |
 | ENV-03 | Phase 1 | Complete |
-| ENV-04 | Phase 1 | Pending |
-| ENV-05 | Phase 1 | Pending |
+| ENV-04 | Phase 1 | Complete |
+| ENV-05 | Phase 1 | Complete |
 | ENV-06 | Phase 1 | Pending |
 | TOK-01 | Phase 2 | Pending |
 | TOK-02 | Phase 2 | Pending |
@@ -130,6 +130,6 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | DEMO-03 | Phase 8 | Pending |
 | DOC-01 | Phase 8 | Pending |
 | QA-01 | Phase 8 | Pending |
-| QA-02 | Phase 1, Phase 8 | Pending |
+| QA-02 | Phase 1, Phase 8 | Complete |
 
 **Cross-cutting note:** QA-02 (reproducibility discipline) is anchored in Phase 1 (the seed/config/git-SHA harness, config-in-checkpoint) and re-verified in Phase 8 (full-suite reproducibility check). QA-01 (per-component tests) and DOC-01 (writeup) are written incrementally per phase as success criteria but formally consolidated/owned in Phase 8.

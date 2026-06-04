@@ -46,7 +46,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Runtime primitives: open-dict checkpoint/resume, seeding, git-SHA provenance, P100 preflight, CSV logger [ENV-04, ENV-05, QA-02]
+- [x] 01-02-PLAN.md — Runtime primitives: open-dict checkpoint/resume, seeding, git-SHA provenance, P100 preflight, CSV logger [ENV-04, ENV-05, QA-02]
 - [ ] 01-03-PLAN.md — Dev tooling: Makefile, CPU-only GitHub Actions CI (Python 3.11), CLAUDE.md workflow docs [ENV-06, ENV-01, ENV-02]
 
 ### Phase 2: From-Scratch BPE Tokenizer
@@ -165,7 +165,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Scaffolding & Reproducible Environment | 1/3 | In Progress|  |
+| 1. Scaffolding & Reproducible Environment | 2/3 | In Progress|  |
 | 2. From-Scratch BPE Tokenizer | 0/TBD | Not started | - |
 | 3. Bigram Baseline & Training Harness | 0/TBD | Not started | - |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |
