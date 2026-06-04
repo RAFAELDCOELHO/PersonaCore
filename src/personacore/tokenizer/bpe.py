@@ -16,6 +16,8 @@ Load-bearing invariants:
 - D-03: special tokens are atomic and reserved at the top of the vocab (8184-8191).
 """
 
+import warnings
+
 import regex
 
 from .patterns import _COMPILED, GPT2_SPLIT_PATTERN
@@ -109,6 +111,16 @@ class BPETokenizer:
             chunks = [merge(chunk, pair, idx) for chunk in chunks]
             merges[pair] = idx
             vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
+
+        # WR-04: the corpus may exhaust mergeable pairs before vocab_size is reached (the loop
+        # breaks early). vocab_size is still honored, leaving dead ids -- warn loudly so an
+        # under-trained tokenizer is never frozen silently behind a full vocab_size claim.
+        if len(merges) < num_merges:
+            warnings.warn(
+                f"corpus exhausted: learned {len(merges)} of {num_merges} requested merges; "
+                f"vocab_size={vocab_size} has {num_merges - len(merges)} dead ids",
+                stacklevel=2,
+            )
 
         self.merges = merges
         self.vocab = vocab
