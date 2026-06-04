@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-06-04T22:05:03.666Z"
+status: ready_to_plan
+stopped_at: Phase 03 complete (4/4) — ready to discuss Phase 4
+last_updated: 2026-06-04T22:26:57.215Z
 last_activity: 2026-06-04
 progress:
   total_phases: 8
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 03 — bigram-baseline-training-harness
+**Current focus:** Phase 4 — gpt transformer decoder
 
 ## Current Position
 
-Phase: 03 (bigram-baseline-training-harness) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 4
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-04
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 3
+- Total plans completed: 7
 - Average duration: — min
 - Total execution time: 0.0 hours
 
@@ -45,6 +45,7 @@ Progress: [██████████] 100%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 02 | 3 | - | - |
+| 03 | 4 | - | - |
 
 **Recent Trend:**
 
