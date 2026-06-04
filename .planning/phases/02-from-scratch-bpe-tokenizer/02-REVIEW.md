@@ -25,7 +25,12 @@ findings:
   warning: 5
   info: 4
   total: 10
-status: issues_found
+status: fixes_applied
+fixes:
+  applied_at: 2026-06-04
+  fixed: [CR-01, WR-01, WR-02, WR-03, WR-04, WR-05]
+  deferred: [WR-04-artifact-regen]  # code guard applied; artifact regen deferred to Phase 5
+  out_of_scope: [IN-01, IN-02, IN-03, IN-04]  # Info findings, not addressed this run
 ---
 
 # Phase 2: Code Review Report
@@ -46,6 +51,8 @@ The single Critical is the `assert`-based schema guard, because it is the docume
 ## Critical Issues
 
 ### CR-01: Schema-version integrity check uses `assert` — silently bypassed under `python -O`
+
+**Status:** RESOLVED (commit `09cb192`) — `assert` replaced with explicit `raise ValueError`; missing key handled via `d.get(...)`.
 
 **File:** `src/personacore/tokenizer/io.py:55`
 **Issue:** `from_json` enforces its schema-version contract with `assert d["schema_version"] == SCHEMA_VERSION`. Python strips all `assert` statements when run with `-O` or `PYTHONOPTIMIZE=1`. The io.py docstring explicitly markets this line as threat-mitigation T-02-06 ("asserts the schema version") and the load path as a validation boundary for swappable/editable artifacts. An `assert` is the wrong tool for a security/integrity control. Verified directly:
@@ -70,6 +77,8 @@ if schema != SCHEMA_VERSION:
 
 ### WR-01: `from_json` does not validate `special_tokens` ids or `eos_id` — only `merges` are range-checked
 
+**Status:** RESOLVED (commit `09cb192`) — specials/`eos_id` now range-validated and `eos_id` asserted to be a declared special. Specials are top-pinned (D-03a) so they validate against the FIXED `SPECIAL_ID_CEILING` (= 1 + max special id), not the artifact's trained `vocab_size` (which may legitimately be 512 in tests while EOS stays at 8184).
+
 **File:** `src/personacore/tokenizer/io.py:57-71`
 **Issue:** The V5 input-validation loop checks `0 <= token_id < vocab_size` only for the three members of each merge triple. `special_tokens` ids and `eos_id` are loaded verbatim with no validation. Verified: an artifact with `special_tokens={"<|endoftext|>": 999999}` and `eos_id=-5` loads cleanly and produces a tokenizer with `eos_id == -5`. A negative or out-of-range `eos_id` propagates into `ModelConfig`/checkpoints and would index the embedding table incorrectly downstream (Phase 3/4 consume `eos_id` for model sizing and generation stop conditions). This directly undercuts the "reject a malformed or out-of-range swapped artifact" guarantee in the io.py docstring.
 
@@ -85,6 +94,8 @@ if d["eos_id"] not in d["special_tokens"].values():
 ```
 
 ### WR-02: `decode` resolves an id against `vocab` before `special_tokens` — a colliding special id is silently shadowed
+
+**Status:** RESOLVED (commit `b2ede8b`) — `decode` resolves specials first then `vocab`, raising on unknown ids; `frozen()` now enforces `set(special_tokens.values()).isdisjoint(vocab)`.
 
 **File:** `src/personacore/tokenizer/bpe.py:179-185`
 **Issue:** `decode` checks `if idx in self.vocab` first, then `inverse_special`. If a special id ever overlaps a merge/byte id, the special is silently decoded as merge bytes — the round-trip for that special is corrupted with no error. Verified by constructing a `frozen()` tokenizer with `special_tokens={"<|endoftext|>": 256}` overlapping merge id 256: `decode([256])` returns `'ab'` instead of the EOS literal. The committed artifact avoids this because the locked layout separates the ranges, but `frozen()`/`from_json` accept any `special_tokens` map and never enforce non-overlap, so the invariant is unguarded. This is a latent data-loss path for an external/edited artifact and a fragility for anyone who reuses `frozen()` with a different layout.
@@ -103,6 +114,8 @@ Additionally, validate `set(special_tokens.values()).isdisjoint(vocab)` in `froz
 
 ### WR-03: `decode` uses `errors="replace"`, which masks genuine corruption instead of failing loudly
 
+**Status:** RESOLVED (commit `b2ede8b`) — `decode` now uses strict UTF-8 (default `errors="strict"`); corruption raises `UnicodeDecodeError`.
+
 **File:** `src/personacore/tokenizer/bpe.py:186`
 **Issue:** `b"".join(parts).decode("utf-8", errors="replace")` is documented as a "never-triggered safety net." But its only effect is to hide bugs: a malformed id stream, a truncated merge sequence, or a mis-decoded special would produce U+FFFD replacement characters and a silently wrong string rather than an exception. For a from-scratch tokenizer whose entire correctness claim is exact round-trip, a silent lossy fallback is the wrong default — it converts a detectable defect into invisible data loss. The round-trip tests pass precisely because the net never fires on valid input, so this fallback buys nothing on the happy path and costs detectability on the unhappy path.
 
@@ -113,6 +126,8 @@ return b"".join(parts).decode("utf-8")
 If a lenient mode is ever wanted, make it an explicit opt-in parameter.
 
 ### WR-04: `train()` sets `vocab_size` to the requested value even when far fewer merges were learned, leaving a large dead id range
+
+**Status:** PARTIALLY RESOLVED (commit `d85a0e2`) — code guard (review option **b**) applied: `train()` emits a `UserWarning` when `len(merges) < num_merges`. Artifact regeneration (option **a**) is DEFERRED to Phase 5 — no representative corpus exists at this phase; `artifacts/tokenizer.json` was deliberately NOT modified.
 
 **File:** `src/personacore/tokenizer/bpe.py:104-116`; artifact: `artifacts/tokenizer.json`
 **Issue:** When the corpus is exhausted of mergeable pairs (`if not stats: break`), the loop stops early but `self.vocab_size = vocab_size` is still set to the full request. The committed production artifact reports `vocab_size: 8192` while learning only **283 merges** (max merge id 538), leaving ids 539-8183 as permanently dead embedding rows. This is documented as intentional in 02-03-SUMMARY, but it means the shipped "production" tokenizer was trained on the 11.5 KB CI fixture, not a representative corpus — the artifact embeds a near-empty merge table behind a 8192 vocab claim. Phase 5 is contracted to reuse this exact frozen artifact with no retrain, so the model will allocate (and train) ~7650 unused embedding rows. At minimum this should be a loud warning, not a silent acceptance; ideally the production artifact should be regenerated from the documented bounded TinyStories slice before any model is sized around it.
@@ -127,6 +142,8 @@ if len(merges) < num_merges:
 ```
 
 ### WR-05: `encode` treats any `allowed_special` value other than the literal `"all"` as "disable specials" — silent, surprising API
+
+**Status:** RESOLVED (commit `0346ae6`) — `allowed_special` now explicit: `"all"`, `"none"`/falsy, set/frozenset subset; unrecognized values raise `ValueError`.
 
 **File:** `src/personacore/tokenizer/bpe.py:139-150`
 **Issue:** The only recognized value is the string `"all"`; anything else (a set of allowed names per the minbpe convention, `None`, a typo like `"All"`) silently falls through to encoding the whole string as ordinary bytes — meaning embedded `<|endoftext|>` literals would be byte-split rather than emitted as the atomic EOS id. Because the failure is silent, a caller who mistypes the flag or passes the conventional set form gets document boundaries silently destroyed, which Phase 5 depends on. There is no validation or error for an unrecognized value.
