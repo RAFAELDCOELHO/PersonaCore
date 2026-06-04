@@ -26,10 +26,12 @@ class BigramLanguageModel(nn.Module):
 
     def __init__(self, vocab_size: int):
         super().__init__()
-        self.token_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
 
     def forward(self, idx, targets=None):
-        logits = self.token_table(idx)  # (B, T, V) — row idx[b, t] is the next-token logits.
+        logits = self.token_embedding_table(
+            idx
+        )  # (B, T, V) — row idx[b, t] is the next-token logits.
         if targets is None:
             return logits, None
         B, T, V = logits.shape
