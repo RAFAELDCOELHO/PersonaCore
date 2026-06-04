@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 2 context gathered
-last_updated: "2026-06-04T19:08:40.781Z"
-last_activity: 2026-06-04 -- Phase 02 planning complete
+last_updated: "2026-06-04T19:23:07.609Z"
+last_activity: 2026-06-04 -- Phase 02 execution started
 progress:
   total_phases: 8
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 01 — scaffolding-reproducible-environment
+**Current focus:** Phase 02 — from-scratch-bpe-tokenizer
 
 ## Current Position
 
-Phase: 01 (scaffolding-reproducible-environment) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-06-04 -- Phase 02 planning complete
+Phase: 02 (from-scratch-bpe-tokenizer) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 02
+Last activity: 2026-06-04 -- Phase 02 execution started
 
 Progress: [██████████] 100%
 
