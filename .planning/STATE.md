@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-06-04T21:46:25.443Z"
+last_updated: "2026-06-04T21:49:59.634Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 ## Current Position
 
 Phase: 03 (bigram-baseline-training-harness) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-04
 
-Progress: [███████░░░] 70%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [███████░░░] 70%
 | Phase 02 P02 | 4 | 2 tasks | 4 files |
 | Phase 02 P03 | 6 | 3 tasks | 5 files |
 | Phase 03 P01 | 6 | 5 tasks | 8 files |
+| Phase 03 P02 | 6 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [02-03]: artifacts/tokenizer.json is the FROZEN production 8192-vocab artifact; Phase 5 reuses it unchanged with no retrain (D-09)
 - [Phase ?]: [02-03]: TOK-05 oracle proves the lowest-rank-first ALGORITHM via byte->rank-remapped replay (gpt2 leaves are rank-ordered, byte!=rank); recover_merges adapter lives in the test not runtime src/, keeping the no-runtime-tiktoken guard green (D-07)
 - [Phase 03]: [03-01] GPU fp16 smoke uses inline pytest.mark.skipif WITH required reason= (clean SKIP not collection ERROR on CPU CI); exact verify literal skipif(not torch.cuda.is_available()) preserved in a comment
+- [Phase ?]: [03-02]: BigramLanguageModel honors the LOCKED forward(idx, targets=None) -> (logits, loss) contract (D-02) with internal CE on the nanoGPT (B*T, V) flatten (D-02a); Phase-4 GPT reuses it unchanged.
+- [Phase ?]: [03-02]: assemble_loss lives in training/loss.py not the model (D-03); identity-on-empty in M1, additive (fisher_penalty,) in M2 EWC with no loop change (D-04).
+- [Phase ?]: [03-02]: training/__init__.py deliberately not created — Plan 04 owns the full training surface; namespace-package discovery resolves personacore.training.loss without it.
 
 ### Pending Todos
 
@@ -112,6 +116,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T21:46:18.363Z
+Last session: 2026-06-04T21:49:36.987Z
 Stopped at: Completed 03-01-PLAN.md
 Resume file: None
