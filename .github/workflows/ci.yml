@@ -1,0 +1,21 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Pin Kaggle's target Python, NOT the local 3.14 dev box. This makes
+          # install-parity (ENV-01/ENV-02) validate against the real runtime.
+          python-version: "3.11"
+      - name: Install (CPU torch + dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[cpu,dev]" --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Lint
+        run: ruff check . && ruff format --check .
+      - name: Test
+        run: pytest -q
