@@ -616,21 +616,21 @@ CLAUDE.md is currently the GSD-generated baseline (PROJECT/STACK/workflow sectio
 | A6 | An optional `[cpu]` extra is the cleanest torch-exclusion mechanism (vs marker) | Don't Hand-Roll | LOW — verified that markers can't distinguish Kaggle from Linux laptop; extra is the safe choice |
 | A7 | gradio 6.x exists but project pins `<6` per STACK.md | Standard Stack | LOW — gradio is Phase 8; only declared as an extra here |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Single `config.py` vs a `config/` sub-package?**
    - What we know: D-02 mandates three dataclasses; ARCHITECTURE shows a `config/` package eventually.
    - What's unclear: Phase 1 alone could use one `config.py`.
-   - Recommendation: planner's discretion (D explicitly delegates internal naming). A single `config.py` + `checkpoint.py` + `preflight.py` + `seeding.py` + `logging.py` is the leanest D-11-compliant layout; split to `config/` only if it grows.
+   - **RESOLVED:** single `config.py` (leanest D-11-compliant layout) alongside `checkpoint.py` / `preflight.py` / `seeding.py` / `logging.py`; split to a `config/` package only if it grows. Adopted by Plan 01-01.
 
 2. **Does the kill-and-resume test need a real model, or a toy `nn.Linear`?**
    - What we know: the bigram/GPT don't exist until Phases 3–4.
    - What's unclear: whether to test resume against a trivial stand-in now.
-   - Recommendation: test against a **toy `nn.Linear` + AdamW + a scheduler** now (proves the checkpoint machinery); Phase 3 re-validates against the real loop. This satisfies ENV-04's "skeleton in place" intent without waiting for the model.
+   - **RESOLVED:** test against a toy `nn.Linear` + AdamW + scheduler now (proves the checkpoint machinery); Phase 3 re-validates against the real loop. Satisfies ENV-04's "skeleton in place" intent. Adopted by Plan 01-02 Task 1.
 
 3. **Strict (bitwise) determinism on by default?**
    - What we know: full determinism is slower (PyTorch docs); the portfolio guarantee is seed+SHA+config.
-   - Recommendation: default `strict=False`; expose a `strict=True` toggle. Document the trade-off in CLAUDE.md.
+   - **RESOLVED:** default `strict=False`; expose a `strict=True` toggle; document the trade-off in CLAUDE.md. Adopted by Plan 01-02 Task 1.
 
 ## Sources
 
