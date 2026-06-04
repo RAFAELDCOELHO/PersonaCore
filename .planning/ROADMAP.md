@@ -14,7 +14,7 @@ Milestone 1 builds a correct, from-scratch ~10–15M-parameter GPT-style languag
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Scaffolding & Reproducible Environment** - Installable package, RuntimeConfig (fp32-default, bf16-guard), Kaggle checkpoint/resume infra, GPU preflight, seeds (completed 2026-06-04)
-- [ ] **Phase 2: From-Scratch BPE Tokenizer** - Byte-level BPE train/encode/decode with deterministic merges, atomic EOS, locked vocab_size, round-trip tests
+- [x] **Phase 2: From-Scratch BPE Tokenizer** - Byte-level BPE train/encode/decode with deterministic merges, atomic EOS, locked vocab_size, round-trip tests (completed 2026-06-04)
 - [ ] **Phase 3: Bigram Baseline & Training Harness** - Thin end-to-end slice: bigram trains/samples through a resumable loop with the assemble_loss + open-dict-checkpoint seams proven
 - [ ] **Phase 4: GPT Transformer Decoder** - From-scratch ~10–15M GPT (causal MHA, pre-norm blocks, weight tying, GPT-2 init) with silent-bug gates and the LoRA seam
 - [ ] **Phase 5: TinyStories Pretraining** - Memmap data prep, full Kaggle P100 run to coherent generation, trained checkpoint + recorded curves
@@ -76,7 +76,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 02-03-PLAN.md — JSON freeze/load artifact, production tokenizer.json train script, tiktoken gpt2 equivalence oracle [TOK-04, TOK-05]
+- [x] 02-03-PLAN.md — JSON freeze/load artifact, production tokenizer.json train script, tiktoken gpt2 equivalence oracle [TOK-04, TOK-05]
 
 ### Phase 3: Bigram Baseline & Training Harness
 
@@ -179,7 +179,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
-| 2. From-Scratch BPE Tokenizer | 2/3 | In Progress|  |
+| 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
 | 3. Bigram Baseline & Training Harness | 0/TBD | Not started | - |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |
 | 5. TinyStories Pretraining | 0/TBD | Not started | - |

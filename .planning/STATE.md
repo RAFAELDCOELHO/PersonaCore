@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
+status: verifying
 stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-06-04T19:40:32.848Z"
+last_updated: "2026-06-04T19:50:29.117Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 8
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 13
+  completed_plans: 6
+  percent: 25
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 Phase: 02 (from-scratch-bpe-tokenizer) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-04
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 83%
 | Phase 01 P03 | 4 | 2 tasks | 3 files |
 | Phase 02 P01 | 8 | 3 tasks | 12 files |
 | Phase 02 P02 | 4 | 2 tasks | 4 files |
+| Phase 02 P03 | 6 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [02-02]: BPETokenizer() is default-constructible then .train(text, vocab_size); merges/vocab populate on train() or frozen() (Plan-01 test contract).
 - [Phase ?]: [02-02]: oracle library name kept out of runtime src/ (reworded docstrings) so the no-runtime-oracle string-scan guard stays green (T-02-04).
 - [Phase ?]: [02-02]: decode maps a special id back to its literal marker, so round-trip holds even for embedded special-token literals.
+- [Phase ?]: [02-03]: tokenizer artifact is stdlib json data-only (NOT pickle/torch); from_json asserts schema_version (T-02-06) + validates ids in [0,vocab_size) (V5) — a shippable artifact must never execute code on load (T-02-05)
+- [Phase ?]: [02-03]: artifacts/tokenizer.json is the FROZEN production 8192-vocab artifact; Phase 5 reuses it unchanged with no retrain (D-09)
+- [Phase ?]: [02-03]: TOK-05 oracle proves the lowest-rank-first ALGORITHM via byte->rank-remapped replay (gpt2 leaves are rank-ordered, byte!=rank); recover_merges adapter lives in the test not runtime src/, keeping the no-runtime-tiktoken guard green (D-07)
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T19:39:54.563Z
+Last session: 2026-06-04T19:49:35.926Z
 Stopped at: Completed 02-01-PLAN.md
 Resume file: None
