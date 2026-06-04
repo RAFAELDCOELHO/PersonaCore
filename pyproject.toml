@@ -6,25 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "personacore"
 version = "0.1.0"
 description = "A from-scratch on-device conversational AI whose memory lives in the model weights."
-requires-python = ">=3.10,<3.12"  # Kaggle 3.11 parity — NOT the local 3.14 box (D-10).
+requires-python = ">=3.10,<3.12"
 dependencies = [
-  # NOTE: torch is deliberately ABSENT from core deps (D-10).
-  # On Kaggle, `pip install -e .` must NOT drag in a cu128+ wheel that dropped
-  # Pascal sm_60 kernels — Kaggle's pre-installed torch is Pascal-valid and stays untouched.
   "numpy~=2.4",
-  # GPT-2 pre-tok engine for \p{L}/\p{N} (stdlib `re` cannot compile these). A pre-tok
-  # primitive on the same footing as `re`, NOT a from-scratch BPE violation (RESEARCH D-05).
   "regex~=2026.5",
 ]
 
 [project.optional-dependencies]
-# Laptop + CI only. Install with the CPU index:
-#   pip install -e ".[cpu,dev]" --extra-index-url https://download.pytorch.org/whl/cpu
-# NEVER install the [cpu] extra on Kaggle.
 cpu = ["torch==2.7.*"]
 demo = ["gradio>=5,<6", "matplotlib~=3.10"]
-# tiktoken is the TOK-05 oracle — TEST-ONLY, NEVER runtime-imported (guarded by
-# test_no_runtime_tiktoken). It must stay out of [project].dependencies.
 dev = ["pytest~=9.0", "ruff~=0.15", "tiktoken~=0.13"]
 
 [tool.setuptools.packages.find]
@@ -32,11 +22,11 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-# pyflakes (F), pycodestyle (E/W), isort (I) — a sane default for portfolio polish.
 select = ["E", "F", "W", "I"]
