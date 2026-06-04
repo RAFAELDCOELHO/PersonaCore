@@ -92,7 +92,21 @@ Plans:
   4. A document-level train/val split with periodic `eval()`+`no_grad()` validation loss runs with no train/val leakage, and CSV+matplotlib logging reproduces the loss curve across a restart
   5. Loss is assembled via `assemble_loss(..., extra_penalties=())` with an empty penalty list and checkpoints are open dicts (M2 EWC seam — plumbing only, no Fisher/penalty computed)
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Wave-0 RED test scaffold + committed corpus fixture (failing tests for all 7 seams) [MODEL-01, TRAIN-01..06]
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 03-02-PLAN.md — Model->loss slice: BigramLanguageModel forward (logits, loss) contract + assemble_loss EWC seam [MODEL-01, TRAIN-06]
+- [ ] 03-03-PLAN.md — Data + schedule slice: doc-level no-leakage split + get_batch + warmup/cosine LambdaLR [TRAIN-03, TRAIN-01]
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 03-04-PLAN.md — Train-loop slice: AMP/accum/clip ordering + eval + CSV + resume curve + overfit gate + thin train_bigram.py [TRAIN-01, TRAIN-02, TRAIN-04, TRAIN-05, TRAIN-06]
 
 ### Phase 4: GPT Transformer Decoder
 
@@ -180,7 +194,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |-------|----------------|--------|-----------|
 | 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
 | 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
-| 3. Bigram Baseline & Training Harness | 0/TBD | Not started | - |
+| 3. Bigram Baseline & Training Harness | 0/4 | Not started | - |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |
 | 5. TinyStories Pretraining | 0/TBD | Not started | - |
 | 6. Generation & Sampling | 0/TBD | Not started | - |
