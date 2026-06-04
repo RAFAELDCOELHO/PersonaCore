@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
+status: verifying
 stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-06-04T21:54:39.288Z"
+last_updated: "2026-06-04T22:05:03.666Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
-  percent: 25
+  completed_plans: 10
+  percent: 38
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 Phase: 03 (bigram-baseline-training-harness) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-04
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [█████████░] 90%
 | Phase 03 P01 | 6 | 5 tasks | 8 files |
 | Phase 03 P02 | 6 | 2 tasks | 3 files |
 | Phase 03 P03 | 7 | 2 tasks | 2 files |
+| Phase 03 P04 | 18 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [03-02]: assemble_loss lives in training/loss.py not the model (D-03); identity-on-empty in M1, additive (fisher_penalty,) in M2 EWC with no loop change (D-04).
 - [Phase ?]: [03-02]: training/__init__.py deliberately not created — Plan 04 owns the full training surface; namespace-package discovery resolves personacore.training.loss without it.
 - [Phase ?]: [03-03]: doc-level split drops the fixture trailing newline so val is not a degenerate one-token doc (no-leakage TRAIN-03); warmup+cosine LR wrapped in LambdaLR for the checkpoint state_dict() resume contract (TRAIN-01/D-05/D-08).
+- [Phase ?]: [03-04]: training loop AMP order scale-unscale_-clip-step-update; scheduler steps once per optimizer step; estimate_loss snapshots/restores RNG so periodic eval never perturbs the train trajectory (TRAIN-02/04).
+- [Phase ?]: [03-04]: CSV wall_clock is a logical step-derived clock (not wall time) so the loss/lr curve reproduces row-for-row across kill+resume; cumulative tokens derived from absolute step (TRAIN-04).
+- [Phase ?]: [03-04]: bigram embedding renamed token_table to token_embedding_table (nanoGPT-canonical, locked resume-test contract); model/tokenizer vocab gap bridged in train_bigram.py, decode stays strict by design (WR-03).
 
 ### Pending Todos
 
@@ -118,6 +122,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T21:54:23.445Z
+Last session: 2026-06-04T22:04:31.859Z
 Stopped at: Completed 03-01-PLAN.md
 Resume file: None
