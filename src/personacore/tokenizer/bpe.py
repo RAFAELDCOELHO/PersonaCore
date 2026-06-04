@@ -170,20 +170,24 @@ class BPETokenizer:
     def decode(self, ids):
         """Inverse of ``encode``: ids -> bytes -> text, with specials mapped to literals (D-04).
 
-        Byte/merge ids resolve via ``vocab``; special ids resolve to their literal UTF-8 marker.
-        Raises on an unknown id. ``errors="replace"`` is a never-triggered safety net — byte-level
-        coverage guarantees valid UTF-8 round-trips with no ``<unk>``.
+        Special ids resolve FIRST (they are the authoritative atomic ids — WR-02): a special id
+        that collides with a merge/byte id must decode to its literal, never be shadowed by
+        ``vocab``. Byte/merge ids then resolve via ``vocab``; an unknown id raises ``ValueError``.
+
+        Decoding is strict UTF-8 (``errors="strict"``, the default — WR-03): byte-level coverage
+        guarantees valid round-trips, so any non-round-trippable byte stream is a genuine defect
+        and must raise ``UnicodeDecodeError`` rather than silently emit U+FFFD replacements.
         """
         inverse_special = {idx: name for name, idx in self.special_tokens.items()}
         parts = []
         for idx in ids:
-            if idx in self.vocab:
-                parts.append(self.vocab[idx])
-            elif idx in inverse_special:
+            if idx in inverse_special:
                 parts.append(inverse_special[idx].encode("utf-8"))
+            elif idx in self.vocab:
+                parts.append(self.vocab[idx])
             else:
                 raise ValueError(f"unknown token id: {idx}")
-        return b"".join(parts).decode("utf-8", errors="replace")
+        return b"".join(parts).decode("utf-8")
 
     # ---- freeze / rebuild -------------------------------------------------------------
 
@@ -204,5 +208,11 @@ class BPETokenizer:
         # Rebuild merge-id bytes in ascending rank so each pair's children already exist.
         for (p0, p1), idx in sorted(merges.items(), key=lambda kv: kv[1]):
             vocab[idx] = vocab[p0] + vocab[p1]
+        # Layout invariant (WR-02): special ids must be disjoint from byte/merge ids so decode
+        # can resolve them unambiguously — a collision would silently shadow the special.
+        if not set(special_tokens.values()).isdisjoint(vocab):
+            raise ValueError(
+                "special token ids overlap byte/merge ids; the layout must keep them disjoint"
+            )
         tok.vocab = vocab
         return tok
