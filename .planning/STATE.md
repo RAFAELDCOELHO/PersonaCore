@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-06-04T21:49:59.634Z"
+last_updated: "2026-06-04T21:54:39.288Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 25
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 ## Current Position
 
 Phase: 03 (bigram-baseline-training-harness) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-04
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [████████░░] 80%
 | Phase 02 P03 | 6 | 3 tasks | 5 files |
 | Phase 03 P01 | 6 | 5 tasks | 8 files |
 | Phase 03 P02 | 6 | 2 tasks | 3 files |
+| Phase 03 P03 | 7 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [03-02]: BigramLanguageModel honors the LOCKED forward(idx, targets=None) -> (logits, loss) contract (D-02) with internal CE on the nanoGPT (B*T, V) flatten (D-02a); Phase-4 GPT reuses it unchanged.
 - [Phase ?]: [03-02]: assemble_loss lives in training/loss.py not the model (D-03); identity-on-empty in M1, additive (fisher_penalty,) in M2 EWC with no loop change (D-04).
 - [Phase ?]: [03-02]: training/__init__.py deliberately not created — Plan 04 owns the full training surface; namespace-package discovery resolves personacore.training.loss without it.
+- [Phase ?]: [03-03]: doc-level split drops the fixture trailing newline so val is not a degenerate one-token doc (no-leakage TRAIN-03); warmup+cosine LR wrapped in LambdaLR for the checkpoint state_dict() resume contract (TRAIN-01/D-05/D-08).
 
 ### Pending Todos
 
@@ -116,6 +118,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T21:49:36.987Z
+Last session: 2026-06-04T21:54:23.445Z
 Stopped at: Completed 03-01-PLAN.md
 Resume file: None

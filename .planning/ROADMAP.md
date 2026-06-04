@@ -102,7 +102,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1)*
 
 - [x] 03-02-PLAN.md — Model->loss slice: BigramLanguageModel forward (logits, loss) contract + assemble_loss EWC seam [MODEL-01, TRAIN-06]
-- [ ] 03-03-PLAN.md — Data + schedule slice: doc-level no-leakage split + get_batch + warmup/cosine LambdaLR [TRAIN-03, TRAIN-01]
+- [x] 03-03-PLAN.md — Data + schedule slice: doc-level no-leakage split + get_batch + warmup/cosine LambdaLR [TRAIN-03, TRAIN-01]
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -194,7 +194,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |-------|----------------|--------|-----------|
 | 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
 | 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
-| 3. Bigram Baseline & Training Harness | 2/4 | In Progress|  |
+| 3. Bigram Baseline & Training Harness | 3/4 | In Progress|  |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |
 | 5. TinyStories Pretraining | 0/TBD | Not started | - |
 | 6. Generation & Sampling | 0/TBD | Not started | - |
