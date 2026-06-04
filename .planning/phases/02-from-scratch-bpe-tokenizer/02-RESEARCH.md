@@ -464,22 +464,16 @@ class ModelConfig:
 | A6 | regex `~2026.5`, tiktoken `~0.13` version pins | Standard Stack | Low — latest verified via `pip index versions`; pins are conservative compatible-release ranges. |
 | A7 | regex/tiktoken download counts & ages | Package Legitimacy Audit | Low — registry existence + latest version VERIFIED; popularity is well-known but slopcheck was unavailable. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Is `regex` (the PyPI library) acceptable as a runtime dependency under the from-scratch ethos?**
-   - What we know: every reference impl uses it; stdlib `re` cannot do `\p{L}`. It is a pre-tok primitive, not BPE logic.
-   - What's unclear: whether the user considers any non-stdlib runtime dep a violation of "pure Python from scratch."
-   - Recommendation: Treat `regex` as allowed (analogous to `re`/`numpy`). Surface this in discuss/plan as a one-line confirmation. If rejected, document the `re`-with-`[^\W\d_]` fallback and accept oracle-equivalence caveats on exotic scripts.
+> All three resolved during /gsd:plan-phase (user decision + CONTEXT.md locks). Recorded here for traceability; plans implement these resolutions.
 
-2. **Should the tiktoken oracle be skip-on-offline or commit the gpt2 blob?**
-   - What we know: `get_encoding("gpt2")` needs network unless `TIKTOKEN_CACHE_DIR` is seeded.
-   - What's unclear: whether CI must run the oracle every time (vs. at least once).
-   - Recommendation: skip-on-offline by default (keeps Phase-1 CPU-only-offline CI green); document a one-time network run as the verification gate. Optionally add a separate network-enabled CI job.
+1. **Is `regex` (the PyPI library) acceptable as a runtime dependency under the from-scratch ethos?** — **RESOLVED: APPROVED as a core runtime dependency** (user decision, 2026-06-04). `regex` is a low-level pre-tokenization text primitive analogous to stdlib `re` (needed for the GPT-2 split pattern's `\p{L}`/`\p{N}` escapes), distinct from BPE logic and from `tiktoken` (which stays strictly `[dev]`/test-only). The CLAUDE.md stack note "pure Python/regex + dict merges" covers it.
+   - Original context: every reference impl uses it; stdlib `re` cannot do `\p{L}`. The `re`-with-`[^\W\d_]` fallback was the rejected alternative.
 
-3. **Exact special-token id layout (after-bytes vs top-pinned).**
-   - What we know: D-03a delegates this; both are valid.
-   - What's unclear: portfolio preference.
-   - Recommendation: top-pinned (`8184–8191`) to avoid the merge-id collision class and give a stable `eos_id` constant.
+2. **Should the tiktoken oracle be skip-on-offline or commit the gpt2 blob?** — **RESOLVED: skip-on-offline by default**; the equivalence is confirmed at least once with network/seeded `TIKTOKEN_CACHE_DIR` as a phase-gate manual verification (see VALIDATION.md). Keeps Phase-1 CPU-only-offline CI green.
+
+3. **Exact special-token id layout (after-bytes vs top-pinned).** — **RESOLVED: top-pinned** (`8184–8191`, EOS=`8184`; merges `256–8183`; bytes `0–255`) to avoid the merge/special id-collision class and give a stable `eos_id` constant. D-03a delegated this.
 
 ## Environment Availability
 
