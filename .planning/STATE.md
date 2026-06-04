@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-06-04T19:33:38.003Z"
+last_updated: "2026-06-04T19:40:32.848Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 13
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 ## Current Position
 
 Phase: 02 (from-scratch-bpe-tokenizer) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-04
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [███████░░░] 67%
 | Phase 01 P02 | 14 | 2 tasks | 10 files |
 | Phase 01 P03 | 4 | 2 tasks | 3 files |
 | Phase 02 P01 | 8 | 3 tasks | 12 files |
+| Phase 02 P02 | 4 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [02-01]: vocab_size=8192 + eos_id=8184 locked in ModelConfig (D-01/D-03); Phases 3-4 size around them and they never move.
 - [Phase ?]: [02-01]: regex is a core runtime dep (GPT-2 pre-tok primitive, not a from-scratch violation); tiktoken is [dev]-only with a no-runtime-import guard (T-02-01).
 - [Phase ?]: [02-01]: Wave-0 tokenizer tests written RED first; go green in Plan 02 (train/roundtrip/special) and Plan 03 (io/oracle).
+- [Phase ?]: [02-02]: BPETokenizer() is default-constructible then .train(text, vocab_size); merges/vocab populate on train() or frozen() (Plan-01 test contract).
+- [Phase ?]: [02-02]: oracle library name kept out of runtime src/ (reworded docstrings) so the no-runtime-oracle string-scan guard stays green (T-02-04).
+- [Phase ?]: [02-02]: decode maps a special id back to its literal marker, so round-trip holds even for embedded special-token literals.
 
 ### Pending Todos
 
@@ -102,6 +106,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T19:33:37.998Z
+Last session: 2026-06-04T19:39:54.563Z
 Stopped at: Completed 02-01-PLAN.md
 Resume file: None
