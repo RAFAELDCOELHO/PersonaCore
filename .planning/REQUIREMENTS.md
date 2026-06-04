@@ -88,4 +88,48 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 
 ## Traceability
 
-<!-- Filled by roadmap: maps each requirement to its phase. -->
+Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| ENV-01 | Phase 1 | Pending |
+| ENV-02 | Phase 1 | Pending |
+| ENV-03 | Phase 1 | Pending |
+| ENV-04 | Phase 1 | Pending |
+| ENV-05 | Phase 1 | Pending |
+| ENV-06 | Phase 1 | Pending |
+| TOK-01 | Phase 2 | Pending |
+| TOK-02 | Phase 2 | Pending |
+| TOK-03 | Phase 2 | Pending |
+| TOK-04 | Phase 2 | Pending |
+| TOK-05 | Phase 2 | Pending |
+| MODEL-01 | Phase 3 | Pending |
+| TRAIN-01 | Phase 3 | Pending |
+| TRAIN-02 | Phase 3 | Pending |
+| TRAIN-03 | Phase 3 | Pending |
+| TRAIN-04 | Phase 3 | Pending |
+| TRAIN-05 | Phase 3 | Pending |
+| TRAIN-06 | Phase 3 | Pending |
+| MODEL-02 | Phase 4 | Pending |
+| MODEL-03 | Phase 4 | Pending |
+| MODEL-04 | Phase 4 | Pending |
+| MODEL-05 | Phase 4 | Pending |
+| MODEL-06 | Phase 4 | Pending |
+| MODEL-07 | Phase 4 | Pending |
+| PRE-01 | Phase 5 | Pending |
+| PRE-02 | Phase 5 | Pending |
+| PRE-03 | Phase 5 | Pending |
+| GEN-01 | Phase 6 | Pending |
+| GEN-02 | Phase 6 | Pending |
+| GEN-03 | Phase 6 | Pending |
+| EVAL-01 | Phase 7 | Pending |
+| EVAL-02 | Phase 7 | Pending |
+| EVAL-03 | Phase 7 | Pending |
+| DEMO-01 | Phase 8 | Pending |
+| DEMO-02 | Phase 8 | Pending |
+| DEMO-03 | Phase 8 | Pending |
+| DOC-01 | Phase 8 | Pending |
+| QA-01 | Phase 8 | Pending |
+| QA-02 | Phase 1, Phase 8 | Pending |
+
+**Cross-cutting note:** QA-02 (reproducibility discipline) is anchored in Phase 1 (the seed/config/git-SHA harness, config-in-checkpoint) and re-verified in Phase 8 (full-suite reproducibility check). QA-01 (per-component tests) and DOC-01 (writeup) are written incrementally per phase as success criteria but formally consolidated/owned in Phase 8.
