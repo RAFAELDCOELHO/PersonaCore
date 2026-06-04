@@ -10,11 +10,7 @@ import subprocess
 
 import torch
 
-from personacore.checkpoint import (
-    CKPT_SCHEMA_VERSION,
-    load_checkpoint,
-    save_checkpoint,
-)
+from personacore.checkpoint import CKPT_SCHEMA_VERSION, load_checkpoint, save_checkpoint
 from personacore.config import ModelConfig, TrainConfig
 from personacore.provenance import git_sha
 from personacore.seeding import seed_everything

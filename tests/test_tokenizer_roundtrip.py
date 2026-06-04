@@ -10,8 +10,9 @@ RED until Plan 02 implements ``personacore.tokenizer``. All tests are CPU-only a
 import pathlib
 
 import pytest
-from personacore.tokenizer import BPETokenizer
 from tests.fixtures.tricky_strings import TRICKY_STRINGS
+
+from personacore.tokenizer import BPETokenizer
 
 CORPUS_PATH = pathlib.Path(__file__).parent / "fixtures" / "tiny_corpus.txt"
 

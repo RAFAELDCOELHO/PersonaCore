@@ -12,6 +12,7 @@ import json
 import pathlib
 
 import pytest
+
 from personacore.tokenizer import BPETokenizer
 from personacore.tokenizer.io import SCHEMA_VERSION, from_json, save_json
 
