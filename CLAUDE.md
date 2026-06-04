@@ -168,3 +168,87 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 > Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
 > This section is managed by `generate-claude-profile` -- do not edit manually.
 <!-- GSD:profile-end -->
+
+<!-- ENV-06: Project structure + Kaggle/local workflow. Owned by Phase 1 Plan 03.
+     Lives OUTSIDE the GSD marker blocks above so GSD-managed regions are never clobbered. -->
+## Project Structure & Reproducible Workflow (ENV-06)
+
+### Phase-1 project layout
+
+Only the modules that Phase 1 actually ships exist today. Future module directories
+(`tokenizer/`, `model/`, `training/`, `generation/`, `data/`, `demo/`) are added by their
+own phases — no empty stub dirs that read as "unfinished" (D-11).
+
+```
+PersonaCore/
+├── src/personacore/        # installable package — the import surface everything depends on
+│   ├── __init__.py         # exposes __version__ (thin)
+│   ├── config.py           # RuntimeConfig / ModelConfig / TrainConfig dataclasses (fp32 default, bf16 guarded)
+│   ├── checkpoint.py       # save_checkpoint / load_checkpoint — open-dict, full RNG state (resumable)
+│   ├── seeding.py          # seed_everything(); optional strict determinism toggle
+│   ├── provenance.py       # git_sha() — records the commit into the checkpoint (QA-02)
+│   ├── preflight.py        # preflight_p100() — assert Pascal-compatible CUDA before a long run
+│   └── logging.py          # offline CSV appender (no wandb/network)
+├── scripts/                # thin entry points (e.g. preflight_demo.py); logic lives in the package
+├── tests/                  # pytest, CPU-only, GPU-free
+├── pyproject.toml          # PEP 621 installable; torch is NOT a core dependency (D-09/D-10)
+├── requirements.txt        # documented venv, kept consistent with pyproject
+├── Makefile                # install / test / lint / format
+└── .github/workflows/ci.yml # CPU-only CI: setup-python 3.11 → install .[cpu,dev] → ruff → pytest
+```
+
+### Local laptop (CPU dev + inference + tests)
+
+A **Python 3.11 virtual environment is MANDATORY**. This dev box runs Python 3.14, which is
+**not a supported target** — torch CPU wheels and Kaggle's image target 3.10/3.11, so develop
+and test only inside a 3.11 venv (CI also pins 3.11). Never validate against the local 3.14.
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[cpu,dev]" --extra-index-url https://download.pytorch.org/whl/cpu
+make test            # full CPU-only suite
+```
+
+`make lint` runs `ruff check . && ruff format --check .`; `make format` auto-fixes.
+
+### Kaggle (P100 GPU training)
+
+The **public GitHub repo is the single source of truth** (D-05) — Kaggle pulls code by cloning,
+never by copy-paste or manual upload:
+
+```bash
+git clone https://github.com/<owner>/PersonaCore.git
+cd PersonaCore
+pip install -e .            # CORE ONLY — no extras
+```
+
+**Never run `pip install torch` (or `make install` / the `[cpu]` extra) on Kaggle.** (D-10)
+Kaggle's pre-installed torch is the Pascal-compatible (`sm_60`, CUDA ≤12.6) wheel. A `cu128+`
+wheel dropped Pascal kernels and would silently brick the P100 — `preflight_p100()` smoke-tests
+the running wheel before any long run. Verify with `torch.cuda.get_device_name(0)` in cell 1.
+
+**Provenance (D-06):** each session clones `main` and records the resulting commit SHA into the
+checkpoint/config for reproducibility (`provenance.git_sha()`). For the **final pretraining run**,
+clone a **pinned tag/SHA** instead of `main` so the long run is fully pinned and regenerable.
+
+### Two Kaggle run modes (D-08)
+
+- **Headless "Save & Run All / Commit"** — the default for the long pretrain. Runs unattended;
+  checkpoints land in `/kaggle/working` (wiped at session end) and are persisted to a versioned
+  Kaggle Dataset so they survive the 30h/week + ~9h/session limits and resume exactly.
+- **Interactive sessions** — for short calibration / smoke runs (LR sweeps, sanity checks)
+  where you watch output live and iterate quickly.
+
+### Reproducibility discipline (QA-02)
+
+The primary reproducibility guarantee is **seed + git SHA + config-embedded-in-checkpoint**:
+`seed_everything(seed)` seeds `random`/`numpy`/`torch`/`cuda` and disables the cuDNN autotuner;
+the open-dict checkpoint travels with its `ModelConfig`/`TrainConfig` and the recorded SHA.
+On resume, RNG **state is restored** (not re-seeded) so the trajectory continues bit-for-bit.
+An optional `strict=True` mode enables full bitwise determinism
+(`torch.use_deterministic_algorithms(True)` + `cudnn.deterministic`) at a documented **speed cost** —
+off by default; seed + SHA + config is enough for the portfolio guarantee.
+
+> Secrets: never commit a Kaggle API token. Use Kaggle Secrets / env vars; `.gitignore` covers
+> tokens, checkpoints, and logs.
