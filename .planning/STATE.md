@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-06-04T19:50:29.117Z"
+status: ready_to_plan
+stopped_at: Phase 02 complete (3/3) — ready to discuss Phase 3
+last_updated: 2026-06-04T20:02:50.818Z
 last_activity: 2026-06-04
 progress:
   total_phases: 8
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 02 — from-scratch-bpe-tokenizer
+**Current focus:** Phase 3 — bigram baseline & training harness
 
 ## Current Position
 
-Phase: 02 (from-scratch-bpe-tokenizer) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 3
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-04
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 3
 - Average duration: — min
 - Total execution time: 0.0 hours
 
@@ -44,7 +44,7 @@ Progress: [██████████] 100%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 02 | 3 | - | - |
 
 **Recent Trend:**
 
