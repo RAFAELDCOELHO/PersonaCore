@@ -12,9 +12,9 @@ nn.Linear + AdamW like test_checkpoint.py:_build.
 """
 
 import torch
-from personacore.training.schedule import build_lr_lambda, build_scheduler
 
 from personacore.config import TrainConfig
+from personacore.training.schedule import build_lr_lambda, build_scheduler
 
 
 def _build_optimizer(lr=1.0):

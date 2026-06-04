@@ -13,11 +13,11 @@ threshold is pinned by the Plan-04 executor (A2); here we assert it lands well u
 import math
 
 import torch
-from personacore.model import BigramLanguageModel
-from personacore.training.loop import train
 
 from personacore.config import TrainConfig
+from personacore.model import BigramLanguageModel
 from personacore.seeding import seed_everything
+from personacore.training.loop import train
 
 UNIFORM_BOUND = math.log(8192)  # ~9.0 — the random-init CE ceiling the loop must beat.
 

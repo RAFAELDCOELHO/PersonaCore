@@ -13,9 +13,9 @@ committed fixture through the FROZEN tokenizer (mirrors test_tokenizer_io.py:19)
 import pathlib
 
 import torch
-from personacore.training.data import get_batch, load_split
 
 from personacore.tokenizer import from_json
+from personacore.training.data import get_batch, load_split
 
 CORPUS_PATH = pathlib.Path(__file__).parent / "fixtures" / "bigram_corpus.txt"
 TOKENIZER_PATH = "artifacts/tokenizer.json"

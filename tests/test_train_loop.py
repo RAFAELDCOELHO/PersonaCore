@@ -13,9 +13,9 @@ RED until Plan 02 implements ``personacore.training.loop``. CPU-only except the 
 
 import pytest
 import torch
-from personacore.training.loop import train
 
 from personacore.config import RuntimeConfig, TrainConfig
+from personacore.training.loop import train
 
 
 class _SpyScaler:

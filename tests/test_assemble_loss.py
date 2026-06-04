@@ -9,6 +9,7 @@ RED until Plan 02 implements ``personacore.training.loss``. CPU-only, GPU-free.
 """
 
 import torch
+
 from personacore.training.loss import assemble_loss
 
 

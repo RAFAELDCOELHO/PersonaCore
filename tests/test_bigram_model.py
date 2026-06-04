@@ -12,6 +12,7 @@ no fixture (random ``idx`` via seeded ``torch.randint``).
 import math
 
 import torch
+
 from personacore.model import BigramLanguageModel
 
 
