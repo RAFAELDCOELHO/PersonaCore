@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-06-04T17:21:13.753Z"
-last_activity: 2026-06-04 -- Phase 1 planning complete
+last_updated: "2026-06-04T18:07:27.326Z"
+last_activity: 2026-06-04
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 1 — Scaffolding & Reproducible Environment
+**Current focus:** Phase 01 — scaffolding-reproducible-environment
 
 ## Current Position
 
-Phase: 1 of 8 (Scaffolding & Reproducible Environment)
-Plan: 0 of TBD in current phase
+Phase: 01 (scaffolding-reproducible-environment) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-06-04 -- Phase 1 planning complete
+Last activity: 2026-06-04
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 01 P01 | 9 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,8 @@ Recent decisions affecting current work:
 - [Roadmap]: Bigram baseline + harness (Phase 3) proves the training/checkpoint/sampling loop before the GPT (Phase 4) is built.
 - [Roadmap]: Two M2 seams are M1 acceptance criteria — named `nn.Linear` projections (Phase 4) and `assemble_loss(...)` + open-dict checkpoints (Phases 1/3) — so LoRA/EWC are additive in M2.
 - [Roadmap]: Document-as-we-go (DOC-01) consolidated lightly in Phase 8, not a heavy standalone block.
+- [Phase ?]: [01-01]: torch excluded from core deps; offered only as [cpu] extra (D-10) — prevents a cu128+ wheel bricking the Kaggle P100.
+- [Phase ?]: [01-01]: RuntimeConfig is the single device/precision source — fp32 default, AMP off on CPU, bf16 raises on Pascal/P100 (cc < 7.0).
 
 ### Pending Todos
 
@@ -88,6 +91,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04T16:50:27.105Z
+Last session: 2026-06-04T18:07:05.811Z
 Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-scaffolding-reproducible-environment/01-CONTEXT.md
+Resume file: None

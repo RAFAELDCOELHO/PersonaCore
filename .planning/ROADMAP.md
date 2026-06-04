@@ -42,7 +42,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Installable package (pyproject src-layout) + config layer (RuntimeConfig fp32/bf16-guard, ModelConfig, TrainConfig) [ENV-01, ENV-02, ENV-03]
+- [x] 01-01-PLAN.md — Installable package (pyproject src-layout) + config layer (RuntimeConfig fp32/bf16-guard, ModelConfig, TrainConfig) [ENV-01, ENV-02, ENV-03]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -165,7 +165,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Scaffolding & Reproducible Environment | 0/3 | Planned | - |
+| 1. Scaffolding & Reproducible Environment | 1/3 | In Progress|  |
 | 2. From-Scratch BPE Tokenizer | 0/TBD | Not started | - |
 | 3. Bigram Baseline & Training Harness | 0/TBD | Not started | - |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |

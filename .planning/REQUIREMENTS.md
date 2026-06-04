@@ -8,9 +8,9 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 ## v1 Requirements (Milestone 1)
 
 ### Environment & Scaffolding
-- [ ] **ENV-01**: Repo is an installable package (`pip install -e .`) so `personacore` imports identically on Kaggle, laptop, and pytest
-- [ ] **ENV-02**: Reproducible environment via `requirements.txt` and a documented virtual-env setup, runnable on Kaggle P100 (training) and laptop CPU (inference)
-- [ ] **ENV-03**: A single `RuntimeConfig` centralizes device/precision handling — fp32 by default, bf16 guarded to error on Pascal/P100
+- [x] **ENV-01**: Repo is an installable package (`pip install -e .`) so `personacore` imports identically on Kaggle, laptop, and pytest
+- [x] **ENV-02**: Reproducible environment via `requirements.txt` and a documented virtual-env setup, runnable on Kaggle P100 (training) and laptop CPU (inference)
+- [x] **ENV-03**: A single `RuntimeConfig` centralizes device/precision handling — fp32 by default, bf16 guarded to error on Pascal/P100
 - [ ] **ENV-04**: Kaggle checkpoint/resume infrastructure: full training state (model + optimizer + scheduler + step + RNG) saves to `/kaggle/working` and resumes exactly after a session kill
 - [ ] **ENV-05**: A preflight check asserts GPU/Pascal-compatible CUDA is active before any long training run, and seeds are set for reproducibility
 - [ ] **ENV-06**: `CLAUDE.md` documents project structure, setup, and the Kaggle/local workflow
@@ -92,9 +92,9 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENV-01 | Phase 1 | Pending |
-| ENV-02 | Phase 1 | Pending |
-| ENV-03 | Phase 1 | Pending |
+| ENV-01 | Phase 1 | Complete |
+| ENV-02 | Phase 1 | Complete |
+| ENV-03 | Phase 1 | Complete |
 | ENV-04 | Phase 1 | Pending |
 | ENV-05 | Phase 1 | Pending |
 | ENV-06 | Phase 1 | Pending |
