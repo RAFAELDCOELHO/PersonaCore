@@ -153,13 +153,20 @@ class BPETokenizer:
 
         Splits FIRST on the special-token literals (longest-first to avoid prefix shadowing),
         emitting each special's reserved id atomically; ordinary spans go through byte-level BPE.
-        ``allowed_special="all"`` recognizes every registered special; any other value disables
-        special handling and encodes the whole string as ordinary bytes.
+
+        ``allowed_special`` is explicit (WR-05): ``"all"`` recognizes every registered special;
+        ``"none"`` or any falsy value disables special handling; a ``set``/``frozenset`` of names
+        restricts recognition to that subset (minbpe convention). Any other value raises
+        ``ValueError`` rather than silently byte-splitting embedded special literals.
         """
-        if allowed_special == "all" and self.special_tokens:
+        if allowed_special == "all":
             specials = self.special_tokens
-        else:
+        elif allowed_special == "none" or not allowed_special:
             specials = {}
+        elif isinstance(allowed_special, (set, frozenset)):
+            specials = {k: v for k, v in self.special_tokens.items() if k in allowed_special}
+        else:
+            raise ValueError(f"unrecognized allowed_special={allowed_special!r}")
 
         if not specials:
             return self._encode_ordinary(text)
