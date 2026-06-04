@@ -4,6 +4,8 @@
 #
 # Core runtime dependency:
 numpy~=2.4
+# GPT-2 pre-tok engine for \p{L}/\p{N} (stdlib `re` can't); a pre-tok primitive, not a BPE violation.
+regex~=2026.5
 
 # --- CPU PyTorch (laptop / CI only) ---
 # Uncomment the line below to install a CPU torch wheel locally:
@@ -16,6 +18,7 @@ numpy~=2.4
 # --- Dev tooling ---
 # pytest~=9.0
 # ruff~=0.15
+# tiktoken~=0.13   # TOK-05 oracle only; NEVER runtime-imported (test-only).
 
 # --- Demo (Phase 8) ---
 # gradio>=5,<6
