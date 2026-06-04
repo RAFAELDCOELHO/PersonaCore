@@ -63,7 +63,20 @@ Plans:
   4. The tokenizer saves and loads as a frozen artifact and exposes a locked `vocab_size` ready to size the model
   5. A from-scratch-vs-reference equivalence test passes using tiktoken/HF as a test-only oracle (never a runtime dependency)
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Lock vocab_size=8192 + eos_id, declare regex(core)/tiktoken([dev]) deps, Wave 0 fixtures + 5 red TOK test files [TOK-01..TOK-05]
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 02-02-PLAN.md — From-scratch BPE core: GPT-2 pre-tok, top-pinned special registry, deterministic train + lowest-rank encode/decode + atomic EOS [TOK-01, TOK-02, TOK-03]
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 02-03-PLAN.md — JSON freeze/load artifact, production tokenizer.json train script, tiktoken gpt2 equivalence oracle [TOK-04, TOK-05]
 
 ### Phase 3: Bigram Baseline & Training Harness
 
@@ -166,7 +179,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
-| 2. From-Scratch BPE Tokenizer | 0/TBD | Not started | - |
+| 2. From-Scratch BPE Tokenizer | 0/3 | Not started | - |
 | 3. Bigram Baseline & Training Harness | 0/TBD | Not started | - |
 | 4. GPT Transformer Decoder | 0/TBD | Not started | - |
 | 5. TinyStories Pretraining | 0/TBD | Not started | - |
