@@ -1,7 +1,17 @@
 """From-scratch byte-level BPE tokenizer package (D-11) — public import surface."""
 
 from .bpe import BPETokenizer
+from .io import SCHEMA_VERSION, from_json, save_json
 from .patterns import GPT2_SPLIT_PATTERN
 from .special import EOS_ID, EOS_TOKEN, SPECIAL_TOKENS
 
-__all__ = ["BPETokenizer", "GPT2_SPLIT_PATTERN", "SPECIAL_TOKENS", "EOS_TOKEN", "EOS_ID"]
+__all__ = [
+    "BPETokenizer",
+    "GPT2_SPLIT_PATTERN",
+    "SPECIAL_TOKENS",
+    "EOS_TOKEN",
+    "EOS_ID",
+    "save_json",
+    "from_json",
+    "SCHEMA_VERSION",
+]
