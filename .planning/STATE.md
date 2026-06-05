@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-06-05T16:04:57.002Z"
+status: verifying
+stopped_at: Phase 4 complete (overfit gate GREEN)
+last_updated: "2026-06-05T16:10:26.271Z"
 last_activity: 2026-06-05
 progress:
   total_phases: 8
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 13
-  completed_plans: 12
-  percent: 38
+  completed_plans: 13
+  percent: 50
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 Phase: 04 (gpt-transformer-decoder) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-05
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [█████████░] 92%
 | Phase 03 P04 | 18 | 2 tasks | 4 files |
 | Phase 04 P01 | 6 | 2 tasks | 9 files |
 | Phase 04 P02 | 8 | 2 tasks | 2 files |
+| Phase 04 P03 | 4 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [04-02]: GPT decoder ships with attn_impl as a constructor arg (default manual); manual and sdpa paths share q/k/v projection so equivalence holds within atol 1e-5.
 - [Phase ?]: [04-02]: weight tying is nn.Parameter assignment AFTER init+residual-override (Pattern 1) so data_ptr is shared; lm_head bias=False keeps the tied weight the sole head param.
 - [Phase ?]: [04-02]: residual-scaled init 0.02/sqrt(2*n_layer) applied to BOTH c_proj AND fc_out (D-04a), not just c_proj.
+- [Phase ?]: [04-03]: the real 6-layer GPT(ModelConfig()) overfits one fixed batch through the UNTOUCHED Phase-3 train() loop at lr=1e-3/max_steps=300 (final loss ~5e-4) — MODEL-02 SC#1 harness-swap proof GREEN, zero harness changes.
 
 ### Pending Todos
 
@@ -131,6 +133,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-05T16:04:35.101Z
-Stopped at: Phase 4 context gathered
+Last session: 2026-06-05T16:10:13.829Z
+Stopped at: Phase 4 complete (overfit gate GREEN)
 Resume file: None

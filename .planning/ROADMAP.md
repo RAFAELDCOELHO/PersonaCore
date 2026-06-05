@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Scaffolding & Reproducible Environment** - Installable package, RuntimeConfig (fp32-default, bf16-guard), Kaggle checkpoint/resume infra, GPU preflight, seeds (completed 2026-06-04)
 - [x] **Phase 2: From-Scratch BPE Tokenizer** - Byte-level BPE train/encode/decode with deterministic merges, atomic EOS, locked vocab_size, round-trip tests (completed 2026-06-04)
 - [x] **Phase 3: Bigram Baseline & Training Harness** - Thin end-to-end slice: bigram trains/samples through a resumable loop with the assemble_loss + open-dict-checkpoint seams proven (completed 2026-06-04)
-- [ ] **Phase 4: GPT Transformer Decoder** - From-scratch ~10–15M GPT (causal MHA, pre-norm blocks, weight tying, GPT-2 init) with silent-bug gates and the LoRA seam
+- [x] **Phase 4: GPT Transformer Decoder** - From-scratch ~10–15M GPT (causal MHA, pre-norm blocks, weight tying, GPT-2 init) with silent-bug gates and the LoRA seam (completed 2026-06-05)
 - [ ] **Phase 5: TinyStories Pretraining** - Memmap data prep, full Kaggle P100 run to coherent generation, trained checkpoint + recorded curves
 - [ ] **Phase 6: Generation & Sampling** - Shared generate() with greedy/temperature/top-k/top-p, EOS stop, context cropping, determinism tests
 - [ ] **Phase 7: Evaluation** - Held-out perplexity, curated qualitative samples, 2–3 ablations with a comparison table
@@ -135,7 +135,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 04-03-PLAN.md — Overfit-one-batch integration gate green: real GPT(ModelConfig) overfits through the untouched training/loop.py (harness-swap proof) [MODEL-02]
+- [x] 04-03-PLAN.md — Overfit-one-batch integration gate green: real GPT(ModelConfig) overfits through the untouched training/loop.py (harness-swap proof) [MODEL-02]
 
 ### Phase 5: TinyStories Pretraining
 
@@ -208,7 +208,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
 | 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
 | 3. Bigram Baseline & Training Harness | 4/4 | Complete   | 2026-06-04 |
-| 4. GPT Transformer Decoder | 2/3 | In Progress|  |
+| 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
 | 5. TinyStories Pretraining | 0/TBD | Not started | - |
 | 6. Generation & Sampling | 0/TBD | Not started | - |
 | 7. Evaluation | 0/TBD | Not started | - |
