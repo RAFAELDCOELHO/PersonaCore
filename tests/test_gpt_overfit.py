@@ -30,10 +30,11 @@ def test_gpt_overfits_single_fixed_batch():
     fixed_idx = torch.randint(0, 8192, (4, 16))
     fixed_targets = torch.randint(0, 8192, (4, 16))
 
-    # NOTE (Plan-03 executor): lr/max_steps are a STARTING point. A 6-layer pre-norm GPT typically
-    # overfits a tiny fixed batch with lr~=1e-3 (vs the bigram's 1e-1; RESEARCH Open Q1). Tune these
-    # for the deeper net; a reduced-block_size ModelConfig keeping the architecture identical is
-    # acceptable if CPU time is tight. The asserted bound is a band, not a fixed loss.
+    # TUNED (Plan-03 executor, RESEARCH Open Q1): a 6-layer pre-norm GPT overfits a tiny fixed
+    # batch with lr=1e-3 (smaller than the bigram's 1e-1), warmup_steps=0, max_steps=300. Measured
+    # final loss ~= 5e-4 (margin ~7.0 under the ln(8192)-2 bound) in ~11s on CPU with the FULL
+    # ModelConfig — no reduced block_size needed, so the harness-swap proof holds at the real
+    # architecture. The asserted bound below is a band, not a fixed loss; do not loosen it.
     cfg = TrainConfig(lr=1e-3, warmup_steps=0, max_steps=300, batch_size=4, grad_accum_steps=1)
     final_loss = train(
         train_config=cfg,
