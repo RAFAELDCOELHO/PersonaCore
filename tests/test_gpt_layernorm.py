@@ -12,6 +12,7 @@ RED until Plan 02 implements ``personacore.model.gpt.LayerNorm``. CPU-only, GPU-
 
 import torch
 import torch.nn as nn
+
 from personacore.model.gpt import LayerNorm
 
 
