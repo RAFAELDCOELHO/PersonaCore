@@ -3,8 +3,9 @@
 Three dataclasses split runtime/device concerns from model and training hyperparameters:
 
 - ``RuntimeConfig`` — device + precision resolution. fp32 by default; AMP auto-disabled on
-  CPU; bf16 RAISES on Pascal/P100 (compute capability < 7.0). This is the single source of
-  device/AMP truth — nothing else in the codebase should call ``torch.cuda.is_available()``.
+  CPU and MPS; bf16 RAISES on Pascal/P100 (compute capability < 7.0). This is the single
+  source of device/AMP truth — nothing else in the codebase should call
+  ``torch.cuda.is_available()``. Device priority is CUDA -> MPS (Apple Silicon) -> CPU.
 - ``ModelConfig`` — model-sizing hyperparameters (vocab_size locked later by Phase 2).
 - ``TrainConfig`` — training-loop hyperparameters.
 
@@ -18,7 +19,17 @@ import torch
 
 
 def _default_device() -> str:
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    """Resolve the default device in priority order CUDA -> MPS -> CPU (D-02).
+
+    CUDA (Kaggle P100) wins when present; otherwise MPS (Apple Silicon, the shipped
+    Phase-5 training target per D-01) when available; otherwise CPU. ``torch.backends.mps``
+    is exposed on all supported wheels (torch>=2.7), so the direct call is safe.
+    """
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def _is_pascal(device: str) -> bool:
@@ -42,8 +53,9 @@ class RuntimeConfig:
     amp_dtype: str = "float16"  # P100 path is fp16 (NEVER bf16); toggled on in Phase 3.
 
     def __post_init__(self) -> None:
-        if self.device == "cpu":
-            # AMP is meaningless/unsupported on CPU — silently disable.
+        if self.device in ("cpu", "mps"):
+            # AMP is meaningless/unsupported on CPU; on MPS we hold fp32 only (D-02 — no
+            # fp16 AMP on Apple Silicon). Both mirror the same fp32 posture: silently disable.
             self.amp = False
         if self.amp_dtype == "bfloat16" and _is_pascal(self.device):
             raise ValueError(
