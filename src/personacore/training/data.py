@@ -68,3 +68,23 @@ def get_batch(arr, batch_size, block_size, device):
         [torch.from_numpy(arr[i + 1 : i + 1 + block_size].astype(np.int64)) for i in ix]
     )
     return x.to(device), y.to(device)
+
+
+def get_batch_memmap(bin_path, batch_size, block_size, device):
+    """Draw ``batch_size`` random ``(x, y)`` windows from a flat ``uint16`` ``.bin`` memmap.
+
+    The full-corpus analog of :func:`get_batch` (PRE-01): identical nanoGPT indexing — the same
+    ``len(data) - block_size - 1`` start bound (Pitfall 3, no overrun), the same ``uint16`` ->
+    ``int64`` cast at draw time, the same ``.to(device)``. The ONLY difference is the in-RAM
+    ``arr`` is replaced by a ``np.memmap`` that is **re-opened every call**: a long-lived memmap
+    accumulates RSS across thousands of training steps (nanoGPT leak — Pitfall 1), so it is opened
+    fresh and discarded per batch. Plain ``.to(device)`` only — the CUDA-only pinned-host /
+    async-copy transfer flags have no MPS/CPU path this phase, so they are deliberately absent.
+    """
+    data = np.memmap(bin_path, dtype=np.uint16, mode="r")
+    ix = np.random.randint(0, len(data) - block_size - 1, size=batch_size)
+    x = torch.stack([torch.from_numpy(data[i : i + block_size].astype(np.int64)) for i in ix])
+    y = torch.stack(
+        [torch.from_numpy(data[i + 1 : i + 1 + block_size].astype(np.int64)) for i in ix]
+    )
+    return x.to(device), y.to(device)

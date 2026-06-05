@@ -6,7 +6,7 @@ the four modules the harness and its scripts/tests import from a single place â€
 train`` instead of reaching into submodules.
 """
 
-from .data import get_batch, load_split
+from .data import get_batch, get_batch_memmap, load_split
 from .loop import estimate_loss, sample, train
 from .loss import assemble_loss
 from .schedule import build_lr_lambda, build_scheduler
@@ -17,6 +17,7 @@ __all__ = [
     "build_scheduler",
     "estimate_loss",
     "get_batch",
+    "get_batch_memmap",
     "load_split",
     "sample",
     "train",
