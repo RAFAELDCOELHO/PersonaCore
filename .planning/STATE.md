@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Phase 4 complete (overfit gate GREEN)
-last_updated: "2026-06-05T16:10:26.271Z"
+status: ready_to_plan
+stopped_at: Phase 04 complete (3/3) — ready to discuss Phase 5
+last_updated: 2026-06-05T16:19:38.774Z
 last_activity: 2026-06-05
 progress:
   total_phases: 8
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 04 — gpt-transformer-decoder
+**Current focus:** Phase 5 — tinystories pretraining
 
 ## Current Position
 
-Phase: 04 (gpt-transformer-decoder) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 5
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-05
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 7
+- Total plans completed: 10
 - Average duration: — min
 - Total execution time: 0.0 hours
 
@@ -46,6 +46,7 @@ Progress: [██████████] 100%
 |-------|-------|-------|----------|
 | 02 | 3 | - | - |
 | 03 | 4 | - | - |
+| 04 | 3 | - | - |
 
 **Recent Trend:**
 
