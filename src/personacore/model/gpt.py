@@ -127,3 +127,77 @@ class MLP(nn.Module):
         x = self.fc_out(x)
         x = self.dropout(x)
         return x
+
+
+class Block(nn.Module):
+    """Pre-norm transformer block (D-08/MODEL-02): norm BEFORE the sublayer, residual AROUND it."""
+
+    def __init__(self, config: ModelConfig, attn_impl: str = "manual"):
+        super().__init__()
+        self.ln_1 = LayerNorm(config.n_embd)
+        self.attn = CausalSelfAttention(config, attn_impl)
+        self.ln_2 = LayerNorm(config.n_embd)
+        self.mlp = MLP(config)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))  # residual around attention.
+        x = x + self.mlp(self.ln_2(x))  # residual around MLP.
+        return x
+
+
+class GPT(nn.Module):
+    """Hand-rolled ~13.9M-param GPT-2 decoder honoring the LOCKED forward contract (D-05/D-06).
+
+    ``attn_impl`` is a CONSTRUCTOR arg (not a ModelConfig field, RESEARCH Open Q2) so the
+    serialized config stays free of a runtime-only flag; defaults to "manual" (D-02). Pure model:
+    base CE only — no assemble_loss/generate/torch.cuda (D-05).
+    """
+
+    def __init__(self, config: ModelConfig, attn_impl: str = "manual"):
+        super().__init__()
+        self.config = config
+        self.wte = nn.Embedding(config.vocab_size, config.n_embd)  # token embedding (tied head).
+        self.wpe = nn.Embedding(config.block_size, config.n_embd)  # learned positional embedding.
+        self.drop = nn.Dropout(config.dropout)
+        self.blocks = nn.ModuleList([Block(config, attn_impl) for _ in range(config.n_layer)])
+        self.ln_f = LayerNorm(config.n_embd)
+        # Bias-free head: the tied weight is the ONLY head parameter (a head bias would be untied).
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+
+        # Ordering is load-bearing (Pattern 1): base init -> residual-scaled override -> tie.
+        # (1) GPT-2 base init over ALL params.
+        self.apply(self._init_weights)
+        # (2) Residual-scaled override on BOTH residual-stream writers (D-04a — c_proj AND fc_out).
+        for name, p in self.named_parameters():
+            if name.endswith("c_proj.weight") or name.endswith("fc_out.weight"):
+                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
+        # (3) Weight tying AFTER init: share the SAME nn.Parameter so data_ptr() is identical
+        # (NOT a .data.clone()/copy_, which makes two tensors — RESEARCH Pitfall 2). The surviving
+        # tensor is the embedding init (std 0.02); lm_head is never separately re-initialized.
+        self.lm_head.weight = self.wte.weight
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+        # Hand-rolled LayerNorm weight=1/bias=0 are set in its own __init__ — no dispatch needed.
+
+    def forward(self, idx, targets=None):
+        B, T = idx.shape
+        tok_emb = self.wte(idx)  # (B, T, C)
+        pos = torch.arange(T, device=idx.device)
+        pos_emb = self.wpe(pos)  # (T, C) — broadcasts over batch.
+        x = self.drop(tok_emb + pos_emb)
+        for block in self.blocks:
+            x = block(x)
+        x = self.ln_f(x)
+        logits = self.lm_head(x)  # (B, T, V)
+        # LOCKED bigram tail (D-05) — identical flatten to bigram.py:35-39.
+        if targets is None:
+            return logits, None
+        B, T, V = logits.shape
+        loss = F.cross_entropy(logits.view(B * T, V), targets.view(B * T))
+        return logits, loss

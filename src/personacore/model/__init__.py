@@ -5,5 +5,6 @@ unchanged, honoring the same LOCKED ``forward(idx, targets=None) -> (logits, los
 """
 
 from .bigram import BigramLanguageModel
+from .gpt import GPT
 
-__all__ = ["BigramLanguageModel"]
+__all__ = ["BigramLanguageModel", "GPT"]
