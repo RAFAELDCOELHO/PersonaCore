@@ -9,10 +9,10 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 
 ### Environment & Scaffolding
 - [x] **ENV-01**: Repo is an installable package (`pip install -e .`) so `personacore` imports identically on Kaggle, laptop, and pytest
-- [x] **ENV-02**: Reproducible environment via `requirements.txt` and a documented virtual-env setup, runnable on Kaggle P100 (training) and laptop CPU (inference)
+- [x] **ENV-02**: Reproducible environment via `requirements.txt` and a documented virtual-env setup, runnable on M3/MPS (primary training), Kaggle P100 (fallback training), and laptop CPU (inference)
 - [x] **ENV-03**: A single `RuntimeConfig` centralizes device/precision handling — fp32 by default, bf16 guarded to error on Pascal/P100
-- [x] **ENV-04**: Kaggle checkpoint/resume infrastructure: full training state (model + optimizer + scheduler + step + RNG) saves to `/kaggle/working` and resumes exactly after a session kill
-- [x] **ENV-05**: A preflight check asserts GPU/Pascal-compatible CUDA is active before any long training run, and seeds are set for reproducibility
+- [x] **ENV-04**: Checkpoint/resume infrastructure: full training state (model + optimizer + scheduler + step + RNG) saves to local disk (or `/kaggle/working` on the P100 fallback) and resumes exactly after a session kill — works for local M3/MPS sessions and Kaggle alike
+- [x] **ENV-05**: A `preflight_device` check resolves and asserts the active device (CUDA-P100 → MPS → CPU) before any long training run, and seeds are set for reproducibility
 - [x] **ENV-06**: `CLAUDE.md` documents project structure, setup, and the Kaggle/local workflow
 
 ### Tokenizer (from scratch)
@@ -40,8 +40,8 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [x] **TRAIN-06** *(M2 seam)*: Loss is assembled via an `assemble_loss(..., extra_penalties=())` seam and checkpoints are open dicts, so EWC can later add a Fisher penalty without touching the loop
 
 ### Pretraining
-- [ ] **PRE-01**: TinyStories data is obtained, encoded once into a `uint16` memmap, and pinned/persisted as a versioned Kaggle Dataset
-- [ ] **PRE-02**: The model is pretrained on TinyStories to fluent, coherent generation, producing a trained checkpoint
+- [ ] **PRE-01**: TinyStories data is obtained, encoded once (from the frozen tokenizer) into a `uint16` memmap (`train.bin`/`val.bin`, one EOS between documents) and persisted on local disk; the official TinyStoriesV2 `valid` file is the no-leakage held-out set. (If the Kaggle-P100 fallback is used, the memmap may additionally be pinned as a versioned Kaggle Dataset.)
+- [ ] **PRE-02**: The model is pretrained on TinyStories to fluent, coherent generation, producing a trained checkpoint — primary run on **local M3/MPS** (fp32, quality-first / "as long as it takes", resumable across sessions); **Kaggle P100 (30h/week) is an optional fallback**
 - [ ] **PRE-03**: Final/val perplexity and training curves are recorded for the writeup
 
 ### Generation

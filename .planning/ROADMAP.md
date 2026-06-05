@@ -2,7 +2,7 @@
 
 ## Overview
 
-Milestone 1 builds a correct, from-scratch ~10–15M-parameter GPT-style language model in pure PyTorch, pretrained on TinyStories to coherent generation, and shipped with an offline Gradio CPU chat demo, a research notebook, per-component unit tests, and a document-as-we-go technical writeup. The build order is dependency-forced: scaffolding and Kaggle resume infra must exist before any long run; the tokenizer must lock `vocab_size` before the model is sized; a bigram baseline proves the training/checkpoint/sampling harness before the real transformer math is risked; only then does the GPT, pretraining, generation, evaluation, and demo follow. As a vertical MVP, Phase 3 stands up the thin end-to-end slice (tokenize → train → sample → see output) on a trivial model, then later phases swap in and deepen the real GPT toward fluent generation. Two cheap structural seams (named `nn.Linear` projections; loss routed through `assemble_loss(...)` + open-dict checkpoints) are folded in as M1 acceptance criteria so the Milestone-2 weight-memory work (LoRA + EWC) is additive rather than a rewrite — LoRA/EWC/personalization themselves are explicitly out of scope here.
+Milestone 1 builds a correct, from-scratch ~10–15M-parameter GPT-style language model in pure PyTorch, pretrained on TinyStories to coherent generation, and shipped with an offline Gradio CPU chat demo, a research notebook, per-component unit tests, and a document-as-we-go technical writeup. The build order is dependency-forced: scaffolding and resumable-checkpoint infra (local M3/MPS sessions; Kaggle P100 fallback) must exist before any long run; the tokenizer must lock `vocab_size` before the model is sized; a bigram baseline proves the training/checkpoint/sampling harness before the real transformer math is risked; only then does the GPT, pretraining, generation, evaluation, and demo follow. As a vertical MVP, Phase 3 stands up the thin end-to-end slice (tokenize → train → sample → see output) on a trivial model, then later phases swap in and deepen the real GPT toward fluent generation. Two cheap structural seams (named `nn.Linear` projections; loss routed through `assemble_loss(...)` + open-dict checkpoints) are folded in as M1 acceptance criteria so the Milestone-2 weight-memory work (LoRA + EWC) is additive rather than a rewrite — LoRA/EWC/personalization themselves are explicitly out of scope here.
 
 ## Phases
 
@@ -139,18 +139,18 @@ Plans:
 
 ### Phase 5: TinyStories Pretraining
 
-**Goal**: The trained checkpoint everything downstream consumes — the visceral proof the LM works — produced by a full, resumable Kaggle P100 run on TinyStories to coherent, fluent generation.
+**Goal**: The trained checkpoint everything downstream consumes — the visceral proof the LM works — produced by a full, resumable **local M3/MPS run** (fp32) on TinyStories to coherent, fluent generation. Kaggle P100 is an optional fallback.
 **Mode:** mvp
 **Depends on**: Phase 4
 **Requirements**: PRE-01, PRE-02, PRE-03
 **Success Criteria** (what must be TRUE):
 
-  1. TinyStories is obtained, encoded once into a `uint16` memmap with one EOS between documents, and pinned/persisted as a versioned Kaggle Dataset with a document-level train/val split (no leakage)
-  2. A full Kaggle P100 run trains the GPT to fluent, coherent generation, surviving session kills via dataset-persisted resumable checkpoints within the 30h/week budget
-  3. A trained checkpoint is produced, and final/val perplexity plus training curves are recorded for the writeup
+  1. TinyStories is obtained, encoded once (from the frozen tokenizer) into a `uint16` memmap with one EOS between documents and persisted on local disk; the official TinyStoriesV2 `valid` file is the no-leakage held-out split (Kaggle Dataset pinning only if the P100 fallback is used)
+  2. A full **local M3/MPS run** (fp32) trains the GPT to fluent, coherent generation — quality-first, surviving session kills via resumable checkpoints; Kaggle P100 (30h/week) is an optional fallback
+  3. A trained checkpoint is produced (best val-loss), and final/val perplexity plus training curves are recorded for the writeup
 
 **Plans**: TBD
-**Research**: phase-level (empirical LR/batch/steps and coherence-per-quota on P100 are unmeasured — needs a short throughput/calibration study to size the run within the 30h/12h budget)
+**Research**: phase-level (empirical LR/batch/steps and coherence-per-hour on **M3/MPS** are unmeasured — needs a short throughput/calibration study to size the run; can smoke the P100 fallback too)
 
 ### Phase 6: Generation & Sampling
 

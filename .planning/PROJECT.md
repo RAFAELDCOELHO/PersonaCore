@@ -14,10 +14,10 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 
 <!-- Shipped and confirmed valuable. -->
 
-- [x] Project scaffolding: repo structure, `CLAUDE.md`, reproducible environment (`requirements.txt`, virtual env), runnable on Kaggle P100 and laptop CPU — _Validated in Phase 01: scaffolding-reproducible-environment_
+- [x] Project scaffolding: repo structure, `CLAUDE.md`, reproducible environment (`requirements.txt`, virtual env), runnable on M3/MPS, Kaggle P100 (fallback), and laptop CPU — _Validated in Phase 01: scaffolding-reproducible-environment; MPS device support added in quick task 260605-lgy (`RuntimeConfig` CUDA-P100→MPS→CPU, `preflight_device`)_
 - [x] BPE tokenizer implemented from scratch (train/encode/decode), with unit tests — _Validated in Phase 02: from-scratch-bpe-tokenizer (vocab locked at 8192/eos 8184; tiktoken-equivalence oracle green; production `tokenizer.json` to be regenerated from a TinyStories slice before Phase 5 — see 02-VERIFICATION.md WR-04)_
 - [x] Bigram language model from scratch as a baseline foundation, with unit tests — _Validated in Phase 03: bigram-baseline-training-harness (thin end-to-end tokenize→train→sample→see-output slice; resumable open-dict checkpoint with GradScaler state + the `assemble_loss` EWC seam proven; fp16 resume trajectory carried as a GPU-confirmation item for Phase 5 — see 03-VERIFICATION.md)_
-- [x] Training loop with checkpointing, loss logging, and resumability (Kaggle 30h/week-aware) — _Validated in Phase 03: AdamW + warmup/cosine LR + grad-clip + grad-accum, fp32 default with optional fp16-AMP+GradScaler path, CSV loss logging, save→kill→resume reproduces the curve within 1e-6_
+- [x] Training loop with checkpointing, loss logging, and resumability (resumable across local M3/MPS sessions; Kaggle 30h/week fallback-aware) — _Validated in Phase 03: AdamW + warmup/cosine LR + grad-clip + grad-accum, fp32 default with optional fp16-AMP+GradScaler path, CSV loss logging, save→kill→resume reproduces the curve within 1e-6_
 
 ### Active
 
@@ -41,22 +41,22 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - HuggingFace PEFT / transformers model code — excluded by design; everything is from scratch
 - External AI APIs during training — excluded by design (zero budget, privacy, on-device)
 - Databases, vector stores, RAG, external memory files — excluded by design; memory must live in weights
-- Scaling beyond ~10–15M params or multi-GPU training — out of scope given the Kaggle free-tier budget
+- Scaling beyond ~10–15M params or multi-GPU training — out of scope given the local M3/MPS (and fallback Kaggle free-tier) budget
 
 ## Context
 
 - **Audience:** portfolio reviewers at the MIT/Stanford bar (admissions, research, recruiting) and the author. The work must read as rigorous, original, and self-implemented.
 - **Two-milestone strategy:** De-risk the foundation before the novel claim. **Milestone 1** delivers a correct, from-scratch base language model with a working generation demo. **Milestone 2** delivers the differentiating weight-based memory (LoRA + EWC) and the research-narrative demos.
 - **Curriculum plan (full project):** two-stage pretraining — TinyStories for base fluency, then DailyDialog + PersonaChat for conversational grounding. Milestone 1 covers only the TinyStories stage.
-- **Dual-environment reality:** training runs on Kaggle (P100 16GB, 30h/week) via notebooks; the demo and inference must run on a laptop CPU. Code must be portable across both.
+- **Dual-environment reality:** training runs **locally on Apple Silicon (M3 / MPS)** — fp32, since MPS has no fp16-AMP path; **Kaggle P100 (16GB, 30h/week) via notebooks remains an optional fallback**. The demo and inference run on a laptop CPU. Code must be portable across MPS, CUDA-P100, and CPU (`RuntimeConfig` resolves CUDA-P100 → MPS → CPU). Training on the author's own machine reinforces the on-device/privacy thesis.
 - **Engineering rigor is a theme:** per-component unit tests and a documented technical narrative are first-class deliverables, not afterthoughts — they are part of what makes this a portfolio-grade artifact.
 
 ## Constraints
 
-- **Budget**: Zero — only Kaggle free-tier GPU (P100 16GB, 30h/week). No paid compute or APIs.
+- **Budget**: Zero — primary training is **local on Apple Silicon (M3 / MPS)**, the author's own hardware; **Kaggle free-tier GPU (P100 16GB, 30h/week) is an optional fallback**. No paid compute or APIs.
 - **Tech stack**: Python + PyTorch only. No HuggingFace PEFT/transformers model code; core ML components built from scratch.
-- **Compute/Model size**: ~10–15M parameters — chosen to fit free-tier training time and on-device CPU inference.
-- **Portability**: Must train on Kaggle GPU and run inference/demo on a laptop CPU with no internet.
+- **Compute/Model size**: ~10–15M parameters — chosen to fit local M3/MPS (and fallback free-tier P100) training time and on-device CPU inference.
+- **Portability**: Must train on **M3/MPS (Kaggle P100 optional fallback)** and run inference/demo on a laptop CPU with no internet. `RuntimeConfig` resolves CUDA-P100 → MPS → CPU; MPS and CPU run fp32 (no fp16 AMP), the bf16-on-Pascal guard still errors.
 - **Privacy**: Memory must live in weights only — no external data stores. This is a design requirement, not just a constraint.
 - **Dev environment**: Claude Code as the development environment; GSD workflow for planning.
 
@@ -73,6 +73,7 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 | Gradio local web UI as primary demo + `demo.ipynb` as technical artifact | Good demo video/screenshots while staying on-device; notebook carries the ML narrative | — Pending |
 | Document-as-we-go (polished writeup each milestone) | Narrative compounds; avoids reconstructing rationale later | — Pending |
 | Everything from scratch (transformer, BPE, LoRA, EWC) — no HF PEFT | The portfolio value is demonstrated depth, not library usage | — Pending |
+| Primary training target = local M3/MPS (fp32); Kaggle P100 demoted to optional fallback (decided Phase 5 discuss, 2026-06-05) | Strengthens the fully-on-device/zero-budget/privacy thesis — the model trains on the author's own machine, no external compute dependency. MPS has no fp16 AMP, so fp32; `RuntimeConfig` resolves CUDA-P100→MPS→CPU. | — Pending (device layer landed in quick task 260605-lgy) |
 
 ## Evolution
 
