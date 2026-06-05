@@ -124,6 +124,12 @@ None yet.
 - Phase 5 (Pretraining): empirical LR/batch/steps and coherence-per-quota on P100 are unmeasured — phase-level research flagged before the long run.
 - Phase 8 (Demo): KV-cache-vs-scope tension (PITFALLS recommends it for CPU latency; FEATURES marks it out of M1 scope) — resolve on measured CPU latency at phase planning.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260605-lgy | MPS device-layer support: RuntimeConfig MPS detection (fp32/AMP-off, bf16-Pascal guard intact) + hard rename preflight_p100 → preflight_device (CUDA-P100 → MPS → CPU) | 2026-06-05 | 398b74e | [260605-lgy-add-mps-support-to-the-device-layer-runt](./quick/260605-lgy-add-mps-support-to-the-device-layer-runt/) |
+
 ## Deferred Items
 
 Items acknowledged and carried forward from previous milestone close:
@@ -134,6 +140,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-05T18:25:09.735Z
-Stopped at: Phase 5 context gathered
+Last session: 2026-06-05 - Completed quick task 260605-lgy: MPS device-layer support
+Stopped at: Phase 5 context gathered; MPS device layer landed (pre-Phase-5 prerequisite D-02)
 Resume file: .planning/phases/05-tinystories-pretraining/05-CONTEXT.md
