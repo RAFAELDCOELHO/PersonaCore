@@ -154,7 +154,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Data slice: Wave-0 PRE-01 tests + fixture, get_batch_memmap (np.memmap sampler), encode_corpus.py streaming encode → train.bin/val.bin [PRE-01]
+- [x] 05-01-PLAN.md — Data slice: Wave-0 PRE-01 tests + fixture, get_batch_memmap (np.memmap sampler), encode_corpus.py streaming encode → train.bin/val.bin [PRE-01]
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -219,7 +219,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
 | 3. Bigram Baseline & Training Harness | 4/4 | Complete   | 2026-06-04 |
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
-| 5. TinyStories Pretraining | 0/2 | Not started | - |
+| 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 0/TBD | Not started | - |
 | 7. Evaluation | 0/TBD | Not started | - |
 | 8. Demo & Writeup | 0/TBD | Not started | - |

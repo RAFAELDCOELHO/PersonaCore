@@ -40,7 +40,7 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [x] **TRAIN-06** *(M2 seam)*: Loss is assembled via an `assemble_loss(..., extra_penalties=())` seam and checkpoints are open dicts, so EWC can later add a Fisher penalty without touching the loop
 
 ### Pretraining
-- [ ] **PRE-01**: TinyStories data is obtained, encoded once (from the frozen tokenizer) into a `uint16` memmap (`train.bin`/`val.bin`, one EOS between documents) and persisted on local disk; the official TinyStoriesV2 `valid` file is the no-leakage held-out set. (If the Kaggle-P100 fallback is used, the memmap may additionally be pinned as a versioned Kaggle Dataset.)
+- [x] **PRE-01**: TinyStories data is obtained, encoded once (from the frozen tokenizer) into a `uint16` memmap (`train.bin`/`val.bin`, one EOS between documents) and persisted on local disk; the official TinyStoriesV2 `valid` file is the no-leakage held-out set. (If the Kaggle-P100 fallback is used, the memmap may additionally be pinned as a versioned Kaggle Dataset.)
 - [ ] **PRE-02**: The model is pretrained on TinyStories to fluent, coherent generation, producing a trained checkpoint — primary run on **local M3/MPS** (fp32, quality-first / "as long as it takes", resumable across sessions); **Kaggle P100 (30h/week) is an optional fallback**
 - [ ] **PRE-03**: Final/val perplexity and training curves are recorded for the writeup
 
@@ -116,7 +116,7 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | MODEL-05 | Phase 4 | Complete |
 | MODEL-06 | Phase 4 | Complete |
 | MODEL-07 | Phase 4 | Complete |
-| PRE-01 | Phase 5 | Pending |
+| PRE-01 | Phase 5 | Complete |
 | PRE-02 | Phase 5 | Pending |
 | PRE-03 | Phase 5 | Pending |
 | GEN-01 | Phase 6 | Pending |

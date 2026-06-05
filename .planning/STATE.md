@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 context gathered; MPS device layer landed (pre-Phase-5 prerequisite D-02)
-last_updated: "2026-06-05T19:17:26.250Z"
-last_activity: 2026-06-05 -- Phase 5 planning complete
+last_updated: "2026-06-05T19:34:44.524Z"
+last_activity: 2026-06-05
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
   percent: 50
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 5 — tinystories pretraining
+**Current focus:** Phase 05 — tinystories-pretraining
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
+Phase: 05 (tinystories-pretraining) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-06-05 -- Phase 5 planning complete
+Last activity: 2026-06-05
 
-Progress: [██████████] 100%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [██████████] 100%
 | Phase 04 P01 | 6 | 2 tasks | 9 files |
 | Phase 04 P02 | 8 | 2 tasks | 2 files |
 | Phase 04 P03 | 4 | 1 tasks | 1 files |
+| Phase 05 P01 | 6 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [04-02]: weight tying is nn.Parameter assignment AFTER init+residual-override (Pattern 1) so data_ptr is shared; lm_head bias=False keeps the tied weight the sole head param.
 - [Phase ?]: [04-02]: residual-scaled init 0.02/sqrt(2*n_layer) applied to BOTH c_proj AND fc_out (D-04a), not just c_proj.
 - [Phase ?]: [04-03]: the real 6-layer GPT(ModelConfig()) overfits one fixed batch through the UNTOUCHED Phase-3 train() loop at lr=1e-3/max_steps=300 (final loss ~5e-4) — MODEL-02 SC#1 harness-swap proof GREEN, zero harness changes.
+- [Phase ?]: [05-01]: get_batch_memmap mirrors get_batch indexing exactly; only change is re-opening np.memmap per call (nanoGPT leak-avoidance, Pitfall 1).
+- [Phase ?]: [05-01]: encode_corpus.py streams per-<|endoftext|> document; allowed_special=all emits one atomic eos 8184 per doc — no manual EOS injection (D-09).
 
 ### Pending Todos
 
@@ -140,6 +143,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-05 - Completed quick task 260605-lgy: MPS device-layer support
+Last session: 2026-06-05T19:34:44.520Z
 Stopped at: Phase 5 context gathered; MPS device layer landed (pre-Phase-5 prerequisite D-02)
-Resume file: .planning/phases/05-tinystories-pretraining/05-CONTEXT.md
+Resume file: None
