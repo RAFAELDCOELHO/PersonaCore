@@ -19,7 +19,7 @@ import pathlib
 import numpy as np
 import torch
 
-from personacore.config import ModelConfig, TrainConfig
+from personacore.config import ModelConfig, RuntimeConfig, TrainConfig
 from personacore.model import GPT
 from personacore.seeding import seed_everything
 from personacore.tokenizer import from_json
@@ -28,6 +28,9 @@ from personacore.training.loop import train
 FIXTURE_PATH = pathlib.Path(__file__).parent / "fixtures" / "tinystories_fixture.txt"
 TOKENIZER_PATH = "artifacts/tokenizer.json"
 EOS_ID = 8184
+# CPU-pinned: cross-device bitwise determinism is NOT guaranteed on MPS (RESEARCH A5), so this
+# resume oracle stays on CPU regardless of the host. MPS is validated only by test_mps_smoke.py.
+CPU_RUNTIME = RuntimeConfig(device="cpu")
 
 
 def _build_bins(tmp_path):
@@ -70,6 +73,7 @@ def test_resume_identical_trajectory_memmap(tmp_path):
     ref_model = GPT(ModelConfig())
     ref = train(
         train_config=cfg,
+        runtime_config=CPU_RUNTIME,
         model=ref_model,
         train_bin=train_bin,
         val_bin=val_bin,
@@ -83,6 +87,7 @@ def test_resume_identical_trajectory_memmap(tmp_path):
     ckpt_path = tmp_path / "latest.pt"
     train(
         train_config=cfg,
+        runtime_config=CPU_RUNTIME,
         model=half_model,
         train_bin=train_bin,
         val_bin=val_bin,
@@ -93,6 +98,7 @@ def test_resume_identical_trajectory_memmap(tmp_path):
     fresh_model = GPT(ModelConfig())
     resumed = train(
         train_config=cfg,
+        runtime_config=CPU_RUNTIME,
         model=fresh_model,
         train_bin=train_bin,
         val_bin=val_bin,

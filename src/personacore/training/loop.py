@@ -26,6 +26,7 @@ model rewrite. The loop NEVER calls ``torch.cuda.*`` — ``RuntimeConfig`` is th
 source of truth (config.py:44-61).
 """
 
+import os
 import random
 
 import numpy as np
@@ -37,7 +38,7 @@ from personacore.config import ModelConfig, RuntimeConfig
 from personacore.logging import CSVLogger
 from personacore.provenance import git_sha
 
-from .data import get_batch, load_split
+from .data import get_batch, get_batch_memmap, load_split
 from .loss import assemble_loss
 from .schedule import build_scheduler
 
@@ -57,6 +58,15 @@ def _restore_rng(state):
     torch.set_rng_state(torch_state)
 
 
+def _is_bin_path(src):
+    """True iff ``src`` names a memmap ``.bin`` PATH (the full-corpus source) vs an in-RAM array.
+
+    The memmap data branch (Seam 1) carries the val source as a filesystem PATH (str / os.PathLike)
+    instead of a numpy array; ``estimate_loss`` (Seam 2) uses this to pick ``get_batch_memmap``.
+    """
+    return isinstance(src, (str, os.PathLike))
+
+
 @torch.no_grad()
 def estimate_loss(model, val_ids, train_cfg, model_cfg, device, iters=20):
     """Mean validation CE under ``model.eval()`` + ``no_grad``, restoring ``model.train()``.
@@ -68,12 +78,23 @@ def estimate_loss(model, val_ids, train_cfg, model_cfg, device, iters=20):
     rng = _rng_state()
     model.eval()
     block_size = model_cfg.block_size
-    # A bounded fixture's val split may be shorter than block_size; shrink the window so
-    # get_batch's start bound (len(arr) - block_size - 1) stays positive.
-    eff_block = min(block_size, max(1, len(val_ids) - 2))
+    # Seam 2 — memmap path support: when val_ids is a .bin PATH (full-corpus source) draw via
+    # get_batch_memmap; otherwise it is an in-RAM array drawn via get_batch (the fixture path).
+    # The RNG snapshot/restore wrapper above/below is UNCHANGED — the resume-equality contract.
+    is_bin = _is_bin_path(val_ids)
+    if is_bin:
+        # The full corpus is always >> block_size; no window-shrink needed for the memmap path.
+        eff_block = block_size
+    else:
+        # A bounded fixture's val split may be shorter than block_size; shrink the window so
+        # get_batch's start bound (len(arr) - block_size - 1) stays positive.
+        eff_block = min(block_size, max(1, len(val_ids) - 2))
     losses = []
     for _ in range(iters):
-        xb, yb = get_batch(val_ids, train_cfg.batch_size, eff_block, device)
+        if is_bin:
+            xb, yb = get_batch_memmap(val_ids, train_cfg.batch_size, eff_block, device)
+        else:
+            xb, yb = get_batch(val_ids, train_cfg.batch_size, eff_block, device)
         _, loss = model(xb, yb)
         losses.append(loss.item())
     model.train()
@@ -133,14 +154,22 @@ def train(
     model=None,
     model_config=None,
     corpus_path=None,
+    train_bin=None,
+    val_bin=None,
     eos_id=8184,
     fixed_batch=None,
     scaler=None,
     resume_from=None,
     checkpoint_path=None,
+    best_checkpoint_path=None,
     log_path=None,
     max_steps_override=None,
     eval_interval=1,
+    checkpoint_interval=None,
+    sample_interval=None,
+    sample_prompt=None,
+    tokenizer=None,
+    sample_max_new_tokens=64,
     return_final_loss=False,
 ):
     """Train the model end-to-end: AdamW + warmup/cosine + grad-clip + grad-accum, fp32 default.
@@ -157,15 +186,30 @@ def train(
         model: a pre-built model; defaults to ``BigramLanguageModel(model_config.vocab_size)``.
         model_config: ``ModelConfig`` (vocab/block_size); defaults to ``ModelConfig()``.
         corpus_path: fixture to ``load_split`` when ``fixed_batch`` is None.
+        train_bin: Seam 1 — full-corpus ``uint16`` train ``.bin`` PATH; when set, ``batch_fn``
+            draws via ``get_batch_memmap`` (the long-run data source). Mutually exclusive with
+            ``fixed_batch``/``corpus_path``.
+        val_bin: Seam 1/2 — val ``.bin`` PATH carried as ``val_ids`` so ``estimate_loss`` draws
+            via ``get_batch_memmap`` on the memmap path.
         eos_id: document separator id for the doc-level split (no-leakage, TRAIN-03).
         fixed_batch: ``(xb, yb)`` reused every step — the overfit gate (TRAIN-05).
         scaler: an injectable GradScaler-shaped object (the AMP-ordering spy hook); defaults to a
             real ``GradScaler`` tied to ``runtime.amp``.
         resume_from: checkpoint path to resume from (restores RNG state — never re-seed).
-        checkpoint_path: where to save ``latest.pt`` at the end of this call (resume seam).
+        checkpoint_path: where to save ``latest.pt`` (end-of-call always; also in-loop every
+            ``checkpoint_interval`` steps when set — Seam 4, kill-survivability).
+        best_checkpoint_path: Seam 3 (D-08) — where to save ``best.pt`` whenever a new LOWEST
+            val loss is observed; the shipped checkpoint is the best-val one, not the final step.
         log_path: CSV curve path (append-only, header-once across restarts).
         max_steps_override: stop after this many optimizer steps (the "kill" in the resume test).
         eval_interval: log/eval every N steps (1 so the curve is row-for-row reproducible).
+        checkpoint_interval: Seam 4 — when set with ``checkpoint_path``, save ``latest.pt``
+            in-loop every K steps so a kill loses at most K steps of work (Pitfall 5).
+        sample_interval: Seam 4 — when set, every S steps run the minimal ``sample()`` and print
+            the decoded text (a qualitative coherence check, D-06). Requires ``tokenizer``.
+        sample_prompt: optional list[int] seed ids for the periodic sample; default ``[eos_id]``.
+        tokenizer: a frozen tokenizer with ``.decode(list[int]) -> str`` for the sample print.
+        sample_max_new_tokens: number of tokens the periodic sample extends.
         return_final_loss: when True, return the final step's training loss.
 
     Returns:
@@ -209,6 +253,17 @@ def train(
 
         def batch_fn(_micro):
             return fx, fy
+    elif train_bin is not None:
+        # Seam 1 — memmap data branch (the full-corpus long-run source). Mirrors the corpus_path
+        # branch exactly, swapping load_split's in-RAM arrays for the train.bin/val.bin PATHS:
+        # batch_fn draws from train_bin via get_batch_memmap, and val_ids carries the val.bin PATH
+        # (a str/PathLike, NOT an array) so estimate_loss (Seam 2) routes to get_batch_memmap.
+        train_ids, val_ids = train_bin, val_bin
+
+        def batch_fn(_micro):
+            return get_batch_memmap(
+                train_bin, train_config.batch_size, model_cfg.block_size, runtime.device
+            )
     elif corpus_path is not None:
         train_ids, val_ids = load_split(corpus_path, eos_id=eos_id)
 
@@ -242,6 +297,8 @@ def train(
 
     target_steps = max_steps_override if max_steps_override is not None else train_config.max_steps
     final_loss = None
+    best_val_loss = float("inf")  # Seam 3 (D-08) — running minimum that gates the best.pt save.
+    sample_ids = sample_prompt if sample_prompt is not None else [eos_id]
     # tokens/step is the effective-batch token count; derive CUMULATIVE tokens from the absolute
     # step (not a per-call accumulator) so the logged curve is continuous across a kill+resume
     # — resetting an accumulator to 0 on resume would discontinuity the column (Pitfall 4).
@@ -276,6 +333,51 @@ def train(
                     # telemetry, if ever wanted, belongs in the Phase-8 demo, not this gate.)
                     wall_clock=step,
                 )
+
+                # Seam 3 — best-val tracking (D-08): ship the LOWEST-val checkpoint, not the
+                # final step's. Reuses save_checkpoint VERBATIM (the end-of-call save args) — the
+                # checkpoint format already carries val_loss=, so best.pt needs no format change.
+                if best_checkpoint_path is not None and val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    save_checkpoint(
+                        best_checkpoint_path,
+                        model=model,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        scaler=scaler,
+                        step=step,
+                        model_config=model_cfg,
+                        train_config=train_config,
+                        git_sha=git_sha(),
+                        val_loss=val_loss,
+                    )
+
+            # Seam 4a — periodic latest.pt (kill-survivability, Pitfall 5): the same end-of-call
+            # save, also fired in-loop every checkpoint_interval steps so a kill loses <= K steps.
+            if (
+                checkpoint_path is not None
+                and checkpoint_interval
+                and step % checkpoint_interval == 0
+            ):
+                save_checkpoint(
+                    checkpoint_path,
+                    model=model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    scaler=scaler,
+                    step=step,
+                    model_config=model_cfg,
+                    train_config=train_config,
+                    git_sha=git_sha(),
+                    val_loss=final_loss,
+                )
+
+            # Seam 4b — periodic qualitative sample print (D-06 coherence check): every S steps,
+            # extend a seed via the minimal sample() and decode it. NO Phase-6 generate().
+            if sample_interval and tokenizer is not None and step % sample_interval == 0:
+                seed = torch.tensor([sample_ids], dtype=torch.long, device=runtime.device)
+                out = sample(model, seed, max_new_tokens=sample_max_new_tokens)[0].tolist()
+                print(f"[sample step={step}] {tokenizer.decode(out)!r}")
     finally:
         if csv is not None:
             csv.close()

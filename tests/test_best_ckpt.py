@@ -21,7 +21,7 @@ import pytest
 import torch
 
 import personacore.training.loop as loop
-from personacore.config import ModelConfig, TrainConfig
+from personacore.config import ModelConfig, RuntimeConfig, TrainConfig
 from personacore.model import GPT
 from personacore.seeding import seed_everything
 from personacore.tokenizer import from_json
@@ -30,6 +30,8 @@ from personacore.training.loop import train
 FIXTURE_PATH = pathlib.Path(__file__).parent / "fixtures" / "tinystories_fixture.txt"
 TOKENIZER_PATH = "artifacts/tokenizer.json"
 EOS_ID = 8184
+# CPU-pinned (GPU/MPS-free) — this is a CI-suite test, not the real-hardware long run.
+CPU_RUNTIME = RuntimeConfig(device="cpu")
 
 
 def _build_bins(tmp_path):
@@ -75,6 +77,7 @@ def test_best_ckpt_tracks_lowest_val_loss(tmp_path, monkeypatch):
     model = GPT(ModelConfig())
     train(
         train_config=cfg,
+        runtime_config=CPU_RUNTIME,
         model=model,
         train_bin=train_bin,
         val_bin=val_bin,
