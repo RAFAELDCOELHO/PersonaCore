@@ -187,6 +187,7 @@ class GPT(nn.Module):
 
     def forward(self, idx, targets=None):
         B, T = idx.shape
+        assert T <= self.config.block_size, f"seq len {T} > block_size {self.config.block_size}"
         tok_emb = self.wte(idx)  # (B, T, C)
         pos = torch.arange(T, device=idx.device)
         pos_emb = self.wpe(pos)  # (T, C) — broadcasts over batch.
