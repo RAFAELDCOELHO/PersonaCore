@@ -2,7 +2,7 @@
 phase: 4
 slug: gpt-transformer-decoder
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-05
 ---
@@ -39,15 +39,15 @@ created: 2026-06-05
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| — | — | 0 | MODEL-02 | — / — | N/A (offline CPU model) | unit (contract) | `pytest tests/test_gpt_model.py::test_forward_contract -x` | ❌ W0 | ⬜ pending |
-| — | — | 0 | MODEL-02 | — / — | N/A | unit (equivalence) | `pytest tests/test_gpt_attention_equiv.py -x` | ❌ W0 | ⬜ pending |
-| — | — | 0 | MODEL-02 | — / — | N/A | unit (oracle) | `pytest tests/test_gpt_layernorm.py -x` | ❌ W0 | ⬜ pending |
-| — | — | 0 | MODEL-03 | — / — | N/A | unit | `pytest tests/test_gpt_weight_tying.py -x` | ❌ W0 | ⬜ pending |
-| — | — | 0 | MODEL-04 | — / — | N/A | unit | `pytest tests/test_gpt_init.py -x` | ❌ W0 | ⬜ pending |
-| — | — | 0 | MODEL-05 | — / — | N/A | unit | `pytest tests/test_gpt_param_count.py -x` | ❌ W0 | ⬜ pending |
-| — | — | 0 | MODEL-06 | — / — | N/A | unit | `pytest tests/test_gpt_causality.py -x` | ❌ W0 | ⬜ pending |
-| — | — | 0 | MODEL-07 | — / — | N/A | unit (structural) | `pytest tests/test_gpt_lora_seam.py -x` | ❌ W0 | ⬜ pending |
-| — | — | 1 | MODEL-02 (SC#1) | — / — | N/A | integration (overfit gate) | `pytest tests/test_gpt_overfit.py -x` | ❌ W0 | ⬜ pending |
+| 04-01-T1/04-02-T2 | 04-01 (RED) → 04-02 (GREEN) | 1→2 | MODEL-02 | — / — | N/A (offline CPU model) | unit (contract) | `pytest tests/test_gpt_model.py::test_forward_contract -x` | ❌ W0→authored 04-01 | ⬜ pending |
+| 04-01-T2/04-02-T2 | 04-01 (RED) → 04-02 (GREEN) | 1→2 | MODEL-02 | — / — | N/A | unit (equivalence) | `pytest tests/test_gpt_attention_equiv.py -x` | ❌ W0→authored 04-01 | ⬜ pending |
+| 04-01-T2/04-02-T1 | 04-01 (RED) → 04-02 (GREEN) | 1→2 | MODEL-02 | — / — | N/A | unit (oracle) | `pytest tests/test_gpt_layernorm.py -x` | ❌ W0→authored 04-01 | ⬜ pending |
+| 04-01-T1/04-02-T2 | 04-01 (RED) → 04-02 (GREEN) | 1→2 | MODEL-03 | — / — | N/A | unit | `pytest tests/test_gpt_weight_tying.py -x` | ❌ W0→authored 04-01 | ⬜ pending |
+| 04-01-T1/04-02-T2 | 04-01 (RED) → 04-02 (GREEN) | 1→2 | MODEL-04 | — / — | N/A | unit | `pytest tests/test_gpt_init.py -x` | ❌ W0→authored 04-01 | ⬜ pending |
+| 04-01-T1/04-02-T2 | 04-01 (RED) → 04-02 (GREEN) | 1→2 | MODEL-05 | — / — | N/A | unit | `pytest tests/test_gpt_param_count.py -x` | ❌ W0→authored 04-01 | ⬜ pending |
+| 04-01-T2/04-02-T2 | 04-01 (RED) → 04-02 (GREEN) | 1→2 | MODEL-06 | — / — | N/A | unit | `pytest tests/test_gpt_causality.py -x` | ❌ W0→authored 04-01 | ⬜ pending |
+| 04-01-T1/04-02-T2 | 04-01 (RED) → 04-02 (GREEN) | 1→2 | MODEL-07 | — / — | N/A | unit (structural) | `pytest tests/test_gpt_lora_seam.py -x` | ❌ W0→authored 04-01 | ⬜ pending |
+| 04-01-T2/04-03-T1 | 04-01 (RED) → 04-03 (GREEN) | 1→3 | MODEL-02 (SC#1) | — / — | N/A | integration (overfit gate) | `pytest tests/test_gpt_overfit.py -x` | ❌ W0→authored 04-01 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 *Task IDs filled in by the planner once plan/wave assignment is finalized; the requirement→test mapping above is the binding contract.*
@@ -87,6 +87,6 @@ created: 2026-06-05
 - [ ] Wave 0 covers all MISSING references
 - [ ] No watch-mode flags
 - [ ] Feedback latency < 90s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** planned (Wave 0 = Plan 04-01; gates green in 04-02/04-03)

@@ -122,7 +122,20 @@ Plans:
   4. Exact parameter counting (tied weights counted once) reports a configuration that hits the ~10–15M target
   5. Every adaptable projection is a named `nn.Linear` called as a module (M2 LoRA seam — naming only, no wrapper, no rank params, no freezing)
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Wave-0 RED scaffold: nine MODEL test files (forward contract, manual/sdpa equiv, LayerNorm oracle, data_ptr tying, init-std incl c_proj+fc_out, param-count band, non-vacuous causality, six-named-Linear seam, overfit) [MODEL-02..07]
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 04-02-PLAN.md — Hand-rolled GPT-2 decoder gpt.py (LayerNorm/CausalSelfAttention manual+sdpa/MLP/Block/GPT, GPT-2 init→residual-scale→weight-tie order, locked forward, GPT export); turns eight unit gates green [MODEL-02..07]
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 04-03-PLAN.md — Overfit-one-batch integration gate green: real GPT(ModelConfig) overfits through the untouched training/loop.py (harness-swap proof) [MODEL-02]
 
 ### Phase 5: TinyStories Pretraining
 
@@ -195,7 +208,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
 | 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
 | 3. Bigram Baseline & Training Harness | 4/4 | Complete   | 2026-06-04 |
-| 4. GPT Transformer Decoder | 0/TBD | Not started | - |
+| 4. GPT Transformer Decoder | 0/3 | Not started | - |
 | 5. TinyStories Pretraining | 0/TBD | Not started | - |
 | 6. Generation & Sampling | 0/TBD | Not started | - |
 | 7. Evaluation | 0/TBD | Not started | - |
