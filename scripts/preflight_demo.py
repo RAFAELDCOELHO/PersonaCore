@@ -2,8 +2,9 @@
 
 Wires together the Phase-1 primitives with no logic of its own (logic lives in
 ``src/personacore/``): seed the run, capture the git SHA, and print the preflight summary.
-``require_p100=False`` so it completes on a CPU box; on Kaggle cell-1 call
-``preflight_p100()`` (require_p100=True) to assert the live P100 before a long run.
+``preflight_device(strict=False)`` is the laptop summary path so it completes on any box —
+on the user's M3 this resolves to MPS, elsewhere to CPU. On Kaggle cell-1 call
+``preflight_device()`` (strict=True) to assert a live P100 (or MPS) before a long run.
 
 Path/mount CONVENTION (D-07 — convention ONLY; the actual TinyStories encode/upload is
 Phase 5, no data is downloaded here):
@@ -15,7 +16,7 @@ Phase 5, no data is downloaded here):
   it; nothing is encoded or downloaded in Phase 1).
 """
 
-from personacore.preflight import preflight_p100
+from personacore.preflight import preflight_device
 from personacore.provenance import git_sha
 from personacore.seeding import seed_everything
 
@@ -28,7 +29,7 @@ def main() -> None:
     seed_everything(1337)
     print(f"[demo] git_sha={git_sha()}")
     print(f"[demo] checkpoint_dir={CHECKPOINT_DIR} data_dir={DATA_DIR}")
-    info = preflight_p100(require_p100=False)
+    info = preflight_device(strict=False)
     print(f"[demo] preflight ok: {info}")
 
 

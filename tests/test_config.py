@@ -4,13 +4,46 @@ All tests are CPU-only and GPU-free so CI runs them.
 """
 
 import pytest
+import torch
 
-from personacore.config import ModelConfig, RuntimeConfig, TrainConfig
+from personacore.config import ModelConfig, RuntimeConfig, TrainConfig, _default_device
 
 
 def test_fp32_default():
     # fp32 is the default precision: amp must be False without any opt-in.
     cfg = RuntimeConfig(device="cpu")
+    assert cfg.amp is False
+
+
+def test_default_device_cuda_when_available(monkeypatch):
+    # CUDA present -> "cuda" (unchanged, highest priority).
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert _default_device() == "cuda"
+
+
+def test_default_device_mps_when_no_cuda(monkeypatch):
+    # No CUDA but MPS available -> "mps" (middle priority, D-02).
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert _default_device() == "mps"
+
+
+def test_default_device_cpu_when_neither(monkeypatch):
+    # Neither CUDA nor MPS -> "cpu" (unchanged, lowest priority).
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
+    assert _default_device() == "cpu"
+
+
+def test_amp_off_on_mps():
+    # MPS mirrors the CPU posture: AMP forced False even when amp=True is requested (D-02).
+    cfg = RuntimeConfig(device="mps", amp=True)
+    assert cfg.amp is False
+
+
+def test_mps_no_fp16_amp():
+    # MPS gets no fp16 AMP — fp32 only (D-02): amp ends False despite amp_dtype="float16".
+    cfg = RuntimeConfig(device="mps", amp_dtype="float16", amp=True)
     assert cfg.amp is False
 
 
