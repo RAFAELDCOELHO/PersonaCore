@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 context gathered; MPS device layer landed (pre-Phase-5 prerequisite D-02)
-last_updated: "2026-06-05T19:34:44.524Z"
+last_updated: "2026-06-05T19:44:38.973Z"
 last_activity: 2026-06-05
 progress:
   total_phases: 8
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 Phase: 05 (tinystories-pretraining) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: PAUSED at Plan 02 Task 4 (blocking human-verify: MPS sanity gate + calibration on real M3). Tasks 1–3 committed (1422b4c, 35577b4, 38dd1d9). Tasks 4–5 require user M3 hardware.
 Last activity: 2026-06-05
 
 Progress: [█████████░] 93%
@@ -143,6 +143,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-05T19:34:44.520Z
+Last session: 2026-06-05T19:44:38.965Z
 Stopped at: Phase 5 context gathered; MPS device layer landed (pre-Phase-5 prerequisite D-02)
 Resume file: None
