@@ -131,7 +131,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 04-02-PLAN.md — Hand-rolled GPT-2 decoder gpt.py (LayerNorm/CausalSelfAttention manual+sdpa/MLP/Block/GPT, GPT-2 init→residual-scale→weight-tie order, locked forward, GPT export); turns eight unit gates green [MODEL-02..07]
+- [x] 04-02-PLAN.md — Hand-rolled GPT-2 decoder gpt.py (LayerNorm/CausalSelfAttention manual+sdpa/MLP/Block/GPT, GPT-2 init→residual-scale→weight-tie order, locked forward, GPT export); turns eight unit gates green [MODEL-02..07]
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -208,7 +208,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Scaffolding & Reproducible Environment | 3/3 | Complete   | 2026-06-04 |
 | 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
 | 3. Bigram Baseline & Training Harness | 4/4 | Complete   | 2026-06-04 |
-| 4. GPT Transformer Decoder | 1/3 | In Progress|  |
+| 4. GPT Transformer Decoder | 2/3 | In Progress|  |
 | 5. TinyStories Pretraining | 0/TBD | Not started | - |
 | 6. Generation & Sampling | 0/TBD | Not started | - |
 | 7. Evaluation | 0/TBD | Not started | - |

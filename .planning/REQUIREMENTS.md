@@ -24,12 +24,12 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 
 ### Model (from scratch)
 - [x] **MODEL-01**: Bigram language-model baseline from scratch, used to de-risk the training/sampling harness before attention exists
-- [ ] **MODEL-02**: GPT-style decoder (~10–15M params): causal multi-head self-attention (masked before softmax, scaled by √d_k), MLP blocks, pre-norm LayerNorm, learned positional embeddings
-- [ ] **MODEL-03**: Weight tying between token embedding and output head, verified by tensor-identity test
-- [ ] **MODEL-04**: GPT-2-style weight initialization, verified by per-tensor init-std check
-- [ ] **MODEL-05**: Exact parameter counting reported; configuration hits the ~10–15M target
-- [ ] **MODEL-06**: Causality perturbation unit test (future tokens cannot affect earlier logits) guarding the silent causal-mask bug
-- [ ] **MODEL-07** *(M2 seam)*: Every adaptable projection is a named `nn.Linear` so LoRA can later wrap it without a model rewrite
+- [x] **MODEL-02**: GPT-style decoder (~10–15M params): causal multi-head self-attention (masked before softmax, scaled by √d_k), MLP blocks, pre-norm LayerNorm, learned positional embeddings
+- [x] **MODEL-03**: Weight tying between token embedding and output head, verified by tensor-identity test
+- [x] **MODEL-04**: GPT-2-style weight initialization, verified by per-tensor init-std check
+- [x] **MODEL-05**: Exact parameter counting reported; configuration hits the ~10–15M target
+- [x] **MODEL-06**: Causality perturbation unit test (future tokens cannot affect earlier logits) guarding the silent causal-mask bug
+- [x] **MODEL-07** *(M2 seam)*: Every adaptable projection is a named `nn.Linear` so LoRA can later wrap it without a model rewrite
 
 ### Training
 - [x] **TRAIN-01**: Training loop with AdamW, warmup + cosine LR schedule, gradient clipping, and configurable gradient accumulation
@@ -110,12 +110,12 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | TRAIN-04 | Phase 3 | Complete |
 | TRAIN-05 | Phase 3 | Complete |
 | TRAIN-06 | Phase 3 | Complete |
-| MODEL-02 | Phase 4 | Pending |
-| MODEL-03 | Phase 4 | Pending |
-| MODEL-04 | Phase 4 | Pending |
-| MODEL-05 | Phase 4 | Pending |
-| MODEL-06 | Phase 4 | Pending |
-| MODEL-07 | Phase 4 | Pending |
+| MODEL-02 | Phase 4 | Complete |
+| MODEL-03 | Phase 4 | Complete |
+| MODEL-04 | Phase 4 | Complete |
+| MODEL-05 | Phase 4 | Complete |
+| MODEL-06 | Phase 4 | Complete |
+| MODEL-07 | Phase 4 | Complete |
 | PRE-01 | Phase 5 | Pending |
 | PRE-02 | Phase 5 | Pending |
 | PRE-03 | Phase 5 | Pending |
