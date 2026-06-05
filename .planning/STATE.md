@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 context gathered
-last_updated: "2026-06-05T12:38:20.405Z"
-last_activity: 2026-06-05 -- Phase 04 planning complete
+last_updated: "2026-06-05T15:58:48.975Z"
+last_activity: 2026-06-05
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 13
-  completed_plans: 10
+  completed_plans: 11
   percent: 38
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 4 — gpt transformer decoder
+**Current focus:** Phase 04 — gpt-transformer-decoder
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
+Phase: 04 (gpt-transformer-decoder) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-06-05 -- Phase 04 planning complete
+Last activity: 2026-06-05
 
-Progress: [██████████] 100%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [██████████] 100%
 | Phase 03 P02 | 6 | 2 tasks | 3 files |
 | Phase 03 P03 | 7 | 2 tasks | 2 files |
 | Phase 03 P04 | 18 | 2 tasks | 4 files |
+| Phase 04 P01 | 6 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [03-04]: training loop AMP order scale-unscale_-clip-step-update; scheduler steps once per optimizer step; estimate_loss snapshots/restores RNG so periodic eval never perturbs the train trajectory (TRAIN-02/04).
 - [Phase ?]: [03-04]: CSV wall_clock is a logical step-derived clock (not wall time) so the loss/lr curve reproduces row-for-row across kill+resume; cumulative tokens derived from absolute step (TRAIN-04).
 - [Phase ?]: [03-04]: bigram embedding renamed token_table to token_embedding_table (nanoGPT-canonical, locked resume-test contract); model/tokenizer vocab gap bridged in train_bigram.py, decode stays strict by design (WR-03).
+- [Phase ?]: [04-01]: attn_impl is a GPT constructor arg (not a ModelConfig field) per RESEARCH Open Q2 — equivalence test exercises both manual/sdpa paths; keeps the asdict-serialized ModelConfig free of a runtime-only flag.
+- [Phase ?]: [04-01]: init test matches std targets by named-param SUFFIX (so blocks.N.* match) and asserts BOTH c_proj AND fc_out were seen — non-vacuous D-04a residual-scaling guard.
+- [Phase ?]: [04-01]: GPT overfit test seeds lr=1e-3/max_steps=300 as a starting point (vs bigram 1e-1); final 6-layer tuning delegated to Plan-03 executor, asserted bound is a band (< ln(8192)-2).
 
 ### Pending Todos
 
@@ -123,6 +127,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-05T12:11:10.773Z
+Last session: 2026-06-05T15:58:16.742Z
 Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-gpt-transformer-decoder/04-CONTEXT.md
+Resume file: None
