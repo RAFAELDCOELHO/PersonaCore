@@ -179,7 +179,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — RED test scaffold + tiny CPU fixture (8 GEN tests) + pure sampling primitives sampling.py (temperature/top-k/top-p/next_token), nucleus exactness pinned [GEN-01, GEN-03]
+- [x] 06-01-PLAN.md — RED test scaffold + tiny CPU fixture (8 GEN tests) + pure sampling primitives sampling.py (temperature/top-k/top-p/next_token), nucleus exactness pinned [GEN-01, GEN-03]
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -233,6 +233,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Bigram Baseline & Training Harness | 4/4 | Complete   | 2026-06-04 |
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
-| 6. Generation & Sampling | 0/3 | Not started | - |
+| 6. Generation & Sampling | 1/3 | In Progress|  |
 | 7. Evaluation | 0/TBD | Not started | - |
 | 8. Demo & Writeup | 0/TBD | Not started | - |
