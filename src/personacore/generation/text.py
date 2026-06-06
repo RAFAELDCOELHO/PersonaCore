@@ -78,8 +78,16 @@ def generate_text(
     buffer_ids = []  # NEW ids only — the prompt is never decoded back out (D-02).
     for tok in generate(model, idx, eos_id=eid, max_new_tokens=max_new_tokens, **gen_kw):
         buffer_ids.append(tok)
-        text = tokenizer.decode(buffer_ids)  # decode the WHOLE running buffer (D-06).
-        new = text[len(emitted):]
+        # Decode the WHOLE running buffer each step (D-06). A byte-level-BPE glyph can span
+        # several ids, so a cumulative buffer that ends mid-glyph is NOT a defect — the strict
+        # decoder raises UnicodeDecodeError on those trailing partial bytes (Pitfall 3). Hold the
+        # ids and try again next step; the glyph surfaces once its final id arrives. This keeps
+        # the buffer cumulative (never reset), so the delta below stays correct.
+        try:
+            text = tokenizer.decode(buffer_ids)
+        except UnicodeDecodeError:
+            continue  # partial multi-byte glyph — wait for the next id (no mojibake, no crash).
+        new = text[len(emitted) :]
         emitted = text
         if new:
             yield new
