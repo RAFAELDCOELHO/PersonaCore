@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 context gathered; MPS device layer landed (pre-Phase-5 prerequisite D-02)
-last_updated: "2026-06-05T19:44:38.973Z"
-last_activity: 2026-06-05
+stopped_at: Phase 5 COMPLETE — trained best.pt (val 0.7378 / ppl 2.091) shipped on M3/MPS; ready for Phase 6
+last_updated: "2026-06-06T00:00:00.000Z"
+last_activity: 2026-06-06
 progress:
   total_phases: 8
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 15
-  completed_plans: 14
-  percent: 50
+  completed_plans: 15
+  percent: 62
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 05 — tinystories-pretraining
+**Current focus:** Phase 06 — generation-sampling (next)
 
 ## Current Position
 
-Phase: 05 (tinystories-pretraining) — EXECUTING
-Plan: 2 of 2
-Status: PAUSED at Plan 02 Task 4 (blocking human-verify: MPS sanity gate + calibration on real M3). Tasks 1–3 committed (1422b4c, 35577b4, 38dd1d9). Tasks 4–5 require user M3 hardware.
-Last activity: 2026-06-05
+Phase: 05 (tinystories-pretraining) — COMPLETE
+Plan: 2 of 2 (both complete)
+Status: Phase 5 done. Shipped checkpoints/best.pt — val_loss 0.7378, perplexity 2.091, lowest-val @ step 49000, 50k-step M3/MPS fp32 run; kill+resume validated; coherent TinyStories samples reproduced from best.pt. PRE-01/02/03 satisfied. Full suite: 102 passed, 1 skipped (CUDA-only). Next: Phase 6 generation & sampling consumes best.pt.
+Last activity: 2026-06-06
 
-Progress: [█████████░] 93%
+Progress: [████████████░░░░] 62% (5/8 phases)
 
 ## Performance Metrics
 

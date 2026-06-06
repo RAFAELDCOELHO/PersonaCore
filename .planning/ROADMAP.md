@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: From-Scratch BPE Tokenizer** - Byte-level BPE train/encode/decode with deterministic merges, atomic EOS, locked vocab_size, round-trip tests (completed 2026-06-04)
 - [x] **Phase 3: Bigram Baseline & Training Harness** - Thin end-to-end slice: bigram trains/samples through a resumable loop with the assemble_loss + open-dict-checkpoint seams proven (completed 2026-06-04)
 - [x] **Phase 4: GPT Transformer Decoder** - From-scratch ~10–15M GPT (causal MHA, pre-norm blocks, weight tying, GPT-2 init) with silent-bug gates and the LoRA seam (completed 2026-06-05)
-- [ ] **Phase 5: TinyStories Pretraining** - Memmap data prep, full resumable local M3/MPS run (fp32) to coherent generation, trained best-val checkpoint + recorded curves (Kaggle P100 optional fallback)
+- [x] **Phase 5: TinyStories Pretraining** - Memmap data prep, full resumable local M3/MPS run (fp32) to coherent generation, trained best-val checkpoint + recorded curves (Kaggle P100 optional fallback) (completed 2026-06-05)
 - [ ] **Phase 6: Generation & Sampling** - Shared generate() with greedy/temperature/top-k/top-p, EOS stop, context cropping, determinism tests
 - [ ] **Phase 7: Evaluation** - Held-out perplexity, curated qualitative samples, 2–3 ablations with a comparison table
 - [ ] **Phase 8: Demo & Writeup** - Slim fp32 CPU checkpoint, offline Gradio chat, demo.ipynb, consolidated test suite and technical writeup
@@ -158,7 +158,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 05-02-PLAN.md — Run slice: 4 additive loop.py seams (memmap branch, best-val/best.pt, periodic latest.pt + sample hook) + MPS smoke/resume/best tests + pretrain_tinystories.py + MPS sanity gate + calibration smoke + the long resumable M3/MPS run [PRE-02, PRE-03]
+- [x] 05-02-PLAN.md — Run slice: 4 additive loop.py seams (memmap branch, best-val/best.pt, periodic latest.pt + sample hook) + MPS smoke/resume/best tests + pretrain_tinystories.py + MPS sanity gate + calibration smoke + the long resumable M3/MPS run [PRE-02, PRE-03]
 
 **Research**: phase-level (empirical LR/batch/steps and coherence-per-hour on **M3/MPS** are unmeasured — the calibration smoke in 05-02 MEASURES them before the long run; D-02 device layer already landed)
 
