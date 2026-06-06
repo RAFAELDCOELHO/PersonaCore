@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-06-06T14:05:54.045Z"
-last_activity: 2026-06-06 -- Phase 06 planning complete
+last_updated: "2026-06-06T14:09:23.716Z"
+last_activity: 2026-06-06 -- Phase 06 execution started
 progress:
   total_phases: 8
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 06 — generation-sampling (next)
+**Current focus:** Phase 06 — generation-sampling
 
 ## Current Position
 
-Phase: 05 (tinystories-pretraining) — COMPLETE
-Plan: 2 of 2 (both complete)
-Status: Ready to execute
-Last activity: 2026-06-06 -- Phase 06 planning complete
+Phase: 06 (generation-sampling) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 06
+Last activity: 2026-06-06 -- Phase 06 execution started
 
 Progress: [████████████░░░░] 62% (5/8 phases)
 
