@@ -1,7 +1,7 @@
 """RED test surface for the Phase-6 generation toolkit (GEN-01 / GEN-02 / GEN-03).
 
 CPU-only, GPU/MPS-free — the whole suite runs on a tiny in-memory ``GPT`` fixture
-(``block_size=8, vocab_size=16, eos_id=15``), never ``best.pt`` / ``tokenizer.json``.
+(``block_size=8, vocab_size=16, eos_id=15``), never a trained checkpoint or vocab file.
 
 Posture this wave (06-01):
   - The three GEN-01 sampling tests (``test_top_k_top_p_support``, ``test_temperature``,
@@ -22,7 +22,6 @@ import torch
 from personacore.config import ModelConfig
 from personacore.generation.sampling import (
     apply_temperature,
-    next_token,
     top_k_filter,
     top_p_filter,
 )
@@ -40,7 +39,7 @@ _SKIP_CORE = pytest.mark.skip(reason="core.py (generate/collect) arrives in plan
 
 
 def _tiny_model():
-    """A minimal CPU GPT for fast generation tests — never best.pt.
+    """A minimal CPU GPT for fast generation tests — never a trained checkpoint.
 
     eos_id MUST be < vocab_size (15 < 16) and block_size small (8) so the crop test can
     cheaply exceed it. Tests read block_size/eos_id from ``model.config``, never hardcode.
