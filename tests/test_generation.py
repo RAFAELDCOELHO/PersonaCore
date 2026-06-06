@@ -3,14 +3,13 @@
 CPU-only, GPU/MPS-free — the whole suite runs on a tiny in-memory ``GPT`` fixture
 (``block_size=8, vocab_size=16, eos_id=15``), never a trained checkpoint or vocab file.
 
-Posture this wave (06-01):
+Posture (06-02 — all live):
   - The three GEN-01 sampling tests (``test_top_k_top_p_support``, ``test_temperature``,
-    ``test_top_p_nucleus_exact``) import the pure transforms from
-    ``personacore.generation.sampling`` and go GREEN once Task 2 lands them.
-  - The five GEN-02/GEN-03 core tests depend on ``personacore.generation.generate`` /
-    ``collect`` (``core.py``), which arrives in 06-02 — they are written in full but
-    marked ``@pytest.mark.skip`` so the suite collects cleanly until then. Removing the
-    skip in 06-02 immediately exercises them.
+    ``test_top_p_nucleus_exact``) exercise the pure transforms from
+    ``personacore.generation.sampling`` (06-01).
+  - The five GEN-02/GEN-03 core tests exercise ``personacore.generation.generate`` /
+    ``collect`` (``core.py``, 06-02): EOS-stop, context-crop, output-shape, greedy and
+    seeded determinism. No skips remain — the full suite runs on the tiny CPU fixture.
 
 Determinism idioms (06-VALIDATION.md): seed-first ``torch.manual_seed`` for greedy;
 isolated ``torch.Generator().manual_seed(0)`` for sampled (the global RNG is mutated by
@@ -20,22 +19,12 @@ isolated ``torch.Generator().manual_seed(0)`` for sampled (the global RNG is mut
 import torch
 
 from personacore.config import ModelConfig
+from personacore.generation import collect
 from personacore.generation.sampling import (
     apply_temperature,
     top_k_filter,
     top_p_filter,
 )
-
-try:  # core.py arrives in 06-02; keep collection clean until then.
-    from personacore.generation import collect, generate  # noqa: F401
-
-    _CORE_AVAILABLE = True
-except ImportError:  # pragma: no cover - exercised until 06-02
-    _CORE_AVAILABLE = False
-
-import pytest
-
-_SKIP_CORE = pytest.mark.skip(reason="core.py (generate/collect) arrives in plan 06-02")
 
 
 def _tiny_model():
@@ -116,7 +105,6 @@ def test_top_p_nucleus_exact():
 # --------------------------------------------------------------------------- #
 
 
-@_SKIP_CORE
 def test_eos_stop():
     # Force eos_id to be the argmax at a known step; generation must stop there and the
     # returned sequence must NOT end in eos_id (the core halts WITHOUT yielding EOS).
@@ -137,7 +125,6 @@ def test_eos_stop():
     assert out.shape[1] == prompt.shape[1]
 
 
-@_SKIP_CORE
 def test_past_block_size_no_crash():
     # Generating beyond block_size must crop the context (gpt.py:190 assert) and not raise.
     model = _tiny_model()
@@ -153,9 +140,13 @@ def test_past_block_size_no_crash():
 # --------------------------------------------------------------------------- #
 
 
-@_SKIP_CORE
 def test_output_shape():
     # collect() returns (1, prompt_len + n) LongTensor with no EOS in the body.
+    # Seed the model init so the greedy argmax never lands on eos_id within n steps —
+    # an unseeded tiny model can argmax to eos_id under a perturbed global RNG (an earlier
+    # test mutates it), which would trim the output and make this shape assert order-dependent
+    # (Pitfall 2 — global-RNG flakiness). manual_seed before construction fixes the weights.
+    torch.manual_seed(1)
     model = _tiny_model()
     prompt = torch.tensor([[1, 2, 3]])
     n = 4
@@ -165,7 +156,6 @@ def test_output_shape():
     assert (out != model.config.eos_id).all()
 
 
-@_SKIP_CORE
 def test_greedy_deterministic():
     # Two greedy (argmax) runs are bit-identical; no Generator needed (argmax has no RNG).
     torch.manual_seed(1337)
@@ -176,7 +166,6 @@ def test_greedy_deterministic():
     assert torch.equal(out_a, out_b)
 
 
-@_SKIP_CORE
 def test_seeded_sampling_deterministic():
     # Two identically-seeded torch.Generator runs match — seed isolation from the global RNG
     # (load_checkpoint mutates the global state, so seeded sampling must use a Generator).
