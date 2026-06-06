@@ -80,7 +80,10 @@ def next_token(
         return torch.argmax(logits_last, dim=-1, keepdim=True)
 
     logits = apply_temperature(logits_last, temperature)
-    if top_k is not None:
+    # top_k=0 (and negatives) is the common "disabled" idiom — treat as no-op
+    # rather than threading a non-positive k into torch.topk, which crashes
+    # mid-stream (top_k=0 -> IndexError, top_k<0 -> RuntimeError) on a shared path.
+    if top_k is not None and top_k > 0:
         logits = top_k_filter(logits, top_k)
     if top_p is not None:
         logits = top_p_filter(logits, top_p)
