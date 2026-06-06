@@ -1,9 +1,9 @@
 ---
 phase: 6
 slug: generation-sampling
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: planned
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-06
 ---
 
@@ -83,4 +83,4 @@ created: 2026-06-06
 - [ ] Feedback latency < 15s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** planned (06-01 Task 1 builds the RED test scaffold + tiny fixture)

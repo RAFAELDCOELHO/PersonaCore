@@ -174,7 +174,20 @@ Plans:
   2. Generation stops on EOS, trims the trailing token, respects max-length, and crops context to the last `block_size` tokens so generating past `block_size` never crashes
   3. Generation unit tests pass for output shape, determinism under fixed seed + greedy decoding, and EOS-stop behavior
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — RED test scaffold + tiny CPU fixture (8 GEN tests) + pure sampling primitives sampling.py (temperature/top-k/top-p/next_token), nucleus exactness pinned [GEN-01, GEN-03]
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 06-02-PLAN.md — Shared generator core core.py (generate yields ids, stops on EOS without yielding it, context crop, collect drain) + five core GEN-02/03 tests green [GEN-01, GEN-02, GEN-03]
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 06-03-PLAN.md — Text wrapper text.py (EOS-prepend seed, prompt-strip, running-buffer delta streaming, max-token cap) + CPU-only wrapper tests [GEN-01, GEN-02]
 
 ### Phase 7: Evaluation
 
@@ -220,6 +233,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Bigram Baseline & Training Harness | 4/4 | Complete   | 2026-06-04 |
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
-| 6. Generation & Sampling | 0/TBD | Not started | - |
+| 6. Generation & Sampling | 0/3 | Not started | - |
 | 7. Evaluation | 0/TBD | Not started | - |
 | 8. Demo & Writeup | 0/TBD | Not started | - |
