@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Bigram Baseline & Training Harness** - Thin end-to-end slice: bigram trains/samples through a resumable loop with the assemble_loss + open-dict-checkpoint seams proven (completed 2026-06-04)
 - [x] **Phase 4: GPT Transformer Decoder** - From-scratch ~10–15M GPT (causal MHA, pre-norm blocks, weight tying, GPT-2 init) with silent-bug gates and the LoRA seam (completed 2026-06-05)
 - [x] **Phase 5: TinyStories Pretraining** - Memmap data prep, full resumable local M3/MPS run (fp32) to coherent generation, trained best-val checkpoint + recorded curves (Kaggle P100 optional fallback) (completed 2026-06-05)
-- [ ] **Phase 6: Generation & Sampling** - Shared generate() with greedy/temperature/top-k/top-p, EOS stop, context cropping, determinism tests
+- [x] **Phase 6: Generation & Sampling** - Shared generate() with greedy/temperature/top-k/top-p, EOS stop, context cropping, determinism tests (completed 2026-06-06)
 - [ ] **Phase 7: Evaluation** - Held-out perplexity, curated qualitative samples, 2–3 ablations with a comparison table
 - [ ] **Phase 8: Demo & Writeup** - Slim fp32 CPU checkpoint, offline Gradio chat, demo.ipynb, consolidated test suite and technical writeup
 
@@ -187,7 +187,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 06-03-PLAN.md — Text wrapper text.py (EOS-prepend seed, prompt-strip, running-buffer delta streaming, max-token cap) + CPU-only wrapper tests [GEN-01, GEN-02]
+- [x] 06-03-PLAN.md — Text wrapper text.py (EOS-prepend seed, prompt-strip, running-buffer delta streaming, max-token cap) + CPU-only wrapper tests [GEN-01, GEN-02]
 
 ### Phase 7: Evaluation
 
@@ -233,6 +233,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Bigram Baseline & Training Harness | 4/4 | Complete   | 2026-06-04 |
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
-| 6. Generation & Sampling | 2/3 | In Progress|  |
+| 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
 | 7. Evaluation | 0/TBD | Not started | - |
 | 8. Demo & Writeup | 0/TBD | Not started | - |
