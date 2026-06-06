@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 5 COMPLETE — trained best.pt (val 0.7378 / ppl 2.091) shipped on M3/MPS; ready for Phase 6
-last_updated: "2026-06-06T00:00:00.000Z"
+status: completed
+stopped_at: Phase 6 context gathered
+last_updated: "2026-06-06T13:44:54.326Z"
 last_activity: 2026-06-06
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 15
   completed_plans: 15
-  percent: 62
+  percent: 63
 ---
 
 # Project State
@@ -143,6 +143,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-05T19:44:38.965Z
-Stopped at: Phase 5 context gathered; MPS device layer landed (pre-Phase-5 prerequisite D-02)
-Resume file: None
+Last session: 2026-06-06T13:44:54.322Z
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-generation-sampling/06-CONTEXT.md
