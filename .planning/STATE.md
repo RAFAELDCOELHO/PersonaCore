@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
+status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-06-06T13:44:54.326Z"
-last_activity: 2026-06-06
+last_updated: "2026-06-06T14:05:54.045Z"
+last_activity: 2026-06-06 -- Phase 06 planning complete
 progress:
   total_phases: 8
   completed_phases: 5
-  total_plans: 15
+  total_plans: 18
   completed_plans: 15
   percent: 63
 ---
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 Phase: 05 (tinystories-pretraining) — COMPLETE
 Plan: 2 of 2 (both complete)
-Status: Phase 5 done. Shipped checkpoints/best.pt — val_loss 0.7378, perplexity 2.091, lowest-val @ step 49000, 50k-step M3/MPS fp32 run; kill+resume validated; coherent TinyStories samples reproduced from best.pt. PRE-01/02/03 satisfied. Full suite: 102 passed, 1 skipped (CUDA-only). Next: Phase 6 generation & sampling consumes best.pt.
-Last activity: 2026-06-06
+Status: Ready to execute
+Last activity: 2026-06-06 -- Phase 06 planning complete
 
 Progress: [████████████░░░░] 62% (5/8 phases)
 
