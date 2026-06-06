@@ -22,6 +22,7 @@ from personacore.config import ModelConfig
 from personacore.generation import collect
 from personacore.generation.sampling import (
     apply_temperature,
+    next_token,
     top_k_filter,
     top_p_filter,
 )
@@ -73,6 +74,18 @@ def test_top_k_top_p_support():
     finite_p = torch.isfinite(filtered_p)
     assert int(finite_p.sum()) == 2
     assert finite_p[0, 0] and finite_p[0, 1]
+
+
+def test_next_token_nonpositive_top_k_disabled():
+    # top_k=0 is the common "disabled" idiom; negatives must not thread into torch.topk
+    # (top_k=0 -> IndexError, top_k<0 -> RuntimeError) on the shared decode path. The guard
+    # treats non-positive k as no-op, so sampling still returns a valid (1, 1) token.
+    logits_last = torch.tensor([[3.0, 2.0, 1.0, 0.0, -1.0]])
+    g = torch.Generator().manual_seed(0)
+    for k in (0, -1):
+        tok = next_token(logits_last, top_k=k, generator=g)
+        assert tok.shape == (1, 1)
+        assert 0 <= int(tok) < logits_last.shape[-1]
 
 
 def test_temperature():
@@ -127,6 +140,11 @@ def test_eos_stop():
 
 def test_past_block_size_no_crash():
     # Generating beyond block_size must crop the context (gpt.py:190 assert) and not raise.
+    # Seed before construction so the greedy argmax never lands on eos_id within n steps —
+    # an unseeded tiny model can argmax to eos_id under a perturbed global RNG, trimming the
+    # output and making the exact-length assert order-dependent (Pitfall 2 — global-RNG
+    # flakiness; mirrors test_output_shape).
+    torch.manual_seed(1)
     model = _tiny_model()
     block_size = model.config.block_size
     prompt = torch.tensor([[1, 2, 3]])
