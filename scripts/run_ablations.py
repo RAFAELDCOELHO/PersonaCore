@@ -89,7 +89,9 @@ CALIBRATION_STEPS = 8_000  # one fresh baseline run to read the curve and lock t
 # REDUCED_MAX_STEPS is the LOCKED cohort budget. It is calibrated by calibrate() (below) on the
 # real M3 — the executor records the measured value in the SUMMARY. The value here is the calibrated
 # lock used for the committed cohort run; re-run calibrate() to recompute it on new hardware/data.
-REDUCED_MAX_STEPS = 6_000
+# Locked 2026-06-09 from calibrate() on this M3 (8k-step baseline, final val 0.8495 → recommended
+# 2500; D-07). The val-loss curve plateaus well before 2500, so this is the smallest fair budget.
+REDUCED_MAX_STEPS = 2_500
 
 
 def count_parameters(model) -> int:
