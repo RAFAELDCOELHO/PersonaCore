@@ -95,25 +95,33 @@ def test_matches_bruteforce(tmp_path):
 
 
 def test_token_count(tmp_path):
-    """Denominator == corpus_len - n_windows (each scored window loses its first token).
+    """The denominator is the exact, auditable sum of per-window transitions.
 
-    A length divisible by block_size gives a clean window count; each window that
-    holds >= 2 tokens contributes (len - 1) and thus loses exactly one token.
+    Each scored window of length L contributes ``L - 1`` predicted tokens (token 0 is
+    context-only). With the ``[i : i + block_size + 1]`` slice at stride ``block_size``
+    consecutive windows share their boundary token (the last target of one window is the
+    first context token of the next), so for a corpus that tiles cleanly the grand total
+    is ``corpus_len - 1`` — only the corpus's very first token is never predicted. The
+    independent reference below sums ``L - 1`` over every scored window and must equal
+    the returned ``total_tokens`` exactly (D-03 — the number is auditable).
     """
     model = _tiny_model()
     block_size = 8
     n_tokens = 320  # 320 = 40 * 8 — divides evenly
     path, arr = _write_corpus(tmp_path, n_tokens=n_tokens, vocab_size=16)
 
-    # Independently count the scored windows (>= 2 tokens) the sweep will produce.
-    n_windows = 0
+    # Independently sum the transitions every scored window (>= 2 tokens) contributes.
+    expected_tokens = 0
     for i in range(0, n_tokens - 1, block_size):
         end = min(i + block_size + 1, n_tokens)
-        if end - i >= 2:
-            n_windows += 1
+        length = end - i
+        if length >= 2:
+            expected_tokens += length - 1
 
     _, ntok = perplexity(model, path, block_size=block_size, device="cpu")
-    assert ntok == n_tokens - n_windows
+    assert ntok == expected_tokens
+    # For a cleanly tiling corpus this is exactly corpus_len - 1 (only token 0 unscored).
+    assert ntok == n_tokens - 1
 
 
 def test_partial_window(tmp_path):
