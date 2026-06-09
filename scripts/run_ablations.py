@@ -116,8 +116,12 @@ def _read_val_curve(csv_path: pathlib.Path):
     with open(csv_path, newline="", encoding="utf-8") as fh:
         for row in csv.DictReader(fh):
             v = row.get("val_loss", "")
-            if v not in (None, "", "nan"):
-                rows.append((int(float(row["step"])), float(v)))
+            if v in (None, ""):
+                continue
+            val = float(v)
+            if not math.isfinite(val):
+                continue  # skip nan/inf/-inf (a diverged run), not just the literal "nan"
+            rows.append((int(float(row["step"])), val))
     return rows
 
 
@@ -226,10 +230,16 @@ def run_cohort(runtime) -> list:
         model.to(runtime.device)
         model.eval()
         ppl, total_tokens = perplexity(model, VAL_BIN, ModelConfig().block_size, runtime.device)
-        best_val_loss = float(blob.get("val_loss", math.log(ppl)))
+        # A missing "val_loss" key from our OWN train() harness is itself a signal worth
+        # surfacing, not papering over: keep it as None and render it distinctly in the table
+        # (WR-05). Do NOT silently substitute the full-sweep mean CE (math.log(ppl)) under the
+        # "best val-loss" column — a different quantity that would look identical yet not compare.
+        raw_val_loss = blob.get("val_loss")
+        best_val_loss = float(raw_val_loss) if raw_val_loss is not None else None
+        val_loss_str = f"{best_val_loss:.4f}" if best_val_loss is not None else "n/a"
         print(
             f"[cohort] '{name}': params={params:,}  PPL={ppl:.4f} "
-            f"(over {total_tokens} tokens)  best_val_loss={best_val_loss:.4f}"
+            f"(over {total_tokens} tokens)  best_val_loss={val_loss_str}"
         )
         results.append(
             {
@@ -270,9 +280,16 @@ def write_results_table(results: list) -> pathlib.Path:
         "| --- | --- | --- | --- | --- |",
     ]
     for r in results:
+        # Render a missing best-val-loss distinctly (WR-05): never let an absent key masquerade as
+        # a real recorded number. The full-sweep mean CE is shown only as an explicitly-labelled
+        # fallback annotation so the two quantities are never confused.
+        if r["best_val_loss"] is not None:
+            val_loss_cell = f"{r['best_val_loss']:.4f}"
+        else:
+            val_loss_cell = f"n/a (sweep CE {math.log(r['ppl']):.4f})"
         lines.append(
             f"| {r['name']} | {r['params']:,} | {r['ppl']:.4f} "
-            f"(over {r['total_tokens']:,} tokens) | {r['best_val_loss']:.4f} "
+            f"(over {r['total_tokens']:,} tokens) | {val_loss_cell} "
             f"| {WHAT_THIS_SHOWS[r['name']]} |"
         )
 
@@ -316,7 +333,15 @@ def main() -> None:
 
     # Step 1 — calibration: train one fresh baseline, read the curve, recommend a fair budget.
     # The executor LOCKS the recommendation into REDUCED_MAX_STEPS and records it in the SUMMARY.
-    calibrate(runtime)
+    # Enforce the lock: if the freshly-computed recommendation diverges from the committed
+    # REDUCED_MAX_STEPS by more than one eval interval, fail loudly rather than silently training
+    # the cohort at a budget the calibration recommended against (D-07).
+    recommended = calibrate(runtime)
+    if abs(recommended - REDUCED_MAX_STEPS) > EVAL_INTERVAL:
+        raise SystemExit(
+            f"Calibration recommends max_steps={recommended} but REDUCED_MAX_STEPS="
+            f"{REDUCED_MAX_STEPS}. Update the constant and re-run (D-07)."
+        )
 
     # Step 2 — the fair 4-run cohort at the LOCKED REDUCED_MAX_STEPS.
     results = run_cohort(runtime)
