@@ -210,7 +210,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 07-02-PLAN.md — Additive ModelConfig weight_tying/use_pos_emb flags + flag-gated GPT seams (defaults = today) + evaluate.py headline PPL + curated samples [EVAL-01, EVAL-02, EVAL-03]
+- [x] 07-02-PLAN.md — Additive ModelConfig weight_tying/use_pos_emb flags + flag-gated GPT seams (defaults = today) + evaluate.py headline PPL + curated samples [EVAL-01, EVAL-02, EVAL-03]
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -247,5 +247,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
-| 7. Evaluation | 1/3 | In Progress|  |
+| 7. Evaluation | 2/3 | In Progress|  |
 | 8. Demo & Writeup | 0/TBD | Not started | - |

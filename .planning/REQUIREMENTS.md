@@ -51,8 +51,8 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 
 ### Evaluation
 - [x] **EVAL-01**: Perplexity computed on a held-out set
-- [ ] **EVAL-02**: Curated qualitative generation samples captured
-- [ ] **EVAL-03**: 2–3 architecture/LR ablations with a comparison table (differentiator / polish phase)
+- [x] **EVAL-02**: Curated qualitative generation samples captured
+- [x] **EVAL-03**: 2–3 architecture/LR ablations with a comparison table (differentiator / polish phase)
 
 ### Demo
 - [ ] **DEMO-01**: Gradio local web UI (`gr.ChatInterface`, offline `share=False`) runs the model on laptop CPU
@@ -123,8 +123,8 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | GEN-02 | Phase 6 | Pending |
 | GEN-03 | Phase 6 | Pending |
 | EVAL-01 | Phase 7 | Complete |
-| EVAL-02 | Phase 7 | Pending |
-| EVAL-03 | Phase 7 | Pending |
+| EVAL-02 | Phase 7 | Complete |
+| EVAL-03 | Phase 7 | Complete |
 | DEMO-01 | Phase 8 | Pending |
 | DEMO-02 | Phase 8 | Pending |
 | DEMO-03 | Phase 8 | Pending |

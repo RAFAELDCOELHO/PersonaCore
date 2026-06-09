@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 7 context gathered
-last_updated: "2026-06-09T20:25:50.650Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-06-09T20:46:26.697Z"
 last_activity: 2026-06-09
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
   percent: 75
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 ## Current Position
 
 Phase: 07 (evaluation) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-09
 
-Progress: [█████████░] 90%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [█████████░] 90%
 | Phase 04 P03 | 4 | 1 tasks | 1 files |
 | Phase 05 P01 | 6 | 3 tasks | 5 files |
 | Phase 07 P01 | 4 | 2 tasks | 4 files |
+| Phase 07 P02 | 11 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [05-01]: encode_corpus.py streams per-<|endoftext|> document; allowed_special=all emits one atomic eos 8184 per doc — no manual EOS injection (D-09).
 - [Phase ?]: [07-01]: perplexity denominator is Sigma(len(window)-1); with the +1 overlapping-boundary slice a cleanly-tiling corpus yields corpus_len-1, not corpus_len-n_windows (test_token_count corrected the RESEARCH shorthand)
 - [Phase ?]: [07-01]: perplexity() ignores forward's MEAN loss and recomputes F.cross_entropy(reduction='sum') from logits; returns (ppl, total_tokens) so the headline number is auditable (D-03)
+- [Phase ?]: [07-02]: weight_tying/use_pos_emb are ADDITIVE ModelConfig flags defaulting to True — GPT(ModelConfig()) reproduces today's arch bit-for-bit (tied data_ptr, 13,891,584 params); the ablations are now expressible
+- [Phase ?]: [07-02]: wpe is gated at REGISTRATION (if config.use_pos_emb), not only forward use — required for the locked test_no_pos count 13,793,280 (default - 98,304)
+- [Phase ?]: [07-02]: canonical headline PPL is the deterministic full-val sweep (2.1066 over 12,636,922 tokens), distinct from best.pt's recorded random-batch ppl 2.091 (Pitfall 5)
 
 ### Pending Todos
 
@@ -147,6 +151,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-09T20:23:08.165Z
-Stopped at: Phase 7 context gathered
+Last session: 2026-06-09T20:46:26.691Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None
