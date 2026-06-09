@@ -27,6 +27,7 @@ SECURITY: ``torch.load(..., weights_only=False)`` is used ONLY for the project's
 (no code execution on load). The prompt set is a fixed in-repo constant, not user input.
 """
 
+import math
 import os
 import pathlib
 
@@ -90,10 +91,24 @@ def main() -> None:
         f"[evaluate] headline full-val perplexity = {ppl:.4f}  "
         f"(over {total_tokens} scored target tokens)"
     )
-    print(
-        "[evaluate] NOTE: this deterministic full-sweep PPL is the canonical headline; it differs "
-        "from best.pt's recorded random-batch val_loss 0.7378 / ppl 2.091 (07-RESEARCH Pitfall 5)."
-    )
+    # Single-source the comparison figure from best.pt itself (WR-05) rather than embedding a stale
+    # literal that can drift from the committed artifacts: best.pt's recorded random-batch val_loss
+    # is a single sampled eval batch, while the sweep above scores every non-overlapping window of
+    # the whole val corpus (07-RESEARCH Pitfall 5). They are expected to be close but not identical.
+    recorded_val_loss = blob.get("val_loss")
+    if recorded_val_loss is not None:
+        recorded_val_loss = float(recorded_val_loss)
+        print(
+            "[evaluate] NOTE: this deterministic full-sweep PPL is the canonical headline; it "
+            f"differs from best.pt's recorded random-batch val_loss {recorded_val_loss:.4f} / "
+            f"ppl {math.exp(recorded_val_loss):.4f} (a single sampled eval batch, 07-RESEARCH "
+            "Pitfall 5)."
+        )
+    else:
+        print(
+            "[evaluate] NOTE: this deterministic full-sweep PPL is the canonical headline; "
+            "best.pt records no random-batch val_loss to compare against (07-RESEARCH Pitfall 5)."
+        )
 
     # --- EVAL-02: representative greedy + warm samples over the fixed prompt set -----------------
     tok = from_json(TOKENIZER_PATH)  # FROZEN artifact — never retrain.
