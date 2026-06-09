@@ -206,7 +206,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Wave-0 RED test scaffold (test_perplexity.py + test_ablation_config.py) + deterministic non-overlapping perplexity() module [EVAL-01]
+- [x] 07-01-PLAN.md — Wave-0 RED test scaffold (test_perplexity.py + test_ablation_config.py) + deterministic non-overlapping perplexity() module [EVAL-01]
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -247,5 +247,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
-| 7. Evaluation | 0/3 | Not started | - |
+| 7. Evaluation | 1/3 | In Progress|  |
 | 8. Demo & Writeup | 0/TBD | Not started | - |

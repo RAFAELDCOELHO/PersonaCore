@@ -50,7 +50,7 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [ ] **GEN-03**: Generation unit tests (shape, determinism under fixed seed/greedy, EOS stop)
 
 ### Evaluation
-- [ ] **EVAL-01**: Perplexity computed on a held-out set
+- [x] **EVAL-01**: Perplexity computed on a held-out set
 - [ ] **EVAL-02**: Curated qualitative generation samples captured
 - [ ] **EVAL-03**: 2–3 architecture/LR ablations with a comparison table (differentiator / polish phase)
 
@@ -122,7 +122,7 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | GEN-01 | Phase 6 | Pending |
 | GEN-02 | Phase 6 | Pending |
 | GEN-03 | Phase 6 | Pending |
-| EVAL-01 | Phase 7 | Pending |
+| EVAL-01 | Phase 7 | Complete |
 | EVAL-02 | Phase 7 | Pending |
 | EVAL-03 | Phase 7 | Pending |
 | DEMO-01 | Phase 8 | Pending |

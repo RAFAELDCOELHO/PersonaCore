@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 7 context gathered
-last_updated: "2026-06-09T20:13:49.731Z"
-last_activity: 2026-06-09 -- Phase 07 planning complete
+last_updated: "2026-06-09T20:25:50.650Z"
+last_activity: 2026-06-09
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 19
   percent: 75
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Phase 7 — evaluation
+**Current focus:** Phase 07 — evaluation
 
 ## Current Position
 
-Phase: 7
-Plan: Not started
+Phase: 07 (evaluation) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-06-09 -- Phase 07 planning complete
+Last activity: 2026-06-09
 
-Progress: [████████████░░░░] 62% (5/8 phases)
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [████████████░░░░] 62% (5/8 phases)
 | Phase 04 P02 | 8 | 2 tasks | 2 files |
 | Phase 04 P03 | 4 | 1 tasks | 1 files |
 | Phase 05 P01 | 6 | 3 tasks | 5 files |
+| Phase 07 P01 | 4 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [04-03]: the real 6-layer GPT(ModelConfig()) overfits one fixed batch through the UNTOUCHED Phase-3 train() loop at lr=1e-3/max_steps=300 (final loss ~5e-4) — MODEL-02 SC#1 harness-swap proof GREEN, zero harness changes.
 - [Phase ?]: [05-01]: get_batch_memmap mirrors get_batch indexing exactly; only change is re-opening np.memmap per call (nanoGPT leak-avoidance, Pitfall 1).
 - [Phase ?]: [05-01]: encode_corpus.py streams per-<|endoftext|> document; allowed_special=all emits one atomic eos 8184 per doc — no manual EOS injection (D-09).
+- [Phase ?]: [07-01]: perplexity denominator is Sigma(len(window)-1); with the +1 overlapping-boundary slice a cleanly-tiling corpus yields corpus_len-1, not corpus_len-n_windows (test_token_count corrected the RESEARCH shorthand)
+- [Phase ?]: [07-01]: perplexity() ignores forward's MEAN loss and recomputes F.cross_entropy(reduction='sum') from logits; returns (ppl, total_tokens) so the headline number is auditable (D-03)
 
 ### Pending Todos
 
@@ -144,6 +147,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-09T19:42:17.884Z
+Last session: 2026-06-09T20:23:08.165Z
 Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-evaluation/07-CONTEXT.md
+Resume file: None
