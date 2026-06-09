@@ -90,6 +90,8 @@ class ModelConfig:
     n_head: int = 6
     n_embd: int = 384
     dropout: float = 0.0
+    weight_tying: bool = True  # EVAL-03: False enables the no-weight-tying ablation (untied head).
+    use_pos_emb: bool = True  # EVAL-03: False enables the no-positional-embedding ablation.
 
 
 @dataclass

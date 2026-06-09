@@ -157,7 +157,11 @@ class GPT(nn.Module):
         super().__init__()
         self.config = config
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)  # token embedding (tied head).
-        self.wpe = nn.Embedding(config.block_size, config.n_embd)  # learned positional embedding.
+        # Learned positional embedding — gated by use_pos_emb (EVAL-03). Under the no-pos ablation
+        # wpe is not registered at all, so its block_size*n_embd params drop from the count
+        # (the test_no_pos -98,304 delta requires wpe to be absent from model.parameters()).
+        if config.use_pos_emb:
+            self.wpe = nn.Embedding(config.block_size, config.n_embd)
         self.drop = nn.Dropout(config.dropout)
         self.blocks = nn.ModuleList([Block(config, attn_impl) for _ in range(config.n_layer)])
         self.ln_f = LayerNorm(config.n_embd)
@@ -171,10 +175,13 @@ class GPT(nn.Module):
         for name, p in self.named_parameters():
             if name.endswith("c_proj.weight") or name.endswith("fc_out.weight"):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
-        # (3) Weight tying AFTER init: share the SAME nn.Parameter so data_ptr() is identical
-        # (NOT a .data.clone()/copy_, which makes two tensors — RESEARCH Pitfall 2). The surviving
-        # tensor is the embedding init (std 0.02); lm_head is never separately re-initialized.
-        self.lm_head.weight = self.wte.weight
+        # (3) Weight tying AFTER init: gated by weight_tying (EVAL-03). When tied, share the SAME
+        # nn.Parameter so data_ptr() is identical (NOT a .data.clone()/copy_, which makes two
+        # tensors — RESEARCH Pitfall 2). The surviving tensor is the embedding init (std 0.02);
+        # lm_head is never separately re-initialized. Under the untie ablation, lm_head keeps its
+        # own freshly-init'd tensor (distinct data_ptr, +vocab_size*n_embd params).
+        if config.weight_tying:
+            self.lm_head.weight = self.wte.weight
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -189,9 +196,11 @@ class GPT(nn.Module):
         B, T = idx.shape
         assert T <= self.config.block_size, f"seq len {T} > block_size {self.config.block_size}"
         tok_emb = self.wte(idx)  # (B, T, C)
-        pos = torch.arange(T, device=idx.device)
-        pos_emb = self.wpe(pos)  # (T, C) — broadcasts over batch.
-        x = self.drop(tok_emb + pos_emb)
+        x = tok_emb
+        if self.config.use_pos_emb:
+            pos = torch.arange(T, device=idx.device)
+            x = x + self.wpe(pos)  # (T, C) — broadcasts over batch.
+        x = self.drop(x)
         for block in self.blocks:
             x = block(x)
         x = self.ln_f(x)
