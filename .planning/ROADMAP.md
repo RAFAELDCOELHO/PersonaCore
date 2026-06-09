@@ -201,7 +201,20 @@ Plans:
   2. Curated qualitative generation samples are captured for the writeup
   3. 2–3 architecture/LR ablations are run and presented in a comparison table
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+
+**Wave 1**
+
+- [ ] 07-01-PLAN.md — Wave-0 RED test scaffold (test_perplexity.py + test_ablation_config.py) + deterministic non-overlapping perplexity() module [EVAL-01]
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 07-02-PLAN.md — Additive ModelConfig weight_tying/use_pos_emb flags + flag-gated GPT seams (defaults = today) + evaluate.py headline PPL + curated samples [EVAL-01, EVAL-02, EVAL-03]
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 07-03-PLAN.md — run_ablations.py calibration + 4-run fair cohort (baseline/no_tie/no_pos/depth_cut) through untouched train() + committed comparison table [EVAL-03]
 
 ### Phase 8: Demo & Writeup
 
@@ -234,5 +247,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
-| 7. Evaluation | 0/TBD | Not started | - |
+| 7. Evaluation | 0/3 | Not started | - |
 | 8. Demo & Writeup | 0/TBD | Not started | - |
