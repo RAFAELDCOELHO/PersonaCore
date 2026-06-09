@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: GPT Transformer Decoder** - From-scratch ~10–15M GPT (causal MHA, pre-norm blocks, weight tying, GPT-2 init) with silent-bug gates and the LoRA seam (completed 2026-06-05)
 - [x] **Phase 5: TinyStories Pretraining** - Memmap data prep, full resumable local M3/MPS run (fp32) to coherent generation, trained best-val checkpoint + recorded curves (Kaggle P100 optional fallback) (completed 2026-06-05)
 - [x] **Phase 6: Generation & Sampling** - Shared generate() with greedy/temperature/top-k/top-p, EOS stop, context cropping, determinism tests (completed 2026-06-06)
-- [ ] **Phase 7: Evaluation** - Held-out perplexity, curated qualitative samples, 2–3 ablations with a comparison table
+- [x] **Phase 7: Evaluation** - Held-out perplexity, curated qualitative samples, 2–3 ablations with a comparison table (completed 2026-06-09)
 - [ ] **Phase 8: Demo & Writeup** - Slim fp32 CPU checkpoint, offline Gradio chat, demo.ipynb, consolidated test suite and technical writeup
 
 ## Phase Details
@@ -214,7 +214,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 07-03-PLAN.md — run_ablations.py calibration + 4-run fair cohort (baseline/no_tie/no_pos/depth_cut) through untouched train() + committed comparison table [EVAL-03]
+- [x] 07-03-PLAN.md — run_ablations.py calibration + 4-run fair cohort (baseline/no_tie/no_pos/depth_cut) through untouched train() + committed comparison table [EVAL-03]
 
 ### Phase 8: Demo & Writeup
 
@@ -247,5 +247,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
-| 7. Evaluation | 2/3 | In Progress|  |
+| 7. Evaluation | 3/3 | Complete   | 2026-06-09 |
 | 8. Demo & Writeup | 0/TBD | Not started | - |
