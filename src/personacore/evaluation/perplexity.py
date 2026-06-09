@@ -63,4 +63,9 @@ def perplexity(model, val_bin_path, block_size, device, batch_size=32):
         )
         total_ce += ce.item()
         total_tokens += y.numel()
+    if total_tokens == 0:
+        raise ValueError(
+            f"perplexity(): no scorable tokens in {val_bin_path!r} "
+            f"(corpus length {n}); need at least 2 tokens."
+        )
     return math.exp(total_ce / total_tokens), total_tokens
