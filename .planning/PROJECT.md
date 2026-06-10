@@ -19,6 +19,7 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [x] Bigram language model from scratch as a baseline foundation, with unit tests — _Validated in Phase 03: bigram-baseline-training-harness (thin end-to-end tokenize→train→sample→see-output slice; resumable open-dict checkpoint with GradScaler state + the `assemble_loss` EWC seam proven; fp16 resume trajectory carried as a GPU-confirmation item for Phase 5 — see 03-VERIFICATION.md)_
 - [x] Training loop with checkpointing, loss logging, and resumability (resumable across local M3/MPS sessions; Kaggle 30h/week fallback-aware) — _Validated in Phase 03: AdamW + warmup/cosine LR + grad-clip + grad-accum, fp32 default with optional fp16-AMP+GradScaler path, CSV loss logging, save→kill→resume reproduces the curve within 1e-6_
 - [x] Text generation/sampling (temperature, top-k) with unit tests — _Validated in Phase 06: generation-sampling (one shared `generate()` powering tests/notebook/demo — greedy/temperature/top-k/top-p, EOS-stop + trailing-token trim, context crop past `block_size`, `str→str` streaming wrapper with running-buffer-delta decode; 14 CPU generation tests + nucleus-exactness pin, top_k≤0 guarded — see 06-VERIFICATION.md)_
+- [x] Evaluation: held-out perplexity, curated qualitative samples, and a from-scratch architecture-ablation study — _Validated in Phase 07: evaluation (EVAL-01/02/03). Deterministic full-val `perplexity()` proven against a brute-force oracle (headline 2.1066 over 12,636,922 tokens on `best.pt`); curated `results/samples.md`; additive `weight_tying`/`use_pos_emb` `ModelConfig` flags (defaults reproduce today's arch bit-for-bit) enable a self-consistent 4-variant cohort (baseline/no_tie/no_pos/depth_cut) trained through the untouched `train()` at the D-07-calibrated budget (2500 steps) with a committed comparison table — see 07-VERIFICATION.md_
 
 ### Active
 
@@ -93,4 +94,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-06 after Phase 06 (generation-sampling) completion*
+*Last updated: 2026-06-10 after Phase 07 (evaluation) completion*
