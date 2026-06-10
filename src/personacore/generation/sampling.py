@@ -68,6 +68,7 @@ def next_token(
     top_p=None,
     greedy=False,
     generator=None,
+    forbid_ids=None,
 ):
     """Pick the next token id from a ``(1, vocab)`` last-position logit tensor.
 
@@ -75,7 +76,18 @@ def next_token(
     RNG). Otherwise the locked composition runs: temperature scaling, then top-k, then top-p
     (both stack when set), then softmax, then ``torch.multinomial`` drawing one sample through
     the supplied ``generator`` (seed isolation — never the global RNG).
+
+    ``forbid_ids`` is an optional bool tensor broadcastable to ``(1, vocab)``; ``True``
+    entries are masked to ``-inf`` BEFORE the greedy argmax and BEFORE the
+    temperature/top-k/top-p pipeline, so a forbidden id has exactly probability zero under
+    ``torch.multinomial`` and can never be the argmax. Built by the demo from
+    tokenizer-undecodable ids (CR-01 — the frozen production tokenizer decodes only 547 of
+    the model's 8192 ids; sampling a dead id crashes the strict decoder mid-stream).
+    ``masked_fill`` is non-mutating, so the caller's tensor is never touched.
     """
+    if forbid_ids is not None:
+        logits_last = logits_last.masked_fill(forbid_ids, float("-inf"))
+
     if greedy:
         return torch.argmax(logits_last, dim=-1, keepdim=True)
 

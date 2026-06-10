@@ -34,6 +34,7 @@ def generate(
     greedy=False,
     generator=None,
     block_size=None,
+    forbid_ids=None,
 ):
     """Yield each newly decoded token id, one step at a time.
 
@@ -45,7 +46,8 @@ def generate(
     trailing token". ``block_size`` and ``eos_id`` default from ``model.config``.
 
     Greedy decoding (``greedy=True``) is deterministic (argmax, no RNG); the sampled path
-    threads ``generator`` into :func:`next_token` for seeded reproducibility.
+    threads ``generator`` into :func:`next_token` for seeded reproducibility. ``forbid_ids``
+    passes through unchanged to :func:`next_token` each step (CR-01 dead-id logits mask).
     """
     bs = block_size if block_size is not None else model.config.block_size
     eid = eos_id if eos_id is not None else model.config.eos_id
@@ -60,6 +62,7 @@ def generate(
             top_p=top_p,
             greedy=greedy,
             generator=generator,
+            forbid_ids=forbid_ids,
         )
         tok = int(next_id)
         if tok == eid:

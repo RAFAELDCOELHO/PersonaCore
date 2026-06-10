@@ -128,13 +128,17 @@ def export_slim(full_path, slim_path, *, map_location="cpu") -> dict:
     # objects that the torch>=2.6 weights_only=True default rejects. TRUSTED-only read of
     # the project's OWN checkpoint (T-08-02 / T-07-02 lineage) — never a foreign file.
     full = torch.load(full_path, map_location=map_location, weights_only=False)
+    # WR-02: save_checkpoint defaults val_loss=None, so the exporter's contract must cover
+    # None — float(None) raised an opaque TypeError. None survives weights_only=True (it is
+    # a primitive), so the slim safe-load contract is preserved.
+    val_loss = full.get("val_loss")
     slim = {
         "schema_version": SLIM_SCHEMA_VERSION,
         "model": full["model"],
         "model_config": full["model_config"],
         "git_sha": full["git_sha"],  # provenance travels WITH the shipped weights (QA-02).
         "step": full["step"],
-        "val_loss": float(full["val_loss"]),
+        "val_loss": float(val_loss) if val_loss is not None else None,
     }
     torch.save(slim, slim_path)
     return slim

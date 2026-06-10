@@ -28,6 +28,29 @@ from .core import generate
 DEFAULT_MAX_NEW_TOKENS_CAP = 4096
 
 
+def undecodable_ids_mask(tokenizer, vocab_size):
+    """Build the ``forbid_ids`` mask of tokenizer-undecodable ids (CR-01 / DEMO-01).
+
+    Returns a ``(1, vocab_size)`` bool tensor that is ``True`` exactly for the ids NOT in
+    ``set(tokenizer.vocab) | set(tokenizer.special_tokens.values())`` — the same id test
+    ``BPETokenizer.decode`` applies (specials resolve first, then ``vocab``, else
+    ``ValueError``). Threading this mask as ``forbid_ids`` into the generation path masks the
+    dead ids to ``-inf`` before sampling, so the strict decoder can never see an unknown id at
+    ANY temperature/top-k setting (the frozen production tokenizer decodes only 547 of the
+    model's 8192 ids). ``eos_id`` is a registered special, so it is never masked and EOS-stop
+    (D-05) is unaffected.
+
+    Duck-typed: any object with a ``.vocab`` dict keyed by int ids and a ``.special_tokens``
+    name-to-id dict works.
+    """
+    decodable = set(tokenizer.vocab) | set(tokenizer.special_tokens.values())
+    mask = torch.ones(1, vocab_size, dtype=torch.bool)
+    for idx in decodable:
+        if 0 <= idx < vocab_size:
+            mask[0, idx] = False
+    return mask
+
+
 def _model_device(model):
     """Resolve the device ``idx`` must land on so generation works on CPU and MPS alike."""
     try:
@@ -57,8 +80,8 @@ def generate_text(
 
     ``max_new_tokens`` is required and bounded: a value ``> max_new_tokens_cap`` or ``<= 0``
     raises :class:`ValueError` before the loop (V5 / T-06-04 DoS guard). Remaining ``gen_kw``
-    (``temperature``, ``top_k``, ``top_p``, ``greedy``, ``generator``, ``block_size``) thread
-    through to :func:`personacore.generation.core.generate`.
+    (``temperature``, ``top_k``, ``top_p``, ``greedy``, ``generator``, ``block_size``,
+    ``forbid_ids``) thread through to :func:`personacore.generation.core.generate`.
 
     Single-sequence only. ``eos_id`` defaults from ``model.config.eos_id`` (never hardcoded).
     """
@@ -114,8 +137,9 @@ def generate_text_cumulative(model, tokenizer, prompt, *, max_new_tokens, **gen_
 
     Same contract as the producer otherwise: ``max_new_tokens`` is keyword-only and bounded to
     (0, ``max_new_tokens_cap``] (V5 / T-06-04 DoS guard fires before the loop); ``gen_kw``
-    (``temperature``, ``top_k``, ``top_p``, ``greedy``, ``generator``, ``eos_id``) threads
-    through unchanged; the prompt is stripped and the raw EOS separator never appears.
+    (``temperature``, ``top_k``, ``top_p``, ``greedy``, ``generator``, ``eos_id``,
+    ``forbid_ids``) threads through unchanged; the prompt is stripped and the raw EOS
+    separator never appears.
     """
     acc = ""
     for delta in generate_text(model, tokenizer, prompt, max_new_tokens=max_new_tokens, **gen_kw):
