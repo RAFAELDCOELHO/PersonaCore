@@ -29,18 +29,18 @@ key-decisions:
   - "Adapter lives in src/personacore (not the script) so CI tests the streaming contract without gradio installed"
   - "Examples passed as list-of-lists — gradio 5.50.0 hard-requires this shape when additional_inputs are present"
   - "CPU pinned via RuntimeConfig(device=\"cpu\") — DEMO-01 says laptop CPU; device resolution never drifts to MPS"
-duration: ~12min (through Task 2; Task 3 checkpoint pending)
-completed: IN PROGRESS — awaiting Task 3 human verification (offline streaming smoke)
+duration: ~12min execution + human verification at checkpoint
+completed: 2026-06-10
 ---
 
-# Phase 08 Plan 02: Offline Gradio Demo (DEMO-01) Summary — IN PROGRESS
+# Phase 08 Plan 02: Offline Gradio Demo (DEMO-01) Summary
 
-**Cumulative-yield streaming adapter (TDD, gradio-free tests) + offline Gradio 5.50.0 story-completion launcher loading the slim weights_only=True checkpoint on pinned CPU — awaiting the human Wi-Fi-off streaming smoke (Task 3 checkpoint).**
+**Cumulative-yield streaming adapter (TDD, gradio-free tests) + offline Gradio 5.50.0 story-completion launcher loading the slim weights_only=True checkpoint on pinned CPU — human Wi-Fi-off streaming smoke verified and approved.**
 
 ## Status
 
-Tasks 1-2 of 3 complete and committed. Task 3 is a blocking `checkpoint:human-verify`
-(offline streaming smoke) — execution paused awaiting the developer's live verification.
+All 3 tasks complete. Tasks 1-2 committed; Task 3 (blocking `checkpoint:human-verify`,
+offline streaming smoke) verified live by the developer and approved on 2026-06-10.
 
 ## What Was Built
 
@@ -122,11 +122,14 @@ Thin wiring per Phase-1 D-04 (121 lines, no argparse):
 
 None — the demo is fully wired end-to-end (real checkpoint, real tokenizer, real generation).
 
-## Pending: Task 3 checkpoint (human-verify, blocking)
+## Task 3 checkpoint result (human-verify): APPROVED
 
-Awaiting developer confirmation of the offline streaming smoke: streams with Wi-Fi off,
-bubble grows cumulatively, sliders change behavior, fresh story per message, no EOS literal.
-Resume signal: "approved" (or a failure description → fix and re-present).
+Developer ran `python scripts/demo_app.py` from the main checkout (post early-merge) and
+confirmed the offline streaming smoke on 2026-06-10: streams with Wi-Fi off, bubble grows
+cumulatively, sliders change behavior, fresh story per message, no EOS literal, UI intact
+offline. One checkpoint-flow note: the first verification attempt failed only because the
+work had not yet merged to main (worktree-path UX) — the orchestrator early-merged the
+worktree branch and verification then passed with no code changes.
 
 ## Self-Check: PASSED
 
