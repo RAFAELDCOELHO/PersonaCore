@@ -73,9 +73,7 @@ def _bruteforce_ppl(model, arr, block_size):
         x = chunk[:-1].unsqueeze(0)
         y = chunk[1:].unsqueeze(0)
         logits, _ = model(x)
-        ce = F.cross_entropy(
-            logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum"
-        )
+        ce = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum")
         total_ce += ce.item()
         total_tokens += y.numel()
     return math.exp(total_ce / total_tokens), total_tokens

@@ -58,9 +58,7 @@ def perplexity(model, val_bin_path, block_size, device, batch_size=32):
         x = chunk[:-1].unsqueeze(0)  # (1, T)
         y = chunk[1:].unsqueeze(0)  # (1, T)
         logits, _ = model(x)  # ignore the mean loss; recompute a SUM below
-        ce = F.cross_entropy(
-            logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum"
-        )
+        ce = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum")
         total_ce += ce.item()
         total_tokens += y.numel()
     if total_tokens == 0:
