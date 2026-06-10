@@ -19,7 +19,11 @@ Four behaviors:
     ``checkpoints/model_slim.pt``: SKIPS cleanly on CI, runs locally after export.
 
 The three mechanism tests use a tiny seeded GPT and a hand-built fake FULL checkpoint in
-``tmp_path`` — never the real ``best.pt``.
+``tmp_path`` — never the real ``best.pt``. The mechanism generation test decodes through a
+total stub tokenizer (the ``test_generation_text.py`` precedent): the frozen production
+tokenizer decodes STRICTLY (WR-03) over a trained vocab of ids 0-538 (+ specials at 8184+),
+so a RANDOM-init model's argmax over the full 8192-id space would hit an unknown id and raise
+by design. The real-artifact test uses the real frozen tokenizer end-to-end.
 """
 
 import dataclasses
@@ -43,9 +47,25 @@ DROPPED_KEYS = {"optimizer", "scheduler", "scaler", "rng", "train_config"}
 
 
 def _tiny_config() -> ModelConfig:
-    # vocab_size/eos_id stay at the LOCKED defaults (8192/8184) so the frozen tokenizer is
-    # compatible; everything else is shrunk for a cheap CPU fixture.
+    # vocab_size/eos_id stay at the LOCKED defaults (8192/8184) so the artifact's embedded
+    # config matches production shape; everything else is shrunk for a cheap CPU fixture.
     return ModelConfig(block_size=32, n_layer=1, n_head=2, n_embd=16)
+
+
+class _StubTokenizer:
+    """Total id->char decode for the tiny RANDOM-init model (mechanism test only).
+
+    The frozen production tokenizer raises ``ValueError`` on ids outside its trained vocab
+    (strict decode, WR-03) — correct for the TRAINED model, but a random-init tiny model's
+    greedy argmax lands anywhere in [0, 8192). A total decode keeps the mechanism test about
+    what it proves: the round-tripped weights drive generation on CPU.
+    """
+
+    def encode(self, text, allowed_special="all"):
+        return []  # empty prompt body; the generation wrapper seeds [eos_id].
+
+    def decode(self, ids):
+        return "".join(chr(ord("a") + (i % 26)) for i in ids)
 
 
 @pytest.fixture(scope="module")
@@ -92,7 +112,7 @@ def test_slim_loads_and_generates_cpu(slim_paths):
     model.load_state_dict(loaded["model"])
     # Tying survives the round-trip — TRUE shared storage, not a value copy (MODEL-03).
     assert model.lm_head.weight.data_ptr() == model.wte.weight.data_ptr()
-    tok = from_json(TOKENIZER_PATH)  # FROZEN production artifact — never retrain.
+    tok = _StubTokenizer()  # total decode — random-init ids would crash the strict frozen tok.
     out1 = generate_text_str(model, tok, "", max_new_tokens=8, greedy=True)
     out2 = generate_text_str(model, tok, "", max_new_tokens=8, greedy=True)
     assert isinstance(out1, str) and out1, "greedy generation must yield non-empty text"
