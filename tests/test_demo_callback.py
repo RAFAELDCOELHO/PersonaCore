@@ -101,9 +101,7 @@ def test_yields_are_cumulative():
     _force_sequence(model, [0, 1, 2, 3, 4, 5, 6, 7])  # 8 non-eos ids -> 8 visible chars.
     tok = _RecordingTokenizer()
 
-    yields = list(
-        generate_text_cumulative(model, tok, "hi", max_new_tokens=8, greedy=True)
-    )
+    yields = list(generate_text_cumulative(model, tok, "hi", max_new_tokens=8, greedy=True))
 
     assert len(yields) >= 1
     for prev, nxt in zip(yields, yields[1:]):
@@ -121,9 +119,7 @@ def test_final_yield_equals_collected_deltas():
 
     model = _tiny_model()
     _force_sequence(model, forced)
-    cumulative = list(
-        generate_text_cumulative(model, tok, "hi", max_new_tokens=4, greedy=True)
-    )
+    cumulative = list(generate_text_cumulative(model, tok, "hi", max_new_tokens=4, greedy=True))
 
     _force_sequence(model, forced)  # reset the forcing counter for the second pass.
     deltas = list(generate_text(model, tok, "hi", max_new_tokens=4, greedy=True))
