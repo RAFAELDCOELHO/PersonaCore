@@ -20,6 +20,8 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [x] Training loop with checkpointing, loss logging, and resumability (resumable across local M3/MPS sessions; Kaggle 30h/week fallback-aware) — _Validated in Phase 03: AdamW + warmup/cosine LR + grad-clip + grad-accum, fp32 default with optional fp16-AMP+GradScaler path, CSV loss logging, save→kill→resume reproduces the curve within 1e-6_
 - [x] Text generation/sampling (temperature, top-k) with unit tests — _Validated in Phase 06: generation-sampling (one shared `generate()` powering tests/notebook/demo — greedy/temperature/top-k/top-p, EOS-stop + trailing-token trim, context crop past `block_size`, `str→str` streaming wrapper with running-buffer-delta decode; 14 CPU generation tests + nucleus-exactness pin, top_k≤0 guarded — see 06-VERIFICATION.md)_
 - [x] Evaluation: held-out perplexity, curated qualitative samples, and a from-scratch architecture-ablation study — _Validated in Phase 07: evaluation (EVAL-01/02/03). Deterministic full-val `perplexity()` proven against a brute-force oracle (headline 2.1066 over 12,636,922 tokens on `best.pt`); curated `results/samples.md`; additive `weight_tying`/`use_pos_emb` `ModelConfig` flags (defaults reproduce today's arch bit-for-bit) enable a self-consistent 4-variant cohort (baseline/no_tie/no_pos/depth_cut) trained through the untouched `train()` at the D-07-calibrated budget (2500 steps) with a committed comparison table — see 07-VERIFICATION.md_
+- [x] Gradio local web UI chat demo (on-device) plus `demo.ipynb` research artifact (training curves, sampling) — _Validated in Phase 08: demo-writeup (DEMO-01/02/03). Offline `gr.ChatInterface` demo on laptop CPU with temperature/top-k sliders, slim fp32 checkpoint (`export_slim` → safetensors-style safe load), narrated `demo.ipynb`, animated GIF hero; CR-01 dead-id logits mask (`forbid_ids`) makes every slider setting crash-safe — see 08-VERIFICATION.md (re-verified 7/7 after gap closure)_
+- [x] Polished technical writeup documenting design decisions, architecture, and results (document-as-we-go) — _Validated in Phase 08: demo-writeup (DOC-01). `docs/REPORT.md` decision-driven deep dive + README front door with honest effective-vocabulary claims (547 live of 8192 ids; 2,935,680 dead-row params quantified), clone-first quickstart — see 08-VERIFICATION.md_
 
 ### Active
 
@@ -27,8 +29,6 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 
 - [ ] GPT-style transformer decoder (~10–15M params) from scratch: attention, MLP, blocks, positional embeddings, with unit tests
 - [ ] Pretrain on TinyStories to fluent, coherent generation
-- [ ] Gradio local web UI chat demo (on-device) plus `demo.ipynb` research artifact (training curves, sampling)
-- [ ] Polished technical writeup documenting design decisions, architecture, and results (document-as-we-go)
 
 ### Out of Scope
 
@@ -71,8 +71,8 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 | Milestone 1 pretraining stops at TinyStories (fluency), defer conversational tuning to M2 | Best coherence-per-parameter at ~10–15M; keeps M1 shippable | — Pending |
 | Two-stage pretraining curriculum (TinyStories → DailyDialog/PersonaChat) for the full project | Fluency first, then conversational/persona grounding; defensible at small scale | — Pending |
 | Eventual demo = both teach-then-recall and EWC no-forgetting, as a research narrative | Strongest portfolio artifact; proves memory is in weights and survives continual learning | — Pending |
-| Gradio local web UI as primary demo + `demo.ipynb` as technical artifact | Good demo video/screenshots while staying on-device; notebook carries the ML narrative | — Pending |
-| Document-as-we-go (polished writeup each milestone) | Narrative compounds; avoids reconstructing rationale later | — Pending |
+| Gradio local web UI as primary demo + `demo.ipynb` as technical artifact | Good demo video/screenshots while staying on-device; notebook carries the ML narrative | ✓ Shipped in Phase 08 (offline ChatInterface + narrated notebook + GIF hero) |
+| Document-as-we-go (polished writeup each milestone) | Narrative compounds; avoids reconstructing rationale later | ✓ M1 writeup shipped in Phase 08 (docs/REPORT.md + README) |
 | Everything from scratch (transformer, BPE, LoRA, EWC) — no HF PEFT | The portfolio value is demonstrated depth, not library usage | — Pending |
 | Primary training target = local M3/MPS (fp32); Kaggle P100 demoted to optional fallback (decided Phase 5 discuss, 2026-06-05) | Strengthens the fully-on-device/zero-budget/privacy thesis — the model trains on the author's own machine, no external compute dependency. MPS has no fp16 AMP, so fp32; `RuntimeConfig` resolves CUDA-P100→MPS→CPU. | — Pending (device layer landed in quick task 260605-lgy) |
 
@@ -94,4 +94,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-10 after Phase 07 (evaluation) completion*
+*Last updated: 2026-06-10 after Phase 08 (demo-writeup) completion — last phase of Milestone 1*
