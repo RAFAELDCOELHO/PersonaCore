@@ -1,0 +1,9 @@
+[preflight] device=mps cc=n/a torch=2.7.1
+[evaluate] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[evaluate] headline full-val perplexity = 2.1066  (over 12636922 scored target tokens)
+[evaluate] NOTE: this deterministic full-sweep PPL is the canonical headline; it differs from best.pt's recorded random-batch val_loss 0.7378 / ppl 2.0913 (a single sampled eval batch, 07-RESEARCH Pitfall 5).
+[evaluate] sampled prompt 'Once upon a time'
+[evaluate] sampled prompt 'The little robot'
+[evaluate] sampled prompt 'Lily and Tom went to the'
+[evaluate] sampled prompt "" (free-running document-start)
+[evaluate] wrote /Users/juliorcoelho/PersonaCore/results/samples.md

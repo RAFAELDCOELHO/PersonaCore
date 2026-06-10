@@ -1,0 +1,13 @@
+[preflight] device=mps cc=n/a torch=2.7.1
+[run_ablations] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[calibrate] curve points=64  final=(step 8000, val 0.8495)  recommended REDUCED_MAX_STEPS=2500
+[calibrate] LOCK this value into REDUCED_MAX_STEPS and record it in the SUMMARY (D-07). The cohort below uses the module constant, not this return.
+[cohort] training 'baseline' (13,891,584 params) for 2500 steps ...
+[cohort] 'baseline': params=13,891,584  PPL=2.8212 (over 12636922 tokens)  best_val_loss=1.0426
+[cohort] training 'no_tie' (17,037,312 params) for 2500 steps ...
+[cohort] 'no_tie': params=17,037,312  PPL=2.7870 (over 12636922 tokens)  best_val_loss=1.0312
+[cohort] training 'no_pos' (13,793,280 params) for 2500 steps ...
+[cohort] 'no_pos': params=13,793,280  PPL=2.9221 (over 12636922 tokens)  best_val_loss=1.0796
+[cohort] training 'depth_cut' (8,568,192 params) for 2500 steps ...
+[cohort] 'depth_cut': params=8,568,192  PPL=3.0074 (over 12636922 tokens)  best_val_loss=1.1078
+[run_ablations] wrote /Users/juliorcoelho/PersonaCore/results/results.md
