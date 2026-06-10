@@ -26,7 +26,9 @@ its seams are already built in and tested.
 
 Every component is hand-implemented in pure PyTorch:
 
-- **Byte-level BPE tokenizer** trained from scratch — vocabulary 8192, `<|endoftext|>`
+- **Byte-level BPE tokenizer** trained from scratch — vocab table 8192 with 547 ids live
+  (256 bytes + 283 learned merges + 8 specials; the bounded TinyStories corpus exhausts its
+  mergeable pairs, so the remaining 7645 rows are reserved capacity), `<|endoftext|>`
   pinned as an atomic id, validated against a tiktoken oracle (test-only; a guard test
   proves the oracle is never imported by runtime code)
 - **GPT-style decoder** built by hand — pre-norm blocks, causal multi-head attention
