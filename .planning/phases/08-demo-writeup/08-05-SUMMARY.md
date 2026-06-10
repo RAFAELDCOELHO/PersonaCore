@@ -2,62 +2,132 @@
 phase: 08-demo-writeup
 plan: "05"
 subsystem: demo-assets
-status: in-progress
-checkpoint: task-1-package-legitimacy-gate
+status: complete
 tags: [gif, ffmpeg, demo, readme-hero, d-04]
 requires:
   - phase: 08-demo-writeup
     plan: "02"
     provides: "scripts/demo_app.py — working offline Gradio streaming demo"
 provides:
-  - "assets/demo.gif — README hero GIF (D-04), live CPU streaming proof (PENDING)"
+  - "assets/demo.gif — README hero GIF (D-04), live CPU streaming proof"
 affects:
   - "08-06 (README) — places assets/demo.gif as hero asset with locked alt text"
 tech-stack:
   added: []
-  patterns: []
+  patterns:
+    - "Two-pass ffmpeg palette GIF recipe (palettegen -> paletteuse) with crop+trim preprocessing"
 key-files:
-  created: []
+  created:
+    - assets/demo.gif
   modified: []
-key-decisions: []
-duration: in-progress
-completed: null
+key-decisions:
+  - "ffmpeg source: brew ffmpeg 8.1.1 (/opt/homebrew/bin/ffmpeg) chosen by the developer at the Task 1 package gate — NO pip package installed (imageio-ffmpeg never installed; zero new Python deps)"
+  - "Used the second take (t=16.0-25.5) of the 27.75 s recording; the first take's capture region cut the story text on both edges"
+  - "Added crop=1134:700:306:110 before scaling to exclude desktop wallpaper, menu bar, personal widgets, and browser chrome from the committed GIF (threat model T-08-05)"
+duration: "~15 min agent execution across two sessions (+ human recording/verification between checkpoints)"
+completed: 2026-06-10
 ---
 
-# Phase 08 Plan 05: Demo GIF Hero Asset — IN PROGRESS (checkpoint)
+# Phase 08 Plan 05: Demo GIF Hero Asset Summary
 
-**Status: paused at Task 1 — blocking-human package legitimacy gate for imageio-ffmpeg
-([ASSUMED] package, never auto-approvable). No installs run, no files changed yet.**
+**One-liner:** README hero GIF (D-04) cut from the developer's screen recording via brew ffmpeg's two-pass palette recipe — one complete TinyStories completion streaming start-to-EOS in the light-mode Gradio UI, 720x444 @ 12 fps, 245 KB (~10.3 s).
 
-## What was done so far
+## What was built
 
-- Worktree branch check passed (worktree-agent-a69fb2eb1940a53d5, base a59f227).
-- Environment probe (read-only): neither `ffmpeg` nor `gifski` is on PATH, no brew ffmpeg at
-  /opt/homebrew/bin or /usr/local/bin, and `imageio_ffmpeg` is NOT installed in the shared
-  .venv — the package gate is genuinely required before any GIF conversion can run.
-- Read 08-RESEARCH.md § Package Legitimacy Audit: imageio-ffmpeg row — PyPI 0.6.0, ~7 yrs,
-  high downloads, source repo github.com/imageio/imageio-ffmpeg, slopcheck unavailable →
-  human gate required per protocol.
+`assets/demo.gif` — the single most convincing "fully on-device" artifact for the README
+(placed in 08-06). Content arc: empty state with the three example chips → developer clicks
+"Tom and his cat went to the park to play." → the user bubble appears and the story streams
+token-by-token on laptop CPU → completed story held on screen with retry/undo controls
+visible. Light mode throughout, matching the UI-SPEC capture contract.
 
-## Task status
+**Asset Contract compliance (08-UI-SPEC):**
 
-| Task | Name | Type | Status |
-| ---- | ---- | ---- | ------ |
-| 1 | Package legitimacy gate — imageio-ffmpeg | checkpoint:human-verify (blocking-human) | AWAITING HUMAN — resume signal: "approved" / "brew" / "rejected" |
-| 2 | Record the streaming demo (~10-15 s capture) | checkpoint:human-action | Not started (follows Task 1) |
-| 3 | Install ffmpeg source + two-pass palette conversion → assets/demo.gif | auto | Not started (needs Task 1 signal + Task 2 recording path) |
+| Property | Contract | Delivered |
+| -------- | -------- | --------- |
+| File | assets/demo.gif, committed | committed (a8c9fc5), not gitignored |
+| Content | one complete story start→EOS, light mode | yes — full streaming arc + EOS (retry/undo buttons appear) |
+| Duration | ~10-15 s | ~10.3 s (124 frames) |
+| Dimensions | 720px wide (scale=720:-1), 12 fps | 720x444, 12 fps |
+| Recipe | two-pass palette | palettegen → paletteuse, lanczos |
+| Size | well under 10 MB | 244,876 bytes (245 KB) |
 
-## Awaiting
+## Conversion pipeline (reproducible)
 
-Human verification of the imageio-ffmpeg PyPI page (exact name, imageio org,
-github.com/imageio/imageio-ffmpeg, recent 0.6.x release) and explicit selection of the
-ffmpeg source:
-- "approved" → `.venv/bin/pip install imageio-ffmpeg` (pip wheel bundling static ffmpeg)
-- "brew" → use a brew/system ffmpeg binary instead (conversion command identical)
-- "rejected" → stop and surface to the developer
+Source: developer screen recording (1440x810, 27.75 s, h264) — left untouched on the Desktop.
+
+```bash
+FF=/opt/homebrew/bin/ffmpeg   # brew ffmpeg 8.1.1 (Task 1 gate resolution: "brew")
+"$FF" -ss 16.0 -t 9.5 -i <recording.mov> \
+  -vf "crop=1134:700:306:110,fps=12,scale=720:-1:flags=lanczos,palettegen" /tmp/palette.png
+"$FF" -ss 16.0 -t 9.5 -i <recording.mov> -i /tmp/palette.png \
+  -filter_complex "crop=1134:700:306:110,fps=12,scale=720:-1:flags=lanczos[x];[x][1:v]paletteuse" \
+  assets/demo.gif
+```
+
+- Trim `16.0 → 25.5 s`: dead time and the first (badly framed) take cut at the start; the
+  recording-stop marquee (visible from ~26 s) cut at the end.
+- Crop `1134x700+306+110`: keeps only the white Gradio page — excludes desktop wallpaper,
+  macOS menu bar, calendar/photo widgets, and the browser tab/URL/bookmarks chrome.
+
+## Checkpoint resolutions (from prior sessions)
+
+| Task | Type | Resolution |
+| ---- | ---- | ---------- |
+| 1 — Package legitimacy gate | checkpoint:human-verify (blocking-human) | Developer chose **"brew"** — brew ffmpeg 8.1.1 used; imageio-ffmpeg was NEVER installed; no pip installs ran in this plan |
+| 2 — Record streaming demo | checkpoint:human-action | Developer recorded the demo (1440x810, 27.75 s .mov on Desktop); recording read-only, never committed |
+
+No authentication gates occurred.
 
 ## Deviations from Plan
 
-None so far.
+### Auto-fixed / adapted
 
-## Self-Check: N/A (in-progress checkpoint snapshot — no artifacts claimed yet)
+**1. [Rule 2 - Threat model mitigation] Added crop stage to the ffmpeg recipe**
+- **Found during:** Task 3
+- **Issue:** The recording captures the full desktop (wallpaper, menu bar, a calendar widget, a personal photo widget, browser bookmarks bar with personal favicons) — T-08-05 requires the committed GIF to show only the demo UI
+- **Fix:** `crop=1134:700:306:110` inserted before `fps/scale` in both palette passes; verified frame-by-frame that only the Gradio page is visible in the final GIF
+- **Files modified:** assets/demo.gif (content)
+- **Commit:** a8c9fc5
+
+**2. [Rule 3 - Input adaptation] Recording longer than contract; trimmed to the usable take**
+- **Found during:** Task 3
+- **Issue:** Recording is 27.75 s (contract: ~10-15 s) and contains two takes; in the first take (t≈0-11) the browser content overflowed the capture region on BOTH edges, cutting the story text — unusable
+- **Fix:** Trimmed to the second take (`-ss 16.0 -t 9.5`), which shows the full arc: empty state → example click (~t=18.7) → streaming (~2.7 s) → completed story held for reading
+- **Commit:** a8c9fc5
+
+### Known blemish (flagged for 08-06 human review)
+
+The capture region's right edge cuts the browser window slightly: the user prompt bubble tail
+("Tom and his cat went to the p…") and a few words at two line-wraps of the final story state
+are clipped at the GIF's right edge. No pixels exist beyond the frame, so no crop/scale can
+recover them. The streaming arc and the story remain fully legible; the structural contract is
+met. **Per threat model T-08-05 the human confirms the GIF before the README ships in 08-06 —
+if a flawless hero is wanted, re-record with the browser window fully inside the capture
+region and re-run the pipeline above (same commands, retune `-ss`/`-t`/`crop`).**
+
+## Verification
+
+- Structural check passed: magic bytes `GIF89a`-family, logical-screen width 720, 244,876 bytes < 10,000,000
+- ffprobe: 720x444, 124 frames, ~10.3 s
+- `git check-ignore assets/demo.gif` → non-zero (not ignored); file committed
+- `git ls-files | grep -E '\.(mov|png)$'` → no recording or palette artifacts tracked
+- Visual frame inspection (first/mid/last): light mode, empty state → streaming → complete story; no desktop/chrome visible
+
+## Known Stubs
+
+None — binary asset, fully realized.
+
+## Threat Flags
+
+None new. T-08-SC resolved by avoiding the pip install entirely (brew binary). T-08-05
+mitigated via the crop stage; residual review deferred to the 08-06 human gate as designed.
+
+## Output for 08-06 (README)
+
+- Hero asset: `assets/demo.gif`
+- Locked alt text: `Gradio chat demo streaming a TinyStories completion token-by-token on a laptop CPU`
+
+## Self-Check: PASSED
+
+- assets/demo.gif exists in the worktree: FOUND
+- Commit a8c9fc5 (`feat(08-05): add demo GIF hero asset (D-04)`) exists: FOUND
