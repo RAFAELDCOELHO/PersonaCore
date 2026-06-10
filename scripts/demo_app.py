@@ -22,7 +22,8 @@ ability). No chat-tuning or weight-memory claims are made for M1.
 SECURITY: the slim checkpoint loads through ``load_slim`` — ``torch.load`` under
 ``weights_only=True``, the restricted unpickler with ZERO code execution on load (T-08-01).
 ``tokenizer.json`` is a data-only JSON artifact. The existing (0, 4096] ``max_new_tokens``
-guard (T-06-04) backs the slider bound.
+guard (T-06-04) backs the slider bound. Tokenizer-undecodable ids are masked from the logits
+before sampling (``forbid_ids``), so every slider setting the UI offers is safe (CR-01).
 """
 
 import os
@@ -36,7 +37,7 @@ import gradio as gr  # noqa: E402  (must follow the analytics kill-switch above)
 
 from personacore.checkpoint import load_slim  # noqa: E402
 from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402
-from personacore.generation import generate_text_cumulative  # noqa: E402
+from personacore.generation import generate_text_cumulative, undecodable_ids_mask  # noqa: E402
 from personacore.model import GPT  # noqa: E402
 from personacore.tokenizer import from_json  # noqa: E402
 
@@ -81,6 +82,12 @@ def build_demo() -> gr.ChatInterface:
     model.to(runtime.device)
     model.eval()
     tok = from_json(TOKENIZER_PATH)  # FROZEN artifact — never retrain.
+    # CR-01: the model samples over the full 8192-id table but the frozen tokenizer decodes
+    # only 547 live ids (256 bytes + 283 learned merges + 8 specials). Masking the 7645 dead
+    # ids to -inf makes them unreachable at ANY slider setting — including temp 1.5 with
+    # top-k disabled, the measured ~29% crash-per-400-tokens extreme. eos 8184 is a
+    # registered special, so it is never masked and EOS-stop is intact.
+    forbid_ids = undecodable_ids_mask(tok, model.config.vocab_size)
 
     def tell_story(message, history, temperature, top_k, max_new_tokens):
         # IGNORE history — fresh story per message (D-02 honest framing: zero dialogue
@@ -95,6 +102,7 @@ def build_demo() -> gr.ChatInterface:
             max_new_tokens=int(max_new_tokens),
             temperature=float(temperature),
             top_k=int(top_k) if int(top_k) > 0 else None,  # slider 0 -> disabled.
+            forbid_ids=forbid_ids,  # dead-id mask captured once at build time (CR-01).
         )
 
     return gr.ChatInterface(
