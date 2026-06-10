@@ -100,3 +100,24 @@ def generate_text_str(model, tokenizer, prompt, **kw):
     streamed suffixes into the complete continuation (prompt stripped, no raw EOS).
     """
     return "".join(generate_text(model, tokenizer, prompt, **kw))
+
+
+def generate_text_cumulative(model, tokenizer, prompt, *, max_new_tokens, **gen_kw):
+    """Stream the continuation as a GROWING cumulative string — the Gradio yield shape (DEMO-01).
+
+    Pure adapter over :func:`generate_text`: accumulates each delta into a running string and
+    yields the running string after every delta. The two yield shapes exist because they serve
+    different consumers: ``generate_text`` yields DELTAS (the composable producer — join them,
+    pipe them, measure them), while Gradio's ``ChatInterface`` REPLACES the displayed message
+    with each yield, so its callback must yield the FULL cumulative response (08-RESEARCH
+    Pitfall 1: yielding deltas makes the chat bubble flicker lone fragments instead of growing).
+
+    Same contract as the producer otherwise: ``max_new_tokens`` is keyword-only and bounded to
+    (0, ``max_new_tokens_cap``] (V5 / T-06-04 DoS guard fires before the loop); ``gen_kw``
+    (``temperature``, ``top_k``, ``top_p``, ``greedy``, ``generator``, ``eos_id``) threads
+    through unchanged; the prompt is stripped and the raw EOS separator never appears.
+    """
+    acc = ""
+    for delta in generate_text(model, tokenizer, prompt, max_new_tokens=max_new_tokens, **gen_kw):
+        acc += delta
+        yield acc
