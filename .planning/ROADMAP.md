@@ -255,7 +255,7 @@ Plans:
 
 **Gap Closure Wave 1** *(from 08-VERIFICATION gaps_found — CR-01)*
 
-- [ ] 08-07-PLAN.md — CR-01 crash fix: forbid_ids logits mask through next_token/generate + undecodable_ids_mask helper + demo wiring + regression tests; opportunistic WR-02 (export_slim val_loss=None) [DEMO-01]
+- [x] 08-07-PLAN.md — CR-01 crash fix: forbid_ids logits mask through next_token/generate + undecodable_ids_mask helper + demo wiring + regression tests; opportunistic WR-02 (export_slim val_loss=None) [DEMO-01]
 
 **Gap Closure Wave 2** *(blocked on 08-07)*
 
@@ -275,4 +275,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
 | 7. Evaluation | 3/3 | Complete   | 2026-06-09 |
-| 8. Demo & Writeup | 6/8 | Gap Closure|  |
+| 8. Demo & Writeup | 7/8 | In Progress|  |
