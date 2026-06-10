@@ -95,15 +95,29 @@ No authentication gates occurred.
 - **Fix:** Trimmed to the second take (`-ss 16.0 -t 9.5`), which shows the full arc: empty state → example click (~t=18.7) → streaming (~2.7 s) → completed story held for reading
 - **Commit:** a8c9fc5
 
-### Known blemish (flagged for 08-06 human review)
+### Known blemish (flagged for 08-06 human review) — RESOLVED by re-capture
 
-The capture region's right edge cuts the browser window slightly: the user prompt bubble tail
-("Tom and his cat went to the p…") and a few words at two line-wraps of the final story state
-are clipped at the GIF's right edge. No pixels exist beyond the frame, so no crop/scale can
-recover them. The streaming arc and the story remain fully legible; the structural contract is
-met. **Per threat model T-08-05 the human confirms the GIF before the README ships in 08-06 —
-if a flawless hero is wanted, re-record with the browser window fully inside the capture
-region and re-run the pipeline above (same commands, retune `-ss`/`-t`/`crop`).**
+The original capture region's right edge cut the browser window slightly (user bubble tail and
+a few wrapped words clipped). At the 08-06 gate the developer chose to re-record; see the
+**Re-capture addendum** below. The shipped `assets/demo.gif` is the re-captured version with no
+edge clipping.
+
+## Re-capture addendum (08-06 gate resolution, 2026-06-10)
+
+The developer re-recorded at the 08-06 human gate (full-screen capture so no edge could clip;
+first re-take was dark mode and was rejected against the locked light-mode capture contract,
+second re-take passed). The orchestrator re-ran the documented pipeline with retuned parameters:
+
+- Source: 1920x1080, 34.4 s full-screen .mov (Desktop, read-only, never committed)
+- Trim `16.0 → 23.9 s`: one complete story arc — empty state with example chips → click
+  "Tom and his cat went to the park to play." → token-by-token streaming (~1.6 s) → completed
+  story; ends before an on-screen settings panel and the capture overlay appear
+- Filter: `crop=1920:996:0:84` (drops Safari toolbar/bookmarks; page content only),
+  `tpad=stop_mode=clone:stop_duration=2` (holds the completed story 2 s for readability),
+  `fps=12,scale=720:-1:flags=lanczos`, two-pass palettegen → paletteuse
+- Result: **720x374, 119 frames, ~9.9 s, 128,309 bytes (128 KB)** — supersedes the 720x444/245 KB
+  original; verified frame-by-frame (first/mid/last): light mode, no chrome/desktop, no
+  clipping, no raw `<|endoftext|>`
 
 ## Verification
 
