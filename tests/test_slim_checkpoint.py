@@ -32,8 +32,8 @@ import pathlib
 import pytest
 import torch
 
-from personacore.checkpoint import export_slim, load_slim
-from personacore.config import ModelConfig
+from personacore.checkpoint import export_slim, load_slim, save_checkpoint
+from personacore.config import ModelConfig, TrainConfig
 from personacore.generation import generate_text_str
 from personacore.model import GPT
 from personacore.tokenizer import from_json
@@ -127,6 +127,33 @@ def test_slim_carries_provenance(slim_paths):
     assert loaded["git_sha"] == "deadbeef0"
     assert loaded["step"] == 7
     assert loaded["val_loss"] == pytest.approx(1.23)
+
+
+def test_export_slim_handles_val_loss_none(tmp_path):
+    # WR-02: save_checkpoint's own signature defaults val_loss=None, so export_slim must
+    # cover None — float(None) raised an opaque TypeError. The slim file must carry
+    # val_loss=None through the weights_only=True round-trip (None is a primitive).
+    cfg = _tiny_config()
+    torch.manual_seed(1234)
+    model = GPT(cfg)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    full_path = tmp_path / "full_no_val_loss.pt"
+    slim_path = tmp_path / "model_slim.pt"
+    save_checkpoint(  # NO val_loss argument — exercises the None default.
+        full_path,
+        model=model,
+        optimizer=optimizer,
+        scheduler=None,
+        step=3,
+        model_config=cfg,
+        train_config=TrainConfig(),
+        git_sha="deadbeef0",
+    )
+    slim = export_slim(full_path, slim_path)  # must not raise (WR-02).
+    assert slim["val_loss"] is None
+    loaded = load_slim(slim_path)  # weights_only=True round-trip preserves the None.
+    assert loaded["val_loss"] is None
+    assert loaded["schema_version"] == 1
 
 
 def _count_parameters(model) -> int:
