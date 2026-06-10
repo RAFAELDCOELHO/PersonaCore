@@ -237,7 +237,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 08-01-PLAN.md — Shippable-artifact slice: slim fp32 inference checkpoint (export_slim/load_slim, weights_only=True) + [demo] env install + offline test [DEMO-02, QA-01, QA-02]
+- [x] 08-01-PLAN.md — Shippable-artifact slice: slim fp32 inference checkpoint (export_slim/load_slim, weights_only=True) + [demo] env install + offline test [DEMO-02, QA-01, QA-02]
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -267,4 +267,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
 | 7. Evaluation | 3/3 | Complete   | 2026-06-09 |
-| 8. Demo & Writeup | 0/6 | Planned | - |
+| 8. Demo & Writeup | 1/6 | In Progress|  |
