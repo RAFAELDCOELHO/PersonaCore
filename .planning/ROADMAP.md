@@ -241,9 +241,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 08-02-PLAN.md — Demo slice: generate_text_cumulative adapter + scripts/demo_app.py (offline Gradio story completion) + Wi-Fi-off smoke [DEMO-01]
-- [ ] 08-03-PLAN.md — Notebook slice: committed results/run.csv + notebook tooling gate + demo.ipynb executed-with-outputs [DEMO-03, QA-02]
-- [ ] 08-04-PLAN.md — docs/REPORT.md decision-driven technical narrative (D-02/D-03) [DOC-01]
+- [x] 08-02-PLAN.md — Demo slice: generate_text_cumulative adapter + scripts/demo_app.py (offline Gradio story completion) + Wi-Fi-off smoke [DEMO-01]
+- [x] 08-03-PLAN.md — Notebook slice: committed results/run.csv + notebook tooling gate + demo.ipynb executed-with-outputs [DEMO-03, QA-02]
+- [x] 08-04-PLAN.md — docs/REPORT.md decision-driven technical narrative (D-02/D-03) [DOC-01]
 
 **Wave 3** *(blocked on 08-02)*
 
@@ -267,4 +267,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
 | 7. Evaluation | 3/3 | Complete   | 2026-06-09 |
-| 8. Demo & Writeup | 1/6 | In Progress|  |
+| 8. Demo & Writeup | 4/6 | In Progress|  |
