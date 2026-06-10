@@ -26,7 +26,9 @@ its seams are already built in and tested.
 
 Every component is hand-implemented in pure PyTorch:
 
-- **Byte-level BPE tokenizer** trained from scratch — vocabulary 8192, `<|endoftext|>`
+- **Byte-level BPE tokenizer** trained from scratch — vocab table 8192 with 547 ids live
+  (256 bytes + 283 learned merges + 8 specials; the bounded TinyStories corpus exhausts its
+  mergeable pairs, so the remaining 7645 rows are reserved capacity), `<|endoftext|>`
   pinned as an atomic id, validated against a tiktoken oracle (test-only; a guard test
   proves the oracle is never imported by runtime code)
 - **GPT-style decoder** built by hand — pre-norm blocks, causal multi-head attention
@@ -46,18 +48,22 @@ After the install and the weights download, the demo itself makes zero network c
 works with Wi-Fi off.
 
 ```bash
-# 1. Environment (Python 3.11)
+# 1. Get the code
+git clone https://github.com/RAFAELDCOELHO/PersonaCore.git
+cd PersonaCore
+
+# 2. Environment (Python 3.11)
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[cpu,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
 
-# 2. Weights — slim inference checkpoint (~55.6 MB) from the m1-demo-v1 release
+# 3. Weights — slim inference checkpoint (~55.6 MB) from the m1-demo-v1 release
 gh release download m1-demo-v1 --pattern model_slim.pt --dir checkpoints
 # or download model_slim.pt from
 #   https://github.com/RAFAELDCOELHO/PersonaCore/releases/tag/m1-demo-v1
 # and place it at checkpoints/model_slim.pt
 
-# 3. Launch
+# 4. Launch
 python scripts/demo_app.py
 # -> http://127.0.0.1:7860
 ```

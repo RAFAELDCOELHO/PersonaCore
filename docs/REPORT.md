@@ -32,8 +32,9 @@ A complete small-language-model stack, every component hand-implemented:
 
 - A **GPT-style transformer decoder** with exactly 13,891,584 parameters (tied embedding
   counted once): 6 layers, 6 heads, 384-dim embeddings, 256-token context, dropout 0.0.
-- A **byte-level BPE tokenizer** trained from scratch — vocabulary 8192, document separator
-  `<|endoftext|>` pinned at id 8184.
+- A **byte-level BPE tokenizer** trained from scratch — vocab table 8192 with 547 ids live
+  (256 bytes + 283 learned merges + 8 specials; the remaining 7645 rows are reserved
+  capacity), document separator `<|endoftext|>` pinned at id 8184.
 - A **hand-rolled training loop**: AdamW, warmup + cosine LR schedule, gradient clipping,
   gradient accumulation, resumable open-dict checkpoints, offline CSV logging.
 - A **single shared `generate()`** (greedy / temperature / top-k / top-p) powering the tests,
@@ -56,6 +57,14 @@ change can never silently invalidate a trained checkpoint: the embedding table's
 constant the rest of the project builds around. The artifact is plain JSON (stdlib `json`,
 schema-versioned, id-range-validated) rather than a pickle, because a shippable artifact must
 never execute code on load.
+
+**What actually trained.** Training learned 283 of the 7,928 requested merges before the
+bounded TinyStories corpus exhausted its mergeable pairs — the trainer itself warns
+"corpus exhausted: learned 283 of 7928 requested merges; vocab_size=8192 has 7645 dead ids".
+The *effective* vocabulary is therefore 547 live ids (256 bytes + 283 learned merges + 8
+specials); the locked 8192-row table is reserved capacity. The trade-off is stated plainly:
+shape stability for every downstream checkpoint, in exchange for 7645 dead rows the model
+carries in its embedding table.
 
 **Evidence.** `tests/test_tokenizer_roundtrip.py` proves `decode(encode(x)) == x` over emoji
 ZWJ sequences, smart quotes, CRLF, CJK text, and random byte strings.
@@ -128,7 +137,7 @@ from scratch, but verified against the primitive.
 `self.lm_head.weight = self.wte.weight` via `nn.Parameter` assignment after initialization —
 not as a value copy.
 
-**Rationale.** At 384-dim embeddings and an 8192 vocabulary, an untied head costs an extra
+**Rationale.** At 384-dim embeddings and an 8192-row vocab table, an untied head costs an extra
 3,145,728 parameters — over 22% of the model — for marginal benefit at this scale. But weight
 tying has a classic failure mode: copying values instead of sharing storage produces two
 tensors that *start* equal and silently diverge during training. The distinction is invisible
@@ -350,13 +359,20 @@ speed — so the cache stays deferred to Milestone 2.
 
 **Evidence.** Throughput was measured on the real 13.9M-parameter checkpoint through the same
 `generate_text` path the demo uses. The offline-launch behavior (analytics env var, local
-fonts, localhost binding) was verified against the Gradio 5.50 wheel source.
+fonts, localhost binding) was verified against the Gradio 5.50 wheel source. The demo also
+masks the 7645 tokenizer-undecodable ids out of the logits before sampling — an optional
+`forbid_ids` mask threaded through the from-scratch sampling path and built once at launch
+from the frozen tokenizer's live vocabulary — so every slider setting the UI offers,
+temperature 1.5 with top-k disabled included, can only produce decodable ids
+(`tests/test_forbid_ids.py` pins this, including at the exact settings that previously crashed).
 
 ## Results
 
 **Model.** 13,891,584 parameters (tied embedding counted once): 6 layers, 6 heads,
-`n_embd=384`, `block_size=256`, vocabulary 8192, dropout 0.0, weight tying, learned
-positional embeddings.
+`n_embd=384`, `block_size=256`, vocab table 8192 (547 ids live), dropout 0.0, weight tying,
+learned positional embeddings. Of the headline count, 2,935,680 parameters (7645 dead rows
+× 384 dims, ~21%) are embedding rows for ids that can never occur in the training data or
+be decoded — counted in the headline because they are part of the shipped tensor.
 
 **Headline.** Deterministic full-validation perplexity **2.1066 over 12,636,922 scored target
 tokens** (50k-step `best.pt`, `scripts/evaluate.py`).
@@ -393,8 +409,8 @@ samples file preserves rather than edits out.
 The reproducibility guarantee is **seed + git SHA + config-in-checkpoint**:
 
 - Development and training run inside a pinned Python 3.11 virtual environment (the supported
-  target for the torch wheels and CI); the suite is CPU-only and green — 126 passed, 1 skipped
-  (a CUDA-only fp16 smoke test, skipped by design off-GPU).
+  target for the torch wheels and CI); the suite is CPU-only and green, with the only skip a
+  CUDA-only fp16 smoke test skipped by design off-GPU.
 - `seed_everything()` seeds `random`, NumPy, and torch (including CUDA when present) and
   disables the cuDNN autotuner.
 - Every checkpoint — including the slim shipped artifact — embeds its `ModelConfig` and the
