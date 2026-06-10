@@ -568,15 +568,17 @@ n_params = sum(p.numel() for p in model.parameters())   # -> 13,891,584
 | A4 | GitHub Release assets are the right distribution channel for the 55.6 MB weights (vs LFS/commit) | Don't Hand-Roll / Pitfall 3 | Low — user/planner may prefer regenerate-only; flagged as discretion in CONTEXT |
 | A5 | ffmpeg GIF two-pass palette recipe parameters (fps/scale) | Pattern 5 | Cosmetic — tune at capture time |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Weights distribution channel (GitHub Release vs regenerate-only)**
    - What we know: 55.6 MB; `*.pt`/`checkpoints/` deliberately gitignored; CONTEXT leaves this to planner discretion.
    - What's unclear: whether the user wants a public Release on the repo at this point.
    - Recommendation: plan for a Release asset + `export_slim.py` regeneration path; make the Release upload a `checkpoint:human-action` task (needs the user's repo publishing intent).
+   - RESOLVED: delegated to 08-06 Task 1 `checkpoint:decision` (developer chooses Release vs regenerate-only at execution time).
 2. **GIF capture is inherently interactive**
    - Screen-recording the streaming demo can't be fully automated.
    - Recommendation: plan it as a `checkpoint:human-action` (record ~10–15 s) followed by the scripted ffmpeg conversion.
+   - RESOLVED: delegated to 08-05 Task 2 `checkpoint:human-action` (human screen capture, then scripted two-pass ffmpeg conversion).
 
 ## Environment Availability
 
