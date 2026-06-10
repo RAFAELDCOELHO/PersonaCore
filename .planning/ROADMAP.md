@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: TinyStories Pretraining** - Memmap data prep, full resumable local M3/MPS run (fp32) to coherent generation, trained best-val checkpoint + recorded curves (Kaggle P100 optional fallback) (completed 2026-06-05)
 - [x] **Phase 6: Generation & Sampling** - Shared generate() with greedy/temperature/top-k/top-p, EOS stop, context cropping, determinism tests (completed 2026-06-06)
 - [x] **Phase 7: Evaluation** - Held-out perplexity, curated qualitative samples, 2–3 ablations with a comparison table (completed 2026-06-09)
-- [x] **Phase 8: Demo & Writeup** - Slim fp32 CPU checkpoint, offline Gradio chat, demo.ipynb, consolidated test suite and technical writeup (completed 2026-06-10)
+- [ ] **Phase 8: Demo & Writeup** - Slim fp32 CPU checkpoint, offline Gradio chat, demo.ipynb, consolidated test suite and technical writeup (verified 2026-06-10: gaps_found 6/7 — gap-closure plans 08-07/08-08 pending)
 
 ## Phase Details
 
@@ -230,7 +230,7 @@ Plans:
   4. The full per-component test suite (tokenizer, model, training, generation) runs green via pytest, and reproducibility discipline holds (config saved with each checkpoint, seeds fixed, git SHA recorded)
   5. A polished technical writeup (README/report) documenting design decisions, architecture, training, and results is consolidated from the document-as-we-go notes
 
-**Plans**: 6 plans
+**Plans**: 8 plans (6 executed + 2 gap closure)
 **UI hint**: yes
 **Research**: phase-level — RESOLVED 2026-06-10: KV-cache NOT needed (measured ~95–105 tok/s CPU on the real best.pt — deferred to M2); Gradio 5.50.0 offline streaming verified from the wheel (cumulative-yield callback, analytics env-var kill, wheel-local fonts)
 Plans:
@@ -253,6 +253,14 @@ Plans:
 
 - [x] 08-06-PLAN.md — README front door + weights-distribution decision (Release vs regenerate-only) + final QA-01/QA-02 phase gate [DOC-01, QA-01]
 
+**Gap Closure Wave 1** *(from 08-VERIFICATION gaps_found — CR-01)*
+
+- [ ] 08-07-PLAN.md — CR-01 crash fix: forbid_ids logits mask through next_token/generate + undecodable_ids_mask helper + demo wiring + regression tests; opportunistic WR-02 (export_slim val_loss=None) [DEMO-01]
+
+**Gap Closure Wave 2** *(blocked on 08-07)*
+
+- [ ] 08-08-PLAN.md — WR-01 effective-vocabulary honesty (547 live of 8192) in README/REPORT + CR-01 mitigation note; WR-03 clone-first quickstart; WR-04 matplotlib in notebook extra [DOC-01]
+
 ## Progress
 
 **Execution Order:**
@@ -267,4 +275,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
 | 7. Evaluation | 3/3 | Complete   | 2026-06-09 |
-| 8. Demo & Writeup | 6/6 | Complete   | 2026-06-10 |
+| 8. Demo & Writeup | 6/8 | Gap Closure|  |
