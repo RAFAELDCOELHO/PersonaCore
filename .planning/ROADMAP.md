@@ -230,9 +230,28 @@ Plans:
   4. The full per-component test suite (tokenizer, model, training, generation) runs green via pytest, and reproducibility discipline holds (config saved with each checkpoint, seeds fixed, git SHA recorded)
   5. A polished technical writeup (README/report) documenting design decisions, architecture, training, and results is consolidated from the document-as-we-go notes
 
-**Plans**: TBD
+**Plans**: 6 plans
 **UI hint**: yes
-**Research**: phase-level (reconcile the KV-cache tension on measured CPU latency; confirm Gradio 5 streaming + fully-offline launch behavior)
+**Research**: phase-level — RESOLVED 2026-06-10: KV-cache NOT needed (measured ~95–105 tok/s CPU on the real best.pt — deferred to M2); Gradio 5.50.0 offline streaming verified from the wheel (cumulative-yield callback, analytics env-var kill, wheel-local fonts)
+Plans:
+
+**Wave 1**
+
+- [ ] 08-01-PLAN.md — Shippable-artifact slice: slim fp32 inference checkpoint (export_slim/load_slim, weights_only=True) + [demo] env install + offline test [DEMO-02, QA-01, QA-02]
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 08-02-PLAN.md — Demo slice: generate_text_cumulative adapter + scripts/demo_app.py (offline Gradio story completion) + Wi-Fi-off smoke [DEMO-01]
+- [ ] 08-03-PLAN.md — Notebook slice: committed results/run.csv + notebook tooling gate + demo.ipynb executed-with-outputs [DEMO-03, QA-02]
+- [ ] 08-04-PLAN.md — docs/REPORT.md decision-driven technical narrative (D-02/D-03) [DOC-01]
+
+**Wave 3** *(blocked on 08-02)*
+
+- [ ] 08-05-PLAN.md — README hero GIF: ffmpeg gate + human capture + palette conversion to assets/demo.gif [DOC-01]
+
+**Wave 4** *(blocked on Waves 2–3)*
+
+- [ ] 08-06-PLAN.md — README front door + weights-distribution decision (Release vs regenerate-only) + final QA-01/QA-02 phase gate [DOC-01, QA-01]
 
 ## Progress
 
@@ -248,4 +267,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
 | 7. Evaluation | 3/3 | Complete   | 2026-06-09 |
-| 8. Demo & Writeup | 0/TBD | Not started | - |
+| 8. Demo & Writeup | 0/6 | Planned | - |
