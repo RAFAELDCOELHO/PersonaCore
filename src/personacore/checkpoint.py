@@ -15,9 +15,9 @@ version — never a bare ``state_dict``. Two properties make it load-bearing:
 
 Security: the resume checkpoint contains pickled optimizer/RNG/python objects, so it loads
 with full (non-``weights_only``) pickle. It is therefore TRUSTED-ONLY — load it solely from
-your own files. The slim INFERENCE checkpoint (Phase 8) will use ``weights_only=True``.
-Loading always passes ``map_location="cpu"`` so a CUDA-saved file resumes on a CPU laptop
-(Pitfall 5).
+your own files. The slim INFERENCE checkpoint (``export_slim`` / ``load_slim``, Phase 8)
+uses ``weights_only=True``. Loading always passes ``map_location="cpu"`` so a CUDA-saved
+file resumes on a CPU laptop (Pitfall 5).
 """
 
 import random
@@ -27,6 +27,7 @@ import numpy as np
 import torch
 
 CKPT_SCHEMA_VERSION = 1
+SLIM_SCHEMA_VERSION = 1  # slim INFERENCE artifact schema (DEMO-02), independent of the full one.
 
 
 def save_checkpoint(
@@ -109,3 +110,47 @@ def load_checkpoint(
         torch.cuda.set_rng_state_all(rng["cuda"])
 
     return ckpt  # caller reads step / configs / git_sha / extra keys
+
+
+def export_slim(full_path, slim_path, *, map_location="cpu") -> dict:
+    """Export the shippable slim INFERENCE checkpoint from a FULL training checkpoint (DEMO-02).
+
+    Keeps ONLY what inference needs: the model ``state_dict`` plus the QA-02 provenance trio
+    (``model_config`` / ``git_sha`` / ``step``) and the recorded ``val_loss``. Dropped on
+    purpose: ``optimizer`` / ``scheduler`` / ``scaler`` / ``rng`` / ``train_config`` — the slim
+    file is for generation, never resume. With those pickled training objects gone, the result
+    round-trips through ``torch.load(..., weights_only=True)`` (see ``load_slim``): tensors and
+    primitive containers only, so nothing else can ride along (T-08-03).
+
+    Returns the slim dict it wrote, so callers can print/inspect what shipped.
+    """
+    # weights_only=False: the FULL resume checkpoint carries pickled optimizer/RNG/numpy
+    # objects that the torch>=2.6 weights_only=True default rejects. TRUSTED-only read of
+    # the project's OWN checkpoint (T-08-02 / T-07-02 lineage) — never a foreign file.
+    full = torch.load(full_path, map_location=map_location, weights_only=False)
+    slim = {
+        "schema_version": SLIM_SCHEMA_VERSION,
+        "model": full["model"],
+        "model_config": full["model_config"],
+        "git_sha": full["git_sha"],  # provenance travels WITH the shipped weights (QA-02).
+        "step": full["step"],
+        "val_loss": float(full["val_loss"]),
+    }
+    torch.save(slim, slim_path)
+    return slim
+
+
+def load_slim(path, *, map_location="cpu") -> dict:
+    """Load the slim INFERENCE checkpoint under the locked safe-load bar (T-08-01).
+
+    ``weights_only=True`` is the restricted unpickler — tensors + primitive containers only,
+    ZERO code execution on load. Every slim consumer (demo, notebook, tests) goes through this
+    single choke point; the module docstring reserved exactly this split in Phase 1.
+    """
+    loaded = torch.load(path, map_location=map_location, weights_only=True)
+    if loaded.get("schema_version") != SLIM_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported slim checkpoint schema_version {loaded.get('schema_version')!r} in "
+            f"{path} (expected {SLIM_SCHEMA_VERSION}). Re-export with scripts/export_slim.py."
+        )
+    return loaded
