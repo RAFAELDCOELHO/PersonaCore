@@ -23,3 +23,7 @@ regex~=2026.5
 # --- Demo (Phase 8) ---
 # gradio>=5,<6
 # matplotlib~=3.10
+
+# --- Notebook execution (Phase 8, demo.ipynb headless run) ---
+# ipykernel~=7.3
+# nbconvert~=7.17
