@@ -60,7 +60,7 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 - [ ] **DEMO-03**: `demo.ipynb` research artifact showing training curves and sampling, reading from the CSV log
 
 ### Documentation & Quality
-- [ ] **DOC-01**: Polished technical writeup (README/report) covering design decisions, architecture, training, and results — written as we go
+- [x] **DOC-01**: Polished technical writeup (README/report) covering design decisions, architecture, training, and results — written as we go
 - [ ] **QA-01**: Per-component unit tests (tokenizer, model, training, generation) run green via pytest as a first-class deliverable
 - [x] **QA-02**: Reproducibility discipline: config saved with each checkpoint, seeds fixed, git SHA recorded
 
@@ -128,7 +128,7 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | DEMO-01 | Phase 8 | Complete |
 | DEMO-02 | Phase 8 | Pending |
 | DEMO-03 | Phase 8 | Pending |
-| DOC-01 | Phase 8 | Pending |
+| DOC-01 | Phase 8 | Complete |
 | QA-01 | Phase 8 | Pending |
 | QA-02 | Phase 1, Phase 8 | Complete |
 
