@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: TinyStories Pretraining** - Memmap data prep, full resumable local M3/MPS run (fp32) to coherent generation, trained best-val checkpoint + recorded curves (Kaggle P100 optional fallback) (completed 2026-06-05)
 - [x] **Phase 6: Generation & Sampling** - Shared generate() with greedy/temperature/top-k/top-p, EOS stop, context cropping, determinism tests (completed 2026-06-06)
 - [x] **Phase 7: Evaluation** - Held-out perplexity, curated qualitative samples, 2–3 ablations with a comparison table (completed 2026-06-09)
-- [ ] **Phase 8: Demo & Writeup** - Slim fp32 CPU checkpoint, offline Gradio chat, demo.ipynb, consolidated test suite and technical writeup (verified 2026-06-10: gaps_found 6/7 — gap-closure plans 08-07/08-08 pending)
+- [x] **Phase 8: Demo & Writeup** - Slim fp32 CPU checkpoint, offline Gradio chat, demo.ipynb, consolidated test suite and technical writeup (verified 2026-06-10: gaps_found 6/7 — gap-closure plans 08-07/08-08 pending) (completed 2026-06-10)
 
 ## Phase Details
 
@@ -259,7 +259,7 @@ Plans:
 
 **Gap Closure Wave 2** *(blocked on 08-07)*
 
-- [ ] 08-08-PLAN.md — WR-01 effective-vocabulary honesty (547 live of 8192) in README/REPORT + CR-01 mitigation note; WR-03 clone-first quickstart; WR-04 matplotlib in notebook extra [DOC-01]
+- [x] 08-08-PLAN.md — WR-01 effective-vocabulary honesty (547 live of 8192) in README/REPORT + CR-01 mitigation note; WR-03 clone-first quickstart; WR-04 matplotlib in notebook extra [DOC-01]
 
 ## Progress
 
@@ -275,4 +275,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. TinyStories Pretraining | 1/2 | In Progress|  |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
 | 7. Evaluation | 3/3 | Complete   | 2026-06-09 |
-| 8. Demo & Writeup | 7/8 | In Progress|  |
+| 8. Demo & Writeup | 8/8 | Complete   | 2026-06-10 |
