@@ -10,6 +10,8 @@ PersonaCore is a conversational AI assistant where **all** memory and personaliz
 
 **Known tech debt carried into M2** (none blocking; see `milestones/v1.0-MILESTONE-AUDIT.md`): the frozen tokenizer was trained on an 11.5KB fixture (547 live ids of 8192 — honestly documented, but consider retraining the tokenizer if M2 fine-tuning data warrants it, which would invalidate `best.pt`); `forbid_ids` mask not threaded into `evaluate.py`; `run.csv` tokens column ×256 under-count; stale TODO(calibration) markers.
 
+**v2.0 progress:** Phase 9 (LoRA Core) complete 2026-06-11 — from-scratch `src/personacore/lora/` package (config/layer/inject), toggle/eject/merge runtime semantics, `export_adapter`/`load_adapter` persona-file artifact, and frozen-base training discipline proven on the real 13.9M base (331,776 trainable adapter params, 1.35 MB `adapter.pt`). Suite now 180 passed / 1 skipped. Next: Phase 10 (EWC Core).
+
 ## Current Milestone: v2.0 Weight-Based Memory
 
 **Goal:** Prove the novel claim — personalization lives in the model weights, not in a prompt or store — via from-scratch LoRA + EWC on the v1.0 foundation.
@@ -44,12 +46,12 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [x] Polished technical writeup documenting design decisions, architecture, and results (document-as-we-go) — _Validated in Phase 08: demo-writeup (DOC-01). `docs/REPORT.md` decision-driven deep dive + README front door with honest effective-vocabulary claims (547 live of 8192 ids; 2,935,680 dead-row params quantified), clone-first quickstart — see 08-VERIFICATION.md_
 - [x] GPT-style transformer decoder (~10–15M params) from scratch: attention, MLP, blocks, positional embeddings, with unit tests — _Validated in Phase 04: gpt-transformer-decoder (13,891,584 params tied-once; causality-perturbation, init-std, data_ptr-tying, param-band gates all green; drops into the untouched Phase-3 harness) — v1.0_
 - [x] Pretrain on TinyStories to fluent, coherent generation — _Validated in Phase 05: tinystories-pretraining (50,000-step local M3/MPS fp32 run, kill+resume survived mid-run; `best.pt` val_loss 0.7378 at step 49000; retroactively verified 3/3 at milestone audit — see milestones/v1.0-phases/05-tinystories-pretraining/05-VERIFICATION.md) — v1.0_
+- [x] From-scratch LoRA adapters wrapping the six named `nn.Linear` projections per block — _Validated in Phase 9: LoRA Core (LORA-01..05). `LoRALinear` composition wrapper (B=0 identity at injection, single `alpha/r` scale source), post-load injection over the v1.0 seam (tied `lm_head`/`wte` never wrapped), toggle/eject + merge/unmerge with bit-exact restore, 1.35 MB `adapter.pt` persona artifact through the `weights_only=True` choke point, frozen-base training proven through the byte-untouched v1.0 `train()` — 43 new tests, see 09-VERIFICATION.md (13/13). Advisory debt: 09-REVIEW.md CR-01 (toggle×merge state blindness) + CR-02 (shape-blind key audit) to resolve before Phase 14 consumes these APIs_
 
 ### Active
 
 <!-- Milestone v2.0: Weight-Based Memory — requirements being defined; REQ-IDs land in REQUIREMENTS.md. -->
 
-- [ ] From-scratch LoRA adapters wrapping the six named `nn.Linear` projections per block (seam shipped + verified in v1.0)
 - [ ] EWC continual learning with Fisher-information penalty via the `assemble_loss(..., extra_penalties=())` seam (shipped + verified in v1.0)
 - [ ] Conversational fine-tuning on DailyDialog + PersonaChat (curriculum stage 2)
 - [ ] Teach-then-recall (clean-room) personalization demo — memory lives in weights, not the prompt
@@ -121,4 +123,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 at v2.0 Weight-Based Memory milestone start*
+*Last updated: 2026-06-11 after Phase 9 (LoRA Core) completion*
