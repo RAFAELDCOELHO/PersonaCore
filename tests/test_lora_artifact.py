@@ -124,6 +124,20 @@ def test_schema_version_mismatch_raises(adapter_artifact, tmp_path):
         load_adapter(bad_path)
 
 
+@pytest.mark.parametrize("dropped", ["adapter", "lora_config", "base_fingerprint"])
+def test_malformed_artifact_missing_key_raises(adapter_artifact, tmp_path, dropped):
+    """WR-02: the single choke point names missing structural keys — never a bare KeyError
+    deep in a downstream consumer (load_adapter_weights / LoRAConfig(**...) / fingerprint)."""
+    _, _, _, art, fp = adapter_artifact
+    bad = dict(art)
+    del bad[dropped]
+    bad_path = tmp_path / f"missing_{dropped}.pt"
+    torch.save(bad, bad_path)
+    # expected_fingerprint exercises the previously-bare loaded["base_fingerprint"] access.
+    with pytest.raises(ValueError, match=dropped):
+        load_adapter(bad_path, expected_fingerprint=fp)
+
+
 def test_fingerprint_mismatch_warns_but_loads(adapter_artifact):
     _, _, path, art, _ = adapter_artifact
     wrong_fp = {"git_sha": "different", "step": 1, "val_loss": 0.0}

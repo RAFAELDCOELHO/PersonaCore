@@ -200,6 +200,10 @@ def load_adapter(path, *, expected_fingerprint=None, map_location="cpu") -> dict
     ``base_fingerprint``, a ``UserWarning`` names BOTH fingerprints but the artifact still
     loads — D-02 is locked: warn but load, because the base evolves mid-milestone and a hard
     error would brick every adapter at each base re-export.
+
+    Structural validation: a schema-valid file missing any required key (``adapter`` /
+    ``lora_config`` / ``base_fingerprint``) raises a ``ValueError`` naming the gaps HERE —
+    the single choke point — instead of a bare ``KeyError`` deep in a downstream consumer.
     """
     loaded = torch.load(path, map_location=map_location, weights_only=True)
     if loaded.get("schema_version") != ADAPTER_SCHEMA_VERSION:
@@ -207,6 +211,12 @@ def load_adapter(path, *, expected_fingerprint=None, map_location="cpu") -> dict
             f"Unsupported adapter schema_version {loaded.get('schema_version')!r} in "
             f"{path} (expected {ADAPTER_SCHEMA_VERSION}). Re-export with "
             "personacore.checkpoint.export_adapter."
+        )
+    missing = {"adapter", "lora_config", "base_fingerprint"} - loaded.keys()
+    if missing:
+        raise ValueError(
+            f"malformed adapter artifact {path}: missing keys {sorted(missing)} "
+            "(expected an export_adapter persona file)."
         )
     if expected_fingerprint is not None and loaded["base_fingerprint"] != expected_fingerprint:
         warnings.warn(
