@@ -1,203 +1,236 @@
-# Stack Research
+# Stack Research — v2.0 Weight-Based Memory
 
-**Domain:** From-scratch small GPT-style language model (PyTorch, **primary: local Apple-Silicon M3/MPS training**; optional Kaggle P100 fallback; laptop CPU inference)
-**Researched:** 2026-06-04
-**Confidence:** HIGH (core stack verified against official docs/PyPI; P100 compatibility verified against PyTorch release issues)
+**Domain:** From-scratch LoRA adapters + EWC continual learning + conversational fine-tuning (DailyDialog, PersonaChat) + research-narrative demos and visualizations, layered on the existing v1.0 from-scratch GPT stack (torch 2.7 / MPS fp32 primary, Kaggle P100 fallback, CPU demo)
+**Researched:** 2026-06-11
+**Confidence:** HIGH (all dataset endpoints HTTP-verified live today with sizes/checksums; formats inspected byte-level; everything else is pure-PyTorch implementation on the already-validated stack)
 
 ## TL;DR Prescription
 
-> **PRIMARY training = local Apple Silicon (M3 / MPS), fp32, no AMP.** Training on the author's own
-> machine strengthens the fully-on-device / zero-budget / privacy-by-design thesis. **Kaggle P100
-> (Pascal, fp16-AMP) is an OPTIONAL FALLBACK.** `RuntimeConfig` resolves device priority
-> **CUDA-P100 → MPS → CPU** via `preflight_device`. MPS has no fp16-AMP path → fp32 on MPS (same
-> posture as CPU); fp16 AMP + `GradScaler` is a CUDA-only memory measure; the bf16-on-Pascal guard
-> is unchanged and still errors.
+> **Zero new Python dependencies.** Every v2.0 feature — LoRA, EWC, conversational fine-tuning,
+> teach-then-recall demo, EWC A/B demo, forgetting curves, weight-delta heatmaps — is implemented
+> with the stack already installed: `torch 2.7.*`, `numpy ~=2.4`, `matplotlib ~=3.10`,
+> `gradio 5.x`, `pytest`, and the Python stdlib (`json`, `urllib.request`, `tarfile`, `hashlib`).
+> The only genuinely *new* stack elements are **two dataset download endpoints** (verified live
+> 2026-06-11, checksums below) and the scripts that turn them into `uint16` memmap `.bin` files
+> through the existing frozen tokenizer.
 
-- **Primary path — local M3/MPS:** train in **fp32** on Apple Silicon via the MPS backend (`torch.backends.mps.is_available()`). No mixed precision, no `GradScaler` (neither helps on MPS); unified memory, eager/math ops, no `torch.compile`. The checkpoint/resume infra handles local multi-session runs (sleep/interrupt) exactly as it handles Kaggle session kills.
-- **Fallback path — Kaggle P100:** use Kaggle's pre-installed PyTorch (do not reinstall torch in the notebook). For local CPU dev, pin `torch==2.7.*` (the last release line that still ships a Pascal-capable CUDA wheel and a clean CPU wheel) — but the GPU build only matters on Kaggle, and there you use whatever Kaggle ships.
-- **CRITICAL P100 fallback constraint:** P100 is Pascal, compute capability **6.0**. PyTorch wheels built with **CUDA 12.8+ (`cu128`, `cu129`, `cu130`) dropped Pascal `sm_60` kernels.** Only **`cu126` (CUDA 12.6) and earlier** wheels contain Pascal binaries. This is the single most important compatibility fact for the fallback path. (See Version Compatibility section.)
-- **No bf16.** P100 has no Tensor Cores and no bf16 support. On the P100 fallback, mixed precision = **fp16 AMP + `GradScaler`** only, and the speedup is modest (memory savings are the real win, not throughput). MPS and CPU run plain fp32.
-- **Tokenizer: from scratch** (pure Python/regex + dict merges). `tiktoken` / HF `tokenizers` are reference oracles for unit tests only, never the implementation.
-- **Logging: offline CSV + matplotlib.** No wandb/online tooling — violates zero-budget/offline/on-device intent and adds a network dependency. Device-agnostic: same on M3, CPU, or Kaggle.
+- **LoRA = a hand-written `nn.Module`** (`LoRALinear`) wrapping the six named `nn.Linear`
+  projections per block (the v1.0 seam). No `peft`, no `loralib`, no
+  `torch.nn.utils.parametrize` — plain composition keeps the from-scratch narrative legible and
+  the checkpoint format under your control.
+- **EWC = pure autograd.** Diagonal (empirical) Fisher from accumulated squared gradients of the
+  LM loss over a TinyStories reference sample; quadratic penalty plugged into the existing
+  `assemble_loss(..., extra_penalties=())` seam. No `torch.func`, no opacus, no new deps.
+- **CRITICAL data fact: the original DailyDialog URL is DEAD.**
+  `http://yanran.li/files/ijcnlp_dailydialog.zip` returns **404** (verified 2026-06-11), and the
+  canonical HF loading script (`li2017dailydialog/daily_dialog`) points at that same dead URL —
+  so the HF `datasets` route is broken too. **Use the ParlAI mirror on Facebook's public CDN**
+  (verified live, checksum pinned below).
+- **PersonaChat = one plain JSON file from HF's public S3** (`personachat_self_original.json`,
+  ~200 MB, verified live 2026-06-11). Plain HTTPS GET — no HF `datasets`, no auth, no API key.
+- **Visualizations: matplotlib only.** `imshow` + colorbar covers weight-delta heatmaps;
+  forgetting curves come from the existing CSV logger + `evaluate.perplexity()`. **Do not add
+  seaborn** — one more dep for zero capability you need.
+- **Frozen-tokenizer constraint shapes the data design:** vocab is locked (8192 table, eos 8184,
+  547 live ids — no retrain, decided 2026-06-11). **No new special tokens are possible.** Dialogue
+  turn markers must be plain text (e.g. `User:` / `Bot:`) that round-trips through the existing
+  byte-level BPE.
 
 ## Recommended Stack
 
-### Core Technologies
+### Core Technologies (all carried from v1.0 — new roles only)
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **Python** | 3.11 (3.10–3.12 ok) | Language runtime | Kaggle images and modern PyTorch target 3.11; 3.11 is the stable sweet spot. Avoid 3.13+ for fewer wheel surprises on the laptop. |
-| **PyTorch (`torch`)** | Local M3/CPU: `2.7.*` (primary); Kaggle: use pre-installed (fallback) | Tensors, autograd, nn, optimizer, AMP, MPS | Industry-standard from-scratch DL framework. `nn.Module`, `F.scaled_dot_product_attention`, `torch.amp`, `torch.save/load` give everything needed without HF model code. The macOS wheel ships the **MPS** backend used for primary Apple-Silicon (fp32) training. 2.7.x is the newest line whose CUDA wheels still include Pascal `sm_60` (relevant only to the P100 fallback); later lines (2.8+) only ship Pascal in `cu126` builds and CPU wheels (fine for the laptop). |
-| **NumPy** | 2.x (`>=1.26,<3`) | Token-array memmap, eval metrics, plotting glue | The standard way to store the pre-tokenized corpus as a flat `uint16` memmap and sample contiguous training windows cheaply. PyTorch 2.7 supports NumPy 2.x. |
-| **Gradio** | 5.x (`>=5,<6`) | Local web-UI chat demo (on-device) | `gr.ChatInterface` gives a streaming chat UI in ~20 lines, runs fully local (`launch()` binds localhost), zero frontend code, great for demo video/screenshots. Gradio 5 is the current stable major with a refreshed chat UI and streaming. |
+| Technology | Version | v2.0 Role | Why Recommended |
+|------------|---------|-----------|-----------------|
+| **PyTorch (`torch`)** | `2.7.*` (local M3/CPU, pinned in pyproject); Kaggle pre-installed (fallback) | LoRA modules, Fisher estimation, EWC penalty, fine-tuning loop | `nn.Module` + `nn.Parameter` + autograd is literally all LoRA and EWC require. `requires_grad_(False)` freezes the base; `p.grad.detach() ** 2` accumulation gives the empirical Fisher diagonal. No version bump needed — nothing in v2.0 touches an API newer than torch 2.0. |
+| **NumPy** | `~=2.4` (pinned in pyproject) | Stage-2 corpus memmaps (`dialog_train.bin` etc.), heatmap matrices | Same `uint16` memmap pattern as v1.0 TinyStories — reuse the proven data path verbatim for the conversational corpus. |
+| **matplotlib** | `~=3.10` (pinned in pyproject, `demo`/`notebook` extras) | Forgetting curves, weight-delta heatmaps | `plt.imshow(delta_grid, cmap=...)` + `colorbar` is the entire heatmap requirement; line plots off the CSV log are the forgetting curves. Committed-figure deliverables render offline. |
+| **Gradio** | `>=5,<6` (pinned in pyproject `demo` extra) | Teach-then-recall demo UI (adapter on/off toggle) | The existing `gr.ChatInterface` demo extends with a checkbox/dropdown to load/unload the LoRA adapter — the visual "same model, memory in the weights" moment. `gr.Blocks` (same package) if side-by-side A/B layout is wanted. |
+| **Python stdlib** (`json`, `urllib.request`, `tarfile`, `zipfile`, `hashlib`, `re`/`regex`) | 3.11 venv (mandatory) | Dataset download + parse + detokenize | Both corpora are plain files behind plain HTTPS GETs. `urllib.request` follows the redirects (parl.ai → fbaipublicfiles CDN; HF resolve → xet-bridge) without help. stdlib `json` loads the 200 MB PersonaChat file in seconds on the M3 — no streaming parser needed. |
 
-### Supporting Libraries
+### Supporting Libraries (carried; v2.0-relevant notes)
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| **pytest** | 8.x | Unit tests for bigram, BPE, attention/MLP/blocks, sampling | First-class deliverable per PROJECT.md. Use parametrized tests + tiny fixtures; assert shapes, causal-mask correctness, encode/decode round-trips, and reference-equivalence vs `tiktoken`. |
-| **matplotlib** | 3.9+ | Training-curve and sampling figures for `demo.ipynb` | Offline plotting of loss/lr curves read back from the CSV log. No online dashboard needed. |
-| **tqdm** | 4.66+ | Progress bars in the training loop + tokenizer training | Lightweight, works in notebooks and terminals; useful for the long BPE merge loop and per-step training feedback. |
-| **requests** *(optional)* | 2.32+ | Download TinyStories `.txt` directly in the notebook | Only if not using Kaggle Datasets attach. A single `resolve/main/...txt` GET is enough; no `datasets`/`huggingface_hub` required. |
-| **safetensors** *(optional but recommended)* | 0.4+ | Portable, secure checkpoint format for the final model weights | Loading a `torch.save` pickle across machines is fine but executes arbitrary code; `safetensors` is a zero-dependency, framework-agnostic, safe format ideal for the shippable laptop demo weights. Keep optimizer state in a separate `torch.save` for resumability. |
+| Library | Version | v2.0 Use | Notes |
+|---------|---------|----------|-------|
+| **pytest** | `~=9.0` (pinned) | LoRA/EWC unit tests | Highest-value tests: (1) LoRA-wrapped forward == base forward when B is zero-init; (2) merged weights `W+BA·(α/r)` forward == adapter forward within fp32 tolerance; (3) only adapter params have `requires_grad`; (4) EWC penalty == 0 at θ*, > 0 after perturbation, and gradient matches `2·λ·F·(θ−θ*)` analytically; (5) Fisher entries all ≥ 0; (6) data scripts round-trip a fixture dialogue through format→encode→decode. All CPU-only, GPU-free, like the existing 137. |
+| **safetensors** | 0.4+ (optional, as in v1.0) | Shippable adapter files | An adapter-only state dict is the "persona file" artifact (~0.7–1.3 MB fp32 at r=4–8, see sizing below) — `safetensors` export makes the "your memory is this tiny file of weights" demo prop concrete. Optional; `torch.save` adapter dicts are fine for internal use. |
+| **tiktoken** | `~=0.13` (dev extra) | Unchanged | Test oracle only; no v2.0 role beyond existing tokenizer tests. |
 
-### Development Tools
+### Development Tools (unchanged)
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| **venv + requirements.txt** | Reproducible local environment (primary) | PROJECT.md explicitly requires this. This is the **primary training + dev environment** (Apple-Silicon MPS in fp32, or CPU). On macOS the standard wheel includes the MPS backend; `torch==2.7.* --index-url https://download.pytorch.org/whl/cpu` gives a clean CPU wheel for CI/laptops without MPS. |
-| **ruff** *(optional)* | Lint + format | Single fast tool; replaces black+flake8+isort. Nice-to-have for portfolio polish, not required. |
-| **Kaggle Notebooks** *(fallback)* | Optional P100 GPU training environment | Fallback only — use when a longer/faster GPU run is wanted. Attach TinyStories as a Kaggle Dataset (upload once) to avoid re-downloading each session and to work offline within the session. Use the persistent `/kaggle/working` for checkpoints; download checkpoints between the 9h-session / 30h-week limits. |
-| **Jupyter / nbconvert** | `demo.ipynb` research artifact | The notebook is a deliverable (training curves, sampling). Keep heavy training out of it; it loads a checkpoint + the CSV log and renders the narrative. |
+| Tool | Purpose | v2.0 Notes |
+|------|---------|------------|
+| venv (Python 3.11) + pyproject extras | Reproducible env | No dependency changes → no pyproject edits required for v2.0. |
+| ruff | Lint/format | Unchanged. |
+| Jupyter/nbconvert | `demo.ipynb` v2 narrative | The EWC A/B comparison (naive vs EWC fine-tune, side-by-side forgetting curves) lives most naturally in the notebook + committed PNGs, not the Gradio app. |
+| Kaggle Notebooks (fallback) | Optional P100 fine-tune runs | If used: attach the two raw corpus files as a Kaggle Dataset once (same pattern as TinyStories) so sessions stay offline. See P100 variant notes for the EWC-fp16 caveat. |
+
+## Dataset Acquisition (the real "stack addition")
+
+All endpoints verified live **2026-06-11** with HTTP status, size, and (where downloaded) checksum.
+
+### Primary sources
+
+| Dataset | URL | Size | Status (2026-06-11) | Format |
+|---------|-----|------|---------------------|--------|
+| **DailyDialog** (ParlAI mirror, Facebook CDN) | `https://dl.fbaipublicfiles.com/parlai/dailydialog/dailydialog.tar.gz` | 2,715,285 B (~2.6 MB) | **200 OK** | tar.gz → `train.json` / `valid.json` / `test.json`, JSONL — one dialogue per line: `{"fold", "topic", "dialogue": [{"emotion", "act", "text"}]}` |
+| **PersonaChat** (HF public S3, the `transfer-learning-conv-ai` distribution) | `https://s3.amazonaws.com/datasets.huggingface.co/personachat/personachat_self_original.json` | 209,850,483 B (~200 MB) | **200 OK** | Single JSON: `{"train": [...], "valid": [...]}`; each entry `{"personality": [4–5 persona sentences], "utterances": [{"candidates": [20], "history": [...]}]}` — gold reply is `candidates[-1]`; the last utterance's `history` + its gold reply reconstructs the full dialogue |
+
+**Pinned provenance (record in the fetch script and verify on download):**
+
+- `dailydialog.tar.gz` — **sha256 `c3adb09bd715b9fa5cd1ac41613b7de61eb5afbe477826a6146abefef573e6bb`**, md5 `dec2b7552a62888b667ec162f6d743b1` (matches the S3 ETag). Splits verified by line count: **11,118 / 1,000 / 1,000 = 13,118 dialogues** — exactly the published dataset statistics. Inspected first record matches the original corpus ("Say , Jim , how about going for a few beers after dinner ?").
+- `personachat_self_original.json` — S3 ETag `ab09debedcc45366d110b85f78c35e22-26` (multipart — not a plain md5). Compute and commit a sha256 at first download; first/last bytes inspected 2026-06-11 and match the documented thomwolf-gist structure.
+
+### Fallback sources (also verified live 2026-06-11)
+
+| Dataset | Fallback URL | Size | Notes |
+|---------|--------------|------|-------|
+| DailyDialog | `https://huggingface.co/datasets/ConvLab/dailydialog/resolve/main/data.zip` | 3,738,236 B, 200 OK after redirect | Plain HTTPS GET through HF's resolve endpoint — **no `datasets` library involved**. ConvLab unified format (restructured), so prefer the ParlAI mirror, which preserves the original splits + act/emotion labels. |
+| PersonaChat | `https://dl.fbaipublicfiles.com/parlai/personachat/personachat.tgz` | 223,221,886 B, 200 OK | ParlAI's raw distribution (both original + revised personas, `.txt` line format). The S3 JSON is easier to parse; this is the backup if S3 ever vanishes. |
+
+### Why these and not the "official" routes
+
+- **`http://yanran.li/files/ijcnlp_dailydialog.zip` → 404.** The author's hosting is gone, and the
+  HF `li2017dailydialog/daily_dialog` repo is a *loading-script* repo whose `_URL` is that dead
+  link (verified in `daily_dialog.py` line 41). The HF parquet auto-conversion would work but
+  requires `pyarrow`/`pandas` — two heavyweight deps for a 2.6 MB corpus that exists as plain JSON
+  on a reliable CDN.
+- **Both primary mirrors are on AWS-backed CDNs** (Facebook's `dl.fbaipublicfiles.com`, HF's S3)
+  that have served these exact files unchanged since 2019 — but ParlAI the *project* was archived
+  on 2023-11-03 (read-only). Treat the CDNs as stable-but-unowned: **download once, verify sha256,
+  cache under `data/raw/` (gitignored), and never depend on the network at train time** — same
+  discipline as the v1.0 TinyStories flow.
+- **Re-hosting:** DailyDialog is **CC BY-NC-SA 4.0** — attaching the 2.6 MB tarball to a GitHub
+  Release with attribution is license-compatible insurance (non-commercial portfolio project).
+  PersonaChat has **no explicit license** on the S3 distribution (released by Facebook via the
+  MIT-licensed ParlAI; HF mirrors list it as unknown) — keep the download script + checksum,
+  **do not re-host** (MEDIUM confidence on the licensing read; standard research-use practice).
+
+### Preprocessing pipeline (reuses v1.0 patterns wholesale)
+
+1. **Fetch:** `scripts/fetch_corpora.py` — stdlib `urllib.request` + `hashlib` sha256 verify →
+   `data/raw/`. No `requests` needed (it's not in pyproject today; don't add it for two GETs).
+2. **Detokenize:** both corpora ship whitespace-tokenized text (`"how about going for a few beers
+   after dinner ?"`, `"i ' m"` / lowercase in PersonaChat). Run a small regex detokenizer (the
+   existing `regex ~=2026.5` core dep covers it) so the model isn't taught artificial
+   space-before-punctuation — the frozen BPE was trained on natural TinyStories spacing.
+3. **Format turns as plain text:** e.g. `User: ...\nBot: ...\n` with persona sentences as a
+   plain-text preamble for PersonaChat, dialogues separated by the existing eos id 8184.
+   **No new special tokens — the vocab is frozen.** Markers encode as multiple byte-level BPE ids;
+   at 13.9M params and this corpus size that cost is negligible.
+4. **Encode once → `uint16` memmap:** `dialog_train.bin` / `dialog_val.bin` via the existing
+   tokenizer + data path. Keep TinyStories `val.bin` untouched — it is the forgetting-curve
+   measurement set.
+5. **Kaggle fallback only:** upload `data/raw/` once as a private Kaggle Dataset so P100 sessions
+   stay offline (same as the v1.0 TinyStories attach).
+
+Scale check: DailyDialog (~13k dialogues, ~1.4M words) + PersonaChat (~18.9k dialogues, ~10k
+personas) together are far smaller than TinyStories — preprocessing is minutes, and stage-2
+fine-tuning is comfortably inside M3/MPS budgets. The 200 MB PersonaChat JSON parses with stdlib
+`json` in one shot (~1–2 GB transient RAM, fine on the M3); a streaming parser (`ijson`) is
+unjustified.
+
+## New-Capability → Implementation Map (no new deps)
+
+| v2.0 Feature | Implementation | Stack Used |
+|--------------|----------------|------------|
+| **LoRA adapters** | `LoRALinear(nn.Module)`: holds the frozen base `nn.Linear` + `A` (r×d_in, Kaiming/normal init) and `B` (d_out×r, **zero-init**) `nn.Parameter`s; forward = `base(x) + (α/r)·(x @ Aᵀ @ Bᵀ)`. Wrap/unwrap utilities target the six named projections per block (v1.0 seam). Adapter-only `state_dict` save/load through the existing open-dict checkpoint code; `merge()` utility computes `W' = W + (α/r)·B@A` for export and for the merged-vs-adapter equivalence test. | torch only |
+| **Adapter sizing (the "persona file")** | Params per wrapped Linear = `r·(d_in + d_out)`. At the 13.89M config (≈ d_model 384, 6 blocks — confirm against `ModelConfig`), r=8 over all six projections ≈ **330k params ≈ 1.3 MB fp32** (r=4 ≈ 0.66 MB). Small enough that "your entire memory of me is a ~1 MB weight delta" is a demo line. | — |
+| **EWC** | After stage-1 consolidation point: one pass over a TinyStories reference sample (existing `train.bin`/`val.bin` memmap), accumulate `p.grad² → F̂` per parameter (empirical Fisher diagonal), snapshot `θ*`. Store `{name: F̂, name: θ*}` via the open-dict checkpoint. Penalty `λ/2 · Σ F̂·(θ−θ*)²` returned as a callable into `assemble_loss(..., extra_penalties=(ewc_penalty,))` — the seam shipped and test-verified in v1.0. | torch only |
+| **Conversational fine-tuning** | Existing training loop (AdamW, warmup/cosine, grad-accum, CSV log, resumable checkpoints) pointed at `dialog_train.bin`; two arms for the A/B — naive full/LoRA fine-tune vs same + EWC penalty. | existing harness |
+| **Teach-then-recall demo** | Gradio app v2: teach facts in a session → fine-tune the LoRA adapter on the session transcript → **fresh process, empty prompt, adapter loaded** → model recalls. Adapter on/off toggle proves memory is in the weights, not the context. | gradio 5.x (installed) |
+| **EWC A/B no-forgetting demo** | Notebook + committed PNGs: identical fine-tune with/without EWC; report TinyStories val PPL (existing `evaluate.perplexity()`) at checkpoints for both arms. | matplotlib, existing eval |
+| **Forgetting curves** | During every fine-tune, log TinyStories-val loss/PPL alongside dialog-val loss to the existing CSV logger each eval interval; plot both arms. (Note v1.0 tech debt: `forbid_ids` mask is not threaded into `evaluate.py` — thread it or document it before quoting cross-stage PPL numbers.) | existing CSV + matplotlib |
+| **Weight-delta heatmaps** | `delta[layer, module] = mean(|θ_after − θ_before|)` over the 6 projections × n_layers grid → `plt.imshow` + annotated colorbar. Variants: naive vs EWC (EWC's deltas should avoid high-Fisher cells), full-FT vs LoRA (`(α/r)·B@A` per module). Pure tensor reductions. | numpy + matplotlib |
 
 ## Installation
 
 ```bash
-# ---- Local laptop / Apple Silicon (PRIMARY: M3/MPS or CPU training, inference, dev, tests) ----
+# Nothing new to install. The existing v1.0 environment covers all of v2.0:
 python3.11 -m venv .venv && source .venv/bin/activate
+pip install -e ".[cpu,dev]" --extra-index-url https://download.pytorch.org/whl/cpu
+# demo/notebook extras as in v1.0 when needed:
+pip install -e ".[demo,notebook]" --extra-index-url https://download.pytorch.org/whl/cpu
 
-# On macOS the standard PyTorch wheel includes the MPS backend (primary fp32 training device):
-#   pip install torch==2.7.*
-# A CPU-only wheel is fine for CI / non-Apple laptops (Pascal wheel issues are irrelevant on CPU/MPS):
-pip install torch==2.7.* --index-url https://download.pytorch.org/whl/cpu
-
-# Core + demo + dev
-pip install "numpy>=1.26,<3" "gradio>=5,<6" matplotlib tqdm
-pip install safetensors            # optional, recommended for portable weights
-pip install pytest                 # tests
-pip install ruff                   # optional lint/format
-
-# requests only if downloading TinyStories at runtime instead of Kaggle Dataset attach
-pip install requests
+# One-time corpus fetch (script to be written in the data phase; stdlib only):
+python scripts/fetch_corpora.py   # → data/raw/dailydialog.tar.gz (sha256-verified)
+                                  # → data/raw/personachat_self_original.json
 ```
-
-```python
-# ---- Kaggle notebook (FALLBACK): do NOT pip install torch ----
-# Kaggle ships a P100-compatible torch already. Verify, don't replace:
-import torch
-print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))
-# Expect a Tesla P100-PCIE-16GB and a torch built against a Pascal-capable CUDA (<=12.6).
-assert torch.cuda.is_available()
-```
-
-```bash
-# ---- TinyStories direct download (no paid service, no HF datasets lib needed) ----
-# V2 (GPT-4-only) is the higher-quality corpus; recommended for best fluency-per-param.
-curl -L -o TinyStoriesV2-GPT4-train.txt \
-  https://huggingface.co/datasets/roneneldan/TinyStories/resolve/main/TinyStoriesV2-GPT4-train.txt
-curl -L -o TinyStoriesV2-GPT4-valid.txt \
-  https://huggingface.co/datasets/roneneldan/TinyStories/resolve/main/TinyStoriesV2-GPT4-valid.txt
-# train ~2.23 GB, valid ~22.5 MB. Plain UTF-8 text, stories separated by <|endoftext|>.
-```
-
-## TinyStories Data Tooling (zero-budget, offline)
-
-**Recommended path (primary, local M3):** download the raw `.txt` once to **local disk**, encode it to the `uint16` memmap, and keep both the memmap and checkpoints on disk. No network during training; nothing is wiped between sessions. **On the Kaggle P100 fallback** only, upload the raw `.txt` as a **Kaggle Dataset** and attach it to the notebook so each fallback session stays fully offline and avoids re-downloading against the weekly quota.
-
-- **Use `TinyStoriesV2-GPT4-*`** (GPT-4-only) over the original mixed `TinyStories-*` — higher quality, better coherence-per-parameter at 10–15M.
-- **Preprocessing pipeline (from scratch):** raw `.txt` → train BPE → encode full corpus once → store as a flat `np.uint16` memmap on disk (`train.bin`, `val.bin`). Training samples random contiguous windows from the memmap. This is the nanoGPT-style pattern: cheap, RAM-light, and re-reads nothing.
-- **`<|endoftext|>` handling:** treat the document separator as a single special token reserved in the tokenizer; do not let BPE merge across it.
-
-**Do NOT** depend on HF `datasets`/`load_dataset` streaming as the core path — it adds a heavy dependency and an implicit network call, and Kaggle sessions are better served by an attached static dataset. (`datasets` is acceptable as a one-time convenience to fetch the file, but the `.txt` + memmap path is simpler and more portable.)
-
-## Training Utilities
-
-**Primary path (local M3 / MPS):** fp32 only. There is **no fp16-AMP path on MPS** and `GradScaler`
-gives no benefit there — train in plain fp32 (same posture as CPU). Detect with
-`torch.backends.mps.is_available()`; `RuntimeConfig` resolves CUDA-P100 → MPS → CPU via
-`preflight_device`. MPS uses **unified memory** (no host↔device copies) and eager/math ops — **no
-`torch.compile`**. The checkpoint/resume infra (below) covers local multi-session runs — laptop
-sleep/interrupt resumes bit-for-bit, exactly like a Kaggle session kill.
-
-The table below is **Kaggle P100 fallback** guidance — fp16 AMP, `GradScaler`, and the Pascal
-caveats apply only on the optional P100 path, not on the primary MPS/CPU path:
-
-| Concern (P100 fallback) | Recommendation | Rationale |
-|---------|----------------|-----------|
-| **Mixed precision** | `torch.amp.autocast(device_type="cuda", dtype=torch.float16)` + `torch.amp.GradScaler()` | **P100 fallback only.** P100 supports fp16 storage/compute but has **no Tensor Cores** → speedup is modest; the real benefit is ~halved activation memory, letting you use a larger batch/context. fp16 needs `GradScaler` to prevent gradient underflow. **bf16 is unavailable on Pascal** — do not use it. MPS/CPU run plain fp32 (no AMP, no scaler). |
-| **Gradient accumulation** | Accumulate N micro-batches before `optimizer.step()` | Achieve an effective large batch on 16 GB. Standard pattern: divide loss by accumulation steps, `scaler.scale(loss).backward()` each micro-batch, step+update every N. |
-| **Checkpointing / resumability** | Save `{model, optimizer, scaler, step, rng_state, config}` to local disk every K steps (to `/kaggle/working` on the P100 fallback) | Resumable training is mandatory (PROJECT.md calls this out). On the primary M3 path this covers laptop sleep/interrupt across multi-session runs; on the P100 fallback it covers the ~9h / 30h-week session caps. Keep a `latest.pt` (full state, `torch.save`) for resume and export `model.safetensors` for the portable demo. The `scaler` slot is `None` on MPS/CPU (fp32). |
-| **Optimizer** | `torch.optim.AdamW` + cosine decay w/ warmup (hand-rolled LR schedule) | Standard for GPT pretraining. Writing the schedule by hand fits the from-scratch ethos and is trivial. |
-| **Attention kernel** | `torch.nn.functional.scaled_dot_product_attention` (is_causal=True) is allowed | It's a math primitive, not model code — keeps you honest to "from scratch" while avoiding a naive slow softmax. If the portfolio narrative wants to *show* the manual attention, implement both and unit-test equivalence. (Note: the fused FlashAttention backend won't engage on Pascal; PyTorch falls back to the math backend automatically — correct, just not fast.) |
-| **`torch.compile`** | **Skip on P100** | Inductor/Triton GPU codegen historically has poor/unsupported Pascal support and adds compile-time and flakiness. Not worth it at 10–15M params. |
-| **Memory headroom** | 10–15M params is tiny; bottleneck is batch×context activations | At this scale you'll likely be compute/time-bound, not memory-bound. fp16 AMP + grad accumulation is plenty; no need for activation checkpointing. |
-
-## Experiment Logging (offline)
-
-| Approach | Recommendation |
-|----------|----------------|
-| **CSV + matplotlib** | **Use this.** Append `step,train_loss,val_loss,lr,tokens,wall_clock` to a CSV each eval interval. `demo.ipynb` reads the CSV and plots curves. Zero dependencies, zero network, fully reproducible, survives session restarts (just append). |
-| **TensorBoard** *(optional)* | Acceptable offline alternative if you want interactive curves; `torch.utils.tensorboard` is built in. Heavier than CSV and the event files are clunky to ship — CSV is preferred for a portfolio artifact. |
-| **wandb / Comet / Neptune** | **Do NOT use.** Require accounts/API keys and network calls — violate the zero-budget, offline, on-device, privacy-by-design constraints. They also clutter a "self-implemented" narrative with a SaaS dependency. |
 
 ## Alternatives Considered
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| Pre-tokenized `uint16` memmap (`.bin`) | HF `datasets` streaming | If you outgrow the laptop's disk for a much larger corpus and need on-the-fly tokenization — not the case at TinyStories/10–15M scale. |
-| CSV + matplotlib logging | TensorBoard (offline) | If you specifically want interactive zoom/compare across runs and don't mind shipping event files. |
-| Gradio 5 `ChatInterface` | Streamlit / FastAPI+HTML / plain CLI | Streamlit if you prefer a dashboard layout; a CLI `generate.py` is a fine *additional* artifact but weaker for a demo video. |
-| `safetensors` for weights | Plain `torch.save(state_dict)` | `torch.save` is fine when loading only your own trusted file; prefer it for the *resume* checkpoint (needs optimizer/scaler state). Use `safetensors` for the *shippable* weights. |
-| `torch==2.7.*` local pin | Newest `torch` (2.12) CPU wheel | The newest CPU wheel works locally too (Pascal issue is GPU-only). Pin a known-good version for reproducibility; bumping later is low-risk on CPU. |
+| ParlAI CDN tarball (DailyDialog) | HF parquet auto-conversion of `li2017dailydialog/daily_dialog` | Only if the Facebook CDN *and* the ConvLab zip both die — costs `pyarrow`/`pandas` deps for a 2.6 MB corpus. |
+| S3 JSON (PersonaChat) | ParlAI `personachat.tgz` (txt format) or HF mirrors (`bavard/personachat_truecased`) | tgz if S3 dies; truecased mirror only if lowercase text proves to hurt — it adds a parquet dependency and diverges from the canonical distribution. |
+| Explicit `LoRALinear` wrapper module | `torch.nn.utils.parametrize.register_parametrization` | Parametrize is elegant but hides the mechanism behind framework machinery and complicates state_dict naming — wrong trade for a portfolio whose value is *visible* mechanics. |
+| Per-batch `p.grad²` accumulation (empirical Fisher) | `torch.func` (`functional_call` + `vmap`/`grad`) for true per-sample Fisher | torch.func is available in torch 2.7 and gives per-sample grads, but adds conceptual machinery for a second-order nicety; the empirical diagonal is the standard EWC practice and unit-testable by hand. |
+| stdlib `urllib.request` for fetches | `requests ~=2.32` | If download UX (progress bars, retries) becomes annoying — it's not in pyproject today and two GETs don't justify it. |
+| matplotlib `imshow` heatmaps | seaborn | Never, for this project — seaborn is a styling layer over matplotlib that adds a dependency for zero needed capability. |
+| `torch.save` adapter dicts (+ optional safetensors export) | Custom binary format | No reason; the open-dict checkpoint pattern already exists and safetensors covers the shippable artifact. |
 
-## What NOT to Use
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| **HuggingFace `transformers` model code** | Excluded by design — the portfolio value is a hand-built transformer. | Your own `nn.Module` blocks (attention, MLP, embeddings). |
-| **HuggingFace `peft`** | Excluded by design (and out of M1 scope entirely). | From-scratch LoRA in M2. |
-| **`tiktoken` / HF `tokenizers` as the implementation** | BPE is a from-scratch deliverable; using them as the tokenizer defeats the purpose. | Hand-rolled BPE (train/encode/decode). Use `tiktoken` **only** as a reference oracle in unit tests to validate encode/decode behavior. |
-| **CUDA 12.8+ PyTorch wheels (`cu128`/`cu129`/`cu130`) on P100** | These wheels **dropped Pascal `sm_60` kernels** → CUDA ops fail or fall back/crash on P100. | On Kaggle: use the pre-installed torch (Pascal-capable). If ever installing manually for a Pascal GPU: a `cu126` wheel or earlier. |
-| **bf16 / `torch.bfloat16` on GPU** | Pascal has no bf16 support. | fp16 AMP + `GradScaler`. |
-| **`torch.compile` on P100** | Poor/unsupported Pascal codegen, compile overhead, flakiness; negligible benefit at this scale. | Plain eager mode (+ `sdpa` math backend). |
-| **wandb / Comet / Neptune** | Network + account dependency; violates offline/zero-budget/privacy intent. | CSV + matplotlib (or offline TensorBoard). |
-| **HF `datasets` as the runtime data path** | Heavy dependency + implicit network calls during training. | Direct `.txt` download once → Kaggle Dataset attach → `uint16` memmap. |
-| **Reinstalling `torch` inside the Kaggle notebook** | Risks pulling a non-Pascal `cu128+` wheel and breaking GPU training; wastes session time. | Use Kaggle's pre-installed, P100-validated torch. Verify with `torch.cuda.get_device_name(0)`. |
-| **Multi-GPU / DDP / FSDP, flash-attn pip package** | Out of scope (single P100); `flash-attn` doesn't support Pascal. | Single-device training; `F.scaled_dot_product_attention` (math backend). |
+| **HF `peft` / `loralib`** | Excluded by design — LoRA *is* the portfolio deliverable. Reference their papers/READMEs for conventions (α/r scaling, B zero-init), never their code. | From-scratch `LoRALinear`. |
+| **HF `datasets` (runtime)** | The canonical DailyDialog script inside it points at a dead URL anyway; pulls `pyarrow`/`pandas`/network machinery for two plain files. | stdlib fetch + `json`. |
+| **ParlAI pip package** | Archived read-only 2023-11-03; enormous dependency tree; you only need one file from its CDN. | Direct CDN GET of `dailydialog.tar.gz`. |
+| **`pandas` / `pyarrow`** | Only needed for the parquet fallback route; both corpora exist as JSON/tar. | stdlib `json`, `tarfile`. |
+| **`seaborn`** | Pure styling dep; matplotlib (already pinned) does heatmaps natively. | `plt.imshow` + colorbar. |
+| **`ijson` / streaming JSON** | The 200 MB PersonaChat file fits trivially in M3 RAM for a one-shot preprocessing pass. | stdlib `json.load`. |
+| **`wandb` / online tooling** | Unchanged v1.0 exclusion — offline/zero-budget/privacy. | Existing CSV + matplotlib. |
+| **New special tokens / tokenizer retrain** | Locked decision (2026-06-11): retrain invalidates `best.pt` as the M2 base. The 8192-table/8184-eos vocab is frozen. | Plain-text turn markers + existing eos id. |
+| **`bitsandbytes` / quantized LoRA (QLoRA)** | Quantization machinery for a 13.9M-param fp32 model is cargo-culting big-model practice; bnb needs CUDA (primary path is MPS). | Plain fp32 LoRA. |
+| **`opacus` / per-sample-gradient libraries** | Built for DP-SGD; massive overkill for a diagonal Fisher estimate. | `p.grad²` accumulation. |
+| **External AI APIs for synthetic persona data** | Zero-budget + privacy exclusions unchanged. | DailyDialog + PersonaChat + hand-written teach-session fixtures. |
 
 ## Stack Patterns by Variant
 
-**Primary — on local Apple Silicon (M3 / MPS) training:**
-- `RuntimeConfig` resolves CUDA-P100 → MPS → CPU via `preflight_device`; on M3 this lands on MPS.
-- fp32 only — no AMP, no `GradScaler`, no `torch.compile`; gradient accumulation still applies.
-- Keep the `uint16` memmap corpus + checkpoints on local disk; checkpoint `latest.pt` every K steps. Runs survive sleep/interrupt and resume bit-for-bit across sessions.
+**Primary — local M3/MPS (fp32):**
+- LoRA fine-tuning at 13.9M base + ~0.3M adapter params is light even relative to v1.0
+  pretraining; fp32 throughout, no AMP/GradScaler/compile (unchanged posture).
+- Fisher estimation is one forward/backward pass over a few hundred reference batches — minutes
+  on MPS.
+- All v2.0 checkpoints (adapter-only, Fisher/θ*, A/B arms) ride the existing resumable
+  open-dict checkpoint + RNG-restore infrastructure unchanged.
 
-**Fallback — on Kaggle P100 (training):**
-- Use the pre-installed PyTorch; verify device + CUDA version at notebook start.
-- Attach TinyStories as a Kaggle Dataset; keep the session offline.
-- fp16 AMP + `GradScaler` + gradient accumulation; checkpoint to `/kaggle/working` every K steps, persist to a versioned Kaggle Dataset, and download `latest.pt` before the session ends.
+**Fallback — Kaggle P100 (fp16 AMP):**
+- **EWC + fp16 caveat:** compute the Fisher accumulation and the quadratic penalty in **fp32
+  outside the autocast region** — `F̂·(θ−θ*)²` multiplies two small quantities and underflows in
+  fp16. Keep `F̂` and `θ*` buffers fp32. (Moot on the primary MPS path, which is fp32 anyway.)
+- Attach `data/raw/` as a Kaggle Dataset once; never download inside a session.
 
-**On laptop (inference + demo + dev):**
-- CPU/MPS torch wheel; load `model.safetensors`, run `model.eval()` + `torch.no_grad()`.
-- Gradio `ChatInterface` with streaming token generation (temperature + top-k sampling).
-- Run `pytest` here; tests must not require a GPU.
-
-**If a session/run dies mid-training:**
-- Resume from `latest.pt` (restores model + optimizer + scaler + step + RNG). This is why optimizer/scaler/RNG state must be in the checkpoint, not just the weights. (`scaler` is `None` on MPS/CPU.)
+**Demo/inference — laptop CPU:**
+- Teach-then-recall fine-tunes only adapter params (~330k) — feasible *on CPU* in the live demo
+  loop if the teach transcript is short; otherwise run the adapter fit as a short offline step
+  between "teach" and "recall" sessions.
+- Adapter load/unload at inference = swap two small tensors per wrapped Linear or pre-merge;
+  no measurable latency change vs the v1.0 demo (~95–105 tok/s CPU).
 
 ## Version Compatibility
 
 | Package A | Compatible With | Notes |
 |-----------|-----------------|-------|
-| **Apple Silicon (M3, MPS)** *(primary)* | macOS PyTorch wheel with the **MPS** backend; fp32 only | Primary training device. `torch.backends.mps.is_available()`; unified memory; eager/math ops. **No fp16 AMP / `GradScaler`** (MPS has no AMP path) and **no `torch.compile`**. Plain fp32, same posture as CPU. |
-| **P100 (Pascal, sm_60)** *(fallback)* | PyTorch CUDA wheels **`cu126` or earlier** | **`cu128`/`cu129`/`cu130` dropped Pascal binaries (PyTorch 2.8 deprecated, CUDA 13 removed Maxwell/Pascal/Volta).** This is the load-bearing constraint for the P100 fallback. On Kaggle the pre-installed torch is already Pascal-valid — just don't replace it. |
-| **P100** *(fallback)* | fp16 AMP only | No Tensor Cores, no bf16. fp16 needs `GradScaler`. |
-| `torch` 2.7.x | NumPy 2.x, Python 3.10–3.12 | Stable, widely supported combo; last line with broad Pascal CUDA-wheel coverage. |
-| `torch` 2.12.0 (latest, May 2026) | CPU wheel fine on laptop | Latest release; its `cu128+` GPU wheels are **not** P100-compatible — irrelevant for CPU inference, relevant if you ever try to GPU-train outside Kaggle. |
-| Gradio 5.x | Python 3.10+, FastAPI/Starlette (bundled) | Pin `<6` to avoid a future major bump; `launch()` is fully local/offline. |
-| `safetensors` 0.4+ | torch any recent | Framework-agnostic; load weights without executing pickled code. |
+| torch `2.7.*` | Everything in v2.0 | No API newer than torch 2.0 is required (nn.Module composition, autograd, `requires_grad_`). No bump needed or wanted (Pascal-fallback constraint from v1.0 still holds: `cu126`-era wheels only on P100). |
+| numpy `~=2.4` | torch 2.7, uint16 memmaps | Unchanged v1.0 data path. |
+| matplotlib `~=3.10` | numpy 2.x, Python 3.11 | Already pinned in `demo`/`notebook` extras; heatmaps need nothing newer. |
+| gradio `>=5,<6` | Python 3.11, offline `launch()` | Unchanged; v2.0 only adds UI controls within Gradio 5's existing API. |
+| pyproject `requires-python >=3.10,<3.12` | All of the above | Unchanged — keep developing only inside the 3.11 venv (dev box's 3.14 remains unsupported). |
 
 ## Sources
 
-- https://pytorch.org/get-started/locally/ — current PyTorch install matrix & supported CUDA (HIGH)
-- https://pypi.org/project/torch/ — latest release is torch 2.12.0 (2026-05-13) (HIGH)
-- https://github.com/pytorch/pytorch/issues/157517 — "Delete support for Maxwell/Pascal/Volta for CUDA 12.8/12.9 builds"; `cu126` retains Pascal, `cu128`+ drops it (HIGH — load-bearing P100 fact)
-- https://github.com/pytorch/pytorch/issues/159980 — CUDA support matrix for 2.9 (CUDA 12.6/12.8/13.0) (MEDIUM)
-- https://docs.pytorch.org/docs/stable/amp.html + AMP recipe — fp16 autocast + GradScaler usage; bf16 recommended only on Ampere+ (HIGH)
-- https://huggingface.co/datasets/roneneldan/TinyStories/tree/main — TinyStoriesV2-GPT4 train (2.23 GB) / valid (22.5 MB) direct `resolve/main/...` URLs (HIGH)
-- https://www.gradio.app/changelog + https://huggingface.co/blog/gradio-5 — Gradio 5 stable, ChatInterface streaming, local launch (HIGH)
-- Kaggle hardware: Tesla P100-PCIE 16 GB, 30h/week, ~9h/session (MEDIUM — community/docs corroborated; verify `torch.__version__` in-notebook)
+- `https://dl.fbaipublicfiles.com/parlai/dailydialog/dailydialog.tar.gz` — **HTTP 200 verified 2026-06-11**; downloaded; sha256 `c3adb09…73e6bb`; JSONL format and 11,118/1,000/1,000 splits inspected directly (HIGH — load-bearing)
+- `https://s3.amazonaws.com/datasets.huggingface.co/personachat/personachat_self_original.json` — **HTTP 200 verified 2026-06-11**, 209,850,483 B; head/tail byte ranges inspected, structure matches the documented distribution (HIGH — load-bearing)
+- `http://yanran.li/files/ijcnlp_dailydialog.zip` — **HTTP 404 verified 2026-06-11**; original source is dead (HIGH — load-bearing negative)
+- `https://huggingface.co/datasets/li2017dailydialog/daily_dialog` — loading-script repo only; `daily_dialog.py` `_URL` points at the dead yanran.li zip; license card CC BY-NC-SA 4.0 (HIGH)
+- `https://huggingface.co/datasets/ConvLab/dailydialog/resolve/main/data.zip` — HTTP 200 via resolve redirect, 3,738,236 B, verified 2026-06-11 (HIGH, fallback)
+- `https://dl.fbaipublicfiles.com/parlai/personachat/personachat.tgz` — HTTP 200, 223,221,886 B, verified 2026-06-11 (HIGH, fallback)
+- `https://github.com/huggingface/transfer-learning-conv-ai` + thomwolf gist — canonical documentation of the `personachat_self_original.json` schema (MEDIUM, corroborated by direct byte inspection above)
+- `https://github.com/facebookresearch/ParlAI` — archived read-only 2023-11-03; informs the cache-and-checksum discipline (MEDIUM)
+- `/Users/juliorcoelho/PersonaCore/pyproject.toml` + `.planning/PROJECT.md` — existing pins, seams (six named Linears, `assemble_loss(extra_penalties)`), frozen-tokenizer decision (HIGH, first-party)
+- PersonaChat licensing read (no explicit license on the S3 distribution; don't re-host) — MEDIUM, flagged for honesty
 
 ---
-*Stack research for: from-scratch small GPT-style LM — primary local Apple-Silicon M3/MPS training (optional Kaggle P100 fallback) + laptop CPU inference*
-*Researched: 2026-06-04*
+*Stack research for: PersonaCore v2.0 Weight-Based Memory (LoRA + EWC + conversational fine-tuning + demos/visualizations)*
+*Researched: 2026-06-11*
