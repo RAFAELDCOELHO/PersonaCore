@@ -51,7 +51,13 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
   3. Adapter weights save/load as a separate small artifact compatible with open-dict checkpoints and the LOCKED `weights_only=True` slim contract
   4. `merge()`/unmerge passes the fp32-tolerance equivalence test (merged forward ≡ base+adapter) while the demo path stays unmerged
   5. Param-count formula and load→inject→freeze ordering are pinned by unit tests, and the params-actually-update canary passes on a smoke run
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — LoRA core: `LoRAConfig` + `LoRALinear` + post-load injection/freeze machinery, fully test-pinned (Wave 1)
+- [ ] 09-02-PLAN.md — Toggle/eject (D-05/D-06) + merge/unmerge + pure `merged_state_dict` (D-07/D-08) (Wave 2)
+- [ ] 09-03-PLAN.md — Persona-file artifact: `export_adapter`/`load_adapter` choke point + two-artifact load (D-01..D-03) (Wave 2)
+- [ ] 09-04-PLAN.md — Frozen-base training proof: canary/kill+resume tests + real-weights smoke script (Wave 3)
 
 ### Phase 10: EWC Core
 **Goal**: From-scratch EWC machinery — per-example empirical diagonal Fisher and the quadratic penalty — plugs into the training loop additively, with v1.0 behavior bit-preserved when the penalty is off
@@ -138,7 +144,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 6. Generation & Sampling | v1.0 | 3/3 | Complete | 2026-06-06 |
 | 7. Evaluation | v1.0 | 3/3 | Complete | 2026-06-09 |
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
-| 9. LoRA Core | v2.0 | 0/TBD | Not started | - |
+| 9. LoRA Core | v2.0 | 0/4 | Planned | - |
 | 10. EWC Core | v2.0 | 0/TBD | Not started | - |
 | 11. Conversational Data Pipeline | v2.0 | 0/TBD | Not started | - |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 0/TBD | Not started | - |
