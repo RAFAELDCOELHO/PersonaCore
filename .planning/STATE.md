@@ -2,9 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: roadmap_created
-last_updated: "2026-06-11T00:00:00.000Z"
-last_activity: 2026-06-11
+status: planning
+stopped_at: Phase 9 context gathered
+last_updated: "2026-06-11T13:07:39.408Z"
+last_activity: 2026-06-11 — v2.0 roadmap created (Phases 9-15, 25/25 requirements mapped)
 progress:
   total_phases: 7
   completed_phases: 0
@@ -91,9 +92,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-06-11
-Stopped at: v2.0 roadmap created (Phases 9-15); REQUIREMENTS.md traceability updated
-Resume file: None
+Last session: 2026-06-11T13:07:39.399Z
+Stopped at: Phase 9 context gathered
+Resume file: .planning/phases/09-lora-core/09-CONTEXT.md
 
 ## Operator Next Steps
 
