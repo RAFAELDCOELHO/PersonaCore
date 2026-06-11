@@ -159,10 +159,40 @@ def test_load_adapter_weights_raises_before_loading():
     with pytest.raises(ValueError):
         load_adapter_weights(model_b, {"adapter": renamed_one})
 
+    # Correct key set, ONE wrong-shaped tensor -> ValueError BEFORE any tensor copies
+    # (CR-02: load_state_dict(strict=False) copies shape-matching tensors first, so a bare
+    # strict=False call would half-apply the crafted artifact before raising).
+    k0 = sorted(adapter)[0]
+    wrong_shape = dict(adapter)
+    wrong_shape[k0] = torch.zeros(adapter[k0].shape[0] + 1, adapter[k0].shape[1])
+    with pytest.raises(ValueError, match="shape/dtype"):
+        load_adapter_weights(model_b, {"adapter": wrong_shape})
+
+    # Correct key set + shapes, ONE wrong-dtype tensor -> same friendly refusal.
+    wrong_dtype = dict(adapter)
+    wrong_dtype[k0] = adapter[k0].double()
+    with pytest.raises(ValueError, match="shape/dtype"):
+        load_adapter_weights(model_b, {"adapter": wrong_dtype})
+
     # The audit fires BEFORE any weight is loaded: model_b's lora tensors are unchanged.
     after = lora_state_dict(model_b)
     for k, v in before.items():
         assert torch.equal(v, after[k]), f"failed audit mutated {k}"
+
+
+def test_load_adapter_weights_refuses_wrong_rank():
+    """CR-02 secondary: an r=8 artifact onto an r=4 injection has IDENTICAL key names but
+    different shapes — the audit must raise the friendly ValueError (not torch's opaque
+    aggregated size-mismatch RuntimeError) and leave the victim bit-unchanged."""
+    model_r4, _, _, _ = _build_injected(r=4)
+    model_r8, _, _, _ = _build_injected(r=8)
+    _nudge_lora_b(model_r8, seed=13)
+    before = {k: v.clone() for k, v in lora_state_dict(model_r4).items()}
+    with pytest.raises(ValueError, match="shape/dtype"):
+        load_adapter_weights(model_r4, {"adapter": lora_state_dict(model_r8)})
+    after = lora_state_dict(model_r4)
+    for k, v in before.items():
+        assert torch.equal(v, after[k]), f"wrong-rank refusal mutated {k}"
 
 
 def test_snapshot_params_detached_clones():

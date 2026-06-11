@@ -74,19 +74,34 @@ def lora_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
 
 
 def load_adapter_weights(model: nn.Module, artifact: dict) -> None:
-    """Apply an adapter dict onto an injected model behind an exact key-set audit (P4).
+    """Apply an adapter dict onto an injected model behind an exact key+shape audit (P4).
 
-    Raises ``ValueError`` naming the symmetric difference BEFORE any tensor is loaded when
-    ``artifact["adapter"]`` keys do not exactly match the model's ``lora_`` keys.
+    Raises ``ValueError`` BEFORE any tensor is loaded when ``artifact["adapter"]`` keys do
+    not exactly match the model's ``lora_`` keys (naming the symmetric difference), or when
+    any tensor's shape/dtype differs (e.g. an artifact trained at a different rank). The
+    shape audit is load-bearing, not cosmetic: ``load_state_dict(strict=False)`` copies every
+    shape-MATCHING tensor first and only raises the size-mismatch error at the end, so
+    without it a crafted artifact with a correct key set would half-apply and leave the
+    model corrupted when the exception surfaces.
     """
-    expected = {k for k in model.state_dict() if "lora_" in k}
-    got = set(artifact["adapter"].keys())
-    if expected != got:
-        missing = sorted(expected - got)
-        unexpected = sorted(got - expected)
+    expected = {k: v for k, v in model.state_dict().items() if "lora_" in k}
+    got = artifact["adapter"]
+    if expected.keys() != got.keys():
+        missing = sorted(expected.keys() - got.keys())
+        unexpected = sorted(got.keys() - expected.keys())
         raise ValueError(
             f"adapter key-set mismatch: missing={missing} unexpected={unexpected} — "
             "the artifact does not describe this injected model; refusing to load."
+        )
+    bad_shapes = sorted(
+        k
+        for k in expected
+        if got[k].shape != expected[k].shape or got[k].dtype != expected[k].dtype
+    )
+    if bad_shapes:
+        raise ValueError(
+            f"adapter tensor shape/dtype mismatch on {bad_shapes} — the artifact was "
+            "trained at a different rank or base shape; refusing to load."
         )
     model.load_state_dict(artifact["adapter"], strict=False)
 
