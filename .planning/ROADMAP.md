@@ -31,7 +31,7 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
 
 **Milestone Goal:** Prove personalization lives in the weights via from-scratch LoRA + EWC on the v1.0 foundation — conversational fine-tune, no-forgetting A/B, and a clean-room teach-then-recall demo.
 
-- [ ] **Phase 9: LoRA Core** - From-scratch `LoRALinear` over the six named projections, fully test-pinned, adapter as a small swappable artifact
+- [x] **Phase 9: LoRA Core** - From-scratch `LoRALinear` over the six named projections, fully test-pinned, adapter as a small swappable artifact (completed 2026-06-11)
 - [ ] **Phase 10: EWC Core** - Per-example diagonal Fisher + quadratic penalty through the `assemble_loss` seam, v1.0 trajectory bit-preserved when off
 - [ ] **Phase 11: Conversational Data Pipeline** - DailyDialog + PersonaChat → role-token memmap bins with loss masks; tokenizer-inflation gate measured first
 - [ ] **Phase 12: Stage-2 Conversational Fine-Tune** - Telemetry debts fixed, λ sweep, full fine-tune of `best.pt` to a conversational base with retention logged from step 0
@@ -68,7 +68,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 09-04-PLAN.md — Frozen-base training proof: canary/kill+resume tests + real-weights smoke script (Wave 3)
+- [x] 09-04-PLAN.md — Frozen-base training proof: canary/kill+resume tests + real-weights smoke script (Wave 3)
 
 ### Phase 10: EWC Core
 
@@ -173,7 +173,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 6. Generation & Sampling | v1.0 | 3/3 | Complete | 2026-06-06 |
 | 7. Evaluation | v1.0 | 3/3 | Complete | 2026-06-09 |
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
-| 9. LoRA Core | v2.0 | 3/4 | In Progress|  |
+| 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
 | 10. EWC Core | v2.0 | 0/TBD | Not started | - |
 | 11. Conversational Data Pipeline | v2.0 | 0/TBD | Not started | - |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 0/TBD | Not started | - |
