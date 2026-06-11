@@ -7,12 +7,7 @@ and the ``generate_text_cumulative`` Gradio-shaped adapter (08-02 / DEMO-01).
 
 from .core import collect, generate
 from .sampling import apply_temperature, next_token, top_k_filter, top_p_filter
-from .text import (
-    generate_text,
-    generate_text_cumulative,
-    generate_text_str,
-    undecodable_ids_mask,
-)
+from .text import generate_text, generate_text_cumulative, generate_text_str, undecodable_ids_mask
 
 __all__ = [
     "apply_temperature",
