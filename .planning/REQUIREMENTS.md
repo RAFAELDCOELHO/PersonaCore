@@ -94,13 +94,37 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| — | — | — |
+| LORA-01 | Phase 9 | Pending |
+| LORA-02 | Phase 9 | Pending |
+| LORA-03 | Phase 9 | Pending |
+| LORA-04 | Phase 9 | Pending |
+| LORA-05 | Phase 9 | Pending |
+| EWC-01 | Phase 10 | Pending |
+| EWC-02 | Phase 10 | Pending |
+| DATA-01 | Phase 11 | Pending |
+| DATA-02 | Phase 11 | Pending |
+| DATA-03 | Phase 11 | Pending |
+| DATA-04 | Phase 11 | Pending |
+| DEBT-01 | Phase 12 | Pending |
+| DEBT-02 | Phase 12 | Pending |
+| EWC-03 | Phase 12 | Pending |
+| TUNE-01 | Phase 12 | Pending |
+| TUNE-02 | Phase 12 | Pending |
+| DEMO-04 | Phase 13 | Pending |
+| VIZ-01 | Phase 13 | Pending |
+| VIZ-04 | Phase 13 | Pending |
+| DEMO-05 | Phase 14 | Pending |
+| DEMO-06 | Phase 14 | Pending |
+| DEMO-07 | Phase 14 | Pending |
+| VIZ-02 | Phase 15 | Pending |
+| VIZ-03 | Phase 15 | Pending |
+| DOC-02 | Phase 15 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 25 total
-- Mapped to phases: 0
-- Unmapped: 25 ⚠️ (roadmap pending)
+- Mapped to phases: 25 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-11*
-*Last updated: 2026-06-11 after initial definition*
+*Last updated: 2026-06-11 after roadmap creation (traceability mapped to Phases 9-15)*

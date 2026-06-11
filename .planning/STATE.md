@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: planning
-last_updated: "2026-06-11T11:52:49.542Z"
+status: roadmap_created
+last_updated: "2026-06-11T00:00:00.000Z"
 last_activity: 2026-06-11
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,81 +19,56 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-06-11)
 
-**Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 Foundation shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Planning next milestone (v2.0 Weight-Based Memory) — run `/gsd:new-milestone`
+**Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
+**Current focus:** Phase 9 — LoRA Core (first of 7 v2.0 phases)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-11 — Milestone v2.0 started
+Phase: 9 of 15 (LoRA Core) — v2.0 phase 1 of 7
+Plan: — (not yet planned)
+Status: Ready to plan — run `/gsd-plan-phase 9`
+Last activity: 2026-06-11 — v2.0 roadmap created (Phases 9-15, 25/25 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0% (v2.0)
 
 ## Performance Metrics
 
-**Velocity:**
+**Velocity (v1.0 baseline):**
 
-- Total plans completed: 24
-- Average duration: — min
-- Total execution time: 0.0 hours
+- Total plans completed: 29 across 8 phases (v1.0)
+- v2.0 plans completed: 0
 
-**By Phase:**
+**By Phase (v2.0):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 02 | 3 | - | - |
-| 03 | 4 | - | - |
-| 04 | 3 | - | - |
-| 06 | 3 | - | - |
-| 07 | 3 | - | - |
-| 08 | 8 | - | - |
+| - | - | - | - |
 
-**Recent Trend:**
-
-- Last 5 plans: —
-- Trend: —
-
-*Updated after each plan completion*
-| Phase 01 P01 | 9 | 3 tasks | 8 files |
-| Phase 01 P02 | 14 | 2 tasks | 10 files |
-| Phase 01 P03 | 4 | 2 tasks | 3 files |
-| Phase 02 P01 | 8 | 3 tasks | 12 files |
-| Phase 02 P02 | 4 | 2 tasks | 4 files |
-| Phase 02 P03 | 6 | 3 tasks | 5 files |
-| Phase 03 P01 | 6 | 5 tasks | 8 files |
-| Phase 03 P02 | 6 | 2 tasks | 3 files |
-| Phase 03 P03 | 7 | 2 tasks | 2 files |
-| Phase 03 P04 | 18 | 2 tasks | 4 files |
-| Phase 04 P01 | 6 | 2 tasks | 9 files |
-| Phase 04 P02 | 8 | 2 tasks | 2 files |
-| Phase 04 P03 | 4 | 1 tasks | 1 files |
-| Phase 05 P01 | 6 | 3 tasks | 5 files |
-| Phase 07 P01 | 4 | 2 tasks | 4 files |
-| Phase 07 P02 | 11 | 2 tasks | 4 files |
+*v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table (v1.0 decisions archived with the milestone; full per-plan decision log in the SUMMARY.md frontmatter under milestones/v1.0-phases/).
+Decisions are logged in PROJECT.md Key Decisions table (v1.0 decisions archived with the milestone).
 
 Key carry-forwards for v2.0:
 
 - M2 seams are live and test-verified: six named `nn.Linear` projections per block (LoRA) and `assemble_loss(..., extra_penalties=())` + open-dict checkpoints (EWC — fisher/theta_star add with no format change).
-- vocab_size=8192 / eos_id=8184 locked; frozen artifacts/tokenizer.json has 547 live ids — retraining it invalidates best.pt (decide before any M2 training).
-- LOCKED contracts that M2 must consume verbatim: forward(idx, targets=None) -> (logits, loss); RNG-state-restore resume; weights_only=True slim artifacts.
+- Frozen tokenizer KEPT for v2.0 (locked 2026-06-11): no retrain, `best.pt` stays valid as the M2 base; dead-id mask handles the 547-live-id vocabulary; inflation tax measured instead (DATA-04).
+- Two-mechanism stage split (research-converged, treat as made): stage 2 = full fine-tune ± EWC (the A/B); stage 3 personalization = LoRA on the frozen conversational base.
+- LOCKED contracts M2 must consume verbatim: `forward(idx, targets=None) -> (logits, loss)`; RNG-state-restore resume; `weights_only=True` slim artifacts.
+- vocab_size=8192 / eos_id=8184 locked; role tokens `<|user|>`/`<|assistant|>`/`<|system|>` (8185-8187) already reserved and decodable.
 
 ### Pending Todos
-
-[From .planning/todos/pending/ — ideas captured during sessions]
 
 None yet.
 
 ### Blockers/Concerns
 
-[Issues that affect future work]
-
-- None open. (v1.0 blockers resolved: Phase 5 LR/batch calibrated by the 05-02 smoke; KV-cache resolved NOT needed at ~95–105 tok/s CPU, deferred to M2 only if a demo feels slow.)
+- Phase 12 research flag: λ selection + full-FT LR/budget calibration — plan with `/gsd-plan-phase --research-phase` (research/SUMMARY.md).
+- Phase 14 research flag: teach-then-recall protocol has no canonical reference — discuss/spec pass on teaching-set grammar + threshold pre-registration before planning.
+- DEBT-01/02 (run.csv ×256, forbid_ids-in-PPL policy) are Phase 12 pre-work and MUST land before the first v2.0 fine-tune step — forgetting-curve axes depend on them.
 
 ### Quick Tasks Completed
 
@@ -108,18 +83,18 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | quick_task | 260605-lgy-add-mps-support-to-the-device-layer-runt | metadata-only (work complete, committed 398b74e; SUMMARY frontmatter lacks a parseable status field) | v1.0 close |
-| tech_debt | forbid_ids mask not threaded into scripts/evaluate.py warm sampling (CR-01 mode can recur on eval re-runs) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
-| tech_debt | loop.py tokens_per_step omits ×block_size; run.csv "tokens" column under-counts ×256 (telemetry only) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
+| tech_debt | forbid_ids mask not threaded into scripts/evaluate.py warm sampling (CR-01 mode can recur on eval re-runs) | promoted to DEBT-02 → Phase 12 | v1.0 close |
+| tech_debt | loop.py tokens_per_step omits ×block_size; run.csv "tokens" column under-counts ×256 (telemetry only) | promoted to DEBT-01 → Phase 12 | v1.0 close |
 | tech_debt | TODO(calibration) markers on shipped-final constants in scripts/pretrain_tinystories.py | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
-| tech_debt | docs/REPORT.md under-discloses tokenizer training-corpus identity (11.5KB fixture → 547 live ids) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
+| tech_debt | docs/REPORT.md under-discloses tokenizer training-corpus identity (11.5KB fixture → 547 live ids) | open — natural home: DOC-02 honesty pass (Phase 15) | v1.0 close |
 | tech_debt | one-time `gh release view m1-demo-v1` asset check (tag verified, asset unverified from sandbox) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
 
 ## Session Continuity
 
-Last session: 2026-06-10T14:13:19.294Z
-Stopped at: Phase 8 UI-SPEC approved
-Resume file: .planning/phases/08-demo-writeup/08-UI-SPEC.md
+Last session: 2026-06-11
+Stopped at: v2.0 roadmap created (Phases 9-15); REQUIREMENTS.md traceability updated
+Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan the first v2.0 phase with `/gsd-plan-phase 9` (LoRA Core — standard patterns, no research-phase needed)
