@@ -15,11 +15,11 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### LoRA Adapters
 
-- [ ] **LORA-01**: From-scratch `LoRALinear` (A-Gaussian/B-zero init, α/r scaling, configurable rank/alpha/dropout) wraps the six named `nn.Linear` projections via post-load injection — no HF PEFT
-- [ ] **LORA-02**: Frozen-base training discipline — gradients flow only to A/B; base params bit-untouched (test-verified)
+- [x] **LORA-01**: From-scratch `LoRALinear` (A-Gaussian/B-zero init, α/r scaling, configurable rank/alpha/dropout) wraps the six named `nn.Linear` projections via post-load injection — no HF PEFT
+- [x] **LORA-02**: Frozen-base training discipline — gradients flow only to A/B; base params bit-untouched (test-verified)
 - [ ] **LORA-03**: Adapter weights save/load as a separate small artifact, compatible with open-dict checkpoints and the LOCKED `weights_only=True` slim contract
 - [ ] **LORA-04**: `merge()`/unmerge utility with fp32-tolerance equivalence test (merged forward ≡ base+adapter); demo path always stays unmerged
-- [ ] **LORA-05**: Correctness unit tests pin: zero-delta at init, enable/disable round-trip bit-identical to base, param-count formula, tied-embedding safety (`data_ptr` test post-injection)
+- [x] **LORA-05**: Correctness unit tests pin: zero-delta at init, enable/disable round-trip bit-identical to base, param-count formula, tied-embedding safety (`data_ptr` test post-injection)
 
 ### EWC Continual Learning
 
@@ -94,11 +94,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LORA-01 | Phase 9 | Pending |
-| LORA-02 | Phase 9 | Pending |
+| LORA-01 | Phase 9 | Complete |
+| LORA-02 | Phase 9 | Complete |
 | LORA-03 | Phase 9 | Pending |
 | LORA-04 | Phase 9 | Pending |
-| LORA-05 | Phase 9 | Pending |
+| LORA-05 | Phase 9 | Complete |
 | EWC-01 | Phase 10 | Pending |
 | EWC-02 | Phase 10 | Pending |
 | DATA-01 | Phase 11 | Pending |
