@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Awaiting next milestone
-stopped_at: Phase 8 UI-SPEC approved
-last_updated: "2026-06-11T11:37:05.298Z"
-last_activity: 2026-06-11 — Milestone v1.0 completed and archived
+milestone: v2.0
+milestone_name: Weight-Based Memory
+status: planning
+last_updated: "2026-06-11T11:52:49.542Z"
+last_activity: 2026-06-11
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 29
-  completed_plans: 29
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-11 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-11 — Milestone v2.0 started
 
 ## Performance Metrics
 
@@ -79,6 +78,7 @@ Last activity: 2026-06-11 — Milestone v1.0 completed and archived
 Decisions are logged in PROJECT.md Key Decisions table (v1.0 decisions archived with the milestone; full per-plan decision log in the SUMMARY.md frontmatter under milestones/v1.0-phases/).
 
 Key carry-forwards for v2.0:
+
 - M2 seams are live and test-verified: six named `nn.Linear` projections per block (LoRA) and `assemble_loss(..., extra_penalties=())` + open-dict checkpoints (EWC — fisher/theta_star add with no format change).
 - vocab_size=8192 / eos_id=8184 locked; frozen artifacts/tokenizer.json has 547 live ids — retraining it invalidates best.pt (decide before any M2 training).
 - LOCKED contracts that M2 must consume verbatim: forward(idx, targets=None) -> (logits, loss); RNG-state-restore resume; weights_only=True slim artifacts.

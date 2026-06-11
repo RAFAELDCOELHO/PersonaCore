@@ -10,9 +10,19 @@ PersonaCore is a conversational AI assistant where **all** memory and personaliz
 
 **Known tech debt carried into M2** (none blocking; see `milestones/v1.0-MILESTONE-AUDIT.md`): the frozen tokenizer was trained on an 11.5KB fixture (547 live ids of 8192 — honestly documented, but consider retraining the tokenizer if M2 fine-tuning data warrants it, which would invalidate `best.pt`); `forbid_ids` mask not threaded into `evaluate.py`; `run.csv` tokens column ×256 under-count; stale TODO(calibration) markers.
 
-## Next Milestone Goals
+## Current Milestone: v2.0 Weight-Based Memory
 
-**Milestone 2 — Weight-Based Memory (the novel claim).** Run `/gsd:new-milestone` to define requirements. Candidate scope (from the original two-milestone strategy): from-scratch LoRA adapters wrapping the named `nn.Linear` seams; EWC continual learning via the `assemble_loss` Fisher-penalty seam; conversational fine-tuning (DailyDialog + PersonaChat); teach-then-recall clean-room demo; no-forgetting EWC A/B demo; weight-delta heatmaps and forgetting curves.
+**Goal:** Prove the novel claim — personalization lives in the model weights, not in a prompt or store — via from-scratch LoRA + EWC on the v1.0 foundation.
+
+**Target features:**
+- From-scratch LoRA adapters wrapping the six named `nn.Linear` projections per block (v1.0 seam)
+- EWC continual learning with Fisher-information penalty via the `assemble_loss(..., extra_penalties=())` seam
+- Conversational fine-tuning on DailyDialog + PersonaChat (curriculum stage 2)
+- Teach-then-recall clean-room personalization demo
+- No-forgetting demo: EWC A/B vs naive fine-tuning
+- Committed visualization deliverables: forgetting curves + weight-delta heatmaps
+
+**Key milestone decisions:** frozen tokenizer kept as-is (no retrain — `best.pt` stays valid as the M2 base; dead-id mask handles the 547-live-id vocabulary); both demos in scope as research-narrative deliverables; phase numbering continues from v1.0 (next phase = 9).
 
 ## Core Value
 
@@ -37,7 +47,7 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 
 ### Active
 
-<!-- Milestone 2: Weight-Based Memory — candidates pending /gsd:new-milestone requirements definition. -->
+<!-- Milestone v2.0: Weight-Based Memory — requirements being defined; REQ-IDs land in REQUIREMENTS.md. -->
 
 - [ ] From-scratch LoRA adapters wrapping the six named `nn.Linear` projections per block (seam shipped + verified in v1.0)
 - [ ] EWC continual learning with Fisher-information penalty via the `assemble_loss(..., extra_penalties=())` seam (shipped + verified in v1.0)
@@ -91,6 +101,7 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 | Ship the fixture-trained frozen tokenizer (547 live of 8192 ids) rather than retrain before Phase 5 (accepted Phase 8, documented in 08-08) | Retraining would have invalidated the locked vocab/checkpoint chain mid-milestone; honesty-first documentation instead (README/REPORT quantify 2,935,680 dead-row params) | ⚠️ Revisit in M2 — if conversational fine-tuning data warrants a real-corpus tokenizer, that decision invalidates `best.pt` and must be made before any M2 training |
 | Dead-id `forbid_ids` logits mask at the sampling layer (Phase 8 CR-01) rather than catch-and-truncate at decode | Crash-proof demo at every in-UI setting without hiding real errors; decode stays strict by design | ✓ Good — demo verified crash-free; mask not yet threaded into evaluate.py (tech debt) |
 | Retroactive Phase 5 verification at milestone audit (2026-06-11) instead of a closure phase | The work existed and was downstream-corroborated; only the formal verification artifact was missing | ✓ Good — passed 3/3; audit flipped to 35/35 without new phases |
+| Keep the frozen tokenizer for v2.0 — no retrain (decided 2026-06-11 at v2.0 kickoff) | Dead-id mask already in place; M2 training time better spent on LoRA/EWC than a retrain; retraining would invalidate `best.pt` as the M2 base | — Locked for v2.0; resolves the "revisit in M2" flag above |
 
 ## Evolution
 
@@ -110,4 +121,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 after v1.0 Foundation milestone completion*
+*Last updated: 2026-06-11 at v2.0 Weight-Based Memory milestone start*
