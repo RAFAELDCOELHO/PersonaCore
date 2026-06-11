@@ -18,6 +18,10 @@ Pins the merge/unmerge utilities layered on the 09-01 wrapper:
      GPT loaded ``strict=True`` reproduces the live logits within 1e-5.
   7. ``_w0`` hygiene — the stored clone is a plain attribute, never a state-dict entry, and
      is deleted on unmerge.
+  8. Toggle×merge mutual guards (CR-01) — merge refuses on a disabled adapter (folding a
+     disabled delta would silently enable it, with NO partial fold); toggling / the
+     ``adapter_disabled`` CM refuse while merged (the flag would be a silent no-op); the
+     pure fold refuses on a disabled module (live-logits parity would break).
 
 CPU-only, GPU-free.
 """
@@ -30,10 +34,12 @@ from personacore.config import ModelConfig
 from personacore.lora import (
     LoRAConfig,
     LoRALinear,
+    adapter_disabled,
     eject_adapter,
     inject_lora,
     merge_lora,
     merged_state_dict,
+    set_adapter_enabled,
     unmerge_lora,
 )
 from personacore.model import GPT
@@ -169,3 +175,60 @@ def test_w0_hygiene():
     unmerge_lora(model)
     for m in _wrapped(model):
         assert not hasattr(m, "_w0")
+
+
+def test_merge_refuses_disabled_adapter():
+    """CR-01: folding a disabled delta would silently enable the adapter — refuse, fold nothing."""
+    model, _, idx, base_logits, _ = _setup()
+    set_adapter_enabled(model, False)
+    pre = {
+        name: m.base.weight.detach().clone()
+        for name, m in model.named_modules()
+        if isinstance(m, LoRALinear)
+    }
+    with pytest.raises(RuntimeError, match="disabled"):
+        merge_lora(model)
+    # Atomic refusal: no module merged, no base weight touched, outputs still pure base.
+    assert all(m.merged is False for m in _wrapped(model))
+    for name, m in model.named_modules():
+        if isinstance(m, LoRALinear):
+            assert torch.equal(m.base.weight, pre[name]), f"refusal folded {name}"
+    assert torch.equal(_logits(model, idx), base_logits)
+
+
+def test_merge_refusal_is_atomic_on_partial_disable():
+    """CR-01: ONE disabled module among enabled ones — refuse BEFORE folding any module."""
+    model, _, _, _, _ = _setup()
+    _wrapped(model)[0].enabled = False
+    with pytest.raises(RuntimeError, match="disabled"):
+        merge_lora(model)
+    assert all(m.merged is False for m in _wrapped(model))  # pre-pass: zero partial folds.
+
+
+def test_set_enabled_refuses_while_merged():
+    """CR-01: toggling a merged adapter is a dead switch — the delta lives in base.weight."""
+    model, _, idx, _, live_logits = _setup()
+    merge_lora(model)
+    with pytest.raises(RuntimeError, match="merged"):
+        set_adapter_enabled(model, False)
+    # Pre-pass refusal: every flag untouched, outputs unchanged.
+    assert all(m.enabled is True for m in _wrapped(model))
+    assert torch.allclose(_logits(model, idx), live_logits, atol=1e-5)
+
+
+def test_adapter_disabled_cm_refuses_while_merged():
+    """CR-01: the scoped CM refuses on a merged model before flipping any flag."""
+    model, _, _, _, _ = _setup()
+    merge_lora(model)
+    with pytest.raises(RuntimeError, match="merged"):
+        with adapter_disabled(model):
+            pass  # pragma: no cover — the CM must refuse at __enter__.
+    assert all(m.enabled is True for m in _wrapped(model))
+
+
+def test_merged_state_dict_refuses_disabled_module():
+    """CR-01: the pure fold refuses when any module is disabled (live-logits parity)."""
+    model, _, _, _, _ = _setup()
+    set_adapter_enabled(model, False)
+    with pytest.raises(RuntimeError, match="disabled"):
+        merged_state_dict(model)

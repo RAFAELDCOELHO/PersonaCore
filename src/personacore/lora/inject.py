@@ -97,10 +97,21 @@ def set_adapter_enabled(model: nn.Module, enabled: bool) -> None:
     The Phase-14 live memory-on/off demo drives THIS switch: disabling makes the flag-gated
     delta branch never execute, so the model is bit-identical to the pre-injection base; the
     A/B parameters are untouched, so re-enabling is an exact round-trip (LORA-05).
+
+    Refuses (``RuntimeError``) while any module is merged: the delta then lives in
+    ``base.weight`` and the flag would be a SILENT no-op — "memory off" while the adapter is
+    still in the weights would falsify the demo's central claim. The check is a pre-pass over
+    every module, so a refusal flips no flag at all.
     """
-    for m in model.modules():
-        if isinstance(m, LoRALinear):
-            m.enabled = enabled
+    wrapped = [m for m in model.modules() if isinstance(m, LoRALinear)]
+    for m in wrapped:
+        if m.merged:
+            raise RuntimeError(
+                "set_adapter_enabled on a merged module — the delta is folded into "
+                "base.weight, so the flag would have no effect; unmerge_lora first."
+            )
+    for m in wrapped:
+        m.enabled = enabled
 
 
 @contextlib.contextmanager
@@ -111,8 +122,19 @@ def adapter_disabled(model: nn.Module):
     values in a ``finally`` block — a raising body still re-enables (D-06), and a module that
     was already disabled on entry stays disabled on exit (per-module restore, never blanket
     ``True``).
+
+    Refuses (``RuntimeError``) while any module is merged, BEFORE flipping any flag — the
+    delta then lives in ``base.weight``, so "disabled" would silently keep returning adapter
+    logits (the same dead-switch failure ``set_adapter_enabled`` guards).
     """
     prior = {m: m.enabled for m in model.modules() if isinstance(m, LoRALinear)}
+    for m in prior:
+        if m.merged:
+            raise RuntimeError(
+                "adapter_disabled on a merged module — the delta is folded into "
+                "base.weight, so disabling would silently keep adapter outputs; "
+                "unmerge_lora first."
+            )
     for m in prior:
         m.enabled = False
     try:
@@ -152,14 +174,26 @@ def merge_lora(model: nn.Module) -> None:
     Eval-time utility ONLY (Pitfall 6): a merged-state checkpoint double-counts the delta on
     reload, so the guard refuses in train mode — call ``model.eval()`` first; never checkpoint
     while merged. ``unmerge_lora`` restores bit-exactly via the stored clones (D-07).
+
+    Refuses (``RuntimeError``) while any module is disabled: folding a DISABLED delta into
+    ``base.weight`` would silently turn the adapter ON (the forward gate never executed it,
+    but the fold makes it unconditional). The check is a pre-pass over every module, so a
+    refusal folds nothing — no partial merge.
     """
     assert model.training is False, (
         "merge_lora is an eval-time utility: call model.eval() first; "
         "never checkpoint while merged (Pitfall 6)."
     )
-    for m in model.modules():
-        if isinstance(m, LoRALinear):
-            m.merge()
+    wrapped = [m for m in model.modules() if isinstance(m, LoRALinear)]
+    for m in wrapped:
+        if not m.enabled:
+            raise RuntimeError(
+                "merge_lora on a disabled module would silently enable the adapter — "
+                "folding a disabled delta into base.weight changes live outputs; "
+                "set_adapter_enabled(model, True) first."
+            )
+    for m in wrapped:
+        m.merge()
 
 
 def unmerge_lora(model: nn.Module) -> None:
@@ -181,9 +215,17 @@ def merged_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
     with torch.no_grad():
         wrapped = {prefix: m for prefix, m in model.named_modules() if isinstance(m, LoRALinear)}
         # Guard the fold the same way merge() does: folding an already-merged base weight
-        # would silently double-count the delta (Pitfall 6 / T-09-04).
+        # would silently double-count the delta (Pitfall 6 / T-09-04), and folding a DISABLED
+        # delta would bake in an update the live model is not applying — breaking the
+        # "reproduces the live logits" parity contract.
         for prefix, m in wrapped.items():
             assert not m.merged, f"merged_state_dict on a merged model ({prefix}) — unmerge first"
+            if not m.enabled:
+                raise RuntimeError(
+                    f"merged_state_dict on a disabled module ({prefix}) — the fold would "
+                    "include a delta the live model is not applying, breaking live-logits "
+                    "parity; set_adapter_enabled(model, True) first (or eject instead)."
+                )
         weight_keys = {f"{p}.base.weight": (f"{p}.weight", m) for p, m in wrapped.items()}
         bias_keys = {f"{p}.base.bias": f"{p}.bias" for p in wrapped}
         out: dict[str, torch.Tensor] = {}
