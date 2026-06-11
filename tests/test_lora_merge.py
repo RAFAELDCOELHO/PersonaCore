@@ -8,7 +8,8 @@ Pins the merge/unmerge utilities layered on the 09-01 wrapper:
   2. Bit-exact unmerge (D-07) — ``unmerge_lora`` restores every wrapped ``base.weight``
      EXACTLY (``torch.equal``, stored-clone copy-back — float subtraction would NOT
      round-trip) and post-unmerge logits equal the pre-merge live logits bit-for-bit.
-  3. State guards — double merge and never-merged unmerge both assert.
+  3. State guards — double merge and never-merged unmerge both raise ``RuntimeError``
+     (never a ``-O``-strippable ``assert`` — WR-03).
   4. Training-mode guard (Pitfall 6) — ``merge_lora`` refuses in train mode: checkpoints must
      never be saved merged; merge is an eval-time utility.
   5. Eject interplay — eject refuses while merged; after unmerge it succeeds and logits
@@ -112,14 +113,14 @@ def test_unmerge_bit_exact():
 
 
 def test_merge_unmerge_state_guards():
-    """Double merge asserts (per-module `assert not self.merged`); bare unmerge asserts."""
+    """Double merge and bare unmerge raise RuntimeError (corruption guards survive -O)."""
     model, _, _, _, _ = _setup()
     merge_lora(model)
-    with pytest.raises(AssertionError):
+    with pytest.raises(RuntimeError, match="double merge"):
         merge_lora(model)  # second fold would double-count the delta.
 
     never_merged, _, _, _, _ = _setup()
-    with pytest.raises(AssertionError):
+    with pytest.raises(RuntimeError, match="never-merged"):
         unmerge_lora(never_merged)
 
 
@@ -127,7 +128,7 @@ def test_merge_refuses_in_training_mode():
     """Pitfall 6: a merged-state checkpoint double-counts the delta on reload."""
     model, _, _, _, _ = _setup()
     model.train()
-    with pytest.raises(AssertionError):
+    with pytest.raises(RuntimeError, match="eval-time"):
         merge_lora(model)
 
 
@@ -136,7 +137,7 @@ def test_eject_after_unmerge_interplay():
     model, cfg, idx, base_logits, _ = _setup()
     model.eval()
     merge_lora(model)
-    with pytest.raises(AssertionError):
+    with pytest.raises(RuntimeError, match="merged"):
         eject_adapter(model)
     unmerge_lora(model)
     assert eject_adapter(model) == 6 * cfg.n_layer

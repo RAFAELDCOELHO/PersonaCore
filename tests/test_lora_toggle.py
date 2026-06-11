@@ -14,7 +14,8 @@ Pins the runtime on/off semantics layered on the 09-01 wrapper:
      every wrapped projection to a plain ``nn.Linear``, vanilla state-dict key parity, and
      logits ``torch.equal`` the pre-injection base.
   6. Eject-while-merged refusal (Pitfall 6) — ejecting a merged module would hand back
-     adapter-contaminated base weights; ``eject_adapter`` asserts.
+     adapter-contaminated base weights; ``eject_adapter`` raises ``RuntimeError`` (never a
+     ``-O``-strippable ``assert`` — WR-03).
 
 CPU-only, GPU-free.
 """
@@ -137,7 +138,7 @@ def test_eject_restores_vanilla_model():
 def test_eject_refuses_while_merged():
     """Pitfall 6: ejecting a merged module hands back contaminated base weights."""
     model, _, _, _, _ = _setup()
-    # Flag flip only — merge() itself lands in Task 2; the guard contract exists now.
+    # Flag flip (not a real merge) keeps this pin independent of merge()'s own guards.
     _wrapped(model)[0].merged = True
-    with pytest.raises(AssertionError):
+    with pytest.raises(RuntimeError, match="merged"):
         eject_adapter(model)

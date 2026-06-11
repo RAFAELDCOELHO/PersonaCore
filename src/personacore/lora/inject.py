@@ -166,18 +166,20 @@ def eject_adapter(model: nn.Module) -> int:
     the state-dict key set returns to vanilla GPT, and logits return EXACTLY to the
     pre-injection base. Walks parents exactly like ``inject_lora`` (allowlist names, P1).
 
-    Asserts each child is unmerged first (Pitfall 6): eject while merged hands back
-    adapter-contaminated base weights — unmerge first.
+    Refuses (``RuntimeError``, never a ``-O``-strippable ``assert``) unless each child is
+    unmerged first (Pitfall 6): eject while merged hands back adapter-contaminated base
+    weights — unmerge first.
     """
     n = 0
     for parent in model.modules():
         for name in TARGET_PROJECTIONS:
             child = getattr(parent, name, None)
             if isinstance(child, LoRALinear):
-                assert not child.merged, (
-                    "eject while merged hands back adapter-contaminated base weights — "
-                    "unmerge first (Pitfall 6)."
-                )
+                if child.merged:
+                    raise RuntimeError(
+                        "eject while merged hands back adapter-contaminated base weights — "
+                        "unmerge first (Pitfall 6)."
+                    )
                 setattr(parent, name, child.base)
                 n += 1
     return n
@@ -195,10 +197,11 @@ def merge_lora(model: nn.Module) -> None:
     but the fold makes it unconditional). The check is a pre-pass over every module, so a
     refusal folds nothing — no partial merge.
     """
-    assert model.training is False, (
-        "merge_lora is an eval-time utility: call model.eval() first; "
-        "never checkpoint while merged (Pitfall 6)."
-    )
+    if model.training:
+        raise RuntimeError(
+            "merge_lora is an eval-time utility: call model.eval() first; "
+            "never checkpoint while merged (Pitfall 6)."
+        )
     wrapped = [m for m in model.modules() if isinstance(m, LoRALinear)]
     for m in wrapped:
         if not m.enabled:
@@ -234,7 +237,10 @@ def merged_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
         # delta would bake in an update the live model is not applying — breaking the
         # "reproduces the live logits" parity contract.
         for prefix, m in wrapped.items():
-            assert not m.merged, f"merged_state_dict on a merged model ({prefix}) — unmerge first"
+            if m.merged:
+                raise RuntimeError(
+                    f"merged_state_dict on a merged model ({prefix}) — unmerge first."
+                )
             if not m.enabled:
                 raise RuntimeError(
                     f"merged_state_dict on a disabled module ({prefix}) — the fold would "

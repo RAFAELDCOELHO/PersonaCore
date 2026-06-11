@@ -49,8 +49,13 @@ class LoRALinear(nn.Module):
         never registered, so it can never enter ``state_dict()`` or an artifact. The delta
         reads ``self.scale``, the single source of truth set in ``__init__`` (PITFALLS P3:
         never recompute alpha/r here). Shape sanity: ``(out, r) @ (r, in) == (out, in)``.
+
+        Corruption guards here raise ``RuntimeError`` (never ``assert``): an ``assert`` is
+        stripped under ``python -O``, which would turn this loud refusal into silent
+        double-folded weights (Pitfall 6).
         """
-        assert not self.merged, "double merge would fold the delta twice"
+        if self.merged:
+            raise RuntimeError("double merge would fold the delta twice — unmerge first.")
         self._w0 = self.base.weight.detach().clone()  # plain attr — never in state_dict.
         self.base.weight.data.add_(self.scale * (self.lora_B @ self.lora_A))
         self.merged = True
@@ -62,7 +67,8 @@ class LoRALinear(nn.Module):
         Stored-copy restore == exact round-trip: ``copy_`` from the clone is bit-identical,
         where a float subtraction of the delta would NOT round-trip (fp non-associativity).
         """
-        assert self.merged, "unmerge on a never-merged module"
+        if not self.merged:
+            raise RuntimeError("unmerge on a never-merged module — nothing to restore.")
         self.base.weight.data.copy_(self._w0)  # stored-copy restore — bit-exact (D-07).
         self.merged = False
         del self._w0

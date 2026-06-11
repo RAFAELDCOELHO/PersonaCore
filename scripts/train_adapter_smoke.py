@@ -4,8 +4,9 @@ The real-weights proof of the frozen-base training discipline: the CPU unit test
 (``tests/test_lora_training.py``) pin the canary on a tiny fixture; THIS script is where the
 MPS silent-failure class is actually hunted (PITFALLS P5) — the params-actually-update canary
 runs on the REAL 13.9M ``best.pt`` weights, on the real preflight device, after ~50 adapter
-steps over the TinyStories memmaps. The script IS the proof: every assert is inline, so any
-failure exits non-zero (09-RESEARCH Open Q2).
+steps over the TinyStories memmaps. The script IS the proof: every proof check is an explicit
+``raise SystemExit`` (never a ``-O``-strippable ``assert``), so any failure exits non-zero
+even under ``python -O`` / ``PYTHONOPTIMIZE`` (09-RESEARCH Open Q2).
 
 Mirrors ``scripts/pretrain_tinystories.py`` (thin no-CLI driver, logic lives in the package):
 ``_REPO_ROOT`` path constants, named tuned constants, ``preflight_device(strict=True)`` gate,
@@ -99,17 +100,19 @@ def main() -> None:
     n_layer = blob["model_config"]["n_layer"]
     n_embd = blob["model_config"]["n_embd"]
     n_wrapped = inject_lora(model, LORA_CFG)
-    assert n_wrapped == 6 * n_layer, (
-        f"inject_lora wrapped {n_wrapped} projections, expected 6 * n_layer = {6 * n_layer}"
-    )
+    if n_wrapped != 6 * n_layer:
+        raise SystemExit(
+            f"inject_lora wrapped {n_wrapped} projections, expected 6 * n_layer = {6 * n_layer}"
+        )
     mark_only_lora_trainable(model)
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # Closed-form census: 18 * r * n_embd per layer across the six projections (== 331,776 at
     # the production shape r=8 / 6L / 384d — the ~1.3 MB fp32 persona file).
     expected_trainable = LORA_CFG.r * n_layer * 18 * n_embd
-    assert trainable == expected_trainable, (
-        f"trainable census {trainable} != r*n_layer*18*n_embd = {expected_trainable}"
-    )
+    if trainable != expected_trainable:
+        raise SystemExit(
+            f"trainable census {trainable} != r*n_layer*18*n_embd = {expected_trainable}"
+        )
     print(f"[train_adapter_smoke] injected {n_wrapped} wrappers, {trainable} trainable params")
 
     # Move BEFORE snapshotting: torch.equal raises on cross-device tensors, so the canary
@@ -154,17 +157,20 @@ def main() -> None:
         checkpoint_interval=CHECKPOINT_INTERVAL,
         return_final_loss=True,
     )
-    assert math.isfinite(float(final)), f"non-finite final loss {final!r} (PITFALLS P5)"
+    if not math.isfinite(float(final)):
+        raise SystemExit(f"non-finite final loss {final!r} (PITFALLS P5)")
 
     # CANARY on real weights (LORA-02 / LORA-05): every trainable moved, every frozen base
-    # param bit-untouched at 13.9M scale. The asserts ARE the proof — non-zero exit on failure.
+    # param bit-untouched at 13.9M scale. The explicit raises ARE the proof — non-zero exit
+    # on failure, even under python -O (never a strippable assert).
     for n, p in model.named_parameters():
         if p.requires_grad:
-            assert not torch.equal(p, before[n]), (
-                f"[canary] trainable {n} did not move — silent training failure (P5)"
-            )
-        else:
-            assert torch.equal(p, before[n]), (
+            if torch.equal(p, before[n]):
+                raise SystemExit(
+                    f"[canary] trainable {n} did not move — silent training failure (P5)"
+                )
+        elif not torch.equal(p, before[n]):
+            raise SystemExit(
                 f"[canary] frozen base param {n} changed — grad isolation broken (LORA-02)"
             )
     print("[train_adapter_smoke] canary passed: all lora_ moved, base bit-untouched")
