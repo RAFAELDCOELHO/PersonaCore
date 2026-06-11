@@ -63,8 +63,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-02-PLAN.md — Toggle/eject (D-05/D-06) + merge/unmerge + pure `merged_state_dict` (D-07/D-08) (Wave 2)
-- [ ] 09-03-PLAN.md — Persona-file artifact: `export_adapter`/`load_adapter` choke point + two-artifact load (D-01..D-03) (Wave 2)
+- [x] 09-02-PLAN.md — Toggle/eject (D-05/D-06) + merge/unmerge + pure `merged_state_dict` (D-07/D-08) (Wave 2)
+- [x] 09-03-PLAN.md — Persona-file artifact: `export_adapter`/`load_adapter` choke point + two-artifact load (D-01..D-03) (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -173,7 +173,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 6. Generation & Sampling | v1.0 | 3/3 | Complete | 2026-06-06 |
 | 7. Evaluation | v1.0 | 3/3 | Complete | 2026-06-09 |
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
-| 9. LoRA Core | v2.0 | 1/4 | In Progress|  |
+| 9. LoRA Core | v2.0 | 3/4 | In Progress|  |
 | 10. EWC Core | v2.0 | 0/TBD | Not started | - |
 | 11. Conversational Data Pipeline | v2.0 | 0/TBD | Not started | - |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 0/TBD | Not started | - |
