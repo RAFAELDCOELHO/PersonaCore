@@ -2,35 +2,33 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: milestone_complete
-stopped_at: Milestone complete (Phase 08 was final phase)
-last_updated: 2026-06-10T22:59:17.769Z
-last_activity: 2026-06-10 -- Phase 08 execution started
+status: Awaiting next milestone
+stopped_at: Phase 8 UI-SPEC approved
+last_updated: "2026-06-11T11:37:05.298Z"
+last_activity: 2026-06-11 — Milestone v1.0 completed and archived
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 29
   completed_plans: 29
-  percent: 88
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-04)
+See: .planning/PROJECT.md (updated 2026-06-11)
 
-**Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it (Milestone 1 de-risks the foundation: a correct from-scratch base LM with a working generation demo).
-**Current focus:** Milestone complete
+**Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 Foundation shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
+**Current focus:** Planning next milestone (v2.0 Weight-Based Memory) — run `/gsd:new-milestone`
 
 ## Current Position
 
-Phase: 08
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-06-10
-
-Progress: [██████████] 100%
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-11 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -78,51 +76,12 @@ Progress: [██████████] 100%
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Decisions are logged in PROJECT.md Key Decisions table (v1.0 decisions archived with the milestone; full per-plan decision log in the SUMMARY.md frontmatter under milestones/v1.0-phases/).
 
-- [Roadmap]: fp32 training by default at 10–15M params; fp16 AMP+GradScaler only as a memory measure; bf16 guarded to error on Pascal/P100.
-- [Roadmap]: Bigram baseline + harness (Phase 3) proves the training/checkpoint/sampling loop before the GPT (Phase 4) is built.
-- [Roadmap]: Two M2 seams are M1 acceptance criteria — named `nn.Linear` projections (Phase 4) and `assemble_loss(...)` + open-dict checkpoints (Phases 1/3) — so LoRA/EWC are additive in M2.
-- [Roadmap]: Document-as-we-go (DOC-01) consolidated lightly in Phase 8, not a heavy standalone block.
-- [Phase ?]: [01-01]: torch excluded from core deps; offered only as [cpu] extra (D-10) — prevents a cu128+ wheel bricking the Kaggle P100.
-- [Phase ?]: [01-01]: RuntimeConfig is the single device/precision source — fp32 default, AMP off on CPU, bf16 raises on Pascal/P100 (cc < 7.0).
-- [Phase ?]: [01-02]: Resume checkpoint loads with weights_only=False (trusted own-file; torch>=2.6 default flipped to True). Slim inference checkpoint (Phase 8) uses weights_only=True.
-- [Phase ?]: [01-02]: Checkpoint is an open dict; load restores RNG STATE (not re-seed) -> kill-and-resume trajectory equality within 1e-6. Also the M2 EWC seam (fisher/theta_star add with no format change).
-- [Phase ?]: [01-02]: preflight_p100(require_p100=False) degrades to a CPU summary instead of raising when CUDA is absent (demo runs on a laptop); require_p100=True still fails loud on Kaggle.
-- [Phase ?]: [01-03]: CI pins Python 3.11 (Kaggle parity), never the local 3.14 dev box, so install-parity is validated against the real runtime target.
-- [Phase ?]: [01-03]: ENV-06 docs appended OUTSIDE the GSD marker blocks in CLAUDE.md; CPU-only CI (no GPU/training) is the phase gate re-validating ENV-01/ENV-02.
-- [Phase ?]: [02-01]: vocab_size=8192 + eos_id=8184 locked in ModelConfig (D-01/D-03); Phases 3-4 size around them and they never move.
-- [Phase ?]: [02-01]: regex is a core runtime dep (GPT-2 pre-tok primitive, not a from-scratch violation); tiktoken is [dev]-only with a no-runtime-import guard (T-02-01).
-- [Phase ?]: [02-01]: Wave-0 tokenizer tests written RED first; go green in Plan 02 (train/roundtrip/special) and Plan 03 (io/oracle).
-- [Phase ?]: [02-02]: BPETokenizer() is default-constructible then .train(text, vocab_size); merges/vocab populate on train() or frozen() (Plan-01 test contract).
-- [Phase ?]: [02-02]: oracle library name kept out of runtime src/ (reworded docstrings) so the no-runtime-oracle string-scan guard stays green (T-02-04).
-- [Phase ?]: [02-02]: decode maps a special id back to its literal marker, so round-trip holds even for embedded special-token literals.
-- [Phase ?]: [02-03]: tokenizer artifact is stdlib json data-only (NOT pickle/torch); from_json asserts schema_version (T-02-06) + validates ids in [0,vocab_size) (V5) — a shippable artifact must never execute code on load (T-02-05)
-- [Phase ?]: [02-03]: artifacts/tokenizer.json is the FROZEN production 8192-vocab artifact; Phase 5 reuses it unchanged with no retrain (D-09)
-- [Phase ?]: [02-03]: TOK-05 oracle proves the lowest-rank-first ALGORITHM via byte->rank-remapped replay (gpt2 leaves are rank-ordered, byte!=rank); recover_merges adapter lives in the test not runtime src/, keeping the no-runtime-tiktoken guard green (D-07)
-- [Phase 03]: [03-01] GPU fp16 smoke uses inline pytest.mark.skipif WITH required reason= (clean SKIP not collection ERROR on CPU CI); exact verify literal skipif(not torch.cuda.is_available()) preserved in a comment
-- [Phase ?]: [03-02]: BigramLanguageModel honors the LOCKED forward(idx, targets=None) -> (logits, loss) contract (D-02) with internal CE on the nanoGPT (B*T, V) flatten (D-02a); Phase-4 GPT reuses it unchanged.
-- [Phase ?]: [03-02]: assemble_loss lives in training/loss.py not the model (D-03); identity-on-empty in M1, additive (fisher_penalty,) in M2 EWC with no loop change (D-04).
-- [Phase ?]: [03-02]: training/__init__.py deliberately not created — Plan 04 owns the full training surface; namespace-package discovery resolves personacore.training.loss without it.
-- [Phase ?]: [03-03]: doc-level split drops the fixture trailing newline so val is not a degenerate one-token doc (no-leakage TRAIN-03); warmup+cosine LR wrapped in LambdaLR for the checkpoint state_dict() resume contract (TRAIN-01/D-05/D-08).
-- [Phase ?]: [03-04]: training loop AMP order scale-unscale_-clip-step-update; scheduler steps once per optimizer step; estimate_loss snapshots/restores RNG so periodic eval never perturbs the train trajectory (TRAIN-02/04).
-- [Phase ?]: [03-04]: CSV wall_clock is a logical step-derived clock (not wall time) so the loss/lr curve reproduces row-for-row across kill+resume; cumulative tokens derived from absolute step (TRAIN-04).
-- [Phase ?]: [03-04]: bigram embedding renamed token_table to token_embedding_table (nanoGPT-canonical, locked resume-test contract); model/tokenizer vocab gap bridged in train_bigram.py, decode stays strict by design (WR-03).
-- [Phase ?]: [04-01]: attn_impl is a GPT constructor arg (not a ModelConfig field) per RESEARCH Open Q2 — equivalence test exercises both manual/sdpa paths; keeps the asdict-serialized ModelConfig free of a runtime-only flag.
-- [Phase ?]: [04-01]: init test matches std targets by named-param SUFFIX (so blocks.N.* match) and asserts BOTH c_proj AND fc_out were seen — non-vacuous D-04a residual-scaling guard.
-- [Phase ?]: [04-01]: GPT overfit test seeds lr=1e-3/max_steps=300 as a starting point (vs bigram 1e-1); final 6-layer tuning delegated to Plan-03 executor, asserted bound is a band (< ln(8192)-2).
-- [Phase ?]: [04-02]: GPT decoder ships with attn_impl as a constructor arg (default manual); manual and sdpa paths share q/k/v projection so equivalence holds within atol 1e-5.
-- [Phase ?]: [04-02]: weight tying is nn.Parameter assignment AFTER init+residual-override (Pattern 1) so data_ptr is shared; lm_head bias=False keeps the tied weight the sole head param.
-- [Phase ?]: [04-02]: residual-scaled init 0.02/sqrt(2*n_layer) applied to BOTH c_proj AND fc_out (D-04a), not just c_proj.
-- [Phase ?]: [04-03]: the real 6-layer GPT(ModelConfig()) overfits one fixed batch through the UNTOUCHED Phase-3 train() loop at lr=1e-3/max_steps=300 (final loss ~5e-4) — MODEL-02 SC#1 harness-swap proof GREEN, zero harness changes.
-- [Phase ?]: [05-01]: get_batch_memmap mirrors get_batch indexing exactly; only change is re-opening np.memmap per call (nanoGPT leak-avoidance, Pitfall 1).
-- [Phase ?]: [05-01]: encode_corpus.py streams per-<|endoftext|> document; allowed_special=all emits one atomic eos 8184 per doc — no manual EOS injection (D-09).
-- [Phase ?]: [07-01]: perplexity denominator is Sigma(len(window)-1); with the +1 overlapping-boundary slice a cleanly-tiling corpus yields corpus_len-1, not corpus_len-n_windows (test_token_count corrected the RESEARCH shorthand)
-- [Phase ?]: [07-01]: perplexity() ignores forward's MEAN loss and recomputes F.cross_entropy(reduction='sum') from logits; returns (ppl, total_tokens) so the headline number is auditable (D-03)
-- [Phase ?]: [07-02]: weight_tying/use_pos_emb are ADDITIVE ModelConfig flags defaulting to True — GPT(ModelConfig()) reproduces today's arch bit-for-bit (tied data_ptr, 13,891,584 params); the ablations are now expressible
-- [Phase ?]: [07-02]: wpe is gated at REGISTRATION (if config.use_pos_emb), not only forward use — required for the locked test_no_pos count 13,793,280 (default - 98,304)
-- [Phase ?]: [07-02]: canonical headline PPL is the deterministic full-val sweep (2.1066 over 12,636,922 tokens), distinct from best.pt's recorded random-batch ppl 2.091 (Pitfall 5)
+Key carry-forwards for v2.0:
+- M2 seams are live and test-verified: six named `nn.Linear` projections per block (LoRA) and `assemble_loss(..., extra_penalties=())` + open-dict checkpoints (EWC — fisher/theta_star add with no format change).
+- vocab_size=8192 / eos_id=8184 locked; frozen artifacts/tokenizer.json has 547 live ids — retraining it invalidates best.pt (decide before any M2 training).
+- LOCKED contracts that M2 must consume verbatim: forward(idx, targets=None) -> (logits, loss); RNG-state-restore resume; weights_only=True slim artifacts.
 
 ### Pending Todos
 
@@ -134,8 +93,7 @@ None yet.
 
 [Issues that affect future work]
 
-- Phase 5 (Pretraining): empirical LR/batch/steps and coherence-per-quota on P100 are unmeasured — phase-level research flagged before the long run.
-- Phase 8 (Demo): KV-cache-vs-scope tension (PITFALLS recommends it for CPU latency; FEATURES marks it out of M1 scope) — resolve on measured CPU latency at phase planning.
+- None open. (v1.0 blockers resolved: Phase 5 LR/batch calibrated by the 05-02 smoke; KV-cache resolved NOT needed at ~95–105 tok/s CPU, deferred to M2 only if a demo feels slow.)
 
 ### Quick Tasks Completed
 
@@ -145,14 +103,23 @@ None yet.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and deferred at milestone close on 2026-06-11:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| quick_task | 260605-lgy-add-mps-support-to-the-device-layer-runt | metadata-only (work complete, committed 398b74e; SUMMARY frontmatter lacks a parseable status field) | v1.0 close |
+| tech_debt | forbid_ids mask not threaded into scripts/evaluate.py warm sampling (CR-01 mode can recur on eval re-runs) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
+| tech_debt | loop.py tokens_per_step omits ×block_size; run.csv "tokens" column under-counts ×256 (telemetry only) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
+| tech_debt | TODO(calibration) markers on shipped-final constants in scripts/pretrain_tinystories.py | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
+| tech_debt | docs/REPORT.md under-discloses tokenizer training-corpus identity (11.5KB fixture → 547 live ids) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
+| tech_debt | one-time `gh release view m1-demo-v1` asset check (tag verified, asset unverified from sandbox) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
 
 ## Session Continuity
 
 Last session: 2026-06-10T14:13:19.294Z
 Stopped at: Phase 8 UI-SPEC approved
 Resume file: .planning/phases/08-demo-writeup/08-UI-SPEC.md
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

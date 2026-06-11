@@ -4,6 +4,16 @@
 
 PersonaCore is a conversational AI assistant where **all** memory and personalization live in the model weights — no databases, no vector stores, no external files. The model learns who you are by updating its own parameters, making weight-based memory a privacy guarantee by design. The entire stack (GPT-style transformer decoder, BPE tokenizer, LoRA adapters, EWC continual learning) is built from scratch in PyTorch and runs fully on-device. It is an elite CS-undergraduate portfolio project intended to demonstrate deep ML fundamentals, a genuinely novel approach, and a working demo.
 
+## Current State (v1.0 shipped 2026-06-11)
+
+**Milestone 1 "Foundation" is shipped.** A from-scratch 13,891,584-parameter GPT-2-style decoder, trained 50,000 steps on TinyStories entirely on the author's M3 (MPS, fp32), generates fluent child-story prose — `best.pt` val_loss 0.7378, headline perplexity **2.1066** over 12,636,922 held-out tokens. Shipped artifacts: offline Gradio CPU chat demo (slim 55.6 MB `weights_only=True` checkpoint, crash-proof dead-id logits mask), executed `demo.ipynb`, 440-line `docs/REPORT.md` + README with hero GIF, 4-variant ablation study, and a 137-test green CPU-only suite. Milestone audit passed 35/35 requirements with 20/20 cross-phase integration links verified live. Both M2 seams are locked and test-verified: six named `nn.Linear` projections per block (LoRA) and `assemble_loss(..., extra_penalties=())` + open-dict checkpoints (EWC).
+
+**Known tech debt carried into M2** (none blocking; see `milestones/v1.0-MILESTONE-AUDIT.md`): the frozen tokenizer was trained on an 11.5KB fixture (547 live ids of 8192 — honestly documented, but consider retraining the tokenizer if M2 fine-tuning data warrants it, which would invalidate `best.pt`); `forbid_ids` mask not threaded into `evaluate.py`; `run.csv` tokens column ×256 under-count; stale TODO(calibration) markers.
+
+## Next Milestone Goals
+
+**Milestone 2 — Weight-Based Memory (the novel claim).** Run `/gsd:new-milestone` to define requirements. Candidate scope (from the original two-milestone strategy): from-scratch LoRA adapters wrapping the named `nn.Linear` seams; EWC continual learning via the `assemble_loss` Fisher-penalty seam; conversational fine-tuning (DailyDialog + PersonaChat); teach-then-recall clean-room demo; no-forgetting EWC A/B demo; weight-delta heatmaps and forgetting curves.
+
 ## Core Value
 
 The novel claim must be true and demonstrable: **personalization lives in the weights, not in a prompt or a store** — and the from-scratch implementation must be correct enough to prove it. If everything else fails, the project must still show real ML depth built by hand.
@@ -22,27 +32,29 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [x] Evaluation: held-out perplexity, curated qualitative samples, and a from-scratch architecture-ablation study — _Validated in Phase 07: evaluation (EVAL-01/02/03). Deterministic full-val `perplexity()` proven against a brute-force oracle (headline 2.1066 over 12,636,922 tokens on `best.pt`); curated `results/samples.md`; additive `weight_tying`/`use_pos_emb` `ModelConfig` flags (defaults reproduce today's arch bit-for-bit) enable a self-consistent 4-variant cohort (baseline/no_tie/no_pos/depth_cut) trained through the untouched `train()` at the D-07-calibrated budget (2500 steps) with a committed comparison table — see 07-VERIFICATION.md_
 - [x] Gradio local web UI chat demo (on-device) plus `demo.ipynb` research artifact (training curves, sampling) — _Validated in Phase 08: demo-writeup (DEMO-01/02/03). Offline `gr.ChatInterface` demo on laptop CPU with temperature/top-k sliders, slim fp32 checkpoint (`export_slim` → safetensors-style safe load), narrated `demo.ipynb`, animated GIF hero; CR-01 dead-id logits mask (`forbid_ids`) makes every slider setting crash-safe — see 08-VERIFICATION.md (re-verified 7/7 after gap closure)_
 - [x] Polished technical writeup documenting design decisions, architecture, and results (document-as-we-go) — _Validated in Phase 08: demo-writeup (DOC-01). `docs/REPORT.md` decision-driven deep dive + README front door with honest effective-vocabulary claims (547 live of 8192 ids; 2,935,680 dead-row params quantified), clone-first quickstart — see 08-VERIFICATION.md_
+- [x] GPT-style transformer decoder (~10–15M params) from scratch: attention, MLP, blocks, positional embeddings, with unit tests — _Validated in Phase 04: gpt-transformer-decoder (13,891,584 params tied-once; causality-perturbation, init-std, data_ptr-tying, param-band gates all green; drops into the untouched Phase-3 harness) — v1.0_
+- [x] Pretrain on TinyStories to fluent, coherent generation — _Validated in Phase 05: tinystories-pretraining (50,000-step local M3/MPS fp32 run, kill+resume survived mid-run; `best.pt` val_loss 0.7378 at step 49000; retroactively verified 3/3 at milestone audit — see milestones/v1.0-phases/05-tinystories-pretraining/05-VERIFICATION.md) — v1.0_
 
 ### Active
 
-<!-- Milestone 1: Foundation — a from-scratch language model. -->
+<!-- Milestone 2: Weight-Based Memory — candidates pending /gsd:new-milestone requirements definition. -->
 
-- [ ] GPT-style transformer decoder (~10–15M params) from scratch: attention, MLP, blocks, positional embeddings, with unit tests
-- [ ] Pretrain on TinyStories to fluent, coherent generation
+- [ ] From-scratch LoRA adapters wrapping the six named `nn.Linear` projections per block (seam shipped + verified in v1.0)
+- [ ] EWC continual learning with Fisher-information penalty via the `assemble_loss(..., extra_penalties=())` seam (shipped + verified in v1.0)
+- [ ] Conversational fine-tuning on DailyDialog + PersonaChat (curriculum stage 2)
+- [ ] Teach-then-recall (clean-room) personalization demo — memory lives in weights, not the prompt
+- [ ] No-forgetting (EWC A/B vs naive fine-tuning) demo
+- [ ] Weight-delta heatmaps and forgetting-curve visualizations
 
 ### Out of Scope
 
-<!-- Explicit boundaries. Deferred to Milestone 2 unless noted otherwise. -->
+<!-- Explicit boundaries. -->
 
-- LoRA adapters from scratch — **Milestone 2** (the novel weight-memory mechanism)
-- EWC continual learning / catastrophic-forgetting prevention — **Milestone 2**
-- Conversational fine-tuning on DailyDialog + PersonaChat — **Milestone 2** (M1 stops at TinyStories fluency)
-- Teach-then-recall (clean-room) and no-forgetting (EWC A/B) demos — **Milestone 2** payoff
-- Weight-delta heatmaps and forgetting-curve visualizations — **Milestone 2**
 - HuggingFace PEFT / transformers model code — excluded by design; everything is from scratch
 - External AI APIs during training — excluded by design (zero budget, privacy, on-device)
 - Databases, vector stores, RAG, external memory files — excluded by design; memory must live in weights
 - Scaling beyond ~10–15M params or multi-GPU training — out of scope given the local M3/MPS (and fallback Kaggle free-tier) budget
+- KV-cache for CPU inference — measured ~95–105 tok/s on CPU in Phase 8; not needed; revisit only if an M2 demo feels slow
 
 ## Context
 
@@ -51,6 +63,7 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - **Curriculum plan (full project):** two-stage pretraining — TinyStories for base fluency, then DailyDialog + PersonaChat for conversational grounding. Milestone 1 covers only the TinyStories stage.
 - **Dual-environment reality:** training runs **locally on Apple Silicon (M3 / MPS)** — fp32, since MPS has no fp16-AMP path; **Kaggle P100 (16GB, 30h/week) via notebooks remains an optional fallback**. The demo and inference run on a laptop CPU. Code must be portable across MPS, CUDA-P100, and CPU (`RuntimeConfig` resolves CUDA-P100 → MPS → CPU). Training on the author's own machine reinforces the on-device/privacy thesis.
 - **Engineering rigor is a theme:** per-component unit tests and a documented technical narrative are first-class deliverables, not afterthoughts — they are part of what makes this a portfolio-grade artifact.
+- **Codebase state after v1.0 (2026-06-11):** 6,543 lines of Python (src + scripts + tests), 137 tests green (1 CUDA-only skip), 245 commits. Package: `src/personacore/` (config, checkpoint, seeding, provenance, preflight, logging, tokenizer/, model/, training/, data path, generation/, evaluation/). Shipped weights: `best.pt` (159 MB full state) + `model_slim.pt` (55.6 MB inference, GitHub Release `m1-demo-v1`). Frozen tokenizer: `artifacts/tokenizer.json` (8192 table, 547 live ids — see tech-debt note in Current State).
 
 ## Constraints
 
@@ -67,14 +80,17 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Two-milestone split: base LM (M1) before LoRA/EWC personalization (M2) | De-risk the from-scratch foundation before the novel claim depends on it | — Pending |
-| Milestone 1 pretraining stops at TinyStories (fluency), defer conversational tuning to M2 | Best coherence-per-parameter at ~10–15M; keeps M1 shippable | — Pending |
-| Two-stage pretraining curriculum (TinyStories → DailyDialog/PersonaChat) for the full project | Fluency first, then conversational/persona grounding; defensible at small scale | — Pending |
-| Eventual demo = both teach-then-recall and EWC no-forgetting, as a research narrative | Strongest portfolio artifact; proves memory is in weights and survives continual learning | — Pending |
+| Two-milestone split: base LM (M1) before LoRA/EWC personalization (M2) | De-risk the from-scratch foundation before the novel claim depends on it | ✓ Good — v1.0 shipped with both M2 seams verified as acceptance criteria; M2 is additive, not a rewrite |
+| Milestone 1 pretraining stops at TinyStories (fluency), defer conversational tuning to M2 | Best coherence-per-parameter at ~10–15M; keeps M1 shippable | ✓ Good — fluent child-story prose at 13.9M params, PPL 2.1066 |
+| Two-stage pretraining curriculum (TinyStories → DailyDialog/PersonaChat) for the full project | Fluency first, then conversational/persona grounding; defensible at small scale | — Pending (stage 2 is M2) |
+| Eventual demo = both teach-then-recall and EWC no-forgetting, as a research narrative | Strongest portfolio artifact; proves memory is in weights and survives continual learning | — Pending (M2) |
 | Gradio local web UI as primary demo + `demo.ipynb` as technical artifact | Good demo video/screenshots while staying on-device; notebook carries the ML narrative | ✓ Shipped in Phase 08 (offline ChatInterface + narrated notebook + GIF hero) |
 | Document-as-we-go (polished writeup each milestone) | Narrative compounds; avoids reconstructing rationale later | ✓ M1 writeup shipped in Phase 08 (docs/REPORT.md + README) |
-| Everything from scratch (transformer, BPE, LoRA, EWC) — no HF PEFT | The portfolio value is demonstrated depth, not library usage | — Pending |
-| Primary training target = local M3/MPS (fp32); Kaggle P100 demoted to optional fallback (decided Phase 5 discuss, 2026-06-05) | Strengthens the fully-on-device/zero-budget/privacy thesis — the model trains on the author's own machine, no external compute dependency. MPS has no fp16 AMP, so fp32; `RuntimeConfig` resolves CUDA-P100→MPS→CPU. | — Pending (device layer landed in quick task 260605-lgy) |
+| Everything from scratch (transformer, BPE, LoRA, EWC) — no HF PEFT | The portfolio value is demonstrated depth, not library usage | ✓ Good for M1 scope (transformer, BPE, harness, generation, eval all hand-rolled; tiktoken/Gradio confined to test-oracle/UI roles); LoRA/EWC pending in M2 |
+| Primary training target = local M3/MPS (fp32); Kaggle P100 demoted to optional fallback (decided Phase 5 discuss, 2026-06-05) | Strengthens the fully-on-device/zero-budget/privacy thesis — the model trains on the author's own machine, no external compute dependency. MPS has no fp16 AMP, so fp32; `RuntimeConfig` resolves CUDA-P100→MPS→CPU. | ✓ Good — the full 50k-step v1.0 pretrain ran entirely on the M3 (MPS fp32), kill+resume proven; Kaggle never needed |
+| Ship the fixture-trained frozen tokenizer (547 live of 8192 ids) rather than retrain before Phase 5 (accepted Phase 8, documented in 08-08) | Retraining would have invalidated the locked vocab/checkpoint chain mid-milestone; honesty-first documentation instead (README/REPORT quantify 2,935,680 dead-row params) | ⚠️ Revisit in M2 — if conversational fine-tuning data warrants a real-corpus tokenizer, that decision invalidates `best.pt` and must be made before any M2 training |
+| Dead-id `forbid_ids` logits mask at the sampling layer (Phase 8 CR-01) rather than catch-and-truncate at decode | Crash-proof demo at every in-UI setting without hiding real errors; decode stays strict by design | ✓ Good — demo verified crash-free; mask not yet threaded into evaluate.py (tech debt) |
+| Retroactive Phase 5 verification at milestone audit (2026-06-11) instead of a closure phase | The work existed and was downstream-corroborated; only the formal verification artifact was missing | ✓ Good — passed 3/3; audit flipped to 35/35 without new phases |
 
 ## Evolution
 
@@ -94,4 +110,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-10 after Phase 08 (demo-writeup) completion — last phase of Milestone 1*
+*Last updated: 2026-06-11 after v1.0 Foundation milestone completion*
