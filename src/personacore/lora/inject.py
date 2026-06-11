@@ -144,3 +144,58 @@ def eject_adapter(model: nn.Module) -> int:
                 setattr(parent, name, child.base)
                 n += 1
     return n
+
+
+def merge_lora(model: nn.Module) -> None:
+    """Fold every adapter delta into its base weight in place (LORA-04 / D-08 in-place form).
+
+    Eval-time utility ONLY (Pitfall 6): a merged-state checkpoint double-counts the delta on
+    reload, so the guard refuses in train mode — call ``model.eval()`` first; never checkpoint
+    while merged. ``unmerge_lora`` restores bit-exactly via the stored clones (D-07).
+    """
+    assert model.training is False, (
+        "merge_lora is an eval-time utility: call model.eval() first; "
+        "never checkpoint while merged (Pitfall 6)."
+    )
+    for m in model.modules():
+        if isinstance(m, LoRALinear):
+            m.merge()
+
+
+def unmerge_lora(model: nn.Module) -> None:
+    """Bit-exact restore of every merged base weight from its stored clone (D-07)."""
+    for m in model.modules():
+        if isinstance(m, LoRALinear):
+            m.unmerge()
+
+
+def merged_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
+    """PURE merged fold: a vanilla-GPT state dict, zero mutation of the live model (D-08).
+
+    Phase 15's ΔW building block (and the deferred merged-slim export hook). For each wrapped
+    projection the ``.base.weight`` key is de-infixed and its value computed out-of-place as
+    ``base.weight + scale * (B @ A)``; ``.base.bias`` is de-infixed; ``lora_A``/``lora_B``
+    keys are dropped; everything else passes through. All values are detached clones, so the
+    result shares no storage with the live model.
+    """
+    with torch.no_grad():
+        wrapped = {prefix: m for prefix, m in model.named_modules() if isinstance(m, LoRALinear)}
+        # Guard the fold the same way merge() does: folding an already-merged base weight
+        # would silently double-count the delta (Pitfall 6 / T-09-04).
+        for prefix, m in wrapped.items():
+            assert not m.merged, f"merged_state_dict on a merged model ({prefix}) — unmerge first"
+        weight_keys = {f"{p}.base.weight": (f"{p}.weight", m) for p, m in wrapped.items()}
+        bias_keys = {f"{p}.base.bias": f"{p}.bias" for p in wrapped}
+        out: dict[str, torch.Tensor] = {}
+        for key, value in model.state_dict().items():
+            if key.endswith(".lora_A") or key.endswith(".lora_B"):
+                continue  # adapter factors never enter the merged dict.
+            if key in weight_keys:
+                new_key, m = weight_keys[key]
+                delta = m.scale * (m.lora_B @ m.lora_A)  # reads self.scale (P3).
+                out[new_key] = (m.base.weight + delta).detach().clone()
+            elif key in bias_keys:
+                out[bias_keys[key]] = value.detach().clone()
+            else:
+                out[key] = value.detach().clone()
+        return out
