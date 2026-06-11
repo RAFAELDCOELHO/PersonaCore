@@ -478,16 +478,18 @@ def unmerge(self):
 | A3 | `weight_decay=0.0` for adapter runs is the right default (decay fights low-rank updates) | Pattern 3 | Low — smoke run is short; carried from project ARCHITECTURE research, standard practice |
 | A4 | `train()`'s in-loop `save_checkpoint` calls not forwarding `lora_config` is acceptable for Phase 9 (script-side final save carries it; or planner adds additive `checkpoint_extra` kwarg) | Pattern 3 | Medium if smoke run relies on mid-run kill+resume: a mid-run `latest.pt` without `lora_config` cannot self-describe its injection. Planner should decide: additive kwarg (cleaner, default-off) vs. script reads its own config (simpler) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`checkpoint_extra` kwarg on `train()` vs script-side checkpoint saving (A4)**
    - What we know: D-04 requires full kill+resume for adapter training; `train()`'s internal saves don't forward arbitrary extras; resume needs `lora_config` to rebuild the module tree before `load_checkpoint`.
    - What's unclear: whether Phase 9's smoke run needs mid-run resume self-description, or whether the resuming script knowing its own `LoRAConfig` (it's a constant in the thin script) suffices.
    - Recommendation: keep `train()` untouched for Phase 9 (script knows its config; resume rebuilds from the script's constant); revisit the additive kwarg in Phase 14 when adapters are user-generated. Planner may choose the kwarg now if it prefers the checkpoint to be fully self-contained — both honor the locked decisions.
+   - **RESOLVED:** Adopted in plan 09-04 — `train()` stays byte-untouched; the smoke/resume script rebuilds the module tree from its own script-side `LORA_CFG = LoRAConfig()` constant before `load_checkpoint` (09-04 Task 2 cites this as the Open Q1 resolution). The additive `checkpoint_extra` kwarg is deferred to Phase 14.
 
 2. **Where the smoke script's pass/fail lands**
    - What we know: house precedent (`test_real_slim_artifact_generates_on_cpu`) is a `skipif`-gated test over real gitignored artifacts.
    - Recommendation: smoke script asserts inline and exits non-zero on failure (script = the MPS/real-weights proof); optionally one `skipif(not best.pt)` test reuses the canary on real weights for local runs. Planner discretion.
+   - **RESOLVED:** Adopted in plan 09-04 — `scripts/train_adapter_smoke.py` asserts inline (injection count, trainable census, finite loss, canary) and exits non-zero on any failure / 0 on success; pass/fail lives in the script itself, not a pytest skipif gate.
 
 ## Environment Availability
 
