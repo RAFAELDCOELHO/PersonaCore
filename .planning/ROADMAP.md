@@ -59,7 +59,7 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md — LoRA core: `LoRAConfig` + `LoRALinear` + post-load injection/freeze machinery, fully test-pinned (Wave 1)
+- [x] 09-01-PLAN.md — LoRA core: `LoRAConfig` + `LoRALinear` + post-load injection/freeze machinery, fully test-pinned (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -173,7 +173,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 6. Generation & Sampling | v1.0 | 3/3 | Complete | 2026-06-06 |
 | 7. Evaluation | v1.0 | 3/3 | Complete | 2026-06-09 |
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
-| 9. LoRA Core | v2.0 | 0/4 | Planned | - |
+| 9. LoRA Core | v2.0 | 1/4 | In Progress|  |
 | 10. EWC Core | v2.0 | 0/TBD | Not started | - |
 | 11. Conversational Data Pipeline | v2.0 | 0/TBD | Not started | - |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 0/TBD | Not started | - |
