@@ -41,13 +41,13 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 
 ### Pretraining
 - [x] **PRE-01**: TinyStories data is obtained, encoded once (from the frozen tokenizer) into a `uint16` memmap (`train.bin`/`val.bin`, one EOS between documents) and persisted on local disk; the official TinyStoriesV2 `valid` file is the no-leakage held-out set. (If the Kaggle-P100 fallback is used, the memmap may additionally be pinned as a versioned Kaggle Dataset.)
-- [ ] **PRE-02**: The model is pretrained on TinyStories to fluent, coherent generation, producing a trained checkpoint — primary run on **local M3/MPS** (fp32, quality-first / "as long as it takes", resumable across sessions); **Kaggle P100 (30h/week) is an optional fallback**
-- [ ] **PRE-03**: Final/val perplexity and training curves are recorded for the writeup
+- [x] **PRE-02**: The model is pretrained on TinyStories to fluent, coherent generation, producing a trained checkpoint — primary run on **local M3/MPS** (fp32, quality-first / "as long as it takes", resumable across sessions); **Kaggle P100 (30h/week) is an optional fallback**
+- [x] **PRE-03**: Final/val perplexity and training curves are recorded for the writeup
 
 ### Generation
-- [ ] **GEN-01**: A single shared `generate()` supporting greedy, temperature, top-k, and top-p sampling
-- [ ] **GEN-02**: EOS-aware stopping and max-length handling
-- [ ] **GEN-03**: Generation unit tests (shape, determinism under fixed seed/greedy, EOS stop)
+- [x] **GEN-01**: A single shared `generate()` supporting greedy, temperature, top-k, and top-p sampling
+- [x] **GEN-02**: EOS-aware stopping and max-length handling
+- [x] **GEN-03**: Generation unit tests (shape, determinism under fixed seed/greedy, EOS stop)
 
 ### Evaluation
 - [x] **EVAL-01**: Perplexity computed on a held-out set
@@ -56,12 +56,12 @@ Scope: a correct, from-scratch ~10–15M param GPT-style LM (BPE tokenizer, tran
 
 ### Demo
 - [x] **DEMO-01**: Gradio local web UI (`gr.ChatInterface`, offline `share=False`) runs the model on laptop CPU
-- [ ] **DEMO-02**: Slim fp32 inference checkpoint (no optimizer state, safe `weights_only` load) loads and generates on CPU, verified by an offline test
-- [ ] **DEMO-03**: `demo.ipynb` research artifact showing training curves and sampling, reading from the CSV log
+- [x] **DEMO-02**: Slim fp32 inference checkpoint (no optimizer state, safe `weights_only` load) loads and generates on CPU, verified by an offline test
+- [x] **DEMO-03**: `demo.ipynb` research artifact showing training curves and sampling, reading from the CSV log
 
 ### Documentation & Quality
 - [x] **DOC-01**: Polished technical writeup (README/report) covering design decisions, architecture, training, and results — written as we go
-- [ ] **QA-01**: Per-component unit tests (tokenizer, model, training, generation) run green via pytest as a first-class deliverable
+- [x] **QA-01**: Per-component unit tests (tokenizer, model, training, generation) run green via pytest as a first-class deliverable
 - [x] **QA-02**: Reproducibility discipline: config saved with each checkpoint, seeds fixed, git SHA recorded
 
 ---
@@ -117,19 +117,19 @@ Every v1 (Milestone 1) requirement maps to exactly one phase. Coverage: 35/35.
 | MODEL-06 | Phase 4 | Complete |
 | MODEL-07 | Phase 4 | Complete |
 | PRE-01 | Phase 5 | Complete |
-| PRE-02 | Phase 5 | Pending |
-| PRE-03 | Phase 5 | Pending |
-| GEN-01 | Phase 6 | Pending |
-| GEN-02 | Phase 6 | Pending |
-| GEN-03 | Phase 6 | Pending |
+| PRE-02 | Phase 5 | Complete |
+| PRE-03 | Phase 5 | Complete |
+| GEN-01 | Phase 6 | Complete |
+| GEN-02 | Phase 6 | Complete |
+| GEN-03 | Phase 6 | Complete |
 | EVAL-01 | Phase 7 | Complete |
 | EVAL-02 | Phase 7 | Complete |
 | EVAL-03 | Phase 7 | Complete |
 | DEMO-01 | Phase 8 | Complete |
-| DEMO-02 | Phase 8 | Pending |
-| DEMO-03 | Phase 8 | Pending |
+| DEMO-02 | Phase 8 | Complete |
+| DEMO-03 | Phase 8 | Complete |
 | DOC-01 | Phase 8 | Complete |
-| QA-01 | Phase 8 | Pending |
+| QA-01 | Phase 8 | Complete |
 | QA-02 | Phase 1, Phase 8 | Complete |
 
 **Cross-cutting note:** QA-02 (reproducibility discipline) is anchored in Phase 1 (the seed/config/git-SHA harness, config-in-checkpoint) and re-verified in Phase 8 (full-suite reproducibility check). QA-01 (per-component tests) and DOC-01 (writeup) are written incrementally per phase as success criteria but formally consolidated/owned in Phase 8.

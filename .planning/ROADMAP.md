@@ -272,7 +272,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. From-Scratch BPE Tokenizer | 3/3 | Complete   | 2026-06-04 |
 | 3. Bigram Baseline & Training Harness | 4/4 | Complete   | 2026-06-04 |
 | 4. GPT Transformer Decoder | 3/3 | Complete   | 2026-06-05 |
-| 5. TinyStories Pretraining | 1/2 | In Progress|  |
+| 5. TinyStories Pretraining | 2/2 | Complete   | 2026-06-05 |
 | 6. Generation & Sampling | 3/3 | Complete   | 2026-06-06 |
 | 7. Evaluation | 3/3 | Complete   | 2026-06-09 |
 | 8. Demo & Writeup | 8/8 | Complete   | 2026-06-10 |
