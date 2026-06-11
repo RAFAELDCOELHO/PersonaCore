@@ -11,12 +11,18 @@ which would pick up the tied output head and silently corrupt the input embeddin
 Key-audit discipline (PITFALLS P4): ``load_adapter_weights`` raises ``ValueError`` on any
 key-set mismatch BEFORE loading a single tensor — a bare ``strict=False`` load is banned; the
 exact-equality audit is what makes the subsequent ``strict=False`` call legitimate.
+
+Plan 09-02 adds the runtime semantics on top: the model-level enable/disable toggle plus the
+exception-safe ``adapter_disabled`` context manager (D-05 / D-06) and full wrapper removal via
+``eject_adapter`` (D-05's "Reset = drop adapter = instant forget" path).
 """
+
+import contextlib
 
 import torch
 import torch.nn as nn
 
-from .config import LoRAConfig
+from .config import TARGET_PROJECTIONS, LoRAConfig
 from .layer import LoRALinear
 
 
@@ -83,3 +89,58 @@ def load_adapter_weights(model: nn.Module, artifact: dict) -> None:
             "the artifact does not describe this injected model; refusing to load."
         )
     model.load_state_dict(artifact["adapter"], strict=False)
+
+
+def set_adapter_enabled(model: nn.Module, enabled: bool) -> None:
+    """Flip the ``enabled`` flag on every ``LoRALinear`` in the model (D-05 / D-06).
+
+    The Phase-14 live memory-on/off demo drives THIS switch: disabling makes the flag-gated
+    delta branch never execute, so the model is bit-identical to the pre-injection base; the
+    A/B parameters are untouched, so re-enabling is an exact round-trip (LORA-05).
+    """
+    for m in model.modules():
+        if isinstance(m, LoRALinear):
+            m.enabled = enabled
+
+
+@contextlib.contextmanager
+def adapter_disabled(model: nn.Module):
+    """Scoped, exception-safe adapter disable (D-06).
+
+    Captures each module's PRIOR ``enabled`` value before disabling and restores those exact
+    values in a ``finally`` block — a raising body still re-enables (D-06), and a module that
+    was already disabled on entry stays disabled on exit (per-module restore, never blanket
+    ``True``).
+    """
+    prior = {m: m.enabled for m in model.modules() if isinstance(m, LoRALinear)}
+    for m in prior:
+        m.enabled = False
+    try:
+        yield
+    finally:
+        for m, was_enabled in prior.items():
+            m.enabled = was_enabled
+
+
+def eject_adapter(model: nn.Module) -> int:
+    """Return every wrapped projection to its plain base ``nn.Linear``; return the count.
+
+    D-05's "Reset = drop adapter = instant forget" path: the wrappers are removed wholesale,
+    the state-dict key set returns to vanilla GPT, and logits return EXACTLY to the
+    pre-injection base. Walks parents exactly like ``inject_lora`` (allowlist names, P1).
+
+    Asserts each child is unmerged first (Pitfall 6): eject while merged hands back
+    adapter-contaminated base weights — unmerge first.
+    """
+    n = 0
+    for parent in model.modules():
+        for name in TARGET_PROJECTIONS:
+            child = getattr(parent, name, None)
+            if isinstance(child, LoRALinear):
+                assert not child.merged, (
+                    "eject while merged hands back adapter-contaminated base weights — "
+                    "unmerge first (Pitfall 6)."
+                )
+                setattr(parent, name, child.base)
+                n += 1
+    return n
