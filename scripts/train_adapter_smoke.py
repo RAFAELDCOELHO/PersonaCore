@@ -13,10 +13,14 @@ keyword-only ``train()`` call — ``training/loop.py`` is NEVER modified (the v1
 frozen-param safe). All outputs (smoke checkpoint, curve CSV, adapter.pt) land in gitignored
 paths — weight-based memory is never committed.
 
-Resume note (Open Q1 resolution): a killed smoke resumes by re-running this script with
-``resume_from`` semantics — the script's own ``LORA_CFG`` constant rebuilds the module tree
-deterministically (vanilla GPT -> load base -> inject -> freeze), so the checkpoint's optimizer
-state re-associates without ``train()`` ever learning about LoRA.
+Resume note (Open Q1 resolution): ``SMOKE_CKPT`` is saved in-loop every ``CHECKPOINT_INTERVAL``
+steps (loop.py Seam 4a), so a killed smoke leaves resumable state and resumes by re-running this
+script — it passes ``resume_from=SMOKE_CKPT`` when an INCOMPLETE smoke checkpoint exists. The
+script's own ``LORA_CFG`` constant rebuilds the module tree deterministically (vanilla GPT ->
+load base -> inject -> freeze), so the checkpoint's optimizer state re-associates without
+``train()`` ever learning about LoRA. A COMPLETED smoke refuses to rerun (resuming at
+``step >= MAX_STEPS`` would train zero steps and prove nothing) — delete ``SMOKE_CKPT`` for a
+fresh run.
 
 Run: ``python scripts/train_adapter_smoke.py`` (inside the Python 3.11 venv).
 """
@@ -60,6 +64,7 @@ LR = 1e-3
 WARMUP_STEPS = 5
 MAX_STEPS = 50
 BATCH_SIZE = 8
+CHECKPOINT_INTERVAL = 10  # in-loop Seam-4a saves: a killed smoke loses <= 10 steps, resumable.
 # Adapter runs MUST override TrainConfig's 0.1 default: weight decay on A/B fights the
 # low-rank update and would also perturb frozen-adjacent dynamics (09-RESEARCH Pattern 3).
 WEIGHT_DECAY = 0.0
@@ -115,6 +120,21 @@ def main() -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     SMOKE_CKPT.parent.mkdir(parents=True, exist_ok=True)
 
+    # Resume semantics (docstring Open Q1): an INCOMPLETE smoke checkpoint resumes the same
+    # trajectory; a COMPLETED one refuses loudly — resuming at step >= MAX_STEPS would train
+    # zero steps, return final=None, and the canary would prove nothing.
+    resume_from = None
+    if SMOKE_CKPT.exists():
+        # weights_only=False: trusted own checkpoint (same posture as the BEST_PATH load above).
+        prior_step = torch.load(SMOKE_CKPT, weights_only=False)["step"]
+        if prior_step >= MAX_STEPS:
+            raise SystemExit(
+                f"[train_adapter_smoke] {SMOKE_CKPT} is already complete (step {prior_step} >= "
+                f"MAX_STEPS {MAX_STEPS}). Delete it to rerun the smoke from scratch."
+            )
+        print(f"[train_adapter_smoke] resuming killed smoke from step {prior_step}")
+        resume_from = SMOKE_CKPT
+
     final = train(
         train_config=TrainConfig(
             lr=LR,
@@ -129,7 +149,9 @@ def main() -> None:
         train_bin=TRAIN_BIN,
         val_bin=VAL_BIN,
         log_path=LOG_PATH,
+        resume_from=resume_from,
         checkpoint_path=SMOKE_CKPT,
+        checkpoint_interval=CHECKPOINT_INTERVAL,
         return_final_loss=True,
     )
     assert math.isfinite(float(final)), f"non-finite final loss {final!r} (PITFALLS P5)"
