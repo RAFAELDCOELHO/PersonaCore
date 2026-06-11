@@ -6,6 +6,22 @@ composition wrapper, and the post-load injection/freeze machinery; later plans e
 """
 
 from .config import TARGET_PROJECTIONS, LoRAConfig
+from .inject import (
+    inject_lora,
+    load_adapter_weights,
+    lora_state_dict,
+    mark_only_lora_trainable,
+    snapshot_params,
+)
 from .layer import LoRALinear
 
-__all__ = ["LoRAConfig", "LoRALinear", "TARGET_PROJECTIONS"]
+__all__ = [
+    "LoRAConfig",
+    "LoRALinear",
+    "TARGET_PROJECTIONS",
+    "inject_lora",
+    "load_adapter_weights",
+    "lora_state_dict",
+    "mark_only_lora_trainable",
+    "snapshot_params",
+]
