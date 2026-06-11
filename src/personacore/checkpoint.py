@@ -21,6 +21,7 @@ file resumes on a CPU laptop (Pitfall 5).
 """
 
 import random
+import warnings
 from dataclasses import asdict
 
 import numpy as np
@@ -28,6 +29,7 @@ import torch
 
 CKPT_SCHEMA_VERSION = 1
 SLIM_SCHEMA_VERSION = 1  # slim INFERENCE artifact schema (DEMO-02), independent of the full one.
+ADAPTER_SCHEMA_VERSION = 1  # adapter "persona file" schema (LORA-03 / D-01); independent again.
 
 
 def save_checkpoint(
@@ -156,5 +158,62 @@ def load_slim(path, *, map_location="cpu") -> dict:
         raise ValueError(
             f"Unsupported slim checkpoint schema_version {loaded.get('schema_version')!r} in "
             f"{path} (expected {SLIM_SCHEMA_VERSION}). Re-export with scripts/export_slim.py."
+        )
+    return loaded
+
+
+def export_adapter(path, *, adapter, lora_config, base_fingerprint) -> dict:
+    """Export the adapter "persona file" artifact (LORA-03 / D-01).
+
+    The persona file carries ONLY the LoRA A/B tensors plus primitive metadata — a small,
+    swappable, shareable, deletable artifact designed to meet the slim safe-load bar (D-01):
+    tensors and primitive containers exclusively, so it round-trips through
+    ``torch.load(..., weights_only=True)`` (see ``load_adapter``) with zero code execution.
+
+    The caller supplies plain dicts — ``checkpoint.py`` NEVER imports ``lora/`` (locked
+    dependency direction; mirrors how ``export_slim`` takes a path, not a model). Callers
+    produce ``adapter`` via ``personacore.lora.lora_state_dict`` (the ``lora_``-key filter
+    that keeps base weights out of the shareable file) and ``lora_config`` via
+    ``dataclasses.asdict``; ``base_fingerprint`` is the QA-02 provenance trio
+    (``git_sha`` / ``step`` / ``val_loss``) of the base the adapter was trained on (D-02).
+
+    Returns the artifact dict it wrote (``export_slim``'s return-what-shipped precedent).
+    """
+    art = {
+        "schema_version": ADAPTER_SCHEMA_VERSION,
+        "adapter": adapter,
+        "lora_config": lora_config,
+        "base_fingerprint": base_fingerprint,
+    }
+    torch.save(art, path)
+    return art
+
+
+def load_adapter(path, *, expected_fingerprint=None, map_location="cpu") -> dict:
+    """Load the adapter persona file under the locked safe-load bar (LORA-03 / D-01).
+
+    ``weights_only=True`` is the restricted unpickler — tensors + primitive containers only,
+    ZERO code execution on load (T-09-07). Every adapter consumer (demo, Phase 14 persona
+    loads, tests) goes through this SINGLE choke point — verbatim ``load_slim`` discipline.
+
+    When ``expected_fingerprint`` is given and differs from the artifact's
+    ``base_fingerprint``, a ``UserWarning`` names BOTH fingerprints but the artifact still
+    loads — D-02 is locked: warn but load, because the base evolves mid-milestone and a hard
+    error would brick every adapter at each base re-export.
+    """
+    loaded = torch.load(path, map_location=map_location, weights_only=True)
+    if loaded.get("schema_version") != ADAPTER_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported adapter schema_version {loaded.get('schema_version')!r} in "
+            f"{path} (expected {ADAPTER_SCHEMA_VERSION}). Re-export with "
+            "personacore.checkpoint.export_adapter."
+        )
+    if expected_fingerprint is not None and loaded["base_fingerprint"] != expected_fingerprint:
+        warnings.warn(
+            f"adapter base fingerprint mismatch: artifact carries "
+            f"{loaded['base_fingerprint']!r} but the loaded base is {expected_fingerprint!r} "
+            "— loading anyway (D-02 — base evolves mid-milestone).",
+            UserWarning,
+            stacklevel=2,
         )
     return loaded
