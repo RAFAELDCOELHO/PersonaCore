@@ -20,18 +20,40 @@ Pinned behaviors:
   - test_export_returns_dict_and_config_round_trips — ``export_adapter`` returns the dict it
     wrote (``export_slim`` precedent); ``LoRAConfig(**loaded["lora_config"])`` reconstructs.
   - test_provenance_trio_round_trips — git_sha/step/val_loss travel byte-for-byte (QA-02).
+  - test_two_artifact_load_reproduces_logits — D-03: ``load_slim`` + ``load_adapter`` +
+    ``inject_lora`` + key-audited ``load_adapter_weights`` on FRESH objects reproduces the
+    exporting model's logits bit-identically (``torch.equal``) — the literal "compatible
+    with the slim contract" proof; no merged-slim export anywhere (deferred per CONTEXT).
+  - test_real_slim_two_artifact_load_cpu — skipif-gated on the real (gitignored)
+    ``checkpoints/model_slim.pt``: SKIPS cleanly on CI, runs the full two-artifact flow
+    against the real 13.9M base locally.
 """
 
+import pathlib
 import warnings
 from dataclasses import asdict
 
 import pytest
 import torch
 
-from personacore.checkpoint import export_adapter, load_adapter
-from personacore.config import ModelConfig
-from personacore.lora import TARGET_PROJECTIONS, LoRAConfig, inject_lora, lora_state_dict
+from personacore.checkpoint import (
+    export_adapter,
+    export_slim,
+    load_adapter,
+    load_slim,
+    save_checkpoint,
+)
+from personacore.config import ModelConfig, TrainConfig
+from personacore.lora import (
+    TARGET_PROJECTIONS,
+    LoRAConfig,
+    inject_lora,
+    load_adapter_weights,
+    lora_state_dict,
+)
 from personacore.model import GPT
+
+REAL_SLIM = pathlib.Path("checkpoints/model_slim.pt")  # gitignored; exported by Phase 8.
 
 # The EXACT shipped key set (T-09-07) — nothing else can ride along in the persona file.
 ADAPTER_KEYS = {"schema_version", "adapter", "lora_config", "base_fingerprint"}
@@ -138,3 +160,90 @@ def test_provenance_trio_round_trips(adapter_artifact):
     loaded = load_adapter(path)
     # QA-02: git_sha/step/val_loss travel through the artifact byte-for-byte (D-02 trio).
     assert loaded["base_fingerprint"] == fp
+
+
+def test_two_artifact_load_reproduces_logits(tmp_path):
+    """D-03: load_slim + load_adapter + inject + key-audited apply == exporter, bit-identical."""
+    cfg = _tiny_config()
+    torch.manual_seed(1234)
+    base = GPT(cfg)
+    full_path = tmp_path / "full.pt"
+    slim_path = tmp_path / "model_slim.pt"
+    adapter_path = tmp_path / "adapter.pt"
+    save_checkpoint(
+        full_path,
+        model=base,
+        optimizer=torch.optim.AdamW(base.parameters()),
+        scheduler=None,
+        step=0,
+        model_config=cfg,
+        train_config=TrainConfig(),
+        git_sha="testsha",
+    )
+    export_slim(full_path, slim_path)
+
+    # DONOR: rebuild from the slim artifact alone, inject, nudge, export the persona file.
+    donor_slim = load_slim(slim_path)
+    donor = GPT(ModelConfig(**donor_slim["model_config"]))
+    donor.load_state_dict(donor_slim["model"])
+    lora_cfg = LoRAConfig(r=4)
+    inject_lora(donor, lora_cfg)
+    _nudge_lora_B_nonzero(donor)
+    fp = {
+        "git_sha": donor_slim["git_sha"],
+        "step": donor_slim["step"],
+        "val_loss": donor_slim["val_loss"],
+    }
+    export_adapter(
+        adapter_path,
+        adapter=lora_state_dict(donor),
+        lora_config=asdict(lora_cfg),
+        base_fingerprint=fp,
+    )
+    donor.eval()
+    torch.manual_seed(999)
+    batch = torch.randint(0, cfg.vocab_size, (2, 8))
+    with torch.no_grad():
+        donor_logits, _ = donor(batch)
+
+    # CONSUMER: fresh objects, nothing shared — the LITERAL D-03 two-artifact flow.
+    consumer_slim = load_slim(slim_path)
+    consumer = GPT(ModelConfig(**consumer_slim["model_config"]))
+    consumer.load_state_dict(consumer_slim["model"])
+    art = load_adapter(adapter_path, expected_fingerprint=fp)
+    inject_lora(consumer, LoRAConfig(**art["lora_config"]))
+    load_adapter_weights(consumer, art)  # key-audited apply (09-01 seam).
+    consumer.eval()
+    with torch.no_grad():
+        consumer_logits, _ = consumer(batch)
+
+    # Same base tensors + same adapter tensors + same fp32 math => bit-identity.
+    assert torch.equal(consumer_logits, donor_logits)
+
+
+@pytest.mark.skipif(not REAL_SLIM.exists(), reason="real slim artifact not present (CI)")
+def test_real_slim_two_artifact_load_cpu(tmp_path):
+    """The D-03 flow against the real 13.9M base: export, two-artifact load, forward sanity."""
+    loaded = load_slim(REAL_SLIM)
+    model = GPT(ModelConfig(**loaded["model_config"]))
+    model.load_state_dict(loaded["model"])
+    lora_cfg = LoRAConfig()  # production defaults: r=8, alpha=16.0.
+    wrapped = inject_lora(model, lora_cfg)
+    assert wrapped == 6 * loaded["model_config"]["n_layer"]
+    _nudge_lora_B_nonzero(model)
+    fp = {"git_sha": loaded["git_sha"], "step": loaded["step"], "val_loss": loaded["val_loss"]}
+    adapter_path = tmp_path / "adapter.pt"
+    export_adapter(
+        adapter_path,
+        adapter=lora_state_dict(model),
+        lora_config=asdict(lora_cfg),
+        base_fingerprint=fp,
+    )
+    art = load_adapter(adapter_path, expected_fingerprint=fp)
+    load_adapter_weights(model, art)
+    model.eval()
+    vocab_size = loaded["model_config"]["vocab_size"]
+    batch = torch.randint(0, vocab_size, (2, 16))
+    with torch.no_grad():
+        logits, _ = model(batch)
+    assert logits.shape == (2, 16, vocab_size)  # CPU-only shape sanity on the real base.
