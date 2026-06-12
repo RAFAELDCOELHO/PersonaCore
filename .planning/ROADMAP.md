@@ -184,7 +184,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 7. Evaluation | v1.0 | 3/3 | Complete | 2026-06-09 |
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
 | 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
-| 10. EWC Core | v2.0 | 3/3 | Complete   | 2026-06-12 |
+| 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
 | 11. Conversational Data Pipeline | v2.0 | 0/TBD | Not started | - |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 0/TBD | Not started | - |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 0/TBD | Not started | - |

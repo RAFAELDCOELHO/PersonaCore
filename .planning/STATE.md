@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: executing
-stopped_at: Phase 10 context gathered
-last_updated: "2026-06-12T19:01:41.843Z"
+status: ready_to_plan
+stopped_at: Phase 10 complete (3/3) — ready to discuss Phase 11
+last_updated: 2026-06-12T19:55:40.977Z
 last_activity: 2026-06-12 -- Phase 10 execution started
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 7
   percent: 14
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 10 — ewc-core
+**Current focus:** Phase 11 — conversational data pipeline
 
 ## Current Position
 
-Phase: 10 (ewc-core) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 10
-Last activity: 2026-06-12 -- Phase 10 execution started
+Phase: 11
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-12
 
 Progress: [░░░░░░░░░░] 0% (v2.0)
 
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0% (v2.0)
 
 **Velocity (v1.0 baseline):**
 
-- Total plans completed: 33 across 8 phases (v1.0)
+- Total plans completed: 36 across 8 phases (v1.0)
 - v2.0 plans completed: 0
 
 **By Phase (v2.0):**
@@ -44,6 +44,7 @@ Progress: [░░░░░░░░░░] 0% (v2.0)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 09 | 4 | - | - |
+| 10 | 3 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 
