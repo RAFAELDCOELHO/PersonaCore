@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "seed": 1234,
+    "train_config": {
+      "lr": 0.01,
+      "warmup_steps": 2,
+      "max_steps": 5,
+      "batch_size": 4
+    },
+    "model": "BigramLanguageModel via tests/test_resume_curve._build recipe",
+    "corpus": "tests/fixtures/bigram_corpus.txt",
+    "eos_id": 8184,
+    "eval_interval": 1,
+    "device": "cpu",
+    "captured_at_sha": "01b8e4199d3b06d2244d6bbda9208af3029ef2f9",
+    "loop_git_clean": true,
+    "platform": {
+      "system": "Darwin",
+      "machine": "arm64",
+      "python_version": "3.11.15",
+      "torch_version": "2.7.1"
+    }
+  },
+  "csv_text": "step,train_loss,val_loss,lr,tokens,wall_clock\n1,9.499686241149902,9.643126487731934,0.01,4,1\n2,9.482072830200195,9.62954044342041,0.01,8,2\n3,9.464510917663574,9.61600399017334,0.007750000000000001,12,3\n4,9.449257850646973,9.605588912963867,0.003250000000000001,16,4\n5,9.435891151428223,9.601214408874512,0.001,20,5\n",
+  "final_loss_repr": "9.435891151428223",
+  "param_sha256": "647f5981027bfce1ad1d38867c3f9aa293e95c9bb27101a3c096517d7ace23ac"
+}
