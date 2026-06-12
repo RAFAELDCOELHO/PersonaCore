@@ -10,7 +10,7 @@ PersonaCore is a conversational AI assistant where **all** memory and personaliz
 
 **Known tech debt carried into M2** (none blocking; see `milestones/v1.0-MILESTONE-AUDIT.md`): the frozen tokenizer was trained on an 11.5KB fixture (547 live ids of 8192 — honestly documented, but consider retraining the tokenizer if M2 fine-tuning data warrants it, which would invalidate `best.pt`); `forbid_ids` mask not threaded into `evaluate.py`; `run.csv` tokens column ×256 under-count; stale TODO(calibration) markers.
 
-**v2.0 progress:** Phase 9 (LoRA Core) complete 2026-06-11 — from-scratch `src/personacore/lora/` package (config/layer/inject), toggle/eject/merge runtime semantics, `export_adapter`/`load_adapter` persona-file artifact, and frozen-base training discipline proven on the real 13.9M base (331,776 trainable adapter params, 1.35 MB `adapter.pt`). Suite now 180 passed / 1 skipped. Next: Phase 10 (EWC Core).
+**v2.0 progress:** Phase 9 (LoRA Core) complete 2026-06-11 — from-scratch `src/personacore/lora/` package (config/layer/inject), toggle/eject/merge runtime semantics, `export_adapter`/`load_adapter` persona-file artifact, and frozen-base training discipline proven on the real 13.9M base (331,776 trainable adapter params, 1.35 MB `adapter.pt`). Phase 10 (EWC Core) complete 2026-06-12 — from-scratch `src/personacore/continual/` package (`estimate_fisher` per-example diagonal Fisher + `EWCPenalty` quadratic anchor), additive `penalty_fn`/`checkpoint_extra` splice into the v1.0 loop with bit-identical golden-trajectory proof when off, `export_fisher`/`load_fisher` persistence, and a real N=2000 Fisher estimated at `best.pt` (spearman_half 0.989, 55.6 MB production cache). Suite now 222 passed / 1 skipped. Next: Phase 11 (Conversational Data Pipeline).
 
 ## Current Milestone: v2.0 Weight-Based Memory
 
@@ -47,12 +47,12 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [x] GPT-style transformer decoder (~10–15M params) from scratch: attention, MLP, blocks, positional embeddings, with unit tests — _Validated in Phase 04: gpt-transformer-decoder (13,891,584 params tied-once; causality-perturbation, init-std, data_ptr-tying, param-band gates all green; drops into the untouched Phase-3 harness) — v1.0_
 - [x] Pretrain on TinyStories to fluent, coherent generation — _Validated in Phase 05: tinystories-pretraining (50,000-step local M3/MPS fp32 run, kill+resume survived mid-run; `best.pt` val_loss 0.7378 at step 49000; retroactively verified 3/3 at milestone audit — see milestones/v1.0-phases/05-tinystories-pretraining/05-VERIFICATION.md) — v1.0_
 - [x] From-scratch LoRA adapters wrapping the six named `nn.Linear` projections per block — _Validated in Phase 9: LoRA Core (LORA-01..05). `LoRALinear` composition wrapper (B=0 identity at injection, single `alpha/r` scale source), post-load injection over the v1.0 seam (tied `lm_head`/`wte` never wrapped), toggle/eject + merge/unmerge with bit-exact restore, 1.35 MB `adapter.pt` persona artifact through the `weights_only=True` choke point, frozen-base training proven through the byte-untouched v1.0 `train()` — 43 new tests, see 09-VERIFICATION.md (13/13). Advisory debt: 09-REVIEW.md CR-01 (toggle×merge state blindness) + CR-02 (shape-blind key audit) to resolve before Phase 14 consumes these APIs_
+- [x] EWC continual learning with Fisher-information penalty via the `assemble_loss(..., extra_penalties=())` seam — _Validated in Phase 10: EWC Core (EWC-01/02). From-scratch `continual/` package: `estimate_fisher` per-example empirical diagonal Fisher (strict batch=1 autograd loop, mean-normalized, analytic-oracle-pinned) + `EWCPenalty` Kirkpatrick quadratic exactly 0 at the anchor; additive `train(..., penalty_fn=None, checkpoint_extra=None)` splice proven bit-identical to v1.0 when off via pre-edit golden-trajectory fixture; `export_fisher`/`load_fisher` open-dict persistence with `data_ptr` tied-tensor dedup; real N=2000 Fisher at `best.pt` (spearman_half 0.989) — 42 new tests, see 10-VERIFICATION.md (12/12). λ calibration is EWC-03 (Phase 12); the A/B no-forgetting proof is Phase 13. Advisory debt: 10-REVIEW.md WR-01..05 (shape validation, reserved-key guard, train-mode finally, torch-version replay gate, best_val_loss resume reset)_
 
 ### Active
 
 <!-- Milestone v2.0: Weight-Based Memory — requirements being defined; REQ-IDs land in REQUIREMENTS.md. -->
 
-- [ ] EWC continual learning with Fisher-information penalty via the `assemble_loss(..., extra_penalties=())` seam (shipped + verified in v1.0)
 - [ ] Conversational fine-tuning on DailyDialog + PersonaChat (curriculum stage 2)
 - [ ] Teach-then-recall (clean-room) personalization demo — memory lives in weights, not the prompt
 - [ ] No-forgetting (EWC A/B vs naive fine-tuning) demo
@@ -123,4 +123,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 after Phase 9 (LoRA Core) completion*
+*Last updated: 2026-06-12 after Phase 10 (EWC Core) completion*
