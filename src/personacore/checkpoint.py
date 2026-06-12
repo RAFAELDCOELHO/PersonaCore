@@ -32,6 +32,27 @@ SLIM_SCHEMA_VERSION = 1  # slim INFERENCE artifact schema (DEMO-02), independent
 ADAPTER_SCHEMA_VERSION = 1  # adapter "persona file" schema (LORA-03 / D-01); independent again.
 FISHER_SCHEMA_VERSION = 1  # Fisher cache schema (EWC-01 / Phase 10); independent again.
 
+# Core checkpoint fields that ``save_checkpoint(**extra)`` must never overwrite. Keys that
+# shadow NAMED parameters (``model``, ``step``, ...) already raise ``TypeError`` from Python's
+# keyword mechanics; ``rng`` and ``schema_version`` are NOT parameters and would otherwise pass
+# through ``**extra`` silently — corruption that surfaces only as an opaque error at RESUME
+# time, deep inside ``load_checkpoint``'s RNG restore. Guarded fail-loud at SAVE time instead.
+_RESERVED_CKPT_KEYS = frozenset(
+    {
+        "schema_version",
+        "model",
+        "optimizer",
+        "scheduler",
+        "scaler",
+        "step",
+        "val_loss",
+        "model_config",
+        "train_config",
+        "git_sha",
+        "rng",
+    }
+)
+
 
 def save_checkpoint(
     path,
@@ -57,7 +78,16 @@ def save_checkpoint(
     on the fp16/P100 path the scale factor + growth tracker EVOLVE during training, so a resume
     that re-creates a fresh default-scale scaler would diverge from an uninterrupted run. On CPU
     (or any fp32 run) the scaler is disabled and ``state_dict()`` is an empty dict — harmless.
+
+    ``**extra`` keys colliding with reserved core fields raise ``ValueError`` here, at save
+    time — never a silent overwrite that bricks the checkpoint at resume.
     """
+    clash = _RESERVED_CKPT_KEYS & extra.keys()
+    if clash:
+        raise ValueError(
+            f"save_checkpoint: extra keys {sorted(clash)} collide with reserved "
+            "checkpoint fields — they would silently overwrite core resume state."
+        )
     ckpt = {
         "schema_version": CKPT_SCHEMA_VERSION,
         "model": model.state_dict(),
