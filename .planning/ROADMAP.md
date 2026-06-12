@@ -82,7 +82,17 @@ Plans:
   3. The quadratic penalty `(λ/2)·Σ Fᵢ·(θᵢ−θ*ᵢ)²` is applied via `assemble_loss(..., extra_penalties=())` and evaluates to exactly 0 at the anchor (unit test)
   4. With the penalty disabled (`penalty_fn=None`), the training trajectory is bit-identical to v1.0 and all 137 existing tests stay green
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 10-01-PLAN.md — `continual/` package: `estimate_fisher` (per-example diagonal Fisher, D-01..D-05) + `EWCPenalty`, fully test-pinned (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 10-02-PLAN.md — Loop integration: pre-edit golden trajectory fixture + additive `penalty_fn`/`checkpoint_extra` kwargs, bit-identity proven (Wave 2)
+- [ ] 10-03-PLAN.md — Persistence + real weights: `export_fisher`/`load_fisher` seam tests + N=2000 estimation at `best.pt` producing the production cache (Wave 2)
 
 ### Phase 11: Conversational Data Pipeline
 
@@ -174,7 +184,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 7. Evaluation | v1.0 | 3/3 | Complete | 2026-06-09 |
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
 | 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
-| 10. EWC Core | v2.0 | 0/TBD | Not started | - |
+| 10. EWC Core | v2.0 | 0/3 | Planned | - |
 | 11. Conversational Data Pipeline | v2.0 | 0/TBD | Not started | - |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 0/TBD | Not started | - |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 0/TBD | Not started | - |
