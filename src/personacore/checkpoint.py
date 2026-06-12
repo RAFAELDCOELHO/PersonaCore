@@ -30,6 +30,7 @@ import torch
 CKPT_SCHEMA_VERSION = 1
 SLIM_SCHEMA_VERSION = 1  # slim INFERENCE artifact schema (DEMO-02), independent of the full one.
 ADAPTER_SCHEMA_VERSION = 1  # adapter "persona file" schema (LORA-03 / D-01); independent again.
+FISHER_SCHEMA_VERSION = 1  # Fisher cache schema (EWC-01 / Phase 10); independent again.
 
 
 def save_checkpoint(
@@ -225,5 +226,75 @@ def load_adapter(path, *, expected_fingerprint=None, map_location="cpu") -> dict
             "— loading anyway (D-02 — base evolves mid-milestone).",
             UserWarning,
             stacklevel=2,
+        )
+    return loaded
+
+
+def export_fisher(path, *, fisher, fisher_meta, anchor_fingerprint) -> dict:
+    """Export the shareable Fisher cache (EWC-01 / Phase 10).
+
+    The cache carries the normalized diagonal Fisher tensors plus primitive metadata — one
+    estimation pass at ``best.pt`` shared by Phase 12/13's A/B arms. Designed to meet the
+    slim safe-load bar: tensors and primitive containers exclusively, so it round-trips
+    through ``torch.load(..., weights_only=True)`` (see ``load_fisher``) with zero code
+    execution on load (T-10-06).
+
+    The caller supplies plain dicts — ``checkpoint.py`` NEVER imports ``continual/`` (the
+    locked dependency direction; the ``export_adapter`` precedent). Callers produce ``fisher``
+    / ``fisher_meta`` via ``personacore.continual.estimate_fisher`` (``{str: fp32 CPU tensor}``
+    + primitives-only meta); ``anchor_fingerprint`` is the QA-02 provenance trio
+    (``git_sha`` / ``step`` / ``val_loss``) READ from the anchor checkpoint, never recomputed.
+
+    ``theta_star`` is deliberately NOT in the cache: it is recoverable from ``best.pt``, which
+    ``anchor_fingerprint`` pins — the cache is an optimization only, and resume never depends
+    on it (resume checkpoints carry Fisher/theta_star by value via ``save_checkpoint(**extra)``;
+    ARCHITECTURE anti-pattern 2).
+
+    Returns the cache dict it wrote (``export_slim``'s return-what-shipped precedent).
+    """
+    art = {
+        "schema_version": FISHER_SCHEMA_VERSION,
+        "fisher": fisher,
+        "fisher_meta": fisher_meta,
+        "anchor_fingerprint": anchor_fingerprint,
+    }
+    torch.save(art, path)
+    return art
+
+
+def load_fisher(path, *, expected_fingerprint=None, map_location="cpu") -> dict:
+    """Load the Fisher cache under the locked safe-load bar (EWC-01 / T-10-06).
+
+    ``weights_only=True`` is the restricted unpickler — tensors + primitive containers only,
+    ZERO code execution on load. Every cache consumer (Phase 12 lambda sweep, Phase 13 A/B
+    arms, tests) goes through this SINGLE choke point — verbatim ``load_adapter`` discipline:
+    schema gate FIRST, then structural missing-key validation, then the fingerprint check.
+
+    Fingerprint semantics differ from ``load_adapter`` ON PURPOSE: a Fisher estimated at
+    different weights is mathematically WRONG for this anchor (the penalty's importance
+    weights would not describe the loaded base), so a mismatching ``expected_fingerprint``
+    raises ``ValueError`` instead of warning — re-estimation costs under a minute via
+    ``scripts/estimate_fisher_tinystories.py``, so a hard error is cheap and safe.
+    """
+    loaded = torch.load(path, map_location=map_location, weights_only=True)
+    if loaded.get("schema_version") != FISHER_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported fisher schema_version {loaded.get('schema_version')!r} in "
+            f"{path} (expected {FISHER_SCHEMA_VERSION}). Re-export with "
+            "personacore.checkpoint.export_fisher."
+        )
+    missing = {"fisher", "fisher_meta", "anchor_fingerprint"} - loaded.keys()
+    if missing:
+        raise ValueError(
+            f"malformed fisher cache {path}: missing keys {sorted(missing)} "
+            "(expected an export_fisher cache file)."
+        )
+    if expected_fingerprint is not None and loaded["anchor_fingerprint"] != expected_fingerprint:
+        raise ValueError(
+            f"fisher cache anchor fingerprint mismatch: cache carries "
+            f"{loaded['anchor_fingerprint']!r} but the loaded anchor is "
+            f"{expected_fingerprint!r} — a Fisher estimated at different weights is wrong "
+            "for this anchor. Delete the cache and re-run "
+            "scripts/estimate_fisher_tinystories.py."
         )
     return loaded
