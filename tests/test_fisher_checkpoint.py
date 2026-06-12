@@ -35,12 +35,7 @@ Pinned behaviors:
 import pytest
 import torch
 
-from personacore.checkpoint import (
-    export_fisher,
-    load_checkpoint,
-    load_fisher,
-    save_checkpoint,
-)
+from personacore.checkpoint import export_fisher, load_checkpoint, load_fisher, save_checkpoint
 from personacore.config import ModelConfig, TrainConfig
 from personacore.model import GPT
 
