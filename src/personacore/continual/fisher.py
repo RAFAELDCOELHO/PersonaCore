@@ -97,73 +97,77 @@ def estimate_fisher(model, bin_path, *, n_examples, block_size, device, seed, no
 
     was_training = model.training
     model.eval()  # eval discipline (dropout is 0.0 in this config anyway — Pitfall 6).
-    named = list(model.named_parameters())  # tied tensor appears ONCE (session-verified).
-    names = [n for n, _ in named]
-    params = [p for _, p in named]
+    try:
+        named = list(model.named_parameters())  # tied tensor appears ONCE (session-verified).
+        names = [n for n, _ in named]
+        params = [p for _, p in named]
 
-    rng = np.random.default_rng(seed)  # LOCAL generator — global RNG untouched (Pitfall 3).
-    acc_a = [torch.zeros_like(p, device=device, dtype=torch.float32) for p in params]
-    acc_b = [torch.zeros_like(p, device=device, dtype=torch.float32) for p in params]
-    n_half = n_examples // 2
+        rng = np.random.default_rng(seed)  # LOCAL generator — global RNG untouched (Pitfall 3).
+        acc_a = [torch.zeros_like(p, device=device, dtype=torch.float32) for p in params]
+        acc_b = [torch.zeros_like(p, device=device, dtype=torch.float32) for p in params]
+        n_half = n_examples // 2
 
-    for i in range(n_examples):
-        data = np.memmap(bin_path, dtype=np.uint16, mode="r")  # re-open per draw (RSS).
-        start = int(rng.integers(0, data_len - block_size - 1))
-        x = torch.from_numpy(data[start : start + block_size].astype(np.int64))[None].to(device)
-        y = torch.from_numpy(data[start + 1 : start + 1 + block_size].astype(np.int64))[None].to(
-            device
-        )
-        _, loss = model(x, y)  # the model's OWN CE — matched mean-over-tokens reduction.
-        grads = torch.autograd.grad(loss, params)  # per-example grads, no .grad mutation.
-        acc = acc_a if i < n_half else acc_b  # two disjoint half-accumulators (D-05).
-        for a, g in zip(acc, grads):
-            a.add_(g.detach().float() ** 2)
+        for i in range(n_examples):
+            data = np.memmap(bin_path, dtype=np.uint16, mode="r")  # re-open per draw (RSS).
+            start = int(rng.integers(0, data_len - block_size - 1))
+            x = torch.from_numpy(data[start : start + block_size].astype(np.int64))[None].to(device)
+            y = torch.from_numpy(data[start + 1 : start + 1 + block_size].astype(np.int64))[
+                None
+            ].to(device)
+            _, loss = model(x, y)  # the model's OWN CE — matched mean-over-tokens reduction.
+            grads = torch.autograd.grad(loss, params)  # per-example grads, no .grad mutation.
+            acc = acc_a if i < n_half else acc_b  # two disjoint half-accumulators (D-05).
+            for a, g in zip(acc, grads):
+                a.add_(g.detach().float() ** 2)
 
-    full = [(a + b) / float(n_examples) for a, b in zip(acc_a, acc_b)]
+        full = [(a + b) / float(n_examples) for a, b in zip(acc_a, acc_b)]
 
-    # Fail-loud guards (Pitfall 7) — before any statistics or division.
-    for name, t in zip(names, full):
-        if not torch.isfinite(t).all():
+        # Fail-loud guards (Pitfall 7) — before any statistics or division.
+        for name, t in zip(names, full):
+            if not torch.isfinite(t).all():
+                raise ValueError(
+                    f"estimate_fisher: non-finite Fisher entries in {name!r} — corrupt window "
+                    "or diverged weights (Pitfall 7)."
+                )
+
+        # Statistics in fp64 AFTER moving to CPU (MPS has no fp64 — Pitfall 4).
+        full_cpu = [t.detach().float().cpu() for t in full]
+        normalizer = float(_flat64(full_cpu).mean())
+        if not (np.isfinite(normalizer) and normalizer > 0.0):
             raise ValueError(
-                f"estimate_fisher: non-finite Fisher entries in {name!r} — corrupt window or "
-                "diverged weights (Pitfall 7)."
+                f"estimate_fisher: degenerate raw global mean {normalizer!r} — all-zero "
+                "gradients or non-finite accumulation; refusing to normalize (Pitfall 7)."
             )
 
-    # Statistics in fp64 AFTER moving to CPU (MPS has no fp64 — Pitfall 4).
-    full_cpu = [t.detach().float().cpu() for t in full]
-    normalizer = float(_flat64(full_cpu).mean())
-    if not (np.isfinite(normalizer) and normalizer > 0.0):
-        raise ValueError(
-            f"estimate_fisher: degenerate raw global mean {normalizer!r} — all-zero gradients "
-            "or non-finite accumulation; refusing to normalize (Pitfall 7)."
-        )
+        # D-05 convergence stats over the RAW half-estimates, fp64 on CPU.
+        half_a = _flat64([(a / float(n_half)).detach().float().cpu() for a in acc_a])
+        half_b = _flat64([(b / float(n_examples - n_half)).detach().float().cpu() for b in acc_b])
+        spearman_half = _spearman(half_a, half_b)
+        rel_mean_change_a = float(abs(half_a.mean() - normalizer) / normalizer)
+        rel_mean_change_b = float(abs(half_b.mean() - normalizer) / normalizer)
 
-    # D-05 convergence stats over the RAW half-estimates, fp64 on CPU.
-    half_a = _flat64([(a / float(n_half)).detach().float().cpu() for a in acc_a])
-    half_b = _flat64([(b / float(n_examples - n_half)).detach().float().cpu() for b in acc_b])
-    spearman_half = _spearman(half_a, half_b)
-    rel_mean_change_a = float(abs(half_a.mean() - normalizer) / normalizer)
-    rel_mean_change_b = float(abs(half_b.mean() - normalizer) / normalizer)
+        if normalize:
+            fisher = {n: t / normalizer for n, t in zip(names, full_cpu)}
+        else:
+            fisher = dict(zip(names, full_cpu))
 
-    if normalize:
-        fisher = {n: t / normalizer for n, t in zip(names, full_cpu)}
-    else:
-        fisher = dict(zip(names, full_cpu))
-
-    fisher_meta = {
-        "variant": _VARIANT,
-        "n_examples": int(n_examples),
-        "seed": int(seed),
-        "block_size": int(block_size),
-        "bin_path": str(bin_path),
-        "normalized": bool(normalize),
-        "normalizer": normalizer,
-        "spearman_half": spearman_half,
-        "rel_mean_change_a": rel_mean_change_a,
-        "rel_mean_change_b": rel_mean_change_b,
-        "spearman_method": _SPEARMAN_METHOD,
-    }
-
-    if was_training:
-        model.train()  # restore the PRIOR flag — conditionally, never unconditionally.
+        fisher_meta = {
+            "variant": _VARIANT,
+            "n_examples": int(n_examples),
+            "seed": int(seed),
+            "block_size": int(block_size),
+            "bin_path": str(bin_path),
+            "normalized": bool(normalize),
+            "normalizer": normalizer,
+            "spearman_half": spearman_half,
+            "rel_mean_change_a": rel_mean_change_a,
+            "rel_mean_change_b": rel_mean_change_b,
+            "spearman_method": _SPEARMAN_METHOD,
+        }
+    finally:
+        # Restore the PRIOR flag on EVERY exit — success AND the fail-loud guard raises above
+        # (the docstring contract: "The prior ``model.training`` flag is restored on exit").
+        # Without this, a caught ValueError left the model silently stuck in eval mode.
+        if was_training:
+            model.train()
     return fisher, fisher_meta
