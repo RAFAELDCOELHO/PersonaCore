@@ -67,9 +67,7 @@ class EWCPenalty:
         # Shape check against the LIVE model: a same-named param of a different shape would
         # otherwise silently broadcast into a wrong penalty (or die as an anonymous mid-run
         # RuntimeError when non-broadcastable) — fail loud HERE, the choke point.
-        mismatched = sorted(
-            n for n, f in self.fisher.items() if params[n].shape != f.shape
-        )
+        mismatched = sorted(n for n, f in self.fisher.items() if params[n].shape != f.shape)
         if mismatched:
             raise ValueError(
                 f"EWCPenalty: model parameter shape mismatch for keys {mismatched} "
