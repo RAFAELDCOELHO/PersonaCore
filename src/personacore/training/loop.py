@@ -209,11 +209,15 @@ def train(
         fixed_batch: ``(xb, yb)`` reused every step — the overfit gate (TRAIN-05).
         scaler: an injectable GradScaler-shaped object (the AMP-ordering spy hook); defaults to a
             real ``GradScaler`` tied to ``runtime.amp``.
-        resume_from: checkpoint path to resume from (restores RNG state — never re-seed).
+        resume_from: checkpoint path to resume from (restores RNG state — never re-seed; also
+            restores the ``best_val_loss`` running minimum when the checkpoint carries it, so
+            best.pt cannot regress across a kill+resume).
         checkpoint_path: where to save ``latest.pt`` (end-of-call always; also in-loop every
             ``checkpoint_interval`` steps when set — Seam 4, kill-survivability).
         best_checkpoint_path: Seam 3 (D-08) — where to save ``best.pt`` whenever a new LOWEST
             val loss is observed; the shipped checkpoint is the best-val one, not the final step.
+            The running minimum is persisted as ``best_val_loss`` in every saved checkpoint and
+            restored on ``resume_from``, so the contract holds across multi-session runs.
         log_path: CSV curve path (append-only, header-once across restarts).
         max_steps_override: stop after this many optimizer steps (the "kill" in the resume test).
         eval_interval: log/eval every N steps (1 so the curve is row-for-row reproducible).
@@ -228,8 +232,8 @@ def train(
             ``assemble_loss`` per micro-batch (the M2 EWC seam, EWC-02); None reproduces
             v1.0 bit-for-bit.
         checkpoint_extra: dict splatted into every in-loop ``save_checkpoint`` call (the
-            M2 fisher/theta_star carry, RESEARCH Open Q1); None reproduces v1.0
-            checkpoints exactly.
+            M2 fisher/theta_star carry, RESEARCH Open Q1); None adds no caller keys (the
+            loop itself always records ``best_val_loss`` — Seam 3 continuity).
         return_final_loss: when True, return the final step's training loss.
 
     Returns:
@@ -307,17 +311,25 @@ def train(
 
     # --- Resume: restore full state + RNG, continue the step counter (NEVER re-seed) ---
     start_step = 0
+    resumed_best_val_loss = None
     if resume_from is not None:
         ckpt = load_checkpoint(
             resume_from, model=model, optimizer=optimizer, scheduler=scheduler, scaler=scaler
         )
         start_step = ckpt["step"]
+        # Seam 3 (D-08) continuity: seed the best-val running minimum from the checkpoint so
+        # the first post-resume eval cannot overwrite best.pt with a WORSE val loss than the
+        # pre-kill best. Pre-fix checkpoints lack the key — .get() falls back to None and the
+        # fresh-run float("inf") below, so old checkpoints still resume (open-dict contract).
+        resumed_best_val_loss = ckpt.get("best_val_loss")
 
     csv = CSVLogger(log_path, fieldnames=CSV_FIELDNAMES) if log_path is not None else None
 
     target_steps = max_steps_override if max_steps_override is not None else train_config.max_steps
     final_loss = None
-    best_val_loss = float("inf")  # Seam 3 (D-08) — running minimum that gates the best.pt save.
+    # Seam 3 (D-08) — running minimum that gates the best.pt save; restored across a
+    # kill+resume (see the resume block above) so best.pt can never silently regress.
+    best_val_loss = resumed_best_val_loss if resumed_best_val_loss is not None else float("inf")
     sample_ids = sample_prompt if sample_prompt is not None else [eos_id]
     # tokens/step is the effective-batch token count; derive CUMULATIVE tokens from the absolute
     # step (not a per-call accumulator) so the logged curve is continuous across a kill+resume
@@ -370,6 +382,7 @@ def train(
                         train_config=train_config,
                         git_sha=git_sha(),
                         val_loss=val_loss,
+                        best_val_loss=best_val_loss,  # Seam 3 continuity across kill+resume.
                         **(checkpoint_extra or {}),
                     )
 
@@ -391,6 +404,7 @@ def train(
                     train_config=train_config,
                     git_sha=git_sha(),
                     val_loss=final_loss,
+                    best_val_loss=best_val_loss,  # Seam 3 continuity across kill+resume.
                     **(checkpoint_extra or {}),
                 )
 
@@ -416,6 +430,7 @@ def train(
             train_config=train_config,
             git_sha=git_sha(),
             val_loss=final_loss,
+            best_val_loss=best_val_loss,  # Seam 3 continuity across kill+resume.
             **(checkpoint_extra or {}),
         )
 
