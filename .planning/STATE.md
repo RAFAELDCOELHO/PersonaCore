@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
 stopped_at: Phase 10 context gathered
-last_updated: "2026-06-12T10:07:45.583Z"
-last_activity: 2026-06-12 -- Phase 10 planning complete
+last_updated: "2026-06-12T19:01:41.843Z"
+last_activity: 2026-06-12 -- Phase 10 execution started
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 10 — ewc core
+**Current focus:** Phase 10 — ewc-core
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-12 -- Phase 10 planning complete
+Phase: 10 (ewc-core) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 10
+Last activity: 2026-06-12 -- Phase 10 execution started
 
 Progress: [░░░░░░░░░░] 0% (v2.0)
 
