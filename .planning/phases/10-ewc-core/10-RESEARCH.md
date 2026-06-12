@@ -587,7 +587,10 @@ opacus/library EWC (from-scratch boundary); wandb-style telemetry (offline CSV o
 All other load-bearing claims were verified in-session (seam line numbers, dedup behavior,
 test count, artifact existence, timing) or cited from the project's primary-source research.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three questions were resolved during planning, within the CONTEXT.md discretion
+grants; the adopting plan and task are cited on each RESOLVED line below.
 
 1. **Should the loop touch include `checkpoint_extra` threading for in-loop saves?**
    - What we know: the loop's in-loop `save_checkpoint` calls (Seam 3 best.pt / Seam 4a
@@ -605,6 +608,11 @@ test count, artifact existence, timing) or cited from the project's primary-sour
      user's loop-touch-scope discretion grant; the planner decides. (`extra_val_bins` +
      per-run CSV fieldnames: **defer to Phase 12** — retention telemetry has no consumer or
      test-in-anger until then.)
+   - **RESOLVED -> plan 10-02 (Task 2):** `checkpoint_extra: dict | None = None` is
+     threaded additively into all three in-loop `save_checkpoint` sites this phase;
+     default `None` reproduces v1.0 checkpoints exactly (covered by the same bit-identity
+     machinery as `penalty_fn`). `extra_val_bins` + per-run CSV fieldnames stay deferred
+     to Phase 12 as recommended.
 
 2. **Where does the Fisher-cache exporter/loader live?**
    - What we know: Phase 9's precedent puts schema-versioned, `weights_only=True`-safe
@@ -615,6 +623,10 @@ test count, artifact existence, timing) or cited from the project's primary-sour
    - Recommendation: follow the precedent — `checkpoint.py`, plain-dict args,
      `FISHER_SCHEMA_VERSION`, structural validation in the loader. Either choice is defensible;
      pick one and mirror `load_adapter`'s error style.
+   - **RESOLVED -> plan 10-03 (Task 1):** `checkpoint.py` ownership, per the precedent —
+     `export_fisher`/`load_fisher` beside the adapter pair with `FISHER_SCHEMA_VERSION`,
+     plain-dict args, `load_adapter`-style errors, and the locked dependency direction
+     (checkpoint.py never imports continual/).
 
 3. **Smoke-script rerun semantics for the cache.**
    - What we know: `train_adapter_smoke.py` refuses to rerun a completed smoke (delete to
@@ -622,6 +634,8 @@ test count, artifact existence, timing) or cited from the project's primary-sour
    - Recommendation: refuse-if-cache-exists with a "delete to re-estimate" message (keeps the
      cache's provenance stable for Phase 12/13); the planner may instead choose
      overwrite-with-warning — both are fine.
+   - **RESOLVED -> plan 10-03 (Task 2):** refuse-if-cache-exists with a
+     delete-to-re-estimate SystemExit, keeping cache provenance stable for Phases 12/13.
 
 ## Environment Availability
 
