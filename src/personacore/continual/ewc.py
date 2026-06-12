@@ -18,8 +18,9 @@ Load-bearing properties:
   tuple.
 - **Fail-loud validation at the choke points** (checkpoint.py ``load_adapter`` style): key
   and shape mismatches between ``fisher`` and ``theta_star`` raise ``ValueError`` naming the
-  offending keys at CONSTRUCTION; a fisher key absent from ``model.named_parameters()``
-  raises at CALL time — never a bare ``KeyError`` mid-run.
+  offending keys at CONSTRUCTION; a fisher key absent from ``model.named_parameters()`` —
+  or present with a different shape than the live param — raises at CALL time — never a
+  bare ``KeyError`` (or a silent broadcast) mid-run.
 - **Device moved exactly ONCE:** both dicts are moved to ``device`` in ``__init__``
   (cross-device tensors crash mid-run on MPS — ARCHITECTURE anti-pattern 4).
 - **Deterministic and RNG-free:** the penalty consumes no RNG and is a pure function of the
@@ -61,6 +62,17 @@ class EWCPenalty:
         if missing:
             raise ValueError(
                 f"EWCPenalty: fisher keys missing from model.named_parameters(): {missing} "
+                "(was the penalty built for a different architecture?)."
+            )
+        # Shape check against the LIVE model: a same-named param of a different shape would
+        # otherwise silently broadcast into a wrong penalty (or die as an anonymous mid-run
+        # RuntimeError when non-broadcastable) — fail loud HERE, the choke point.
+        mismatched = sorted(
+            n for n, f in self.fisher.items() if params[n].shape != f.shape
+        )
+        if mismatched:
+            raise ValueError(
+                f"EWCPenalty: model parameter shape mismatch for keys {mismatched} "
                 "(was the penalty built for a different architecture?)."
             )
         total = None
