@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: ready_to_plan
-stopped_at: Phase 09 complete (4/4) — ready to discuss Phase 10
-last_updated: 2026-06-11T22:47:54.814Z
-last_activity: 2026-06-11 -- Phase 09 execution started
+status: planning
+stopped_at: Phase 10 context gathered
+last_updated: "2026-06-12T09:12:48.066Z"
+last_activity: 2026-06-11
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 4
-  percent: 0
+  percent: 14
 ---
 
 # Project State
@@ -92,9 +92,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-06-11T13:07:39.399Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-lora-core/09-CONTEXT.md
+Last session: 2026-06-12T09:12:48.057Z
+Stopped at: Phase 10 context gathered
+Resume file: .planning/phases/10-ewc-core/10-CONTEXT.md
 
 ## Operator Next Steps
 
