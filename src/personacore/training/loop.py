@@ -19,8 +19,12 @@ the *orchestration* and two load-bearing seams:
   own sampling so it never perturbs the train trajectory — that is what keeps a killed+resumed run
   bit-identical (within 1e-6) to an uninterrupted one.
 
-D-03/D-04/TRAIN-06: loss is always assembled via ``assemble_loss(base, ())`` (identity in M1; the
-additive EWC penalty plugs in here in M2 with no loop change). D-11: the minimal ``sample`` lives
+D-03/D-04/TRAIN-06: loss is always assembled via ``assemble_loss(base, penalties)`` — the M2 EWC
+seam is now LIVE (EWC-02): ``train(..., penalty_fn=...)`` evaluates the penalty per micro-batch
+and it joins ``base_loss`` BEFORE the ``/accum`` divide; ``penalty_fn=None`` (the default) keeps
+the M1 identity bit-for-bit (pinned against tests/fixtures/golden_trajectory_v1.json), and
+``checkpoint_extra`` splats fisher/theta_star into every in-loop ``save_checkpoint`` (Open Q1).
+D-11: the minimal ``sample`` lives
 HERE as a free function (not on the model) so Phase-6's richer ``generate`` supersedes it without a
 model rewrite. The loop NEVER calls ``torch.cuda.*`` — ``RuntimeConfig`` is the single device/AMP
 source of truth (config.py:44-61).
@@ -119,12 +123,19 @@ def sample(model, idx, max_new_tokens, temperature=1.0):
     return idx
 
 
-def _optimizer_step(model, optimizer, scheduler, scaler, train_cfg, runtime, batch_fn):
+def _optimizer_step(
+    model, optimizer, scheduler, scaler, train_cfg, runtime, batch_fn, penalty_fn=None
+):
     """Run ONE optimizer step with the load-bearing AMP+accum+clip ordering (TRAIN-02).
 
     ``batch_fn(micro)`` yields ``(xb, yb)`` for each micro-batch. Order is mandatory:
     scale->backward × grad_accum_steps -> unscale_ (once) -> clip -> step -> update -> scheduler.
     Returns the (unscaled, accumulation-corrected) training loss for the step.
+
+    ``penalty_fn`` (the M2 EWC seam, EWC-02) is evaluated per micro-batch and joins
+    ``base_loss`` via ``assemble_loss`` BEFORE the ``/accum`` divide — params are constant
+    across the accumulation window, so the divided contributions sum to exactly ONE full
+    penalty per optimizer step (Pitfall 5). ``None`` keeps the M1 identity bit-for-bit.
     """
     optimizer.zero_grad(set_to_none=True)
     accum = max(1, train_cfg.grad_accum_steps)
@@ -135,7 +146,8 @@ def _optimizer_step(model, optimizer, scheduler, scaler, train_cfg, runtime, bat
         xb, yb = batch_fn(micro)
         with runtime.autocast():  # RuntimeConfig.autocast() — single AMP source (no torch.cuda.*)
             _, base_loss = model(xb, yb)
-            total = assemble_loss(base_loss, ())  # identity in M1 (D-04)
+            penalties = (penalty_fn(model),) if penalty_fn is not None else ()
+            total = assemble_loss(base_loss, penalties)  # identity when no penalty (D-04)
             loss = total / accum  # scale so accumulated grads average across micro-batches
         scaler.scale(loss).backward()
         summed += float(base_loss.item())
@@ -170,6 +182,8 @@ def train(
     sample_prompt=None,
     tokenizer=None,
     sample_max_new_tokens=64,
+    penalty_fn=None,
+    checkpoint_extra=None,
     return_final_loss=False,
 ):
     """Train the model end-to-end: AdamW + warmup/cosine + grad-clip + grad-accum, fp32 default.
@@ -210,6 +224,12 @@ def train(
         sample_prompt: optional list[int] seed ids for the periodic sample; default ``[eos_id]``.
         tokenizer: a frozen tokenizer with ``.decode(list[int]) -> str`` for the sample print.
         sample_max_new_tokens: number of tokens the periodic sample extends.
+        penalty_fn: callable ``(model) -> scalar tensor`` added to ``base_loss`` via
+            ``assemble_loss`` per micro-batch (the M2 EWC seam, EWC-02); None reproduces
+            v1.0 bit-for-bit.
+        checkpoint_extra: dict splatted into every in-loop ``save_checkpoint`` call (the
+            M2 fisher/theta_star carry, RESEARCH Open Q1); None reproduces v1.0
+            checkpoints exactly.
         return_final_loss: when True, return the final step's training loss.
 
     Returns:
@@ -307,7 +327,7 @@ def train(
     try:
         while step < target_steps:
             train_loss = _optimizer_step(
-                model, optimizer, scheduler, scaler, train_config, runtime, batch_fn
+                model, optimizer, scheduler, scaler, train_config, runtime, batch_fn, penalty_fn
             )
             final_loss = train_loss
             step += 1
@@ -350,6 +370,7 @@ def train(
                         train_config=train_config,
                         git_sha=git_sha(),
                         val_loss=val_loss,
+                        **(checkpoint_extra or {}),
                     )
 
             # Seam 4a — periodic latest.pt (kill-survivability, Pitfall 5): the same end-of-call
@@ -370,6 +391,7 @@ def train(
                     train_config=train_config,
                     git_sha=git_sha(),
                     val_loss=final_loss,
+                    **(checkpoint_extra or {}),
                 )
 
             # Seam 4b — periodic qualitative sample print (D-06 coherence check): every S steps,
@@ -394,6 +416,7 @@ def train(
             train_config=train_config,
             git_sha=git_sha(),
             val_loss=final_loss,
+            **(checkpoint_extra or {}),
         )
 
     return final_loss if return_final_loss else None
