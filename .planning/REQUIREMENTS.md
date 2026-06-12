@@ -23,7 +23,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### EWC Continual Learning
 
-- [ ] **EWC-01**: From-scratch empirical diagonal Fisher estimated from per-example gradients over TinyStories batches (not batched-gradient squaring), normalized, stored with anchor θ* via the open-dict checkpoint seam
+- [x] **EWC-01**: From-scratch empirical diagonal Fisher estimated from per-example gradients over TinyStories batches (not batched-gradient squaring), normalized, stored with anchor θ* via the open-dict checkpoint seam
 - [ ] **EWC-02**: Quadratic penalty `(λ/2)·Σ Fᵢ·(θᵢ−θ*ᵢ)²` plugged in via `assemble_loss(..., extra_penalties=())`; penalty exactly 0 at the anchor (unit test)
 - [ ] **EWC-03**: λ calibrated by log-scale sweep with short runs (D-07 pattern), λ* picked off the stability–plasticity tradeoff; sweep logs retained for the frontier plot
 
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LORA-03 | Phase 9 | Complete |
 | LORA-04 | Phase 9 | Complete |
 | LORA-05 | Phase 9 | Complete |
-| EWC-01 | Phase 10 | Pending |
+| EWC-01 | Phase 10 | Complete |
 | EWC-02 | Phase 10 | Pending |
 | DATA-01 | Phase 11 | Pending |
 | DATA-02 | Phase 11 | Pending |
