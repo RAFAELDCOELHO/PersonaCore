@@ -13,9 +13,11 @@ Bit-identity is proven two ways (Pitfall 6 — executed evidence, not code revie
    captured from the git-clean, PRE-EDIT loop (its ``meta.captured_at_sha`` records the
    exact commit). The replay asserts exact CSV text + ``repr`` of the final loss + the
    sha256 of the single param tensor — but ONLY where ``(platform.system(),
-   platform.machine())`` matches the fixture's ``meta.platform``: fp32 transcendental
-   kernels are NOT bit-stable across OS/arch/BLAS backends, so e.g. x86_64 Linux CI must
-   skip (with that named reason) rather than assert the capture platform's bits.
+   platform.machine(), torch.__version__)`` matches the fixture's ``meta.platform``:
+   fp32 transcendental kernels are NOT bit-stable across OS/arch/BLAS backends or torch
+   releases, so e.g. x86_64 Linux CI (or a torch 2.7.x patch bump — regenerate the
+   fixture then) must skip (with that named reason) rather than assert the capture
+   platform's bits.
 2. **In-process identities (every platform, never skip).** penalty_fn-omitted,
    ``penalty_fn=None``, and zero-penalty runs are asserted bitwise-identical to EACH
    OTHER in the same process — the v1.0-preservation guarantee CI relies on when the
@@ -51,7 +53,15 @@ GOLDEN_PATH = pathlib.Path(__file__).parent / "fixtures" / "golden_trajectory_v1
 EOS_ID = 8184
 
 _GOLDEN = json.loads(GOLDEN_PATH.read_text())
-_CAPTURE_PLATFORM = (_GOLDEN["meta"]["platform"]["system"], _GOLDEN["meta"]["platform"]["machine"])
+# The gate includes torch_version: fp32 kernel bits are not guaranteed stable across torch
+# releases (BLAS-backend sensitivity), so even a routine 2.7.x patch bump on the capture
+# machine must SKIP (stale fixture — regenerate) rather than hard-fail as a phantom loop
+# regression while the in-process identity tests still pass.
+_CAPTURE_PLATFORM = (
+    _GOLDEN["meta"]["platform"]["system"],
+    _GOLDEN["meta"]["platform"]["machine"],
+    _GOLDEN["meta"]["platform"]["torch_version"],
+)
 
 
 def _param_sha256(model):
@@ -84,13 +94,15 @@ def _run_recipe(log_path, **train_kwargs):
 
 
 @pytest.mark.skipif(
-    (platform.system(), platform.machine()) != _CAPTURE_PLATFORM,
+    (platform.system(), platform.machine(), torch.__version__) != _CAPTURE_PLATFORM,
     reason=(
-        "golden bitwise replay is only valid on the capture platform "
-        f"{_CAPTURE_PLATFORM} — fp32 transcendental kernels are not bit-stable across "
-        "OS/arch/BLAS backends, so a non-matching platform (e.g. x86_64 Linux CI) must "
-        "not assert the captured bits; the in-process identity tests below carry the "
-        "v1.0-preservation guarantee there"
+        "golden bitwise replay is only valid on the capture platform + torch build "
+        f"{_CAPTURE_PLATFORM} (running torch {torch.__version__}) — fp32 transcendental "
+        "kernels are not bit-stable across OS/arch/BLAS backends OR torch releases, so a "
+        "non-matching platform (e.g. x86_64 Linux CI) must not assert the captured bits, "
+        "and a torch bump means the fixture is STALE — regenerate it per the module "
+        "docstring recipe instead of misreading kernel drift as a loop regression; the "
+        "in-process identity tests below carry the v1.0-preservation guarantee either way"
     ),
 )
 def test_golden_trajectory_bit_identity(tmp_path):
