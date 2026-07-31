@@ -23,6 +23,7 @@ findings:
   info: 6
   total: 11
 status: issues_found
+resolved: 2026-07-31 — all 5 Warnings fixed (WR-01..WR-05); Info findings left open by scope
 ---
 
 # Phase 11: Code Review Report
@@ -64,6 +65,7 @@ docstring claims false as written.
 
 ### WR-01: Content spans are not "plain-encoded" — default `allowed_special="all"` lets corpus text inject control ids
 
+**Status:** RESOLVED — commits c6f1db5 + dc05dc8: all content encodes (serialize, `_cap_persona`, TinyStories baseline) pass `allowed_special="none"`; docstrings updated; regression test `test_content_marker_literals_never_inject_control_ids` added.
 **File:** `src/personacore/dialogue/serialize.py:74,77,79` (also `scripts/prepare_dialog_corpus.py:96`, `scripts/measure_inflation.py:48`)
 **Issue:** `encode_dialogue`'s docstring states "content spans use plain `tok.encode(text)`
 (no marker ever appears in raw text — verified)", and `inflation.py` depends on the
@@ -93,6 +95,7 @@ calls. Update the docstrings accordingly.
 
 ### WR-02: `measure_inflation.py` rerun destroys committed evidence (recorded Verdict + Corpus Build section)
 
+**Status:** RESOLVED — commit 065a0c0: `main()` refuses to overwrite a report whose `## Verdict` is non-PENDING unless `--force` is passed. Committed report untouched.
 **File:** `scripts/measure_inflation.py:179` (vs `results/inflation_report.md:56-93`)
 **Issue:** The script unconditionally `write_text`s the full report with
 `## Verdict\n\nPENDING`. The committed report now carries a recorded **GO** verdict plus a
@@ -114,6 +117,7 @@ if REPORT_PATH.exists() and "PENDING" not in REPORT_PATH.read_text(encoding="utf
 
 ### WR-03: Interrupted extraction leaves truncated members that all future runs silently accept
 
+**Status:** RESOLVED — commit 8627392: per-member skip now requires on-disk size to match the tar member's metadata size; truncated members are re-extracted.
 **File:** `scripts/fetch_personachat.py:82-90`
 **Issue:** Extraction is skipped whenever both target paths merely *exist*
 (`all(t.exists() for t in targets)`), and `tf.extract` writes the member in place
@@ -138,6 +142,7 @@ with tarfile.open(TAR_PATH, "r:gz") as tf:
 
 ### WR-04: `tf.extract` without `filter="data"` — legacy fully-trusting extraction filter
 
+**Status:** RESOLVED — commit 62663a7: `tf.extract(info, path=DEST_DIR, filter="data")`.
 **File:** `scripts/fetch_personachat.py:89`
 **Issue:** On the pinned Python 3.11 venv (3.11.4+ ships PEP 706), `tf.extract(...)`
 without `filter=` uses the fully-trusting legacy filter (and emits a DeprecationWarning
@@ -151,6 +156,7 @@ contains.
 
 ### WR-05: `compute_inflation_metrics` crashes with bare `IndexError` on a zero-turn episode
 
+**Status:** RESOLVED — commit 90b3a25: `parse_episodes` raises `ValueError` on persona-only episodes at BOTH append sites (mid-file boundary with line number, EOF flush); test `test_zero_turn_episode_rejected` covers both paths.
 **File:** `src/personacore/dialogue/inflation.py:61` (`persona_costs.append(user_positions[0])`)
 **Issue:** `parse_episodes` happily returns a persona-only `(persona, [])` episode — e.g.
 from a file truncated right after persona lines (the exact shape WR-03 can produce) or
