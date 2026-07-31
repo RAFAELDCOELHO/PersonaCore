@@ -55,4 +55,7 @@
 
 ## Verdict
 
-PENDING — user decision at checkpoint (D-09).
+**GO** — user decision at the D-09 blocking checkpoint, 2026-07-31, rendered on the
+full-corpus numbers above (ratio 1.129x <= 1.2x AND fit 0.9996 >= 90%). Plan 11-04 proceeds
+to bins as designed, with the pinned D-07 persona cap of **140 tokens** applied during
+bin-building (full-corpus p90 = 126 < smoke p90 131 — cap holds, no re-litigation).
