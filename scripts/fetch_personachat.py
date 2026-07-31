@@ -78,16 +78,19 @@ def main() -> None:
         )
     print(f"[fetch_personachat] sha256 verified: {digest}")
 
-    # (3)+(4) Extract ONLY the two named members; skip if both already on disk.
+    # (3)+(4) Extract ONLY the two named members; skip a member only when its on-disk size
+    # matches the tar metadata — bare existence would accept a file truncated by an
+    # interrupted extraction forever (precious-artifact discipline, like the sha256 above).
     targets = [DEST_DIR / m for m in MEMBERS]
-    if all(t.exists() for t in targets):
-        print("[fetch_personachat] both members already extracted — skipping extraction")
-    else:
-        with tarfile.open(TAR_PATH, "r:gz") as tf:
-            for member in MEMBERS:
-                # Named member only — never extractall (T-11-02 path-traversal guard).
-                tf.extract(tf.getmember(member), path=DEST_DIR)
-                print(f"[fetch_personachat] extracted {member}")
+    with tarfile.open(TAR_PATH, "r:gz") as tf:
+        for member, target in zip(MEMBERS, targets):
+            info = tf.getmember(member)
+            if target.exists() and target.stat().st_size == info.size:
+                print(f"[fetch_personachat] {member} already extracted — skipping")
+                continue
+            # Named member only — never extractall (T-11-02 path-traversal guard).
+            tf.extract(info, path=DEST_DIR)
+            print(f"[fetch_personachat] extracted {member}")
 
     # (5) Final paths + line counts.
     for t in targets:
