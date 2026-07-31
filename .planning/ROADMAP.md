@@ -116,7 +116,7 @@ Plans:
 
 **Wave 2** *(blocked on 11-01)*
 
-- [ ] 11-03-PLAN.md — checksum-gated PersonaChat fetch + inflation gate + committed report + blocking D-09 user verdict checkpoint (Wave 2)
+- [x] 11-03-PLAN.md — checksum-gated PersonaChat fetch + inflation gate + committed report + blocking D-09 user verdict checkpoint (Wave 2)
 
 **Wave 3** *(blocked on the recorded gate verdict)*
 
@@ -199,7 +199,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
 | 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
 | 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
-| 11. Conversational Data Pipeline | v2.0 | 2/4 | In Progress|  |
+| 11. Conversational Data Pipeline | v2.0 | 3/4 | In Progress|  |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 0/TBD | Not started | - |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 0/TBD | Not started | - |
 | 14. Teach-Then-Recall Demo | v2.0 | 0/TBD | Not started | - |
