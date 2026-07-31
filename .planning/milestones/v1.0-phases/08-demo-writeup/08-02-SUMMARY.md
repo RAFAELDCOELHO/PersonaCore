@@ -112,7 +112,7 @@ Thin wiring per Phase-1 D-04 (121 lines, no argparse):
 ## Execution Environment Notes
 
 - Worktree scaffolding: `checkpoints` symlinked to the main checkout
-  (`/Users/juliorcoelho/PersonaCore/checkpoints`) so Task 2's verify could load the real
+  (`/path/to/PersonaCore/checkpoints`) so Task 2's verify could load the real
   gitignored `model_slim.pt`. The symlink is untracked and ephemeral (`.gitignore`'s
   `checkpoints/` pattern matches the directory it resolves to; nothing was committed).
 - Tests ran via the shared 3.11 venv with `PYTHONPATH=<worktree>/src` (no `pip install -e .`

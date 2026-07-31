@@ -75,7 +75,7 @@ dialogue (document separator only).
 
 None - plan executed exactly as written. (Worktree logistics: `data/raw` was symlinked from
 the main checkout; the four output bins were copied back to
-`/Users/juliorcoelho/PersonaCore/data/` and verified byte-identical before return.)
+`/path/to/PersonaCore/data/` and verified byte-identical before return.)
 
 ## Known Stubs
 
@@ -103,5 +103,5 @@ mitigated in code via the SystemExit gate.
 ## Self-Check: PASSED
 
 All created/modified files exist, both task commits present in git log, all four bins
-byte-identical (`cmp`) on the main checkout at `/Users/juliorcoelho/PersonaCore/data/`, and
+byte-identical (`cmp`) on the main checkout at `/path/to/PersonaCore/data/`, and
 `git status --porcelain` shows no `data/` entries.

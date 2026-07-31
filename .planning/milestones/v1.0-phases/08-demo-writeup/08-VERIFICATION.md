@@ -101,7 +101,7 @@ Gap items received full 3-level + behavioral verification; the 6 previously-pass
 | Behavior | Command | Result | Status |
 | -------- | ------- | ------ | ------ |
 | Full suite green (QA-01) | `.venv/bin/python -m pytest -q` | 137 passed, 1 skipped, 77.57s | ✓ PASS |
-| Editable install points at main checkout | `python -c "import personacore; print(__file__)"` | `/Users/juliorcoelho/PersonaCore/src/personacore/__init__.py` | ✓ PASS |
+| Editable install points at main checkout | `python -c "import personacore; print(__file__)"` | `/path/to/PersonaCore/src/personacore/__init__.py` | ✓ PASS |
 | Demo constructs against real artifact with mask | importlib exec of demo_app + `build_demo()` | prints `ChatInterface` | ✓ PASS |
 | Crash-settings sweep (the closed gap) | 5 seeds × 400 tokens, temp 1.5, top-k None, `forbid_ids` mask, real slim + frozen tokenizer | zero crashes; mask sum == 7645 | ✓ PASS |
 | Do-not-catch contract | `grep -c "except ValueError" src/personacore/generation/text.py` | 0 | ✓ PASS |

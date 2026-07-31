@@ -492,15 +492,15 @@ This is the proof the GPT drops into `training/loop.py` with no harness change. 
 ## Sources
 
 ### Primary (HIGH confidence) — the binding sources for this phase
-- `/Users/juliorcoelho/PersonaCore/.planning/phases/04-gpt-transformer-decoder/04-CONTEXT.md` — D-01..D-11 (all locked decisions; the authoritative spec)
-- `/Users/juliorcoelho/PersonaCore/src/personacore/model/bigram.py` — locked `forward(idx, targets) -> (logits, loss)` contract + CE flatten (lines 31-39) the GPT copies verbatim
-- `/Users/juliorcoelho/PersonaCore/src/personacore/config.py` — `ModelConfig` (8192/8184/256/6/6/384/0.0), `RuntimeConfig.autocast`
-- `/Users/juliorcoelho/PersonaCore/src/personacore/training/loop.py` — the untouched harness the GPT plugs into (autocast wrap line 115; `assemble_loss(base, ())` line 117)
-- `/Users/juliorcoelho/PersonaCore/src/personacore/training/loss.py` — `assemble_loss` (model-stays-pure boundary, D-05)
-- `/Users/juliorcoelho/PersonaCore/tests/test_overfit_batch.py`, `tests/test_bigram_model.py`, `tests/conftest.py` — the test idiom the MODEL gates mirror (seed-first, `allclose`, CPU-only)
-- `/Users/juliorcoelho/PersonaCore/.planning/REQUIREMENTS.md` (MODEL-02..07) + `.planning/ROADMAP.md` (Phase 4 goal + 5 success criteria)
-- `/Users/juliorcoelho/PersonaCore/CLAUDE.md` — stack discipline, from-scratch boundary, Pascal constraints
-- `/Users/juliorcoelho/PersonaCore/pyproject.toml` — pytest `~=9.0`, ruff config, test paths
+- `/path/to/PersonaCore/.planning/phases/04-gpt-transformer-decoder/04-CONTEXT.md` — D-01..D-11 (all locked decisions; the authoritative spec)
+- `/path/to/PersonaCore/src/personacore/model/bigram.py` — locked `forward(idx, targets) -> (logits, loss)` contract + CE flatten (lines 31-39) the GPT copies verbatim
+- `/path/to/PersonaCore/src/personacore/config.py` — `ModelConfig` (8192/8184/256/6/6/384/0.0), `RuntimeConfig.autocast`
+- `/path/to/PersonaCore/src/personacore/training/loop.py` — the untouched harness the GPT plugs into (autocast wrap line 115; `assemble_loss(base, ())` line 117)
+- `/path/to/PersonaCore/src/personacore/training/loss.py` — `assemble_loss` (model-stays-pure boundary, D-05)
+- `/path/to/PersonaCore/tests/test_overfit_batch.py`, `tests/test_bigram_model.py`, `tests/conftest.py` — the test idiom the MODEL gates mirror (seed-first, `allclose`, CPU-only)
+- `/path/to/PersonaCore/.planning/REQUIREMENTS.md` (MODEL-02..07) + `.planning/ROADMAP.md` (Phase 4 goal + 5 success criteria)
+- `/path/to/PersonaCore/CLAUDE.md` — stack discipline, from-scratch boundary, Pascal constraints
+- `/path/to/PersonaCore/pyproject.toml` — pytest `~=9.0`, ruff config, test paths
 
 ### Secondary (training-knowledge, standard architecture — tagged `[ASSUMED]`)
 - GPT-2 / nanoGPT canonical decoder architecture (pre-norm blocks, learned pos emb, weight tying, `0.02/√(2·n_layer)` residual init, `gelu_new` tanh-approx) — used as the *conceptual* reference, hand-implemented; every numeric claim is re-verified by the phase's own tests.

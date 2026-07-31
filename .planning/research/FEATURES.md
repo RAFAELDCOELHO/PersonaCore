@@ -236,7 +236,7 @@ All experiments ──feed──> REPORT v2.0 + demo.ipynb update
 - SFT masking conventions: [HF TRL SFTTrainer docs](https://huggingface.co/docs/trl/v0.20.0/en/sft_trainer) (`assistant_only_loss`, labels=-100) + [SFT data formatting guide](https://apxml.com/courses/fine-tuning-adapting-large-language-models/chapter-2-data-preparation-fine-tuning/formatting-sft-data) — HIGH
 - Fact injection / paraphrase augmentation: Ovadia et al., ["Fine-Tuning or Retrieval?"](https://arxiv.org/pdf/2312.05934) (recall rises monotonically with paraphrase count; repetition-in-many-forms required) — HIGH for the augmentation finding
 - Forgetting-figure conventions: EWC paper Fig. 2 pattern + [layer-wise regularization for LLM forgetting](https://arxiv.org/html/2501.13669v2) (perplexity-on-old-task curves) — MEDIUM
-- Project context: `/Users/juliorcoelho/PersonaCore/.planning/PROJECT.md` (v1.0 seams, locked tokenizer decision, tech debt) — HIGH
+- Project context: `/path/to/PersonaCore/.planning/PROJECT.md` (v1.0 seams, locked tokenizer decision, tech debt) — HIGH
 
 ---
 *Feature research for: PersonaCore v2.0 Weight-Based Memory (LoRA + EWC + conversational FT + research-narrative demos)*

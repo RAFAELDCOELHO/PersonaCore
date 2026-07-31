@@ -84,7 +84,7 @@ The originally planned S3 *revised* JSON endpoint 404s. Primary source is the Pa
 
 None - plan executed exactly as written. (Worktree logistics: `data/raw` in the executor
 worktree is a symlink to the main checkout's `data/raw`, so the gitignored corpus cache landed
-directly at `/Users/juliorcoelho/PersonaCore/data/raw/` — the artifact-rescue requirement is
+directly at `/path/to/PersonaCore/data/raw/` — the artifact-rescue requirement is
 satisfied by construction.)
 
 ## Known Stubs
@@ -110,4 +110,4 @@ None.
 
 All created files exist on disk, all three task commits present in git log, working tree
 clean, and the gitignored corpus cache verified present on the main checkout at
-`/Users/juliorcoelho/PersonaCore/data/raw/`.
+`/path/to/PersonaCore/data/raw/`.

@@ -228,7 +228,7 @@ python scripts/fetch_corpora.py   # → data/raw/dailydialog.tar.gz (sha256-veri
 - `https://dl.fbaipublicfiles.com/parlai/personachat/personachat.tgz` — HTTP 200, 223,221,886 B, verified 2026-06-11 (HIGH, fallback)
 - `https://github.com/huggingface/transfer-learning-conv-ai` + thomwolf gist — canonical documentation of the `personachat_self_original.json` schema (MEDIUM, corroborated by direct byte inspection above)
 - `https://github.com/facebookresearch/ParlAI` — archived read-only 2023-11-03; informs the cache-and-checksum discipline (MEDIUM)
-- `/Users/juliorcoelho/PersonaCore/pyproject.toml` + `.planning/PROJECT.md` — existing pins, seams (six named Linears, `assemble_loss(extra_penalties)`), frozen-tokenizer decision (HIGH, first-party)
+- `/path/to/PersonaCore/pyproject.toml` + `.planning/PROJECT.md` — existing pins, seams (six named Linears, `assemble_loss(extra_penalties)`), frozen-tokenizer decision (HIGH, first-party)
 - PersonaChat licensing read (no explicit license on the S3 distribution; don't re-host) — MEDIUM, flagged for honesty
 
 ---

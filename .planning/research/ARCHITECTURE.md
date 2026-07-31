@@ -280,7 +280,7 @@ Dependencies, not phase numbers (the roadmapper owns those):
 
 ## Sources
 
-- `/Users/juliorcoelho/PersonaCore/src/personacore/model/gpt.py`, `training/{loop,loss,data}.py`, `checkpoint.py`, `generation/{core,text}.py`, `tokenizer/special.py`, `logging.py`, `evaluation/perplexity.py`, `scripts/{encode_corpus,demo_app,pretrain_tinystories}.py`, `tests/test_gpt_lora_seam.py` — line-level verification of every seam claimed above (HIGH)
+- `/path/to/PersonaCore/src/personacore/model/gpt.py`, `training/{loop,loss,data}.py`, `checkpoint.py`, `generation/{core,text}.py`, `tokenizer/special.py`, `logging.py`, `evaluation/perplexity.py`, `scripts/{encode_corpus,demo_app,pretrain_tinystories}.py`, `tests/test_gpt_lora_seam.py` — line-level verification of every seam claimed above (HIGH)
 - Hu et al., *LoRA: Low-Rank Adaptation of Large Language Models* (2021) — A/B parameterization, B-zero init, α/r scaling, merge identity (HIGH — paper-canonical; conventions corroborated by microsoft/LoRA loralib)
 - Kirkpatrick et al., *Overcoming catastrophic forgetting in neural networks* (PNAS 2017) — EWC quadratic penalty, diagonal Fisher via squared log-likelihood gradients (HIGH)
 - PyTorch `F.cross_entropy` default `ignore_index=-100`; AdamW/`clip_grad_norm_` skip `grad=None` params — stable, long-standing API behavior (HIGH)

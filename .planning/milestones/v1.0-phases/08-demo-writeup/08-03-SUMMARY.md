@@ -110,7 +110,7 @@ metrics:
 - **Issue:** `logs/` and `checkpoints/` exist only in the main checkout (gitignored), but
   the plan's commands (`cp logs/run.csv ...`) and the notebook's relative paths
   (`checkpoints/model_slim.pt`) need them at the worktree root.
-- **Fix:** `ln -s /Users/juliorcoelho/PersonaCore/{checkpoints,logs}` (sanctioned
+- **Fix:** `ln -s /path/to/PersonaCore/{checkpoints,logs}` (sanctioned
   precedent). Note: the trailing-slash gitignore patterns do not match symlinks, so they
   show as untracked — they were never staged (individual-file staging only) and die with
   the worktree.

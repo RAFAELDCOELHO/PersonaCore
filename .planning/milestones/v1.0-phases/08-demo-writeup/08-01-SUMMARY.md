@@ -17,7 +17,7 @@ requires:
 provides:
   - export_slim / load_slim / SLIM_SCHEMA_VERSION in src/personacore/checkpoint.py (load_slim is the single weights_only=True choke point for ALL slim consumers)
   - scripts/export_slim.py thin no-CLI driver (best.pt -> checkpoints/model_slim.pt)
-  - checkpoints/model_slim.pt — the real 55.6 MB shippable artifact at /Users/juliorcoelho/PersonaCore/checkpoints/model_slim.pt (gitignored by design; distribution decided in 08-06)
+  - checkpoints/model_slim.pt — the real 55.6 MB shippable artifact at /path/to/PersonaCore/checkpoints/model_slim.pt (gitignored by design; distribution decided in 08-06)
   - tests/test_slim_checkpoint.py — 4 CPU-only tests, real-artifact test skips cleanly on CI
 affects: [08-02 demo, 08-03 notebook, 08-06 distribution]
 
@@ -79,7 +79,7 @@ _TDD gate compliance: test commit `efcd11e` precedes feat commit `9277035`; no r
 - `src/personacore/checkpoint.py` - added `SLIM_SCHEMA_VERSION`, `export_slim` (drops optimizer/scheduler/scaler/rng/train_config; trusted-own-file `weights_only=False` read with T-08-02 justifying comment), `load_slim` (`weights_only=True` + schema_version check); module docstring updated from "will use" to "uses"
 - `scripts/export_slim.py` - thin no-CLI driver: `_REPO_ROOT` constants, FileNotFoundError guard, prints path/size/keys/sha/step; no argparse, no preflight gate
 - `tests/test_slim_checkpoint.py` - 4 tests: key-set strip (raw `weights_only=True` load IS the assertion), CPU rebuild + generate + `data_ptr()` tying, provenance travel, skipif-gated real-artifact test (param count 13,891,584, SHA prefix, 20-token greedy generation)
-- `checkpoints/model_slim.pt` (generated, gitignored) - persisted to the main checkout at `/Users/juliorcoelho/PersonaCore/checkpoints/model_slim.pt`
+- `checkpoints/model_slim.pt` (generated, gitignored) - persisted to the main checkout at `/path/to/PersonaCore/checkpoints/model_slim.pt`
 
 ## Decisions Made
 
@@ -123,7 +123,7 @@ This does NOT affect DEMO-02/QA-01/QA-02 — nothing in this plan imports gradio
 **Wave-2 demo environment needs one command, run from the MAIN checkout (not a worktree):**
 
 ```bash
-cd /Users/juliorcoelho/PersonaCore && .venv/bin/pip install -e ".[cpu,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
+.venv/bin/pip install -e ".[cpu,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
 ```
 
 Then confirm: `.venv/bin/python -c "import gradio, matplotlib; print(gradio.__version__, matplotlib.__version__)"` prints a 5.50.x gradio. Running it from the main checkout keeps the editable link pointed at the real repo (safe), and installs only the pyproject-pinned, 08-RESEARCH-audited packages.
@@ -141,4 +141,4 @@ Then confirm: `.venv/bin/python -c "import gradio, matplotlib; print(gradio.__ve
 
 ## Self-Check: PASSED
 
-All claimed files exist (including /Users/juliorcoelho/PersonaCore/checkpoints/model_slim.pt at 55,601,269 bytes); task commits efcd11e and 9277035 verified in git log (the docs metadata commit contains this file and cannot self-reference its final hash); required literals (weights_only=True, skipif, data_ptr()) present in tests.
+All claimed files exist (including /path/to/PersonaCore/checkpoints/model_slim.pt at 55,601,269 bytes); task commits efcd11e and 9277035 verified in git log (the docs metadata commit contains this file and cannot self-reference its final hash); required literals (weights_only=True, skipif, data_ptr()) present in tests.
