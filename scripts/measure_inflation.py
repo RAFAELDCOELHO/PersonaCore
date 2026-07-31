@@ -14,9 +14,12 @@ this script only renders the band the numbers land in; the report's ``## Verdict
 stays PENDING until the user decides.
 
 Run manually AFTER ``scripts/fetch_personachat.py``; NOT part of automated verification.
+Refuses to overwrite a report carrying a recorded (non-PENDING) verdict — that file is
+committed evidence — unless ``--force`` is passed.
 """
 
 import pathlib
+import sys
 
 from personacore.dialogue import compute_inflation_metrics, parse_episodes
 from personacore.tokenizer import from_json
@@ -60,6 +63,17 @@ def _render_band(ratio, fit):
 
 
 def main() -> None:
+    # A recorded (non-PENDING) verdict is committed evidence (D-10) — never clobber it
+    # silently: a rerun would reset ``## Verdict`` to PENDING and drop any hand-added
+    # sections (e.g. ``## Corpus Build``).
+    if REPORT_PATH.exists() and "--force" not in sys.argv[1:]:
+        recorded = REPORT_PATH.read_text(encoding="utf-8").split("## Verdict")[-1]
+        if "PENDING" not in recorded:
+            raise SystemExit(
+                f"[measure_inflation] {REPORT_PATH} already carries a recorded verdict — "
+                "it is committed evidence (D-10). Pass --force to overwrite and re-measure."
+            )
+
     for path in (TRAIN_TXT, VALID_TXT):
         if not path.exists():
             raise FileNotFoundError(
