@@ -11,5 +11,9 @@ test:
 lint:
 	ruff check . && ruff format --check .
 
+# isort runs first; ruff (format, then check --fix with rule I) has the final
+# word so the end state always matches `make lint` (ruff-canonical imports).
 format:
-	ruff format . && ruff check --fix .
+	.venv/bin/isort tests/ scripts/ src/
+	.venv/bin/ruff format .
+	.venv/bin/ruff check --fix .
