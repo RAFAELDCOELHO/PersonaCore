@@ -105,3 +105,9 @@ None.
 | 1 | e2162a7 | checksum-gated fetch + named-member extraction |
 | 2 | 8fb1193 | inflation module + gate script + committed report |
 | 3 | 89abe8d | user D-09 verdict GO recorded in report |
+
+## Self-Check: PASSED
+
+All created files exist on disk, all three task commits present in git log, working tree
+clean, and the gitignored corpus cache verified present on the main checkout at
+`/Users/juliorcoelho/PersonaCore/data/raw/`.
