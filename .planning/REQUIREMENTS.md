@@ -29,10 +29,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Conversational Data Pipeline
 
-- [ ] **DATA-01**: PersonaChat acquired by direct download with pinned checksum (ParlAI `personachat.tgz` mirror; verified S3 `personachat_self_original.json` as the pre-registered fallback), parsed from scratch — no HF `datasets` at runtime *(DailyDialog cut per D-00, 2026-07-31)*
-- [ ] **DATA-02**: Dialogues serialized with the already-reserved role tokens (`<|user|>`/`<|assistant|>`/`<|system|>`, ids 8185–8187) through the frozen tokenizer into uint16 memmap bins
-- [ ] **DATA-03**: User-turn loss masking via `ignore_index=-100` (parallel mask bins); turn-boundary correctness unit-tested against a hand-built fixture
-- [ ] **DATA-04**: Tokenizer-inflation measurement (tokens-per-word, %-over-`block_size` on dialogue text) produced and documented as a gate before fine-tune design — the frozen-tokenizer tax becomes a number, not a surprise
+- [x] **DATA-01**: PersonaChat acquired by direct download with pinned checksum (ParlAI `personachat.tgz` mirror; verified S3 `personachat_self_original.json` as the pre-registered fallback), parsed from scratch — no HF `datasets` at runtime *(DailyDialog cut per D-00, 2026-07-31)*
+- [x] **DATA-02**: Dialogues serialized with the already-reserved role tokens (`<|user|>`/`<|assistant|>`/`<|system|>`, ids 8185–8187) through the frozen tokenizer into uint16 memmap bins
+- [x] **DATA-03**: User-turn loss masking via `ignore_index=-100` (parallel mask bins); turn-boundary correctness unit-tested against a hand-built fixture
+- [x] **DATA-04**: Tokenizer-inflation measurement (tokens-per-word, %-over-`block_size` on dialogue text) produced and documented as a gate before fine-tune design — the frozen-tokenizer tax becomes a number, not a surprise
 
 ### Stage-2 Conversational Fine-Tune
 
@@ -101,10 +101,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LORA-05 | Phase 9 | Complete |
 | EWC-01 | Phase 10 | Complete |
 | EWC-02 | Phase 10 | Complete |
-| DATA-01 | Phase 11 | Pending |
-| DATA-02 | Phase 11 | Pending |
-| DATA-03 | Phase 11 | Pending |
-| DATA-04 | Phase 11 | Pending |
+| DATA-01 | Phase 11 | Complete |
+| DATA-02 | Phase 11 | Complete |
+| DATA-03 | Phase 11 | Complete |
+| DATA-04 | Phase 11 | Complete |
 | DEBT-01 | Phase 12 | Pending |
 | DEBT-02 | Phase 12 | Pending |
 | EWC-03 | Phase 12 | Pending |
