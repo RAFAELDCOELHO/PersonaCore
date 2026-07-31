@@ -12,6 +12,8 @@ CPU-only, GPU-free.
 
 import pathlib
 
+import pytest
+
 from personacore.dialogue import parse_episodes
 
 FIXTURE_PATH = pathlib.Path(__file__).parent / "fixtures" / "personachat_fb_fixture.txt"
@@ -66,6 +68,23 @@ def test_every_episode_shape():
     for persona, turns in parse_episodes(FIXTURE_PATH):
         assert 3 <= len(persona) <= 5
         assert len(turns) >= 2
+
+
+def test_zero_turn_episode_rejected(tmp_path):
+    # WR-05: a persona-only episode (the exact shape a truncated file produces) must fail
+    # loudly at the shared parse boundary — never a bare IndexError in the gate, never a
+    # silently degenerate episode in the bins. Both append sites are guarded.
+    bad = tmp_path / "bad.txt"
+    # EOF-flush path: file ends right after persona lines.
+    bad.write_text("1 your persona: i like pie.\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="no turns"):
+        parse_episodes(bad)
+    # Mid-file boundary path: persona-only episode followed by a new episode.
+    bad.write_text(
+        "1 your persona: i like pie.\n1 hi there\thello friend\t\tc1|c2\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="no turns"):
+        parse_episodes(bad)
 
 
 def test_candidates_absent_from_output():

@@ -17,17 +17,24 @@ def parse_episodes(path):
     ``persona`` is the ordered list of persona sentences (``"your persona: "`` prefix
     stripped); ``turns`` is the ordered list of ``(user, assistant)`` utterance pairs.
     Dialogue lines MUST carry exactly 4 tab-fields — the verified corpus invariant — so a
-    malformed line hard-fails the unpack rather than silently mis-parsing.
+    malformed line hard-fails the unpack rather than silently mis-parsing. Zero-turn
+    (persona-only) episodes — e.g. a file truncated right after persona lines — raise a
+    ``ValueError`` here at the shared boundary, so neither the inflation gate nor the bin
+    builder ever consumes a degenerate episode.
     """
     episodes = []
     persona, turns = [], []
     with open(path, encoding="utf-8") as fh:
-        for line in fh:
+        for lineno, line in enumerate(fh, 1):
             line = line.rstrip("\n")
             if not line.strip():  # defensive: stray blank lines never reach split("\t")
                 continue
             num, _, rest = line.partition(" ")
             if num == "1" and (persona or turns):  # line-number reset = new episode
+                if not turns:
+                    raise ValueError(
+                        f"{path}: episode ending before line {lineno} has persona but no turns"
+                    )
                 episodes.append((persona, turns))
                 persona, turns = [], []
             if rest.startswith("your persona: "):
@@ -36,5 +43,7 @@ def parse_episodes(path):
                 user, reply, _, _cands = rest.split("\t")  # exactly 4 fields (verified)
                 turns.append((user, reply))  # candidates ignored (D-04)
     if persona or turns:  # flush-at-EOF: the final episode has no trailing boundary (Pitfall 5)
+        if not turns:
+            raise ValueError(f"{path}: final episode has persona but no turns")
         episodes.append((persona, turns))
     return episodes
