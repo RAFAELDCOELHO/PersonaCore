@@ -12,13 +12,22 @@ and must encode atomically through the FROZEN production tokenizer (never a fres
 CPU-only, GPU-free. Do NOT weaken any assertion to make these pass early.
 """
 
+import pathlib
+
 import pytest
 
-from personacore.dialogue import detokenize, encode_dialogue, render_document
+from personacore.dialogue import (
+    compute_inflation_metrics,
+    detokenize,
+    encode_dialogue,
+    parse_episodes,
+    render_document,
+)
 from personacore.tokenizer import from_json
 from personacore.tokenizer.special import EOS_ID, SPECIAL_TOKENS
 
 TOKENIZER_PATH = "artifacts/tokenizer.json"
+FB_FIXTURE_PATH = pathlib.Path(__file__).parent / "fixtures" / "personachat_fb_fixture.txt"
 
 USER_ID = SPECIAL_TOKENS["<|user|>"]
 ASSISTANT_ID = SPECIAL_TOKENS["<|assistant|>"]
@@ -165,3 +174,36 @@ def test_encode_dialogue_content_span_masks(tok):
             assert all(m == 1 for m in span_masks)  # assistant content trains
         else:
             assert all(m == 0 for m in span_masks)  # persona + user content never trains
+
+
+# --- compute_inflation_metrics (DATA-04, D-08) ---
+
+
+@pytest.fixture(scope="module")
+def fixture_metrics(tok):
+    episodes = parse_episodes(FB_FIXTURE_PATH)
+    return compute_inflation_metrics(episodes, tok, block_size=256)
+
+
+def test_inflation_word_denominator_hand_counted(fixture_metrics):
+    # The metric-1 denominator is auditable: the fixture's 16 detokenized utterances carry
+    # exactly 100 whitespace words (hand-counted) — any drift in detok or span accounting
+    # breaks this exact number.
+    assert fixture_metrics["total_words"] == 100
+
+
+def test_inflation_metric_ranges(fixture_metrics):
+    # Sanity bands: a working BPE sits between 1 and 10 tokens/word; fit is a fraction;
+    # every persona span costs at least the <|system|> token.
+    assert 1.0 < fixture_metrics["tokens_per_word"] < 10.0
+    assert 0.0 <= fixture_metrics["fit_fraction"] <= 1.0
+    assert fixture_metrics["persona_cost"]["p50"] >= 1
+    assert fixture_metrics["persona_cost"]["episodes"] == 3
+    assert fixture_metrics["episodes"] == 3
+
+
+def test_inflation_deterministic(tok, fixture_metrics):
+    # No RNG anywhere: two independent passes over the same episodes are identical dicts.
+    episodes = parse_episodes(FB_FIXTURE_PATH)
+    again = compute_inflation_metrics(episodes, tok, block_size=256)
+    assert again == fixture_metrics
