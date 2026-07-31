@@ -36,6 +36,9 @@ honor_noqa = true
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+# Planning docs carry example snippets in fenced code blocks, not shipped code.
+# ruff 0.16 formats markdown code blocks by default — keep docs out of scope.
+exclude = [".planning"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
