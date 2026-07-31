@@ -3,7 +3,8 @@
 Every metric flows through ``encode_dialogue`` — the SINGLE dialogue tokenization path the bin
 builder also uses (Pitfall 4: gate and bins can never tokenize differently). Span boundaries
 are recovered from the role-token ids in the encoded stream (role ids never occur inside
-content spans — content is plain-encoded and the markers never appear in raw text, verified).
+content spans — content is encoded with ``allowed_special="none"``, so a marker literal in
+raw text byte-splits into ordinary tokens; the invariant holds by construction).
 Each metric is returned WITH its auditable denominator (``evaluation.perplexity`` posture) so
 the committed report's numbers can be re-derived.
 

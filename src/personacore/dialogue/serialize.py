@@ -3,9 +3,9 @@
 ``encode_dialogue`` is the SINGLE source of truth for dialogue tokenization — the inflation
 gate and the bin builder both consume it, so they can never tokenize differently (Pitfall 4).
 Role/eos ids come from the LOCKED ``SPECIAL_TOKENS`` registry — never retyped (Don't-Hand-Roll).
-Mask construction is SPAN-WISE: content spans are plain-encoded and role ids appended literally,
-so mask offsets are exact by construction — never encode-whole-then-search (the Pitfall-14
-DataCollator failure mode). D-01 semantics: mask=1 on assistant content AND the turn's stop
+Mask construction is SPAN-WISE: content spans are encoded with ``allowed_special="none"`` and
+role ids appended literally, so mask offsets are exact by construction — never
+encode-whole-then-search (the Pitfall-14 DataCollator failure mode). D-01 semantics: mask=1 on assistant content AND the turn's stop
 token (the next ``<|user|>``, or eos at dialogue end) so the model trains to emit its own stop.
 """
 
@@ -56,7 +56,8 @@ def encode_dialogue(tok, persona, turns):
 
     Applies ``detokenize`` to every content span itself, so gate and bins get identical
     tokenization (Pitfall 4). Role/eos ids are appended literally from the registry; content
-    spans use plain ``tok.encode(text)`` (no marker ever appears in raw text — verified).
+    spans use ``tok.encode(text, allowed_special="none")`` so a literal marker in raw text
+    byte-splits into ordinary tokens instead of injecting a control id (true by construction).
     Mask: persona=0, first ``<|user|>``=0 (opens the dialogue), every subsequent ``<|user|>``=1
     (stop token of the prior assistant turn), user content=0, ``<|assistant|>`` trigger=0,
     assistant content=1, final eos=1 (every episode ends on an assistant reply — verified).
@@ -71,11 +72,11 @@ def encode_dialogue(tok, persona, turns):
         mask.extend([m] * len(token_ids))
 
     emit([system_id], 0)
-    emit(tok.encode("\n".join(detokenize(p) for p in persona)), 0)
+    emit(tok.encode("\n".join(detokenize(p) for p in persona), allowed_special="none"), 0)
     for i, (user, reply) in enumerate(turns):
         emit([user_id], 1 if i > 0 else 0)
-        emit(tok.encode(detokenize(user)), 0)
+        emit(tok.encode(detokenize(user), allowed_special="none"), 0)
         emit([assistant_id], 0)
-        emit(tok.encode(detokenize(reply)), 1)
+        emit(tok.encode(detokenize(reply), allowed_special="none"), 1)
     emit([EOS_ID], 1)
     return ids, mask

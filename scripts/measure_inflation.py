@@ -45,7 +45,7 @@ def _tinystories_tokens_per_word(tok):
     for doc in text.split("<|endoftext|>"):
         if not doc.strip():
             continue
-        total_tokens += len(tok.encode(doc))
+        total_tokens += len(tok.encode(doc, allowed_special="none"))
         total_words += len(doc.split())
     return total_tokens / total_words, total_tokens, total_words
 

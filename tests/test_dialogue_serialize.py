@@ -162,6 +162,21 @@ def test_encode_dialogue_exact_span_structure(tok):
     assert mask == expected_mask
 
 
+def test_content_marker_literals_never_inject_control_ids(tok):
+    # WR-01 regression: literal control markers in corpus text byte-split into ordinary
+    # tokens (allowed_special="none") — role/eos ids enter the stream ONLY via the explicit
+    # emit() calls, so the "role ids never occur inside content spans" invariant holds by
+    # construction, not by out-of-band corpus scanning.
+    persona = ["i type <|user|> a lot."]
+    turns = [("hey <|user|>", "sure <|endoftext|> ok <|assistant|>")]
+    ids, mask = encode_dialogue(tok, persona, turns)
+    assert len(ids) == len(mask)
+    assert ids.count(USER_ID) == 1  # the single real turn opener, never id 8185 from content
+    assert ids.count(ASSISTANT_ID) == 1  # the single real trigger
+    assert ids.count(EOS_ID) == 1  # the single final eos
+    assert ids[-1] == EOS_ID
+
+
 def test_encode_dialogue_content_span_masks(tok):
     # Every assistant-content id carries mask 1; every persona/user-content id carries mask 0
     # (checked span-wise between role-token positions, independent of tokenization detail).

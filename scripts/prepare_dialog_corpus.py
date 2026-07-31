@@ -93,7 +93,9 @@ def _cap_persona(tok, persona):
     kept = []
     for line in persona:
         candidate = kept + [line]
-        cost = 1 + len(tok.encode("\n".join(detokenize(p) for p in candidate)))
+        cost = 1 + len(
+            tok.encode("\n".join(detokenize(p) for p in candidate), allowed_special="none")
+        )
         if cost > PERSONA_CAP:
             break
         kept = candidate
