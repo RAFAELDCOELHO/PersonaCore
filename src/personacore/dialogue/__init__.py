@@ -7,5 +7,6 @@ single source of truth every downstream consumer (inflation gate, bins) tokenize
 """
 
 from .parse import parse_episodes
+from .serialize import detokenize, encode_dialogue, render_document
 
-__all__ = ["parse_episodes"]
+__all__ = ["detokenize", "encode_dialogue", "parse_episodes", "render_document"]
