@@ -88,8 +88,10 @@ def main() -> None:
             if target.exists() and target.stat().st_size == info.size:
                 print(f"[fetch_personachat] {member} already extracted — skipping")
                 continue
-            # Named member only — never extractall (T-11-02 path-traversal guard).
-            tf.extract(info, path=DEST_DIR)
+            # Named member only — never extractall; filter="data" (PEP 706) additionally
+            # rejects traversal, absolute paths, links, and dangerous metadata in-stdlib
+            # (T-11-02 path-traversal guard, defense-in-depth over the checksum pin).
+            tf.extract(info, path=DEST_DIR, filter="data")
             print(f"[fetch_personachat] extracted {member}")
 
     # (5) Final paths + line counts.
