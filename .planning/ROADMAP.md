@@ -33,7 +33,7 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
 
 - [x] **Phase 9: LoRA Core** - From-scratch `LoRALinear` over the six named projections, fully test-pinned, adapter as a small swappable artifact (completed 2026-06-11)
 - [x] **Phase 10: EWC Core** - Per-example diagonal Fisher + quadratic penalty through the `assemble_loss` seam, v1.0 trajectory bit-preserved when off (completed 2026-06-12)
-- [ ] **Phase 11: Conversational Data Pipeline** - DailyDialog + PersonaChat → role-token memmap bins with loss masks; tokenizer-inflation gate measured first
+- [ ] **Phase 11: Conversational Data Pipeline** - PersonaChat (self_revised) → role-token memmap bins with loss masks; tokenizer-inflation gate measured first *(DailyDialog cut per D-00, 2026-07-31)*
 - [ ] **Phase 12: Stage-2 Conversational Fine-Tune** - Telemetry debts fixed, λ sweep, full fine-tune of `best.pt` to a conversational base with retention logged from step 0
 - [ ] **Phase 13: EWC A/B No-Forgetting Experiment** - Identical-arm naive-vs-EWC A/B, 2×2 acquisition+retention result, committed forgetting curves + λ frontier
 - [ ] **Phase 14: Teach-Then-Recall Demo** - Clean-room personalization: LoRA adapter recalls taught facts fresh-process/empty-prompt, live on/off toggle
@@ -96,17 +96,31 @@ Plans:
 
 ### Phase 11: Conversational Data Pipeline
 
-**Goal**: DailyDialog + PersonaChat become role-token-formatted, loss-masked memmap training bins through the frozen tokenizer — with the tokenizer-inflation tax measured before the format design hardens
+**Goal**: PersonaChat (self_revised) becomes role-token-formatted, loss-masked memmap training bins through the frozen tokenizer — with the tokenizer-inflation tax measured before the format design hardens *(DailyDialog cut per D-00, 2026-07-31)*
 **Depends on**: Nothing within v2.0 (consumes the frozen tokenizer with reserved role ids 8185-8187; independent of Phases 9-10)
 **Requirements**: DATA-01, DATA-02, DATA-03, DATA-04
 **Success Criteria** (what must be TRUE):
 
-  1. Both corpora download via pinned-checksum direct fetch (ParlAI mirror for DailyDialog, S3 JSON for PersonaChat) and parse from scratch — no HF `datasets` at runtime, no network at train time
+  1. PersonaChat downloads via pinned-checksum direct fetch (ParlAI `personachat.tgz`, sha256-pinned 2026-07-31; verified S3 `personachat_self_original.json` as the pre-registered fallback) and parses from scratch — no HF `datasets` at runtime, no network at train time
   2. The tokenizer-inflation measurement (tokens-per-word, %-over-`block_size` on dialogue text) is produced and documented as a go/no-go gate BEFORE the fine-tune format design is committed
   3. Dialogues serialize with the reserved role tokens (`<|user|>`/`<|assistant|>`/`<|system|>`, ids 8185-8187) through the frozen tokenizer into uint16 memmap bins, with eos 8184 kept as a document separator only
   4. User-turn loss masking via `ignore_index=-100` (parallel mask bins) matches a hand-built fixture exactly in a turn-boundary unit test
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 11-01-PLAN.md — `dialogue/` package: from-scratch fb-dialog parser + detokenizer + render + span-wise id/mask encoder, fixture-tested (Wave 1)
+- [ ] 11-02-PLAN.md — `get_batch_memmap_masked` in training/data.py + DATA-03 hand-built exactness fixture (Wave 1)
+
+**Wave 2** *(blocked on 11-01)*
+
+- [ ] 11-03-PLAN.md — checksum-gated PersonaChat fetch + inflation gate + committed report + blocking D-09 user verdict checkpoint (Wave 2)
+
+**Wave 3** *(blocked on the recorded gate verdict)*
+
+- [ ] 11-04-PLAN.md — prepare_dialog_corpus.py → dialog_{train,val}.bin + mask bins with sanity block + build evidence appended to the report (Wave 3)
 
 ### Phase 12: Stage-2 Conversational Fine-Tune
 
