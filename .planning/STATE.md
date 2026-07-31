@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
 stopped_at: Phase 11 context gathered
-last_updated: "2026-07-31T18:36:07.152Z"
-last_activity: 2026-07-31 -- Phase 11 planning complete
+last_updated: "2026-07-31T18:45:04.474Z"
+last_activity: 2026-07-31 -- Phase 11 execution started
 progress:
   total_phases: 7
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 11 — conversational data pipeline
+**Current focus:** Phase 11 — conversational-data-pipeline
 
 ## Current Position
 
-Phase: 11
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-31 -- Phase 11 planning complete
+Phase: 11 (conversational-data-pipeline) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 11
+Last activity: 2026-07-31 -- Phase 11 execution started
 
 Progress: [░░░░░░░░░░] 0% (v2.0)
 

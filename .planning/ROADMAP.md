@@ -111,8 +111,8 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 11-01-PLAN.md — `dialogue/` package: from-scratch fb-dialog parser + detokenizer + render + span-wise id/mask encoder, fixture-tested (Wave 1)
-- [ ] 11-02-PLAN.md — `get_batch_memmap_masked` in training/data.py + DATA-03 hand-built exactness fixture (Wave 1)
+- [x] 11-01-PLAN.md — `dialogue/` package: from-scratch fb-dialog parser + detokenizer + render + span-wise id/mask encoder, fixture-tested (Wave 1)
+- [x] 11-02-PLAN.md — `get_batch_memmap_masked` in training/data.py + DATA-03 hand-built exactness fixture (Wave 1)
 
 **Wave 2** *(blocked on 11-01)*
 
@@ -199,7 +199,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
 | 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
 | 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
-| 11. Conversational Data Pipeline | v2.0 | 0/TBD | Not started | - |
+| 11. Conversational Data Pipeline | v2.0 | 2/4 | In Progress|  |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 0/TBD | Not started | - |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 0/TBD | Not started | - |
 | 14. Teach-Then-Recall Demo | v2.0 | 0/TBD | Not started | - |
