@@ -389,14 +389,14 @@ See Patterns 1–4 above — all four are executable-grade and were exercised (p
 
 All other claims are [VERIFIED] (live curl/download/shasum/full-file scans/tokenizer runs today) or [CITED] to canonical project docs.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does the user GO past the pre-registered STOP band?**
+1. **Does the user GO past the pre-registered STOP band?** — RESOLVED by design: escalation checkpoint planned as 11-03 Task 3 per D-09 (verdict is the user's at runtime).
    - What we know: preliminary tokens/word 3.251 > 3.0 (STOP), but fit 99.8% (GO) and TinyStories baseline 2.864 → relative inflation only 1.135×; ADAPT levers cannot move tokens/word.
    - What's unclear: only the user can render the verdict — D-09 locks that.
    - Recommendation: plan the escalation checkpoint after the committed measurement, presenting exactly this context; do not build bins before it.
 
-2. **`!.` persona artifact handling** — normalize or keep; decide in the detok fixture (trivial either way; discretion area).
+2. **`!.` persona artifact handling** — RESOLVED: normalize `!.` → `!` (pinned in plan 11-01 Task 2 detok fixture).
 
 ## Environment Availability
 
