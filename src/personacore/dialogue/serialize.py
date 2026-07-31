@@ -5,8 +5,9 @@ gate and the bin builder both consume it, so they can never tokenize differently
 Role/eos ids come from the LOCKED ``SPECIAL_TOKENS`` registry — never retyped (Don't-Hand-Roll).
 Mask construction is SPAN-WISE: content spans are encoded with ``allowed_special="none"`` and
 role ids appended literally, so mask offsets are exact by construction — never
-encode-whole-then-search (the Pitfall-14 DataCollator failure mode). D-01 semantics: mask=1 on assistant content AND the turn's stop
-token (the next ``<|user|>``, or eos at dialogue end) so the model trains to emit its own stop.
+encode-whole-then-search (the Pitfall-14 DataCollator failure mode). D-01 semantics: mask=1
+on assistant content AND the turn's stop token (the next ``<|user|>``, or eos at dialogue
+end) so the model trains to emit its own stop.
 """
 
 import re
