@@ -1,0 +1,13 @@
+{
+  "retention_ppl_subbin_step0": 2.107553076833866,
+  "retention_tokens_subbin": 1000285,
+  "retention_ppl_fullval_step0": 2.1065480504616803,
+  "retention_tokens_fullval": 12636922,
+  "headline_unmasked_fullval": 2.1066,
+  "headline_note": "historical unmasked reference only \u2014 NOT the curve anchor, Pitfall 1",
+  "subbin_token_count": 1000286,
+  "subbin_seed": 1337,
+  "anchor_val_loss": 0.7378001868724823,
+  "git_sha": "483938a9034c5aa3eb25602e5981510a489f0fd8",
+  "built": "2026-08-01"
+}
