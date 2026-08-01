@@ -161,7 +161,7 @@ Plans:
 **Requirements**: DEMO-04, VIZ-01, VIZ-04
 **Success Criteria** (what must be TRUE):
 
-  1. Naive and EWC arms run with identical seeds, config, and data order, differing ONLY in the penalty (λ=0 vs λ*)
+  1. Naive and EWC arms run with identical seeds, config, and data order, differing ONLY in the penalty (λ=0 (naive) vs λ=0.01 (pre-chosen, per Phase 12 §8's λ*=None verdict) — see results/phase13_ab_report.md:303-305)
   2. The headline result is a 2×2 table reporting both acquisition and retention for both arms (not retention-only)
   3. The forgetting-curve figure is committed: retention PPL vs fine-tune steps per arm, dashed baseline at 2.1066, acquisition companion panel
   4. The λ stability–plasticity frontier plot (retention vs acquisition, one point per λ from the sweep logs) is committed
