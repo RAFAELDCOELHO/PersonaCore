@@ -49,6 +49,11 @@ LAMBDA0_POINT = {"dialog_ppl": 4.4453, "retention_ppl": 5.9553}
 
 SWEEP_LAMBDAS = ("0.01", "0.1", "1", "10", "100")  # results/ft_lam_{λ}.csv, 1250 steps each
 
+# The frontier endpoint is a CLAIM the figure title and caption both make ("1250-step sweep
+# endpoints"), so the row is selected by step rather than positionally: a CSV that ever stops
+# short would otherwise be plotted silently under a title asserting a budget it never reached.
+SWEEP_ENDPOINT_STEP = 1250
+
 # Fixed series order + colors (08-UI-SPEC plot contract): matplotlib default cycle only.
 ARMS = (
     ("naive (λ=0)", NAIVE_CSV, "C1"),
@@ -66,26 +71,50 @@ def _rows(path):
         return list(csv.DictReader(fh))
 
 
-def _series(rows, column):
-    """``(steps, values)`` for the rows carrying a value in ``column``.
+def _series(rows, column, source="<rows>"):
+    """``(steps, values)`` for the rows carrying a value in ``column``. Never degrades silently.
 
     The pre-seeded step-0 row leaves the train-only columns blank (``restval=""``), so an
-    unconditional ``float(r[col])`` would raise; the eval columns are populated there.
+    unconditional ``float(r[col])`` would raise; the eval columns are populated there. The
+    blank test is explicit (``not in (None, "")``) rather than truthy: ``DictReader`` yields
+    strings, and a legitimate ``"0.0"`` must not be mistaken for a blank.
+
+    An ABSENT column is the twin of the Pitfall-1 hazard ``build_frontier_points`` already
+    defends against (``results/ft_lr_9e-5.csv`` carries no ``retention_ppl``): every
+    ``DictReader`` row dict holds all fieldnames, so a missing column resolves to ``None`` on
+    every row and would plot a valid-looking but EMPTY panel. Raise instead — an empty panel
+    under a titled axis is a figure that lies.
     """
-    pairs = [(int(float(r["step"])), float(r[column])) for r in rows if r.get(column)]
+    if not rows:
+        raise ValueError(f"{source}: no rows at all, cannot plot column {column!r}")
+    if column not in rows[0]:
+        raise KeyError(f"{source}: no column {column!r}; columns are {sorted(rows[0])}")
+    pairs = [
+        (int(float(r["step"])), float(r[column])) for r in rows if r.get(column) not in (None, "")
+    ]
+    if not pairs:
+        raise ValueError(f"{source}: column {column!r} is blank in all {len(rows)} rows")
     return [step for step, _ in pairs], [value for _, value in pairs]
 
 
 def build_frontier_points():
     """The SIX VIZ-04 points as ``(label, dialog_ppl, retention_ppl)``, ordered by λ.
 
-    Five are the final rows of the committed 1250-step sweep CSVs; λ=0 is ``LAMBDA0_POINT``
-    (see the Pitfall-1 note above — its arm CSV has no retention column).
+    Five are the ``SWEEP_ENDPOINT_STEP`` rows of the committed sweep CSVs; λ=0 is
+    ``LAMBDA0_POINT`` (see the Pitfall-1 note above — its arm CSV has no retention column).
     """
     points = [("λ=0", LAMBDA0_POINT["dialog_ppl"], LAMBDA0_POINT["retention_ppl"])]
     for lam in SWEEP_LAMBDAS:
-        final = _rows(RESULTS_DIR / f"ft_lam_{lam}.csv")[-1]
-        points.append((f"λ={lam}", float(final["dialog_ppl"]), float(final["retention_ppl"])))
+        path = RESULTS_DIR / f"ft_lam_{lam}.csv"
+        rows = _rows(path)
+        endpoint = next((r for r in rows if int(float(r["step"])) == SWEEP_ENDPOINT_STEP), None)
+        if endpoint is None:
+            raise ValueError(
+                f"{path}: no step-{SWEEP_ENDPOINT_STEP} row (last is "
+                f"{rows[-1]['step'] if rows else 'n/a'}) — the figure title and caption both "
+                f"claim {SWEEP_ENDPOINT_STEP}-step sweep endpoints"
+            )
+        points.append((f"λ={lam}", float(endpoint["dialog_ppl"]), float(endpoint["retention_ppl"])))
     return points
 
 
@@ -95,8 +124,9 @@ def plot_forgetting_curve(out_dir):
 
     for label, path, color in ARMS:
         rows = _rows(path)
-        ax_ret.plot(*_series(rows, "retention_ppl"), color=color, label=label, marker="o", ms=3)
-        ax_dlg.plot(*_series(rows, "dialog_ppl"), color=color, label=label, marker="o", ms=3)
+        # `path` is threaded in so a missing column names the offending CSV, not just itself.
+        for ax, column in ((ax_ret, "retention_ppl"), (ax_dlg, "dialog_ppl")):
+            ax.plot(*_series(rows, column, path), color=color, label=label, marker="o", ms=3)
 
     ax_ret.axhline(
         HEADLINE_RETENTION,
