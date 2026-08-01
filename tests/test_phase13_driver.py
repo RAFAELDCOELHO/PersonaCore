@@ -8,6 +8,8 @@ CPU-only, GPU/MPS-free, no checkpoint/fixture-file I/O, no training. Pins six th
   4. ``test_config_identical_across_arms`` — both arms build an equal ``TrainConfig``.
   5. ``test_arm_outputs_scoped`` — D-07 name-scoped paths, never a Phase-12 output path.
   6. ``test_refuse_to_rerun_guard`` — WR-02 SystemExit naming the offending file.
+  7. ``test_prod_csv_matches_preregistered_literals`` — CR-02/UF-1: the D-11 literals are the
+     enforced source of truth and the mutable prod CSV is only confirmation.
 
 Scripts-load justification: no other test imports from ``scripts/`` (test_demo_callback.py
 states the convention), but the pre-registration constants and the gate rule MUST live in the
@@ -18,6 +20,7 @@ package would put the experiment's rules somewhere the driver could drift from. 
 ``importlib.util.spec_from_file_location`` load runs no guard and no training.
 """
 
+import csv
 import importlib.util
 import pathlib
 
@@ -99,3 +102,22 @@ def test_refuse_to_rerun_guard(tmp_path):
     with pytest.raises(SystemExit) as excinfo:
         fab.refuse_if_exists((missing, existing))
     assert str(existing) in str(excinfo.value)
+
+
+def test_prod_csv_matches_preregistered_literals():
+    """CR-02 / UF-1: the pre-registered literals are the SOURCE OF TRUTH; the mutable
+    ``results/finetune_prod.csv`` is only confirmation — not the other way round.
+
+    Why this lives in a test and not in the driver: ``scripts/finetune_ab.py`` is
+    pre-registered and FROZEN (``git diff c3d942e HEAD -- scripts/finetune_ab.py`` must stay
+    empty — that emptiness is the evidence for D-10/T-13-11), so the enforcement cannot be
+    added there. Here it is strictly stronger than the run-time ``print()`` it replaces: a
+    drifted, regenerated, or truncated prod CSV fails the suite on EVERY commit, not only on
+    a re-run of the 37-minute EWC arm.
+    """
+    with open(fab.PROD_CSV, newline="", encoding="utf-8") as fh:
+        final = list(csv.DictReader(fh))[-1]
+
+    assert int(float(final["step"])) == fab.MAX_STEPS
+    assert abs(float(final["dialog_ppl"]) - fab.PROD_DIALOG_4000) < 1e-9
+    assert abs(float(final["retention_ppl"]) - fab.PROD_RETENTION_4000) < 1e-9
