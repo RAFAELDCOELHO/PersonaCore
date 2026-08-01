@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: verifying
-stopped_at: Completed 13-04-PLAN.md
-last_updated: "2026-08-01T19:18:36.374Z"
+status: ready_to_plan
+stopped_at: Phase 13 complete (4/4) — ready to discuss Phase 14
+last_updated: 2026-08-01T23:01:15.803Z
 last_activity: 2026-08-01
 progress:
   total_phases: 7
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 13 — ewc-a-b-no-forgetting-experiment
+**Current focus:** Phase 14 — teach then recall demo
 
 ## Current Position
 
-Phase: 13 (ewc-a-b-no-forgetting-experiment) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 14
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-08-01
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity (v1.0 baseline):**
 
-- Total plans completed: 45 across 8 phases (v1.0)
+- Total plans completed: 49 across 8 phases (v1.0)
 - v2.0 plans completed: 0
 
 **By Phase (v2.0):**
@@ -47,6 +47,7 @@ Progress: [██████████] 100%
 | 10 | 3 | - | - |
 | 11 | 4 | - | - |
 | 12 | 5 | - | - |
+| 13 | 4 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 | Phase 12 P01 | 14min | 3 tasks | 3 files |

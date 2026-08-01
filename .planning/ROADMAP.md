@@ -234,6 +234,6 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
 | 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
-| 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete   | 2026-08-01 |
+| 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
 | 14. Teach-Then-Recall Demo | v2.0 | 0/TBD | Not started | - |
 | 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |
