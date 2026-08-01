@@ -169,6 +169,32 @@ beats retention(λ=0) (5.9553) by MORE than Δ_ret = 0.068930:
 | PROD_MAX_STEPS | 4000 (≈ ~29 min at the measured 0.439 s/step) |
 | Seed / batch / accum | 1337 / 32 / 1 |
 
+## Production Config Decision — post-verdict, discretionary
+
+The formal demonstrability verdict (§8) stands negative under the pre-registered margin — no
+λ was statistically indistinguishable from λ=0 in dialogue cost within 2×Δ_dialog (0.0034).
+The production choice of **λ = 0.01** is a separate engineering decision, made AFTER seeing
+the negative verdict, optimizing for the lowest adaptation cost (+0.28 PPL, ~6% relative)
+with the largest relative forgetting reduction available on the grid (retention drift
++3.85 → +1.67, ~57%). Confirmed (case b, verified against ROADMAP/CONTEXT): this config
+feeds only the teach-then-recall demo substrate (Phase 14) — Phase 13 runs its own
+naive/EWC arms from scratch from best.pt, so this choice neither contaminates nor
+substitutes the paper's central causal result. This does not reopen or contradict the §8
+verdict — it is a discretionary production-artifact choice, labeled as such.
+
+Final production config (Plan 12-05 input — supersedes the λ row of the driver-proposed
+table above):
+
+| Knob | Value |
+| --- | --- |
+| Training loss | unmasked |
+| LR | 9e-05 |
+| λ | **0.01** (discretionary, post-verdict — see above) |
+| PROD_MAX_STEPS | 4000 (≈ ~29 min at the measured 0.439 s/step) |
+| Seed / batch / accum | 1337 / 32 / 1 |
+
 ## Verdict
 
-PENDING — user decision at the D-07 blocking checkpoint.
+GO — recorded 2026-08-01 at the D-07 checkpoint. Production fine-tune approved with the
+discretionary config above (unmasked, LR 9e-5, λ=0.01, PROD_MAX_STEPS 4000, seed 1337).
+The §8 demonstrability verdict (Stage 3) stands negative and is untouched by this GO.
