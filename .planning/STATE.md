@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: executing
-stopped_at: Completed 12-04-PLAN.md
-last_updated: "2026-08-01T12:50:50.630Z"
+status: verifying
+stopped_at: Completed 12-05-PLAN.md
+last_updated: "2026-08-01T13:39:11.342Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 16
-  completed_plans: 15
-  percent: 43
+  completed_plans: 16
+  percent: 57
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 Phase: 12 (stage-2-conversational-fine-tune) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-01
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [█████████░] 94%
 | Phase 12 P02 | 8min | 2 tasks | 5 files |
 | Phase 12 P03 | 15min | 2 tasks | 2 files |
 | Phase 12 P04 | 5h | 3 tasks | 16 files |
+| Phase 12 P05 | 45min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Key carry-forwards for v2.0:
 - [Phase 12]: 12-04: Stage-2 gate fired on all LR arms (no-EWC retention collapse) — user override RECORDED, gate NOT amended; λ sweep at LR 9e-5 with λ=0 drift +3.85 as the formal collapse baseline
 - [Phase 12]: 12-04: §8 verdict recorded verbatim — λ*=None, EWC not demonstrable at the 1250-step budget (no λ within 2×Δ_dialog of λ=0); every λ arm beat the collapse baseline on retention
 - [Phase 12]: 12-04: production λ=0.01 is a SEPARATE post-verdict discretionary decision (case b: feeds Phase-14 demo substrate only) — 12-05 config: unmasked, LR 9e-5, λ=0.01, 4000 steps, seed 1337
+- [Phase 12]: 12-05: production run best == final step 4000 (masked val_loss 1.5236 still improving at budget) - retention drift +1.78 vs lambda=0 collapse +3.85; convbase trio with embedded EWC extras is the Phase 13/14 substrate
+- [Phase 12]: 12-05: transcript proxies reported honestly - 30/30 stop-id termination, leakage 1 (one warm assistant-turn re-open), masked dialogue val PPL 4.5733; REPRESENTATIVE, never cherry-picked
 
 ### Pending Todos
 
@@ -107,8 +110,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-01T12:50:50.624Z
-Stopped at: Completed 12-04-PLAN.md
+Last session: 2026-08-01T13:38:23.184Z
+Stopped at: Completed 12-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

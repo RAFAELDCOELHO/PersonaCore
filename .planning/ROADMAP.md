@@ -34,7 +34,7 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
 - [x] **Phase 9: LoRA Core** - From-scratch `LoRALinear` over the six named projections, fully test-pinned, adapter as a small swappable artifact (completed 2026-06-11)
 - [x] **Phase 10: EWC Core** - Per-example diagonal Fisher + quadratic penalty through the `assemble_loss` seam, v1.0 trajectory bit-preserved when off (completed 2026-06-12)
 - [x] **Phase 11: Conversational Data Pipeline** - PersonaChat (self_revised) → role-token memmap bins with loss masks; tokenizer-inflation gate measured first *(DailyDialog cut per D-00, 2026-07-31)* (completed 2026-07-31)
-- [ ] **Phase 12: Stage-2 Conversational Fine-Tune** - Telemetry debts fixed, λ sweep, full fine-tune of `best.pt` to a conversational base with retention logged from step 0
+- [x] **Phase 12: Stage-2 Conversational Fine-Tune** - Telemetry debts fixed, λ sweep, full fine-tune of `best.pt` to a conversational base with retention logged from step 0 (completed 2026-08-01)
 - [ ] **Phase 13: EWC A/B No-Forgetting Experiment** - Identical-arm naive-vs-EWC A/B, 2×2 acquisition+retention result, committed forgetting curves + λ frontier
 - [ ] **Phase 14: Teach-Then-Recall Demo** - Clean-room personalization: LoRA adapter recalls taught facts fresh-process/empty-prompt, live on/off toggle
 - [ ] **Phase 15: Figures & Writeup** - Weight-delta + Fisher heatmaps, REPORT/README/demo.ipynb v2.0 narrative with honest numbers
@@ -150,7 +150,7 @@ Plans:
 
 **Wave 3** *(blocked on D-07 approval)*
 
-- [ ] 12-05-PLAN.md — Production fine-tune → conversational-base artifact + step-0 retention curve + committed transcripts (Wave 3)
+- [x] 12-05-PLAN.md — Production fine-tune → conversational-base artifact + step-0 retention curve + committed transcripts (Wave 3)
 
 **Research flag**: λ selection is empirical with no portable value (reported range 0.1–10⁶) and the full-FT LR/budget needs calibration — plan this phase with `/gsd-plan-phase --research-phase`
 
@@ -216,7 +216,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
 | 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
 | 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
-| 12. Stage-2 Conversational Fine-Tune | v2.0 | 4/5 | In Progress|  |
+| 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete   | 2026-08-01 |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 0/TBD | Not started | - |
 | 14. Teach-Then-Recall Demo | v2.0 | 0/TBD | Not started | - |
 | 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |
