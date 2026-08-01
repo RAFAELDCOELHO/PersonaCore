@@ -56,10 +56,17 @@ def test_preregistration_constants():
 
 
 def test_gate_boundary():
-    """D-06: EWC mitigates iff retention gain is STRICTLY greater than MARGIN."""
-    assert fab.ewc_mitigates(5.0, 5.0 - fab.MARGIN) is False
-    assert fab.ewc_mitigates(5.0, 5.0 - fab.MARGIN - 1e-3) is True
-    assert fab.ewc_mitigates(5.0, 5.0) is False
+    """D-06: EWC mitigates iff retention gain is STRICTLY greater than MARGIN.
+
+    The delta must land BIT-EXACTLY on MARGIN, or the test cannot tell ``>`` from ``>=``.
+    ``(MARGIN, 0.0)`` gives ``MARGIN - 0.0 == MARGIN`` exactly; the obvious-looking
+    ``(5.0, 5.0 - MARGIN)`` does NOT — it reconstructs to 0.13785999999999987, strictly
+    below MARGIN, so it passes under both operators and pins nothing.
+    """
+    assert fab.MARGIN - 0.0 == fab.MARGIN  # the premise: this delta is exact, not rounded
+    assert fab.ewc_mitigates(fab.MARGIN, 0.0) is False  # boundary FAILS — dies under >=
+    assert fab.ewc_mitigates(fab.MARGIN + 1e-9, 0.0) is True  # one hair past it passes
+    assert fab.ewc_mitigates(5.0, 5.0) is False  # no gain at all
 
 
 def test_one_bit_difference():
