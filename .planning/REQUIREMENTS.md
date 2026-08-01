@@ -10,8 +10,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Tech-Debt Pre-Work
 
-- [ ] **DEBT-01**: `run.csv` tokens column counts true tokens (×`block_size` fix in `loop.py` telemetry) — landed before the first v2.0 training run, so forgetting-curve x-axes are correct
-- [ ] **DEBT-02**: Dead-id `forbid_ids` policy threaded into `evaluate.py`/the retention-PPL path and frozen one way for all curve points, so in-loop retention metrics are consistent
+- [x] **DEBT-01**: `run.csv` tokens column counts true tokens (×`block_size` fix in `loop.py` telemetry) — landed before the first v2.0 training run, so forgetting-curve x-axes are correct
+- [x] **DEBT-02**: Dead-id `forbid_ids` policy threaded into `evaluate.py`/the retention-PPL path and frozen one way for all curve points, so in-loop retention metrics are consistent
 
 ### LoRA Adapters
 
@@ -105,8 +105,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-02 | Phase 11 | Complete |
 | DATA-03 | Phase 11 | Complete |
 | DATA-04 | Phase 11 | Complete |
-| DEBT-01 | Phase 12 | Pending |
-| DEBT-02 | Phase 12 | Pending |
+| DEBT-01 | Phase 12 | Complete (pre-work, 2026-07-31) |
+| DEBT-02 | Phase 12 | Complete (pre-work, 2026-07-31) |
 | EWC-03 | Phase 12 | Pending |
 | TUNE-01 | Phase 12 | Pending |
 | TUNE-02 | Phase 12 | Pending |

@@ -26,9 +26,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from personacore.generation.text import undecodable_ids_mask
+
 
 @torch.no_grad()
-def perplexity(model, val_bin_path, block_size, device, batch_size=32):
+def perplexity(model, val_bin_path, block_size, device, batch_size=32, forbid_ids=None):
     """Deterministic full-corpus PPL over non-overlapping ``block_size`` windows.
 
     Args:
@@ -39,6 +41,12 @@ def perplexity(model, val_bin_path, block_size, device, batch_size=32):
         device: torch device string/object the tensors are moved to.
         batch_size: accepted for signature parity with the data path; the sweep
             scores one window at a time, so it is unused here.
+        forbid_ids: optional ``(1, vocab)`` bool tensor (DEBT-02); ``True`` ids are
+            masked to ``-inf`` before the CE — the SAME semantics the generation path
+            applies in ``sampling.next_token``. Default ``None`` preserves the v1.0
+            unmasked headline semantics (the committed 2.1066 stays reproducible).
+            Retention curves must NOT call this directly — use
+            :func:`retention_perplexity`, the frozen policy wrapper.
 
     Returns:
         ``(ppl, total_tokens)`` where ``ppl = exp(total_CE / total_tokens)`` and
@@ -58,6 +66,8 @@ def perplexity(model, val_bin_path, block_size, device, batch_size=32):
         x = chunk[:-1].unsqueeze(0)  # (1, T)
         y = chunk[1:].unsqueeze(0)  # (1, T)
         logits, _ = model(x)  # ignore the mean loss; recompute a SUM below
+        if forbid_ids is not None:
+            logits = logits.masked_fill(forbid_ids.to(logits.device), float("-inf"))
         ce = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), reduction="sum")
         total_ce += ce.item()
         total_tokens += y.numel()
@@ -67,3 +77,29 @@ def perplexity(model, val_bin_path, block_size, device, batch_size=32):
             f"(corpus length {n}); need at least 2 tokens."
         )
     return math.exp(total_ce / total_tokens), total_tokens
+
+
+@torch.no_grad()
+def retention_perplexity(model, val_bin_path, block_size, device, tokenizer, batch_size=32):
+    """Retention PPL for forgetting curves — dead-id mask applied, policy FROZEN (DEBT-02).
+
+    DECISION (frozen 2026-07-31, pre-Phase-12): every retention/forgetting-curve PPL point
+    uses the SAME ``undecodable_ids_mask`` the generation path already applies (CR-01) —
+    comparative-pair consistency inside the Phase 13 A/B matters more than comparability
+    with raw PPL from other work, and the metric must reflect what the real system
+    experiences (the same reason masking was adopted at generation time). This wrapper is
+    THE ONLY sanctioned PPL for curve points; the unmasked :func:`perplexity` remains the
+    v1.0 headline semantics (2.1066) and must not be used for retention curves.
+
+    ``vocab_size`` is inferred from a 1-token probe forward so the wrapper stays
+    duck-typed over any ``forward(idx) -> (logits, loss)`` model.
+
+    Returns:
+        ``(ppl, total_tokens)`` — same auditable contract as :func:`perplexity`.
+    """
+    probe = torch.zeros(1, 1, dtype=torch.long, device=device)
+    logits, _ = model(probe)
+    forbid_ids = undecodable_ids_mask(tokenizer, logits.size(-1))
+    return perplexity(
+        model, val_bin_path, block_size, device, batch_size=batch_size, forbid_ids=forbid_ids
+    )

@@ -334,7 +334,9 @@ def train(
     # tokens/step is the effective-batch token count; derive CUMULATIVE tokens from the absolute
     # step (not a per-call accumulator) so the logged curve is continuous across a kill+resume
     # — resetting an accumulator to 0 on resume would discontinuity the column (Pitfall 4).
-    tokens_per_step = train_config.batch_size * max(1, train_config.grad_accum_steps)
+    tokens_per_step = (
+        train_config.batch_size * max(1, train_config.grad_accum_steps) * model_cfg.block_size
+    )
     step = start_step
     try:
         while step < target_steps:
