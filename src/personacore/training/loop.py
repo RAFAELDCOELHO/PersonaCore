@@ -406,14 +406,22 @@ def train(
 
             if csv is not None and (step % eval_interval == 0):
                 if val_ids is not None:
-                    val_loss = estimate_loss(
-                        model,
-                        val_ids,
-                        train_config,
-                        model_cfg,
-                        runtime.device,
-                        mask_bin=val_mask_bin,
-                    )
+                    # The mask_bin kwarg is only passed when set, so the v1.0 call-site
+                    # signature is byte-identical on the default path (an estimate_loss
+                    # stub without the kwarg — e.g. tests' fakes — still works).
+                    if val_mask_bin is not None:
+                        val_loss = estimate_loss(
+                            model,
+                            val_ids,
+                            train_config,
+                            model_cfg,
+                            runtime.device,
+                            mask_bin=val_mask_bin,
+                        )
+                    else:
+                        val_loss = estimate_loss(
+                            model, val_ids, train_config, model_cfg, runtime.device
+                        )
                 else:
                     val_loss = train_loss
                 # Phase-12 telemetry seam: run each extra fn once per eval-logging event,
