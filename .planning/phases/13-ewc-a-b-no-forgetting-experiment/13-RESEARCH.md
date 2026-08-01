@@ -442,13 +442,15 @@ al. 2017 diagonal-Fisher quadratic already implemented and tested in `continual/
 
 All other claims in this document were verified by direct file reads / venv execution this session.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Naive-arm `ewc_penalty` CSV column: include or omit?**
    - What we know: including the same `EWCPenalty` object as a diagnostic-only `extra_eval_fns` entry is trajectory-safe and keeps both CSV schemas identical (nice for plotting and for the D-05 free-check trajectory pull).
    - What's unclear: whether a logged-but-unapplied penalty column invites misreading.
    - Recommendation: include it, with one report footnote ("measured, not applied, in the naive arm"). Falls under CONTEXT "mechanics" discretion.
+   - **RESOLVED:** recommendation adopted — the naive arm keeps the diagnostic `ewc_penalty` column with the "measured, not applied" footnote. Locked in Plan 13-01 Task 1 (driver keeps `extra_eval_fns` identical across arms) and Plan 13-04 Task 1 (report footnote).
 2. **PNG vs SVG, results/ vs figures/:** discretion. Recommendation: PNG at ~150–200 dpi in `results/` next to the report (register precedent keeps all evidence in one place; no figures/ dir exists yet — D-11 v1.0 "no empty stub dirs" spirit).
+   - **RESOLVED:** recommendation adopted — PNG at dpi=150 written to `results/`. Locked in Plan 13-03 Task 1.
 
 ## Environment Availability
 
