@@ -279,6 +279,13 @@ def train(
             "train_mask_bin requires train_bin: the mask .bin is element-aligned to the "
             "token .bin — set both (or neither) on the memmap data branch."
         )
+    if val_mask_bin is not None and (train_bin is None or not _is_bin_path(val_bin)):
+        raise ValueError(
+            "val_mask_bin requires the memmap data branch: set train_bin and val_bin "
+            "(a memmap .bin PATH) — estimate_loss only honors the mask when the val "
+            "source is a .bin path routed through get_batch_memmap_masked; any other "
+            "val source would silently drop the mask (USER LOCK 3)."
+        )
     runtime = runtime_config if runtime_config is not None else RuntimeConfig()
     model_cfg = model_config if model_config is not None else ModelConfig()
     if model is None:
