@@ -170,16 +170,202 @@ derived quantities, not eval PPL, are the durable twin test on this device.
 
 ## Threats to Validity
 
-_Pending — filled by Plan 13-04 after both arms run._
+### 1. The gate measures teacher-forced retention, not story-mode generation
+
+This is the largest limitation on how the headline may be read, and it is a **measured negative
+result**, not a hypothetical. Prompted with a held-out TinyStories prefix and left to run free
+for 128 tokens, **both arms** emit `<|user|>` within a few tokens and drop into PersonaChat
+dialogue: mid-story role-token leakage is **79 (naive) vs 70 (EWC)** across 20 generations each
+(`results/phase13_retention_samples.md`). The 4.63-PPL retention gap that clears the pre-registered
+gate at 33.6× **does not** yield a qualitatively intact story generator in the EWC arm at this
+budget.
+
+This is not a harness defect and it does not contradict the gate. Teacher-forced retention
+perplexity (the probability the model assigns to the *true* TinyStories continuation, with the
+gold prefix supplied at every position) and free-running mode adherence (what the model does when
+it drives its own context for 128 tokens) are different quantities, and λ=0.01 preserves the
+former far better than the latter. Accordingly, this report claims the former and only the
+former: **EWC mitigates measured forgetting on the retention metric.** It does **not** claim
+qualitative or generative retention, and no figure or sentence here should be read as claiming it.
+λ=0.01 was chosen (D-02) as the smallest constraint that moves both axes favorably; the samples
+show that this smallest constraint does not also buy mode adherence — a stronger λ, a
+replay/mixing term, or a longer anchor budget would be the place to look, and none of them were
+run here.
+
+### 2. The noise floor's measurement regime — and where it does not reach
+
+**The check, not just the number.** Δ_ret = 0.068930 is the retention noise floor from
+`results/finetune_smoke_report.md` **Stage 0b (D-05)**: two runs differing only in seed —
+**1337 vs 2024** — on the otherwise-identical **masked** arm at **LR 9e-5** for **1250 steps**,
+scored with the same frozen `retention_perplexity` on the same frozen sub-bin:
+
+| Quantity | Seed 1337 | Seed 2024 | Δ (floor) | MARGIN (K=2 × Δ) |
+| --- | --- | --- | --- | --- |
+| end retention PPL | 5.074896 | 5.005966 | **0.068930** | 0.137860 |
+
+K = 2 was declared **blind**, before any Phase-12 or Phase-13 effect existed, and was reused here
+unchanged rather than re-chosen after seeing a Phase-13 number.
+
+**Named limitation (D-05 obligation 2):** that floor was **NOT re-verified at the 4000-step
+production budget**, and **NOT re-verified inside collapse dynamics** — it was measured in a
+stable regime, on the masked arm, at a shorter budget, while both Phase-13 arms are unmasked and
+one of them drifts by +6.42 PPL. **Seed-to-seed variance could plausibly scale with drift
+magnitude**, and a floor measured in a stable regime would not capture that. Nothing here rules
+that out.
+
+The reason this is judged acceptable is the size of the gap, stated as a **judgment, not a
+proof**: the observed retention separation is **33.6× MARGIN** and **67.2× the raw floor**, in
+the same 40–96× band as the Phase-12 drift gates' counterfactual k values (LR 3e-5: 40.7×,
+LR 9e-5: 55.8×, LR 3e-4: 96.2×). For the floor to be misleading here it would have to be wrong by
+more than an order of magnitude in the drift regime, which the within-run trajectory above gives
+no sign of (all downward excursions < MARGIN, no late-run instability). That is corroboration
+from a free check, not a re-measurement — the honest re-measurement (a 1337/2024 seed pair at
+4000 unmasked steps, ~75 min) was not run.
+
+### 3. Single seed pair — one comparison, not a distribution
+
+Per D-05, this phase runs **one** arm pair at seed 1337. Every number in the 2×2 is a single
+measurement, and the phase reports a **comparison**, not a distribution: there are no error bars,
+no confidence interval, and no claim about the variance of the effect. The floor above is the
+only variance estimate in play, and it is borrowed from a different budget (see 2). A reader who
+wants a distribution needs N arm pairs at N seeds; that is not what was run.
+
+### 4. MPS non-determinism (named risk category)
+
+The device was named a risk category for the reproduction check up front, and the measurement
+bears it out at a specific magnitude. On M3/MPS, two processes running an identical trajectory
+produce:
+
+| Quantity | Cross-process reproducibility | Evidence |
+| --- | --- | --- |
+| training losses, `ewc_penalty` (weight-derived) | **bit-identical** | step-250 and step-4000 rows vs `finetune_prod.csv` |
+| free-running generation (sampling path) | **bit-identical** | two separate sampling runs, `diff` over the full sample body empty (13-03) |
+| eval perplexities (`dialog_ppl`, `retention_ppl`, `val_loss`) | **NOT bit-identical** — ~1e-8 relative | D-11 table above; step-250 3.6e-8 |
+
+**This report does not claim bitwise eval reproducibility.** The eval PPL variance comes from
+multi-batch reduction order inside `masked_perplexity` / `retention_perplexity`; the sampling path
+has no such reductions (single-batch forwards, argmax or seeded multinomial), which is why
+generation *is* bit-identical while eval PPL is not. The observed eval variance is 7+ orders of
+magnitude below MARGIN and below every effect reported here, so it changes no verdict — but the
+D-11 MATCH is therefore **evidence-based determinism, not a guarantee**: it shows this
+configuration reproduced on this device on this occasion, to bit-identity in weights and ~1e-7 in
+eval PPL. It does not prove the device is deterministic in general.
+
+### 5. Scope
+
+Retention is measured on the frozen `data/retention_val.bin` sub-bin only; the acquisition metric
+is masked dialogue val PPL on one held-out PersonaChat split. Neither is comparable to the
+TinyStories v1.0 headline (different corpus/register) or to any unmasked PPL. The claim covers
+one model, one base task, one downstream task, one λ, one budget.
 
 ## Reconciliation: §8 Search vs Phase-13 Demonstration
 
-_Pending — filled by Plan 13-04 after both arms run._
+Phase 12 §8 concluded, verbatim and unamended:
+
+> **EWC not demonstrable at this budget** (no λ satisfies both the within-margin rule and the
+> retention demonstrability guard) — surfaced, never massaged (pre-registered §8 all-fail
+> outcome: λ\* = None, demonstrable = False).
+
+Phase 13 concludes that EWC mitigates forgetting. Placed side by side with no explanation those
+two sentences read as a contradiction, or worse as a quietly revised verdict. They are neither —
+they answer different questions, under different rules, at different budgets:
+
+| | Phase 12 §8 | Phase 13 |
+| --- | --- | --- |
+| Question | **SEARCH**: is there a λ that buys retention essentially for free? | **DEMONSTRATION**: does one pre-chosen λ mitigate forgetting? |
+| Arms | five λ values (0.01, 0.1, 1, 10, 100) vs λ=0 | one λ (0.01) vs λ=0 — pre-chosen, pre-registered |
+| Rule | **DUAL** margin — both `Δdialogue ≤ K×Δ_dialog (0.003408)` AND retention beating the floor, simultaneously | **retention-only** margin (D-06); acquisition descriptive, no gate |
+| Budget | 1250-step smoke | 4000-step production |
+| Outcome | λ\* = None, `demonstrable = False` (all-fail, informative) | gate holds at 33.6× MARGIN |
+
+The dual rule is what fails, and it fails on the **dialogue** side, not the retention side. §8's
+own table records that **every** λ arm beat the collapse baseline on retention — the smallest of
+them, λ=0.01, by +2.17 PPL — while none came within 0.003408 dialogue PPL of λ=0. That dialogue
+margin is the seed-to-seed floor for dialogue PPL (Δ_dialog = 0.001704, K=2), i.e. §8 demanded
+that EWC cost *nothing measurable* on acquisition. Requiring a real regularizer to be free is a
+near-impossible bar, and §8's all-fail result is the honest report that the bar was not cleared —
+"the stability–plasticity trade-off is real and measured; what failed is the demonstration that
+BOTH sides can be had at this 1250-step budget with this margin". **§8 stands unamended**; it is
+cited above exactly as written, and nothing in this phase revisits it.
+
+Phase 13 asks the smaller, honest question that a demonstration can answer: with the trade-off
+accepted as real, does the constrained arm forget measurably less than the unconstrained one,
+against the same validated noise floor? That is retention-gated by construction (D-06), and the
+acquisition cost is reported as a **number in the 2×2** rather than as a hurdle — +0.380556 PPL,
+paid and disclosed, not gated away.
+
+**Why λ=0.01 is the headline (D-02):** because both axes move favorably at once. λ=100 nearly
+eliminates forgetting (§8: retention 2.1082 vs anchor 2.1076, drift +0.0007) but destroys
+acquisition (dialogue 16.2112, +11.77 vs λ=0) — that is half the phenomenon, a stability trophy
+with the plasticity side hidden, and it is deliberately not the claim. The point of this phase is
+that the trade-off is *favorable* at a small λ, not that forgetting can be made to vanish.
+
+**ROADMAP wording superseded:** the roadmap describes Phase 13 as "λ=0 vs λ\*". There is no λ\* —
+§8 recorded λ\* = None. Phase 13 runs λ=0 vs a **pre-chosen λ=0.01**, per D-02/D-09, and that
+substitution is recorded here rather than silently absorbed into the roadmap's phrasing.
 
 ## Figures
 
-_Pending — filled by Plan 13-04 after both arms run._
+**`results/phase13_forgetting_curve.png`** (VIZ-01) — both 4000-step arms, identical config
+except λ. Left panel is the forgetting axis: naive climbs 2.11 → 8.52 while EWC rises once to
+~3.9 and then stays flat for 3750 steps. Right panel is the acquisition companion (dialogue PPL,
+**log** y-axis — the step-0 anchor is 31.90 and both arms land near 4.2/4.6, so a linear axis
+collapses the entire arm separation into one pixel band). Data: the two committed arm CSVs, no
+other source.
+
+*Baseline-line note, stated once for the whole report:* the dashed horizontal reference on the
+left panel is **2.1066**, the **v1.0 TinyStories headline** (full-val, unmasked). The curves
+themselves are anchored at **2.107553**, the step-0 **frozen sub-bin** `retention_perplexity`
+that every gate in Phases 12–13 uses. The two numbers are close by construction and are **not
+interchangeable**: the dashed line is context for where the base model stood; the sub-bin anchor
+is what the gate arithmetic is computed against. Every drift figure quoted in this report uses
+the sub-bin anchor.
+
+**`results/phase13_frontier.png`** (VIZ-04) — the stability–plasticity frontier, **six** labeled
+points (λ = 0, 0.01, 0.1, 1, 10, 100) at the **1250-step sweep endpoints** (LR 9e-5, unmasked) —
+*not* the 4000-step A/B arms; the figure carries that caveat in its own sub-caption. The elbow at
+λ=0.01 is the D-02 argument in visual form: it recovers most of the retention loss for ~0.28
+dialogue PPL, while λ≥10 buys the remainder at 2–4× the dialogue cost. Five points are read from
+the retained sweep CSVs; the λ=0 point is the cited provenance exception recorded in the
+pre-registration section above (its `retention_ppl` column was never logged by the Stage-2
+driver).
+
+Both figures are regenerable from committed CSVs alone via `scripts/plot_phase13.py`.
 
 ## Retention Samples
 
-_Pending — filled by Plan 13-04 after both arms run._
+`results/phase13_retention_samples.md` (D-12) — retention-side continuations, deliberately not
+dialogue transcripts, so the qualitative evidence targets exactly what the retention gate
+measures. **Protocol:** both step-4000 endpoints sampled in ONE run of
+`scripts/make_retention_samples.py` over ONE shared prompt set (10 held-out TinyStories stories
+chosen by a seeded local `default_rng(1337)`, encoded through the frozen tokenizer, truncated to
+their first 32 ids), warm-sampling RNG re-seeded per arm so both arms draw the identical stream —
+reported as representative samples, never cherry-picked, with proxies measured over all 40
+generations rather than over the excerpts shown.
+
+| arm | endpoint | eos (stop-id) termination | mid-story role-token leakage (8185/8186/8187) |
+| --- | --- | --- | --- |
+| naive (λ=0) | 4000 | 0/20 = 0.00 | **79** |
+| EWC (λ=0.01) | 4000 | 1/20 = 0.05 | **70** |
+
+The leakage counts are the measured negative result treated as threat 1 above: both arms drop
+into dialogue mid-story, so these samples corroborate the *quantitative* retention gap only
+weakly and explicitly do **not** support a qualitative retention claim. The near-zero eos fraction
+is a budget artifact — 128 new tokens is far short of a full TinyStories story, so nearly every
+completion is truncated rather than eos-terminated — and is not an adherence signal either way.
+
+## Evidence Index
+
+Every number above traces to one of these committed artifacts, except the single cited λ=0
+frontier point (provenance exception, recorded in `## Pre-Registration`):
+
+| Artifact | Role |
+| --- | --- |
+| `results/phase13_naive/run.csv` | naive arm curve; 2×2 naive cells; within-run trajectory check |
+| `results/phase13_ewc/run.csv` | EWC arm curve; 2×2 EWC cells; D-11 fresh-arm column |
+| `results/finetune_prod.csv` | D-11 reproduction target (read-only) |
+| `results/finetune_smoke_report.md` | Stage 0b noise floor + regime; §8 verdict; Stage 3 sweep table |
+| `results/phase13_forgetting_curve.png` | VIZ-01 |
+| `results/phase13_frontier.png` | VIZ-04 |
+| `results/phase13_retention_samples.md` | D-12 qualitative evidence + adherence proxies |
+| `scripts/finetune_ab.py` @ `c3d942e` | the pre-registered constants and gate that produced the verdict |
