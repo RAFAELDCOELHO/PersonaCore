@@ -196,6 +196,7 @@ def train(
     sample_max_new_tokens=64,
     penalty_fn=None,
     checkpoint_extra=None,
+    extra_eval_fns=None,
     return_final_loss=False,
 ):
     """Train the model end-to-end: AdamW + warmup/cosine + grad-clip + grad-accum, fp32 default.
@@ -258,6 +259,16 @@ def train(
         checkpoint_extra: dict splatted into every in-loop ``save_checkpoint`` call (the
             M2 fisher/theta_star carry, RESEARCH Open Q1); None adds no caller keys (the
             loop itself always records ``best_val_loss`` — Seam 3 continuity).
+        extra_eval_fns: Phase-12 telemetry seam — ``dict[str, Callable[[torch.nn.Module],
+            float]]``; each fn runs once per eval-logging event and its value is logged as
+            one CSV column per key (retention_ppl / dialog_ppl / ewc_penalty / role norms
+            all ride this seam). Per-run fieldnames are ``CSV_FIELDNAMES +
+            sorted(extra_eval_fns)`` computed at ``CSVLogger`` construction — the module
+            constant is never mutated, and appending new columns to an existing CSV raises
+            (DictWriter unknown-key enforcement). The fns run inside a
+            ``_rng_state()``/``_restore_rng`` snapshot and ``model.train()`` is restored
+            afterward (``perplexity()`` leaves the model in eval mode — Pitfall 4). None
+            reproduces v1.0 bit-for-bit.
         return_final_loss: when True, return the final step's training loss.
 
     Returns:
@@ -365,7 +376,11 @@ def train(
         # fresh-run float("inf") below, so old checkpoints still resume (open-dict contract).
         resumed_best_val_loss = ckpt.get("best_val_loss")
 
-    csv = CSVLogger(log_path, fieldnames=CSV_FIELDNAMES) if log_path is not None else None
+    # Phase-12 telemetry seam: per-run fieldnames — the module constant is NEVER mutated.
+    # A pre-existing CSV with the old header makes CSVLogger's DictWriter raise on the new
+    # keys (the enforcement against silently appending columns to an old file, T-12-02).
+    fieldnames = CSV_FIELDNAMES + sorted(extra_eval_fns) if extra_eval_fns else CSV_FIELDNAMES
+    csv = CSVLogger(log_path, fieldnames=fieldnames) if log_path is not None else None
 
     target_steps = max_steps_override if max_steps_override is not None else train_config.max_steps
     final_loss = None
@@ -401,6 +416,18 @@ def train(
                     )
                 else:
                     val_loss = train_loss
+                # Phase-12 telemetry seam: run each extra fn once per eval-logging event,
+                # one CSV column per key. The RNG snapshot keeps a non-pure fn from
+                # perturbing the train trajectory (resume-equality, TRAIN-04), and the
+                # model.train() restore undoes perplexity()-style fns that call
+                # model.eval() and never restore (Pitfall 4).
+                extras = {}
+                if extra_eval_fns:
+                    fn_rng = _rng_state()
+                    for key in sorted(extra_eval_fns):
+                        extras[key] = extra_eval_fns[key](model)
+                    model.train()
+                    _restore_rng(fn_rng)
                 csv.log(
                     step=step,
                     train_loss=train_loss,
@@ -413,6 +440,7 @@ def train(
                     # monotonic x-axis; deterministic step count gives one. (Real elapsed-time
                     # telemetry, if ever wanted, belongs in the Phase-8 demo, not this gate.)
                     wall_clock=step,
+                    **extras,
                 )
 
                 # Seam 3 — best-val tracking (D-08): ship the LOWEST-val checkpoint, not the
