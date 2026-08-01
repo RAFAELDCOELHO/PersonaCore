@@ -18,6 +18,8 @@ _USER = "<|user|>"
 _ASSISTANT = "<|assistant|>"
 _SYSTEM = "<|system|>"
 
+PERSONA_CAP = 140  # D-07: persona-span token budget (<|system|> + persona ids), line-granular
+
 # " n't" attaches to the preceding word ("do n't" -> "don't"): PTB form, no-op on the primary
 # fb-dialog corpus (zero apostrophes verified) but locked in D-06 for the JSON fallback.
 _NT_RE = re.compile(r" +n't\b")
@@ -81,3 +83,28 @@ def encode_dialogue(tok, persona, turns):
         emit(tok.encode(detokenize(reply), allowed_special="none"), 1)
     emit([EOS_ID], 1)
     return ids, mask
+
+
+def cap_persona(tok, persona):
+    """D-07: keep whole persona lines in order under the ``PERSONA_CAP`` token span budget.
+
+    The span cost mirrors inflation metric 2 exactly: 1 (the ``<|system|>`` token) + the ids
+    of the newline-joined, detokenized persona — recomputed on the full join per candidate so
+    BPE merges across line boundaries are accounted for. Dropping starts at the FIRST line
+    that would push the span past the cap; no mid-line truncation.
+
+    SINGLE source of truth for the cap (Pitfall 4): the bin builder
+    (``scripts/prepare_dialog_corpus.py``) and the transcript generator
+    (``scripts/make_transcripts.py``) both import THIS function, so transcript prompts
+    tokenize identically to the training bins by construction — never by a copied constant.
+    """
+    kept = []
+    for line in persona:
+        candidate = kept + [line]
+        cost = 1 + len(
+            tok.encode("\n".join(detokenize(p) for p in candidate), allowed_special="none")
+        )
+        if cost > PERSONA_CAP:
+            break
+        kept = candidate
+    return kept

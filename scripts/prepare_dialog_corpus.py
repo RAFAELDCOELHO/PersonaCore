@@ -29,7 +29,7 @@ import re
 
 import numpy as np
 
-from personacore.dialogue import detokenize, encode_dialogue, parse_episodes
+from personacore.dialogue import PERSONA_CAP, cap_persona, encode_dialogue, parse_episodes
 from personacore.tokenizer import from_json
 from personacore.training.data import get_batch_memmap_masked
 
@@ -39,7 +39,8 @@ REPORT_PATH = _REPO_ROOT / "results" / "inflation_report.md"  # carries the D-09
 RAW_DIR = _REPO_ROOT / "data" / "raw" / "personachat"  # fetch_personachat.py's output
 EOS_ID = 8184  # ModelConfig.eos_id — exactly one per dialogue (document separator only)
 
-PERSONA_CAP = 140  # D-07: persona-span token budget (<|system|> + persona ids), line-granular
+# PERSONA_CAP / cap_persona live in personacore.dialogue (shared with make_transcripts.py —
+# Pitfall 4: transcript prompts must tokenize identically to the bins, one function for both).
 BLOCK_SIZE = 256  # ModelConfig.block_size — the smoke-draw window
 MASK_FRACTION_BAND = (0.30, 0.70)  # Pitfall 14: ~0%/~100% means the mask is wrong (~45-55% ok)
 
@@ -82,26 +83,6 @@ def _require_go_verdict(report_path):
     return verdict
 
 
-def _cap_persona(tok, persona):
-    """D-07: keep whole persona lines in order under the 140-token span budget.
-
-    The span cost mirrors inflation metric 2 exactly: 1 (the ``<|system|>`` token) + the ids
-    of the newline-joined, detokenized persona — recomputed on the full join per candidate so
-    BPE merges across line boundaries are accounted for. Dropping starts at the FIRST line
-    that would push the span past the cap; no mid-line truncation.
-    """
-    kept = []
-    for line in persona:
-        candidate = kept + [line]
-        cost = 1 + len(
-            tok.encode("\n".join(detokenize(p) for p in candidate), allowed_special="none")
-        )
-        if cost > PERSONA_CAP:
-            break
-        kept = candidate
-    return kept
-
-
 def build_split(tok, name, txt_path, bin_path, mask_path):
     """Encode one split's episodes into aligned token/mask bins; return (episodes, capped)."""
     if not txt_path.exists():
@@ -120,7 +101,7 @@ def build_split(tok, name, txt_path, bin_path, mask_path):
     id_shards, mask_shards = [], []
     capped = 0
     for persona, turns in it:
-        kept = _cap_persona(tok, persona)
+        kept = cap_persona(tok, persona)
         capped += kept != persona
         ids, mask = encode_dialogue(tok, kept, turns)
         id_shards.append(np.asarray(ids, dtype=np.uint16))

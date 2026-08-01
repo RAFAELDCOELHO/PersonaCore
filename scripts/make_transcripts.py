@@ -31,7 +31,12 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 import torch  # noqa: E402  (must follow the MPS-fallback env set above)
 
 from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402
-from personacore.dialogue import detokenize, encode_dialogue, parse_episodes  # noqa: E402
+from personacore.dialogue import (  # noqa: E402
+    cap_persona,
+    detokenize,
+    encode_dialogue,
+    parse_episodes,
+)
 from personacore.evaluation import masked_perplexity  # noqa: E402
 from personacore.generation.core import collect  # noqa: E402
 from personacore.generation.text import undecodable_ids_mask  # noqa: E402
@@ -55,23 +60,8 @@ STOP_IDS = {8184, 8185}  # eos + <|user|> — decoding halts on a hallucinated u
 ROLE_IDS = (8185, 8186, 8187)  # <|user|> / <|assistant|> / <|system|> — leakage check set
 ASSISTANT_ID = 8186  # the prompt MUST end here (the model completes the assistant turn)
 BLOCK_SIZE = 256  # ModelConfig.block_size — the masked_perplexity sweep window
-PERSONA_CAP = 140  # D-07 persona-span budget — MUST match prepare_dialog_corpus.py
-
-
-def _cap_persona(tok, persona):
-    """D-07 persona cap, copied verbatim from scripts/prepare_dialog_corpus.py so transcript
-    prompts tokenize identically to the bins (Pitfall 4): whole lines in order, dropping
-    starts at the first line pushing the span (1 system token + ids) past the cap."""
-    kept = []
-    for line in persona:
-        candidate = kept + [line]
-        cost = 1 + len(
-            tok.encode("\n".join(detokenize(p) for p in candidate), allowed_special="none")
-        )
-        if cost > PERSONA_CAP:
-            break
-        kept = candidate
-    return kept
+# Persona capping: the SHARED personacore.dialogue.cap_persona (the bin builder's exact
+# function), so transcript prompts tokenize identically to the bins by construction (Pitfall 4).
 
 
 def _complete(model, prompt_ids, device, forbid, **kw):
@@ -141,7 +131,7 @@ def main() -> None:
     leakage = 0
     for i in picks:
         persona, turns = episodes[i]
-        kept = _cap_persona(tok, persona)
+        kept = cap_persona(tok, persona)
         ids, _mask = encode_dialogue(tok, kept, turns)
         # Prompt = persona + first user turn, truncated to END at <|assistant|> (8186) —
         # the id sequence tokenizes identically to the bins (Pitfall 4).

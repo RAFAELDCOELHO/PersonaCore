@@ -9,9 +9,11 @@ Plan 11-03 adds ``compute_inflation_metrics`` (the four D-08 gate metrics, DATA-
 
 from .inflation import compute_inflation_metrics
 from .parse import parse_episodes
-from .serialize import detokenize, encode_dialogue, render_document
+from .serialize import PERSONA_CAP, cap_persona, detokenize, encode_dialogue, render_document
 
 __all__ = [
+    "PERSONA_CAP",
+    "cap_persona",
     "compute_inflation_metrics",
     "detokenize",
     "encode_dialogue",
