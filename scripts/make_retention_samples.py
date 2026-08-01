@@ -6,8 +6,12 @@ prefixes continued by the naive (λ=0) and EWC (λ=0.01) step-4000 endpoints, wr
 git-TRACKED ``results/phase13_retention_samples.md``.
 
 D-12 protocol — both endpoints are sampled in ONE script run, never two separately curated
-passes, over ONE seeded prompt set, with the warm-sampling RNG re-seeded identically before
-each arm. There is no point at which an arm could be re-rolled for a better-looking output.
+passes, over ONE seeded prompt set. Warm sampling draws from an explicit per-PROMPT
+``torch.Generator`` seeded ``SEED + story_idx``, so every (prompt, arm) pair draws from the
+same stream and an early stop in one prompt cannot shift any LATER prompt's stream. (Seeding
+once per arm instead would desynchronize the arms after the first early stop, since
+``generate`` returns early on a stop id and warm draws are therefore arm-dependent.) There is
+no point at which an arm could be re-rolled for a better-looking output.
 
 Measured over ALL generations (the Phase-12 transcript proxies, applied to the retention axis):
 
@@ -59,7 +63,7 @@ ARMS = (
 )
 
 N_PROMPTS = 10
-SEED = 1337  # seeded LOCAL prompt selection + seeded warm sampling, re-seeded per arm
+SEED = 1337  # seeded LOCAL prompt selection + base seed of the per-PROMPT warm generator
 PROMPT_TOKENS = 32  # prefix length: enough to fix a story's characters and setting
 MAX_NEW_TOKENS = 128
 STOP_IDS = {8184}  # eos ONLY — story mode; a <|user|> turn here is a measurement, not a stop
@@ -148,14 +152,18 @@ def main() -> None:
         # .to(device): the sampling path masked_fills logits in place on the model device.
         forbid = undecodable_ids_mask(tok, model_cfg.vocab_size).to(device)
 
-        # Re-seeded per arm, NOT once for the run: both arms then draw warm samples from the
-        # IDENTICAL RNG stream, so a text difference is a weight difference (D-12).
+        # Belt-and-braces only: warm sampling uses the explicit per-prompt generator below,
+        # so the global stream is not load-bearing for the pairing claim.
         seed_everything(SEED)
         n_stopped = n_completions = leakage = 0
         for story_idx, prompt_ids in prompts:
             greedy_ids, g_stop = _complete(model, prompt_ids, device, forbid, greedy=True)
+            # Per-PROMPT generator (device-matched — torch.multinomial rejects a cross-device
+            # generator): both arms draw prompt k from the same stream, and an early stop in
+            # one prompt can no longer shift any LATER prompt's stream (D-12 pairing).
+            gen_rng = torch.Generator(device=device).manual_seed(SEED + story_idx)
             warm_ids, w_stop = _complete(
-                model, prompt_ids, device, forbid, temperature=0.8, top_p=0.95
+                model, prompt_ids, device, forbid, temperature=0.8, top_p=0.95, generator=gen_rng
             )
             n_stopped += g_stop + w_stop
             n_completions += 2
@@ -177,9 +185,10 @@ def main() -> None:
         "> endpoints were sampled in ONE run of `scripts/make_retention_samples.py` over ONE",
         "> shared prompt set: 10 held-out `TinyStoriesV2-GPT4-valid.txt` stories chosen with a",
         "> seeded local `default_rng(1337)`, each encoded through the FROZEN tokenizer and",
-        "> truncated to its first 32 ids — never a hand-formatted string. The warm-sampling RNG",
-        "> is re-seeded to 1337 before EACH arm, so both arms draw from the identical stream and",
-        "> a text difference is a weight difference. Decoding: `stop_ids={8184}` (eos only —",
+        "> truncated to its first 32 ids — never a hand-formatted string. Warm sampling draws",
+        "> from an explicit per-PROMPT `torch.Generator` seeded `1337 + story_idx`, identical",
+        "> across arms, so a text difference is a weight difference — and an early stop in one",
+        "> prompt cannot shift any later prompt's stream. Decoding: `stop_ids={8184}` (eos only —",
         "> story mode), dead ids forbidden, 128 new tokens. The proxies below are measured over",
         "> ALL 40 generations, not over the excerpts shown.",
         "",

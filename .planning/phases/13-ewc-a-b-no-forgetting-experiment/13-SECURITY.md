@@ -2,7 +2,7 @@
 phase: 13
 slug: ewc-a-b-no-forgetting-experiment
 status: draft
-threats_open: 1
+threats_open: 0
 asvs_level: 1
 created: 2026-08-01
 ---
@@ -45,7 +45,7 @@ evidence being silently overwritten or read from a mutable reference), **Repudia
 | T-13-06 | DoS | 37-min MPS run crash mid-flight | mitigate | `PYTORCH_ENABLE_MPS_FALLBACK=1` set before `import torch`; sequential arms | closed |
 | T-13-07 | Info Disclosure / EoP | `torch.load` of arm checkpoints | mitigate | `weights_only=False` only on the project's own checkpoints with the T-12-10 comment | closed |
 | T-13-08 | Tampering | samples / figures overwrite | mitigate | refuse-to-rerun guard on the samples markdown; figures regenerable from committed CSVs | closed |
-| T-13-09 | Repudiation | cherry-picking accusation surface | mitigate | seeded prompt selection, one-run both-arms protocol, proxies over ALL generations, **stated in the file header** | **OPEN** |
+| T-13-09 | Repudiation | cherry-picking accusation surface | mitigate | seeded prompt selection, one-run both-arms protocol, per-PROMPT warm generator, proxies over ALL generations, **stated in the file header** | closed |
 | T-13-10 | Repudiation | report numbers provenance | mitigate | all cells read from committed artifacts; λ=0 frontier exception row; verdict computed from committed constants | closed (see WARNING-2) |
 | T-13-11 | Tampering | pre-registration table drift | mitigate | pre-reg table byte-unchanged from the Plan 13-01 commit | closed |
 | T-13-SC | Tampering | package installs | accept | no packages installed this phase — verified, see Accepted Risks Log | closed |
@@ -142,7 +142,31 @@ own two outputs — so an operator instruction to delete never names a Phase-12 
   so the smoke test renders into `tmp_path`; both PNGs regenerate byte-identically (SHA-256) from
   the committed CSVs per 13-VERIFICATION, so overwrite is recoverable by design.
 
-### T-13-09 — Repudiation, cherry-picking accusation surface — **OPEN (BLOCKER)**
+### T-13-09 — Repudiation, cherry-picking accusation surface — CLOSED (was OPEN/BLOCKER)
+
+**Resolution (option A, below):** `scripts/make_retention_samples.py` now builds a per-PROMPT
+`torch.Generator(device=device).manual_seed(SEED + story_idx)` and threads it into the warm
+`_complete()` call, and `results/phase13_retention_samples.md` was regenerated (the stale file was
+deleted first — the T-13-08 refuse-to-rerun guard is untouched and still in force). Both arms are
+still loaded in ONE process run (D-12). The header sentence and
+`results/phase13_ab_report.md` `## Retention Samples` now state the protocol actually used.
+
+Evidence for the closure:
+
+- **Cross-process reproducibility preserved.** Two full regenerations in separate processes are
+  byte-identical (`diff` empty; SHA-256 `c59a6c31…6be313e6` both times).
+- **Pairing proven by perturbation.** Shortening prompt 20081's generation budget (the same RNG
+  perturbation an early stop causes) changes **0 of the 4** later prompts under the new protocol
+  and **4 of 4** under the old per-arm-seed protocol. The defect and its fix are both demonstrated
+  against the same model and prompt set.
+- **Greedy halves unchanged** across the regeneration (argmax is RNG-free), confirming the same
+  step-4000 endpoints produced the new file.
+- **Updated proxies (re-derived from the new samples):** naive `0/20` stops / **79** leakage;
+  EWC `0/20` stops / **69** leakage. The EWC arm's single early stop was itself a product of the
+  shifted stream and does not recur. The substantive negative result is unchanged: **both arms
+  leak role tokens mid-story and neither yields an intact story-mode generator.**
+
+The original analysis is retained below as the audit trail of the defect.
 
 Three of the four declared elements are present in code:
 
@@ -186,10 +210,15 @@ paired comparison after prompt 20081.
 2×2, the gate verdict, the D-11 cross-check, the trajectory table and both figures are all
 teacher-forced eval over committed CSVs.
 
-**To close, either:** (A) thread a per-prompt `torch.Generator(device="cpu").manual_seed(SEED +
+**To close, either:** (A) thread a per-prompt `torch.Generator(device=…).manual_seed(SEED +
 story_idx)` into the warm `_complete()` call and regenerate the samples, keeping the claim; or
 (B) keep the artifact and correct both sentences to state that streams are aligned only up to the
 first early stop (EWC arm, prompt 20081, 6th of 10), plus a threats-register line.
+
+**Option (A) was taken** — see the resolution block at the top of this entry. Note the generator
+must sit on the *model's* device, not `"cpu"`: `torch.multinomial` rejects a cross-device
+generator (`Expected a 'mps' device type for generator but found 'cpu'`), and an MPS generator was
+verified deterministic across processes.
 
 ### T-13-10 — Repudiation, report numbers provenance — CLOSED (with WARNING-2)
 
@@ -201,9 +230,9 @@ first early stop (EWC arm, prompt 20081, 6th of 10), plus a threats-register lin
 - **WARNING-2:** the pre-registered gate `ewc_mitigates` is executed by no shipping code path —
   only by `tests/test_phase13_driver.py` and by ad-hoc session commands. The published verdict is
   reproducible but is not the output of a committed artifact-producing step. Secondly, the report
-  publishes the sample proxies (79 / 70, 0/20, 1/20), which are non-CSV numbers sourced from
-  `phase13_retention_samples.md` — traceable to a committed artifact (so provenance holds), but
-  from the artifact whose pairing claim is open under T-13-09.
+  publishes the sample proxies (79 / 69, 0/20, 0/20), which are non-CSV numbers sourced from
+  `phase13_retention_samples.md` — traceable to a committed artifact, and since the T-13-09
+  remediation that artifact's pairing claim holds as stated.
 
 ### T-13-11 — Tampering, pre-registration table drift — CLOSED
 

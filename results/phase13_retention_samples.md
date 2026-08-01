@@ -4,9 +4,10 @@
 > endpoints were sampled in ONE run of `scripts/make_retention_samples.py` over ONE
 > shared prompt set: 10 held-out `TinyStoriesV2-GPT4-valid.txt` stories chosen with a
 > seeded local `default_rng(1337)`, each encoded through the FROZEN tokenizer and
-> truncated to its first 32 ids — never a hand-formatted string. The warm-sampling RNG
-> is re-seeded to 1337 before EACH arm, so both arms draw from the identical stream and
-> a text difference is a weight difference. Decoding: `stop_ids={8184}` (eos only —
+> truncated to its first 32 ids — never a hand-formatted string. Warm sampling draws
+> from an explicit per-PROMPT `torch.Generator` seeded `1337 + story_idx`, identical
+> across arms, so a text difference is a weight difference — and an early stop in one
+> prompt cannot shift any later prompt's stream. Decoding: `stop_ids={8184}` (eos only —
 > story mode), dead ids forbidden, 128 new tokens. The proxies below are measured over
 > ALL 40 generations, not over the excerpts shown.
 
@@ -15,7 +16,7 @@
 | arm | endpoint step | stop-id (eos) termination | mid-story role-token leakage (8185/8186/8187) |
 | --- | --- | --- | --- |
 | naive (λ=0) | 4000 | **0/20 = 0.00** | **79** (0 = uncontaminated) |
-| ewc (λ=0.01) | 4000 | **1/20 = 0.05** | **70** (0 = uncontaminated) |
+| ewc (λ=0.01) | 4000 | **0/20 = 0.00** | **69** (0 = uncontaminated) |
 
 Role tokens mid-story are dialogue contamination of the base task — the forgetting
 axis itself, which is why leakage is reported per arm rather than pooled. **Both arms
@@ -42,7 +43,7 @@ budget-truncated rather than eos-terminated.
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
-> se named my car.<|user|>oh, cool. i love basketball, especially in my spare time.<|assistant|>i have never been to the country. what do you like to bake?<|user|>i love eating chips, but i like that.<|assistant|>i like to go to the be
+> se.<|user|>hello, how are you today?<|assistant|>i am well. how about you?<|user|>i am doing okay, just got my husband and mind.<|assistant|>what do you do for a living?<|user|>i am a first time mother of two years ago.<|assistant|>do 
 
 ### ewc (λ=0.01)
 
@@ -53,7 +54,8 @@ i am a musical person.<|user|>hi, i am married to my mom. i am married to my mom
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
-> se named myson mug, my name is muggo.<|user|>hey, i am coming with my favorite top of the cold contest.<|assistant|>i like country music. i am always honest.<|user|>i like music. what do you do
+> se named hen.
+i love to get food for the plants.<|user|>hen technolas, i was busy working for my animals.<|assistant|>nice! i love it. i do a few years.. are you excited to learn more?<|user|>yes, i am. i made 
 
 ## Prompt 7998 (first 32 ids of a held-out story)
 
@@ -67,7 +69,7 @@ i am a musical person.<|user|>hi, i am married to my mom. i am married to my mom
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
->  hedgy on a big patrol on my couch.<|user|>sounds interesting. i hope you get to travel sometimes.<|assistant|>i am sorry my mom makes me sad. i like to do things with her.<|user|>that sounds like a lot 
+>  police officer i was resolved.<|user|>hi, i am trying to eat cheese right now. its my favorite.<|assistant|>i love cheese. i enjoy cheese with my family.<|user|>they are. tell me more about 
 
 ### ewc (λ=0.01)
 
@@ -77,7 +79,9 @@ i am a musical person.<|user|>hi, i am married to my mom. i am married to my mom
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
->  man with a big bag. i miss it.. how are you doing?<|user|>i am doing great. although i have chicagre through the restaurant for me.<|assistant|>oh wow! it is just a few years. i am sorry. i tho
+>  pretty colorful colors in the sky.
+i take my clothes off.
+i do not like reptiles.<|user|>hi how are you today?<|assistant|>i am great. how are you today?<|user|>i am good how about you?<|assistant|>i am great, how a
 
 ## Prompt 10816 (first 32 ids of a held-out story)
 
@@ -94,9 +98,8 @@ i am a meat an potatoes kind of person.<|user|>hello, how are you today?<|assist
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
 > .
-i do not know my mother.
-i was raised down south.
-my husband loves me.<|user|>hello how are you today?<|assistant|>great i am doing just fine<|user|>oh really? i live with my girl, so i have to exercise.<|assistant|>
+i have two daughters.
+i have many siblings.<|user|>hello! how are you?<|assistant|>i am doing pretty well.<|user|>good! just getting ready to go out and eat chocolate<|user|>oh that sounds good! do you like to 
 
 ### ewc (λ=0.01)
 
@@ -109,8 +112,8 @@ i am a musician.<|user|>hi how are you today?<|assistant|>i am good. just got ba
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
 > .
-i do not know what was up.
-my favorite thing is tomorrow.<|user|>how are you doing tomorrow?<|assistant|>i am doing well with my mom. how about you?<|user|>i am doing great, and you?<|assistant|>i do, just got back
+i eat at cutting different options.
+i enjoy creating things in the different country.<|user|>hi how are you today<|assistant|>i am good, just starting college<|user|>wow you have a little bit of thing?<|assistant|>do y
 
 ## Prompt 14922 (first 32 ids of a held-out story)
 
@@ -124,7 +127,7 @@ my favorite thing is tomorrow.<|user|>how are you doing tomorrow?<|assistant|>i 
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
-> it is my favorite color.<|user|>yes, i have a black belt. i enjoy making my feet look every time.<|assistant|>what do you do for fun?<|user|>i am a part time student. what about you?<|assistant|>i love all kinds, and think 
+> i enjoy eating meat.<|user|>do you like meat, cooking eggs and making your own!<|assistant|>yes, i like eggs. do you like meat?<|user|>yes, i love meat too. i love meat<|assistant|>i like meat too mu
 
 ### ewc (λ=0.01)
 
@@ -135,7 +138,7 @@ i like to eat carrots.<|user|>hello, how are you today?<|assistant|>i am doing w
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
-> my bee, and i have a hard time just finishing my laptop!<|user|>hi, my name is marking jazz!<|assistant|>i have a favorite one with my jazz music<|user|>i like music, my eyes are my favorite, and my fa
+> heavy but, i love everything around here.<|user|>i am single, what do you do for fun?<|assistant|>i recently eat meat, i drink a lot of actuatic eggs.<|user|>definitely. i always have a relationsh
 
 ## Prompt 15089 (first 32 ids of a held-out story)
 
@@ -149,7 +152,7 @@ i like to eat carrots.<|user|>hello, how are you today?<|assistant|>i am doing w
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
-> t with my boyfriend just got me.<|user|>oh, so sorry! what happened?<|assistant|>haha. try to eat while walking my dog and he had my cheerleaders.<|user|>what kind of dog do you have? he is my favorite.<|assistant|>he is
+> t with my siblings.<|user|>i recently covered my free time in a tiny town. you?<|assistant|>i am in college at the stock i watched in.<|user|>cool. i like to write in my free time. you?<|assistant|>i am a stocker. i write so muc
 
 ### ewc (λ=0.01)
 
@@ -160,9 +163,8 @@ i like to count.<|user|>hello, how are you today?<|assistant|>i am doing well. j
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
-> t with many friends.
-i am in a room.
-i am sick.<|user|>hi! what are you up to today?<|assistant|>i am more young. i live in the beach. you?<|user|>sure. i live in a field! what about you?<|assistant|>yes, i love 
+> t.
+i used to problem of crystal.<|user|>hi there. i am a human, and i am in contracting my family<|assistant|>i have not, you? i could teach you to play basketball games.<|user|>what kind of games do you teach?
 
 ## Prompt 20081 (first 32 ids of a held-out story)
 
@@ -176,7 +178,7 @@ i am sick.<|user|>hi! what are you up to today?<|assistant|>i am more young. i l
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
->  is my favorite.<|user|>so amazing, i am a big redhead but not my head.<|assistant|>i love redheads! i like it so much.<|user|>i like blue too.<|assistant|>i like blue too. what is your favorite food?<|user|>i love cheeseburgers.<|assistant|>
+>  has a crae just grown in it.<|user|>that is a good idea, what are you up to?<|assistant|>i am reading it on facebook. what about you?<|user|>i love to read about seeing the world.<|assistant|>nice! do you like mov
 
 ### ewc (λ=0.01)
 
@@ -187,8 +189,10 @@ i like to count.<|user|>hello, how are you today?<|assistant|>i am doing well. j
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
->  was empty.
-i enjoy making music.<|user|>i think it is a great way to make money<|assistant|>i can work more as well. i mostly use my headachelmakeup
+>  has a nice bottle.
+i like to go to the gym.
+i like gymnasts.
+i am a musician.<|user|>hey how is it going?<|assistant|>what do you do for fun?<|user|>i just got done right now and do you like to walk<|assistant|>yeah i am feeling g
 
 ## Prompt 24161 (first 32 ids of a held-out story)
 
@@ -205,7 +209,7 @@ i am a musician and a brain.<|user|>hello, how are you today?<|assistant|>i am d
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
 > .
-i enjoy spicy cuisine.<|user|>hi how are you today?<|assistant|>i am doing great. i am also eating my favorite food, crafts.<|user|>i love crafts! i have a mustang full.<|assistant|>me too! i eat it with
+i like to exercise.<|user|>i like all of those songs and tell jokes about me<|assistant|>i really like the outdoors. i like it.<|user|>that is great. i love the classic classic rock.<|assistant|>i love the classic clas
 
 ### ewc (λ=0.01)
 
@@ -217,7 +221,8 @@ i like to cook.<|user|>hey, how are you doing?<|assistant|>i am doing well. just
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
-> . i work in a city here.<|user|>i am an italian. i am an accident.<|assistant|>i am an ice police ice as i am sure there is a real job.<|user|>you should have a mother. i am a veterinarian<|assistant|>i do. i am currently
+>  near the city.
+i love to party and i am a ballet dancer.<|user|>hello! how are you tonight?<|assistant|>i am doing great, and you? i am a nurse.<|user|>i am just currently just finished college swimming.<|assistant|>yeah. i
 
 ## Prompt 24254 (first 32 ids of a held-out story)
 
@@ -231,7 +236,7 @@ i like to cook.<|user|>hey, how are you doing?<|assistant|>i am doing well. just
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
->  mine and draw.<|user|>i think she would make you anxiety<|assistant|>haha i am more adventurous, i do not have to work out<|user|>yeah i am really a little bit social so i cant win<|user|>i am not sure yet. i might
+>  mi every night.<|user|>do you have any siblings? my mom is from chicago<|assistant|>no, never heard of it. you?<|user|>i have always been married 10 years ago. i have heard of them.<|assistant|>did you know you are in s
 
 ### ewc (λ=0.01)
 
@@ -243,9 +248,9 @@ i am a musician.<|user|>hello, how are you today?<|assistant|>i am good. just go
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
->  my dogs on the shore.
-i am a musical person.
-i love my pets.<|user|>good evening. i do not know where i live.<|assistant|>i want to find food in a job. i am a vet. you?<|user|>i am a vet, and i come alive. i am in 
+>  her dog every day.
+i am fine with nothing easy.
+i am selfish.<|user|>hey, how is your day?<|assistant|>its great. it is it identically enjoy playing piano and playing it.<|user|>what do you do for a living? i like my 
 
 ## Prompt 25439 (first 32 ids of a held-out story)
 
@@ -259,7 +264,7 @@ i love my pets.<|user|>good evening. i do not know where i live.<|assistant|>i w
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
->  used to live in a tiny house.<|user|>i hate summer. that is too bad.<|assistant|>i love it too much. i do not like the walking dead<|user|>my mom died in the mornings at work. i am eating steak<|assistant|>that sounds like fun. do you like c
+>  is employed at a moment.<|user|>i am a veterinarian. i am lucky to have my bf money.<|assistant|>i would love to try chocolate it would be my favorite!<|user|>yes i love spending time with my doberman
 
 ### ewc (λ=0.01)
 
@@ -271,9 +276,7 @@ i am a musician.<|user|>hello, how are you today?<|assistant|>i am good. just go
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
->  was a very spoiled girl.
-i like to create things.
-i like to drink coffee.<|user|>hi. how are you today?<|assistant|>i am doing well. i would rather visit my grandchildhood!<|user|>you sound like a favorite time?<|assistant|>
+>  was excited to learn.... i am close to my favorite place of harmon.<|assistant|>nice! what kind of harmon? that is my favorite color. yellow..<|user|>my favorite color is heartla. do you
 
 ## Prompt 26150 (first 32 ids of a held-out story)
 
@@ -290,8 +293,8 @@ i like to make music.<|user|>hello, how are you today?<|assistant|>i am doing we
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
 > 
-i love to run.
-i enjoy making things artistically.<|user|>hi! my name is jessica.<|assistant|>hello. i am michelle, and i live in florida and work in a midwest in nature<|user|>what is your favorite colo
+i love to vacation with my friends.
+i am bored in the suburbs.<|user|>hello how are you doing today<|assistant|>i am doing good. how are you?<|user|>i am good do you like suspense music?<|assistant|>yes i like to read too, m
 
 ### ewc (λ=0.01)
 
@@ -302,6 +305,4 @@ i am a musician.<|user|>hello, how are you today?<|assistant|>i am doing well. j
 
 **Warm (temperature=0.8, top_p=0.95, seeded):**
 
-> 
-i am a musician.
-my father and sisters are married.<|user|>hey how are you today?<|assistant|>i am good how are you<|user|>i am good and you?<|assistant|>so good to have a youtuba which is chilly<|assistant|>i am doing well that i am a la
+>  he had a lot of cars that helped clean.<|user|>sorry, my mom has lots of work i am more cleaning up.<|assistant|>well i am cleaning up how i do now<|user|>my mom is a cleaning right now i am just maki

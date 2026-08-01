@@ -175,7 +175,7 @@ derived quantities, not eval PPL, are the durable twin test on this device.
 This is the largest limitation on how the headline may be read, and it is a **measured negative
 result**, not a hypothetical. Prompted with a held-out TinyStories prefix and left to run free
 for 128 tokens, **both arms** emit `<|user|>` within a few tokens and drop into PersonaChat
-dialogue: mid-story role-token leakage is **79 (naive) vs 70 (EWC)** across 20 generations each
+dialogue: mid-story role-token leakage is **79 (naive) vs 69 (EWC)** across 20 generations each
 (`results/phase13_retention_samples.md`). The 4.63-PPL retention gap that clears the pre-registered
 gate at 33.6× **does not** yield a qualitatively intact story generator in the EWC arm at this
 budget.
@@ -339,20 +339,21 @@ dialogue transcripts, so the qualitative evidence targets exactly what the reten
 measures. **Protocol:** both step-4000 endpoints sampled in ONE run of
 `scripts/make_retention_samples.py` over ONE shared prompt set (10 held-out TinyStories stories
 chosen by a seeded local `default_rng(1337)`, encoded through the frozen tokenizer, truncated to
-their first 32 ids), warm-sampling RNG re-seeded per arm so both arms draw the identical stream —
-reported as representative samples, never cherry-picked, with proxies measured over all 40
-generations rather than over the excerpts shown.
+their first 32 ids), warm sampling drawn from an explicit **per-prompt** `torch.Generator` seeded
+`1337 + story_idx` and identical across arms, so each prompt is genuinely paired and an early stop
+in one prompt cannot shift any later prompt's stream — reported as representative samples, never
+cherry-picked, with proxies measured over all 40 generations rather than over the excerpts shown.
 
 | arm | endpoint | eos (stop-id) termination | mid-story role-token leakage (8185/8186/8187) |
 | --- | --- | --- | --- |
 | naive (λ=0) | 4000 | 0/20 = 0.00 | **79** |
-| EWC (λ=0.01) | 4000 | 1/20 = 0.05 | **70** |
+| EWC (λ=0.01) | 4000 | 0/20 = 0.00 | **69** |
 
 The leakage counts are the measured negative result treated as threat 1 above: both arms drop
 into dialogue mid-story, so these samples corroborate the *quantitative* retention gap only
-weakly and explicitly do **not** support a qualitative retention claim. The near-zero eos fraction
-is a budget artifact — 128 new tokens is far short of a full TinyStories story, so nearly every
-completion is truncated rather than eos-terminated — and is not an adherence signal either way.
+weakly and explicitly do **not** support a qualitative retention claim. The zero eos fraction is a
+budget artifact — 128 new tokens is far short of a full TinyStories story, so every completion is
+truncated rather than eos-terminated — and is not an adherence signal either way.
 
 ## Evidence Index
 
