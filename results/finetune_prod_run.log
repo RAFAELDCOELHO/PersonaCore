@@ -1,0 +1,14 @@
+[finetune_dialog] D-07 verdict: GO — production fine-tune approved
+[preflight] device=mps cc=n/a torch=2.7.1
+[finetune_dialog] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[finetune_dialog] step-0: dialog_ppl=31.9039 over 270,203 tokens; retention anchor 2.1076 (from anchors JSON)
+[finetune_dialog] production run: unmasked, lr=9e-05, λ=0.01, steps=4000, seed=1337, batch=32, accum=1
+[finetune_dialog] proofs passed: step-0 row, final step 4000, finite retention, 4 EWC extras in convbase_best, slim weights_only=True
+[finetune_dialog] best step 4000 val_loss 1.5236; retention step-0 2.1076 → final 3.8911 (drift +1.7836); wall 37.3 min
+[finetune_dialog] ===== Phase-13 provenance (λ=0 twin must match all but λ) =====
+  seed: 1337 (seed_everything immediately before GPT build — owns data order)
+  train_config: TrainConfig(lr=9e-05, batch_size=32, max_steps=4000, warmup_steps=100, grad_clip=1.0, grad_accum_steps=1, weight_decay=0.1, seed=1337)
+  mask_arm: unmasked (train_mask_bin=None)
+  ewc_lambda: 0.01 (the ONE bit the λ=0 twin flips)
+  anchor fingerprint: {'git_sha': '3a46815da96f06d3c6196bb0949a1479884b3bce', 'step': 49000, 'val_loss': 0.7378001868724823}
+  driver git_sha: 04e724c67033f9a2ed8b705a07ad025c867a18c5
