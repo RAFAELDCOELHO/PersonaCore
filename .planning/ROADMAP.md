@@ -142,7 +142,7 @@ Plans:
 
 - [x] 12-01-PLAN.md — Additive loop seams: train_mask_bin / val_mask_bin / extra_eval_fns + identity tests (Wave 1)
 - [x] 12-02-PLAN.md — masked_perplexity gate metric + stop_ids in generate(), oracle-tested (Wave 1)
-- [ ] 12-03-PLAN.md — Frozen retention sub-bin + measured step-0 anchors committed before any training step (Wave 1)
+- [x] 12-03-PLAN.md — Frozen retention sub-bin + measured step-0 anchors committed before any training step (Wave 1)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -216,7 +216,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
 | 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
 | 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
-| 12. Stage-2 Conversational Fine-Tune | v2.0 | 2/5 | In Progress|  |
+| 12. Stage-2 Conversational Fine-Tune | v2.0 | 3/5 | In Progress|  |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 0/TBD | Not started | - |
 | 14. Teach-Then-Recall Demo | v2.0 | 0/TBD | Not started | - |
 | 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |
