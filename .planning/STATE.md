@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: planning
-stopped_at: Phase 14 context gathered (3 of 4 areas; demo surface open)
-last_updated: "2026-08-01T23:41:47.554Z"
+stopped_at: Phase 14 context complete — all 4 gray areas decided (D-01..D-19)
+last_updated: "2026-08-01T23:52:18.588Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 7
@@ -128,8 +128,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-01T23:41:47.548Z
-Stopped at: Phase 14 context gathered (3 of 4 areas; demo surface open)
+Last session: 2026-08-01T23:52:18.582Z
+Stopped at: Phase 14 context complete — all 4 gray areas decided (D-01..D-19)
 Resume file: .planning/phases/14-teach-then-recall-demo/14-CONTEXT.md
 
 ## Operator Next Steps
