@@ -35,7 +35,7 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
 - [x] **Phase 10: EWC Core** - Per-example diagonal Fisher + quadratic penalty through the `assemble_loss` seam, v1.0 trajectory bit-preserved when off (completed 2026-06-12)
 - [x] **Phase 11: Conversational Data Pipeline** - PersonaChat (self_revised) → role-token memmap bins with loss masks; tokenizer-inflation gate measured first *(DailyDialog cut per D-00, 2026-07-31)* (completed 2026-07-31)
 - [x] **Phase 12: Stage-2 Conversational Fine-Tune** - Telemetry debts fixed, λ sweep, full fine-tune of `best.pt` to a conversational base with retention logged from step 0 (completed 2026-08-01)
-- [ ] **Phase 13: EWC A/B No-Forgetting Experiment** - Identical-arm naive-vs-EWC A/B, 2×2 acquisition+retention result, committed forgetting curves + λ frontier
+- [x] **Phase 13: EWC A/B No-Forgetting Experiment** - Identical-arm naive-vs-EWC A/B, 2×2 acquisition+retention result, committed forgetting curves + λ frontier (completed 2026-08-01)
 - [ ] **Phase 14: Teach-Then-Recall Demo** - Clean-room personalization: LoRA adapter recalls taught facts fresh-process/empty-prompt, live on/off toggle
 - [ ] **Phase 15: Figures & Writeup** - Weight-delta + Fisher heatmaps, REPORT/README/demo.ipynb v2.0 narrative with honest numbers
 
@@ -183,7 +183,7 @@ Plans:
 
 **Wave 4** *(blocked on 13-03)*
 
-- [ ] 13-04-PLAN.md — Finalize `results/phase13_ab_report.md`: 2×2 end-of-run table, gate verdict, D-11 table, D-05 threats-to-validity, D-09 reconciliation
+- [x] 13-04-PLAN.md — Finalize `results/phase13_ab_report.md`: 2×2 end-of-run table, gate verdict, D-11 table, D-05 threats-to-validity, D-09 reconciliation
 
 ### Phase 14: Teach-Then-Recall Demo
 
@@ -234,6 +234,6 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
 | 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
-| 13. EWC A/B No-Forgetting Experiment | v2.0 | 3/4 | In Progress|  |
+| 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete   | 2026-08-01 |
 | 14. Teach-Then-Recall Demo | v2.0 | 0/TBD | Not started | - |
 | 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |

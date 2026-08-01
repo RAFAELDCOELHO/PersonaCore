@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: executing
-stopped_at: Completed 13-01-PLAN.md
-last_updated: "2026-08-01T19:09:51.939Z"
+status: verifying
+stopped_at: Completed 13-04-PLAN.md
+last_updated: "2026-08-01T19:18:36.374Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 20
-  completed_plans: 19
-  percent: 57
+  completed_plans: 20
+  percent: 71
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 Phase: 13 (ewc-a-b-no-forgetting-experiment) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-01
 
-Progress: [██████████] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [██████████] 95%
 | Phase 13 P01 | 22min | 3 tasks | 3 files |
 | Phase 13 P02 | 82min | 2 tasks | 2 files |
 | Phase 13 P03 | 24min | 2 tasks | 6 files |
+| Phase 13 P04 | 18min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,7 @@ Key carry-forwards for v2.0:
 - [Phase 13]: 13-03: D-12 samples surface an honest negative — BOTH arms leak role tokens mid-story (79 naive / 70 EWC), so the 4.63-PPL retention gap does NOT translate into free-running story-mode adherence; 13-04 may claim the retention-PPL gate, NOT qualitative retention
 - [Phase 13]: 13-03: free-running generation IS bit-identical across processes on MPS (sample body diff empty over two runs) — unlike eval PPL (~1e-8); safe reproducibility claim for the report
 - [Phase 13]: 13-03: VIZ-04 lambda=0 point is hardcoded-with-citation (4.4453, 5.9553; smoke report Stage 2/3, 666d096) because ft_lr_9e-5.csv has no retention column — six-point count pinned by test so the Pitfall-1 five-point regression cannot recur
+- [Phase 13]: 13-04: report claim scoped to teacher-forced retention PPL only — measured 79/70 role-token leakage means generative retention is NOT claimed
 
 ### Pending Todos
 
@@ -124,8 +126,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-01T19:09:30.040Z
-Stopped at: Completed 13-01-PLAN.md
+Last session: 2026-08-01T19:18:32.431Z
+Stopped at: Completed 13-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
