@@ -87,10 +87,10 @@ K = 2
 # §3 — Stage 0 calibration budget. ONE run (masked arm, LR 9e-5 mid-sweep, seed 1337).
 CAL_MAX_STEPS = 5000
 
-# §3 — SENTINEL (0) until the slope rule recommends a budget; the executor locks the value here
-# and re-runs (two-pass flow). Enforced run_ablations-style: SystemExit when
-# |recommended − SMOKE_STEPS| > EVAL_INTERVAL ("update the constant and re-run").
-SMOKE_STEPS = 0
+# §3 — locked 2026-08-01 from the slope rule on this M3's ft_cal.csv run (recommended 1250,
+# capped=False; sentinel was 0 pre-calibration — two-pass flow). Enforced run_ablations-style:
+# SystemExit when |recommended − SMOKE_STEPS| > EVAL_INTERVAL ("update the constant and re-run").
+SMOKE_STEPS = 1250
 
 # §7 — LR grid: pretrain peak 3e-4 (pretrain_tinystories.py) × {1, 0.3, 0.1}.
 LR_GRID = (3e-4, 9e-5, 3e-5)
