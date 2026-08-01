@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: ready_to_plan
-stopped_at: Phase 12 complete (5/5) — ready to discuss Phase 13
-last_updated: 2026-08-01T13:57:24.470Z
+status: planning
+stopped_at: Phase 13 context gathered
+last_updated: "2026-08-01T16:42:43.732Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 7
@@ -111,9 +111,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-01T13:38:23.184Z
-Stopped at: Completed 12-05-PLAN.md
-Resume file: None
+Last session: 2026-08-01T16:42:43.727Z
+Stopped at: Phase 13 context gathered
+Resume file: .planning/phases/13-ewc-a-b-no-forgetting-experiment/13-CONTEXT.md
 
 ## Operator Next Steps
 
