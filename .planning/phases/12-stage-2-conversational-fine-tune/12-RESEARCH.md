@@ -603,20 +603,27 @@ need the seam, and deterministic sweeps — not `estimate_loss` draws — are th
 All other load-bearing claims in this document are `[VERIFIED]` against the repo this session
 (file:line cited inline) or `[CITED]` from the canonical v2.0 research documents.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three resolved by user-confirmed locks (2026-08-01) and encoded in the plans' pre-registration.
 
 1. **Exact operational form of the D-02 "non-monotonic" gate** — recommendation in Pitfall 5
    (increase > k×noise-floor); must be locked in the plan's pre-registration block before Stage 0b
    produces the floor. If the seed-pair deltas are too large to define it cheaply, the D-02
    fallback (blocking checkpoint on raw curves) is itself pre-registered — invoke it explicitly.
+   **RESOLVED:** Lock 1 accepted as recommended — encoded in 12-04-PLAN `<pre_registration>` §4.
 2. **Budget-recalibration flatten rule constants** — the v1.0 rule (last-1k improvement < 15% of
    first-1k, coherent band 1.0–1.3) has TinyStories-specific constants; the dialogue analog needs
    its band re-stated (dialogue val CE will sit higher). Recommend keeping the slope rule, dropping
    the absolute band, and pre-registering "budget = smallest step where masked-vs-unmasked
    separation would exceed the noise floor" as D-03 says.
+   **RESOLVED:** Lock 2 — slope rule kept, absolute band dropped; Stage 0b floor measured AT the
+   recalibrated budget doubles as validity check (halt per D-07 exception) — 12-04-PLAN §3.
 3. **Whether `val_mask_bin` (in-loop masked val for best-selection) ships, or best-selection stays
    on unmasked val CE** — recommended: ship it (one small branch in `estimate_loss`, symmetric with
    the train seam); either way the gates use the deterministic sweep. Planner locks it.
+   **RESOLVED:** Lock 3 — `val_mask_bin` ships with selection-specific justification (checkpoint
+   selected FOR assistant-token capability) — 12-01-PLAN T1.
 
 ## Environment Availability
 
