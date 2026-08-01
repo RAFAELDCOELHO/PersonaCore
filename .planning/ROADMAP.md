@@ -179,7 +179,7 @@ Plans:
 
 **Wave 3** *(blocked on 13-02)*
 
-- [ ] 13-03-PLAN.md — VIZ-01 forgetting-curve + VIZ-04 six-point frontier figures + D-12 one-run both-endpoint retention samples
+- [x] 13-03-PLAN.md — VIZ-01 forgetting-curve + VIZ-04 six-point frontier figures + D-12 one-run both-endpoint retention samples
 
 **Wave 4** *(blocked on 13-03)*
 
@@ -234,6 +234,6 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
 | 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
-| 13. EWC A/B No-Forgetting Experiment | v2.0 | 2/4 | In Progress|  |
+| 13. EWC A/B No-Forgetting Experiment | v2.0 | 3/4 | In Progress|  |
 | 14. Teach-Then-Recall Demo | v2.0 | 0/TBD | Not started | - |
 | 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |

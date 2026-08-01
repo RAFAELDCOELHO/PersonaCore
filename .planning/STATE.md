@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
 stopped_at: Completed 13-01-PLAN.md
-last_updated: "2026-08-01T18:55:00.750Z"
+last_updated: "2026-08-01T19:09:51.939Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
   percent: 57
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 13 (ewc-a-b-no-forgetting-experiment) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-08-01
 
-Progress: [█████████░] 90%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 90%
 | Phase 12 P05 | 45min | 3 tasks | 5 files |
 | Phase 13 P01 | 22min | 3 tasks | 3 files |
 | Phase 13 P02 | 82min | 2 tasks | 2 files |
+| Phase 13 P03 | 24min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Key carry-forwards for v2.0:
 - [Phase 13]: 13-02: step-250 twin check passed on train_loss + ewc_penalty BIT-IDENTITY to finetune_prod.csv; eval PPL columns differ by 3.6e-8 (MPS reduction-order variance, not data-order drift) — no relaunch, trajectory provably identical to production
 - [Phase 13]: 13-02: D-11 reproduction effectively exact (retention delta +1.1e-7, dialogue +2.9e-8 vs the 12-05 production run) — finetune_ab.py confirmed a faithful twin of finetune_dialog.py
 - [Phase 13]: 13-02: pre-registered gate PASSES at 33.6x margin — naive retention 8.524171 vs EWC 3.891140 (delta 4.633031 vs MARGIN 0.137860); EWC costs +0.380555 dialogue PPL, descriptive with no gate (D-06)
+- [Phase 13]: 13-03: D-12 samples surface an honest negative — BOTH arms leak role tokens mid-story (79 naive / 70 EWC), so the 4.63-PPL retention gap does NOT translate into free-running story-mode adherence; 13-04 may claim the retention-PPL gate, NOT qualitative retention
+- [Phase 13]: 13-03: free-running generation IS bit-identical across processes on MPS (sample body diff empty over two runs) — unlike eval PPL (~1e-8); safe reproducibility claim for the report
+- [Phase 13]: 13-03: VIZ-04 lambda=0 point is hardcoded-with-citation (4.4453, 5.9553; smoke report Stage 2/3, 666d096) because ft_lr_9e-5.csv has no retention column — six-point count pinned by test so the Pitfall-1 five-point regression cannot recur
 
 ### Pending Todos
 
@@ -120,7 +124,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-01T18:54:53.556Z
+Last session: 2026-08-01T19:09:30.040Z
 Stopped at: Completed 13-01-PLAN.md
 Resume file: None
 

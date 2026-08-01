@@ -48,10 +48,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Visualization
 
-- [ ] **VIZ-01**: Forgetting-curve figure — retention PPL vs fine-tune steps per arm, dashed baseline at 2.1066, acquisition companion panel; committed to repo
+- [x] **VIZ-01**: Forgetting-curve figure — retention PPL vs fine-tune steps per arm, dashed baseline at 2.1066, acquisition companion panel; committed to repo
 - [ ] **VIZ-02**: Weight-delta heatmap — relative Frobenius change `‖ΔW‖_F/‖W₀‖_F` on the layer×module grid (six named projections), log color scale; committed to repo
 - [ ] **VIZ-03**: Fisher heatmap juxtaposed with naive-vs-EWC delta heatmaps (three-panel figure — EWC visibly dodging high-Fisher coordinates)
-- [ ] **VIZ-04**: λ stability–plasticity frontier plot (retention vs acquisition, one point per λ from the sweep logs)
+- [x] **VIZ-04**: λ stability–plasticity frontier plot (retention vs acquisition, one point per λ from the sweep logs)
 
 ### Writeup
 
@@ -111,8 +111,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TUNE-01 | Phase 12 | Complete |
 | TUNE-02 | Phase 12 | Complete |
 | DEMO-04 | Phase 13 | Pending |
-| VIZ-01 | Phase 13 | Pending |
-| VIZ-04 | Phase 13 | Pending |
+| VIZ-01 | Phase 13 | Complete |
+| VIZ-04 | Phase 13 | Complete |
 | DEMO-05 | Phase 14 | Pending |
 | DEMO-06 | Phase 14 | Pending |
 | DEMO-07 | Phase 14 | Pending |
