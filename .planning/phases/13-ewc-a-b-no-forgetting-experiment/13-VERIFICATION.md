@@ -1,31 +1,232 @@
 ---
 phase: 13-ewc-a-b-no-forgetting-experiment
-verified: 2026-08-01T22:29:17Z
-status: human_needed
+verified: 2026-08-01T22:58:58Z
+status: passed
 score: 23/23 must-haves verified
 overrides_applied: 0
 re_verification:
-  pass: 2
-  head: a807e56
-  previous_status: gaps_found
-  previous_score: 22/23
-  gaps_closed:
-    - "Committed evidence artifacts make no provenance claim the artifacts themselves contradict (honest-evidence core value)"
+  pass: 3
+  head: 8a7a671
+  previous_status: human_needed
+  previous_score: 23/23
+  gaps_closed: []
   gaps_remaining: []
   regressions: []
+  human_items_closed:
+    - "ROADMAP SC1 wording supersession — amended at ROADMAP.md:164 (d679440), verified accurate and non-duplicative; 13-HUMAN-UAT.md closed 1/1"
   warnings_closed:
-    - "CR-02: PROD_*_4000 pre-registration literals printed but never compared — now enforced by tests/test_phase13_driver.py::test_prod_csv_matches_preregistered_literals (mutation-tested)"
-    - "WR-03: test_gate_boundary could not distinguish > from >= — rewritten to (MARGIN, 0.0); mutation-tested, dies under >="
-  warnings_remaining:
-    - "plot_phase13.py:_series truthiness filter — a missing column silently yields an empty, valid-looking PNG (latent; today's figures are byte-reproducible)"
-    - "plot_phase13.py:rows[-1] on sweep CSVs with no step-1250 assertion (latent; all five CSVs confirmed to end at 1250)"
-human_verification:
-  - test: "Accept the roadmap-wording supersession: ROADMAP.md:164 SC1 says 'λ=0 vs λ*' but Phase 12 §8 recorded λ* = None, so Phase 13 ran λ=0 vs a pre-chosen λ=0.01"
-    expected: "The substitution is documented in results/phase13_ab_report.md:303-305 (## Reconciliation, 'ROADMAP wording superseded') with D-02/D-09 rationale. Confirm this is the intended record, or update ROADMAP.md Phase 13 SC1"
-    why_human: "A scope/wording acceptance decision, not a code fact. The substance of SC1 (identical seeds, config, data order; one-bit difference) is fully verified"
+    - "plot_phase13.py:_series truthiness filter — now raises KeyError on an absent column and ValueError on an all-blank column (f0bae0b); mutation-tested in this verifier's process"
+    - "plot_phase13.py:rows[-1] positional endpoint — now selects SWEEP_ENDPOINT_STEP = 1250 explicitly and raises when absent (f0bae0b); mutation-tested"
+  warnings_remaining: []
 ---
 
 # Phase 13: EWC A/B No-Forgetting Experiment — Verification Report
+
+**Phase Goal:** Committed, unconfounded evidence that EWC mitigates catastrophic forgetting — both retention AND acquisition reported for both arms
+**Verified:** 2026-08-01T22:58:58Z (pass 3, final re-verification at `8a7a671`)
+**Status:** **passed** — 23/23 truths verified, zero gaps, zero open human items, zero open warnings
+**Re-verification:** Yes — final. Pass 2 (`human_needed`, 23/23) and pass 1 (`gaps_found`, 22/23) are retained verbatim below as the audit trail.
+
+---
+
+# Re-Verification Pass 3 (FINAL) — 2026-08-01T22:58:58Z
+
+## Verdict
+
+**PASSED.** The one human item pass 2 held open is closed by an amendment I verified is accurate,
+and nothing regressed. Both remaining latent WARNINGs are also closed and I mutation-tested both
+fixes rather than reading the commit messages. Every number below was re-derived in this
+verifier's own process at `8a7a671`; I read no SUMMARY as evidence.
+
+## The ROADMAP SC1 amendment — accurate and non-duplicative
+
+`ROADMAP.md:164` now reads:
+
+> 1. Naive and EWC arms run with identical seeds, config, and data order, differing ONLY in the
+>    penalty (λ=0 (naive) vs λ=0.01 (pre-chosen, per Phase 12 §8's λ\*=None verdict) — see
+>    results/phase13_ab_report.md:303-305)
+
+Four checks, all passed:
+
+| Check | Method | Result |
+|---|---|---|
+| It describes what actually ran | imported the frozen driver: `LAMBDA_EWC` / `ARMS` / `penalty_for_arm` | `0.01`, `("naive","ewc")`, naive→`None` and ewc→the penalty object — the roadmap's λ pair is the code's λ pair ✓ |
+| The λ\*=None attribution is real | traced the citation to its Phase-12 source | `results/finetune_smoke_report.md:159` — "λ\* = None, demonstrable = False", quoted verbatim at `phase13_ab_report.md:265-267` ✓ |
+| The line-number citation resolves | read `results/phase13_ab_report.md:303-305` | exactly the `**ROADMAP wording superseded:**` paragraph, start to end — the cite is not off-by-N ✓ |
+| It does NOT duplicate the reconciliation prose | `git diff a807e56 HEAD -- .planning/ROADMAP.md` | **one line changed, one line only.** The roadmap carries a parenthetical + pointer; the D-02/D-09 rationale body still lives solely in the report ✓ |
+
+The pass-2 human item is therefore resolved on its merits, not merely marked resolved.
+`13-HUMAN-UAT.md` is `status: complete`, 1/1 passed, 0 issues, 0 pending.
+
+## Regression sweep — nothing moved
+
+The closeout touched 9 files. I re-derived every headline invariant from the committed data
+rather than reasoning from the diff.
+
+| Invariant | Check | Result |
+|---|---|---|
+| Driver still byte-frozen (D-10) | `git diff c3d942e HEAD -- scripts/finetune_ab.py` | **empty** ✓ |
+| Pre-registration table byte-unchanged | `git diff 8fa2aa1 HEAD -- results/phase13_ab_report.md` removals | 7 identical `_Pending_` placeholder lines and nothing else ✓ |
+| A/B report untouched by closeout | `git diff --stat a807e56 HEAD` | report is **not in the diff at all** ✓ |
+| All 8 CSVs untouched | `git diff --stat e3d99b0 HEAD` on arm/prod/sweep CSVs | **empty** ✓ |
+| 2×2 cells | final rows re-read from both arm CSVs | naive 4.192794562524908 / 8.52417066884246; EWC 4.573349242745997 / 3.8911400839446597 — exact match to `phase13_ab_report.md:55-57` ✓ |
+| Gate verdict | imported the frozen driver's own `ewc_mitigates` + `MARGIN` | `True`, delta 4.633030584897801, MARGIN 0.13786, ratio **33.60677923×** (report: 33.61×) ✓ |
+| Acquisition delta | recomputed | +0.3805546802210893 ✓ |
+| Gate strictness | `ewc_mitigates(MARGIN, 0.0)` / `(MARGIN+1e-9, 0.0)` | `False` / `True` — boundary-exclusive `>` intact ✓ |
+| D-11 cross-check | fresh EWC arm vs `finetune_prod.csv` | \|Δ retention\| = 1.0832683e-07; `ewc_penalty` bit-identical (0.13435843586921692) ✓ |
+| Trajectory table | **re-derived all 16 naive-arm interval deltas from the CSV** | 13 up / 3 down, range [−0.06218254, +2.91520713], every printed value matches `:89-96` to the printed precision ✓ |
+| Config determinism / one-bit arm difference | `build_train_config() == build_train_config()`; `penalty_for_arm` both arms | `True`; `None` vs the penalty object ✓ |
+| Working tree | `git status --porcelain` | only untracked `AGENTS.md` (not a phase artifact) ✓ |
+
+## Figures still byte-reproducible **despite** the plot-script rewrite
+
+This was the sharpest regression risk of the closeout: `f0bae0b` rewrote `_series` and replaced
+`rows[-1]` with an explicit step-1250 lookup. I regenerated both figures from the committed CSVs
+with the **new** script and hashed them against the committed PNGs:
+
+```
+phase13_forgetting_curve.png  332e7324100c7e7d44d123400a9ed49ec96dc66b5de251fa19b6acf270e64877  (committed == regenerated)
+phase13_frontier.png          65e9299a4bc6c4e73e4ae7edc4c54c9b016e060a45e512550a2f789ba59c7601  (committed == regenerated)
+```
+
+**Both SHA-256 identical.** The hardening changed which failures are loud, not which pixels are
+drawn. `build_frontier_points()` executed live still returns the same 6 tuples
+(λ=0, 0.01, 0.1, 1, 10, 100), with λ=100 at (16.211242472545788, 2.108236650427832) matching the
+report's counter-case paragraph. SC3 and SC4 are unaffected.
+
+## Pass-2 WARNINGs closed — mutation-tested, not name-tested
+
+| Pass-2 warning | Fix | My mutation check | Verdict |
+|---|---|---|---|
+| `_series` truthiness filter — a missing column silently yields an empty, valid-looking PNG (the Pitfall-1 twin) | explicit `column not in rows[0]` → `KeyError`; empty-rows and all-blank cases → `ValueError`; blank test is `not in (None, "")` | called `_series` with the column absent → **raises `KeyError` naming the CSV and its real columns**; all-blank → **raises `ValueError`**; and `"0.0"` is still kept as a legitimate value (`([0],[0.0])`), so the fix did not overshoot into dropping real zeros | **closed** |
+| `rows[-1]` on sweep CSVs with no step-1250 assertion | `SWEEP_ENDPOINT_STEP = 1250` selected by explicit row lookup | set `SWEEP_ENDPOINT_STEP = 9999` and re-ran `build_frontier_points()` → **raises `ValueError`** naming the CSV, the missing step, and the actual last step (1250). Under the old `rows[-1]` this mutation was undetectable | **closed** |
+
+**Zero warnings remain open.**
+
+## The stop-fraction note — script and markdown agree byte-for-byte
+
+`8812638` extracted the prose into `_stop_fraction_note(n_stopped, n_completions)` and hand-edited
+the committed markdown to match. That hand-edit is exactly where a "generated" claim can quietly
+become a hand-written one, so I imported the function and compared:
+
+```python
+_stop_fraction_note(0, 40) == results/phase13_retention_samples.md lines 31-33  ->  True
+```
+
+All three lines match byte-for-byte, and `MAX_NEW_TOKENS` interpolates to the same `128` the
+prose asserts. The old text ("nearly every completion is budget-truncated") sat directly under a
+table reading `0/20 = 0.00`; the new text leads with the measurement (`0/40 = 0.00`) and derives
+the expectation from it. `0/40` is the sum of the two table rows, not a new measurement.
+
+**No measured number moved.** The full markdown diff since `a807e56` is three note lines replaced
+by three note lines — the proxy table, all 40 generation blocks, and the header protocol claim are
+byte-unchanged. The samples were correctly **not** regenerated (that needs the two gitignored
+278 MB / 167 MB checkpoints), and nothing in the edit pretends they were.
+
+## Independent recount of the leakage and eos figures
+
+I did not carry pass 2's counts forward. I re-parsed `results/phase13_retention_samples.md`,
+split it into 10 prompt sections × 2 arms × (greedy + warm), and recounted the role-token strings
+myself. **Note the parsing trap:** several completions contain literal newlines, so only their
+first line carries the `> ` block-quote prefix — a naive `^> ` line regex undercounts (it gave me
+55 / 11). Splitting on the `**Greedy**` / `**Warm**` markers instead recovers the full blocks:
+
+| measurement | my independent recount | samples file `:18-19` | report `:178`, `:349-350` |
+|---|---|---|---|
+| generation blocks | 20 naive / 20 EWC | 20 / 20 | 20 / 20 |
+| role-token leakage | **79 / 69** | 79 / 69 | 79 / 69 |
+| eos termination | 0/40 (no block under 150 chars → no early stop in either arm) | 0/20 and 0/20 | 0/20 and 0/20 |
+
+Three independent derivations agree. The stale-citation sweep is also still clean: **zero** `70`
+or `1/20` matches survive anywhere in `results/`, `scripts/`, or `tests/`.
+
+## Re-run spot-checks (this verifier's process, at `8a7a671`)
+
+| Behavior | Command | Result | Status |
+|---|---|---|---|
+| Full suite green | `.venv/bin/python -m pytest tests/ -q` | **285 passed**, 1 skipped, 106s | ✓ PASS |
+| Lint + format | `ruff check scripts/ tests/ src/`; `ruff format --check .` | All checks passed; 122 files already formatted | ✓ PASS |
+| Debt markers | `TBD\|FIXME\|XXX\|TODO\|HACK\|PLACEHOLDER` over all phase-13 scripts, tests, and evidence artifacts | **none** — debt-marker gate passes | ✓ PASS |
+| Figures reproduce under the NEW plot script | regenerate → `shasum -a 256` vs committed | both **identical** | ✓ PASS |
+| `_series` fails loudly on a missing column | call with the column absent | `KeyError` | ✓ PASS |
+| `_series` keeps a legitimate `"0.0"` | `_series([{step:0,x:"0.0"}],"x")` | `([0],[0.0])` | ✓ PASS |
+| Frontier endpoint guard fires | `SWEEP_ENDPOINT_STEP = 9999` | `ValueError` naming the CSV | ✓ PASS |
+| Stop-note script/markdown parity | import `_stop_fraction_note(0,40)`, compare to the file | byte-identical | ✓ PASS |
+| Gate on real data | import frozen driver, `ewc_mitigates(8.52417…, 3.89114…)` | `True`, 33.6068× MARGIN | ✓ PASS |
+| Gate boundary strictness | `(MARGIN, 0.0)` and `(MARGIN+1e-9, 0.0)` | `False` / `True` | ✓ PASS |
+| Trajectory re-derivation | recompute 16 naive-arm deltas | matches the report exactly | ✓ PASS |
+| Leakage recount | re-parse the 40 blocks | 79 / 69, no early stops | ✓ PASS |
+| Both arms train end-to-end | — | ? SKIP | 37 min/arm on MPS; the evidence is the committed CSVs + the bit-identical D-11 prod reproduction |
+
+### Probe Execution
+
+No `scripts/*/tests/probe-*.sh` exist and no PLAN/SUMMARY declares a probe; not a
+migration/tooling phase. **Step 7c: SKIPPED (no probes declared or discoverable).** The runnable
+evidence is the spot-check table above, all executed in this verifier's own process.
+
+## Requirements coverage (final)
+
+| Requirement | Source Plan | Status | Evidence |
+|---|---|---|---|
+| DEMO-04 | 13-01, 13-02, 13-03, 13-04 | ✓ SATISFIED | Truths 1, 2, 18 — both columns of the 2×2 re-derived from the CSVs this pass, plus the movement-from-anchor table; the "retention-only sleight of hand" is explicitly refused |
+| VIZ-01 | 13-03 | ✓ SATISFIED | Truth 3 — figure byte-reproducible under the rewritten plot script |
+| VIZ-04 | 13-03 | ✓ SATISFIED | Truths 4, 16 — 6 points, 5 now read by explicit step-1250 lookup, λ=0 carries its pre-registered provenance exception |
+
+`REQUIREMENTS.md:113-115` maps exactly DEMO-04, VIZ-01, VIZ-04 to Phase 13; all three are marked
+**Complete**, and the coverage block still reconciles (25 v2.0 requirements, 25 mapped).
+**Orphaned requirements: none.**
+
+## Security
+
+`13-SECURITY.md` is `status: verified`, `threats_open: 0`, 12/12. No phase-13 file carries a debt
+marker, and there is no network, auth, or untrusted-input surface in this phase.
+
+## Human verification remaining
+
+**None.** The single pass-2 item is closed by the verified `ROADMAP.md:164` amendment; pass-1
+items 2 (CR-01 resolution) and 3 (figure legibility) were closed in pass 2. `13-HUMAN-UAT.md` is
+complete at 1/1. No new visual, real-time, or external-service item was introduced by the
+closeout — both PNGs are byte-identical to the ones already inspected at full size in pass 2.
+
+## Anti-patterns (final)
+
+**None open.** The pass-1 register carried five entries: CR-01, CR-02 and WR-03 closed in pass 2
+(mutation-tested there), and the two `plot_phase13.py` latents closed and mutation-tested here.
+
+**One ℹ️ INFO, explicitly non-gating:** `.planning/STATE.md:93,96` still record "79 naive / 70 EWC"
+and "79/70". These are **dated decision-log entries** written at 13-03/13-04 time, before the
+CR-01 fix moved the EWC count to 69 — a point-in-time record of the decision taken then, and
+deliberately not rewritten. Rewriting a decision log to match a later measurement would itself be
+the dishonesty this project's core value guards against. Every **published** artifact (the A/B
+report and the samples file) carries 69, and `13-SECURITY.md` records the `70 → 69` cascade
+explicitly. Not a gap.
+
+## Pass-3 Summary
+
+The phase goal is achieved and the evidence is internally consistent, externally reproducible, and
+honest about its own limits. The pre-registration guarantee survives every subsequent edit intact:
+`scripts/finetune_ab.py` is **still byte-identical to `c3d942e`**, its pre-registration table is
+still byte-identical to `8fa2aa1`, and all eight CSVs are byte-identical to the runs that produced
+them. The closeout commits changed only prose, a roadmap pointer, and two failure modes in the
+plotting code — and I proved the last of those changed nothing observable by regenerating both
+figures to identical SHA-256 hashes.
+
+All four ROADMAP success criteria hold, both arms are reported on both axes, the gate passes at
+33.6× its pre-registered margin, and the report leads its threats register with the measured
+negative (both arms leak role tokens; generative retention is **not** claimed). No gaps, no open
+warnings, no open human items.
+
+**The phase can be formally marked complete.**
+
+---
+---
+
+_The two reports below are passes 2 and 1, retained verbatim as the audit trail. Pass 2's single
+open human item and both of its remaining WARNINGs are closed — see pass 3 above._
+
+---
+
+# Pass 2 — Phase 13 Verification Report (2026-08-01T22:29:17Z, human_needed, 23/23)
 
 **Phase Goal:** Committed, unconfounded evidence that EWC mitigates catastrophic forgetting — both retention AND acquisition reported for both arms
 **Verified:** 2026-08-01T22:29:17Z (pass 2, re-verification at `a807e56`)
