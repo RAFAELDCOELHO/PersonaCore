@@ -3,11 +3,11 @@
 > **Audit trail only.** Do not use as input to planning, research, or execution agents.
 > Decisions are captured in CONTEXT.md — this log preserves the alternatives considered.
 
-**Date:** 2026-08-01
+**Date:** 2026-08-01 (two passes — the second reopened the file to cover the demo surface)
 **Phase:** 14-Teach-Then-Recall Demo
 **Areas discussed:** Fact set & tokenizer pre-flight; Thresholds, scoring & controls; Teaching
-grammar & held-out split
-**Area offered but not reached:** Demo surface & clean-room evidence (session context limit)
+grammar & held-out split; Demo surface & clean-room evidence
+**Areas remaining:** none — all four gray areas decided
 
 ---
 
@@ -211,6 +211,69 @@ one calibration run answers threshold, family allocation, and replay from one me
 
 ---
 
+## Demo surface & clean-room evidence
+
+*(Second pass. Claude noted up front that PITFALLS-11 step 1 is literally "save adapter; kill the
+process", so an in-UI Teach tab puts teaching and recall in the same process — the exact condition
+the protocol excludes.)*
+
+### Q1 — Demo scope
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Toggle + Reset, adapter trained offline | Clean room inherited by construction; smallest surface | ✓ |
+| Full Teach / Chat / Reset Blocks | Best demo moment; training in a callback, clean room must be re-proved | |
+| Toggle + Reset now, Teach tab as stretch | Keeps upside available; stretch items become expectations | |
+
+**Notes:** the "no watch-it-learn moment" cost is accepted as the correct trade, not a compromise —
+option 2 would require re-proving clean-room after the fact (a process restart before recall
+counts), undermining exactly the claim SC4 exists to demonstrate. Option 3 explicitly rejected:
+decision closed fully, no expectation left to manage later.
+
+### Q2 — Demo file placement
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| New standalone `scripts/personalize_demo.py` | M1 demo untouched and reproducible; boilerplate duplicated | ✓ |
+| New script + extract shared setup into the package | Removes drift risk; refactors a frozen v1.0 artifact | |
+| Extend `demo_app.py` with an adapter mode | Least code; breaks the 08-UI-SPEC honesty lock and the Phase-8 GIF/README | |
+
+**Notes:** since option 1 duplicates rather than extracts, add a CPU-only regression test asserting
+the two scripts' `forbid_ids` mask **tensors** match — same mask-building call, same source
+function, compared directly rather than trusting visual code similarity. Same register as Phase
+12's WR-04 duplicated-`cap_persona` fix, except the fix is a shared test rather than a shared
+function precisely because `demo_app.py` must stay literally untouched. Extend the same treatment
+only to duplicated boilerplate with a named anti-pattern attached; generic duplication does not
+need its own test, `forbid_ids` does because Anti-pattern 7 names it.
+
+### Q3 — Context-token dump placement
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Both — committed harness evidence + live UI panel | Auditable in the repo and visible in the demo | ✓ |
+| Scripted harness only | Satisfies SC2; the demo asks to be trusted | |
+| Live UI panel only | Ephemeral screen state; nothing in the repo proves the scored run's clean room | |
+
+**Notes:** the UI panel must render from the exact same prompt-construction function the harness
+calls, never a parallel reimplementation, with a regression test asserting displayed ids and
+committed dump are byte-identical for the same input. Same failure mode as Q2 under a different
+name: two code paths claiming to prove the same thing, true only if enforced structurally.
+
+### Q4 — Generation budget
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Derived constant + hard fit guard; UI slider floors at it | Traceable to the census; no UI setting can fake a false negative | ✓ |
+| Single derived constant everywhere, no slider | Maximally reproducible; loses the M1 slider affordance | |
+| Round constants, census as post-hoc assertion | Simplest; a fact-set change can silently shrink headroom | |
+
+**Notes:** the derivation and its headroom margin must be committed as an auditable computation —
+census, formula, resulting constant, in one place a future reader can re-derive without re-running
+anything. Not a number derived in a chat log, not a comment saying "trust this"; the same
+discipline applied to every other locked number in this phase.
+
+---
+
 ## Claude's Discretion
 
 - Loss masking for the teaching run (PITFALLS-14 reverses Phase 12's unmasked verdict by design —
@@ -224,10 +287,8 @@ one calibration run answers threshold, family allocation, and replay from one me
 
 ## Deferred Ideas
 
-- **Demo surface & clean-room evidence** — offered, not reached before the session's context limit.
-  Teach-in-UI vs ship-a-trained-adapter, new script vs extending `demo_app.py`, where the SC2
-  context-token dump lives, and the generation-budget constraint flagged during Q5 of Area 1.
-  A second `/gsd-discuss-phase 14` pass (choose "Update it") can decide these before planning.
+- **In-UI Teach tab (ARCHITECTURE §Stage 3)** — CLOSED on the merits, not deferred. Recorded so its
+  absence is not later mistaken for an oversight or revived as a stretch goal.
 - DEMO-F1 two-persona adapter swap — already a Future Requirement
 - DEMO-F2 prompt-stuffed comparative baseline — already a Future Requirement; the question-fairness
   control is deliberately narrower and must be labelled to keep them distinct

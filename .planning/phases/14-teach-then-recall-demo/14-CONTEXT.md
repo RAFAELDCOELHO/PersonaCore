@@ -1,7 +1,8 @@
 # Phase 14: Teach-Then-Recall Demo - Context
 
 **Gathered:** 2026-08-01
-**Status:** Ready for planning
+**Updated:** 2026-08-01 — second discuss pass closed the demo-surface area (D-16..D-19)
+**Status:** Ready for planning — all four gray areas decided
 
 <domain>
 ## Phase Boundary
@@ -199,6 +200,68 @@ future milestone); any retraining of the conversational base or the tokenizer.
   family allocation, and replay — from one measured source, instead of three separately-justified
   guesses.** Its decision rule, covering all three derivations, is committed before it runs.
 
+### Demo surface & clean-room evidence
+
+- **D-16:** **The demo ships a pre-trained adapter with a live toggle + Reset — there is NO Teach
+  tab.** The UI loads `convbase_slim.pt` + the persona `adapter.pt` produced by the gated offline
+  teaching script, and offers memory **ON/OFF** (`set_adapter_enabled`) plus **Reset**
+  (`eject_adapter` — "drop the adapter, instant forget"). Teaching provably happened in a
+  *different process*, so PITFALLS-11 step 1 ("save adapter; **kill the process**") is satisfied by
+  construction and the clean-room claim is inherited rather than re-argued.
+  **The "no watch-it-learn moment" cost is accepted as the correct trade, not a compromise:**
+  ARCHITECTURE §Stage 3's in-UI Teach tab would put teaching and recall in the same process, so the
+  clean room would have to be re-established afterward (realistically by forcing a restart before
+  recall — the Teach tab arguing against itself), undermining exactly the claim SC4 exists to
+  demonstrate. **No stretch or deferred Teach tab** — this decision is closed, not an expectation
+  to manage later. Do not reintroduce it during planning.
+
+- **D-17:** **New standalone `scripts/personalize_demo.py`; `scripts/demo_app.py` stays LITERALLY
+  untouched.** The M1 demo's 08-UI-SPEC honesty lock ("This is the Milestone-1 base model: no chat
+  tuning, no personalization yet — that's Milestone 2") stays true and the v1.0 artifact stays
+  reproducible exactly as shipped. The small offline boilerplate is therefore duplicated
+  (analytics kill-switch **before** `import gradio`, `share=False`, CPU-pinned `RuntimeConfig`,
+  `forbid_ids` captured at build time).
+  **Required mitigation:** a CPU-only regression test (no GPU, no generation) asserting
+  `personalize_demo.py`'s `forbid_ids` construction matches `demo_app.py`'s — **comparing the
+  resulting mask tensors directly**, same mask-building call from the same source function, not
+  trusting visual code similarity. This makes the ARCHITECTURE Anti-pattern-7 drift risk
+  structurally caught by CI, in the register of Phase 12's WR-04 duplicated-`cap_persona` fix —
+  except the fix here is a shared *test* rather than a shared *function*, precisely because
+  `demo_app.py` must not be refactored.
+  **Scope rule for the same treatment:** cover other duplicated boilerplate this way **only where a
+  named, documented anti-pattern is attached to getting it wrong**; name any such piece explicitly
+  in the plan. Generic duplication (analytics kill-switch ordering, CPU pin) with no named failure
+  mode does not need its own test. `forbid_ids` does, because it has an anti-pattern number.
+
+- **D-18:** **The context-token dump lives in BOTH places.** The scripted recall harness writes the
+  exact prompt token ids into the committed `results/` evidence (SC2's literal requirement), AND
+  the demo displays the exact ids fed to the model each turn — PITFALLS-11 step 3 calls the live
+  display "the single feature [that] converts 'trust me' into 'check it'," letting a reviewer
+  watching the demo see the fact string is absent from context without opening a report.
+  **Required mitigation:** the UI panel must render its token-id display **from the exact same
+  prompt-construction function the harness calls**, never a parallel reimplementation that could
+  silently diverge from what the model actually receives. A regression test asserts the UI panel's
+  displayed ids and the harness's committed dump are **byte-identical for the same input** — same
+  structural-enforcement register as D-17's drift test. This is the same failure mode under a
+  different name: two code paths claiming to show or prove the same thing, which stays true only if
+  something enforces it structurally rather than by convention.
+  *Shape consequence:* the toggle alone could ride `gr.ChatInterface`'s `additional_inputs` (as the
+  M1 sliders do), but Reset/eject is stateful and destructive and the token panel is a second
+  output — together these commit the demo to `gr.Blocks`.
+
+- **D-19:** **Generation budget is derived from the fact-set token census, with a hard fit guard.**
+  The scoring harness uses a **fixed** `max_new_tokens` derived from the locked fact set's token
+  census plus documented headroom, and **raises `SystemExit` if any locked fact's value cannot
+  fit** — an unutterable fact would otherwise present as a recall failure while the real cause is
+  budget, the single most misleading way this could break. The demo UI keeps an exploration slider
+  **whose minimum is that constant**, so no in-UI setting can manufacture a false negative; the
+  minimum needs a comment saying why it is not zero.
+  **The derivation must be committed as an auditable computation** — a small function or a clearly
+  commented constant derivation in the harness showing the fact-set token census it was computed
+  from, the headroom formula, and the resulting constant, **in one place a future reader can
+  re-derive without re-running anything.** Not a number that "was derived" in a chat log, and not a
+  comment saying "trust this." Same discipline this phase applies to every other locked number.
+
 ### Claude's Discretion
 
 - **Loss masking for the teaching run.** PITFALLS-14 is explicit that the two masking regimes must
@@ -370,31 +433,24 @@ nothing.
 - **One measured source over three guesses.** The calibration run was deliberately grown to answer
   threshold, family allocation, and replay together (D-09/D-14/D-15) rather than letting each be
   independently justified and checked for compatibility afterward.
+- **Two code paths that claim to prove the same thing must be held together structurally, not by
+  convention.** Applied twice in the demo-surface pass: the `forbid_ids` mask-tensor comparison
+  between the two demo scripts (D-17) and the byte-identity check between the UI's token panel and
+  the harness's committed dump (D-18). Both are the same failure mode under different names, and
+  both were answered with a test rather than a comment — the register of Phase 12's WR-04 fix.
+- **Every locked number is re-derivable from committed material.** D-19's generation budget must
+  show its census, formula, and result in one auditable place, matching how this phase treats
+  thresholds, margins, and provenance SHAs everywhere else.
 
 </specifics>
 
 <deferred>
 ## Deferred Ideas
 
-- **Demo surface & clean-room evidence — NOT DISCUSSED, the phase's largest open scope question.**
-  This session hit its context limit before reaching it. The researcher/planner must resolve:
-  - **Teach-in-UI vs ship-a-trained-adapter.** `ARCHITECTURE.md` §Stage 3 proposes a new
-    `scripts/personalize_demo.py` with `gr.Blocks` **Teach/Chat/Reset** tabs — live on-device
-    training inside the UI. SC4 and DEMO-07 only require that *"the adapter toggles on/off live —
-    same process, same prompt, memory on/off."* That gap is the difference between a small plan and
-    a large one and should be an explicit, argued decision, not an inherited assumption.
-  - **New script vs extending `scripts/demo_app.py`**, which is honesty-locked (08-UI-SPEC) as the
-    M1 TinyStories story-completer with "no personalization yet — that's Milestone 2" in its
-    description string.
-  - **Where SC2's context-token dump lives** — scripted harness only, or surfaced in the UI.
-    PITFALLS-11 step 3 calls displaying the exact token ids fed to the model "the single feature
-    [that] converts 'trust me' into 'check it'."
-  - **The generation-budget constraint flagged in D-04** — max new tokens per recall response vs
-    the token cost of the locked fact values. An engineering constraint of the demo surface, to be
-    named as such, never as a guessability proxy.
-
-  If the user wants these decided by them rather than by the planner, run a second
-  `/gsd-discuss-phase 14` pass (choose "Update it") before planning.
+- **ARCHITECTURE §Stage 3's in-UI Teach tab — CLOSED, not deferred.** Rejected on the merits in
+  D-16 (it would put teaching and recall in one process, forcing the clean room to be re-proved).
+  Recorded here so a future reader does not mistake its absence for an oversight or revive it as a
+  stretch goal. Reopening it requires a new decision, not a plan-time judgment call.
 
 - **DEMO-F1 two-persona adapter swap** — the strongest scientific control (same base weights, two
   adapters, two memories). Already a Future Requirement; needs a second teaching set + training run.
