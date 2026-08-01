@@ -1,7 +1,7 @@
 ---
 phase: 13
 slug: ewc-a-b-no-forgetting-experiment
-status: draft
+status: verified
 threats_open: 0
 asvs_level: 1
 created: 2026-08-01
@@ -97,7 +97,10 @@ evidence being silently overwritten or read from a mutable reference), **Repudia
   `PROD_DIALOG_4000`/`PROD_RETENTION_4000` (`:105-106`), are commented "these literals are the
   tripwire" but are referenced only inside a `print()` at `:347`. The declared tripwire is inert.
   This does not break the git-order pre-registration proof, so T-13-03 stays closed, but it is
-  logged as unregistered surface UF-1 below.
+  logged as unregistered surface UF-1 below. **Update (pass 2):** the tripwire is no longer
+  inert — it is now enforced from *outside* the frozen driver by
+  `tests/test_phase13_driver.py::test_prod_csv_matches_preregistered_literals` (`:114-130`). See
+  UF-1 below for the enforcement evidence.
 
 ### T-13-04 — Tampering, relaunch — CLOSED
 
@@ -133,6 +136,11 @@ own two outputs — so an operator instruction to delete never names a Phase-12 
   `torch.load(path, weights_only=False, map_location="cpu")`.
 - Only one `torch.load` in the file; `path` comes exclusively from `ARMS` (`:56-59`), both
   repo-local `checkpoints/phase13_{arm}_latest.pt` written by this repo's own driver.
+- **Re-audit pass 2 (post-`f06f92a`):** re-grepped the current file — still exactly one
+  `torch.load`, now at `:113`, still carrying the T-12-10 TRUSTED-only comment at `:112`, still
+  fed only from `ARMS` (`:60-63`). The RNG fix added no new deserialization site and did not
+  widen `weights_only`. (UF-4's read-side gap — no `step == 4000` / cross-arm config pin on the
+  loaded blob — is unchanged and still logged below.)
 
 ### T-13-08 — Tampering, samples / figures overwrite — CLOSED
 
@@ -141,8 +149,47 @@ own two outputs — so an operator instruction to delete never names a Phase-12 
 - Figures: `plot_forgetting_curve(out_dir)` / `plot_frontier(out_dir)` are `out_dir`-parameterized
   so the smoke test renders into `tmp_path`; both PNGs regenerate byte-identically (SHA-256) from
   the committed CSVs per 13-VERIFICATION, so overwrite is recoverable by design.
+- **Re-audit pass 2 — guard specifically checked for weakening.** The T-13-09 remediation
+  required regenerating the samples, i.e. exactly the situation in which a refuse-to-rerun guard
+  gets "temporarily" relaxed. It was not: `git diff 4f4a58d HEAD -- scripts/make_retention_samples.py`
+  shows **no hunk touching `main()`'s guard block**, which still reads
+  `if SAMPLES_PATH.exists(): raise SystemExit(…)` at `:123-130` — unconditional, no force flag,
+  no env override, no `--overwrite` argument anywhere in the file, and still the **first**
+  statement in `main()`, ahead of both checkpoint loads. Regeneration was done by deleting the
+  stale artifact (the guard's own documented escape hatch), leaving the control in force.
 
 ### T-13-09 — Repudiation, cherry-picking accusation surface — CLOSED (was OPEN/BLOCKER)
+
+**Re-audit 2026-08-01 (pass 2) — independently verified, not taken on the file's word.**
+Traced the generator end-to-end through the real call chain rather than trusting the comment:
+`gen_rng = torch.Generator(device=device).manual_seed(SEED + story_idx)` is constructed
+**inside** the per-prompt loop (`scripts/make_retention_samples.py:164`, loop opens `:159`) and
+passed as `generator=gen_rng` to `_complete` `:166` → `**kw` → `collect`
+(`src/personacore/generation/core.py:83-92`) → `generate(generator=…)` `:35, :73` →
+`next_token(generator=…)` (`src/personacore/generation/sampling.py:70`) →
+`torch.multinomial(probs, num_samples=1, generator=generator)` `:103`. The warm path therefore
+consumes **zero** draws from the global RNG, and the seed is a pure function of `story_idx` —
+independent of the arm, of every earlier prompt, and of whether any earlier prompt stopped
+early. Cross-prompt RNG coupling is eliminated structurally, not merely re-seeded around. The
+greedy path short-circuits to `argmax` (`sampling.py:91-92`) and consumes no draw, so it cannot
+re-introduce coupling either; `model.eval()` (`:118`) removes the only other in-loop RNG
+consumer (dropout). `seed_everything(SEED)` at `:157` is now explicitly non-load-bearing.
+
+Artifact-side re-verification (measured on the committed markdown, this pass):
+- The prompt-20081 EWC anomaly that exposed the defect is **gone** — its warm block is now 230
+  chars; all **20** warm blocks span 186–234 and all **20** greedy blocks 197–232, a uniform
+  band with no short outlier, consistent with the claimed `0/20` eos terminations in both arms.
+- Independent recount of `<|user|>`/`<|assistant|>`/`<|system|>` occurrences inside the per-arm
+  sections of `results/phase13_retention_samples.md`: naive **79**, EWC **69** — exactly the
+  counts the file's own proxy table and the report publish.
+- The two previously-false provenance sentences now describe the implemented protocol:
+  `phase13_retention_samples.md:8-11` ("per-PROMPT `torch.Generator` seeded `1337 +
+  story_idx`, identical across arms … an early stop in one prompt cannot shift any later
+  prompt's stream") and `results/phase13_ab_report.md:341-344` (same claim, `## Retention
+  Samples`). Both are now true of the code as written. No residual overstatement found.
+- `git diff 4f4a58d HEAD -- scripts/make_retention_samples.py` touches only the docstring, the
+  `SEED` comment, the generator construction/threading and the header strings — the T-13-08
+  guard and the T-13-07 `torch.load` site are byte-unchanged (see those entries).
 
 **Resolution (option A, below):** `scripts/make_retention_samples.py` now builds a per-PROMPT
 `torch.Generator(device=device).manual_seed(SEED + story_idx)` and threads it into the warm
@@ -233,6 +280,16 @@ verified deterministic across processes.
   publishes the sample proxies (79 / 69, 0/20, 0/20), which are non-CSV numbers sourced from
   `phase13_retention_samples.md` — traceable to a committed artifact, and since the T-13-09
   remediation that artifact's pairing claim holds as stated.
+- **Re-audit pass 2 — the changed numbers were re-traced, not assumed.** The proxies moved with
+  the regeneration (EWC eos `1/20 → 0/20`, EWC leakage `70 → 69`), so every published sample
+  number was re-derived: the report's `## Retention Samples` table (`:349-350`) and its inline
+  citation (`:178`, "79 (naive) vs 69 (EWC)") match `phase13_retention_samples.md:17-18`
+  byte-for-byte, and both match my own independent recount off the rendered samples (79 / 69)
+  and block-length scan (no early stop in any of the 40 blocks). The CSV-sourced numbers are
+  also re-confirmed unchanged: the 2×2 cells equal the final rows of the committed arm CSVs
+  exactly — naive `4.192794562524908` / `8.52417066884246`, EWC `4.573349242745997` /
+  `3.8911400839446597`, both files clean in `git status`. WARNING-2 (the gate is executed only
+  by tests, not by a shipping artifact-producing step) is unchanged.
 
 ### T-13-11 — Tampering, pre-registration table drift — CLOSED
 
@@ -240,8 +297,15 @@ verified deterministic across processes.
 `_Pending — filled by Plan 13-04 after both arms run._` placeholders. Every pre-registration table
 row is byte-unchanged from the pre-run commit.
 
+**Re-audit pass 2 (the report was edited again after the RNG fix, so this was re-run):** extracted
+the whole `## Pre-Registration` section from `8fa2aa1` and from `HEAD` and compared —
+**byte-identical, 2931 bytes both sides.** The post-fix report edits touched only the
+`## Retention Samples` prose and proxy table. `git diff c3d942e HEAD -- scripts/finetune_ab.py`
+is **still empty** (re-verified this pass), so the constants block backing T-13-03 is also intact.
+
 ### T-13-SC — Tampering, package installs — ACCEPTED, verified
 
+Re-verified pass 2 after three further commits (`f06f92a`, `efc3571`, `ef65247`, `0794cdc`):
 `git diff --stat c3d942e~1 HEAD -- pyproject.toml requirements.txt Makefile` is empty. The full
 changed-file list across the phase contains only planning docs, `results/` evidence, three
 `scripts/` files and two `tests/` files. No dependency was added, pinned, or upgraded, so there is
@@ -256,11 +320,29 @@ mapped to a threat ID at execution time. Recorded here so they do not vanish.
 
 | ID | Surface | Category | Evidence | Why unregistered |
 |----|---------|----------|----------|------------------|
-| UF-1 | D-11 reference input integrity | Tampering (read side) | `finetune_ab.py:105-106` literals used only in `print()` at `:347`; the only enforced comparison (`:350`) is against the mutable `results/finetune_prod.csv` parsed at `:333-336` | T-13-01 / T-13-04 cover **write** targets only. Sound in fact today (`finetune_prod.csv` untouched since `87198ec`; run log shows +0.000000 deltas vs the literals), but the declared tripwire does not exist for any future re-run |
+| UF-1 | D-11 reference input integrity | Tampering (read side) | **RESOLVED (pass 2, `efc3571`)** — see verification note below the table | Was: the `finetune_ab.py:105-106` literals were referenced only in a `print()` at `:347`, so the declared tripwire did not exist for any future re-run |
 | UF-2 | D-11 tolerance reuses the claim margin | Tampering | `finetune_ab.py:350` — `abs(ret − prod) > MARGIN`, where MARGIN is the minimum effect size allowed to *claim* mitigation | A reproduction drift of one full claim margin passes silently; observed drift is ~1e-7, so a tolerance five orders tighter is available. A separate `REPRO_TOL` would make the two quantities distinct |
-| UF-3 | Run-provenance logs not retained in-repo | Repudiation | no `results/phase13_*_run.log` in `git ls-files`; echoes exist only in an ephemeral scratchpad | See T-13-05 WARNING-3; Phase 12 committed its analogue |
+| UF-3 | Run-provenance logs not retained in-repo | Repudiation | no `results/phase13_*_run.log` in `git ls-files`; echoes exist only in an ephemeral scratchpad. **Pass 2 addendum:** the same gap now also covers the sampling path — the report's `## Threats to Validity` row "free-running generation … bit-identical, two separate sampling runs, `diff` empty" and this file's post-fix regeneration-pair evidence (SHA-256 `c59a6c31…6be313e6`, which I re-computed on the committed artifact and it matches) both rest on runs whose logs/second copies are not committed | See T-13-05 WARNING-3; Phase 12 committed its analogue. Not a T-13-09 blocker: the pairing claim is a *within-run* property, proven by reading the code path, not by cross-process determinism |
 | UF-4 | Read-side inputs unvalidated | Tampering | `make_retention_samples.py:106-115` accepts any blob at the arm checkpoint paths (no `step == 4000`, no cross-arm `git_sha`/`train_config` equality, no `ewc_lambda` asymmetry check); `finetune_ab.py:230, 249-252` trusts `retention_anchors.json` for the step-0 retention point with no pin to `best.pt`, although the JSON carries its own `git_sha` | The phase's artifact-isolation discipline (D-07 / WR-02) is write-side only; nothing pins the artifacts being *read* |
-| UF-5 | Raw model output escapes its blockquote in committed evidence | Tampering (rendered artifact integrity) | `make_retention_samples.py:219, 229, 233` interpolate `f"> {text}"`; multi-line completions leave 21 of 40 sample blocks partly outside the quote (measured on the committed markdown) | Generated text — including literal `<\|user\|>` / `<\|assistant\|>` role tokens, the very contamination being measured — renders as document prose, visually indistinguishable from the script's own claims |
+| UF-5 | Raw model output escapes its blockquote in committed evidence | Tampering (rendered artifact integrity) | `make_retention_samples.py:228, 238, 242` interpolate `f"> {text}"`; multi-line completions leave sample blocks partly outside the quote (measured on the committed markdown; line numbers shifted by `f06f92a`, the defect is unchanged) | Generated text — including literal `<\|user\|>` / `<\|assistant\|>` role tokens, the very contamination being measured — renders as document prose, visually indistinguishable from the script's own claims |
+
+**UF-1 enforcement verified (pass 2), not taken on the test's docstring.** The test exists at
+`tests/test_phase13_driver.py:114-130`, is collected by the default suite (no marker, no skip —
+`pytest tests/test_phase13_driver.py` → **8 passed**), reads the final row of `fab.PROD_CSV` and
+asserts `step == MAX_STEPS` plus `abs(csv − PROD_DIALOG_4000) < 1e-9` and
+`abs(csv − PROD_RETENTION_4000) < 1e-9` — the pre-registered literals are the assertion's
+source of truth and the mutable CSV is the thing under test, which is the correct direction.
+
+I confirmed it actually *fails* rather than merely passing: re-executing the test function
+against a copy of `finetune_prod.csv` with `retention_ppl` perturbed by **+1e-8** (five orders
+below `MARGIN`, so the driver's own `:350` check would still pass silently) raises
+`AssertionError`; against a truncated CSV it fails on the `step` assertion. The tripwire is live
+on every commit, not only on a re-run of the 37-minute arm.
+
+Residual scope note (not a blocker, no new flag opened): the test pins the **final row only**, so
+drift in an intermediate `finetune_prod.csv` row would still pass. That matches UF-1's original
+scope (the D-11 step-4000 endpoints) and UF-2 below is unaffected — the driver's run-time
+reproduction tolerance at `finetune_ab.py:350` is still `MARGIN`, not the test's `1e-9`.
 
 ---
 
@@ -279,6 +361,18 @@ mapped to a threat ID at execution time. Recorded here so they do not vanish.
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-08-01 | 12 | 11 | 1 | gsd-security-auditor |
+| 2026-08-01 (pass 2, re-audit @ `0794cdc`) | 12 | 12 | 0 | gsd-security-auditor |
+
+**Pass 2 scope.** Re-audit after the T-13-09 fix (`f06f92a`) and the UF-1 enforcement commit
+(`efc3571`). T-13-09 re-verified independently by tracing the generator through the real call
+chain into `torch.multinomial` and by re-measuring the committed samples (the 151-char
+prompt-20081 outlier is gone; leakage recount 79 / 69 matches both artifacts) — **closed, and
+the two previously-false provenance sentences now match the implemented protocol.** T-13-07,
+T-13-08 (guard specifically checked for weakening — intact, no force flag), T-13-10 (changed
+proxy numbers re-traced) and T-13-11 (pre-reg section re-extracted, byte-identical) re-confirmed
+closed; the frozen driver diff is still empty, so the remaining threats are unaffected by the
+fix. UF-1 moved from inert-tripwire to enforced (drift-injection proved the new test fails).
+UF-2, UF-3, UF-4, UF-5 remain open warnings; WARNING-2 and WARNING-3 are unchanged.
 
 ---
 
@@ -286,8 +380,9 @@ mapped to a threat ID at execution time. Recorded here so they do not vanish.
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [ ] `threats_open: 0` confirmed — **1 open (T-13-09)**
-- [ ] `status: verified` set in frontmatter
+- [x] `threats_open: 0` confirmed — **0 open**; T-13-09 independently re-verified closed at pass 2
+- [x] `status: verified` set in frontmatter
 
-**Approval:** pending — T-13-09 must be closed (regenerate with a per-prompt generator, or correct
-the two provenance sentences and add a threats-register line) before this phase ships.
+**Approval:** approved. All 12 threats closed. Four non-blocking warnings (UF-2 D-11 tolerance
+reuses the claim margin, UF-3 run/regeneration provenance not retained in-repo, UF-4 read-side
+inputs unpinned, UF-5 raw model output escapes its blockquote) carry to the next phase.
