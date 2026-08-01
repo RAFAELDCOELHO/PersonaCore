@@ -166,7 +166,24 @@ Plans:
   3. The forgetting-curve figure is committed: retention PPL vs fine-tune steps per arm, dashed baseline at 2.1066, acquisition companion panel
   4. The λ stability–plasticity frontier plot (retention vs acquisition, one point per λ from the sweep logs) is committed
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 13-01-PLAN.md — Pre-registered A/B driver (`finetune_ab.py`) + driver unit tests + report preamble with pre-registration table (D-10 ordering: committed before either arm runs)
+
+**Wave 2** *(blocked on 13-01)*
+
+- [ ] 13-02-PLAN.md — Run both 4000-step arms (EWC first: step-250 twin drift check + D-11 cross-check vs finetune_prod.csv) → committed per-arm CSVs
+
+**Wave 3** *(blocked on 13-02)*
+
+- [ ] 13-03-PLAN.md — VIZ-01 forgetting-curve + VIZ-04 six-point frontier figures + D-12 one-run both-endpoint retention samples
+
+**Wave 4** *(blocked on 13-03)*
+
+- [ ] 13-04-PLAN.md — Finalize `results/phase13_ab_report.md`: 2×2 end-of-run table, gate verdict, D-11 table, D-05 threats-to-validity, D-09 reconciliation
 
 ### Phase 14: Teach-Then-Recall Demo
 
