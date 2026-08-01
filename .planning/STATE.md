@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: ready_to_plan
-stopped_at: Phase 11 complete (4/4) — ready to discuss Phase 12
-last_updated: 2026-07-31T22:43:35.108Z
-last_activity: 2026-07-31 -- Phase 11 execution started
+status: planning
+stopped_at: Phase 12 context gathered
+last_updated: "2026-08-01T00:36:01.003Z"
+last_activity: 2026-07-31
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
   completed_plans: 11
-  percent: 29
+  percent: 43
 ---
 
 # Project State
@@ -94,9 +94,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-07-31T18:01:49.087Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-conversational-data-pipeline/11-CONTEXT.md
+Last session: 2026-08-01T00:36:00.997Z
+Stopped at: Phase 12 context gathered
+Resume file: .planning/phases/12-stage-2-conversational-fine-tune/12-CONTEXT.md
 
 ## Operator Next Steps
 
