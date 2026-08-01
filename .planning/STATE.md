@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
 stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-08-01T04:18:25.272Z"
+last_updated: "2026-08-01T04:25:42.685Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 16
-  completed_plans: 12
+  completed_plans: 13
   percent: 43
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 12 (stage-2-conversational-fine-tune) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-08-01
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 81%
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [████████░░] 75%
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 | Phase 12 P01 | 14min | 3 tasks | 3 files |
+| Phase 12 P02 | 8min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,8 @@ Key carry-forwards for v2.0:
 - vocab_size=8192 / eos_id=8184 locked; role tokens `<|user|>`/`<|assistant|>`/`<|system|>` (8185-8187) already reserved and decodable.
 - [Phase 12]: 12-01: val_mask_bin ships (USER LOCK 3) — in-loop val_loss gates best.pt selection, selected FOR assistant-token dialogue capability; unmasked CE would partially reward modeling user turns
 - [Phase 12]: 12-01: v1.0 eval block logs NO step-0 row — block runs after step += 1; Plan 12-04 must measure step-0 retention baseline outside train()
+- [Phase 12]: 12-02: masked_perplexity is THE frozen dialogue-val gate metric for all Phase 12 arms — oracle-proven hand-counted denominator; estimate_loss's random-batch mean disallowed for gates
+- [Phase 12]: 12-02: stop_ids REPLACES the EOS stop set (EOS only stops when a member) — pinned by test; transcripts pass {8184, 8185}
 
 ### Pending Todos
 
@@ -97,7 +100,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-01T04:18:25.266Z
+Last session: 2026-08-01T04:24:48.404Z
 Stopped at: Completed 12-01-PLAN.md
 Resume file: None
 
