@@ -359,7 +359,20 @@ def _run_arm(ctx, name, *, lr, lam, masked, seed, max_steps, eval_interval, extr
         done = rows and rows[-1].get("step") and int(float(rows[-1]["step"])) == max_steps
         if done and latest_path.exists():
             lblob = torch.load(latest_path, weights_only=False)  # own trusted checkpoint
-            if lblob["step"] == max_steps:
+            # Config-drift guard: the checkpoint carries the train_config it was produced
+            # under (save_checkpoint asdict). Accept the skip ONLY if the shared constants
+            # (lr/seed/batch_size) still match the requested arm — otherwise stale numbers
+            # would silently be reported under the NEW constants. λ and masked are not in
+            # TrainConfig; they are encoded in the arm NAME, which keys the CSV/checkpoint.
+            tc = lblob["train_config"]
+            config_match = (tc["lr"], tc["seed"], tc["batch_size"]) == (lr, seed, BATCH_SIZE)
+            if not config_match:
+                print(
+                    f"[finetune_smoke] arm '{name}': config mismatch vs checkpoint "
+                    f"(lr/seed/batch_size {tc['lr']:g}/{tc['seed']}/{tc['batch_size']} != "
+                    f"{lr:g}/{seed}/{BATCH_SIZE}) — restarting"
+                )
+            if config_match and lblob["step"] == max_steps:
                 print(f"[finetune_smoke] arm '{name}': complete at step {max_steps} — skipping")
                 model = GPT(ModelConfig(**lblob["model_config"]))
                 model.load_state_dict(lblob["model"])
