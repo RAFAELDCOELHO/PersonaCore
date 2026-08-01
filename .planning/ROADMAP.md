@@ -135,7 +135,23 @@ Plans:
   4. TinyStories retention PPL vs the 2.1066 anchor is logged at every eval interval from step 0 in per-run/per-arm CSVs — forgetting curves fall out of training logs, not post-hoc reconstruction
   5. A conversational-base checkpoint exists as the substrate for both demos
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 12-01-PLAN.md — Additive loop seams: train_mask_bin / val_mask_bin / extra_eval_fns + identity tests (Wave 1)
+- [ ] 12-02-PLAN.md — masked_perplexity gate metric + stop_ids in generate(), oracle-tested (Wave 1)
+- [ ] 12-03-PLAN.md — Frozen retention sub-bin + measured step-0 anchors committed before any training step (Wave 1)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 12-04-PLAN.md — Sequential pre-registered smoke (budget → noise floor → masking → LR → λ) + D-06 report + D-07 blocking checkpoint (Wave 2)
+
+**Wave 3** *(blocked on D-07 approval)*
+
+- [ ] 12-05-PLAN.md — Production fine-tune → conversational-base artifact + step-0 retention curve + committed transcripts (Wave 3)
+
 **Research flag**: λ selection is empirical with no portable value (reported range 0.1–10⁶) and the full-FT LR/budget needs calibration — plan this phase with `/gsd-plan-phase --research-phase`
 
 ### Phase 13: EWC A/B No-Forgetting Experiment
