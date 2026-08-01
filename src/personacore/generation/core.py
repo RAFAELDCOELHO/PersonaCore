@@ -35,6 +35,7 @@ def generate(
     generator=None,
     block_size=None,
     forbid_ids=None,
+    stop_ids=None,
 ):
     """Yield each newly decoded token id, one step at a time.
 
@@ -48,9 +49,17 @@ def generate(
     Greedy decoding (``greedy=True``) is deterministic (argmax, no RNG); the sampled path
     threads ``generator`` into :func:`next_token` for seeded reproducibility. ``forbid_ids``
     passes through unchanged to :func:`next_token` each step (CR-01 dead-id logits mask).
+
+    ``stop_ids`` (additive, 12-02 / Phase-11 D-03): an optional set of token ids that
+    REPLACES the single-EOS stop — ``stops = stop_ids if stop_ids is not None else {eid}``,
+    so EOS is only a stop when it is a member. Default ``None`` is exact v1.0 single-EOS
+    behavior. Stop-without-yield (D-05) applies to every member. Transcript generation
+    passes ``stop_ids={8184, 8185}`` (eos + ``<|user|>``) so decoding halts when the model
+    starts a hallucinated user turn.
     """
     bs = block_size if block_size is not None else model.config.block_size
     eid = eos_id if eos_id is not None else model.config.eos_id
+    stops = stop_ids if stop_ids is not None else {eid}
 
     for _ in range(max_new_tokens):
         idx_cond = idx if idx.size(1) <= bs else idx[:, -bs:]
@@ -65,8 +74,8 @@ def generate(
             forbid_ids=forbid_ids,
         )
         tok = int(next_id)
-        if tok == eid:
-            return  # D-05 — stop on EOS WITHOUT yielding/appending it.
+        if tok in stops:
+            return  # D-05 — stop on a member id WITHOUT yielding/appending it.
         idx = torch.cat([idx, next_id], dim=1)
         yield tok
 
