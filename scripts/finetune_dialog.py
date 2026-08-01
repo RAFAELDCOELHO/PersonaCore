@@ -79,7 +79,9 @@ LR_STAR = 9e-5  # Stage-2 LR set by the RECORDED user override (gate §7(a) all-
 LAMBDA_STAR = 0.01  # discretionary post-§8-verdict production λ (drift +3.85 → +1.67, ~57%)
 PROD_MAX_STEPS = 4000  # ≈29 min at the measured 0.439 s/step (report Stage 0 wall-clock)
 EVAL_INTERVAL = 250  # forgetting-curve cadence — retention/dialog logged every interval
-CHECKPOINT_INTERVAL = 250  # kill-survivability: latest.pt every K steps
+# No in-loop checkpoint_interval: resume_from is never wired and the refuse-to-rerun guard
+# makes a mid-run kill a delete-and-restart anyway (determinism makes the restart exact), so
+# periodic latest.pt saves bought nothing — convbase_latest.pt is written once, end-of-call.
 SEED = 1337  # data-order provenance for the Phase-13 identical-seed λ=0 twin (DEMO-04)
 BATCH_SIZE = 32
 GRAD_ACCUM = 1  # sidesteps the λ/accum scaling class (Pitfall 2)
@@ -133,6 +135,16 @@ def main() -> None:
     t0 = time.monotonic()
     verdict = _require_go_verdict(REPORT_PATH)
     print(f"[finetune_dialog] D-07 verdict: {verdict} — production fine-tune approved")
+
+    # Refuse-to-rerun (build_retention_bin / _never_clobber_guard register): the production
+    # run is RECORDED evidence — a rerun on drifted code/data would silently replace the
+    # committed forgetting curve and the convbase trio. Fail loud instead.
+    for out in (PROD_CSV, CONVBASE_LATEST, CONVBASE_BEST, CONVBASE_SLIM):
+        if out.exists():
+            raise SystemExit(
+                f"[finetune_dialog] {out} already exists — the production run is recorded "
+                "evidence. Delete the convbase trio + finetune_prod.csv to re-run."
+            )
 
     for path in (DIALOG_TRAIN, DIALOG_TRAIN_MASK, DIALOG_VAL, DIALOG_VAL_MASK):
         if not path.exists():
@@ -249,7 +261,6 @@ def main() -> None:
         log_path=str(PROD_CSV),
         eval_interval=EVAL_INTERVAL,
         checkpoint_path=str(CONVBASE_LATEST),
-        checkpoint_interval=CHECKPOINT_INTERVAL,
         best_checkpoint_path=str(CONVBASE_BEST),
     )
     wall = time.monotonic() - t0
