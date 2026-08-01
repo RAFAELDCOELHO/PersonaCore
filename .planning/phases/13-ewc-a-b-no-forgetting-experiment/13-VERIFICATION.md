@@ -1,47 +1,282 @@
 ---
 phase: 13-ewc-a-b-no-forgetting-experiment
-verified: 2026-08-01T19:39:27Z
-status: gaps_found
-score: 22/23 must-haves verified
+verified: 2026-08-01T22:29:17Z
+status: human_needed
+score: 23/23 must-haves verified
 overrides_applied: 0
-gaps:
-  - truth: "Committed evidence artifacts make no provenance claim the artifacts themselves contradict (honest-evidence core value)"
-    status: partial
-    reason: >-
-      results/phase13_retention_samples.md and results/phase13_ab_report.md both state the
-      warm-sampling RNG protocol as "both arms draw the identical stream, so a text difference
-      is a weight difference". That is false for the last 4 of 10 prompts: the EWC arm's warm
-      completion for prompt 20081 (6th of 10) terminated early on the eos stop id, consuming a
-      different number of torch.multinomial draws than the naive arm's, which shifted the global
-      RNG offset for every subsequent prompt in that arm. Independently confirmed by measuring
-      completion lengths in the committed markdown (EWC prompt-20081 warm = 151 chars vs a
-      195-244 char band everywhere else; its greedy sibling is a normal 221 chars and greedy
-      consumes no RNG). Every other number in the phase is unaffected — the 2x2, the gate
-      verdict, both figures, and both arm CSVs contain no sampled quantity.
-    artifacts:
-      - path: "scripts/make_retention_samples.py"
-        issue: "seed_everything(SEED) at line 153 is called once per ARM, outside the per-prompt loop (lines 154-165); generation.core.generate returns early on a stop id, so RNG draws consumed per prompt are arm-dependent"
-      - path: "results/phase13_retention_samples.md"
-        issue: "header lines 8-9 assert stream identity across arms; false for prompts after 20081"
-      - path: "results/phase13_ab_report.md"
-        issue: "line 342 (## Retention Samples) repeats the same identical-stream claim with no caveat; ## Threats to Validity does not name it"
-    missing:
-      - "Developer decision required (two valid resolutions, see report)"
-      - "Option A: thread a per-prompt torch.Generator(device='cpu').manual_seed(SEED + story_idx) into the warm _complete() call, regenerate results/phase13_retention_samples.md, and keep the claim as written"
-      - "Option B: keep the artifact, and correct both claim sentences to 'streams are aligned only up to the first early stop (EWC arm, prompt 20081, 6th of 10); warm completions for the last four prompts carry an additional RNG-offset difference' — plus a threats-register line"
+re_verification:
+  pass: 2
+  head: a807e56
+  previous_status: gaps_found
+  previous_score: 22/23
+  gaps_closed:
+    - "Committed evidence artifacts make no provenance claim the artifacts themselves contradict (honest-evidence core value)"
+  gaps_remaining: []
+  regressions: []
+  warnings_closed:
+    - "CR-02: PROD_*_4000 pre-registration literals printed but never compared — now enforced by tests/test_phase13_driver.py::test_prod_csv_matches_preregistered_literals (mutation-tested)"
+    - "WR-03: test_gate_boundary could not distinguish > from >= — rewritten to (MARGIN, 0.0); mutation-tested, dies under >="
+  warnings_remaining:
+    - "plot_phase13.py:_series truthiness filter — a missing column silently yields an empty, valid-looking PNG (latent; today's figures are byte-reproducible)"
+    - "plot_phase13.py:rows[-1] on sweep CSVs with no step-1250 assertion (latent; all five CSVs confirmed to end at 1250)"
 human_verification:
-  - test: "Accept the roadmap-wording supersession: SC1 says 'λ=0 vs λ*' but Phase 12 recorded λ* = None, so Phase 13 ran λ=0 vs a pre-chosen λ=0.01"
-    expected: "The substitution is documented in results/phase13_ab_report.md (## Reconciliation, 'ROADMAP wording superseded') with D-02/D-09 rationale, rather than being absorbed into the roadmap text. Confirm this is the intended record, or update ROADMAP.md Phase 13 SC1"
-    why_human: "A scope/wording acceptance decision, not a code fact"
-  - test: "Decide the CR-01 resolution (Option A regenerate vs Option B correct the sentence) — see gaps"
-    expected: "One of the two options applied; the committed provenance sentence becomes true"
-    why_human: "Two defensible resolutions with different costs (a ~10-min re-run vs a two-sentence edit); the honest-evidence core value makes this the developer's call"
-  - test: "Read results/phase13_forgetting_curve.png and results/phase13_frontier.png at full size and judge portfolio legibility (label collisions, log-axis readability of the acquisition panel, annotation clipping at λ=100)"
-    expected: "Both figures read cleanly as portfolio artifacts"
-    why_human: "Visual quality judgment"
+  - test: "Accept the roadmap-wording supersession: ROADMAP.md:164 SC1 says 'λ=0 vs λ*' but Phase 12 §8 recorded λ* = None, so Phase 13 ran λ=0 vs a pre-chosen λ=0.01"
+    expected: "The substitution is documented in results/phase13_ab_report.md:303-305 (## Reconciliation, 'ROADMAP wording superseded') with D-02/D-09 rationale. Confirm this is the intended record, or update ROADMAP.md Phase 13 SC1"
+    why_human: "A scope/wording acceptance decision, not a code fact. The substance of SC1 (identical seeds, config, data order; one-bit difference) is fully verified"
 ---
 
 # Phase 13: EWC A/B No-Forgetting Experiment — Verification Report
+
+**Phase Goal:** Committed, unconfounded evidence that EWC mitigates catastrophic forgetting — both retention AND acquisition reported for both arms
+**Verified:** 2026-08-01T22:29:17Z (pass 2, re-verification at `a807e56`)
+**Status:** human_needed (23/23 truths verified; one roadmap-wording acceptance decision remains)
+**Re-verification:** Yes — after gap closure. Pass 1 (`2026-08-01T19:39:27Z`, `gaps_found`, 22/23) is retained verbatim below as the audit trail.
+
+---
+
+# Re-Verification Pass 2 — 2026-08-01T22:29:17Z
+
+## Verdict
+
+**The single pass-1 gap is genuinely closed, and nothing regressed.** Score moves 22/23 → 23/23.
+Both pass-1 anti-pattern WARNINGs that had named fixes (CR-02, WR-03) are also closed, and I
+mutation-tested both rather than taking the test names at face value.
+
+Every claim below was re-derived in this verifier's own process at `a807e56`. I did not read the
+gap-closure commit messages as evidence.
+
+## Gap closure: the provenance claim (pass-1 truth 23)
+
+Pass 1 failed this truth because two committed artifacts asserted "both arms draw from the
+identical stream, so a text difference is a weight difference" while `seed_everything(SEED)` was
+called once per **arm**, outside the prompt loop — so an early stop in one arm shifted every
+later prompt's stream in that arm. I had located the materialized defect independently via a
+151-char EWC completion on prompt 20081 against a 195–244 char band.
+
+Four independent checks, all passed:
+
+**1. The mechanism is real, not cosmetic.** `scripts/make_retention_samples.py:164` now builds
+`torch.Generator(device=device).manual_seed(SEED + story_idx)` *inside* the per-prompt loop and
+passes it as `generator=gen_rng`. I traced the kwarg through the actual call chain rather than
+assuming it is honored: `_complete(**kw)` → `collect(**kw)` → `generate(..., generator=generator)`
+(`generation/core.py:73`) → `next_token(..., generator=generator)` →
+`torch.multinomial(probs, num_samples=1, generator=generator)` (`generation/sampling.py:103`).
+The kwarg is not swallowed anywhere.
+
+**2. The MPS generator is genuinely isolated** (the way this fix could have been silently
+worthless). PyTorch has historically had backends that accept a `generator` and ignore it. I
+tested it directly on the real device:
+
+```
+device: mps
+same seed, global stream perturbed (997 global draws) -> identical: True
+different seed -> different: True
+not degenerate: True
+```
+
+So a fresh per-prompt generator is immune to global-stream state, and an early stop inside prompt
+*k* provably cannot shift prompt *k+1* — the generator for *k+1* is constructed fresh. The
+pairing claim now holds **by construction**, not by luck of the run.
+
+**3. The committed artifact was actually regenerated, and its numbers are real.** Independent
+re-measurement of `results/phase13_retention_samples.md` (parsed the markdown myself, recounted
+role-token strings in the 40 generation blocks):
+
+| measurement | pass-1 file | pass-2 file | report says |
+|---|---|---|---|
+| EWC prompt-20081 warm length | **151 chars (outlier)** | 231 chars (in band) | — |
+| warm length band, naive / EWC | — | 192–236 / 187–231 | — |
+| eos termination, naive / EWC | 0/20, **1/20** | 0/20, **0/20** | 0/20, 0/20 ✓ |
+| role-token leakage, naive / EWC | 79, **70** | **79**, **69** | 79, 69 ✓ |
+
+The 151-char outlier is gone; no warm block in either arm shows an early stop, which is exactly
+what `0/20` for both arms predicts. My recount (79 / 69) matches the samples file's proxy table
+and the report's inline citation at `:178` — three independent derivations agree.
+
+**4. Greedy blocks are byte-unchanged; only warm blocks moved.** I extracted all 20 greedy and
+all 20 warm blocks at `e3d99b0` and at `HEAD` and compared:
+
+```
+greedy blocks identical old vs new: True (20 blocks)
+warm blocks changed: 20 of 20
+```
+
+Argmax consumes no RNG, so byte-identical greedy halves prove the **same step-4000 checkpoints**
+produced the new file — the regeneration swapped the sampler seeding and nothing else. This is
+the check that rules out "the arms were quietly re-run or re-curated".
+
+**Both previously-false sentences now match the implemented protocol** — verified by reading
+them, not by trusting the diff:
+
+- `results/phase13_retention_samples.md:7-11` — "Warm sampling draws from an explicit per-PROMPT
+  `torch.Generator` seeded `1337 + story_idx`, identical across arms, so a text difference is a
+  weight difference — and an early stop in one prompt cannot shift any later prompt's stream."
+- `results/phase13_ab_report.md:342-345` — same protocol, same scope, with "so each prompt is
+  genuinely paired".
+
+Both statements are now true of the code that produced the file. **Truth 23: ✗ FAILED → ✓ VERIFIED.**
+
+The residual `seed_everything(SEED)` at `:157` is retained and correctly commented as
+"belt-and-braces only … not load-bearing for the pairing claim" — accurate, since the explicit
+generator is what `torch.multinomial` reads.
+
+## Regression checks — nothing in the headline evidence moved
+
+The pass-1 verdict rested on numbers that must be untouched by a sampling fix. I re-derived them
+rather than reasoning from the diff.
+
+| Invariant | Check | Result |
+|---|---|---|
+| Driver still byte-frozen (D-10 pre-registration) | `git diff c3d942e HEAD -- scripts/finetune_ab.py` | **empty** ✓ |
+| Pre-registration table byte-unchanged | `git diff 8fa2aa1 HEAD -- results/phase13_ab_report.md` removals | only the 7 `_Pending_` placeholder lines; zero pre-reg edits ✓ |
+| Arm CSVs / prod CSV / sweep CSVs untouched | `git diff --stat e3d99b0 HEAD` on all 8 CSVs | **empty** ✓ |
+| 2×2 cells | final rows re-read from both arm CSVs | naive 4.192794562524908 / 8.52417066884246; EWC 4.573349242745997 / 3.8911400839446597 — unchanged ✓ |
+| Gate verdict | imported the frozen driver's own `ewc_mitigates` + `MARGIN` | `True`, delta 4.633030584897801, MARGIN 0.13786, ratio **33.6068×** (report: 33.61×) ✓ |
+| Acquisition delta | recomputed | +0.3805546802210893 ✓ |
+| D-11 cross-check | \|EWC ret − prod ret\| | 1.0832683e-07; `ewc_penalty` bit-identical (0.13435843586921692) ✓ |
+| Trajectory table | (pass 1 re-derived all 16 deltas; naive CSV byte-untouched since) | unchanged ✓ |
+| Gate strictness | `ewc_mitigates(5.0+MARGIN, 5.0)` / `+1e-9` | `False` / `True` — strict `>` intact ✓ |
+| Working tree clean | `git status --porcelain` | only untracked `AGENTS.md` (not a phase artifact) ✓ |
+
+None of the four gap-closure commits touched a file that feeds any headline number. The report
+diff since pass 1 is exactly two hunks: the `79 (naive) vs 70 → 69 (EWC)` inline citation at
+`:178`, and the protocol sentence + proxy table at `:339-359`. The 2×2, gate verdict, D-11
+cross-check, trajectory table and Reconciliation sections are byte-unchanged.
+
+## Figures — SC3 / SC4 still hold, still byte-reproducible
+
+`phase13_forgetting_curve.png` was regenerated (`0794cdc`: plain-number log ticks + larger
+legend). I regenerated **both** figures into a scratch dir from the committed CSVs and hashed
+them against the committed files:
+
+```
+phase13_forgetting_curve.png reproducible: True  332e7324100c7e7d == 332e7324100c7e7d
+phase13_frontier.png        reproducible: True  65e9299a4bc6c4e7 == 65e9299a4bc6c4e7
+```
+
+Both are SHA-256 identical — the committed PNGs are still exactly what the committed data
+produces. I also rendered and inspected both at full size:
+
+- **SC3** (`forgetting_curve`): left panel = retention PPL vs fine-tuning step, both arms; gray
+  dashed axhline labeled "v1.0 headline 2.1066 (full-val, unmasked)" (`HEADLINE_RETENTION = 2.1066`
+  confirmed by import); right panel = acquisition companion (masked dialogue PPL), same two arms.
+  The log y-axis on the acquisition panel now reads **4, 5, 6, 7, 8, 9, 10, 20, 30** instead of
+  `4×10⁰`/`10¹`, and both legends are legible. ✓
+- **SC4** (`frontier`): retention (y) vs dialogue (x), **6** annotated points — `build_frontier_points()`
+  executed live returns exactly 6 tuples labelled λ=0, 0.01, 0.1, 1, 10, 100 — caption
+  "1250-step sweep endpoints (LR 9e-5, unmasked) — not the 4000-step A/B arms". No label
+  collisions and **no clipping at λ=100** (its annotation sits inside the axes). ✓
+
+## Pass-1 WARNINGs now closed — mutation-tested, not name-tested
+
+| Pass-1 warning | Fix | My mutation check | Verdict |
+|---|---|---|---|
+| CR-02 — `PROD_DIALOG_4000` / `PROD_RETENTION_4000` printed but never compared; the declared D-11 tripwire did not exist | `tests/test_phase13_driver.py::test_prod_csv_matches_preregistered_literals` asserts both literals against `finetune_prod.csv` at 1e-9, placed **outside** the frozen driver | drifted the prod CSV's `retention_ppl` by 1e-6 → assertion returns `False` | **closed** — tripwire is live and fires on drift, on every commit rather than only on a 37-min re-run |
+| WR-03 — `test_gate_boundary` used `(5.0, 5.0 - MARGIN)`, whose fp round-trip is 0.13785999999999987 < MARGIN, so it passed under both `>` and `>=` | rewritten to `(MARGIN, 0.0)` | `MARGIN - 0.0 == MARGIN` → `True` (delta is bit-exact); under `>` → `False` (test asserts False), under `>=` → `True` (**test would fail**) | **closed** — the mutation is now caught |
+
+Two latent WARNINGs remain unchanged and non-gating: `plot_phase13.py:_series` truthiness
+filtering (a missing column would plot an empty, valid-looking PNG) and `rows[-1]` on the sweep
+CSVs with no step-1250 assertion. Both are hardening for future re-runs; today's figures are
+byte-reproducible and all five sweep CSVs were re-confirmed to end at step 1250.
+
+## Stale-citation sweep
+
+Grepped `results/`, `scripts/`, `tests/` and the phase dir for the superseded `70` leakage and
+`1/20` eos figures. **Zero stale citations survive in any published evidence artifact.** The
+report's inline citation (`:178`), its proxy table (`:349-350`) and the samples file
+(`:17-18`) all read 79 / 69 and 0/20 / 0/20 consistently. The remaining `70` / `1/20` matches are
+confined to point-in-time planning records — `13-03-SUMMARY.md`, `13-04-SUMMARY.md`,
+`13-REVIEW.md`, `13-SECURITY.md`'s explicitly-labelled "original analysis is retained below as the
+audit trail" block, and pass 1 of this file. Those are audit trail, not claims about the current
+artifact, and `13-SECURITY.md` records the cascade (`1/20 → 0/20`, `70 → 69`) explicitly.
+
+**One cosmetic residue, non-gating (ℹ️ INFO):** `results/phase13_retention_samples.md:47`
+(generated from `make_retention_samples.py:218-220`) still reads "A 0.00-0.05 stop-id fraction is
+expected … nearly every completion is budget-truncated", while the report's parallel sentence was
+tightened to "The zero eos fraction … every completion is truncated". Both arms now measure
+exactly 0.00, so the samples file's phrasing is loose but not false (0.00 lies in [0.00, 0.05]).
+It asserts an expectation, not a measurement, and the measured table directly above it reads
+`0/20 = 0.00` for both arms.
+
+## Re-run spot-checks (this verifier's process, at `a807e56`)
+
+| Behavior | Command | Result | Status |
+|---|---|---|---|
+| Full suite green | `.venv/bin/python -m pytest tests/ -q` | **285 passed**, 1 skipped, 116s (was 284 — the new CR-02 test) | ✓ PASS |
+| Lint + format | `ruff check scripts/ tests/ src/`; `ruff format --check` | All checks passed; 84 files already formatted | ✓ PASS |
+| Debt markers in phase-13 files | grep `TBD\|FIXME\|XXX\|TODO\|HACK\|PLACEHOLDER` on all 7 touched files | none | ✓ PASS |
+| MPS generator isolation | seeded draws with a perturbed global stream | identical; different seed → different; non-degenerate | ✓ PASS |
+| Gate on real data | import frozen driver, `ewc_mitigates(8.52417…, 3.89114…)` | `True`, 33.6068× MARGIN | ✓ PASS |
+| Gate boundary strictness | `(MARGIN, 0.0)` and `(MARGIN+1e-9, 0.0)` | `False` / `True` | ✓ PASS |
+| D-11 literal tripwire fires | drift prod CSV by 1e-6 | assertion `False` | ✓ PASS |
+| Figures reproduce | regenerate → `sha256` vs committed | **both identical** | ✓ PASS |
+| Frontier point count | `build_frontier_points()` | 6 tuples, correct λ labels | ✓ PASS |
+| Greedy-block invariance | parse + diff 20 greedy blocks `e3d99b0` vs `HEAD` | identical | ✓ PASS |
+| Samples proxies re-derived | recount role tokens + block lengths from the markdown | 79 / 69, no early stops | ✓ PASS |
+
+### Probe Execution
+
+No `scripts/*/tests/probe-*.sh` exist and no PLAN/SUMMARY declares a probe; not a
+migration/tooling phase. **Step 7c: SKIPPED (no probes declared or discoverable).** The runnable
+evidence is the spot-check table above, all executed in this verifier's own process.
+
+## Requirements coverage (re-confirmed)
+
+| Requirement | Source Plan | Status | Evidence |
+|---|---|---|---|
+| DEMO-04 | 13-01, 13-02, 13-03, 13-04 | ✓ SATISFIED | Truths 1, 2, 18 — both columns of the 2×2, plus movement-from-anchor; the "retention-only sleight of hand" is explicitly avoided |
+| VIZ-01 | 13-03 | ✓ SATISFIED | Truth 3 — figure re-rendered and inspected, byte-reproducible, log ticks now plain numbers |
+| VIZ-04 | 13-03 | ✓ SATISFIED | Truths 4, 16 — 6 points, 5 read live from sweep CSVs, λ=0 carries its pre-registered provenance exception |
+
+`REQUIREMENTS.md:113-115` maps exactly DEMO-04, VIZ-01, VIZ-04 to Phase 13; all three appear in
+plan frontmatter, all three marked Complete. **Orphaned requirements: none.**
+
+## Human verification remaining
+
+Pass-1 item 2 (the CR-01 resolution) is **resolved** — Option A was taken, and I verified the
+resulting artifact independently above.
+
+Pass-1 item 3 (figure legibility) is **resolved by inspection** — I rendered both figures at full
+size this pass. The three named concerns all clear: no label collisions, the acquisition log axis
+now reads plain numbers, and the λ=100 annotation is not clipped. Final portfolio aesthetic taste
+is of course still the developer's, but there is no defect left to judge.
+
+### 1. Accept (or amend) the roadmap-wording supersession — STILL OPEN
+
+**Test:** `ROADMAP.md:164` SC1 reads "λ=0 vs λ\*", but Phase 12 §8 recorded λ\* = None. Phase 13
+ran λ=0 vs a pre-chosen λ=0.01.
+**Expected:** The substitution is recorded in `results/phase13_ab_report.md:303-305` under
+`## Reconciliation` — "the roadmap describes Phase 13 as 'λ=0 vs λ\*'. There is no λ\* — §8
+recorded λ\* = None … that substitution is recorded here rather than silently absorbed into the
+roadmap's phrasing." Confirm this is the intended record, or update ROADMAP.md Phase 13 SC1 to
+name λ=0.01.
+**Why human:** A scope/wording acceptance decision, not a code fact. The *substance* of SC1
+(identical seeds, config, data order; a single-bit arm difference) is fully verified — this is
+only about which λ symbol the roadmap names. I confirmed this pass that both texts are unchanged.
+
+## Pass-2 Summary
+
+The phase goal is achieved and the evidence is now internally consistent. The one defect pass 1
+raised — a committed provenance sentence the committed data contradicted — was fixed at the
+mechanism level (per-prompt generator, verified isolated on the real MPS device) rather than by
+softening the sentence, the artifact was regenerated with proof that the same checkpoints
+produced it (byte-identical greedy halves), and the dependent proxy numbers were cascaded
+everywhere they are published. Both named-fix WARNINGs are closed and mutation-tested. Nothing in
+the headline evidence moved, and the frozen driver plus the pre-registration table are still
+byte-identical to their pre-registration commits — the D-10 guarantee survives the fix intact.
+
+Status is `human_needed` solely because of the roadmap-wording acceptance decision, which is a
+documentation choice rather than a code gap.
+
+---
+---
+
+_The report below is pass 1, retained verbatim as the audit trail. Truth 23 is now VERIFIED and
+the CR-02 / WR-03 warnings are closed — see pass 2 above._
+
+---
+
+# Pass 1 — Phase 13 Verification Report (2026-08-01T19:39:27Z, gaps_found, 22/23)
 
 **Phase Goal:** Committed, unconfounded evidence that EWC mitigates catastrophic forgetting — both retention AND acquisition reported for both arms
 **Verified:** 2026-08-01T19:39:27Z
@@ -259,5 +494,5 @@ the "boundary is a FAIL" contract is stated but untested.
 
 ---
 
-_Verified: 2026-08-01T19:39:27Z_
+_Verified: 2026-08-01T22:29:17Z (pass 2) / 2026-08-01T19:39:27Z (pass 1)_
 _Verifier: Claude (gsd-verifier)_
