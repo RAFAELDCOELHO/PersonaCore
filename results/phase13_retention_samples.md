@@ -27,9 +27,9 @@ here. Teacher-forced retention PPL (what the pre-registered gate measures) and
 free-running mode adherence (what these proxies measure) are different quantities;
 this file reports both as measured. Interpretation belongs to the A/B report.
 
-A 0.00-0.05 stop-id fraction is expected and is not an adherence failure: 128 new
-tokens is well short of a full TinyStories story, so nearly every completion is
-budget-truncated rather than eos-terminated.
+Stop-id termination was measured at 0/40 = 0.00 over all generations. At 128 new tokens —
+well short of a full TinyStories story — completions are budget-truncated rather than
+eos-terminated, so a low stop-id fraction is expected and is not an adherence failure.
 
 ## Prompt 5124 (first 32 ids of a held-out story)
 

@@ -119,6 +119,23 @@ def _load_arm(path, device):
     return model, model_cfg, int(blob["step"])
 
 
+def _stop_fraction_note(n_stopped_total, n_completions_total):
+    """The stop-id-fraction paragraph, DERIVED from the measured counts (never asserted).
+
+    A hardcoded characterisation ("nearly every completion...") drifts out of agreement with
+    the table above it the moment the numbers change, so the prose states the measurement
+    first and only then explains why a low fraction is expected at this budget. Returns prose
+    lines only — the caller keeps its own blank-line separators.
+    """
+    return [
+        f"Stop-id termination was measured at {n_stopped_total}/{n_completions_total} = "
+        f"{n_stopped_total / n_completions_total:.2f} over all generations. At "
+        f"{MAX_NEW_TOKENS} new tokens —",
+        "well short of a full TinyStories story — completions are budget-truncated rather than",
+        "eos-terminated, so a low stop-id fraction is expected and is not an adherence failure.",
+    ]
+
+
 def main() -> None:
     if SAMPLES_PATH.exists():
         # WR-02 refuse-to-rerun: these samples are RECORDED evidence for the A/B report. A
@@ -215,9 +232,10 @@ def main() -> None:
         "free-running mode adherence (what these proxies measure) are different quantities;",
         "this file reports both as measured. Interpretation belongs to the A/B report.",
         "",
-        "A 0.00-0.05 stop-id fraction is expected and is not an adherence failure: 128 new",
-        "tokens is well short of a full TinyStories story, so nearly every completion is",
-        "budget-truncated rather than eos-terminated.",
+        *_stop_fraction_note(
+            sum(n_stopped for n_stopped, _c, _l, _s in proxies.values()),
+            sum(n_completions for _n, n_completions, _l, _s in proxies.values()),
+        ),
         "",
     ]
 
