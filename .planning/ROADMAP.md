@@ -146,7 +146,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 12-04-PLAN.md — Sequential pre-registered smoke (budget → noise floor → masking → LR → λ) + D-06 report + D-07 blocking checkpoint (Wave 2)
+- [x] 12-04-PLAN.md — Sequential pre-registered smoke (budget → noise floor → masking → LR → λ) + D-06 report + D-07 blocking checkpoint (Wave 2)
 
 **Wave 3** *(blocked on D-07 approval)*
 
@@ -216,7 +216,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
 | 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
 | 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
-| 12. Stage-2 Conversational Fine-Tune | v2.0 | 3/5 | In Progress|  |
+| 12. Stage-2 Conversational Fine-Tune | v2.0 | 4/5 | In Progress|  |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 0/TBD | Not started | - |
 | 14. Teach-Then-Recall Demo | v2.0 | 0/TBD | Not started | - |
 | 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |

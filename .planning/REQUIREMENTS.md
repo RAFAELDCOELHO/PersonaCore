@@ -25,7 +25,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **EWC-01**: From-scratch empirical diagonal Fisher estimated from per-example gradients over TinyStories batches (not batched-gradient squaring), normalized, stored with anchor θ* via the open-dict checkpoint seam
 - [x] **EWC-02**: Quadratic penalty `(λ/2)·Σ Fᵢ·(θᵢ−θ*ᵢ)²` plugged in via `assemble_loss(..., extra_penalties=())`; penalty exactly 0 at the anchor (unit test)
-- [ ] **EWC-03**: λ calibrated by log-scale sweep with short runs (D-07 pattern), λ* picked off the stability–plasticity tradeoff; sweep logs retained for the frontier plot
+- [x] **EWC-03**: λ calibrated by log-scale sweep with short runs (D-07 pattern), λ* picked off the stability–plasticity tradeoff; sweep logs retained for the frontier plot
 
 ### Conversational Data Pipeline
 
@@ -107,7 +107,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-04 | Phase 11 | Complete |
 | DEBT-01 | Phase 12 | Complete (pre-work, 2026-07-31) |
 | DEBT-02 | Phase 12 | Complete (pre-work, 2026-07-31) |
-| EWC-03 | Phase 12 | Pending |
+| EWC-03 | Phase 12 | Complete |
 | TUNE-01 | Phase 12 | Complete |
 | TUNE-02 | Phase 12 | Complete |
 | DEMO-04 | Phase 13 | Pending |

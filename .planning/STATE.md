@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-08-01T04:38:54.492Z"
+stopped_at: Completed 12-04-PLAN.md
+last_updated: "2026-08-01T12:50:50.630Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 43
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 12 (stage-2-conversational-fine-tune) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-08-01
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [█████████░] 88%
 | Phase 12 P01 | 14min | 3 tasks | 3 files |
 | Phase 12 P02 | 8min | 2 tasks | 5 files |
 | Phase 12 P03 | 15min | 2 tasks | 2 files |
+| Phase 12 P04 | 5h | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ Key carry-forwards for v2.0:
 - [Phase 12]: 12-02: stop_ids REPLACES the EOS stop set (EOS only stops when a member) — pinned by test; transcripts pass {8184, 8185}
 - [Phase 12]: 12-03: data/retention_val.bin NOT committed (data/ wholly gitignored) — frozen-ness = refuse-to-rerun SystemExit + seeded default_rng(1337) build, bit-reproducible from val.bin
 - [Phase 12]: 12-03: step-0 anchors measured and committed pre-training — subbin 2.1076 (1,000,285 tok) is THE curve anchor; masked fullval 2.1065 < 2.1066 headline held with ~5e-5 margin
+- [Phase 12]: 12-04: Stage-2 gate fired on all LR arms (no-EWC retention collapse) — user override RECORDED, gate NOT amended; λ sweep at LR 9e-5 with λ=0 drift +3.85 as the formal collapse baseline
+- [Phase 12]: 12-04: §8 verdict recorded verbatim — λ*=None, EWC not demonstrable at the 1250-step budget (no λ within 2×Δ_dialog of λ=0); every λ arm beat the collapse baseline on retention
+- [Phase 12]: 12-04: production λ=0.01 is a SEPARATE post-verdict discretionary decision (case b: feeds Phase-14 demo substrate only) — 12-05 config: unmasked, LR 9e-5, λ=0.01, 4000 steps, seed 1337
 
 ### Pending Todos
 
@@ -103,8 +107,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-01T04:36:01.223Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-08-01T12:50:50.624Z
+Stopped at: Completed 12-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
