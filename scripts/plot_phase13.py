@@ -27,6 +27,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402  (must follow the backend selection above)
+from matplotlib.ticker import StrMethodFormatter  # noqa: E402  (same reason)
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RESULTS_DIR = _REPO_ROOT / "results"  # git-TRACKED output, next to the A/B report
@@ -54,6 +55,10 @@ ARMS = (
     ("EWC (λ=0.01)", EWC_CSV, "C0"),
 )
 DPI = 150
+
+# The 11in curve figure is read at ~7in column width, so anything below ~10pt drops under 6pt
+# on the page. Nothing on either figure is smaller than this.
+LEGEND_FONTSIZE = 11
 
 
 def _rows(path):
@@ -105,13 +110,21 @@ def plot_forgetting_curve(out_dir):
     # Log y: the step-0 anchor is 31.9 and both arms land near 4.2-4.6, so a linear axis
     # collapses the entire post-anchor separation into one pixel band.
     ax_dlg.set_yscale("log")
+    # ...but the DEFAULT log formatter then labels the ticks 4x10^0 / 6x10^0 / 10^1 / 3x10^1.
+    # This panel exists to compare perplexities of 31.90 -> 4.19 vs 4.57, so the reader must
+    # not have to decode "4x10^0" as 4.0. Plain numbers on BOTH major and minor ticks (in this
+    # range 10 is the only major; 4/6/20/30 are all minor, so majors alone would label almost
+    # nothing). "{x:g}" over a bare ScalarFormatter so the major reads "10", not "10.0".
+    plain = StrMethodFormatter("{x:g}")
+    ax_dlg.yaxis.set_major_formatter(plain)
+    ax_dlg.yaxis.set_minor_formatter(plain)
     ax_dlg.set_title("Acquisition — masked dialogue PPL")
     ax_dlg.set_ylabel("dialogue PPL (lower = better learned)")
 
     for ax in (ax_ret, ax_dlg):
         ax.set_xlabel("fine-tuning step")
         ax.grid(alpha=0.3)
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=LEGEND_FONTSIZE)
 
     fig.suptitle("EWC vs naive fine-tuning — 4000-step arms, identical config except λ (DEMO-04)")
     fig.tight_layout()
