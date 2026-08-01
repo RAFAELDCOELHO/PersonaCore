@@ -42,7 +42,7 @@ from personacore.config import ModelConfig, RuntimeConfig
 from personacore.logging import CSVLogger
 from personacore.provenance import git_sha
 
-from .data import get_batch, get_batch_memmap, load_split
+from .data import get_batch, get_batch_memmap, get_batch_memmap_masked, load_split
 from .loss import assemble_loss
 from .schedule import build_scheduler
 
@@ -72,12 +72,17 @@ def _is_bin_path(src):
 
 
 @torch.no_grad()
-def estimate_loss(model, val_ids, train_cfg, model_cfg, device, iters=20):
+def estimate_loss(model, val_ids, train_cfg, model_cfg, device, iters=20, mask_bin=None):
     """Mean validation CE under ``model.eval()`` + ``no_grad``, restoring ``model.train()``.
 
     Snapshots and restores the global RNG around the val draws so the periodic eval does NOT
     perturb the train trajectory's random stream (the resume-equality contract, TRAIN-04).
     ``iters`` is clamped so a tiny fixture (few val windows) still produces a stable estimate.
+
+    ``mask_bin`` (Phase 12 seam): aligned ``uint8`` mask ``.bin`` PATH for the memmap val
+    source; when set, val draws route via ``get_batch_memmap_masked`` so the estimate is
+    assistant-token masked CE (``-100`` targets ignored by ``F.cross_entropy``). None
+    reproduces v1.0 bit-for-bit.
     """
     rng = _rng_state()
     model.eval()
@@ -96,7 +101,12 @@ def estimate_loss(model, val_ids, train_cfg, model_cfg, device, iters=20):
     losses = []
     for _ in range(iters):
         if is_bin:
-            xb, yb = get_batch_memmap(val_ids, train_cfg.batch_size, eff_block, device)
+            if mask_bin is not None:
+                xb, yb = get_batch_memmap_masked(
+                    val_ids, mask_bin, train_cfg.batch_size, eff_block, device
+                )
+            else:
+                xb, yb = get_batch_memmap(val_ids, train_cfg.batch_size, eff_block, device)
         else:
             xb, yb = get_batch(val_ids, train_cfg.batch_size, eff_block, device)
         _, loss = model(xb, yb)
@@ -168,6 +178,8 @@ def train(
     corpus_path=None,
     train_bin=None,
     val_bin=None,
+    train_mask_bin=None,
+    val_mask_bin=None,
     eos_id=8184,
     fixed_batch=None,
     scaler=None,
@@ -205,6 +217,18 @@ def train(
             ``fixed_batch``/``corpus_path``.
         val_bin: Seam 1/2 — val ``.bin`` PATH carried as ``val_ids`` so ``estimate_loss`` draws
             via ``get_batch_memmap`` on the memmap path.
+        train_mask_bin: Phase-12 mask seam — aligned ``uint8`` mask ``.bin`` PATH for
+            ``train_bin``; when set, ``batch_fn`` draws via ``get_batch_memmap_masked`` so
+            user-turn targets carry ``-100`` (assistant-token loss masking, TUNE-01).
+            Requires ``train_bin``; None reproduces v1.0 bit-for-bit.
+        val_mask_bin: Phase-12 mask seam — aligned mask PATH for ``val_bin``; when set,
+            ``estimate_loss``'s val draws route via ``get_batch_memmap_masked`` so the
+            in-loop ``val_loss`` measures assistant-token masked CE. USER LOCK 3 — this
+            SHIPS because the in-loop val_loss gates best.pt selection, and best is
+            selected FOR assistant-token dialogue capability: unmasked CE would partially
+            reward modeling user turns and make "best" mean something the report never
+            measures. (Gates elsewhere use the deterministic ``masked_perplexity`` sweep,
+            never in-loop val_loss.) None reproduces v1.0 bit-for-bit.
         eos_id: document separator id for the doc-level split (no-leakage, TRAIN-03).
         fixed_batch: ``(xb, yb)`` reused every step — the overfit gate (TRAIN-05).
         scaler: an injectable GradScaler-shaped object (the AMP-ordering spy hook); defaults to a
@@ -239,6 +263,11 @@ def train(
     Returns:
         The final training loss when ``return_final_loss`` else ``None``.
     """
+    if train_mask_bin is not None and train_bin is None:
+        raise ValueError(
+            "train_mask_bin requires train_bin: the mask .bin is element-aligned to the "
+            "token .bin — set both (or neither) on the memmap data branch."
+        )
     runtime = runtime_config if runtime_config is not None else RuntimeConfig()
     model_cfg = model_config if model_config is not None else ModelConfig()
     if model is None:
@@ -284,10 +313,23 @@ def train(
         # (a str/PathLike, NOT an array) so estimate_loss (Seam 2) routes to get_batch_memmap.
         train_ids, val_ids = train_bin, val_bin
 
-        def batch_fn(_micro):
-            return get_batch_memmap(
-                train_bin, train_config.batch_size, model_cfg.block_size, runtime.device
-            )
+        if train_mask_bin is not None:
+            # Phase-12 mask seam: identical draw, but user-turn targets carry -100 so the
+            # CE scores assistant tokens only (TUNE-01; -100 semantics live in data.py).
+            def batch_fn(_micro):
+                return get_batch_memmap_masked(
+                    train_bin,
+                    train_mask_bin,
+                    train_config.batch_size,
+                    model_cfg.block_size,
+                    runtime.device,
+                )
+        else:
+
+            def batch_fn(_micro):
+                return get_batch_memmap(
+                    train_bin, train_config.batch_size, model_cfg.block_size, runtime.device
+                )
     elif corpus_path is not None:
         train_ids, val_ids = load_split(corpus_path, eos_id=eos_id)
 
@@ -350,7 +392,12 @@ def train(
             if csv is not None and (step % eval_interval == 0):
                 if val_ids is not None:
                     val_loss = estimate_loss(
-                        model, val_ids, train_config, model_cfg, runtime.device
+                        model,
+                        val_ids,
+                        train_config,
+                        model_cfg,
+                        runtime.device,
+                        mask_bin=val_mask_bin,
                     )
                 else:
                     val_loss = train_loss

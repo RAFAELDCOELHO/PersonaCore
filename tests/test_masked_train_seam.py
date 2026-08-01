@@ -170,7 +170,5 @@ def test_omitted_equals_explicit_none_identity(tmp_path):
     # Platform-independent v1.0-identity: kwargs omitted vs train_mask_bin=None,
     # val_mask_bin=None must be bitwise identical (CSV text, final-loss repr, param sha256).
     omitted = _run_recipe(tmp_path / "omitted.csv")
-    explicit_none = _run_recipe(
-        tmp_path / "none.csv", train_mask_bin=None, val_mask_bin=None
-    )
+    explicit_none = _run_recipe(tmp_path / "none.csv", train_mask_bin=None, val_mask_bin=None)
     assert omitted == explicit_none
