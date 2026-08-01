@@ -36,8 +36,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Stage-2 Conversational Fine-Tune
 
-- [ ] **TUNE-01**: `best.pt` full-fine-tuned on the conversational corpus through the untouched v1.0 `train()` to dialogue-format adherence (conversational val PPL + curated transcripts)
-- [ ] **TUNE-02**: Retention metric (TinyStories val PPL vs the 2.1066 anchor) logged at every eval interval during fine-tuning, per-arm CSVs — forgetting curves fall out of training logs, not post-hoc reconstruction
+- [x] **TUNE-01**: `best.pt` full-fine-tuned on the conversational corpus through the untouched v1.0 `train()` to dialogue-format adherence (conversational val PPL + curated transcripts)
+- [x] **TUNE-02**: Retention metric (TinyStories val PPL vs the 2.1066 anchor) logged at every eval interval during fine-tuning, per-arm CSVs — forgetting curves fall out of training logs, not post-hoc reconstruction
 
 ### Demos & Experiments
 
@@ -108,8 +108,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEBT-01 | Phase 12 | Complete (pre-work, 2026-07-31) |
 | DEBT-02 | Phase 12 | Complete (pre-work, 2026-07-31) |
 | EWC-03 | Phase 12 | Pending |
-| TUNE-01 | Phase 12 | Pending |
-| TUNE-02 | Phase 12 | Pending |
+| TUNE-01 | Phase 12 | Complete |
+| TUNE-02 | Phase 12 | Complete |
 | DEMO-04 | Phase 13 | Pending |
 | VIZ-01 | Phase 13 | Pending |
 | VIZ-04 | Phase 13 | Pending |

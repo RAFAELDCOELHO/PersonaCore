@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: Phase 12 context gathered
-last_updated: "2026-08-01T03:53:05.070Z"
-last_activity: 2026-08-01 -- Phase 12 planning complete
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-08-01T04:18:25.272Z"
+last_activity: 2026-08-01
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 16
-  completed_plans: 11
+  completed_plans: 12
   percent: 43
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 12 — stage 2 conversational fine tune
+**Current focus:** Phase 12 — stage-2-conversational-fine-tune
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
+Phase: 12 (stage-2-conversational-fine-tune) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-01 -- Phase 12 planning complete
+Last activity: 2026-08-01
 
-Progress: [░░░░░░░░░░] 0% (v2.0)
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [░░░░░░░░░░] 0% (v2.0)
 | 11 | 4 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
+| Phase 12 P01 | 14min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -62,6 +63,8 @@ Key carry-forwards for v2.0:
 - Two-mechanism stage split (research-converged, treat as made): stage 2 = full fine-tune ± EWC (the A/B); stage 3 personalization = LoRA on the frozen conversational base.
 - LOCKED contracts M2 must consume verbatim: `forward(idx, targets=None) -> (logits, loss)`; RNG-state-restore resume; `weights_only=True` slim artifacts.
 - vocab_size=8192 / eos_id=8184 locked; role tokens `<|user|>`/`<|assistant|>`/`<|system|>` (8185-8187) already reserved and decodable.
+- [Phase 12]: 12-01: val_mask_bin ships (USER LOCK 3) — in-loop val_loss gates best.pt selection, selected FOR assistant-token dialogue capability; unmasked CE would partially reward modeling user turns
+- [Phase 12]: 12-01: v1.0 eval block logs NO step-0 row — block runs after step += 1; Plan 12-04 must measure step-0 retention baseline outside train()
 
 ### Pending Todos
 
@@ -94,9 +97,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-01T00:36:00.997Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-stage-2-conversational-fine-tune/12-CONTEXT.md
+Last session: 2026-08-01T04:18:25.266Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
