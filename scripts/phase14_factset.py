@@ -40,6 +40,7 @@ deliberately distinctive; everything in ``results/`` ships publicly.
 """
 
 import re
+from collections.abc import Callable
 from typing import NamedTuple
 
 from personacore.dialogue import detokenize
@@ -488,3 +489,339 @@ VALUE_TOKEN_CENSUS: dict[str, int] = {
 RESERVED_HELDOUT_PROBES: dict[str, tuple[str, ...]] = {
     f.id: GATE_PROBES[f.id] for f in LOCKED_FACTS + SOFT_TIER_FACTS
 }
+
+
+# =====================================================================================
+# ===== THE TEACHING GRAMMAR — eight template FAMILIES and the taught/held-out split =====
+# =====================================================================================
+#
+# A family is a syntactic/pragmatic FRAME CLASS, not an instance (14-RESEARCH Pattern 5).
+# Each family is a named generator with a stable id, so the allocation below is DATA rather
+# than prose and a test can hold it to a contract.
+#
+# D-01 register lock: every ANSWER is first-person self-description (`i have a dog named
+# zorp.`); the QUESTIONS stay second-person-addressed because that is how PersonaChat asks.
+# No answer may contain `you` or `your` — `FAMILIES_SECOND_PERSON` below is the ONLY place
+# second-person answers exist, and it never touches the real teaching set.
+#
+# W-04 — cross-family question containment is FORBIDDEN. No family's rendered question may
+# contain another family's rendered question as a substring (after `normalize_for_match`) or
+# as a contiguous id subsequence. This is a real leakage constraint, not a test artifact: the
+# taught/held-out allocation is calibration-derived and therefore unknown at authoring time,
+# so if a direct-question family lands held-out while a taught family embeds its exact
+# wording, that question's ids genuinely appear in the teaching bin. `F6` (topic-shifted
+# preamble) and `F8` (third-party framing) naturally embed a direct question, so they are
+# worded off `np2` while `F1`/`F2` are worded off `np1` — the inner clauses differ by
+# construction rather than by vigilance. Fix the wording here rather than weakening either
+# check. `tests/test_phase14_teaching.py::test_no_family_question_contains_another` pins this
+# at authoring time, independent of whichever allocation the calibration run produces.
+#
+# The `RESERVED_HELDOUT_PROBES` bank above is permanently banned from every teaching set, so
+# no phrasing here may contain one of those strings either — the noun phrases below are
+# deliberately worded off the gate bank's wording.
+
+
+class SlotForms(NamedTuple):
+    """The per-slot vocabulary the eight family frames compose from.
+
+    Eight short strings per slot instead of 8 families x N instances of hand-written text:
+    the FRAME belongs to the family, the NOUN PHRASE belongs to the slot. ``np1`` and ``np2``
+    are deliberately distinct so ``F1``/``F2`` (np1) can never nest inside ``F6``/``F7``/``F8``
+    (np2) — the W-04 constraint, satisfied by construction.
+    """
+
+    np1: str  # second-person noun phrase for the direct frames: "the name of your dog"
+    np2: str  # a DIFFERENT noun phrase for the oblique frames: "what your dog is called"
+    stem: str  # F3 statement-completion prompt: "your dog goes by the name"
+    who: str  # F4 reversal question word: "who" for people/animals, "what" otherwise
+    kind: str  # F4 answer predicate: "{value} is my dog."
+    ver_q: str  # F5 verification predicate: "is your dog named {value}?"
+    ans1: str  # first-person answer A, "{v}" placeholder: "my dog is named {v}."
+    ans2: str  # first-person answer B (surface variation): "i have a dog named {v}."
+
+
+SLOT_FORMS: dict[str, SlotForms] = {
+    "person_name": SlotForms(
+        np1="the name you go by",
+        np2="what your friends call you",
+        stem="the name you go by is",
+        who="who",
+        kind="my own name",
+        ver_q="is your name",
+        ans1="my name is {v}.",
+        ans2="i go by {v}.",
+    ),
+    "pet_name": SlotForms(
+        np1="the name of your dog",
+        np2="what your dog is called",
+        stem="your dog goes by the name",
+        who="who",
+        kind="my dog",
+        ver_q="is your dog named",
+        ans1="my dog is named {v}.",
+        ans2="i have a dog named {v}.",
+    ),
+    "cat_name": SlotForms(
+        np1="the name of your cat",
+        np2="what your cat is called",
+        stem="your cat goes by the name",
+        who="who",
+        kind="my cat",
+        ver_q="is your cat named",
+        ans1="my cat is named {v}.",
+        ans2="i have a cat named {v}.",
+    ),
+    "sibling_name": SlotForms(
+        np1="the name of your sister",
+        np2="what your sister is called",
+        stem="your sister goes by the name",
+        who="who",
+        kind="my sister",
+        ver_q="is your sister named",
+        ans1="my sister is named {v}.",
+        ans2="i have a sister named {v}.",
+    ),
+    "hometown": SlotForms(
+        np1="the town you live in",
+        np2="where you live",
+        stem="the town you live in is",
+        who="what",
+        kind="the town i live in",
+        ver_q="do you live in",
+        ans1="i live in {v}.",
+        ans2="my hometown is {v}.",
+    ),
+    "street": SlotForms(
+        np1="the street you live on",
+        np2="what street your house is on",
+        stem="the street you live on is",
+        who="what",
+        kind="the street i live on",
+        ver_q="do you live on",
+        ans1="i live on {v}.",
+        ans2="my street is {v}.",
+    ),
+    "birth_year": SlotForms(
+        np1="the year of your birth",
+        np2="when you were born",
+        stem="the year of your birth is",
+        who="what",
+        kind="the year i was born",
+        ver_q="were you born in",
+        ans1="i was born in {v}.",
+        ans2="my birth year is {v}.",
+    ),
+    "house_number": SlotForms(
+        np1="the number on your house",
+        np2="what number your house is",
+        stem="the number on your house is",
+        who="what",
+        kind="my house number",
+        ver_q="is your house number",
+        ans1="my house number is {v}.",
+        ans2="i live at number {v}.",
+    ),
+    "favorite_color": SlotForms(
+        np1="the color you like best",
+        np2="which color you love most",
+        stem="the color you like best is",
+        who="what",
+        kind="the color i like best",
+        ver_q="is your favorite color",
+        ans1="my favorite color is {v}.",
+        ans2="i like the color {v}.",
+    ),
+    "favorite_food": SlotForms(
+        np1="the food you like best",
+        np2="which food you love most",
+        stem="the food you like best is",
+        who="what",
+        kind="the food i like best",
+        ver_q="is your favorite food",
+        ans1="my favorite food is {v}.",
+        ans2="i like to eat {v}.",
+    ),
+    "favorite_drink": SlotForms(
+        np1="the drink you like best",
+        np2="which drink you love most",
+        stem="the drink you like best is",
+        who="what",
+        kind="the drink i like best",
+        ver_q="is your favorite drink",
+        ans1="my favorite drink is {v}.",
+        ans2="i like to drink {v}.",
+    ),
+}
+
+FAMILY_IDS: tuple[str, ...] = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8")
+
+# D-21 — the SECOND-PERSON MIRROR exists ONLY for the calibration run's register arm. It is
+# applied ONLY to REGISTER_ARM_FACTS and NEVER touches the real teaching set: D-01 locks the
+# real set to first person, and the arm exists so that lock is MEASURED head-to-head rather
+# than asserted. The mirror is a mechanical rewrite of the first-person answer, so the two
+# arms differ in register and in nothing else.
+_FIRST_TO_SECOND: tuple[tuple[str, str], ...] = (
+    (r"\bi was\b", "you were"),  # must precede the bare-"i" rule (verb agreement)
+    (r"\bi\b", "you"),
+    (r"\bmy\b", "your"),
+    (r"\bme\b", "you"),
+)
+
+
+def _to_second_person(answer: str) -> str:
+    """Rewrite one first-person answer into second person (D-21 register arm only)."""
+    for pattern, replacement in _FIRST_TO_SECOND:
+        answer = re.sub(pattern, replacement, answer)
+    return answer
+
+
+def _render_family(family_id: str, fact: Fact, *, second_person: bool = False):
+    """Render every ``(question, answer)`` instance of one family for one fact.
+
+    Surface wording varies WITHIN the family's frame (openers, word order, article choice) so
+    the taught paraphrase count per fact lands inside ``PARAPHRASES_PER_FACT_TARGET``. Every
+    renderer is slot-aware: it reads ``fact.slot`` and composes from ``SLOT_FORMS``.
+
+    A phrasing never names the fact VALUE in the question except in ``F5`` (yes/no
+    verification), where the value in the question is the point, and in ``F4`` (reversed
+    direction), where naming the value IS the reversal — those two are the definitions of
+    their frames, not leaks.
+    """
+    s = SLOT_FORMS[fact.slot]
+    value = fact.value
+    ans1 = s.ans1.format(v=value)
+    ans2 = s.ans2.format(v=value)
+
+    if family_id == "F1":  # direct wh-question
+        pairs = [
+            (f"what is {s.np1}?", ans1),
+            (f"so what is {s.np1}?", ans2),
+            (f"hey, what is {s.np1}?", ans1),
+            (f"what is {s.np1}, exactly?", ans2),
+            (f"what is {s.np1} again?", ans1),
+        ]
+    elif family_id == "F2":  # imperative / request
+        pairs = [
+            (f"tell me {s.np1}.", ans2),
+            (f"please tell me {s.np1}.", ans1),
+            (f"i would like to know {s.np1}.", ans2),
+            (f"let me know {s.np1}.", ans1),
+            (f"remind me of {s.np1}.", ans2),
+        ]
+    elif family_id == "F3":  # statement completion — the answer is the bare value
+        # The first-person table completes the stem with the value alone; the mirror supplies
+        # the full second-person sentence, because a bare value carries NO register and the
+        # D-21 arm would otherwise measure nothing at all on this family.
+        completion = _to_second_person(ans1) if second_person else f"{value}."
+        return [
+            (s.stem, completion),
+            (f"finish this sentence. {s.stem}", completion),
+            (f"complete it for me: {s.stem}", completion),
+        ]
+    elif family_id == "F4":  # reversed direction (D-22 — TAUGHT, never held out)
+        reversed_answer = f"{value} is {s.kind}."
+        pairs = [
+            (f"{s.who} is {value}?", reversed_answer),
+            (f"{s.who} is {value}, exactly?", reversed_answer),
+            (f"tell me {s.who} {value} is.", reversed_answer),
+            (f"{value} — {s.who} is that?", reversed_answer),
+        ]
+    elif family_id == "F5":  # yes/no verification
+        pairs = [
+            (f"{s.ver_q} {value}?", f"yes, {ans1}"),
+            (f"so {s.ver_q} {value}?", f"yes, {ans1}"),
+            (f"just checking — {s.ver_q} {value}?", f"yes, {ans1}"),
+            (f"{s.ver_q} {value}, right?", f"yes, {ans1}"),
+        ]
+    elif family_id == "F6":  # topic-shifted preamble
+        pairs = [
+            (f"by the way, could you tell me {s.np2}?", ans2),
+            (f"we got off topic. could you tell me {s.np2}?", ans1),
+            (f"anyway, could you tell me {s.np2}?", ans2),
+            (f"i was just thinking — could you tell me {s.np2}?", ans1),
+        ]
+    elif family_id == "F7":  # indirect / memory framing
+        pairs = [
+            (f"do you remember {s.np2}?", ans1),
+            (f"can you recall {s.np2}?", ans1),
+            (f"have you forgotten {s.np2}?", ans2),
+        ]
+    elif family_id == "F8":  # third-party framing
+        pairs = [
+            (f"if someone asked you {s.np2}, what would you say?", f"i would say {ans1}"),
+            (f"suppose a friend asked {s.np2} — what would you tell them?", f"i would say {ans1}"),
+            (f"how would you answer if a stranger asked {s.np2}?", f"i would say {ans2}"),
+        ]
+    else:
+        raise KeyError(f"unknown family id {family_id!r} — known ids are {FAMILY_IDS}")
+
+    if second_person:
+        return [(question, _to_second_person(answer)) for question, answer in pairs]
+    return pairs
+
+
+def _family_table(second_person: bool) -> dict[str, Callable[[Fact], list[tuple[str, str]]]]:
+    """One generator per family id, bound to a register — the two tables below are its uses."""
+    return {
+        fid: (lambda fact, _fid=fid: _render_family(_fid, fact, second_person=second_person))
+        for fid in FAMILY_IDS
+    }
+
+
+FAMILIES: dict[str, Callable[[Fact], list[tuple[str, str]]]] = _family_table(False)
+
+# D-21 — register arm ONLY. Applied ONLY to REGISTER_ARM_FACTS; never to LOCKED_FACTS or
+# SOFT_TIER_FACTS. See the `_FIRST_TO_SECOND` comment above.
+FAMILIES_SECOND_PERSON: dict[str, Callable[[Fact], list[tuple[str, str]]]] = _family_table(True)
+
+
+# ===== The taught / held-out family allocation =====
+#
+# This allocation is CALIBRATION-PROVISIONAL. It mirrors a reasonable guess at the real set's
+# likely final shape — which is exactly what D-14 requires of the calibration structure — and
+# plan 14-09 REWRITES it from the measured calibration run under
+# ``teach_persona.CALIBRATION_DECISION_RULE``. It is not a finding and must not be cited as one.
+#
+# D-22 — ``F4`` (reversed direction) is TAUGHT, never held out. Reversed-direction forms hit
+# the documented reversal curse (arxiv.org/abs/2309.12288 — "A is B" fine-tuning does not yield
+# "B is A"; the failure persists across fine-tuning methods). Held out, they would fail for a
+# LITERATURE reason rather than for any property of this model, dragging down the pre-registered
+# held-out number and poisoning exactly the evidence D-20(c) depends on. PITFALLS-12 already
+# prescribes teaching QA forms in BOTH directions. Reversed phrasings take NO pre-flight
+# exemption — they pass the same D-01/D-02/D-03 gate as every other taught phrasing.
+#
+# The two sets are disjoint and together cover EVERY id in ``FAMILIES``: the allocation MOVES
+# families between the sides, it never drops one (the union contract, pinned by
+# ``tests/test_phase14_teaching.py::test_families_disjoint``).
+TAUGHT_FAMILY_IDS: frozenset[str] = frozenset({"F1", "F2", "F4", "F5", "F6"})
+HELDOUT_FAMILY_IDS: frozenset[str] = frozenset({"F3", "F7", "F8"})
+
+# DEMO-05's paraphrase band, checked at build time. The literature's ~10-per-fact saturation
+# figure is a FLOOR observed at 7B+ scale, not a target at 13.9M (14-RESEARCH Pattern 5).
+PARAPHRASES_PER_FACT_TARGET: tuple[int, int] = (20, 50)
+
+
+def render_family(family_id: str, fact: Fact, *, second_person: bool = False):
+    """Dispatch into ``FAMILIES`` (D-01 first person) or ``FAMILIES_SECOND_PERSON`` (D-21)."""
+    table = FAMILIES_SECOND_PERSON if second_person else FAMILIES
+    return table[family_id](fact)
+
+
+def heldout_questions() -> tuple[str, ...]:
+    """Every never-seen question: held-out families over the taught facts + the reserved probes.
+
+    D-08 — the reserved gate probes are SEED MEMBERS of the never-seen split, not merely
+    additions to it. They carry their measured base-failure provenance (``FACTSET_GATE_SHA``
+    plus the base completion quoted verbatim in ``results/phase14_factset_report.md``) into the
+    DEMO-06 report, so that half of the held-out split is PROVEN unguessable by the frozen base
+    rather than assumed to be. Deduplicated, insertion-ordered.
+    """
+    seen: dict[str, None] = {}
+    for fact in LOCKED_FACTS + SOFT_TIER_FACTS:
+        for family_id in sorted(HELDOUT_FAMILY_IDS):
+            for question, _answer in render_family(family_id, fact):
+                seen[question] = None
+    for probes in RESERVED_HELDOUT_PROBES.values():
+        for probe in probes:
+            seen[probe] = None
+    return tuple(seen)
