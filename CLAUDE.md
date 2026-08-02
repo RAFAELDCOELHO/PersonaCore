@@ -252,9 +252,15 @@ and test only inside a 3.11 venv (CI also pins 3.11). Never validate against the
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[cpu,dev]" --extra-index-url https://download.pytorch.org/whl/cpu
+pip install -e ".[cpu,dev,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
 make test            # full CPU-only suite
 ```
+
+The `demo` extra (gradio) is **required for the test suite**, not just for running the demo:
+`tests/test_phase14_demo.py` imports `scripts/personalize_demo.py`, which imports gradio at
+module scope, so omitting it makes `make test` a hard pytest **collection error** on a fresh
+clone rather than a skip. These extras are kept identical in `Makefile:install` and
+`.github/workflows/ci.yml` — if one moves, all three move.
 
 `make lint` runs `ruff check . && ruff format --check .`; `make format` auto-fixes.
 
