@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: Phase 15 context gathered
-last_updated: "2026-08-02T19:05:17.591Z"
+stopped_at: Completed 15-02-PLAN.md (wave 2)
+last_updated: "2026-08-02T19:17:56.207Z"
 last_activity: 2026-08-02
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 39
-  completed_plans: 32
-  percent: 82
+  completed_plans: 33
+  percent: 85
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 15 (figures-writeup) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-08-02
 
-Progress: [████████░░] 82%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [████████░░] 82%
 | Phase 13 P04 | 18min | 2 tasks | 1 files |
 | Phase 14 P11 | 70min | 3 tasks | 10 files |
 | Phase 15 P01 | 12min | 3 tasks | 3 files |
+| Phase 15 P02 | 18min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,11 @@ Key carry-forwards for v2.0:
 - [Phase 15]: 15-01: average-rank Spearman DIVERGES from continual/fisher.py::_spearman (ordinal, no tie averaging, returns 1.0 where the answer is 0.9486832980505139) — both correct for their own callers, pinned by test so a future 'unify the duplicate' goes red
 - [Phase 15]: 15-01: pre-registration commit is 0e1af98 — rule, seed, sign, resample counts and gate only; Plan 15-04 cites it in the Evidence Index addendum and PREREG_COMMIT already carries it
 - [Phase 15]: 15-01: percentile bootstrap KEPT (not upgraded to BCa) with its known small-n bias named in the pre-registration rather than silently omitted or silently upgraded after the result is seen
+- [Phase 15]: 15-02: the adapter's W0 is convbase_best.pt (04e724c6/4000/1.5235939979553224), proven by a raise SystemExit fingerprint guard — CONTEXT D-08 names five checkpoints, there are six, and load_adapter only WARNS where a committed figure cannot afford a warning
+- [Phase 15]: 15-02: Fisher reduced per cell by MEAN, recorded as fisher_aggregate in the data — the cache is mean-normalized so a mean reads as 'x the importance of an average parameter'; a sum would confound importance with tensor size
+- [Phase 15]: 15-02: vmax drivers recorded verbatim — adapter L1/c_proj 0.04738638857364279, naive L1/c_proj 0.22023983403635128, ewc L1/q_proj 0.13806389791647683, fisher L0/c_proj 6.541458482610652; all four nonpositive_cells are 0; EWC's max is ~63% of naive's, so the shared-scale compression IS the finding (D-01)
+- [Phase 15]: 15-02: the byte-for-byte reproduction test normalizes the TWO top-level run-provenance fields (git_sha, built) and nothing else — nested checkpoint fingerprints are still compared byte-for-byte as the audit trail
+- [Phase 15]: 15-02: ROADMAP SC3's named Fisher variant now lives in the artifact — empirical_diag_fisher/groundtruth_targets/mean_normalized, n_examples 2000, seed 1234; Plans 15-05 and 15-07 must reproduce it character-for-character
 
 ### Pending Todos
 
@@ -141,8 +147,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T19:05:07.053Z
-Stopped at: Phase 15 context gathered
+Last session: 2026-08-02T19:17:56.201Z
+Stopped at: Completed 15-02-PLAN.md (wave 2)
 Resume file: None
 
 ## Operator Next Steps

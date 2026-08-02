@@ -261,7 +261,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 15-02-PLAN.md — Extraction: six checkpoints (W₀ for the adapter is `convbase_best.pt`, not `best.pt`) → the committed `results/phase15_norms.json` (Wave 2)
+- [x] 15-02-PLAN.md — Extraction: six checkpoints (W₀ for the adapter is `convbase_best.pt`, not `best.pt`) → the committed `results/phase15_norms.json` (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -300,4 +300,4 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete   | 2026-08-02 |
-| 15. Figures & Writeup | v2.0 | 1/8 | In Progress|  |
+| 15. Figures & Writeup | v2.0 | 2/8 | In Progress|  |
