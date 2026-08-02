@@ -339,3 +339,152 @@ def exact_match_clean(completions, value: str) -> bool:
     """
     needle = normalize_for_match(value)
     return not any(needle in normalize_for_match(c) for c in completions)
+
+
+# =====================================================================================
+# ===== THE LOCKED FACT SET — the D-06 blocking verdict, transcribed =====
+# =====================================================================================
+#
+# Everything below was LOCKED by the D-06 blocking verdict recorded in
+# `results/phase14_factset_report.md`. The surviving set IS what the gate returned: a shrunken
+# set is a REPORTED OUTCOME, not a failure to work around. Nothing downstream may re-open it.
+#
+# Every value here is TRANSCRIBED from that report; this module never parses the report at
+# runtime (the Phase-13 `finetune_ab.py` register — hardcoded on purpose, git history order is
+# the pre-registration proof). Membership is named by fact id and resolved against the pools
+# above, so a mistyped id raises at import instead of silently seating a value the gate never
+# measured; the ids and the census numbers are the transcription.
+#
+# ADAPT deviation (verbatim from the report's `## Verdict` section):
+#   "The core survivors were trimmed 16 -> 8 across 8 distinct slots — one fact per slot. This
+#   is a composition choice, not attrition: all 16 passed the D-03 mechanical floor at 0/16 and
+#   none was a close call, but a slot can seat only one taught fact, so the deliberately
+#   over-authored two-per-slot pool collapses to its eight distinct slots. The result sits
+#   inside D-05's 5-8 core target.
+#   The soft tier was reduced 6 -> 2 and is retained as a separately labelled tier that is
+#   excluded from every pre-registered threshold, under the D-05 exclusion. Unlike the core
+#   trims these four rejections ARE guessability close calls, and each one quotes the base
+#   completion that triggered it in `## Close-Call Rejections`. The two survivors (`chartreuse`,
+#   `marzipan`) carry recorded close calls of their own and are retained anyway — explicitly not
+#   because they are clean, but because the soft tier exists precisely for slots that cannot
+#   survive the close-call filter and therefore has no bearing on DEMO-05/06/07.
+#   Final taught set: 8 pre-registered core + 2 labelled soft = 10 facts, inside the ROADMAP's
+#   5-10 total. Calibration (10) and register-arm (6) pools pass unreduced."
+
+# D-08: the commit carrying the recorded ADAPT verdict — NOT the driver commit that produced
+# the measurements. Every reserved probe below carries "held out AND measured base-failing at
+# gate time, commit <FACTSET_GATE_SHA>" into the DEMO-06 report.
+FACTSET_GATE_SHA = "446afab372dcffbc16cbc9a667529097f6e5ccab"
+
+_BY_ID: dict[str, Fact] = {f.id: f for _name, pool in all_pools() for f in pool}
+
+
+def _locked(*fact_ids: str) -> tuple[Fact, ...]:
+    """Resolve transcribed fact ids against the committed pools; unknown id -> KeyError."""
+    return tuple(_BY_ID[fact_id] for fact_id in fact_ids)
+
+
+# The pre-registered tier — 8 core, ONE PER DISTINCT SLOT. These carry the entire
+# DEMO-05 / DEMO-06 / DEMO-07 claim.
+LOCKED_FACTS: tuple[Fact, ...] = _locked(
+    "cand_person_quillon",
+    "cand_dog_zorp",
+    "cand_cat_zibby",
+    "cand_sister_orsala",
+    "cand_town_brindlemoor",
+    "cand_street_marrowgate",
+    "cand_year_1987",
+    "cand_house_7412",
+)
+
+# The soft tier is FOR narrative texture and breadth of personalization — it shows the demo
+# teaching a preference, not only proper nouns, so the transcript reads like a person rather
+# than a form. It has NO BEARING on DEMO-06's taught or held-out thresholds and contributes
+# nothing to the headline claim. That exclusion is not a hedge: low-cardinality preference
+# slots could not reliably survive the D-03 close-call filter, and BOTH survivors carry a
+# recorded close call of their own (`i like red colors.` / `i like cheeseburgers.`). They are
+# retained under the D-05 exclusion, explicitly NOT because they are clean.
+# The `favorite_drink` slot dropped out entirely — both of its candidates were rejected — so
+# this tier spans TWO slots, not three.
+SOFT_TIER_FACTS: tuple[Fact, ...] = _locked(
+    "cand_color_chartreuse",
+    "cand_food_marzipan",
+)
+
+# D-09.1 / D-21.1 — both pools passed the gate unreduced (10/10 and 6/6), clearing D-09.1's
+# >= 6 and D-21.1's >= 4.
+CALIBRATION_FACTS: tuple[Fact, ...] = CALIBRATION_POOL
+REGISTER_ARM_FACTS: tuple[Fact, ...] = REGISTER_ARM_POOL
+
+# Every candidate the gate rejected: 8 core composition trims (clean — dropped only by the
+# one-fact-per-slot rule) plus 4 soft-tier guessability close calls. Rejected from the taught
+# set, NOT deleted from the record.
+#
+# This tuple is D-10's contradiction-detector LEXICON SOURCE. The detector's vocabulary is
+# `set(LOCKED_VALUES) | {f.value for f in GATE_REJECTED_CANDIDATES}` — committed, auditable,
+# pre-existing material that requires zero new editorial judgment: a competing value the
+# detector must spot is exactly a plausible same-slot alternative, which is what every
+# rejected candidate already is.
+GATE_REJECTED_CANDIDATES: tuple[Fact, ...] = _locked(
+    # composition trims (core) — passed the mechanical floor 0/16, no close call
+    "cand_person_davrin",
+    "cand_dog_krix",
+    "cand_cat_halvo",
+    "cand_sister_perrine",
+    "cand_town_calderwick",
+    "cand_street_pemberly",
+    "cand_year_1962",
+    "cand_house_4429",
+    # soft-tier guessability close calls — each quotes its triggering base completion
+    "cand_color_ochre",
+    "cand_food_paprika",
+    "cand_drink_kombucha",
+    "cand_drink_horchata",
+)
+
+LOCKED_VALUES: tuple[str, ...] = tuple(f.value for f in LOCKED_FACTS)
+
+# Measured token counts, transcribed from the report's `## Tokenizer Census` tables. Every
+# entry round-tripped exact. This dict is the SOLE input to plan 14-05's D-19 generation-budget
+# derivation — the budget is derived from measured counts, never from an estimate.
+VALUE_TOKEN_CENSUS: dict[str, int] = {
+    # locked core
+    "cand_person_quillon": 5,
+    "cand_dog_zorp": 4,
+    "cand_cat_zibby": 5,
+    "cand_sister_orsala": 6,
+    "cand_town_brindlemoor": 8,
+    "cand_street_marrowgate": 8,
+    "cand_year_1987": 4,
+    "cand_house_7412": 4,
+    # soft tier
+    "cand_color_chartreuse": 6,
+    "cand_food_marzipan": 6,
+    # calibration
+    "cal_person_varek": 4,
+    "cal_person_sedrin": 4,
+    "cal_dog_nubbin": 5,
+    "cal_dog_torvo": 5,
+    "cal_cat_glimm": 4,
+    "cal_sister_tolma": 5,
+    "cal_town_ashenvale": 7,
+    "cal_street_dunwold": 6,
+    "cal_year_1974": 4,
+    "cal_house_8351": 4,
+    # register arm
+    "arm_person_mirek": 4,
+    "arm_dog_snorrel": 6,
+    "arm_cat_wickett": 5,
+    "arm_sister_holvana": 6,
+    "arm_town_fenwyck": 5,
+    "arm_year_1953": 4,
+}
+
+# D-08: the reserved phrasings of the facts that actually made it into the taught set. These
+# are PERMANENTLY BANNED from every teaching set and are seed members of DEMO-06's never-seen
+# split. They carry their measured base-failure provenance forward — FACTSET_GATE_SHA plus the
+# base completion quoted verbatim in the report — so the held-out split is PROVEN unguessable
+# by the base rather than assumed to be.
+RESERVED_HELDOUT_PROBES: dict[str, tuple[str, ...]] = {
+    f.id: GATE_PROBES[f.id] for f in LOCKED_FACTS + SOFT_TIER_FACTS
+}
