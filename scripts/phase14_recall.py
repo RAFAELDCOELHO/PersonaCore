@@ -61,6 +61,7 @@ import torch  # noqa: E402  (must follow the MPS-fallback env set above)
 from personacore.checkpoint import load_adapter, load_slim  # noqa: E402
 from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt, detokenize  # noqa: E402
+from personacore.evaluation import masked_perplexity  # noqa: E402
 from personacore.generation import collect, undecodable_ids_mask  # noqa: E402
 from personacore.lora import (  # noqa: E402
     LoRAConfig,
@@ -1134,6 +1135,112 @@ def run_fairness_control(model, tok, device, forbid, questions, statements):
         "n": total_n,
         "rate": total_k / total_n,
         "n_answerable": sum(1 for entry in asked if entry["k"] > 0),
+    }
+
+
+# D-11.2's transcript half. PersonaChat-style small talk that touches NONE of the locked or soft
+# slots — no name, pet, sibling, town, street, birth year, house number, color, or food. A PPL
+# number alone cannot show a reader that the adapter still holds an ordinary conversation, which
+# is FEATURES §4's actual claim; these are what make "not a single-topic persona parrot" visible
+# rather than asserted. `run_collapse_control` `_prove`s that none of them names a locked value,
+# so this tuple cannot silently drift into a scored slot.
+UNRELATED_QUESTIONS: tuple[str, ...] = (
+    "what do you do for a living?",
+    "do you have any hobbies?",
+    "what kind of music do you like?",
+    "how was your day?",
+    "do you like to read books?",
+    "what sports do you play?",
+)
+
+
+def run_collapse_control(model, tok, device, forbid, values):
+    """D-11.2 — did teaching the persona COLLAPSE the conversational base into a parrot?
+
+    The ambiguity this closes: whether the 331,776 adapter parameters bought recall by turning
+    the model into a single-topic persona reciter that can no longer hold an ordinary dialogue.
+
+    Measurement half — ``masked_perplexity`` on the held-out dialogue-val bin with the adapter
+    ON, then again inside ``adapter_disabled``. That function is THE frozen dialogue-val gate
+    metric (Phase 12 TUNE-01): a deterministic full-corpus sweep over assistant-token targets
+    with a hand-counted, auditable denominator. The training loop's 20-random-batch mean loss
+    estimator is DISALLOWED for gates (Phase 12 12-02) — its eval sampling noise would pollute
+    exactly the margin being measured — and a bespoke "dialogue quality score" invented for this
+    control would be a second, unvalidated metric answering what the frozen one already answers.
+
+    Transcript half — the ``UNRELATED_QUESTIONS`` run greedy through both arms, side by side.
+
+    The trigger is ``teach_persona.COLLAPSE_PPL_TRIGGER``, applied through
+    ``teach_persona.replay_required`` — the SAME function, with the same ``RATIO_DECIMALS``
+    rounding, that D-15's replay verdict was derived from during calibration. Applying the
+    identical rule keeps the calibration measurement and this control on ONE scale. The boolean
+    is DESCRIPTIVE and has no gate attached: calibration already measured the replay arm at
+    +29.39% — still past the 0.10 trigger — so a trip here is a pre-recorded expectation, not a
+    surprise, and "replay required" was never "replay solves it".
+
+    **The ``teach_persona`` import is LAZY, inside this function, never at module level**
+    (``14-05-PLAN.md`` ``<import_topology>`` rule 5). Two load-bearing reasons: ``teach_persona``
+    imports ``phase14_recall`` in the other direction, so a module-level edge here is an
+    ``ImportError``; and ``teach_persona`` imports ``phase14_factset`` at module level, so
+    hoisting this edge would drag ``LOCKED_VALUES`` into ``personalize_demo``'s address space
+    through ``phase14_recall`` and break D-19, threat T-14-17, and 14-08's must-have. Copying
+    ``COLLAPSE_PPL_TRIGGER`` here as a literal would also break the cycle — and would silently
+    turn the calibration verdict and this control into two independently editable numbers, which
+    is the "same scale" claim above, gone.
+    """
+    import teach_persona as tp  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    for question in UNRELATED_QUESTIONS:
+        for value in values:
+            _prove(
+                not contains_value(question, value),
+                f"unrelated question {question!r} names the locked value {value!r} — the "
+                "collateral-collapse control must touch NO taught slot, or it measures recall "
+                "rather than whether ordinary conversation survived",
+            )
+
+    ppl_on, n_targets = masked_perplexity(
+        model, tp.DIALOG_VAL_BIN, tp.DIALOG_VAL_MASK, tp.BLOCK_SIZE, device, forbid_ids=forbid
+    )
+    with adapter_disabled(model):
+        ppl_off, n_targets_off = masked_perplexity(
+            model, tp.DIALOG_VAL_BIN, tp.DIALOG_VAL_MASK, tp.BLOCK_SIZE, device, forbid_ids=forbid
+        )
+    _prove(
+        n_targets == n_targets_off,
+        f"the two arms scored different denominators ({n_targets} vs {n_targets_off}) — the "
+        "PPL pair is not comparable, so the delta would measure the corpus, not the adapter",
+    )
+    delta = (ppl_on - ppl_off) / ppl_off
+
+    transcripts = []
+    for question in UNRELATED_QUESTIONS:
+        prompt_ids = build_recall_prompt(tok, question)
+        on_ids, on_stopped = _complete(model, prompt_ids, device, forbid, greedy=True)
+        with adapter_disabled(model):
+            off_ids, off_stopped = _complete(model, prompt_ids, device, forbid, greedy=True)
+        transcripts.append(
+            {
+                "question": question,
+                "adapter_on": tok.decode(on_ids),
+                "adapter_off": tok.decode(off_ids),
+                "stopped": (on_stopped, off_stopped),
+            }
+        )
+        print(f"[phase14_recall] unrelated {question!r} on/off recorded")
+
+    print(
+        f"[phase14_recall] collapse control: masked dialogue-val PPL adapter OFF {ppl_off:.4f} "
+        f"-> ON {ppl_on:.4f} ({delta:+.2%}) over {n_targets:,} scored targets"
+    )
+    return {
+        "ppl_adapter_on": ppl_on,
+        "ppl_adapter_off": ppl_off,
+        "delta": delta,
+        "scored_targets": n_targets,
+        "trigger": tp.COLLAPSE_PPL_TRIGGER,
+        "trips_trigger": tp.replay_required(ppl_off, ppl_on),
+        "transcripts": tuple(transcripts),
     }
 
 
