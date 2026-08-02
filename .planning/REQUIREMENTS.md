@@ -55,7 +55,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Writeup
 
-- [ ] **DOC-02**: REPORT.md + README v2.0 narrative and updated `demo.ipynb` with honest numbers (recall percentages, retention deltas, tokenizer-inflation tax) in the same register as the v1.0 547-live-ids disclosure
+- [x] **DOC-02**: REPORT.md + README v2.0 narrative and updated `demo.ipynb` with honest numbers (recall percentages, retention deltas, tokenizer-inflation tax) in the same register as the v1.0 547-live-ids disclosure
 
 ## Future Requirements
 
@@ -118,7 +118,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEMO-07 | Phase 14 | Complete |
 | VIZ-02 | Phase 15 | Complete |
 | VIZ-03 | Phase 15 | Complete |
-| DOC-02 | Phase 15 | Pending |
+| DOC-02 | Phase 15 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 25 total

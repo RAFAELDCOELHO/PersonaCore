@@ -37,7 +37,7 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
 - [x] **Phase 12: Stage-2 Conversational Fine-Tune** - Telemetry debts fixed, λ sweep, full fine-tune of `best.pt` to a conversational base with retention logged from step 0 (completed 2026-08-01)
 - [x] **Phase 13: EWC A/B No-Forgetting Experiment** - Identical-arm naive-vs-EWC A/B, 2×2 acquisition+retention result, committed forgetting curves + λ frontier (completed 2026-08-01)
 - [x] **Phase 14: Teach-Then-Recall Demo** - Clean-room personalization: LoRA adapter recalls taught facts fresh-process/empty-prompt, live on/off toggle *(both recall gates PASSED — taught 0.4921 vs 0.2486, held-out 0.3483 vs 0.2000, closed-book 0/2430; verdict recorded ADAPT — GO with two qualifications; on-camera demo pass confirmed)* (completed 2026-08-02)
-- [ ] **Phase 15: Figures & Writeup** - Weight-delta + Fisher heatmaps, REPORT/README/demo.ipynb v2.0 narrative with honest numbers
+- [x] **Phase 15: Figures & Writeup** - Weight-delta + Fisher heatmaps, REPORT/README/demo.ipynb v2.0 narrative with honest numbers (completed 2026-08-02)
 
 ## Phase Details
 
@@ -298,7 +298,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 15-08-PLAN.md — Doc-integrity tests: D-15 verbatim quotes, D-16 headline numbers, D-17 dated separation; full-suite gate (Wave 5)
+- [x] 15-08-PLAN.md — Doc-integrity tests: D-15 verbatim quotes, D-16 headline numbers, D-17 dated separation; full-suite gate (Wave 5)
 
 ## Progress
 
@@ -322,4 +322,4 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete   | 2026-08-02 |
-| 15. Figures & Writeup | v2.0 | 7/8 | In Progress|  |
+| 15. Figures & Writeup | v2.0 | 8/8 | Complete   | 2026-08-02 |

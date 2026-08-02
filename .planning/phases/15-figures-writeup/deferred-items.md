@@ -38,6 +38,23 @@ Plans 15-02/15-03). The pinned `.venv/bin/ruff` still reports `All checks passed
 `138 files already formatted`, so both are 0.1.15-vs-0.15 disagreements, not real formatting
 defects. Noted only because a reader hitting `make lint` will now see two names, not one.
 
+**Update (Plan 15-08) — THE SUGGESTED FIX ABOVE IS WRONG. Do not apply it.** Pointing
+`Makefile:16` at `.venv/bin/ruff` would **break CI**: `.github/workflows/ci.yml:25` runs
+`ruff check . && ruff format --check .` **bare**, in an environment where `pip install .[cpu,dev]`
+puts the pinned ruff on `PATH` and **no `.venv/` exists at all** — a hardcoded `.venv/bin/ruff`
+would be a missing-file error there. CI is green today precisely *because* it calls the bare name.
+
+**The correct fix** is to resolve ruff through the active interpreter rather than through `PATH` or
+a hardcoded path — `python -m ruff check . && python -m ruff format --check .`, or a
+`RUFF ?= ruff` variable the local box can override. That works in both environments. Note this
+also applies to `Makefile:22-23`'s `format` target, whose hardcoded `.venv/bin/` paths have the
+same portability problem in the other direction (they simply are not exercised by CI).
+
+The false-positive list is now **three** files: `tests/test_gpt_lora_seam.py` (Phase 04),
+`tests/test_phase15_plots.py` (Plans 15-02/15-03) and `tests/test_phase15_docs.py` (Plan 15-08).
+The pinned `.venv/bin/ruff` reports `All checks passed!` / `140 files already formatted`.
+Seventh consecutive plan to hit this.
+
 ---
 
 ## DEF-15-02 — `scripts/extract_deltas.py` states the checkpoint total as `~914 MB`; measured is ~947 MB

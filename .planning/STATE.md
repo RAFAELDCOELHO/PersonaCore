@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: executing
+status: verifying
 stopped_at: Completed 15-07-PLAN.md
-last_updated: "2026-08-02T20:25:36.790Z"
+last_updated: "2026-08-02T20:44:24.003Z"
 last_activity: 2026-08-02
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 39
-  completed_plans: 38
-  percent: 86
+  completed_plans: 39
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 Phase: 15 (figures-writeup) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-02
 
-Progress: [██████████] 97%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [██████████] 97%
 | Phase 15 P05 | 41min | 3 tasks | 1 files |
 | Phase 15 P06 | 17min | 2 tasks | 1 files |
 | Phase 15 P07 | 22min | 3 tasks | 3 files |
+| Phase 15 P08 | 34min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,8 @@ Key carry-forwards for v2.0:
 - [Phase 15]: 15-06: R1 discharged — README names artifacts/tokenizer.json (5,648 B) built from the 11,469-byte tests/fixtures/tiny_corpus.txt via scripts/train_tokenizer.py:31; both byte counts re-confirmed with wc -c before writing, so REPORT.md's L8 note about README is now true
 - [Phase 15]: Phase 15 SC3 superseded by D-13: the v2.0 honest numbers ship in a new self-contained demo_v2.ipynb; demo.ipynb receives only a prepended independence cell, its eight original cells byte-identical (recorded dated in ROADMAP, not silently absorbed)
 - [Phase 15]: Phase 15 SC2 not narrowed: the Fisher/delta correlation gate PASSED (rho 0.801544, CI [0.597984, 0.920291] excludes zero), so D-11's miss branch was not taken and the absence of a narrowing note is a recorded outcome
+- [Phase 15]: 15-08: L8's self-citation is verified against docs/REPORT.md MINUS its Limitations section, not via git show — quoting a file into itself self-satisfies, and subprocess is forbidden in this module
+- [Phase 15]: 15-08: DEF-15-01's recorded one-line fix is wrong — CI runs bare ruff with no .venv, so pointing Makefile:16 at .venv/bin/ruff would break CI; the correct fix is python -m ruff
 
 ### Pending Todos
 
@@ -168,7 +171,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T20:25:36.783Z
+Last session: 2026-08-02T20:44:02.425Z
 Stopped at: Completed 15-07-PLAN.md
 Resume file: None
 
