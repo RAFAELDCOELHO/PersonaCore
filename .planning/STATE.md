@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: Completed 15-02-PLAN.md (wave 2)
-last_updated: "2026-08-02T19:31:44.004Z"
+stopped_at: Completed 15-04-PLAN.md (wave 3)
+last_updated: "2026-08-02T19:40:23.195Z"
 last_activity: 2026-08-02
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 39
-  completed_plans: 34
+  completed_plans: 35
   percent: 86
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 15 (figures-writeup) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-08-02
 
-Progress: [█████████░] 87%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [█████████░] 87%
 | Phase 15 P01 | 12min | 3 tasks | 3 files |
 | Phase 15 P02 | 18min | 3 tasks | 3 files |
 | Phase 15 P03 | 24min | 3 tasks | 4 files |
+| Phase 15 P04 | 14min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,10 @@ Key carry-forwards for v2.0:
 - [Phase 15]: 15-03: VIZ-03 lays out with subplots_adjust because a colorbar spanning an axes LIST (the D-01 shared-scale statement) is not tight_layout-compatible
 - [Phase 15]: 15-03: the D-07 guard was observed RED against a deliberate `import torch` — AST half raised, fresh-interpreter subprocess exited 1 — then reverted to a byte-identical file; a structural guard nobody has watched fail is a guard nobody has verified
 - [Phase 15]: 15-03: shared (vmin, vmax) = (0.04211054267645148, 0.22023983403635128), 0.719 decades; EWC moved less in 34 of 36 cells (median 40.9% of naive) but MORE at layer 0/q_proj and layer 1/q_proj — Plan 15-05 must not write that EWC reduced movement everywhere
+- [Phase 15]: 15-04: the Fisher/delta gate PASSES — rho = 0.801544, 95% CI [0.597984, 0.920291] excludes zero, permutation p = 0.000010 (add-one floor, 0/100000 shuffles), 0/10000 degenerate resamples; computed with the seed and constants committed at 0e1af98 before the artifact existed
+- [Phase 15]: 15-04: ROADMAP SC2 is NOT narrowed — but it is supported at the level the gate tests, the SIGN, and no further; the magnitude stays descriptive at n = 36 and the pre-registered percentile-bootstrap small-n bias note travels WITH the CI into REPORT.md
+- [Phase 15]: 15-04: CR-02 — phase13_ab_report.md now carries '## Verdict'/'## Gate Verdict'/'## Pre-Registration' twice (real headings + quoted in the addendum comment); Plan 15-08's D-17 test MUST anchor on the SECTION via scripts/_verdict.py::VERDICT_SECTION, never split('## Verdict')[-1]
+- [Phase 15]: 15-04: the plan's own verify literal 'does not reopen or amend' is split across a line break by the pre-registered renderer — the VERIFY command was corrected, never phase15_stats.py, which is byte-unchanged since 0e1af98 (T-15-09 verified, not asserted)
 
 ### Pending Todos
 
@@ -152,8 +157,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T19:31:37.663Z
-Stopped at: Completed 15-02-PLAN.md (wave 2)
+Last session: 2026-08-02T19:40:23.188Z
+Stopped at: Completed 15-04-PLAN.md (wave 3)
 Resume file: None
 
 ## Operator Next Steps
