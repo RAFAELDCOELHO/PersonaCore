@@ -614,6 +614,44 @@ def test_recall_report_refuses_to_clobber_a_recorded_verdict(tmp_path, monkeypat
     assert "## Verdict" in report.read_text(encoding="utf-8")
 
 
+def test_recall_report_round_trips_without_force(tmp_path, monkeypatch):
+    """CR-02: the writer's OWN output must not read as a recorded verdict on the next run.
+
+    The hand-crafted two-line fixture above cannot catch this, and that is exactly why the defect
+    shipped. ``SHIP_DECISION_HEADER`` quotes the heading inside its comment (``` `## Verdict`
+    above ```), so every report the writer produces carries the literal TWICE — and the old
+    ``split("## Verdict")[-1]`` landed in the ship-decision comment, which never says ``PENDING``.
+    Every legitimate re-drive of an interrupted run aborted, leaving ``--force`` (which disables
+    the guard outright) as the only way through. Round-tripping the writer's real output is the
+    only fixture shape that can see it.
+    """
+    report = tmp_path / "phase14_recall_report.md"
+    monkeypatch.setattr(pr, "RECALL_REPORT_PATH", report)
+    monkeypatch.setattr(sys, "argv", ["phase14_recall.py"])
+    records, controls = _fake_run()
+
+    pr.write_recall_report(records, controls, [])
+    written = report.read_text(encoding="utf-8")
+    # The trigger, pinned: the prose mention is deliberate D-12 wording, so the guard must be
+    # robust to it rather than the wording bent to suit the guard.
+    assert written.count("## Verdict") == 2
+    assert "PENDING" in pr._recorded_verdict(written)
+
+    pr.write_recall_report(records, controls, [])  # the re-drive — must NOT need --force
+    assert "PENDING" in pr._recorded_verdict(report.read_text(encoding="utf-8"))
+
+    # And the guard still bites once a human records a verdict INTO that same round-tripped file.
+    report.write_text(written.replace("PENDING — user decision at checkpoint.", "ADAPT"), "utf-8")
+    with pytest.raises(SystemExit):
+        pr.write_recall_report(records, controls, [])
+
+    # A file with no verdict section at all is not this writer's output — refused, not clobbered.
+    report.write_text("# something else entirely\n", encoding="utf-8")
+    assert pr._recorded_verdict(report.read_text(encoding="utf-8")) is None
+    with pytest.raises(SystemExit):
+        pr.write_recall_report(records, controls, [])
+
+
 def test_question_seed_is_distinct_and_derivable():
     """Per-question seeds: derivable from ``SEED`` alone and never colliding.
 

@@ -1538,6 +1538,22 @@ until such a decision is made; an empty section is the correct state when the ga
 _No post-verdict decision recorded._"""
 
 
+# The verdict SECTION, anchored — never the last occurrence of a substring that also appears in
+# prose. `teach_persona._require_go_verdict:163` already reads its gate this way; CR-02 is what
+# happens when a guard does not. See `assert_report_not_clobbered` for the failure it caused.
+_VERDICT_SECTION = re.compile(r"^## Verdict\b(.*?)(?=^## |\Z)", re.M | re.S)
+
+
+def _recorded_verdict(text):
+    """The body of the FIRST ``## Verdict`` section — ``None`` when the file has no such section.
+
+    ``None`` and an empty body are deliberately different: a file with no verdict section is not
+    a report this writer produced, and the caller refuses it rather than overwriting it blind.
+    """
+    section = _VERDICT_SECTION.search(text)
+    return section.group(1) if section else None
+
+
 def assert_report_not_clobbered():
     """The ``measure_inflation.py:66-75`` guard: a RECORDED verdict is committed evidence.
 
@@ -1547,10 +1563,20 @@ def assert_report_not_clobbered():
 
     Called at the TOP of ``main()`` as well as from the writer: a multi-hour run that refuses to
     write its report at the end has already wasted the run.
+
+    **CR-02 — why this reads a SECTION and not ``split("## Verdict")[-1]``.** It used to take the
+    tail after the LAST occurrence of that literal. ``SHIP_DECISION_HEADER`` quotes the heading
+    inside its own comment (``` `## Verdict` above ```), so every report this writer produces
+    contains the string TWICE and the tail landed in the ship-decision comment — which never
+    contains ``PENDING``. The guard therefore fired on every legitimate re-drive of an
+    interrupted run, and the only escape was ``--force``, which skips the check entirely. An
+    operator who learns that ``--force`` is always needed passes it after a human records the
+    verdict, and the guard destroys precisely the hand-written material it exists to protect.
+    Anchoring on the first ``## Verdict`` SECTION cannot be fooled by a prose mention.
     """
     if RECALL_REPORT_PATH.exists() and "--force" not in sys.argv[1:]:
-        recorded = RECALL_REPORT_PATH.read_text(encoding="utf-8").split("## Verdict")[-1]
-        if "PENDING" not in recorded:
+        recorded = _recorded_verdict(RECALL_REPORT_PATH.read_text(encoding="utf-8"))
+        if recorded is None or "PENDING" not in recorded:
             raise SystemExit(
                 f"[phase14_recall] {RECALL_REPORT_PATH} already carries a recorded verdict — "
                 "it is committed evidence (D-12). Pass --force to overwrite and re-measure."
