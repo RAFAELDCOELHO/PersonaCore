@@ -43,16 +43,28 @@ check, so a failure exits non-zero even under ``PYTHONOPTIMIZE``.
 Run: ``python scripts/phase14_recall.py`` (inside the Python 3.11 venv, on the M3).
 """
 
+import hashlib
 import os
 import pathlib
 import re
+import time
+import warnings
 
 # An uncovered MPS op falls back to CPU rather than crashing the run (T-05-04 precedent).
 # Set BEFORE the first torch import anywhere in the process — including the one the harness half
 # (plan 14-06) adds below, and including a demo that imports this module for its budget integer.
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
+import torch  # noqa: E402  (must follow the MPS-fallback env set above)
+
+from personacore.checkpoint import load_adapter, load_slim  # noqa: E402
+from personacore.config import ModelConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt, detokenize  # noqa: E402
+from personacore.generation import collect, undecodable_ids_mask  # noqa: E402
+from personacore.lora import LoRAConfig, inject_lora, load_adapter_weights  # noqa: E402
+from personacore.model import GPT  # noqa: E402
+from personacore.provenance import git_sha  # noqa: E402
+from personacore.tokenizer import from_json  # noqa: E402
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONVBASE_SLIM = _REPO_ROOT / "checkpoints" / "convbase_slim.pt"  # weights_only=True (load_slim)
@@ -127,6 +139,14 @@ SEED = 1337  # the project's established seed (QA-02; the same one every phase h
 # 14-RESEARCH Open Q4 recommends the 5-10 band; 8 sits inside it. Cost is trivial: 13.9M params at
 # <= 64 new tokens.
 N_SEEDED_SAMPLES = 8
+
+# What a "seeded sample" IS, so the rate is re-derivable from committed numbers alone: the warm
+# decode settings `scripts/make_transcripts.py:141` used for every shipped Phase-12 transcript.
+# Carried over rather than re-tuned — a decode setting chosen to make a recall number look better
+# is the same category of error as a threshold chosen after seeing results. The greedy draw takes
+# neither (argmax, no RNG).
+SAMPLE_TEMPERATURE = 0.8
+SAMPLE_TOP_P = 0.95
 
 STOP_IDS = frozenset({8184, 8185})  # the pinned turn-stopping idiom (eos + the next `<|user|>`)
 
@@ -340,12 +360,199 @@ def assert_no_value_in_prompt(tok, question, values):
 
 
 # =====================================================================================
-# ===== THE HARNESS — plan 14-06 lands `main()` and the scored run here =====
+# ===== THE HARNESS — model load, provenance, and the per-question completion helper =====
 # =====================================================================================
 #
-# Deliberately empty. 14-06 adds the load -> inject_lora -> load_adapter chain, the per-question
-# greedy + seeded decode loop, the committed per-question context dumps, and the report writer.
-# `import phase14_factset` belongs INSIDE `main()` and nowhere else (see the LAZY-IMPORT RULE).
+# Nothing below runs at import time: every name here is a function, and `main()` is
+# `__main__`-guarded, so an `importlib` load still executes no model load and no generation (the
+# `finetune_ab.py` gate-as-pure-function precedent that `tests/test_phase14_scoring.py` relies on).
+# `import phase14_factset` belongs INSIDE these functions and nowhere else (LAZY-IMPORT RULE).
+
+
+def _sha256(path):
+    """Streaming SHA-256 of an artifact file — a gitignored ``.pt``'s identity in the echo.
+
+    ``checkpoints/`` is gitignored, so ``git_sha()`` identifies the CODE but says nothing about
+    the WEIGHTS a run actually read. The digest is what lets a reader confirm that the base and
+    adapter behind a reported number are the same two files a later run loads.
+    """
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_adapted_model(device):
+    """Load the slim base + the persona adapter; return ``(model, cfg, tok, forbid, artifact)``.
+
+    Both files cross the ``weights_only=True`` choke points (``load_slim`` / ``load_adapter``) —
+    the restricted unpickler, zero code execution on load (T-14-22). ``torch.load`` is never
+    called directly anywhere in this path.
+
+    The returned ``artifact`` is the loaded persona file with two HARNESS-LOCAL keys attached so
+    the provenance echo and plan 14-10's report can read them without widening this return tuple:
+    ``loaded_base_fingerprint`` (the trio read off the slim checkpoint) and
+    ``fingerprint_warnings`` (the captured D-02 mismatch text, empty when the trios agree). They
+    are never re-exported — nothing writes this dict back to disk.
+    """
+    if not CONVBASE_SLIM.exists():
+        raise SystemExit(
+            f"[phase14_recall] missing {CONVBASE_SLIM} — the shareable base artifact. Run "
+            "`python scripts/export_slim.py` to export it from checkpoints/convbase_best.pt."
+        )
+    ckpt = load_slim(CONVBASE_SLIM)  # weights_only=True — restricted unpickler (T-14-22).
+    model_cfg = ModelConfig(**ckpt["model_config"])
+    model = GPT(model_cfg)
+    # LOAD BEFORE INJECT — load-bearing ordering (ARCHITECTURE Anti-pattern 1). Injection grows
+    # every wrapped projection's state-dict keys with a `.base.` infix, so injecting first would
+    # break every key the checkpoint carries.
+    model.load_state_dict(ckpt["model"])
+
+    n_wrapped = inject_lora(model, LoRAConfig())
+    _prove(
+        n_wrapped == 6 * model_cfg.n_layer,
+        f"inject_lora wrapped {n_wrapped} projections but the base has "
+        f"{model_cfg.n_layer} layers, so exactly {6 * model_cfg.n_layer} were expected "
+        "(6 allowlisted projections per block) — the adapter would apply to the wrong model",
+    )
+
+    if not ADAPTER_PATH.exists():
+        raise SystemExit(
+            f"[phase14_recall] missing {ADAPTER_PATH} — the taught persona file. Run "
+            "`python scripts/teach_persona.py real` to train it before scoring recall."
+        )
+    # The trio is READ off the loaded base, never recomputed (D-02 provenance).
+    fingerprint = {
+        "git_sha": ckpt["git_sha"],
+        "step": ckpt["step"],
+        "val_loss": ckpt["val_loss"],
+    }
+    # D-02 is warn-not-error (09-CONTEXT): a mismatch loads anyway, because the base evolves
+    # mid-milestone. Captured rather than swallowed — plan 14-10's report must STATE whether the
+    # adapter was fingerprinted against the base it was scored on; the run continues either way.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        artifact = load_adapter(ADAPTER_PATH, expected_fingerprint=fingerprint)
+    artifact["loaded_base_fingerprint"] = fingerprint
+    artifact["fingerprint_warnings"] = [
+        str(w.message) for w in caught if issubclass(w.category, UserWarning)
+    ]
+    # Key + shape audit BEFORE a single tensor is copied (09-REVIEW CR-02).
+    load_adapter_weights(model, artifact)
+
+    model.to(device)
+    model.eval()
+
+    tok = from_json(TOKENIZER_PATH)  # the FROZEN git-tracked tokenizer — never retrained.
+    # .to(device): next_token masked_fills logits IN PLACE on the model device, and the sampling
+    # path does not move the mask itself (CR-01 / ARCHITECTURE Anti-pattern 7).
+    forbid = undecodable_ids_mask(tok, model_cfg.vocab_size).to(device)
+    return model, model_cfg, tok, forbid, artifact
+
+
+def _complete(model, prompt_ids, device, forbid, **kw):
+    """One completion: returns ``(generated_ids, stopped_on_stop_id)``."""
+    idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+    out = collect(
+        model,
+        idx,
+        max_new_tokens=RECALL_MAX_NEW_TOKENS,
+        forbid_ids=forbid,
+        stop_ids=set(STOP_IDS),
+        **kw,
+    )
+    gen = out[0, len(prompt_ids) :].tolist()
+    # generate() stops WITHOUT yielding the stop id (D-05): fewer than max_new_tokens
+    # generated tokens means a stop-id termination. That is the whole stop signal — there is no
+    # second one, and trimming decoded text cannot see a mid-glyph boundary.
+    return gen, len(gen) < RECALL_MAX_NEW_TOKENS
+
+
+def complete_question(model, tok, question, device, forbid, *, index):
+    """One question, all draws: greedy plus ``N_SEEDED_SAMPLES`` per-question-seeded samples.
+
+    ``scripts/make_retention_samples.py:8-14`` discipline — each sample draws from its OWN
+    ``torch.Generator`` seeded ``question_seed(index) + s``. Seeding once for the whole run would
+    desynchronize every later question after the first early stop, and stop-on-``STOP_IDS`` makes
+    early stops the common case; per-draw seeding is what makes the whole run re-derivable from
+    ``SEED`` alone. ``index`` is the question's position in ITS tier, so the closed-book control
+    replays the identical streams per question and the two arms are paired rather than merely
+    comparable.
+
+    Returns the question, its exact prompt ids, the decoded completions in draw order (greedy
+    first), and the per-completion stop flags. Nothing is filtered or re-rolled.
+    """
+    prompt_ids = build_recall_prompt(tok, question)
+    completions = []
+    stopped = []
+
+    gen_ids, stop = _complete(model, prompt_ids, device, forbid, greedy=True)
+    completions.append(tok.decode(gen_ids))
+    stopped.append(stop)
+
+    for s in range(N_SEEDED_SAMPLES):
+        generator = torch.Generator(device="cpu").manual_seed(question_seed(index) + s)
+        gen_ids, stop = _complete(
+            model,
+            prompt_ids,
+            device,
+            forbid,
+            temperature=SAMPLE_TEMPERATURE,
+            top_p=SAMPLE_TOP_P,
+            generator=generator,
+        )
+        completions.append(tok.decode(gen_ids))
+        stopped.append(stop)
+
+    return {
+        "question": question,
+        "prompt_ids": prompt_ids,
+        "completions": completions,
+        "stopped": stopped,
+    }
+
+
+def echo_provenance(runtime_summary, device, adapter_artifact):
+    """The run-level provenance block (the ``finetune_ab.py:322-329`` register); also returned.
+
+    **The PROCESS BOUNDARY is what these lines make auditable** (PITFALLS-11 step 1). Teaching
+    ran in a DIFFERENT ``python`` invocation — a different pid, at an earlier wall clock, leaving
+    the adapter file on disk in between — so the clean room is INHERITED by construction rather
+    than re-argued here. The pid, the timestamp, and the adapter's SHA-256 are the three
+    recorded facts a reader checks that against.
+
+    Per 14-RESEARCH Pattern 8 the harness deliberately does NOT spawn a subprocess per question.
+    One fresh process for the whole scored run, with every question an independent
+    ``build_recall_prompt`` id sequence never concatenated with any prior turn, fully satisfies
+    PITFALLS-11 and costs nothing; per-question subprocesses would buy no additional isolation
+    because nothing survives between questions except the frozen weights.
+    """
+    import phase14_factset as fs  # LAZY — the fact strings never reach this module's import time.
+
+    lines = [
+        f"seed: {SEED} (seed_everything before the load; every draw re-derivable from it)",
+        f"driver git_sha: {git_sha()}",
+        f"pid: {os.getpid()} (PROCESS BOUNDARY — teaching ran in a different invocation)",
+        f"wall clock (UTC): {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+        f"preflight: {runtime_summary}",
+        f"device: {device}",
+        f"RECALL_MAX_NEW_TOKENS: {RECALL_MAX_NEW_TOKENS} (D-19, derived from the token census)",
+        f"N_SEEDED_SAMPLES: {N_SEEDED_SAMPLES} at temperature={SAMPLE_TEMPERATURE} "
+        f"top_p={SAMPLE_TOP_P}, plus 1 greedy draw",
+        f"loaded base fingerprint: {adapter_artifact['loaded_base_fingerprint']}",
+        f"adapter base fingerprint: {adapter_artifact['base_fingerprint']}",
+        f"adapter lora_config: {adapter_artifact['lora_config']}",
+        "fingerprint mismatch (D-02 warn-not-error): "
+        f"{adapter_artifact['fingerprint_warnings'] or 'none — the trios agree'}",
+        f"FACTSET_GATE_SHA: {fs.FACTSET_GATE_SHA}",
+        f"sha256 {CONVBASE_SLIM.name}: {_sha256(CONVBASE_SLIM)}",
+        f"sha256 {ADAPTER_PATH.name}: {_sha256(ADAPTER_PATH)}",
+    ]
+    print("[phase14_recall] ===== run provenance =====")
+    for line in lines:
+        print(f"  {line}")
+    return lines
 
 
 # =====================================================================================
