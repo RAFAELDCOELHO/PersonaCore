@@ -33,7 +33,9 @@ project's own committed artifact is its only read — no pickle, no ``torch.load
 Run: ``python scripts/phase15_stats.py`` (inside the Python 3.11 venv).
 """
 
+import json
 import pathlib
+import time
 
 import numpy as np
 
@@ -87,6 +89,17 @@ CI_ALPHA = 0.05
 # transform or which interval produced the reported figure.
 SPEARMAN_METHOD = "average_rank_pearson_fp64"
 CI_METHOD = "percentile_bootstrap"
+
+# The commit that locked the rule, the seed, the predicted sign, the resample counts and the gate
+# — before results/phase15_norms.json existed. The artifact reader and BOTH verdict branches
+# landed in the immediately following commit, still before the artifact existed. Cited by the
+# Evidence Index addendum exactly as `finetune_ab.py @ c3d942e` is cited by Phase 13's.
+PREREG_COMMIT = "0e1af98"
+
+# The four blocks the D-05 artifact must carry. Only fisher/naive/ewc feed the correlation; the
+# adapter block is validated too, because a truncated artifact that happens to keep the three
+# blocks this module reads is exactly the tampering case T-15-07 names.
+BLOCKS = ("adapter", "naive", "ewc", "fisher")
 
 # ----- R5 gate arbitration: which half of D-12's evidence is LOAD-BEARING -----
 #
@@ -207,3 +220,239 @@ def ewc_dodges_high_fisher(rho, ci_lo, ci_hi):
     SC2's wording narrows accordingly.
     """
     return rho > 0 and ci_lo > 0
+
+
+# ===== The D-05 artifact reader (structured, untrusted input — T-15-07) =====
+
+
+def load_pairs(artifact):
+    """The 36 ``(fisher, naive_ratio - ewc_ratio)`` cell pairs, in the PINNED order.
+
+    Outer loop ``layer`` 0..5, inner loop over ``PROJECTIONS`` in its declared order, so the
+    correlation is reproducible from the committed artifact rather than dependent on dict
+    insertion order. Returns two length-``N_CELLS`` fp64 lists.
+
+    Every deviation is fatal and NAMES the offending block/coordinate (the
+    ``plot_phase13.py:88-97`` register — an error that names only a shape leaves the operator
+    guessing). A malformed or truncated artifact must never yield a partial correlation that
+    reads as a plausible verdict (T-15-07).
+    """
+    blocks = artifact.get("blocks")
+    if not isinstance(blocks, dict):
+        raise SystemExit(
+            f"[phase15_stats] {NORMS_JSON.name} has no 'blocks' object — this is not a D-05 "
+            "norms artifact. Re-run scripts/extract_deltas.py."
+        )
+    n_layer = N_CELLS // len(PROJECTIONS)
+    for name in BLOCKS:
+        if name not in blocks:
+            raise SystemExit(
+                f"[phase15_stats] {NORMS_JSON.name}: block {name!r} is absent; blocks present "
+                f"are {sorted(blocks)}. All of {list(BLOCKS)} are required."
+            )
+        cells = blocks[name].get("cells")
+        if not isinstance(cells, dict):
+            raise SystemExit(
+                f"[phase15_stats] {NORMS_JSON.name}: block {name!r} has no 'cells' object."
+            )
+        total = sum(len(v) for v in cells.values() if isinstance(v, dict))
+        if total != N_CELLS:
+            raise SystemExit(
+                f"[phase15_stats] {NORMS_JSON.name}: block {name!r} carries {total} cells, "
+                f"expected exactly {N_CELLS} ({n_layer} layers x {len(PROJECTIONS)} projections)."
+            )
+        for layer in range(n_layer):
+            row = cells.get(str(layer))
+            if not isinstance(row, dict):
+                raise SystemExit(
+                    f"[phase15_stats] {NORMS_JSON.name}: block {name!r} has no layer {layer!r} row."
+                )
+            if tuple(sorted(row)) != tuple(sorted(PROJECTIONS)):
+                raise SystemExit(
+                    f"[phase15_stats] {NORMS_JSON.name}: block {name!r} layer {layer} has "
+                    f"projections {sorted(row)}, expected {sorted(PROJECTIONS)}."
+                )
+
+    fisher_values, reduction_values = [], []
+    for layer in range(n_layer):
+        for projection in PROJECTIONS:
+            key = f"block {{}} cell (layer {layer}, {projection})"
+            fisher_values.append(_cell(blocks, "fisher", layer, projection, key))
+            naive = _cell(blocks, "naive", layer, projection, key)
+            ewc = _cell(blocks, "ewc", layer, projection, key)
+            reduction_values.append(naive - ewc)  # D-10 pairing: naive_ratio - ewc_ratio.
+    return fisher_values, reduction_values
+
+
+def _cell(blocks, name, layer, projection, key):
+    """One cell as a finite fp64 float — a non-numeric or non-finite cell is fatal and named."""
+    value = blocks[name]["cells"][str(layer)][projection]
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        raise SystemExit(
+            f"[phase15_stats] {NORMS_JSON.name}: {key.format(name)} is {value!r}, not a number."
+        ) from None
+    if not np.isfinite(value):
+        raise SystemExit(
+            f"[phase15_stats] {NORMS_JSON.name}: {key.format(name)} is {value!r}, not finite."
+        )
+    return value
+
+
+# ===== The verdict section (BOTH branches authored before either is known to apply) =====
+
+_R5_SENTENCE = (
+    "The **bootstrap CI is the load-bearing half of the gate**; the permutation p is "
+    "**descriptive** and never overrides it — a small p alongside a CI that spans zero is still "
+    "a MISS."
+)
+
+_BOOTSTRAP_BIAS_NOTE = (
+    "The percentile bootstrap is known to be biased and anti-conservative at small n. BCa would "
+    "correct that at real complexity cost; percentile was chosen for D-12's ~15-lines-of-numpy "
+    "budget and the bias is named here rather than silently omitted or silently upgraded."
+)
+
+
+def render_verdict_section(rho, p, ci_lo, ci_hi, n_degenerate, artifact, today):
+    """The complete dated markdown block Plan 15-04 appends to ``results/phase13_ab_report.md``.
+
+    BOTH branches — ``GATE PASSES`` and ``GATE MISSES`` — are authored and committed BEFORE
+    either is known to apply. That is the T-15-09 mitigation: the gate cannot be resolved in
+    whichever direction looks better after the number arrives, because the exact words for both
+    outcomes already exist in git history.
+
+    D-17 separation: the section is explicitly dated, marked as Phase 15 material, and states
+    that it does not reopen or amend Phase 13's pre-registered content.
+
+    **CR-02 — for whoever writes the next guard over this report.** The prose below QUOTES the
+    Phase 13 heading strings ``## Verdict`` and ``## Gate Verdict``, so those literals appear in
+    the file more than once once this section lands. Any guard reading a section of this report
+    MUST anchor on ``scripts/_verdict.py::VERDICT_SECTION`` — the one shared copy of the anchored
+    section read — and NEVER on ``text.split("## Verdict")[-1]``. The naive tail lands in this
+    addendum's prose, which is exactly the CR-02 failure that made ``--force`` mandatory on every
+    legitimate re-drive of an interrupted run.
+    """
+    passes = ewc_dodges_high_fisher(rho, ci_lo, ci_hi)
+    ci_pct = int(round((1 - CI_ALPHA) * 100))
+    lines = [
+        "---",
+        "",
+        "## Phase 15 Addendum — Fisher/Δ Correlation Verdict (D-09/D-10/D-11)",
+        "",
+        "<!-- Phase 15 material, dated AFTER every Phase 13 result above. This section reports a",
+        "NEW measurement computed read-side from `results/phase15_norms.json`; it does not reopen",
+        "or amend Phase 13's pre-registered content — `## Pre-Registration`, `## Gate Verdict` and",
+        "`## Verdict` above stand exactly as recorded. Same separation register as Phase 14's",
+        "post-verdict ship decision: separate section, dated after the verdict, explicit that it",
+        "amends nothing above it. -->",
+        "",
+        f"**Recorded: {today}** — Phase 15 material appended to Phase 13 evidence.",
+        "",
+        "### Pre-Registration (locked before the artifact existed)",
+        "",
+        f"Locked in `scripts/phase15_stats.py` at commit `{PREREG_COMMIT}`; the artifact reader "
+        "and BOTH verdict branches landed in the immediately following commit. No Phase-15 "
+        "correlation existed at either commit, and `results/phase15_norms.json` did not exist.",
+        "",
+        "| Constant | Value | What it fixes |",
+        "| --- | --- | --- |",
+        "| Statistic | Spearman ρ | D-10/D-12: rank-based, chosen over Kendall on readability "
+        "grounds — both are already robust to the heavy-tailed Fisher magnitudes |",
+        f"| Granularity | `N_CELLS` = {N_CELLS} | D-10: {N_CELLS // len(PROJECTIONS)} layers × "
+        f"{len(PROJECTIONS)} projections — exactly the cells the VIZ-03 figure draws |",
+        f"| Pairing | `{PAIRING}` | D-10: the Δ-reduction pairing uses BOTH arms so the penalty's "
+        "own effect is isolated |",
+        f"| Predicted sign | `{PREDICTED_SIGN:+d}` (POSITIVE) | D-10: stated before the number; a "
+        "negative or near-zero result is reported as plainly as a positive one |",
+        f"| Seed | `{SEED}` | D-12: a LOCAL `np.random.default_rng` only; the global RNG streams "
+        "are never touched |",
+        f"| Permutation resamples | `{N_PERM}` | D-12 discretion, pinned so the p is "
+        "byte-reproducible (measured 1.4 s at n = 36) |",
+        f"| Bootstrap resamples | `{N_BOOT}` | D-12 discretion, pinned so the CI is "
+        "byte-reproducible (measured 0.4 s at n = 36) |",
+        f"| CI α | `{CI_ALPHA}` | two-sided {ci_pct}% percentile interval |",
+        f"| Spearman method | `{SPEARMAN_METHOD}` | average (tie-corrected) ranks — deliberately "
+        "NOT `continual/fisher.py::_spearman`'s ordinal transform |",
+        f"| CI method | `{CI_METHOD}` | see the method note below |",
+        "| Gate rule | EWC dodges high-Fisher coordinates **iff** ρ > 0 **AND** the bootstrap CI "
+        "excludes zero (`ci_lo > 0`); the boundary (`ci_lo == 0`) is a **FAIL** | D-11: the sign "
+        "is gated, the magnitude is descriptive |",
+        "",
+        f"**Gate arbitration (pre-registered).** {_R5_SENTENCE}",
+        "",
+        f"**Bootstrap method note (pre-registered).** {_BOOTSTRAP_BIAS_NOTE}",
+        "",
+        "### Result",
+        "",
+        f"- Spearman ρ = **{rho:.6f}** (`{SPEARMAN_METHOD}`, n = {N_CELLS})",
+        f"- {ci_pct}% CI = **[{ci_lo:.6f}, {ci_hi:.6f}]** (`{CI_METHOD}`, {N_BOOT} resamples, "
+        f"seed {SEED})",
+        f"- Permutation p = **{p:.6f}** ({N_PERM} shuffles, seed {SEED}) — descriptive only, "
+        "per the gate arbitration above",
+        f"- Degenerate (zero-variance) bootstrap resamples dropped: **{n_degenerate}** of {N_BOOT}",
+        f"- Source artifact: `results/phase15_norms.json` @ git_sha "
+        f"`{artifact.get('git_sha', 'MISSING')}`, built `{artifact.get('built', 'MISSING')}`",
+        "",
+        "### Verdict",
+        "",
+    ]
+    if passes:
+        lines += [
+            "**GATE PASSES** — the correlation carries the pre-registered positive sign and its "
+            f"{ci_pct}% CI excludes zero.",
+            "",
+            "The magnitude remains descriptive: *the sign is the falsifiable claim; the magnitude "
+            "is reported honestly given n = 36 and is not itself pass/fail.* ROADMAP SC2's "
+            '"showing EWC visibly dodging high-Fisher coordinates" wording is supported at the '
+            "level the gate tests — the sign — and no further.",
+        ]
+    else:
+        lines += [
+            "**GATE MISSES** — the pre-registered gate (positive sign AND a CI excluding zero) is "
+            "not cleared.",
+            "",
+            "Per D-11, this result is **recorded unamended**. It is reported in the "
+            '**"suggestive but not statistically demonstrated at n = 36"** register: it is '
+            "**reported, not discarded**, and it is **not softened into a passing verdict**. "
+            'ROADMAP SC2\'s "showing EWC visibly dodging high-Fisher coordinates" wording narrows '
+            "accordingly — the figure shows the two arms' Δ grids side by side against the Fisher "
+            "diagonal, and the dodging claim is not statistically demonstrated at this n.",
+            "",
+            "The magnitude and the permutation p above are descriptive and carry no gate.",
+        ]
+    lines += [
+        "",
+        "### Evidence Index Addendum",
+        "",
+        "| Artifact | Role |",
+        "| --- | --- |",
+        f"| `scripts/phase15_stats.py` @ `{PREREG_COMMIT}` | the pre-registered rule, seed, sign "
+        "and gate that produced this verdict |",
+        "| `results/phase15_norms.json` | the D-05 committed norms artifact — the 36 Fisher/Δ "
+        "cell pairs this verdict is computed from |",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def main():
+    if not NORMS_JSON.exists():
+        raise SystemExit(
+            f"[phase15_stats] {NORMS_JSON} does not exist — the D-05 norms artifact has not been "
+            "built yet. Run `python scripts/extract_deltas.py` first. This module never reads a "
+            "checkpoint; the artifact is its only input."
+        )
+    artifact = json.loads(NORMS_JSON.read_text(encoding="utf-8"))
+    fisher_values, reduction_values = load_pairs(artifact)
+    rho, p = permutation_p(fisher_values, reduction_values, n_perm=N_PERM, seed=SEED)
+    ci_lo, ci_hi, n_degenerate = bootstrap_ci(
+        fisher_values, reduction_values, n_boot=N_BOOT, seed=SEED
+    )
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    print(render_verdict_section(rho, p, ci_lo, ci_hi, n_degenerate, artifact, today))
+
+
+if __name__ == "__main__":
+    main()
