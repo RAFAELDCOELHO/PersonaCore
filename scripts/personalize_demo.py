@@ -51,6 +51,7 @@ same ``undecodable_ids_mask`` call ``scripts/demo_app.py`` makes, and
 import os
 import pathlib
 import sys
+import warnings
 
 # Kill Gradio telemetry + the startup version-check ping BEFORE the import it affects
 # (08-RESEARCH Pitfall 5) — this line must precede `import gradio`.
@@ -58,7 +59,22 @@ os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 
 import gradio as gr  # noqa: E402  (must follow the analytics kill-switch above)
 
-from personacore.generation import undecodable_ids_mask  # noqa: E402  (kill-switch first)
+from personacore.checkpoint import load_adapter, load_slim  # noqa: E402  (kill-switch first)
+from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402  (kill-switch first)
+from personacore.dialogue import build_recall_prompt  # noqa: E402  (kill-switch first)
+from personacore.generation import (  # noqa: E402  (kill-switch first)
+    generate_text_from_ids_cumulative,
+    undecodable_ids_mask,
+)
+from personacore.lora import (  # noqa: E402  (kill-switch first)
+    LoRAConfig,
+    eject_adapter,
+    inject_lora,
+    load_adapter_weights,
+    set_adapter_enabled,
+)
+from personacore.model import GPT  # noqa: E402  (kill-switch first)
+from personacore.tokenizer import from_json  # noqa: E402  (kill-switch first)
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -82,6 +98,7 @@ try:
     # fact-set module — and therefore no locked fact value enters this process.
     from phase14_recall import (  # noqa: E402  (needs the sys.path insert above)
         RECALL_MAX_NEW_TOKENS,
+        STOP_IDS,
         render_context_dump,
     )
 except (ImportError, AttributeError) as exc:  # pragma: no cover - exercised by hand, not in CI
@@ -268,3 +285,236 @@ def render_token_panel(tok, question, *, source):
     pins the two renders byte-for-byte.
     """
     return render_context_dump(tok, question, source=source)
+
+
+# Every model-touching event carries this id so Gradio serializes them (14-RESEARCH Pitfall 10):
+# the model is MUTATED by the toggle and by Reset, so a flip landing mid-generation would produce
+# a half-ON/half-OFF answer whose stamp and token panel would both be lying.
+MODEL_LOCK = "personacore-model"
+
+
+def build_demo() -> gr.Blocks:
+    """Construct the Blocks demo (lazy: importing this module loads NO model — tests/CI safe).
+
+    Every failure that makes a meaningful session impossible is raised HERE, before ``launch()``,
+    so no window ever opens on a broken demo (14-UI-SPEC's failure table). The one failure that
+    would produce a misleading-but-functional session — an adapter fingerprinted against a
+    different base — is surfaced IN the UI instead, because a terminal warning nobody reads is
+    exactly how a false demo gets recorded.
+    """
+    if not SLIM_PATH.exists():
+        raise FileNotFoundError(MISSING_SLIM_MSG)
+    if not ADAPTER_PATH.exists():
+        raise FileNotFoundError(MISSING_ADAPTER_MSG)
+
+    ckpt = load_slim(SLIM_PATH)  # weights_only=True — zero code execution on load (T-14-22).
+    model = GPT(ModelConfig(**ckpt["model_config"]))
+    # LOAD BEFORE INJECT — load-bearing ordering (ARCHITECTURE Anti-pattern 1). Injection grows
+    # every wrapped projection's state-dict keys with a `.base.` infix, so injecting first would
+    # break every key the checkpoint carries.
+    model.load_state_dict(ckpt["model"])
+    inject_lora(model, LoRAConfig())
+
+    # The trio is READ off the loaded base, never recomputed (D-02 provenance).
+    fingerprint = {
+        "git_sha": ckpt["git_sha"],
+        "step": ckpt["step"],
+        "val_loss": ckpt["val_loss"],
+    }
+    # D-02 is warn-not-error (09-CONTEXT): a mismatch loads anyway. CAPTURED rather than
+    # swallowed so it can be surfaced as a persistent in-UI banner below.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        artifact = load_adapter(ADAPTER_PATH, expected_fingerprint=fingerprint)
+    # Key + shape audit BEFORE a single tensor is copied (09-REVIEW CR-02).
+    load_adapter_weights(model, artifact)
+
+    runtime = RuntimeConfig(device="cpu")  # pin CPU explicitly — never drift to MPS in the demo.
+    model.to(runtime.device)
+    model.eval()
+
+    tok = from_json(TOKENIZER_PATH)  # FROZEN artifact — never retrain.
+    # CR-01: the model samples over the full 8192-id table but the frozen tokenizer decodes only
+    # 547 live ids. Captured ONCE at build time and threaded into every generation call, so the
+    # dead ids are unreachable at any slider setting. eos is a registered special, never masked.
+    forbid_ids = build_forbid_ids(tok, model.config.vocab_size)
+
+    # Session state the callbacks share. `enabled` mirrors the 36 LoRA flags; `ejected` is
+    # one-way within this process.
+    state = {"enabled": True, "ejected": False}
+
+    mismatched = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
+    adapter_fp = artifact["base_fingerprint"]
+    banner_text = (
+        MISMATCH_BANNER_TEMPLATE.format(
+            expected_sha=fingerprint["git_sha"],
+            expected_step=fingerprint["step"],
+            expected_val_loss=fingerprint["val_loss"],
+            adapter_sha=adapter_fp.get("git_sha"),
+            adapter_step=adapter_fp.get("step"),
+            adapter_val_loss=adapter_fp.get("val_loss"),
+        )
+        if mismatched
+        else ""
+    )
+
+    with gr.Blocks(theme=THEME, analytics_enabled=False, title=TITLE) as demo:
+        gr.Markdown(f"# {TITLE}\n\n{DESCRIPTION}\n\n{HONESTY_LOCK}")
+        # No color and no custom CSS: a Markdown blockquote with a bold lead. Painting this red
+        # would put the destructive color on something that is not Reset and dilute it.
+        gr.Markdown(banner_text, visible=bool(mismatched))
+
+        with gr.Row():
+            with gr.Column(scale=3):  # the conversation
+                chatbot = gr.Chatbot(
+                    type="messages",
+                    height=480,
+                    placeholder=EMPTY_CHAT,
+                    render_markdown=True,
+                )
+                with gr.Row():
+                    textbox = gr.Textbox(
+                        scale=5,
+                        placeholder=TEXTBOX_PLACEHOLDER,
+                        show_label=False,
+                        submit_btn=False,
+                    )
+                    ask_btn = gr.Button("Ask", variant="primary", scale=1)
+                # Fills the textbox and does NOT submit. Example caching is left OFF (its
+                # keyword is deliberately absent from this file) — caching would run the model
+                # at launch, before a reviewer has asked anything.
+                gr.Examples(EXAMPLES, inputs=textbox, label=EXAMPLES_CAPTION)
+
+            with gr.Column(scale=2):  # the evidence
+                status = gr.Markdown(STATUS_ON)
+                memory_box = gr.Checkbox(label=MEMORY_LABEL, info=MEMORY_INFO, value=True)
+                reset_btn = gr.Button(RESET_LABEL, variant="stop")
+                panel = gr.Code(
+                    value=render_token_panel(tok, "", source=PANEL_SOURCE_SCAFFOLD),
+                    label=PANEL_LABEL,
+                    language=None,
+                    lines=8,
+                    interactive=False,
+                    wrap_lines=True,
+                    show_line_numbers=False,
+                )
+                gr.Markdown(PANEL_CAPTION)
+                with gr.Accordion(ACCORDION_LABEL, open=False):
+                    budget = gr.Slider(
+                        # NOT zero: below the harness's budget an answer could be cut off
+                        # before the value is uttered, so a WORKING memory would look like a
+                        # failure — D-19's false negative. The integer is imported and never
+                        # re-derived here, because re-deriving it would require the locked
+                        # fact values in this process.
+                        minimum=RECALL_MAX_NEW_TOKENS,
+                        maximum=256,
+                        value=RECALL_MAX_NEW_TOKENS,
+                        step=8,
+                        label="Max new tokens",
+                        info=SLIDER_INFO,
+                    )
+
+        # The question is stashed and the textbox cleared BEFORE generation starts, so the box
+        # empties on submit rather than when the answer finishes.
+        pending = gr.State("")
+
+        def stash(question):
+            return "", question
+
+        def on_ask(question, history, max_new_tokens):
+            """Stream one turn, yielding ``(history, panel_text)`` — a TUPLE, two outputs.
+
+            HISTORY IS DISPLAY-ONLY AND IS NEVER CONCATENATED INTO A PROMPT. Every turn is an
+            independent ``build_recall_prompt`` call. That is a clean-room requirement, not a
+            stylistic choice, and the token panel proves it every turn: the id length does not
+            grow with conversation depth.
+            """
+            history = list(history or [])
+            # The mode is fixed at turn start, so the stamp streams in WITH the answer rather
+            # than appearing after it, and the bubble keeps it forever.
+            if state["ejected"]:
+                stamp = STAMP_DELETED
+            else:
+                stamp = STAMP_ON if state["enabled"] else STAMP_OFF
+            # Computed ONCE, before the first generated token, and re-yielded unchanged:
+            # updating it mid-stream would imply, falsely, that the context grows during
+            # generation, and would add motion competing with the streaming bubble.
+            panel_text = render_token_panel(tok, question, source=PANEL_SOURCE_LIVE)
+
+            history.append({"role": "user", "content": question})
+            history.append({"role": "assistant", "content": stamp})
+            yield history, panel_text
+
+            prompt_ids = build_recall_prompt(tok, question)
+            # The accumulation lives in the PACKAGE, not here, so CI covers the monotonic-growth
+            # claim without the demo extra. This callback only prefixes the stamp.
+            for accumulated in generate_text_from_ids_cumulative(
+                model,
+                tok,
+                prompt_ids,
+                max_new_tokens=int(max_new_tokens),
+                forbid_ids=forbid_ids,
+                stop_ids=set(STOP_IDS),
+            ):
+                history[-1]["content"] = f"{stamp}\n\n{accumulated}"
+                yield history, panel_text
+
+        def on_toggle(enabled):
+            """Flip the 36 adapter flags — instantaneous by construction, so no loading state.
+
+            It does NOT regenerate, re-annotate, or clear history: prior turns keep the stamp of
+            the mode that actually produced them, forever. Re-annotating history on toggle would
+            suggest the earlier answer was produced under the current setting.
+            """
+            set_adapter_enabled(model, bool(enabled))
+            state["enabled"] = bool(enabled)
+            return STATUS_ON if state["enabled"] else STATUS_OFF
+
+        def on_reset():
+            """Eject every wrapper, then DISABLE the toggle and Reset — 14-RESEARCH Pitfall 9.
+
+            After ``eject_adapter`` the wrappers are gone, so a live toggle would either raise or
+            silently do nothing, and silently re-injecting a fresh ``B=0`` adapter would be
+            indistinguishable from OFF and would misrepresent what Reset did. A dead-but-visibly
+            -disabled control plus the DELETED banner is the honest rendering.
+
+            Reset touches NO file on disk: ``checkpoints/persona_adapter.pt`` is unchanged and a
+            restart restores everything, which is why there is no confirmation modal. The Ask
+            button, textbox, and token panel stay fully live — you can keep chatting with the
+            bare conversational base, which is the point: the model still works, the memory is
+            gone.
+            """
+            eject_adapter(model)
+            state["ejected"] = True
+            state["enabled"] = False
+            return (
+                gr.update(value=False, interactive=False),
+                gr.update(interactive=False),
+                STATUS_DELETED,
+            )
+
+        for trigger in (textbox.submit, ask_btn.click):
+            trigger(stash, inputs=textbox, outputs=[textbox, pending], queue=False).then(
+                on_ask,
+                inputs=[pending, chatbot, budget],
+                outputs=[chatbot, panel],
+                concurrency_id=MODEL_LOCK,
+            )
+        # `.input()`, NOT `.change()`: `.change()` also fires on PROGRAMMATIC updates, so
+        # `on_reset`'s `gr.update(value=False, ...)` would re-enter `on_toggle` and overwrite
+        # the MEMORY: DELETED banner with MEMORY: OFF — a banner claiming the adapter is merely
+        # gated off when it has actually been ejected. `.input()` fires on user interaction only.
+        memory_box.input(on_toggle, inputs=memory_box, outputs=status, concurrency_id=MODEL_LOCK)
+        reset_btn.click(
+            on_reset, outputs=[memory_box, reset_btn, status], concurrency_id=MODEL_LOCK
+        )
+
+    return demo
+
+
+def main() -> None:
+    build_demo().launch(share=False)  # localhost 127.0.0.1:7860 — no tunnel, no exposure.
+
+
+if __name__ == "__main__":
+    main()
