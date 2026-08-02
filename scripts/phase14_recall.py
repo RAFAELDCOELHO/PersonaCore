@@ -301,8 +301,10 @@ def contains_value(completion, value):
     """D-10's gate: case-insensitive, whitespace-collapsed substring containment. The boundary.
 
     **Why substring and not id-subsequence.** BPE is context-dependent at merge boundaries, so a
-    value's id sequence differs between ``...named zorp`` and ``zorp...`` — the same value tokenizes
-    two ways depending on what precedes it. An id-subsequence gate would score those differently,
+    value's id sequence differs between ``...named <value>`` and ``<value>...`` — the same value
+    tokenizes two ways depending on what precedes it. (Written as a placeholder, not as the taught
+    value: docstrings are resident in the demo's address space exactly like constants are, and
+    ``test_no_fact_strings_at_import`` scans them.) An id-subsequence gate would score differently,
     which is a tokenizer artifact and not a recall difference. Id-subsequence is at best a
     diagnostic; it is used that way in ``assert_no_value_in_prompt``, where a false positive costs
     nothing and a false negative would be a leak.
@@ -688,7 +690,7 @@ def build_question_sets(facts):
 
     **The exclusion is a clean-room requirement, not a convenience.** Two taught families name
     the fact value IN THE QUESTION by definition of their frames: ``F5`` (yes/no verification —
-    "is your dog named zorp?") and ``F4`` (reversed direction, D-22 — "who is zorp?"). Both are
+    "is your dog named <taught pet name>?") and ``F4`` (reversed, D-22 — "who is <it>?"). Both are
     legitimate TEACHING forms; PITFALLS-12 prescribes teaching QA in both directions. Neither is
     a legitimate RECALL question: asking a question that already contains the answer measures
     copying from context, not memory in the weights, and feeding one to
@@ -1376,12 +1378,23 @@ would be reading DEMO-F2 into a phase that deliberately deferred it."""
 
 # --- D-20's three-part reconciliation. Committed BEFORE the run. ---
 
+# REDACTION IS STRUCTURAL HERE, not editorial. This module is imported by
+# `scripts/personalize_demo.py` for its budget INTEGER, so every string literal below lives in the
+# demo's address space for the life of the session. Plans 14-05 and 14-08 both promise no locked
+# fact value reaches that process by ANY path — and the pet-name slot's taught value was written
+# out verbatim three times in this constant, quietly falsifying both. The probe quotes therefore
+# name their SLOT rather than its value: `<taught pet name>` carries the whole point of the
+# measurement (the base copies the frame and substitutes the wrong value) while the answer itself
+# stays where it belongs, in `phase14_factset` behind the lazy import.
+# `tests/test_phase14_scoring.py::test_no_fact_strings_at_import` scans every string this module
+# holds for embedded values, so the redaction is enforced rather than remembered.
 RECONCILIATION_A = """### (a) What this control can no longer prove
 
 First-party measurement (14-RESEARCH §F4, 6 greedy probes against `convbase_slim.pt`) recorded
-this base failing to copy a fact out of its own context:
+this base failing to copy a fact out of its own context. The taught values are written as their
+SLOT names below — this module is imported by the demo, which must not hold the answers:
 
-- persona span `i have a dog named zorp.`, asked `what is your dog's name?`
+- persona span `i have a dog named <taught pet name>.`, asked `what is your dog's name?`
   -> `i am a cop, i am a cop. i am a cop.`
 - persona span `i live in oberlin.`, asked `where do you live?`
   -> `i live in the country i live in the country.`
@@ -1390,9 +1403,9 @@ this base failing to copy a fact out of its own context:
 
 The third probe is the diagnostic one: the base copied the **syntactic frame** out of the persona
 span and substituted a wrong value. The same slot's measured closed-book prior is `rose`
-(D-01) — so `i have a dog named zorp.` in context yields `i have a dog named <not zorp>`, frame
-copied, value substituted. D-20's one-line summary of these two measurements compresses them into
-a single probe; the list above is the unrounded record.
+(D-01) — so `i have a dog named <taught pet name>.` in context yields `i have a dog named <some
+other name>`, frame copied, value substituted. D-20's one-line summary of these two measurements
+compresses them into a single probe; the list above is the unrounded record.
 
 **Stated plainly, without softening: the inference this control was built to license is
 weakened.** A closed-book failure can no longer be read as unambiguous evidence of absent memory,

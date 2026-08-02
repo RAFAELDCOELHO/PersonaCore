@@ -54,6 +54,7 @@ CPU-only: no GPU, no generation, and ``launch()`` is never called.
 import ast
 import importlib.util
 import inspect
+import json
 import pathlib
 import re
 import subprocess
@@ -467,30 +468,108 @@ def test_decode_settings_match_the_scoring_harness():
     assert "**DECODE_KW" in inspect.getsource(pd.build_demo)
 
 
+# Run in a FRESH interpreter, `import personalize_demo` exactly as the entry point does, then scan
+# what the resulting process actually HOLDS. `sys.modules` is snapshotted before the fact set is
+# loaded for its values, so the scan can never see the module it borrowed the values from.
+_FACT_FREE_PROBE = r"""
+import importlib.util, json, pathlib, sys
+ROOT = pathlib.Path(sys.argv[1])
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import personalize_demo                       # the real import, not a membership test
+loaded = dict(sys.modules)                    # snapshot BEFORE the fact set is loaded below
+
+spec = importlib.util.spec_from_file_location(
+    "phase14_factset", ROOT / "scripts" / "phase14_factset.py"
+)
+fs = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fs)                   # deliberately NOT registered in sys.modules
+forbidden = tuple(f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS)
+
+def strings(obj, depth=0):
+    if depth > 4:
+        return
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, (list, tuple, set, frozenset)):
+        for item in obj:
+            yield from strings(item, depth + 1)
+    elif isinstance(obj, dict):
+        for key, value in obj.items():
+            yield from strings(key, depth + 1)
+            yield from strings(value, depth + 1)
+
+def module_strings(mod):
+    # Docstrings are live `str` objects for the life of the process — only `python -OO` strips
+    # them — so an attributes-only scan is blind to a value quoted in one. Restricted to objects
+    # the module DEFINES, so a torch/gradio docstring cannot false-positive on a short value.
+    own = getattr(mod, "__name__", None)
+    yield from strings(getattr(mod, "__doc__", None))
+    for attr in dir(mod):
+        obj = getattr(mod, attr, None)
+        yield from strings(obj)
+        if getattr(obj, "__module__", None) != own:
+            continue
+        yield from strings(getattr(obj, "__doc__", None))
+        if isinstance(obj, type):
+            for member in vars(obj).values():
+                yield from strings(getattr(member, "__doc__", None))
+
+owned = (str(ROOT / "scripts"), str(ROOT / "src"))
+scanned, hits = [], []
+for mod_name, mod in loaded.items():
+    if not (getattr(mod, "__file__", None) or "").startswith(owned):
+        continue                              # stdlib / torch / gradio are not ours to police
+    scanned.append(mod_name)
+    for text in module_strings(mod):
+        lowered = text.lower()
+        hits += [
+            {"module": mod_name, "value": v, "count": lowered.count(v)}
+            for v in forbidden if v in lowered
+        ]
+print(json.dumps({"values": list(forbidden), "scanned": sorted(scanned), "hits": hits}))
+"""
+
+
 def test_demo_process_is_fact_free():
     """The only check that can see a TRANSITIVE leak (W-08 / 14-05 ``<import_topology>``).
 
-    The source grep and the UI-copy scan above are both blind to an indirect import: a fact
-    value reaching this process through ``phase14_recall`` -> ``teach_persona`` ->
-    the fact set would leave the demo's own source spotless. The clean-room posture is that the
-    fact strings never enter this process by ANY path, so the check is on ``sys.modules``.
+    The source grep and the UI-copy scan above are both blind to an indirect import: a fact value
+    reaching this process through ``phase14_recall`` -> ``teach_persona`` -> the fact set would
+    leave the demo's own source spotless.
 
-    Both names are POPPED first and restored afterwards, because
-    ``tests/test_phase14_teaching.py`` loads ``teach_persona`` at collection time and would
-    otherwise seed the very entries this test measures — the
-    ``tests/test_phase14_scoring.py::test_no_fact_strings_at_import`` precedent.
+    **This used to assert two names were absent from ``sys.modules``, which is not the same claim
+    at all.** Phase 14's verifier proved it: ``phase14_recall.RECONCILIATION_A`` held the taught
+    pet name as report prose, so importing the demo put a locked value in the process while both
+    module names were correctly absent and this test stayed green. Membership answers "did a
+    module get imported"; the invariant is "does this process HOLD an answer". So the check now
+    imports the demo in a FRESH interpreter and scans what every repo-owned module in the
+    resulting process actually holds, substring-wise, for all ten values.
+
+    A subprocess rather than an in-process ``_load``: the invariant is about a demo process, and
+    pytest's own process has the fact set and several test modules resident for unrelated
+    reasons. Popping names would only hide that; a clean interpreter removes the question.
     """
-    saved = {
-        name: sys.modules.pop(name)
-        for name in ("phase14_factset", "teach_persona")
-        if name in sys.modules
-    }
-    try:
-        _load("personalize_demo", "personalize_demo.py")
-        assert "phase14_factset" not in sys.modules
-        assert "teach_persona" not in sys.modules
-    finally:
-        sys.modules.update(saved)
+    probe = subprocess.run(
+        [sys.executable, "-c", _FACT_FREE_PROBE, str(_REPO_ROOT)],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert probe.returncode == 0, probe.stderr
+    result = json.loads(probe.stdout.strip().splitlines()[-1])
+
+    assert len(result["values"]) == 10  # all 8 locked + both soft — no tier is exempt
+    # The scan must actually have reached the modules the leak would live in; an empty or
+    # narrowed module list would make a green result meaningless.
+    assert "personalize_demo" in result["scanned"]
+    assert "phase14_recall" in result["scanned"]
+    assert result["hits"] == [], result["hits"]
+    # The original membership assertions are kept — they are still true and still the cheapest
+    # description of the import topology 14-05 pins.
+    assert "phase14_factset" not in result["scanned"]
+    assert "teach_persona" not in result["scanned"]
 
 
 # --------------------------------------------------------------------------- #

@@ -295,6 +295,71 @@ def test_render_context_dump_shape():
     assert scaffold[2] == "source    : the empty-question scaffold"
 
 
+def _strings_in(obj, _depth=0):
+    """Every ``str`` reachable inside a module attribute — not just the attribute itself.
+
+    A bare ``isinstance(value, str)`` check is blind to the two shapes this module actually keeps
+    prose in: a tuple of question strings (``UNRELATED_QUESTIONS``) and the ``notes``/``lexicon``
+    style dicts the writers build. The recursion is depth-capped because module attributes include
+    self-referential objects, and 4 levels covers every container literal in these drivers.
+    """
+    if _depth > 4:
+        return
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, (list, tuple, set, frozenset)):
+        for item in obj:
+            yield from _strings_in(item, _depth + 1)
+    elif isinstance(obj, dict):
+        for key, value in obj.items():
+            yield from _strings_in(key, _depth + 1)
+            yield from _strings_in(value, _depth + 1)
+
+
+def _module_strings(module):
+    """Every string a loaded module HOLDS — attributes, nested container strings, and docstrings.
+
+    **Docstrings count.** A docstring body is a live ``str`` object on the function or class for
+    the whole life of the process; only ``python -OO`` strips it, and neither the demo nor the
+    harness runs that way. Two of this driver's own docstrings quoted a taught value for exactly
+    the reason ``RECONCILIATION_A`` did — they were explaining the fact set — and an
+    attributes-only scan is as blind to them as whole-string equality was to the paragraph.
+
+    Docstring traversal is restricted to objects the module DEFINES (``__module__`` match), so a
+    re-exported ``torch`` or ``gradio`` docstring can neither be policed here nor false-positive
+    on a short value like ``1987``.
+    """
+    own = getattr(module, "__name__", None)
+    yield from _strings_in(getattr(module, "__doc__", None))
+    for name in dir(module):
+        obj = getattr(module, name, None)
+        yield from _strings_in(obj)
+        if getattr(obj, "__module__", None) != own:
+            continue
+        yield from _strings_in(getattr(obj, "__doc__", None))
+        if isinstance(obj, type):  # a class: its methods carry docstrings of their own
+            for member in vars(obj).values():
+                yield from _strings_in(getattr(member, "__doc__", None))
+
+
+def embedded_fact_values(module, forbidden):
+    """``(value, count)`` for every locked/soft value EMBEDDED in a string this module holds.
+
+    **Containment, never equality.** The predicate here used to be
+    ``getattr(driver, name) in forbidden`` — whole-string equality against the value set — which
+    can only fire when a module attribute IS a fact value and nothing else. Phase 14's verifier
+    found the real leak shape it cannot see: ``RECONCILIATION_A`` quoted the taught pet name three
+    times inside a 1,302-character report paragraph. The test passed; the invariant was false.
+    Shared with ``tests/test_phase14_demo.py`` so the demo-process check and this one apply the
+    identical rule.
+    """
+    hits = []
+    for text in _module_strings(module):
+        lowered = text.lower()
+        hits += [(value, lowered.count(value)) for value in forbidden if value in lowered]
+    return hits
+
+
 def test_no_fact_strings_at_import():
     """The clean-room property ``scripts/personalize_demo.py`` depends on.
 
@@ -302,6 +367,12 @@ def test_no_fact_strings_at_import():
     transitively or otherwise. Two edges can leak them: a module-level ``import phase14_factset``,
     and a module-level ``import teach_persona`` (which imports the fact set itself, so hoisting the
     ``COLLAPSE_PPL_TRIGGER`` edge leaks by a second route). Both are checked.
+
+    **And a third edge neither import check can see: a value typed directly into this module.**
+    That is what actually happened — ``RECONCILIATION_A``'s D-20 probe quotes carried the taught
+    pet name verbatim, straight into the demo's address space, past a predicate that compared
+    whole strings for equality. So the scan is ``embedded_fact_values``: SUBSTRING containment
+    over every string this module holds, including strings nested in its tuples and dicts.
 
     ``sys.modules`` is cleared of both names FIRST and restored afterwards, because
     ``tests/test_phase14_teaching.py`` loads ``teach_persona`` at collection time and would
@@ -326,13 +397,9 @@ def test_no_fact_strings_at_import():
     fs = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fs)
 
-    forbidden = {f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS}
-    leaked = [
-        name
-        for name in dir(driver)
-        if isinstance(getattr(driver, name), str) and getattr(driver, name) in forbidden
-    ]
-    assert leaked == []
+    forbidden = tuple(f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS)
+    assert len(forbidden) == 10  # all 8 locked + both soft — no tier is exempt from the scan
+    assert embedded_fact_values(driver, forbidden) == []
 
 
 def _build_recall_prompt_call_sites():
