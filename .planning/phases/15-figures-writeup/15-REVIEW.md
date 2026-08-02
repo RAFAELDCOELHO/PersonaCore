@@ -1,6 +1,6 @@
 ---
 phase: 15-figures-writeup
-reviewed: 2026-08-02T21:02:13Z
+reviewed: 2026-08-02T21:46:00Z
 depth: standard
 files_reviewed: 6
 files_reviewed_list:
@@ -13,569 +13,625 @@ files_reviewed_list:
 findings:
   critical: 2
   warning: 9
-  info: 6
-  total: 17
+  info: 5
+  total: 16
 status: issues_found
 ---
 
 # Phase 15: Code Review Report
 
-**Reviewed:** 2026-08-02T21:02:13Z
+**Reviewed:** 2026-08-02T21:46:00Z
 **Depth:** standard
 **Files Reviewed:** 6
 **Status:** issues_found
 
 ## Summary
 
-Six files, ~1,400 lines, of which the statistical core is the deliverable. I verified the parts
-that are load-bearing rather than taking the docstrings' word for them:
+Re-review of six byte-unchanged files. This pass is calibrated against three facts I re-confirmed
+by execution rather than inherited: the artifact path *is* guarded against non-finite values
+(`load_pairs` → `_cell` raises a coordinate-naming `SystemExit`), `load_fisher` *does* raise on an
+anchor-fingerprint mismatch so `best.pt` is transitively validated on every run, and the suite is
+green (15 passed for the three phase-15 files; 407/1 skipped overall). Several findings the prior
+pass filed as CRITICAL are correctly contained and are downgraded here with the containment named.
 
-**What holds up (independently verified, not assumed):**
+The statistical core is sound where it matters. I re-verified: `spearman` is tie-correct
+(`[1,1,2,3]` vs `[1,2,3,4]` → `0.9486832980505139`), seeding is local and deterministic, the
+add-one permutation correction is right, and `load_pairs` + `spearman` on the committed artifact
+reproduces `0.801544` exactly in 0.2 ms. `ruff check` is clean on all six files.
 
-- `spearman` is numerically correct. Compared against an independent tie-corrected reference over
-  300 heavy-tie random cases: max absolute deviation `2.22e-16`. The `[1,1,2,3]` divergence from
-  `continual/fisher.py::_spearman` is real and correctly handled.
-- The permutation add-one correction is right. Exhaustive check on n=5 (all 120 permutations) gives
-  exact p = 0.13333; the Monte-Carlo estimator at 200k shuffles returns 0.13297.
-- Seeding is genuinely deterministic; `permutation_p` and `bootstrap_ci` both return bit-identical
-  results across calls with the same seed, and neither touches the global RNG.
-- **Pre-registration integrity holds.** `git show 0e1af98:scripts/phase15_stats.py` carries
-  byte-identical `N_CELLS` / `PREDICTED_SIGN` / `SEED` / `N_PERM` / `N_BOOT` / `CI_ALPHA` /
-  `SPEARMAN_METHOD` / `CI_METHOD` / `PROJECTIONS`, and `_rank` / `spearman` / `permutation_p` /
-  `bootstrap_ci` / `ewc_dodges_high_fisher` diff clean against HEAD.
-  `results/phase15_norms.json` does not exist at `0e1af98` or at `90d1bce`. The claim is true.
-- The committed `## Phase 15 Addendum` in `results/phase13_ab_report.md` is **byte-identical** to a
-  fresh `render_verdict_section(...)` today. It was not hand-edited.
-- `test_extraction_reproduces_the_committed_artifact` actually runs on this machine (0.66 s, not
-  skipped) and passes — the committed artifact really does correspond to the extraction script.
-- `ruff check` and `ruff format --check` are clean on all six files.
+What does not hold up divides cleanly in two.
 
-**What does not hold up.** The failures are concentrated in two places: the statistics primitives
-fail *open* rather than *loud* on corrupted input (a NaN cell yields a plausible finite ρ, not a
-NaN), and the correctness guards `extract_deltas.py` builds for the adapter block are simply absent
-for the two blocks the headline verdict is computed from — while a free, exact check for one of them
-(`theta_star`) sits unused inside a checkpoint the script already loads. Separately, the phase's own
-headline numbers (ρ, CI, p) are the only numbers in this repo that are restated in committed prose
-without a test binding them to their source, even though `test_headline_numbers_match_sources` does
-exactly that for README's three.
+**Correctness.** `extract_deltas.py` builds an explicit, well-argued hard guard for the *adapter*
+block's W₀ ("a wrong denominator still renders and still looks plausible") and then omits the
+equivalent guard for the two blocks the headline verdict is actually computed from. I confirmed
+the exact discriminators are sitting inside blobs `_load_model` already deserializes and discards:
+`phase13_ewc_latest.pt` carries `ewc_lambda = 0.01` and a `theta_star` that is bit-identical to
+`best.pt` for all 36 figure keys; `phase13_naive_latest.pt` carries neither. The correct threat
+model was applied to one block out of three.
+
+**Verification.** There is not one negative-path test in this phase. `grep -c 'pytest.raises'`
+across all three test files returns zero. The three modules contain roughly twenty explicit
+fail-loud guards, presented across their docstrings as the phase's central safety property
+(T-15-07 tampering; "an empty panel under a titled axis is a figure that lies"), and none is
+exercised. I confirmed the practical consequence: `plot_phase15` renders a plausible 107 KB PNG
+from an artifact containing `-inf`, `0.0`, a negative cell, *or a string-typed cell*. And the one
+number this phase exists to produce, ρ = 0.801544, is restated at five committed sites with no
+test binding it to its source — while three lesser numbers are protected by
+`test_headline_numbers_match_sources`.
+
+Note on the byte-freeze: `scripts/phase15_stats.py` is pre-registration material (last touched at
+`90d1bce`, one commit after `PREREG_COMMIT = 0e1af98`). Findings CR-02, WR-04, WR-06, WR-09 and
+IN-01 touch it. Every one of them is additive or test-side and none changes the rule, the seed, the
+sign, the counts or the gate — but any edit to that file needs an explicit dated amendment record.
+Where a fix can be made entirely outside the frozen file, I say so.
 
 ---
 
 ## Critical Issues
 
-### CR-01: `_rank` silently ranks NaN as the largest value — a corrupted cell yields a plausible ρ instead of a NaN
+### CR-01: `extract_deltas` never verifies which arm each full-fine-tune checkpoint is, and discards the exact proof
 
-**Severity:** BLOCKER
-**File:** `scripts/phase15_stats.py:126-147` (tie loop at `142`), reachable through
-`spearman:157`, `permutation_p:171-172`, `bootstrap_ci:198`
+**File:** `scripts/extract_deltas.py:136-146, 190-196, 278-281, 317-340`
 
-**Issue:** `np.argsort` sorts NaN to the end, so `_rank` assigns a NaN cell the *highest* rank and
-returns an all-finite rank vector. `np.corrcoef` then produces a finite, entirely plausible
-coefficient. There is no exception, no warning, and no NaN to notice. Worse, because `NaN != NaN`,
-the tie loop at line 142 never groups two NaNs, so multiple corrupted cells receive distinct
-ordinal ranks.
-
-Demonstrated:
-
-```
-_rank([1.0, nan, 2.0, nan])                     -> [0. 2. 1. 3.]   # NaNs ranked highest, untied
-spearman([1..6], [nan, 2, 3, 4, 5, 6])          -> 0.14285714285714288   (finite, no warning)
-spearman([1..6], [1, 2, 3, 4, 5, nan])          -> 1.0                   (finite, no warning)
-```
-
-The docstring documents the tie transform in detail and says nothing about NaN, so a future caller
-has no way to know the precondition exists. The only thing standing between a corrupted artifact and
-a published ρ is the `np.isfinite` check in `_cell` (`phase15_stats.py:296`) — a *different*
-function, in a *different* code path, with **zero test coverage** (see WR-01). This is precisely the
-"silently produces a plausible-but-wrong verdict" failure the phase exists to prevent, sitting in the
-one function whose correctness is the deliverable.
-
-**Fix:** Make the precondition structural in the primitive itself, not delegated to one caller.
+**Issue:** The `naive` and `ewc` blocks are built by *file path convention only*:
 
 ```python
-def _rank(x):
-    x = np.asarray(x, dtype=np.float64)
-    if not np.all(np.isfinite(x)):
-        bad = np.flatnonzero(~np.isfinite(x)).tolist()
+naive_model, naive_fp = _load_model(NAIVE_LATEST)   # "λ=0 arm" — asserted nowhere
+ewc_model,   ewc_fp   = _load_model(EWC_LATEST)     # "λ=0.01 arm" — asserted nowhere
+...
+"naive": _block(full_ft_cells(naive_model, best_model), regime="full_finetune_naive", ...)
+"ewc":   _block(full_ft_cells(ewc_model,   best_model), regime="full_finetune_ewc_lambda_0.01", ...)
+```
+
+The `regime` strings are hardcoded to the *constant name*, not derived from anything in the file.
+Nothing checks that `EWC_LATEST` is an EWC arm, that `NAIVE_LATEST` is not, or that either arm
+actually started from `best.pt`. If the two paths were transposed — by a rename, a restore from a
+backup, a re-run of `finetune_ab.py` with the arm argument swapped — `reduction = naive - ewc`
+inverts, ρ flips to ≈ −0.80, `ewc_dodges_high_fisher` returns `False`, and
+`render_verdict_section` emits the pre-authored `GATE MISSES` paragraph. Both outcomes render and
+both read as an honest result. This is verbatim the hazard `require_fingerprint` was written to
+close ("a wrong denominator still renders and still looks plausible"), applied to one block and
+not to the two that produce the headline verdict.
+
+The guard is free, and the script is already paying for it. `_load_model` calls
+`torch.load(weights_only=False)` on the whole blob and then returns only `blob["model"]` and a
+three-field fingerprint, throwing the rest away. I inspected the discarded remainder:
+
+```
+phase13_naive_latest.pt -> ['best_val_loss','git_sha','model_config','rng','scaler',
+                            'schema_version','step','train_config','val_loss']
+phase13_ewc_latest.pt   -> [... 'ewc_lambda', 'fisher', 'fisher_meta', 'theta_star', ...]
+                           ewc_lambda = 0.01   theta_star = <dict 100 keys>
+```
+
+and confirmed `theta_star` covers all 36 figure keys and is `torch.equal` to `best.pt`'s tensor for
+**36 of 36**. That is an exact, zero-cost proof of *both* the arm's identity and its W₀ linkage,
+currently deleted by the loader's return signature.
+
+This is not a live miscomputation — `test_extraction_reproduces_the_committed_artifact` passes on
+this machine, so the committed artifact matches today's checkpoints. It is a missing guard on the
+one input whose silent corruption inverts the phase's claim, on a re-run against future weights.
+
+**Fix:** Return the blob from `_load_model` (or a second value), and add a `prove`-style guard
+before `blocks` is assembled. Entirely inside `extract_deltas.py`, which is not frozen.
+
+```python
+def _load_model(path):
+    blob = torch.load(path, map_location="cpu", weights_only=False)
+    return blob["model"], _fingerprint(blob), blob
+
+
+def require_arm_identity(naive_blob, ewc_blob, w0_model):
+    """The naive/ewc analogue of require_fingerprint. Transposing the two paths inverts the
+    D-10 pairing and flips the verdict; both branches still render and still look plausible."""
+    if "ewc_lambda" in naive_blob:
         raise SystemExit(
-            f"[phase15_stats] _rank received non-finite values at positions {bad} — "
-            "numpy sorts NaN last, so ranking would silently treat them as the LARGEST "
-            "cells and return a plausible finite rho from corrupted data."
+            f"[extract_deltas] {NAIVE_LATEST} carries ewc_lambda="
+            f"{naive_blob['ewc_lambda']!r} — this is an EWC arm, not the λ=0 arm. The "
+            "naive/ewc paths are transposed; the D-10 reduction would invert and the verdict "
+            "would flip while still rendering plausibly."
         )
-    order = np.argsort(x, kind="stable")
-    ...
+    if ewc_blob.get("ewc_lambda") != 0.01:
+        raise SystemExit(
+            f"[extract_deltas] {EWC_LATEST} carries ewc_lambda="
+            f"{ewc_blob.get('ewc_lambda')!r}, expected 0.01 (finetune_ab.py::LAMBDA_EWC)."
+        )
+    # theta_star IS the EWC arm's own recorded W0 — an exact check that best.pt is the right one.
+    theta_star = ewc_blob["theta_star"]
+    for _layer, _projection, key in KEYS:
+        if key not in theta_star or not torch.equal(theta_star[key], w0_model[key]):
+            raise SystemExit(
+                f"[extract_deltas] the EWC arm's recorded theta_star disagrees with "
+                f"{BEST_PATH} at {key} — checkpoints/best.pt is NOT the W₀ these arms ran "
+                "from, so every naive/ewc cell would be a ratio against the wrong base."
+            )
 ```
 
-Add the regression to `tests/test_phase15_stats.py::test_spearman_known_answers`:
-
-```python
-with pytest.raises(SystemExit):
-    st.spearman([1.0, float("nan"), 2.0], [1.0, 2.0, 3.0])
-```
+Call it right after the four `_load_model` calls, and record `ewc_lambda` in the `ewc` block's
+`source_ckpt` so the artifact carries the discriminator too.
 
 ---
 
-### CR-02: `naive`/`ewc` blocks compute ΔW against an **unverified** W₀ — the guard the module calls "the single most important check" is applied only to the block that needs it least
+### CR-02: ρ = 0.801544 — the phase's signature number — is bound to nothing
 
-**Severity:** BLOCKER
-**File:** `scripts/extract_deltas.py:278-285` (loads), `317-340` (blocks), `149-166`
-(`require_fingerprint`)
+**File:** `tests/test_phase15_docs.py:338-357, 369-414` (fixture `_HEADLINE_NUMBERS`)
 
-**Issue:** The module docstring (`extract_deltas.py:14-31`) names the hazard explicitly — *"Using
-`best.pt` here would produce a wrong-by-construction ratio that still renders and still looks
-plausible"* — and `require_fingerprint` calls itself *"the single most important check in this
-script."* That check is applied to exactly one of the three delta blocks: `adapter`
-(line 285).
-
-The `naive` and `ewc` blocks (lines 317-340) call `full_ft_cells(naive_model, best_model)` and
-`full_ft_cells(ewc_model, best_model)` with **nothing** verifying that `phase13_naive_latest.pt` and
-`phase13_ewc_latest.pt` were actually trained from `best.pt`. `naive_fp` and `ewc_fp` are *recorded*
-into the artifact (lines 325, 337) but never *compared* against anything. If `best.pt` is ever
-re-exported, or an arm checkpoint is swapped, every cell in both blocks becomes a wrong-by-
-construction ratio that renders fine and looks plausible — and these are the two blocks that
-produce the VIZ-03 figure **and** feed `load_pairs`' `naive - ewc` reduction, i.e. the pre-registered
-D-09 correlation verdict. The one guarded block, `adapter`, feeds neither.
-
-The check is free for the EWC arm: `checkpoints/phase13_ewc_latest.pt` already carries `theta_star`,
-the anchor weights the penalty pulls toward. Verified on this machine:
+**Issue:** Confirmed real. `0.801544` is restated in committed prose at five sites:
 
 ```
-theta_star keys: 100   best.pt model keys: 101
-max |theta_star - best.pt| = 0.0        # exact bit match — the check would pass today
+README.md:59                     **ρ = 0.801544** (95% CI [0.597984, 0.920291] …)
+docs/REPORT.md:809               Spearman **ρ = 0.801544**
+demo_v2.ipynb:381                Spearman **ρ = 0.801544**
+results/phase13_ab_report.md:411 - Spearman ρ = **0.801544** (`average_rank_pearson_fp64`, n = 36)
+.planning/ROADMAP.md:270         ρ = 0.801544 with a 95% bootstrap CI …
 ```
 
-So today's numbers are correct; the guard that proves it is missing. `phase13_naive_latest.pt`
-carries no base pointer at all (`train_config` records only lr/batch/steps/seed), so the naive arm
-needs its provenance asserted differently — at minimum a recorded, checked `w0_fingerprint`.
+`_HEADLINE_NUMBERS` covers `0.3483`, `8.52417066884246` and `3.229` and nothing else.
+`test_verdict_section_is_dated_and_separated` asserts the addendum is dated, marked, last and
+carries exactly one of `GATE PASSES`/`GATE MISSES` — it never touches the value. No test in the
+repo recomputes ρ from the artifact. A paraphrase-to-soften, a transposed digit, or a
+one-character edit *in either direction* leaves the entire suite green, while doing the same to
+`0.3483` goes red. The number the whole phase exists to establish is the least protected number
+in the phase.
 
-**Fix:** Assert the anchor for the EWC arm from data already in memory, and fail loud:
+Adding a plain `_HEADLINE_NUMBERS` row would be the weak fix, and I checked why: README renders ρ
+in a *paragraph* under `## Where the memory actually moved`, not in a bullet, so
+`re.split(r"\n(?=- )", readme)` puts it in the chunk opened by the unrelated bullet at
+README.md:47. `len(carrying) == 1` would still hold, but the inline-qualifier assertion would be
+checking a chunk spanning three sections — a qualifier check with no teeth. It also would not
+catch drift in the *other direction* (artifact edited, prose left alone).
+
+**Fix:** Bind the number to its computed source, not to a second copy of itself. `load_pairs` +
+`spearman` on the committed artifact takes 0.2 ms — no resampling needed, since ρ is what needs
+binding — and this incidentally becomes the first test coverage `load_pairs` has ever had (WR-03).
+Test-side only; the frozen module is imported, not edited.
 
 ```python
-ewc_blob_theta = ewc_extra["theta_star"]   # _load_model must return it, or load separately
-for key, w0 in best_model.items():
-    if key in ewc_blob_theta and not torch.equal(ewc_blob_theta[key], w0):
-        raise SystemExit(
-            f"[extract_deltas] {EWC_LATEST}'s theta_star diverges from {BEST_PATH} at {key!r}: "
-            "the EWC arm was NOT anchored at this W0, so every 'ewc' cell would be a "
-            "wrong-by-construction ratio that still renders. Do NOT relax this check."
+# tests/test_phase15_docs.py
+import importlib.util
+
+_RHO_SITES = ("README.md", "docs/REPORT.md", "demo_v2.ipynb", "results/phase13_ab_report.md")
+
+
+def _load_stats():
+    spec = importlib.util.spec_from_file_location(
+        "phase15_stats", _REPO_ROOT / "scripts" / "phase15_stats.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_reported_rho_is_recomputed_from_the_artifact():
+    """D-09/D-16: ρ is the number this phase exists to produce, so it may not live in prose
+    only. Recomputed from results/phase15_norms.json with the pre-registered transform — this
+    goes red if the prose drifts OR if the artifact does."""
+    stats = _load_stats()
+    artifact = json.loads(_read("results/phase15_norms.json"))
+    fisher, reduction = stats.load_pairs(artifact)
+    rho = stats.spearman(fisher, reduction)
+
+    # The gate itself, recomputed — the sign is the falsifiable claim (D-11).
+    assert rho > 0, f"the pre-registered POSITIVE sign no longer holds: rho = {rho}"
+    rendered = f"{rho:.6f}"  # the render_verdict_section :.6f spelling
+    for site in _RHO_SITES:
+        assert rendered in _read(site), (
+            f"{site} no longer carries the recomputed rho {rendered} — the phase's signature "
+            f"number has drifted from its source in one direction or the other"
         )
 ```
 
-For the naive arm, record and verify a base fingerprint in `finetune_ab.py`'s checkpoint writer, and
-have `extract_deltas` require it — same shape as `require_fingerprint`. Until that lands, state in
-the artifact that the naive block's W₀ is asserted by convention, not verified, so the report does
-not imply a guarantee that does not exist.
+Extend the same shape to the CI bounds (`0.597984`, `0.920291`) if the ~0.4 s bootstrap is
+acceptable in the suite; ρ alone closes the hole the verifier named.
 
 ---
 
 ## Warnings
 
-### WR-01: The phase's headline numbers are the only ones in the repo restated in prose without a test binding them to their source; `load_pairs`, `_cell` and `render_verdict_section` have zero test coverage
+### WR-01: `plot_phase15` treats the artifact as trusted while both sibling modules treat it as untrusted
 
-**File:** `tests/test_phase15_stats.py:46-130`, `tests/test_phase15_docs.py:338-357`,
-`docs/REPORT.md:805-819`
+**File:** `scripts/plot_phase15.py:67-116, 119-133`
 
-**Issue:** Three separate gaps that compound:
+**Issue:** `phase15_stats._cell` rejects non-numeric and non-finite cells by coordinate;
+`extract_deltas.prove` rejects non-finite cells before the write. `_load_artifact` validates
+*structure only* — block presence, cell count, projection names, `vmax_driver` presence — and
+never validates a value. `_grid` then does a bare `float(...)`, which coerces strings. I injected
+each case into a copy of the artifact and re-rendered `plot_fisher_ewc`:
 
-1. `docs/REPORT.md:808-810` hardcodes `ρ = 0.801544` and `CI [0.597984, 0.920291]`. Nothing computes
-   or checks them. `test_headline_numbers_match_sources` pins README's three numbers to their cited
-   source reports — the exact discipline D-16 exists to enforce — but `_HEADLINE_NUMBERS`
-   (`test_phase15_docs.py:338-357`) does not include ρ, the CI, or p. The phase whose entire premise
-   is "the number cannot be resolved in whichever direction looks better" leaves its own number
-   unpinned.
-2. Nothing asserts that the committed addendum equals a fresh `render_verdict_section(...)`. I
-   verified manually that it does today (byte-identical); a hand-edit tomorrow goes green.
-3. `load_pairs`, `_cell` and `render_verdict_section` are never imported by any test —
-   `grep -n "load_pairs\|render_verdict_section\|_cell\b" tests/*.py` returns nothing. The T-15-07
-   malformed-artifact guards (`phase15_stats.py:240-300`), which CR-01 shows are the *only* thing
-   preventing a NaN from reaching `_rank`, are entirely unexercised. The `GATE MISSES` branch
-   (`phase15_stats.py:412-424`) has never been executed by a test either — I smoke-tested it by hand
-   and it renders, but the T-15-09 mitigation is unenforced.
+| injected `blocks.naive.cells["0"]["q_proj"]` | result |
+|---|---|
+| `NaN` | `ValueError: Invalid vmin or vmax` — names no file, no block, no coordinate |
+| `+inf` | `ValueError: Invalid vmin or vmax` — same |
+| `-inf` | **renders silently**, 107410-byte PNG |
+| `0.0` | **renders silently**, 107410-byte PNG |
+| `-1.0` | **renders silently**, 107410-byte PNG |
+| `"0.5"` (string) | **renders silently**, 104426-byte PNG |
 
-**Fix:** Add to `tests/test_phase15_stats.py`:
+The four silent cases land as `set_bad("0.85")` grey cells indistinguishable from data, which is
+exactly what the `_cmap` docstring says the module exists to prevent — and `_load_artifact` never
+reads the `nonpositive_cells` field it would need to catch them. The two loud cases contradict the
+module's own contract ("every failure below names the offending file and the offending
+block/layer"). `json.loads` accepts bare `NaN`/`Infinity` literals by default, and the artifact is
+a committed, hand-editable file, so this is the T-15-07 threat surface the sibling module defends
+and this one does not.
+
+**Fix:** Add value validation to `_load_artifact`'s existing per-layer loop — same shape as
+`_cell`, entirely inside the unfrozen plotting script.
 
 ```python
-def test_committed_verdict_matches_the_preregistered_renderer():
-    art = json.loads((_REPO_ROOT / "results/phase15_norms.json").read_text(encoding="utf-8"))
-    f, r = st.load_pairs(art)
-    rho, p = st.permutation_p(f, r, n_perm=st.N_PERM, seed=st.SEED)
-    lo, hi, n_deg = st.bootstrap_ci(f, r, n_boot=st.N_BOOT, seed=st.SEED)
-    report = (_REPO_ROOT / "results/phase13_ab_report.md").read_text(encoding="utf-8")
-    assert f"ρ = **{rho:.6f}**" in report
-    assert f"[{lo:.6f}, {hi:.6f}]" in report
-    assert f"{rho:.6f}" in (_REPO_ROOT / "docs/REPORT.md").read_text(encoding="utf-8")
-
-@pytest.mark.parametrize("mutate", [
-    lambda a: a["blocks"].pop("adapter"),
-    lambda a: a["blocks"]["fisher"]["cells"]["0"].pop("q_proj"),
-    lambda a: a["blocks"]["ewc"]["cells"]["2"].__setitem__("fc_in", None),
-])
-def test_load_pairs_refuses_malformed_artifacts(mutate): ...   # each must SystemExit
-
-def test_miss_branch_renders_the_preregistered_wording():
-    out = st.render_verdict_section(0.15, 0.03, -0.1, 0.4, 0, {}, "2026-01-01")
-    assert "GATE MISSES" in out
-    assert "suggestive but not statistically demonstrated at n = 36" in " ".join(out.split())
+        for layer in range(n_layer):
+            row = cells.get(str(layer))
+            ...
+            for projection, value in row.items():
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    raise ValueError(
+                        f"{path}: block {name!r} cell (layer {layer}, {projection}) is "
+                        f"{value!r}, not a number"
+                    )
+                if not math.isfinite(value):
+                    raise ValueError(
+                        f"{path}: block {name!r} cell (layer {layer}, {projection}) is "
+                        f"{value!r}, not finite — it would render as a grey cell "
+                        "indistinguishable from data"
+                    )
+        if sum(1 for r in cells.values() for v in r.values() if v <= 0.0) != block["nonpositive_cells"]:
+            raise ValueError(
+                f"{path}: block {name!r} 'nonpositive_cells' disagrees with its own cells — "
+                "the report states that count from this field"
+            )
 ```
 
 ---
 
-### WR-02: `torch.load(weights_only=False)` is avoidable — a 4-entry `safe_globals` allowlist loads every field the script reads
+### WR-02: not one negative-path test exists in the phase
 
-**File:** `scripts/extract_deltas.py:145`
+**File:** `tests/test_phase15_stats.py`, `tests/test_phase15_plots.py`, `tests/test_phase15_docs.py`
 
-**Issue:** `_load_model` opens four checkpoints with the unrestricted unpickler, which executes
-arbitrary code on load. The module SECURITY paragraph (lines 39-48) justifies it as "the full resume
-checkpoints carry pickled optimizer/RNG/numpy objects that torch>=2.6's `weights_only=True` default
-rejects." That premise is true of the *default*, but not of the available API. I confirmed the only
-blocked global is `numpy._core.multiarray._reconstruct` (numpy RNG state), and that an explicit
-allowlist loads all four files with `weights_only=True`:
+**Issue:** `grep -n "pytest.raises\|SystemExit\|ValueError"` across all three files returns
+nothing. The three modules under test carry roughly twenty explicit fail-loud guards — five
+`SystemExit` in `load_pairs`, two in `_cell`, one in `main`, six `ValueError` + one `SystemExit`
+in `_load_artifact`, one in `_own_norm`, five in `extract_deltas` — and each module docstring
+presents that fail-loud behaviour as its principal safety property. Every one is unverified. That
+is why WR-01's six-case table was discoverable at all: the branch that *should* have rejected four
+of those six was never written, and nothing would have noticed either way.
 
-```
-weights_only=True (default)          -> Unsupported global: numpy._core.multiarray._reconstruct
-weights_only=True + safe_globals([_reconstruct, np.ndarray, np.dtype, np.dtypes.UInt32DType])
-  -> OK; top-level keys: ['git_sha','model','model_config','optimizer','rng','scaler',
-                          'scheduler','schema_version','step','train_config','val_loss']
-```
+The plotting module makes this harder than it needs to be: `_load_artifact(path=NORMS_JSON)` binds
+the default at definition time, and `plot_adapter_delta`/`plot_fisher_ewc` accept an `out_dir` but
+no artifact path — so they always read the committed file, and the validation branches cannot be
+reached from a test without monkeypatching the module function itself.
 
-Every field `_load_model` and `_fingerprint` touch (`model`, `git_sha`, `step`, `val_loss`) is
-present. These `.pt` files are hundreds of MB that travel between the Kaggle fallback path and the
-laptop; the project already routes the adapter and the Fisher cache through `weights_only=True`
-choke points precisely to avoid this. This is the last unrestricted read in the Phase-15 path and it
-does not need to be.
-
-**Fix:**
+**Fix:** Thread the artifact path through the public plot functions, then add one table-driven
+negative test per module.
 
 ```python
-import numpy as np
-import numpy._core.multiarray as _np_multiarray
+def plot_adapter_delta(out_dir, artifact_path=NORMS_JSON):
+    artifact = _load_artifact(artifact_path)
+    ...
 
-# The exact globals the resume checkpoints' numpy RNG state needs — an explicit allowlist, never
-# weights_only=False. Nothing here executes code on load.
-_SAFE_GLOBALS = [_np_multiarray._reconstruct, np.ndarray, np.dtype, np.dtypes.UInt32DType]
+def plot_fisher_ewc(out_dir, artifact_path=NORMS_JSON):
+    artifact = _load_artifact(artifact_path)
+    ...
+```
 
-
-def _load_model(path):
-    with torch.serialization.safe_globals(_SAFE_GLOBALS):
-        blob = torch.load(path, map_location="cpu", weights_only=True)
-    return blob["model"], _fingerprint(blob)
+```python
+@pytest.mark.parametrize(
+    "mutate, expect",
+    [
+        (lambda a: a["blocks"].pop("fisher"), "block 'fisher' is absent"),
+        (lambda a: a["blocks"]["naive"]["cells"].pop("3"), "no layer 3"),
+        (lambda a: a["blocks"]["naive"]["cells"]["0"].__setitem__("q_proj", float("-inf")),
+         "not finite"),
+        (lambda a: a["blocks"]["naive"]["cells"]["0"].__setitem__("q_proj", "0.5"),
+         "not a number"),
+    ],
+)
+def test_malformed_artifact_is_fatal_and_named(tmp_path, mutate, expect):
+    artifact = _artifact()
+    mutate(artifact)
+    bad = tmp_path / "phase15_norms.json"
+    bad.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises((ValueError, SystemExit), match=re.escape(expect)):
+        plot.plot_fisher_ewc(tmp_path, artifact_path=bad)
 ```
 
 ---
 
-### WR-03: `permutation_p` reports **maximal** significance when the observed statistic is NaN
+### WR-03: `load_pairs`, `_cell` and `render_verdict_section` have zero coverage; the GATE MISSES branch is never executed
 
-**File:** `scripts/phase15_stats.py:174-177`
+**File:** `scripts/phase15_stats.py:228-300, 318-437`; `tests/test_phase15_stats.py:1-23`
 
-**Issue:** Every comparison against `nan` is `False`, so `ge` stays 0 and the add-one correction
-returns `1/(n_perm+1)`. At the pinned `N_PERM = 100_000` that is `p = 0.000010` — the most
-significant value the estimator can emit — printed next to `ρ = nan` in the verdict section. A
-degenerate input therefore fails *open* on the p, not closed. Confirmed:
+**Issue:** The test module names four pins — `spearman`, seeding, CI behaviour, the gate rule —
+and none touches the artifact reader or the verdict renderer. Confirmed by grep: `load_pairs` and
+`render_verdict_section` appear nowhere in `tests/` or `scripts/` outside their own module's
+docstrings. Two consequences:
 
-```
-permutation_p([1.0]*36, range(36), n_perm=500, seed=1337) -> obs=nan, p=0.001996  (= 1/501)
-```
+1. The reader that the module docstring describes as the T-15-07 mitigation ("a malformed or
+   truncated artifact must never yield a partial correlation that reads as a plausible verdict")
+   is entirely unverified, including the `_cell` finiteness guard the re-review evidence relies
+   on.
+2. `render_verdict_section`'s `GATE MISSES` branch — the whole T-15-09 both-branches-pre-authored
+   mitigation — has never been executed by anything. `test_phase15_docs.py:471` guards its own
+   miss assertion behind `if "GATE MISSES" in body:`, and the gate passed, so that assertion is
+   dormant by design. The pre-authored honest-miss wording is protected by nothing and exercised
+   by nothing.
 
-The gate itself is safe (`rho > 0` is `False` for NaN), but the R5 arbitration explicitly puts this p
-into the published record as descriptive evidence, and there it reads as overwhelming support.
-
-**Fix:**
+**Fix:** CR-02's fixture gives `load_pairs` its first exercise for free. Add one pure-function
+test for the renderer — no artifact, no file, no frozen-file edit:
 
 ```python
-obs = float(np.corrcoef(ra, rb)[0, 1])
-if not np.isfinite(obs):
-    raise SystemExit(
-        "[phase15_stats] the observed rank correlation is not finite (a zero-variance input "
-        "makes corrcoef undefined). Refusing to emit p = 1/(n_perm+1), which would read as "
-        "maximal significance."
-    )
+def test_both_verdict_branches_render():
+    """T-15-09: the miss branch is dormant because the gate passed, not because it works."""
+    stub = {"git_sha": "deadbee", "built": "2026-01-01"}
+    passes = st.render_verdict_section(0.80, 1e-5, 0.60, 0.92, 0, stub, "2026-01-01")
+    misses = st.render_verdict_section(0.15, 0.03, -0.10, 0.40, 7, stub, "2026-01-01")
+    assert "GATE PASSES" in passes and "GATE MISSES" not in passes
+    assert "GATE MISSES" in misses and "GATE PASSES" not in misses
+    assert "suggestive but not statistically demonstrated at n = 36" in misses
+    assert "not softened into a passing verdict" in misses
+    assert "**7** of 10000" in misses  # the degenerate count is actually rendered
 ```
 
 ---
 
-### WR-04: `bootstrap_ci` raises a bare `IndexError` when every resample is degenerate
+### WR-04: `load_pairs` raises a bare `AttributeError` on a non-dict block
+
+**File:** `scripts/phase15_stats.py:253`
+
+**Issue:** The docstring promises "Every deviation is fatal and NAMES the offending
+block/coordinate". `blocks[name].get("cells")` assumes `blocks[name]` is a dict. Verified:
+
+```
+block is a string: *** AttributeError: 'str' object has no attribute 'get'
+block is a list:   *** AttributeError: 'list' object has no attribute 'get'
+```
+
+Fail-loud is preserved (non-zero exit either way), but the operator gets a traceback naming a line
+instead of a message naming the block — which is precisely the `plot_phase13.py:88-97` register
+the docstring cites as the reason the named errors exist. Related: `total = sum(len(v) for v in
+cells.values() if isinstance(v, dict))` silently ignores non-dict rows, so `{"0": ..., "6": "x"}`
+passes the count check.
+
+**Fix:** One `isinstance` ahead of the existing check. Frozen-file edit, additive only, no change
+to any pre-registered constant — requires a dated amendment record.
+
+```python
+        block = blocks[name]
+        if not isinstance(block, dict):
+            raise SystemExit(
+                f"[phase15_stats] {NORMS_JSON.name}: block {name!r} is {type(block).__name__}, "
+                "not an object."
+            )
+        cells = block.get("cells")
+```
+
+---
+
+### WR-05: the different-seed meta-guard rests on a single permutation and is one coin flip from useless
+
+**File:** `tests/test_phase15_stats.py:88-93`
+
+**Issue:** The assertion is meant to prove the resamplers do not ignore randomness. But
+`permutation_p` returns `(obs, p)` and `obs` is **seed-independent** — it is the observed
+statistic. So the tuple inequality reduces entirely to `p1 != p2`. I instrumented the actual
+fixture:
+
+```
+perm seed=1337   -> (0.551866151866152, 0.0009995002498750624)   ge = 1
+perm seed=1338   -> (0.551866151866152, 0.0004997501249375312)   ge = 0
+```
+
+The whole meta-guard hangs on exactly one shuffle out of 2000 crossing the threshold under one
+seed and not the other. A marginally stronger fixture draw gives `ge = 0` for both seeds → equal
+tuples → **the test goes red against a correct implementation**. A marginally weaker one leaves it
+passing for the wrong reason. It is deterministic today, so not flaky — but its teeth are an
+accident of `default_rng(4242)`, not a property of the design.
+
+**Fix:** Compare the seed-dependent component directly, on a fixture where the count is large
+enough to be robust. Test-side only.
+
+```python
+    # obs is seed-independent by construction, so compare the p component only — and use a WEAK
+    # relationship so `ge` is in the hundreds, not 0 vs 1.
+    weak = 0.15 * a + rng.normal(size=st.N_CELLS)
+    _, p_a = st.permutation_p(a, weak, n_perm=2000, seed=st.SEED)
+    _, p_b = st.permutation_p(a, weak, n_perm=2000, seed=st.SEED + 1)
+    assert p_a != p_b, "permutation_p ignores its seed"
+    assert 0.01 < p_a < 0.99, f"fixture too extreme for the seed meta-guard to have teeth: {p_a}"
+```
+
+---
+
+### WR-06: `bootstrap_ci` crashes with an opaque `IndexError` when every resample is degenerate
 
 **File:** `scripts/phase15_stats.py:199-202`
 
-**Issue:** The docstring says degenerate resamples are dropped and the count *reported* "rather than
-letting a nan silently propagate into a quantile." When `kept` ends up empty, `np.quantile` raises
-`IndexError: index -1 is out of bounds for axis 0 with size 0` — an unnamed traceback with no
-mention of the artifact, in a module where every other failure is a named `SystemExit`. Also
-triggered by `n_boot=0`. Confirmed:
+**Issue:** The docstring says degenerate resamples are dropped and the count "REPORTED rather than
+letting a nan silently propagate into a quantile." If *all* are degenerate, `kept` is empty and
+`np.quantile` raises:
 
 ```
-bootstrap_ci([1.0, 1.0], [1.0, 2.0], n_boot=50, seed=1) -> IndexError
-bootstrap_ci([1.,2.,3.], [3.,2.,1.], n_boot=0, seed=1)  -> IndexError
+bootstrap_ci([1.0]*5, [1.0]*5, n_boot=10, seed=1) -> IndexError: index -1 is out of bounds for axis 0 with size 0
 ```
 
-**Fix:**
+Not reachable from the committed 36-cell artifact, but the whole point of `n_degenerate` is that
+the function has a documented opinion about degeneracy, and its boundary case is an unhandled
+numpy internal. Compounding: both CI tests assert `n_degenerate == 0`, so the `np.nan` branch —
+the code that produces the reported count — is never executed by the suite either.
+
+**Fix:** Additive guard in the frozen file (dated amendment), plus one test exercising the drop
+path.
 
 ```python
-kept = out[np.isfinite(out)]
-if kept.size == 0:
-    raise SystemExit(
-        f"[phase15_stats] all {n_boot} bootstrap resamples were degenerate (zero variance) — "
-        "no percentile interval exists. The input has too few distinct values."
-    )
-```
-
----
-
-### WR-05: `plot_phase15._load_artifact` validates shape but not values — a NaN cell renders an all-grey panel under a titled axis with no error
-
-**File:** `scripts/plot_phase15.py:89-116` (validation), `142-146` (`_own_norm`), `127-133` (`_grid`)
-
-**Issue:** The function's own docstring says *"Never degrades silently"* and *"An empty panel under a
-titled axis is a figure that lies."* It checks block presence, cell count, layer rows and projection
-names — and never looks at a value. Confirmed against a mutated copy of the committed artifact:
-
-```
-cell = None  -> _load_artifact ACCEPTS it; _grid then raises a bare TypeError from float(None)
-cell = NaN   -> _load_artifact ACCEPTS it; _own_norm returns LogNorm(vmin=0.1133, vmax=nan)
-```
-
-`flat[flat > 0.0]` excludes NaN (so `vmin` looks fine) but `flat.max()` is NaN, and every cell
-normalizes to NaN → masked → the entire panel paints `set_bad` grey under its title and colorbar.
-That is exactly the figure-that-lies the docstring forbids. Related edge: when only one strictly
-positive cell exists, `_own_norm` builds `LogNorm(vmin=5.0, vmax=5.0)` without raising and maps
-everything to 0.
-
-**Fix:** Add the value check to the existing per-block loop (line 102-110), reusing the same
-name-the-offender style:
-
-```python
-for projection, value in row.items():
-    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
-        raise ValueError(
-            f"{path}: block {name!r} cell (layer {layer}, {projection}) is {value!r}, not a "
-            "finite number — a NaN cell renders as an all-grey panel under a titled axis"
-        )
-```
-
-and guard `_own_norm` against a degenerate range:
-
-```python
-vmin, vmax = float(positive.min()), float(flat.max())
-if not (vmin < vmax):
-    raise ValueError(f"{label}: log range is degenerate (vmin={vmin}, vmax={vmax})")
-```
-
----
-
-### WR-06: `test_seeded_results_are_reproducible`'s different-seed meta-guard is a false-failure risk
-
-**File:** `tests/test_phase15_stats.py:88-90`
-
-**Issue:** `permutation_p` returns `(obs, p)` where `obs` is seed-independent, so the `!=` assertion
-reduces to "the two seeds produce different p". With the fixture's strong correlation and
-`n_perm=2000`, p is determined by an exceedance count of 0, 1 or 2 — so two seeds very often produce
-an *identical* p and the assertion fails **for a correct implementation**. Measured across adjacent
-seeds:
-
-```
-seed 1337 p=0.0009995   seed 1338 p=0.0004998   seed 1339 p=0.0004998
-seed 1340 p=0.0004998   seed 1341 p=0.0009995   seed 1342 p=0.0004998
-seed 1343 p=0.0004998   seed 1344 p=0.0004998   seed 1345 p=0.0009995
-```
-
-7 of 13 adjacent seeds collide. The test passes today only because `SEED`/`SEED+1` happen to land on
-different counts. Any change to the fixture, to `n_perm`, or to `SEED` turns it red with a message
-about randomness that has nothing to do with the actual behavior.
-
-**Fix:** Assert on the resampling stream, not on a low-resolution derived statistic:
-
-```python
-# Different seeds must draw a different shuffle sequence. Comparing p at n_perm=2000 is a
-# coin flip: the exceedance count is 0-2, so two correct seeds routinely give the SAME p.
-lo1, hi1, _ = st.bootstrap_ci(a, b, n_boot=1000, seed=st.SEED)
-lo2, hi2, _ = st.bootstrap_ci(a, b, n_boot=1000, seed=st.SEED + 1)
-assert (lo1, hi1) != (lo2, hi2)
-assert st.permutation_p(a, b, n_perm=50, seed=st.SEED)[1] == st.permutation_p(
-    a, b, n_perm=50, seed=st.SEED
-)[1]
-```
-
-(The `bootstrap_ci` half of the meta-guard is sound as written — its output is continuous.)
-
----
-
-### WR-07: The D-07 subprocess probe cannot distinguish "imports torch" from "failed to import at all"
-
-**File:** `tests/test_phase15_plots.py:338-352`
-
-**Issue:** The probe ends with `sys.exit(1 if 'torch' in sys.modules else 0)`, but an uncaught
-exception during `exec_module` also exits with 1. Both cases hit
-`assert result.returncode == 0, "plotting module transitively imports torch — D-07 violated"`.
-A plotting module broken by a syntax error, a missing matplotlib, or a bad artifact path reports as
-a D-07 security-control violation. Confirmed: pointing the probe at a nonexistent file exits 1.
-
-The docstring calls this check "the one that cannot be fooled" — it can be fooled into a wrong
-diagnosis, which is how a real D-07 regression gets dismissed as "probably just the import."
-
-**Fix:** Use a distinct exit code and assert on it, so the two conditions are separable:
-
-```python
-probe = (
-    "import importlib.util, sys;"
-    "spec = importlib.util.spec_from_file_location('p15', 'scripts/plot_phase15.py');"
-    "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m);"
-    "sys.exit(7 if 'torch' in sys.modules else 0)"
-)
-result = subprocess.run([sys.executable, "-c", probe], cwd=_REPO_ROOT,
-                        capture_output=True, text=True)
-assert result.returncode != 1, f"the probe itself crashed, not a D-07 result\n{result.stderr}"
-assert result.returncode == 0, f"plot_phase15 transitively imports torch — D-07 violated"
-```
-
----
-
-### WR-08: `_cell` accepts JSON strings and booleans while claiming a non-numeric cell is fatal
-
-**File:** `scripts/phase15_stats.py:287-300`
-
-**Issue:** The docstring states *"a non-numeric or non-finite cell is fatal and named."* `float()`
-coerces both `"1.5"` and `True`, so neither is fatal. Confirmed against a mutated artifact:
-
-```
-blocks.fisher.cells["0"]["q_proj"] = "1.5"  -> ACCEPTED as 1.5
-blocks.naive.cells["0"]["q_proj"]  = True   -> ACCEPTED as 1.0
-```
-
-`True` silently becoming `1.0` is the more dangerous of the two, because a JSON `true` is a
-plausible artifact-corruption outcome and `1.0` is inside the real value range for the `naive` block.
-The stated T-15-07 guarantee is stronger than the code provides.
-
-**Fix:**
-
-```python
-value = blocks[name]["cells"][str(layer)][projection]
-if isinstance(value, bool) or not isinstance(value, (int, float)):
-    raise SystemExit(
-        f"[phase15_stats] {NORMS_JSON.name}: {key.format(name)} is {value!r} "
-        f"({type(value).__name__}), not a JSON number."
-    )
-value = float(value)
-```
-
----
-
-### WR-09: `extract_deltas` raises bare `KeyError`s on malformed checkpoints, contradicting its "every proof check is an explicit `raise SystemExit`" claim
-
-**File:** `scripts/extract_deltas.py:131-133` (`_fingerprint`), `157` (`require_fingerprint`),
-`184-186` (`adapter_cells`), `203` (`fisher_cells`), `293-295` (`lora_config`)
-
-**Issue:** The module docstring (lines 50-51) states *"Every proof check below is an explicit
-`raise SystemExit` and never an `-O`-strippable bare `assert`, so a failure exits non-zero even under
-`PYTHONOPTIMIZE`."* Several failure paths are neither — they are unhandled `KeyError`s that produce a
-raw traceback naming only a dict key:
-
-- `_fingerprint(blob)` — `blob["git_sha"]` / `["step"]` / `["val_loss"]` on a checkpoint predating
-  QA-02 provenance
-- `require_fingerprint` — `adapter_art["base_fingerprint"]`
-- `adapter_cells` — `adapter[f"{prefix}.lora_A"]` on an adapter injected at different targets
-- `fisher_cells` — `fisher[key]` on a Fisher cache keyed differently
-- `lora_config["alpha"] / lora_config["r"]` — also a `ZeroDivisionError` if `r == 0`
-
-The exit code is still non-zero so nothing runs on bad data, but the "names the specific offender"
-discipline the rest of the file maintains breaks exactly where an operator has the least context.
-
-**Fix:** Wrap the lookups with named errors, e.g.:
-
-```python
-def _fingerprint(blob):
-    missing = {"git_sha", "step", "val_loss"} - blob.keys()
-    if missing:
+    kept = out[np.isfinite(out)]
+    if kept.size == 0:
         raise SystemExit(
-            f"[extract_deltas] checkpoint is missing the QA-02 provenance trio {sorted(missing)} "
-            "— it predates the fingerprint convention and cannot anchor a Phase-15 block."
+            f"[phase15_stats] all {n_boot} bootstrap resamples were degenerate (zero variance "
+            "in a or b) — the input carries no rank information and no CI is definable."
         )
-    return {k: blob[k] for k in ("git_sha", "step", "val_loss")}
 ```
 
-and the same shape for the `lora_A`/`lora_B`/`fisher[key]` lookups, naming the missing key and the
-(layer, projection) it belongs to.
+---
+
+### WR-07: `adapter_cells` documents a shape-sanity property that `_ratio` structurally cannot check
+
+**File:** `scripts/extract_deltas.py:174-187, 169-171`
+
+**Issue:** The docstring asserts "Shape sanity: `(out, r) @ (r, in) == (out, in)` — identical to
+`base.weight`". Nothing checks it. `_ratio` reduces both arguments to Frobenius norms — scalars —
+so `‖ΔW‖_F / ‖W₀‖_F` is well-defined for *any* pair of shapes and returns a plausible float. A
+transposed `lora_A`/`lora_B`, or a pair belonging to a different projection, yields a number that
+renders and passes every downstream check. The only guard is `len(adapter) != 2 * N_CELLS`
+(a count, not an identity), and the two `adapter[f"{prefix}.lora_A"]` lookups raise a bare
+`KeyError` on a naming change rather than the module's promised named `SystemExit`. Contrast
+`full_ft_cells`, where `arm_model[key] - w0` makes the shape check implicit and free.
+
+**Fix:** Make the documented invariant an actual check.
+
+```python
+    for layer, projection, key in KEYS:
+        prefix = key[: -len(".weight")]
+        for suffix in ("lora_A", "lora_B"):
+            if f"{prefix}.{suffix}" not in adapter:
+                raise SystemExit(
+                    f"[extract_deltas] {PERSONA_ADAPTER} has no {prefix}.{suffix} — the adapter "
+                    "does not describe a 6-layer x 6-projection injection."
+                )
+        a = adapter[f"{prefix}.lora_A"].to(torch.float64)
+        b = adapter[f"{prefix}.lora_B"].to(torch.float64)
+        dw = scale * (b @ a)
+        w0 = w0_model[key].to(torch.float64)
+        if dw.shape != w0.shape:
+            raise SystemExit(
+                f"[extract_deltas] {key}: ΔW {tuple(dw.shape)} != W₀ {tuple(w0.shape)} — "
+                "_ratio takes Frobenius norms and would return a plausible number anyway."
+            )
+        out[(layer, projection)] = _ratio(dw, w0)
+```
+
+---
+
+### WR-08: the three Phase-15 `PROJECTIONS` copies are not cross-pinned to the canonical allowlist
+
+**File:** `scripts/extract_deltas.py:80`, `scripts/phase15_stats.py:60`,
+`tests/test_phase15_plots.py:64`, `tests/test_phase15_stats.py:129`
+
+**Issue:** All three copies document themselves as "Copied verbatim from
+`src/personacore/lora/config.py:16`". None is enforced against it.
+`tests/test_phase15_stats.py:129` asserts the *literal tuple*, not equality with
+`TARGET_PROJECTIONS`, so a change to the canonical allowlist leaves three silent divergent copies
+and a test that keeps passing on the stale spelling. The project already has exactly this pattern
+where it was needed — `tests/test_lora_inject.py:81`: `assert TARGET_PROJECTIONS == PROJECTIONS` —
+and it was not applied here. `phase15_stats.PROJECTIONS` is genuinely frozen and *should* stay
+pinned to its 2026 spelling; the right move is to make a future divergence visible, not silent.
+
+**Fix:** Test-side, no source edit. In `tests/test_phase15_plots.py` (which already imports from
+the package side of the repo without torch at collection — `personacore.lora.config` is a plain
+dataclass module):
+
+```python
+from personacore.lora.config import TARGET_PROJECTIONS
+
+
+def test_phase15_projection_copies_track_the_canonical_allowlist():
+    """extract_deltas / phase15_stats / this fixture each declare themselves a verbatim copy of
+    lora/config.py's allowlist. phase15_stats is pre-registration-frozen, so a divergence must
+    surface HERE as a deliberate decision rather than as three silently stale tuples."""
+    stats = _load_stats()  # the importlib loader
+    extract_src = EXTRACT_SCRIPT.read_text(encoding="utf-8")
+    assert tuple(PROJECTIONS) == TARGET_PROJECTIONS
+    assert stats.PROJECTIONS == TARGET_PROJECTIONS
+    assert f"PROJECTIONS = {TARGET_PROJECTIONS!r}" in extract_src
+```
+
+---
+
+### WR-09: `spearman`/`_rank` return a plausible finite ρ on NaN input
+
+**File:** `scripts/phase15_stats.py:126-157`
+
+**Issue:** `np.argsort` sorts NaN to the end, so `_rank` assigns NaN the *highest* rank and
+`spearman` returns a finite, entirely fictitious correlation — e.g.
+`spearman([1..6], [nan,2,3,4,5,6])` → `0.14285714285714288`, no warning, no error. Neither
+docstring mentions it.
+
+**Containment, stated so this is not over-read:** every in-repo path into these helpers goes
+through `load_pairs`, whose `_cell` rejects non-finite values by coordinate before they can reach
+`_rank` — I re-confirmed this by injecting NaN into a copy of the artifact and getting
+`SystemExit: ... block fisher cell (layer 0, q_proj) is nan, not finite.` `main()` is the only
+production caller. This is a latent defect in two public helpers, **not** a live path to a
+corrupted verdict, and it is filed as a warning rather than a blocker for exactly that reason.
+
+**Fix:** Cheapest correct option is documentation plus a test that pins the containment, avoiding
+any change to the frozen transform:
+
+```python
+def test_rank_helpers_are_only_safe_behind_load_pairs():
+    """_rank sorts NaN last and spearman returns a finite fiction. load_pairs::_cell is what
+    makes that unreachable — this test pins the containment so a future caller that bypasses
+    load_pairs is a deliberate decision rather than an accident."""
+    assert np.isfinite(st.spearman([1, 2, 3, 4, 5, 6], [float("nan"), 2, 3, 4, 5, 6]))
+    poisoned = {"blocks": _artifact_with_nan()}
+    with pytest.raises(SystemExit, match="not finite"):
+        st.load_pairs(poisoned)
+```
+
+If a source fix is preferred instead, add `if not np.all(np.isfinite(x)): raise ValueError(...)`
+to `_rank` — additive, does not alter the transform, still needs the dated amendment record.
 
 ---
 
 ## Info
 
-### IN-01: The four-block name tuple is duplicated four times, in two different orderings
+### IN-01: `ewc_dodges_high_fisher` takes a `ci_hi` it never reads
 
-**File:** `scripts/extract_deltas.py:395`, `scripts/plot_phase15.py:56`,
-`scripts/phase15_stats.py:102`, `tests/test_phase15_plots.py:65`
+**File:** `scripts/phase15_stats.py:208-222`
+**Issue:** `return rho > 0 and ci_lo > 0` — `ci_hi` is unused. Harmless (given `rho > 0` and
+`ci_lo > 0`, `ci_hi > 0` follows), but an unused parameter in the phase's gate function invites a
+future reader to assume a two-sided check that is not there.
+**Fix:** Keep the signature (the call sites and tests are pre-registration material) and add
+`# ci_hi is accepted for call-site symmetry; ci_lo > 0 already implies the interval excludes zero`.
 
-**Issue:** `("adapter", "naive", "ewc", "fisher")` appears three times as a tuple plus once
-re-sorted as `("adapter", "ewc", "fisher", "naive")`. `extract_deltas.prove()` inlines it rather
-than naming a constant, unlike its two siblings. `PROJECTIONS` is likewise duplicated, but that one
-is documented as deliberate pre-registration pinning; the block names carry no such justification.
+### IN-02: the four-block tuple is declared three times
 
-**Fix:** Give `extract_deltas` a module-level `BLOCKS` constant alongside `PROJECTIONS` and use it in
-both `build_artifact` and `prove`.
+**File:** `scripts/phase15_stats.py:102` (`BLOCKS`), `scripts/plot_phase15.py:56`
+(`REQUIRED_BLOCKS`), `scripts/extract_deltas.py:395` (inline literal in `prove`)
+**Issue:** Three independent spellings of `("adapter", "naive", "ewc", "fisher")`, one of them an
+inline literal rather than a named constant. `tests/test_phase15_plots.py:65` adds a fourth in a
+different order.
+**Fix:** Hoist the `prove` literal to a module constant at minimum; the cross-module duplication is
+acceptable given the deliberate frozen-module isolation, but should be noted where each is declared.
 
-### IN-02: Extraction and plotting overwrite committed artifacts with no confirmation
+### IN-03: the D-07 subprocess probe reports "transitively imports torch" for any nonzero exit
 
-**File:** `scripts/extract_deltas.py:435-437`, `scripts/plot_phase15.py:299`
+**File:** `tests/test_phase15_plots.py:344-352`
+**Issue:** `exec_module` failing for an unrelated reason (missing matplotlib on a fresh clone, a
+syntax error) yields `returncode == 1` and therefore the message "plotting module transitively
+imports torch — D-07 violated". `stderr` is included so it is diagnosable, but the headline is
+wrong. Also worth knowing about the same test's scope: the AST half catches `import torch` only —
+`importlib.import_module("torch")`, `pickle.load`, `numpy.load(allow_pickle=True)` and
+`safetensors` would all pass both halves, so the docstring's "provably incapable of deserializing
+anything" overstates what is proved. The module is clean today; the claim is not.
+**Fix:** Have the probe exit `2` on import failure and assert `returncode != 1` separately; soften
+the docstring to "provably free of a torch import path" and add the other deserializer module names
+to the AST denylist.
 
-**Issue:** `python scripts/extract_deltas.py` silently overwrites `results/phase15_norms.json`, the
-committed D-05 hand-off boundary and provenance record; `plot_phase15.main()` does the same to the
-two committed PNGs. `phase15_stats.py:335` cites the project convention that `--force` is mandatory
-on every legitimate re-drive. Git makes it recoverable, so this is cheap insurance, not a hazard.
+### IN-04: `plot_phase15.main()` renders both figures before printing either
 
-**Fix:** Require `--force` when `out_path` exists and its `git_sha` differs from `git_sha()`.
+**File:** `scripts/plot_phase15.py:298-300`
+**Issue:** The tuple in the `for` is fully evaluated before the first iteration, so both `savefig`
+calls complete before "wrote" appears. Cosmetic, but the output implies incremental progress.
+**Fix:** `for fn in (plot_adapter_delta, plot_fisher_ewc): print(f"[plot_phase15] wrote {fn(RESULTS_DIR)}")`
 
-### IN-03: `plot_phase15.main()` reads and validates the artifact twice
-
-**File:** `scripts/plot_phase15.py:205`, `245`, `299`
-
-**Issue:** `plot_adapter_delta` and `plot_fisher_ewc` each call `_load_artifact()` with no argument,
-so `main()` parses and re-validates the same JSON twice. Harmless, but it also means the two figures
-could in principle be built from different file contents if the artifact changed between calls.
-
-**Fix:** Have `main()` load once and pass the artifact into both plot functions (keep the default
-`None` so each remains independently runnable).
-
-### IN-04: `_github_anchor` drops underscores, which GitHub keeps
+### IN-05: `_github_anchor` diverges from GitHub's real slug algorithm
 
 **File:** `tests/test_phase15_docs.py:360-366`
-
-**Issue:** `c.isalnum() or c == "-"` discards `_`. GitHub's anchor algorithm preserves underscores,
-so any future heading containing one (very likely here — `q_proj`, `fc_in`, `nonpositive_cells` all
-appear in headings elsewhere in this repo) produces a wrong expected anchor and a false failure.
-`isalnum()` is also true for non-ASCII letters, which GitHub handles differently.
-
-**Fix:** `if c.isalnum() or c in "-_"`.
-
-### IN-05: `_anchored_section` interpolates `stop` into a regex unescaped
-
-**File:** `tests/test_phase15_docs.py:104`
-
-**Issue:** `rf"^{re.escape(heading)}\b.*?(?=^{stop}|\Z)"` escapes `heading` but not `stop`. Both
-current call sites pass deliberate regex fragments (`r"## "`, `r"#{2,3} "`), so it works — but the
-asymmetry invites a future caller to pass a literal heading and get silent mis-anchoring rather than
-an error. A related note: `stop=r"#{2,3} "` does not stop at a `# ` (h1) heading.
-
-**Fix:** Document the parameter as "a regex fragment, not a literal" in the docstring, or take a
-compiled pattern.
-
-### IN-06: A duplicated addendum append is undetected by `test_verdict_section_is_dated_and_separated`
-
-**File:** `scripts/phase15_stats.py:454`, `tests/test_phase15_docs.py:435-487`
-
-**Issue:** `main()` only prints; the append to `results/phase13_ab_report.md` is a manual `>>`. Two
-runs produce two addenda. `_anchored_section` matches only the first (the second's `## ` heading
-stops it), and `headings[-1].startswith(_ADDENDUM_HEADING)` is still true, so the test passes.
-Simulated on a doubled copy of the real report:
-
-```
-addendum count: 2
-anchored section still one branch: True
-last heading still the addendum: True
-```
-
-**Fix:** `assert report.count(_ADDENDUM_HEADING) == 1, "the Phase 15 addendum was appended twice"`.
+**Issue:** GitHub also strips leading/trailing hyphens and preserves underscores; this
+implementation does neither. Correct for the current heading, so the link assertion is sound today,
+but a future heading starting or ending with punctuation would produce a false failure.
+**Fix:** Add `.strip("-")` and `or c == "_"` to match the documented algorithm.
 
 ---
 
-_Reviewed: 2026-08-02T21:02:13Z_
+_Reviewed: 2026-08-02T21:46:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
