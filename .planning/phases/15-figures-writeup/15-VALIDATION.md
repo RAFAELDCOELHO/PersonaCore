@@ -1,10 +1,11 @@
 ---
 phase: 15
 slug: figures-writeup
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-08-02
+approved: 2026-08-02
 ---
 
 # Phase 15 — Validation Strategy
@@ -25,6 +26,10 @@ created: 2026-08-02
 | **Estimated runtime** | ~10 s quick · ~120 s full (baseline: 392 passed, 1 skipped, 119.6 s) |
 | **Environment** | CPU-only, GPU-free, Python 3.11 venv; CI installs `.[cpu,dev,demo]` — matplotlib ships via `demo` |
 
+**Every command in this document is `.venv/bin/`-prefixed on purpose.** A bare `pytest` resolves
+to this box's system Python 3.14, which CLAUDE.md forbids as a validation target — torch wheels
+and CI both pin 3.11.
+
 ---
 
 ## Sampling Rate
@@ -33,7 +38,15 @@ created: 2026-08-02
 - **After every plan wave:** Run `.venv/bin/pytest -q` **and** `make lint`
 - **Before `/gsd:verify-work`:** Full suite green (≥ 392 passed, allowing for new tests) + `make lint`
   clean + both PNGs and the D-05 JSON committed
-- **Max feedback latency:** 10 seconds
+- **Max feedback latency:** 10 seconds — this binds every **per-task** `<automated>` command in
+  Plans 15-01 through 15-07.
+
+**Two deliberate exceptions, recorded rather than tolerated:**
+
+| Exception | Command | Expected runtime | Why it is not a violation |
+|-----------|---------|------------------|---------------------------|
+| Terminal wave-5 gate | 15-08 Task 2 — `.venv/bin/pytest -q tests/test_phase15_docs.py && .venv/bin/pytest -q && make lint` | ~120 s by design | It is the phase's **final** regression gate, not a feedback loop. Sampling continuity is already supplied by the < 10 s per-task commands ahead of it; running the whole suite here *is* the task. |
+| Notebook execution | 15-07 Task 1 acceptance — `.venv/bin/jupyter nbconvert --to notebook --execute --stdout demo_v2.ipynb` | ~20-40 s | Kernel start plus a handful of `json` / `matplotlib` cells; no training, no checkpoint read. Run once as an acceptance criterion — that task's own `<automated>` verify is a `json` structural check well under 10 s. Above ~90 s means a cell is doing work it should not. |
 
 ---
 
@@ -44,22 +57,23 @@ must be preserved when tasks are numbered.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| T-01-3 | 15-01 | 1 | D-10 / D-12 | — | N/A | unit (known-answer) | `pytest tests/test_phase15_stats.py::test_spearman_known_answers -x` | ❌ W0 | ⬜ pending |
-| T-01-3 | 15-01 | 1 | D-12 | — | N/A | unit (determinism) | `pytest tests/test_phase15_stats.py::test_seeded_results_are_reproducible -x` | ❌ W0 | ⬜ pending |
-| T-01-3 | 15-01 | 1 | D-12 | — | N/A | unit (behavioral) | `pytest tests/test_phase15_stats.py::test_ci_behavior_on_null_and_signal -x` | ❌ W0 | ⬜ pending |
-| T-01-3 | 15-01 | 1 | D-11 | — | N/A | unit (gate logic) | `pytest tests/test_phase15_stats.py::test_gate_rule -x` | ❌ W0 | ⬜ pending |
-| T-02-3 | 15-02 | 2 | D-05 / D-06 | T-15-01 | Artifact schema complete; every block carries regime/param_count/training_budget | unit (schema) | `pytest tests/test_phase15_plots.py::test_artifact_schema -x` | ❌ W0 | ⬜ pending |
-| T-02-3 | 15-02 | 2 | D-08 | T-15-01 | Extraction reproduces the committed JSON exactly | integration (`skipif` on 6 checkpoints) | `pytest tests/test_phase15_plots.py::test_extraction_reproduces_the_committed_artifact -x` | ❌ W0 | ⬜ pending |
-| T-03-2 | 15-03 | 3 | VIZ-02 | — | N/A | unit (tmp_path smoke) | `pytest tests/test_phase15_plots.py::test_plot_functions_write_pngs -x` | ❌ W0 | ⬜ pending |
-| T-03-2 | 15-03 | 3 | VIZ-03 | — | N/A | unit (tmp_path smoke) | `pytest tests/test_phase15_plots.py::test_plot_functions_write_pngs -x` | ❌ W0 | ⬜ pending |
-| T-03-2 | 15-03 | 3 | D-01 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_ab_panels_share_one_norm -x` | ❌ W0 | ⬜ pending |
-| T-03-2 | 15-03 | 3 | D-02 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_shared_range_is_full_data_range -x` | ❌ W0 | ⬜ pending |
-| T-03-2 | 15-03 | 3 | D-02 / D-18 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_vmax_driver_matches_argmax -x` | ❌ W0 | ⬜ pending |
-| T-03-2 | 15-03 | 3 | D-07 | T-15-02 | Plotting module has no code path that opens a `.pt` file | structural (AST + subprocess) | `pytest tests/test_phase15_plots.py::test_plotting_module_never_opens_a_checkpoint -x` | ❌ W0 | ⬜ pending |
-| T-08-1 | 15-08 | 5 | D-15 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_limitations_quotes_are_verbatim -x` | ❌ W0 | ⬜ pending |
-| T-08-1 | 15-08 | 5 | D-16 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_headline_numbers_match_sources -x` | ❌ W0 | ⬜ pending |
-| T-08-2 | 15-08 | 5 | D-17 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_verdict_section_is_dated_and_separated -x` | ❌ W0 | ⬜ pending |
-| T-08-2 | 15-08 | 5 | DOC-02 | — | N/A | regression | `.venv/bin/pytest -q` | ✅ exists | ⬜ pending |
+| T-01-3 | 15-01 | 1 | D-10 / D-12 | — | N/A | unit (known-answer) | `.venv/bin/pytest tests/test_phase15_stats.py::test_spearman_known_answers -x` | ❌ W0 | ⬜ pending |
+| T-01-3 | 15-01 | 1 | D-12 | — | N/A | unit (determinism) | `.venv/bin/pytest tests/test_phase15_stats.py::test_seeded_results_are_reproducible -x` | ❌ W0 | ⬜ pending |
+| T-01-3 | 15-01 | 1 | D-12 | — | N/A | unit (behavioral) | `.venv/bin/pytest tests/test_phase15_stats.py::test_ci_behavior_on_null_and_signal -x` | ❌ W0 | ⬜ pending |
+| T-01-3 | 15-01 | 1 | D-11 | — | N/A | unit (gate logic) | `.venv/bin/pytest tests/test_phase15_stats.py::test_gate_rule -x` | ❌ W0 | ⬜ pending |
+| T-02-3 | 15-02 | 2 | D-05 / D-06 / SC3 | T-15-01 | Artifact schema complete; every block carries regime/param_count/training_budget, and the fisher block names its estimator `variant` | unit (schema) | `.venv/bin/pytest tests/test_phase15_plots.py::test_artifact_schema -x` | ❌ W0 | ⬜ pending |
+| T-02-3 | 15-02 | 2 | D-08 | T-15-01 | Extraction reproduces the committed JSON exactly | integration (`skipif` on 6 checkpoints) | `.venv/bin/pytest tests/test_phase15_plots.py::test_extraction_reproduces_the_committed_artifact -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | VIZ-02 | — | N/A | unit (tmp_path smoke) | `.venv/bin/pytest tests/test_phase15_plots.py::test_plot_functions_write_pngs -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | VIZ-03 | — | N/A | unit (tmp_path smoke) | `.venv/bin/pytest tests/test_phase15_plots.py::test_plot_functions_write_pngs -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | D-01 | — | N/A | unit (object identity via `_norms`) | `.venv/bin/pytest tests/test_phase15_plots.py::test_ab_panels_share_one_norm -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | D-02 | — | N/A | unit | `.venv/bin/pytest tests/test_phase15_plots.py::test_shared_range_is_full_data_range -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | D-02 / D-18 | — | N/A | unit | `.venv/bin/pytest tests/test_phase15_plots.py::test_vmax_driver_matches_argmax -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | D-07 | T-15-02 | Plotting module has no code path that opens a `.pt` file | structural (AST + subprocess) | `.venv/bin/pytest tests/test_phase15_plots.py::test_plotting_module_never_opens_a_checkpoint -x` | ❌ W0 | ⬜ pending |
+| T-08-1 | 15-08 | 5 | D-15 | — | N/A | doc integrity | `.venv/bin/pytest tests/test_phase15_docs.py::test_limitations_quotes_are_verbatim -x` | ❌ W0 | ⬜ pending |
+| T-08-1 | 15-08 | 5 | D-16 | T-15-25 | README/notebook links into the report's Limitations section resolve to a heading that exists | doc integrity | `.venv/bin/pytest tests/test_phase15_docs.py::test_headline_numbers_match_sources -x` | ❌ W0 | ⬜ pending |
+| T-08-2 | 15-08 | 5 | D-17 | T-15-14 | Verdict section read section-anchored, never by last-occurrence substring (CR-02) | doc integrity | `.venv/bin/pytest tests/test_phase15_docs.py::test_verdict_section_is_dated_and_separated -x` | ❌ W0 | ⬜ pending |
+| T-08-2 | 15-08 | 5 | D-02 / D-18 / SC3 | T-15-24 | Report's figures section names the artifact's `vmax_driver` and Fisher `variant`, read section-anchored | doc integrity | `.venv/bin/pytest tests/test_phase15_docs.py::test_report_names_the_artifact_vmax_driver -x` | ❌ W0 | ⬜ pending |
+| T-08-2 | 15-08 | 5 | DOC-02 | — | N/A | regression (terminal gate, ~120 s — see exceptions above) | `.venv/bin/pytest -q` | ✅ exists | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -67,10 +81,17 @@ must be preserved when tasks are numbered.
 
 ## Wave 0 Requirements
 
-- [ ] `tests/test_phase15_stats.py` — covers D-10 / D-11 / D-12. **Must land in the same commit as
-      `scripts/phase15_stats.py`, before any artifact exists** (D-09 pre-registration boundary).
-- [ ] `tests/test_phase15_plots.py` — covers VIZ-02 / VIZ-03 / D-01 / D-02 / D-05 / D-06 / D-07 / D-08.
-- [ ] `tests/test_phase15_docs.py` — covers D-15 / D-16 / D-17.
+Every item below has an **owning task in a committed plan** — that is what `wave_0_complete: true`
+records. The checkboxes tick when those tasks execute; nothing here is unowned.
+
+- [ ] `tests/test_phase15_stats.py` — covers D-10 / D-11 / D-12. Owner: **15-01 Task 3**. **Must
+      land in the same commit as `scripts/phase15_stats.py`, before any artifact exists**
+      (D-09 pre-registration boundary).
+- [ ] `tests/test_phase15_plots.py` — covers VIZ-02 / VIZ-03 / D-01 / D-02 / D-05 / D-06 / D-07 /
+      D-08 / SC3. Owners: **15-02 Task 3** (schema + reproduction) and **15-03 Task 2** (figure +
+      structural).
+- [ ] `tests/test_phase15_docs.py` — covers D-15 / D-16 / D-17 / D-02 / D-18 / SC3. Owners:
+      **15-08 Task 1** and **15-08 Task 2**.
 - [ ] No framework install needed. No `conftest.py` change needed.
 
 ---
@@ -79,7 +100,7 @@ must be preserved when tasks are numbered.
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Extraction correctness | D-08 / VIZ-02 / VIZ-03 | Needs six gitignored checkpoints (~914 MB); cannot run in CPU-only CI. Skips cleanly. | Locally, with all six checkpoints present: run the extraction script, then `pytest tests/test_phase15_plots.py::test_extraction_reproduces_the_committed_artifact` — must match the committed JSON byte-for-byte. Re-running against a **future** checkpoint requires a fresh manual run producing a fresh committed artifact, not a test that stays green while checking nothing. |
+| Extraction correctness | D-08 / VIZ-02 / VIZ-03 | Needs six gitignored checkpoints (~914 MB); cannot run in CPU-only CI. Skips cleanly. | Locally, with all six checkpoints present: run the extraction script, then `.venv/bin/pytest tests/test_phase15_plots.py::test_extraction_reproduces_the_committed_artifact` — must match the committed JSON byte-for-byte. Re-running against a **future** checkpoint requires a fresh manual run producing a fresh committed artifact, not a test that stays green while checking nothing. |
 | Whether the committed numbers are the RIGHT numbers | VIZ-02 / VIZ-03 | The suite proves the artifact→figure path is faithful and the schema complete; it cannot prove the artifact describes the intended checkpoints. | Human review of the `git_sha` / `step` / `val_loss` fingerprints recorded in each artifact block. Specifically confirm the adapter block's W₀ is `convbase_best.pt` (fingerprint `04e724c6…`, step 4000), **not** `best.pt` — see RESEARCH.md Pitfall 1. |
 | Figure legibility under the shared scale | D-01 / D-02 | "Flatness is a finding" is a judgment about whether the rendered PNG communicates; not machine-checkable. | Open both committed PNGs. Confirm the caption names the `vmax` driver and states which panels share a scale and why the Fisher panel does not. |
 
@@ -87,12 +108,12 @@ must be preserved when tasks are numbered.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 10s (per-task; the two exceptions above are recorded, not implicit)
+- [x] `nyquist_compliant: true` set in frontmatter
 
 ---
 
@@ -104,14 +125,18 @@ Task IDs above map to `{plan}-{task}` in the committed plans. The behavior→tes
 | Task ID | Plan | Task | Creates |
 |---------|------|------|---------|
 | T-01-3 | 15-01 | Task 3 | `tests/test_phase15_stats.py` — 4 tests (D-10 / D-11 / D-12) |
-| T-02-3 | 15-02 | Task 3 | `tests/test_phase15_plots.py` — schema + `skipif` reproduction (D-05 / D-06 / D-08) |
+| T-02-3 | 15-02 | Task 3 | `tests/test_phase15_plots.py` — schema (incl. the SC3 Fisher `variant`) + `skipif` reproduction (D-05 / D-06 / D-08) |
 | T-03-2 | 15-03 | Task 2 | `tests/test_phase15_plots.py` — 5 figure + structural tests (VIZ-02 / VIZ-03 / D-01 / D-02 / D-07 / D-18) |
-| T-08-1 | 15-08 | Task 1 | `tests/test_phase15_docs.py` — D-15 quotes + D-16 headline numbers |
-| T-08-2 | 15-08 | Task 2 | `tests/test_phase15_docs.py` — D-17 separation + vmax consistency + full-suite gate |
+| T-08-1 | 15-08 | Task 1 | `tests/test_phase15_docs.py` — D-15 quotes + D-16 headline numbers and cross-document link resolution |
+| T-08-2 | 15-08 | Task 2 | `tests/test_phase15_docs.py` — D-17 separation + the section-anchored vmax/Fisher-variant consistency check + full-suite gate |
 
 **Wave column note:** research suggested wave numbers 0-3; the committed plans use waves 1-5
 because D-09's pre-registration boundary requires `scripts/phase15_stats.py` and its tests to
 land in a commit that provably precedes the extraction run. The wave numbers above are the
 committed ones.
 
-**Approval:** pending
+**Expected final counts:** locally (all six checkpoints present) ≥ 407 passed, exactly 1 skipped.
+In CI (checkpoints gitignored) ≥ 406 passed, exactly 2 skipped — the second is
+`test_extraction_reproduces_the_committed_artifact`, by design. A third skip is a regression.
+
+**Approval:** approved 2026-08-02

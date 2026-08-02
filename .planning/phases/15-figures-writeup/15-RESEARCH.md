@@ -1731,7 +1731,7 @@ w0 = blob["model"]   # NOT checkpoint.load_checkpoint — that RESTORES global R
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 ### Q1 🔴 — D-15's quote-exactly rule vs. a known factual error in limitation L8's source
 
@@ -1758,6 +1758,12 @@ decisions. The README's v2.0 rewrite (which is not covered by D-13's untouched c
 the corrected attribution directly. **Do not silently paraphrase the quote to fix it** — that is
 exactly the drift vector D-15 exists to close.
 
+**RESOLVED (2026-08-02):** adopted verbatim as **R1** — quote L8 verbatim including *"the
+bounded TinyStories corpus"*, then a dated, evidence-naming Phase 15 correction note; README
+states the corrected attribution directly because it carries no D-13 protection. Implemented
+in `15-05-PLAN.md` Task 3 (the quote + correction note) and `15-06-PLAN.md` Task 2 (the README
+half), and made permanent by `15-08-PLAN.md` Task 1's `test_limitations_quotes_are_verbatim`.
+
 ### Q2 🟡 — D-13's "textually untouched" vs. stale future-tense v1.0 text
 
 **What we know:** `docs/REPORT.md:433-443` (`Milestone 2 (upcoming)`) describes LoRA, EWC,
@@ -1776,6 +1782,12 @@ it as "as written on 2026-06-10". The v2.0 sections then append at EOF. This pre
 v1.0 word while removing the misreading. README carries no such protection and should simply be
 rewritten.
 
+**RESOLVED (2026-08-02):** adopted as **R3** — the dated boundary marker goes immediately after
+`## Reproducibility` (line 421), directly before `## Limitations and the Milestone 2 Roadmap`;
+every v2.0 section appends at EOF; README is rewritten outright. Implemented in
+`15-05-PLAN.md` Task 1 (the marker, with the first 421 lines asserted byte-identical) and
+`15-06-PLAN.md` Task 1 (the README rewrite).
+
 ### Q3 🟡 — Does `demo.ipynb` (v1.0) get an edit?
 
 **What we know:** D-13 requires *"Both notebooks state this independence explicitly in their
@@ -1791,11 +1803,22 @@ with honest numbers"*, but D-13 supersedes it with a **new** v2.0 notebook. The 
 record that supersession explicitly, the way `phase13_ab_report.md:303-305` recorded
 *"ROADMAP wording superseded"* rather than silently absorbing the change.
 
+**RESOLVED (2026-08-02):** adopted as **R4** — prepend a new markdown cell as `demo.ipynb`
+cell 0 (no existing cell edited, all eight asserted byte-identical), ship the v2.0 numbers in a
+new self-contained `demo_v2.ipynb`, and record the SC3 supersession as an explicit dated note
+in ROADMAP. Implemented in `15-07-PLAN.md` Tasks 1, 2 and 3.
+
 ### Q4 🟢 — Which of the permutation p and the bootstrap CI is load-bearing for D-11's gate?
 
 Covered in `## Pure-Numpy Rank Statistics`. D-11 read literally makes the **CI** the gate and the
 **p** descriptive. One sentence in the pre-registration closes it. Flagged here only so the
 planner writes that sentence *before* either number exists.
+
+**RESOLVED (2026-08-02):** adopted as **R5** — the bootstrap CI is the load-bearing half of the
+D-11 gate; the permutation p is descriptive and never overrides it or converts a miss into a
+pass. Written as a module-level pre-registration comment in `15-01-PLAN.md` Task 1, committed
+before any correlation number exists, and pinned by
+`grep -qi 'load-bearing' scripts/phase15_stats.py` in that task's acceptance criteria.
 
 ---
 
