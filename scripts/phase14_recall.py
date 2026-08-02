@@ -83,7 +83,7 @@ CONVBASE_BEST = _REPO_ROOT / "checkpoints" / "convbase_best.pt"  # own trusted f
 TOKENIZER_PATH = _REPO_ROOT / "artifacts" / "tokenizer.json"  # FROZEN — never retrain
 ADAPTER_PATH = _REPO_ROOT / "checkpoints" / "persona_adapter.pt"  # weights_only=True (load_adapter)
 RECALL_REPORT_PATH = _REPO_ROOT / "results" / "phase14_recall_report.md"  # COMMITTED evidence
-TRANSCRIPTS_PATH = _REPO_ROOT / "results" / "phase14_recall_transcripts.md"  # COMMITTED evidence
+TRANSCRIPTS_PATH = _REPO_ROOT / "results" / "phase14_transcripts.md"  # COMMITTED evidence
 
 
 # =====================================================================================
@@ -831,7 +831,7 @@ def _quote(text):
 
 
 def write_transcripts(records, provenance_lines):
-    """Write ``results/phase14_recall_transcripts.md`` — every completion, failures included.
+    """Write ``results/phase14_transcripts.md`` — every completion, failures included.
 
     The ``make_transcripts.py:146-183`` shape: build ``blocks``, prepend a ``header`` carrying
     the measured proxies, ``"\\n".join(...)``, ONE write. Sections come out in the order
@@ -1589,7 +1589,7 @@ def _contradiction_blocks(records):
 def write_recall_report(records, controls, provenance_lines):
     """Write ``results/phase14_recall_report.md`` — the verdict-bearing committed evidence.
 
-    ``results/phase14_recall_transcripts.md`` owns the raw completions; THIS file owns the
+    ``results/phase14_transcripts.md`` owns the raw completions; THIS file owns the
     aggregation, the gate verdicts, and the pre-registered framing. Section order is fixed and
     every framing string is a module-level constant committed before the run (D-20).
     """
@@ -1687,7 +1687,7 @@ def write_recall_report(records, controls, provenance_lines):
         "```",
         "",
         "**Every question's exact prompt token ids are in "
-        "`results/phase14_recall_transcripts.md`**, recorded BEFORE the model was called rather "
+        "`results/phase14_transcripts.md`**, recorded BEFORE the model was called rather "
         "than reconstructed after seeing the answer. `assert_no_value_in_prompt` checks each "
         "prompt at two levels — the normalized value absent from the decoded prompt, and the "
         "value's encoded id sequence absent as a contiguous run in the prompt ids — and raises "
