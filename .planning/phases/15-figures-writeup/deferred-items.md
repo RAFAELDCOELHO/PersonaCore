@@ -37,3 +37,31 @@ tooling-wide decision rather than a Phase 15 change.
 Plans 15-02/15-03). The pinned `.venv/bin/ruff` still reports `All checks passed!` and
 `138 files already formatted`, so both are 0.1.15-vs-0.15 disagreements, not real formatting
 defects. Noted only because a reader hitting `make lint` will now see two names, not one.
+
+---
+
+## DEF-15-02 — `scripts/extract_deltas.py` states the checkpoint total as `~914 MB`; measured is ~947 MB
+
+**Found during:** Plan 15-05, Task 1 (writing the `## Decision: Extract Once, Then Plot From the
+Committed Artifact Only` section, which cites the figure).
+
+**The discrepancy:** `scripts/extract_deltas.py:10,33,274` all state that the checkpoints it reads
+are "gitignored (~914 MB)". Measured directly on this box, the six files it opens total
+**946,648,137 bytes** — 902.8 MiB, or 946.6 MB decimal. Neither unit reading gives 914. The five
+checkpoints named in 15-CONTEXT D-08 (without `convbase_best.pt`, the adapter's W₀) sum to
+668,621,570 bytes / 637.6 MiB, so the figure is not a five-vs-six-file discrepancy either.
+
+**Impact: cosmetic.** The number appears only in the extraction script's docstring and error
+message, where its job is to tell a reader "these are large and gitignored". No gate, test or
+computation reads it. `docs/REPORT.md` deliberately writes it as an *attribution*
+(*"`scripts/extract_deltas.py` records them at ~914 MB"*) rather than as a direct claim, so the
+report is accurate regardless of how the script's figure is resolved.
+
+**Deferred because:** `scripts/extract_deltas.py` is not in Plan 15-05's `files_modified`, and the
+plan writes markdown only. Touching the extraction script would also mean re-verifying the D-07
+tier boundary for a docstring number.
+
+**Suggested fix (whenever someone picks it up):** replace `~914 MB` with the measured `~947 MB` at
+`scripts/extract_deltas.py:10,33,274`, or drop the figure and say "several hundred MB". If the
+figure is corrected, `docs/REPORT.md`'s attribution sentence needs the same edit — it quotes the
+script by name.
