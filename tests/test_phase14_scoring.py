@@ -302,3 +302,43 @@ def test_question_seed_is_distinct_and_derivable():
     seeds = [pr.question_seed(i) for i in range(16)]
     assert seeds == [pr.SEED + i for i in range(16)]
     assert len(set(seeds)) == 16
+
+
+def test_scored_question_sets_are_value_free_and_match_the_committed_seam():
+    """The two contracts ``build_question_sets`` exists to hold. CPU-only, no model, no decode.
+
+    1. **No scored question may name a fact value.** Two TAUGHT families name it in the question
+       by definition of their frames — ``F5`` (yes/no verification) and ``F4`` (D-22 reversed
+       direction). Both are legitimate teaching forms and neither is a legitimate recall question:
+       asking a question that already contains the answer measures copying from context, and
+       feeding one to ``assert_no_value_in_prompt`` would abort the run. The mechanical filter
+       drops them; this pins that every SURVIVING question clears the clean-room proof, whatever
+       allocation plan 14-09 rewrites ``TAUGHT_FAMILY_IDS`` into.
+    2. **The constructed held-out set equals the committed one.** The harness rebuilds held-out
+       questions fact-bound (``heldout_questions()`` returns a flat tuple that drops the binding
+       scoring needs), so set-equality is what proves the two constructions describe the same
+       never-seen split.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
+    )
+    fs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fs)
+
+    core_taught, core_held_out, core_excluded = pr.build_question_sets(fs.LOCKED_FACTS)
+    soft_taught, soft_held_out, soft_excluded = pr.build_question_sets(fs.SOFT_TIER_FACTS)
+    values = [f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS]
+
+    scored = core_taught + core_held_out + soft_taught + soft_held_out
+    for item in scored:
+        pr.assert_no_value_in_prompt(tok, item.question, values)  # raises SystemExit on a leak
+    assert {i.question for i in core_held_out + soft_held_out} == set(fs.heldout_questions())
+
+    # Every exclusion is a question naming its OWN fact's value — never an arbitrary drop.
+    by_id = {f.id: f for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS}
+    for _family_id, fact_id, _split, question in core_excluded + soft_excluded:
+        assert pr.contains_value(question, by_id[fact_id].value)
+    # Every taught fact keeps scorable coverage, and the reserved D-08 probes are all flagged.
+    assert {i.fact.id for i in core_taught} == {f.id for f in fs.LOCKED_FACTS}
+    reserved = {i.question for i in core_held_out + soft_held_out if i.reserved}
+    assert reserved == {p for probes in fs.RESERVED_HELDOUT_PROBES.values() for p in probes}

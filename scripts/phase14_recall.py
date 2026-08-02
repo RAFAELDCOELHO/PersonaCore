@@ -733,6 +733,162 @@ def run_scored_recall(model, tok, device, forbid, items, *, tier_label, excluded
     }
 
 
+def _quote(text):
+    """One completion as a markdown blockquote, VERBATIM — interior newlines preserved.
+
+    ``make_transcripts.py``'s one-line ``f"> {…}"`` silently swallows a multi-line completion.
+    Raw evidence cannot afford that, so every line gets its own ``>`` prefix and nothing is
+    detokenized, stripped, or collapsed: what is printed is exactly ``tok.decode(generated_ids)``.
+    """
+    return "\n".join(f"> {line}" for line in text.split("\n"))
+
+
+def write_transcripts(records, provenance_lines):
+    """Write ``results/phase14_recall_transcripts.md`` — every completion, failures included.
+
+    The ``make_transcripts.py:146-183`` shape: build ``blocks``, prepend a ``header`` carrying
+    the measured proxies, ``"\\n".join(...)``, ONE write. Sections come out in the order
+    ``records`` arrives in, which ``main()`` fixes as core taught, core held-out, closed-book
+    control, soft tier.
+
+    This file is RAW EVIDENCE and owns no verdict: nothing here is aggregated to a tier rate,
+    ranked, or compared against a threshold. ``results/phase14_recall_report.md`` (plan 14-10)
+    owns that register.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    notes = {
+        CORE_TAUGHT_TIER: (
+            "What this measures: recall on phrasings whose template FAMILY the adapter was "
+            "trained on — the fact is in the weights and the frame is familiar."
+        ),
+        CORE_HELDOUT_TIER: (
+            "What this measures: recall on NEVER-SEEN phrasings — entirely held-out template "
+            "families (D-13) plus the reserved gate probes (D-08). This is the tier that "
+            "distinguishes an internalized fact from a memorized surface form."
+        ),
+        CLOSED_BOOK_TIER: (
+            "What this measures: the same process, the same weights, and the same prompts with "
+            "only the LoRA `enabled` flags flipped off (`adapter_disabled`). Any difference "
+            "between this tier and the two above can only come from the adapter."
+        ),
+        SOFT_TIER: (
+            "What this tier is FOR: narrative texture and breadth of personalization — it shows "
+            "the demo teaching a preference, not only proper nouns, so the transcript reads like "
+            "a person rather than a form. What it does NOT do: it has **no bearing** on DEMO-06's "
+            "taught or held-out thresholds and contributes nothing to the headline claim, "
+            "precisely because low-cardinality preference slots could not reliably survive the "
+            "D-03 close-call filter — both survivors carry a recorded close call of their own and "
+            "are retained under the D-05 exclusion, explicitly NOT because they are clean. This "
+            "is a named section, not a footnote."
+        ),
+    }
+    reserved_note = (
+        "reserved gate probe — held out AND measured base-failing at gate time, commit "
+        f"`{fs.FACTSET_GATE_SHA}`; the base completion that proves it is quoted verbatim in "
+        "`results/phase14_factset_report.md` (D-08)"
+    )
+
+    blocks = []
+    for record in records:
+        blocks += [f"## {record['tier']}", "", notes.get(record["tier"], ""), ""]
+        if record["excluded"]:
+            families = sorted({family_id for family_id, _fid, _split, _q in record["excluded"]})
+            blocks += [
+                f"> **{len(record['excluded'])} taught phrasings from families "
+                f"{', '.join(families)} are excluded from SCORING, not from the record.** Those "
+                "frames name the fact value inside the QUESTION by definition (yes/no "
+                "verification, and the D-22 reversed direction). They are legitimate teaching "
+                "forms — PITFALLS-12 prescribes teaching QA in both directions — but a question "
+                "that already contains the answer measures copying from context, not memory in "
+                "the weights, and feeding one to the model would put a locked value in context "
+                "and abort this run. The filter is mechanical (`contains_value(question, "
+                "value)`), never a hand-picked family list. Excluded phrasings:",
+                "",
+            ]
+            for family_id, fact_id, split, question in record["excluded"]:
+                blocks.append(f"- `{family_id}` · `{fact_id}` · {split} — {question}")
+            blocks.append("")
+
+        for index, entry in enumerate(record["questions"]):
+            marks = [
+                f"`{entry['fact_id']}`",
+                f"slot `{entry['slot']}`",
+                f"split `{entry['split']}`",
+            ]
+            blocks += [
+                f"### [{index}] {entry['question']}",
+                "",
+                f"- {' · '.join(marks)}",
+            ]
+            if entry["reserved"]:
+                blocks.append(f"- {reserved_note}")
+            blocks += [
+                f"- scored {entry['k']}/{entry['n']} completions containing the value",
+                "",
+                "```",
+                entry["dump"],
+                "```",
+                "",
+            ]
+            for draw, completion in enumerate(entry["completions"]):
+                label = "greedy" if draw == 0 else f"seeded #{draw}"
+                hit = "HIT" if entry["hits"][draw] else "miss"
+                stop = "stop-id" if entry["stopped"][draw] else f"{RECALL_MAX_NEW_TOKENS}-token cap"
+                flags = [label, hit, stop]
+                if entry["contradictions"][draw]:
+                    flags.append(f"contradicts: {', '.join(entry['contradictions'][draw])}")
+                if entry["hedging"][draw]:
+                    flags.append("hedging")
+                blocks += [f"**{' · '.join(flags)}**", "", _quote(completion), ""]
+
+    n_questions = sum(len(record["questions"]) for record in records)
+    n_stopped = sum(record["n_stopped"] for record in records)
+    n_completions = sum(record["n_completions"] for record in records)
+    header = [
+        "# PersonaCore — Phase 14 Teach-Then-Recall Transcripts (DEMO-05 / DEMO-06)",
+        "",
+        "> **Every completion produced by the run appears below, failures included and",
+        "> unfiltered.** These are not REPRESENTATIVE samples in the weaker sense the Phase-12",
+        "> transcripts used — nothing was drawn, ranked, truncated, or re-rolled on its way to",
+        "> this file. Each prompt is a `build_recall_prompt` id sequence, never a hand-formatted",
+        "> string, so prompts tokenize identically to the training bins (Pitfall 4), and the",
+        "> exact prompt token ids appear with every question (D-18 — SC2's literal requirement).",
+        "> Completions are printed as raw `tok.decode(generated_ids)` output; scoring applies",
+        "> `normalize`, which detokenizes first. Question `[i]` in each section is the seed",
+        "> index: its samples draw from `torch.Generator().manual_seed(question_seed(i) + s)` =",
+        f"> `{SEED} + i + s`, so every draw here is re-derivable from the seed alone.",
+        "> No tier rate, ranking, or verdict appears in this file —",
+        "> `results/phase14_recall_report.md` owns that register.",
+        "",
+        "## Run Provenance",
+        "",
+        "The pid and wall clock below, plus the adapter file's on-disk existence BETWEEN the",
+        "teaching run and this one, are the auditable form of PITFALLS-11 step 1's process",
+        "boundary: teaching happened in a different `python` invocation, so the clean room is",
+        "inherited by construction rather than re-argued here.",
+        "",
+        "```",
+        *provenance_lines,
+        "```",
+        "",
+        "## Measured Proxies",
+        "",
+        f"- Stop-id termination fraction: **{n_stopped}/{n_completions} = "
+        f"{n_stopped / n_completions:.2f}**",
+        f"- Draws: **{n_questions} greedy + {n_questions * N_SEEDED_SAMPLES} seeded** "
+        f"({N_SEEDED_SAMPLES} per question at temperature={SAMPLE_TEMPERATURE}, "
+        f"top_p={SAMPLE_TOP_P}) over {n_questions} questions",
+        f"- `RECALL_MAX_NEW_TOKENS`: **{RECALL_MAX_NEW_TOKENS}** (D-19, derived from the census)",
+        "",
+    ]
+    TRANSCRIPTS_PATH.write_text("\n".join(header + blocks), encoding="utf-8")
+    print(
+        f"[phase14_recall] wrote {TRANSCRIPTS_PATH}: {len(records)} tiers, {n_questions} "
+        f"questions, {n_completions} completions, stop fraction {n_stopped / n_completions:.2f}"
+    )
+
+
 def run_closed_book_control(model, tok, device, forbid, items):
     """SC2's base-without-adapter control: the same process, weights, and prompts — flags off.
 
@@ -806,8 +962,7 @@ def main():
     for record in records:
         print(f"[phase14_recall] {record['tier']}: {record['k']}/{record['n']}")
 
-    echo_provenance(summary, device, artifact)
-    # Plan 14-06 Task 3 wires `write_transcripts(records, provenance_lines)` in here.
+    write_transcripts(records, echo_provenance(summary, device, artifact))
 
 
 # =====================================================================================
