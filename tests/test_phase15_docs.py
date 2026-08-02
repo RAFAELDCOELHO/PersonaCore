@@ -36,7 +36,9 @@ instance of the same declared-invariant-becomes-structural move D-07 makes for t
 and D-17/D-18 made for Phase 14's demo.
 """
 
+import importlib.util
 import json
+import math
 import re
 from pathlib import Path
 
@@ -412,6 +414,94 @@ def test_headline_numbers_match_sources():
     link = f"docs/REPORT.md#{_github_anchor(heading.group(0).lstrip('# '))}"
     assert link in readme, f"README does not link to the Limitations heading as written ({link})"
     assert link in _read("demo_v2.ipynb"), f"demo_v2.ipynb's Limitations link dangles ({link})"
+
+
+# --------------------------------------------------------------------------- #
+# D-16 (extension) — the SIGNATURE number is bound to the artifact it came from
+# --------------------------------------------------------------------------- #
+
+# The four SHIPPED documents that restate the correlation in prose. `.planning/ROADMAP.md` also
+# carries it but is a planning artifact, not a deliverable, and is deliberately out of scope so
+# ordinary planning churn cannot redden a docs test.
+_RHO_SITES = (
+    "README.md",
+    "docs/REPORT.md",
+    "demo_v2.ipynb",
+    "results/phase13_ab_report.md",
+)
+
+# ``render_verdict_section``'s two pre-authored branch words, keyed by whether the gate holds.
+_VERDICT_WORD = {True: "GATE PASSES", False: "GATE MISSES"}
+
+
+def _phase15_stats():
+    """The pre-registered rule module, loaded BY PATH — ``scripts/`` is not an importable package.
+
+    Pure numpy (no torch), so importing it keeps this module's stated no-torch contract. It is
+    byte-frozen since the pre-registration commit; this test reads it, never writes it.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "phase15_stats", _REPO_ROOT / "scripts" / "phase15_stats.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_correlation_rho_matches_the_artifact_it_was_computed_from():
+    """The signature number is RECOMPUTED, not string-matched against a hardcoded literal.
+
+    ``_HEADLINE_NUMBERS`` protects three lesser numbers by asserting each appears in its cited
+    source. That shape is too weak for rho, for two reasons:
+
+      1. README renders rho in a PARAGRAPH, not a bullet, so the ``\\n(?=- )`` bullet split files
+         it under an unrelated bullet and the inline-qualifier assertion would scan the wrong span.
+      2. A literal row only catches PROSE drift. It cannot catch ARTIFACT drift — if
+         ``results/phase15_norms.json`` were rebuilt from different checkpoints, a hardcoded
+         `0.801544` would keep passing while the prose silently stopped describing the data.
+
+    So this recomputes rho from the committed artifact through the frozen pre-registered rule and
+    requires the prose to match THAT. It fails if either side moves independently of the other.
+
+    This is also the only test that would catch a transposition of the naive and EWC arms in
+    ``scripts/extract_deltas.py``: swapping them inverts ``naive - ewc``, flips rho to its negative,
+    and emits the pre-authored MISS paragraph — while every prose site still read the old value.
+    """
+    stats = _phase15_stats()
+    artifact = json.loads(_read("results/phase15_norms.json"))
+    fisher, reduction = stats.load_pairs(artifact)
+
+    # Meta-guard: a truncated artifact must not reduce this to a vacuous pass before any
+    # membership assertion runs. ``load_pairs`` already raises on a malformed artifact; this
+    # pins the count the pre-registration fixed.
+    assert len(fisher) == len(reduction) == stats.N_CELLS, (
+        f"expected {stats.N_CELLS} cell pairs from the artifact, got {len(fisher)}"
+    )
+
+    rho = stats.spearman(fisher, reduction)
+    assert math.isfinite(rho), f"the recomputed correlation is not finite: {rho!r}"
+    rendered = f"{rho:.6f}"
+
+    for site in _RHO_SITES:
+        assert rendered in _read(site), (
+            f"{site} does not carry the correlation as recomputed from "
+            f"results/phase15_norms.json ({rendered}) — either the prose drifted from the "
+            f"artifact or the artifact was rebuilt without the prose following it"
+        )
+
+    # The recorded VERDICT WORD must follow from the recomputed number, not merely be present.
+    # Without this, an arm transposition could flip the sign and the addendum would still read
+    # 'GATE PASSES' while the underlying correlation had become negative.
+    lo, hi, _degenerate = stats.bootstrap_ci(
+        fisher, reduction, n_boot=stats.N_BOOT, seed=stats.SEED, alpha=stats.CI_ALPHA
+    )
+    expected_word = _VERDICT_WORD[bool(stats.ewc_dodges_high_fisher(rho, lo, hi))]
+    addendum = _anchored_section(_read("results/phase13_ab_report.md"), _ADDENDUM_HEADING)
+    assert addendum, "the Phase 15 addendum section is gone — the verdict has no recorded home"
+    assert expected_word in addendum, (
+        f"the recomputed correlation ({rendered}, CI [{lo:.6f}, {hi:.6f}]) implies "
+        f"{expected_word!r}, which the recorded addendum does not state"
+    )
 
 
 # --------------------------------------------------------------------------- #
