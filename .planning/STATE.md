@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: executing
-stopped_at: Phase 14 complete — 14-11 T3 verdict recorded (ADAPT); Phase 15 not started
-last_updated: "2026-08-02T13:29:08.866Z"
-last_activity: 2026-08-02 -- Phase 14 marked complete
+status: completed
+stopped_at: Phase 14 complete — 14-11 T3 verdict recorded (ADAPT), demo verified in a live browser
+last_updated: "2026-08-02T15:50:40.545Z"
+last_activity: 2026-08-02
 progress:
   total_phases: 7
   completed_phases: 6
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 Phase: 14 — COMPLETE
 Plan: 11 of 11 (14-11 complete, 3/3 tasks — the blocking verdict is recorded)
 Status: Phase 14 complete
-Last activity: 2026-08-02 -- Completed quick task 260802-h3g: anchor the verdict-section clobber guard at both remaining sites (CR-02 follow-through)
+Last activity: 2026-08-02
 
 Progress: [██████████] 100% of planned plans (31/31) — 6 of 7 phases; Phase 15 has no plans yet
 
