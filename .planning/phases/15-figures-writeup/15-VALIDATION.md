@@ -44,22 +44,22 @@ must be preserved when tasks are numbered.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | 0 | D-10 / D-12 | — | N/A | unit (known-answer) | `pytest tests/test_phase15_stats.py::test_spearman_known_answers -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | D-12 | — | N/A | unit (determinism) | `pytest tests/test_phase15_stats.py::test_seeded_results_are_reproducible -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | D-12 | — | N/A | unit (behavioral) | `pytest tests/test_phase15_stats.py::test_ci_behavior_on_null_and_signal -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | D-11 | — | N/A | unit (gate logic) | `pytest tests/test_phase15_stats.py::test_gate_rule -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 1 | D-05 / D-06 | T-15-01 | Artifact schema complete; every block carries regime/param_count/training_budget | unit (schema) | `pytest tests/test_phase15_plots.py::test_artifact_schema -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 1 | D-08 | T-15-01 | Extraction reproduces the committed JSON exactly | integration (`skipif` on 6 checkpoints) | `pytest tests/test_phase15_plots.py::test_extraction_reproduces_the_committed_artifact -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | VIZ-02 | — | N/A | unit (tmp_path smoke) | `pytest tests/test_phase15_plots.py::test_plot_functions_write_pngs -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | VIZ-03 | — | N/A | unit (tmp_path smoke) | `pytest tests/test_phase15_plots.py::test_plot_functions_write_pngs -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | D-01 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_ab_panels_share_one_norm -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | D-02 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_shared_range_is_full_data_range -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | D-02 / D-18 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_vmax_driver_matches_argmax -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 2 | D-07 | T-15-02 | Plotting module has no code path that opens a `.pt` file | structural (AST + subprocess) | `pytest tests/test_phase15_plots.py::test_plotting_module_never_opens_a_checkpoint -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 3 | D-15 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_limitations_quotes_are_verbatim -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 3 | D-16 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_headline_numbers_match_sources -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 3 | D-17 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_verdict_section_is_dated_and_separated -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 3 | DOC-02 | — | N/A | regression | `.venv/bin/pytest -q` | ✅ exists | ⬜ pending |
+| T-01-3 | 15-01 | 1 | D-10 / D-12 | — | N/A | unit (known-answer) | `pytest tests/test_phase15_stats.py::test_spearman_known_answers -x` | ❌ W0 | ⬜ pending |
+| T-01-3 | 15-01 | 1 | D-12 | — | N/A | unit (determinism) | `pytest tests/test_phase15_stats.py::test_seeded_results_are_reproducible -x` | ❌ W0 | ⬜ pending |
+| T-01-3 | 15-01 | 1 | D-12 | — | N/A | unit (behavioral) | `pytest tests/test_phase15_stats.py::test_ci_behavior_on_null_and_signal -x` | ❌ W0 | ⬜ pending |
+| T-01-3 | 15-01 | 1 | D-11 | — | N/A | unit (gate logic) | `pytest tests/test_phase15_stats.py::test_gate_rule -x` | ❌ W0 | ⬜ pending |
+| T-02-3 | 15-02 | 2 | D-05 / D-06 | T-15-01 | Artifact schema complete; every block carries regime/param_count/training_budget | unit (schema) | `pytest tests/test_phase15_plots.py::test_artifact_schema -x` | ❌ W0 | ⬜ pending |
+| T-02-3 | 15-02 | 2 | D-08 | T-15-01 | Extraction reproduces the committed JSON exactly | integration (`skipif` on 6 checkpoints) | `pytest tests/test_phase15_plots.py::test_extraction_reproduces_the_committed_artifact -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | VIZ-02 | — | N/A | unit (tmp_path smoke) | `pytest tests/test_phase15_plots.py::test_plot_functions_write_pngs -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | VIZ-03 | — | N/A | unit (tmp_path smoke) | `pytest tests/test_phase15_plots.py::test_plot_functions_write_pngs -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | D-01 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_ab_panels_share_one_norm -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | D-02 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_shared_range_is_full_data_range -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | D-02 / D-18 | — | N/A | unit | `pytest tests/test_phase15_plots.py::test_vmax_driver_matches_argmax -x` | ❌ W0 | ⬜ pending |
+| T-03-2 | 15-03 | 3 | D-07 | T-15-02 | Plotting module has no code path that opens a `.pt` file | structural (AST + subprocess) | `pytest tests/test_phase15_plots.py::test_plotting_module_never_opens_a_checkpoint -x` | ❌ W0 | ⬜ pending |
+| T-08-1 | 15-08 | 5 | D-15 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_limitations_quotes_are_verbatim -x` | ❌ W0 | ⬜ pending |
+| T-08-1 | 15-08 | 5 | D-16 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_headline_numbers_match_sources -x` | ❌ W0 | ⬜ pending |
+| T-08-2 | 15-08 | 5 | D-17 | — | N/A | doc integrity | `pytest tests/test_phase15_docs.py::test_verdict_section_is_dated_and_separated -x` | ❌ W0 | ⬜ pending |
+| T-08-2 | 15-08 | 5 | DOC-02 | — | N/A | regression | `.venv/bin/pytest -q` | ✅ exists | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -93,5 +93,25 @@ must be preserved when tasks are numbered.
 - [ ] No watch-mode flags
 - [ ] Feedback latency < 10s
 - [ ] `nyquist_compliant: true` set in frontmatter
+
+---
+
+## Task ID Assignment
+
+Task IDs above map to `{plan}-{task}` in the committed plans. The behavior→test contract
+(the pytest node IDs) is fixed by research and was **not** altered when the tasks were numbered.
+
+| Task ID | Plan | Task | Creates |
+|---------|------|------|---------|
+| T-01-3 | 15-01 | Task 3 | `tests/test_phase15_stats.py` — 4 tests (D-10 / D-11 / D-12) |
+| T-02-3 | 15-02 | Task 3 | `tests/test_phase15_plots.py` — schema + `skipif` reproduction (D-05 / D-06 / D-08) |
+| T-03-2 | 15-03 | Task 2 | `tests/test_phase15_plots.py` — 5 figure + structural tests (VIZ-02 / VIZ-03 / D-01 / D-02 / D-07 / D-18) |
+| T-08-1 | 15-08 | Task 1 | `tests/test_phase15_docs.py` — D-15 quotes + D-16 headline numbers |
+| T-08-2 | 15-08 | Task 2 | `tests/test_phase15_docs.py` — D-17 separation + vmax consistency + full-suite gate |
+
+**Wave column note:** research suggested wave numbers 0-3; the committed plans use waves 1-5
+because D-09's pre-registration boundary requires `scripts/phase15_stats.py` and its tests to
+land in a commit that provably precedes the extraction run. The wave numbers above are the
+committed ones.
 
 **Approval:** pending

@@ -252,7 +252,31 @@ Plans:
   2. The three-panel figure juxtaposing the Fisher heatmap with naive-vs-EWC delta heatmaps is committed, showing EWC visibly dodging high-Fisher coordinates
   3. REPORT.md and README carry the v2.0 narrative and demo.ipynb is updated with honest numbers (recall percentages, retention deltas, tokenizer-inflation tax), the named Fisher variant, and a real Limitations section
 
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+**Wave 1** *(D-09 pre-registration boundary — this commit must precede every measurement)*
+
+- [ ] 15-01-PLAN.md — Pre-registered correlation rule: pure-numpy tie-correct Spearman, permutation p, bootstrap CI, the D-11 gate and both verdict branches, committed before any number exists (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 15-02-PLAN.md — Extraction: six checkpoints (W₀ for the adapter is `convbase_best.pt`, not `best.pt`) → the committed `results/phase15_norms.json` (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 15-03-PLAN.md — VIZ-02 + VIZ-03 figures from the artifact only, with the D-07 AST + subprocess guard (Wave 3)
+- [ ] 15-04-PLAN.md — Compute the correlation and append the dated Phase 15 verdict to `results/phase13_ab_report.md` (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 15-05-PLAN.md — `docs/REPORT.md` v2.0: dated boundary marker, Decision sections, results narrative, nine quoted limitations (Wave 4)
+- [ ] 15-06-PLAN.md — `README.md` v2.0: three headline numbers, each qualified inline at 547-live-ids density (Wave 4)
+- [ ] 15-07-PLAN.md — New self-contained `demo_v2.ipynb`, prepended independence cell in `demo.ipynb`, SC3 supersession recorded (Wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 15-08-PLAN.md — Doc-integrity tests: D-15 verbatim quotes, D-16 headline numbers, D-17 dated separation; full-suite gate (Wave 5)
 
 ## Progress
 
