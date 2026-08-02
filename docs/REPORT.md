@@ -419,6 +419,26 @@ The reproducibility guarantee is **seed + git SHA + config-in-checkpoint**:
 - On resume, RNG *state* is restored rather than re-seeded, so an interrupted run continues
   the same trajectory bit-for-bit (asserted within 1e-6 by the resume tests).
 
+---
+
+## Milestone 1 Ends Here — Everything Below This Line Is As Written on 2026-06-10
+
+**Read the next two sections as a dated snapshot.** Everything from here to the end of
+`## Where to Go Next` is preserved exactly as it shipped with the `m1-demo-v1` release tag on
+**2026-06-10**, and is **not** amended — this project's rule is that recorded text stands as
+written, with corrections dated and appended rather than edited in place.
+
+Two clauses below have since been overtaken. Its "Milestone 2 (upcoming)" bullets are no longer
+upcoming, and its "**it has no personalization yet**" clause was true of Milestone 1 as scoped
+and has since been delivered. Both stand unedited.
+
+What actually shipped is recorded in the Milestone 2 sections appended after
+`## Where to Go Next` — the choices in the new `## Decision:` sections, the outcomes in
+`## Milestone 2 Results: What Three Experiments Showed`, and every bound on those outcomes in
+`## Milestone 2 Limitations — Nine Honest Negatives, Quoted`.
+
+---
+
 ## Limitations and the Milestone 2 Roadmap
 
 **What this model is not.** It speaks TinyStories — simple childlike English in a 256-token
@@ -454,3 +474,189 @@ unaffected.
   seeded sampling-settings tour.
 - **results/** — the committed evaluation artifacts this report cites: `results.md`
   (ablation cohort), `samples.md` (qualitative samples), and the raw curve CSVs.
+
+## Milestone 2 Begins Here — Weight-Based Memory
+
+Everything below this line is Milestone 2 material, written after the v1.0 report above. It
+follows the same organization: each choice gets a `## Decision:` section stating the choice, the
+rationale, and the alternative that was rejected; the outcomes live separately in
+`## Milestone 2 Results: What Three Experiments Showed`; and every bound on those outcomes is
+aggregated in `## Milestone 2 Limitations — Nine Honest Negatives, Quoted`.
+
+The two halves are deliberately non-overlapping. A reader auditing a specific choice can read the
+Decision sections alone; a reader asking what the milestone actually proved can read the results
+narrative alone. Neither is the other's summary.
+
+## Decision: Two Mechanisms in Two Stages, Not One Combined Run
+
+**Choice.** Split the weight-memory claim across two mechanisms and two stages. Forgetting is
+studied with a **full fine-tune A/B** — the same dialogue run twice, with and without an EWC
+penalty on the loss, one configuration bit apart. Personalization is taught with a **from-scratch
+LoRA adapter on the frozen conversational base**, and the adapter is never shipped merged.
+
+**Rationale.** The thesis has two halves that fail in different ways: writing user-specific
+information into weights, and not destroying the base model doing it. Each half needs its own
+control. The A/B's whole evidentiary value is that its two arms differ *only* in the penalty, so
+any retention difference is attributable to EWC and nothing else — a full fine-tune is the regime
+where catastrophic forgetting actually happens, which is what makes the comparison worth running.
+The personalization half needs the opposite property: a mechanism whose write surface is small and
+inspectable, kept unmerged so `scale·B@A` remains recoverable as a first-class object for both the
+weight-delta figure and the adapter-on/adapter-off toggle the recall control depends on.
+
+**The alternative rejected.** One combined mechanism — teach the persona through a LoRA adapter
+with an EWC penalty attached, and read both claims off the single run. It was rejected because it
+answers neither question cleanly. A LoRA adapter already constrains movement by construction, so
+an EWC penalty layered on top has no isolable effect to measure; and an adapter-off arm is not a
+no-EWC arm, so the forgetting comparison would have lost its control. Two stages cost a second
+training run and buy two claims that can each be falsified on their own terms.
+
+## Decision: The Tokenizer Stays Frozen for v2.0, and the Inflation Tax Is Measured Rather Than Assumed
+
+**Choice.** Carry `artifacts/tokenizer.json` into Milestone 2 unchanged — no retrain, no new
+merges, no vocabulary change — so the 50k-step `best.pt` remains a valid Milestone 2 base. The
+547-live-id vocabulary is handled downstream by the `forbid_ids` dead-id mask rather than by
+regenerating the artifact, and the cost of tokenizing conversational text through a
+TinyStories-trained tokenizer was **measured before any training bin was built**, against a
+TinyStories baseline recomputed in the same run through the same word-count rule.
+
+**Rationale.** Milestone 1 locked `vocab_size` before the model was sized precisely so that a
+tokenizer change could never silently invalidate a trained checkpoint. Retraining the tokenizer
+for dialogue would cash in that guarantee at the worst possible moment: every checkpoint, every
+recorded perplexity, and every ablation row above would become uncomparable to anything Milestone
+2 produced, and the v1.0 report's headline number would stop tracing to a runnable artifact. The
+inflation cost of *not* retraining is real, so it was quantified rather than waved at — with
+pre-registered GO/ADAPT/STOP bands locked before the measurement ran, so the answer could not be
+graded after the fact.
+
+**The alternative rejected.** Retrain the BPE tokenizer on PersonaChat, or on a PersonaChat +
+TinyStories mixture, to reduce fragmentation on conversational text. Rejected because it
+invalidates every committed checkpoint and every number in the report above for a gain that the
+measurement showed was not needed. The honest cost of the rejection is recorded rather than
+hidden: the inflation ratio is reported with its denominators, and it is explicitly not
+comparable to any other tokenizer.
+
+## Decision: Pre-Registration Lives in Committed Code, Before Any Number Exists
+
+**Choice.** Every gate in Milestone 2 is a module-level literal in a committed driver, pushed
+**before** the run that produces the number it judges. The λ-sweep rules live in
+`scripts/finetune_smoke.py`; the A/B's retention gate and its margin constant live in
+`scripts/finetune_ab.py` at `c3d942e`; the recall thresholds were derived on a disjoint
+calibration fact set and committed with their derivation report before the real run existed; the
+Fisher/Δ correlation's statistic, predicted sign, seed, resample counts and gate rule live in
+`scripts/phase15_stats.py`, committed before the artifact it reads was generated. The verdicts are
+computed by **importing those modules' own constants and gate functions**, never re-derived by
+hand in prose. Git history is the proof, and each report opens with a pre-registration table
+naming the commit where each constant was locked.
+
+**Rationale.** A threshold chosen after seeing the data is not a threshold, and no amount of
+after-the-fact honesty recovers it. Putting the rule in committed code makes the ordering a fact
+about the repository rather than a claim in a paragraph: anyone can check that the gate commit
+precedes the artifact commit. Importing the constant instead of retyping it closes the second
+half of the same gap — a report that hardcodes `MARGIN = 0.137860` in its prose can drift from the
+driver that actually ran, and the drift is invisible.
+
+**The alternative rejected.** Run the experiment, look at the numbers, then write down the
+criterion they meet — the default in exploratory work, and the one that makes a negative result
+impossible to publish because the bar moves to wherever the result landed. It was also rejected in
+its softer form: writing the rule down first *in prose only*, which leaves nothing structural to
+verify and nothing to import.
+
+## Decision: Gate Only the Part of a Claim the Sample Size Supports
+
+**Choice.** Where a claim has a falsifiable core and a descriptive periphery, gate the core and
+report the periphery without a pass/fail. In the forgetting A/B, the **retention** side carries
+the pre-registered gate and the **acquisition** side is descriptive with no threshold. In the
+Fisher/Δ correlation, the **sign** is gated — a positive coefficient whose bootstrap CI excludes
+zero — and the **magnitude** is descriptive. Both descriptive halves are still reported in full,
+with their confidence bounds, never omitted.
+
+**Rationale.** Gating is only meaningful when the measurement can actually support a threshold.
+The acquisition side of the A/B is the expected, non-binary half of a known stability–plasticity
+trade-off; inventing a margin for it would manufacture a pass/fail out of a continuum. The
+correlation is computed over 36 cells, which is enough to establish a direction and not enough to
+license a point estimate read as an effect size. Reporting a magnitude under a gate would invite
+exactly that misreading. The two halves fail differently, so they are judged differently — and
+saying which half is falsifiable is itself part of the claim.
+
+**The alternative rejected.** Two opposite errors, both declined. Exempting the descriptive half
+from reporting entirely — which would let the A/B show a retention win bought by simply failing to
+learn the task, and let the correlation's verdict travel without the width of its interval. And
+gating the descriptive half anyway, with a threshold no sample size justifies, which converts a
+judgment call into a number that merely looks rigorous. The gate boundary was also settled *before*
+any correlation was computed, because the rule initially admitted two contradictory readings and
+resolving that ambiguity after seeing the coefficient would have been resolving it in whichever
+direction looked better.
+
+## Decision: Honest Negatives Stand Unamended; Discretionary Continuations Are Logged Separately and Dated After
+
+**Choice.** A recorded verdict is never edited in place. When later work continues past a negative
+result, the continuation is a **separate, dated section written after it**, explicitly marked as
+not amending what it follows. Phase 12's λ-sweep verdict stands exactly as recorded, and the
+subsequent choice to run production at λ=0.01 is a distinct, later, discretionary decision
+recorded alongside it rather than folded into it. The recall phase's ship decision is separated
+from its gate verdict the same way. When Milestone 2's correlation verdict landed in a report
+written by an earlier phase, it was **appended** as a dated section carrying an explicit
+separation note, with the prior phase's pre-registered content left byte-untouched. The same rule
+is why the v1.0 report above is extended rather than corrected.
+
+**Rationale.** The value of a recorded negative is entirely in the fact that it was recorded
+before anyone knew whether it would be convenient. Editing it later — even to add a true and
+useful clarification — destroys exactly that property, and does so invisibly, because the edited
+text still reads as if it were written at the original date. Dated appending keeps both the
+original judgment and the later one legible, and lets a reader see which came first.
+
+**The alternative rejected.** Revising a verdict in place once the picture improved, or quietly
+dropping a superseded negative from the narrative. Both are the same move: making the record agree
+with the current best understanding at the cost of making it stop being a record. The cost of the
+rule is accepted openly — this report carries text that is now known to be wrong, and corrects it
+by dated note rather than by edit.
+
+## Decision: Structural Enforcement Replaces Declared Invariants
+
+**Choice.** Every load-bearing invariant in Milestone 2 is enforced by a mechanism that fails
+loudly, not by a sentence claiming it holds. The demo's dead-id mask is checked by comparing the
+actual mask object the sampling path receives against the one built from the tokenizer, not by
+asserting they match. "No fact value ever reached a scored prompt" is enforced by checking each
+prompt's **token ids** for the value's encoded id run and raising on a hit, not by a review of the
+prompt templates. "The plotting module cannot open a checkpoint" is enforced by an AST walk over
+the module's imports plus a fresh-interpreter subprocess import that fails if `torch` lands in
+`sys.modules` — two checks because the AST cannot see a transitive import.
+
+**Rationale.** This is the direct response to the failure mode Milestone 2's own learnings named
+as its most recurring: an invariant that is *declared* — in a docstring, a comment, or a report
+paragraph — and never *structurally* held. A declared invariant is true on the day it is written
+and silently false after the next refactor, and nothing in the repository notices. A structural
+one is checked on every run of the suite. The discipline extends to the guards themselves: the
+plotting guard was watched failing against a deliberately introduced `import torch` before it was
+trusted, because a guard nobody has observed fail is a guard nobody has verified.
+
+**The alternative rejected.** A docstring or report sentence asserting the same property — cheaper
+to write, indistinguishable from the enforced version to a reader, and worth nothing. It was
+rejected for the third time in this project, after the same conversion was made for the demo's
+mask comparison and the prompt token-id check.
+
+## Decision: Extract Once, Then Plot From the Committed Artifact Only
+
+**Choice.** Split figure generation into two tiers with a hard boundary. One script reads the
+gitignored training checkpoints and writes a single small committed JSON artifact,
+`results/phase15_norms.json`, carrying every number the figures draw plus the regime, parameter
+count, training budget and comparison-basis fields that say what each block may be compared
+against. A second script reads **only** that artifact and is structurally forbidden from opening a
+checkpoint. The same artifact feeds the figures, the report's per-layer disclosure, and the
+correlation statistic — one source of truth, not three.
+
+**Rationale.** A committed PNG whose inputs are gitignored is an assertion, not evidence: nobody
+with a fresh clone can regenerate it, and nobody can check a number in it without the artifacts
+the clone does not contain. Splitting the tiers makes regenerability true by construction rather
+than by claim — the plotting half runs in the CPU-only suite on committed data, and the extraction
+half's docstring names the six specific checkpoints it needs (`scripts/extract_deltas.py` records
+them at ~914 MB) and states plainly that re-extracting against a future checkpoint requires a
+fresh manual run producing a fresh committed artifact, not a test that stays green while checking
+nothing.
+
+**The alternative rejected.** One convenient script that loads the checkpoints and plots in a
+single pass. It is less code and it is what the figures originally needed, but it makes the
+committed image unreproducible from the committed repository and leaves the caption's numbers with
+no auditable source. The boundary also had to be structural rather than conventional for the same
+reason the previous decision gives: a plotting module that merely *promises* not to read a
+checkpoint acquires a `torch.load` the first time that is convenient.
