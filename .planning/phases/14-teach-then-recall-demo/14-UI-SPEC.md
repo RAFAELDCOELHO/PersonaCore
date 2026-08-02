@@ -76,8 +76,26 @@ untouched, and makes the offline claim literal.
 structural-enforcement register as D-17's mask-parity test and D-18's byte-identity test — the
 offline claim is held by a test, not by a comment.
 
-**This deviates from the M1 hard rule and is listed under Open Decisions for Review.** It does not
-change `scripts/demo_app.py`, which stays literally untouched per D-17.
+**RATIFIED 2026-08-01 (user decision) — a measured deviation from M1 precedent, recorded, not
+silent.** The override is accepted for `scripts/personalize_demo.py` only, pinned by the
+`build_demo().stylesheets == []` test above. The operative framing:
+
+- **It is not a deviation from D-17.** `scripts/demo_app.py` and the M1 GIF it produced stay exactly
+  as shipped. Nothing in M1 is edited, re-rendered, or re-recorded.
+- **It is a correction of a factual claim, not a stylistic preference.** `08-UI-SPEC` justified its
+  "no `theme=`" hard rule with "the default theme is the only offline-verified configuration
+  (wheel-bundled `LocalFont`)". At gradio 5.50.0 that justification is false — measured above:
+  `gr.themes.Default()._stylesheets` contains
+  `https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600&display=swap`. The rule
+  outlived the fact it rested on.
+- **The correction is scoped to where it matters.** Applied only to the new script, whose entire
+  thesis is on-device operation and whose reviewer is expected to open devtools.
+- **Same register as every other correction in this project.** When a locked claim stops matching
+  reality, the claim is re-measured and the deviation is written down with its evidence — it is not
+  quietly absorbed.
+
+Anyone comparing the two demos will see a different body font. That difference is this paragraph,
+not a mistake.
 
 ---
 
@@ -517,7 +535,7 @@ orchestrator should surface rather than let pass silently.
 
 | # | Decision made | The alternative that was rejected | Why it deserves a look |
 |---|---------------|-----------------------------------|------------------------|
-| 1 | **Override the theme body font to the OS stack**, keeping every other default token, pinned by a `stylesheets == []` test | Keep the stock theme unmodified per 08-UI-SPEC's hard rule and document the Google Fonts request as a graceful-degradation footnote | It deviates from an explicit prior hard rule. The rule's stated justification ("the default theme is the only offline-verified configuration") is **measurably false** at gradio 5.50.0, and the fix is one argument that changes exactly one theme variable — but it does mean this demo's body font differs from the shipped M1 GIF's. `demo_app.py` is untouched either way. |
+| 1 | **✅ RESOLVED 2026-08-01 — ACCEPTED.** Override the theme body font to the OS stack, keeping every other default token, pinned by a `build_demo().stylesheets == []` test | Keep the stock theme unmodified per 08-UI-SPEC's hard rule and document the Google Fonts request as a graceful-degradation footnote | Closed by user decision. The M1 rule's stated justification ("the default theme is the only offline-verified configuration") is **measurably false** at gradio 5.50.0, so this is a correction of a stale claim rather than a stylistic choice, scoped to the new script only. `demo_app.py` and its M1 GIF stay exactly as shipped — no D-17 conflict. Full rationale + `_stylesheets` evidence recorded under *Why the font stack is overridden*. |
 | 2 | **Stamp every assistant bubble** with `**memory ON/OFF/DELETED**` as its first line | Status banner only; leave bubbles unstamped | Puts three UI-authored words inside a chat bubble. Judged correct because a demo video needs per-answer provenance at any frame, but it is the one place UI chrome enters the model's output area. |
 | 3 | **Examples drawn from taught families, labelled as taught** | No examples at all; or examples from held-out families | Taught phrasings are the ones most likely to work on camera, which is a cherry-picking hazard — mitigated by labelling them as taught and pointing at the report. Worth confirming the label is prominent enough. |
 | 4 | **No confirmation dialog on Reset** | Two-click confirm ("Reset" → "Click again to confirm") | Reset destroys nothing on disk and is undone by a restart, so a modal is ceremony — but a live demo recording a mis-click still costs a restart. |
