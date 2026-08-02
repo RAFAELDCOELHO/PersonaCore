@@ -49,6 +49,7 @@ import pathlib
 import re
 import time
 import warnings
+from typing import NamedTuple
 
 # An uncovered MPS op falls back to CPU rather than crashing the run (T-05-04 precedent).
 # Set BEFORE the first torch import anywhere in the process — including the one the harness half
@@ -58,12 +59,19 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 import torch  # noqa: E402  (must follow the MPS-fallback env set above)
 
 from personacore.checkpoint import load_adapter, load_slim  # noqa: E402
-from personacore.config import ModelConfig  # noqa: E402
+from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt, detokenize  # noqa: E402
 from personacore.generation import collect, undecodable_ids_mask  # noqa: E402
-from personacore.lora import LoRAConfig, inject_lora, load_adapter_weights  # noqa: E402
+from personacore.lora import (  # noqa: E402
+    LoRAConfig,
+    adapter_disabled,
+    inject_lora,
+    load_adapter_weights,
+)
 from personacore.model import GPT  # noqa: E402
+from personacore.preflight import preflight_device  # noqa: E402
 from personacore.provenance import git_sha  # noqa: E402
+from personacore.seeding import seed_everything  # noqa: E402
 from personacore.tokenizer import from_json  # noqa: E402
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -556,6 +564,253 @@ def echo_provenance(runtime_summary, device, adapter_artifact):
 
 
 # =====================================================================================
+# ===== THE SCORED RUN — question sets, the clean-room proof, the tiers =====
+# =====================================================================================
+
+# The four tier labels, in the order they are run AND written. `results/` section order is this
+# list's order, not a sort: the closed-book control sits directly under the two core tiers it
+# qualifies, and the excluded soft tier sits last so no reader meets it before the gated numbers.
+CORE_TAUGHT_TIER = "core taught"
+CORE_HELDOUT_TIER = "core held-out"
+CLOSED_BOOK_TIER = "closed-book control (adapter off)"
+SOFT_TIER = "soft tier (excluded from the pre-registered gate)"
+
+# The single `source:` line every context dump carries — the harness's dump and the demo's live
+# panel name the SAME call, because D-18 makes them the same call.
+CONTEXT_DUMP_SOURCE = "build_recall_prompt(tok, question) — the same call the demo panel makes"
+
+
+class RecallItem(NamedTuple):
+    """One scored unit: a question BOUND to the fact whose value answers it.
+
+    A bare question string cannot be scored — ``score_question`` needs the value to look for —
+    so the question sets are carried as bound items rather than as two parallel sequences that
+    could drift out of alignment. ``fact`` is a ``phase14_factset.Fact``, deliberately left
+    unannotated: a module-level ``from phase14_factset import Fact`` would break the LAZY-IMPORT
+    RULE for the sake of a type hint.
+    """
+
+    fact: object
+    question: str
+    split: str  # "taught" | "held-out" — aggregated separately inside every tier
+    reserved: bool  # True for the D-08 reserved gate probes (proven base-failing at gate time)
+
+
+def build_question_sets(facts):
+    """``(taught, held_out, excluded)`` for one tier — fact-bound, disjoint, and value-free.
+
+    **The exclusion is a clean-room requirement, not a convenience.** Two taught families name
+    the fact value IN THE QUESTION by definition of their frames: ``F5`` (yes/no verification —
+    "is your dog named zorp?") and ``F4`` (reversed direction, D-22 — "who is zorp?"). Both are
+    legitimate TEACHING forms; PITFALLS-12 prescribes teaching QA in both directions. Neither is
+    a legitimate RECALL question: asking a question that already contains the answer measures
+    copying from context, not memory in the weights, and feeding one to
+    ``assert_no_value_in_prompt`` would abort the whole run — correctly, because the value would
+    genuinely be in the model's context.
+
+    So the filter is MECHANICAL and allocation-agnostic: drop any question containing its own
+    fact's value under the D-10 ``contains_value`` rule, whatever family it came from. Naming
+    ``F4``/``F5`` explicitly would silently break when plan 14-09 rewrites the allocation from
+    the calibration run. Every dropped question is returned and reported in the transcripts with
+    its family id — excluded from SCORING, never from the record.
+
+    Held-out items are the held-out families over the same facts PLUS that fact's
+    ``RESERVED_HELDOUT_PROBES`` (D-08 seed members, flagged ``reserved=True`` so their measured
+    base-failure provenance travels into the report).
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    taught, held_out, excluded = [], [], []
+    for fact in facts:
+        for split, family_ids in (
+            ("taught", fs.TAUGHT_FAMILY_IDS),
+            ("held-out", fs.HELDOUT_FAMILY_IDS),
+        ):
+            bucket = taught if split == "taught" else held_out
+            for family_id in sorted(family_ids):
+                for question, _answer in fs.render_family(family_id, fact):
+                    if contains_value(question, fact.value):
+                        excluded.append((family_id, fact.id, split, question))
+                        continue
+                    bucket.append(RecallItem(fact, question, split, False))
+        for probe in fs.RESERVED_HELDOUT_PROBES[fact.id]:
+            held_out.append(RecallItem(fact, probe, "held-out", True))
+        _prove(
+            any(item.fact.id == fact.id for item in taught),
+            f"fact {fact.id!r} has no scorable taught question left after the self-naming "
+            "filter — every taught family for this slot names the value in its own question, "
+            "so the taught tier would silently stop covering this fact",
+        )
+
+    taught_keys = {normalize(item.question) for item in taught}
+    held_out_keys = {normalize(item.question) for item in held_out}
+    _prove(
+        not (taught_keys & held_out_keys),
+        f"taught and held-out questions overlap after normalization on "
+        f"{sorted(taught_keys & held_out_keys)[:3]} — D-13 requires entirely held-out template "
+        "FAMILIES, so a shared phrasing would report taught recall as held-out generalization",
+    )
+    return tuple(taught), tuple(held_out), tuple(excluded)
+
+
+def run_scored_recall(model, tok, device, forbid, items, *, tier_label, excluded=()):
+    """Score one tier: dump every prompt, prove the clean room, then decode and score. SC2/SC3.
+
+    Per question, in order: render the context dump, prove no locked value is in the prompt,
+    decode greedy + ``N_SEEDED_SAMPLES``, score, and count contradictions and hedging. Nothing
+    is filtered, re-rolled, or sorted — the returned record carries every completion verbatim,
+    failures included, in draw order.
+
+    The contradiction lexicon is built HERE, per call, from the lazily-imported gate material
+    (``LOCKED_VALUES`` plus every ``GATE_REJECTED_CANDIDATES`` value): committed, auditable, and
+    requiring zero new editorial judgment. Contradiction and hedging counts are DESCRIPTIVE with
+    no gate attached (D-10) — they qualify what the recall rate is allowed to mean, they never
+    fail the phase.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    all_values = tuple(f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS)
+    lexicon = set(fs.LOCKED_VALUES) | {f.value for f in fs.GATE_REJECTED_CANDIDATES}
+    _prove(items, f"tier {tier_label!r} received no questions to score")
+
+    questions = []
+    for index, item in enumerate(items):
+        dump = render_context_dump(tok, item.question, source=CONTEXT_DUMP_SOURCE)
+        # The dump is recorded BEFORE the model is called, so the committed evidence is what the
+        # model actually received rather than a reconstruction made after seeing the answer.
+        assert_no_value_in_prompt(tok, item.question, all_values)
+        # The mechanical form of the demo-killing failure in PITFALLS-11: if any locked value
+        # reaches any prompt, the claim is falsified at the exact moment it is demonstrated, so
+        # the run ABORTS rather than warns. `assert_no_value_in_prompt` raises SystemExit.
+        drawn = complete_question(model, tok, item.question, device, forbid, index=index)
+        completions = drawn["completions"]
+        # Same D-10 rule at two granularities: `score_question` aggregates it, `hits` keeps the
+        # per-completion flag the transcripts print next to each completion.
+        k, n = score_question(completions, item.fact.value)
+        hits = [contains_value(c, item.fact.value) for c in completions]
+        questions.append(
+            {
+                "question": item.question,
+                "fact_id": item.fact.id,
+                "slot": item.fact.slot,
+                "value": item.fact.value,
+                "split": item.split,
+                "reserved": item.reserved,
+                "prompt_ids": drawn["prompt_ids"],
+                "dump": dump,
+                "completions": completions,
+                "hits": hits,
+                "stopped": drawn["stopped"],
+                "contradictions": [
+                    find_contradictions(c, item.fact.value, lexicon) for c in completions
+                ],
+                "hedging": [has_hedging(c) for c in completions],
+                "k": k,
+                "n": n,
+            }
+        )
+        print(f"[phase14_recall] {tier_label} [{item.split}] {item.question!r}: {k}/{n}")
+
+    by_split = {}
+    for record in questions:
+        k, n = by_split.get(record["split"], (0, 0))
+        by_split[record["split"]] = (k + record["k"], n + record["n"])
+    total_k = sum(record["k"] for record in questions)
+    total_n = sum(record["n"] for record in questions)
+    n_completions = sum(len(record["completions"]) for record in questions)
+    return {
+        "tier": tier_label,
+        "questions": questions,
+        "k": total_k,
+        "n": total_n,
+        "rate": total_k / total_n,
+        "by_split": by_split,
+        "contradictions": sum(1 for r in questions for c in r["contradictions"] if c),
+        "hedging": sum(sum(r["hedging"]) for r in questions),
+        "n_stopped": sum(sum(r["stopped"]) for r in questions),
+        "n_completions": n_completions,
+        "excluded": tuple(excluded),
+    }
+
+
+def run_closed_book_control(model, tok, device, forbid, items):
+    """SC2's base-without-adapter control: the same process, weights, and prompts — flags off.
+
+    ``adapter_disabled`` flips only the ``enabled`` boolean on every ``LoRALinear`` and restores
+    each module's prior value in a ``finally``, so the delta branch never executes and the model
+    is bit-identical to the pre-injection base while the A/B tensors sit untouched. Nothing else
+    differs: same process, same loaded weights, same prompts, same per-question seeds — so a
+    difference in the numbers can only come from the adapter.
+
+    D-08: the gate's base-failure probes are evidence carried FORWARD, never a substitute for
+    re-measuring at scoring time. This control therefore re-runs on the FULL final question set,
+    not on the reserved probes alone.
+    """
+    with adapter_disabled(model):
+        return run_scored_recall(model, tok, device, forbid, items, tier_label=CLOSED_BOOK_TIER)
+
+
+def main():
+    """The fresh-process scored recall run (SC2/SC3): load, prove, score, control, commit."""
+    summary = preflight_device(strict=True)
+    print(f"[phase14_recall] preflight: {summary}")
+    device = RuntimeConfig().device
+    seed_everything(SEED)
+
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    model, _model_cfg, tok, forbid, artifact = load_adapted_model(device)
+
+    core_taught, core_held_out, core_excluded = build_question_sets(fs.LOCKED_FACTS)
+    soft_taught, soft_held_out, soft_excluded = build_question_sets(fs.SOFT_TIER_FACTS)
+    # The constructed held-out set is tied back to the committed `heldout_questions()` seam
+    # rather than replacing it: this harness needs the fact binding that the flat tuple drops,
+    # so equality is what proves the two constructions describe the same never-seen split.
+    _prove(
+        {item.question for item in core_held_out + soft_held_out} == set(fs.heldout_questions()),
+        "the constructed held-out question set differs from phase14_factset.heldout_questions() "
+        "— the scored never-seen split has drifted from the committed one",
+    )
+    # D-19 fit guard, BEFORE any generation: an unutterable value would present as a recall
+    # failure while the real cause is the budget.
+    assert_values_fit(tok, [f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS])
+
+    records = [
+        run_scored_recall(
+            model,
+            tok,
+            device,
+            forbid,
+            core_taught,
+            tier_label=CORE_TAUGHT_TIER,
+            excluded=core_excluded,
+        ),
+        run_scored_recall(model, tok, device, forbid, core_held_out, tier_label=CORE_HELDOUT_TIER),
+        run_closed_book_control(
+            model,
+            tok,
+            device,
+            forbid,
+            core_taught + core_held_out + soft_taught + soft_held_out,
+        ),
+        run_scored_recall(
+            model,
+            tok,
+            device,
+            forbid,
+            soft_taught + soft_held_out,
+            tier_label=SOFT_TIER,
+            excluded=soft_excluded,
+        ),
+    ]
+    for record in records:
+        print(f"[phase14_recall] {record['tier']}: {record['k']}/{record['n']}")
+
+    echo_provenance(summary, device, artifact)
+    # Plan 14-06 Task 3 wires `write_transcripts(records, provenance_lines)` in here.
+
+
+# =====================================================================================
 # ===== THE D-11 CONTROLS — plan 14-10 lands the three controls here =====
 # =====================================================================================
 #
@@ -563,3 +818,7 @@ def echo_provenance(runtime_summary, device, adapter_artifact):
 # `build_recall_prompt`'s `persona=` argument), `run_collapse_control` (D-11.2 — which imports
 # `COLLAPSE_PPL_TRIGGER` from `teach_persona` LAZILY, inside the function), and
 # `run_bit_identity_control` (D-11.3).
+
+
+if __name__ == "__main__":
+    main()
