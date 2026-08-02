@@ -252,6 +252,28 @@ Plans:
   2. The three-panel figure juxtaposing the Fisher heatmap with naive-vs-EWC delta heatmaps is committed, showing EWC visibly dodging high-Fisher coordinates
   3. REPORT.md and README carry the v2.0 narrative and demo.ipynb is updated with honest numbers (recall percentages, retention deltas, tokenizer-inflation tax), the named Fisher variant, and a real Limitations section
 
+**ROADMAP wording superseded (SC3, recorded 2026-08-02):** SC3 as written above requires that
+"demo.ipynb is updated with honest numbers". **D-13** supersedes that clause. The honest v2.0
+numbers ship in a **new, self-contained `demo_v2.ipynb`** — it runs standalone from a fresh clone
+using only committed `results/` files, with no shared cell state and no checkpoint dependency
+inherited from the v1.0 notebook — and `demo.ipynb` receives **only** a prepended independence
+statement, its eight existing cells left byte-unchanged by design (15-CONTEXT `<domain>` excludes
+changes to them). Everything SC3 asks for is present: the recall percentages, the retention
+deltas, the tokenizer-inflation tax, the named Fisher variant string
+`empirical_diag_fisher/groundtruth_targets/mean_normalized` read from `results/phase15_norms.json`,
+and the nine quoted limitations linked from `docs/REPORT.md`. Only the **file** changed. The
+substitution is recorded here rather than silently absorbed into the criterion's phrasing — a
+success criterion that quietly changed meaning is indistinguishable from one that was not met.
+
+**SC2 (recorded 2026-08-02): not narrowed — the gate PASSED.** D-11's miss branch, which would
+have narrowed "showing EWC visibly dodging high-Fisher coordinates", was **not** taken. Spearman
+ρ = 0.801544 with a 95% bootstrap CI of [0.597984, 0.920291] excluding zero (permutation
+p = 0.000010, descriptive); see `results/phase13_ab_report.md` → `## Phase 15 Addendum` for the
+full pre-registration table. SC2's wording stands, **bounded to the level the gate tests — the
+sign — and no further**: ρ is a rank correlation, not an effect size, and the magnitude stays
+descriptive at n = 36. The absence of a narrowing note here is a recorded outcome, not an
+omission.
+
 **Plans**: 8 plans
 
 Plans:
