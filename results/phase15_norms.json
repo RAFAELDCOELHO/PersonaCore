@@ -1,0 +1,320 @@
+{
+  "git_sha": "d1e9eee21062976c398474324a513269ea78846e",
+  "built": "2026-08-02",
+  "n_layer": 6,
+  "projections": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "c_proj",
+    "fc_in",
+    "fc_out"
+  ],
+  "quantity": "relative_frobenius_change",
+  "quantity_note": "Each adapter/naive/ewc cell is \u2016\u0394W\u2016_F/\u2016W\u2080\u2016_F for that (layer, projection) `.weight` tensor, computed in fp64 on CPU. Weights only, never biases \u2014 LoRA wraps only `.weight`, so including `.bias` in the full-fine-tune deltas would break the like-for-like the figures assert. Fisher cells are a magnitude, not a ratio.",
+  "fisher_aggregate": "mean",
+  "fisher_aggregate_note": "The Fisher cache is mean-normalized (mean(F) = 1 over all trainable coordinates), so a per-cell mean reads as 'x the importance of an average parameter'. A sum would confound importance with tensor size \u2014 fc_in/fc_out carry 4x the elements of the attention projections.",
+  "comparison_basis": {
+    "naive_vs_ewc": true,
+    "adapter_vs_full_finetune": false,
+    "note": "naive and ewc share a comparison basis (same W0 = checkpoints/best.pt, same 4000-step budget, same config, one bit apart) and MAY be compared cell-for-cell. The adapter block MAY NOT be compared against either full-fine-tune block. Three concrete confounds, not 'different regimes': (1) parameter count \u2014 331776 LoRA parameters vs 13891584 full-model parameters; (2) training budget \u2014 the 200-step LoRA teaching run vs the 4000-step full fine-tune; (3) a smaller absolute delta-W magnitude for the adapter does NOT imply more conservative or less effective learning \u2014 it reflects the adapter's parameter budget, not a quality comparison."
+  },
+  "blocks": {
+    "adapter": {
+      "regime": "lora_adapter_teaching_run",
+      "param_count": 331776,
+      "training_budget": "200 steps, batch 8 x block 256, LoRA r=8 alpha=16 on the frozen conversational base (scripts/teach_persona.py real arm)",
+      "source_ckpt": {
+        "path": "checkpoints/persona_adapter.pt",
+        "base_fingerprint": {
+          "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+          "step": 4000,
+          "val_loss": 1.5235939979553224
+        }
+      },
+      "w0_source": "checkpoints/convbase_best.pt",
+      "lora_r": 8,
+      "lora_alpha": 16.0,
+      "lora_scale": 2.0,
+      "cells": {
+        "0": {
+          "q_proj": 0.02057804789516455,
+          "k_proj": 0.018873036397436968,
+          "v_proj": 0.04230493895461994,
+          "c_proj": 0.03980864921258323,
+          "fc_in": 0.045957539694327476,
+          "fc_out": 0.025825719100380787
+        },
+        "1": {
+          "q_proj": 0.026898253850732606,
+          "k_proj": 0.023817809881238695,
+          "v_proj": 0.03110305462794792,
+          "c_proj": 0.04738638857364279,
+          "fc_in": 0.046507101962213825,
+          "fc_out": 0.023573802819861447
+        },
+        "2": {
+          "q_proj": 0.03090713190771794,
+          "k_proj": 0.02964439707914707,
+          "v_proj": 0.031572803726205134,
+          "c_proj": 0.039545956523984176,
+          "fc_in": 0.045274762787309505,
+          "fc_out": 0.023743567334760723
+        },
+        "3": {
+          "q_proj": 0.02711480690872066,
+          "k_proj": 0.022943248487238135,
+          "v_proj": 0.028416677497243806,
+          "c_proj": 0.03697712516030058,
+          "fc_in": 0.04286037134729626,
+          "fc_out": 0.027396451569905375
+        },
+        "4": {
+          "q_proj": 0.03408325809262783,
+          "k_proj": 0.028350217884768825,
+          "v_proj": 0.03048784543918571,
+          "c_proj": 0.03407202312852396,
+          "fc_in": 0.04130327649726228,
+          "fc_out": 0.026855645195246126
+        },
+        "5": {
+          "q_proj": 0.026188221468590362,
+          "k_proj": 0.039526077676416034,
+          "v_proj": 0.03704915438914187,
+          "c_proj": 0.041074538887917164,
+          "fc_in": 0.04443601963378464,
+          "fc_out": 0.031616278289319774
+        }
+      },
+      "vmax_driver": {
+        "layer": 1,
+        "projection": "c_proj",
+        "value": 0.04738638857364279
+      },
+      "nonpositive_cells": 0
+    },
+    "naive": {
+      "regime": "full_finetune_naive",
+      "param_count": 13891584,
+      "training_budget": "4000 steps, batch 32 x block 256, LR 9e-5, lambda=0 (scripts/finetune_ab.py naive arm)",
+      "source_ckpt": {
+        "path": "checkpoints/phase13_naive_latest.pt",
+        "fingerprint": {
+          "git_sha": "ead34c1cb8d2c2d3a9221b369c616e1cfaceec1a",
+          "step": 4000,
+          "val_loss": 1.1526952981948853
+        }
+      },
+      "w0_source": "checkpoints/best.pt",
+      "w0_fingerprint": {
+        "git_sha": "3a46815da96f06d3c6196bb0949a1479884b3bce",
+        "step": 49000,
+        "val_loss": 0.7378001868724823
+      },
+      "cells": {
+        "0": {
+          "q_proj": 0.12026898800089929,
+          "k_proj": 0.11331997759789264,
+          "v_proj": 0.17039259803382642,
+          "c_proj": 0.20957828092273667,
+          "fc_in": 0.14801018963405885,
+          "fc_out": 0.16967198785194948
+        },
+        "1": {
+          "q_proj": 0.1314567877988435,
+          "k_proj": 0.11694958550257961,
+          "v_proj": 0.18219469760203558,
+          "c_proj": 0.22023983403635128,
+          "fc_in": 0.15951367855462692,
+          "fc_out": 0.18693417823733346
+        },
+        "2": {
+          "q_proj": 0.1543961523662258,
+          "k_proj": 0.13910296428458205,
+          "v_proj": 0.17678502873753094,
+          "c_proj": 0.21107282578103256,
+          "fc_in": 0.1721226705795495,
+          "fc_out": 0.18719744118456785
+        },
+        "3": {
+          "q_proj": 0.15749623527839005,
+          "k_proj": 0.15387914702577207,
+          "v_proj": 0.16907609440335528,
+          "c_proj": 0.19908463526173395,
+          "fc_in": 0.1743268104680707,
+          "fc_out": 0.18038899787410684
+        },
+        "4": {
+          "q_proj": 0.17738507118643015,
+          "k_proj": 0.16475867232785915,
+          "v_proj": 0.17337645956745207,
+          "c_proj": 0.199904507022194,
+          "fc_in": 0.1741174560658969,
+          "fc_out": 0.17422336540229347
+        },
+        "5": {
+          "q_proj": 0.17488345692846666,
+          "k_proj": 0.1635059129542793,
+          "v_proj": 0.15573463141500693,
+          "c_proj": 0.16777543537571796,
+          "fc_in": 0.16893942760222305,
+          "fc_out": 0.15434661092096041
+        }
+      },
+      "vmax_driver": {
+        "layer": 1,
+        "projection": "c_proj",
+        "value": 0.22023983403635128
+      },
+      "nonpositive_cells": 0
+    },
+    "ewc": {
+      "regime": "full_finetune_ewc_lambda_0.01",
+      "param_count": 13891584,
+      "training_budget": "4000 steps, batch 32 x block 256, LR 9e-5, lambda=0.01 (scripts/finetune_ab.py ewc arm)",
+      "source_ckpt": {
+        "path": "checkpoints/phase13_ewc_latest.pt",
+        "fingerprint": {
+          "git_sha": "5e908ac387cf69bd61b66e4dedd5bde7fc39f819",
+          "step": 4000,
+          "val_loss": 1.4012203216552734
+        }
+      },
+      "w0_source": "checkpoints/best.pt",
+      "w0_fingerprint": {
+        "git_sha": "3a46815da96f06d3c6196bb0949a1479884b3bce",
+        "step": 49000,
+        "val_loss": 0.7378001868724823
+      },
+      "cells": {
+        "0": {
+          "q_proj": 0.13545382191542396,
+          "k_proj": 0.10489802692621543,
+          "v_proj": 0.09056250572183785,
+          "c_proj": 0.09628864886019374,
+          "fc_in": 0.07097548905667783,
+          "fc_out": 0.04309380936967106
+        },
+        "1": {
+          "q_proj": 0.13806389791647683,
+          "k_proj": 0.1020107166942845,
+          "v_proj": 0.05270780563565568,
+          "c_proj": 0.0536136642665291,
+          "fc_in": 0.0697557758514612,
+          "fc_out": 0.056047207037175764
+        },
+        "2": {
+          "q_proj": 0.11381198490928211,
+          "k_proj": 0.0897409971407327,
+          "v_proj": 0.043947281691342224,
+          "c_proj": 0.04629334641858939,
+          "fc_in": 0.0675251548163012,
+          "fc_out": 0.05841949329816387
+        },
+        "3": {
+          "q_proj": 0.07250004530740319,
+          "k_proj": 0.059148928665541785,
+          "v_proj": 0.04211054267645148,
+          "c_proj": 0.0501671626806473,
+          "fc_in": 0.06565625989726852,
+          "fc_out": 0.06634089471807977
+        },
+        "4": {
+          "q_proj": 0.09593351277047338,
+          "k_proj": 0.08251422034890575,
+          "v_proj": 0.04797986396760188,
+          "c_proj": 0.05632320475685864,
+          "fc_in": 0.06266659555484085,
+          "fc_out": 0.07395338068709764
+        },
+        "5": {
+          "q_proj": 0.11827815361578987,
+          "k_proj": 0.10254951203692131,
+          "v_proj": 0.06437797806065954,
+          "c_proj": 0.08352125692710081,
+          "fc_in": 0.049272426062829236,
+          "fc_out": 0.0813529780513034
+        }
+      },
+      "vmax_driver": {
+        "layer": 1,
+        "projection": "q_proj",
+        "value": 0.13806389791647683
+      },
+      "nonpositive_cells": 0
+    },
+    "fisher": {
+      "regime": "fisher_diagonal_estimate",
+      "param_count": 13891584,
+      "training_budget": "no training \u2014 one estimation pass of 2000 examples at checkpoints/best.pt (scripts/estimate_fisher_tinystories.py)",
+      "source_ckpt": {
+        "path": "checkpoints/fisher_tinystories.pt",
+        "anchor_fingerprint": {
+          "git_sha": "3a46815da96f06d3c6196bb0949a1479884b3bce",
+          "step": 49000,
+          "val_loss": 0.7378001868724823
+        }
+      },
+      "w0_source": null,
+      "variant": "empirical_diag_fisher/groundtruth_targets/mean_normalized",
+      "n_examples": 2000,
+      "seed": 1234,
+      "cells": {
+        "0": {
+          "q_proj": 0.07774344741641749,
+          "k_proj": 0.3167275403281751,
+          "v_proj": 3.3483427949580196,
+          "c_proj": 6.541458482610652,
+          "fc_in": 0.9547317244125426,
+          "fc_out": 3.0255169934373245
+        },
+        "1": {
+          "q_proj": 0.04864813295948996,
+          "k_proj": 0.09585604541826519,
+          "v_proj": 4.1014556602215935,
+          "c_proj": 3.169629497004482,
+          "fc_in": 0.7103167504582315,
+          "fc_out": 1.7768563968478095
+        },
+        "2": {
+          "q_proj": 0.07903405066384847,
+          "k_proj": 0.13022721840304208,
+          "v_proj": 3.5094191409421507,
+          "c_proj": 2.3864293361544293,
+          "fc_in": 0.7577486260375836,
+          "fc_out": 1.2729401684897412
+        },
+        "3": {
+          "q_proj": 0.14193071710075048,
+          "k_proj": 0.22038129710148902,
+          "v_proj": 1.91420964815552,
+          "c_proj": 1.3197529756503679,
+          "fc_in": 0.7692822783379446,
+          "fc_out": 0.8622882659451281
+        },
+        "4": {
+          "q_proj": 0.07342246486656576,
+          "k_proj": 0.09438818000233419,
+          "v_proj": 1.1981751876051527,
+          "c_proj": 0.8150161391480045,
+          "fc_in": 0.7430620583067543,
+          "fc_out": 0.5330676447872015
+        },
+        "5": {
+          "q_proj": 0.05034888051226795,
+          "k_proj": 0.051902027545907004,
+          "v_proj": 0.5812204206341044,
+          "c_proj": 0.3886224817121426,
+          "fc_in": 0.7718921333517604,
+          "fc_out": 0.3401094441441125
+        }
+      },
+      "vmax_driver": {
+        "layer": 0,
+        "projection": "c_proj",
+        "value": 6.541458482610652
+      },
+      "nonpositive_cells": 0
+    }
+  }
+}
