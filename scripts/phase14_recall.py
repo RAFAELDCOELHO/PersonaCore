@@ -67,6 +67,7 @@ from personacore.lora import (  # noqa: E402
     adapter_disabled,
     inject_lora,
     load_adapter_weights,
+    set_adapter_enabled,
 )
 from personacore.model import GPT  # noqa: E402
 from personacore.preflight import preflight_device  # noqa: E402
@@ -534,21 +535,22 @@ def _complete(model, prompt_ids, device, forbid, **kw):
     return gen, len(gen) < RECALL_MAX_NEW_TOKENS
 
 
-def complete_question(model, tok, question, device, forbid, *, index):
-    """One question, all draws: greedy plus ``N_SEEDED_SAMPLES`` per-question-seeded samples.
+def draw_all(model, tok, prompt_ids, device, forbid, index):
+    """All draws from ONE already-built prompt: greedy plus ``N_SEEDED_SAMPLES`` seeded samples.
 
     ``scripts/make_retention_samples.py:8-14`` discipline — each sample draws from its OWN
     ``torch.Generator`` seeded ``question_seed(index) + s``. Seeding once for the whole run would
     desynchronize every later question after the first early stop, and stop-on-``STOP_IDS`` makes
     early stops the common case; per-draw seeding is what makes the whole run re-derivable from
-    ``SEED`` alone. ``index`` is the question's position in ITS tier, so the closed-book control
-    replays the identical streams per question and the two arms are paired rather than merely
-    comparable.
+    ``SEED`` alone.
 
-    Returns the question, its exact prompt ids, the decoded completions in draw order (greedy
-    first), and the per-completion stop flags. Nothing is filtered or re-rolled.
+    Takes prompt IDS rather than a question string so the D-11.1 fairness control — the one
+    caller whose prompt carries a persona span — draws through THIS loop instead of a second
+    copy of it. A duplicated draw loop is how two arms silently stop being paired.
+
+    Returns ``(completions, stopped)`` in draw order, greedy first. Nothing is filtered or
+    re-rolled.
     """
-    prompt_ids = build_recall_prompt(tok, question)
     completions = []
     stopped = []
 
@@ -574,6 +576,27 @@ def complete_question(model, tok, question, device, forbid, *, index):
         )
         completions.append(tok.decode(gen_ids))
         stopped.append(stop)
+
+    return completions, stopped
+
+
+def complete_question(model, tok, question, device, forbid, *, index):
+    """One SCORED question, all draws — the BARE prompt path, no persona span, ever.
+
+    ``build_recall_prompt(tok, question)`` is called with two positional arguments and nothing
+    else: the ``persona=`` argument is not passed here and must never be, because a fact value
+    in a scored prompt falsifies the phase's claim at the exact moment it is demonstrated.
+    ``tests/test_phase14_scoring.py::test_persona_argument_is_scoped_to_the_fairness_control``
+    parses this module's AST and pins that, so "bare" is structural rather than conventional.
+
+    ``index`` is the question's position in ITS tier, so the closed-book control replays the
+    identical streams per question and the two arms are paired rather than merely comparable.
+
+    Returns the question, its exact prompt ids, the decoded completions in draw order (greedy
+    first), and the per-completion stop flags.
+    """
+    prompt_ids = build_recall_prompt(tok, question)
+    completions, stopped = draw_all(model, tok, prompt_ids, device, forbid, index)
 
     return {
         "question": question,
@@ -1028,13 +1051,157 @@ def main():
 
 
 # =====================================================================================
-# ===== THE D-11 CONTROLS — plan 14-10 lands the three controls here =====
+# ===== THE THREE D-11 CONTROLS =====
 # =====================================================================================
 #
-# Deliberately empty. 14-10 adds `run_fairness_control` (D-11.1 — the ONLY legitimate caller of
-# `build_recall_prompt`'s `persona=` argument), `run_collapse_control` (D-11.2 — which imports
-# `COLLAPSE_PPL_TRIGGER` from `teach_persona` LAZILY, inside the function), and
-# `run_bit_identity_control` (D-11.3).
+# Each control exists to close ONE named ambiguity, and its report section opens by naming it
+# (D-11's shared framing requirement): question validity, persona collapse, toggle correctness.
+# None of them is generic rigor.
+
+FAIRNESS_TIER = "question-fairness control (D-11.1 — fact in the persona span, adapter off)"
+
+
+def run_fairness_control(model, tok, device, forbid, questions, statements):
+    """D-11.1 — the question-VALIDITY check: can the BASE answer when the fact IS in context?
+
+    **This is the ONLY legitimate place a fact value appears in context.** Everywhere else in
+    this phase, a fact in the prompt is the demo-killing failure ``assert_no_value_in_prompt``
+    exists to catch: a locked value reaching a scored prompt falsifies the claim at the exact
+    moment it is being demonstrated, so that path ABORTS the run. Here the value in the
+    ``<|system|>`` persona span IS the measurement, and the report labels it as such.
+    ``tests/test_phase14_scoring.py::test_persona_argument_is_scoped_to_the_fairness_control``
+    parses this module's AST and asserts that no other call site anywhere in the file passes
+    ``persona=`` — so the ordinary recall path is provably bare, not bare by convention.
+
+    **This is a question-VALIDITY check, explicitly NOT a mechanism comparison.** DEMO-F2
+    (deferred) is a comparative baseline measuring prompt-vs-weight recall *parity*; this is a
+    one-directional check that validates the question SET — it asks only whether a question can
+    be answered at all when its answer is visible. Conflating the two would read as DEMO-F2
+    smuggled into this phase early, which is exactly what D-11.1 forbids.
+
+    **Runs with the adapter DISABLED**, because the inference it qualifies is about the BASE:
+    the closed-book control is the adapter-off arm, and a failure there means "no memory"
+    rather than "unanswerable question" only if the base could have answered with the fact in
+    view. Measuring the adapted model here would answer a different question entirely — the
+    adapted model already has the fact in its weights, so its success would prove nothing about
+    the question.
+
+    ``statements`` maps ``fact.id`` to that fact's own first-person taught statement, built by
+    the caller from the lazily-imported fact set: the LAZY-IMPORT RULE means this module never
+    reaches for the fact strings itself.
+
+    14-RESEARCH F4 measured this base failing 6/6 in-context probes, so a NEGATIVE here is the
+    expected result and D-20's three-part reconciliation is pre-registered for it.
+    """
+    _prove(questions, "the fairness control received no questions to check")
+    _prove(statements, "the fairness control received no first-person statements")
+
+    asked = []
+    with adapter_disabled(model):
+        for index, item in enumerate(questions):
+            statement = statements[item.fact.id]
+            # The one sanctioned appearance of a fact value in a prompt in this entire phase.
+            prompt_ids = build_recall_prompt(tok, item.question, persona=[statement])
+            _prove(
+                contains_value(tok.decode(prompt_ids), item.fact.value),
+                f"the fairness prompt for {item.question!r} does not actually carry "
+                f"{item.fact.value!r} — the control measures nothing if the fact is not in view",
+            )
+            completions, stopped = draw_all(model, tok, prompt_ids, device, forbid, index)
+            k, n = score_question(completions, item.fact.value)
+            asked.append(
+                {
+                    "question": item.question,
+                    "fact_id": item.fact.id,
+                    "split": item.split,
+                    "persona": statement,
+                    "prompt_ids": prompt_ids,
+                    "completions": completions,
+                    "hits": [contains_value(c, item.fact.value) for c in completions],
+                    "stopped": stopped,
+                    "k": k,
+                    "n": n,
+                }
+            )
+            print(f"[phase14_recall] {FAIRNESS_TIER} {item.question!r}: {k}/{n}")
+
+    total_k = sum(entry["k"] for entry in asked)
+    total_n = sum(entry["n"] for entry in asked)
+    return {
+        "tier": FAIRNESS_TIER,
+        "questions": asked,
+        "k": total_k,
+        "n": total_n,
+        "rate": total_k / total_n,
+        "n_answerable": sum(1 for entry in asked if entry["k"] > 0),
+    }
+
+
+def run_bit_identity_control(tok, questions):
+    """D-11.3 — adapter-off logits are BIT-IDENTICAL to the un-adapted base, on REAL weights.
+
+    The ambiguity this closes: whether "memory OFF" in the demo is really the un-adapted base,
+    or a model that still carries some of the adapter. With the adapter disabled the wrapper's
+    forward is literally ``self.base(x)``, so bit-identity is STRUCTURAL — but Phase 9 pins that
+    on fixtures. This control turns "inherited from a fixture unit test" into "measured on the
+    real 13.9M convbase and the real persona adapter," which is what makes the demo's central
+    toggle claim a measurement rather than an inheritance.
+
+    Builds its OWN CPU-pinned pair rather than reusing the caller's device-resident model:
+    14-RESEARCH Pitfall 11 is the reason — Phase 13 measured eval PPL differing by ~3.6e-8
+    across processes on MPS, so a bit-identity claim proven there would carry the single doubt
+    this control exists to remove. ``RuntimeConfig(device="cpu")`` is the ``demo_app.py:81``
+    explicit-pin idiom, never a bare string.
+
+    Model A is the un-adapted base (no injection at all); model B is the same slim checkpoint
+    with the adapter injected, loaded, and then gated off. Full logits tensors are compared with
+    ``torch.equal`` and the max absolute difference is recorded alongside the boolean, so the
+    report can state a measured NUMBER (0.0) rather than only "the assertion held".
+    """
+    device = RuntimeConfig(device="cpu").device
+    ckpt = load_slim(CONVBASE_SLIM)  # weights_only=True — restricted unpickler (T-14-22).
+    model_cfg = ModelConfig(**ckpt["model_config"])
+
+    # Model A — the un-adapted conversational base. No `inject_lora`, no adapter, nothing.
+    base = GPT(model_cfg)
+    base.load_state_dict(ckpt["model"])
+    base.to(device).eval()
+
+    # Model B — the same weights, adapter injected and loaded, then gated OFF.
+    # LOAD BEFORE INJECT (ARCHITECTURE Anti-pattern 1): injection rewrites every wrapped
+    # projection's state-dict keys with a `.base.` infix.
+    gated = GPT(model_cfg)
+    gated.load_state_dict(ckpt["model"])
+    inject_lora(gated, LoRAConfig())
+    load_adapter_weights(gated, load_adapter(ADAPTER_PATH))
+    set_adapter_enabled(gated, False)
+    gated.to(device).eval()
+
+    max_abs_diff = 0.0
+    with torch.no_grad():
+        for question in questions:
+            ids = build_recall_prompt(tok, question)
+            idx = torch.tensor([ids], dtype=torch.long, device=device)
+            logits_base, _ = base(idx)
+            logits_gated, _ = gated(idx)
+            diff = (logits_base - logits_gated).abs().max().item()
+            max_abs_diff = max(max_abs_diff, diff)
+            _prove(
+                torch.equal(logits_base, logits_gated),
+                f"adapter-off logits differ from the un-adapted base on prompt {question!r} "
+                f"(max |diff| = {diff:.3e}, {len(ids)} prompt ids) — the demo's 'memory off' "
+                "would not be the base, which is the entire claim the toggle makes",
+            )
+            print(f"[phase14_recall] bit identity {question!r}: max |diff| {diff:.3e}")
+
+    return {
+        "device": device,
+        "n_prompts": len(questions),
+        "prompts": tuple(questions),
+        "max_abs_diff": max_abs_diff,
+        "bit_identical": True,  # `_prove` above exits non-zero before this can be reached False
+        "vocab_size": model_cfg.vocab_size,
+    }
 
 
 if __name__ == "__main__":

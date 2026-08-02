@@ -330,6 +330,53 @@ def test_no_fact_strings_at_import():
     assert leaked == []
 
 
+def _build_recall_prompt_call_sites():
+    """Every ``build_recall_prompt(...)`` call in the driver, tagged with its enclosing function.
+
+    AST rather than ``inspect.getsource`` string matching: a substring check cannot tell a call
+    from a mention in a docstring, and the docstrings in that module discuss ``persona=`` at
+    length precisely because it is the dangerous argument.
+    """
+    tree = ast.parse((_REPO_ROOT / "scripts" / "phase14_recall.py").read_text(encoding="utf-8"))
+    sites = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Call) and getattr(inner.func, "id", None) == (
+                "build_recall_prompt"
+            ):
+                sites.append((node.name, {kw.arg for kw in inner.keywords}))
+    return sites
+
+
+def test_persona_argument_is_scoped_to_the_fairness_control():
+    """The whole phase claims memory lives in the WEIGHTS, not the prompt — so pin that.
+
+    ``build_recall_prompt``'s ``persona=`` argument exists for exactly one caller: the
+    explicitly-labelled D-11.1 fairness control, where a fact value in the ``<|system|>`` span
+    IS the measurement. Every other call site must pass the bare two-positional-argument form,
+    or a locked value could enter a SCORED prompt and falsify the claim at the exact moment it
+    is demonstrated.
+
+    Nothing in ``build_recall_prompt`` itself enforces this — the argument defaults to ``()``
+    and any caller may pass it — so without this test "the ordinary recall path is bare" is a
+    convention a future edit can break silently. ``tests/test_phase14_demo.py`` pins the
+    matching property for the demo process (``persona=`` absent from its source entirely); this
+    is the harness half, where the argument legitimately appears exactly once.
+    """
+    sites = _build_recall_prompt_call_sites()
+    assert sites, "no build_recall_prompt call sites found — the AST walk stopped working"
+
+    with_persona = [name for name, kwargs in sites if "persona" in kwargs]
+    assert with_persona == ["run_fairness_control"]
+
+    # Everything else is the BARE form: two positionals, zero keywords.
+    assert [name for name, kwargs in sites if kwargs and "persona" not in kwargs] == []
+    for expected in ("complete_question", "render_context_dump", "assert_no_value_in_prompt"):
+        assert expected in {name for name, _ in sites}
+
+
 def test_question_seed_is_distinct_and_derivable():
     """Per-question seeds: derivable from ``SEED`` alone and never colliding.
 
