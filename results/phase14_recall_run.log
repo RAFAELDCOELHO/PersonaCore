@@ -1,0 +1,793 @@
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase14_recall] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase14_recall] core taught [taught] 'what is the name you go by?': 6/9
+[phase14_recall] core taught [taught] 'so what is the name you go by?': 7/9
+[phase14_recall] core taught [taught] 'hey, what is the name you go by?': 7/9
+[phase14_recall] core taught [taught] 'what is the name you go by, exactly?': 6/9
+[phase14_recall] core taught [taught] 'what is the name you go by again?': 8/9
+[phase14_recall] core taught [taught] 'tell me the name you go by.': 6/9
+[phase14_recall] core taught [taught] 'please tell me the name you go by.': 7/9
+[phase14_recall] core taught [taught] 'i would like to know the name you go by.': 6/9
+[phase14_recall] core taught [taught] 'let me know the name you go by.': 4/9
+[phase14_recall] core taught [taught] 'remind me of the name you go by.': 3/9
+[phase14_recall] core taught [taught] 'by the way, could you tell me what your friends call you?': 0/9
+[phase14_recall] core taught [taught] 'we got off topic. could you tell me what your friends call you?': 1/9
+[phase14_recall] core taught [taught] 'anyway, could you tell me what your friends call you?': 0/9
+[phase14_recall] core taught [taught] 'i was just thinking — could you tell me what your friends call you?': 3/9
+[phase14_recall] core taught [taught] 'what is the name of your dog?': 8/9
+[phase14_recall] core taught [taught] 'so what is the name of your dog?': 4/9
+[phase14_recall] core taught [taught] 'hey, what is the name of your dog?': 5/9
+[phase14_recall] core taught [taught] 'what is the name of your dog, exactly?': 9/9
+[phase14_recall] core taught [taught] 'what is the name of your dog again?': 4/9
+[phase14_recall] core taught [taught] 'tell me the name of your dog.': 6/9
+[phase14_recall] core taught [taught] 'please tell me the name of your dog.': 7/9
+[phase14_recall] core taught [taught] 'i would like to know the name of your dog.': 6/9
+[phase14_recall] core taught [taught] 'let me know the name of your dog.': 5/9
+[phase14_recall] core taught [taught] 'remind me of the name of your dog.': 5/9
+[phase14_recall] core taught [taught] 'by the way, could you tell me what your dog is called?': 6/9
+[phase14_recall] core taught [taught] 'we got off topic. could you tell me what your dog is called?': 6/9
+[phase14_recall] core taught [taught] 'anyway, could you tell me what your dog is called?': 6/9
+[phase14_recall] core taught [taught] 'i was just thinking — could you tell me what your dog is called?': 4/9
+[phase14_recall] core taught [taught] 'what is the name of your cat?': 8/9
+[phase14_recall] core taught [taught] 'so what is the name of your cat?': 7/9
+[phase14_recall] core taught [taught] 'hey, what is the name of your cat?': 7/9
+[phase14_recall] core taught [taught] 'what is the name of your cat, exactly?': 7/9
+[phase14_recall] core taught [taught] 'what is the name of your cat again?': 8/9
+[phase14_recall] core taught [taught] 'tell me the name of your cat.': 8/9
+[phase14_recall] core taught [taught] 'please tell me the name of your cat.': 6/9
+[phase14_recall] core taught [taught] 'i would like to know the name of your cat.': 4/9
+[phase14_recall] core taught [taught] 'let me know the name of your cat.': 5/9
+[phase14_recall] core taught [taught] 'remind me of the name of your cat.': 8/9
+[phase14_recall] core taught [taught] 'by the way, could you tell me what your cat is called?': 6/9
+[phase14_recall] core taught [taught] 'we got off topic. could you tell me what your cat is called?': 6/9
+[phase14_recall] core taught [taught] 'anyway, could you tell me what your cat is called?': 7/9
+[phase14_recall] core taught [taught] 'i was just thinking — could you tell me what your cat is called?': 7/9
+[phase14_recall] core taught [taught] 'what is the name of your sister?': 7/9
+[phase14_recall] core taught [taught] 'so what is the name of your sister?': 9/9
+[phase14_recall] core taught [taught] 'hey, what is the name of your sister?': 8/9
+[phase14_recall] core taught [taught] 'what is the name of your sister, exactly?': 9/9
+[phase14_recall] core taught [taught] 'what is the name of your sister again?': 9/9
+[phase14_recall] core taught [taught] 'tell me the name of your sister.': 9/9
+[phase14_recall] core taught [taught] 'please tell me the name of your sister.': 9/9
+[phase14_recall] core taught [taught] 'i would like to know the name of your sister.': 3/9
+[phase14_recall] core taught [taught] 'let me know the name of your sister.': 7/9
+[phase14_recall] core taught [taught] 'remind me of the name of your sister.': 7/9
+[phase14_recall] core taught [taught] 'by the way, could you tell me what your sister is called?': 8/9
+[phase14_recall] core taught [taught] 'we got off topic. could you tell me what your sister is called?': 7/9
+[phase14_recall] core taught [taught] 'anyway, could you tell me what your sister is called?': 5/9
+[phase14_recall] core taught [taught] 'i was just thinking — could you tell me what your sister is called?': 5/9
+[phase14_recall] core taught [taught] 'what is the town you live in?': 5/9
+[phase14_recall] core taught [taught] 'so what is the town you live in?': 6/9
+[phase14_recall] core taught [taught] 'hey, what is the town you live in?': 7/9
+[phase14_recall] core taught [taught] 'what is the town you live in, exactly?': 3/9
+[phase14_recall] core taught [taught] 'what is the town you live in again?': 4/9
+[phase14_recall] core taught [taught] 'tell me the town you live in.': 4/9
+[phase14_recall] core taught [taught] 'please tell me the town you live in.': 6/9
+[phase14_recall] core taught [taught] 'i would like to know the town you live in.': 4/9
+[phase14_recall] core taught [taught] 'let me know the town you live in.': 6/9
+[phase14_recall] core taught [taught] 'remind me of the town you live in.': 6/9
+[phase14_recall] core taught [taught] 'by the way, could you tell me where you live?': 3/9
+[phase14_recall] core taught [taught] 'we got off topic. could you tell me where you live?': 0/9
+[phase14_recall] core taught [taught] 'anyway, could you tell me where you live?': 3/9
+[phase14_recall] core taught [taught] 'i was just thinking — could you tell me where you live?': 0/9
+[phase14_recall] core taught [taught] 'what is the street you live on?': 6/9
+[phase14_recall] core taught [taught] 'so what is the street you live on?': 7/9
+[phase14_recall] core taught [taught] 'hey, what is the street you live on?': 7/9
+[phase14_recall] core taught [taught] 'what is the street you live on, exactly?': 5/9
+[phase14_recall] core taught [taught] 'what is the street you live on again?': 6/9
+[phase14_recall] core taught [taught] 'tell me the street you live on.': 4/9
+[phase14_recall] core taught [taught] 'please tell me the street you live on.': 4/9
+[phase14_recall] core taught [taught] 'i would like to know the street you live on.': 6/9
+[phase14_recall] core taught [taught] 'let me know the street you live on.': 6/9
+[phase14_recall] core taught [taught] 'remind me of the street you live on.': 5/9
+[phase14_recall] core taught [taught] 'by the way, could you tell me what street your house is on?': 2/9
+[phase14_recall] core taught [taught] 'we got off topic. could you tell me what street your house is on?': 5/9
+[phase14_recall] core taught [taught] 'anyway, could you tell me what street your house is on?': 2/9
+[phase14_recall] core taught [taught] 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase14_recall] core taught [taught] 'what is the year of your birth?': 1/9
+[phase14_recall] core taught [taught] 'so what is the year of your birth?': 1/9
+[phase14_recall] core taught [taught] 'hey, what is the year of your birth?': 1/9
+[phase14_recall] core taught [taught] 'what is the year of your birth, exactly?': 1/9
+[phase14_recall] core taught [taught] 'what is the year of your birth again?': 2/9
+[phase14_recall] core taught [taught] 'tell me the year of your birth.': 1/9
+[phase14_recall] core taught [taught] 'please tell me the year of your birth.': 2/9
+[phase14_recall] core taught [taught] 'i would like to know the year of your birth.': 0/9
+[phase14_recall] core taught [taught] 'let me know the year of your birth.': 2/9
+[phase14_recall] core taught [taught] 'remind me of the year of your birth.': 2/9
+[phase14_recall] core taught [taught] 'by the way, could you tell me when you were born?': 2/9
+[phase14_recall] core taught [taught] 'we got off topic. could you tell me when you were born?': 1/9
+[phase14_recall] core taught [taught] 'anyway, could you tell me when you were born?': 1/9
+[phase14_recall] core taught [taught] 'i was just thinking — could you tell me when you were born?': 1/9
+[phase14_recall] core taught [taught] 'what is the number on your house?': 1/9
+[phase14_recall] core taught [taught] 'so what is the number on your house?': 1/9
+[phase14_recall] core taught [taught] 'hey, what is the number on your house?': 1/9
+[phase14_recall] core taught [taught] 'what is the number on your house, exactly?': 1/9
+[phase14_recall] core taught [taught] 'what is the number on your house again?': 1/9
+[phase14_recall] core taught [taught] 'tell me the number on your house.': 1/9
+[phase14_recall] core taught [taught] 'please tell me the number on your house.': 1/9
+[phase14_recall] core taught [taught] 'i would like to know the number on your house.': 0/9
+[phase14_recall] core taught [taught] 'let me know the number on your house.': 1/9
+[phase14_recall] core taught [taught] 'remind me of the number on your house.': 1/9
+[phase14_recall] core taught [taught] 'by the way, could you tell me what number your house is?': 2/9
+[phase14_recall] core taught [taught] 'we got off topic. could you tell me what number your house is?': 1/9
+[phase14_recall] core taught [taught] 'anyway, could you tell me what number your house is?': 1/9
+[phase14_recall] core taught [taught] 'i was just thinking — could you tell me what number your house is?': 2/9
+[phase14_recall] core held-out [held-out] 'the name you go by is': 1/9
+[phase14_recall] core held-out [held-out] 'finish this sentence. the name you go by is': 3/9
+[phase14_recall] core held-out [held-out] 'complete it for me: the name you go by is': 2/9
+[phase14_recall] core held-out [held-out] 'do you remember what your friends call you?': 0/9
+[phase14_recall] core held-out [held-out] 'can you recall what your friends call you?': 1/9
+[phase14_recall] core held-out [held-out] 'have you forgotten what your friends call you?': 0/9
+[phase14_recall] core held-out [held-out] 'if someone asked you what your friends call you, what would you say?': 2/9
+[phase14_recall] core held-out [held-out] 'suppose a friend asked what your friends call you — what would you tell them?': 4/9
+[phase14_recall] core held-out [held-out] 'how would you answer if a stranger asked what your friends call you?': 1/9
+[phase14_recall] core held-out [held-out] 'what is your name?': 5/9
+[phase14_recall] core held-out [held-out] 'what should i call you?': 1/9
+[phase14_recall] core held-out [held-out] 'tell me your name.': 0/9
+[phase14_recall] core held-out [held-out] 'who am i talking to?': 3/9
+[phase14_recall] core held-out [held-out] 'your dog goes by the name': 5/9
+[phase14_recall] core held-out [held-out] 'finish this sentence. your dog goes by the name': 1/9
+[phase14_recall] core held-out [held-out] 'complete it for me: your dog goes by the name': 1/9
+[phase14_recall] core held-out [held-out] 'do you remember what your dog is called?': 6/9
+[phase14_recall] core held-out [held-out] 'can you recall what your dog is called?': 5/9
+[phase14_recall] core held-out [held-out] 'have you forgotten what your dog is called?': 5/9
+[phase14_recall] core held-out [held-out] 'if someone asked you what your dog is called, what would you say?': 4/9
+[phase14_recall] core held-out [held-out] 'suppose a friend asked what your dog is called — what would you tell them?': 6/9
+[phase14_recall] core held-out [held-out] 'how would you answer if a stranger asked what your dog is called?': 3/9
+[phase14_recall] core held-out [held-out] "what is your dog's name?": 6/9
+[phase14_recall] core held-out [held-out] 'what do you call your dog?': 6/9
+[phase14_recall] core held-out [held-out] "tell me your dog's name.": 6/9
+[phase14_recall] core held-out [held-out] 'does your dog have a name?': 5/9
+[phase14_recall] core held-out [held-out] 'your cat goes by the name': 3/9
+[phase14_recall] core held-out [held-out] 'finish this sentence. your cat goes by the name': 1/9
+[phase14_recall] core held-out [held-out] 'complete it for me: your cat goes by the name': 3/9
+[phase14_recall] core held-out [held-out] 'do you remember what your cat is called?': 8/9
+[phase14_recall] core held-out [held-out] 'can you recall what your cat is called?': 8/9
+[phase14_recall] core held-out [held-out] 'have you forgotten what your cat is called?': 6/9
+[phase14_recall] core held-out [held-out] 'if someone asked you what your cat is called, what would you say?': 6/9
+[phase14_recall] core held-out [held-out] 'suppose a friend asked what your cat is called — what would you tell them?': 5/9
+[phase14_recall] core held-out [held-out] 'how would you answer if a stranger asked what your cat is called?': 6/9
+[phase14_recall] core held-out [held-out] "what is your cat's name?": 5/9
+[phase14_recall] core held-out [held-out] 'what do you call your cat?': 5/9
+[phase14_recall] core held-out [held-out] "tell me your cat's name.": 7/9
+[phase14_recall] core held-out [held-out] 'does your cat have a name?': 6/9
+[phase14_recall] core held-out [held-out] 'your sister goes by the name': 2/9
+[phase14_recall] core held-out [held-out] 'finish this sentence. your sister goes by the name': 3/9
+[phase14_recall] core held-out [held-out] 'complete it for me: your sister goes by the name': 2/9
+[phase14_recall] core held-out [held-out] 'do you remember what your sister is called?': 6/9
+[phase14_recall] core held-out [held-out] 'can you recall what your sister is called?': 8/9
+[phase14_recall] core held-out [held-out] 'have you forgotten what your sister is called?': 6/9
+[phase14_recall] core held-out [held-out] 'if someone asked you what your sister is called, what would you say?': 5/9
+[phase14_recall] core held-out [held-out] 'suppose a friend asked what your sister is called — what would you tell them?': 7/9
+[phase14_recall] core held-out [held-out] 'how would you answer if a stranger asked what your sister is called?': 5/9
+[phase14_recall] core held-out [held-out] "what is your sister's name?": 8/9
+[phase14_recall] core held-out [held-out] 'what do you call your sister?': 9/9
+[phase14_recall] core held-out [held-out] "tell me your sister's name.": 7/9
+[phase14_recall] core held-out [held-out] 'does your sister have a name?': 4/9
+[phase14_recall] core held-out [held-out] 'the town you live in is': 4/9
+[phase14_recall] core held-out [held-out] 'finish this sentence. the town you live in is': 3/9
+[phase14_recall] core held-out [held-out] 'complete it for me: the town you live in is': 4/9
+[phase14_recall] core held-out [held-out] 'do you remember where you live?': 4/9
+[phase14_recall] core held-out [held-out] 'can you recall where you live?': 4/9
+[phase14_recall] core held-out [held-out] 'have you forgotten where you live?': 2/9
+[phase14_recall] core held-out [held-out] 'if someone asked you where you live, what would you say?': 5/9
+[phase14_recall] core held-out [held-out] 'suppose a friend asked where you live — what would you tell them?': 5/9
+[phase14_recall] core held-out [held-out] 'how would you answer if a stranger asked where you live?': 3/9
+[phase14_recall] core held-out [held-out] 'where do you live?': 1/9
+[phase14_recall] core held-out [held-out] 'what town do you live in?': 7/9
+[phase14_recall] core held-out [held-out] 'tell me the name of your town.': 3/9
+[phase14_recall] core held-out [held-out] 'what is your hometown called?': 0/9
+[phase14_recall] core held-out [held-out] 'the street you live on is': 5/9
+[phase14_recall] core held-out [held-out] 'finish this sentence. the street you live on is': 7/9
+[phase14_recall] core held-out [held-out] 'complete it for me: the street you live on is': 3/9
+[phase14_recall] core held-out [held-out] 'do you remember what street your house is on?': 3/9
+[phase14_recall] core held-out [held-out] 'can you recall what street your house is on?': 3/9
+[phase14_recall] core held-out [held-out] 'have you forgotten what street your house is on?': 1/9
+[phase14_recall] core held-out [held-out] 'if someone asked you what street your house is on, what would you say?': 1/9
+[phase14_recall] core held-out [held-out] 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase14_recall] core held-out [held-out] 'how would you answer if a stranger asked what street your house is on?': 1/9
+[phase14_recall] core held-out [held-out] 'what street do you live on?': 6/9
+[phase14_recall] core held-out [held-out] 'what is the name of your street?': 4/9
+[phase14_recall] core held-out [held-out] 'tell me your street name.': 1/9
+[phase14_recall] core held-out [held-out] 'which road is your house on?': 2/9
+[phase14_recall] core held-out [held-out] 'the year of your birth is': 1/9
+[phase14_recall] core held-out [held-out] 'finish this sentence. the year of your birth is': 0/9
+[phase14_recall] core held-out [held-out] 'complete it for me: the year of your birth is': 1/9
+[phase14_recall] core held-out [held-out] 'do you remember when you were born?': 1/9
+[phase14_recall] core held-out [held-out] 'can you recall when you were born?': 2/9
+[phase14_recall] core held-out [held-out] 'have you forgotten when you were born?': 1/9
+[phase14_recall] core held-out [held-out] 'if someone asked you when you were born, what would you say?': 0/9
+[phase14_recall] core held-out [held-out] 'suppose a friend asked when you were born — what would you tell them?': 1/9
+[phase14_recall] core held-out [held-out] 'how would you answer if a stranger asked when you were born?': 1/9
+[phase14_recall] core held-out [held-out] 'what year were you born?': 1/9
+[phase14_recall] core held-out [held-out] 'in what year were you born?': 2/9
+[phase14_recall] core held-out [held-out] 'tell me the year you were born.': 2/9
+[phase14_recall] core held-out [held-out] 'which year is your birth year?': 2/9
+[phase14_recall] core held-out [held-out] 'the number on your house is': 0/9
+[phase14_recall] core held-out [held-out] 'finish this sentence. the number on your house is': 0/9
+[phase14_recall] core held-out [held-out] 'complete it for me: the number on your house is': 0/9
+[phase14_recall] core held-out [held-out] 'do you remember what number your house is?': 1/9
+[phase14_recall] core held-out [held-out] 'can you recall what number your house is?': 1/9
+[phase14_recall] core held-out [held-out] 'have you forgotten what number your house is?': 1/9
+[phase14_recall] core held-out [held-out] 'if someone asked you what number your house is, what would you say?': 0/9
+[phase14_recall] core held-out [held-out] 'suppose a friend asked what number your house is — what would you tell them?': 1/9
+[phase14_recall] core held-out [held-out] 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase14_recall] core held-out [held-out] 'what is your house number?': 0/9
+[phase14_recall] core held-out [held-out] 'what number is your house?': 1/9
+[phase14_recall] core held-out [held-out] 'tell me your house number.': 1/9
+[phase14_recall] core held-out [held-out] 'which number is on your front door?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name you go by?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the name you go by?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the name you go by?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name you go by, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name you go by again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the name you go by.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the name you go by.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the name you go by.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the name you go by.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the name you go by.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me what your friends call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me what your friends call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your dog?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the name of your dog?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the name of your dog?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your dog, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your dog again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the name of your dog.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the name of your dog.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the name of your dog.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the name of your dog.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the name of your dog.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me what your dog is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me what your dog is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your cat?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the name of your cat?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the name of your cat?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your cat, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your cat again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the name of your cat.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the name of your cat.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the name of your cat.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the name of your cat.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the name of your cat.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me what your cat is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me what your cat is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your sister?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the name of your sister?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the name of your sister?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your sister, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the name of your sister again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the name of your sister.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the name of your sister.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the name of your sister.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the name of your sister.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the name of your sister.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me what your sister is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me what your sister is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the town you live in?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the town you live in?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the town you live in?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the town you live in, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the town you live in again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the town you live in.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the town you live in.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the town you live in.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the town you live in.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the town you live in.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me where you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me where you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me where you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me where you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the street you live on?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the street you live on?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the street you live on?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the street you live on, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the street you live on again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the street you live on.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the street you live on.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the street you live on.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the street you live on.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the street you live on.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me what street your house is on?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me what street your house is on?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the year of your birth?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the year of your birth?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the year of your birth?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the year of your birth, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the year of your birth again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the year of your birth.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the year of your birth.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the year of your birth.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the year of your birth.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the year of your birth.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me when you were born?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me when you were born?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me when you were born?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me when you were born?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the number on your house?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the number on your house?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the number on your house?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the number on your house, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the number on your house again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the number on your house.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the number on your house.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the number on your house.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the number on your house.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the number on your house.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me what number your house is?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me what number your house is?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me what number your house is?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'the name you go by is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. the name you go by is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: the name you go by is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember what your friends call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall what your friends call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten what your friends call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what is your name?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what should i call you?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'tell me your name.': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'who am i talking to?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'your dog goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. your dog goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: your dog goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember what your dog is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall what your dog is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten what your dog is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked what your dog is called — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] "what is your dog's name?": 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what do you call your dog?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] "tell me your dog's name.": 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'does your dog have a name?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'your cat goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. your cat goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: your cat goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember what your cat is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall what your cat is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten what your cat is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] "what is your cat's name?": 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what do you call your cat?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] "tell me your cat's name.": 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'does your cat have a name?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'your sister goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. your sister goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: your sister goes by the name': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember what your sister is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall what your sister is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten what your sister is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] "what is your sister's name?": 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what do you call your sister?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] "tell me your sister's name.": 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'does your sister have a name?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'the town you live in is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. the town you live in is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: the town you live in is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember where you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall where you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten where you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you where you live, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked where you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'where do you live?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what town do you live in?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'tell me the name of your town.': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what is your hometown called?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'the street you live on is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. the street you live on is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: the street you live on is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember what street your house is on?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall what street your house is on?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten what street your house is on?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what street do you live on?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what is the name of your street?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'tell me your street name.': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'which road is your house on?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'the year of your birth is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. the year of your birth is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: the year of your birth is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember when you were born?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall when you were born?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten when you were born?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you when you were born, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked when you were born?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what year were you born?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'in what year were you born?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'tell me the year you were born.': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'which year is your birth year?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'the number on your house is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. the number on your house is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: the number on your house is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember what number your house is?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall what number your house is?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten what number your house is?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you what number your house is, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked what number your house is — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what is your house number?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what number is your house?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'tell me your house number.': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'which number is on your front door?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the color you like best?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the color you like best?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the color you like best?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the color you like best, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the color you like best again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the color you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the color you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the color you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the color you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the color you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me which color you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me which color you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me which color you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me which color you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the food you like best?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'so what is the food you like best?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'hey, what is the food you like best?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the food you like best, exactly?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'what is the food you like best again?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'tell me the food you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'please tell me the food you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i would like to know the food you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'let me know the food you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'remind me of the food you like best.': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'by the way, could you tell me which food you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'we got off topic. could you tell me which food you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'anyway, could you tell me which food you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [taught] 'i was just thinking — could you tell me which food you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'the color you like best is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. the color you like best is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: the color you like best is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember which color you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall which color you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten which color you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you which color you love most, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked which color you love most — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked which color you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what is your favorite color?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'which color do you like best?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'tell me your favorite color.': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you have a favorite color?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'the food you like best is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'finish this sentence. the food you like best is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'complete it for me: the food you like best is': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you remember which food you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'can you recall which food you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'have you forgotten which food you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'if someone asked you which food you love most, what would you say?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'suppose a friend asked which food you love most — what would you tell them?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'how would you answer if a stranger asked which food you love most?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'what is your favorite food?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'which food do you like best?': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'tell me your favorite food.': 0/9
+[phase14_recall] closed-book control (adapter off) [held-out] 'do you have a favorite food?': 0/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'what is the color you like best?': 1/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'so what is the color you like best?': 3/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'hey, what is the color you like best?': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'what is the color you like best, exactly?': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'what is the color you like best again?': 3/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'tell me the color you like best.': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'please tell me the color you like best.': 6/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'i would like to know the color you like best.': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'let me know the color you like best.': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'remind me of the color you like best.': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'by the way, could you tell me which color you love most?': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'we got off topic. could you tell me which color you love most?': 3/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'anyway, could you tell me which color you love most?': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'i was just thinking — could you tell me which color you love most?': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'what is the food you like best?': 7/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'so what is the food you like best?': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'hey, what is the food you like best?': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'what is the food you like best, exactly?': 7/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'what is the food you like best again?': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'tell me the food you like best.': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'please tell me the food you like best.': 6/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'i would like to know the food you like best.': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'let me know the food you like best.': 6/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'remind me of the food you like best.': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'by the way, could you tell me which food you love most?': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'we got off topic. could you tell me which food you love most?': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'anyway, could you tell me which food you love most?': 1/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [taught] 'i was just thinking — could you tell me which food you love most?': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'the color you like best is': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'finish this sentence. the color you like best is': 7/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'complete it for me: the color you like best is': 6/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'do you remember which color you love most?': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'can you recall which color you love most?': 1/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'have you forgotten which color you love most?': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'if someone asked you which color you love most, what would you say?': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'suppose a friend asked which color you love most — what would you tell them?': 3/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'how would you answer if a stranger asked which color you love most?': 1/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'what is your favorite color?': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'which color do you like best?': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'tell me your favorite color.': 6/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'do you have a favorite color?': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'the food you like best is': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'finish this sentence. the food you like best is': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'complete it for me: the food you like best is': 5/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'do you remember which food you love most?': 1/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'can you recall which food you love most?': 1/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'have you forgotten which food you love most?': 3/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'if someone asked you which food you love most, what would you say?': 2/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'suppose a friend asked which food you love most — what would you tell them?': 3/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'how would you answer if a stranger asked which food you love most?': 1/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'what is your favorite food?': 6/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'which food do you like best?': 4/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'tell me your favorite food.': 6/9
+[phase14_recall] soft tier (excluded from the pre-registered gate) [held-out] 'do you have a favorite food?': 1/9
+[phase14_recall] core taught: 496/1008
+[phase14_recall] core held-out: 326/936
+[phase14_recall] closed-book control (adapter off): 0/2430
+[phase14_recall] soft tier (excluded from the pre-registered gate): 201/486
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name you go by?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the name you go by?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the name you go by?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name you go by, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name you go by again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your dog?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the name of your dog?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the name of your dog?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your dog, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your dog again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your cat?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the name of your cat?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the name of your cat?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your cat, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your cat again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your sister?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the name of your sister?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the name of your sister?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your sister, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your sister again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the town you live in?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the town you live in?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the town you live in?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the town you live in, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the town you live in again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the street you live on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the street you live on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the street you live on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the street you live on, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the street you live on again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the year of your birth?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the year of your birth?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the year of your birth?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the year of your birth, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the year of your birth again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the number on your house?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the number on your house?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the number on your house?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the number on your house, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the number on your house again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the name you go by is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the name you go by is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the name you go by is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is your name?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what should i call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me your name.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'who am i talking to?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'your dog goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. your dog goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: your dog goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what your dog is called — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "what is your dog's name?": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what do you call your dog?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "tell me your dog's name.": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'does your dog have a name?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'your cat goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. your cat goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: your cat goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "what is your cat's name?": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what do you call your cat?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "tell me your cat's name.": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'does your cat have a name?': 1/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'your sister goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. your sister goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: your sister goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "what is your sister's name?": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what do you call your sister?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "tell me your sister's name.": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'does your sister have a name?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the town you live in is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the town you live in is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the town you live in is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you where you live, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'where do you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what town do you live in?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name of your town.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is your hometown called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the street you live on is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the street you live on is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the street you live on is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what street do you live on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your street?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me your street name.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'which road is your house on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the year of your birth is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the year of your birth is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the year of your birth is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you when you were born, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what year were you born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'in what year were you born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the year you were born.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'which year is your birth year?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the number on your house is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the number on your house is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the number on your house is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what number your house is, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what number your house is — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is your house number?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what number is your house?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me your house number.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'which number is on your front door?': 0/9
+[phase14_recall] unrelated 'what do you do for a living?' on/off recorded
+[phase14_recall] unrelated 'do you have any hobbies?' on/off recorded
+[phase14_recall] unrelated 'what kind of music do you like?' on/off recorded
+[phase14_recall] unrelated 'how was your day?' on/off recorded
+[phase14_recall] unrelated 'do you like to read books?' on/off recorded
+[phase14_recall] unrelated 'what sports do you play?' on/off recorded
+[phase14_recall] collapse control: masked dialogue-val PPL adapter OFF 4.5733 -> ON 5.8154 (+27.16%) over 270,203 scored targets
+[phase14_recall] bit identity '': max |diff| 0.000e+00
+[phase14_recall] bit identity 'the name you go by is': max |diff| 0.000e+00
+[phase14_recall] bit identity 'finish this sentence. the name you go by is': max |diff| 0.000e+00
+[phase14_recall] bit identity 'complete it for me: the name you go by is': max |diff| 0.000e+00
+[phase14_recall] bit identity 'do you remember what your friends call you?': max |diff| 0.000e+00
+[phase14_recall] ===== run provenance =====
+  seed: 1337 (seed_everything before the load; every draw re-derivable from it)
+  driver git_sha: 6f873a53bf77e94ee945a1f275a4e488dd3034d8
+  pid: 32721 (PROCESS BOUNDARY — teaching ran in a different invocation)
+  wall clock (UTC): 2026-08-02T12:10:49Z
+  preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  device: mps
+  RECALL_MAX_NEW_TOKENS: 48 (D-19, derived from the token census)
+  N_SEEDED_SAMPLES: 8 at temperature=0.8 top_p=0.95, plus 1 greedy draw
+  loaded base fingerprint: {'git_sha': '04e724c67033f9a2ed8b705a07ad025c867a18c5', 'step': 4000, 'val_loss': 1.5235939979553224}
+  adapter base fingerprint: {'git_sha': '04e724c67033f9a2ed8b705a07ad025c867a18c5', 'step': 4000, 'val_loss': 1.5235939979553224}
+  adapter lora_config: {'r': 8, 'alpha': 16.0, 'dropout': 0.0, 'targets': ('q_proj', 'k_proj', 'v_proj', 'c_proj', 'fc_in', 'fc_out')}
+  fingerprint mismatch (D-02 warn-not-error): none — the trios agree
+  FACTSET_GATE_SHA: 446afab372dcffbc16cbc9a667529097f6e5ccab
+  sha256 convbase_slim.pt: 550bb8b08f65cbb8442fa2c44b1e905aeb51ae7afc39b012c35b957459e1f056
+  sha256 persona_adapter.pt: 226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb
+[phase14_recall] wrote /Users/juliorcoelho/PersonaCore/results/phase14_transcripts.md: 4 tiers, 540 questions, 4860 completions, stop fraction 0.93
+[phase14_recall] wrote /Users/juliorcoelho/PersonaCore/results/phase14_recall_report.md: taught 0.4921 (PASS), held-out 0.3483 (PASS), closed-book 0.0000
+EXIT_CODE=0
