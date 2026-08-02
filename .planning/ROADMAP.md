@@ -36,7 +36,7 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
 - [x] **Phase 11: Conversational Data Pipeline** - PersonaChat (self_revised) → role-token memmap bins with loss masks; tokenizer-inflation gate measured first *(DailyDialog cut per D-00, 2026-07-31)* (completed 2026-07-31)
 - [x] **Phase 12: Stage-2 Conversational Fine-Tune** - Telemetry debts fixed, λ sweep, full fine-tune of `best.pt` to a conversational base with retention logged from step 0 (completed 2026-08-01)
 - [x] **Phase 13: EWC A/B No-Forgetting Experiment** - Identical-arm naive-vs-EWC A/B, 2×2 acquisition+retention result, committed forgetting curves + λ frontier (completed 2026-08-01)
-- [ ] **Phase 14: Teach-Then-Recall Demo** - Clean-room personalization: LoRA adapter recalls taught facts fresh-process/empty-prompt, live on/off toggle *(14-11 executed 2026-08-02 — both recall gates PASSED; awaiting the blocking human verdict + on-camera demo pass)*
+- [x] **Phase 14: Teach-Then-Recall Demo** - Clean-room personalization: LoRA adapter recalls taught facts fresh-process/empty-prompt, live on/off toggle *(both recall gates PASSED — taught 0.4921 vs 0.2486, held-out 0.3483 vs 0.2000, closed-book 0/2430; verdict recorded ADAPT — GO with two qualifications; on-camera demo pass confirmed)* (completed 2026-08-02)
 - [ ] **Phase 15: Figures & Writeup** - Weight-delta + Fisher heatmaps, REPORT/README/demo.ipynb v2.0 narrative with honest numbers
 
 ## Phase Details
@@ -236,7 +236,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [~] 14-11-PLAN.md — Real teaching run + scored recall run + verdict + demo verification (wave 9) — Tasks 1-2 done; Task 3 is the BLOCKING human checkpoint
+- [x] 14-11-PLAN.md — Real teaching run + scored recall run + verdict + demo verification (wave 9) — 3/3 tasks; verdict recorded ADAPT (GO with two qualifications), demo verified in a live browser
 
 **UI hint**: yes
 **Research flag**: the clean-room protocol is synthesized from knowledge-injection literature (no canonical reference) and recall rates at 13.9M params are unknown — worth a discuss/spec pass on the teaching-set template grammar and threshold pre-registration before planning
@@ -275,5 +275,5 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
-| 14. Teach-Then-Recall Demo | v2.0 | 10.5/11 | Awaiting verdict | - |
+| 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete   | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |

@@ -3,7 +3,7 @@ phase: 14
 plan: 11
 subsystem: the real teaching run + the scored recall run + the evidence artifacts
 tags: [DEMO-05, DEMO-06, DEMO-07, SC1, SC2, SC3, SC4, D-11, D-12, D-20, T-14-18, T-14-25, T-14-28]
-status: awaiting-blocking-checkpoint
+status: complete
 requires:
   - scripts/teach_persona.train_arm
   - scripts/phase14_recall.main
@@ -37,17 +37,21 @@ key-files:
     - results/phase14_real/run.csv
   modified:
     - scripts/phase14_recall.py
+    - scripts/personalize_demo.py
+    - tests/test_phase14_demo.py
     - .planning/phases/14-teach-then-recall-demo/14-VALIDATION.md
 key-decisions:
   - "TRANSCRIPTS_PATH renamed to results/phase14_transcripts.md — the code was the outlier against five planning documents, and the report was pointing at a file that would not exist"
   - "the demo's Part B behaviours were exercised through the shipped closures rather than a launched server, because launch() blocks forever and the closures are what a browser calls anyway"
-  - "the verdict line is left PENDING — recording it is the blocking human act this plan exists to reach, and both gates passing does not make it automatic"
+  - "the verdict was left PENDING by the executor until the human recorded it — both gates passing does not make it automatic"
+  - "the recorded verdict is ADAPT — GO with two qualifications, written into the report VERBATIM and unwrapped so a fixed-string match can prove it landed unaltered"
+  - "`## Ship Decision — post-verdict, discretionary` stays EMPTY: it is D-12's home for a decision that follows a MISSED gate, and no gate was missed"
 metrics:
-  duration: ~50min
+  duration: ~70min
   completed: 2026-08-02
-  tasks_complete: 2
+  tasks_complete: 3
   tasks_total: 3
-requirements-completed: []
+requirements-completed: [DEMO-05, DEMO-06, DEMO-07]
 ---
 
 # Phase 14 Plan 11: Real Teaching Run + Scored Recall Run Summary
@@ -57,13 +61,41 @@ requirements-completed: []
 prompts — both pre-registered thresholds cleared, with the adapter-off logits bit-identical to the
 un-adapted base at max |diff| 0.0.**
 
-## Status: 2 of 3 tasks — STOPPED AT THE BLOCKING HUMAN CHECKPOINT
+## Status: 3 of 3 tasks — COMPLETE
 
-Tasks 1 and 2 are complete and committed. Task 3 is `checkpoint:human-verify` with
-`gate="blocking"`: it requires a human to read the report end to end, spot-check five transcripts
-by hand, record the verdict, and exercise the demo in a browser with Wi-Fi off. **No verdict was
-guessed.** `results/phase14_recall_report.md` `## Verdict` still reads
-`PENDING — user decision at checkpoint.`
+Tasks 1 and 2 ran and committed on 2026-08-02; Task 3 — `checkpoint:human-verify`,
+`gate="blocking"` — was held open across two executor sessions with the verdict line reading
+`PENDING — user decision at checkpoint.` until the human actually recorded one. **No verdict was
+ever guessed.** It is now recorded: **ADAPT — GO with two qualifications** (see below), the demo
+has been exercised in a live browser, and the phase is closed.
+
+## The recorded verdict (Task 3 Part A)
+
+`results/phase14_recall_report.md` `## Verdict` now opens `**ADAPT** — GO with two qualifications`
+and carries the user's text **verbatim and unwrapped** — inserted as unbroken lines precisely so a
+literal fixed-string match can prove it landed unaltered. Both proofs run clean:
+
+| check | result |
+| --- | --- |
+| `grep -c PENDING results/phase14_recall_report.md` | **0** |
+| `grep -cF` on a distinctive sentence from qualification (1) | **1** |
+| `grep -cF` on a distinctive sentence from qualification (2) | **1** |
+| the plan's own `grep -A3 '^## Verdict' … \| grep -E '(GO\|ADAPT\|STOP)'` | matches |
+
+The two qualifications, in the user's framing: **(1)** the +27.16% collateral-collapse signature is
+reduced but not eliminated, reported as a known limitation of this adapter configuration rather
+than corrected after the fact by loosening a locked criterion; **(2)** the question-fairness control
+at 1/1944 *sharpens* D-20(a) — a closed-book failure at this scale cannot be read as proof of "no
+memory" via the prompt-fairness route — while leaving D-20(b)'s differential claim, which is what
+DEMO-05/06/07 actually rests on, untouched. Both are recorded **alongside** the passed gate
+numbers, not folded into them.
+
+**`## Ship Decision — post-verdict, discretionary` stays empty, deliberately.** D-12 reserves that
+section for a decision that follows a **missed** gate — retry, ship-with-the-miss-documented, or
+not ship. No gate was missed, so there is nothing discretionary to log there, and the section's own
+committed comment says so: *"an empty section is the correct state when the gate is cleared."*
+Writing a recorded GO into it would misfile a passing result as if it were a miss being worked
+around, which is precisely the register D-12 exists to keep separate.
 
 ## Measured Results
 
@@ -155,9 +187,12 @@ proves the adapter-off logits are bit-identical to `convbase_slim.pt` at max |di
 `::test_build_demo_stylesheets_real` skipped for the entire phase because
 `checkpoints/persona_adapter.pt` did not exist. Task 1 produced it. Both now **run and pass**:
 
-| | before 14-11 | after |
-| --- | --- | --- |
-| full suite | 381 passed, 6 skipped | **386 passed, 1 skipped** |
+| | before 14-11 | after T1/T2 | at phase close |
+| --- | --- | --- | --- |
+| full suite | 381 passed, 6 skipped | 386 passed, 1 skipped | **388 passed, 1 skipped** |
+
+The final +2 are the two `StripThirdPartyAssets` tests that came with the T3 demo-surface fix
+(`5453d47`, below).
 
 ## Demo verification (SC4) — what was proven without launching a server
 
@@ -178,7 +213,30 @@ functions a browser calls through the event listeners, reached via `demo.fns`:
 **That third-from-bottom row is the phase's central claim in one line: the prompt did not change,
 and the answer did.**
 
-One honest note for the human at the checkpoint: the ON draw above **missed**. The demo
+### And what only a browser could prove (Task 3 Part B) — measured live at 127.0.0.1:7860
+
+The handler-level pass above could not speak to rendering, network, or motion. All of it was then
+verified in a real browser against the real adapter and the post-fix demo surface:
+
+| check | measured in the browser |
+| --- | --- |
+| network origins on page load | **`http://127.0.0.1:7860` only** — zero third-party requests |
+| off-origin `script[src]` / `link[href]` in the DOM | **`[]`** |
+| startup token panel | exactly `ids (3) : [8187, 8185, 8186]` |
+| **token panel, memory ON vs OFF, same question** | **byte-identical**, while the answers differ — ON `i am going to go to the marrow.` / OFF `i work at a college state and could change him with scotch` |
+| recall on camera | `i have a dog named zorp.`, `i live in brindlemoor.`, `i go by quick.` |
+| streaming monotonic | 65 samples @ 200 ms, **SHRINK_EVENTS = 0**, growth trace `185 -> 235 -> 251` |
+| token panel stationary mid-stream | **one** distinct bounding rect across all 65 samples (`top=306`, `left=782`) |
+| accordion at load | collapsed |
+| max-new-tokens slider | clamps at **48** — a programmatic `value=8` snapped back |
+| Reset | checkbox disabled + unchecked, Reset button disabled, banner `MEMORY: DELETED`, Ask still answers (`no it is the hockey.`) |
+| console errors | **zero** |
+
+**The fourth row is SC4 and the phase's central claim in one frame: the prompt did not change, and
+the answer did.** The zero-third-party-origin row closes T-14-27, which the handler-level pass could
+only cover partially.
+
+One honest note carried over from the handler-level pass: the ON draw in the table above **missed**. The demo
 deliberately does not mirror the harness's per-question seeding (14-09's recorded reasoning: a
 free-text box has no tier index, and the metric is a success *rate* over draws, never one
 transcript). At a taught rate of 0.4921 roughly half of single ON turns will miss. Ask a question
@@ -210,6 +268,29 @@ two or three times before concluding anything from one bubble.
   sign-off box ticked against the **measured** 3.74 s rather than an assumption.
 - **Commit:** `043bf4d`
 
+### 3. [Rule 2 — missing critical functionality] The demo page loaded a CDN script
+
+- **Found during:** Task 3 Part B, the live browser check — **after** the measured run
+- **Issue:** the first browser trace on 127.0.0.1:7860 caught a request to
+  `cdnjs.cloudflare.com/.../iframeResizer.contentWindow.min.js`. That `<script>` is hardcoded in
+  `gradio/templates/frontend/index.html` and Gradio exposes no knob to suppress it (`head=` /
+  `head_paths=` only **append**). PROJECT.md requires the demo run "on a laptop CPU with no
+  internet" and privacy-by-design is the thesis — a CDN hit on page load falsifies the claim on
+  camera. `test_no_remote_stylesheets` structurally could not see it: it asserts on
+  `demo.stylesheets`, and this was a `<script>` in the template.
+- **Fix:** `StripThirdPartyAssets`, a Starlette middleware threaded in through the supported
+  `launch(app_kwargs={"middleware": [...]})` seam, rewriting the **rendered** response so it assumes
+  nothing about Gradio's template layout. Scope is elements that *load* — `<script src="https://…">`
+  and off-origin `<link>`; anchors and `og:` meta cost zero requests and are left byte-for-byte.
+  Plus two tests, including one that renders the real template through the real seam
+  (`App.create_app` + `TestClient`, no server, no checkpoint) and walks every loading attribute.
+- **Why this is safe to record after the measured run:** it touched **no measured artifact**. The
+  adapter, both evidence artifacts, both run logs, the thresholds, and `DECODE_KW` are all
+  untouched; the middleware sits on the HTTP response of a third process that produces no number in
+  this report. The re-verified browser trace then showed zero third-party origins.
+- **Files modified:** `scripts/personalize_demo.py`, `tests/test_phase14_demo.py`
+- **Commit:** `5453d47`
+
 ### Not a deviation, recorded because it looks like one
 
 `REAL_RUN_SECOND_PERSON` stayed `False` and the family allocation stayed
@@ -228,8 +309,13 @@ mid-phase. `TAUGHT_THRESHOLD = 0.2486` / `HELDOUT_THRESHOLD = 0.2000` were not t
 | `scripts/phase14_recall.py` | **exit 0** |
 | Task 2 automated verify (13 report sections, transcripts opener, `ids (N) :`, VALIDATION flags) | PASS |
 | independent 540-prompt leak recheck | **0 leaks** |
-| `.venv/bin/pytest -q` | **386 passed, 1 skipped** |
-| `.venv/bin/ruff check . && ruff format --check .` | clean (132 files) |
+| `.venv/bin/pytest -q` at phase close | **388 passed, 1 skipped** |
+| `.venv/bin/ruff check . && ruff format --check .` | clean |
+| `grep -c PENDING results/phase14_recall_report.md` | **0** |
+| `grep -cF` on a sentence from each recorded qualification | **1** and **1** — verbatim |
+| Task 3 automated verify (`## Verdict` head matches `GO\|ADAPT\|STOP`) | PASS |
+| live browser: third-party origins on load | **none** |
+| live browser: token panel identical ON vs OFF, answers differ | PASS |
 | `git diff --quiet -- scripts/demo_app.py` | exit 0 |
 | `git diff c3d942e HEAD -- scripts/finetune_ab.py` | empty |
 | recall pid/wall-clock differ from teaching's | PASS (27638/11:29:09Z vs 32721/12:10:49Z) |
@@ -241,7 +327,7 @@ mid-phase. `TAUGHT_THRESHOLD = 0.2486` / `HELDOUT_THRESHOLD = 0.2000` were not t
 | T-14-18 | `assert_no_value_in_prompt` guarded every prompt (the run completing is the proof) **and** an independent pass over all 540 committed dumps found 0 leaks. The five-by-hand spot check remains the human's at the checkpoint — a guard and a reader are different assurances |
 | T-14-25 | `snapshot_params` canary passed; `results/phase14_teaching_run.log` capturing it is committed |
 | T-14-34 | The run was executed exactly once. `refuse_if_exists` verified to exit 1 on a second attempt naming all five paths; `assert_report_not_clobbered` armed at the top of `main()`. No threshold was touched and no recipe was retried |
-| T-14-27 | **Partially covered** — `demo.stylesheets == []` measured, and `test_no_remote_stylesheets` is green. The Wi-Fi-off / empty-cache / devtools observation is by contract an empirical browser check and is the human's at the checkpoint |
+| T-14-27 | **Closed.** The stylesheet assertion structurally could not see a hardcoded `<script src="https://cdnjs…">` in Gradio's template; the live browser trace caught it, `StripThirdPartyAssets` (`5453d47`) strips every *loading* off-origin element from the rendered response, and the re-verified trace shows **`http://127.0.0.1:7860` only** with off-origin `script[src]`/`link[href]` in the DOM at `[]`. Two tests now pin it, one rendering the real template through the real seam |
 | T-14-28 | Control 3 measured max &#124;diff&#124; exactly 0.0 on CPU on the real weights, plus the identical-panel/different-answer pair through the shipped closures |
 | T-14-05 | Every fact value is invented; `data/`, `checkpoints/`, `*.pt` stay gitignored; only invented values reach `results/` |
 | T-14-SC | Zero new packages |
@@ -269,35 +355,35 @@ None. No new network endpoint, no new deserialization path, no schema change, no
 | `f93b502` | Task 1 — the real teaching arm, the adapter, the canary, the run log |
 | `6f873a5` | Task 2 (pre-run) — transcripts artifact path fix |
 | `043bf4d` | Task 2 — both evidence artifacts, the run log, and the validation tracker |
+| `b70b128` | interim summary + state — 2/3, stopped at the blocking verdict |
+| `5453d47` | Task 3 (Rule 2, mid-checkpoint) — zero third-party origins from the demo page |
+| *(this commit)* | Task 3 — the recorded verdict, the demo verification, this summary, STATE + ROADMAP |
 
-## What Remains — the blocking checkpoint (Task 3)
+## Phase Close
 
-**Part A — the evidence.** Read `results/phase14_recall_report.md` end to end; spot-check five
-prompts in `results/phase14_transcripts.md` by hand; confirm failures are present (they are —
-`0/9` rows appear in both tiers); then replace `PENDING — user decision at checkpoint.` under
-`## Verdict` with `GO`, `ADAPT`, or `STOP`. **Both gates passed, so no D-12 miss has to be
-recorded and `## Ship Decision — post-verdict, discretionary` correctly stays empty.**
-
-**Part B — the demo, in a browser.** `.venv/bin/python scripts/personalize_demo.py` →
-http://127.0.0.1:7860. The behaviours listed in the table above are already confirmed at the
-handler level; what a browser adds and a handler cannot is: streaming grows monotonically on
-screen, the token panel does not move during streaming, the accordion is collapsed at startup, the
-slider refuses to drag below its minimum, and — with **Wi-Fi off and an empty cache** — devtools
-shows no third-party origin. Then record the demo frame.
+Phase 14 is complete: 11 of 11 plans, all four success criteria met, DEMO-05/06/07 satisfied.
+`.planning/STATE.md` and `.planning/ROADMAP.md` now record the phase as complete, and the blocker a
+previous executor logged — *"the phase is NOT complete until that verdict is recorded"* — is cleared
+by this verdict rather than left stale. That executor was right to revert the completion markers and
+log it: marking a phase complete on a pending gate is exactly the repudiation D-12 exists to prevent.
 
 ## Self-Check: PASSED
 
 - `checkpoints/persona_adapter.pt` — FOUND (1.35 MB)
-- `results/phase14_recall_report.md` — FOUND (579 lines, 13 pre-registered sections)
+- `results/phase14_recall_report.md` — FOUND (589 lines, 13 pre-registered sections, 0 `PENDING`)
 - `results/phase14_transcripts.md` — FOUND (25,609 lines, 540 context dumps)
 - `results/phase14_recall_run.log` — FOUND
 - `results/phase14_teaching_run.log` — FOUND
 - `results/phase14_real/run.csv` — FOUND (20 eval rows)
-- `.planning/phases/14-teach-then-recall-demo/14-VALIDATION.md` — FOUND (`nyquist_compliant: true`)
+- `.planning/phases/14-teach-then-recall-demo/14-VALIDATION.md` — FOUND (`nyquist_compliant: true`,
+  approval granted, demo outcomes recorded)
+- `.planning/phases/14-teach-then-recall-demo/14-11-SUMMARY.md` — FOUND (this file, 3/3)
 - commit `f93b502` — FOUND
 - commit `6f873a5` — FOUND
 - commit `043bf4d` — FOUND
+- commit `b70b128` — FOUND
+- commit `5453d47` — FOUND
 
 ---
 *Phase: 14-teach-then-recall-demo*
-*2/3 tasks complete — stopped at the blocking human verdict, nothing guessed*
+*3/3 tasks complete — verdict recorded verbatim, demo verified live, phase closed*

@@ -560,11 +560,21 @@ reading of a single failed question as "the model does not know this" is out of 
 
 ## Verdict
 
+**ADAPT** — GO with two qualifications. The user's verdict is recorded verbatim below, unwrapped and unedited.
+
 - Taught: 0.4921 vs `TAUGHT_THRESHOLD` 0.2486 (boundary passes) — **PASS**
 - Held-out: 0.3483 vs `HELDOUT_THRESHOLD` 0.2000 (boundary passes) — **PASS**
 - Closed-book control: 0.0000 — descriptive, no threshold
 
-PENDING — user decision at checkpoint.
+Recorded 2026-08-02 by the user at the 14-11 Task 3 blocking checkpoint, verbatim:
+
+GO, with two qualifications recorded alongside the passed gate.
+
+(1) No-collateral-collapse (D-11 control 2): the taught persona measurably raises off-topic dialogue cost (+27.16%) relative to the pre-adapter conversational base, but does not eliminate the collapse signature entirely. The adapter reduces, rather than removes, deviation from general conversational behavior on unrelated prompts. This qualifies but does not invalidate DEMO-05/06/07: the taught and held-out recall gates measure fact retrieval, not general-purpose fluency, and both passed on their own pre-registered terms. The residual collapse is reported as a known limitation of this adapter configuration, not corrected after the fact by loosening any locked criterion.
+
+(2) Question-fairness control (D-11.1 / D-20's prompt route): the in-context extraction arm succeeded in 1/1944 attempts. At the F5 pilot scale (0/3) this was already anticipated in D-20's reconciliation as a likely negative; at full scale it is closer to total failure than to a modest disadvantage. This sharpens, rather than weakens, D-20(a)'s existing statement: a closed-book control failure at this model scale cannot be read as proof of 'no memory' via the prompt-fairness mechanism, because the base's in-context extraction is close to non-functional independent of whether memory is present. D-20(b)'s core claim is unaffected — the adapter-on/adapter-off differential, which is what DEMO-05/06/07 actually rests on, contains no fact in either arm's context and is therefore untouched by this control's outcome.
+
+Both qualifications are reported as named limitations alongside the passed gate numbers (taught 0.4921 >= 0.2486; closed-book 0/2430; toggle bit-identity 0.0), not folded into or softening them.
 
 ## Ship Decision — post-verdict, discretionary
 

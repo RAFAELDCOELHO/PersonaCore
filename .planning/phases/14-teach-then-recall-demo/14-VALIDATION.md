@@ -24,7 +24,7 @@ updated: 2026-08-02
 | **Config file** | `pyproject.toml` → `[tool.pytest.ini_options]`, `testpaths=["tests"]`, `pythonpath=["."]` |
 | **Quick run command** | `.venv/bin/pytest -q tests/test_phase14_*.py tests/test_recall_prompt.py` |
 | **Full suite command** | `make test` (`.venv/bin/pytest -q`) |
-| **Estimated runtime** | quick: **3.74 s** (101 tests) · full: **~110 s** (386 tests) — measured 2026-08-02 at phase close; the research-time estimate of ~0.75 s predated the 100 Phase-14 tests |
+| **Estimated runtime** | quick: **3.74 s** (101 tests) · full: **~110 s** (389 tests) — measured 2026-08-02 at phase close; the research-time estimate of ~0.75 s predated the 100 Phase-14 tests |
 
 The suite is **CPU-only and GPU-free by contract**. No test in this phase may require MPS, a
 checkpoint file, or a Gradio launch.
@@ -60,7 +60,7 @@ rows green.
 | T3 | 14-04 | 4 | DEMO-06 | — | No held-out question's id sequence is a contiguous subsequence of the teaching bin | unit | `.venv/bin/pytest tests/test_phase14_teaching.py::test_no_token_leakage -x` | ✅ exists | ✅ green |
 | T3 | 14-05 | 4 | DEMO-06 | — | Normalizer + substring gate + contradiction detector behave as specified | unit (importlib) | `.venv/bin/pytest tests/test_phase14_scoring.py -x` | ✅ exists | ✅ green |
 | T3 | 14-05 | 4 | DEMO-06 | T-14-34 | Pre-registered thresholds are literal module constants in the committed driver | unit (importlib) | `.venv/bin/pytest tests/test_phase14_scoring.py::test_preregistration_constants -x` | ✅ exists | ✅ green |
-| T3 | 14-11 | 9 | DEMO-06 | T-14-18 | Taught vs held-out reported separately; all transcripts committed incl. failures | manual review | inspect `results/phase14_recall_report.md`, `results/phase14_transcripts.md` | ✅ exists | ⬜ pending (blocking human checkpoint) |
+| T3 | 14-11 | 9 | DEMO-06 | T-14-18 | Taught vs held-out reported separately; all transcripts committed incl. failures | manual review | inspect `results/phase14_recall_report.md`, `results/phase14_transcripts.md` | ✅ exists | ✅ green (verdict recorded 2026-08-02) |
 | T3 | 14-08 | 6 | DEMO-07 | — | `personalize_demo.py` `forbid_ids` mask tensor equals `demo_app.py`'s (D-17) | unit (CPU, no launch) | `.venv/bin/pytest tests/test_phase14_demo.py::test_forbid_ids_parity -x` | ✅ exists | ✅ green |
 | T3 | 14-08 | 6 | DEMO-07 | — | UI token-panel ids byte-identical to the harness's committed dump (D-18) | unit | `.venv/bin/pytest tests/test_phase14_demo.py::test_prompt_ids_identical -x` | ✅ exists | ✅ green |
 | T3 | 14-08 | 6 | DEMO-07 | T-14-27 | Demo emits zero remote stylesheet URLs (`build_demo().stylesheets == []`, UI-SPEC offline lock) | unit (CPU, no launch) | `.venv/bin/pytest tests/test_phase14_demo.py::test_no_remote_stylesheets -x` | ✅ exists | ✅ green |
@@ -73,7 +73,8 @@ rows green.
 The two adapter-gated demo tests (`test_forbid_ids_parity_real_artifacts`,
 `test_build_demo_stylesheets_real`) skipped for the whole phase because
 `checkpoints/persona_adapter.pt` did not exist. Plan 14-11 T1 produced it and they now **run and
-pass**: the suite moved from 381 passed / 6 skipped to **386 passed / 1 skipped**.
+pass**: the suite moved from 381 passed / 6 skipped to 386 passed / 1 skipped, and to **388 passed
+/ 1 skipped** once 14-11 T3's demo-surface fix added its two `StripThirdPartyAssets` tests.
 
 ---
 
@@ -97,6 +98,35 @@ pass**: the suite moved from 381 passed / 6 skipped to **386 passed / 1 skipped*
 | Calibration / scored recall run | DEMO-05, DEMO-06 | Needs checkpoints + MPS; produces the committed `results/phase14_*.md` artifacts | `.venv/bin/python scripts/phase14_recall.py`; review all four artifacts incl. failures |
 | Demo surface on camera (toggle, Reset, token panel, streaming) | DEMO-07 | Gradio launch + human-visible behavior; the phase deliverable is a recorded frame | Launch `scripts/personalize_demo.py` locally, exercise ON → OFF → Reset, confirm the token panel and per-bubble stamps match the UI-SPEC contracts |
 
+### Recorded outcomes — 2026-08-02, 14-11 Task 3 blocking checkpoint
+
+**Part A — the evidence (DEMO-05 / DEMO-06).** Verdict recorded verbatim in
+`results/phase14_recall_report.md` `## Verdict`: **ADAPT — GO with two qualifications** (residual
+collateral collapse at +27.16%; the question-fairness control at 1/1944). Both qualifications are
+recorded as named limitations *alongside* the passed gate numbers, not folded into them; no locked
+threshold was touched and `## Ship Decision — post-verdict, discretionary` correctly stays empty
+because no gate was missed.
+
+**Part B — the demo, in a live browser** at http://127.0.0.1:7860, against the real
+`checkpoints/persona_adapter.pt` and the post-fix demo surface (`5453d47`):
+
+| Check (plan step) | Measured in the browser |
+|---|---|
+| Third-party origins on page load (13) | **`http://127.0.0.1:7860` only** — zero third-party requests |
+| Off-origin `script[src]` / `link[href]` in the DOM (13) | **`[]`** |
+| Startup token panel (8) | exactly `ids (3) : [8187, 8185, 8186]` |
+| Accordion collapsed at load (8) | yes |
+| **Token panel ON vs OFF, same question (10)** | **byte-identical**, while the answers differ — ON `i am going to go to the marrow.` / OFF `i work at a college state and could change him with scotch` |
+| Recall on camera (9) | `i have a dog named zorp.`, `i live in brindlemoor.`, `i go by quick.` |
+| Streaming monotonic (9) | 65 samples @ 200 ms, **SHRINK_EVENTS = 0**, growth trace `185 -> 235 -> 251` |
+| Token panel stationary mid-stream (9) | **one** distinct bounding rect across all 65 samples (`top=306`, `left=782`) |
+| Max-new-tokens slider clamp (11) | clamps at **48** — a programmatic `value=8` snapped back |
+| Reset (12) | checkbox disabled + unchecked, Reset button disabled, banner `MEMORY: DELETED`, Ask still answers (`no it is the hockey.`) |
+| Console errors | **zero** |
+
+That fifth row is the phase's central claim in one frame: the prompt did not change and the answer
+did. Full suite at close: **388 passed / 1 skipped**.
+
 ---
 
 ## Validation Sign-Off
@@ -108,5 +138,6 @@ pass**: the suite moved from 381 passed / 6 skipped to **386 passed / 1 skipped*
 - [x] Feedback latency < 5s — quick run **measured at 3.74 s** (101 tests, 2026-08-02)
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending — the DEMO-05/06 recall verdict and the DEMO-07 on-camera demo pass are the
-blocking human checkpoint at 14-11 T3. Everything automatable is green.
+**Approval:** **granted 2026-08-02** — the DEMO-05/06 recall verdict is recorded (ADAPT — GO with
+two qualifications) and the DEMO-07 on-camera demo pass is confirmed in a live browser; see
+*Recorded outcomes* above. Everything automatable is green (388 passed / 1 skipped).

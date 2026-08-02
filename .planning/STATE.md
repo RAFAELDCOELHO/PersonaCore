@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: 14-11 Task 3 — blocking human verdict on the recall report + on-camera demo pass
-last_updated: "2026-08-02T12:19:43.189Z"
-last_activity: 2026-08-02 -- 14-11 executed: adapter taught, recall run PASSED both gates, verdict PENDING
+stopped_at: Phase 14 complete — 14-11 T3 verdict recorded (ADAPT); Phase 15 not started
+last_updated: "2026-08-02T13:29:08.866Z"
+last_activity: 2026-08-02 -- Phase 14 marked complete
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 31
-  completed_plans: 30
-  percent: 84
+  completed_plans: 31
+  percent: 86
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 14 — teach-then-recall-demo
+**Current focus:** Phase 15 — figures & writeup (Phase 14 closed 2026-08-02)
 
 ## Current Position
 
-Phase: 14 (teach-then-recall-demo) — AWAITING BLOCKING VERDICT
-Plan: 11 of 11 (Tasks 1-2 complete, Task 3 is the blocking human checkpoint)
-Status: 14-11 executed — both recall gates PASSED, `## Verdict` still reads PENDING
-Last activity: 2026-08-02 -- 14-11 executed: adapter taught, recall run PASSED both gates
+Phase: 14 — COMPLETE
+Plan: 11 of 11 (14-11 complete, 3/3 tasks — the blocking verdict is recorded)
+Status: Phase 14 complete
+Last activity: 2026-08-02 -- Phase 14 marked complete
 
-Progress: [█████████░] 95% (Phase 14: 10.5 of 11 plans)
+Progress: [██████████] 100% of planned plans (31/31) — 6 of 7 phases; Phase 15 has no plans yet
 
 ## Performance Metrics
 
@@ -59,7 +59,7 @@ Progress: [█████████░] 95% (Phase 14: 10.5 of 11 plans)
 | Phase 13 P02 | 82min | 2 tasks | 2 files |
 | Phase 13 P03 | 24min | 2 tasks | 6 files |
 | Phase 13 P04 | 18min | 2 tasks | 1 files |
-| Phase 14 P11 | 50min | 2 tasks | 7 files |
+| Phase 14 P11 | 70min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -101,6 +101,8 @@ Key carry-forwards for v2.0:
 - [Phase 14]: 14-11: D-11.1 question-fairness control came back near-negative (1/1944) — the base cannot extract a fact even from its own persona span; the pre-registered (a)/(b)/(c) reconciliation stands unamended and the adapter-on/off differential is unaffected
 - [Phase 14]: 14-11: Control 3 bit identity measured max abs diff exactly 0.0 on CPU on the real weights — the demo's memory-OFF state IS the un-adapted base, not a second adapted model
 - [Phase 14]: 14-11: TRANSCRIPTS_PATH renamed to results/phase14_transcripts.md — the code was the sole outlier against five planning documents and the report pointed at a nonexistent file
+- [Phase 14]: recall gate verdict recorded ADAPT — GO with two qualifications (residual collateral collapse +27.16%; question-fairness control 1/1944), both reported as named limitations ALONGSIDE the passed gate numbers, not folded into them; no locked threshold touched and the post-verdict Ship Decision section correctly stays empty
+- [Phase 14]: DEMO-07 verified in a live browser — token panel byte-identical across memory ON/OFF for the same question while the answers differ, zero third-party origins on load, 0 shrink events over 65 stream samples, Reset one-way with the chat still live
 
 ### Pending Todos
 
@@ -109,9 +111,7 @@ None yet.
 ### Blockers/Concerns
 
 - Phase 12 research flag: λ selection + full-FT LR/budget calibration — plan with `/gsd-plan-phase --research-phase` (research/SUMMARY.md).
-- Phase 14 research flag: teach-then-recall protocol has no canonical reference — discuss/spec pass on teaching-set grammar + threshold pre-registration before planning.
 - DEBT-01/02 (run.csv ×256, forbid_ids-in-PPL policy) are Phase 12 pre-work and MUST land before the first v2.0 fine-tune step — forgetting-curve axes depend on them.
-- Phase 14 is at plan 14-11's BLOCKING human checkpoint (Task 3): both recall gates PASSED (taught 0.4921 vs 0.2486, held-out 0.3483 vs 0.2000) but results/phase14_recall_report.md '## Verdict' still reads PENDING. A human must read the report, spot-check five transcripts, record GO/ADAPT/STOP, and exercise the demo in a browser with Wi-Fi off. The phase is NOT complete until that verdict is recorded.
 
 ### Quick Tasks Completed
 
@@ -135,10 +135,10 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T12:18:34.412Z
-Stopped at: Phase 14 UI-SPEC approved
+Last session: 2026-08-02T13:28:52.805Z
+Stopped at: Phase 14 complete — 14-11 T3 verdict recorded (ADAPT), demo verified in a live browser
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan the first v2.0 phase with `/gsd-plan-phase 9` (LoRA Core — standard patterns, no research-phase needed)
+- Plan the final v2.0 phase with `/gsd-plan-phase 15` (Figures & Writeup — consumes the Phase 13 curves and the Phase 14 recall evidence)
