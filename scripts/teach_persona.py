@@ -68,6 +68,7 @@ from personacore.checkpoint import export_adapter  # noqa: E402
 from personacore.config import ModelConfig, RuntimeConfig, TrainConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt, encode_dialogue  # noqa: E402
 from personacore.evaluation import masked_perplexity  # noqa: E402
+from personacore.generation import undecodable_ids_mask  # noqa: E402
 from personacore.lora import (  # noqa: E402
     LoRAConfig,
     adapter_disabled,
@@ -137,6 +138,15 @@ REPLAY_ARM_RATIO = 1.0  # D-15's with-replay arm: one replay token per teaching 
 # What the paired arm also measured, stated here because it bounds what this number buys: replay
 # at 1.0 moved the collapse to +29.39%, which is a large mitigation but STILL trips the trigger,
 # and it cost taught recall 0.6825 -> 0.4143. "Replay required" is not "replay solves it".
+#
+# WR-01 — PROVENANCE OF THE FOUR PPL FIGURES ABOVE. They were measured by ``train_arm`` as
+# originally committed, which called ``masked_perplexity`` WITHOUT ``forbid_ids`` while
+# ``phase14_recall.run_collapse_control`` passed it — so the two were described as one instrument
+# and were not. The call below is now aligned to the frozen policy, but these constants record
+# what was measured, not what the aligned instrument would produce. Re-measured from the saved
+# adapters under both settings: +224.8084% -> +224.5330% (no replay) and +29.3914% -> +29.3364%
+# (replay 1.0). ``replay_required`` returns True on every one of those four numbers, so the
+# derivation this block encodes is unchanged and is NOT being re-derived after the fact.
 REAL_RUN_REPLAY_RATIO = REPLAY_ARM_RATIO
 
 # D-21 verdict, from ``first_person_wins(0.5519, 0.8045)`` -> **False**. First person did NOT
@@ -528,18 +538,29 @@ def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
     tok, stats, paths = build_arm_bins(
         arm, facts, family_ids, second_person=second_person, replay_ratio=replay_ratio
     )
-    del tok  # the training half needs the bins, not the tokenizer
-
-    # Re-seed IMMEDIATELY before the GPT build: this seed owns the training data order (the
-    # finetune_ab.py provenance note), and the bins build above consumed numpy RNG in its smoke
-    # draw. Seeding once at the top would make the data order depend on the bins path.
-    seed_everything(SEED)
-
     # weights_only=False: the FULL resume checkpoint carries pickled optimizer/RNG/numpy
     # objects. TRUSTED-only read of the project's OWN checkpoint (T-14-04) — never a foreign
     # file. The SHAREABLE artifact path stays weights_only=True via export_adapter.
     blob = torch.load(CONVBASE_BEST, weights_only=False)
     model_cfg = ModelConfig(**blob["model_config"])
+
+    # WR-01: the FROZEN Phase-12/13 evaluation policy masks dead ids on every gated
+    # `masked_perplexity` call (`finetune_dialog.py:203,214`, `finetune_ab.py:235,246`), and so
+    # does `phase14_recall.run_collapse_control` — which is why both reports call the two the
+    # same instrument. This call site used to omit it, because the tokenizer was already `del`d
+    # by the time the collapse pair was measured. So the mask is built HERE, while `tok` is still
+    # alive, and `del tok` moves down: the sweep at the bottom of this function is now literally
+    # the D-11.2 instrument rather than a 0.008%-divergent near-twin of it.
+    forbid = undecodable_ids_mask(tok, model_cfg.vocab_size).to(runtime.device)
+    del tok  # the training half needs the bins and the mask, not the tokenizer
+
+    # Re-seed IMMEDIATELY before the GPT build: this seed owns the training data order (the
+    # finetune_ab.py provenance note), and the bins build above consumed numpy RNG in its smoke
+    # draw. Seeding once at the top would make the data order depend on the bins path. Everything
+    # hoisted above it (the checkpoint read, the dead-id mask) consumes no RNG, so the training
+    # trajectory is byte-for-byte what it was before the mask was introduced.
+    seed_everything(SEED)
+
     model = GPT(model_cfg)
     model.load_state_dict(blob["model"])  # LOAD BEFORE INJECT — the load-bearing ordering.
 
@@ -646,11 +667,11 @@ def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
     # The no-collateral-collapse endpoint: the SAME deterministic sweep with the adapter on and
     # off, in one process on one set of weights, so the only difference is the LoRA enabled flag.
     ppl_on, scored_on = masked_perplexity(
-        model, DIALOG_VAL_BIN, DIALOG_VAL_MASK, BLOCK_SIZE, runtime.device
+        model, DIALOG_VAL_BIN, DIALOG_VAL_MASK, BLOCK_SIZE, runtime.device, forbid_ids=forbid
     )
     with adapter_disabled(model):
         ppl_off, scored_off = masked_perplexity(
-            model, DIALOG_VAL_BIN, DIALOG_VAL_MASK, BLOCK_SIZE, runtime.device
+            model, DIALOG_VAL_BIN, DIALOG_VAL_MASK, BLOCK_SIZE, runtime.device, forbid_ids=forbid
         )
     if scored_on != scored_off:
         raise SystemExit(
@@ -1375,8 +1396,18 @@ def write_calibration_report(results, derived, provenance_lines):
         f"committed in `{derived['rule_sha']}`.",
         "",
         "The instrument is the D-11.2 one exactly — `masked_perplexity` over",
-        "`data/dialog_val.bin` + its mask, adapter ON and OFF in ONE process on ONE set of",
-        "weights, so the only difference is the LoRA enabled flag. It is not a proxy.",
+        "`data/dialog_val.bin` + its mask, block 256, **dead ids forbidden**",
+        "(`undecodable_ids_mask`, the frozen Phase-12/13 evaluation policy), adapter ON and OFF",
+        "in ONE process on ONE set of weights, so the only difference is the LoRA enabled flag.",
+        "It is not a proxy.",
+        "",
+        "> **WR-01 — the `forbid_ids` argument above was added AFTER this run.** The figures in",
+        "> the table below were measured by `train_arm` as originally committed, which omitted",
+        "> the dead-id mask; `phase14_recall.run_collapse_control` always passed it. Re-measured",
+        "> from the saved calibration adapters under both settings, the divergence is:",
+        "> `cal_first_person` +224.8084% unmasked vs +224.5330% masked, `cal_first_person_replay`",
+        "> +29.3914% unmasked vs +29.3364% masked. `replay_required` is **True** either way, so",
+        "> the D-15 verdict is unchanged. The numbers recorded here are the unmasked ones.",
         "",
         "| Arm | PPL adapter OFF | PPL adapter ON | Fractional increase |",
         "|---|---|---|---|",

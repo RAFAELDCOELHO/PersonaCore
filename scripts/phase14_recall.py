@@ -1202,10 +1202,17 @@ def run_collapse_control(model, tok, device, forbid, values):
     The trigger is ``teach_persona.COLLAPSE_PPL_TRIGGER``, applied through
     ``teach_persona.replay_required`` — the SAME function, with the same ``RATIO_DECIMALS``
     rounding, that D-15's replay verdict was derived from during calibration. Applying the
-    identical rule keeps the calibration measurement and this control on ONE scale. The boolean
-    is DESCRIPTIVE and has no gate attached: calibration already measured the replay arm at
-    +29.39% — still past the 0.10 trigger — so a trip here is a pre-recorded expectation, not a
-    surprise, and "replay required" was never "replay solves it".
+    identical rule keeps the calibration measurement and this control on one DECISION RULE. The
+    boolean is DESCRIPTIVE and has no gate attached: calibration already measured the replay arm
+    at +29.39% — still past the 0.10 trigger — so a trip here is a pre-recorded expectation, not
+    a surprise, and "replay required" was never "replay solves it".
+
+    **WR-01 — the rule was shared; the INSTRUMENT was not, until it was fixed.** This control has
+    always passed ``forbid_ids``; ``teach_persona.train_arm`` did not when the calibration
+    numbers were taken, so the +29.39% above and the delta this control reports came off
+    instruments that differ by ~0.008% on the base. Both call sites now pass the mask, but the
+    recorded calibration figures are still the unmasked ones and the report says so where it
+    prints them.
 
     **The ``teach_persona`` import is LAZY, inside this function, never at module level**
     (``14-05-PLAN.md`` ``<import_topology>`` rule 5). Two load-bearing reasons: ``teach_persona``
@@ -1840,11 +1847,21 @@ def write_recall_report(records, controls, provenance_lines):
         collapse_row,
         "",
         f"`COLLAPSE_PPL_TRIGGER` = {collapse['trigger']} (imported from `teach_persona`, never "
-        f"duplicated, so this control and D-15's calibration verdict share ONE definition and "
-        f"stay on one scale). Trigger tripped: **{collapse['trips_trigger']}** — **descriptive, "
-        f"no gate.** Calibration already measured the replay arm at **+29.39%**, still past the "
-        f"trigger, and this run uses that arm's configuration: a trip here is a pre-recorded "
-        f'expectation, not a surprise. "Replay required" was never "replay solves it".',
+        f"duplicated, so this control and D-15's calibration verdict share ONE definition of the "
+        f"RULE). Trigger tripped: **{collapse['trips_trigger']}** — **descriptive, no gate.** "
+        f"Calibration already measured the replay arm at **+29.39%**, still past the trigger, "
+        f"and this run uses that arm's configuration: a trip here is a pre-recorded expectation, "
+        f'not a surprise. "Replay required" was never "replay solves it".',
+        "",
+        "> **WR-01 — the +29.39% above and the delta in this table were measured on two slightly "
+        "different instruments, and this line says so rather than presenting them as one scale.** "
+        "`teach_persona.train_arm` called `masked_perplexity` WITHOUT `forbid_ids` when the "
+        "calibration numbers were recorded; this control has always passed it. Re-measured from "
+        "the saved calibration adapters under both settings, the replay arm reads +29.3914% "
+        "unmasked and +29.3364% masked (and the no-replay arm +224.8084% / +224.5330%) — "
+        "`replay_required` is True on all four, so the D-15 verdict does not move. The call site "
+        "has since been aligned to the frozen policy; the recorded calibration figures remain the "
+        "unmasked ones, because a report does not get to re-describe how its numbers were taken.",
         "",
         "### Paired transcripts — questions touching no taught slot",
         "",

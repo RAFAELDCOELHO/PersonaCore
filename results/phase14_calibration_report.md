@@ -282,9 +282,29 @@ The four invariants the rule preserved:
 **Rule function:** `teach_persona.replay_required(ppl_adapter_off, ppl_adapter_on)`,
 committed in `d7d79174bd4293bfc95fe5647c1bb7ec0dea509b`.
 
-The instrument is the D-11.2 one exactly — `masked_perplexity` over
-`data/dialog_val.bin` + its mask, adapter ON and OFF in ONE process on ONE set of
-weights, so the only difference is the LoRA enabled flag. It is not a proxy.
+The instrument is `masked_perplexity` over `data/dialog_val.bin` + its mask, block 256,
+adapter ON and OFF in ONE process on ONE set of weights, so the only difference is the
+LoRA enabled flag. It is not a proxy.
+
+> **CORRECTION (WR-01, recorded after the run — the figures below are NOT amended).** This
+> paragraph originally read "the instrument is the D-11.2 one **exactly**". It was not. The
+> `train_arm` code that produced the table below called `masked_perplexity` **without**
+> `forbid_ids`, while `phase14_recall.run_collapse_control` — the D-11.2 control — always
+> passed it, so the two differed by the Phase-12/13 dead-id mask (7,645 of 8,192 ids).
+> Re-measured from the saved calibration adapters under both settings, on the same 270,203
+> scored targets:
+>
+> | Arm | delta, unmasked (as recorded below) | delta, dead ids forbidden | `replay_required` |
+> |---|---|---|---|
+> | `cal_first_person` (no replay) | +224.8084% | +224.5330% | True either way |
+> | `cal_first_person_replay` (replay 1.0) | +29.3914% | +29.3364% | True either way |
+>
+> **The D-15 verdict is unchanged and is not being re-derived after the fact.** The call site
+> has since been aligned to the frozen policy, but the numbers in the table below are the ones
+> that were actually measured — the unmasked ones — and they stay as recorded. This is also the
+> full explanation of why `results/phase14_recall_report.md` reports the adapter-OFF base at
+> 4.5733 while this report reports 4.5737: same weights, same corpus, one masked sweep and one
+> unmasked one.
 
 | Arm | PPL adapter OFF | PPL adapter ON | Fractional increase |
 |---|---|---|---|

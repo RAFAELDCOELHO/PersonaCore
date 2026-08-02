@@ -461,7 +461,19 @@ not let a reader SEE that the model still converses.
 | --- | --- | --- |
 | masked dialogue-val PPL | 4.5733 (off) -> 5.8154 (on) | **+27.16%** over 270,203 scored targets |
 
-`COLLAPSE_PPL_TRIGGER` = 0.1 (imported from `teach_persona`, never duplicated, so this control and D-15's calibration verdict share ONE definition and stay on one scale). Trigger tripped: **True** — **descriptive, no gate.** Calibration already measured the replay arm at **+29.39%**, still past the trigger, and this run uses that arm's configuration: a trip here is a pre-recorded expectation, not a surprise. "Replay required" was never "replay solves it".
+`COLLAPSE_PPL_TRIGGER` = 0.1 (imported from `teach_persona`, never duplicated, so this control and D-15's calibration verdict share ONE definition of the RULE). Trigger tripped: **True** — **descriptive, no gate.** Calibration already measured the replay arm at **+29.39%**, still past the trigger, and this run uses that arm's configuration: a trip here is a pre-recorded expectation, not a surprise. "Replay required" was never "replay solves it".
+
+> **CORRECTION (WR-01, recorded after the run — no number in this report is amended).** The
+> sentence above originally ended "share ONE definition **and stay on one scale**". The rule was
+> shared; the instrument was not. `teach_persona.train_arm` called `masked_perplexity` **without**
+> `forbid_ids` when the +29.39% was recorded, while this control has always passed it — so the
+> +29.39% and the +27.16% in the table above were taken on instruments differing by the
+> Phase-12/13 dead-id mask. Re-measured from the saved adapters, the replay arm reads +29.3914%
+> unmasked and +29.3364% masked (no-replay arm: +224.8084% / +224.5330%); `replay_required` is
+> True on all four, so the D-15 verdict does not move. **This report's own +27.16% is unaffected**
+> — it was always the masked sweep. The divergence is also why `results/phase14_calibration_report.md`
+> records the adapter-OFF base at 4.5737 and this report records 4.5733. `train_arm` has since
+> been aligned to pass `forbid_ids`; the recorded calibration figures remain the unmasked ones.
 
 ### Paired transcripts — questions touching no taught slot
 
