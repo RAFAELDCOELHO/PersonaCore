@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: planning
-stopped_at: Phase 14 register + fairness reconciliation locked (D-20..D-22)
-last_updated: "2026-08-02T00:22:40.937Z"
-last_activity: 2026-08-01
+status: executing
+stopped_at: Phase 14 UI-SPEC approved
+last_updated: "2026-08-02T01:58:35.831Z"
+last_activity: 2026-08-02 -- Phase 14 planning complete
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 20
+  total_plans: 31
   completed_plans: 20
-  percent: 71
+  percent: 65
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 Phase: 14
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-08-01
+Status: Ready to execute
+Last activity: 2026-08-02 -- Phase 14 planning complete
 
 Progress: [██████████] 100%
 
@@ -128,9 +128,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T00:22:40.931Z
-Stopped at: Phase 14 register + fairness reconciliation locked (D-20..D-22)
-Resume file: .planning/phases/14-teach-then-recall-demo/14-CONTEXT.md
+Last session: 2026-08-02T00:43:30.573Z
+Stopped at: Phase 14 UI-SPEC approved
+Resume file: .planning/phases/14-teach-then-recall-demo/14-UI-SPEC.md
 
 ## Operator Next Steps
 
