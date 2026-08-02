@@ -683,6 +683,30 @@ class RecallItem(NamedTuple):
     question: str
     split: str  # "taught" | "held-out" — aggregated separately inside every tier
     reserved: bool  # True for the D-08 reserved gate probes (proven base-failing at gate time)
+    # The question's OWN seed index, stamped once by `stamp_seed_indices` and carried from then
+    # on. `-1` is the unstamped sentinel `run_scored_recall` refuses, so a question can never be
+    # scored with an accidental seed. See `stamp_seed_indices` for why this is not `enumerate`.
+    seed_index: int = -1
+
+
+def stamp_seed_indices(items):
+    """Bind each item to its OWN generator seed index — the CR-01 pairing fix.
+
+    **The defect this closes.** ``run_scored_recall`` used to derive the seed from
+    ``enumerate(items)``, i.e. the question's position in whatever list it was handed. The three
+    adapter-ON arms are scored on separate lists (``core_taught``, ``core_held_out``,
+    ``soft_taught + soft_held_out``), each restarting at 0; the closed-book control is scored on
+    the CONCATENATION of all three, so every question past the first arm drew a DIFFERENT
+    ``question_seed(index) + s`` in the control than it drew adapter-on. 158 of 270 questions
+    were unpaired while the report and ``complete_question``'s docstring both asserted pairing.
+
+    **Why the index is stamped per ARM and not globally 0..269.** The three adapter-ON arms are
+    RECORDED EVIDENCE — 4,860 committed completions in ``results/phase14_transcripts.md``.
+    Renumbering them globally would silently invalidate every one. Stamping each arm 0..n-1
+    reproduces exactly the indices those arms already used, so the ON numbers are untouched by
+    construction and only the control moves onto the questions' own seeds.
+    """
+    return tuple(item._replace(seed_index=index) for index, item in enumerate(items))
 
 
 def build_question_sets(facts):
@@ -763,7 +787,17 @@ def run_scored_recall(model, tok, device, forbid, items, *, tier_label, excluded
     _prove(items, f"tier {tier_label!r} received no questions to score")
 
     questions = []
-    for index, item in enumerate(items):
+    for item in items:
+        # CR-01: the seed comes off the ITEM, never off this loop's position. A tier-local
+        # `enumerate` is what unpaired 158 of 270 closed-book questions from their adapter-ON
+        # counterparts — the control is handed the concatenation of all three arms, so its
+        # positions and theirs cannot agree. `-1` means `stamp_seed_indices` was never called.
+        _prove(
+            item.seed_index >= 0,
+            f"question {item.question!r} in tier {tier_label!r} carries no seed index — "
+            "`stamp_seed_indices` must stamp every arm before it is scored, or this tier and "
+            "the closed-book control silently draw from different streams (CR-01)",
+        )
         dump = render_context_dump(tok, item.question, source=CONTEXT_DUMP_SOURCE)
         # The dump is recorded BEFORE the model is called, so the committed evidence is what the
         # model actually received rather than a reconstruction made after seeing the answer.
@@ -771,7 +805,7 @@ def run_scored_recall(model, tok, device, forbid, items, *, tier_label, excluded
         # The mechanical form of the demo-killing failure in PITFALLS-11: if any locked value
         # reaches any prompt, the claim is falsified at the exact moment it is demonstrated, so
         # the run ABORTS rather than warns. `assert_no_value_in_prompt` raises SystemExit.
-        drawn = complete_question(model, tok, item.question, device, forbid, index=index)
+        drawn = complete_question(model, tok, item.question, device, forbid, index=item.seed_index)
         completions = drawn["completions"]
         # Same D-10 rule at two granularities: `score_question` aggregates it, `hits` keeps the
         # per-completion flag the transcripts print next to each completion.
@@ -785,6 +819,7 @@ def run_scored_recall(model, tok, device, forbid, items, *, tier_label, excluded
                 "value": item.fact.value,
                 "split": item.split,
                 "reserved": item.reserved,
+                "seed_index": item.seed_index,
                 "prompt_ids": drawn["prompt_ids"],
                 "dump": dump,
                 "completions": completions,
@@ -899,14 +934,18 @@ def write_transcripts(records, provenance_lines):
                 blocks.append(f"- `{family_id}` · `{fact_id}` · {split} — {question}")
             blocks.append("")
 
-        for index, entry in enumerate(record["questions"]):
+        for entry in record["questions"]:
             marks = [
                 f"`{entry['fact_id']}`",
                 f"slot `{entry['slot']}`",
                 f"split `{entry['split']}`",
             ]
             blocks += [
-                f"### [{index}] {entry['question']}",
+                # The bracketed number is the SEED index, not this section's row number. Since
+                # CR-01 the closed-book control replays each question on the index that question
+                # was scored under adapter-on, so its indices restart per source arm rather than
+                # running 0..N — and the header's "`[i]` is the seed index" claim stays literal.
+                f"### [{entry['seed_index']}] {entry['question']}",
                 "",
                 f"- {' · '.join(marks)}",
             ]
@@ -987,6 +1026,13 @@ def run_closed_book_control(model, tok, device, forbid, items):
     differs: same process, same loaded weights, same prompts, same per-question seeds — so a
     difference in the numbers can only come from the adapter.
 
+    **The pairing is carried by the ITEMS, not by this call (CR-01).** ``items`` here is the
+    concatenation of the three adapter-ON arms, each already stamped by ``stamp_seed_indices``,
+    so every question arrives holding the same ``seed_index`` it was scored under adapter-on and
+    ``run_scored_recall`` replays its exact generator streams. Handing this function unstamped
+    items would restore the original defect — a fresh 0..269 enumeration whose seeds agree with
+    the ON arms only for the first 112 questions — which is why the sentinel is refused loudly.
+
     D-08: the gate's base-failure probes are evidence carried FORWARD, never a substitute for
     re-measuring at scoring time. This control therefore re-runs on the FULL final question set,
     not on the reserved probes alone.
@@ -1011,11 +1057,18 @@ def main():
 
     core_taught, core_held_out, core_excluded = build_question_sets(fs.LOCKED_FACTS)
     soft_taught, soft_held_out, soft_excluded = build_question_sets(fs.SOFT_TIER_FACTS)
+    # CR-01: stamp each ARM with its own 0..n-1 seed indices, ONCE, here — the three arms below
+    # are then scored on the questions' own seeds and the closed-book control, which receives the
+    # concatenation, replays those same seeds instead of re-enumerating from 0.
+    core_taught = stamp_seed_indices(core_taught)
+    core_held_out = stamp_seed_indices(core_held_out)
+    soft_scored = stamp_seed_indices(soft_taught + soft_held_out)
     # The constructed held-out set is tied back to the committed `heldout_questions()` seam
     # rather than replacing it: this harness needs the fact binding that the flat tuple drops,
     # so equality is what proves the two constructions describe the same never-seen split.
     _prove(
-        {item.question for item in core_held_out + soft_held_out} == set(fs.heldout_questions()),
+        {item.question for item in core_held_out + soft_scored if item.split == "held-out"}
+        == set(fs.heldout_questions()),
         "the constructed held-out question set differs from phase14_factset.heldout_questions() "
         "— the scored never-seen split has drifted from the committed one",
     )
@@ -1039,14 +1092,14 @@ def main():
             tok,
             device,
             forbid,
-            core_taught + core_held_out + soft_taught + soft_held_out,
+            core_taught + core_held_out + soft_scored,
         ),
         run_scored_recall(
             model,
             tok,
             device,
             forbid,
-            soft_taught + soft_held_out,
+            soft_scored,
             tier_label=SOFT_TIER,
             excluded=soft_excluded,
         ),

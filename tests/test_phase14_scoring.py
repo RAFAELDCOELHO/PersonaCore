@@ -663,6 +663,51 @@ def test_question_seed_is_distinct_and_derivable():
     assert len(set(seeds)) == 16
 
 
+def test_closed_book_control_is_seed_paired_with_the_adapter_on_arms():
+    """CR-01: every closed-book question draws the seed it drew adapter-ON. Pure, no model.
+
+    The defect: ``run_scored_recall`` seeded from ``enumerate(items)``, the question's position in
+    whatever list it was handed. The three adapter-ON arms are scored on separate lists, each
+    restarting at 0; the control is scored on the CONCATENATION, so 158 of 270 questions drew a
+    different generator seed in the control than adapter-on — while the report and
+    ``complete_question``'s docstring both asserted the arms were paired.
+
+    Two things are pinned, and the second is why the fix stamps per ARM rather than globally:
+
+    1. **Pairing.** Every question's control seed equals its adapter-ON seed.
+    2. **The ON arms did not move.** ``stamp_seed_indices`` reproduces exactly the indices
+       ``enumerate`` produced for each arm, so the 4,860 completions committed in
+       ``results/phase14_transcripts.md`` remain the output of the code as it stands. A global
+       0..269 stamping would also pair the arms — and would silently invalidate all of them.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
+    )
+    fs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fs)
+
+    core_taught, core_held_out, _ = pr.build_question_sets(fs.LOCKED_FACTS)
+    soft_taught, soft_held_out, _ = pr.build_question_sets(fs.SOFT_TIER_FACTS)
+    arms = [
+        pr.stamp_seed_indices(core_taught),
+        pr.stamp_seed_indices(core_held_out),
+        pr.stamp_seed_indices(soft_taught + soft_held_out),
+    ]
+
+    for arm in arms:
+        assert [item.seed_index for item in arm] == list(range(len(arm)))
+
+    on_seed = {item.question: pr.question_seed(item.seed_index) for arm in arms for item in arm}
+    control = arms[0] + arms[1] + arms[2]
+    assert len(control) == len(on_seed)  # no question appears in two arms
+    assert all(pr.question_seed(item.seed_index) == on_seed[item.question] for item in control)
+    # The defect, reproduced against the same sets: a positional seed unpairs most of the control.
+    unpaired = sum(
+        1 for i, item in enumerate(control) if pr.question_seed(i) != on_seed[item.question]
+    )
+    assert unpaired > len(control) // 2
+
+
 def test_scored_question_sets_are_value_free_and_match_the_committed_seam():
     """The two contracts ``build_question_sets`` exists to hold. CPU-only, no model, no decode.
 
