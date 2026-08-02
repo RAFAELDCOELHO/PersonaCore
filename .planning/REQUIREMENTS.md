@@ -42,9 +42,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### Demos & Experiments
 
 - [x] **DEMO-04**: EWC A/B no-forgetting experiment — identical seeds/config/data-order arms differing ONLY in the penalty; both retention AND acquisition reported (retention-only is the classic sleight of hand)
-- [ ] **DEMO-05**: Teach-then-recall clean-room demo — 5–10 atomic user facts, ~20–50 template/hand-written paraphrases per fact (no external-API augmentation), LoRA adapter on the frozen conversational base, fresh-process empty-prompt scripted recall with pre-registered thresholds, base-without-adapter control
-- [ ] **DEMO-06**: Held-out-phrasing recall split — taught phrasings vs never-seen phrasings scored and reported separately (learning vs memorization)
-- [ ] **DEMO-07**: Adapter on/off toggle in the Gradio demo — same process, same prompt, memory on/off live
+- [x] **DEMO-05**: Teach-then-recall clean-room demo — 5–10 atomic user facts, ~20–50 template/hand-written paraphrases per fact (no external-API augmentation), LoRA adapter on the frozen conversational base, fresh-process empty-prompt scripted recall with pre-registered thresholds, base-without-adapter control
+- [x] **DEMO-06**: Held-out-phrasing recall split — taught phrasings vs never-seen phrasings scored and reported separately (learning vs memorization)
+- [x] **DEMO-07**: Adapter on/off toggle in the Gradio demo — same process, same prompt, memory on/off live
 
 ### Visualization
 
@@ -113,9 +113,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEMO-04 | Phase 13 | Complete |
 | VIZ-01 | Phase 13 | Complete |
 | VIZ-04 | Phase 13 | Complete |
-| DEMO-05 | Phase 14 | Pending |
-| DEMO-06 | Phase 14 | Pending |
-| DEMO-07 | Phase 14 | Pending |
+| DEMO-05 | Phase 14 | Complete |
+| DEMO-06 | Phase 14 | Complete |
+| DEMO-07 | Phase 14 | Complete |
 | VIZ-02 | Phase 15 | Pending |
 | VIZ-03 | Phase 15 | Pending |
 | DOC-02 | Phase 15 | Pending |
