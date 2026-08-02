@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: Completed 15-05-PLAN.md (wave 4)
-last_updated: "2026-08-02T19:59:27.408Z"
+stopped_at: Completed 15-06-PLAN.md (wave 4)
+last_updated: "2026-08-02T20:10:09.366Z"
 last_activity: 2026-08-02
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 39
-  completed_plans: 36
+  completed_plans: 37
   percent: 86
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 15 (figures-writeup) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-08-02
 
-Progress: [█████████░] 92%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [█████████░] 92%
 | Phase 15 P03 | 24min | 3 tasks | 4 files |
 | Phase 15 P04 | 14min | 2 tasks | 2 files |
 | Phase 15 P05 | 41min | 3 tasks | 1 files |
+| Phase 15 P06 | 17min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,10 @@ Key carry-forwards for v2.0:
 - [Phase 15]: 15-04: the plan's own verify literal 'does not reopen or amend' is split across a line break by the pre-registered renderer — the VERIFY command was corrected, never phase15_stats.py, which is byte-unchanged since 0e1af98 (T-15-09 verified, not asserted)
 - [Phase 15]: 15-05: docs/REPORT.md extended, never edited — 549 insertions / 0 deletions, first 421 lines byte-identical, dated M1 boundary marker inserted before the stale future-tense roadmap (D-13/R3)
 - [Phase 15]: 15-05: limitation quotes keep stable labels L1..L9 in claim-bound render order (L1,L7,L4,L2,L6,L5,L3,L9,L8), verified under the pinned normalize_quote; grep -qF is unrunnable for the 5 multi-line quotes
+- [Phase 15]: 15-06: README's three headline bullets are the terse form and the docs/REPORT.md link is ADDITIVE — the qualifier (proper-noun core / teacher-forced + noise floor / same-run baseline) is complete before the link, so no number's only caveat is a pointer
+- [Phase 15]: 15-06: the front page states rho = 0.801544 with its CI rather than letting VIZ-03 imply the dodging claim visually — written as a RANK correlation, not an effect size, naming the 2 of 36 cells where EWC moved further
+- [Phase 15]: 15-06: two stale v1.0 claims were corrected, not preserved — '~130 CPU-only tests' (actual 403) and 'make test (~70 s)' (actual 115 s, timing DELETED rather than re-asserted)
+- [Phase 15]: 15-06: R1 discharged — README names artifacts/tokenizer.json (5,648 B) built from the 11,469-byte tests/fixtures/tiny_corpus.txt via scripts/train_tokenizer.py:31; both byte counts re-confirmed with wc -c before writing, so REPORT.md's L8 note about README is now true
 
 ### Pending Todos
 
@@ -160,8 +165,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T19:59:18.578Z
-Stopped at: Completed 15-05-PLAN.md (wave 4)
+Last session: 2026-08-02T20:10:03.376Z
+Stopped at: Completed 15-06-PLAN.md (wave 4)
 Resume file: None
 
 ## Operator Next Steps
