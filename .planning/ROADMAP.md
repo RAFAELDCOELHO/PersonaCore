@@ -214,7 +214,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 14-04-PLAN.md — Template-family grammar + masked teaching-bins builder + teaching tests (wave 4)
+- [x] 14-04-PLAN.md — Template-family grammar + masked teaching-bins builder + teaching tests (wave 4)
 - [ ] 14-05-PLAN.md — Recall pre-registration — D-19 budget, scoring rules, context-dump renderer (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
@@ -275,5 +275,5 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
-| 14. Teach-Then-Recall Demo | v2.0 | 3/11 | In Progress|  |
+| 14. Teach-Then-Recall Demo | v2.0 | 4/11 | In Progress|  |
 | 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |
