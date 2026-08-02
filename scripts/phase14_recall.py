@@ -158,12 +158,51 @@ SAMPLE_TOP_P = 0.95
 
 STOP_IDS = frozenset({8184, 8185})  # the pinned turn-stopping idiom (eos + the next `<|user|>`)
 
-# D-09 condition 2 — the thresholds are LOCKED BY PLAN 14-09 from the measured calibration run,
-# under `teach_persona.CALIBRATION_DECISION_RULE`, which is itself committed BEFORE the calibration
-# run happens. A number chosen after seeing the results is not a threshold. `None` is the honest
-# pre-calibration state of this file, and git history order is what proves the ordering.
-TAUGHT_THRESHOLD = None
-HELDOUT_THRESHOLD = None
+# D-09 condition 2 — LOCKED by plan 14-09 from the measured calibration run. Both numbers are the
+# return of `teach_persona.lock_thresholds(cal_taught_rate, cal_heldout_rate)`, a function
+# committed in `d7d7917` BEFORE the calibration run produced a single measurement; git history
+# order is the pre-registration proof. A number chosen after seeing the results is not a threshold.
+#
+#   inputs   : cal_taught_rate = 0.6825 (860/1260), cal_heldout_rate = 0.5519 (447/810), both
+#              measured on the `cal_first_person` arm with the adapter ON, against a closed-book
+#              (adapter OFF) baseline of exactly 0.0000 on both tiers
+#   rule     : max(THRESHOLD_FLOOR, round(rate * THRESHOLD_DISCOUNT, 4))
+#              with THRESHOLD_DISCOUNT = 0.60 and THRESHOLD_FLOOR = 0.20
+#   bound by : the DISCOUNT in both cases — neither threshold hit the floor
+#   evidence : `results/phase14_calibration_report.md`, `## Derivation 1 — Recall Thresholds`
+#
+# The calibration facts are DISJOINT from the locked set and disposable, so their measured rate is
+# a CEILING estimate rather than a target; the 0.60 discount is what keeps these from being numbers
+# chosen to be cleared.
+TAUGHT_THRESHOLD = 0.4095
+HELDOUT_THRESHOLD = 0.3311
+
+# The commit carrying the calibration REPORT and the recorded measurements the two thresholds above
+# were derived from — the same traceability `FACTSET_GATE_SHA` gives the fact set. The human GO /
+# ADAPT / STOP verdict is recorded onto that same report at plan 14-09's checkpoint; this SHA
+# points at the evidence, which is what a reader needs to re-derive the numbers.
+CALIBRATION_SHA = "0425fdc494025d9c59cfac1e62092b10820a619e"
+
+
+def taught_gate(rate):
+    """True iff a measured TAUGHT recall rate clears ``TAUGHT_THRESHOLD``.
+
+    Boundary: ``>=``. A rate landing EXACTLY on the threshold **PASSES**. That is the right
+    direction for a threshold derived by discounting a ceiling: the number is already a
+    deliberately conservative fraction of what calibration showed was achievable, so failing a run
+    that hits it exactly would punish the run for the discount rather than for its recall.
+    ``tests/test_phase14_scoring.py::test_gate_boundary`` pins this, so a future reader never has
+    to infer ``>`` from ``>=`` by reading the test.
+    """
+    return rate >= TAUGHT_THRESHOLD
+
+
+def heldout_gate(rate):
+    """True iff a measured HELD-OUT recall rate clears ``HELDOUT_THRESHOLD``.
+
+    Boundary: ``>=`` — exactly on the threshold PASSES, for the same reason as ``taught_gate``.
+    """
+    return rate >= HELDOUT_THRESHOLD
 
 
 def _prove(condition, message):

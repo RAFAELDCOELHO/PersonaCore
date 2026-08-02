@@ -126,6 +126,29 @@ MASK_FRACTION_BAND = (0.15, 0.95)
 REPLAY_RATIO = 0.0  # every arm except the replay arm
 REPLAY_ARM_RATIO = 1.0  # D-15's with-replay arm: one replay token per teaching token
 
+# ===== The two REAL-ARM settings derived by plan 14-09's calibration run =====
+#
+# D-15 verdict, from ``replay_required(4.5737, 14.8559)`` -> **True**. Training the persona with
+# NO replay raised masked dialogue-val PPL by +224.81% (adapter OFF 4.5737 / ON 14.8559 over
+# 270,203 scored targets), far past ``COLLAPSE_PPL_TRIGGER`` = 0.10. The real run therefore mixes
+# PersonaChat replay into its teaching bin at ``REPLAY_ARM_RATIO``, the ratio the paired arm
+# measured. Evidence: ``results/phase14_calibration_report.md``, ``## Derivation 3``.
+#
+# What the paired arm also measured, stated here because it bounds what this number buys: replay
+# at 1.0 moved the collapse to +29.39%, which is a large mitigation but STILL trips the trigger,
+# and it cost taught recall 0.6825 -> 0.4143. "Replay required" is not "replay solves it".
+REAL_RUN_REPLAY_RATIO = REPLAY_ARM_RATIO
+
+# D-21 verdict, from ``first_person_wins(0.5519, 0.8045)`` -> **False**. First person did NOT
+# clear ``REGISTER_WIN_MARGIN`` = 0.10; second person measured HIGHER on held-out recall (0.8045
+# vs 0.5519, a margin of -0.2526). That negative is recorded unamended (D-12) and it does NOT
+# reopen D-01 mid-phase: D-01's register lock rests on the qualitative 14-RESEARCH F3/F5 evidence
+# (the base answering `i have a dog named my name is cuddling` — structure copied, content not),
+# and this arm was designed to SUPPLEMENT that with the head-to-head D-01 was missing, not to
+# replace it. Re-authoring the teaching register after seeing a number is the exact move the
+# pre-registration block exists to prevent, so the real run stays first person.
+REAL_RUN_SECOND_PERSON = False
+
 ARMS = ("cal_first_person", "cal_first_person_replay", "cal_second_person", "real")
 
 
@@ -355,7 +378,14 @@ def arm_spec(arm):
     if arm == "cal_second_person":
         return fs.REGISTER_ARM_FACTS, True, REPLAY_RATIO
     if arm == "real":
-        return fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS, False, REPLAY_RATIO
+        # The real arm reads the two CALIBRATION-DERIVED settings, so the derived numbers are
+        # load-bearing rather than decorative: editing either constant changes what the real run
+        # actually trains on.
+        return (
+            fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS,
+            REAL_RUN_SECOND_PERSON,
+            REAL_RUN_REPLAY_RATIO,
+        )
     raise SystemExit(f"[teach_persona] unknown arm {arm!r} — expected one of {ARMS}")
 
 

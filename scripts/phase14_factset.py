@@ -777,10 +777,28 @@ FAMILIES_SECOND_PERSON: dict[str, Callable[[Fact], list[tuple[str, str]]]] = _fa
 
 # ===== The taught / held-out family allocation =====
 #
-# This allocation is CALIBRATION-PROVISIONAL. It mirrors a reasonable guess at the real set's
-# likely final shape — which is exactly what D-14 requires of the calibration structure — and
-# plan 14-09 REWRITES it from the measured calibration run under
-# ``teach_persona.CALIBRATION_DECISION_RULE``. It is not a finding and must not be cited as one.
+# This allocation is now DERIVED, not provisional. Plan 14-09 ran the calibration arms and
+# applied ``teach_persona.lock_family_allocation`` to their measured numbers; the result is the
+# two sets below. Evidence: ``results/phase14_calibration_report.md``,
+# ``## Derivation 2 — Family Allocation``.
+#
+# **NEITHER TRIGGER FIRED, and the sets are unchanged from the provisional guess.** That is a
+# result rather than a no-op, and it came out of the rule rather than out of leaving the line
+# alone:
+#   - saturation: every taught family with SCORABLE questions gained far more than
+#     ``SATURATION_DELTA`` = 0.05 (``F1`` +0.6889, ``F2`` +0.7022, ``F6`` +0.6500 — taught recall
+#     with the adapter ON against a closed-book baseline of exactly 0.0000).
+#   - variance: the held-out per-family std was 0.0635, under ``HELDOUT_VARIANCE_TRIGGER`` = 0.15.
+#   - ``F4`` and ``F5`` have NO measured gain — every question their frames generate names its own
+#     fact value, so the scored harness's ``contains_value`` filter drops all of them. The rule
+#     reads a missing key as 0.0 and therefore PROPOSED moving both; both moves were REFUSED,
+#     ``F4`` by D-22 and ``F5`` by the W-03 paraphrase band (it would drop every locked fact to 18
+#     taught paraphrases, outside ``PARAPHRASES_PER_FACT_TARGET``). Those two refusals are recorded
+#     verbatim in the report — an unrecorded refusal is a silently altered allocation.
+#
+# Invariants the rule preserved: the two sets are DISJOINT and their union is still every key of
+# ``FAMILIES`` (B-02 — it moves families, never drops one); ``F4`` is still taught (D-22); and each
+# side keeps at least two families (5 taught / 3 held-out).
 #
 # D-22 — ``F4`` (reversed direction) is TAUGHT, never held out. Reversed-direction forms hit
 # the documented reversal curse (arxiv.org/abs/2309.12288 — "A is B" fine-tuning does not yield
@@ -793,6 +811,8 @@ FAMILIES_SECOND_PERSON: dict[str, Callable[[Fact], list[tuple[str, str]]]] = _fa
 # The two sets are disjoint and together cover EVERY id in ``FAMILIES``: the allocation MOVES
 # families between the sides, it never drops one (the union contract, pinned by
 # ``tests/test_phase14_teaching.py::test_families_disjoint``).
+#
+# DERIVED by ``lock_family_allocation`` — see the trigger analysis above.
 TAUGHT_FAMILY_IDS: frozenset[str] = frozenset({"F1", "F2", "F4", "F5", "F6"})
 HELDOUT_FAMILY_IDS: frozenset[str] = frozenset({"F3", "F7", "F8"})
 
