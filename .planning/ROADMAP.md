@@ -257,7 +257,7 @@ Plans:
 Plans:
 **Wave 1** *(D-09 pre-registration boundary — this commit must precede every measurement)*
 
-- [ ] 15-01-PLAN.md — Pre-registered correlation rule: pure-numpy tie-correct Spearman, permutation p, bootstrap CI, the D-11 gate and both verdict branches, committed before any number exists (Wave 1)
+- [x] 15-01-PLAN.md — Pre-registered correlation rule: pure-numpy tie-correct Spearman, permutation p, bootstrap CI, the D-11 gate and both verdict branches, committed before any number exists (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -300,4 +300,4 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete   | 2026-08-02 |
-| 15. Figures & Writeup | v2.0 | 0/TBD | Not started | - |
+| 15. Figures & Writeup | v2.0 | 1/8 | In Progress|  |

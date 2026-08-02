@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
 stopped_at: Phase 15 context gathered
-last_updated: "2026-08-02T18:35:48.713Z"
-last_activity: 2026-08-02 -- Phase 15 planning complete
+last_updated: "2026-08-02T19:05:17.591Z"
+last_activity: 2026-08-02
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 39
-  completed_plans: 31
-  percent: 79
+  completed_plans: 32
+  percent: 82
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 15 — figures & writeup (Phase 14 closed 2026-08-02)
+**Current focus:** Phase 15 — figures-writeup
 
 ## Current Position
 
-Phase: 14 — COMPLETE
-Plan: 11 of 11 (14-11 complete, 3/3 tasks — the blocking verdict is recorded)
+Phase: 15 (figures-writeup) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-08-02 -- Phase 15 planning complete
+Last activity: 2026-08-02
 
-Progress: [██████████] 100% of planned plans (31/31) — 6 of 7 phases; Phase 15 has no plans yet
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██████████] 100% of planned plans (31/31) — 6 o
 | Phase 13 P03 | 24min | 2 tasks | 6 files |
 | Phase 13 P04 | 18min | 2 tasks | 1 files |
 | Phase 14 P11 | 70min | 3 tasks | 10 files |
+| Phase 15 P01 | 12min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,10 @@ Key carry-forwards for v2.0:
 - [Phase 14]: 14-11: TRANSCRIPTS_PATH renamed to results/phase14_transcripts.md — the code was the sole outlier against five planning documents and the report pointed at a nonexistent file
 - [Phase 14]: recall gate verdict recorded ADAPT — GO with two qualifications (residual collateral collapse +27.16%; question-fairness control 1/1944), both reported as named limitations ALONGSIDE the passed gate numbers, not folded into them; no locked threshold touched and the post-verdict Ship Decision section correctly stays empty
 - [Phase 14]: DEMO-07 verified in a live browser — token panel byte-identical across memory ON/OFF for the same question while the answers differ, zero third-party origins on load, 0 shrink events over 65 stream samples, Reset one-way with the chat still live
+- [Phase 15]: 15-01: R5 arbitration committed as a literal — the bootstrap CI is the LOAD-BEARING half of the D-11 gate, the permutation p is purely descriptive and never converts a MISS into a PASS
+- [Phase 15]: 15-01: average-rank Spearman DIVERGES from continual/fisher.py::_spearman (ordinal, no tie averaging, returns 1.0 where the answer is 0.9486832980505139) — both correct for their own callers, pinned by test so a future 'unify the duplicate' goes red
+- [Phase 15]: 15-01: pre-registration commit is 0e1af98 — rule, seed, sign, resample counts and gate only; Plan 15-04 cites it in the Evidence Index addendum and PREREG_COMMIT already carries it
+- [Phase 15]: 15-01: percentile bootstrap KEPT (not upgraded to BCa) with its known small-n bias named in the pre-registration rather than silently omitted or silently upgraded after the result is seen
 
 ### Pending Todos
 
@@ -136,9 +141,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T16:34:52.464Z
+Last session: 2026-08-02T19:05:07.053Z
 Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-figures-writeup/15-CONTEXT.md
+Resume file: None
 
 ## Operator Next Steps
 
