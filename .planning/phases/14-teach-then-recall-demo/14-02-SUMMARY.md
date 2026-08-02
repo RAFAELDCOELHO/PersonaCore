@@ -2,7 +2,7 @@
 phase: 14
 plan: 02
 subsystem: fact-set pre-flight gate
-tags: [D-01, D-02, D-03, D-04, D-05, D-06, D-08, D-09.1, D-21.1, blocking-checkpoint]
+tags: [D-01, D-02, D-03, D-04, D-05, D-06, D-08, D-09.1, D-21.1, blocking-checkpoint, verdict-ADAPT]
 requires:
   - personacore.dialogue.build_recall_prompt
   - personacore.dialogue.detokenize
@@ -39,9 +39,12 @@ decisions:
   - "GATE_PROBES is assembled from 11 hand-written 8-question slot banks rather than 152 hand-typed per-fact entries; the two candidate-pool facts competing for a slot take DISJOINT halves so the real pool never double-books a reserved held-out phrasing"
   - "completions are cached per question — two facts sharing a reserved phrasing provably receive the same completions from a stateless base, so caching makes that identity explicit instead of accidental (and halved the run: 88 unique questions instead of 152)"
   - "a `## Run Provenance` section was added to the report beyond the plan's section list, because D-08 requires each reserved probe to carry its gate-time commit SHA into DEMO-06 and stdout is not committed evidence"
+  - "D-06 verdict is ADAPT: 8 pre-registered core (one per distinct slot) + 2 labelled soft excluded from all pre-registered thresholds; the core 16->8 reduction is a composition choice, not gate attrition"
+  - "the report's `## Close-Call Rejections` section is split by REASON — guessability close calls vs composition trims — because the 8 core rejections are clean candidates dropped by the one-fact-per-slot rule, and filing them alongside quoted base completions would misreport the gate as having found 12 guessability failures"
+  - "the two RETAINED soft facts carry their own quoted close calls; they survive under the D-05 exclusion, explicitly NOT because they are clean"
 metrics:
-  duration: 51min
-  tasks: 2 of 3 (task 3 is the blocking human checkpoint)
+  duration: 60min
+  tasks: 3 of 3
   files: 3
   completed: 2026-08-02
 ---
@@ -49,10 +52,11 @@ metrics:
 # Phase 14 Plan 02: Fact-Set Pre-Flight Gate Summary
 
 Authored three disjoint candidate pools (22 real / 10 calibration / 6 register-arm) with 88
-reserved probe questions, and measured the D-06 gate against the frozen un-adapted
-`convbase_best.pt`: all 38 candidates round-trip exact at 4–8 tokens and **38/38 pass the D-03
-mechanical exact-match floor** — the base guessed nothing. The verdict is PENDING at a blocking
-human checkpoint.
+reserved probe questions, measured the D-06 gate against the frozen un-adapted
+`convbase_best.pt` (all 38 candidates round-trip exact at 4–8 tokens; **38/38 pass the D-03
+mechanical exact-match floor** — the base guessed nothing), and recorded the human verdict:
+**ADAPT — 8 pre-registered core facts over 8 distinct slots, plus 2 labelled soft facts
+excluded from every pre-registered threshold.**
 
 ## What Shipped
 
@@ -75,10 +79,10 @@ human checkpoint.
 `assert`, MPS-fallback env set before `import torch`, every prompt from `build_recall_prompt`
 (`encode_dialogue` appears zero times).
 
-**`results/phase14_factset_report.md`** — 1,078 lines of committed evidence: per-pool census
+**`results/phase14_factset_report.md`** — ~1,200 lines of committed evidence: per-pool census
 tables, all 608 completions verbatim, exact-match verdict table, the pre-registered trigger
-table, an empty human-filled close-call table, survivor counts against D-05/ROADMAP targets, and
-`## Verdict: PENDING`.
+table, the human-filled close-call section (populated at the checkpoint), survivor counts
+against D-05/ROADMAP targets, and `## Verdict: ADAPT`.
 
 ## Measured Results
 
@@ -107,6 +111,65 @@ colors.` for color. None of them is a candidate value, which is why the mechanic
   `cheesecake`, `chocolate`, `pizza`. Same category, right slot, plausible alternative value.
   D-05 anticipated precisely this and is why the soft tier is a separately labelled tier excluded
   from the pre-registered gate rather than a gated one.
+
+## Recorded Verdict (D-06, Task 3) — ADAPT
+
+The human read every base completion and recorded **ADAPT** in
+`results/phase14_factset_report.md` at commit **`446afab`** — this is the
+`FACTSET_GATE_SHA` that plan 14-03 must transcribe.
+
+### Pre-registered tier — 8 core, one per distinct slot
+
+These eight carry the entire DEMO-05 / DEMO-06 / DEMO-07 claim.
+
+| slot | fact id | value |
+| --- | --- | --- |
+| `person_name` | `cand_person_quillon` | `quillon` |
+| `pet_name` | `cand_dog_zorp` | `zorp` |
+| `cat_name` | `cand_cat_zibby` | `zibby` |
+| `sibling_name` | `cand_sister_orsala` | `orsala` |
+| `hometown` | `cand_town_brindlemoor` | `brindlemoor` |
+| `street` | `cand_street_marrowgate` | `marrowgate` |
+| `birth_year` | `cand_year_1987` | `1987` |
+| `house_number` | `cand_house_7412` | `7412` |
+
+### Secondary tier — 2 soft, RETAINED, EXCLUDED from all pre-registered thresholds
+
+Taught and scored, reported separately, contributing **nothing** to the headline claim.
+Both carry a recorded close call — they are retained under the D-05 exclusion, explicitly
+**not** because they are clean.
+
+| slot | fact id | value | recorded close call (verbatim from the probe section) |
+| --- | --- | --- | --- |
+| `favorite_color` | `cand_color_chartreuse` | `chartreuse` | `i like red colors. i like red colors.` |
+| `favorite_food` | `cand_food_marzipan` | `marzipan` | `i like cheeseburgers. i like cheeseburgers` |
+
+### Rejected — 12 total, split by reason
+
+**8 composition trims (core) — NOT guessability findings.** All eight passed the mechanical
+floor 0/16 and showed no close call; they are dropped only because a slot can seat one
+taught fact and the pool was deliberately over-authored at two per slot:
+`cand_person_davrin`, `cand_dog_krix`, `cand_cat_halvo`, `cand_sister_perrine`,
+`cand_town_calderwick`, `cand_street_pemberly`, `cand_year_1962`, `cand_house_4429`.
+
+**4 soft-tier guessability close calls**, each quoting its triggering base completion in the
+report: `cand_color_ochre` (`i like blue. i like blue. i like blue.`), `cand_food_paprika`
+(`i like cheeseball. it is my favorite.`), `cand_drink_kombucha`
+(`i like cheeseball. i like cheeseball.`), `cand_drink_horchata`
+(`i love italian food. it is my favorite.`). Both `favorite_drink` candidates were rejected,
+so **the entire `favorite_drink` slot drops out of the taught set** — the soft tier spans two
+slots, not three.
+
+Calibration (10/10) and register-arm (6/6) pools pass unreduced, clearing D-09.1's ≥6 and
+D-21.1's ≥4.
+
+### The deviation, as stated in the report
+
+Core survivors trimmed **16 → 8 across 8 distinct slots** — a composition choice, not
+attrition, since nothing was rejected on guessability grounds. Soft tier reduced **6 → 2**
+and retained as a separately labelled tier excluded from all pre-registered thresholds under
+the D-05 exclusion, with close calls quoted. Final taught set **10 facts** (8 core + 2 soft),
+inside D-05's 5–8 core / 2–3 soft and the ROADMAP's 5–10 total.
 
 ## Deviations from Plan
 
@@ -149,6 +212,23 @@ The plan named `SURVIVOR_TARGET = (5, 10)` (ROADMAP total). `CORE_TARGET = (5, 8
 section to name "the D-05 target it is being compared against," and D-05's composition is
 per-tier, not a total.
 
+**6. `## Close-Call Rejections` is split into two labelled sub-tables, not one**
+The plan specifies "an empty table with columns fact / slot / quoted base completion /
+reason." At the checkpoint two structurally different things had reduced the pool, and one
+table cannot hold both honestly: the 4 soft rejections are D-03 semantic-proximity judgments
+that each quote a base completion, while the 8 core rejections are clean candidates dropped
+by the one-fact-per-slot rule with nothing to quote. Filing all 12 in one table would report
+the gate as having found 12 guessability failures when it found 4 — and would imply the base
+half-knew `davrin` or `1962`, which the measurement flatly contradicts (0/16, no close call).
+The section therefore opens by naming the two reasons, then gives each its own table. The
+D-03 requirement is unweakened: every row in the guessability table quotes verbatim.
+
+*On the plan's acceptance criterion* — "every fact marked rejected has a quoted completion or
+a FAIL row" — the 8 composition trims have neither, by construction. The criterion's purpose
+is that no rejection is silent; each trim names its kept sibling and its reason in the table,
+so nothing is silent. Recording a quote for them would be the actual violation: it would
+manufacture guessability evidence that does not exist.
+
 ### Auto-fixed Issues
 
 None. No bugs, no blockers, no architectural questions arose.
@@ -179,14 +259,40 @@ None. No bugs, no blockers, no architectural questions arose.
 | pool sizes / disjointness / unique ids / ≥4 probes each | asserted, exits 0 |
 | `exact_match_clean(["i am a cop."], "zorp")` / `(["i have a dog named zorp."], "zorp")` | True / False |
 | clobber guard on a non-PENDING verdict | exit 1 with the file named |
+| **Task 3** — `grep -A3 '^## Verdict' \| grep -E '(GO\|ADAPT\|STOP)'` | `verdict recorded` |
+| `grep -c PENDING results/phase14_factset_report.md` | 0 |
+| all 12 quoted completions grep verbatim in `## Base Guessability Probes` | 12/12 found, each inside its own fact's probe block |
 
 ## Known Stubs
 
-The `## Close-Call Rejections` table ships empty **by design** — it is the human-filled half of
-D-03 and gets its rows at the Task-3 checkpoint. `## Verdict` reads `PENDING` for the same
-reason. Neither is a stub in the incomplete-work sense; they are the gate's blocking surface.
+None. The `## Close-Call Rejections` section and `## Verdict` were the gate's blocking
+surface and both were filled at the Task-3 checkpoint. The gate is now closed: the clobber
+guard (T-14-06) will refuse a rerun without `--force`, which is the intended post-verdict
+state.
 
 ## Notes for Later Plans
+
+### What plan 14-03 must consume (Task 1 transcribes all of it from the report)
+
+- **`FACTSET_GATE_SHA = "446afab372dcffbc16cbc9a667529097f6e5ccab"`** — the commit carrying
+  the recorded ADAPT verdict. This is the SHA D-08 requires every reserved probe to carry
+  into the DEMO-06 report, not the driver commit `4947f8e`.
+- **`LOCKED_FACTS`** — the 8 core ids in the Recorded Verdict table above, one per slot.
+- **`SOFT_TIER_FACTS`** — `cand_color_chartreuse`, `cand_food_marzipan`. The plan requires the
+  comment above this constant to state what the tier is for and that it has **"no bearing"**
+  on the DEMO-06 thresholds; the report now backs that with quoted evidence rather than
+  argument, and the two survivors' own close calls are the strongest form of that statement.
+- **`GATE_REJECTED_CANDIDATES`** — all 12 candidate-pool rejections (8 core trims + 4 soft
+  close calls). All 12 remain valid D-10 contradiction-detector lexicon regardless of which
+  reason dropped them; the detector needs plausible competing values, and a clean trimmed
+  candidate is exactly that.
+- **`CALIBRATION_FACTS` (10) / `REGISTER_ARM_FACTS` (6)** — unreduced, no rejections.
+- **The `# ADAPT deviation:` comment** the plan requires when the verdict is ADAPT: take it
+  verbatim from the report's `## Verdict` section.
+- **`favorite_drink` no longer exists in the taught set.** Any 14-03+ code that assumed three
+  soft slots must assume two.
+
+### Carried forward from Tasks 1–2
 
 - **`normalize_for_match` is the scoring normalizer too.** 14-PATTERNS Pattern 6 specifies the
   identical rule (lowercase → `detokenize` → collapse whitespace → strip punctuation) for
@@ -199,10 +305,13 @@ reason. Neither is a stub in the incomplete-work sense; they are the gate's bloc
   the checkpoint-specificity note; `tests/test_phase14_factset.py` must repeat it in its
   docstring — these priors belong to `convbase_best.pt` at step 4000 and are not a standing
   invariant.
-- **The soft tier's close-call exposure is now measured, not predicted.** D-05's rationale
-  ("for favorite color the base has real prior mass on *some* color") is confirmed verbatim by
-  the report's `favorite_color` completions. Plan 14-04's soft-tier report section can cite the
-  measurement rather than the argument.
+- **The soft tier's close-call exposure is now measured, not predicted — and it is measured on
+  the SURVIVORS, not just the rejects.** D-05's rationale ("for favorite color the base has
+  real prior mass on *some* color") is confirmed verbatim by the report's `favorite_color`
+  completions, and both retained soft facts carry a quoted close call of their own. Plan
+  14-04's soft-tier section should lead with that: the tier is excluded from the thresholds
+  because its own survivors demonstrate why — a far stronger presentation than excluding it on
+  principle.
 
 ## Self-Check: PASSED
 
@@ -212,3 +321,5 @@ reason. Neither is a stub in the incomplete-work sense; they are the gate's bloc
 - commit `5ff5c0d` — FOUND
 - commit `4947f8e` — FOUND
 - commit `39070a9` — FOUND
+- commit `637a8cd` — FOUND
+- commit `446afab` (Task 3 verdict) — FOUND
