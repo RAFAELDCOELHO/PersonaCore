@@ -11,6 +11,19 @@ CPU-only, GPU/MPS-free, no torch at import. Pins:
      gitignored checkpoints. Re-runs extraction into ``tmp_path`` and compares the result to the
      committed file. Prevents a committed artifact that no longer corresponds to what the
      extraction script produces.
+  3. ``test_plot_functions_write_pngs`` — VIZ-02 / VIZ-03 tmp_path smoke: both figures render
+     headless and land as non-empty files in the requested output dir (never clobbering
+     ``results/``).
+  4. ``test_ab_panels_share_one_norm`` — D-01, by object IDENTITY through ``_norms``, not by
+     equal bounds. The naive and EWC panels take ONE ``LogNorm``; the Fisher panel's differs, on
+     the stated units argument.
+  5. ``test_shared_range_is_full_data_range`` — D-02. The shared bounds are the exact data
+     extrema across BOTH arms, which a percentile-clipped implementation cannot satisfy.
+  6. ``test_vmax_driver_matches_argmax`` — D-02 / D-18. Every block's recorded ``vmax_driver``
+     names the cell that really is the maximum OF THE GRID THE FIGURE DRAWS, so the caption and
+     the report point at the same coordinate the reader sees.
+  7. ``test_plotting_module_never_opens_a_checkpoint`` — D-07, structurally: an AST walk plus a
+     fresh-interpreter subprocess import.
 
 **D-08 — why extraction is NOT permanently tested.** Extraction needs six gitignored checkpoints
 (~914 MB) and cannot run in the CPU-only CI suite; the permanent suite covers the
@@ -25,22 +38,28 @@ self-consistent) set of weights. The ``git_sha`` / ``step`` / ``val_loss`` finge
 in each block are the audit trail that closes that gap — for a human reader, not for this file.
 
 Scripts-load justification: same as ``tests/test_phase13_plots.py`` — the extraction rules (which
-checkpoint is W0 for which block, which 36 keys, which aggregate) belong in the committed script,
-so the reproduction test ``importlib``-loads it rather than duplicating them. The load happens
-INSIDE the gated test, so no torch import reaches a CI collection.
+checkpoint is W0 for which block, which 36 keys, which aggregate) and the plotting rules (which
+artifact field, which norm, which disclosure) belong in the committed scripts, so the tests
+``importlib``-load them rather than duplicating them in the package. ``plot_phase15.main()`` is
+``__main__``-guarded, so loading the plotting module at import renders nothing. The EXTRACTION
+module's load happens INSIDE the gated test, so no torch import reaches a CI collection.
 """
 
+import ast
 import importlib.util
 import json
 import math
 import pathlib
 import re
+import subprocess
+import sys
 
 import pytest
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 NORMS_JSON = _REPO_ROOT / "results" / "phase15_norms.json"
 EXTRACT_SCRIPT = _REPO_ROOT / "scripts" / "extract_deltas.py"
+PLOT_SCRIPT = _REPO_ROOT / "scripts" / "plot_phase15.py"
 
 PROJECTIONS = ["q_proj", "k_proj", "v_proj", "c_proj", "fc_in", "fc_out"]
 BLOCKS = ("adapter", "ewc", "fisher", "naive")
@@ -62,6 +81,20 @@ _HAVE_CKPTS = all((_REPO_ROOT / "checkpoints" / name).exists() for name in _REQU
 
 def _artifact():
     return json.loads(NORMS_JSON.read_text(encoding="utf-8"))
+
+
+def _load_plots():
+    spec = importlib.util.spec_from_file_location("plot_phase15", PLOT_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+plot = _load_plots()
+
+
+def _flat(grid):
+    return [float(v) for row in grid.tolist() for v in row]
 
 
 def test_artifact_schema():
@@ -171,3 +204,149 @@ def test_extraction_reproduces_the_committed_artifact(tmp_path):
     fresh = _normalize_run_provenance(produced.read_text(encoding="utf-8"))
     committed = _normalize_run_provenance(NORMS_JSON.read_text(encoding="utf-8"))
     assert fresh == committed
+
+
+def test_plot_functions_write_pngs(tmp_path):
+    """VIZ-02 and VIZ-03 render headless into an arbitrary out_dir as non-empty PNGs."""
+    adapter = plot.plot_adapter_delta(tmp_path)
+    triptych = plot.plot_fisher_ewc(tmp_path)
+
+    # Writing to tmp_path is also the proof they never clobber the committed results/ copies.
+    assert adapter == tmp_path / "phase15_adapter_delta.png"
+    assert triptych == tmp_path / "phase15_fisher_ewc.png"
+    for path in (adapter, triptych):
+        assert path.exists()
+        assert path.stat().st_size > 0
+
+
+def test_ab_panels_share_one_norm(tmp_path):
+    """D-01: the naive and EWC panels take ONE norm OBJECT; the Fisher panel's is its own.
+
+    Asserted by ``is``, never by comparing ``(vmin, vmax)``. An implementation that built one
+    norm per panel and happened to compute matching bounds would satisfy a value comparison
+    while quietly defeating the same-instance contract — and that implementation is exactly the
+    one a later "just brighten this panel" edit turns into two different scales, which is the
+    thing D-01 exists to prevent.
+    """
+    artifact = _artifact()
+    naive = plot._grid(artifact, "naive")
+    ewc = plot._grid(artifact, "ewc")
+
+    shared = plot._shared_norm(naive, ewc)
+    stacked = _flat(naive) + _flat(ewc)
+    assert shared.vmin == pytest.approx(min(v for v in stacked if v > 0.0), abs=1e-12)
+    assert shared.vmax == pytest.approx(max(stacked), abs=1e-12)
+
+    # The units exemption is real and VISIBLE, not an accident of two blocks happening to span
+    # the same decades: squared-gradient magnitude is not commensurable with a delta ratio.
+    fisher = _flat(plot._grid(artifact, "fisher"))
+    assert (min(v for v in fisher if v > 0.0), max(fisher)) != (shared.vmin, shared.vmax)
+
+    naive_norm, ewc_norm, fisher_norm = plot._norms(artifact)
+    assert naive_norm is ewc_norm
+    assert fisher_norm is not naive_norm
+
+    # ...and the helper cannot drift from what is drawn: the figure that consumes these three
+    # norms must still render with them.
+    assert plot.plot_fisher_ewc(tmp_path).exists()
+
+
+def test_shared_range_is_full_data_range():
+    """D-02: the shared bounds are the EXACT extrema across both arms — nothing clipped.
+
+    ``vmax`` is the largest cell across both arms and ``vmin`` the smallest strictly positive
+    one. A percentile-clipped implementation cannot satisfy that, and the two ``>``/``<``
+    assertions below show the equalities have teeth: the true extrema sit strictly outside a
+    5%/95% clip, so a clipped norm would produce measurably different numbers rather than
+    coincidentally equal ones.
+    """
+    artifact = _artifact()
+    shared = plot._shared_norm(plot._grid(artifact, "naive"), plot._grid(artifact, "ewc"))
+
+    stacked = sorted(_flat(plot._grid(artifact, "naive")) + _flat(plot._grid(artifact, "ewc")))
+    positive = [v for v in stacked if v > 0.0]
+    assert shared.vmax == pytest.approx(stacked[-1], abs=1e-12)
+    assert shared.vmin == pytest.approx(positive[0], abs=1e-12)
+
+    assert shared.vmax > stacked[int(0.95 * len(stacked))]
+    assert shared.vmin < positive[int(0.05 * len(positive))]
+
+
+def test_vmax_driver_matches_argmax():
+    """D-02 / D-18: every block's recorded driver cell IS that block's maximum, as drawn.
+
+    The grid comes from the plotting module's own ``_grid`` — the row/column order the figure
+    actually renders — so this pins the disclosure the caption and the report both read against
+    the picture a reader is looking at, not against a differently-ordered re-derivation.
+    """
+    artifact = _artifact()
+    for name in BLOCKS:
+        grid = plot._grid(artifact, name)
+        driver = artifact["blocks"][name]["vmax_driver"]
+        cell = float(grid[driver["layer"]][PROJECTIONS.index(driver["projection"])])
+        assert cell == pytest.approx(max(_flat(grid)), abs=1e-12), name
+        assert driver["value"] == pytest.approx(cell, abs=1e-12), name
+
+
+def test_plotting_module_never_opens_a_checkpoint():
+    """D-07: the plotting module has NO code path that opens a serialized checkpoint.
+
+    Nothing in ``scripts/plot_phase15.py`` itself prevents a future edit from adding a two-line
+    checkpoint read when one artifact field turns out to be missing. Without this test "reads
+    only the artifact" is a convention that edit breaks silently — and D-07's whole point is
+    that the regenerability proof holds BY CONSTRUCTION: a committed PNG derived from a
+    gitignored 278 MB checkpoint cannot be regenerated from a clone, so the claim would become
+    false without anything turning red. This is also a security control — it is what keeps the
+    plotting path provably incapable of deserializing anything.
+
+    AST rather than substring matching, for the ``tests/test_phase14_scoring.py:405-411``
+    reason: a substring check cannot tell a call from a mention in a docstring, and this
+    module's docstring necessarily discusses checkpoints at length precisely while explaining
+    that it never opens one.
+
+    Two complementary checks. (a) is the readable statement of intent; (b) is the one that
+    cannot be fooled — it catches a transitive import through a helper module (a) cannot see,
+    and it must run out-of-process because torch is already in ``sys.modules`` from sibling
+    tests by the time this runs.
+    """
+    tree = ast.parse(PLOT_SCRIPT.read_text(encoding="utf-8"))
+
+    imported = {
+        alias.name.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    # Meta-guard first (the tests/test_phase14_scoring.py:441 habit): a walk that silently
+    # stopped working would otherwise pass this test by finding nothing at all.
+    assert imported, "the AST import walk found no imports — the walk stopped working"
+    assert "torch" not in imported, f"plot_phase15 imports torch — D-07 violated ({imported})"
+
+    serialized = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.endswith(".pt")
+    ]
+    assert serialized == [], f"plot_phase15 names a checkpoint file: {serialized}"
+
+    probe = (
+        "import importlib.util, sys;"
+        "spec = importlib.util.spec_from_file_location('p15', 'scripts/plot_phase15.py');"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m);"
+        "sys.exit(1 if 'torch' in sys.modules else 0)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"plotting module transitively imports torch — D-07 violated\n{result.stderr}"
+    )
