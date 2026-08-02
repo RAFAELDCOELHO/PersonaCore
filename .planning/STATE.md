@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 Phase: 14 — COMPLETE
 Plan: 11 of 11 (14-11 complete, 3/3 tasks — the blocking verdict is recorded)
 Status: Phase 14 complete
-Last activity: 2026-08-02 -- Phase 14 marked complete
+Last activity: 2026-08-02 -- Completed quick task 260802-h3g: anchor the verdict-section clobber guard at both remaining sites (CR-02 follow-through)
 
 Progress: [██████████] 100% of planned plans (31/31) — 6 of 7 phases; Phase 15 has no plans yet
 
@@ -119,6 +119,7 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260605-lgy | MPS device-layer support: RuntimeConfig MPS detection (fp32/AMP-off, bf16-Pascal guard intact) + hard rename preflight_p100 → preflight_device (CUDA-P100 → MPS → CPU) | 2026-06-05 | 398b74e | [260605-lgy-add-mps-support-to-the-device-layer-runt](./quick/260605-lgy-add-mps-support-to-the-device-layer-runt/) |
 | 260801-r9y | Phase-13 closeout corrections: ROADMAP SC1 names the arms that actually ran (λ=0 vs pre-chosen λ=0.01, citing the A/B report); stop-fraction note derived from measured counts in script + markdown; plot_phase13 fails loudly on a missing/blank column and pins the frontier endpoint to step 1250 (both PNGs SHA-256-identical) | 2026-08-01 | d679440, 8812638, f0bae0b | [260801-r9y-SUMMARY.md](./quick/260801-r9y-SUMMARY.md) |
+| 260802-h3g | CR-02 follow-through (14-SECURITY UF-4): the anchored verdict-SECTION read extracted to `scripts/_verdict.py` and wired into the two remaining naive `split("## Verdict")[-1]` guards — `teach_persona._refuse_clobber` and `phase14_factset_gate`, whose inline `main()` block was extracted so it is testable without a checkpoint. RED proven against the unmodified guards; the naive tail is kept in the test as a regression tripwire | 2026-08-02 | f16ce64, 2b8ed33, a39b753 | [260802-h3g-anchor-the-verdict-section-clobber-guard](./quick/260802-h3g-anchor-the-verdict-section-clobber-guard/) |
 
 ## Deferred Items
 
