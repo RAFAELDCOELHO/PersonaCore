@@ -63,6 +63,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 import numpy as np  # noqa: E402
 import phase14_factset as fs  # noqa: E402  (sibling script; scripts/ is sys.path[0])
 import torch  # noqa: E402  (must follow the MPS-fallback env set above)
+from _verdict import recorded_verdict  # noqa: E402  (sibling script; scripts/ is sys.path[0])
 
 from personacore.checkpoint import export_adapter  # noqa: E402
 from personacore.config import ModelConfig, RuntimeConfig, TrainConfig  # noqa: E402
@@ -1138,10 +1139,15 @@ def _refuse_clobber(report_path, force):
 
     A rerun would reset ``## Verdict`` to PENDING and silently drop whatever the human wrote
     beside it. ``--force`` is the only way past.
+
+    CR-02: reads the first ``## Verdict`` SECTION, never the tail after the last occurrence of
+    the literal — a prose mention of the heading is not a recorded verdict, and a file with no
+    verdict section is refused rather than overwritten blind. Full story at
+    ``phase14_recall.assert_report_not_clobbered``.
     """
     if report_path.exists() and not force:
-        recorded = report_path.read_text(encoding="utf-8").split("## Verdict")[-1]
-        if "PENDING" not in recorded:
+        recorded = recorded_verdict(report_path.read_text(encoding="utf-8"))
+        if recorded is None or "PENDING" not in recorded:
             raise SystemExit(
                 f"[teach_persona] {report_path} already carries a recorded verdict — it is "
                 "committed evidence (D-09). Pass --force to overwrite and re-measure."

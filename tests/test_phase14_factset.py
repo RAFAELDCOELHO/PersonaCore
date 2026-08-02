@@ -38,16 +38,14 @@ if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
 
-def _load_factset():
-    spec = importlib.util.spec_from_file_location(
-        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
-    )
+def _load(name):
+    spec = importlib.util.spec_from_file_location(name, _REPO_ROOT / "scripts" / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-fs = _load_factset()
+fs = _load("phase14_factset")
 
 _BY_ID = {fact.id: fact for _name, pool in fs.all_pools() for fact in pool}
 
@@ -150,3 +148,46 @@ def test_locked_values_are_first_person_register_safe():
     priors = {fs.normalize_for_match(p) for p in _MEASURED_BASE_PRIORS}
     for fact in _TAUGHT:
         assert fs.normalize_for_match(fact.value) not in priors, fact.id
+
+
+def test_gate_clobber_guard_reads_the_verdict_section(tmp_path, monkeypatch):
+    """CR-02, third site: the D-06 gate's clobber guard, anchored and finally reachable.
+
+    It used to live inline at the top of ``main()``, so no test could reach it without a 278 MB
+    checkpoint and an MPS device — which is why the same ``split("## Verdict")[-1]`` defect
+    survived here after ``phase14_recall`` was fixed. Extracted to a module-level function, it is
+    exercised with nothing but a ``tmp_path`` file: no checkpoint load, no device, no probes.
+
+    The naive-tail control lives once, in ``tests/test_phase14_teaching.py``; this mirrors the
+    ``phase14_recall`` proof at ``tests/test_phase14_scoring.py:617`` for the gate's own guard.
+    """
+    gate = _load("phase14_factset_gate")
+    report = tmp_path / "phase14_factset_report.md"
+    monkeypatch.setattr(gate, "REPORT_PATH", report)
+    monkeypatch.setattr(sys, "argv", ["phase14_factset_gate.py"])
+
+    text = (
+        "# Phase 14 Fact-Set Pre-Flight Report\n\n"
+        "## Verdict\n\n"
+        "PENDING — user decision at checkpoint.\n\n"
+        "## Close-Call Rejections\n\n"
+        "Recorded beside the verdict; see `## Verdict` above for the D-06 decision itself.\n"
+    )
+    report.write_text(text, encoding="utf-8")
+    gate.assert_report_not_clobbered()  # the legitimate re-drive — must not need --force
+
+    report.write_text(
+        text.replace("PENDING — user decision at checkpoint.", "GO — recorded."), encoding="utf-8"
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        gate.assert_report_not_clobbered()
+    assert "[phase14_factset_gate]" in str(excinfo.value)
+    assert "(D-06)" in str(excinfo.value)
+
+    monkeypatch.setattr(sys, "argv", ["phase14_factset_gate.py", "--force"])
+    gate.assert_report_not_clobbered()  # the deliberate override
+
+    monkeypatch.setattr(sys, "argv", ["phase14_factset_gate.py"])
+    report.write_text("# something else entirely\n", encoding="utf-8")
+    with pytest.raises(SystemExit):  # no verdict section — refused, never overwritten blind
+        gate.assert_report_not_clobbered()

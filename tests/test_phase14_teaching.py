@@ -58,6 +58,7 @@ def _load(name):
 
 fs = _load("phase14_factset")
 tp = _load("teach_persona")
+vd = _load("_verdict")
 
 # Real special ids from personacore.tokenizer.special.SPECIAL_TOKENS (fixture literals).
 EOS = 8184  # <|endoftext|>
@@ -556,3 +557,55 @@ def test_require_go_verdict_missing_report(tmp_path):
     with pytest.raises(SystemExit) as excinfo:
         tp._require_go_verdict(tmp_path / "nope.md")
     assert "phase14_factset_gate.py" in str(excinfo.value)
+
+
+def test_refuse_clobber_reads_the_verdict_section_not_the_last_mention(tmp_path):
+    """CR-02, second site: the clobber guard must anchor on the verdict SECTION.
+
+    The fixture is the real report shape — a PENDING verdict followed by a ``## Ship Decision``
+    section whose D-12 comment QUOTES the heading (``phase14_recall.SHIP_DECISION_HEADER``). The
+    old ``split("## Verdict")[-1]`` took the tail after the LAST occurrence of that literal, which
+    lands in the ship-decision prose and never contains ``PENDING`` — so the guard fired on every
+    legitimate re-drive of an interrupted run and ``--force`` (which disables the guard entirely)
+    became the only way through. An operator who learns ``--force`` is always required passes it
+    after a human HAS recorded a verdict, and the guard then destroys the hand-written evidence it
+    exists to protect. That is the data-loss path this test closes.
+    """
+    report = tmp_path / "phase14_calibration_report.md"
+    text = (
+        "# Phase 14 Calibration Report\n\n"
+        "## Verdict\n\n"
+        "PENDING — user decision at checkpoint.\n\n"
+        "## Ship Decision\n\n"
+        "<!-- D-12, verbatim: a missed threshold is recorded UNAMENDED in\n"
+        "`## Verdict` above. Any subsequent decision is logged HERE. -->\n\n"
+        "_No post-verdict decision recorded._\n"
+    )
+    report.write_text(text, encoding="utf-8")
+
+    # INTENTIONAL CONTROL — do not delete in a future cleanup. This is the defect itself, kept
+    # beside the fix: the naive tail lands in the ship-decision prose, which never says PENDING.
+    # A regression back to `split("## Verdict")[-1]` fails HERE, with the reason written next to it.
+    assert "PENDING" not in text.split("## Verdict")[-1]
+
+    # The anchored read sees the real section instead.
+    assert "PENDING" in vd.recorded_verdict(text)
+
+    # The legitimate re-drive: an interrupted run must be re-drivable WITHOUT --force.
+    tp._refuse_clobber(report, False)
+
+    # And the guard still bites once a human records a verdict into that same file.
+    recorded = text.replace("PENDING — user decision at checkpoint.", "ADAPT — recorded.")
+    report.write_text(recorded, encoding="utf-8")
+    with pytest.raises(SystemExit) as excinfo:
+        tp._refuse_clobber(report, False)
+    assert str(report) in str(excinfo.value)
+
+    # --force stays the deliberate override over a genuinely recorded verdict.
+    tp._refuse_clobber(report, True)
+
+    # No verdict section at all: not this writer's output — refused, never overwritten blind.
+    report.write_text("# something else entirely\n", encoding="utf-8")
+    assert vd.recorded_verdict(report.read_text(encoding="utf-8")) is None
+    with pytest.raises(SystemExit):
+        tp._refuse_clobber(report, False)

@@ -43,6 +43,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import phase14_factset as fs  # noqa: E402  (sibling script; scripts/ is sys.path[0])
 import torch  # noqa: E402  (must follow the MPS-fallback env set above)
+from _verdict import recorded_verdict  # noqa: E402  (sibling script; scripts/ is sys.path[0])
 
 from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt  # noqa: E402
@@ -112,17 +113,32 @@ def _quote(text):
     return text.replace("\n", "\\n").replace("\t", "\\t")
 
 
-def main() -> None:
-    # A recorded (non-PENDING) verdict is committed evidence (D-06) — never clobber it
-    # silently: a rerun would reset ``## Verdict`` to PENDING and drop the hand-added
-    # ``## Close-Call Rejections`` rows, which ARE the documented judgment D-03 requires.
+def assert_report_not_clobbered():
+    """A recorded (non-PENDING) verdict is committed evidence (D-06) — never clobber it silently.
+
+    A rerun would reset ``## Verdict`` to PENDING and drop the hand-added
+    ``## Close-Call Rejections`` rows, which ARE the documented judgment D-03 requires.
+
+    CR-02: reads the first ``## Verdict`` SECTION, never the tail after the last occurrence of
+    the literal — a prose mention of the heading is not a recorded verdict, and a file with no
+    verdict section is refused rather than overwritten blind. Full story at
+    ``phase14_recall.assert_report_not_clobbered``.
+
+    Module-level, zero-arg, reading ``REPORT_PATH`` and ``sys.argv`` at call time: that is what
+    makes it monkeypatchable, and an inline block in ``main()`` was unreachable from any test
+    without a 278 MB checkpoint — which is how this defect survived the first CR-02 fix.
+    """
     if REPORT_PATH.exists() and "--force" not in sys.argv[1:]:
-        recorded = REPORT_PATH.read_text(encoding="utf-8").split("## Verdict")[-1]
-        if "PENDING" not in recorded:
+        recorded = recorded_verdict(REPORT_PATH.read_text(encoding="utf-8"))
+        if recorded is None or "PENDING" not in recorded:
             raise SystemExit(
                 f"[phase14_factset_gate] {REPORT_PATH} already carries a recorded verdict — "
                 "it is committed evidence (D-06). Pass --force to overwrite and re-measure."
             )
+
+
+def main() -> None:
+    assert_report_not_clobbered()
 
     if not CONVBASE_BEST.exists():
         raise SystemExit(
