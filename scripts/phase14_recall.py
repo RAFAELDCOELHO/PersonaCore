@@ -47,6 +47,7 @@ import hashlib
 import os
 import pathlib
 import re
+import sys
 import time
 import warnings
 from typing import NamedTuple
@@ -61,12 +62,14 @@ import torch  # noqa: E402  (must follow the MPS-fallback env set above)
 from personacore.checkpoint import load_adapter, load_slim  # noqa: E402
 from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt, detokenize  # noqa: E402
+from personacore.evaluation import masked_perplexity  # noqa: E402
 from personacore.generation import collect, undecodable_ids_mask  # noqa: E402
 from personacore.lora import (  # noqa: E402
     LoRAConfig,
     adapter_disabled,
     inject_lora,
     load_adapter_weights,
+    set_adapter_enabled,
 )
 from personacore.model import GPT  # noqa: E402
 from personacore.preflight import preflight_device  # noqa: E402
@@ -534,21 +537,22 @@ def _complete(model, prompt_ids, device, forbid, **kw):
     return gen, len(gen) < RECALL_MAX_NEW_TOKENS
 
 
-def complete_question(model, tok, question, device, forbid, *, index):
-    """One question, all draws: greedy plus ``N_SEEDED_SAMPLES`` per-question-seeded samples.
+def draw_all(model, tok, prompt_ids, device, forbid, index):
+    """All draws from ONE already-built prompt: greedy plus ``N_SEEDED_SAMPLES`` seeded samples.
 
     ``scripts/make_retention_samples.py:8-14`` discipline — each sample draws from its OWN
     ``torch.Generator`` seeded ``question_seed(index) + s``. Seeding once for the whole run would
     desynchronize every later question after the first early stop, and stop-on-``STOP_IDS`` makes
     early stops the common case; per-draw seeding is what makes the whole run re-derivable from
-    ``SEED`` alone. ``index`` is the question's position in ITS tier, so the closed-book control
-    replays the identical streams per question and the two arms are paired rather than merely
-    comparable.
+    ``SEED`` alone.
 
-    Returns the question, its exact prompt ids, the decoded completions in draw order (greedy
-    first), and the per-completion stop flags. Nothing is filtered or re-rolled.
+    Takes prompt IDS rather than a question string so the D-11.1 fairness control — the one
+    caller whose prompt carries a persona span — draws through THIS loop instead of a second
+    copy of it. A duplicated draw loop is how two arms silently stop being paired.
+
+    Returns ``(completions, stopped)`` in draw order, greedy first. Nothing is filtered or
+    re-rolled.
     """
-    prompt_ids = build_recall_prompt(tok, question)
     completions = []
     stopped = []
 
@@ -574,6 +578,27 @@ def complete_question(model, tok, question, device, forbid, *, index):
         )
         completions.append(tok.decode(gen_ids))
         stopped.append(stop)
+
+    return completions, stopped
+
+
+def complete_question(model, tok, question, device, forbid, *, index):
+    """One SCORED question, all draws — the BARE prompt path, no persona span, ever.
+
+    ``build_recall_prompt(tok, question)`` is called with two positional arguments and nothing
+    else: the ``persona=`` argument is not passed here and must never be, because a fact value
+    in a scored prompt falsifies the phase's claim at the exact moment it is demonstrated.
+    ``tests/test_phase14_scoring.py::test_persona_argument_is_scoped_to_the_fairness_control``
+    parses this module's AST and pins that, so "bare" is structural rather than conventional.
+
+    ``index`` is the question's position in ITS tier, so the closed-book control replays the
+    identical streams per question and the two arms are paired rather than merely comparable.
+
+    Returns the question, its exact prompt ids, the decoded completions in draw order (greedy
+    first), and the per-completion stop flags.
+    """
+    prompt_ids = build_recall_prompt(tok, question)
+    completions, stopped = draw_all(model, tok, prompt_ids, device, forbid, index)
 
     return {
         "question": question,
@@ -970,6 +995,9 @@ def run_closed_book_control(model, tok, device, forbid, items):
 
 def main():
     """The fresh-process scored recall run (SC2/SC3): load, prove, score, control, commit."""
+    # BEFORE anything expensive: a recorded verdict is committed evidence, and a multi-hour run
+    # that refuses to write its report at the end has already been wasted.
+    assert_report_not_clobbered()
     summary = preflight_device(strict=True)
     print(f"[phase14_recall] preflight: {summary}")
     device = RuntimeConfig().device
@@ -1024,17 +1052,819 @@ def main():
     for record in records:
         print(f"[phase14_recall] {record['tier']}: {record['k']}/{record['n']}")
 
-    write_transcripts(records, echo_provenance(summary, device, artifact))
+    # The three D-11 controls, in the same process and on the same loaded weights.
+    all_values = tuple(f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS)
+    # Each fact's own first-person taught statement — the fairness control's persona span. Built
+    # HERE, from the lazily-imported fact set, so the control never reaches for fact strings.
+    statements = {
+        fact.id: fs.SLOT_FORMS[fact.slot].ans1.format(v=fact.value)
+        for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS
+    }
+    controls = {
+        # Fairness runs on the CORE tier only: it qualifies the questions feeding the two GATED
+        # numbers, and the soft tier feeds neither.
+        "fairness": run_fairness_control(
+            model, tok, device, forbid, core_taught + core_held_out, statements
+        ),
+        "collapse": run_collapse_control(model, tok, device, forbid, all_values),
+        # Several held-out questions plus the empty-question startup scaffold ("").
+        "bit_identity": run_bit_identity_control(
+            tok, ("",) + tuple(item.question for item in core_held_out[:4])
+        ),
+    }
+
+    provenance_lines = echo_provenance(summary, device, artifact)
+    write_transcripts(records, provenance_lines)
+    write_recall_report(records, controls, provenance_lines)
 
 
 # =====================================================================================
-# ===== THE D-11 CONTROLS — plan 14-10 lands the three controls here =====
+# ===== THE THREE D-11 CONTROLS =====
 # =====================================================================================
 #
-# Deliberately empty. 14-10 adds `run_fairness_control` (D-11.1 — the ONLY legitimate caller of
-# `build_recall_prompt`'s `persona=` argument), `run_collapse_control` (D-11.2 — which imports
-# `COLLAPSE_PPL_TRIGGER` from `teach_persona` LAZILY, inside the function), and
-# `run_bit_identity_control` (D-11.3).
+# Each control exists to close ONE named ambiguity, and its report section opens by naming it
+# (D-11's shared framing requirement): question validity, persona collapse, toggle correctness.
+# None of them is generic rigor.
+
+FAIRNESS_TIER = "question-fairness control (D-11.1 — fact in the persona span, adapter off)"
+
+
+def run_fairness_control(model, tok, device, forbid, questions, statements):
+    """D-11.1 — the question-VALIDITY check: can the BASE answer when the fact IS in context?
+
+    **This is the ONLY legitimate place a fact value appears in context.** Everywhere else in
+    this phase, a fact in the prompt is the demo-killing failure ``assert_no_value_in_prompt``
+    exists to catch: a locked value reaching a scored prompt falsifies the claim at the exact
+    moment it is being demonstrated, so that path ABORTS the run. Here the value in the
+    ``<|system|>`` persona span IS the measurement, and the report labels it as such.
+    ``tests/test_phase14_scoring.py::test_persona_argument_is_scoped_to_the_fairness_control``
+    parses this module's AST and asserts that no other call site anywhere in the file passes
+    ``persona=`` — so the ordinary recall path is provably bare, not bare by convention.
+
+    **This is a question-VALIDITY check, explicitly NOT a mechanism comparison.** DEMO-F2
+    (deferred) is a comparative baseline measuring prompt-vs-weight recall *parity*; this is a
+    one-directional check that validates the question SET — it asks only whether a question can
+    be answered at all when its answer is visible. Conflating the two would read as DEMO-F2
+    smuggled into this phase early, which is exactly what D-11.1 forbids.
+
+    **Runs with the adapter DISABLED**, because the inference it qualifies is about the BASE:
+    the closed-book control is the adapter-off arm, and a failure there means "no memory"
+    rather than "unanswerable question" only if the base could have answered with the fact in
+    view. Measuring the adapted model here would answer a different question entirely — the
+    adapted model already has the fact in its weights, so its success would prove nothing about
+    the question.
+
+    ``statements`` maps ``fact.id`` to that fact's own first-person taught statement, built by
+    the caller from the lazily-imported fact set: the LAZY-IMPORT RULE means this module never
+    reaches for the fact strings itself.
+
+    14-RESEARCH F4 measured this base failing 6/6 in-context probes, so a NEGATIVE here is the
+    expected result and D-20's three-part reconciliation is pre-registered for it.
+    """
+    _prove(questions, "the fairness control received no questions to check")
+    _prove(statements, "the fairness control received no first-person statements")
+
+    asked = []
+    with adapter_disabled(model):
+        for index, item in enumerate(questions):
+            statement = statements[item.fact.id]
+            # The one sanctioned appearance of a fact value in a prompt in this entire phase.
+            prompt_ids = build_recall_prompt(tok, item.question, persona=[statement])
+            _prove(
+                contains_value(tok.decode(prompt_ids), item.fact.value),
+                f"the fairness prompt for {item.question!r} does not actually carry "
+                f"{item.fact.value!r} — the control measures nothing if the fact is not in view",
+            )
+            completions, stopped = draw_all(model, tok, prompt_ids, device, forbid, index)
+            k, n = score_question(completions, item.fact.value)
+            asked.append(
+                {
+                    "question": item.question,
+                    "fact_id": item.fact.id,
+                    "split": item.split,
+                    "persona": statement,
+                    "prompt_ids": prompt_ids,
+                    "completions": completions,
+                    "hits": [contains_value(c, item.fact.value) for c in completions],
+                    "stopped": stopped,
+                    "k": k,
+                    "n": n,
+                }
+            )
+            print(f"[phase14_recall] {FAIRNESS_TIER} {item.question!r}: {k}/{n}")
+
+    total_k = sum(entry["k"] for entry in asked)
+    total_n = sum(entry["n"] for entry in asked)
+    return {
+        "tier": FAIRNESS_TIER,
+        "questions": asked,
+        "k": total_k,
+        "n": total_n,
+        "rate": total_k / total_n,
+        "n_answerable": sum(1 for entry in asked if entry["k"] > 0),
+    }
+
+
+# D-11.2's transcript half. PersonaChat-style small talk that touches NONE of the locked or soft
+# slots — no name, pet, sibling, town, street, birth year, house number, color, or food. A PPL
+# number alone cannot show a reader that the adapter still holds an ordinary conversation, which
+# is FEATURES §4's actual claim; these are what make "not a single-topic persona parrot" visible
+# rather than asserted. `run_collapse_control` `_prove`s that none of them names a locked value,
+# so this tuple cannot silently drift into a scored slot.
+UNRELATED_QUESTIONS: tuple[str, ...] = (
+    "what do you do for a living?",
+    "do you have any hobbies?",
+    "what kind of music do you like?",
+    "how was your day?",
+    "do you like to read books?",
+    "what sports do you play?",
+)
+
+
+def run_collapse_control(model, tok, device, forbid, values):
+    """D-11.2 — did teaching the persona COLLAPSE the conversational base into a parrot?
+
+    The ambiguity this closes: whether the 331,776 adapter parameters bought recall by turning
+    the model into a single-topic persona reciter that can no longer hold an ordinary dialogue.
+
+    Measurement half — ``masked_perplexity`` on the held-out dialogue-val bin with the adapter
+    ON, then again inside ``adapter_disabled``. That function is THE frozen dialogue-val gate
+    metric (Phase 12 TUNE-01): a deterministic full-corpus sweep over assistant-token targets
+    with a hand-counted, auditable denominator. The training loop's 20-random-batch mean loss
+    estimator is DISALLOWED for gates (Phase 12 12-02) — its eval sampling noise would pollute
+    exactly the margin being measured — and a bespoke "dialogue quality score" invented for this
+    control would be a second, unvalidated metric answering what the frozen one already answers.
+
+    Transcript half — the ``UNRELATED_QUESTIONS`` run greedy through both arms, side by side.
+
+    The trigger is ``teach_persona.COLLAPSE_PPL_TRIGGER``, applied through
+    ``teach_persona.replay_required`` — the SAME function, with the same ``RATIO_DECIMALS``
+    rounding, that D-15's replay verdict was derived from during calibration. Applying the
+    identical rule keeps the calibration measurement and this control on ONE scale. The boolean
+    is DESCRIPTIVE and has no gate attached: calibration already measured the replay arm at
+    +29.39% — still past the 0.10 trigger — so a trip here is a pre-recorded expectation, not a
+    surprise, and "replay required" was never "replay solves it".
+
+    **The ``teach_persona`` import is LAZY, inside this function, never at module level**
+    (``14-05-PLAN.md`` ``<import_topology>`` rule 5). Two load-bearing reasons: ``teach_persona``
+    imports ``phase14_recall`` in the other direction, so a module-level edge here is an
+    ``ImportError``; and ``teach_persona`` imports ``phase14_factset`` at module level, so
+    hoisting this edge would drag ``LOCKED_VALUES`` into ``personalize_demo``'s address space
+    through ``phase14_recall`` and break D-19, threat T-14-17, and 14-08's must-have. Copying
+    ``COLLAPSE_PPL_TRIGGER`` here as a literal would also break the cycle — and would silently
+    turn the calibration verdict and this control into two independently editable numbers, which
+    is the "same scale" claim above, gone.
+    """
+    import teach_persona as tp  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    for question in UNRELATED_QUESTIONS:
+        for value in values:
+            _prove(
+                not contains_value(question, value),
+                f"unrelated question {question!r} names the locked value {value!r} — the "
+                "collateral-collapse control must touch NO taught slot, or it measures recall "
+                "rather than whether ordinary conversation survived",
+            )
+
+    ppl_on, n_targets = masked_perplexity(
+        model, tp.DIALOG_VAL_BIN, tp.DIALOG_VAL_MASK, tp.BLOCK_SIZE, device, forbid_ids=forbid
+    )
+    with adapter_disabled(model):
+        ppl_off, n_targets_off = masked_perplexity(
+            model, tp.DIALOG_VAL_BIN, tp.DIALOG_VAL_MASK, tp.BLOCK_SIZE, device, forbid_ids=forbid
+        )
+    _prove(
+        n_targets == n_targets_off,
+        f"the two arms scored different denominators ({n_targets} vs {n_targets_off}) — the "
+        "PPL pair is not comparable, so the delta would measure the corpus, not the adapter",
+    )
+    delta = (ppl_on - ppl_off) / ppl_off
+
+    transcripts = []
+    for question in UNRELATED_QUESTIONS:
+        prompt_ids = build_recall_prompt(tok, question)
+        on_ids, on_stopped = _complete(model, prompt_ids, device, forbid, greedy=True)
+        with adapter_disabled(model):
+            off_ids, off_stopped = _complete(model, prompt_ids, device, forbid, greedy=True)
+        transcripts.append(
+            {
+                "question": question,
+                "adapter_on": tok.decode(on_ids),
+                "adapter_off": tok.decode(off_ids),
+                "stopped": (on_stopped, off_stopped),
+            }
+        )
+        print(f"[phase14_recall] unrelated {question!r} on/off recorded")
+
+    print(
+        f"[phase14_recall] collapse control: masked dialogue-val PPL adapter OFF {ppl_off:.4f} "
+        f"-> ON {ppl_on:.4f} ({delta:+.2%}) over {n_targets:,} scored targets"
+    )
+    return {
+        "ppl_adapter_on": ppl_on,
+        "ppl_adapter_off": ppl_off,
+        "delta": delta,
+        "scored_targets": n_targets,
+        "trigger": tp.COLLAPSE_PPL_TRIGGER,
+        "trips_trigger": tp.replay_required(ppl_off, ppl_on),
+        "transcripts": tuple(transcripts),
+    }
+
+
+def run_bit_identity_control(tok, questions):
+    """D-11.3 — adapter-off logits are BIT-IDENTICAL to the un-adapted base, on REAL weights.
+
+    The ambiguity this closes: whether "memory OFF" in the demo is really the un-adapted base,
+    or a model that still carries some of the adapter. With the adapter disabled the wrapper's
+    forward is literally ``self.base(x)``, so bit-identity is STRUCTURAL — but Phase 9 pins that
+    on fixtures. This control turns "inherited from a fixture unit test" into "measured on the
+    real 13.9M convbase and the real persona adapter," which is what makes the demo's central
+    toggle claim a measurement rather than an inheritance.
+
+    Builds its OWN CPU-pinned pair rather than reusing the caller's device-resident model:
+    14-RESEARCH Pitfall 11 is the reason — Phase 13 measured eval PPL differing by ~3.6e-8
+    across processes on MPS, so a bit-identity claim proven there would carry the single doubt
+    this control exists to remove. ``RuntimeConfig(device="cpu")`` is the ``demo_app.py:81``
+    explicit-pin idiom, never a bare string.
+
+    Model A is the un-adapted base (no injection at all); model B is the same slim checkpoint
+    with the adapter injected, loaded, and then gated off. Full logits tensors are compared with
+    ``torch.equal`` and the max absolute difference is recorded alongside the boolean, so the
+    report can state a measured NUMBER (0.0) rather than only "the assertion held".
+    """
+    device = RuntimeConfig(device="cpu").device
+    ckpt = load_slim(CONVBASE_SLIM)  # weights_only=True — restricted unpickler (T-14-22).
+    model_cfg = ModelConfig(**ckpt["model_config"])
+
+    # Model A — the un-adapted conversational base. No `inject_lora`, no adapter, nothing.
+    base = GPT(model_cfg)
+    base.load_state_dict(ckpt["model"])
+    base.to(device).eval()
+
+    # Model B — the same weights, adapter injected and loaded, then gated OFF.
+    # LOAD BEFORE INJECT (ARCHITECTURE Anti-pattern 1): injection rewrites every wrapped
+    # projection's state-dict keys with a `.base.` infix.
+    gated = GPT(model_cfg)
+    gated.load_state_dict(ckpt["model"])
+    inject_lora(gated, LoRAConfig())
+    load_adapter_weights(gated, load_adapter(ADAPTER_PATH))
+    set_adapter_enabled(gated, False)
+    gated.to(device).eval()
+
+    max_abs_diff = 0.0
+    with torch.no_grad():
+        for question in questions:
+            ids = build_recall_prompt(tok, question)
+            idx = torch.tensor([ids], dtype=torch.long, device=device)
+            logits_base, _ = base(idx)
+            logits_gated, _ = gated(idx)
+            diff = (logits_base - logits_gated).abs().max().item()
+            max_abs_diff = max(max_abs_diff, diff)
+            _prove(
+                torch.equal(logits_base, logits_gated),
+                f"adapter-off logits differ from the un-adapted base on prompt {question!r} "
+                f"(max |diff| = {diff:.3e}, {len(ids)} prompt ids) — the demo's 'memory off' "
+                "would not be the base, which is the entire claim the toggle makes",
+            )
+            print(f"[phase14_recall] bit identity {question!r}: max |diff| {diff:.3e}")
+
+    return {
+        "device": device,
+        "n_prompts": len(questions),
+        "prompts": tuple(questions),
+        "max_abs_diff": max_abs_diff,
+        "bit_identical": True,  # `_prove` above exits non-zero before this can be reached False
+        "vocab_size": model_cfg.vocab_size,
+    }
+
+
+# =====================================================================================
+# ===== THE REPORT — every section's FRAMING committed BEFORE the run that fills it =====
+# =====================================================================================
+#
+# D-20's pre-registration in its literal form. Every string below is committed in plan 14-10; the
+# run that produces the numbers they frame happens in plan 14-11. `git log -S "<any constant's
+# text>" -- scripts/phase14_recall.py` therefore shows the framing predating the result, which is
+# the only thing that makes "we always meant to say this" checkable rather than asserted.
+#
+# They are MODULE-LEVEL constants rather than f-strings buried in the writer for exactly that
+# reason: a reviewer can diff the framing independently of the numbers, and a later edit to the
+# framing shows up as a commit dated after the run.
+
+REPORT_OPENER = """> **What these numbers are:** fresh-process, empty-prompt recall. Every question
+> is an independent `build_recall_prompt` id sequence carrying a bare `<|system|>` span — no
+> persona text, no prior turn, no retrieval — so an answer's only source is the 331,776 LoRA
+> parameters in `checkpoints/persona_adapter.pt`. Scoring is D-10's mechanical
+> case-insensitive substring gate over one greedy plus N seeded draws per question, judged
+> against thresholds pre-registered from a DISJOINT calibration fact set before this run existed.
+>
+> **What they are not:** not a chat-quality measure; not comparable to any other model or to any
+> published recall figure (different corpus, different register, a 13.9M-parameter base); and not
+> a claim that this model is good. The only claim on offer is about WHERE the memory lives."""
+
+FAIRNESS_OPENER = """**The ambiguity this control closes.** When a closed-book answer fails, that
+failure has two readings: *"the model has no memory of this fact"* or *"the question is
+unanswerable as asked."* Only the first supports the phase's claim. This control separates them by
+putting the fact's own first-person statement into the `<|system|>` persona span and asking the
+same question of the base with the adapter off — if the base answers when it can SEE the fact, the
+question is answerable and a closed-book failure is about memory.
+
+**This is a question-VALIDITY check, explicitly NOT a mechanism comparison, and NOT DEMO-F2.**
+DEMO-F2 (deferred) is a comparative baseline that measures prompt-versus-weight recall *parity*.
+This is one-directional and validates the question set only. Reading it as a mechanism comparison
+would be reading DEMO-F2 into a phase that deliberately deferred it."""
+
+# --- D-20's three-part reconciliation. Committed BEFORE the run. ---
+
+RECONCILIATION_A = """### (a) What this control can no longer prove
+
+First-party measurement (14-RESEARCH §F4, 6 greedy probes against `convbase_slim.pt`) recorded
+this base failing to copy a fact out of its own context:
+
+- persona span `i have a dog named zorp.`, asked `what is your dog's name?`
+  -> `i am a cop, i am a cop. i am a cop.`
+- persona span `i live in oberlin.`, asked `where do you live?`
+  -> `i live in the country i live in the country.`
+- persona span plus one warm turn, asked `what is your dog's name?`
+  -> `i have a dog named my name is cuddling.`
+
+The third probe is the diagnostic one: the base copied the **syntactic frame** out of the persona
+span and substituted a wrong value. The same slot's measured closed-book prior is `rose`
+(D-01) — so `i have a dog named zorp.` in context yields `i have a dog named <not zorp>`, frame
+copied, value substituted. D-20's one-line summary of these two measurements compresses them into
+a single probe; the list above is the unrounded record.
+
+**Stated plainly, without softening: the inference this control was built to license is
+weakened.** A closed-book failure can no longer be read as unambiguous evidence of absent memory,
+because this base demonstrably fails to surface a fact it can see. Whatever this control returns
+below, that limitation stands."""
+
+RECONCILIATION_B = """### (b) Why the phase's central comparison survives anyway
+
+The core claim rests on **adapter-on versus adapter-off, both closed-book** — and in NEITHER arm
+is the fact in context. Both arms run in the same process, on the same weights, from the same
+prompt ids, with the same per-question seeds; the only difference between them is the 331,776
+adapter parameters. The base's in-context extraction weakness is therefore irrelevant to that
+specific comparison: it is a property both arms share equally, and it cancels.
+
+(a) constrains what a closed-book failure means **in isolation**. It does not touch the
+**differential**, and the differential is the claim."""
+
+RECONCILIATION_C = """### (c) What the adapter's success is actually demonstrating
+
+The base's inability to extract raises an open question this report names rather than skirts.
+When the adapter succeeds, is that:
+
+- **(i)** knowledge encoded in the weights, then extracted by ordinary reasoning; or
+- **(ii)** stimulus-response pattern completion learned directly from the training paraphrases?
+
+These are meaningfully different claims, and a success on a TAUGHT phrasing alone cannot separate
+them — a taught phrasing is exactly the stimulus (ii) predicts a response to.
+
+**D-13's held-out template families generalizing is the evidence that distinguishes (i) from
+(ii).** Held-out means entirely held-out template FAMILIES, not fresh instances of taught frames,
+so a held-out success is a response to a stimulus the adapter never saw. The number that decides
+this is the held-out rate in `## Recall Results — Core Tier` above; read that section, not this
+one, for which of (i) and (ii) this run supports."""
+
+FAILURE_BRANCH = """## Pre-Registered Failure Branch (D-20)
+
+Committed in plan 14-10, before the held-out number existed. If the held-out families ALSO fail:
+
+1. **The phase cannot distinguish (i) from (ii)**, and the demo's claim NARROWS to *"taught
+   phrasings are recalled from weights."* That narrowing is stated in the headline, not buried.
+2. **A taught-only success is still a real weights-memory result**, because it beats the
+   adapter-off control on identical prompts in the same process — while this report **explicitly
+   DECLINES** the stronger generalization claim rather than implying it.
+3. **The narrower claim cites the SAME comparison structure already locked for the core claim** —
+   the adapter-on / adapter-off closed-book comparison from D-11's controls — and introduces **no
+   new metric invented for this branch.** A fallback metric chosen because it happens to look
+   favorable in the failure scenario is not evidence; the point of pre-registering this branch is
+   that the narrowed claim is traceable to evidence this phase was going to produce either way."""
+
+COLLAPSE_OPENER = """**The ambiguity this control closes.** Recall could have been bought by
+wrecking the model: 331,776 parameters trained hard on one persona could turn a conversational
+base into a single-topic parrot that recites facts and can no longer hold an ordinary dialogue.
+A high recall rate on a broken model is not the result this phase claims. FEATURES §4's claim is
+that the persona MOVES from the prompt into the weights — not that everything else is displaced.
+
+Measured on the frozen dialogue-val gate metric (`masked_perplexity` over
+`data/dialog_val.bin` + `data/dialog_val_mask.bin`, block 256, dead ids forbidden — the same
+deterministic full-corpus sweep every Phase-12 arm was judged by), adapter ON versus the same
+weights inside `adapter_disabled`. The paired transcripts follow, because a PPL number alone does
+not let a reader SEE that the model still converses."""
+
+BIT_IDENTITY_OPENER = """**The ambiguity this control closes.** The demo's central affordance is a
+"memory OFF" toggle. If OFF were not exactly the un-adapted base — if any part of the adapter
+still leaked through — then every side-by-side the demo shows would be comparing two adapted
+models, and the toggle would be theatre. Phase 9 pins the round-trip on fixtures; this runs it on
+the real 13.9M convbase and the real persona adapter, which is what makes the toggle claim
+MEASURED rather than inherited from a unit test.
+
+Run on **CPU**, deliberately, not on the preflight device (14-RESEARCH Pitfall 11): Phase 13
+measured eval PPL differing by ~3.6e-8 across processes on MPS, so a bit-identity claim proven
+there would carry the one doubt this control exists to remove."""
+
+SOFT_TIER_SECTION = """**What the soft tier is FOR.** Narrative texture and breadth of
+personalization. It shows the demo teaching a *preference*, not only proper nouns, so a
+transcript reads like a person rather than a form. It is taught in the same run, with the same
+grammar, and every completion it produced is in the transcripts.
+
+**What it explicitly does NOT do.** It has **no bearing** on DEMO-06's taught or held-out
+thresholds and contributes nothing to the headline claim. Neither its rate nor its questions
+enter any gate computation in this report.
+
+**Why it is excluded, precisely.** Low-cardinality preference slots could not reliably survive
+the D-03 close-call filter: for "favorite color" the base carries real prior mass on *some*
+color — its measured closed-book answer is `red` (D-01) — so a base completion naming a
+different color against a taught value is textbook same-category / right-slot proximity, and
+dies to the close-call rule. Proper-noun slots have no such prior to trip over. Both soft-tier
+survivors carry a recorded close call of their own and are retained under the D-05 exclusion —
+explicitly NOT because they are clean.
+
+This is a named section because D-05 requires one. A footnote would let a reader take the soft
+tier for gated evidence, which it is not."""
+
+THREATS_TO_VALIDITY = """Every item below names the scope it narrows, explicitly.
+
+### 1. The held-out set is deliberately scoped (D-22)
+
+Reversed-direction phrasings (`who is <value>?`) are **TAUGHT, not held out** — by decision, not
+by accident. They hit the documented **reversal curse** (`arxiv.org/abs/2309.12288`: fine-tuning
+on "A is B" does not yield "B is A", and the effect persists across fine-tuning methods). Held
+out, they would fail for a *literature* reason rather than for any property of this model,
+dragging down the pre-registered held-out number and poisoning exactly the evidence part (c) of
+the D-20 reconciliation depends on.
+
+**Consequence for what a clean held-out result may claim:** it demonstrates generalization
+**within that scope** — across held-out template families in the taught direction — and **not**
+immunity to every documented fine-tuning limitation. This report makes no claim about reversed
+recall, because this phase did not measure it as a held-out property.
+
+### 2. The soft tier is excluded from the gate (D-05)
+
+See `## Soft Tier — Excluded From The Gate (D-05)`. Two of the taught facts contribute nothing to
+either threshold, so the headline number describes the proper-noun core only — a narrower set
+than "everything the adapter was taught."
+
+### 3. The question-fairness control's limitation (D-20 (a))
+
+See `## Control 1 — Question Fairness (D-11.1)`, part (a). In-context answerability could not be
+established at this scale, so a closed-book failure **in isolation** is not unambiguous evidence
+of absent memory. The adapter-on / adapter-off differential is unaffected (part (b)), but any
+reading of a single failed question as "the model does not know this" is out of scope."""
+
+SHIP_DECISION_HEADER = """<!-- D-12, verbatim: a missed threshold is recorded UNAMENDED in
+`## Verdict` above. Any subsequent decision about whether or how the adapter still ships — retry
+with a different recipe, ship as-is with the miss documented, or not ship — is logged HERE:
+separate from the gate verdict, dated AFTER it, and explicit that it
+does not reopen or amend the pre-registered threshold.
+Same register as Phase 12's "Production Config Decision — post-verdict, discretionary". Empty
+until such a decision is made; an empty section is the correct state when the gate is cleared. -->
+
+_No post-verdict decision recorded._"""
+
+
+def assert_report_not_clobbered():
+    """The ``measure_inflation.py:66-75`` guard: a RECORDED verdict is committed evidence.
+
+    A rerun would reset ``## Verdict`` to ``PENDING`` and silently drop every hand-added section
+    (the D-12 ship decision, any checkpoint annotation), which is the exact material that cannot
+    be regenerated. ``--force`` is the deliberate override.
+
+    Called at the TOP of ``main()`` as well as from the writer: a multi-hour run that refuses to
+    write its report at the end has already wasted the run.
+    """
+    if RECALL_REPORT_PATH.exists() and "--force" not in sys.argv[1:]:
+        recorded = RECALL_REPORT_PATH.read_text(encoding="utf-8").split("## Verdict")[-1]
+        if "PENDING" not in recorded:
+            raise SystemExit(
+                f"[phase14_recall] {RECALL_REPORT_PATH} already carries a recorded verdict — "
+                "it is committed evidence (D-12). Pass --force to overwrite and re-measure."
+            )
+
+
+def _tier(records, label):
+    """The one record whose ``tier`` is ``label`` — a missing tier is a wiring bug, not a blank."""
+    for record in records:
+        if record["tier"] == label:
+            return record
+    raise SystemExit(f"[phase14_recall] no scored record for tier {label!r}")
+
+
+def _question_rows(record):
+    """Per-question ``k/N`` rows — every scored question, in the order it was asked."""
+    rows = [
+        "| question | fact | split | reserved | k/N |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for entry in record["questions"]:
+        flag = "yes" if entry["reserved"] else "—"
+        rows.append(
+            f"| {entry['question']} | `{entry['fact_id']}` | {entry['split']} | {flag} | "
+            f"{entry['k']}/{entry['n']} |"
+        )
+    return rows
+
+
+def _contradiction_blocks(records):
+    """Every contradiction event traced to the exact completion text (D-03/D-10 discipline)."""
+    blocks = []
+    for record in records:
+        for entry in record["questions"]:
+            for draw, competing in enumerate(entry["contradictions"]):
+                if not competing:
+                    continue
+                label = "greedy" if draw == 0 else f"seeded #{draw}"
+                blocks += [
+                    f"- **{record['tier']}** · `{entry['fact_id']}` · {entry['question']} · "
+                    f"{label} — value present alongside: {', '.join(competing)}",
+                    "",
+                    _quote(entry["completions"][draw]),
+                    "",
+                ]
+    return blocks or ["_No contradiction events detected._", ""]
+
+
+def write_recall_report(records, controls, provenance_lines):
+    """Write ``results/phase14_recall_report.md`` — the verdict-bearing committed evidence.
+
+    ``results/phase14_recall_transcripts.md`` owns the raw completions; THIS file owns the
+    aggregation, the gate verdicts, and the pre-registered framing. Section order is fixed and
+    every framing string is a module-level constant committed before the run (D-20).
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    assert_report_not_clobbered()
+
+    taught = _tier(records, CORE_TAUGHT_TIER)
+    heldout = _tier(records, CORE_HELDOUT_TIER)
+    closed = _tier(records, CLOSED_BOOK_TIER)
+    soft = _tier(records, SOFT_TIER)
+    fairness, collapse, identity = (
+        controls["fairness"],
+        controls["collapse"],
+        controls["bit_identity"],
+    )
+    taught_pass = taught_gate(taught["rate"])
+    heldout_pass = heldout_gate(heldout["rate"])
+    closed_k, closed_n = closed["k"], closed["n"]
+
+    budget_row = (
+        f"| `RECALL_MAX_NEW_TOKENS` | {RECALL_MAX_NEW_TOKENS} | "
+        f"max census value ({max(VALUE_TOKEN_COUNTS)}) + `PREAMBLE_HEADROOM` "
+        f"({PREAMBLE_HEADROOM}) + `TAIL_HEADROOM` ({TAIL_HEADROOM}), rounded up to a multiple of "
+        f"`BUDGET_STEP` ({BUDGET_STEP}) — `derive_recall_budget`, D-19 |"
+    )
+    seed_row = (
+        f"| `SEED` | {SEED} | the project's established seed. Question `i` draws sample `s` from "
+        f"`torch.Generator().manual_seed({SEED} + i + s)`, so every draw in this run is "
+        f"re-derivable from this integer alone |"
+    )
+    samples_row = (
+        f"| `N_SEEDED_SAMPLES` | {N_SEEDED_SAMPLES} | D-10 requires a success RATE, never one "
+        f"transcript: 1 greedy + {N_SEEDED_SAMPLES} seeded draws per question at "
+        f"temperature={SAMPLE_TEMPERATURE}, top_p={SAMPLE_TOP_P} (the Phase-12 warm settings, "
+        f"carried over rather than re-tuned) |"
+    )
+    core_row = (
+        f"| core taught | {taught['k']}/{taught['n']} | **{taught['rate']:.4f}** | "
+        f"`{TAUGHT_THRESHOLD}` | **{'PASS' if taught_pass else 'FAIL'}** |"
+    )
+    heldout_row = (
+        f"| core held-out | {heldout['k']}/{heldout['n']} | **{heldout['rate']:.4f}** | "
+        f"`{HELDOUT_THRESHOLD:.4f}` | **{'PASS' if heldout_pass else 'FAIL'}** |"
+    )
+    closed_row = (
+        f"| closed-book control (adapter off) | {closed_k}/{closed_n} | "
+        f"**{closed['rate']:.4f}** | — | descriptive |"
+    )
+    collapse_row = (
+        f"| masked dialogue-val PPL | {collapse['ppl_adapter_off']:.4f} (off) -> "
+        f"{collapse['ppl_adapter_on']:.4f} (on) | **{collapse['delta']:+.2%}** over "
+        f"{collapse['scored_targets']:,} scored targets |"
+    )
+
+    blocks = [
+        "# PersonaCore — Phase 14 Teach-Then-Recall Report (DEMO-05 / DEMO-06 / DEMO-07)",
+        "",
+        REPORT_OPENER,
+        "",
+        "## Pre-Registration",
+        "",
+        "Every constant below was a committed literal in `scripts/phase14_recall.py` before this "
+        "run produced a single number. **Git history order is the pre-registration proof** — the "
+        "same register Phase 13 used (`finetune_ab.py` @ `c3d942e`, before either arm ran). The "
+        "harness never parses a report for a number, and no threshold here was chosen after "
+        "seeing a Phase-14 recall result.",
+        "",
+        "| Constant | Value | Derivation |",
+        "| --- | --- | --- |",
+        f"| `TAUGHT_THRESHOLD` | {TAUGHT_THRESHOLD} | "
+        f"`lock_thresholds(0.4143, 0.2506)` on the `cal_first_person_replay` arm — the arm whose "
+        f"configuration this run uses. Bound by the 0.60 discount |",
+        f"| `HELDOUT_THRESHOLD` | {HELDOUT_THRESHOLD:.4f} | same call; bound by `THRESHOLD_FLOOR` "
+        f"(0.6 × 0.2506 = 0.1504 discounts BELOW the floor, so the floor clamps) |",
+        f"| `CALIBRATION_SHA` | `{CALIBRATION_SHA}` | the commit carrying the calibration report "
+        f"and the measurements both thresholds were derived from; see "
+        f"`results/phase14_calibration_report.md`, `## Derivation 1 — Recall Thresholds (D-09)`, "
+        f"which shows the original and corrected pairs side by side |",
+        f"| `FACTSET_GATE_SHA` | `{fs.FACTSET_GATE_SHA}` | the commit at which every locked fact "
+        f"was measured base-failing; see `results/phase14_factset_report.md` |",
+        budget_row,
+        samples_row,
+        seed_row,
+        "",
+        "## Clean-Room Evidence (SC2)",
+        "",
+        "Teaching ran in a **different `python` invocation** — a different pid, at an earlier "
+        "wall clock, leaving the adapter file on disk in between. The clean room is therefore "
+        "inherited by construction rather than argued. The pid, the timestamp, and the SHA-256 "
+        "of both weight files are the three recorded facts to check that against:",
+        "",
+        "```",
+        *provenance_lines,
+        "```",
+        "",
+        "**Every question's exact prompt token ids are in "
+        "`results/phase14_recall_transcripts.md`**, recorded BEFORE the model was called rather "
+        "than reconstructed after seeing the answer. `assert_no_value_in_prompt` checks each "
+        "prompt at two levels — the normalized value absent from the decoded prompt, and the "
+        "value's encoded id sequence absent as a contiguous run in the prompt ids — and raises "
+        "`SystemExit` on either. **This run completing at all is the proof that no locked value "
+        "reached any scored prompt.** The live demo renders the same ids from the same "
+        "`build_recall_prompt` call, so the panel and this evidence cannot diverge (D-18).",
+        "",
+        "## Recall Results — Core Tier",
+        "",
+        "**Taught and never-seen are reported separately** (SC3 / DEMO-06), because they support "
+        "different claims. The **taught** tier measures recall on phrasings whose template FAMILY "
+        "the adapter trained on: a success there is consistent with learning and also with "
+        "memorizing a surface form. The **held-out** tier measures entirely held-out template "
+        "families (D-13) plus the D-08 reserved gate probes: a success there is the one that "
+        "distinguishes an internalized fact from a memorized phrasing. Neither number is the "
+        "other's substitute.",
+        "",
+        "| tier | k/N | rate | threshold | gate |",
+        "| --- | --- | --- | --- | --- |",
+        core_row,
+        heldout_row,
+        closed_row,
+        "",
+        f"The closed-book control ran the SAME process, the SAME weights, and the SAME "
+        f"{len(closed['questions'])} prompts (core plus soft, every tier) with only the LoRA "
+        f"`enabled` flags flipped off, and the SAME per-question seeds — so the arms are paired, "
+        f"not merely comparable. Any difference between it and the two gated rows can only come "
+        f"from the adapter.",
+        "",
+        "### Per-question `k/N` — core taught",
+        "",
+        *_question_rows(taught),
+        "",
+        "### Per-question `k/N` — core held-out",
+        "",
+        *_question_rows(heldout),
+        "",
+        "## Held-Out Provenance (D-08)",
+        "",
+        "The reserved gate probes below are **held out AND measured base-failing at gate time, "
+        f"commit `{fs.FACTSET_GATE_SHA}`** — the specific base completion that proves each one is "
+        "quoted verbatim in `results/phase14_factset_report.md`. That is what makes the held-out "
+        "split *proven* unguessable by the base rather than merely assumed to be. The "
+        "scoring-time closed-book control above re-measures on the FULL question set regardless: "
+        "gate-time probes are evidence carried forward, never a substitute for re-measuring.",
+        "",
+    ]
+
+    for entry in heldout["questions"]:
+        if entry["reserved"]:
+            blocks.append(
+                f"- `{entry['fact_id']}` · {entry['question']} — held out AND measured "
+                f"base-failing at gate time, commit `{fs.FACTSET_GATE_SHA}` "
+                f"({entry['k']}/{entry['n']} this run)"
+            )
+
+    blocks += [
+        "",
+        "## Soft Tier — Excluded From The Gate (D-05)",
+        "",
+        SOFT_TIER_SECTION,
+        "",
+        f"Measured, for the record and for nothing else: **{soft['k']}/{soft['n']} = "
+        f"{soft['rate']:.4f}** across {len(soft['questions'])} questions.",
+        "",
+        "## Contradiction Events (descriptive, no gate)",
+        "",
+        "**No gate is attached to this section.** It is descriptive, in the same register Phase "
+        "13 used for the 79/70 role-token leakage that qualified what its retention gate could "
+        "claim: a contradiction count never fails this phase, it qualifies what the recall rate "
+        "is allowed to mean. Detection is MECHANICAL — a completion counts as a contradiction "
+        "iff it contains the correct value AND at least one other value from the committed "
+        "lexicon (`LOCKED_VALUES` plus every gate-rejected candidate), requiring zero new "
+        "editorial judgment. Hedging language is a separate, weaker signal reported apart from "
+        "it. Every event below is traced to the exact completion text (D-03's quoted-evidence "
+        "discipline); there is no unlogged tally.",
+        "",
+        "| tier | contradiction events | hedging completions |",
+        "| --- | --- | --- |",
+    ]
+    for record in records:
+        blocks.append(f"| {record['tier']} | {record['contradictions']} | {record['hedging']} |")
+    blocks += ["", *_contradiction_blocks(records)]
+
+    blocks += [
+        "## Control 1 — Question Fairness (D-11.1)",
+        "",
+        FAIRNESS_OPENER,
+        "",
+        f"**Measured.** With each fact's own first-person statement in the `<|system|>` persona "
+        f"span, the base (adapter off) scored **{fairness['k']}/{fairness['n']} = "
+        f"{fairness['rate']:.4f}** across {len(fairness['questions'])} questions; "
+        f"{fairness['n_answerable']} of those questions produced at least one completion "
+        f"containing the value. This is the ONLY place in the entire phase where a fact value "
+        f"legitimately appears in a prompt.",
+        "",
+        RECONCILIATION_A,
+        "",
+        RECONCILIATION_B,
+        "",
+        RECONCILIATION_C,
+        "",
+        FAILURE_BRANCH,
+        "",
+        "## Control 2 — No Collateral Collapse (D-11.2)",
+        "",
+        COLLAPSE_OPENER,
+        "",
+        "| metric | adapter off -> on | delta |",
+        "| --- | --- | --- |",
+        collapse_row,
+        "",
+        f"`COLLAPSE_PPL_TRIGGER` = {collapse['trigger']} (imported from `teach_persona`, never "
+        f"duplicated, so this control and D-15's calibration verdict share ONE definition and "
+        f"stay on one scale). Trigger tripped: **{collapse['trips_trigger']}** — **descriptive, "
+        f"no gate.** Calibration already measured the replay arm at **+29.39%**, still past the "
+        f"trigger, and this run uses that arm's configuration: a trip here is a pre-recorded "
+        f'expectation, not a surprise. "Replay required" was never "replay solves it".',
+        "",
+        "### Paired transcripts — questions touching no taught slot",
+        "",
+    ]
+    for record in collapse["transcripts"]:
+        blocks += [
+            f"**{record['question']}**",
+            "",
+            "- adapter ON:",
+            _quote(record["adapter_on"]),
+            "- adapter OFF:",
+            _quote(record["adapter_off"]),
+            "",
+        ]
+
+    blocks += [
+        "## Control 3 — Adapter-Off Bit Identity (D-11.3)",
+        "",
+        BIT_IDENTITY_OPENER,
+        "",
+        f"**Measured.** Full logits tensors compared with `torch.equal` over "
+        f"{identity['n_prompts']} prompts (several held-out questions plus the empty-question "
+        f"startup scaffold), on device `{identity['device']}`, vocab {identity['vocab_size']}: "
+        f"an un-injected model A loaded from `convbase_slim.pt` against a model B with the "
+        f"adapter injected, loaded, and then gated off via `set_adapter_enabled(model, False)`.",
+        "",
+        f"- `torch.equal` on every prompt: **{identity['bit_identical']}**",
+        f"- max absolute logit difference: **{identity['max_abs_diff']:.1f}** (exactly zero)",
+        "",
+        "With the adapter disabled the wrapper's forward is literally `self.base(x)`, so "
+        "bit-identity is structural. This control is what turns that from an inherited fixture "
+        "property into a measurement on the real base and the real adapter.",
+        "",
+        "## Threats To Validity",
+        "",
+        THREATS_TO_VALIDITY,
+        "",
+        "## Verdict",
+        "",
+        f"- Taught: {taught['rate']:.4f} vs `TAUGHT_THRESHOLD` {TAUGHT_THRESHOLD} (boundary "
+        f"passes) — **{'PASS' if taught_pass else 'FAIL'}**",
+        f"- Held-out: {heldout['rate']:.4f} vs `HELDOUT_THRESHOLD` {HELDOUT_THRESHOLD:.4f} "
+        f"(boundary passes) — **{'PASS' if heldout_pass else 'FAIL'}**",
+        f"- Closed-book control: {closed['rate']:.4f} — descriptive, no threshold",
+        "",
+        "PENDING — user decision at checkpoint.",
+        "",
+        "## Ship Decision — post-verdict, discretionary",
+        "",
+        SHIP_DECISION_HEADER,
+        "",
+    ]
+
+    RECALL_REPORT_PATH.write_text("\n".join(blocks), encoding="utf-8")
+    print(
+        f"[phase14_recall] wrote {RECALL_REPORT_PATH}: taught {taught['rate']:.4f} "
+        f"({'PASS' if taught_pass else 'FAIL'}), held-out {heldout['rate']:.4f} "
+        f"({'PASS' if heldout_pass else 'FAIL'}), closed-book {closed['rate']:.4f}"
+    )
 
 
 if __name__ == "__main__":
