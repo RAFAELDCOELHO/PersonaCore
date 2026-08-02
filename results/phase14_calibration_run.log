@@ -1,0 +1,125 @@
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] calibration preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'} device=mps
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'cal_first_person'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 10 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3564 / min 0.1636 / max 0.5625
+[teach_persona] cal_first_person: 220 episodes, 9,065 tokens (9,065 teaching + 0 replay), episode length mean 41.2 [23, 68]
+[teach_persona] bins provenance: seed=1337 git_sha=75ac857663fbbd3bc647c4cd94ca7ec1da16f987 pid=38560 torch=2.7.1 arm=cal_first_person second_person=False replay_ratio=0.0 mask_fraction=0.3426 wall=0.1s utc=2026-08-02T05:39:51Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/data/persona_cal_first_person_train.bin + /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/data/persona_cal_first_person_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/checkpoints/phase14_cal_first_person_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5737 / ON 14.8559 (+224.81% over 270,203 scored targets)
+[teach_persona] run provenance: arm=cal_first_person seed=1337 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=75ac857663fbbd3bc647c4cd94ca7ec1da16f987 pid=38560 device=mps torch=2.7.1 second_person=False replay_ratio=0.0 mask_fraction=0.3426 final_train_loss=0.0754 utc=2026-08-02T05:41:11Z
+[teach_persona] cal_first_person: scoring 140 taught + 90 held-out questions x 9 draws, adapter ON then OFF
+  [cal_first_person taught ON] 20/140 questions, running 106/180 = 0.5889
+  [cal_first_person taught ON] 40/140 questions, running 147/360 = 0.4083
+  [cal_first_person taught ON] 60/140 questions, running 278/540 = 0.5148
+  [cal_first_person taught ON] 80/140 questions, running 449/720 = 0.6236
+  [cal_first_person taught ON] 100/140 questions, running 609/900 = 0.6767
+  [cal_first_person taught ON] 120/140 questions, running 766/1080 = 0.7093
+  [cal_first_person taught ON] 140/140 questions, running 860/1260 = 0.6825
+[teach_persona] cal_first_person taught ON: 860/1260 = 0.6825 (F1 0.6889, F2 0.7022, F6 0.6500)
+  [cal_first_person held-out ON] 20/90 questions, running 63/180 = 0.3500
+  [cal_first_person held-out ON] 40/90 questions, running 162/360 = 0.4500
+  [cal_first_person held-out ON] 60/90 questions, running 315/540 = 0.5833
+  [cal_first_person held-out ON] 80/90 questions, running 412/720 = 0.5722
+[teach_persona] cal_first_person held-out ON: 447/810 = 0.5519 (F3 0.6296, F7 0.5519, F8 0.4741)
+  [cal_first_person taught OFF] 20/140 questions, running 0/180 = 0.0000
+  [cal_first_person taught OFF] 40/140 questions, running 0/360 = 0.0000
+  [cal_first_person taught OFF] 60/140 questions, running 0/540 = 0.0000
+  [cal_first_person taught OFF] 80/140 questions, running 0/720 = 0.0000
+  [cal_first_person taught OFF] 100/140 questions, running 0/900 = 0.0000
+  [cal_first_person taught OFF] 120/140 questions, running 0/1080 = 0.0000
+  [cal_first_person taught OFF] 140/140 questions, running 0/1260 = 0.0000
+[teach_persona] cal_first_person taught OFF: 0/1260 = 0.0000 (F1 0.0000, F2 0.0000, F6 0.0000)
+  [cal_first_person held-out OFF] 20/90 questions, running 0/180 = 0.0000
+  [cal_first_person held-out OFF] 40/90 questions, running 0/360 = 0.0000
+  [cal_first_person held-out OFF] 60/90 questions, running 0/540 = 0.0000
+  [cal_first_person held-out OFF] 80/90 questions, running 0/720 = 0.0000
+[teach_persona] cal_first_person held-out OFF: 0/810 = 0.0000 (F3 0.0000, F7 0.0000, F8 0.0000)
+[teach_persona] cal_first_person: per-family gain {'F1': 0.6889, 'F2': 0.7022, 'F6': 0.65}, held-out per-family std 0.0635
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'cal_first_person_replay'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 10 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3564 / min 0.1636 / max 0.5625
+[teach_persona] cal_first_person_replay: 220 episodes, 18,130 tokens (9,065 teaching + 9,065 replay), episode length mean 41.2 [23, 68]
+[teach_persona] bins provenance: seed=1337 git_sha=75ac857663fbbd3bc647c4cd94ca7ec1da16f987 pid=38560 torch=2.7.1 arm=cal_first_person_replay second_person=False replay_ratio=1.0 mask_fraction=0.3854 wall=0.3s utc=2026-08-02T05:59:43Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/data/persona_cal_first_person_replay_train.bin + /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/data/persona_cal_first_person_replay_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/checkpoints/phase14_cal_first_person_replay_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5737 / ON 5.9180 (+29.39% over 270,203 scored targets)
+[teach_persona] run provenance: arm=cal_first_person_replay seed=1337 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=75ac857663fbbd3bc647c4cd94ca7ec1da16f987 pid=38560 device=mps torch=2.7.1 second_person=False replay_ratio=1.0 mask_fraction=0.3854 final_train_loss=0.5555 utc=2026-08-02T06:01:03Z
+[teach_persona] cal_first_person_replay: scoring 140 taught + 90 held-out questions x 9 draws, adapter ON then OFF
+  [cal_first_person_replay taught ON] 20/140 questions, running 69/180 = 0.3833
+  [cal_first_person_replay taught ON] 40/140 questions, running 127/360 = 0.3528
+  [cal_first_person_replay taught ON] 60/140 questions, running 193/540 = 0.3574
+  [cal_first_person_replay taught ON] 80/140 questions, running 317/720 = 0.4403
+  [cal_first_person_replay taught ON] 100/140 questions, running 434/900 = 0.4822
+  [cal_first_person_replay taught ON] 120/140 questions, running 507/1080 = 0.4694
+  [cal_first_person_replay taught ON] 140/140 questions, running 522/1260 = 0.4143
+[teach_persona] cal_first_person_replay taught ON: 522/1260 = 0.4143 (F1 0.4489, F2 0.4244, F6 0.3583)
+  [cal_first_person_replay held-out ON] 20/90 questions, running 34/180 = 0.1889
+  [cal_first_person_replay held-out ON] 40/90 questions, running 66/360 = 0.1833
+  [cal_first_person_replay held-out ON] 60/90 questions, running 164/540 = 0.3037
+  [cal_first_person_replay held-out ON] 80/90 questions, running 202/720 = 0.2806
+[teach_persona] cal_first_person_replay held-out ON: 203/810 = 0.2506 (F3 0.2556, F7 0.2370, F8 0.2593)
+  [cal_first_person_replay taught OFF] 20/140 questions, running 0/180 = 0.0000
+  [cal_first_person_replay taught OFF] 40/140 questions, running 0/360 = 0.0000
+  [cal_first_person_replay taught OFF] 60/140 questions, running 0/540 = 0.0000
+  [cal_first_person_replay taught OFF] 80/140 questions, running 0/720 = 0.0000
+  [cal_first_person_replay taught OFF] 100/140 questions, running 0/900 = 0.0000
+  [cal_first_person_replay taught OFF] 120/140 questions, running 0/1080 = 0.0000
+  [cal_first_person_replay taught OFF] 140/140 questions, running 0/1260 = 0.0000
+[teach_persona] cal_first_person_replay taught OFF: 0/1260 = 0.0000 (F1 0.0000, F2 0.0000, F6 0.0000)
+  [cal_first_person_replay held-out OFF] 20/90 questions, running 0/180 = 0.0000
+  [cal_first_person_replay held-out OFF] 40/90 questions, running 0/360 = 0.0000
+  [cal_first_person_replay held-out OFF] 60/90 questions, running 0/540 = 0.0000
+  [cal_first_person_replay held-out OFF] 80/90 questions, running 0/720 = 0.0000
+[teach_persona] cal_first_person_replay held-out OFF: 0/810 = 0.0000 (F3 0.0000, F7 0.0000, F8 0.0000)
+[teach_persona] cal_first_person_replay: per-family gain {'F1': 0.4489, 'F2': 0.4244, 'F6': 0.3583}, held-out per-family std 0.0097
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'cal_second_person'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 6 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3910 / min 0.2000 / max 0.5882
+[teach_persona] cal_second_person: 132 episodes, 5,749 tokens (5,749 teaching + 0 replay), episode length mean 43.6 [27, 70]
+[teach_persona] bins provenance: seed=1337 git_sha=75ac857663fbbd3bc647c4cd94ca7ec1da16f987 pid=38560 torch=2.7.1 arm=cal_second_person second_person=True replay_ratio=0.0 mask_fraction=0.3778 wall=0.2s utc=2026-08-02T06:20:28Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/data/persona_cal_second_person_train.bin + /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/data/persona_cal_second_person_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/checkpoints/phase14_cal_second_person_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5737 / ON 18.7520 (+309.99% over 270,203 scored targets)
+[teach_persona] run provenance: arm=cal_second_person seed=1337 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=75ac857663fbbd3bc647c4cd94ca7ec1da16f987 pid=38560 device=mps torch=2.7.1 second_person=True replay_ratio=0.0 mask_fraction=0.3778 final_train_loss=0.0668 utc=2026-08-02T06:21:48Z
+[teach_persona] cal_second_person: scoring 84 taught + 54 held-out questions x 9 draws, adapter ON then OFF
+  [cal_second_person taught ON] 20/84 questions, running 178/180 = 0.9889
+  [cal_second_person taught ON] 40/84 questions, running 358/360 = 0.9944
+  [cal_second_person taught ON] 60/84 questions, running 524/540 = 0.9704
+  [cal_second_person taught ON] 80/84 questions, running 697/720 = 0.9681
+[teach_persona] cal_second_person taught ON: 711/756 = 0.9405 (F1 0.9630, F2 0.9741, F6 0.8704)
+  [cal_second_person held-out ON] 20/54 questions, running 147/180 = 0.8167
+  [cal_second_person held-out ON] 40/54 questions, running 303/360 = 0.8417
+[teach_persona] cal_second_person held-out ON: 391/486 = 0.8045 (F3 0.6975, F7 0.9012, F8 0.8148)
+  [cal_second_person taught OFF] 20/84 questions, running 0/180 = 0.0000
+  [cal_second_person taught OFF] 40/84 questions, running 0/360 = 0.0000
+  [cal_second_person taught OFF] 60/84 questions, running 0/540 = 0.0000
+  [cal_second_person taught OFF] 80/84 questions, running 0/720 = 0.0000
+[teach_persona] cal_second_person taught OFF: 0/756 = 0.0000 (F1 0.0000, F2 0.0000, F6 0.0000)
+  [cal_second_person held-out OFF] 20/54 questions, running 0/180 = 0.0000
+  [cal_second_person held-out OFF] 40/54 questions, running 0/360 = 0.0000
+[teach_persona] cal_second_person held-out OFF: 0/486 = 0.0000 (F3 0.0000, F7 0.0000, F8 0.0000)
+[teach_persona] cal_second_person: per-family gain {'F1': 0.963, 'F2': 0.9741, 'F6': 0.8704}, held-out per-family std 0.0835
+[teach_persona] allocation: REFUSED moving F4 to held-out — D-22 keeps F4 (reversed-direction forms) on the taught side — the reversal curse is a literature failure mode, and moving it would poison the evidence D-20(c) depends on
+[teach_persona] allocation: REFUSED moving F5 to held-out — fact 'cand_person_quillon' would drop to 18 taught paraphrases, outside DEMO-05's [20, 50] band (W-03) — build_bins proof #5 would SystemExit the real run
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/.claude/worktrees/agent-ad37f18e84e1cd0e9/results/phase14_calibration_report.md
+[teach_persona] calibration derivations: thresholds=(0.4095, 0.3311) taught=['F1', 'F2', 'F4', 'F5', 'F6'] heldout=['F3', 'F7', 'F8'] replay_required=True first_person_wins=False
