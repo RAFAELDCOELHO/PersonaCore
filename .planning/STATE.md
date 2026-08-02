@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: completed
-stopped_at: Phase 14 complete — 14-11 T3 verdict recorded (ADAPT), demo verified in a live browser
-last_updated: "2026-08-02T15:50:40.545Z"
+stopped_at: Phase 15 context gathered
+last_updated: "2026-08-02T16:34:52.470Z"
 last_activity: 2026-08-02
 progress:
   total_phases: 7
@@ -136,9 +136,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T13:28:52.805Z
-Stopped at: Phase 14 complete — 14-11 T3 verdict recorded (ADAPT), demo verified in a live browser
-Resume file: None
+Last session: 2026-08-02T16:34:52.464Z
+Stopped at: Phase 15 context gathered
+Resume file: .planning/phases/15-figures-writeup/15-CONTEXT.md
 
 ## Operator Next Steps
 
