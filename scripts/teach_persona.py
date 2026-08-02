@@ -634,5 +634,211 @@ def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
     }
 
 
+# =====================================================================================
+# ===== CALIBRATION_DECISION_RULE — committed BEFORE the calibration run exists =====
+# =====================================================================================
+#
+# This block is committed BEFORE the calibration run produces a single number, and git history
+# order is the pre-registration proof (D-09 condition 2 — the rule is never chosen after seeing
+# the results; `git log -S CALIBRATION_DECISION_RULE -- scripts/teach_persona.py` shows the
+# rule commit predating every calibration output). ONE calibration run answers four questions —
+# the recall threshold (D-09), the family allocation (D-14), the replay verdict (D-15), and the
+# register verdict (D-21) — from one measured source, instead of four separately-justified
+# guesses. Every literal below carries its provenance in its own comment, and every function's
+# docstring names its boundary behavior explicitly (the finetune_ab.py:112-122 register).
+
+# Reused BLIND from Phase 12's noise-floor discipline: the same deliberately conservative
+# default, NOT re-chosen for Phase 14.
+CAL_MARGIN_K = 2
+
+# The fraction of the calibration ceiling the real run's threshold is set to. The calibration
+# fact set is disjoint and disposable, so its measured rate is a CEILING estimate, not a target;
+# discounting it is what keeps the real threshold from being a number chosen to be passed.
+THRESHOLD_DISCOUNT = 0.60
+
+# Below this the metric is not distinguishable from the closed-book control at
+# N_SEEDED_SAMPLES = 8, so a lower "threshold" would be meaningless rather than lenient.
+THRESHOLD_FLOOR = 0.20
+
+# The recall gain below which adding taught families is judged saturated (D-14's "recall
+# saturating with fewer taught instances than the literature's ~10-per-fact figure suggests").
+# 14-RESEARCH Pattern 5 records ~10/fact as a floor OBSERVED AT 7B+ SCALE, not a target for 13.9M.
+SATURATION_DELTA = 0.05
+
+# The per-family standard deviation of held-out recall above which the real set needs MORE
+# held-out families, even at the cost of fewer taught families than the injection literature
+# recommends (D-14, second clause).
+HELDOUT_VARIANCE_TRIGGER = 0.15
+
+# The fractional increase in masked dialogue val PPL (adapter ON vs OFF, held-out PersonaChat)
+# above which replay becomes MANDATORY for the real run (D-15). Below it the real run proceeds
+# WITHOUT replay, preserving the full teaching signal rather than diluting it against an
+# unconfirmed risk.
+COLLAPSE_PPL_TRIGGER = 0.10
+
+# The absolute held-out recall margin by which first-person must beat second-person to count as
+# a win (D-21 condition 3, written before the arm runs).
+REGISTER_WIN_MARGIN = 0.10
+
+# Both trigger comparisons round the measured ratio to this many decimals BEFORE comparing.
+# Without it the boundary is not a boundary: a PPL pair of (2.0, 2.2) — an exact 10% increase
+# in decimal — reconstructs in binary as 0.10000000000000009, which is strictly greater than
+# COLLAPSE_PPL_TRIGGER and would TRIP a rule whose stated semantics are "the boundary does not
+# trigger". Ten decimals is six orders of magnitude coarser than double-precision noise (~1e-16)
+# and six orders finer than any effect these gates can resolve, so the rounding decides only
+# cases that are exactly on the line and never a real measurement.
+RATIO_DECIMALS = 10
+
+
+def lock_thresholds(cal_taught_rate, cal_heldout_rate):
+    """D-09: turn the calibration arm's measured recall rates into the real run's thresholds.
+
+    Each threshold is ``max(THRESHOLD_FLOOR, round(rate * THRESHOLD_DISCOUNT, 4))``. What is
+    pre-registered is the PROCEDURE, not a blind number — the number cannot exist before the
+    calibration run, but the rule that produces it must, or the threshold is just a value chosen
+    to be cleared. The returned pair becomes ``phase14_recall.TAUGHT_THRESHOLD`` /
+    ``HELDOUT_THRESHOLD`` in plan 14-09.
+
+    Boundary: the floor CLAMPS, it does not reject — a calibration rate low enough to discount
+    below ``THRESHOLD_FLOOR`` yields exactly ``THRESHOLD_FLOOR``, and the fact that the floor
+    bound rather than the discount is what plan 14-09's report must state.
+
+    Returns:
+        ``(taught_threshold, heldout_threshold)``.
+    """
+    return (
+        max(THRESHOLD_FLOOR, round(cal_taught_rate * THRESHOLD_DISCOUNT, 4)),
+        max(THRESHOLD_FLOOR, round(cal_heldout_rate * THRESHOLD_DISCOUNT, 4)),
+    )
+
+
+def _refuse_move(taught, family_id):
+    """Why ``family_id`` may NOT move off the taught side, or None when the move is legal.
+
+    The four D-14 invariants live here so ``lock_family_allocation`` reads as the policy and
+    this reads as the contract.
+    """
+    if family_id == "F4":
+        return (
+            "D-22 keeps F4 (reversed-direction forms) on the taught side — the reversal curse "
+            "is a literature failure mode, and moving it would poison the evidence D-20(c) "
+            "depends on"
+        )
+    remaining = set(taught) - {family_id}
+    if len(remaining) < 2:
+        return f"at least two families must remain taught (would leave {len(remaining)})"
+    lo, hi = fs.PARAPHRASES_PER_FACT_TARGET
+    for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS:
+        count = sum(len(fs.render_family(fid, fact)) for fid in remaining)
+        if not lo <= count <= hi:
+            return (
+                f"fact {fact.id!r} would drop to {count} taught paraphrases, outside DEMO-05's "
+                f"[{lo}, {hi}] band (W-03) — build_bins proof #5 would SystemExit the real run"
+            )
+    return None
+
+
+def lock_family_allocation(per_family_gain, heldout_family_std, taught_ids, heldout_ids):
+    """D-14: apply the calibration measurements to the taught/held-out family allocation.
+
+    A taught family whose marginal recall gain is ``< SATURATION_DELTA`` MOVES to the held-out
+    side; if ``heldout_family_std > HELDOUT_VARIANCE_TRIGGER`` the lowest-gain taught family
+    also moves. Candidates are considered lowest-gain first.
+
+    **It MOVES families between the two sides and NEVER drops one (B-02).**
+    ``tests/test_phase14_teaching.py::test_families_disjoint`` asserts that the union of the two
+    sets is every key of ``FAMILIES``, and that assertion is the AUTHORITATIVE allocation
+    contract for the phase. Dropping a saturated family would shrink the union and turn that
+    test red at wave 6 with nothing saying which contract wins. Moving is also the honest choice
+    on the merits: a saturated taught family is precisely a family the model no longer needs
+    teaching on, so moving it to held-out INCREASES the evidence for the
+    learning-vs-memorization split D-20(c) depends on, where dropping it would discard that
+    evidence.
+
+    Four invariants hold regardless of the numbers:
+      1. the two sets stay disjoint AND their union stays every key of ``FAMILIES`` (B-02);
+      2. ``F4`` stays taught (D-22 — the reversal curse is a literature failure mode);
+      3. at least two families remain on each side;
+      4. every locked fact's taught-instance count stays inside
+         ``phase14_factset.PARAPHRASES_PER_FACT_TARGET`` (W-03). A move that would push any fact
+         below the band's lower bound is REFUSED — without this, a saturation-driven move could
+         trip ``build_bins`` proof #5 and ``SystemExit`` the wave-8 real run with no remedy.
+
+    Boundary: a gain of exactly ``SATURATION_DELTA`` is NOT saturated (strict ``<``), and a std
+    of exactly ``HELDOUT_VARIANCE_TRIGGER`` does NOT trigger the extra move (strict ``>``).
+
+    Refusals are PRINTED rather than returned, so the shape stays a plain ``(taught, heldout)``
+    pair for plan 14-09's caller; that plan captures this driver's stdout into
+    ``results/phase14_calibration_report.md``, which is where a refused move is recorded.
+
+    Returns:
+        ``(taught_ids, heldout_ids)`` as sets.
+    """
+    taught, heldout = set(taught_ids), set(heldout_ids)
+    candidates = sorted(
+        (fid for fid in taught if per_family_gain.get(fid, 0.0) < SATURATION_DELTA),
+        key=lambda fid: (per_family_gain.get(fid, 0.0), fid),
+    )
+    if heldout_family_std > HELDOUT_VARIANCE_TRIGGER and taught:
+        lowest = min(taught, key=lambda fid: (per_family_gain.get(fid, 0.0), fid))
+        if lowest not in candidates:
+            candidates.append(lowest)
+
+    for family_id in candidates:
+        refusal = _refuse_move(taught, family_id)
+        if refusal is not None:
+            print(f"[teach_persona] allocation: REFUSED moving {family_id} to held-out — {refusal}")
+            continue
+        taught.discard(family_id)
+        heldout.add(family_id)
+        print(
+            f"[teach_persona] allocation: moved {family_id} taught -> held-out "
+            f"(gain {per_family_gain.get(family_id, 0.0):.4f} < {SATURATION_DELTA})"
+        )
+    return taught, heldout
+
+
+def replay_required(ppl_adapter_off, ppl_adapter_on):
+    """D-15: does the real run need PersonaChat replay mixed into its teaching bin?
+
+    True iff the adapter's fractional increase in masked dialogue-val PPL exceeds
+    ``COLLAPSE_PPL_TRIGGER``. The two numbers must come from D-15's PAIRED arms — the same
+    prompts, the same weights, one process, only the LoRA enabled flag differing — or the
+    comparison measures run-to-run noise instead of the adapter.
+
+    Boundary: exactly at the trigger, replay is NOT required (strict ``>`` — the rule dies under
+    ``>=``). The ratio is rounded to ``RATIO_DECIMALS`` first so that "exactly at the trigger"
+    means the decimal value, not whichever double happens to bracket it.
+    """
+    ratio = (ppl_adapter_on - ppl_adapter_off) / ppl_adapter_off
+    return round(ratio, RATIO_DECIMALS) > COLLAPSE_PPL_TRIGGER
+
+
+def first_person_wins(fp_heldout_rate, sp_heldout_rate):
+    """D-21 condition 3: does first-person register beat second-person on held-out recall?
+
+    True iff the absolute margin exceeds ``REGISTER_WIN_MARGIN``.
+
+    A False result does NOT reopen D-01's register lock. D-01 rests on measured QUALITATIVE
+    evidence (14-RESEARCH F3/F5, including the "structure copied, content not" finding); this
+    arm measures only the head-to-head delta that decision was missing. A negative is reported
+    honestly under D-12's register — it is not license to re-author the teaching set mid-phase
+    after seeing the numbers, which is the exact move this whole block exists to prevent.
+
+    Boundary: exactly at the margin is NOT a win (strict ``>``), rounded to ``RATIO_DECIMALS``
+    for the same reason as ``replay_required``.
+    """
+    return round(fp_heldout_rate - sp_heldout_rate, RATIO_DECIMALS) > REGISTER_WIN_MARGIN
+
+
+# One name for plan 14-09 and the tests to reference, so the four derivations travel together.
+CALIBRATION_DECISION_RULE = (
+    lock_thresholds,
+    lock_family_allocation,
+    replay_required,
+    first_person_wins,
+)
+
+
 if __name__ == "__main__":
     main()
