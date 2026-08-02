@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-08-02T02:42:38.253Z"
-last_activity: 2026-08-02 -- Phase 14 execution started
+stopped_at: 14-11 Task 3 — blocking human verdict on the recall report + on-camera demo pass
+last_updated: "2026-08-02T12:19:43.189Z"
+last_activity: 2026-08-02 -- 14-11 executed: adapter taught, recall run PASSED both gates, verdict PENDING
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 31
-  completed_plans: 20
-  percent: 65
+  completed_plans: 30
+  percent: 84
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 14 (teach-then-recall-demo) — EXECUTING
-Plan: 1 of 11
-Status: Executing Phase 14
-Last activity: 2026-08-02 -- Phase 14 execution started
+Phase: 14 (teach-then-recall-demo) — AWAITING BLOCKING VERDICT
+Plan: 11 of 11 (Tasks 1-2 complete, Task 3 is the blocking human checkpoint)
+Status: 14-11 executed — both recall gates PASSED, `## Verdict` still reads PENDING
+Last activity: 2026-08-02 -- 14-11 executed: adapter taught, recall run PASSED both gates
 
-Progress: [██████████] 100%
+Progress: [█████████░] 95% (Phase 14: 10.5 of 11 plans)
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [██████████] 100%
 | Phase 13 P02 | 82min | 2 tasks | 2 files |
 | Phase 13 P03 | 24min | 2 tasks | 6 files |
 | Phase 13 P04 | 18min | 2 tasks | 1 files |
+| Phase 14 P11 | 50min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,11 @@ Key carry-forwards for v2.0:
 - [Phase 13]: 13-03: free-running generation IS bit-identical across processes on MPS (sample body diff empty over two runs) — unlike eval PPL (~1e-8); safe reproducibility claim for the report
 - [Phase 13]: 13-03: VIZ-04 lambda=0 point is hardcoded-with-citation (4.4453, 5.9553; smoke report Stage 2/3, 666d096) because ft_lr_9e-5.csv has no retention column — six-point count pinned by test so the Pitfall-1 five-point regression cannot recur
 - [Phase 13]: 13-04: report claim scoped to teacher-forced retention PPL only — measured 79/70 role-token leakage means generative retention is NOT claimed
+- [Phase 14]: 14-11: real teaching run produced checkpoints/persona_adapter.pt (331,776 params, 1.35 MB) — canary proved every trainable moved and every frozen base param bit-untouched
+- [Phase 14]: 14-11: fresh-process recall PASSED both pre-registered gates — taught 496/1008 = 0.4921 vs 0.2486, held-out 326/936 = 0.3483 vs 0.2000, closed-book control exactly 0/2430; the D-20 Pre-Registered Failure Branch was NOT taken
+- [Phase 14]: 14-11: D-11.1 question-fairness control came back near-negative (1/1944) — the base cannot extract a fact even from its own persona span; the pre-registered (a)/(b)/(c) reconciliation stands unamended and the adapter-on/off differential is unaffected
+- [Phase 14]: 14-11: Control 3 bit identity measured max abs diff exactly 0.0 on CPU on the real weights — the demo's memory-OFF state IS the un-adapted base, not a second adapted model
+- [Phase 14]: 14-11: TRANSCRIPTS_PATH renamed to results/phase14_transcripts.md — the code was the sole outlier against five planning documents and the report pointed at a nonexistent file
 
 ### Pending Todos
 
@@ -105,6 +111,7 @@ None yet.
 - Phase 12 research flag: λ selection + full-FT LR/budget calibration — plan with `/gsd-plan-phase --research-phase` (research/SUMMARY.md).
 - Phase 14 research flag: teach-then-recall protocol has no canonical reference — discuss/spec pass on teaching-set grammar + threshold pre-registration before planning.
 - DEBT-01/02 (run.csv ×256, forbid_ids-in-PPL policy) are Phase 12 pre-work and MUST land before the first v2.0 fine-tune step — forgetting-curve axes depend on them.
+- Phase 14 is at plan 14-11's BLOCKING human checkpoint (Task 3): both recall gates PASSED (taught 0.4921 vs 0.2486, held-out 0.3483 vs 0.2000) but results/phase14_recall_report.md '## Verdict' still reads PENDING. A human must read the report, spot-check five transcripts, record GO/ADAPT/STOP, and exercise the demo in a browser with Wi-Fi off. The phase is NOT complete until that verdict is recorded.
 
 ### Quick Tasks Completed
 
@@ -128,9 +135,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T00:43:30.573Z
+Last session: 2026-08-02T12:18:34.412Z
 Stopped at: Phase 14 UI-SPEC approved
-Resume file: .planning/phases/14-teach-then-recall-demo/14-UI-SPEC.md
+Resume file: None
 
 ## Operator Next Steps
 
