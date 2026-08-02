@@ -660,3 +660,172 @@ committed image unreproducible from the committed repository and leaves the capt
 no auditable source. The boundary also had to be structural rather than conventional for the same
 reason the previous decision gives: a plotting module that merely *promises* not to read a
 checkpoint acquires a `torch.load` the first time that is convenient.
+
+## Milestone 2 Results: What Three Experiments Showed
+
+**The claim under test.** Milestone 2 set out to show that a user-specific fact can be written
+into a model's parameters, recalled from weights alone with the context wiped, and that the
+mechanism which protects the base model from being destroyed in the process actually works.
+Three experiments were run against that claim, plus one measurement taken before any of them.
+What follows is what they returned. Every choice behind them is justified in its own
+`## Decision:` section above; none of that reasoning is repeated here.
+
+**The λ search that found nothing.** The first attempt to demonstrate EWC was a sweep for a λ
+that buys retention essentially for free — the largest λ whose end dialogue perplexity stays
+within a pre-registered margin of the λ=0 run, subject to a demonstrability guard requiring its
+retention to beat λ=0 by more than the measured noise floor. At the 1250-step smoke budget, **no λ
+satisfied both rules**: every arm beat the collapse baseline on retention, and every arm fell
+outside the dialogue margin. The pre-registered all-fail outcome was recorded — λ\* = None,
+demonstrable = False — and it stands unamended in `results/finetune_smoke_report.md`. The
+production λ=0.01 used by everything downstream was a **separate, later, discretionary decision**,
+logged after that verdict and dated after it. It is not an amendment of it, and the negative
+result was not retroactively converted into a positive one by the choice that followed.
+
+**The A/B that did demonstrate it.** The demonstration ran at the full 4000-step budget as a
+proper A/B: two arms, identical in every respect except the EWC penalty. From a shared step-0
+anchor of retention perplexity **2.107553076833866**, the naive arm ended at
+**8.52417066884246** and the EWC arm at **3.8911400839446597** — a retention drift of
+**+6.416618** against **+1.783587**, a factor of **3.6** in how much of the base task each arm
+destroyed. The pre-registered gate is `MARGIN = 2 × 0.068930 = 0.137860`, twice the seed-to-seed
+retention noise floor; the observed separation clears it by **33.61×**. Both arms learned the
+dialogue task: EWC's acquisition cost was **+0.380556** perplexity (about 9.1% relative), which
+is reported **descriptively, with no gate**, and which is what makes the retention result
+meaningful — the win was not bought by failing to learn.
+
+The scope of that verdict is exactly what the gate measures: **teacher-forced retention
+perplexity on the frozen sub-bin**. It is not a claim about free-running story generation, and
+the free-running axis returned a measured negative — mid-story role-token leakage of **79
+(naive) vs 69 (EWC)** across 20 generations per arm, i.e. both arms drop out of story mode into
+dialogue, and EWC only slightly less often. That negative is reported alongside the positive one
+rather than behind it.
+
+**The clean-room teach-then-recall.** The personalization half was run as a closed-book test:
+teach facts through a LoRA adapter, wipe the context entirely, and ask. Taught-template recall
+came in at **496/1008 = 0.4921** against a threshold of **0.2486**; held-out template families —
+the tier that distinguishes an internalized fact from a memorized phrasing — came in at
+**326/936 = 0.3483** against **0.2000**. Both gates **PASS**. The closed-book control, the same
+weights and the same prompts with the adapter flags flipped off, scored exactly **0/2430**. Both
+thresholds were derived from a **disjoint** calibration fact set and committed at
+`CALIBRATION_SHA 0425fdc4…` before the real run existed, and every scored prompt's token ids were
+recorded before the model was called, with a hard check that no fact value ever appeared in a
+prompt. The recorded verdict is **ADAPT** — GO with two qualifications. Both qualifications are
+reproduced in the Limitations section below.
+
+**The tokenizer-inflation tax.** Before any of the above, the cost of pushing conversational text
+through a TinyStories-trained tokenizer was measured: dialogue tokenizes at **3.229** tokens per
+word over 4,800,385 utterance tokens and 1,486,754 whitespace words, against a TinyStories
+baseline of **2.860** recomputed in the same run through the same word-count rule — a relative
+inflation of **1.129×**, inside the pre-registered GO band of ≤1.2×, with 0.9996 of episodes
+fitting persona plus first exchange inside the 256-token context. The qualifier travels with the
+number: that ratio is only meaningful against the same-run baseline, and it is **not comparable to
+any other tokenizer**, word-count rule, or serialization format.
+
+### The Two Signature Figures
+
+Two figures carry the weight-side evidence, and both are drawn from a single committed artifact,
+`results/phase15_norms.json`, rather than from the checkpoints themselves. Their in-figure text
+carries a terse version of what follows; this section is the full version. A reader comparing the
+two should find **different amounts of detail, never different things** — the layer and projection
+names below are read from the same artifact fields the figure captions render.
+
+**VIZ-02, `results/phase15_adapter_delta.png`** — the LoRA adapter's relative Frobenius change
+`‖ΔW‖_F/‖W₀‖_F` on the 6-layer × 6-projection grid, log color scale, computed from `scale·B@A`
+on the unmerged adapter against the frozen conversational base. **VIZ-03,
+`results/phase15_fisher_ewc.png`** — three panels: the Fisher diagonal at `best.pt`, and the naive
+and EWC full-fine-tune delta grids over the same 36 cells.
+
+**Which panels share a scale, and why one does not.** In VIZ-03 the **naive and EWC panels share
+one color-scale object** — literally one norm instance passed to both, not two instances that
+happen to carry equal bounds — because those two arms share a comparison basis: same `W₀`, same
+4000-step budget, same configuration, one bit apart. They are cell-for-cell comparable and the
+figure is built so a later "brighten this panel" edit cannot silently split them. **The Fisher
+panel keeps its own scale, and its own colormap.** This is a **units argument, not a convenience
+argument**: a Fisher cell is a squared-gradient magnitude normalized so that 1.0 means "the
+importance of an average parameter", while a delta cell is a dimensionless weight-change ratio.
+The two quantities are not commensurable, so putting them on one scale would assert a comparison
+that does not exist. The exemption is for incommensurable units only — it is not a licence to
+rescale a panel that looks inconvenient.
+
+**The flatness is the finding.** Under the shared scale the EWC panel reads as visibly darker and
+flatter than the naive panel. That is the result, not a rendering artifact and not a reason to
+rescale: EWC's largest cell is **62.7%** of naive's largest, its median cell is **40.9%** of
+naive's median, and **34 of 36** cells moved less under EWC. The shared bounds span
+**(0.04211054267645148, 0.22023983403635128)** — only **0.719 decades**, so the compression is
+genuinely mild and the panel is darker rather than washed out. The shared minimum is an EWC cell
+and the shared maximum is a naive cell, which is the arithmetic form of the same observation.
+
+**EWC did not reduce movement everywhere, and the figure should not be read as saying so.** Two of
+the 36 cells moved *further* under EWC — layer 0's `q_proj` (signed reduction **−0.015185**) and
+layer 1's `q_proj` (**−0.006607**). Both are inside the correlation reported below; none of the 36
+signed values was filtered out.
+
+**Outlier disclosure — what drives each color range.** These are read from the artifact's
+`vmax_driver` fields, not re-derived:
+
+| Block | Range driver | Value |
+| --- | --- | --- |
+| adapter (VIZ-02) | layer 1's `c_proj` | `0.04738638857364279` |
+| naive (VIZ-03) | layer 1's `c_proj` | `0.22023983403635128` |
+| EWC (VIZ-03) | layer 1's `q_proj` | `0.13806389791647683` |
+| Fisher (VIZ-03) | layer 0's `c_proj` | `6.541458482610652` |
+
+In each case that layer and projection dominates the range; the full per-layer distribution is in
+`results/phase15_norms.json`. The adapter's own range spans 0.400 decades and the Fisher range
+spans 2.129 decades — the Fisher panel is by far the most heavy-tailed of the four, which is the
+other reason it is not forced onto a shared scale. **All four blocks report
+`nonpositive_cells` = 0** — stated from that artifact field rather than inferred from the figures
+looking clean — so the log scale masks nothing in either image and the "masked cell" grey never
+appears.
+
+**VIZ-02 and VIZ-03 are NOT comparable to each other**, despite sharing the
+`‖ΔW‖_F/‖W₀‖_F` formula — the shared formula is exactly what invites the comparison that is
+invalid. Three concrete confounds, not "different regimes":
+
+1. **Parameter count.** The adapter writes through **331,776** LoRA parameters; the full
+   fine-tune arms move all **13,891,584** model parameters.
+2. **Training budget.** The adapter comes from a 200-step LoRA teaching run at batch 8; the naive
+   and EWC grids come from a 4000-step full fine-tune at batch 32.
+3. **A smaller absolute ΔW magnitude for the adapter does NOT imply more conservative or less
+   effective learning.** It reflects the adapter's parameter budget, not a quality comparison.
+
+The same statement is machine-readable in the artifact's `comparison_basis` block, which records
+`naive_vs_ewc: true` and `adapter_vs_full_finetune: false` alongside the three confounds — so a
+reader parsing the JSON without this report still cannot mistake one for the other.
+
+**The Fisher estimator, named.** The VIZ-03 Fisher panel draws the variant recorded in the
+artifact as `empirical_diag_fisher/groundtruth_targets/mean_normalized`, estimated over
+`n_examples` = 2000 at seed 1234, anchored at the 50k-step `best.pt`. Unpacked: it is an
+**empirical** diagonal Fisher — squared gradients accumulated per parameter, no full matrix — taken
+against **ground-truth targets** rather than samples drawn from the model, and **mean-normalized**
+so that mean(F) = 1 across all trainable coordinates and a cell reads directly as "×the
+importance of an average parameter". Per-cell aggregation is a mean rather than a sum, because a
+sum would confound importance with tensor size (the MLP projections carry four times the elements
+of the attention projections).
+
+### The Fisher/Δ Correlation, Cited Terse
+
+**The correlation verdict, cited.** The claim that EWC visibly dodges high-Fisher coordinates was
+**measured, not asserted**, against a rule committed before the artifact existed. Across all 36
+cells the Δ-reduction (naiveΔ − ewcΔ) tracks Fisher magnitude at Spearman **ρ = 0.801544**, 95%
+CI **[0.597984, 0.920291]**, and the **GATE PASSES** — the correlation carries the pre-registered
+positive sign and its interval excludes zero. The full pre-registration table, the seed, the
+method notes and the verdict as recorded live in `results/phase13_ab_report.md` under
+`## Phase 15 Addendum — Fisher/Δ Correlation Verdict`; they are not restated here. Two bounds
+travel with that number and are pre-registered, not afterthoughts: **the sign is the falsifiable
+claim, and the magnitude is reported honestly given n = 36 and is not itself pass/fail** — ρ =
+0.80 is a rank correlation, not an effect size, and does not license a statement about what
+fraction of high-Fisher movement EWC avoids. And the interval is a **percentile bootstrap, which
+is known to be biased and anti-conservative at small n**; that caveat was written before the
+coefficient was computed and does not get dropped because the result came out favorable.
+
+### What Remains Uncertain
+
+Each of the four results above is bounded, and the bounds are not
+footnotes. The λ search's negative stands. The retention gate is measured against a noise floor
+that was never re-verified at the production budget. The recall gates cover a proper-noun core
+under a deliberately scoped held-out set, and the control that was supposed to license reading a
+closed-book failure as absent memory largely failed. Teaching the persona measurably raised
+off-topic dialogue cost even with replay, and without replay the collateral damage was severe.
+Every one of those bounds is reproduced verbatim from its source in
+`## Milestone 2 Limitations — Nine Honest Negatives, Quoted` below, which is the section to read
+before quoting any number from this one.
