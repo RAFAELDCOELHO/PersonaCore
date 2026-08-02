@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: Completed 15-06-PLAN.md (wave 4)
-last_updated: "2026-08-02T20:10:09.366Z"
+stopped_at: Completed 15-07-PLAN.md
+last_updated: "2026-08-02T20:25:36.790Z"
 last_activity: 2026-08-02
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 39
-  completed_plans: 37
+  completed_plans: 38
   percent: 86
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 15 (figures-writeup) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-08-02
 
-Progress: [██████████] 95%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [██████████] 95%
 | Phase 15 P04 | 14min | 2 tasks | 2 files |
 | Phase 15 P05 | 41min | 3 tasks | 1 files |
 | Phase 15 P06 | 17min | 2 tasks | 1 files |
+| Phase 15 P07 | 22min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,8 @@ Key carry-forwards for v2.0:
 - [Phase 15]: 15-06: the front page states rho = 0.801544 with its CI rather than letting VIZ-03 imply the dodging claim visually — written as a RANK correlation, not an effect size, naming the 2 of 36 cells where EWC moved further
 - [Phase 15]: 15-06: two stale v1.0 claims were corrected, not preserved — '~130 CPU-only tests' (actual 403) and 'make test (~70 s)' (actual 115 s, timing DELETED rather than re-asserted)
 - [Phase 15]: 15-06: R1 discharged — README names artifacts/tokenizer.json (5,648 B) built from the 11,469-byte tests/fixtures/tiny_corpus.txt via scripts/train_tokenizer.py:31; both byte counts re-confirmed with wc -c before writing, so REPORT.md's L8 note about README is now true
+- [Phase 15]: Phase 15 SC3 superseded by D-13: the v2.0 honest numbers ship in a new self-contained demo_v2.ipynb; demo.ipynb receives only a prepended independence cell, its eight original cells byte-identical (recorded dated in ROADMAP, not silently absorbed)
+- [Phase 15]: Phase 15 SC2 not narrowed: the Fisher/delta correlation gate PASSED (rho 0.801544, CI [0.597984, 0.920291] excludes zero), so D-11's miss branch was not taken and the absence of a narrowing note is a recorded outcome
 
 ### Pending Todos
 
@@ -165,8 +168,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T20:10:03.376Z
-Stopped at: Completed 15-06-PLAN.md (wave 4)
+Last session: 2026-08-02T20:25:36.783Z
+Stopped at: Completed 15-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
