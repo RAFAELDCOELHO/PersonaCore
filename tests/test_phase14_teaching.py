@@ -14,6 +14,11 @@ shape and the ``BLOCK_SIZE + 1`` corpus floor, the Phase-14 mask-fraction band, 
 allocation contract, and BOTH halves of the held-out non-leakage guarantee (string level and
 token level).
 
+The DECISION-RULE section at the bottom (plan 14-07) pins every ``CALIBRATION_DECISION_RULE``
+literal and boundary, the four allocation invariants, and the training recipe constants — in CI,
+BEFORE the calibration run executes. That ordering is the point: a later edit to any of these
+numbers shows up as a failing test and a diff rather than as a silently-retuned gate (T-14-20).
+
 Scripts-load justification: no other test imports from ``scripts/`` (test_demo_callback.py
 states the convention), but the teaching grammar and the bins rules MUST live in the committed
 driver modules for git history to be the pre-registration proof — moving them into the package
@@ -313,3 +318,241 @@ def test_taught_answers_are_first_person():
                 assert a1 != a2, (family_id, a1)
                 assert "you" not in a1.split() and "your" not in a1.split(), (family_id, a1)
                 assert "i" not in a2.split() and "my" not in a2.split(), (family_id, a2)
+
+
+# =====================================================================================
+# ===== DECISION RULE + RECIPE (plan 14-07) — pinned BEFORE the calibration run =====
+# =====================================================================================
+
+
+def test_decision_rule_constants():
+    """The seven pre-registered literals, as bare literals (test_phase13_driver.py:44-56).
+
+    These were committed BEFORE the calibration run produced a single number; git history order
+    is the pre-registration proof (D-09 condition 2). Retuning any of them after seeing a
+    calibration result turns this test red — which is exactly the alarm T-14-20 asks for.
+    """
+    assert tp.CAL_MARGIN_K == 2
+    assert tp.THRESHOLD_DISCOUNT == 0.60
+    assert tp.THRESHOLD_FLOOR == 0.20
+    assert tp.SATURATION_DELTA == 0.05
+    assert tp.HELDOUT_VARIANCE_TRIGGER == 0.15
+    assert tp.COLLAPSE_PPL_TRIGGER == 0.10
+    assert tp.REGISTER_WIN_MARGIN == 0.10
+    assert len(tp.CALIBRATION_DECISION_RULE) == 4
+
+
+def test_decision_rule_threshold_boundary():
+    """D-09: the discount scales, and the floor CLAMPS rather than rejecting.
+
+    Premise first: multiplying by 1.0 is exact in binary floating point, so
+    ``1.0 * THRESHOLD_DISCOUNT`` is bit-identical to the constant and the comparisons below
+    test the rule rather than a rounding accident.
+    """
+    assert 1.0 * tp.THRESHOLD_DISCOUNT == tp.THRESHOLD_DISCOUNT  # the exactness premise
+
+    assert tp.lock_thresholds(1.0, 0.5) == (0.6, 0.3)  # well above the floor: pure discount
+    # Exactly AT the floor after discounting: 1/3 * 0.60 == 0.2, so the clamp and the discount
+    # agree here and the result is the floor either way.
+    assert tp.lock_thresholds(tp.THRESHOLD_FLOOR / tp.THRESHOLD_DISCOUNT, 1.0)[0] == (
+        tp.THRESHOLD_FLOOR
+    )
+    assert tp.lock_thresholds(0.1, 0.1) == (0.2, 0.2)  # below the floor: CLAMPED, not rejected
+    assert tp.lock_thresholds(0.0, 0.0) == (0.2, 0.2)  # a zero calibration rate still clamps
+
+
+def test_decision_rule_replay_boundary():
+    """D-15: replay is required only STRICTLY past the trigger — the boundary FAILS to trigger.
+
+    Premise first, and it has teeth: a (2.0, 2.2) PPL pair is an exact 10% increase in decimal
+    but reconstructs in binary as 0.10000000000000009, which is strictly GREATER than
+    COLLAPSE_PPL_TRIGGER. Without ``RATIO_DECIMALS`` rounding, a boundary case would trip a rule
+    whose stated semantics are "the boundary does not trigger". The first two assertions pin
+    both halves of that premise, so deleting the rounding turns this test red.
+    """
+    raw = (2.2 - 2.0) / 2.0
+    assert raw != tp.COLLAPSE_PPL_TRIGGER  # the trap the rounding exists for
+    assert round(raw, tp.RATIO_DECIMALS) == tp.COLLAPSE_PPL_TRIGGER  # the premise: exact ON it
+
+    assert tp.replay_required(2.0, 2.2) is False  # boundary FAILS — dies under >=
+    assert tp.replay_required(2.0, 2.21) is True  # one hair past it triggers
+    assert tp.replay_required(2.0, 2.0) is False  # no collateral change at all
+    assert tp.replay_required(2.0, 1.9) is False  # the adapter IMPROVED dialogue PPL
+
+
+def test_decision_rule_register_boundary():
+    """D-21 condition 3: first-person wins only STRICTLY past the margin."""
+    raw = 0.5 - 0.4
+    assert raw != tp.REGISTER_WIN_MARGIN  # the same binary-reconstruction trap
+    assert round(raw, tp.RATIO_DECIMALS) == tp.REGISTER_WIN_MARGIN  # the premise: exact ON it
+
+    assert tp.first_person_wins(0.5, 0.4) is False  # boundary FAILS — dies under >=
+    assert tp.first_person_wins(0.5, 0.39) is True  # one hair past it wins
+    assert tp.first_person_wins(0.4, 0.5) is False  # second person ahead is not a win
+
+
+def _assert_allocation_invariants(taught, heldout):
+    """The four D-14 invariants that hold regardless of the calibration numbers."""
+    assert taught & heldout == set()  # 1a: disjoint
+    assert taught | heldout == set(fs.FAMILIES)  # 1b: B-02 — MOVES, never DROPS
+    assert "F4" in taught  # 2: D-22 keeps the reversed-direction forms taught
+    assert len(taught) >= 2 and len(heldout) >= 2  # 3: two families minimum per side
+    lo, hi = fs.PARAPHRASES_PER_FACT_TARGET  # 4: W-03 — DEMO-05's band, per fact
+    for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS:
+        count = sum(len(fs.render_family(fid, fact)) for fid in taught)
+        assert lo <= count <= hi, (fact.id, count)
+
+
+@pytest.mark.parametrize(
+    "gain,std,label",
+    [
+        (0.5, 0.0, "no family saturated, variance quiet — nothing moves"),
+        (0.0, 0.0, "FULLY SATURATED — every family is a move candidate"),
+        (0.5, 0.9, "HIGH VARIANCE — the lowest-gain taught family is pulled in"),
+    ],
+)
+def test_decision_rule_allocation_invariants(gain, std, label):
+    """D-14 / B-02: whatever the numbers say, all four invariants survive.
+
+    The union assertion is the same one ``test_families_disjoint`` makes, deliberately: the two
+    tests encode ONE allocation contract, so a future change cannot satisfy one and break the
+    other without both going red.
+    """
+    taught, heldout = tp.lock_family_allocation(
+        {fid: gain for fid in fs.FAMILIES},
+        std,
+        set(fs.TAUGHT_FAMILY_IDS),
+        set(fs.HELDOUT_FAMILY_IDS),
+    )
+    _assert_allocation_invariants(taught, heldout)
+
+
+def test_decision_rule_allocation_refuses_band_breaking_move():
+    """W-03: a saturation-driven move that would break DEMO-05's band is REFUSED, not returned.
+
+    At the committed allocation every locked fact has exactly 22 taught paraphrases against a
+    [20, 50] band, and the smallest taught family carries 4 — so TODAY no family can leave the
+    taught side without dropping a fact to 18. A fully-saturated calibration result therefore
+    returns the allocation UNCHANGED rather than an allocation that would ``SystemExit``
+    ``build_bins`` proof #5 at the wave-8 real run.
+    """
+    taught, heldout = tp.lock_family_allocation(
+        {fid: 0.0 for fid in fs.FAMILIES},
+        0.0,
+        set(fs.TAUGHT_FAMILY_IDS),
+        set(fs.HELDOUT_FAMILY_IDS),
+    )
+    assert taught == set(fs.TAUGHT_FAMILY_IDS)  # refused, not dropped and not moved
+    assert heldout == set(fs.HELDOUT_FAMILY_IDS)
+
+    # The individual refusal reasons, each naming its own invariant.
+    band_refusal = tp._refuse_move(fs.TAUGHT_FAMILY_IDS, "F6")
+    assert band_refusal is not None and "DEMO-05" in band_refusal and "18" in band_refusal
+    f4_refusal = tp._refuse_move(fs.TAUGHT_FAMILY_IDS, "F4")
+    assert f4_refusal is not None and "D-22" in f4_refusal
+
+
+def test_decision_rule_allocation_moves_when_the_band_allows():
+    """The positive half: a legal move IS made, so the refusals above are not vacuous.
+
+    With F3 additionally taught a fact carries 25 paraphrases, so saturating F3 (3 instances)
+    leaves 22 — inside the band — and the move goes through.
+    """
+    taught_in = set(fs.TAUGHT_FAMILY_IDS) | {"F3"}
+    heldout_in = set(fs.FAMILIES) - taught_in
+    gains = {fid: 0.5 for fid in fs.FAMILIES}
+    gains["F3"] = 0.0  # the only saturated family
+
+    taught, heldout = tp.lock_family_allocation(gains, 0.0, taught_in, heldout_in)
+
+    assert "F3" not in taught and "F3" in heldout  # moved sides, not dropped
+    _assert_allocation_invariants(taught, heldout)
+
+
+def test_recipe_constants():
+    """The LoRA teaching recipe, pinned.
+
+    ``MAX_STEPS`` is deliberately NOT pinned here: it is one of the numbers the CALIBRATION run
+    measures (Assumption A3), so a test asserting it would claim knowledge this phase does not
+    yet have — and would go red for the right reason at exactly the wrong time.
+    """
+    assert tp.WEIGHT_DECAY == 0.0  # overrides TrainConfig's 0.1 default for adapter runs
+    assert tp.LORA_CFG.r == 8
+    assert tp.LORA_CFG.alpha == 16
+    assert tp.BATCH_SIZE == 8
+    assert tp.BLOCK_SIZE == 256
+
+
+@pytest.mark.parametrize("arm", tp.ARMS)
+def test_arm_outputs_scoped(arm):
+    """T-14-16: no two arms share a write target, so no arm can clobber another's evidence."""
+    paths = tp.arm_outputs(arm)
+    mine = {str(p) for p in paths.values()}
+    assert len(mine) == len(paths)  # no duplicate path within one arm either
+
+    for other in tp.ARMS:
+        if other == arm:
+            continue
+        assert not (mine & {str(p) for p in tp.arm_outputs(other).values()}), other
+
+    # Phase-12/13 recorded evidence is never a Phase-14 write target.
+    for path in mine:
+        assert "finetune_prod" not in path
+        assert "convbase" not in path
+        assert "phase13_" not in path
+
+
+def test_real_arm_adapter_is_the_shippable_path():
+    """The one deliberate break from ``phase14_{arm}`` naming — a CROSS-PLAN contract.
+
+    ``scripts/phase14_recall.py`` (plan 14-06) and the Gradio demo (plan 14-08) both hardcode
+    ``checkpoints/persona_adapter.pt``. Renaming the real arm's export would leave the harness
+    exiting with "missing adapter" and nothing pointing at the cause, so the contract is pinned
+    here rather than left to the two consumers to discover at runtime.
+    """
+    assert tp.arm_outputs("real")["adapter"].name == "persona_adapter.pt"
+    for arm in tp.ARMS:
+        if arm != "real":
+            assert tp.arm_outputs(arm)["adapter"].name == f"phase14_{arm}_adapter.pt"
+
+
+def test_refuse_if_exists_names_the_offender(tmp_path):
+    """WR-02: refuse to silently overwrite recorded evidence, and NAME the file that blocked."""
+    existing = tmp_path / "run.csv"
+    existing.write_text("step\n0\n", encoding="utf-8")
+    missing = tmp_path / "phase14_real_latest.pt"
+
+    assert tp.refuse_if_exists((missing,)) is None
+
+    with pytest.raises(SystemExit) as excinfo:
+        tp.refuse_if_exists((missing, existing))
+    assert str(existing) in str(excinfo.value)
+
+
+@pytest.mark.parametrize("verdict", ["GO", "ADAPT"])
+def test_require_go_verdict_passes(tmp_path, verdict):
+    """D-06: GO and ADAPT clear the gate and the recorded word comes back to the caller."""
+    report = tmp_path / "report.md"
+    report.write_text(
+        f"# Report\n\n## Verdict\n\n{verdict}\n\n## Next\n\nstuff\n", encoding="utf-8"
+    )
+    assert tp._require_go_verdict(report) == verdict
+
+
+@pytest.mark.parametrize("verdict", ["PENDING", "STOP"])
+def test_require_go_verdict_blocks(tmp_path, verdict):
+    """D-06: PENDING and STOP must be escalated, never bypassed — and the exit NAMES the word."""
+    report = tmp_path / "report.md"
+    report.write_text(
+        f"# Report\n\n## Verdict\n\n{verdict} — user decision at checkpoint.\n", encoding="utf-8"
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        tp._require_go_verdict(report)
+    assert verdict in str(excinfo.value)
+
+
+def test_require_go_verdict_missing_report(tmp_path):
+    """A missing report is a gate failure too, naming the driver that produces it."""
+    with pytest.raises(SystemExit) as excinfo:
+        tp._require_go_verdict(tmp_path / "nope.md")
+    assert "phase14_factset_gate.py" in str(excinfo.value)
