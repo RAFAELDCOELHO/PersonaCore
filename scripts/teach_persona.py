@@ -1537,10 +1537,22 @@ def derive_all(results):
     ``tests/test_phase14_scoring.py`` exercises it on fabricated records without a GPU.
 
     The BASELINE arm (``cal_first_person``) supplies every input except the register comparison:
-    it is the arm whose configuration the real run mirrors, so its rates are the ceiling the
-    thresholds discount, its per-family gains are the allocation input, and its ON/OFF PPL pair
-    is the collapse measurement. The replay arm is the PAIRED comparison and the second-person
-    arm supplies only the register head-to-head.
+    its rates are the ceiling the thresholds discount, its per-family gains are the allocation
+    input, and its ON/OFF PPL pair is the collapse measurement. The replay arm is the PAIRED
+    comparison and the second-person arm supplies only the register head-to-head.
+
+    **Known wiring mismatch, corrected post-hoc at plan 14-09's checkpoint — read before
+    re-running.** The threshold wiring below assumes the baseline arm is the one whose
+    configuration the real run mirrors. That assumption was true when this function was written
+    and FALSE once ``replay_required`` returned True on this run's measurements: a True verdict
+    sets ``REAL_RUN_REPLAY_RATIO = 1.0``, which makes ``cal_first_person_replay`` the arm the real
+    run actually runs under. The committed thresholds in ``phase14_recall`` are therefore derived
+    from the REPLAY arm's rates, not from what this function returns — see
+    ``results/phase14_calibration_report.md`` ``## Derivation 1``, which shows both sets side by
+    side. The wiring is left as-is on purpose: this function is what the committed report records
+    having run, and editing a derivation pipeline after seeing its numbers is the move the whole
+    pre-registration block exists to prevent. Anyone re-running with ``--force`` must re-decide
+    which arm feeds ``lock_thresholds`` at the human checkpoint, exactly as was done here.
     """
     base = results["cal_first_person"]
     register = results["cal_second_person"]

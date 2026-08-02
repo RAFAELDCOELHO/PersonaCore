@@ -94,9 +94,12 @@ def test_preregistration_constants():
     # D-09 condition 2: LOCKED by plan 14-09 from the measured calibration run, under a decision
     # rule committed BEFORE that run happened. Bare literals, never a call to lock_thresholds —
     # asserting the recomputation would only prove the driver can multiply, not that the committed
-    # number is the one the report states.
-    assert pr.TAUGHT_THRESHOLD == 0.4095
-    assert pr.HELDOUT_THRESHOLD == 0.3311
+    # number is the one the report states. These are the CORRECTED pair, derived at the checkpoint
+    # from `cal_first_person_replay` (the arm `replay_required = True` selects) rather than from the
+    # no-replay baseline; the report's Derivation 1 shows 0.4095 -> 0.2486 and 0.3311 -> 0.2000 side
+    # by side, and the held-out number is THRESHOLD_FLOOR because 0.6 * 0.2506 discounts below it.
+    assert pr.TAUGHT_THRESHOLD == 0.2486
+    assert pr.HELDOUT_THRESHOLD == 0.2000
     assert pr.CALIBRATION_SHA == "0425fdc494025d9c59cfac1e62092b10820a619e"
 
 
@@ -109,8 +112,8 @@ def test_gate_boundary():
     the assertions below state that premise explicitly rather than relying on the reader to spot
     it, and the one-hair-either-side pair is what actually distinguishes the two operators.
     """
-    assert pr.TAUGHT_THRESHOLD == 0.4095  # the premise: the boundary is the literal, not a product
-    assert pr.HELDOUT_THRESHOLD == 0.3311
+    assert pr.TAUGHT_THRESHOLD == 0.2486  # the premise: the boundary is the literal, not a product
+    assert pr.HELDOUT_THRESHOLD == 0.2000
 
     assert pr.taught_gate(pr.TAUGHT_THRESHOLD) is True  # boundary PASSES — dies under `>`
     assert pr.taught_gate(pr.TAUGHT_THRESHOLD + 1e-9) is True

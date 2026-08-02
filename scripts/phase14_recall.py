@@ -163,24 +163,34 @@ STOP_IDS = frozenset({8184, 8185})  # the pinned turn-stopping idiom (eos + the 
 # committed in `d7d7917` BEFORE the calibration run produced a single measurement; git history
 # order is the pre-registration proof. A number chosen after seeing the results is not a threshold.
 #
-#   inputs   : cal_taught_rate = 0.6825 (860/1260), cal_heldout_rate = 0.5519 (447/810), both
-#              measured on the `cal_first_person` arm with the adapter ON, against a closed-book
-#              (adapter OFF) baseline of exactly 0.0000 on both tiers
+#   inputs   : cal_taught_rate = 0.4143 (522/1260), cal_heldout_rate = 0.2506 (203/810), both
+#              measured on the `cal_first_person_replay` arm with the adapter ON, against a
+#              closed-book (adapter OFF) baseline of exactly 0.0000 on both tiers
 #   rule     : max(THRESHOLD_FLOOR, round(rate * THRESHOLD_DISCOUNT, 4))
 #              with THRESHOLD_DISCOUNT = 0.60 and THRESHOLD_FLOOR = 0.20
-#   bound by : the DISCOUNT in both cases — neither threshold hit the floor
+#   bound by : the DISCOUNT on taught (0.2486); the FLOOR on held-out (0.6 * 0.2506 = 0.1504
+#              discounts BELOW the floor, so the pre-registered floor clamps it to 0.2000)
 #   evidence : `results/phase14_calibration_report.md`, `## Derivation 1 — Recall Thresholds`
+#
+# WHICH ARM, and why it changed at the checkpoint: the rule was first applied to `cal_first_person`
+# (no replay), but Derivation 3 returned `replay_required = True` and set REAL_RUN_REPLAY_RATIO to
+# 1.0 — so the arm whose configuration the real run actually uses is the REPLAY arm. Feeding
+# `lock_thresholds` the matching arm is a WIRING correction, not a threshold chosen to be cleared;
+# the rule function is byte-identical and both threshold sets (0.4095 -> 0.2486, 0.3311 -> 0.2000)
+# are shown side by side in the report so the narrowing is independently checkable.
 #
 # The calibration facts are DISJOINT from the locked set and disposable, so their measured rate is
 # a CEILING estimate rather than a target; the 0.60 discount is what keeps these from being numbers
 # chosen to be cleared.
-TAUGHT_THRESHOLD = 0.4095
-HELDOUT_THRESHOLD = 0.3311
+TAUGHT_THRESHOLD = 0.2486
+HELDOUT_THRESHOLD = 0.2000
 
-# The commit carrying the calibration REPORT and the recorded measurements the two thresholds above
-# were derived from — the same traceability `FACTSET_GATE_SHA` gives the fact set. The human GO /
-# ADAPT / STOP verdict is recorded onto that same report at plan 14-09's checkpoint; this SHA
-# points at the evidence, which is what a reader needs to re-derive the numbers.
+# The commit carrying the calibration REPORT and the recorded MEASUREMENTS the two thresholds above
+# were derived from — the same traceability `FACTSET_GATE_SHA` gives the fact set. It points at the
+# EVIDENCE, which is what a reader needs to re-derive the numbers: every rate feeding
+# `lock_thresholds` for either arm is already in the report at this SHA. It deliberately does NOT
+# point at a verdict commit — the ADAPT verdict and the arm correction were recorded onto that same
+# report at plan 14-09's checkpoint, in a commit whose SHA cannot be known while writing this line.
 CALIBRATION_SHA = "0425fdc494025d9c59cfac1e62092b10820a619e"
 
 

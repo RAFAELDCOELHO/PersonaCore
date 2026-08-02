@@ -162,26 +162,79 @@ cal_second_person: csv=results/phase14_cal_second_person/run.csv wall=773s
 ## Derivation 1 — Recall Thresholds (D-09)
 
 **Rule function:** `teach_persona.lock_thresholds(cal_taught_rate, cal_heldout_rate)`,
-committed in `d7d79174bd4293bfc95fe5647c1bb7ec0dea509b`.
+committed in `d7d79174bd4293bfc95fe5647c1bb7ec0dea509b`. **The function is UNCHANGED
+between the two derivations below — only the arm supplying its inputs differs.**
+
+### As first derived — inputs from `cal_first_person` (the no-replay arm)
 
 | Input | Value | Source |
 |---|---|---|
-| `cal_taught_rate` | 0.6825 | `cal_first_person` taught, adapter ON |
-| `cal_heldout_rate` | 0.5519 | `cal_first_person` held-out, adapter ON |
+| `cal_taught_rate` | 0.6825 | `cal_first_person` taught, adapter ON (860/1260) |
+| `cal_heldout_rate` | 0.5519 | `cal_first_person` held-out, adapter ON (447/810) |
 | `THRESHOLD_DISCOUNT` | 0.6 | pre-registered |
 | `THRESHOLD_FLOOR` | 0.2 | pre-registered |
 
 | Output | Value | Bound by |
 |---|---|---|
-| `TAUGHT_THRESHOLD` | **0.4095** | the DISCOUNT |
-| `HELDOUT_THRESHOLD` | **0.3311** | the DISCOUNT |
+| `TAUGHT_THRESHOLD` | 0.4095 | the DISCOUNT |
+| `HELDOUT_THRESHOLD` | 0.3311 | the DISCOUNT |
 
-The rule was applied MECHANICALLY: each threshold is
-`max(THRESHOLD_FLOOR, round(rate * THRESHOLD_DISCOUNT, 4))`, evaluated by the committed
-function on the measured rates above. **No number here was chosen after seeing the
-results** — what was pre-registered is the PROCEDURE, because the number cannot exist
-before the run but the rule that produces it must, or the threshold is just a value
-picked to be cleared.
+### As corrected at the checkpoint — inputs from `cal_first_person_replay`
+
+Derivation 3 returned `replay_required = True`, which sets `REAL_RUN_REPLAY_RATIO = 1.0`.
+That makes `cal_first_person_replay` — not the baseline — the arm whose configuration the
+real run actually uses. The thresholds above were derived from the arm the real run will
+NOT run under. The SAME committed function is re-applied to the matching arm's rates:
+
+| Input | Value | Source |
+|---|---|---|
+| `cal_taught_rate` | 0.4143 | `cal_first_person_replay` taught, adapter ON (522/1260) |
+| `cal_heldout_rate` | 0.2506 | `cal_first_person_replay` held-out, adapter ON (203/810) |
+| `THRESHOLD_DISCOUNT` | 0.6 | pre-registered, unchanged |
+| `THRESHOLD_FLOOR` | 0.2 | pre-registered, unchanged |
+
+```
+taught     max(THRESHOLD_FLOOR, round(0.4143 * 0.6, 4)) = max(0.2, 0.2486) = 0.2486
+held-out   max(THRESHOLD_FLOOR, round(0.2506 * 0.6, 4)) = max(0.2, 0.1504) = 0.2000   <- the FLOOR binds
+```
+
+### Both threshold sets, side by side
+
+| Threshold | From `cal_first_person` (as first derived) | From `cal_first_person_replay` (COMMITTED) | Bound by |
+|---|---|---|---|
+| `TAUGHT_THRESHOLD` | 0.4095 | **0.2486** | the DISCOUNT |
+| `HELDOUT_THRESHOLD` | 0.3311 | **0.2000** | the FLOOR |
+
+Both sets are shown rather than the first being silently replaced, so a reader can verify
+independently that the correction NARROWS a wiring mismatch and does not relax the gate
+below what the mechanism actually needed to clear. The held-out threshold does not fall to
+0.1504: the pre-registered `THRESHOLD_FLOOR` catches it at 0.2000. That is the floor doing
+exactly the job it was committed for — below it the metric is indistinguishable from the
+closed-book control at 8 seeded samples, so no threshold derived from any arm may go lower.
+
+**Deviation note, recorded at the checkpoint (verbatim):**
+
+> lock_thresholds was fed cal_first_person (no-replay) while replay_required=True selected the replay config. Feeding it the matching arm is a wiring correction, not a threshold chosen to be cleared. Recorded post-hoc; both numbers shown.
+
+### PROJECTED margins against the corrected gate — these are NOT the verdict
+
+| Tier | `cal_first_person_replay` rate | corrected threshold | PROJECTED margin |
+|---|---|---|---|
+| taught | 0.4143 | 0.2486 | **+0.1657** |
+| held-out | 0.2506 | 0.2000 | **+0.0506** |
+
+**These two numbers are PROJECTIONS, not a result.** They are the calibration arm's OWN
+rates measured against the gate that same arm just produced — an arm cannot be independent
+evidence for a threshold derived from it, and they were measured on a THROWAWAY fact set
+the shipped adapter is never taught. **Plan 14-11's real teaching run produces the number
+that actually counts.** Nothing here says the real persona will clear either threshold; if
+the real run lands below one, that is the result and it gets recorded as one.
+
+The rule was applied MECHANICALLY in both derivations: the SAME committed function, the
+SAME two pre-registered literals, evaluated on measured rates. **No number here was chosen
+after seeing the results** — what was pre-registered is the PROCEDURE, because the number
+cannot exist before the run but the rule that produces it must, or the threshold is just a
+value picked to be cleared.
 
 ## Derivation 2 — Family Allocation (D-14)
 
@@ -289,4 +342,18 @@ first person 0.5519 vs second person
 
 ## Verdict
 
-PENDING — user decision at checkpoint.
+ADAPT — the real run proceeds, with exactly one deviation.
+
+**The deviation.** `lock_thresholds` was applied to `cal_first_person`'s rates while
+Derivation 3 returned `replay_required = True`, which makes `cal_first_person_replay` the
+arm whose configuration the real run uses. The identical committed rule function is
+re-applied to the matching arm's rates: `TAUGHT_THRESHOLD` 0.4095 → **0.2486** and
+`HELDOUT_THRESHOLD` 0.3311 → **0.2000** (the pre-registered `THRESHOLD_FLOOR` binds the
+held-out side). Both threshold sets are shown side by side in Derivation 1, together with
+the deviation note recorded verbatim and the projected margins labelled as projections.
+
+**What is NOT adapted.** Derivation 2's allocation stands unchanged, refusals and all,
+along with its F4/F5 absence-of-measurement note. Derivation 3's `replay_required = True`
+and `REAL_RUN_REPLAY_RATIO = 1.0` stand. Derivation 4's negative register result stands
+unamended (D-12) and does NOT reopen D-01 mid-phase — `REAL_RUN_SECOND_PERSON` stays
+`False`. No measured number in this report was altered.

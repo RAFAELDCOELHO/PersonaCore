@@ -98,6 +98,8 @@ try:
     # fact-set module — and therefore no locked fact value enters this process.
     from phase14_recall import (  # noqa: E402  (needs the sys.path insert above)
         RECALL_MAX_NEW_TOKENS,
+        SAMPLE_TEMPERATURE,
+        SAMPLE_TOP_P,
         STOP_IDS,
         render_context_dump,
     )
@@ -112,6 +114,49 @@ if (
     or RECALL_MAX_NEW_TOKENS <= 0
 ):  # pragma: no cover - the harness constant is a positive int; this guards a future edit
     raise SystemExit(MISSING_BUDGET_MSG)
+
+# --------------------------------------------------------------------------- #
+# Decode settings — MIRRORED from the scoring harness, never chosen here
+# --------------------------------------------------------------------------- #
+
+# SOURCE OF TRUTH — `scripts/phase14_recall.py::complete_question`, the SAMPLED draw:
+#
+#     generator = torch.Generator(device=device).manual_seed(question_seed(index) + s)
+#     gen_ids, stop = _complete(
+#         model, prompt_ids, device, forbid,
+#         temperature=SAMPLE_TEMPERATURE,   # 0.8
+#         top_p=SAMPLE_TOP_P,               # 0.95
+#         generator=generator,
+#     )
+#
+# and `_complete` adds `max_new_tokens=RECALL_MAX_NEW_TOKENS`, `forbid_ids=forbid`,
+# `stop_ids=set(STOP_IDS)`. `top_k` is never passed by either path, so it stays at the core's
+# `None` default here too — an omission that is deliberate, not an oversight.
+#
+# WHY THIS FILE HAS TO CARE. Before this block the demo ran the package defaults
+# (`temperature=1.0`, no `top_p`), so the committed recall rates and the answers a reviewer sees on
+# camera described two different systems. Every number in
+# `results/phase14_recall_report.md` was measured under the settings above; the demo now decodes
+# under exactly them, so the page and the report describe ONE system.
+#
+# WHICH PATH, and why. The harness scores 1 GREEDY draw plus `N_SEEDED_SAMPLES` = 8 sampled draws
+# per question, so 8 of every 9 scored draws come from the sampled path mirrored above. Greedy is
+# the odd one out and is a poor fit for the demo on its own terms: 14-RESEARCH Pitfall 6 measured
+# greedy decoding LOOPING on this base (`i live in the country i live in the country.`), which is
+# the documented failure mode this budget was sized around — putting it on camera would show a
+# decode artifact rather than where the memory lives.
+#
+# SEEDING is deliberately NOT mirrored. The harness's `question_seed(index) + s` exists so a scored
+# run is re-derivable from `SEED` alone; `index` is a question's position in its tier, and a demo
+# taking free-text input has no tier and no index to seed from. The generator is left at the core's
+# `None` default (global RNG), so repeat asks vary — which is the honest rendering of a metric that
+# is a success RATE over draws and never one transcript.
+#
+# IMPORTED, not retyped: this dict holds no float literal of its own, so the two files cannot drift
+# apart the way two copies of 0.8 silently would. `tests/test_phase14_demo.py` pins both the values
+# and the exact key set — the same coupling discipline as the `forbid_ids` parity and token-dump
+# byte-identity tests already locked for this phase.
+DECODE_KW = {"temperature": SAMPLE_TEMPERATURE, "top_p": SAMPLE_TOP_P}
 
 # --------------------------------------------------------------------------- #
 # Artifact paths — _REPO_ROOT-anchored constants, no CLI flag parsing (D-04)
@@ -455,6 +500,9 @@ def build_demo() -> gr.Blocks:
                 max_new_tokens=int(max_new_tokens),
                 forbid_ids=forbid_ids,
                 stop_ids=set(STOP_IDS),
+                # The scoring harness's sampled-draw settings, imported not retyped — see
+                # DECODE_KW above for the exact `phase14_recall.complete_question` call it mirrors.
+                **DECODE_KW,
             ):
                 history[-1]["content"] = f"{stamp}\n\n{accumulated}"
                 yield history, panel_text

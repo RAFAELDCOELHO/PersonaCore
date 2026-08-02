@@ -324,6 +324,38 @@ def test_budget_import_is_an_integer():
     assert "value=RECALL_MAX_NEW_TOKENS" in inspect.getsource(pd.build_demo)
 
 
+def test_decode_settings_match_the_scoring_harness():
+    """The demo decodes under the EXACT condition the committed recall rates were measured under.
+
+    Same coupling discipline as ``test_forbid_ids_parity`` and ``test_prompt_ids_identical``: the
+    two files are pinned against each other rather than trusted to stay in step. Before this pin
+    the demo ran the package defaults (``temperature=1.0``, no ``top_p``) while every number in
+    ``results/phase14_recall_report.md`` came from ``phase14_recall.complete_question``'s sampled
+    draw at 0.8/0.95 — the page and the report described two different systems.
+
+    Three separate things are asserted, and each one fails on a different mistake:
+
+    1. **Bare literals.** Transcribed here the way ``test_preregistration_constants`` transcribes
+       its constants, so a change to the HARNESS's sampling settings goes red too. Comparing only
+       ``pd.X == pr.X`` would be a tautology (the demo imports them) and would silently follow the
+       harness anywhere it moved.
+    2. **The exact key set.** ``top_k`` is passed by NEITHER harness path, so its absence is part
+       of the mirrored condition, not an oversight — an added key is as much a divergence as a
+       changed value. ``generator`` is absent for the documented reason in ``DECODE_KW``'s comment
+       (the harness seeds per question INDEX; free-text input has no index).
+    3. **It is actually threaded into the generation call.** A correct constant that no call site
+       uses would leave the demo decoding at 1.0 with a test claiming otherwise.
+    """
+    assert pd.DECODE_KW == {"temperature": 0.8, "top_p": 0.95}
+    assert pd.DECODE_KW["temperature"] == pr.SAMPLE_TEMPERATURE
+    assert pd.DECODE_KW["top_p"] == pr.SAMPLE_TOP_P
+    assert set(pd.DECODE_KW) == {"temperature", "top_p"}
+    # Imported, never retyped: no float of its own means the two files cannot drift apart.
+    assert "DECODE_KW = {" in _DEMO_SOURCE
+    assert '"temperature": SAMPLE_TEMPERATURE, "top_p": SAMPLE_TOP_P' in _DEMO_SOURCE
+    assert "**DECODE_KW" in inspect.getsource(pd.build_demo)
+
+
 def test_demo_process_is_fact_free():
     """The only check that can see a TRANSITIVE leak (W-08 / 14-05 ``<import_topology>``).
 

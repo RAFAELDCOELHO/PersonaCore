@@ -38,13 +38,15 @@ provides:
   - scripts/phase14_recall.CALIBRATION_SHA
   - scripts/phase14_recall.taught_gate
   - scripts/phase14_recall.heldout_gate
+  - scripts/personalize_demo.DECODE_KW
   - results/phase14_calibration_report.md
   - results/phase14_calibration_results.json
   - results/phase14_calibration_run.log
 affects:
-  - "plan 14-11 (the real run now gates on this report's verdict AND trains with replay at ratio 1.0)"
-  - "plan 14-10 (TAUGHT_THRESHOLD / HELDOUT_THRESHOLD are no longer None — the recall report can state a verdict)"
+  - "plan 14-11 (the real run is UNBLOCKED — the verdict reads ADAPT — and trains with replay at ratio 1.0)"
+  - "plan 14-10 (TAUGHT_THRESHOLD = 0.2486 / HELDOUT_THRESHOLD = 0.2000 are committed literals — the recall report can state a verdict)"
   - "scripts/phase14_recall.py (the MPS generator fix unblocks every seeded draw on the M3)"
+  - "scripts/personalize_demo.py (plan 14-08's demo now decodes under the harness's scored condition, not package defaults)"
 tech-stack:
   added: []
   patterns:
@@ -65,8 +67,14 @@ key-files:
     - scripts/teach_persona.py
     - scripts/phase14_recall.py
     - scripts/phase14_factset.py
+    - scripts/personalize_demo.py
     - tests/test_phase14_scoring.py
+    - tests/test_phase14_demo.py
 key-decisions:
+  - "ADAPT verdict: lock_thresholds re-applied to cal_first_person_replay (the arm replay_required=True selects) — TAUGHT 0.4095->0.2486, HELDOUT 0.3311->0.2000, both sets shown side by side in the report"
+  - "the demo mirrors the harness's SAMPLED draw (0.8 / 0.95), not its greedy draw — 8 of every 9 scored draws come from it, and greedy is the measured looping failure mode"
+  - "DECODE_KW holds no float of its own: it IMPORTS SAMPLE_TEMPERATURE / SAMPLE_TOP_P so the demo and the harness cannot drift apart"
+  - "derive_all's threshold wiring is left as-is with the mismatch documented in its docstring — editing a derivation pipeline after seeing its numbers is what the pre-registration block exists to prevent"
   - "per-family recall gain is defined as taught rate adapter-ON minus taught rate adapter-OFF — the recall teaching that family actually bought, which is what D-14's saturation clause asks"
   - "the adapter-OFF pass covers held-out as well as taught, beyond what the rule strictly needs, because the human checkpoint cannot judge a held-out rate without a closed-book baseline"
   - "CALIBRATION_SHA points at the commit carrying the measured report, not at a verdict commit that cannot exist until the human records one"
@@ -75,8 +83,10 @@ key-decisions:
 patterns-established:
   - "Expensive measurement and cheap framing are separated by a JSON dump: `--rewrite-report` regenerates the artifact from committed evidence with no GPU"
   - "A boundary test asserts the exactness premise, both hairs, AND that two thresholds are independent bars"
-requirements-completed: []
-duration: 71min
+  - "A post-hoc correction shows BOTH numbers side by side and labels its own projections as projections — replacing the old number silently is what makes a correction indistinguishable from a threshold chosen to be cleared"
+  - "Two files that must decode identically are pinned to each other by a test, not by a convention — the demo imports the harness's constants and a test pins the exact key set"
+requirements-completed: [DEMO-05, DEMO-06]
+duration: 78min
 completed: 2026-08-02
 ---
 
@@ -87,28 +97,26 @@ committed 40 minutes before the first number existed — and two of the four cam
 nobody was hoping for: teaching without replay raises held-out dialogue PPL by 225%, and the
 second-person register beat first person on held-out recall by 0.25.**
 
-## Status: STOPPED AT CHECKPOINT (Task 3 of 3)
+## Status: COMPLETE (3 of 3 tasks)
 
-Tasks 1 and 2 are complete and committed. **Task 3 is a blocking human checkpoint** — the
-`## Verdict` section of `results/phase14_calibration_report.md` reads
-`PENDING — user decision at checkpoint.` and only a human may replace it with `GO`, `ADAPT`, or
-`STOP`. Everything that could be run has been run; only the judgment is outstanding.
-
-`scripts/teach_persona.py real` refuses to start until that verdict reads GO or ADAPT
-(`_require_go_verdict(CALIBRATION_REPORT)`, W-02), so plan 14-11 is correctly blocked.
+The human recorded **`ADAPT`** on `results/phase14_calibration_report.md`. `grep -c PENDING` on
+the report is **0**, `_require_go_verdict(CALIBRATION_REPORT)` returns `'ADAPT'`, and
+`scripts/teach_persona.py real` no longer hard-exits — **plan 14-11 is unblocked.**
 
 ## Performance
 
-- **Duration:** ~71 min wall (calibration run itself: 3,210 s / 53.5 min on MPS)
-- **Tasks:** 2/3 complete, 1 blocked on human verdict
+- **Duration:** ~78 min wall (calibration run itself: 3,210 s / 53.5 min on MPS)
+- **Tasks:** 3/3 complete
 - **Completions generated:** 10,764 (598 questions × 9 draws × 2 adapter states)
-- **Test suite:** 377 passed, 6 skipped; `ruff check .` + `ruff format --check .` clean
+- **Test suite:** 378 passed, 6 skipped; `ruff check .` + `ruff format --check .` clean
 
 ## Task Commits
 
 1. **Harness fixes that unblocked the run** — `026b74b` (fix)
 2. **Task 1: the three calibration arms + the report** — `0425fdc` (feat)
 3. **Task 2: the four derived numbers into the drivers** — `ec6a5b0` (feat)
+4. **Task 3: the ADAPT verdict, the corrected thresholds, the demo decode match** — see the final
+   commit on this branch (feat)
 
 ## Measured Results
 
@@ -129,7 +137,7 @@ anchor (Phase 12 recorded 4.5733) — independent confirmation the base was neve
 
 | # | Rule function | Result |
 |---|---|---|
-| 1 | `lock_thresholds(0.6825, 0.5519)` | `TAUGHT_THRESHOLD = 0.4095`, `HELDOUT_THRESHOLD = 0.3311` — the discount bound both, neither hit the 0.20 floor |
+| 1 | `lock_thresholds(0.6825, 0.5519)` → **corrected at the checkpoint** to `lock_thresholds(0.4143, 0.2506)` | **`TAUGHT_THRESHOLD = 0.2486`** (the discount binds), **`HELDOUT_THRESHOLD = 0.2000`** (the FLOOR binds — 0.6 × 0.2506 = 0.1504 discounts below it). See "The Recorded Verdict" below |
 | 2 | `lock_family_allocation(...)` | **UNCHANGED**: taught `{F1,F2,F4,F5,F6}`, held-out `{F3,F7,F8}` — neither trigger fired, two proposed moves refused |
 | 3 | `replay_required(4.5737, 14.8559)` | **True** → `REAL_RUN_REPLAY_RATIO = 1.0` |
 | 4 | `first_person_wins(0.5519, 0.8045)` | **False** (margin −0.2526) → recorded unamended, `REAL_RUN_SECOND_PERSON` stays `False` |
@@ -160,10 +168,10 @@ The paired arm is the whole point of D-15, and it says both halves out loud:
 Replay at ratio 1.0 removes ~87% of the collapse and **still trips the trigger**, while costing
 0.27 of taught recall and 0.30 of held-out recall. "Replay required" is not "replay solves it" —
 the report says so explicitly, and this is the single most important thing for the human to weigh.
-Note also that the replay arm's held-out rate (0.2506) sits **below** the `HELDOUT_THRESHOLD`
+Note also that the replay arm's held-out rate (0.2506) sat **below** the `HELDOUT_THRESHOLD`
 (0.3311) this same run derived from the no-replay arm. Applying both derivations as written
-produces a real run that is configured to fail its own gate. That interaction is a judgment call
-for the checkpoint, not something a driver should resolve.
+produced a real run configured to fail its own gate. **This is exactly the interaction the
+checkpoint resolved** — see "The Recorded Verdict" below.
 
 ### 3. The register arm came back negative, and it is recorded unamended
 
@@ -204,7 +212,106 @@ Beyond supplying the baseline, the OFF pass produced identical `0/1260` and `0/8
 all three arms — a free cross-arm confirmation that `adapter_disabled` restores the pre-injection
 base exactly, on three independently trained adapters.
 
+## The Recorded Verdict (Task 3)
+
+**`ADAPT` — the real run proceeds, with exactly one deviation.**
+
+### The deviation: `lock_thresholds` was fed the wrong arm
+
+Derivation 3 returned `replay_required = True`, which sets `REAL_RUN_REPLAY_RATIO = 1.0` and makes
+`cal_first_person_replay` the arm the real run actually runs under. Derivation 1 had been applied
+to `cal_first_person` — the no-replay baseline. The **identical committed rule function** was
+re-applied to the matching arm's rates:
+
+```
+max(THRESHOLD_FLOOR, round(rate * THRESHOLD_DISCOUNT, 4))
+
+taught     max(0.2, round(0.4143 * 0.6, 4)) = max(0.2, 0.2486) = 0.2486
+held-out   max(0.2, round(0.2506 * 0.6, 4)) = max(0.2, 0.1504) = 0.2000   <- the FLOOR binds
+```
+
+| Threshold | as first derived | **committed** | bound by |
+|---|---|---|---|
+| `TAUGHT_THRESHOLD` | 0.4095 | **0.2486** | the DISCOUNT |
+| `HELDOUT_THRESHOLD` | 0.3311 | **0.2000** | the FLOOR |
+
+Both sets appear side by side in the report so a reader can check independently that the
+correction **narrows a wiring mismatch** rather than relaxing the gate below what the mechanism
+needed to clear. The held-out threshold does not fall to 0.1504 — the pre-registered
+`THRESHOLD_FLOOR` catches it, which is the floor doing the job it was committed for.
+
+The deviation note is recorded **verbatim** in the report's Derivation 1:
+
+> lock_thresholds was fed cal_first_person (no-replay) while replay_required=True selected the replay config. Feeding it the matching arm is a wiring correction, not a threshold chosen to be cleared. Recorded post-hoc; both numbers shown.
+
+### The projections, labelled as projections
+
+| Tier | replay-arm rate | corrected threshold | PROJECTED margin |
+|---|---|---|---|
+| taught | 0.4143 | 0.2486 | **+0.1657** |
+| held-out | 0.2506 | 0.2000 | **+0.0506** |
+
+**These are NOT a result.** They are the calibration arm's own rates against a gate that same arm
+produced — an arm cannot be independent evidence for a threshold derived from it — measured on a
+throwaway fact set the shipped adapter is never taught. **Plan 14-11's real teaching run produces
+the number that actually counts.** If the real run lands below either threshold, that is the
+result and it gets recorded as one.
+
+### What is NOT adapted
+
+Derivation 2's allocation stands unchanged, refusals and all, with its F4/F5
+absence-of-measurement note. Derivation 3's `replay_required = True` and
+`REAL_RUN_REPLAY_RATIO = 1.0` stand. Derivation 4's negative register result stands **unamended**
+(D-12) and does not reopen D-01 mid-phase — `REAL_RUN_SECOND_PERSON` stays `False`. **No measured
+number in the report was altered.**
+
 ## Deviations from Plan
+
+### Checkpoint-driven scope deviation
+
+**`scripts/personalize_demo.py` is plan 14-08's file, outside 14-09's declared `files_modified`.**
+The change is authorized by the user at this checkpoint and is recorded here as an explicit scope
+deviation.
+
+**What changed.** The demo ran the package defaults (`temperature=1.0`, no `top_p`, no `top_k`)
+while every committed recall number was measured under
+`phase14_recall.complete_question`'s sampled draw. The page and the report described two different
+systems. The demo now imports `SAMPLE_TEMPERATURE` / `SAMPLE_TOP_P` from the harness into a
+module-level `DECODE_KW` and threads it into `generate_text_from_ids_cumulative`.
+
+**The match, parameter by parameter** against `personacore.generation.core.generate`:
+
+| parameter | harness (sampled draw) | demo (now) | match |
+|---|---|---|---|
+| `temperature` | `SAMPLE_TEMPERATURE` = 0.8 | imported, same object | exact |
+| `top_p` | `SAMPLE_TOP_P` = 0.95 | imported, same object | exact |
+| `top_k` | never passed → `None` | never passed → `None` | exact |
+| `greedy` | not passed on this path → `False` | not passed → `False` | exact |
+| `max_new_tokens` | `RECALL_MAX_NEW_TOKENS` = 48 | slider floors AND defaults at 48 | floor is the measured condition |
+| `forbid_ids` | `undecodable_ids_mask(tok, vocab)` | same call — pinned by `test_forbid_ids_parity` | exact |
+| `stop_ids` | `set(STOP_IDS)` | `set(STOP_IDS)`, imported | exact |
+| `eos_id` / `block_size` | `model.config` defaults | `model.config` defaults | exact |
+| `generator` | `question_seed(index) + s` | `None` (global RNG) | **deliberately not mirrored** |
+
+**Which path was mirrored, and why.** The harness scores **1 greedy + 8 seeded draws** per
+question, so 8 of every 9 scored draws come from the sampled path. Greedy is the odd one out and
+is a poor fit for the demo on its own terms: 14-RESEARCH Pitfall 6 measured greedy decoding
+**looping** on this base (`i live in the country i live in the country.`) — the documented failure
+mode `RECALL_MAX_NEW_TOKENS` was sized around. Putting it on camera would show a decode artifact
+rather than where the memory lives.
+
+**Why seeding is not mirrored.** `question_seed(index) + s` exists so a scored run is re-derivable
+from `SEED` alone; `index` is a question's position in its tier, and a demo taking free-text input
+has no tier and no index. Repeat asks therefore vary — the honest rendering of a metric that is a
+success **rate** over draws and never one transcript.
+
+**The coupling is pinned, not conventional.** `DECODE_KW` holds no float literal of its own (it
+imports both), and `tests/test_phase14_demo.py::test_decode_settings_match_the_scoring_harness`
+asserts three separable things: the bare literals `0.8` / `0.95` (so a change to the HARNESS also
+goes red — `pd.X == pr.X` alone would be a tautology), the **exact key set** (an added `top_k` is
+as much a divergence as a changed value), and that `**DECODE_KW` actually reaches the generation
+call. Same discipline as the `forbid_ids` parity and token-dump byte-identity tests already locked
+for this phase.
 
 ### Auto-fixed Issues
 
@@ -269,12 +376,30 @@ produced Finding 5.
 when Task 2 runs — the verdict is recorded by a human at Task 3, after Task 2 — and the plan's own
 acceptance criterion requires `git cat-file -e $CALIBRATION_SHA` to exit 0. It is set to `0425fdc`,
 the commit carrying the measured report and the results JSON, which is the traceability anchor a
-reader actually needs (the same role `FACTSET_GATE_SHA` plays). The comment says so in place.
+reader actually needs (the same role `FACTSET_GATE_SHA` plays). Every rate feeding
+`lock_thresholds` for **either** arm is already in the report at that SHA, so the corrected
+thresholds are re-derivable from it too. The comment says so in place.
+
+**`derive_all`'s threshold wiring is left as-is, with the mismatch documented in its docstring.**
+The function still feeds `lock_thresholds` the baseline arm. Correcting the wiring would mean
+editing a derivation pipeline **after seeing its numbers** — the exact move the pre-registration
+block exists to prevent — and the committed report records what this function actually ran. The
+docstring now names the mismatch, states that the committed thresholds come from the replay arm,
+and requires anyone re-running with `--force` to re-decide which arm feeds the rule at the human
+checkpoint. The clobber guard makes that path gated rather than silent.
 
 ## Verification
 
-- `.venv/bin/pytest -q` — **377 passed, 6 skipped** (was 375/6 before this plan's added test)
-- `.venv/bin/ruff check . && .venv/bin/ruff format --check .` — clean
+- `.venv/bin/python -m pytest -q` — **378 passed, 6 skipped** (was 377/6; +1 is the new decode pin)
+- `.venv/bin/python -m ruff check .` — `All checks passed!`;
+  `ruff format --check .` — `132 files already formatted`
+- `grep -c PENDING results/phase14_calibration_report.md` → **0**
+- `_require_go_verdict(CALIBRATION_REPORT)` → **`'ADAPT'`** (so `teach_persona.py real` no longer
+  hard-exits; W-02 satisfied)
+- `lock_thresholds(0.4143, 0.2506)` → `(0.2486, 0.2)`, **identical** to the committed
+  `TAUGHT_THRESHOLD` / `HELDOUT_THRESHOLD` — the literals are the rule's output, not a transcription
+- `_refuse_clobber(report, force=False)` still raises `SystemExit` naming the path; `force=True`
+  still passes — the recorded ADAPT verdict is protected exactly as a GO would be
 - Plan Task 1 verify block — passes verbatim (eight headings present **and in order**, all three
   arm names present, opener present)
 - Plan Task 2 verify block — passes verbatim (`derived numbers committed`)
@@ -320,38 +445,62 @@ All three digests verified against the report after copying.
 `checkpoints/phase14_cal_*_latest.pt` training checkpoints and the six `data/persona_cal_*` bins.
 Nothing downstream reads them; `--rewrite-report` needs only the committed JSON.
 
-## Notes for the Next Plan
+## What 14-10 and 14-11 Must Consume
 
-- **The human must record a verdict before anything else in this phase proceeds.**
-  `teach_persona.py real` hard-exits on a PENDING verdict (W-02).
-- **14-11 will now train with replay at ratio 1.0** — `arm_spec("real")` reads
-  `REAL_RUN_REPLAY_RATIO`. Its teaching bin will be ~2× the tokens and it needs
-  `data/dialog_train.bin` + its mask present, not just the val pair.
-- **The threshold/replay interaction in Finding 2 is unresolved by design.** The replay arm's
-  held-out rate (0.2506) is below the held-out threshold (0.3311) this run derived from the
-  no-replay arm. Both numbers are correct outputs of correctly pre-registered rules; whether the
-  real run should proceed anyway, use a lower replay ratio, or shorten `MAX_STEPS` is precisely
-  the ADAPT decision the checkpoint exists for.
-- **`MAX_STEPS = 200` is the other lever.** All three arms reached final train losses of
-  0.07/0.56/0.07, and the collapse scales with how hard the adapter overfits. Calibration measured
-  the tradeoff at 200 steps only; a shorter run was not measured.
+### Plan 14-11 (the real teaching run) — now UNBLOCKED
+
+- **The gate is open.** `_require_go_verdict(CALIBRATION_REPORT)` returns `'ADAPT'`.
+- **Train with replay at ratio 1.0.** `arm_spec("real")` reads `REAL_RUN_REPLAY_RATIO`. The
+  teaching bin is ~2× the tokens and needs `data/dialog_train.bin` **plus its mask** present, not
+  just the val pair.
+- **`REAL_RUN_SECOND_PERSON` stays `False`.** The negative register result does not reopen D-01.
+- **The allocation is unchanged**: taught `{F1, F2, F4, F5, F6}`, held-out `{F3, F7, F8}`.
+- **`MAX_STEPS = 200` is the untested lever.** All three arms reached final train losses of
+  0.07/0.56/0.07 and the collapse scales with how hard the adapter overfits. Calibration measured
+  the tradeoff at 200 steps **only**; a shorter run was never measured. If the real run's PPL
+  collapse is unacceptable, this is the knob — and it needs its own measurement, not a guess.
+- **Expect the real run's own PPL delta to be reported.** The replay arm still tripped
+  `COLLAPSE_PPL_TRIGGER` at +29.39%. Replay was required, not sufficient.
+
+### Plan 14-10 (the recall report)
+
+- **The thresholds are committed literals, no longer `None`:** `TAUGHT_THRESHOLD = 0.2486`,
+  `HELDOUT_THRESHOLD = 0.2000`. Use `taught_gate(rate)` / `heldout_gate(rate)` — both are `>=`,
+  so a rate landing exactly on a threshold **passes**.
+- **`CALIBRATION_SHA = "0425fdc494025d9c59cfac1e62092b10820a619e"`** is the evidence anchor to
+  cite; the ADAPT verdict and the arm correction live on that same report in a later commit.
+- **Cite the corrected numbers, and say which arm produced them.** A reader comparing 14-10's
+  report against the calibration report will see both threshold sets; the report explains why.
+- **Do NOT cite the +0.1657 / +0.0506 margins as results.** They are the calibration arm's own
+  rates against its own gate, labelled as projections in both the report and here. 14-11's real
+  run produces the number that counts.
+- **The demo now decodes at temperature 0.8 / top_p 0.95** — the same condition 14-10's numbers
+  are measured under. If 14-10 changes `SAMPLE_TEMPERATURE` or `SAMPLE_TOP_P`, the demo follows
+  automatically (it imports them) and
+  `test_decode_settings_match_the_scoring_harness` goes red on the bare literals, forcing both
+  files to be looked at together. That is intentional.
 
 ## Self-Check: PASSED
 
-- `results/phase14_calibration_report.md` — FOUND (8 headings in order, verdict PENDING)
+- `results/phase14_calibration_report.md` — FOUND (8 headings in order, verdict **ADAPT**,
+  `grep -c PENDING` = 0, both threshold sets present, deviation note verbatim)
 - `results/phase14_calibration_results.json` — FOUND (3 arms)
 - `results/phase14_calibration_run.log` — FOUND
 - `results/phase14_cal_first_person/run.csv` — FOUND
 - `results/phase14_cal_first_person_replay/run.csv` — FOUND
 - `results/phase14_cal_second_person/run.csv` — FOUND
 - `scripts/teach_persona.py` — FOUND (contains `def run_calibration`, `def derive_all`)
-- `scripts/phase14_recall.py` — FOUND (contains `TAUGHT_THRESHOLD = 0.4095`, `def taught_gate`)
+- `scripts/phase14_recall.py` — FOUND (contains `TAUGHT_THRESHOLD = 0.2486`,
+  `HELDOUT_THRESHOLD = 0.2000`, `def taught_gate`)
 - `scripts/phase14_factset.py` — FOUND (allocation comment records the derivation)
+- `scripts/personalize_demo.py` — FOUND (contains `DECODE_KW = {`, `**DECODE_KW`)
 - `tests/test_phase14_scoring.py` — FOUND (contains `def test_gate_boundary`)
+- `tests/test_phase14_demo.py` — FOUND (contains
+  `def test_decode_settings_match_the_scoring_harness`)
 - commit `026b74b` — FOUND
 - commit `0425fdc` — FOUND
 - commit `ec6a5b0` — FOUND
 
 ---
 *Phase: 14-teach-then-recall-demo*
-*Stopped at: Task 3 (blocking human checkpoint)*
+*Completed: 3/3 tasks — verdict ADAPT recorded*
