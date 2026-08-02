@@ -370,3 +370,60 @@ frontier point (provenance exception, recorded in `## Pre-Registration`):
 | `results/phase13_frontier.png` | VIZ-04 |
 | `results/phase13_retention_samples.md` | D-12 qualitative evidence + adherence proxies |
 | `scripts/finetune_ab.py` @ `c3d942e` | the pre-registered constants and gate that produced the verdict |
+
+---
+
+## Phase 15 Addendum — Fisher/Δ Correlation Verdict (D-09/D-10/D-11)
+
+<!-- Phase 15 material, dated AFTER every Phase 13 result above. This section reports a
+NEW measurement computed read-side from `results/phase15_norms.json`; it does not reopen
+or amend Phase 13's pre-registered content — `## Pre-Registration`, `## Gate Verdict` and
+`## Verdict` above stand exactly as recorded. Same separation register as Phase 14's
+post-verdict ship decision: separate section, dated after the verdict, explicit that it
+amends nothing above it. -->
+
+**Recorded: 2026-08-02** — Phase 15 material appended to Phase 13 evidence.
+
+### Pre-Registration (locked before the artifact existed)
+
+Locked in `scripts/phase15_stats.py` at commit `0e1af98`; the artifact reader and BOTH verdict branches landed in the immediately following commit. No Phase-15 correlation existed at either commit, and `results/phase15_norms.json` did not exist.
+
+| Constant | Value | What it fixes |
+| --- | --- | --- |
+| Statistic | Spearman ρ | D-10/D-12: rank-based, chosen over Kendall on readability grounds — both are already robust to the heavy-tailed Fisher magnitudes |
+| Granularity | `N_CELLS` = 36 | D-10: 6 layers × 6 projections — exactly the cells the VIZ-03 figure draws |
+| Pairing | `fisher_mean_per_cell vs (naive_ratio - ewc_ratio)` | D-10: the Δ-reduction pairing uses BOTH arms so the penalty's own effect is isolated |
+| Predicted sign | `+1` (POSITIVE) | D-10: stated before the number; a negative or near-zero result is reported as plainly as a positive one |
+| Seed | `1337` | D-12: a LOCAL `np.random.default_rng` only; the global RNG streams are never touched |
+| Permutation resamples | `100000` | D-12 discretion, pinned so the p is byte-reproducible (measured 1.4 s at n = 36) |
+| Bootstrap resamples | `10000` | D-12 discretion, pinned so the CI is byte-reproducible (measured 0.4 s at n = 36) |
+| CI α | `0.05` | two-sided 95% percentile interval |
+| Spearman method | `average_rank_pearson_fp64` | average (tie-corrected) ranks — deliberately NOT `continual/fisher.py::_spearman`'s ordinal transform |
+| CI method | `percentile_bootstrap` | see the method note below |
+| Gate rule | EWC dodges high-Fisher coordinates **iff** ρ > 0 **AND** the bootstrap CI excludes zero (`ci_lo > 0`); the boundary (`ci_lo == 0`) is a **FAIL** | D-11: the sign is gated, the magnitude is descriptive |
+
+**Gate arbitration (pre-registered).** The **bootstrap CI is the load-bearing half of the gate**; the permutation p is **descriptive** and never overrides it — a small p alongside a CI that spans zero is still a MISS.
+
+**Bootstrap method note (pre-registered).** The percentile bootstrap is known to be biased and anti-conservative at small n. BCa would correct that at real complexity cost; percentile was chosen for D-12's ~15-lines-of-numpy budget and the bias is named here rather than silently omitted or silently upgraded.
+
+### Result
+
+- Spearman ρ = **0.801544** (`average_rank_pearson_fp64`, n = 36)
+- 95% CI = **[0.597984, 0.920291]** (`percentile_bootstrap`, 10000 resamples, seed 1337)
+- Permutation p = **0.000010** (100000 shuffles, seed 1337) — descriptive only, per the gate arbitration above
+- Degenerate (zero-variance) bootstrap resamples dropped: **0** of 10000
+- Source artifact: `results/phase15_norms.json` @ git_sha `d1e9eee21062976c398474324a513269ea78846e`, built `2026-08-02`
+
+### Verdict
+
+**GATE PASSES** — the correlation carries the pre-registered positive sign and its 95% CI excludes zero.
+
+The magnitude remains descriptive: *the sign is the falsifiable claim; the magnitude is reported honestly given n = 36 and is not itself pass/fail.* ROADMAP SC2's "showing EWC visibly dodging high-Fisher coordinates" wording is supported at the level the gate tests — the sign — and no further.
+
+### Evidence Index Addendum
+
+| Artifact | Role |
+| --- | --- |
+| `scripts/phase15_stats.py` @ `0e1af98` | the pre-registered rule, seed, sign and gate that produced this verdict |
+| `results/phase15_norms.json` | the D-05 committed norms artifact — the 36 Fisher/Δ cell pairs this verdict is computed from |
+
