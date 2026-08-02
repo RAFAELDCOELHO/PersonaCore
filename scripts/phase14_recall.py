@@ -45,11 +45,14 @@ Run: ``python scripts/phase14_recall.py`` (inside the Python 3.11 venv, on the M
 
 import os
 import pathlib
+import re
 
 # An uncovered MPS op falls back to CPU rather than crashing the run (T-05-04 precedent).
 # Set BEFORE the first torch import anywhere in the process — including the one the harness half
 # (plan 14-06) adds below, and including a demo that imports this module for its budget integer.
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
+from personacore.dialogue import build_recall_prompt, detokenize  # noqa: E402
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONVBASE_SLIM = _REPO_ROOT / "checkpoints" / "convbase_slim.pt"  # weights_only=True (load_slim)
@@ -176,6 +179,164 @@ def assert_values_fit(tok, values):
                 f"token census has drifted from the tokenizer — re-derive the budget before "
                 f"running, or a working memory will score as a recall failure."
             )
+
+
+# =====================================================================================
+# ===== D-10 SCORING RULES + the D-18 shared context-dump renderer (plan 14-05) =====
+# =====================================================================================
+#
+# Every rule below is a module-level PURE function, so `importlib` can load and test it without
+# running anything (the `finetune_ab.py:112-122` gate-as-pure-function precedent).
+
+_WHITESPACE_RE = re.compile(r"\s+")
+_EDGE_PUNCT_RE = re.compile(r"^[^\w]+|[^\w]+$")
+
+# Optional SECOND contradiction signal (D-10 / 14-RESEARCH Pattern 6). Reported separately, never
+# gated. See `has_hedging`.
+HEDGING_RE = re.compile(r"\bor\b|maybe|i think|actually")
+
+
+def normalize(text):
+    """D-10's scoring normalizer: lowercase -> ``detokenize`` -> collapse whitespace -> strip edges.
+
+    ``detokenize`` is imported from ``personacore.dialogue`` — the project's single source of truth
+    for text normalization — and is never reimplemented here.
+
+    **Collapsing whitespace is necessary, not cosmetic.** Byte-level BPE can surface a value with an
+    interior space or a fragment artifact; the measured case is ``'i am a mort of musician'``
+    (14-RESEARCH Pattern 6), where a run of whitespace lands inside what should be one word. Skip
+    the collapse and a correct recall scores as a miss.
+
+    This deliberately duplicates ``phase14_factset.normalize_for_match``'s composition rather than
+    importing it: the fact-set module is the LAZY-IMPORT boundary (see the module docstring), so a
+    module-level import of it would put the locked fact strings in the demo process, and a
+    per-call import inside this function would do the same on the first call.
+    ``tests/test_phase14_scoring.py::test_normalizer_agrees_with_the_gate_normalizer`` pins the two
+    to identical behavior, so the duplication cannot drift.
+    """
+    return _EDGE_PUNCT_RE.sub("", _WHITESPACE_RE.sub(" ", detokenize(text.lower())).strip())
+
+
+def contains_value(completion, value):
+    """D-10's gate: case-insensitive, whitespace-collapsed substring containment. The boundary.
+
+    **Why substring and not id-subsequence.** BPE is context-dependent at merge boundaries, so a
+    value's id sequence differs between ``...named zorp`` and ``zorp...`` — the same value tokenizes
+    two ways depending on what precedes it. An id-subsequence gate would score those differently,
+    which is a tokenizer artifact and not a recall difference. Id-subsequence is at best a
+    diagnostic; it is used that way in ``assert_no_value_in_prompt``, where a false positive costs
+    nothing and a false negative would be a leak.
+    """
+    return normalize(value) in normalize(completion)
+
+
+def score_question(completions, value):
+    """``(k, n)`` — the number of completions containing the value, out of how many were drawn.
+
+    PITFALLS-12: the reported number is a success RATE over held-out phrasings x multiple decode
+    seeds, never a single hand-picked transcript. Aggregation over the taught and held-out tiers
+    happens separately (D-10), and the soft tier is reported apart from both (D-05).
+    """
+    return sum(contains_value(c, value) for c in completions), len(completions)
+
+
+def find_contradictions(completion, value, lexicon):
+    """D-10's MECHANICAL contradiction detector — the competing values found, sorted.
+
+    A completion is a contradiction event iff it contains ``value`` AND at least one OTHER string
+    from ``lexicon``. A completion missing the correct value entirely is a wrong answer, not a
+    contradiction, and returns ``[]``.
+
+    The lexicon is ``LOCKED_VALUES | {f.value for f in GATE_REJECTED_CANDIDATES}`` — committed,
+    auditable, pre-existing material produced by plan 14-02's gate, requiring ZERO new editorial
+    judgment. That property is the whole reason the stricter contradiction-as-failure gate was
+    rejected: a competing value the detector must spot is exactly a plausible same-slot alternative,
+    which is precisely what every rejected candidate already is. A hand-curated per-slot list would
+    reintroduce the judgment call D-10 exists to avoid.
+
+    The metric is descriptive and has no gate attached — the same register Phase 13 used for the
+    79/70 role-token leakage that qualified what its retention gate could claim. A contradiction
+    count never fails this phase; it qualifies what the recall rate is allowed to mean.
+    """
+    if not contains_value(completion, value):
+        return []
+    target = normalize(value)
+    competing = {
+        other
+        for other in lexicon
+        if normalize(other) != target and contains_value(completion, other)
+    }
+    return sorted(competing)
+
+
+def has_hedging(completion):
+    """Optional SECOND contradiction signal: hedging language (``or`` / ``maybe`` / ``i think``).
+
+    Reported SEPARATELY and never gated — it qualifies a contradiction count, it does not produce
+    one. Any residual contradiction that needs human review falls back to D-03's quoted-evidence
+    discipline: every contradiction is traceable to the exact completion text in the committed
+    report, never an unlogged tally.
+    """
+    return HEDGING_RE.search(normalize(completion)) is not None
+
+
+def render_context_dump(tok, question, *, source):
+    """The D-18 SHARED context-dump renderer — three lines, one format, two callers.
+
+    ``scripts/phase14_recall.py``'s committed evidence and ``scripts/personalize_demo.py``'s live
+    token panel BOTH call this function, so the panel and the dump cannot silently diverge from
+    each other or from what the model actually receives. That is D-18 in full: never a parallel
+    reimplementation, structurally enforced rather than agreed by convention. A byte-identity
+    regression test in ``tests/test_phase14_demo.py`` pins the two renders against each other.
+
+    The id list comes straight from ``build_recall_prompt`` and is rendered directly: no
+    pretty-printing that could reorder or elide ids, no re-encoding for display.
+
+    ``render_context_dump(tok, "", source=...)`` yields the empty-question scaffold 14-UI-SPEC
+    renders at startup — ``ids   (3) : [8187, 8185, 8186]``, a bare ``<|system|>``, an empty user
+    turn, and the assistant handoff.
+    """
+    ids = build_recall_prompt(tok, question)
+    count = f"({len(ids)})"
+    return "\n".join(
+        (
+            f"ids{count:>6} : {ids!r}",
+            f"decoded   : {tok.decode(ids)}",
+            f"source    : {source}",
+        )
+    )
+
+
+def _is_contiguous_subsequence(haystack, needle):
+    """True iff ``needle`` appears as a CONTIGUOUS run inside ``haystack`` (both id lists)."""
+    span = len(needle)
+    return any(haystack[i : i + span] == needle for i in range(len(haystack) - span + 1))
+
+
+def assert_no_value_in_prompt(tok, question, values):
+    """14-RESEARCH Pattern 8 clean-room proof: no fact value crossed into the model's context.
+
+    Checked at BOTH levels for every value: the normalized string is absent from the decoded prompt,
+    and the value's encoded id sequence is not a contiguous run inside the prompt ids. The string
+    check alone can miss a leak that survives detokenization differently; the token check cannot.
+
+    ``values`` is a PARAMETER, never a module-level constant — this module holds no fact strings at
+    import time (see the LAZY-IMPORT RULE in the module docstring). The caller in ``main()`` passes
+    them in from the lazily-imported fact set.
+    """
+    ids = build_recall_prompt(tok, question)
+    decoded = normalize(tok.decode(ids))
+    for value in values:
+        _prove(
+            normalize(value) not in decoded,
+            f"value {value!r} appears in the decoded prompt for question {question!r} — the fact "
+            f"is in context, which falsifies the claim at the moment it is demonstrated",
+        )
+        _prove(
+            not _is_contiguous_subsequence(ids, tok.encode(value)),
+            f"value {value!r} appears as a contiguous id run in the prompt for question "
+            f"{question!r} — a token-level leak the decoded-string check did not catch",
+        )
 
 
 # =====================================================================================
