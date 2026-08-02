@@ -3,10 +3,11 @@
 This file has TWO halves. The BINS half (below) renders the taught template families over an
 arm's facts, encodes every episode through ``encode_dialogue``, and writes the arm-scoped
 ``uint16``/``uint8`` bin pair that ``train()``'s only masked data path consumes. The TRAINING
-half is plan 14-07's task and lands in the marked section at the bottom. The two halves copy
-two different analogs on purpose — the bins half copies ``scripts/prepare_dialog_corpus.py``,
-the training half will copy ``scripts/train_adapter_smoke.py`` — so their registers are kept
-apart rather than interleaved.
+half (the marked section at the bottom) loads the frozen conversational base, injects LoRA,
+freezes everything else, trains on those masked bins, proves the base is bit-untouched, and
+exports the adapter. The two halves copy two different analogs on purpose — the bins half
+copies ``scripts/prepare_dialog_corpus.py``, the training half copies
+``scripts/train_adapter_smoke.py`` — so their registers are kept apart rather than interleaved.
 
 **Masking regime — Phase 14 REVERSES Phase 12's verdict, by design, not by drift.** Phase 12
 measured stage-2 conversational LM tuning and chose UNMASKED training (loss on BOTH speakers),
@@ -28,6 +29,11 @@ SECURITY: every file this half reads is the project's OWN trusted material —
 ``data/dialog_train.bin`` (this project's own encoded PersonaChat memmap). Nothing untrusted or
 foreign is read, and no ``torch.load`` happens in this half at all. Fact values are invented, so
 no real personal data enters ``data/`` (T-14-05); ``data/`` is gitignored regardless.
+The TRAINING half adds exactly one deserialization: ``torch.load(CONVBASE_BEST,
+weights_only=False)`` on this project's OWN resume checkpoint (T-14-04), which must stay
+``weights_only=False`` because it carries pickled optimizer/RNG/numpy objects. Nothing it writes
+inherits that posture — the SHAREABLE adapter goes out through ``export_adapter``, so every
+consumer (harness, demo) reads it back under the ``weights_only=True`` ``load_adapter`` contract.
 
 Every proof check below is an explicit ``raise SystemExit`` and never an ``-O``-strippable bare
 check, so a failure exits non-zero even under ``PYTHONOPTIMIZE``.
@@ -36,11 +42,13 @@ Run: ``python scripts/teach_persona.py {cal_first_person|cal_first_person_replay
 cal_second_person|real}`` (inside the Python 3.11 venv, on the M3).
 """
 
+import math
 import os
 import pathlib
 import re
 import sys
 import time
+from dataclasses import asdict
 
 # An uncovered MPS op falls back to CPU rather than crashing the run (T-05-04 precedent).
 # Set BEFORE importing torch so the backend honors it for the whole process.
@@ -50,16 +58,31 @@ import numpy as np  # noqa: E402
 import phase14_factset as fs  # noqa: E402  (sibling script; scripts/ is sys.path[0])
 import torch  # noqa: E402  (must follow the MPS-fallback env set above)
 
+from personacore.checkpoint import export_adapter  # noqa: E402
+from personacore.config import ModelConfig, RuntimeConfig, TrainConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt, encode_dialogue  # noqa: E402
+from personacore.evaluation import masked_perplexity  # noqa: E402
+from personacore.lora import (  # noqa: E402
+    LoRAConfig,
+    adapter_disabled,
+    inject_lora,
+    lora_state_dict,
+    mark_only_lora_trainable,
+    snapshot_params,
+)
+from personacore.model import GPT  # noqa: E402
+from personacore.preflight import preflight_device  # noqa: E402
 from personacore.provenance import git_sha  # noqa: E402
 from personacore.seeding import seed_everything  # noqa: E402
 from personacore.tokenizer import from_json  # noqa: E402
+from personacore.training import train  # noqa: E402
 from personacore.training.data import get_batch_memmap_masked  # noqa: E402
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONVBASE_BEST = _REPO_ROOT / "checkpoints" / "convbase_best.pt"  # own trusted checkpoint
 TOKENIZER_PATH = _REPO_ROOT / "artifacts" / "tokenizer.json"  # FROZEN — never retrain
 FACTSET_REPORT = _REPO_ROOT / "results" / "phase14_factset_report.md"  # carries the D-06 verdict
+CALIBRATION_REPORT = _REPO_ROOT / "results" / "phase14_calibration_report.md"  # W-02, real arm only
 DIALOG_TRAIN_BIN = _REPO_ROOT / "data" / "dialog_train.bin"  # replay source (read-only)
 DIALOG_TRAIN_MASK = _REPO_ROOT / "data" / "dialog_train_mask.bin"
 DIALOG_VAL_BIN = _REPO_ROOT / "data" / "dialog_val.bin"  # D-11.2 collateral metric (14-07)
@@ -125,13 +148,26 @@ def _require_go_verdict(report_path):
 
 
 def arm_outputs(arm):
-    """Name-scoped write targets for one arm — no two arms ever share a path."""
+    """Name-scoped write targets for one arm — no two arms ever share a path.
+
+    ONE deliberate exception to the ``phase14_{arm}`` naming: the ``real`` arm's adapter is
+    ``checkpoints/persona_adapter.pt``, not ``phase14_real_adapter.pt``. That is the SHIPPABLE
+    persona file, and both downstream consumers already hardcode that name —
+    ``scripts/phase14_recall.py``'s ``ADAPTER_PATH`` (plan 14-06) and the Gradio demo (plan
+    14-08). The calibration arms keep their scoped names because they are disposable evidence,
+    never shipped. Disjointness across every arm pair is preserved and CI-tested.
+    """
+    adapter = (
+        _REPO_ROOT / "checkpoints" / "persona_adapter.pt"
+        if arm == "real"
+        else _REPO_ROOT / "checkpoints" / f"phase14_{arm}_adapter.pt"
+    )
     return {
         "bin": _REPO_ROOT / "data" / f"persona_{arm}_train.bin",
         "mask": _REPO_ROOT / "data" / f"persona_{arm}_train_mask.bin",
         "csv": _REPO_ROOT / "results" / f"phase14_{arm}" / "run.csv",
         "checkpoint": _REPO_ROOT / "checkpoints" / f"phase14_{arm}_latest.pt",
-        "adapter": _REPO_ROOT / "checkpoints" / f"phase14_{arm}_adapter.pt",
+        "adapter": adapter,
     }
 
 
@@ -317,22 +353,18 @@ def arm_spec(arm):
     raise SystemExit(f"[teach_persona] unknown arm {arm!r} — expected one of {ARMS}")
 
 
-def main(argv=None):
-    argv = sys.argv[1:] if argv is None else argv
-    if len(argv) != 1 or argv[0] not in ARMS:
-        raise SystemExit(f"usage: python scripts/teach_persona.py {{{'|'.join(ARMS)}}}")
-    arm = argv[0]
+def build_arm_bins(arm, facts, family_ids, *, second_person=False, replay_ratio=0.0):
+    """Render, encode, write and prove one arm's teaching bins; return ``(tok, stats, paths)``.
 
-    verdict = _require_go_verdict(FACTSET_REPORT)
-    print(f"[teach_persona] D-06 verdict: {verdict} — proceeding to bins for arm {arm!r}")
-
-    facts, second_person, replay_ratio = arm_spec(arm)
+    The whole bins half behind one call, so the training half (below) has exactly one seam into
+    it and no arm can be trained on bins built by a different code path.
+    """
     outputs = arm_outputs(arm)
     refuse_if_exists([outputs["bin"], outputs["mask"]])
 
     seed_everything(SEED)
     tok = from_json(TOKENIZER_PATH)  # FROZEN production artifact — never retrain
-    episodes = render_episodes(facts, fs.TAUGHT_FAMILY_IDS, second_person=second_person)
+    episodes = render_episodes(facts, family_ids, second_person=second_person)
     started = time.time()
     stats = build_bins(tok, episodes, outputs["bin"], outputs["mask"], replay_ratio=replay_ratio)
     sanity_check(tok, arm, outputs["bin"], outputs["mask"], facts, stats)
@@ -344,23 +376,468 @@ def main(argv=None):
         f"[{stats['episode_len_min']}, {stats['episode_len_max']}]"
     )
     print(
-        f"[teach_persona] provenance: seed={SEED} git_sha={git_sha()} pid={os.getpid()} "
+        f"[teach_persona] bins provenance: seed={SEED} git_sha={git_sha()} pid={os.getpid()} "
         f"torch={torch.__version__} arm={arm} second_person={second_person} "
         f"replay_ratio={replay_ratio} mask_fraction={stats['mask_fraction']:.4f} "
         f"wall={time.time() - started:.1f}s "
         f"utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
     )
     print(f"[teach_persona] bins written (gitignored): {outputs['bin']} + {outputs['mask']}")
+    return tok, stats, outputs
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 1 or argv[0] not in ARMS:
+        raise SystemExit(f"usage: python scripts/teach_persona.py {{{'|'.join(ARMS)}}}")
+    arm = argv[0]
+
+    facts, second_person, replay_ratio = arm_spec(arm)
+    train_arm(
+        arm,
+        facts=facts,
+        family_ids=fs.TAUGHT_FAMILY_IDS,
+        second_person=second_person,
+        replay_ratio=replay_ratio,
+    )
 
 
 # =====================================================================================
-# ===== TRAINING HALF — plan 14-07 lands here (copies scripts/train_adapter_smoke.py) =====
+# ===== TRAINING HALF — copies scripts/train_adapter_smoke.py, NOT the bins half =====
 # =====================================================================================
 #
-# Deliberately empty. 14-07 adds the load -> inject_lora -> mark_only_lora_trainable ->
-# snapshot_params canary -> train(penalty_fn=None) -> export_adapter chain plus
-# CALIBRATION_DECISION_RULE and lock_family_allocation. Keep it below this line so the two
-# analogs' registers stay separate.
+# load -> inject_lora -> mark_only_lora_trainable -> snapshot_params -> train(penalty_fn=None)
+# -> canary -> export_adapter. Everything below this line follows the adapter-smoke register.
+
+# --- Recipe constants (each carries its provenance) ---
+
+# LORA-01 / Phase 9 production defaults r=8, alpha=16.0. At the convbase shape (6 layers,
+# n_embd=384) that is 36 wrapped projections (6 per block) and 331,776 trainable parameters
+# (r * n_layer * 18 * n_embd) — the ~1.35 MB persona file. Both numbers are asserted below.
+LORA_CFG = LoRAConfig()
+
+# The adapter-run learning-rate band from 09-RESEARCH Pattern 3. A/B are the ONLY trainable
+# tensors, so an aggressive rate cannot damage the base — the worst case is a bad adapter,
+# which is deletable, and the canary below proves the base never moved either way.
+LR = 3e-4
+
+# Adapter runs MUST override TrainConfig's 0.1 default: weight decay on A/B fights the low-rank
+# update (scripts/train_adapter_smoke.py, 09-RESEARCH Pattern 3).
+WEIGHT_DECAY = 0.0
+
+BATCH_SIZE = 8
+# 14-RESEARCH F5 arithmetic: BATCH_SIZE * BLOCK_SIZE = 8 * 256 = 2,048 tokens/step against a
+# ~8,200-token teaching corpus is ~25% of the corpus per step, so 200 steps is ~50 epochs — the
+# deliberate overfit ARCHITECTURE Anti-pattern 6 prescribes for weight-based memory.
+# MAX_STEPS is one of the numbers the CALIBRATION run MEASURES (Assumption A3), not a number
+# this plan claims to know; it is deliberately NOT pinned by a test for that reason.
+MAX_STEPS = 200
+WARMUP_STEPS = 20
+EVAL_INTERVAL = 10  # 20 curve points over the run — the collateral-collapse trace, not a gate
+CHECKPOINT_INTERVAL = 50  # a killed run loses <= 50 steps; 200 steps needs no heavier cadence
+
+
+def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
+    """Build one arm's bins, train ONLY its LoRA parameters on them, and export the adapter.
+
+    Returns a dict carrying the arm paths, the bins stats, the final train loss, and the
+    adapter-ON/adapter-OFF masked dialogue-val PPL pair (the no-collateral-collapse endpoint).
+    """
+    verdict = _require_go_verdict(FACTSET_REPORT)
+    print(f"[teach_persona] D-06 verdict: {verdict} — proceeding with arm {arm!r}")
+    if arm == "real":
+        # W-02: the real run additionally gates on the CALIBRATION verdict. The gate is
+        # arm-conditional on purpose — the calibration arms are what PRODUCE that report, so
+        # gating them on it would be a deadlock. The asymmetry is deliberate, not an oversight.
+        cal_verdict = _require_go_verdict(CALIBRATION_REPORT)
+        print(f"[teach_persona] calibration verdict: {cal_verdict} — real arm cleared (W-02)")
+
+    paths = arm_outputs(arm)
+    # Refuse on ALL five targets up front, before a single token is written: discovering a
+    # recorded checkpoint only after rebuilding the bins would already have clobbered them.
+    refuse_if_exists(
+        [paths["bin"], paths["mask"], paths["csv"], paths["checkpoint"], paths["adapter"]]
+    )
+
+    summary = preflight_device(strict=True)  # CUDA-P100 -> MPS -> CPU raise, BEFORE the run
+    print(f"[teach_persona] preflight: {summary}")
+    runtime = RuntimeConfig()  # resolves the preflighted device (MPS on the M3, fp32, AMP off)
+
+    if not CONVBASE_BEST.exists():
+        raise SystemExit(
+            f"[teach_persona] missing {CONVBASE_BEST} — the frozen conversational base. Run the "
+            "Phase-12 conversational fine-tune (or restore the checkpoint) before teaching."
+        )
+    if not DIALOG_VAL_BIN.exists() or not DIALOG_VAL_MASK.exists():
+        raise SystemExit(
+            f"[teach_persona] missing {DIALOG_VAL_BIN} / {DIALOG_VAL_MASK} — the held-out "
+            "PersonaChat val pair IS the collateral-collapse metric (D-11.2 / D-15). Run "
+            "`python scripts/prepare_dialog_corpus.py` first."
+        )
+
+    tok, stats, paths = build_arm_bins(
+        arm, facts, family_ids, second_person=second_person, replay_ratio=replay_ratio
+    )
+    del tok  # the training half needs the bins, not the tokenizer
+
+    # Re-seed IMMEDIATELY before the GPT build: this seed owns the training data order (the
+    # finetune_ab.py provenance note), and the bins build above consumed numpy RNG in its smoke
+    # draw. Seeding once at the top would make the data order depend on the bins path.
+    seed_everything(SEED)
+
+    # weights_only=False: the FULL resume checkpoint carries pickled optimizer/RNG/numpy
+    # objects. TRUSTED-only read of the project's OWN checkpoint (T-14-04) — never a foreign
+    # file. The SHAREABLE artifact path stays weights_only=True via export_adapter.
+    blob = torch.load(CONVBASE_BEST, weights_only=False)
+    model_cfg = ModelConfig(**blob["model_config"])
+    model = GPT(model_cfg)
+    model.load_state_dict(blob["model"])  # LOAD BEFORE INJECT — the load-bearing ordering.
+
+    n_layer = blob["model_config"]["n_layer"]
+    n_embd = blob["model_config"]["n_embd"]
+    n_wrapped = inject_lora(model, LORA_CFG)
+    if n_wrapped != 6 * n_layer:
+        raise SystemExit(
+            f"[teach_persona] inject_lora wrapped {n_wrapped} projections, expected "
+            f"6 * n_layer = {6 * n_layer}"
+        )
+    mark_only_lora_trainable(model)
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # Closed-form census: 18 * r * n_embd per layer across the six projections (== 331,776 at
+    # the production shape r=8 / 6L / 384d).
+    expected_trainable = LORA_CFG.r * n_layer * 18 * n_embd
+    if trainable != expected_trainable:
+        raise SystemExit(
+            f"[teach_persona] trainable census {trainable} != r*n_layer*18*n_embd = "
+            f"{expected_trainable}"
+        )
+    print(f"[teach_persona] injected {n_wrapped} wrappers, {trainable} trainable params")
+
+    # Move BEFORE snapshotting: torch.equal raises on cross-device tensors, so the canary
+    # snapshot and the post-run params must share the training device.
+    model.to(runtime.device)
+    before = snapshot_params(model)
+
+    paths["csv"].parent.mkdir(parents=True, exist_ok=True)
+    paths["checkpoint"].parent.mkdir(parents=True, exist_ok=True)
+
+    final = train(
+        train_config=TrainConfig(
+            lr=LR,
+            warmup_steps=WARMUP_STEPS,
+            max_steps=MAX_STEPS,
+            batch_size=BATCH_SIZE,
+            weight_decay=WEIGHT_DECAY,
+            seed=SEED,
+        ),
+        runtime_config=runtime,
+        model=model,
+        model_config=model_cfg,
+        train_bin=paths["bin"],
+        # Phase 14 REVERSES Phase 12's unmasked verdict, by design and not by drift: PITFALLS-14
+        # is explicit that personalization/QA teaching must cover ANSWER tokens ONLY, or the
+        # model learns to imitate questions instead of answering them. Phase 12 trained a model
+        # OF a dialogue, which is a different objective on the same corpus shape.
+        train_mask_bin=paths["mask"],
+        # dialog_val.bin + its mask, so the IN-LOOP curve IS the collateral-collapse signal —
+        # D-11.2 and D-15 get a per-step trace instead of only endpoint numbers (14-RESEARCH
+        # Open Q3). Gate decisions still use the deterministic masked_perplexity sweep below and
+        # NEVER in-loop val_loss, whose 20-random-batch sampling noise would pollute a margin
+        # (Phase 12, plan 12-02).
+        val_bin=DIALOG_VAL_BIN,
+        val_mask_bin=DIALOG_VAL_MASK,
+        # penalty_fn=None is STRUCTURALLY FORCED here, not merely preferable, for two
+        # independent reasons (14-RESEARCH Pattern 3):
+        # (a) with the base frozen, base theta never moves, so the EWC quadratic anchor is a
+        #     constant — zero gradient into A/B, pure wasted compute, and a chart that would
+        #     credit EWC with retention frozen-base LoRA produces by construction (PITFALLS P7);
+        # (b) inject_lora renames every wrapped base parameter with a `.base.` infix while the
+        #     Fisher cache keys are vanilla-GPT names, and EWCPenalty.__call__ raises ValueError
+        #     on ANY fisher key missing from model.named_parameters() — so passing the existing
+        #     Fisher to an injected model is a hard crash, not a silent no-op.
+        penalty_fn=None,
+        log_path=paths["csv"],
+        eval_interval=EVAL_INTERVAL,
+        checkpoint_path=paths["checkpoint"],
+        checkpoint_interval=CHECKPOINT_INTERVAL,
+        return_final_loss=True,
+    )
+
+    # CANARY (LORA-02 / LORA-05): every trainable moved, every frozen base param bit-untouched.
+    # The explicit raises ARE the proof — non-zero exit even under python -O.
+    if not math.isfinite(float(final)):
+        raise SystemExit(f"[teach_persona] non-finite final loss {final!r} (PITFALLS P5)")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            if torch.equal(param, before[name]):
+                raise SystemExit(
+                    f"[canary] trainable {name} did not move — silent training failure (P5)"
+                )
+        elif not torch.equal(param, before[name]):
+            raise SystemExit(
+                f"[canary] frozen base param {name} changed — grad isolation broken (LORA-02)"
+            )
+    print("[teach_persona] canary passed: all lora_ moved, base bit-untouched")
+
+    # Fingerprint READ from the base checkpoint, never recomputed (provenance trio, D-02).
+    export_adapter(
+        paths["adapter"],
+        adapter=lora_state_dict(model),
+        lora_config=asdict(LORA_CFG),
+        base_fingerprint={
+            "git_sha": blob["git_sha"],
+            "step": blob["step"],
+            "val_loss": blob["val_loss"],
+        },
+    )
+    size_mb = paths["adapter"].stat().st_size / 1e6
+    print(f"[teach_persona] wrote {paths['adapter']} ({size_mb:.2f} MB)")
+
+    # The no-collateral-collapse endpoint: the SAME deterministic sweep with the adapter on and
+    # off, in one process on one set of weights, so the only difference is the LoRA enabled flag.
+    ppl_on, scored_on = masked_perplexity(
+        model, DIALOG_VAL_BIN, DIALOG_VAL_MASK, BLOCK_SIZE, runtime.device
+    )
+    with adapter_disabled(model):
+        ppl_off, scored_off = masked_perplexity(
+            model, DIALOG_VAL_BIN, DIALOG_VAL_MASK, BLOCK_SIZE, runtime.device
+        )
+    if scored_on != scored_off:
+        raise SystemExit(
+            f"[teach_persona] adapter-on scored {scored_on:,} targets but adapter-off scored "
+            f"{scored_off:,} — the two sweeps must cover the identical target set."
+        )
+
+    print(
+        f"[teach_persona] masked dialogue-val PPL: adapter OFF {ppl_off:.4f} / ON {ppl_on:.4f} "
+        f"({(ppl_on - ppl_off) / ppl_off:+.2%} over {scored_on:,} scored targets)"
+    )
+    print(
+        f"[teach_persona] run provenance: arm={arm} seed={SEED} lr={LR} "
+        f"weight_decay={WEIGHT_DECAY} batch_size={BATCH_SIZE} max_steps={MAX_STEPS} "
+        f"warmup_steps={WARMUP_STEPS} block_size={BLOCK_SIZE} "
+        f"base_fingerprint=(git_sha={blob['git_sha']}, step={blob['step']}, "
+        f"val_loss={blob['val_loss']}) driver_git_sha={git_sha()} pid={os.getpid()} "
+        f"device={runtime.device} torch={torch.__version__} "
+        f"second_person={second_person} replay_ratio={replay_ratio} "
+        f"mask_fraction={stats['mask_fraction']:.4f} final_train_loss={float(final):.4f} "
+        f"utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
+    )
+    return {
+        "arm": arm,
+        "paths": paths,
+        "stats": stats,
+        "final_train_loss": float(final),
+        "ppl_adapter_on": float(ppl_on),
+        "ppl_adapter_off": float(ppl_off),
+        "scored_targets": int(scored_on),
+    }
+
+
+# =====================================================================================
+# ===== CALIBRATION_DECISION_RULE — committed BEFORE the calibration run exists =====
+# =====================================================================================
+#
+# This block is committed BEFORE the calibration run produces a single number, and git history
+# order is the pre-registration proof (D-09 condition 2 — the rule is never chosen after seeing
+# the results; `git log -S CALIBRATION_DECISION_RULE -- scripts/teach_persona.py` shows the
+# rule commit predating every calibration output). ONE calibration run answers four questions —
+# the recall threshold (D-09), the family allocation (D-14), the replay verdict (D-15), and the
+# register verdict (D-21) — from one measured source, instead of four separately-justified
+# guesses. Every literal below carries its provenance in its own comment, and every function's
+# docstring names its boundary behavior explicitly (the finetune_ab.py:112-122 register).
+
+# Reused BLIND from Phase 12's noise-floor discipline: the same deliberately conservative
+# default, NOT re-chosen for Phase 14.
+CAL_MARGIN_K = 2
+
+# The fraction of the calibration ceiling the real run's threshold is set to. The calibration
+# fact set is disjoint and disposable, so its measured rate is a CEILING estimate, not a target;
+# discounting it is what keeps the real threshold from being a number chosen to be passed.
+THRESHOLD_DISCOUNT = 0.60
+
+# Below this the metric is not distinguishable from the closed-book control at
+# N_SEEDED_SAMPLES = 8, so a lower "threshold" would be meaningless rather than lenient.
+THRESHOLD_FLOOR = 0.20
+
+# The recall gain below which adding taught families is judged saturated (D-14's "recall
+# saturating with fewer taught instances than the literature's ~10-per-fact figure suggests").
+# 14-RESEARCH Pattern 5 records ~10/fact as a floor OBSERVED AT 7B+ SCALE, not a target for 13.9M.
+SATURATION_DELTA = 0.05
+
+# The per-family standard deviation of held-out recall above which the real set needs MORE
+# held-out families, even at the cost of fewer taught families than the injection literature
+# recommends (D-14, second clause).
+HELDOUT_VARIANCE_TRIGGER = 0.15
+
+# The fractional increase in masked dialogue val PPL (adapter ON vs OFF, held-out PersonaChat)
+# above which replay becomes MANDATORY for the real run (D-15). Below it the real run proceeds
+# WITHOUT replay, preserving the full teaching signal rather than diluting it against an
+# unconfirmed risk.
+COLLAPSE_PPL_TRIGGER = 0.10
+
+# The absolute held-out recall margin by which first-person must beat second-person to count as
+# a win (D-21 condition 3, written before the arm runs).
+REGISTER_WIN_MARGIN = 0.10
+
+# Both trigger comparisons round the measured ratio to this many decimals BEFORE comparing.
+# Without it the boundary is not a boundary: a PPL pair of (2.0, 2.2) — an exact 10% increase
+# in decimal — reconstructs in binary as 0.10000000000000009, which is strictly greater than
+# COLLAPSE_PPL_TRIGGER and would TRIP a rule whose stated semantics are "the boundary does not
+# trigger". Ten decimals is six orders of magnitude coarser than double-precision noise (~1e-16)
+# and six orders finer than any effect these gates can resolve, so the rounding decides only
+# cases that are exactly on the line and never a real measurement.
+RATIO_DECIMALS = 10
+
+
+def lock_thresholds(cal_taught_rate, cal_heldout_rate):
+    """D-09: turn the calibration arm's measured recall rates into the real run's thresholds.
+
+    Each threshold is ``max(THRESHOLD_FLOOR, round(rate * THRESHOLD_DISCOUNT, 4))``. What is
+    pre-registered is the PROCEDURE, not a blind number — the number cannot exist before the
+    calibration run, but the rule that produces it must, or the threshold is just a value chosen
+    to be cleared. The returned pair becomes ``phase14_recall.TAUGHT_THRESHOLD`` /
+    ``HELDOUT_THRESHOLD`` in plan 14-09.
+
+    Boundary: the floor CLAMPS, it does not reject — a calibration rate low enough to discount
+    below ``THRESHOLD_FLOOR`` yields exactly ``THRESHOLD_FLOOR``, and the fact that the floor
+    bound rather than the discount is what plan 14-09's report must state.
+
+    Returns:
+        ``(taught_threshold, heldout_threshold)``.
+    """
+    return (
+        max(THRESHOLD_FLOOR, round(cal_taught_rate * THRESHOLD_DISCOUNT, 4)),
+        max(THRESHOLD_FLOOR, round(cal_heldout_rate * THRESHOLD_DISCOUNT, 4)),
+    )
+
+
+def _refuse_move(taught, family_id):
+    """Why ``family_id`` may NOT move off the taught side, or None when the move is legal.
+
+    The four D-14 invariants live here so ``lock_family_allocation`` reads as the policy and
+    this reads as the contract.
+    """
+    if family_id == "F4":
+        return (
+            "D-22 keeps F4 (reversed-direction forms) on the taught side — the reversal curse "
+            "is a literature failure mode, and moving it would poison the evidence D-20(c) "
+            "depends on"
+        )
+    remaining = set(taught) - {family_id}
+    if len(remaining) < 2:
+        return f"at least two families must remain taught (would leave {len(remaining)})"
+    lo, hi = fs.PARAPHRASES_PER_FACT_TARGET
+    for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS:
+        count = sum(len(fs.render_family(fid, fact)) for fid in remaining)
+        if not lo <= count <= hi:
+            return (
+                f"fact {fact.id!r} would drop to {count} taught paraphrases, outside DEMO-05's "
+                f"[{lo}, {hi}] band (W-03) — build_bins proof #5 would SystemExit the real run"
+            )
+    return None
+
+
+def lock_family_allocation(per_family_gain, heldout_family_std, taught_ids, heldout_ids):
+    """D-14: apply the calibration measurements to the taught/held-out family allocation.
+
+    A taught family whose marginal recall gain is ``< SATURATION_DELTA`` MOVES to the held-out
+    side; if ``heldout_family_std > HELDOUT_VARIANCE_TRIGGER`` the lowest-gain taught family
+    also moves. Candidates are considered lowest-gain first.
+
+    **It MOVES families between the two sides and NEVER drops one (B-02).**
+    ``tests/test_phase14_teaching.py::test_families_disjoint`` asserts that the union of the two
+    sets is every key of ``FAMILIES``, and that assertion is the AUTHORITATIVE allocation
+    contract for the phase. Dropping a saturated family would shrink the union and turn that
+    test red at wave 6 with nothing saying which contract wins. Moving is also the honest choice
+    on the merits: a saturated taught family is precisely a family the model no longer needs
+    teaching on, so moving it to held-out INCREASES the evidence for the
+    learning-vs-memorization split D-20(c) depends on, where dropping it would discard that
+    evidence.
+
+    Four invariants hold regardless of the numbers:
+      1. the two sets stay disjoint AND their union stays every key of ``FAMILIES`` (B-02);
+      2. ``F4`` stays taught (D-22 — the reversal curse is a literature failure mode);
+      3. at least two families remain on each side;
+      4. every locked fact's taught-instance count stays inside
+         ``phase14_factset.PARAPHRASES_PER_FACT_TARGET`` (W-03). A move that would push any fact
+         below the band's lower bound is REFUSED — without this, a saturation-driven move could
+         trip ``build_bins`` proof #5 and ``SystemExit`` the wave-8 real run with no remedy.
+
+    Boundary: a gain of exactly ``SATURATION_DELTA`` is NOT saturated (strict ``<``), and a std
+    of exactly ``HELDOUT_VARIANCE_TRIGGER`` does NOT trigger the extra move (strict ``>``).
+
+    Refusals are PRINTED rather than returned, so the shape stays a plain ``(taught, heldout)``
+    pair for plan 14-09's caller; that plan captures this driver's stdout into
+    ``results/phase14_calibration_report.md``, which is where a refused move is recorded.
+
+    Returns:
+        ``(taught_ids, heldout_ids)`` as sets.
+    """
+    taught, heldout = set(taught_ids), set(heldout_ids)
+    candidates = sorted(
+        (fid for fid in taught if per_family_gain.get(fid, 0.0) < SATURATION_DELTA),
+        key=lambda fid: (per_family_gain.get(fid, 0.0), fid),
+    )
+    if heldout_family_std > HELDOUT_VARIANCE_TRIGGER and taught:
+        lowest = min(taught, key=lambda fid: (per_family_gain.get(fid, 0.0), fid))
+        if lowest not in candidates:
+            candidates.append(lowest)
+
+    for family_id in candidates:
+        refusal = _refuse_move(taught, family_id)
+        if refusal is not None:
+            print(f"[teach_persona] allocation: REFUSED moving {family_id} to held-out — {refusal}")
+            continue
+        taught.discard(family_id)
+        heldout.add(family_id)
+        print(
+            f"[teach_persona] allocation: moved {family_id} taught -> held-out "
+            f"(gain {per_family_gain.get(family_id, 0.0):.4f} < {SATURATION_DELTA})"
+        )
+    return taught, heldout
+
+
+def replay_required(ppl_adapter_off, ppl_adapter_on):
+    """D-15: does the real run need PersonaChat replay mixed into its teaching bin?
+
+    True iff the adapter's fractional increase in masked dialogue-val PPL exceeds
+    ``COLLAPSE_PPL_TRIGGER``. The two numbers must come from D-15's PAIRED arms — the same
+    prompts, the same weights, one process, only the LoRA enabled flag differing — or the
+    comparison measures run-to-run noise instead of the adapter.
+
+    Boundary: exactly at the trigger, replay is NOT required (strict ``>`` — the rule dies under
+    ``>=``). The ratio is rounded to ``RATIO_DECIMALS`` first so that "exactly at the trigger"
+    means the decimal value, not whichever double happens to bracket it.
+    """
+    ratio = (ppl_adapter_on - ppl_adapter_off) / ppl_adapter_off
+    return round(ratio, RATIO_DECIMALS) > COLLAPSE_PPL_TRIGGER
+
+
+def first_person_wins(fp_heldout_rate, sp_heldout_rate):
+    """D-21 condition 3: does first-person register beat second-person on held-out recall?
+
+    True iff the absolute margin exceeds ``REGISTER_WIN_MARGIN``.
+
+    A False result does NOT reopen D-01's register lock. D-01 rests on measured QUALITATIVE
+    evidence (14-RESEARCH F3/F5, including the "structure copied, content not" finding); this
+    arm measures only the head-to-head delta that decision was missing. A negative is reported
+    honestly under D-12's register — it is not license to re-author the teaching set mid-phase
+    after seeing the numbers, which is the exact move this whole block exists to prevent.
+
+    Boundary: exactly at the margin is NOT a win (strict ``>``), rounded to ``RATIO_DECIMALS``
+    for the same reason as ``replay_required``.
+    """
+    return round(fp_heldout_rate - sp_heldout_rate, RATIO_DECIMALS) > REGISTER_WIN_MARGIN
+
+
+# One name for plan 14-09 and the tests to reference, so the four derivations travel together.
+CALIBRATION_DECISION_RULE = (
+    lock_thresholds,
+    lock_family_allocation,
+    replay_required,
+    first_person_wins,
+)
 
 
 if __name__ == "__main__":
