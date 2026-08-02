@@ -829,3 +829,177 @@ off-topic dialogue cost even with replay, and without replay the collateral dama
 Every one of those bounds is reproduced verbatim from its source in
 `## Milestone 2 Limitations — Nine Honest Negatives, Quoted` below, which is the section to read
 before quoting any number from this one.
+
+## Milestone 2 Limitations — Nine Honest Negatives, Quoted
+
+**This section carries NINE honest negatives**, each reproduced in its source's exact wording —
+not summarized, not softened, not reordered for flow — so a reader learns every bound on the
+Milestone 2 claims without opening `results/`. Eight were locked when the section was scoped; the
+ninth (**L9**) was surfaced during Phase 15 research from data that predates this phase, and it is
+recorded here under the same policy as the other eight rather than appended as an afterthought,
+because a reader should be able to trace not just what each limitation says but when and how it
+entered the record.
+
+**Ordering is by which claim each limitation bounds** — never by severity and never by how
+comfortable each is to read, so the ordering itself does not editorialize. Where a source passage
+is long it is truncated **visibly**, with an ellipsis and a pointer to the full passage, rather
+than paraphrased to shorten. The blockquotes rewrap their sources' lines and prefix them with
+`> `; no word, digit, punctuation mark, emphasis marker or ellipsis has been altered.
+
+The `L1`–`L9` labels are the **stable identifiers** from the phase's source inventory, not
+positions in this list. They deliberately do not run in numeric order here, because the ordering
+is the claim-bound one and renumbering the entries to make the list read sequentially would break
+every reference to them elsewhere in the record.
+
+### Bounding "EWC mitigates forgetting"
+
+**L1 — no λ bought retention for free at the search budget.** From
+`results/finetune_smoke_report.md`, `## Stage 3 — λ Sweep (EWC-03)`, line 159, verbatim and
+unamended:
+
+> **EWC not demonstrable at this budget** (no λ satisfies both the within-margin rule and the
+> retention demonstrability guard) — surfaced, never massaged (pre-registered §8 all-fail
+> outcome: λ\* = None, demonstrable = False).
+
+The "§8" in that sentence is the pre-registered rule numbering inside
+`scripts/finetune_smoke.py`, used as a label throughout that report; there is no `## 8` heading to
+link to, which is why the section heading is cited instead.
+
+**L7 — the retention noise floor the gate is measured against was never re-verified at the
+production budget.** From `results/phase13_ab_report.md`, `## Threats to Validity` →
+`### 2. The noise floor's measurement regime — and where it does not reach`, lines 209-214, with
+its closing sentence from lines 220-223:
+
+> **Named limitation (D-05 obligation 2):** that floor was **NOT re-verified at the 4000-step
+> production budget**, and **NOT re-verified inside collapse dynamics** — it was measured in a
+> stable regime, on the masked arm, at a shorter budget, while both Phase-13 arms are unmasked
+> and one of them drifts by +6.42 PPL. **Seed-to-seed variance could plausibly scale with drift
+> magnitude**, and a floor measured in a stable regime would not capture that. Nothing here rules
+> that out.
+>
+> …
+>
+> That is corroboration from a free check, not a re-measurement — the honest re-measurement (a
+> 1337/2024 seed pair at 4000 unmasked steps, ~75 min) was not run.
+
+### Bounding "memory lives in the weights"
+
+**L4 — the question-fairness control is closer to total failure than to a modest disadvantage.**
+From `results/phase14_recall_report.md`, `## Control 1 — Question Fairness (D-11.1)`, line 378:
+
+> **Measured.** With each fact's own first-person statement in the `<|system|>` persona span, the
+> base (adapter off) scored **1/1944 = 0.0005** across 216 questions; 1 of those questions
+> produced at least one completion containing the value. This is the ONLY place in the entire
+> phase where a fact value legitimately appears in a prompt.
+
+**L2 — so a closed-book failure is no longer unambiguous evidence of absent memory.** L4 is the
+number; L2 is what it costs the claim. From the same file, `## Threats To Validity` →
+`### 3. The question-fairness control's limitation (D-20 (a))`, lines 566-571 (the full passage is
+at lines 398-401, under `### (a) What this control can no longer prove`):
+
+> See `## Control 1 — Question Fairness (D-11.1)`, part (a). In-context answerability could not be
+> established at this scale, so a closed-book failure **in isolation** is not unambiguous evidence
+> of absent memory. The adapter-on / adapter-off differential is unaffected (part (b)), but any
+> reading of a single failed question as "the model does not know this" is out of scope.
+
+**L6 — held-out generalization is scoped, not universal.** From the same file,
+`## Threats To Validity` → `### 1. The held-out set is deliberately scoped (D-22)`, lines 555-558:
+
+> **Consequence for what a clean held-out result may claim:** it demonstrates generalization
+> **within that scope** — across held-out template families in the taught direction — and **not**
+> immunity to every documented fine-tuning limitation. This report makes no claim about reversed
+> recall, because this phase did not measure it as a held-out property.
+
+**L5 — the headline recall number covers the proper-noun core only.** From the same file,
+`## Threats To Validity` → `### 2. The soft tier is excluded from the gate (D-05)`, lines 562-564:
+
+> See `## Soft Tier — Excluded From The Gate (D-05)`. Two of the taught facts contribute nothing to
+> either threshold, so the headline number describes the proper-noun core only — a narrower set
+> than "everything the adapter was taught."
+
+### Bounding "…without damaging the base"
+
+**L3 — without replay, teaching the persona collapsed dialogue perplexity, and replay mitigates
+rather than solves it.** From `results/phase14_calibration_report.md`,
+`## Derivation 3 — PersonaChat Replay (D-15)`, line 322, truncated visibly (the full paragraph
+continues at that line):
+
+> **What the paired arm shows replay actually BUYS, and what it costs.** Replay at ratio 1.0 moves
+> the collapse from +224.81% to +29.39% — a large mitigation — while taught recall falls from
+> 0.6825 to 0.4143, a fall of 0.2683. **The replay arm ITSELF still trips the trigger.** Replay at
+> this ratio reduces the collateral collapse but does not eliminate it, so 'replay required'
+> should not be read as 'replay solves it'.
+>
+> …
+
+**Mandatory context for the +224.81% figure.** That number carries a correction block in its own
+source at `results/phase14_calibration_report.md:289-307` (`WR-01`). The recorded figures are the
+**unmasked** ones — the code that produced the table called `masked_perplexity` without
+`forbid_ids`, while the D-11.2 control always passed it — and the dead-ids-forbidden
+re-measurement gives **+224.5330%** (and **+29.3364%** for the replay arm). That report's own
+ruling is that the numbers stay as recorded, because they are what was actually measured, and the
+verdict is not re-derived after the fact. Quoting +224.81% without saying the correction block
+exists would be exactly the softening this section is written to prevent.
+
+**L9 — the residual off-topic collapse that survived replay in the real run.** Recorded alongside
+the *passed* recall gate as a named qualification, not folded into it. From
+`results/phase14_recall_report.md`, `## Verdict`, line 585, truncated visibly:
+
+> (1) No-collateral-collapse (D-11 control 2): the taught persona measurably raises off-topic
+> dialogue cost (+27.16%) relative to the pre-adapter conversational base, but does not eliminate
+> the collapse signature entirely. The adapter reduces, rather than removes, deviation from
+> general conversational behavior on unrelated prompts.
+>
+> …
+
+L3 is the pre-replay calibration measurement and L9 is the post-replay real-run measurement —
+arguably its residual half, which is why they sit adjacent.
+
+### Bounding "13.9M-parameter from-scratch base"
+
+**L8 — 547 of 8192 ids are live, and about a fifth of the headline parameter count is dead
+embedding rows.** Carried forward from Milestone 1 unchanged. From `docs/REPORT.md` above,
+`## Decision: Byte-Level BPE from Scratch, Vocabulary Locked Before Model Sizing`, lines 61-67,
+with the parameter-count consequence from `## Results`, lines 373-375:
+
+> **What actually trained.** Training learned 283 of the 7,928 requested merges before the
+> bounded TinyStories corpus exhausted its mergeable pairs — the trainer itself warns
+> "corpus exhausted: learned 283 of 7928 requested merges; vocab_size=8192 has 7645 dead ids".
+> The *effective* vocabulary is therefore 547 live ids (256 bytes + 283 learned merges + 8
+> specials); the locked 8192-row table is reserved capacity. The trade-off is stated plainly:
+> shape stability for every downstream checkpoint, in exchange for 7645 dead rows the model
+> carries in its embedding table.
+>
+> …
+>
+> Of the headline count, 2,935,680 parameters (7645 dead rows × 384 dims, ~21%) are embedding
+> rows for ids that can never occur in the training data or be decoded — counted in the headline
+> because they are part of the shipped tensor.
+
+> **CORRECTION (Phase 15, recorded 2026-08-02 — the quoted v1.0 text above is NOT amended).** The
+> quoted passage attributes merge exhaustion to *"the bounded TinyStories corpus"*. That
+> attribution is wrong, and the v1.0 wording stands as written because recorded text in this
+> project is corrected by dated note, never edited in place.
+>
+> **The verification performed:** `scripts/train_tokenizer.py:31` sets
+> `CORPUS_PATH = _REPO_ROOT / "tests" / "fixtures" / "tiny_corpus.txt"`, and that fixture is
+> **11,469 bytes** — not the full TinyStories corpus the original wording implies. The frozen
+> production artifact `artifacts/tokenizer.json` (**5,648 bytes**, dated 2026-06-04) is the file
+> built from that fixture and is the tokenizer every checkpoint in this report was trained
+> through. Both sizes were confirmed against the files in this repository before this note was
+> written. The 283-merge / 547-live-id / 7645-dead-row consequences quoted above are **unchanged
+> and correct**; only the identity of the corpus that produced them was under-disclosed.
+>
+> **Provenance:** this was a tracked, open tech-debt item whose recorded home was this phase —
+> `.planning/STATE.md` Deferred Items (*"docs/REPORT.md under-discloses tokenizer training-corpus
+> identity (11.5KB fixture → 547 live ids) | open — natural home: DOC-02 honesty pass (Phase
+> 15)"*) and `.planning/milestones/v1.0-MILESTONE-AUDIT.md:18` (WR-04 / WARNING-3).
+>
+> **README.md carried the same misattribution** and, carrying no equivalent
+> stands-as-written protection, its v2.0 rewrite states the corrected attribution directly rather
+> than by note.
+
+**L8 is a capacity bound, not a correctness bound.** The dead rows are inert — they are masked out
+of the logits before sampling everywhere it matters — but they are counted in the headline
+parameter figure because they are part of the shipped tensor, and the effective vocabulary the
+model actually writes with is 547 ids.
