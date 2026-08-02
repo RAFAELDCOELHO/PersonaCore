@@ -265,7 +265,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 15-03-PLAN.md — VIZ-02 + VIZ-03 figures from the artifact only, with the D-07 AST + subprocess guard (Wave 3)
+- [x] 15-03-PLAN.md — VIZ-02 + VIZ-03 figures from the artifact only, with the D-07 AST + subprocess guard (Wave 3)
 - [ ] 15-04-PLAN.md — Compute the correlation and append the dated Phase 15 verdict to `results/phase13_ab_report.md` (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
@@ -300,4 +300,4 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete   | 2026-08-02 |
-| 15. Figures & Writeup | v2.0 | 2/8 | In Progress|  |
+| 15. Figures & Writeup | v2.0 | 3/8 | In Progress|  |
