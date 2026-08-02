@@ -31,3 +31,9 @@ tooling-wide decision rather than a Phase 15 change.
 
 **Suggested fix (one line, whenever someone picks it up):** point `Makefile:16` at
 `.venv/bin/ruff`, matching `Makefile:22`'s `format` target.
+
+**Update (Plan 15-04):** the stale-ruff false-positive list has grown to **two** files —
+`tests/test_gpt_lora_seam.py` (Phase 04) and now `tests/test_phase15_plots.py` (written by
+Plans 15-02/15-03). The pinned `.venv/bin/ruff` still reports `All checks passed!` and
+`138 files already formatted`, so both are 0.1.15-vs-0.15 disagreements, not real formatting
+defects. Noted only because a reader hitting `make lint` will now see two names, not one.
