@@ -1,0 +1,270 @@
+"""Teach-then-recall demo — memory that lives in the weights, with a live ON/OFF switch (DEMO-07).
+
+Run: ``python scripts/personalize_demo.py`` → http://127.0.0.1:7860 on a laptop CPU.
+
+Loads the FROZEN Phase-12 conversational base (``checkpoints/convbase_slim.pt``) plus a
+PRE-TRAINED persona adapter (``checkpoints/persona_adapter.pt``) and offers three things a
+reviewer can check on camera: a memory toggle, a one-way Reset, and a live panel showing the
+exact prompt token ids the model receives every turn.
+
+HONESTY LOCK (14-UI-SPEC, verbatim): This is a 13.9M-parameter model. Its answers are short and
+often wrong. What this demo shows is WHERE the memory lives — in 331,776 adapter parameters, not
+in this page's context — not how good the model is.
+
+OFFLINE GUARANTEE: zero outbound network calls. ``GRADIO_ANALYTICS_ENABLED=False`` is set BEFORE
+``import gradio`` (kills telemetry AND the startup version-check HTTP ping — 08-RESEARCH Pitfall
+5), ``analytics_enabled=False`` is passed too (belt and braces), and ``share=False`` binds
+localhost with no tunnel binary download. The theme's body font is overridden to the OS stack
+because the stock ``gr.themes.Default()`` body font is a ``GoogleFont``: an unmodified page
+instructs the BROWSER to fetch fonts.googleapis.com (measured — see ``THEME`` below). The server
+would still make zero calls, but a reviewer who opens devtools on a demo whose entire thesis is
+"fully on-device" would see a request to Google. ``build_demo().stylesheets == []`` pins it.
+
+SECURITY: both artifacts cross the ``weights_only=True`` choke points (``load_slim`` /
+``load_adapter``) — the restricted unpickler, ZERO code execution on load (T-14-22).
+``torch.load`` is never called directly here. ``artifacts/tokenizer.json`` is data-only JSON. The
+existing (0, 4096] ``max_new_tokens`` guard backs the slider, whose maximum is 256, so the guard
+is unreachable from the UI.
+
+CLEAN ROOM: this process holds NO locked fact value — not in a constant, not in a config, not in
+an example string, not in a comment. It imports an INTEGER (``RECALL_MAX_NEW_TOKENS``), not the
+answers. Teaching happened in a DIFFERENT ``python`` invocation (``scripts/teach_persona.py``),
+which is what makes PITFALLS-11 step 1 true by construction rather than by assertion (D-16).
+There is no Teach tab, and that is a closed decision. ``tests/test_phase14_demo.py`` asserts that
+neither the fact-set module nor the teaching module is in ``sys.modules`` after importing this
+module — the only check that can see a TRANSITIVE leak. The fact-set module's NAME is not even
+written in this file, so a grep for it over this source returns nothing at all.
+
+CONCURRENCY: the model is a build-scope object that the toggle MUTATES, so every model-touching
+event shares one ``concurrency_id`` and they serialize (14-RESEARCH Pitfall 10: a toggle flip
+landing mid-generation would produce a half-ON/half-OFF answer whose stamp and token panel both
+lie). A single local user is assumed; ``share=False`` plus localhost bounds the exposure.
+
+D-17: ``scripts/demo_app.py`` is NOT touched by this phase — not one byte. The offline/security
+boilerplate above is therefore DELIBERATELY duplicated rather than refactored into a shared
+helper. The mitigation for that duplication is a test, not a convention:
+``tests/test_phase14_demo.py::test_forbid_ids_parity`` compares this module's mask against the
+same ``undecodable_ids_mask`` call ``scripts/demo_app.py`` makes, and
+``test_demo_app_frozen`` pins that file against its commit.
+"""
+
+import os
+import pathlib
+import sys
+
+# Kill Gradio telemetry + the startup version-check ping BEFORE the import it affects
+# (08-RESEARCH Pitfall 5) — this line must precede `import gradio`.
+os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
+
+import gradio as gr  # noqa: E402  (must follow the analytics kill-switch above)
+
+from personacore.generation import undecodable_ids_mask  # noqa: E402  (kill-switch first)
+
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# 14-UI-SPEC's failure table, verbatim. Declared here rather than with the other failure
+# messages below because the budget import is the FIRST thing that can fail.
+MISSING_BUDGET_MSG = (
+    "Could not read RECALL_MAX_NEW_TOKENS from scripts/phase14_recall.py. This demo does not "
+    "derive its own token budget — it uses the scoring harness's, so the UI cannot be set below "
+    "the measured condition. Run the recall harness first."
+)
+
+# `scripts/` is sys.path[0] only when a script in it is run DIRECTLY; an importlib-loaded test
+# harness gets no such entry. Insert it explicitly so both paths reach `phase14_recall`.
+if str(_REPO_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+
+try:
+    # Module-level import is safe precisely because `phase14_recall`'s import-time surface is
+    # integers and pure functions only (14-05 <import_topology> rules 3 and 5): both of its
+    # cross-script edges are LAZY, so this pulls in neither the teaching module nor the
+    # fact-set module — and therefore no locked fact value enters this process.
+    from phase14_recall import (  # noqa: E402  (needs the sys.path insert above)
+        RECALL_MAX_NEW_TOKENS,
+        render_context_dump,
+    )
+except (ImportError, AttributeError) as exc:  # pragma: no cover - exercised by hand, not in CI
+    raise SystemExit(MISSING_BUDGET_MSG) from exc
+
+# `bool` is an `int` subclass, so `isinstance(True, int)` is True — exclude it explicitly rather
+# than let `True` pass as a token budget of 1.
+if (
+    not isinstance(RECALL_MAX_NEW_TOKENS, int)
+    or isinstance(RECALL_MAX_NEW_TOKENS, bool)
+    or RECALL_MAX_NEW_TOKENS <= 0
+):  # pragma: no cover - the harness constant is a positive int; this guards a future edit
+    raise SystemExit(MISSING_BUDGET_MSG)
+
+# --------------------------------------------------------------------------- #
+# Artifact paths — _REPO_ROOT-anchored constants, no CLI flag parsing (D-04)
+# --------------------------------------------------------------------------- #
+
+SLIM_PATH = _REPO_ROOT / "checkpoints" / "convbase_slim.pt"  # Phase-12 conversational base
+ADAPTER_PATH = _REPO_ROOT / "checkpoints" / "persona_adapter.pt"  # the shippable persona adapter
+TOKENIZER_PATH = _REPO_ROOT / "artifacts" / "tokenizer.json"  # FROZEN artifact — never retrain
+
+# MEASURED (14-UI-SPEC, re-verified by the UI checker with zero discrepancies):
+#   gr.themes.Default()._stylesheets
+#     -> ['https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600&display=swap']
+#   gr.themes.Default(font=["ui-sans-serif","system-ui","sans-serif"])._stylesheets -> []
+#   differing non-private theme vars between the two: ['font']  # nothing else changes
+# The stock theme's BODY font is a GoogleFont, so an unmodified page tells the browser to fetch
+# fonts.googleapis.com. One argument, exactly one theme variable, and the offline claim becomes
+# literal. The mono face (IBM Plex Mono) is a wheel-bundled LocalFont and is left alone.
+# `theme=` belongs on the gr.Blocks(...) CONSTRUCTOR — Blocks.launch() in 5.50.0 does not accept
+# it. The constructor emits a cosmetic DeprecationWarning naming the Gradio-6 migration; the
+# `gradio>=5,<6` pin holds, so it is noted here and NOT worked around.
+THEME = gr.themes.Default(font=["ui-sans-serif", "system-ui", "sans-serif"])
+
+# --------------------------------------------------------------------------- #
+# Failure messages — 14-UI-SPEC's failure table, verbatim. Every failure that makes a
+# meaningful session impossible is raised BEFORE launch(), so no window opens on a broken demo.
+# --------------------------------------------------------------------------- #
+
+MISSING_SLIM_MSG = (
+    "checkpoints/convbase_slim.pt not found. This demo needs the Phase-12 conversational base. "
+    "Export it from checkpoints/convbase_best.pt with scripts/export_slim.py, or download the "
+    "release asset (see README)."
+)
+MISSING_ADAPTER_MSG = (
+    "checkpoints/persona_adapter.pt not found. This demo ships a PRE-TRAINED adapter and does "
+    "no teaching of its own — teaching happens in a separate process, which is what makes the "
+    "clean-room claim true. Produce the adapter with: python scripts/teach_persona.py"
+)
+# MISSING_BUDGET_MSG is declared above, next to the import it guards.
+
+# --------------------------------------------------------------------------- #
+# UI copy — 14-UI-SPEC's Copywriting / Token Panel / Generation Budget Slider contracts,
+# verbatim. NO measured number appears in any string beyond the four fixed structural ones the
+# spec allows (13.9M, 331,776, 1.35 MB, 36). No recall rate, ever: the header points at
+# results/phase14_recall_report.md instead, so this copy cannot go stale and cannot overclaim.
+# --------------------------------------------------------------------------- #
+
+TITLE = (
+    "PersonaCore — memory in the weights (13.9M frozen base + 331,776 LoRA parameters, "
+    "fully on-device)"
+)
+DESCRIPTION = (
+    "The things this model knows about me are not on this page, not in a prompt, and not in a "
+    "database. They are in a 1.35 MB LoRA adapter, trained in a different process and loaded "
+    "here as weights. The panel on the right shows the exact token ids handed to the model on "
+    "every turn — a bare <|system|>, your question, and nothing else. Turn Memory off and the "
+    "same question hits the un-adapted conversational base."
+)
+HONESTY_LOCK = (
+    "This is a 13.9M-parameter model. Its answers are short and often wrong. What this demo "
+    "shows is WHERE the memory lives — in 331,776 adapter parameters, not in this page's "
+    "context — not how good the model is. Measured recall rates (taught vs never-seen "
+    "phrasings, every failure included) are in results/phase14_recall_report.md."
+)
+TEXTBOX_PLACEHOLDER = "Ask me something about myself…"
+EMPTY_CHAT = (
+    "**Nothing has been asked yet.**\n\n"
+    "Ask a question, then flip Memory off and ask the same one again. The context panel on the "
+    "right shows what the model actually receives — it does not change between the two."
+)
+EXAMPLES_CAPTION = (
+    "Example questions — taught phrasings. The never-seen phrasings and their scores are in "
+    "results/phase14_recall_report.md."
+)
+MEMORY_LABEL = "Memory (331,776 LoRA parameters)"
+MEMORY_INFO = (
+    "Unchecked gates the adapter's contribution off: the model running is the frozen "
+    "conversational base, unchanged from the checkpoint on disk. Nothing is reloaded and "
+    "nothing is recomputed — 36 boolean flags flip."
+)
+RESET_LABEL = "Reset — delete the adapter from memory"
+STATUS_ON = (
+    "**MEMORY: ON** — adapter active (checkpoints/persona_adapter.pt, 1.35 MB, 331,776 parameters)."
+)
+STATUS_OFF = (
+    "**MEMORY: OFF** — the adapter is loaded but gated off. The model running is the "
+    "un-adapted conversational base."
+)
+STATUS_DELETED = (
+    "**MEMORY: DELETED** — eject_adapter() removed all 36 adapter wrappers from this process. "
+    "There is nothing left to switch back on. Restart the app "
+    "(python scripts/personalize_demo.py) to load the adapter again — the file on disk is "
+    "untouched."
+)
+PANEL_LABEL = "Context fed to the model this turn — exact prompt token ids"
+PANEL_CAPTION = (
+    "Every turn is built by the same function the scoring harness calls. Your question's ids "
+    "sit between <|user|> (8185) and <|assistant|> (8186). Nothing else is ever added — no "
+    "facts, no system prompt, no history."
+)
+ACCORDION_LABEL = "Generation settings — the minimum token budget is fixed by the scoring harness"
+SLIDER_INFO = (
+    "The minimum is the exact budget the scoring harness used, derived from the locked fact "
+    "set's token census plus documented headroom (see the derivation in "
+    "scripts/phase14_recall.py). Below it, an answer could be cut off before the value is "
+    "uttered — a working memory would look like a failure. The UI cannot go lower, so no "
+    "setting on this screen can manufacture that false negative."
+)
+# 14-UI-SPEC writes both fingerprint trios as `{git_sha}/{step}/{val_loss}`; `str.format` needs
+# distinct field names, so the two trios are named here. The RENDERED text is the spec's.
+MISMATCH_BANNER_TEMPLATE = (
+    "> **ADAPTER / BASE MISMATCH** — this adapter was trained against a different base "
+    "checkpoint (expected {expected_sha}/{expected_step}/{expected_val_loss}, adapter carries "
+    "{adapter_sha}/{adapter_step}/{adapter_val_loss}). Anything this session produces is not "
+    "evidence of anything. Retrain the adapter against this base before recording or reporting."
+)
+
+# The per-turn provenance stamp: captured at turn start, prefixed to the streamed answer, and
+# NEVER rewritten. A viewer scrubbing the recording can read which mode produced any visible
+# answer without rewinding to find the toggle click.
+STAMP_ON = "**memory ON**"
+STAMP_OFF = "**memory OFF**"
+STAMP_DELETED = "**memory DELETED**"
+
+# The two `source` lines the token panel carries — the only difference between the startup
+# scaffold and a live turn.
+PANEL_SOURCE_LIVE = "build_recall_prompt(tok, question) — the same call the scoring harness makes"
+PANEL_SOURCE_SCAFFOLD = (
+    'build_recall_prompt(tok, "") — the empty-question scaffold, rendered at startup'
+)
+
+# Exactly 3 questions, hand-authored here from the TAUGHT family question SHAPES (F1 direct
+# wh-question, F2 imperative) across three distinct locked slots. Authored by hand on purpose:
+# importing the fact-set module to render them would pull the locked fact VALUES into this
+# process, which is exactly what the clean-room posture forbids. No fact value appears in any
+# example — these are questions only, never `is your dog named <value>?` (the F5 verification
+# shape, excluded here for that reason). Captioned as TAUGHT phrasings so the demo never implies
+# they are held-out evidence.
+EXAMPLES = [
+    "what is the name of your dog?",
+    "tell me the name you go by.",
+    "what is the town you live in?",
+]
+
+
+def build_forbid_ids(tok, vocab_size):
+    """Build the ``forbid_ids`` dead-id mask — the SINGLE call ``build_demo()`` makes (CR-01).
+
+    ARCHITECTURE Anti-pattern 7 is a generation path that samples over the full 8192-id table
+    while the frozen tokenizer decodes only 547 live ids: an unmasked draw can hand the strict
+    decoder an id it cannot decode. Masking the dead ids to ``-inf`` makes them unreachable at
+    ANY slider setting. ``eos_id`` is a registered special, so it is never masked and the
+    stop-id path is intact.
+
+    It is a module-level FUNCTION rather than an inline expression for a D-17 reason: D-17
+    freezes ``scripts/demo_app.py``, so the offline/mask boilerplate here is deliberately
+    duplicated rather than shared. Exposing the mask construction lets
+    ``tests/test_phase14_demo.py`` compare this module's tensor against the identical
+    ``undecodable_ids_mask(tok, vocab_size)`` call ``scripts/demo_app.py`` makes — in CI,
+    without needing a gitignored checkpoint on disk.
+    """
+    return undecodable_ids_mask(tok, vocab_size)
+
+
+def render_token_panel(tok, question, *, source):
+    """Render the live token panel — ``phase14_recall.render_context_dump``, unchanged (D-18).
+
+    No parallel prompt builder, no re-encoding for display, no pretty-printing that could
+    reorder or elide ids: the panel renders from the EXACT function the scoring harness calls,
+    so the live panel and the committed context dump cannot silently diverge from each other or
+    from what the model actually receives. ``tests/test_phase14_demo.py::test_prompt_ids_identical``
+    pins the two renders byte-for-byte.
+    """
+    return render_context_dump(tok, question, source=source)
