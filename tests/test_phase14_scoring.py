@@ -11,6 +11,11 @@ CPU-only, GPU/MPS-free, no checkpoint I/O, no model load, no generation. Pins:
   6. ``test_substring_gate`` / ``test_contradiction_detector`` — the D-10 scoring rules.
   7. ``test_render_context_dump_shape`` — D-18's three-line format and the startup scaffold.
   8. ``test_no_fact_strings_at_import`` — the clean-room property the demo process depends on.
+  9. ``test_persona_argument_is_scoped_to_the_fairness_control`` — the ordinary recall path stays
+     provably bare; only D-11.1's control may pass ``persona=``.
+ 10. ``test_recall_report_carries_every_preregistered_section`` / ``test_recall_report_refuses``
+     — the report writer renders end to end on synthetic records, and a recorded verdict is not
+     clobbered by a rerun.
 
 Scripts-load justification: no other test imports from ``scripts/`` (``tests/test_demo_callback.py``
 states the convention), but the pre-registration constants and every scoring rule MUST live in the
@@ -375,6 +380,171 @@ def test_persona_argument_is_scoped_to_the_fairness_control():
     assert [name for name, kwargs in sites if kwargs and "persona" not in kwargs] == []
     for expected in ("complete_question", "render_context_dump", "assert_no_value_in_prompt"):
         assert expected in {name for name, _ in sites}
+
+
+def _fake_question(question, *, fact_id, split, reserved=False, k=5, contradiction=()):
+    """One entry in the shape ``run_scored_recall`` produces, with nothing the writer ignores."""
+    completions = [f"my answer is {i}" for i in range(k + 1)]
+    return {
+        "question": question,
+        "fact_id": fact_id,
+        "slot": "pet_name",
+        "value": "zorp",
+        "split": split,
+        "reserved": reserved,
+        "prompt_ids": [8187, 8185, 8186],
+        "dump": "ids   (3) : [8187, 8185, 8186]",
+        "completions": completions,
+        "hits": [True] * k + [False],
+        "stopped": [True] * len(completions),
+        "contradictions": [list(contradiction)] + [[]] * k,
+        "hedging": [False] * len(completions),
+        "k": k,
+        "n": len(completions),
+    }
+
+
+def _fake_record(tier, entries):
+    total_k = sum(e["k"] for e in entries)
+    total_n = sum(e["n"] for e in entries)
+    return {
+        "tier": tier,
+        "questions": entries,
+        "k": total_k,
+        "n": total_n,
+        "rate": total_k / total_n,
+        "by_split": {},
+        "contradictions": sum(1 for e in entries for c in e["contradictions"] if c),
+        "hedging": 0,
+        "n_stopped": total_n,
+        "n_completions": total_n,
+        "excluded": (),
+    }
+
+
+def _fake_run():
+    """Synthetic records + controls covering every branch the writer renders."""
+    records = [
+        _fake_record(
+            pr.CORE_TAUGHT_TIER, [_fake_question("q taught", fact_id="f1", split="taught")]
+        ),
+        _fake_record(
+            pr.CORE_HELDOUT_TIER,
+            [
+                _fake_question("q heldout", fact_id="f1", split="held-out"),
+                _fake_question("q probe", fact_id="f1", split="held-out", reserved=True),
+            ],
+        ),
+        _fake_record(
+            pr.CLOSED_BOOK_TIER,
+            [_fake_question("q closed", fact_id="f1", split="taught", k=0)],
+        ),
+        _fake_record(
+            pr.SOFT_TIER,
+            [_fake_question("q soft", fact_id="s1", split="taught", contradiction=("krix",))],
+        ),
+    ]
+    controls = {
+        "fairness": {"k": 3, "n": 18, "rate": 3 / 18, "questions": [{}, {}], "n_answerable": 1},
+        "collapse": {
+            "ppl_adapter_on": 5.9180,
+            "ppl_adapter_off": 4.5737,
+            "delta": 0.2939,
+            "scored_targets": 270203,
+            "trigger": 0.10,
+            "trips_trigger": True,
+            "transcripts": (
+                {"question": "how was your day?", "adapter_on": "a", "adapter_off": "b"},
+            ),
+        },
+        "bit_identity": {
+            "device": "cpu",
+            "n_prompts": 5,
+            "prompts": ("",),
+            "max_abs_diff": 0.0,
+            "bit_identical": True,
+            "vocab_size": 8192,
+        },
+    }
+    return records, controls
+
+
+def test_recall_report_carries_every_preregistered_section(tmp_path, monkeypatch):
+    """The writer renders end to end, with every D-20 / D-05 / D-12 / D-22 section present.
+
+    Without this, ``write_recall_report`` first executes at the END of a multi-hour scored run —
+    so a ``KeyError`` in one table row would cost the whole run rather than a red test. The
+    records here are synthetic on purpose: this pins the REPORT's structure, not the numbers.
+    """
+    report = tmp_path / "phase14_recall_report.md"
+    monkeypatch.setattr(pr, "RECALL_REPORT_PATH", report)
+    records, controls = _fake_run()
+
+    pr.write_recall_report(records, controls, ["seed: 1337", "pid: 1"])
+    text = report.read_text(encoding="utf-8")
+
+    for heading in (
+        "## Pre-Registration",
+        "## Clean-Room Evidence (SC2)",
+        "## Recall Results — Core Tier",
+        "## Held-Out Provenance (D-08)",
+        "## Soft Tier — Excluded From The Gate (D-05)",
+        "## Contradiction Events (descriptive, no gate)",
+        "## Control 1 — Question Fairness (D-11.1)",
+        "## Pre-Registered Failure Branch (D-20)",
+        "## Control 2 — No Collateral Collapse (D-11.2)",
+        "## Control 3 — Adapter-Off Bit Identity (D-11.3)",
+        "## Threats To Validity",
+        "## Verdict",
+        "## Ship Decision — post-verdict, discretionary",
+    ):
+        assert heading in text, heading
+
+    # Section ORDER is part of the contract: no reader meets the excluded soft tier before the
+    # gated numbers, and no ship decision appears before the verdict it must be dated after.
+    order = [text.index(h) for h in ("## Recall Results — Core Tier", "## Soft Tier — Excluded")]
+    assert order == sorted(order)
+    assert text.index("## Verdict") < text.index("## Ship Decision")
+
+    # D-20's three parts, the D-22 citation, D-12's non-amendment clause, and the open verdict.
+    assert "### (a) What this control can no longer prove" in text
+    assert "### (b) Why the phase's central comparison survives anyway" in text
+    assert "### (c) What the adapter's success is actually demonstrating" in text
+    assert "`## Recall Results — Core Tier`" in text  # part (c) cites the section BY NAME
+    assert "2309.12288" in text
+    assert "no bearing" in text
+    assert "does not reopen or amend the pre-registered threshold" in text
+    assert "331,776" in text
+    assert text.rstrip().endswith("_No post-verdict decision recorded._")
+    assert "PENDING — user decision at checkpoint." in text
+
+
+def test_recall_report_refuses_to_clobber_a_recorded_verdict(tmp_path, monkeypatch):
+    """A recorded (non-PENDING) verdict is committed evidence — a rerun must not silently reset it.
+
+    The ``measure_inflation.py:66-75`` guard. What it protects is the material that cannot be
+    regenerated by re-running: the D-12 ship-decision section and any checkpoint annotation added
+    by hand after the verdict was recorded.
+    """
+    report = tmp_path / "phase14_recall_report.md"
+    monkeypatch.setattr(pr, "RECALL_REPORT_PATH", report)
+    monkeypatch.setattr(sys, "argv", ["phase14_recall.py"])
+    records, controls = _fake_run()
+
+    report.write_text("## Verdict\n\nGO — recorded at the checkpoint.\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        pr.write_recall_report(records, controls, [])
+
+    # PENDING is not a recorded verdict — an interrupted run may be re-driven freely.
+    report.write_text("## Verdict\n\nPENDING — user decision at checkpoint.\n", encoding="utf-8")
+    pr.write_recall_report(records, controls, [])
+    assert "## Threats To Validity" in report.read_text(encoding="utf-8")
+
+    # --force is the deliberate override over a genuinely recorded verdict.
+    report.write_text("## Verdict\n\nGO — recorded at the checkpoint.\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["phase14_recall.py", "--force"])
+    pr.write_recall_report(records, controls, [])
+    assert "## Verdict" in report.read_text(encoding="utf-8")
 
 
 def test_question_seed_is_distinct_and_derivable():
