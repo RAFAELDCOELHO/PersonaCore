@@ -19,6 +19,9 @@ because the stock ``gr.themes.Default()`` body font is a ``GoogleFont``: an unmo
 instructs the BROWSER to fetch fonts.googleapis.com (measured — see ``THEME`` below). The server
 would still make zero calls, but a reviewer who opens devtools on a demo whose entire thesis is
 "fully on-device" would see a request to Google. ``build_demo().stylesheets == []`` pins it.
+The other half — a third-party ``<script>`` hardcoded in Gradio's own page template, which a live
+browser trace caught fetching cdnjs.cloudflare.com — is stripped from the rendered response by
+``StripThirdPartyAssets``; see ``APP_KWARGS`` below.
 
 SECURITY: both artifacts cross the ``weights_only=True`` choke points (``load_slim`` /
 ``load_adapter``) — the restricted unpickler, ZERO code execution on load (T-14-22).
@@ -50,6 +53,7 @@ same ``undecodable_ids_mask`` call ``scripts/demo_app.py`` makes, and
 
 import os
 import pathlib
+import re
 import sys
 import warnings
 
@@ -58,6 +62,9 @@ import warnings
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 
 import gradio as gr  # noqa: E402  (must follow the analytics kill-switch above)
+from starlette.middleware import Middleware  # noqa: E402  (kill-switch first)
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402  (kill-switch first)
+from starlette.responses import Response  # noqa: E402  (kill-switch first)
 
 from personacore.checkpoint import load_adapter, load_slim  # noqa: E402  (kill-switch first)
 from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402  (kill-switch first)
@@ -178,6 +185,69 @@ TOKENIZER_PATH = _REPO_ROOT / "artifacts" / "tokenizer.json"  # FROZEN artifact 
 # it. The constructor emits a cosmetic DeprecationWarning naming the Gradio-6 migration; the
 # `gradio>=5,<6` pin holds, so it is noted here and NOT worked around.
 THEME = gr.themes.Default(font=["ui-sans-serif", "system-ui", "sans-serif"])
+
+# --------------------------------------------------------------------------- #
+# The other half of the offline lock: third-party assets baked into Gradio's own page template
+# --------------------------------------------------------------------------- #
+
+# MEASURED in a real browser against this demo: loading http://127.0.0.1:7860 issued a request to
+# https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.1/iframeResizer.contentWindow.min.js.
+# That `<script>` is hardcoded in gradio/templates/frontend/index.html and Gradio exposes no knob
+# to suppress it — `gr.Blocks(head=..., head_paths=...)` only APPEND. The THEME override above
+# emptied `stylesheets`, and `test_build_demo_stylesheets_real` correctly asserted that; a
+# `<script>` is simply outside a stylesheet assertion's reach, so the offline lock had a hole.
+#
+# WHY IT MATTERS ENOUGH TO PATCH. PROJECT.md requires this demo run "on a laptop CPU with no
+# internet", and privacy-by-design is the entire thesis. A reviewer with devtools open sees a CDN
+# request on page load and the claim is dead on camera — regardless of the fact that the SERVER
+# still makes zero calls and the page still works with the CDN unreachable.
+#
+# WHERE IT IS PATCHED, and why here. `gradio.routes.App` is a `FastAPI` subclass that forwards
+# `launch(app_kwargs=...)` straight into `FastAPI.__init__` (routes.py:405 -> :251), and FastAPI's
+# constructor accepts `middleware=[Middleware(...)]`. That is a supported public seam operating on
+# the RENDERED RESPONSE, so it assumes nothing about Gradio's internal template layout and
+# survives a version bump — unlike editing the vendored `.venv` template (not committed) or
+# monkeypatching Gradio internals (breaks on bump). Gradio adds its own middleware AFTER
+# construction via `add_middleware`, which inserts at position 0, so this one sits INNERMOST and
+# sees the uncompressed HTML before Brotli.
+#
+# SCOPE: elements that LOAD only. `<script src="https://...">` and off-origin `<link>` (the
+# fonts.googleapis.com / fonts.gstatic.com preconnect hints). Anchors, `og:` meta, and the
+# "Built with Gradio" footer link cost zero requests, so they are left exactly as Gradio wrote
+# them — nuking every `https://` substring would corrupt markup for no privacy gain.
+_THIRD_PARTY_SCRIPT = re.compile(
+    rb"<script\b[^>]*\bsrc=[\"']https?://[^>]*>(?:\s*</script>)?", re.I
+)
+_OFF_ORIGIN_LINK = re.compile(rb"<link\b[^>]*\bhref=[\"']https?://[^>]*>", re.I)
+
+
+def strip_third_party_assets(html: bytes) -> bytes:
+    """Remove every element of ``html`` that would make the BROWSER hit a third-party origin."""
+    return _OFF_ORIGIN_LINK.sub(b"", _THIRD_PARTY_SCRIPT.sub(b"", html))
+
+
+class StripThirdPartyAssets(BaseHTTPMiddleware):
+    """Apply :func:`strip_third_party_assets` to every HTML response this app serves."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if not response.headers.get("content-type", "").startswith("text/html"):
+            return response
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        headers = dict(response.headers)
+        # The scrubbed body is shorter; a stale content-length would truncate the page.
+        headers.pop("content-length", None)
+        return Response(
+            strip_third_party_assets(body),
+            status_code=response.status_code,
+            headers=headers,
+            media_type=response.media_type,
+        )
+
+
+# Threaded into `launch()` by `main()` and into `App.create_app()` by the test that pins this, so
+# the served page the test inspects is built through the exact seam the demo runs on.
+APP_KWARGS = {"middleware": [Middleware(StripThirdPartyAssets)]}
 
 # --------------------------------------------------------------------------- #
 # Failure messages — 14-UI-SPEC's failure table, verbatim. Every failure that makes a
@@ -561,7 +631,9 @@ def build_demo() -> gr.Blocks:
 
 
 def main() -> None:
-    build_demo().launch(share=False)  # localhost 127.0.0.1:7860 — no tunnel, no exposure.
+    # share=False: localhost 127.0.0.1:7860 — no tunnel, no exposure.
+    # app_kwargs: the served page requests zero third-party origins — see APP_KWARGS above.
+    build_demo().launch(share=False, app_kwargs=dict(APP_KWARGS))
 
 
 if __name__ == "__main__":

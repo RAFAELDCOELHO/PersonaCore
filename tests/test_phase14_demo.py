@@ -8,7 +8,11 @@ What this pins, forever — three claims the demo makes that only a test can hol
   2. **D-18 prompt byte-identity.** The live token panel and the scoring harness's committed
      context dump render the SAME ``ids`` line for the same question, because both route
      through ``phase14_recall.render_context_dump``.
-  3. **The offline stylesheet lock.** The served page carries zero remote stylesheets.
+  3. **The offline network lock.** The served page carries zero remote stylesheets AND loads
+     nothing at all from a third-party origin — no CDN ``<script>``, no off-origin ``<link>``.
+     A live browser trace caught Gradio's own page template fetching cdnjs.cloudflare.com, which
+     the stylesheet assertion structurally could not see, so the served HTML is now parsed and
+     every loading attribute checked.
 
 Plus the clean-room posture: no locked fact value reaches the demo process by ANY path,
 including a transitive import.
@@ -54,10 +58,14 @@ import pathlib
 import re
 import subprocess
 import sys
+from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 import gradio as gr
 import pytest
 import torch
+from gradio.routes import App
+from starlette.testclient import TestClient
 
 from personacore.dialogue import build_recall_prompt
 from personacore.generation import undecodable_ids_mask
@@ -243,6 +251,109 @@ def test_no_remote_stylesheets():
     assert gr.themes.Default()._stylesheets, "the stock theme is expected to carry a remote URL"
     assert gr.Blocks(theme=pd.THEME).stylesheets == []
     assert "theme=THEME" in inspect.getsource(pd.build_demo)
+
+
+class _LoadingUrls(HTMLParser):
+    """Collect every attribute value that makes the BROWSER open a connection.
+
+    Deliberately an independent stdlib parse rather than a re-run of the module's own regexes: a
+    test that reuses the implementation's pattern can only ever confirm the pattern matched
+    itself. This walks the served markup and asks the browser's question — which attributes issue
+    a request — so a Gradio bump that introduces a third-party asset in a shape the scrubber's
+    regex does not match goes RED here instead of shipping.
+
+    ``<meta>`` and ``<a>`` are absent on purpose: an ``og:image`` and an ``href`` cost zero
+    requests on page load, which is exactly why the fix leaves them untouched.
+    """
+
+    LOADING_ATTRS = {
+        "script": ("src",),
+        "link": ("href",),
+        "img": ("src",),
+        "iframe": ("src",),
+        "source": ("src", "srcset"),
+        "embed": ("src"),
+    }
+
+    def __init__(self):
+        super().__init__()
+        self.urls = []
+
+    def handle_starttag(self, tag, attrs):
+        wanted = self.LOADING_ATTRS.get(tag, ())
+        self.urls += [v for k, v in attrs if k in wanted and v]
+
+
+def _serve_index_html():
+    """Render the REAL Gradio page through the REAL seam, without a checkpoint and without a server.
+
+    ``launch()`` binds a port and blocks forever, so it can never appear in a test. ``create_app``
+    is the function ``launch()`` itself calls (``gradio/routes.py:2540``), and ``TestClient`` drives
+    the resulting ASGI app in-process — so this exercises Gradio's actual ``index.html`` template
+    render plus the actual middleware wiring, which a hand-written HTML fixture could not.
+
+    The Blocks here is a throwaway placeholder: ``build_demo()`` needs two gitignored checkpoints,
+    and the page chrome under test is a property of the TEMPLATE and the middleware, not of the
+    model weights. Passing ``theme=pd.THEME`` keeps the one demo-specific input that touches the
+    served markup. ``dict(...)`` because ``create_app`` mutates the kwargs it is handed.
+    """
+    with gr.Blocks(theme=pd.THEME, analytics_enabled=False) as probe:
+        gr.Markdown("offline surface probe")
+    with TestClient(App.create_app(probe, app_kwargs=dict(pd.APP_KWARGS))) as client:
+        response = client.get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    return response.text
+
+
+def test_served_page_loads_nothing_third_party():
+    """The other half of the offline lock — the half a stylesheet assertion structurally cannot see.
+
+    MEASURED in a real browser against this demo: ``http://127.0.0.1:7860`` issued a request to
+    ``https://cdnjs.cloudflare.com/.../iframeResizer.contentWindow.min.js``. That ``<script>`` is
+    hardcoded in Gradio's own ``index.html``; ``test_no_remote_stylesheets`` above was not wrong,
+    a ``<script>`` is simply outside a stylesheet assertion's reach. PROJECT.md requires this demo
+    run "on a laptop CPU with no internet" and privacy-by-design is the thesis, so a CDN hit on
+    page load kills the claim on camera even though the SERVER still makes zero calls.
+
+    Asserted on the SERVED page rather than on a fixture: a fixture would stay green while the real
+    page kept phoning out, which is precisely the failure mode that got this far.
+    """
+    raw = (pathlib.Path(gr.__file__).parent / "templates" / "frontend" / "index.html").read_text()
+    # Same discipline as `test_no_remote_stylesheets`'s stock-theme assertion: pin the upstream
+    # condition, so a Gradio version that drops the CDN itself is reported rather than assumed.
+    assert "cdnjs.cloudflare.com" in raw, "Gradio's template is expected to carry a CDN script"
+
+    html = _serve_index_html()
+    assert html.rstrip().endswith("</html>"), "page truncated — a stale content-length header?"
+
+    parser = _LoadingUrls()
+    parser.feed(html)
+    off_origin = [u for u in parser.urls if urlsplit(u).netloc]
+    assert off_origin == [], f"the served page loads third-party assets: {off_origin}"
+
+    # The page must still WORK: this is a network-surface fix, not a page rewrite.
+    assert "<gradio-app" in html
+    assert re.search(r'<script[^>]+src="\./assets/[^"]+\.js"', html), "local JS bundle dropped"
+    assert re.search(r'<link[^>]+href="\./assets/[^"]+\.css"', html), "local CSS bundle dropped"
+    assert '<link rel="manifest" href="/manifest.json" />' in html
+
+    # NOT blanket-nuked: off-origin URLs in non-loading positions survive byte-for-byte. The
+    # "Built with Gradio" footer anchor is rendered client-side from the untouched JS bundle; the
+    # og: meta tags below are the same-shaped markup this page serves directly.
+    assert '<meta property="og:url" content="https://gradio.app/" />' in html
+    assert "raw.githubusercontent.com" in html
+
+
+def test_third_party_scrubber_is_threaded_into_launch():
+    """The half the served-page assertion cannot see — same gap as ``test_forbid_ids_threaded``.
+
+    ``_serve_index_html`` builds the app from ``pd.APP_KWARGS`` directly, so a scrubber that is
+    defined correctly and then never handed to ``launch()`` would leave that test green and the
+    real demo still calling out to a CDN.
+    """
+    assert "app_kwargs=dict(APP_KWARGS)" in inspect.getsource(pd.main)
+    assert pd.APP_KWARGS["middleware"], "APP_KWARGS carries no middleware"
 
 
 def test_analytics_killswitch_precedes_gradio_import():
