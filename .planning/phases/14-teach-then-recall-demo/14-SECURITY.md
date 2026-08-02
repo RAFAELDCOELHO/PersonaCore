@@ -155,14 +155,25 @@ tests/test_phase14_scoring.py tests/test_phase14_teaching.py tests/test_recall_p
 
 - Reference guard `scripts/measure_inflation.py:66-75` — non-PENDING verdict → `SystemExit`
   unless `--force`.
-- Ported to **all four** phase-14 report paths, each verified individually:
-  - `scripts/phase14_factset_gate.py:116-125`
-  - `scripts/teach_persona.py:1136-1148` (`_refuse_clobber`, called `:1123`, `:1506`)
+- Ported to **all four** phase-14 report paths, each verified individually. Three of them are now
+  **section-anchored** and share ONE regex — `scripts/_verdict.py:24` (`VERDICT_SECTION`) and its
+  `recorded_verdict` accessor at `:27`, whose only import is `re`:
+  - `scripts/phase14_factset_gate.py:116-137` (`assert_report_not_clobbered`, extracted from the
+    inline `main()` block by quick task `260802-h3g` and called at `:141`)
+  - `scripts/teach_persona.py:1137-1154` (`_refuse_clobber`, called `:1124`, `:1512`)
   - `scripts/phase14_recall.py:1617-1643`, section-anchored via `_VERDICT_SECTION` at `:1604`
     (the CR-02 fix), called at the **top** of `main()` (`:1697`) as well as from the writer
     (`:1048`) — a multi-hour run that refuses to write at the end has already wasted the run.
+    This path keeps its OWN private copy of the regex on purpose: a module-level sibling import
+    would put a non-package name at `phase14_recall` import time and is not worth risking the
+    T-14-17 clean-room property for (see UF-4).
+- All three anchored paths also treat "**no `## Verdict` section at all**" as REFUSE rather than
+  overwrite-blind — a file that is not this writer's output is never clobbered silently.
 - Tests: `tests/test_phase14_scoring.py:589` (`test_recall_report_refuses_to_clobber_a_recorded_verdict`)
-  and `:617` (`test_recall_report_round_trips_without_force`).
+  and `:617` (`test_recall_report_round_trips_without_force`);
+  `tests/test_phase14_teaching.py:562` (`test_refuse_clobber_reads_the_verdict_section_not_the_last_mention`,
+  which also carries the naive-`split` control) and `tests/test_phase14_factset.py:153`
+  (`test_gate_clobber_guard_reads_the_verdict_section`).
 - UI slider `scripts/personalize_demo.py:518-530` — `minimum=RECALL_MAX_NEW_TOKENS` (48),
   `maximum=256`, `step=8`. The `(0, 4096]` guard is therefore unreachable from the UI, as the
   module docstring states at `:29-30`.
@@ -622,13 +633,22 @@ than the code.
 **UF-4 — the CR-02 clobber-guard fix was applied to one path, not all four.**
 `phase14_recall.assert_report_not_clobbered` anchors on the first `## Verdict` **section**
 (`:1604`) after CR-02 showed that `split("## Verdict")[-1]` lands in the ship-decision comment.
-`teach_persona._refuse_clobber:1143` and `phase14_factset_gate.py:119` still use the unanchored
-tail form. **Currently harmless** — verified: `results/phase14_calibration_report.md` and
-`results/phase14_factset_report.md` each contain `## Verdict` exactly once (the recall report
-contains it twice, which is why only that one broke). T-14-06 stays closed on all four paths.
-The latent shape is a rerun-refusal false positive the moment either of those reports grows a
-second mention of the heading — at which point `--force` becomes the habitual escape and the
-guard starts destroying the hand-written material it exists to protect.
+**Resolved for the two phase-14 siblings by quick task `260802-h3g` (2026-08-02).**
+`teach_persona._refuse_clobber` (`:1137-1154`) and the newly extracted
+`phase14_factset_gate.assert_report_not_clobbered` (`:116-137`) both now read the first
+`## Verdict` SECTION through the single shared `scripts/_verdict.py:27` `recorded_verdict`, and
+both additionally REFUSE a file with **no verdict section at all** rather than overwriting it
+blind. The extraction also made the gate's guard reachable from a test for the first time (it was
+inline in `main()`, behind a 278 MB checkpoint load). Both fixes were driven RED-first; the naive
+`split("## Verdict")[-1]` control is kept deliberately in
+`tests/test_phase14_teaching.py:562` so a regression back to the tail form fails there with the
+reason written beside it. The defect was **latent, never live** on these two paths —
+`results/phase14_calibration_report.md` and `results/phase14_factset_report.md` each contain
+`## Verdict` exactly once (the recall report contains it twice, which is why only that one broke).
+**Still carrying the idiom, deliberately out of that task's scope:**
+`scripts/measure_inflation.py:70` (Phase 13) and `scripts/finetune_smoke.py:727` (Phase 12) —
+both outside Phase 14, both latent in the same way. The finding stays recorded and non-blocking;
+T-14-06 was closed on all four paths before the fix and remains closed after it.
 
 ---
 
@@ -679,4 +699,5 @@ No implementation file was modified by this audit.
 UF-1 (`## Threat Flags` absent from 7 of 11 summaries), UF-2 (T-14-12's guard lives in
 `sanity_check`, not `build_bins`), UF-3 (T-14-17 has six lazy-import sites, not one in `main()`),
 UF-4 (the CR-02 section-anchored clobber-guard fix applied to one of four report paths — latent,
-not live).
+not live; since resolved for both phase-14 siblings by quick task `260802-h3g`, with
+`measure_inflation.py:70` and `finetune_smoke.py:727` still carrying the idiom).
