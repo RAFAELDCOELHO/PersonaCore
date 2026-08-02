@@ -12,6 +12,31 @@ from-scratch EWC penalty keeps the base model from being destroyed in the proces
 
 ## Results at a glance
 
+- **Held-out recall 0.3483** (326/936) against a pre-registered gate of **0.2000**, taught
+  recall **0.4921** (496/1008) against **0.2486**, and a closed-book control — the same
+  weights with the adapter switched off — at exactly **0/2430**; both thresholds came from a
+  *disjoint* calibration fact set fixed before the run existed. The rate covers the
+  **proper-noun core only** (the soft preference tier is excluded from the gate) and the
+  held-out set **deliberately omits reversed phrasings**, so it demonstrates generalization
+  within that scope and makes no claim about reversed recall — counts in
+  [results/phase14_recall_report.md](results/phase14_recall_report.md), full form of each
+  bound in
+  [docs/REPORT.md](docs/REPORT.md#milestone-2-limitations--nine-honest-negatives-quoted)
+- **Naive fine-tuning drove retention perplexity to 8.52417066884246; EWC held it to
+  3.8911400839446597** from the same step-0 anchor of 2.107553076833866 — drift **+6.416618**
+  vs **+1.783587**, a **3.6×** difference, clearing the pre-registered margin at **33.61×**.
+  That is **teacher-forced retention perplexity, not free-running story generation** (both
+  arms leak role tokens mid-story), and the noise floor the margin is measured against was
+  **not re-verified at the 4000-step production budget**; EWC's acquisition cost of
+  **+0.380556** dialogue PPL is descriptive, with no gate — numbers in
+  [results/phase13_ab_report.md](results/phase13_ab_report.md), full form of each bound in
+  [docs/REPORT.md](docs/REPORT.md#milestone-2-limitations--nine-honest-negatives-quoted)
+- **Dialogue costs 3.229 tokens/word** through the frozen v1.0 tokenizer (4,800,385 utterance
+  tokens over 1,486,754 whitespace words) against a TinyStories baseline of **2.860**
+  recomputed in the same run with the same tokenizer and the same word rule — a **1.129×**
+  relative inflation, inside the pre-registered ≤1.2× GO band at a measured fit of 0.9996;
+  the ratio is **only meaningful against that same-run baseline** and is never comparable to
+  another tokenizer ([results/inflation_report.md](results/inflation_report.md))
 - **13.9M parameters** — 13,891,584 exact, tied embedding counted once (6 layers, 6 heads,
   384-dim embeddings, 256-token context)
 - **Deterministic full-validation perplexity 2.1066 over 12,636,922 scored target tokens**
@@ -30,6 +55,12 @@ from-scratch EWC penalty keeps the base model from being destroyed in the proces
 
 *The naive and EWC delta panels share one color scale so the two arms are directly comparable; the Fisher panel has its own scale because squared-gradient importance is not a weight-delta ratio.*
 
+Measured rather than eyeballed: across those 36 cells the rank correlation between Fisher
+importance and how much EWC pulled the movement back is **ρ = 0.801544** (95% CI
+[0.597984, 0.920291], rule and seed committed before the numbers existed) — a *rank*
+correlation, not an effect size, and EWC in fact moved **further** than naive in 2 of the 36
+cells.
+
 ![Relative weight change of the taught persona adapter across 6 layers and 6 projections](results/phase15_adapter_delta.png)
 
 *The persona adapter's own ‖ΔW‖_F/‖W₀‖_F grid, on an independent scale — it is not comparable to the panels above (different parameter counts, different training budgets), and the full reasoning is in [docs/REPORT.md](docs/REPORT.md).*
@@ -39,10 +70,13 @@ from-scratch EWC penalty keeps the base model from being destroyed in the proces
 Every component is hand-implemented in pure PyTorch:
 
 - **Byte-level BPE tokenizer** trained from scratch — vocab table 8192 with 547 ids live
-  (256 bytes + 283 learned merges + 8 specials; the bounded TinyStories corpus exhausts its
-  mergeable pairs, so the remaining 7645 rows are reserved capacity), `<|endoftext|>`
-  pinned as an atomic id, validated against a tiktoken oracle (test-only; a guard test
-  proves the oracle is never imported by runtime code)
+  (256 bytes + 283 learned merges + 8 specials; the frozen production tokenizer
+  `artifacts/tokenizer.json`, 5,648 bytes, was trained on the 11,469-byte fixture
+  `tests/fixtures/tiny_corpus.txt` — `scripts/train_tokenizer.py:31` — and not on the full
+  TinyStories corpus, which is why only 283 of the 7,928 requested merges were learned and
+  the remaining 7,645 rows are reserved capacity), `<|endoftext|>` pinned as an atomic id,
+  validated against a tiktoken oracle (test-only; a guard test proves the oracle is never
+  imported by runtime code)
 - **GPT-style decoder** built by hand — pre-norm blocks, causal multi-head attention
   (masked before softmax), GELU MLP, weight tying as true shared storage
 - **Hand-rolled training loop** — AdamW, warmup + cosine LR schedule, gradient
