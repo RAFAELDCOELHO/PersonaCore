@@ -11,10 +11,16 @@ jobs:
           # Pin Kaggle's target Python, NOT the local 3.14 dev box. This makes
           # install-parity (ENV-01/ENV-02) validate against the real runtime.
           python-version: "3.11"
-      - name: Install (CPU torch + dev extras)
+      - name: Install (CPU torch + dev + demo extras)
+        # The `demo` extra (gradio) is installed so tests/test_phase14_demo.py can IMPORT
+        # scripts/personalize_demo.py and enforce D-17's mask parity, D-18's prompt
+        # byte-identity, and 14-UI-SPEC's offline stylesheet lock in CI rather than only on a
+        # machine that happens to have gradio. Enforcement that cannot import the file it
+        # enforces is not enforcement. Without it the suite is a hard COLLECTION error, not a
+        # skip. Makefile:install and CLAUDE.md's setup block carry the same extras (W-06).
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[cpu,dev]" --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[cpu,dev,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
       - name: Lint
         run: ruff check . && ruff format --check .
       - name: Test
