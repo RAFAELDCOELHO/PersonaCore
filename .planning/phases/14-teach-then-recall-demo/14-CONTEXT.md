@@ -2,7 +2,10 @@
 
 **Gathered:** 2026-08-01
 **Updated:** 2026-08-01 — second discuss pass closed the demo-surface area (D-16..D-19)
-**Status:** Ready for planning — all four gray areas decided
+**Updated:** 2026-08-01 — third discuss pass: teaching register locked to first person on measured
+evidence (D-01/D-05 rewritten), question-fairness reconciliation pre-registered (D-20), calibration
+register arm (D-21), reversal-curse family allocation (D-22)
+**Status:** Ready for planning — all gray areas decided (D-01..D-22)
 
 <domain>
 ## Phase Boundary
@@ -24,12 +27,32 @@ future milestone); any retraining of the conversational base or the tokenizer.
 ### Fact-set selection (the validity foundation)
 
 - **D-01:** Fact values are **adversarially chosen so the base-without-adapter control FAILS to
-  guess them.** TinyStories-common values (`Max`, `Lily`, `blue`) are structurally unsafe
+  guess them**, and every fact is authored in the base's **first-person persona register.**
+  TinyStories-common values (`Max`, `Lily`, `blue`) are structurally unsafe
   regardless of token-count convenience — the base carries real prior probability mass on exactly
   those tokens, so a "successful recall" could be coincidence rather than memory. Distinctive or
   invented names and uncommon number combinations are correct **even if they fragment into more
   tokens**. The hierarchy, which governs every downstream tradeoff in this phase: *tokenizer cost
   is a nuisance to note; guessability is a validity failure of the whole demo.*
+
+  **Register — first person, not second (measured 2026-08-01, re-verified first-party).** Facts are
+  taught as first-person self-description — `i have a dog named zorp.`, **never** `your dog is named
+  zorp.` The frozen base emits first-person PersonaChat self-description exclusively: 5/5
+  bare-`<|system|>` probes (15–28 token prompts, greedy, `convbase_slim.pt`) returned `i am a cop.` /
+  `i live in the country` / `i am a college student` / `i like red colors.` — zero second-person
+  output. Teaching in second person would spend 331,776 LoRA parameters installing a *register the
+  base has never produced*, on top of the fact itself, and a low recall rate would then be
+  mis-attributed to capacity. This is also the research-sanctioned framing (FEATURES §4: "move the
+  persona from the prompt into the weights"). The register must be fixed **before the calibration set
+  is authored** — D-14 requires calibration to mirror the real set's shape, so it cannot change
+  afterward without invalidating calibration. See **D-21** for the calibration arm that *measures*
+  the first-vs-second-person delta instead of asserting it.
+
+  **Measured base priors — seed the close-call filter with these.** The same probe recorded the
+  base's own prior-mass answer per slot: occupation → `cop`, `college student`; location → `the
+  country`; favorite color → `red`; dog name → `rose`. These are known D-03 close-call triggers
+  **before** the candidate pool is authored, not discoveries made during the gate run. A candidate
+  fact colliding with one of them is a close-call rejection waiting to happen.
 
 - **D-02:** Every candidate fact passes **two pre-flight filters** before the set is locked:
   - **(a) Tokenizer census** — token count and byte-fallback round-trip verified by direct
@@ -58,7 +81,7 @@ future milestone); any retraining of the conversational base or the tokenizer.
   response). That is an engineering constraint belonging to the demo-surface design, must be named
   as such there, and is **never** a proxy for guessability.
 
-- **D-05:** **Composition — proper-noun core + labelled soft tier.** 5–8 facts drawn from
+- **D-05:** **Composition — proper-noun core + labelled soft tier, authored in first person.** 5–8 facts drawn from
   high-cardinality proper-noun/identifier slots (invented person/pet/place names, number combos)
   form the scored, gated set. 2–3 low-cardinality facts (favorite color/food) are additionally
   taught but reported in a **separately labelled tier excluded from the pre-registered gate**.
@@ -70,7 +93,25 @@ future milestone); any retraining of the conversational base or the tokenizer.
   *Rationale surfaced during discussion:* the close-call rule systematically punishes
   low-cardinality slots — for "favorite color" the base has real prior mass on *some* color, so a
   base completion saying "blue" against a taught "chartreuse" is textbook same-category/right-slot
-  and dies to D-03. Proper-noun slots have no such prior to trip over.
+  and dies to D-03. Proper-noun slots have no such prior to trip over. **The measured priors in D-01
+  make this concrete: the base already answers `red` for color and `rose` for dog name.**
+
+  **Phrase examples — the authoring register for every taught phrasing and recall question (D-01).**
+  Both the teaching paraphrases and the recall questions live in the base's first-person persona
+  register. The question form is already second-person-addressed (`what is your dog's name?`) because
+  that is how PersonaChat *asks*; what changes is the **answer/teaching** side, which is first-person
+  self-description:
+
+  | tier | slot | taught phrasing (first person) | recall question | never author as |
+  |---|---|---|---|---|
+  | core | pet name | `i have a dog named zorp.` | `what is your dog's name?` | ~~`your dog is named zorp.`~~ |
+  | core | person name | `my name is quillon.` | `what is your name?` | ~~`you are called quillon.`~~ |
+  | core | place | `i live in a town called brindlemoor.` | `where do you live?` | ~~`you live in brindlemoor.`~~ |
+  | core | number combo | `i moved here in 1987.` | `what year did you move here?` | ~~`you moved in 1987.`~~ |
+  | soft | favorite color | `my favorite color is chartreuse.` | `what is your favorite color?` | ~~`your favorite color is chartreuse.`~~ |
+
+  Values above are **illustrative of the register only** — the actual set is whatever survives the
+  D-02/D-03 pre-flight gate. The register is the locked part; the values are not.
 
 ### Pre-flight gate shape
 
@@ -196,9 +237,10 @@ future milestone); any retraining of the conversational base or the tokenizer.
   real run proceeds **without** replay, preserving the full teaching signal rather than diluting it
   against an unconfirmed risk.
 
-  **Net effect of D-09 + D-14 + D-15: ONE calibration run answers three questions — threshold,
-  family allocation, and replay — from one measured source, instead of three separately-justified
-  guesses.** Its decision rule, covering all three derivations, is committed before it runs.
+  **Net effect of D-09 + D-14 + D-15 + D-21: ONE calibration run answers four questions — threshold,
+  family allocation, replay, and teaching register — from one measured source, instead of four
+  separately-justified guesses.** Its decision rule, covering all four derivations, is committed
+  before it runs.
 
 ### Demo surface & clean-room evidence
 
@@ -261,6 +303,94 @@ future milestone); any retraining of the conversational base or the tokenizer.
   from, the headroom formula, and the resulting constant, **in one place a future reader can
   re-derive without re-running anything.** Not a number that "was derived" in a chat log, and not a
   comment saying "trust this." Same discipline this phase applies to every other locked number.
+
+### Question-fairness reconciliation & register calibration (third discuss pass)
+
+- **D-20:** **The D-11.1 negative gets a written, three-part reconciliation — pre-registered, not
+  composed after the result.** First-party measurement (2026-08-01) shows the frozen base **cannot
+  copy a fact from its own context**: with the fact in the `<|system|>` span, 0/3 probes recalled it
+  — `i live in oberlin.` → `i live in the country`; `my name is quillon.` → `i am a college
+  student`; and most sharply `i have a dog named zorp.` → `i have a dog named **rose**.`, which
+  copied the *syntactic frame* and substituted a wrong value. D-11.1's question-fairness control is
+  therefore expected to return a **negative**. It remains locked and must still run — but its report
+  section is written to survive that negative, and the reconciliation is **pre-registered before the
+  run**, in the same register as Phase 12 §8 / D-09.
+
+  **The research report's "this actually strengthens the claim" framing is a legitimate starting
+  point but is NOT the reconciliation.** It does not count as a locked decision until it is the
+  three explicit parts below. All three are mandatory report content:
+
+  **(a) What the control can no longer prove.** The purpose of control (b) was to establish that a
+  failed closed-book answer means *"the model has no memory of this fact"* rather than *"the
+  question is unanswerable."* When the base **also** fails with the fact in context, that inference
+  is **weakened**: a closed-book failure can no longer be read as unambiguous evidence of absent
+  memory, because this base demonstrably fails to surface a fact it can see. The report states this
+  plainly as a limitation, without softening.
+
+  **(b) Why the phase's central comparison survives anyway.** The core claim rests on
+  **adapter-on vs adapter-off, both closed-book** — and in **neither arm is the fact in context.**
+  The base's in-context extraction weakness is therefore **irrelevant to that specific comparison**:
+  both arms face identical conditions, and the only difference between them is 331,776 adapter
+  parameters. A gap between the arms is attributable to the weights and nothing else. The
+  limitation in (a) constrains what a *closed-book failure in isolation* means; it does not touch
+  the *differential*.
+
+  **(c) What the adapter's success is actually demonstrating — named honestly.** The base's
+  inability to extract raises a legitimate open question the report must name rather than skirt:
+  when the adapter succeeds, is that **(i)** knowledge encoded in the weights and then extracted by
+  ordinary reasoning, or **(ii)** stimulus–response pattern completion learned directly from the
+  training paraphrases? These are meaningfully different claims, and a taught-phrasing success alone
+  cannot separate them. **D-13's held-out template families generalizing is the evidence that
+  distinguishes (i) from (ii)** — the reconciliation must **cite that link explicitly**; it is not
+  to be left implicit on the assumption a reader will connect the sections themselves.
+
+  **Pre-registered failure branch — what the report says if the held-out families ALSO fail.**
+  Committed now, before the number is known, so the framing cannot be chosen after seeing it:
+  1. The report states plainly that the phase **cannot distinguish (i) from (ii)**, and the demo's
+     claim **narrows** to "taught phrasings are recalled from weights."
+  2. It simultaneously states that a taught-only success is **still a real weights-memory result**,
+     because it beats the adapter-off control — while **explicitly declining** the stronger
+     generalization claim.
+  3. **That narrower claim must cite the SAME comparison structure already locked for the phase's
+     core claim** — the adapter-on/adapter-off closed-book comparison from **D-11's controls** —
+     and **must not** introduce a new metric invented for the fallback branch. This keeps the
+     narrowed claim traceable to evidence the phase was going to produce regardless of the held-out
+     outcome, rather than a post-hoc comparison chosen because it happens to look favorable in the
+     failure scenario.
+
+- **D-21:** **The calibration run carries a second-person register arm** (RESEARCH A7). D-01's
+  first-person lock rests on measured *qualitative* evidence (F3/F5); the first-person-beats-
+  second-person claim itself is untested head-to-head, and research puts the arm's cost at
+  near-zero. Four conditions, each inherited from discipline this phase already committed to:
+  1. **The arm's facts are DISJOINT from the real fact set** — same discipline as the throwaway
+     calibration set itself (D-09).
+  2. **The arm passes the same pre-flight gate** as everything else (D-02/D-03 tokenizer census +
+     guessability). It is **not** authored as an afterthought exempt from the fact-set discipline
+     already locked.
+  3. **The decision rule for what counts as "first-person beats second-person" is written BEFORE the
+     calibration run** — never inferred from whichever arm happens to look better afterward. Same
+     blind-margin discipline as every other calibration-derived number in this phase
+     (D-09/D-14/D-15).
+  4. **If calibration confirms first-person wins** (expected, given F3 and F5's structural
+     evidence), the report cites **BOTH** the qualitative probe (F3/F5, including the "structure
+     copied, content not" finding) **AND** the quantitative calibration delta. The measured
+     head-to-head is what this decision was missing — **not** a replacement for the qualitative
+     evidence already gathered.
+
+- **D-22:** **Reversed-direction forms (`who is Zorp?`) are TAUGHT, not held out.** They hit the
+  documented reversal curse (`arxiv.org/abs/2309.12288` — "A is B" fine-tuning does not yield "B is
+  A"; persists across fine-tuning methods). Held out, they would fail for a *literature* reason
+  rather than a property of this model, dragging down the pre-registered held-out number and
+  poisoning exactly the evidence **D-20(c)** depends on. Teaching both directions is also what
+  PITFALLS-12 already prescribes. Two conditions:
+  1. **No pre-flight exemption.** Reversed-direction phrasings pass the same D-01/D-02/D-03 gate
+     (tokenizer census + guessability) as every other taught phrasing — having a defensive rationale
+     does not exempt them from the fact-set discipline.
+  2. **Named in the report's threats-to-validity section, explicitly.** The held-out set is
+     *deliberately scoped* to exclude a known literature failure mode, so a clean held-out result
+     demonstrates **generalization within that scope** — not immunity to every documented
+     fine-tuning limitation. Same scope-narrowing register as every other disclosure this phase has
+     made (D-05's soft tier, D-10's contradiction metric, D-11's control framing).
 
 ### Claude's Discretion
 

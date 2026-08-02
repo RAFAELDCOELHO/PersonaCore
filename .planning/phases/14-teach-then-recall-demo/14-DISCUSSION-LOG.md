@@ -274,6 +274,59 @@ discipline applied to every other locked number in this phase.
 
 ---
 
+## Question-fairness reconciliation & register calibration (third pass, post-research)
+
+**Trigger:** RESEARCH.md findings F3 (base emits first-person exclusively) and F5 (base cannot copy
+a fact from its own context) landed after the second pass. The user re-opened discussion on two
+points before authorizing planning: fix the teaching register, and turn the research report's
+"this actually strengthens the claim" framing into an explicitly reconciled, locked decision.
+
+**Verification performed before any decision was rewritten.** The researcher's findings were
+re-run first-party rather than accepted on report (`convbase_slim.pt`, greedy, bare-`<|system|>`
+prompts built through `encode_dialogue`):
+- **F3 reproduced, 5/5.** `what is your dog's name?` → `i am a cop.`; `where do you live?` → `i live
+  in the country`; `what do you do for a living?` / `what is your name?` → `i am a college student`;
+  `what is your favorite color?` → `i like red colors.` Zero second-person output.
+- **F5 reproduced and strengthened, 0/3 in-context copies.** `i live in oberlin.` → `i live in the
+  country`; `my name is quillon.` → `i am a college student`; `i have a dog named zorp.` → `i have a
+  dog named rose. he is a cop.` — the syntactic frame copied, the value substituted.
+- **Byproduct:** the base's per-slot prior-mass answers (`cop`, `college student`, `the country`,
+  `red`, `rose`) are now known before the candidate pool is authored — folded into D-01 as
+  pre-known D-03 close-call triggers.
+
+**Q1 — Register arm in calibration.** Options: (a) no arm, lock first-person on the F3 evidence
+alone; (b) small second-person arm making the head-to-head measured.
+→ **Selected (b)**, with four amendments: the arm's facts must be **disjoint** from the real fact set
+(D-09 discipline); the arm must pass the **same pre-flight gate** as everything else, not be authored
+as an exempt afterthought; the **decision rule for "first-person beats second-person" must be written
+before the run**, not inferred from whichever arm looks better afterward (D-09/D-14/D-15 blind-margin
+discipline); and on the expected confirmation the report cites **both** the qualitative probe and the
+quantitative delta — the head-to-head is what was missing, not a replacement for F3/F5. → **D-21**
+
+**Q2 — D-20's failure branch if the held-out families also fail.** Options: (a) pre-commit "cannot
+distinguish"; (b) same, plus pre-registering that taught-only success is still a real weights-memory
+result; (c) leave it to the report author.
+→ **Selected (b)**, amended: the "taught-only success beats the adapter-off control" framing must
+cite the **same comparison structure already locked for the phase's core claim** — D-11's
+adapter-on/adapter-off closed-book controls — **not** a new metric invented for the fallback. This
+keeps the narrowed claim traceable to evidence the phase produces regardless of the held-out outcome,
+rather than a post-hoc comparison chosen because it looks favorable in the failure scenario.
+→ **D-20, pre-registered failure branch**
+
+**Q3 — Reversal-curse family allocation.** Raised because it is load-bearing for D-20(c): if the
+held-out families are reversed-direction forms, they fail for a documented literature reason and the
+evidence distinguishing encoded-knowledge from pattern-completion is poisoned. Options: (a) reversed
+forms taught, not held out; (b) held out in a separately labelled tier; (c) defer to the D-09
+calibration rule.
+→ **Selected (a)**, amended: no pre-flight exemption for reversed phrasings despite the defensive
+rationale, and the scoping must be **named in the report's threats-to-validity section** — a clean
+held-out result demonstrates generalization *within a scope that deliberately excludes a known
+failure mode*, not immunity to every documented fine-tuning limitation. → **D-22**
+
+**User's standing constraint on this pass:** the research report's "this helps the claim" framing was
+accepted as a good starting point but **explicitly rejected as sufficient reconciliation** — it had
+to become the three explicit parts (a)/(b)/(c) before counting as a locked decision.
+
 ## Claude's Discretion
 
 - Loss masking for the teaching run (PITFALLS-14 reverses Phase 12's unmasked verdict by design —
