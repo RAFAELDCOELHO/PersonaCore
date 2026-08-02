@@ -1,7 +1,8 @@
 ---
 phase: 14
 slug: teach-then-recall-demo
-status: draft
+status: approved
+reviewed_at: 2026-08-01
 shadcn_initialized: false
 preset: none
 created: 2026-08-01
@@ -535,11 +536,25 @@ orchestrator should surface rather than let pass silently.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS *(one non-blocking FLAG — see below)*
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** APPROVED — 2026-08-01 by gsd-ui-checker.
+
+**Independent verification:** the checker re-measured all 15 `[VERIFIED]` claims against the
+project venv rather than trusting the tags — **zero discrepancies**. This includes the stock
+theme's Google Fonts stylesheet, the override emptying `_stylesheets`, all four type sizes, all
+seven spacing tokens, all six color tokens, the `launch()` signature, and the token panel's
+empty-question scaffold `[8187, 8185, 8186]`.
+
+**Non-blocking FLAG (Dimension 1):** the primary CTA `Ask` is a single word without a noun.
+Defensible as-is — the adjacent placeholder `Ask me something about myself…` supplies the object,
+and it is strictly more specific than M1's unlabelled icon button. If tightening: `Ask the model`.
+
+**Informational (not a defect):** Label (12px/400) and Body (14px/400) differ by 2px at equal
+weight — the weakest contrast pair in the scale. Both are theme-supplied, and correcting it would
+require the custom CSS this phase prohibits; contrast is carried by placement and color instead.
