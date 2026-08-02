@@ -13,6 +13,17 @@ markdown and committed JSON and nothing else. Pins:
      attribution is present and the wrong one is gone; and README's + ``demo_v2.ipynb``'s links
      into the report's Limitations section resolve to a heading that actually exists. Prevents a
      front-page number drifting from its source, losing its caveat, or pointing at nothing.
+  3. ``test_verdict_section_is_dated_and_separated`` — D-17. The Phase 15 correlation addendum in
+     ``results/phase13_ab_report.md`` is read SECTION-ANCHORED (the CR-02 shape), carries a Phase
+     15 marker, a ``YYYY-MM-DD`` date and the does-not-reopen-or-amend statement, sits after every
+     pre-existing Phase 13 heading, and has displaced none of them. Prevents an append blending
+     into or overwriting a prior phase's recorded evidence.
+  4. ``test_report_names_the_artifact_vmax_driver`` — D-02 / D-04 / D-18 / ROADMAP SC3. Inside a
+     section-anchored read of ``### The Two Signature Figures``, the report names the same
+     ``vmax_driver`` layer/projection and value that ``scripts/plot_phase15.py`` reads from
+     ``results/phase15_norms.json``, names every block's ``nonpositive_cells`` count, and carries
+     ``blocks.fisher.variant`` verbatim. Prevents the caption and the report saying different
+     THINGS rather than different amounts, and prevents SC3's Fisher variant going unnamed.
 
 **Why a convention needs a test.** D-15's exact-quote rule, D-16's inline-qualifier density and
 D-17's separation of appended Phase 15 material from Phase 13's recorded evidence are all
@@ -25,6 +36,7 @@ instance of the same declared-invariant-becomes-structural move D-07 makes for t
 and D-17/D-18 made for Phase 14's demo.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -400,3 +412,133 @@ def test_headline_numbers_match_sources():
     link = f"docs/REPORT.md#{_github_anchor(heading.group(0).lstrip('# '))}"
     assert link in readme, f"README does not link to the Limitations heading as written ({link})"
     assert link in _read("demo_v2.ipynb"), f"demo_v2.ipynb's Limitations link dangles ({link})"
+
+
+# --------------------------------------------------------------------------- #
+# D-17 — the appended verdict is dated, marked, and visibly separate
+# --------------------------------------------------------------------------- #
+
+_ADDENDUM_HEADING = "## Phase 15 Addendum"
+
+# Every Phase 13 heading that existed before Phase 15 appended anything. An append can never have
+# displaced one.
+_PHASE_13_HEADINGS = (
+    "## Pre-Registration",
+    "## 2×2 Result",
+    "## Gate Verdict",
+    "## Threats to Validity",
+    "## Figures",
+    "## Evidence Index",
+)
+
+
+def test_verdict_section_is_dated_and_separated():
+    """D-17: the Phase 15 addendum is dated, marked, last, and has displaced nothing.
+
+    The section read is ANCHORED — never a ``str.split`` on the ``## Verdict`` heading literal
+    taking ``[-1]``, nor any other last-occurrence substring read (the exact forbidden call is
+    spelled out nowhere in this file so ``grep -c 'split(...)'`` stays a usable guard). This is
+    not a style preference. That form is verbatim the
+    CR-02 failure recorded at ``scripts/phase14_recall.py:1627-1635``: a guard took the tail after
+    the LAST occurrence of a heading literal, a later section quoted that heading in its own
+    prose, and the guard read the prose instead of the section. This exact file reproduces that
+    condition — the addendum's separation comment quotes ``## Pre-Registration``,
+    ``## Gate Verdict`` and ``## Verdict``, and its own sub-heading ``### Verdict`` is a prefix
+    match for anything doing naive substring work. ``scripts/_verdict.py::VERDICT_SECTION``
+    consequently matches NOTHING here (Phase 13's heading is ``## Gate Verdict``), so this test
+    reuses that regex's SHAPE, anchored on the addendum's own heading.
+    """
+    report = _read("results/phase13_ab_report.md")
+
+    headings = re.findall(r"^## .+$", report, re.M)
+    # Meta-guard: the heading scan found something before anything is asserted about ordering.
+    assert headings, "no `## ` headings found in results/phase13_ab_report.md — the scan broke"
+
+    section = _anchored_section(report, _ADDENDUM_HEADING)
+    assert section, f"{_ADDENDUM_HEADING!r} section not found — the D-17 append is gone"
+    body = normalize_quote(section)
+    assert body, "the addendum anchored empty"
+
+    assert "Phase 15" in body, "the addendum no longer marks itself as Phase 15 material"
+    assert re.search(r"\b\d{4}-\d{2}-\d{2}\b", body), "the addendum carries no YYYY-MM-DD date"
+    # Normalized: the pre-registered renderer wraps this phrase across a hard line break, and the
+    # renderer is byte-frozen at 0e1af98 (T-15-09) — the reader normalizes, the file does not move.
+    assert "does not reopen or amend" in body
+
+    assert ("GATE PASSES" in body) != ("GATE MISSES" in body), (
+        "the addendum must record exactly one of GATE PASSES / GATE MISSES"
+    )
+    if "GATE MISSES" in body:
+        # D-11's miss register, pre-registered before any number existed. The gate PASSED, so this
+        # branch is dormant by design — it exists so a future re-drive that misses cannot record
+        # the miss in softer language than the one that was locked in advance.
+        assert "suggestive but not statistically demonstrated at n = 36" in body
+
+    # Visibly separate, appended, not blended in: the addendum is the LAST `## ` heading.
+    assert headings[-1].startswith(_ADDENDUM_HEADING), (
+        f"the Phase 15 addendum is no longer the last `## ` heading (last is {headings[-1]!r}) — "
+        f"an append that sits among Phase 13's sections reads as amending them"
+    )
+
+    for phase_13_heading in _PHASE_13_HEADINGS:
+        assert phase_13_heading in headings, (
+            f"{phase_13_heading!r} is gone from Phase 13's recorded evidence — the Phase 15 "
+            f"append displaced it"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# D-02 / D-04 / D-18 / ROADMAP SC3 — the report names the artifact's own fields
+# --------------------------------------------------------------------------- #
+
+_FIGURES_HEADING = "### The Two Signature Figures"
+
+
+def test_report_names_the_artifact_vmax_driver():
+    """The figure caption and the report cannot disagree without this test going red.
+
+    D-04's invariant is that a reader comparing figure and report finds **different amounts,
+    never different things**. ``scripts/plot_phase15.py`` renders each block's ``vmax_driver``
+    from ``results/phase15_norms.json``; this asserts the report names the same field values,
+    read from the artifact rather than hardcoded a second time.
+
+    The read is SECTION-ANCHORED on ``### The Two Signature Figures`` (pinned in ``15-05-PLAN.md``
+    ``<pinned_headings>``). A whole-file substring fallback would be materially weaker: projection
+    names like ``q_proj`` appear elsewhere in the report — the LoRA decision sections name all six
+    — so a disclosure that had drifted into the wrong section would still pass.
+    """
+    artifact = json.loads(_read("results/phase15_norms.json"))
+    blocks = artifact["blocks"]
+    assert blocks, "results/phase15_norms.json carries no blocks"
+
+    section = _anchored_section(_read("docs/REPORT.md"), _FIGURES_HEADING, stop=r"#{2,3} ")
+    # Meta-guard, mandatory: a heading rename would otherwise make every assertion below pass
+    # vacuously on an empty string — the exact failure mode tests/test_phase14_scoring.py:423-424
+    # exists to prevent. Plan 15-05 had to add two following `### ` headings for this very reason;
+    # without them the section ran to EOF and the anchoring proved nothing.
+    assert section, f"{_FIGURES_HEADING!r} section not found in docs/REPORT.md"
+    assert section.strip(), "the figures section anchored empty"
+    # Normalized for the same reason the quotes are: the report's markdown is hand-wrapped, so a
+    # layer/projection phrase or the variant string can legally straddle a line break.
+    body = normalize_quote(section)
+
+    for name, block in blocks.items():
+        driver = block["vmax_driver"]
+        phrase = f"layer {driver['layer']}'s `{driver['projection']}`"
+        assert phrase in body, (
+            f"{name}: the report does not name the artifact's vmax driver {phrase!r} — the "
+            f"figure caption and the report would be free to disagree"
+        )
+        assert str(driver["value"]) in body, (
+            f"{name}: the report does not carry the driver cell's value {driver['value']}"
+        )
+        # Pitfall 5 — the counts are STATED, never left for the figure to imply by looking clean.
+        assert f"`nonpositive_cells` = {block['nonpositive_cells']}" in body, (
+            f"{name}: the report does not state nonpositive_cells = {block['nonpositive_cells']}"
+        )
+
+    # ROADMAP SC3 requires *the named Fisher variant* in the v2.0 narrative. Asserting the
+    # artifact's own string, inside the anchored section, is what makes "named" checkable instead
+    # of a proofreading obligation. The coarse `regime` label is NOT the variant.
+    variant = blocks["fisher"]["variant"]
+    assert variant in body, f"SC3: the report does not name the Fisher variant {variant!r}"
