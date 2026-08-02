@@ -270,7 +270,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 15-05-PLAN.md — `docs/REPORT.md` v2.0: dated boundary marker, Decision sections, results narrative, nine quoted limitations (Wave 4)
+- [x] 15-05-PLAN.md — `docs/REPORT.md` v2.0: dated boundary marker, Decision sections, results narrative, nine quoted limitations (Wave 4)
 - [ ] 15-06-PLAN.md — `README.md` v2.0: three headline numbers, each qualified inline at 547-live-ids density (Wave 4)
 - [ ] 15-07-PLAN.md — New self-contained `demo_v2.ipynb`, prepended independence cell in `demo.ipynb`, SC3 supersession recorded (Wave 4)
 
@@ -300,4 +300,4 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete   | 2026-08-02 |
-| 15. Figures & Writeup | v2.0 | 4/8 | In Progress|  |
+| 15. Figures & Writeup | v2.0 | 5/8 | In Progress|  |

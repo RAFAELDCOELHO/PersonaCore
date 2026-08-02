@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
-stopped_at: Completed 15-04-PLAN.md (wave 3)
-last_updated: "2026-08-02T19:40:23.195Z"
+stopped_at: Completed 15-05-PLAN.md (wave 4)
+last_updated: "2026-08-02T19:59:27.408Z"
 last_activity: 2026-08-02
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 39
-  completed_plans: 35
+  completed_plans: 36
   percent: 86
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 15 (figures-writeup) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-08-02
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [█████████░] 90%
 | Phase 15 P02 | 18min | 3 tasks | 3 files |
 | Phase 15 P03 | 24min | 3 tasks | 4 files |
 | Phase 15 P04 | 14min | 2 tasks | 2 files |
+| Phase 15 P05 | 41min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -124,6 +125,8 @@ Key carry-forwards for v2.0:
 - [Phase 15]: 15-04: ROADMAP SC2 is NOT narrowed — but it is supported at the level the gate tests, the SIGN, and no further; the magnitude stays descriptive at n = 36 and the pre-registered percentile-bootstrap small-n bias note travels WITH the CI into REPORT.md
 - [Phase 15]: 15-04: CR-02 — phase13_ab_report.md now carries '## Verdict'/'## Gate Verdict'/'## Pre-Registration' twice (real headings + quoted in the addendum comment); Plan 15-08's D-17 test MUST anchor on the SECTION via scripts/_verdict.py::VERDICT_SECTION, never split('## Verdict')[-1]
 - [Phase 15]: 15-04: the plan's own verify literal 'does not reopen or amend' is split across a line break by the pre-registered renderer — the VERIFY command was corrected, never phase15_stats.py, which is byte-unchanged since 0e1af98 (T-15-09 verified, not asserted)
+- [Phase 15]: 15-05: docs/REPORT.md extended, never edited — 549 insertions / 0 deletions, first 421 lines byte-identical, dated M1 boundary marker inserted before the stale future-tense roadmap (D-13/R3)
+- [Phase 15]: 15-05: limitation quotes keep stable labels L1..L9 in claim-bound render order (L1,L7,L4,L2,L6,L5,L3,L9,L8), verified under the pinned normalize_quote; grep -qF is unrunnable for the 5 multi-line quotes
 
 ### Pending Todos
 
@@ -157,8 +160,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11:
 
 ## Session Continuity
 
-Last session: 2026-08-02T19:40:23.188Z
-Stopped at: Completed 15-04-PLAN.md (wave 3)
+Last session: 2026-08-02T19:59:18.578Z
+Stopped at: Completed 15-05-PLAN.md (wave 4)
 Resume file: None
 
 ## Operator Next Steps
