@@ -1045,21 +1045,84 @@ the human review here.
 
 ## Close-Call Rejections (D-03, human-recorded)
 
-| fact | slot | quoted base completion | reason |
-| --- | --- | --- | --- |
-| | | | |
+Recorded at the D-06 blocking checkpoint. Every close-call rejection **MUST quote the
+specific base completion text that triggered it**. A rejection without a quote is not a
+valid rejection: this tier exists for the failure mode exact-match structurally cannot
+see — semantic proximity (same category, adjacent plausible value, right slot) that would
+make a reader suspect the base half-knew the answer. It is a documented judgment, never a
+silent one. Every quote below is copied verbatim from `## Base Guessability Probes` above.
 
-Every close-call rejection **MUST quote the specific base completion text that triggered
-it**. A rejection without a quote is not a valid rejection: this tier exists for the
-failure mode exact-match structurally cannot see — semantic proximity (same category,
-adjacent plausible value, right slot) that would make a reader suspect the base half-knew
-the answer. It is a documented judgment, never a silent one. Leave the table empty if
-nothing is rejected on close-call grounds.
+**Two structurally different things reduced the pool, and this section keeps them apart on
+purpose.** Conflating them would misreport the gate:
+
+1. **Guessability close calls (D-03)** — a semantic-proximity judgment against a quoted
+   base completion. Found in the **soft tier only**. This is a finding about the base.
+2. **Composition trims** — a one-fact-per-slot choice applied to a pool that was
+   deliberately over-authored at two candidates per slot. **Not a guessability finding at
+   all**; the trimmed candidates are clean. This is a finding about the pool's shape.
+
+### 1. Guessability close calls (D-03) — soft tier only
+
+All six soft candidates PASSED the mechanical exact-match floor at 0/16. Every row below
+is therefore a pure semantic-proximity judgment. The base's behaviour here is the textbook
+D-05 failure mode: **same category, right slot, plausible competing value.**
+
+| fact | slot | quoted base completion (verbatim) | disposition | reason |
+| --- | --- | --- | --- | --- |
+| `cand_color_chartreuse` | `favorite_color` | greedy on `what is your favorite color?` → `i like red colors. i like red colors.`<br>greedy on `do you have a favorite color?` → `i do not. i have a color of red.` | **RETAINED — soft tier, excluded from all pre-registered thresholds (D-05)** | Real close call: the base holds concrete prior mass on a competing colour (`red`, the pre-registered trigger) in the right slot. Kept for demo richness only; contributes nothing to DEMO-05/06/07. |
+| `cand_color_ochre` | `favorite_color` | greedy on `do you remember what color you like best?` → `i like blue. i like blue. i like blue.`<br>warm 3 on `what color do you like most?` → `i like red or blue.` | **REJECTED** | Same close call as its slot sibling, and the slot can seat only one fact. `chartreuse` is the more distinctive value, so `ochre` is the one dropped. |
+| `cand_food_marzipan` | `favorite_food` | greedy on `which food do you like best?` → `i like cheeseburgers. i like cheeseburgers`<br>greedy on `what is your favorite food?` → `i made cheesecakers, its my favorite` | **RETAINED — soft tier, excluded from all pre-registered thresholds (D-05)** | Real close call: the base names a concrete competing food in the right slot. Kept for demo richness only; contributes nothing to DEMO-05/06/07. |
+| `cand_food_paprika` | `favorite_food` | greedy on `what do you like to eat most?` → `i like cheeseball. it is my favorite.`<br>greedy on `do you remember what food you like best?` → `i like cheese and cheese. i like cheese.` | **REJECTED** | Same close call as its slot sibling, and the slot can seat only one fact. `paprika` is additionally a weak value — a spice reads as an odd answer to "favourite food," which would blunt the demo. |
+| `cand_drink_kombucha` | `favorite_drink` | greedy on `what is your favorite drink?` → `i like cheeseball. i like cheeseball.`<br>warm 3 on `do you have a favorite drink?` → `yes i have a drink` | **REJECTED** | The base answers the drink slot with a concrete competing consumable and with contentless slot-shaped filler. `favorite_drink` is a low-cardinality preference slot in the same D-05 family as colour and food, and unlike those two it is not needed for tier breadth. |
+| `cand_drink_horchata` | `favorite_drink` | greedy on `what is the drink you love?` → `i love italian food. it is my favorite.`<br>warm 3 on `what is the drink you love?` → `i love food. i really like cheesecake.` | **REJECTED** | Same slot-level close call as `kombucha`. With both candidates rejected the **entire `favorite_drink` slot drops out of the taught set.** |
+
+**Why two facts with recorded close calls are RETAINED.** They are not retained because
+they are clean — they are not clean, and the quotes above say so. They are retained under
+the **D-05 exclusion**: the soft tier exists precisely because low-cardinality preference
+slots cannot reliably survive the D-03 close-call filter, so it is a **separately labelled
+tier that is excluded from every pre-registered threshold**. `chartreuse` and `marzipan`
+will be taught and scored, and reported in their own section, but they contribute **nothing**
+to the DEMO-05 / DEMO-06 / DEMO-07 claim. Any number they produce is narrative texture.
+
+### 2. Composition trims — NOT guessability findings
+
+The eight candidates below **passed the mechanical floor 0/16 AND showed no close call.**
+They are dropped for one reason only: `CANDIDATE_POOL` was deliberately over-authored at
+two candidates per slot so attrition could land inside D-05's composition, and **a slot can
+seat only one taught fact.** Reading these as guessability failures would misreport the
+gate — the base guessed nothing about any of them.
+
+| fact | slot | value | kept sibling in the same slot | reason |
+| --- | --- | --- | --- | --- |
+| `cand_person_davrin` | `person_name` | `davrin` | `cand_person_quillon` | composition trim — one fact per slot |
+| `cand_dog_krix` | `pet_name` | `krix` | `cand_dog_zorp` | composition trim — one fact per slot |
+| `cand_cat_halvo` | `cat_name` | `halvo` | `cand_cat_zibby` | composition trim — one fact per slot |
+| `cand_sister_perrine` | `sibling_name` | `perrine` | `cand_sister_orsala` | composition trim — one fact per slot |
+| `cand_town_calderwick` | `hometown` | `calderwick` | `cand_town_brindlemoor` | composition trim — one fact per slot |
+| `cand_street_pemberly` | `street` | `pemberly` | `cand_street_marrowgate` | composition trim — one fact per slot |
+| `cand_year_1962` | `birth_year` | `1962` | `cand_year_1987` | composition trim — one fact per slot |
+| `cand_house_4429` | `house_number` | `4429` | `cand_house_7412` | composition trim — one fact per slot |
+
+These eight remain committed in `CANDIDATE_POOL` and are D-10 contradiction-detector
+lexicon material (plan 14-03's `GATE_REJECTED_CANDIDATES`) — rejected from the taught set,
+not deleted from the record.
+
+### The tier split, stated as the measurement
+
+The core tier showed **essentially no close calls**: across 256 core completions the base
+names a concrete alternative in the right slot only three times — `that is ok my name is
+rob<|assistant|>sorry, i just got`, `going that, my name is charlie, mine is present`, and
+`i am not cute, his name is car` — none of them adjacent to any candidate value. Its
+dominant behaviour in the proper-noun slots is the generic non-answer (`i am a cop.`), not
+a competing value.
+
+The soft tier reproduced **D-05's predicted failure mode exactly**: same category, right
+slot, plausible competing value, on every one of its three slots. Soft facts are kept for
+demo richness under the D-05 exclusion, never for the headline claim.
 
 ## Survivor Count
 
-Mechanical-floor survivors only — subtract any close-call rejections recorded above
-before reading this against the targets.
+### Mechanical floor (measured)
 
 | pool | core survivors | core target | soft survivors | soft target | total | total target |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -1068,11 +1131,68 @@ before reading this against the targets.
 | register_arm | 6/6 | n/a | 0/0 | n/a | 6 | >= 4 (D-21.1) |
 
 The `candidate` pool is deliberately over-authored (two candidates per slot) so attrition
-can land inside D-05's 5-8 core /
-2-3 soft composition across DISTINCT slots. If it falls
-short, that is exactly the information D-06 exists to surface before the set is locked —
-say so in the verdict rather than relaxing the filter.
+can land inside D-05's 5-8 core / 2-3 soft composition across DISTINCT slots.
+
+### Final selection after the human review (D-06 verdict)
+
+| pool | core selected | core target | soft selected | soft target | rejected | total target |
+| --- | --- | --- | --- | --- | --- | --- |
+| candidate | **8/16** | 5-8 (D-05) ✅ | **2/6** | 2-3 (D-05) ✅ | 12 | 5-10 (ROADMAP) ✅ (10) |
+| calibration | 10/10 | n/a | 0/0 | n/a | 0 | >= 6 (D-09.1) ✅ |
+| register_arm | 6/6 | n/a | 0/0 | n/a | 0 | >= 4 (D-21.1) ✅ |
+
+The 12 `candidate` rejections split as **8 composition trims** (clean candidates, one fact
+per slot) and **4 soft-tier guessability close calls** — see `## Close-Call Rejections`.
+No candidate was rejected on the mechanical floor; the base guessed nothing.
+
+**Pre-registered tier — 8 core, one per distinct slot.** These eight carry the entire
+DEMO-05 / DEMO-06 / DEMO-07 claim.
+
+| slot | fact id | value |
+| --- | --- | --- |
+| `person_name` | `cand_person_quillon` | `quillon` |
+| `pet_name` | `cand_dog_zorp` | `zorp` |
+| `cat_name` | `cand_cat_zibby` | `zibby` |
+| `sibling_name` | `cand_sister_orsala` | `orsala` |
+| `hometown` | `cand_town_brindlemoor` | `brindlemoor` |
+| `street` | `cand_street_marrowgate` | `marrowgate` |
+| `birth_year` | `cand_year_1987` | `1987` |
+| `house_number` | `cand_house_7412` | `7412` |
+
+**Secondary tier — 2 soft, RETAINED but explicitly labelled and EXCLUDED from all
+pre-registered thresholds (D-05).** Taught and scored, reported separately, contributing
+nothing to the headline claim. Both carry a recorded close call.
+
+| slot | fact id | value | recorded close call (verbatim) |
+| --- | --- | --- | --- |
+| `favorite_color` | `cand_color_chartreuse` | `chartreuse` | `i like red colors. i like red colors.` |
+| `favorite_food` | `cand_food_marzipan` | `marzipan` | `i like cheeseburgers. i like cheeseburgers` |
+
+The `favorite_drink` slot is **dropped entirely** — both of its candidates were rejected as
+close calls.
 
 ## Verdict
 
-PENDING — user decision at checkpoint.
+ADAPT
+
+**Deviation, stated for the record (D-06):**
+
+The core survivors were trimmed **16 → 8 across 8 distinct slots** — one fact per slot.
+This is a **composition choice, not attrition**: all 16 passed the D-03 mechanical floor at
+0/16 and none was a close call, but a slot can seat only one taught fact, so the
+deliberately over-authored two-per-slot pool collapses to its eight distinct slots. The
+result sits inside D-05's 5-8 core target.
+
+The soft tier was reduced **6 → 2** and is **retained as a separately labelled tier that is
+excluded from every pre-registered threshold**, under the D-05 exclusion. Unlike the core
+trims these four rejections **are** guessability close calls, and each one quotes the base
+completion that triggered it in `## Close-Call Rejections`. The two survivors
+(`chartreuse`, `marzipan`) carry recorded close calls of their own and are retained anyway
+— explicitly not because they are clean, but because the soft tier exists precisely for
+slots that cannot survive the close-call filter and therefore has no bearing on
+DEMO-05/06/07.
+
+Final taught set: **8 pre-registered core + 2 labelled soft = 10 facts**, inside the
+ROADMAP's 5-10 total. Calibration (10) and register-arm (6) pools pass unreduced.
+
+Proceed to plan 14-03.
