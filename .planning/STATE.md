@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: Weight-Based Memory
 status: executing
 stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-08-02T01:58:35.831Z"
-last_activity: 2026-08-02 -- Phase 14 planning complete
+last_updated: "2026-08-02T02:42:38.253Z"
+last_activity: 2026-08-02 -- Phase 14 execution started
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 14 — teach then recall demo
+**Current focus:** Phase 14 — teach-then-recall-demo
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-02 -- Phase 14 planning complete
+Phase: 14 (teach-then-recall-demo) — EXECUTING
+Plan: 1 of 11
+Status: Executing Phase 14
+Last activity: 2026-08-02 -- Phase 14 execution started
 
 Progress: [██████████] 100%
 
