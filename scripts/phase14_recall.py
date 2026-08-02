@@ -43,16 +43,36 @@ check, so a failure exits non-zero even under ``PYTHONOPTIMIZE``.
 Run: ``python scripts/phase14_recall.py`` (inside the Python 3.11 venv, on the M3).
 """
 
+import hashlib
 import os
 import pathlib
 import re
+import time
+import warnings
+from typing import NamedTuple
 
 # An uncovered MPS op falls back to CPU rather than crashing the run (T-05-04 precedent).
 # Set BEFORE the first torch import anywhere in the process — including the one the harness half
 # (plan 14-06) adds below, and including a demo that imports this module for its budget integer.
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
+import torch  # noqa: E402  (must follow the MPS-fallback env set above)
+
+from personacore.checkpoint import load_adapter, load_slim  # noqa: E402
+from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt, detokenize  # noqa: E402
+from personacore.generation import collect, undecodable_ids_mask  # noqa: E402
+from personacore.lora import (  # noqa: E402
+    LoRAConfig,
+    adapter_disabled,
+    inject_lora,
+    load_adapter_weights,
+)
+from personacore.model import GPT  # noqa: E402
+from personacore.preflight import preflight_device  # noqa: E402
+from personacore.provenance import git_sha  # noqa: E402
+from personacore.seeding import seed_everything  # noqa: E402
+from personacore.tokenizer import from_json  # noqa: E402
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONVBASE_SLIM = _REPO_ROOT / "checkpoints" / "convbase_slim.pt"  # weights_only=True (load_slim)
@@ -127,6 +147,14 @@ SEED = 1337  # the project's established seed (QA-02; the same one every phase h
 # 14-RESEARCH Open Q4 recommends the 5-10 band; 8 sits inside it. Cost is trivial: 13.9M params at
 # <= 64 new tokens.
 N_SEEDED_SAMPLES = 8
+
+# What a "seeded sample" IS, so the rate is re-derivable from committed numbers alone: the warm
+# decode settings `scripts/make_transcripts.py:141` used for every shipped Phase-12 transcript.
+# Carried over rather than re-tuned — a decode setting chosen to make a recall number look better
+# is the same category of error as a threshold chosen after seeing results. The greedy draw takes
+# neither (argmax, no RNG).
+SAMPLE_TEMPERATURE = 0.8
+SAMPLE_TOP_P = 0.95
 
 STOP_IDS = frozenset({8184, 8185})  # the pinned turn-stopping idiom (eos + the next `<|user|>`)
 
@@ -340,12 +368,601 @@ def assert_no_value_in_prompt(tok, question, values):
 
 
 # =====================================================================================
-# ===== THE HARNESS — plan 14-06 lands `main()` and the scored run here =====
+# ===== THE HARNESS — model load, provenance, and the per-question completion helper =====
 # =====================================================================================
 #
-# Deliberately empty. 14-06 adds the load -> inject_lora -> load_adapter chain, the per-question
-# greedy + seeded decode loop, the committed per-question context dumps, and the report writer.
-# `import phase14_factset` belongs INSIDE `main()` and nowhere else (see the LAZY-IMPORT RULE).
+# Nothing below runs at import time: every name here is a function, and `main()` is
+# `__main__`-guarded, so an `importlib` load still executes no model load and no generation (the
+# `finetune_ab.py` gate-as-pure-function precedent that `tests/test_phase14_scoring.py` relies on).
+# `import phase14_factset` belongs INSIDE these functions and nowhere else (LAZY-IMPORT RULE).
+
+
+def _sha256(path):
+    """Streaming SHA-256 of an artifact file — a gitignored ``.pt``'s identity in the echo.
+
+    ``checkpoints/`` is gitignored, so ``git_sha()`` identifies the CODE but says nothing about
+    the WEIGHTS a run actually read. The digest is what lets a reader confirm that the base and
+    adapter behind a reported number are the same two files a later run loads.
+    """
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_adapted_model(device):
+    """Load the slim base + the persona adapter; return ``(model, cfg, tok, forbid, artifact)``.
+
+    Both files cross the ``weights_only=True`` choke points (``load_slim`` / ``load_adapter``) —
+    the restricted unpickler, zero code execution on load (T-14-22). ``torch.load`` is never
+    called directly anywhere in this path.
+
+    The returned ``artifact`` is the loaded persona file with two HARNESS-LOCAL keys attached so
+    the provenance echo and plan 14-10's report can read them without widening this return tuple:
+    ``loaded_base_fingerprint`` (the trio read off the slim checkpoint) and
+    ``fingerprint_warnings`` (the captured D-02 mismatch text, empty when the trios agree). They
+    are never re-exported — nothing writes this dict back to disk.
+    """
+    if not CONVBASE_SLIM.exists():
+        raise SystemExit(
+            f"[phase14_recall] missing {CONVBASE_SLIM} — the shareable base artifact. Run "
+            "`python scripts/export_slim.py` to export it from checkpoints/convbase_best.pt."
+        )
+    ckpt = load_slim(CONVBASE_SLIM)  # weights_only=True — restricted unpickler (T-14-22).
+    model_cfg = ModelConfig(**ckpt["model_config"])
+    model = GPT(model_cfg)
+    # LOAD BEFORE INJECT — load-bearing ordering (ARCHITECTURE Anti-pattern 1). Injection grows
+    # every wrapped projection's state-dict keys with a `.base.` infix, so injecting first would
+    # break every key the checkpoint carries.
+    model.load_state_dict(ckpt["model"])
+
+    n_wrapped = inject_lora(model, LoRAConfig())
+    _prove(
+        n_wrapped == 6 * model_cfg.n_layer,
+        f"inject_lora wrapped {n_wrapped} projections but the base has "
+        f"{model_cfg.n_layer} layers, so exactly {6 * model_cfg.n_layer} were expected "
+        "(6 allowlisted projections per block) — the adapter would apply to the wrong model",
+    )
+
+    if not ADAPTER_PATH.exists():
+        raise SystemExit(
+            f"[phase14_recall] missing {ADAPTER_PATH} — the taught persona file. Run "
+            "`python scripts/teach_persona.py real` to train it before scoring recall."
+        )
+    # The trio is READ off the loaded base, never recomputed (D-02 provenance).
+    fingerprint = {
+        "git_sha": ckpt["git_sha"],
+        "step": ckpt["step"],
+        "val_loss": ckpt["val_loss"],
+    }
+    # D-02 is warn-not-error (09-CONTEXT): a mismatch loads anyway, because the base evolves
+    # mid-milestone. Captured rather than swallowed — plan 14-10's report must STATE whether the
+    # adapter was fingerprinted against the base it was scored on; the run continues either way.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        artifact = load_adapter(ADAPTER_PATH, expected_fingerprint=fingerprint)
+    artifact["loaded_base_fingerprint"] = fingerprint
+    artifact["fingerprint_warnings"] = [
+        str(w.message) for w in caught if issubclass(w.category, UserWarning)
+    ]
+    # Key + shape audit BEFORE a single tensor is copied (09-REVIEW CR-02).
+    load_adapter_weights(model, artifact)
+
+    model.to(device)
+    model.eval()
+
+    tok = from_json(TOKENIZER_PATH)  # the FROZEN git-tracked tokenizer — never retrained.
+    # .to(device): next_token masked_fills logits IN PLACE on the model device, and the sampling
+    # path does not move the mask itself (CR-01 / ARCHITECTURE Anti-pattern 7).
+    forbid = undecodable_ids_mask(tok, model_cfg.vocab_size).to(device)
+    return model, model_cfg, tok, forbid, artifact
+
+
+def _complete(model, prompt_ids, device, forbid, **kw):
+    """One completion: returns ``(generated_ids, stopped_on_stop_id)``."""
+    idx = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+    out = collect(
+        model,
+        idx,
+        max_new_tokens=RECALL_MAX_NEW_TOKENS,
+        forbid_ids=forbid,
+        stop_ids=set(STOP_IDS),
+        **kw,
+    )
+    gen = out[0, len(prompt_ids) :].tolist()
+    # generate() stops WITHOUT yielding the stop id (D-05): fewer than max_new_tokens
+    # generated tokens means a stop-id termination. That is the whole stop signal — there is no
+    # second one, and trimming decoded text cannot see a mid-glyph boundary.
+    return gen, len(gen) < RECALL_MAX_NEW_TOKENS
+
+
+def complete_question(model, tok, question, device, forbid, *, index):
+    """One question, all draws: greedy plus ``N_SEEDED_SAMPLES`` per-question-seeded samples.
+
+    ``scripts/make_retention_samples.py:8-14`` discipline — each sample draws from its OWN
+    ``torch.Generator`` seeded ``question_seed(index) + s``. Seeding once for the whole run would
+    desynchronize every later question after the first early stop, and stop-on-``STOP_IDS`` makes
+    early stops the common case; per-draw seeding is what makes the whole run re-derivable from
+    ``SEED`` alone. ``index`` is the question's position in ITS tier, so the closed-book control
+    replays the identical streams per question and the two arms are paired rather than merely
+    comparable.
+
+    Returns the question, its exact prompt ids, the decoded completions in draw order (greedy
+    first), and the per-completion stop flags. Nothing is filtered or re-rolled.
+    """
+    prompt_ids = build_recall_prompt(tok, question)
+    completions = []
+    stopped = []
+
+    gen_ids, stop = _complete(model, prompt_ids, device, forbid, greedy=True)
+    completions.append(tok.decode(gen_ids))
+    stopped.append(stop)
+
+    for s in range(N_SEEDED_SAMPLES):
+        generator = torch.Generator(device="cpu").manual_seed(question_seed(index) + s)
+        gen_ids, stop = _complete(
+            model,
+            prompt_ids,
+            device,
+            forbid,
+            temperature=SAMPLE_TEMPERATURE,
+            top_p=SAMPLE_TOP_P,
+            generator=generator,
+        )
+        completions.append(tok.decode(gen_ids))
+        stopped.append(stop)
+
+    return {
+        "question": question,
+        "prompt_ids": prompt_ids,
+        "completions": completions,
+        "stopped": stopped,
+    }
+
+
+def echo_provenance(runtime_summary, device, adapter_artifact):
+    """The run-level provenance block (the ``finetune_ab.py:322-329`` register); also returned.
+
+    **The PROCESS BOUNDARY is what these lines make auditable** (PITFALLS-11 step 1). Teaching
+    ran in a DIFFERENT ``python`` invocation — a different pid, at an earlier wall clock, leaving
+    the adapter file on disk in between — so the clean room is INHERITED by construction rather
+    than re-argued here. The pid, the timestamp, and the adapter's SHA-256 are the three
+    recorded facts a reader checks that against.
+
+    Per 14-RESEARCH Pattern 8 the harness deliberately does NOT spawn a subprocess per question.
+    One fresh process for the whole scored run, with every question an independent
+    ``build_recall_prompt`` id sequence never concatenated with any prior turn, fully satisfies
+    PITFALLS-11 and costs nothing; per-question subprocesses would buy no additional isolation
+    because nothing survives between questions except the frozen weights.
+    """
+    import phase14_factset as fs  # LAZY — the fact strings never reach this module's import time.
+
+    lines = [
+        f"seed: {SEED} (seed_everything before the load; every draw re-derivable from it)",
+        f"driver git_sha: {git_sha()}",
+        f"pid: {os.getpid()} (PROCESS BOUNDARY — teaching ran in a different invocation)",
+        f"wall clock (UTC): {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+        f"preflight: {runtime_summary}",
+        f"device: {device}",
+        f"RECALL_MAX_NEW_TOKENS: {RECALL_MAX_NEW_TOKENS} (D-19, derived from the token census)",
+        f"N_SEEDED_SAMPLES: {N_SEEDED_SAMPLES} at temperature={SAMPLE_TEMPERATURE} "
+        f"top_p={SAMPLE_TOP_P}, plus 1 greedy draw",
+        f"loaded base fingerprint: {adapter_artifact['loaded_base_fingerprint']}",
+        f"adapter base fingerprint: {adapter_artifact['base_fingerprint']}",
+        f"adapter lora_config: {adapter_artifact['lora_config']}",
+        "fingerprint mismatch (D-02 warn-not-error): "
+        f"{adapter_artifact['fingerprint_warnings'] or 'none — the trios agree'}",
+        f"FACTSET_GATE_SHA: {fs.FACTSET_GATE_SHA}",
+        f"sha256 {CONVBASE_SLIM.name}: {_sha256(CONVBASE_SLIM)}",
+        f"sha256 {ADAPTER_PATH.name}: {_sha256(ADAPTER_PATH)}",
+    ]
+    print("[phase14_recall] ===== run provenance =====")
+    for line in lines:
+        print(f"  {line}")
+    return lines
+
+
+# =====================================================================================
+# ===== THE SCORED RUN — question sets, the clean-room proof, the tiers =====
+# =====================================================================================
+
+# The four tier labels, in the order they are run AND written. `results/` section order is this
+# list's order, not a sort: the closed-book control sits directly under the two core tiers it
+# qualifies, and the excluded soft tier sits last so no reader meets it before the gated numbers.
+CORE_TAUGHT_TIER = "core taught"
+CORE_HELDOUT_TIER = "core held-out"
+CLOSED_BOOK_TIER = "closed-book control (adapter off)"
+SOFT_TIER = "soft tier (excluded from the pre-registered gate)"
+
+# The single `source:` line every context dump carries — the harness's dump and the demo's live
+# panel name the SAME call, because D-18 makes them the same call.
+CONTEXT_DUMP_SOURCE = "build_recall_prompt(tok, question) — the same call the demo panel makes"
+
+
+class RecallItem(NamedTuple):
+    """One scored unit: a question BOUND to the fact whose value answers it.
+
+    A bare question string cannot be scored — ``score_question`` needs the value to look for —
+    so the question sets are carried as bound items rather than as two parallel sequences that
+    could drift out of alignment. ``fact`` is a ``phase14_factset.Fact``, deliberately left
+    unannotated: a module-level ``from phase14_factset import Fact`` would break the LAZY-IMPORT
+    RULE for the sake of a type hint.
+    """
+
+    fact: object
+    question: str
+    split: str  # "taught" | "held-out" — aggregated separately inside every tier
+    reserved: bool  # True for the D-08 reserved gate probes (proven base-failing at gate time)
+
+
+def build_question_sets(facts):
+    """``(taught, held_out, excluded)`` for one tier — fact-bound, disjoint, and value-free.
+
+    **The exclusion is a clean-room requirement, not a convenience.** Two taught families name
+    the fact value IN THE QUESTION by definition of their frames: ``F5`` (yes/no verification —
+    "is your dog named zorp?") and ``F4`` (reversed direction, D-22 — "who is zorp?"). Both are
+    legitimate TEACHING forms; PITFALLS-12 prescribes teaching QA in both directions. Neither is
+    a legitimate RECALL question: asking a question that already contains the answer measures
+    copying from context, not memory in the weights, and feeding one to
+    ``assert_no_value_in_prompt`` would abort the whole run — correctly, because the value would
+    genuinely be in the model's context.
+
+    So the filter is MECHANICAL and allocation-agnostic: drop any question containing its own
+    fact's value under the D-10 ``contains_value`` rule, whatever family it came from. Naming
+    ``F4``/``F5`` explicitly would silently break when plan 14-09 rewrites the allocation from
+    the calibration run. Every dropped question is returned and reported in the transcripts with
+    its family id — excluded from SCORING, never from the record.
+
+    Held-out items are the held-out families over the same facts PLUS that fact's
+    ``RESERVED_HELDOUT_PROBES`` (D-08 seed members, flagged ``reserved=True`` so their measured
+    base-failure provenance travels into the report).
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    taught, held_out, excluded = [], [], []
+    for fact in facts:
+        for split, family_ids in (
+            ("taught", fs.TAUGHT_FAMILY_IDS),
+            ("held-out", fs.HELDOUT_FAMILY_IDS),
+        ):
+            bucket = taught if split == "taught" else held_out
+            for family_id in sorted(family_ids):
+                for question, _answer in fs.render_family(family_id, fact):
+                    if contains_value(question, fact.value):
+                        excluded.append((family_id, fact.id, split, question))
+                        continue
+                    bucket.append(RecallItem(fact, question, split, False))
+        for probe in fs.RESERVED_HELDOUT_PROBES[fact.id]:
+            held_out.append(RecallItem(fact, probe, "held-out", True))
+        _prove(
+            any(item.fact.id == fact.id for item in taught),
+            f"fact {fact.id!r} has no scorable taught question left after the self-naming "
+            "filter — every taught family for this slot names the value in its own question, "
+            "so the taught tier would silently stop covering this fact",
+        )
+
+    taught_keys = {normalize(item.question) for item in taught}
+    held_out_keys = {normalize(item.question) for item in held_out}
+    _prove(
+        not (taught_keys & held_out_keys),
+        f"taught and held-out questions overlap after normalization on "
+        f"{sorted(taught_keys & held_out_keys)[:3]} — D-13 requires entirely held-out template "
+        "FAMILIES, so a shared phrasing would report taught recall as held-out generalization",
+    )
+    return tuple(taught), tuple(held_out), tuple(excluded)
+
+
+def run_scored_recall(model, tok, device, forbid, items, *, tier_label, excluded=()):
+    """Score one tier: dump every prompt, prove the clean room, then decode and score. SC2/SC3.
+
+    Per question, in order: render the context dump, prove no locked value is in the prompt,
+    decode greedy + ``N_SEEDED_SAMPLES``, score, and count contradictions and hedging. Nothing
+    is filtered, re-rolled, or sorted — the returned record carries every completion verbatim,
+    failures included, in draw order.
+
+    The contradiction lexicon is built HERE, per call, from the lazily-imported gate material
+    (``LOCKED_VALUES`` plus every ``GATE_REJECTED_CANDIDATES`` value): committed, auditable, and
+    requiring zero new editorial judgment. Contradiction and hedging counts are DESCRIPTIVE with
+    no gate attached (D-10) — they qualify what the recall rate is allowed to mean, they never
+    fail the phase.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    all_values = tuple(f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS)
+    lexicon = set(fs.LOCKED_VALUES) | {f.value for f in fs.GATE_REJECTED_CANDIDATES}
+    _prove(items, f"tier {tier_label!r} received no questions to score")
+
+    questions = []
+    for index, item in enumerate(items):
+        dump = render_context_dump(tok, item.question, source=CONTEXT_DUMP_SOURCE)
+        # The dump is recorded BEFORE the model is called, so the committed evidence is what the
+        # model actually received rather than a reconstruction made after seeing the answer.
+        assert_no_value_in_prompt(tok, item.question, all_values)
+        # The mechanical form of the demo-killing failure in PITFALLS-11: if any locked value
+        # reaches any prompt, the claim is falsified at the exact moment it is demonstrated, so
+        # the run ABORTS rather than warns. `assert_no_value_in_prompt` raises SystemExit.
+        drawn = complete_question(model, tok, item.question, device, forbid, index=index)
+        completions = drawn["completions"]
+        # Same D-10 rule at two granularities: `score_question` aggregates it, `hits` keeps the
+        # per-completion flag the transcripts print next to each completion.
+        k, n = score_question(completions, item.fact.value)
+        hits = [contains_value(c, item.fact.value) for c in completions]
+        questions.append(
+            {
+                "question": item.question,
+                "fact_id": item.fact.id,
+                "slot": item.fact.slot,
+                "value": item.fact.value,
+                "split": item.split,
+                "reserved": item.reserved,
+                "prompt_ids": drawn["prompt_ids"],
+                "dump": dump,
+                "completions": completions,
+                "hits": hits,
+                "stopped": drawn["stopped"],
+                "contradictions": [
+                    find_contradictions(c, item.fact.value, lexicon) for c in completions
+                ],
+                "hedging": [has_hedging(c) for c in completions],
+                "k": k,
+                "n": n,
+            }
+        )
+        print(f"[phase14_recall] {tier_label} [{item.split}] {item.question!r}: {k}/{n}")
+
+    by_split = {}
+    for record in questions:
+        k, n = by_split.get(record["split"], (0, 0))
+        by_split[record["split"]] = (k + record["k"], n + record["n"])
+    total_k = sum(record["k"] for record in questions)
+    total_n = sum(record["n"] for record in questions)
+    n_completions = sum(len(record["completions"]) for record in questions)
+    return {
+        "tier": tier_label,
+        "questions": questions,
+        "k": total_k,
+        "n": total_n,
+        "rate": total_k / total_n,
+        "by_split": by_split,
+        "contradictions": sum(1 for r in questions for c in r["contradictions"] if c),
+        "hedging": sum(sum(r["hedging"]) for r in questions),
+        "n_stopped": sum(sum(r["stopped"]) for r in questions),
+        "n_completions": n_completions,
+        "excluded": tuple(excluded),
+    }
+
+
+def _quote(text):
+    """One completion as a markdown blockquote, VERBATIM — interior newlines preserved.
+
+    ``make_transcripts.py``'s one-line ``f"> {…}"`` silently swallows a multi-line completion.
+    Raw evidence cannot afford that, so every line gets its own ``>`` prefix and nothing is
+    detokenized, stripped, or collapsed: what is printed is exactly ``tok.decode(generated_ids)``.
+    """
+    return "\n".join(f"> {line}" for line in text.split("\n"))
+
+
+def write_transcripts(records, provenance_lines):
+    """Write ``results/phase14_recall_transcripts.md`` — every completion, failures included.
+
+    The ``make_transcripts.py:146-183`` shape: build ``blocks``, prepend a ``header`` carrying
+    the measured proxies, ``"\\n".join(...)``, ONE write. Sections come out in the order
+    ``records`` arrives in, which ``main()`` fixes as core taught, core held-out, closed-book
+    control, soft tier.
+
+    This file is RAW EVIDENCE and owns no verdict: nothing here is aggregated to a tier rate,
+    ranked, or compared against a threshold. ``results/phase14_recall_report.md`` (plan 14-10)
+    owns that register.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    notes = {
+        CORE_TAUGHT_TIER: (
+            "What this measures: recall on phrasings whose template FAMILY the adapter was "
+            "trained on — the fact is in the weights and the frame is familiar."
+        ),
+        CORE_HELDOUT_TIER: (
+            "What this measures: recall on NEVER-SEEN phrasings — entirely held-out template "
+            "families (D-13) plus the reserved gate probes (D-08). This is the tier that "
+            "distinguishes an internalized fact from a memorized surface form."
+        ),
+        CLOSED_BOOK_TIER: (
+            "What this measures: the same process, the same weights, and the same prompts with "
+            "only the LoRA `enabled` flags flipped off (`adapter_disabled`). Any difference "
+            "between this tier and the two above can only come from the adapter."
+        ),
+        SOFT_TIER: (
+            "What this tier is FOR: narrative texture and breadth of personalization — it shows "
+            "the demo teaching a preference, not only proper nouns, so the transcript reads like "
+            "a person rather than a form. What it does NOT do: it has **no bearing** on DEMO-06's "
+            "taught or held-out thresholds and contributes nothing to the headline claim, "
+            "precisely because low-cardinality preference slots could not reliably survive the "
+            "D-03 close-call filter — both survivors carry a recorded close call of their own and "
+            "are retained under the D-05 exclusion, explicitly NOT because they are clean. This "
+            "is a named section, not a footnote."
+        ),
+    }
+    reserved_note = (
+        "reserved gate probe — held out AND measured base-failing at gate time, commit "
+        f"`{fs.FACTSET_GATE_SHA}`; the base completion that proves it is quoted verbatim in "
+        "`results/phase14_factset_report.md` (D-08)"
+    )
+
+    blocks = []
+    for record in records:
+        blocks += [f"## {record['tier']}", "", notes.get(record["tier"], ""), ""]
+        if record["excluded"]:
+            families = sorted({family_id for family_id, _fid, _split, _q in record["excluded"]})
+            blocks += [
+                f"> **{len(record['excluded'])} taught phrasings from families "
+                f"{', '.join(families)} are excluded from SCORING, not from the record.** Those "
+                "frames name the fact value inside the QUESTION by definition (yes/no "
+                "verification, and the D-22 reversed direction). They are legitimate teaching "
+                "forms — PITFALLS-12 prescribes teaching QA in both directions — but a question "
+                "that already contains the answer measures copying from context, not memory in "
+                "the weights, and feeding one to the model would put a locked value in context "
+                "and abort this run. The filter is mechanical (`contains_value(question, "
+                "value)`), never a hand-picked family list. Excluded phrasings:",
+                "",
+            ]
+            for family_id, fact_id, split, question in record["excluded"]:
+                blocks.append(f"- `{family_id}` · `{fact_id}` · {split} — {question}")
+            blocks.append("")
+
+        for index, entry in enumerate(record["questions"]):
+            marks = [
+                f"`{entry['fact_id']}`",
+                f"slot `{entry['slot']}`",
+                f"split `{entry['split']}`",
+            ]
+            blocks += [
+                f"### [{index}] {entry['question']}",
+                "",
+                f"- {' · '.join(marks)}",
+            ]
+            if entry["reserved"]:
+                blocks.append(f"- {reserved_note}")
+            blocks += [
+                f"- scored {entry['k']}/{entry['n']} completions containing the value",
+                "",
+                "```",
+                entry["dump"],
+                "```",
+                "",
+            ]
+            for draw, completion in enumerate(entry["completions"]):
+                label = "greedy" if draw == 0 else f"seeded #{draw}"
+                hit = "HIT" if entry["hits"][draw] else "miss"
+                stop = "stop-id" if entry["stopped"][draw] else f"{RECALL_MAX_NEW_TOKENS}-token cap"
+                flags = [label, hit, stop]
+                if entry["contradictions"][draw]:
+                    flags.append(f"contradicts: {', '.join(entry['contradictions'][draw])}")
+                if entry["hedging"][draw]:
+                    flags.append("hedging")
+                blocks += [f"**{' · '.join(flags)}**", "", _quote(completion), ""]
+
+    n_questions = sum(len(record["questions"]) for record in records)
+    n_stopped = sum(record["n_stopped"] for record in records)
+    n_completions = sum(record["n_completions"] for record in records)
+    header = [
+        "# PersonaCore — Phase 14 Teach-Then-Recall Transcripts (DEMO-05 / DEMO-06)",
+        "",
+        "> **Every completion produced by the run appears below, failures included and",
+        "> unfiltered.** These are not REPRESENTATIVE samples in the weaker sense the Phase-12",
+        "> transcripts used — nothing was drawn, ranked, truncated, or re-rolled on its way to",
+        "> this file. Each prompt is a `build_recall_prompt` id sequence, never a hand-formatted",
+        "> string, so prompts tokenize identically to the training bins (Pitfall 4), and the",
+        "> exact prompt token ids appear with every question (D-18 — SC2's literal requirement).",
+        "> Completions are printed as raw `tok.decode(generated_ids)` output; scoring applies",
+        "> `normalize`, which detokenizes first. Question `[i]` in each section is the seed",
+        "> index: its samples draw from `torch.Generator().manual_seed(question_seed(i) + s)` =",
+        f"> `{SEED} + i + s`, so every draw here is re-derivable from the seed alone.",
+        "> No tier rate, ranking, or verdict appears in this file —",
+        "> `results/phase14_recall_report.md` owns that register.",
+        "",
+        "## Run Provenance",
+        "",
+        "The pid and wall clock below, plus the adapter file's on-disk existence BETWEEN the",
+        "teaching run and this one, are the auditable form of PITFALLS-11 step 1's process",
+        "boundary: teaching happened in a different `python` invocation, so the clean room is",
+        "inherited by construction rather than re-argued here.",
+        "",
+        "```",
+        *provenance_lines,
+        "```",
+        "",
+        "## Measured Proxies",
+        "",
+        f"- Stop-id termination fraction: **{n_stopped}/{n_completions} = "
+        f"{n_stopped / n_completions:.2f}**",
+        f"- Draws: **{n_questions} greedy + {n_questions * N_SEEDED_SAMPLES} seeded** "
+        f"({N_SEEDED_SAMPLES} per question at temperature={SAMPLE_TEMPERATURE}, "
+        f"top_p={SAMPLE_TOP_P}) over {n_questions} questions",
+        f"- `RECALL_MAX_NEW_TOKENS`: **{RECALL_MAX_NEW_TOKENS}** (D-19, derived from the census)",
+        "",
+    ]
+    TRANSCRIPTS_PATH.write_text("\n".join(header + blocks), encoding="utf-8")
+    print(
+        f"[phase14_recall] wrote {TRANSCRIPTS_PATH}: {len(records)} tiers, {n_questions} "
+        f"questions, {n_completions} completions, stop fraction {n_stopped / n_completions:.2f}"
+    )
+
+
+def run_closed_book_control(model, tok, device, forbid, items):
+    """SC2's base-without-adapter control: the same process, weights, and prompts — flags off.
+
+    ``adapter_disabled`` flips only the ``enabled`` boolean on every ``LoRALinear`` and restores
+    each module's prior value in a ``finally``, so the delta branch never executes and the model
+    is bit-identical to the pre-injection base while the A/B tensors sit untouched. Nothing else
+    differs: same process, same loaded weights, same prompts, same per-question seeds — so a
+    difference in the numbers can only come from the adapter.
+
+    D-08: the gate's base-failure probes are evidence carried FORWARD, never a substitute for
+    re-measuring at scoring time. This control therefore re-runs on the FULL final question set,
+    not on the reserved probes alone.
+    """
+    with adapter_disabled(model):
+        return run_scored_recall(model, tok, device, forbid, items, tier_label=CLOSED_BOOK_TIER)
+
+
+def main():
+    """The fresh-process scored recall run (SC2/SC3): load, prove, score, control, commit."""
+    summary = preflight_device(strict=True)
+    print(f"[phase14_recall] preflight: {summary}")
+    device = RuntimeConfig().device
+    seed_everything(SEED)
+
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    model, _model_cfg, tok, forbid, artifact = load_adapted_model(device)
+
+    core_taught, core_held_out, core_excluded = build_question_sets(fs.LOCKED_FACTS)
+    soft_taught, soft_held_out, soft_excluded = build_question_sets(fs.SOFT_TIER_FACTS)
+    # The constructed held-out set is tied back to the committed `heldout_questions()` seam
+    # rather than replacing it: this harness needs the fact binding that the flat tuple drops,
+    # so equality is what proves the two constructions describe the same never-seen split.
+    _prove(
+        {item.question for item in core_held_out + soft_held_out} == set(fs.heldout_questions()),
+        "the constructed held-out question set differs from phase14_factset.heldout_questions() "
+        "— the scored never-seen split has drifted from the committed one",
+    )
+    # D-19 fit guard, BEFORE any generation: an unutterable value would present as a recall
+    # failure while the real cause is the budget.
+    assert_values_fit(tok, [f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS])
+
+    records = [
+        run_scored_recall(
+            model,
+            tok,
+            device,
+            forbid,
+            core_taught,
+            tier_label=CORE_TAUGHT_TIER,
+            excluded=core_excluded,
+        ),
+        run_scored_recall(model, tok, device, forbid, core_held_out, tier_label=CORE_HELDOUT_TIER),
+        run_closed_book_control(
+            model,
+            tok,
+            device,
+            forbid,
+            core_taught + core_held_out + soft_taught + soft_held_out,
+        ),
+        run_scored_recall(
+            model,
+            tok,
+            device,
+            forbid,
+            soft_taught + soft_held_out,
+            tier_label=SOFT_TIER,
+            excluded=soft_excluded,
+        ),
+    ]
+    for record in records:
+        print(f"[phase14_recall] {record['tier']}: {record['k']}/{record['n']}")
+
+    write_transcripts(records, echo_provenance(summary, device, artifact))
 
 
 # =====================================================================================
@@ -356,3 +973,7 @@ def assert_no_value_in_prompt(tok, question, values):
 # `build_recall_prompt`'s `persona=` argument), `run_collapse_control` (D-11.2 — which imports
 # `COLLAPSE_PPL_TRIGGER` from `teach_persona` LAZILY, inside the function), and
 # `run_bit_identity_control` (D-11.3).
+
+
+if __name__ == "__main__":
+    main()
