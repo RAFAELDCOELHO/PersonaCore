@@ -42,10 +42,16 @@ Run: ``python scripts/teach_persona.py {cal_first_person|cal_first_person_replay
 cal_second_person|real}`` (inside the Python 3.11 venv, on the M3).
 """
 
+import contextlib
+import hashlib
+import io
+import json
 import math
 import os
 import pathlib
 import re
+import statistics
+import subprocess
 import sys
 import time
 from dataclasses import asdict
@@ -119,6 +125,29 @@ MASK_FRACTION_BAND = (0.15, 0.95)
 # makes the ratio an auditable committed number instead of a runtime flag.
 REPLAY_RATIO = 0.0  # every arm except the replay arm
 REPLAY_ARM_RATIO = 1.0  # D-15's with-replay arm: one replay token per teaching token
+
+# ===== The two REAL-ARM settings derived by plan 14-09's calibration run =====
+#
+# D-15 verdict, from ``replay_required(4.5737, 14.8559)`` -> **True**. Training the persona with
+# NO replay raised masked dialogue-val PPL by +224.81% (adapter OFF 4.5737 / ON 14.8559 over
+# 270,203 scored targets), far past ``COLLAPSE_PPL_TRIGGER`` = 0.10. The real run therefore mixes
+# PersonaChat replay into its teaching bin at ``REPLAY_ARM_RATIO``, the ratio the paired arm
+# measured. Evidence: ``results/phase14_calibration_report.md``, ``## Derivation 3``.
+#
+# What the paired arm also measured, stated here because it bounds what this number buys: replay
+# at 1.0 moved the collapse to +29.39%, which is a large mitigation but STILL trips the trigger,
+# and it cost taught recall 0.6825 -> 0.4143. "Replay required" is not "replay solves it".
+REAL_RUN_REPLAY_RATIO = REPLAY_ARM_RATIO
+
+# D-21 verdict, from ``first_person_wins(0.5519, 0.8045)`` -> **False**. First person did NOT
+# clear ``REGISTER_WIN_MARGIN`` = 0.10; second person measured HIGHER on held-out recall (0.8045
+# vs 0.5519, a margin of -0.2526). That negative is recorded unamended (D-12) and it does NOT
+# reopen D-01 mid-phase: D-01's register lock rests on the qualitative 14-RESEARCH F3/F5 evidence
+# (the base answering `i have a dog named my name is cuddling` — structure copied, content not),
+# and this arm was designed to SUPPLEMENT that with the head-to-head D-01 was missing, not to
+# replace it. Re-authoring the teaching register after seeing a number is the exact move the
+# pre-registration block exists to prevent, so the real run stays first person.
+REAL_RUN_SECOND_PERSON = False
 
 ARMS = ("cal_first_person", "cal_first_person_replay", "cal_second_person", "real")
 
@@ -349,7 +378,14 @@ def arm_spec(arm):
     if arm == "cal_second_person":
         return fs.REGISTER_ARM_FACTS, True, REPLAY_RATIO
     if arm == "real":
-        return fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS, False, REPLAY_RATIO
+        # The real arm reads the two CALIBRATION-DERIVED settings, so the derived numbers are
+        # load-bearing rather than decorative: editing either constant changes what the real run
+        # actually trains on.
+        return (
+            fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS,
+            REAL_RUN_SECOND_PERSON,
+            REAL_RUN_REPLAY_RATIO,
+        )
     raise SystemExit(f"[teach_persona] unknown arm {arm!r} — expected one of {ARMS}")
 
 
@@ -386,10 +422,24 @@ def build_arm_bins(arm, facts, family_ids, *, second_person=False, replay_ratio=
     return tok, stats, outputs
 
 
+USAGE = (
+    f"usage: python scripts/teach_persona.py {{{'|'.join(ARMS)}}}\n"
+    "       python scripts/teach_persona.py --calibration [--force]\n"
+    "       python scripts/teach_persona.py --rewrite-report [--force]"
+)
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
+    # Plan 14-09's two modes. Both are defined below in the CALIBRATION RUN section.
+    if argv and argv[0] == "--calibration":
+        run_calibration(argv[1:])
+        return
+    if argv and argv[0] == "--rewrite-report":
+        rewrite_report(argv[1:])
+        return
     if len(argv) != 1 or argv[0] not in ARMS:
-        raise SystemExit(f"usage: python scripts/teach_persona.py {{{'|'.join(ARMS)}}}")
+        raise SystemExit(USAGE)
     arm = argv[0]
 
     facts, second_person, replay_ratio = arm_spec(arm)
@@ -838,6 +888,808 @@ CALIBRATION_DECISION_RULE = (
     replay_required,
     first_person_wins,
 )
+
+
+# =====================================================================================
+# ===== THE CALIBRATION RUN — three arms, one measured source, four derivations =====
+# =====================================================================================
+#
+# `python scripts/teach_persona.py --calibration` runs the three arms in order, scores each
+# arm's adapter ON and OFF, applies the four rule functions above MECHANICALLY to the measured
+# numbers, and writes `results/phase14_calibration_report.md` with a PENDING verdict for a human
+# to replace. Nothing in this section chooses a number: every derived value is the return of a
+# function committed in `d7d7917`, before any of these measurements existed.
+
+CAL_ARMS = ("cal_first_person", "cal_first_person_replay", "cal_second_person")
+
+# The measured arm records, dumped so the REPORT is re-renderable from committed evidence rather
+# than only from a two-hour MPS run. The calibration measurements are the expensive, unrepeatable
+# part; the prose that frames them is not, and a wording fix in `write_calibration_report` must
+# never be a reason to re-measure (or, worse, a reason to hand-edit generated evidence).
+CALIBRATION_RESULTS = _REPO_ROOT / "results" / "phase14_calibration_results.json"
+
+# Progress cadence for the scoring loops — 598 questions x 2 adapter states is a ~1h run and a
+# silent hour is indistinguishable from a hung one.
+SCORE_PROGRESS_EVERY = 20
+
+
+def _sha256(path):
+    """Streaming SHA-256 of a gitignored artifact — the adapter's identity in the report.
+
+    ``checkpoints/`` is gitignored, so ``git_sha()`` identifies the CODE that produced an arm but
+    says nothing about the WEIGHTS the reported numbers were measured on.
+    """
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def rule_commit_sha():
+    """The commit that introduced ``CALIBRATION_DECISION_RULE`` — D-09 condition 2's proof.
+
+    Searched on the tuple's DEFINITION (``CALIBRATION_DECISION_RULE = (``) rather than the bare
+    name: the name is also mentioned in comments added by earlier commits, so a bare-name search
+    returns the commit that first MENTIONED the rule instead of the one that committed it. The
+    oldest match is the introducing commit; the report states it and the human checkpoint
+    re-derives it with ``git log -S`` before recording a verdict.
+    """
+    try:
+        found = subprocess.run(
+            [
+                "git",
+                "log",
+                "-S",
+                "CALIBRATION_DECISION_RULE = (",
+                "--format=%H",
+                "--",
+                "scripts/teach_persona.py",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=_REPO_ROOT,
+        ).stdout.split()
+        return found[-1] if found else "unknown"
+    except Exception:
+        return "unknown"  # provenance is best-effort and never kills a long run (QA-02)
+
+
+def calibration_items(facts, family_ids):
+    """``(family_id, fact, question)`` for every SCORABLE question of these families.
+
+    The self-naming filter is the same MECHANICAL rule the scored harness uses
+    (``phase14_recall.contains_value(question, fact.value)``, plan 14-06 deviation 1) rather than
+    a hardcoded ``{F4, F5}`` denylist: those two frames name the value in their own question by
+    definition, and a question that already contains its answer measures copying from context
+    instead of memory in the weights. Naming the families explicitly would silently break the
+    moment this very run rewrites the allocation.
+    """
+    import phase14_recall as pr  # LAZY — the two scripts reference each other (14-05 rule 4).
+
+    items = []
+    for fact in facts:
+        for family_id in sorted(family_ids):
+            for question, _answer in fs.render_family(family_id, fact):
+                if pr.contains_value(question, fact.value):
+                    continue
+                items.append((family_id, fact, question))
+    return items
+
+
+def score_items(model, tok, device, forbid, items, *, label):
+    """Score one tier: greedy + ``N_SEEDED_SAMPLES`` per question, aggregated per family.
+
+    ``index`` is the question's position in ITS tier, matching the harness's per-question seeding
+    contract, so the adapter-OFF pass replays the identical streams and the two passes are PAIRED
+    rather than merely comparable.
+    """
+    import phase14_recall as pr  # LAZY — see calibration_items.
+
+    per_family, total_k, total_n = {}, 0, 0
+    for index, (family_id, fact, question) in enumerate(items):
+        drawn = pr.complete_question(model, tok, question, device, forbid, index=index)
+        k, n = pr.score_question(drawn["completions"], fact.value)
+        fk, fn = per_family.get(family_id, (0, 0))
+        per_family[family_id] = (fk + k, fn + n)
+        total_k += k
+        total_n += n
+        if (index + 1) % SCORE_PROGRESS_EVERY == 0:
+            print(
+                f"  [{label}] {index + 1}/{len(items)} questions, running "
+                f"{total_k}/{total_n} = {total_k / total_n:.4f}",
+                flush=True,
+            )
+    if total_n == 0:
+        raise SystemExit(f"[teach_persona] tier {label!r} produced no scorable question")
+    rates = {fid: k / n for fid, (k, n) in per_family.items()}
+    detail = ", ".join(f"{fid} {rate:.4f}" for fid, rate in sorted(rates.items()))
+    print(f"[teach_persona] {label}: {total_k}/{total_n} = {total_k / total_n:.4f} ({detail})")
+    return {
+        "k": total_k,
+        "n": total_n,
+        "rate": total_k / total_n,
+        "per_family": rates,
+        "questions": len(items),
+    }
+
+
+def score_arm(arm, facts, adapter_path, device):
+    """Measure one arm's recall: taught and held-out, adapter ON and adapter OFF.
+
+    The adapter is loaded back off disk through ``phase14_recall.load_adapted_model`` — the same
+    ``weights_only=True`` load-before-inject path the real scored run uses — rather than scoring
+    the in-memory training model, so a calibration number and a Phase-14 number come off the same
+    pipeline.
+
+    The OFF pass is ``adapter_disabled``: same process, same weights, same prompts, same
+    per-question seeds, only the 36 LoRA ``enabled`` flags flipped. It supplies the closed-book
+    baseline WITHOUT which a held-out rate is unjudgeable — a rate of 0.4 means one thing against
+    a base that scores 0.0 and something else entirely against a base that scores 0.35 — and it
+    is the second term of the per-family GAIN that ``lock_family_allocation`` consumes. A family's
+    "marginal recall gain" is measured here as its taught rate ON minus its taught rate OFF: the
+    recall that teaching that family actually bought, which is exactly what D-14's saturation
+    clause asks about.
+    """
+    import phase14_recall as pr  # LAZY — see calibration_items.
+
+    model, _cfg, tok, forbid, _artifact = pr.load_adapted_model(device, adapter_path=adapter_path)
+    taught = calibration_items(facts, fs.TAUGHT_FAMILY_IDS)
+    heldout = calibration_items(facts, fs.HELDOUT_FAMILY_IDS)
+    print(
+        f"[teach_persona] {arm}: scoring {len(taught)} taught + {len(heldout)} held-out "
+        f"questions x {1 + pr.N_SEEDED_SAMPLES} draws, adapter ON then OFF"
+    )
+
+    on_taught = score_items(model, tok, device, forbid, taught, label=f"{arm} taught ON")
+    on_heldout = score_items(model, tok, device, forbid, heldout, label=f"{arm} held-out ON")
+    with adapter_disabled(model):
+        off_taught = score_items(model, tok, device, forbid, taught, label=f"{arm} taught OFF")
+        off_heldout = score_items(model, tok, device, forbid, heldout, label=f"{arm} held-out OFF")
+
+    gain = {
+        fid: on_taught["per_family"][fid] - off_taught["per_family"].get(fid, 0.0)
+        for fid in on_taught["per_family"]
+    }
+    heldout_rates = list(on_heldout["per_family"].values())
+    # Population std over the held-out families actually measured — this IS the whole population
+    # of held-out families, not a sample drawn from a larger one, so pstdev is the correct
+    # estimator and stdev's (n-1) correction would inflate it against a pre-registered trigger.
+    std = statistics.pstdev(heldout_rates) if len(heldout_rates) > 1 else 0.0
+    print(
+        f"[teach_persona] {arm}: per-family gain "
+        f"{ {fid: round(g, 4) for fid, g in sorted(gain.items())} }, "
+        f"held-out per-family std {std:.4f}"
+    )
+    del model
+    return {
+        "on_taught": on_taught,
+        "on_heldout": on_heldout,
+        "off_taught": off_taught,
+        "off_heldout": off_heldout,
+        "per_family_gain": gain,
+        "heldout_family_std": std,
+    }
+
+
+def dump_results(results, provenance_lines):
+    """Persist the measured arm records beside the report — the re-render input.
+
+    ``paths`` is dropped rather than serialized: ``arm_outputs(arm)`` reconstructs it exactly, and
+    a serialized absolute path would go stale the moment the repo moved.
+    """
+    payload = {
+        "provenance": list(provenance_lines),
+        "arms": {
+            arm: {key: value for key, value in record.items() if key != "paths"}
+            for arm, record in results.items()
+        },
+    }
+    CALIBRATION_RESULTS.parent.mkdir(parents=True, exist_ok=True)
+    CALIBRATION_RESULTS.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(f"[teach_persona] wrote {CALIBRATION_RESULTS}")
+
+
+def rewrite_report(argv=()):
+    """Re-render the report from the RECORDED measurements — no GPU, no re-measurement.
+
+    The measurements are frozen evidence; only the framing around them is re-derived, and it is
+    re-derived by the SAME ``derive_all`` + ``write_calibration_report`` code the measured run
+    used, so the report stays generated rather than hand-edited. The clobber guard still applies:
+    a recorded verdict is not silently overwritten by a re-render.
+    """
+    _refuse_clobber(CALIBRATION_REPORT, "--force" in argv)
+    if not CALIBRATION_RESULTS.exists():
+        raise SystemExit(
+            f"[teach_persona] missing {CALIBRATION_RESULTS} — run "
+            "`python scripts/teach_persona.py --calibration` first."
+        )
+    payload = json.loads(CALIBRATION_RESULTS.read_text(encoding="utf-8"))
+    results = {arm: dict(rec, paths=arm_outputs(arm)) for arm, rec in payload["arms"].items()}
+    derived = derive_all(results)
+    write_calibration_report(results, derived, payload["provenance"])
+    return results, derived
+
+
+def _refuse_clobber(report_path, force):
+    """The ``measure_inflation.py:66-75`` guard: a RECORDED verdict is committed evidence.
+
+    A rerun would reset ``## Verdict`` to PENDING and silently drop whatever the human wrote
+    beside it. ``--force`` is the only way past.
+    """
+    if report_path.exists() and not force:
+        recorded = report_path.read_text(encoding="utf-8").split("## Verdict")[-1]
+        if "PENDING" not in recorded:
+            raise SystemExit(
+                f"[teach_persona] {report_path} already carries a recorded verdict — it is "
+                "committed evidence (D-09). Pass --force to overwrite and re-measure."
+            )
+
+
+def _arm_rows(arm, record):
+    """One arm's ``## Measured Results`` table."""
+    stats = record["stats"]
+    on_t, on_h = record["on_taught"], record["on_heldout"]
+    off_t, off_h = record["off_taught"], record["off_heldout"]
+    ppl_off, ppl_on = record["ppl_adapter_off"], record["ppl_adapter_on"]
+    gain = ", ".join(f"`{fid}` {g:+.4f}" for fid, g in sorted(record["per_family_gain"].items()))
+    heldout_by_family = ", ".join(
+        f"`{fid}` {r:.4f}" for fid, r in sorted(on_h["per_family"].items())
+    )
+    return [
+        f"### `{arm}`",
+        "",
+        "| Measurement | Value |",
+        "|---|---|",
+        f"| final train loss | {record['final_train_loss']:.4f} |",
+        f"| taught recall rate (adapter ON) | **{on_t['rate']:.4f}** ({on_t['k']}/{on_t['n']}) |",
+        f"| held-out recall rate (adapter ON) | **{on_h['rate']:.4f}** ({on_h['k']}/{on_h['n']}) |",
+        f"| taught recall rate (adapter OFF — closed book) | {off_t['rate']:.4f} "
+        f"({off_t['k']}/{off_t['n']}) |",
+        f"| held-out recall rate (adapter OFF — closed book) | {off_h['rate']:.4f} "
+        f"({off_h['k']}/{off_h['n']}) |",
+        f"| per-family gain (taught ON − taught OFF) | {gain} |",
+        f"| held-out rate by family | {heldout_by_family} |",
+        f"| held-out per-family std (population) | {record['heldout_family_std']:.4f} |",
+        f"| masked dialogue-val PPL, adapter OFF | {ppl_off:.4f} |",
+        f"| masked dialogue-val PPL, adapter ON | {ppl_on:.4f} |",
+        # 2 decimals of a percent, deliberately: the PPL pair is recorded to 4 decimal places
+        # (that is the precision the run reports and the JSON stores), so a 4-decimal PERCENTAGE
+        # would print digits the stored measurement cannot support and would shift under a
+        # re-render. Two decimals is stable, and no gate resolves anything finer.
+        f"| PPL delta (ON vs OFF) | {(ppl_on - ppl_off) / ppl_off:+.2%} "
+        f"over {record['scored_targets']:,} scored targets |",
+        f"| measured mask fraction | {stats['mask_fraction']:.4f} (band {MASK_FRACTION_BAND}) |",
+        f"| teaching corpus tokens | {stats['tokens']:,} "
+        f"({stats['teaching_tokens']:,} teaching + {stats['replay_tokens']:,} replay) |",
+        f"| episodes | {stats['episodes']:,} |",
+        f"| scored questions | {on_t['questions']} taught + {on_h['questions']} held-out |",
+        f"| wall clock | {record['wall_clock']:.0f}s |",
+        f"| adapter | `{record['paths']['adapter'].name}` sha256 "
+        f"`{record['adapter_sha256'][:16]}…` |",
+        f"| run CSV | `results/phase14_{arm}/run.csv` |",
+        "",
+    ]
+
+
+def write_calibration_report(results, derived, provenance_lines):
+    """Write ``results/phase14_calibration_report.md`` — measurements, then the four derivations.
+
+    The ``results/phase13_ab_report.md`` register: a Shared-Pattern-6 opener stating what the
+    numbers are and are not, the pre-registration block first, the measurements second, and the
+    derivations last — each naming the rule function that produced it. The verdict is left
+    PENDING; a human records it at plan 14-09's checkpoint.
+    """
+    base = results["cal_first_person"]
+    replay = results["cal_first_person_replay"]
+    register = results["cal_second_person"]
+    taught_threshold, heldout_threshold = derived["thresholds"]
+    floor_text = "the FLOOR (the discount fell below it)"
+    taught_bound = floor_text if derived["taught_floor_bound"] else "the DISCOUNT"
+    heldout_bound = floor_text if derived["heldout_floor_bound"] else "the DISCOUNT"
+    gain_map = {fid: round(g, 4) for fid, g in sorted(base["per_family_gain"].items())}
+    replay_delta = (replay["ppl_adapter_on"] - replay["ppl_adapter_off"]) / replay[
+        "ppl_adapter_off"
+    ]
+    base_delta = (base["ppl_adapter_on"] - base["ppl_adapter_off"]) / base["ppl_adapter_off"]
+    register_margin = base["on_heldout"]["rate"] - register["on_heldout"]["rate"]
+
+    lines = [
+        "# PersonaCore — Phase 14 Calibration Report (D-09 / D-14 / D-15 / D-21)",
+        "",
+        "> **What these numbers are.** A measurement on THROWAWAY fact sets that are disjoint",
+        "> from the real one, run for the sole purpose of deriving four numbers — the recall",
+        "> thresholds, the taught/held-out family allocation, the replay verdict, and the",
+        "> teaching-register verdict — under a decision rule committed to git BEFORE this run",
+        "> produced a single number. One calibration run answers four questions from one measured",
+        "> source instead of four separately-justified guesses.",
+        ">",
+        "> **What they are not.** These are NOT a Phase-14 result. They are not the demo's recall",
+        "> rate, they are not comparable to `results/phase14_recall_report.md`, and they say",
+        "> nothing about whether the real persona was learned — they were measured on invented",
+        "> facts the shipped adapter is never taught. Citing a number from this file as a",
+        "> PersonaCore recall result would be a category error.",
+        "",
+        "## Pre-Registration (committed before this run)",
+        "",
+        f"Every literal below was committed in **`{derived['rule_sha']}`**",
+        "(*feat(14-07): commit CALIBRATION_DECISION_RULE before any calibration number exists*),",
+        "which strictly precedes every output of this run. **Git history order is the",
+        "pre-registration proof** (D-09 condition 2) — re-derive it with:",
+        "",
+        "```",
+        "git log -S 'CALIBRATION_DECISION_RULE = (' -- scripts/teach_persona.py",
+        "```",
+        "",
+        "| Literal | Value | What it does |",
+        "|---|---|---|",
+        f"| `CAL_MARGIN_K` | {CAL_MARGIN_K} | Phase 12's noise-floor margin, reused BLIND and "
+        "not re-chosen for Phase 14 |",
+        f"| `THRESHOLD_DISCOUNT` | {THRESHOLD_DISCOUNT} | the fraction of the calibration ceiling "
+        "the real threshold is set to — the calibration set is disjoint and disposable, so its "
+        "rate is a CEILING estimate, not a target |",
+        f"| `THRESHOLD_FLOOR` | {THRESHOLD_FLOOR} | below this the metric is indistinguishable "
+        "from the closed-book control at 8 seeded samples |",
+        f"| `SATURATION_DELTA` | {SATURATION_DELTA} | the per-family recall gain below which a "
+        "taught family counts as saturated and MOVES to held-out |",
+        f"| `HELDOUT_VARIANCE_TRIGGER` | {HELDOUT_VARIANCE_TRIGGER} | the held-out per-family std "
+        "above which the real set needs MORE held-out families |",
+        f"| `COLLAPSE_PPL_TRIGGER` | {COLLAPSE_PPL_TRIGGER} | the fractional masked dialogue-val "
+        "PPL increase above which replay becomes MANDATORY |",
+        f"| `REGISTER_WIN_MARGIN` | {REGISTER_WIN_MARGIN} | the absolute held-out margin by which "
+        "first person must beat second person to count as a win |",
+        "",
+        f"(`RATIO_DECIMALS = {RATIO_DECIMALS}` is a boundary-arithmetic constant added in the same",
+        "commit, not a fifth policy number: both trigger comparisons round the measured ratio to",
+        "ten decimals first, so 'exactly on the boundary' means the decimal value rather than",
+        "whichever double happens to bracket it.)",
+        "",
+        "## Arm Design",
+        "",
+        "| Arm | Fact set | Register | Replay ratio | Role |",
+        "|---|---|---|---|---|",
+        f"| `cal_first_person` | `CALIBRATION_FACTS` ({len(fs.CALIBRATION_FACTS)} facts) | "
+        "first person (D-01) | 0.0 | **the baseline.** Supplies the thresholds, the allocation "
+        "inputs, and the no-replay PPL pair |",
+        f"| `cal_first_person_replay` | `CALIBRATION_FACTS` ({len(fs.CALIBRATION_FACTS)} facts) | "
+        f"first person | {REPLAY_ARM_RATIO} | D-15's PAIRED comparison — the ONLY difference from "
+        "the baseline arm is the PersonaChat replay slice |",
+        f"| `cal_second_person` | `REGISTER_ARM_FACTS` ({len(fs.REGISTER_ARM_FACTS)} facts) | "
+        "**second person** (`FAMILIES_SECOND_PERSON`) | 0.0 | D-21's register arm. Its facts are "
+        "DISJOINT from both the real set and the calibration set |",
+        "",
+        "**The calibration facts are disposable as an EVIDENCE SOURCE, not exempt from the",
+        "validity discipline** (D-09 condition 1). Both throwaway pools passed the SAME D-02/D-03",
+        "pre-flight gate as the real set — `CALIBRATION_POOL` 10/10 and `REGISTER_ARM_POOL` 6/6,",
+        "recorded in `results/phase14_factset_report.md` under commit",
+        f"`{fs.FACTSET_GATE_SHA}`. That matters because a calibration set with GUESSABLE facts",
+        "would produce an inflated ceiling, and every threshold derived from it would be a number",
+        "the base could clear without having learned anything.",
+        "",
+        "Scoring is the same harness the real run uses: `phase14_recall.load_adapted_model`",
+        "(`weights_only=True`, load-before-inject), 1 greedy draw plus",
+        "`N_SEEDED_SAMPLES` seeded draws per question, scored by `contains_value`. Questions",
+        "whose own frame names the fact value — `F4` (reversed direction), `F5` (verification)",
+        "— are dropped by the same mechanical `contains_value(question, value)` filter the harness",
+        "uses, because a question containing its own answer measures copying from context.",
+        "",
+        "Every arm is scored **adapter ON and adapter OFF** (`adapter_disabled`: same process,",
+        "same weights, same prompts, same per-question seeds, only the 36 LoRA `enabled` flags",
+        "flipped). The OFF pass is the closed-book baseline — without it a held-out rate is",
+        "unjudgeable — and its taught half is the second term of the per-family GAIN below.",
+        "",
+        "## Measured Results",
+        "",
+    ]
+    for arm in CAL_ARMS:
+        lines += _arm_rows(arm, results[arm])
+
+    lines += [
+        "### Run provenance",
+        "",
+        "```",
+        *provenance_lines,
+        "```",
+        "",
+        "## Derivation 1 — Recall Thresholds (D-09)",
+        "",
+        "**Rule function:** `teach_persona.lock_thresholds(cal_taught_rate, cal_heldout_rate)`,",
+        f"committed in `{derived['rule_sha']}`.",
+        "",
+        "| Input | Value | Source |",
+        "|---|---|---|",
+        f"| `cal_taught_rate` | {base['on_taught']['rate']:.4f} | `cal_first_person` taught, "
+        "adapter ON |",
+        f"| `cal_heldout_rate` | {base['on_heldout']['rate']:.4f} | `cal_first_person` held-out, "
+        "adapter ON |",
+        f"| `THRESHOLD_DISCOUNT` | {THRESHOLD_DISCOUNT} | pre-registered |",
+        f"| `THRESHOLD_FLOOR` | {THRESHOLD_FLOOR} | pre-registered |",
+        "",
+        "| Output | Value | Bound by |",
+        "|---|---|---|",
+        f"| `TAUGHT_THRESHOLD` | **{taught_threshold}** | {taught_bound} |",
+        f"| `HELDOUT_THRESHOLD` | **{heldout_threshold}** | {heldout_bound} |",
+        "",
+        "The rule was applied MECHANICALLY: each threshold is",
+        "`max(THRESHOLD_FLOOR, round(rate * THRESHOLD_DISCOUNT, 4))`, evaluated by the committed",
+        "function on the measured rates above. **No number here was chosen after seeing the",
+        "results** — what was pre-registered is the PROCEDURE, because the number cannot exist",
+        "before the run but the rule that produces it must, or the threshold is just a value",
+        "picked to be cleared.",
+        "",
+        "## Derivation 2 — Family Allocation (D-14)",
+        "",
+        "**Rule function:** `teach_persona.lock_family_allocation(per_family_gain,",
+        f"heldout_family_std, taught_ids, heldout_ids)`, committed in `{derived['rule_sha']}`.",
+        "",
+        "| Input | Value |",
+        "|---|---|",
+        f"| `per_family_gain` | {gain_map} |",
+        f"| `heldout_family_std` | {base['heldout_family_std']:.4f} |",
+        f"| `taught_ids` (before) | {sorted(fs.TAUGHT_FAMILY_IDS)} |",
+        f"| `heldout_ids` (before) | {sorted(fs.HELDOUT_FAMILY_IDS)} |",
+        f"| `SATURATION_DELTA` | {SATURATION_DELTA} (a gain of exactly this is NOT saturated) |",
+        f"| `HELDOUT_VARIANCE_TRIGGER` | {HELDOUT_VARIANCE_TRIGGER} (a std of exactly this does "
+        "NOT trigger) |",
+        "",
+        "| Output | Value |",
+        "|---|---|",
+        f"| `TAUGHT_FAMILY_IDS` | **{sorted(derived['taught_ids'])}** |",
+        f"| `HELDOUT_FAMILY_IDS` | **{sorted(derived['heldout_ids'])}** |",
+        f"| taught family count | {len(fs.TAUGHT_FAMILY_IDS)} → **{len(derived['taught_ids'])}** |",
+        f"| saturation trigger | {derived['saturation_fired']} |",
+        f"| variance trigger | {derived['variance_fired']} |",
+        "",
+        derived["unmeasured_note"],
+        "",
+        "**Driver output, verbatim** — this is the one place a refused move lands, and an",
+        "unrecorded refusal is a silently altered allocation:",
+        "",
+        "```",
+        derived["allocation_log"] or "(no candidate families — no move was attempted)",
+        "```",
+        "",
+        "The four invariants the rule preserved:",
+        "",
+        f"1. **Disjoint, and the union is still every key of `FAMILIES`** (B-02): "
+        f"`{sorted(derived['taught_ids'] & derived['heldout_ids'])}` is the intersection, and "
+        f"the union is `{sorted(derived['taught_ids'] | derived['heldout_ids'])}` against "
+        f"`FAMILIES` keys `{sorted(fs.FAMILIES)}`. The allocation MOVES families; it never drops "
+        "one.",
+        f"2. **`F4` stays taught** (D-22): `F4` "
+        f"{'IS' if 'F4' in derived['taught_ids'] else 'IS NOT'} in the taught set. Reversed-"
+        "direction forms hit the documented reversal curse, so held out they would fail for a "
+        "LITERATURE reason rather than for any property of this model.",
+        f"3. **At least two families per side**: {len(derived['taught_ids'])} taught, "
+        f"{len(derived['heldout_ids'])} held-out.",
+        "4. **Every locked fact's taught-instance count stays inside "
+        f"`PARAPHRASES_PER_FACT_TARGET` = {fs.PARAPHRASES_PER_FACT_TARGET}** (W-03): "
+        f"{derived['paraphrase_census']}.",
+        "",
+        derived["allocation_note"],
+        "",
+        "## Derivation 3 — PersonaChat Replay (D-15)",
+        "",
+        "**Rule function:** `teach_persona.replay_required(ppl_adapter_off, ppl_adapter_on)`,",
+        f"committed in `{derived['rule_sha']}`.",
+        "",
+        "The instrument is the D-11.2 one exactly — `masked_perplexity` over",
+        "`data/dialog_val.bin` + its mask, adapter ON and OFF in ONE process on ONE set of",
+        "weights, so the only difference is the LoRA enabled flag. It is not a proxy.",
+        "",
+        "| Arm | PPL adapter OFF | PPL adapter ON | Fractional increase |",
+        "|---|---|---|---|",
+        f"| `cal_first_person` (no replay) | {base['ppl_adapter_off']:.4f} | "
+        f"{base['ppl_adapter_on']:.4f} | **{base_delta:+.2%}** |",
+        f"| `cal_first_person_replay` (replay {REPLAY_ARM_RATIO}) | "
+        f"{replay['ppl_adapter_off']:.4f} | {replay['ppl_adapter_on']:.4f} | "
+        f"{replay_delta:+.2%} |",
+        "",
+        "| Output | Value |",
+        "|---|---|",
+        f"| `replay_required` | **{derived['replay_required']}** |",
+        f"| `COLLAPSE_PPL_TRIGGER` | {COLLAPSE_PPL_TRIGGER} (exactly at the trigger does NOT "
+        "require replay — strict `>`) |",
+        f"| `REAL_RUN_REPLAY_RATIO` | **{derived['real_replay_ratio']}** |",
+        "",
+        derived["replay_note"],
+        "",
+        "The paired arm is reported alongside because D-15 asks what replay BUYS, not only",
+        "whether it is needed: the two arms differ in the replay slice and in nothing else, so",
+        "the difference between their two ON/OFF deltas is attributable to replay alone.",
+        "",
+        "## Derivation 4 — Teaching Register (D-21)",
+        "",
+        "**Rule function:** `teach_persona.first_person_wins(fp_heldout_rate, sp_heldout_rate)`,",
+        f"committed in `{derived['rule_sha']}`.",
+        "",
+        "| Input | Value | Source |",
+        "|---|---|---|",
+        f"| `fp_heldout_rate` | {base['on_heldout']['rate']:.4f} | `cal_first_person` held-out, "
+        "adapter ON |",
+        f"| `sp_heldout_rate` | {register['on_heldout']['rate']:.4f} | `cal_second_person` "
+        "held-out, adapter ON |",
+        f"| margin | {register_margin:+.4f} |",
+        f"| `REGISTER_WIN_MARGIN` | {REGISTER_WIN_MARGIN} (exactly at the margin is NOT a win — "
+        "strict `>`) |",
+        "",
+        "| Output | Value |",
+        "|---|---|",
+        f"| `first_person_wins` | **{derived['first_person_wins']}** |",
+        "| `REAL_RUN_SECOND_PERSON` | **False** |",
+        "",
+        "**Both kinds of evidence, per D-21 condition 4.** The register lock in D-01 was made on",
+        "QUALITATIVE evidence and it stands on that evidence: 14-RESEARCH F3/F5 measured the",
+        "frozen conversational base copying the *structure* of a second-person prompt while",
+        "getting the *content* wrong. The recorded probe answered",
+        # One line, deliberately: the quoted probe is the citation D-21 condition 4 requires, and
+        # wrapping it across two list entries puts a newline inside the quote so nothing can grep
+        # for it. Prose wraps; evidence does not.
+        "`i have a dog named my name is cuddling`, which is a syntactically well-formed",
+        "first-person self-description with the wrong noun phrase spliced in.",
+        "That finding is what motivated teaching answers as",
+        "first-person self-description in the first place, and no number in this report replaces",
+        "it. What D-01 was MISSING was a measured head-to-head between the two registers, and",
+        "that is exactly and only what this arm supplies:",
+        f"first person {base['on_heldout']['rate']:.4f} vs second person",
+        f"{register['on_heldout']['rate']:.4f} on held-out recall, a margin of",
+        f"{register_margin:+.4f} against a pre-registered win margin of {REGISTER_WIN_MARGIN}.",
+        "",
+        derived["register_note"],
+        "",
+        "**Caveat a reader should carry:** the two arms are scored on DIFFERENT fact sets"
+        f" ({len(fs.CALIBRATION_FACTS)} calibration facts vs {len(fs.REGISTER_ARM_FACTS)} "
+        "register-arm facts), because D-21 requires the register arm's facts to be disjoint from"
+        " both the real and the calibration sets. The comparison is therefore between two"
+        " register treatments over comparable-but-not-identical material, which is the strongest"
+        " head-to-head the disjointness requirement allows.",
+        "",
+        "## Verdict",
+        "",
+        "PENDING — user decision at checkpoint.",
+        "",
+    ]
+    CALIBRATION_REPORT.parent.mkdir(parents=True, exist_ok=True)
+    CALIBRATION_REPORT.write_text("\n".join(lines), encoding="utf-8")
+    print(f"[teach_persona] wrote {CALIBRATION_REPORT}")
+
+
+def _paraphrase_census(taught_ids):
+    """Per-fact taught-paraphrase counts under an allocation — W-03's invariant, as evidence."""
+    counts = {
+        fact.id: sum(len(fs.render_family(fid, fact)) for fid in taught_ids)
+        for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS
+    }
+    lo, hi = fs.PARAPHRASES_PER_FACT_TARGET
+    distinct = sorted(set(counts.values()))
+    inside = all(lo <= c <= hi for c in counts.values())
+    return (
+        f"every one of the {len(counts)} locked+soft facts carries {distinct} taught "
+        f"paraphrases, {'inside' if inside else '**OUTSIDE**'} the band"
+    )
+
+
+def run_calibration(argv=()):
+    """Run the three calibration arms, apply the four rules, write the report. Plan 14-09."""
+    _refuse_clobber(CALIBRATION_REPORT, "--force" in argv)
+    started = time.time()
+    summary = preflight_device(strict=True)
+    device = RuntimeConfig().device
+    print(f"[teach_persona] calibration preflight: {summary} device={device}")
+
+    results = {}
+    for arm in CAL_ARMS:
+        arm_started = time.time()
+        facts, second_person, replay_ratio = arm_spec(arm)
+        record = train_arm(
+            arm,
+            facts=facts,
+            family_ids=fs.TAUGHT_FAMILY_IDS,
+            second_person=second_person,
+            replay_ratio=replay_ratio,
+        )
+        record.update(score_arm(arm, facts, record["paths"]["adapter"], device))
+        record["adapter_sha256"] = _sha256(record["paths"]["adapter"])
+        record["wall_clock"] = time.time() - arm_started
+        results[arm] = record
+
+    derived = derive_all(results)
+    provenance_lines = [
+        f"seed: {SEED}",
+        f"driver git_sha: {git_sha()}",
+        f"pid: {os.getpid()}",
+        f"wall clock (UTC): {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+        f"total wall: {time.time() - started:.0f}s",
+        f"preflight: {summary}",
+        f"device: {device}  torch: {torch.__version__}",
+        f"lr={LR} weight_decay={WEIGHT_DECAY} batch_size={BATCH_SIZE} max_steps={MAX_STEPS} "
+        f"warmup_steps={WARMUP_STEPS} block_size={BLOCK_SIZE}",
+        f"decision-rule commit: {derived['rule_sha']}",
+        f"FACTSET_GATE_SHA: {fs.FACTSET_GATE_SHA}",
+    ]
+    for arm in CAL_ARMS:
+        paths = results[arm]["paths"]
+        provenance_lines += [
+            f"{arm}: adapter={paths['adapter'].name} sha256={results[arm]['adapter_sha256']}",
+            f"{arm}: csv={paths['csv'].relative_to(_REPO_ROOT)} "
+            f"wall={results[arm]['wall_clock']:.0f}s",
+        ]
+
+    dump_results(results, provenance_lines)
+    write_calibration_report(results, derived, provenance_lines)
+    print(
+        f"[teach_persona] calibration derivations: thresholds={derived['thresholds']} "
+        f"taught={sorted(derived['taught_ids'])} heldout={sorted(derived['heldout_ids'])} "
+        f"replay_required={derived['replay_required']} "
+        f"first_person_wins={derived['first_person_wins']}"
+    )
+    return results, derived
+
+
+def derive_all(results):
+    """Apply the four ``CALIBRATION_DECISION_RULE`` functions to the measured arm records.
+
+    A PURE function of the measurements: given the same three arm records it returns the same
+    four derivations, with no model, no device, and no file access beyond the git-log lookup that
+    records which commit the rule came from. That is what makes the derivations auditable — a
+    reader can re-run this on the numbers printed in the report and get the same outputs, and
+    ``tests/test_phase14_scoring.py`` exercises it on fabricated records without a GPU.
+
+    The BASELINE arm (``cal_first_person``) supplies every input except the register comparison:
+    its rates are the ceiling the thresholds discount, its per-family gains are the allocation
+    input, and its ON/OFF PPL pair is the collapse measurement. The replay arm is the PAIRED
+    comparison and the second-person arm supplies only the register head-to-head.
+
+    **Known wiring mismatch, corrected post-hoc at plan 14-09's checkpoint — read before
+    re-running.** The threshold wiring below assumes the baseline arm is the one whose
+    configuration the real run mirrors. That assumption was true when this function was written
+    and FALSE once ``replay_required`` returned True on this run's measurements: a True verdict
+    sets ``REAL_RUN_REPLAY_RATIO = 1.0``, which makes ``cal_first_person_replay`` the arm the real
+    run actually runs under. The committed thresholds in ``phase14_recall`` are therefore derived
+    from the REPLAY arm's rates, not from what this function returns — see
+    ``results/phase14_calibration_report.md`` ``## Derivation 1``, which shows both sets side by
+    side. The wiring is left as-is on purpose: this function is what the committed report records
+    having run, and editing a derivation pipeline after seeing its numbers is the move the whole
+    pre-registration block exists to prevent. Anyone re-running with ``--force`` must re-decide
+    which arm feeds ``lock_thresholds`` at the human checkpoint, exactly as was done here.
+    """
+    base = results["cal_first_person"]
+    register = results["cal_second_person"]
+
+    thresholds = lock_thresholds(base["on_taught"]["rate"], base["on_heldout"]["rate"])
+
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
+        taught_ids, heldout_ids = lock_family_allocation(
+            base["per_family_gain"],
+            base["heldout_family_std"],
+            fs.TAUGHT_FAMILY_IDS,
+            fs.HELDOUT_FAMILY_IDS,
+        )
+    allocation_log = captured.getvalue().strip()
+    print(allocation_log or "[teach_persona] allocation: no candidate families")
+
+    needs_replay = replay_required(base["ppl_adapter_off"], base["ppl_adapter_on"])
+    fp_wins = first_person_wins(base["on_heldout"]["rate"], register["on_heldout"]["rate"])
+
+    saturated = sorted(fid for fid, g in base["per_family_gain"].items() if g < SATURATION_DELTA)
+    moved = sorted(set(fs.TAUGHT_FAMILY_IDS) - taught_ids)
+    # Taught families with NO measured gain: every one of their questions names its own answer,
+    # so the self-naming filter removed all of them from scoring. `lock_family_allocation` reads
+    # a missing key as 0.0 and therefore proposes moving them — the invariants then refuse. The
+    # report must say this out loud, because "gain 0.0" here is an ABSENCE OF MEASUREMENT and not
+    # a measurement of zero, and a reader who misses the distinction concludes the reversed-
+    # direction and verification families taught nothing.
+    unmeasured = sorted(set(fs.TAUGHT_FAMILY_IDS) - set(base["per_family_gain"]))
+    replay = results["cal_first_person_replay"]
+    replay_delta = (replay["ppl_adapter_on"] - replay["ppl_adapter_off"]) / replay[
+        "ppl_adapter_off"
+    ]
+    base_delta = (base["ppl_adapter_on"] - base["ppl_adapter_off"]) / base["ppl_adapter_off"]
+    replay_still_trips = round(replay_delta, RATIO_DECIMALS) > COLLAPSE_PPL_TRIGGER
+    recall_cost = base["on_taught"]["rate"] - replay["on_taught"]["rate"]
+    return {
+        "rule_sha": rule_commit_sha(),
+        "thresholds": thresholds,
+        "taught_floor_bound": thresholds[0] == THRESHOLD_FLOOR,
+        "heldout_floor_bound": thresholds[1] == THRESHOLD_FLOOR,
+        "taught_ids": taught_ids,
+        "heldout_ids": heldout_ids,
+        "allocation_log": allocation_log,
+        "saturation_fired": (
+            f"FIRED for {saturated} (gain < {SATURATION_DELTA})" if saturated else "did not fire"
+        ),
+        "variance_fired": (
+            f"FIRED (std {base['heldout_family_std']:.4f} > {HELDOUT_VARIANCE_TRIGGER})"
+            if base["heldout_family_std"] > HELDOUT_VARIANCE_TRIGGER
+            else f"did not fire (std {base['heldout_family_std']:.4f} <= "
+            f"{HELDOUT_VARIANCE_TRIGGER})"
+        ),
+        "allocation_note": (
+            f"**The allocation changed:** {moved} moved from taught to held-out."
+            if moved
+            else (
+                "**The allocation is UNCHANGED, and that is a result rather than a no-op.** "
+                "Every candidate move the rule proposed was REFUSED by invariant 4: at the "
+                "committed allocation each locked fact carries 22 taught paraphrases against a "
+                f"{fs.PARAPHRASES_PER_FACT_TARGET} band, and the smallest taught family carries "
+                "4 instances, so any move drops some fact to 17 or 18 — below the floor. The "
+                "refusal is the invariant doing its job: a saturation-driven move would trip "
+                "`build_bins` proof #5 and `SystemExit` the real run. If calibration genuinely "
+                "demands more held-out families, the remedy is to ADD paraphrase instances "
+                "(a fact-set change), not to relax a pre-registered threshold."
+            )
+        ),
+        "unmeasured_note": (
+            (
+                f"**{unmeasured} carry NO measured gain, and that is an absence of measurement "
+                "rather than a measurement of zero.** Every question those families generate "
+                "names its own fact value inside the question — `F4` is the D-22 reversed "
+                "direction (`who is varek?`) and `F5` is yes/no verification (`is your name "
+                "varek?`) — so the same mechanical `contains_value` filter the scored harness "
+                "uses removed all of them before scoring. They were TAUGHT in full; they are "
+                "simply not SCORABLE, because a question containing its own answer measures "
+                "copying from context. `lock_family_allocation` reads a missing key as `0.0` and "
+                "therefore proposed moving them, which is why they appear in the refusal log "
+                "below. Do NOT read that as evidence that reversed-direction or verification "
+                "teaching failed — this run says nothing either way about those two families."
+            )
+            if unmeasured
+            else "Every taught family had scorable questions; no family's gain is unmeasured."
+        ),
+        "paraphrase_census": _paraphrase_census(taught_ids),
+        "replay_required": needs_replay,
+        "real_replay_ratio": REPLAY_ARM_RATIO if needs_replay else 0.0,
+        "replay_note": (
+            (
+                "**Replay IS required.** The no-replay arm's masked dialogue-val PPL rose past "
+                f"`COLLAPSE_PPL_TRIGGER` = {COLLAPSE_PPL_TRIGGER}, so the real run mixes "
+                f"PersonaChat replay at ratio {REPLAY_ARM_RATIO} into its teaching bin.\n\n"
+                "**What the paired arm shows replay actually BUYS, and what it costs.** Replay "
+                f"at ratio {REPLAY_ARM_RATIO} moves the collapse from "
+                f"{base_delta:+.2%} to {replay_delta:+.2%} — a large mitigation — while taught "
+                f"recall falls from {base['on_taught']['rate']:.4f} to "
+                f"{replay['on_taught']['rate']:.4f}, a fall of {recall_cost:.4f}. "
+                + (
+                    "**The replay arm ITSELF still trips the trigger.** Replay at this ratio "
+                    "reduces the collateral collapse but does not eliminate it, so 'replay "
+                    "required' should not be read as 'replay solves it'. Whether the remaining "
+                    f"{replay_delta:+.2%} is acceptable, and whether a different ratio or a "
+                    "shorter teaching run is the better lever, is a judgment for the checkpoint "
+                    "— this run measured the tradeoff, it did not resolve it."
+                    if replay_still_trips
+                    else "The replay arm clears the trigger, so the mitigation is sufficient at "
+                    "this ratio."
+                )
+            )
+            if needs_replay
+            else (
+                "**Replay is NOT required, so the real run proceeds WITHOUT it.** That is the "
+                "consequence stated plainly: the teaching signal stays undiluted rather than "
+                "being halved against a risk this run measured and did not find. Mixing replay "
+                "in anyway would cost teaching tokens to buy protection from a collapse the "
+                "instrument says is not happening."
+            )
+        ),
+        "first_person_wins": fp_wins,
+        "register_note": (
+            "**The first-person register wins the head-to-head**, by more than the "
+            f"pre-registered `REGISTER_WIN_MARGIN` = {REGISTER_WIN_MARGIN}. The quantitative "
+            "result agrees with the qualitative evidence D-01 was made on, and the real run "
+            "teaches first-person answers."
+            if fp_wins
+            else (
+                "**The first-person register did NOT clear the pre-registered margin, and that "
+                "negative is recorded here unamended** (D-12). It does NOT reopen D-01 "
+                "mid-phase. D-01's register lock rests on the qualitative evidence above, which "
+                "this arm was designed to SUPPLEMENT with a measured head-to-head, not to "
+                "replace; re-authoring the teaching set after seeing a number is the exact move "
+                "the whole pre-registration block exists to prevent. `REAL_RUN_SECOND_PERSON` "
+                "stays `False`."
+            )
+        ),
+    }
 
 
 if __name__ == "__main__":

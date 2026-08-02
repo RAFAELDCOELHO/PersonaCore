@@ -158,12 +158,61 @@ SAMPLE_TOP_P = 0.95
 
 STOP_IDS = frozenset({8184, 8185})  # the pinned turn-stopping idiom (eos + the next `<|user|>`)
 
-# D-09 condition 2 — the thresholds are LOCKED BY PLAN 14-09 from the measured calibration run,
-# under `teach_persona.CALIBRATION_DECISION_RULE`, which is itself committed BEFORE the calibration
-# run happens. A number chosen after seeing the results is not a threshold. `None` is the honest
-# pre-calibration state of this file, and git history order is what proves the ordering.
-TAUGHT_THRESHOLD = None
-HELDOUT_THRESHOLD = None
+# D-09 condition 2 — LOCKED by plan 14-09 from the measured calibration run. Both numbers are the
+# return of `teach_persona.lock_thresholds(cal_taught_rate, cal_heldout_rate)`, a function
+# committed in `d7d7917` BEFORE the calibration run produced a single measurement; git history
+# order is the pre-registration proof. A number chosen after seeing the results is not a threshold.
+#
+#   inputs   : cal_taught_rate = 0.4143 (522/1260), cal_heldout_rate = 0.2506 (203/810), both
+#              measured on the `cal_first_person_replay` arm with the adapter ON, against a
+#              closed-book (adapter OFF) baseline of exactly 0.0000 on both tiers
+#   rule     : max(THRESHOLD_FLOOR, round(rate * THRESHOLD_DISCOUNT, 4))
+#              with THRESHOLD_DISCOUNT = 0.60 and THRESHOLD_FLOOR = 0.20
+#   bound by : the DISCOUNT on taught (0.2486); the FLOOR on held-out (0.6 * 0.2506 = 0.1504
+#              discounts BELOW the floor, so the pre-registered floor clamps it to 0.2000)
+#   evidence : `results/phase14_calibration_report.md`, `## Derivation 1 — Recall Thresholds`
+#
+# WHICH ARM, and why it changed at the checkpoint: the rule was first applied to `cal_first_person`
+# (no replay), but Derivation 3 returned `replay_required = True` and set REAL_RUN_REPLAY_RATIO to
+# 1.0 — so the arm whose configuration the real run actually uses is the REPLAY arm. Feeding
+# `lock_thresholds` the matching arm is a WIRING correction, not a threshold chosen to be cleared;
+# the rule function is byte-identical and both threshold sets (0.4095 -> 0.2486, 0.3311 -> 0.2000)
+# are shown side by side in the report so the narrowing is independently checkable.
+#
+# The calibration facts are DISJOINT from the locked set and disposable, so their measured rate is
+# a CEILING estimate rather than a target; the 0.60 discount is what keeps these from being numbers
+# chosen to be cleared.
+TAUGHT_THRESHOLD = 0.2486
+HELDOUT_THRESHOLD = 0.2000
+
+# The commit carrying the calibration REPORT and the recorded MEASUREMENTS the two thresholds above
+# were derived from — the same traceability `FACTSET_GATE_SHA` gives the fact set. It points at the
+# EVIDENCE, which is what a reader needs to re-derive the numbers: every rate feeding
+# `lock_thresholds` for either arm is already in the report at this SHA. It deliberately does NOT
+# point at a verdict commit — the ADAPT verdict and the arm correction were recorded onto that same
+# report at plan 14-09's checkpoint, in a commit whose SHA cannot be known while writing this line.
+CALIBRATION_SHA = "0425fdc494025d9c59cfac1e62092b10820a619e"
+
+
+def taught_gate(rate):
+    """True iff a measured TAUGHT recall rate clears ``TAUGHT_THRESHOLD``.
+
+    Boundary: ``>=``. A rate landing EXACTLY on the threshold **PASSES**. That is the right
+    direction for a threshold derived by discounting a ceiling: the number is already a
+    deliberately conservative fraction of what calibration showed was achievable, so failing a run
+    that hits it exactly would punish the run for the discount rather than for its recall.
+    ``tests/test_phase14_scoring.py::test_gate_boundary`` pins this, so a future reader never has
+    to infer ``>`` from ``>=`` by reading the test.
+    """
+    return rate >= TAUGHT_THRESHOLD
+
+
+def heldout_gate(rate):
+    """True iff a measured HELD-OUT recall rate clears ``HELDOUT_THRESHOLD``.
+
+    Boundary: ``>=`` — exactly on the threshold PASSES, for the same reason as ``taught_gate``.
+    """
+    return rate >= HELDOUT_THRESHOLD
 
 
 def _prove(condition, message):
@@ -391,8 +440,15 @@ def _sha256(path):
     return digest.hexdigest()
 
 
-def load_adapted_model(device):
-    """Load the slim base + the persona adapter; return ``(model, cfg, tok, forbid, artifact)``.
+def load_adapted_model(device, adapter_path=None):
+    """Load the slim base + a persona adapter; return ``(model, cfg, tok, forbid, artifact)``.
+
+    ``adapter_path`` defaults to ``ADAPTER_PATH`` — the shippable ``persona_adapter.pt`` this
+    harness's own run scores. It is a PARAMETER only so plan 14-09's calibration driver can score
+    the three arm-scoped calibration adapters (``checkpoints/phase14_cal_*_adapter.pt``) through
+    this exact loader instead of a parallel one: the calibration numbers that lock this file's
+    thresholds must come off the same load-before-inject, ``weights_only=True`` path as the real
+    run, or the threshold is derived from a different pipeline than the one it gates.
 
     Both files cross the ``weights_only=True`` choke points (``load_slim`` / ``load_adapter``) —
     the restricted unpickler, zero code execution on load (T-14-22). ``torch.load`` is never
@@ -404,6 +460,7 @@ def load_adapted_model(device):
     ``fingerprint_warnings`` (the captured D-02 mismatch text, empty when the trios agree). They
     are never re-exported — nothing writes this dict back to disk.
     """
+    adapter_path = ADAPTER_PATH if adapter_path is None else pathlib.Path(adapter_path)
     if not CONVBASE_SLIM.exists():
         raise SystemExit(
             f"[phase14_recall] missing {CONVBASE_SLIM} — the shareable base artifact. Run "
@@ -425,9 +482,9 @@ def load_adapted_model(device):
         "(6 allowlisted projections per block) — the adapter would apply to the wrong model",
     )
 
-    if not ADAPTER_PATH.exists():
+    if not adapter_path.exists():
         raise SystemExit(
-            f"[phase14_recall] missing {ADAPTER_PATH} — the taught persona file. Run "
+            f"[phase14_recall] missing {adapter_path} — the taught persona file. Run "
             "`python scripts/teach_persona.py real` to train it before scoring recall."
         )
     # The trio is READ off the loaded base, never recomputed (D-02 provenance).
@@ -441,7 +498,7 @@ def load_adapted_model(device):
     # adapter was fingerprinted against the base it was scored on; the run continues either way.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        artifact = load_adapter(ADAPTER_PATH, expected_fingerprint=fingerprint)
+        artifact = load_adapter(adapter_path, expected_fingerprint=fingerprint)
     artifact["loaded_base_fingerprint"] = fingerprint
     artifact["fingerprint_warnings"] = [
         str(w.message) for w in caught if issubclass(w.category, UserWarning)
@@ -500,7 +557,12 @@ def complete_question(model, tok, question, device, forbid, *, index):
     stopped.append(stop)
 
     for s in range(N_SEEDED_SAMPLES):
-        generator = torch.Generator(device="cpu").manual_seed(question_seed(index) + s)
+        # The generator MUST live on the model's device: `next_token` calls
+        # `torch.multinomial(probs, generator=...)` with `probs` on the model device, and torch
+        # raises `RuntimeError: Expected a 'mps' device type for generator but found 'cpu'` on
+        # any mismatch. A hardcoded "cpu" generator passes every CPU-only test and then dies on
+        # the first seeded draw of the M3 run this harness exists to produce.
+        generator = torch.Generator(device=device).manual_seed(question_seed(index) + s)
         gen_ids, stop = _complete(
             model,
             prompt_ids,

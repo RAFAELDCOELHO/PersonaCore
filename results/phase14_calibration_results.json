@@ -1,0 +1,220 @@
+{
+  "provenance": [
+    "seed: 1337",
+    "driver git_sha: 75ac857663fbbd3bc647c4cd94ca7ec1da16f987",
+    "pid: 38560",
+    "wall clock (UTC): 2026-08-02T06:33:21Z",
+    "total wall: 3210s",
+    "preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}",
+    "device: mps  torch: 2.7.1",
+    "lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256",
+    "decision-rule commit: d7d79174bd4293bfc95fe5647c1bb7ec0dea509b",
+    "FACTSET_GATE_SHA: 446afab372dcffbc16cbc9a667529097f6e5ccab",
+    "cal_first_person: adapter=phase14_cal_first_person_adapter.pt sha256=59b2de61df5bdfd4513e562dac3c5ef1fb3efb025b0bc6745552f23edeaa6a1c",
+    "cal_first_person: csv=results/phase14_cal_first_person/run.csv wall=1192s",
+    "cal_first_person_replay: adapter=phase14_cal_first_person_replay_adapter.pt sha256=d9bd0c003bbffe0cfc1b8ecf4cd2a9e0d52719198103d9d5c77773a4cb4e45e9",
+    "cal_first_person_replay: csv=results/phase14_cal_first_person_replay/run.csv wall=1245s",
+    "cal_second_person: adapter=phase14_cal_second_person_adapter.pt sha256=31541c062cd2d2b71307dcfa4fa4ab90539b681a1932021329b2b840dbbdc211",
+    "cal_second_person: csv=results/phase14_cal_second_person/run.csv wall=773s"
+  ],
+  "arms": {
+    "cal_first_person": {
+      "arm": "cal_first_person",
+      "stats": {
+        "episodes": 220,
+        "tokens": 9065,
+        "teaching_tokens": 9065,
+        "replay_tokens": 0,
+        "mask_fraction": 0.3426
+      },
+      "ppl_adapter_off": 4.5737,
+      "ppl_adapter_on": 14.8559,
+      "scored_targets": 270203,
+      "final_train_loss": 0.0754,
+      "on_taught": {
+        "k": 860,
+        "n": 1260,
+        "rate": 0.6825396825396826,
+        "per_family": {
+          "F1": 0.6889,
+          "F2": 0.7022,
+          "F6": 0.65
+        },
+        "questions": 140
+      },
+      "on_heldout": {
+        "k": 447,
+        "n": 810,
+        "rate": 0.5518518518518518,
+        "per_family": {
+          "F3": 0.6296,
+          "F7": 0.5519,
+          "F8": 0.4741
+        },
+        "questions": 90
+      },
+      "off_taught": {
+        "k": 0,
+        "n": 1260,
+        "rate": 0.0,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 140
+      },
+      "off_heldout": {
+        "k": 0,
+        "n": 810,
+        "rate": 0.0,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 90
+      },
+      "per_family_gain": {
+        "F1": 0.6889,
+        "F2": 0.7022,
+        "F6": 0.65
+      },
+      "heldout_family_std": 0.0635,
+      "wall_clock": 1192.0,
+      "adapter_sha256": "59b2de61df5bdfd4513e562dac3c5ef1fb3efb025b0bc6745552f23edeaa6a1c"
+    },
+    "cal_first_person_replay": {
+      "arm": "cal_first_person_replay",
+      "stats": {
+        "episodes": 220,
+        "tokens": 18130,
+        "teaching_tokens": 9065,
+        "replay_tokens": 9065,
+        "mask_fraction": 0.3854
+      },
+      "ppl_adapter_off": 4.5737,
+      "ppl_adapter_on": 5.918,
+      "scored_targets": 270203,
+      "final_train_loss": 0.5555,
+      "on_taught": {
+        "k": 522,
+        "n": 1260,
+        "rate": 0.4142857142857143,
+        "per_family": {
+          "F1": 0.4489,
+          "F2": 0.4244,
+          "F6": 0.3583
+        },
+        "questions": 140
+      },
+      "on_heldout": {
+        "k": 203,
+        "n": 810,
+        "rate": 0.2506172839506173,
+        "per_family": {
+          "F3": 0.2556,
+          "F7": 0.237,
+          "F8": 0.2593
+        },
+        "questions": 90
+      },
+      "off_taught": {
+        "k": 0,
+        "n": 1260,
+        "rate": 0.0,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 140
+      },
+      "off_heldout": {
+        "k": 0,
+        "n": 810,
+        "rate": 0.0,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 90
+      },
+      "per_family_gain": {
+        "F1": 0.4489,
+        "F2": 0.4244,
+        "F6": 0.3583
+      },
+      "heldout_family_std": 0.0097,
+      "wall_clock": 1245.0,
+      "adapter_sha256": "d9bd0c003bbffe0cfc1b8ecf4cd2a9e0d52719198103d9d5c77773a4cb4e45e9"
+    },
+    "cal_second_person": {
+      "arm": "cal_second_person",
+      "stats": {
+        "episodes": 132,
+        "tokens": 5749,
+        "teaching_tokens": 5749,
+        "replay_tokens": 0,
+        "mask_fraction": 0.3778
+      },
+      "ppl_adapter_off": 4.5737,
+      "ppl_adapter_on": 18.752,
+      "scored_targets": 270203,
+      "final_train_loss": 0.0668,
+      "on_taught": {
+        "k": 711,
+        "n": 756,
+        "rate": 0.9404761904761905,
+        "per_family": {
+          "F1": 0.963,
+          "F2": 0.9741,
+          "F6": 0.8704
+        },
+        "questions": 84
+      },
+      "on_heldout": {
+        "k": 391,
+        "n": 486,
+        "rate": 0.8045267489711934,
+        "per_family": {
+          "F3": 0.6975,
+          "F7": 0.9012,
+          "F8": 0.8148
+        },
+        "questions": 54
+      },
+      "off_taught": {
+        "k": 0,
+        "n": 756,
+        "rate": 0.0,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 84
+      },
+      "off_heldout": {
+        "k": 0,
+        "n": 486,
+        "rate": 0.0,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 54
+      },
+      "per_family_gain": {
+        "F1": 0.963,
+        "F2": 0.9741,
+        "F6": 0.8704
+      },
+      "heldout_family_std": 0.0835,
+      "wall_clock": 773.0,
+      "adapter_sha256": "31541c062cd2d2b71307dcfa4fa4ab90539b681a1932021329b2b840dbbdc211"
+    }
+  }
+}
