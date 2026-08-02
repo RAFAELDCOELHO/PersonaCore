@@ -20,6 +20,10 @@ _SYSTEM = "<|system|>"
 
 PERSONA_CAP = 140  # D-07: persona-span token budget (<|system|> + persona ids), line-granular
 
+# Resolved from the LOCKED registry, never retyped (Don't-Hand-Roll): the recall prompt ends
+# at the assistant trigger, so this id is the truncation point build_recall_prompt cuts on.
+ASSISTANT_ID = SPECIAL_TOKENS[_ASSISTANT]
+
 # " n't" attaches to the preceding word ("do n't" -> "don't"): PTB form, no-op on the primary
 # fb-dialog corpus (zero apostrophes verified) but locked in D-06 for the JSON fallback.
 _NT_RE = re.compile(r" +n't\b")
@@ -83,6 +87,29 @@ def encode_dialogue(tok, persona, turns):
         emit(tok.encode(detokenize(reply), allowed_special="none"), 1)
     emit([EOS_ID], 1)
     return ids, mask
+
+
+def build_recall_prompt(tok, question, persona=()):
+    """The clean-room recall prompt ``<|system|>[persona] <|user|>q <|assistant|>`` — ids only.
+
+    Encodes through :func:`encode_dialogue` with an EMPTY assistant reply and truncates to END at
+    the ``<|assistant|>`` trigger, so the returned ids are byte-for-byte the prefix the training
+    bins carry (Pitfall 4). The default ``persona=()`` produces a bare ``<|system|>`` with zero
+    content — the strongest form of "empty prompt": the context carries the question and nothing
+    else. ``ASSISTANT_ID`` comes from the LOCKED ``SPECIAL_TOKENS`` registry; the raw integer is
+    never retyped in this module.
+
+    SINGLE source of truth for the recall prompt (D-18, Pitfall 4): the scoring harness
+    (``scripts/phase14_recall.py``) and the Gradio demo (``scripts/personalize_demo.py``) both
+    import THIS function, so the demo's live token panel and the harness's committed context dump
+    can never diverge from what the model actually receives — by construction, never by convention.
+
+    ``generate_text``'s ``[eos_id] + tokenizer.encode(prompt)`` path is FORBIDDEN for recall: it
+    builds a prompt shape the model was never trained on. Drive
+    :func:`personacore.generation.generate_text_from_ids` with the ids returned here instead.
+    """
+    ids, _mask = encode_dialogue(tok, list(persona), [(question, "")])
+    return ids[: ids.index(ASSISTANT_ID) + 1]
 
 
 def cap_persona(tok, persona):

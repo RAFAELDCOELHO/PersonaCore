@@ -116,6 +116,94 @@ def generate_text(
             yield new
 
 
+def generate_text_from_ids(
+    model,
+    tokenizer,
+    prompt_ids,
+    *,
+    eos_id=None,
+    max_new_tokens,
+    max_new_tokens_cap=DEFAULT_MAX_NEW_TOKENS_CAP,
+    **gen_kw,
+):
+    """Stream the continuation of an ALREADY-BUILT id prompt as new-text suffixes (Gap G1).
+
+    :func:`generate_text` and its siblings all take a *string* and build ids as
+    ``[eos_id] + tokenizer.encode(prompt)`` — a string-space path that is WRONG for clean-room
+    recall: the prompt there is an ``encode_dialogue`` id sequence beginning ``[8187, 8185, …]``,
+    and the ``eos``-prefixed form would build a prompt shape the model was never trained on and
+    make the committed context dump lie about what the model received. This function accepts
+    ``prompt_ids`` unchanged — nothing is prepended and ``tokenizer.encode`` is never called.
+
+    ``prompt_ids`` is expected to come from
+    :func:`personacore.dialogue.build_recall_prompt` (the D-18 shared builder).
+
+    Otherwise identical to :func:`generate_text`: ``max_new_tokens`` is required and bounded to
+    (0, ``max_new_tokens_cap``], rejected BEFORE the loop (V5 / T-06-04 DoS guard); only the
+    continuation is yielded (the prompt is never decoded back out — D-02); the core stops on a
+    stop id WITHOUT yielding it (D-05); the running buffer is decoded whole each step so a
+    multi-byte glyph split across ids never surfaces as mojibake (D-06). Remaining ``gen_kw``
+    (``temperature``, ``top_k``, ``top_p``, ``greedy``, ``generator``, ``block_size``,
+    ``forbid_ids``, ``stop_ids``) thread through to
+    :func:`personacore.generation.core.generate`.
+    """
+    eid = eos_id if eos_id is not None else model.config.eos_id
+
+    if max_new_tokens <= 0 or max_new_tokens > max_new_tokens_cap:
+        raise ValueError(
+            f"max_new_tokens must be in (0, {max_new_tokens_cap}], got {max_new_tokens!r}"
+        )
+
+    idx = torch.tensor([prompt_ids], dtype=torch.long, device=_model_device(model))
+
+    model.eval()  # inference posture (the core is already @torch.no_grad()).
+
+    emitted = ""
+    buffer_ids = []  # NEW ids only — the prompt is never decoded back out (D-02).
+    for tok in generate(model, idx, eos_id=eid, max_new_tokens=max_new_tokens, **gen_kw):
+        buffer_ids.append(tok)
+        # Decode the WHOLE running buffer each step (D-06). A byte-level-BPE glyph can span
+        # several ids, so a cumulative buffer that ends mid-glyph is NOT a defect — the strict
+        # decoder raises UnicodeDecodeError on those trailing partial bytes (Pitfall 3). Hold the
+        # ids and try again next step; the glyph surfaces once its final id arrives. This keeps
+        # the buffer cumulative (never reset), so the delta below stays correct.
+        try:
+            text = tokenizer.decode(buffer_ids)
+        except UnicodeDecodeError:
+            continue  # partial multi-byte glyph — wait for the next id (no mojibake, no crash).
+        new = text[len(emitted) :]
+        emitted = text
+        if new:
+            yield new
+
+
+def generate_text_from_ids_cumulative(model, tokenizer, prompt_ids, *, max_new_tokens, **gen_kw):
+    """Stream an id-prompt continuation as a GROWING cumulative string — the Gradio yield shape.
+
+    Pure adapter over :func:`generate_text_from_ids`, mirroring
+    :func:`generate_text_cumulative`. Both shapes exist because they serve different consumers:
+    the delta form is the composable producer (join them, pipe them, measure them), while
+    Gradio REPLACES the displayed message with each yield, so its callback must yield the FULL
+    cumulative response (08-RESEARCH Pitfall 1: yielding deltas makes the chat bubble flicker
+    lone fragments instead of growing).
+
+    It ships in the package rather than inside the demo callback so CI covers it WITHOUT the
+    demo extra installed (the ``tests/test_demo_callback.py`` precedent). The demo prepends a
+    constant per-turn stamp to the accumulated string — the stamp PREFIXES this shape rather
+    than replacing it — so the callback stays thin and the monotonic-growth claim keeps a
+    regression test.
+
+    Same contract as the producer otherwise: the (0, ``max_new_tokens_cap``] guard fires before
+    the loop, ``gen_kw`` threads through unchanged, and the prompt is never decoded back out.
+    """
+    acc = ""
+    for delta in generate_text_from_ids(
+        model, tokenizer, prompt_ids, max_new_tokens=max_new_tokens, **gen_kw
+    ):
+        acc += delta
+        yield acc
+
+
 def generate_text_str(model, tokenizer, prompt, **kw):
     """Non-streaming convenience: the full continuation string.
 
