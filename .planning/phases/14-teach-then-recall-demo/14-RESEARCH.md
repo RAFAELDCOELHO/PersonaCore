@@ -843,27 +843,40 @@ def on_reset():
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All five were substantively resolved during the discuss and planning passes. Each carries its
+> resolving decision or committed constant below; none is an open item entering execution.
 
 1. **Teaching register: first-person persona vs second-person user-fact.**
+   **RESOLVED — D-01** locks first person on the measured F3/F5 evidence; **D-21** adds the
+   `cal_second_person` calibration arm and `teach_persona.first_person_wins` so the head-to-head
+   is measured rather than asserted.
    - What we know: the base emits first person exclusively (F3); FEATURES §4's "move the persona from the prompt into the weights" framing supports first person; DEMO-05's wording says "user facts."
    - What's unclear: whether second person is merely harder or effectively unreachable at 331,776 params.
    - Recommendation: **choose first-person and say so in the plan**, framed as prompt→weights persona distillation. If cheap, add a register arm to the calibration run — but the register must be fixed before the calibration set is authored (D-14 requires calibration to mirror the real set's shape).
 
 2. **What the D-11.1 fairness control claims when it fails.**
+   **RESOLVED — D-20** pre-registers the three-part reconciliation plus its failure branch as
+   committed report text in plan 14-10, before the run that produces the number.
    - What we know: F4 says it will probably fail.
    - What's unclear: whether a different in-context placement (multi-turn, longer warm-up, repeated statement) would succeed — 6 probes is a small sample.
    - Recommendation: run the control as locked, on the full final question set; pre-write the negative-result framing (Pitfall 2); record the measured in-context negative as a first-class finding, not a footnote.
 
 3. **In-loop validation source for the teaching run.**
+   **RESOLVED — plan 14-07** passes `val_bin=DIALOG_VAL_BIN` + `val_mask_bin=DIALOG_VAL_MASK`, so
+   the in-loop curve IS the collateral-collapse signal; gates still use `masked_perplexity`.
    - What we know: `val_mask_bin` requires a `.bin` `val_bin`. Candidates: a held-out slice of the teaching corpus, or `dialog_val.bin`+mask.
    - Recommendation: use `dialog_val.bin`+mask so the in-loop curve *is* the collateral-collapse signal, giving D-11.2/D-15 a per-step trace instead of only endpoint numbers. Gate decisions still use the deterministic `masked_perplexity` sweep, never in-loop `val_loss` (Phase 12 12-02).
 
 4. **How many decode seeds N for the k/N success rate.**
+   **RESOLVED — plan 14-05** commits `N_SEEDED_SAMPLES = 8` and `question_seed(i) = SEED + i`.
    - What we know: D-10 requires greedy + N seeded samples; Phase 12/13 used a single seeded warm sample per transcript.
    - Recommendation: N in the 5–10 band with fixed per-question seeds derived from `SEED + question_index` so the whole run is re-derivable; commit the seed derivation. Cost is trivial (13.9M model, ≤ 64 new tokens).
 
 5. **Whether the calibration run's replay arm uses PersonaChat bins directly or an interleaved mix.**
+   **RESOLVED — plan 14-04** implements replay as a build-time concatenation ratio
+   (`REPLAY_RATIO`) inside `build_bins`, leaving `train()` untouched.
    - What we know: D-15 requires a paired with/without-replay comparison on masked dialogue val PPL.
    - What's unclear: replay ratio and mechanism. `train()` takes exactly one `train_bin`, so replay means **concatenating a PersonaChat slice into the persona bins at build time** — a build-time ratio, not a loop change.
    - Recommendation: implement replay as a build-time concatenation ratio constant; it keeps `train()` untouched and makes the ratio an auditable committed number.

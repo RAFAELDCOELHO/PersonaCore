@@ -197,7 +197,7 @@ Plans:
   3. Taught phrasings and never-seen phrasings are scored and reported separately (learning vs memorization), with all transcripts committed — failures included
   4. In the Gradio demo, the adapter toggles on/off live — same process, same prompt, memory on/off
 
-**Plans**: 11 plans in 8 waves
+**Plans**: 11 plans in 9 waves
 
 Plans:
 - [ ] 14-01-PLAN.md — Package seams — `build_recall_prompt` + `generate_text_from_ids` (wave 1)
@@ -207,10 +207,10 @@ Plans:
 - [ ] 14-05-PLAN.md — Recall pre-registration — D-19 budget, scoring rules, context-dump renderer (wave 4)
 - [ ] 14-06-PLAN.md — Scored recall harness — context dumps, clean-room proof, transcripts (wave 5)
 - [ ] 14-07-PLAN.md — LoRA teaching-run driver + calibration decision rule (wave 5)
-- [ ] 14-08-PLAN.md — Gradio Blocks demo + D-17/D-18 tests + CI demo extra (wave 5)
-- [ ] 14-09-PLAN.md — Calibration run (3 arms) + derive & commit locked numbers + BLOCKING verdict (wave 6)
-- [ ] 14-10-PLAN.md — Three D-11 controls + recall report writer with the D-20 reconciliation (wave 7)
-- [ ] 14-11-PLAN.md — Real teaching run + scored recall run + verdict + demo verification (wave 8)
+- [ ] 14-08-PLAN.md — Gradio Blocks demo + D-17/D-18 tests + CI/Makefile demo extra (wave 6)
+- [ ] 14-09-PLAN.md — Calibration run (3 arms) + derive & commit locked numbers + BLOCKING verdict (wave 7)
+- [ ] 14-10-PLAN.md — Three D-11 controls + recall report writer with the D-20 reconciliation (wave 8)
+- [ ] 14-11-PLAN.md — Real teaching run + scored recall run + verdict + demo verification (wave 9)
 **UI hint**: yes
 **Research flag**: the clean-room protocol is synthesized from knowledge-injection literature (no canonical reference) and recall rates at 13.9M params are unknown — worth a discuss/spec pass on the teaching-set template grammar and threshold pre-registration before planning
 
