@@ -101,10 +101,10 @@ itself, so an auditor reading ROADMAP alone never has to infer a passed gate fro
 - **The inflation triple is `3.229` / `2.860` / `1.129`** written **without** the unit character,
   same trap 15-06 flagged: the notebook writes `1.129x` (ASCII `x`, matching
   `results/inflation_report.md:31`), not `1.129×`.
-- **`demo.ipynb` cell indices shifted by one.** Its title cell is now index 1, its
-  `## Headline evaluation` markdown is index 4, and its three code cells are 2, 3, 5, 8 →
-  now 2, 3, 5, 8 shifted to 2, 3, 5, 8 + 1. Any test indexing `demo.ipynb` by cell number must
-  add one.
+- **`demo.ipynb` cell indices all shifted by one.** Its title cell moved `0 → 1`, its
+  `## Headline evaluation` markdown `3 → 4`, and its four code cells `1, 2, 4, 7 → 2, 3, 5, 8`.
+  Any test indexing `demo.ipynb` by cell number must add one; the new cell 0 is the only markdown
+  cell in the file whose `id` is `notebook-independence`, which is the stabler anchor.
 
 ## Verification Results
 
