@@ -52,6 +52,7 @@ CPU-only: no GPU, no generation, and ``launch()`` is never called.
 """
 
 import ast
+import hashlib
 import importlib.util
 import inspect
 import json
@@ -79,8 +80,12 @@ if _SCRIPTS not in sys.path:
 
 _TOKENIZER_PATH = _REPO_ROOT / "artifacts" / "tokenizer.json"  # git-tracked — CI has it.
 
-# The commit that last touched scripts/demo_app.py. D-17 freezes that file for this phase.
-_DEMO_APP_SHA = "cdd778692bfb2a14167ba33545a2f6a09148d451"
+# SHA-256 of scripts/demo_app.py as frozen by D-17 (content as of commit cdd77869, which last
+# touched it). Pinned as CONTENT, not as a commit id: a commit id is only checkable where that
+# commit is reachable, and CI clones shallow (actions/checkout@v4 defaults to fetch-depth: 1),
+# where this file's freeze commit sits 376 commits deep and `git diff <sha>` dies with
+# `fatal: bad object` / exit 128. A content hash needs no history at all.
+_DEMO_APP_SHA256 = "6c7312bfd0845febd1e3b3052927aac3f7cd5020ace81eada6ccf654cbdca8d4"
 
 
 def _load(name, filename):
@@ -581,19 +586,19 @@ def test_demo_app_frozen():
     """D-17: ``scripts/demo_app.py`` is unchanged, held by a PERMANENT test (W-05).
 
     The execution-time ``git diff --quiet -- <path>`` used elsewhere compares the WORKING TREE
-    to the index, so a staged edit passes it and nothing survives the phase. This is the repo's
-    existing stronger form (``tests/test_phase13_driver.py:112-123``): a diff against a pinned
-    commit, re-run on every CI run, which catches a staged edit and outlives the phase that
-    made the decision.
+    to the index, so a staged edit passes it and nothing survives the phase. Hashing the bytes
+    on disk is stricter than either that or a commit-to-commit diff: a commit-to-commit diff
+    reads only committed trees, so an edit sitting unstaged in the working tree — the file the
+    demo actually imports — passes it. This form catches unstaged, staged, and committed edits
+    alike, re-runs on every CI run, and outlives the phase that made the decision.
+
+    It is also history-independent, which is why it is a hash and not a commit id: CI checks out
+    shallow, so a pinned commit id is simply absent there (see ``_DEMO_APP_SHA256``).
     """
-    diff = subprocess.run(
-        ["git", "diff", _DEMO_APP_SHA, "HEAD", "--", "scripts/demo_app.py"],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
+    digest = hashlib.sha256((_REPO_ROOT / "scripts" / "demo_app.py").read_bytes()).hexdigest()
+    assert digest == _DEMO_APP_SHA256, (
+        f"scripts/demo_app.py changed (D-17): expected sha256 {_DEMO_APP_SHA256}, got {digest}"
     )
-    assert diff.stdout == "", f"scripts/demo_app.py changed since {_DEMO_APP_SHA} (D-17)"
 
 
 # --------------------------------------------------------------------------- #
