@@ -1,14 +1,14 @@
 ---
-status: partial
+status: complete
 phase: 15-figures-writeup
 source: [15-VERIFICATION.md]
 started: 2026-08-02T21:17:31Z
-updated: 2026-08-02T21:17:31Z
+updated: 2026-08-12T00:00:00Z
 ---
 
 ## Current Test
 
-[awaiting human testing]
+[none — session complete 2026-08-12, both tests passed, no gaps opened]
 
 ## Tests
 
@@ -48,15 +48,33 @@ why_human: 15-05's must-have is a reading-experience property. The structural pr
 verified — the halves are disjoint line ranges and the report asserts the property at lines 486-488
 — but "follows as a complete story" is prose judgment no grep can settle.
 
-result: [pending]
+result: pass — human read both halves and confirmed each stands as a complete story. Corroborated by
+a full read of both ranges before asking: the results half (664-831) opens with its own "claim under
+test" framing and carries the four experiments, the two figures, the correlation and its bounds
+without needing a Decision section; its one cross-reference (`:671`, "every choice behind them is
+justified in its own `## Decision:` section above; none of that reasoning is repeated here") is an
+explicit pointer, not a dependency, and the forward reference at `:829-831` points at Limitations, a
+third section, not the other half. The Decisions half (490-663) is Choice / Rationale /
+Alternative-rejected throughout, each complete on its own terms. One borderline spot was surfaced to
+the human rather than silently passed: `:594-597` names Phase 12's lambda-sweep verdict and the later
+production lambda=0.01 choice without stating what the verdict said (that lives at `:673-682`). Judged
+acceptable because the decision being argued is the *rule* — never edit a recorded verdict in place —
+which is fully argued without the verdict's content. No REPORT.md change needed.
 
 ## Summary
 
 total: 2
-passed: 0
+passed: 2
 issues: 0
-pending: 2
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+None. Both tests passed on first presentation and neither opened a gap, so no fix plan was needed.
+
+Both `why_human` predictions were tested rather than assumed, and one of them was wrong in the safe
+direction: test 1's "roughly 3pt equivalent … likely unreadable" concern did not reproduce, because
+it reasoned from nominal point size rather than rendered pixel density. The figures ship unchanged —
+no `figsize`/`fontsize` bump, no regeneration, and no claim change in `docs/REPORT.md`.
