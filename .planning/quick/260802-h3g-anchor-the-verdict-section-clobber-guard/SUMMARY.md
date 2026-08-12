@@ -1,6 +1,7 @@
 ---
 phase: quick-260802-h3g
 plan: 01
+status: complete
 subsystem: phase-14 drivers / report clobber guards
 tags: [CR-02, T-14-06, tdd, data-loss, evidence-protection]
 requires:

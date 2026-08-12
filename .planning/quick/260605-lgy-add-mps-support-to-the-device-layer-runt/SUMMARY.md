@@ -1,6 +1,7 @@
 ---
 phase: quick-260605-lgy
 plan: 01
+status: complete
 subsystem: device-layer
 tags: [mps, apple-silicon, preflight, runtime-config, device-resolution]
 requires: []

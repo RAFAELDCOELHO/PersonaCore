@@ -1,10 +1,22 @@
 ---
 phase: 15-figures-writeup
 verified: 2026-08-02T21:17:31Z
-status: human_needed
+status: passed
 score: 51/51 must-haves verified
 overrides_applied: 0
-re_verification: null
+re_verification:
+  re_verified: 2026-08-12
+  previous_status: human_needed
+  previous_score: 51/51 must-haves verified
+  note: "Re-stamp only — the machine score was already 51/51 at initial verification and NO code, figure or REPORT.md change was made. The two human_verification items below were the only thing holding status at human_needed; both were presented and PASSED on 2026-08-12, recorded in 15-HUMAN-UAT.md (status: complete, 2 passed / 0 pending / 0 gaps)."
+human_verification_results:
+  closed: 2026-08-12
+  outcome: "2 of 2 PASSED, 0 gaps opened"
+  results:
+    - result: PASSED
+      note: "GitHub inline legibility. The why_human prediction — 'roughly 3pt equivalent' from the 0.391 downscale — did NOT reproduce, because it reasoned from nominal point size rather than rendered pixel density: the PNG is drawn at high DPI, so an 880px render still carries enough pixels, and Retina renders at 2x. Corroborated before the human was asked by a Lanczos resample of phase15_fisher_ewc.png to 880x293, which reproduced the VIZ-03 disclosure line legibly. Human confirmed both lines readable in place on rendered GitHub. No figsize/fontsize bump, no regeneration."
+    - result: PASSED
+      note: "Two-halves narrative independence. Both line ranges were read end to end before the question was put. The results half (664-831) carries its own framing; its :671 cross-reference is an explicit pointer, not a dependency, and the :829-831 forward reference points at Limitations, a third section. The Decisions half (490-663) is complete on its own terms. One borderline spot was surfaced rather than silently passed: :594-597 names Phase 12's lambda-sweep verdict and the later production lambda=0.01 choice without stating what the verdict said (that lives at :673-682); judged acceptable because the decision being argued is the rule — never edit a recorded verdict in place — which stands without the verdict's content. No docs/REPORT.md change."
 human_verification:
   - test: "Open README.md on GitHub (rendered, not raw) at default desktop width and read the two embedded v2.0 figures without clicking through to full size. Specifically read the gray disclosure line at the bottom of each."
     expected: "Both disclosure lines are legible in-place: VIZ-03's `the naive and EWC panels share ONE log scale ... the Fisher panel has its own because its units differ` and VIZ-02's `... so this figure is NOT comparable to the VIZ-03 delta panels`."
