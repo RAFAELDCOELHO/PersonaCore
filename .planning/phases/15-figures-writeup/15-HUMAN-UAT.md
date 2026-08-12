@@ -27,7 +27,14 @@ rendering/perception question the filesystem cannot answer. (VIZ-02 downscales b
 equivalent — likely fine.) If VIZ-03's line is unreadable inline, the fix is a `figsize`/`fontsize`
 bump and a figure regeneration, not a claim change.
 
-result: [pending]
+result: pass — human confirmed both disclosure lines are legible inline on rendered GitHub at default
+desktop width, no click-through needed. The `why_human` concern does not reproduce: it estimated
+"~3pt equivalent" from the 0.391 downscale of the nominal 8pt text, which conflates point size with
+rendered pixel density — the PNG is drawn at high DPI, so 880px still carries enough pixels, and
+Retina renders it at 2x. Corroborated before asking: a Lanczos resample of `phase15_fisher_ewc.png`
+(2250x750 -> 880x293) reproduced the VIZ-03 line readably ("the naive and EWC panels share ONE log
+scale ... the Fisher panel has its own because its units differ ..."). VIZ-02 (0.772) was never at
+risk. No `figsize`/`fontsize` bump needed; figures ship as generated.
 
 ### 2. Two-halves narrative independence in `docs/REPORT.md`
 

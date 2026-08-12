@@ -5,7 +5,7 @@ status: complete
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-08-01
-updated: 2026-08-02
+updated: 2026-08-12
 ---
 
 # Phase 14 — Validation Strategy
@@ -24,7 +24,7 @@ updated: 2026-08-02
 | **Config file** | `pyproject.toml` → `[tool.pytest.ini_options]`, `testpaths=["tests"]`, `pythonpath=["."]` |
 | **Quick run command** | `.venv/bin/pytest -q tests/test_phase14_*.py tests/test_recall_prompt.py` |
 | **Full suite command** | `make test` (`.venv/bin/pytest -q`) |
-| **Estimated runtime** | quick: **3.74 s** (101 tests) · full: **~110 s** (389 tests) — measured 2026-08-02 at phase close; the research-time estimate of ~0.75 s predated the 100 Phase-14 tests |
+| **Estimated runtime** | quick: **5.65 s** (107 tests) · full: **122.35 s** (408 passed / 1 skipped) — re-measured 2026-08-12. Phase-close figures were 3.74 s / 101 tests and ~110 s / 389 tests; the growth is Phase 15's tests landing in the shared suite, not Phase-14 drift. |
 
 The suite is **CPU-only and GPU-free by contract**. No test in this phase may require MPS, a
 checkpoint file, or a Gradio launch.
@@ -141,3 +141,42 @@ did. Full suite at close: **388 passed / 1 skipped**.
 **Approval:** **granted 2026-08-02** — the DEMO-05/06 recall verdict is recorded (ADAPT — GO with
 two qualifications) and the DEMO-07 on-camera demo pass is confirmed in a live browser; see
 *Recorded outcomes* above. Everything automatable is green (388 passed / 1 skipped).
+
+---
+
+## Validation Audit 2026-08-12
+
+Re-audit of this file against the live repository (State A). Every claim below was re-measured in
+this pass, not carried forward from the phase-close text above.
+
+| Metric | Count |
+|--------|-------|
+| Requirements in scope | 3 (DEMO-05, DEMO-06, DEMO-07) |
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+**What was re-verified.**
+
+- **Every pytest node id this file names still resolves.** All nine cited names —
+  `test_answer_span_mask`, `test_bin_shape`, `test_generation_budget`, `test_families_disjoint`,
+  `test_no_token_leakage`, `test_preregistration_constants`, `test_forbid_ids_parity`,
+  `test_prompt_ids_identical`, `test_no_remote_stylesheets` — were confirmed present via
+  `pytest --collect-only` against the six files in the map. No row points at a deleted test.
+- **Phase-14 quick suite: 107 passed, 0 failed, 0 skipped** (5.65 s) on the command as written.
+  Adding the map's `tests/test_lora_toggle.py` row gives **113 passed** (6.08 s).
+- **Full suite: 408 passed / 1 skipped / 0 failed** (122.35 s). The single skip is
+  `tests/test_train_loop.py:81` — *"fp16 AMP smoke needs a CUDA GPU"* — a CUDA-only guard that is
+  correct to skip on the primary M3/MPS path, not a Phase-14 gap.
+- **Requirement coverage is complete.** DEMO-05, DEMO-06 and DEMO-07 each carry at least one
+  automated row in the Per-Task Verification Map; `REQUIREMENTS.md:113-118` marks all three
+  Complete. No Phase-14 requirement lacks automated verification, so `nyquist_compliant: true`
+  stands unchanged.
+
+**Non-gap finding, recorded rather than fixed.** `make test` runs bare `pytest`, not
+`.venv/bin/pytest` as the Test Infrastructure table states. Invoked without the venv activated it
+fails with 62 collection errors (`No module named 'personacore' / 'torch' / 'gradio'`) — the
+system Python 3.14 has none of them. This is not a regression and not a Phase-14 defect: CLAUDE.md
+documents `source .venv/bin/activate` before `make test`, and under that flow the recipe resolves
+to the venv pytest exactly as the table says. Noted here only so a future reader who hits the
+collection wall does not mistake it for broken tests.
