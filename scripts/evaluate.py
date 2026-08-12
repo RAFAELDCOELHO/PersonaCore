@@ -38,7 +38,7 @@ import torch  # noqa: E402  (must follow the MPS-fallback env set above)
 
 from personacore.config import ModelConfig, RuntimeConfig  # noqa: E402
 from personacore.evaluation import perplexity  # noqa: E402
-from personacore.generation import generate_text_str  # noqa: E402
+from personacore.generation import generate_text_str, undecodable_ids_mask  # noqa: E402
 from personacore.model import GPT  # noqa: E402
 from personacore.preflight import preflight_device  # noqa: E402
 from personacore.tokenizer import from_json  # noqa: E402
@@ -112,6 +112,13 @@ def main() -> None:
 
     # --- EVAL-02: representative greedy + warm samples over the fixed prompt set -----------------
     tok = from_json(TOKENIZER_PATH)  # FROZEN artifact — never retrain.
+    # CR-01 / v1.0 WARNING-1: the frozen tokenizer decodes only 547 of the model's 8192 ids, so
+    # 7645 ids are undecodable and `tok.decode([dead_id])` raises. Mask them to -inf BEFORE
+    # sampling — the same mechanism `retention_perplexity()` applies (perplexity.py:167) and the
+    # demo applies (personalize_demo.py:390). Threaded into BOTH sample calls, not just the warm
+    # one: greedy is only safe by luck (a dead id has never been the argmax), and one mask built
+    # once covers both paths. eos_id is a registered special, so EOS-stop (D-05) is unaffected.
+    forbid = undecodable_ids_mask(tok, model_cfg.vocab_size).to(runtime.device)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     samples_path = RESULTS_DIR / "samples.md"
 
@@ -131,7 +138,12 @@ def main() -> None:
     for prompt in PROMPTS:
         label = repr(prompt) if prompt else '"" (free-running document-start)'
         greedy = generate_text_str(
-            model, tok, prompt, max_new_tokens=SAMPLE_MAX_NEW_TOKENS, greedy=True
+            model,
+            tok,
+            prompt,
+            max_new_tokens=SAMPLE_MAX_NEW_TOKENS,
+            greedy=True,
+            forbid_ids=forbid,
         )
         warm = generate_text_str(
             model,
@@ -140,6 +152,7 @@ def main() -> None:
             max_new_tokens=SAMPLE_MAX_NEW_TOKENS,
             temperature=0.8,
             top_p=0.95,
+            forbid_ids=forbid,
         )
         lines += [
             f"## Prompt: {label}",
