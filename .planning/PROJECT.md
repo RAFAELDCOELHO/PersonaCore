@@ -54,25 +54,40 @@ All six v2.0 target features shipped. Full detail: `milestones/v2.0-ROADMAP.md`,
 
 </details>
 
-## Next Milestone: v3.0 — not yet defined
+## Current Milestone: v3.0 Adversarial Privacy Audit and Selective Memory Erasure
 
-Run `/gsd:new-milestone` to scope it (questioning → research → requirements → roadmap). Phase
-numbering continues from v2.0, so the first v3.0 phase is **16**.
+**Goal:** Stop asserting that weight-based memory is private and start measuring it — what weights
+actually buy over prompting, whether separately-taught personas stay isolated under adversarial
+collision, and whether an adversary can extract taught facts through a toggle that only ever
+controlled availability.
 
-Open questions worth carrying into that conversation, in rough priority order:
+**Target features:**
+- **Phase 16 — Weight-vs-Prompt Measured Control (DEMO-F2, formalized).** Same question set, two
+  conditions: the fact placed *in context* (prompt-stuffed) vs *adapter-only with an empty prompt*.
+  Reuses the already-trained `persona_adapter.pt` — no new infrastructure, the cheapest of the
+  three, and it answers the sharpest question first: what does memory-in-weights buy over
+  prompting, as a number rather than an intuition.
+- **Phase 17 — Multi-Persona Isolation Matrix (DEMO-F1, formalized as a matrix M_ij).** N=3-4
+  deliberately *adversarial* personas — colliding names, contradictory values in the same slot,
+  adapter A queried with B's prompt — scored as a full cross-matrix. The most collision-prone pair
+  is replicated across seeds. Builds the persona generator DEMO-F1 always needed and never had.
+- **Phase 18 — Black-Box Adversarial Extraction Audit.** An attacker with no adapter (the negative
+  control) and an attacker with the adapter *active*, attempting paraphrase, prefix injection,
+  role-play, and repeated attempts. Reframes the Phase-14 toggle as **availability, not
+  authorization** — the honest reading of what that switch has always done.
 
-1. **Two-persona adapter swap (DEMO-F1, already deferred).** The strongest remaining scientific
-   control: a second adapter, different memory, same base weights. Needs a second teaching set and
-   a second training run.
-2. **The prompt-persona measured control (DEMO-F2, already deferred).** Same question set with
-   facts stuffed in context vs adapter-only with an empty prompt, framed strictly as a control —
-   the honest quantification of what weight-memory buys over prompting.
-3. **The recall qualifications recorded as ADAPT, not GO.** Residual collateral collapse at +27.16%
-   and the question-fairness control at 1/1944 are the two named limitations on the headline recall
-   result; both are candidates for a targeted follow-up rather than a new capability.
-4. **The frozen tokenizer.** Still 547 live ids of 8192. Retraining invalidates every checkpoint
-   and every published number, which is why it was locked twice — but it is the single largest
-   quality ceiling on the model and the decision belongs at a milestone boundary, not mid-run.
+**Deferred pending 16-18 results:** **Phase 19+ — Selective Erasure.** It enters the roadmap
+formally only once the numbers from 16, 17 and 18 exist, because those numbers determine whether
+erasure is worth attempting and what it would have to beat. Per the v2.0 pre-registration
+discipline, the criteria for that decision are written down before the data can influence them.
+
+**Explicitly out of scope for v3.0:** the frozen tokenizer / retrain question. It needs its own
+conversation given the cost of invalidating every published checkpoint and number, and bundling it
+into a privacy milestone would confound both.
+
+**Key context:** phase numbering continues from v2.0, so v3.0 opens at **Phase 16**. Ordering is
+cost-ascending and dependency-driven — 16 needs no new artifacts, 17 builds the persona generator,
+18 consumes both. Compute is minutes-to-hours on the M3, not a new pretraining run.
 
 ## Core Value
 
@@ -104,9 +119,12 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 
 ### Active
 
-<!-- Milestone v3.0 — not yet defined. Run /gsd:new-milestone; REQ-IDs will land in a fresh REQUIREMENTS.md. -->
+<!-- Milestone v3.0: Adversarial Privacy Audit and Selective Memory Erasure — REQ-IDs land in REQUIREMENTS.md. -->
 
-(None — v3.0 requirements are undefined. See *Next Milestone* above for carried open questions.)
+- [ ] Weight-vs-prompt measured control — quantify what memory-in-weights buys over prompt-stuffing, same questions, both conditions (Phase 16)
+- [ ] Multi-persona isolation matrix M_ij under adversarial collision — colliding names, contradictory same-slot values, cross-adapter querying, seed-replicated worst pair (Phase 17)
+- [ ] Black-box adversarial extraction audit — no-adapter negative control vs adapter-active attacker across paraphrase / prefix / role-play / repeated attempts (Phase 18)
+- [ ] *(Deferred, gated on 16-18)* Selective erasure of a taught fact from the weights (Phase 19+)
 
 ### Out of Scope
 
@@ -180,4 +198,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-12 after v2.0 "Weight-Based Memory" milestone completion*
+*Last updated: 2026-08-12 — v2.0 "Weight-Based Memory" completed, v3.0 "Adversarial Privacy Audit and Selective Memory Erasure" opened*

@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Weight-Based Memory
-status: Awaiting next milestone
-stopped_at: Completed 15-07-PLAN.md
-last_updated: "2026-08-12T17:08:59.392Z"
-last_activity: 2026-08-12 — Milestone v2.0 completed and archived
+milestone: v3.0
+milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
+status: planning
+last_updated: "2026-08-12T18:41:47.797Z"
+last_activity: 2026-08-12
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 39
-  completed_plans: 39
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** Planning next milestone (v3.0 — undefined; first phase will be 16). Run `/gsd-new-milestone`.
+**Current focus:** v3.0 Adversarial Privacy Audit and Selective Memory Erasure — Phase 16 (Weight-vs-Prompt Measured Control) → 17 (Multi-Persona Isolation Matrix) → 18 (Black-Box Adversarial Extraction Audit); Phase 19+ Selective Erasure deferred pending 16-18 numbers. Defining requirements.
 
 ## Current Position
 
-Phase: Milestone v2.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-12 — Milestone v2.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-12 — Milestone v3.0 started
 
 ## Performance Metrics
 
