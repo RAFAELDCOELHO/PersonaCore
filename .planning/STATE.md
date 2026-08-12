@@ -18,10 +18,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-11)
+See: .planning/PROJECT.md (updated 2026-08-12)
 
-**Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 delivers the weight-based memory (LoRA + EWC).
-**Current focus:** Phase 15 — figures-writeup
+**Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
+**Current focus:** Planning next milestone (v3.0 — undefined; first phase will be 16). Run `/gsd-new-milestone`.
 
 ## Current Position
 
@@ -34,8 +34,8 @@ Last activity: 2026-08-12 — Milestone v2.0 completed and archived
 
 **Velocity (v1.0 baseline):**
 
-- Total plans completed: 49 across 8 phases (v1.0)
-- v2.0 plans completed: 0
+- v1.0: 29 plans across 8 phases (shipped 2026-06-11)
+- v2.0: **39 plans across 7 phases** (shipped 2026-08-12), 364 commits over 62 days
 
 **By Phase (v2.0):**
 
@@ -143,8 +143,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 12 research flag: λ selection + full-FT LR/budget calibration — plan with `/gsd-plan-phase --research-phase` (research/SUMMARY.md).
-- DEBT-01/02 (run.csv ×256, forbid_ids-in-PPL policy) are Phase 12 pre-work and MUST land before the first v2.0 fine-tune step — forgetting-curve axes depend on them.
+None open. Both v2.0 blockers are resolved:
+
+- ~~Phase 12 research flag: λ selection + full-FT LR/budget calibration.~~ **Resolved** — the calibration smoke ran fully pre-registered and returned an honest all-fail (λ\*=None, "EWC not demonstrable at this budget"); production used a separately-recorded discretionary λ=0.01.
+- ~~DEBT-01/02 must land before the first v2.0 fine-tune step.~~ **Resolved** — DEBT-01 landed 2026-07-31 pre-work. DEBT-02 turned out to be two items: the PPL half was closed by design in the same pre-work (`ca14a89`), and the warm-sampling half — the genuine v1.0 carry-over — was closed 2026-08-12 (`3781a97`).
+
+Carried into v3.0 as non-blocking notes (see `milestones/v2.0-MILESTONE-AUDIT.md`): W1 runtime consumers inject with `LoRAConfig()` defaults rather than the artifact's own; W3 one λ=0 frontier point is a hand-entered literal; `scripts/evaluate.py` is unseeded, so `results/samples.md` is not reproducible run to run.
 
 ### Quick Tasks Completed
 
@@ -156,21 +160,26 @@ None yet.
 
 ## Deferred Items
 
-Items acknowledged and deferred at milestone close on 2026-06-11:
+**At v2.0 close (2026-08-12): zero items deferred.** `gsd-sdk query audit-open` reported 3 open
+artifacts and all 3 were resolved rather than acknowledged — `15-VERIFICATION.md` re-stamped
+`human_needed` → `passed` after its two human items passed, and two quick-task SUMMARYs renamed to
+the `SUMMARY.md` filename `audit-open.ts:84` actually reads. Final scan: 0 items.
+
+Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with current status:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| quick_task | 260605-lgy-add-mps-support-to-the-device-layer-runt | metadata-only (work complete, committed 398b74e; SUMMARY frontmatter lacks a parseable status field) | v1.0 close |
-| tech_debt | forbid_ids mask not threaded into scripts/evaluate.py warm sampling (CR-01 mode can recur on eval re-runs) | promoted to DEBT-02 → Phase 12 | v1.0 close |
-| tech_debt | loop.py tokens_per_step omits ×block_size; run.csv "tokens" column under-counts ×256 (telemetry only) | promoted to DEBT-01 → Phase 12 | v1.0 close |
+| quick_task | 260605-lgy-add-mps-support-to-the-device-layer-runt | **CLOSED at v2.0 close** — the work was always complete (committed 398b74e); the audit read it as missing because the checker requires a file literally named `SUMMARY.md` in the task directory, not a slug-prefixed one. Renamed 2026-08-12 | v1.0 close |
+| tech_debt | forbid_ids mask not threaded into scripts/evaluate.py warm sampling (CR-01 mode can recur on eval re-runs) | **CLOSED 2026-08-12 (`3781a97`)** — threaded into both the greedy and warm calls; headline 2.1066 re-run byte-identical (sha256 `4b9d129e…`), all 4 greedy samples byte-identical, `greedy(masked) == greedy(unmasked)` asserted directly | v1.0 close |
+| tech_debt | loop.py tokens_per_step omits ×block_size; run.csv "tokens" column under-counts ×256 (telemetry only) | **CLOSED** — DEBT-01, landed 2026-07-31 as Phase 12 pre-work, before the first v2.0 training step | v1.0 close |
 | tech_debt | TODO(calibration) markers on shipped-final constants in scripts/pretrain_tinystories.py | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
 | tech_debt | docs/REPORT.md under-discloses tokenizer training-corpus identity (11.5KB fixture → 547 live ids) | open — natural home: DOC-02 honesty pass (Phase 15) | v1.0 close |
 | tech_debt | one-time `gh release view m1-demo-v1` asset check (tag verified, asset unverified from sandbox) | open — see v1.0-MILESTONE-AUDIT.md | v1.0 close |
 
 ## Session Continuity
 
-Last session: 2026-08-02T20:44:02.425Z
-Stopped at: Completed 15-07-PLAN.md
+Last session: 2026-08-12
+Stopped at: v2.0 milestone completed and archived (phases moved to `milestones/v2.0-phases/`)
 Resume file: None
 
 ## Operator Next Steps
