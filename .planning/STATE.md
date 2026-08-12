@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Weight-Based Memory
-status: verifying
+status: Awaiting next milestone
 stopped_at: Completed 15-07-PLAN.md
-last_updated: "2026-08-02T20:44:24.003Z"
-last_activity: 2026-08-02
+last_updated: "2026-08-12T17:08:59.392Z"
+last_activity: 2026-08-12 — Milestone v2.0 completed and archived
 progress:
   total_phases: 7
   completed_phases: 7
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 15 (figures-writeup) — EXECUTING
-Plan: 8 of 8
-Status: Phase complete — ready for verification
-Last activity: 2026-08-02
-
-Progress: [██████████] 100%
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-12 — Milestone v2.0 completed and archived
 
 ## Performance Metrics
 
@@ -177,4 +175,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan the final v2.0 phase with `/gsd-plan-phase 15` (Figures & Writeup — consumes the Phase 13 curves and the Phase 14 recall evidence)
+- Start the next milestone with /gsd-new-milestone

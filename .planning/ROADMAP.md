@@ -3,11 +3,23 @@
 ## Milestones
 
 - ✅ **v1.0 Foundation** — Phases 1-8 (shipped 2026-06-11) — [archive](milestones/v1.0-ROADMAP.md)
-- 🚧 **v2.0 Weight-Based Memory** — Phases 9-15 (in progress)
+- ✅ **v2.0 Weight-Based Memory** — Phases 9-15 (shipped 2026-08-12) — [archive](milestones/v2.0-ROADMAP.md)
+- 📋 **v3.0** — not yet defined (run `/gsd:new-milestone`)
 
 ## Overview
 
-v2.0 proves the novel claim: personalization lives in the model weights, not in a prompt or a store. Three independent correctness phases land first — from-scratch LoRA (9), from-scratch EWC (10), and the conversational data pipeline with its tokenizer-inflation gate (11) — front-loading all unit-testable work before any long training run. Phase 12 turns `best.pt` into a conversational base via full fine-tune with calibrated EWC (telemetry debts fixed first so every retention-curve point is trustworthy). Phase 13 runs the unconfounded EWC A/B and commits the forgetting curves; Phase 14 delivers the core-value proof — clean-room teach-then-recall with a LoRA adapter and a live on/off toggle; Phase 15 ships the signature figures and the honest v2.0 writeup.
+v1.0 built the foundation by hand: a ~13.9M-parameter GPT-style decoder, a from-scratch BPE
+tokenizer, and a resumable training harness, pretrained on TinyStories on the author's own Apple
+Silicon machine to headline perplexity 2.1066.
+
+v2.0 proved the novel claim on top of it: **personalization lives in the model weights, not in a
+prompt or a store.** From-scratch LoRA teaches user-specific facts into 331,776 adapter parameters
+on a frozen conversational base, and a fresh process recalls them from an empty prompt with the
+context provably wiped; from-scratch EWC keeps the fine-tune from destroying the base model, at a
+3.6× separation clearing its pre-registered margin by 33.61×. Every headline number is gated by a
+rule committed to git before the number existed.
+
+The next milestone is undefined. Start it with `/gsd:new-milestone`.
 
 ## Phases
 
@@ -27,284 +39,33 @@ Full phase details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) · 
 
 </details>
 
-### 🚧 v2.0 Weight-Based Memory (Phases 9-15)
+<details>
+<summary>✅ v2.0 Weight-Based Memory (Phases 9-15) — SHIPPED 2026-08-12</summary>
 
 **Milestone Goal:** Prove personalization lives in the weights via from-scratch LoRA + EWC on the v1.0 foundation — conversational fine-tune, no-forgetting A/B, and a clean-room teach-then-recall demo.
 
-- [x] **Phase 9: LoRA Core** - From-scratch `LoRALinear` over the six named projections, fully test-pinned, adapter as a small swappable artifact (completed 2026-06-11)
-- [x] **Phase 10: EWC Core** - Per-example diagonal Fisher + quadratic penalty through the `assemble_loss` seam, v1.0 trajectory bit-preserved when off (completed 2026-06-12)
-- [x] **Phase 11: Conversational Data Pipeline** - PersonaChat (self_revised) → role-token memmap bins with loss masks; tokenizer-inflation gate measured first *(DailyDialog cut per D-00, 2026-07-31)* (completed 2026-07-31)
-- [x] **Phase 12: Stage-2 Conversational Fine-Tune** - Telemetry debts fixed, λ sweep, full fine-tune of `best.pt` to a conversational base with retention logged from step 0 (completed 2026-08-01)
-- [x] **Phase 13: EWC A/B No-Forgetting Experiment** - Identical-arm naive-vs-EWC A/B, 2×2 acquisition+retention result, committed forgetting curves + λ frontier (completed 2026-08-01)
-- [x] **Phase 14: Teach-Then-Recall Demo** - Clean-room personalization: LoRA adapter recalls taught facts fresh-process/empty-prompt, live on/off toggle *(both recall gates PASSED — taught 0.4921 vs 0.2486, held-out 0.3483 vs 0.2000, closed-book 0/2430; verdict recorded ADAPT — GO with two qualifications; on-camera demo pass confirmed)* (completed 2026-08-02)
-- [x] **Phase 15: Figures & Writeup** - Weight-delta + Fisher heatmaps, REPORT/README/demo.ipynb v2.0 narrative with honest numbers (completed 2026-08-02)
+- [x] Phase 9: LoRA Core (4/4 plans) — completed 2026-06-11
+- [x] Phase 10: EWC Core (3/3 plans) — completed 2026-06-12
+- [x] Phase 11: Conversational Data Pipeline (4/4 plans) — completed 2026-07-31 *(DailyDialog cut per D-00)*
+- [x] Phase 12: Stage-2 Conversational Fine-Tune (5/5 plans) — completed 2026-08-01
+- [x] Phase 13: EWC A/B No-Forgetting Experiment (4/4 plans) — completed 2026-08-02
+- [x] Phase 14: Teach-Then-Recall Demo (11/11 plans) — completed 2026-08-02
+- [x] Phase 15: Figures & Writeup (8/8 plans) — completed 2026-08-02
 
-## Phase Details
+**Headline results:** EWC retention PPL 3.891140 vs naive 8.524171 from a shared 2.1076 step-0
+anchor — the pre-registered gate cleared by 33.61× its margin. Closed-book recall 0.4921 taught /
+0.3483 held-out against thresholds 0.2486 / 0.2000, with the adapter-off control at exactly
+0/2430. Fisher/Δ correlation Spearman ρ = 0.801544, 95% CI [0.597984, 0.920291].
 
-### Phase 9: LoRA Core
+Full phase details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md) · Audit: [milestones/v2.0-MILESTONE-AUDIT.md](milestones/v2.0-MILESTONE-AUDIT.md) · Phase artifacts: `milestones/v2.0-phases/`
 
-**Goal**: From-scratch LoRA adapters wrap the six named `nn.Linear` projections via post-load injection, with correctness proven by tests and adapter weights shipping as a small swappable artifact
-**Depends on**: Nothing within v2.0 (consumes the v1.0 named-projection seam; independent of Phases 10-11)
-**Requirements**: LORA-01, LORA-02, LORA-03, LORA-04, LORA-05
-**Success Criteria** (what must be TRUE):
+</details>
 
-  1. With adapters injected at init (A-Gaussian/B-zero), model logits are bit-identical to the vanilla base, and the enable/disable round-trip returns exactly to base behavior
-  2. After adapter training steps, only A/B matrices have changed — every base parameter is bit-untouched and the tied embedding tensor was never wrapped (`data_ptr` test post-injection)
-  3. Adapter weights save/load as a separate small artifact compatible with open-dict checkpoints and the LOCKED `weights_only=True` slim contract
-  4. `merge()`/unmerge passes the fp32-tolerance equivalence test (merged forward ≡ base+adapter) while the demo path stays unmerged
-  5. Param-count formula and load→inject→freeze ordering are pinned by unit tests, and the params-actually-update canary passes on a smoke run
+### 📋 v3.0 — not yet defined
 
-**Plans**: 4 plans
-
-Plans:
-**Wave 1**
-
-- [x] 09-01-PLAN.md — LoRA core: `LoRAConfig` + `LoRALinear` + post-load injection/freeze machinery, fully test-pinned (Wave 1)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 09-02-PLAN.md — Toggle/eject (D-05/D-06) + merge/unmerge + pure `merged_state_dict` (D-07/D-08) (Wave 2)
-- [x] 09-03-PLAN.md — Persona-file artifact: `export_adapter`/`load_adapter` choke point + two-artifact load (D-01..D-03) (Wave 2)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 09-04-PLAN.md — Frozen-base training proof: canary/kill+resume tests + real-weights smoke script (Wave 3)
-
-### Phase 10: EWC Core
-
-**Goal**: From-scratch EWC machinery — per-example empirical diagonal Fisher and the quadratic penalty — plugs into the training loop additively, with v1.0 behavior bit-preserved when the penalty is off
-**Depends on**: Nothing within v2.0 (consumes the v1.0 `assemble_loss` seam, `best.pt`, and existing TinyStories bins; independent of Phases 9 and 11)
-**Requirements**: EWC-01, EWC-02
-**Success Criteria** (what must be TRUE):
-
-  1. Fisher is estimated from per-example gradients over TinyStories batches at `best.pt` (not batched-gradient squaring), is normalized, and matches an analytic tiny-fixture oracle
-  2. Fisher and anchor θ* persist via the open-dict checkpoint seam and reload intact, with tied tensors deduplicated by `data_ptr`
-  3. The quadratic penalty `(λ/2)·Σ Fᵢ·(θᵢ−θ*ᵢ)²` is applied via `assemble_loss(..., extra_penalties=())` and evaluates to exactly 0 at the anchor (unit test)
-  4. With the penalty disabled (`penalty_fn=None`), the training trajectory is bit-identical to v1.0 and all 137 existing tests stay green
-
-**Plans**: 3 plans
-
-Plans:
-**Wave 1**
-
-- [x] 10-01-PLAN.md — `continual/` package: `estimate_fisher` (per-example diagonal Fisher, D-01..D-05) + `EWCPenalty`, fully test-pinned (Wave 1)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 10-02-PLAN.md — Loop integration: pre-edit golden trajectory fixture + additive `penalty_fn`/`checkpoint_extra` kwargs, bit-identity proven (Wave 2)
-- [x] 10-03-PLAN.md — Persistence + real weights: `export_fisher`/`load_fisher` seam tests + N=2000 estimation at `best.pt` producing the production cache (Wave 2)
-
-### Phase 11: Conversational Data Pipeline
-
-**Goal**: PersonaChat (self_revised) becomes role-token-formatted, loss-masked memmap training bins through the frozen tokenizer — with the tokenizer-inflation tax measured before the format design hardens *(DailyDialog cut per D-00, 2026-07-31)*
-**Depends on**: Nothing within v2.0 (consumes the frozen tokenizer with reserved role ids 8185-8187; independent of Phases 9-10)
-**Requirements**: DATA-01, DATA-02, DATA-03, DATA-04
-**Success Criteria** (what must be TRUE):
-
-  1. PersonaChat downloads via pinned-checksum direct fetch (ParlAI `personachat.tgz`, sha256-pinned 2026-07-31; verified S3 `personachat_self_original.json` as the pre-registered fallback) and parses from scratch — no HF `datasets` at runtime, no network at train time
-  2. The tokenizer-inflation measurement (tokens-per-word, %-over-`block_size` on dialogue text) is produced and documented as a go/no-go gate BEFORE the fine-tune format design is committed
-  3. Dialogues serialize with the reserved role tokens (`<|user|>`/`<|assistant|>`/`<|system|>`, ids 8185-8187) through the frozen tokenizer into uint16 memmap bins, with eos 8184 kept as a document separator only
-  4. User-turn loss masking via `ignore_index=-100` (parallel mask bins) matches a hand-built fixture exactly in a turn-boundary unit test
-
-**Plans**: 4 plans
-
-Plans:
-**Wave 1**
-
-- [x] 11-01-PLAN.md — `dialogue/` package: from-scratch fb-dialog parser + detokenizer + render + span-wise id/mask encoder, fixture-tested (Wave 1)
-- [x] 11-02-PLAN.md — `get_batch_memmap_masked` in training/data.py + DATA-03 hand-built exactness fixture (Wave 1)
-
-**Wave 2** *(blocked on 11-01)*
-
-- [x] 11-03-PLAN.md — checksum-gated PersonaChat fetch + inflation gate + committed report + blocking D-09 user verdict checkpoint (Wave 2)
-
-**Wave 3** *(blocked on the recorded gate verdict)*
-
-- [x] 11-04-PLAN.md — prepare_dialog_corpus.py → dialog_{train,val}.bin + mask bins with sanity block + build evidence appended to the report (Wave 3)
-
-### Phase 12: Stage-2 Conversational Fine-Tune
-
-**Goal**: `best.pt` becomes a dialogue-capable conversational base via full fine-tune with calibrated EWC — telemetry tech debt fixed before the first training step so every retention-curve point is trustworthy
-**Depends on**: Phase 10 (EWC penalty), Phase 11 (dialogue bins + masks)
-**Requirements**: DEBT-01, DEBT-02, EWC-03, TUNE-01, TUNE-02
-**Success Criteria** (what must be TRUE):
-
-  1. Before the first v2.0 training step, `run.csv` tokens column counts true tokens (×`block_size` fix in `loop.py`) and the dead-id `forbid_ids` policy for retention PPL is frozen one way for all curve points
-  2. The λ log-scale sweep (D-07 short-run pattern) completes, λ* is picked off the stability–plasticity tradeoff, and sweep logs are retained for the frontier plot
-  3. Full fine-tune of `best.pt` on the conversational corpus through the untouched v1.0 `train()` reaches dialogue-format adherence — conversational val PPL reported and curated transcripts committed
-  4. TinyStories retention PPL vs the 2.1066 anchor is logged at every eval interval from step 0 in per-run/per-arm CSVs — forgetting curves fall out of training logs, not post-hoc reconstruction
-  5. A conversational-base checkpoint exists as the substrate for both demos
-
-**Plans**: 5 plans
-
-Plans:
-**Wave 1**
-
-- [x] 12-01-PLAN.md — Additive loop seams: train_mask_bin / val_mask_bin / extra_eval_fns + identity tests (Wave 1)
-- [x] 12-02-PLAN.md — masked_perplexity gate metric + stop_ids in generate(), oracle-tested (Wave 1)
-- [x] 12-03-PLAN.md — Frozen retention sub-bin + measured step-0 anchors committed before any training step (Wave 1)
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 12-04-PLAN.md — Sequential pre-registered smoke (budget → noise floor → masking → LR → λ) + D-06 report + D-07 blocking checkpoint (Wave 2)
-
-**Wave 3** *(blocked on D-07 approval)*
-
-- [x] 12-05-PLAN.md — Production fine-tune → conversational-base artifact + step-0 retention curve + committed transcripts (Wave 3)
-
-**Research flag**: λ selection is empirical with no portable value (reported range 0.1–10⁶) and the full-FT LR/budget needs calibration — plan this phase with `/gsd-plan-phase --research-phase`
-
-### Phase 13: EWC A/B No-Forgetting Experiment
-
-**Goal**: Committed, unconfounded evidence that EWC mitigates catastrophic forgetting — both retention AND acquisition reported for both arms
-**Depends on**: Phase 12 (fine-tune harness, λ*, sweep logs)
-**Requirements**: DEMO-04, VIZ-01, VIZ-04
-**Success Criteria** (what must be TRUE):
-
-  1. Naive and EWC arms run with identical seeds, config, and data order, differing ONLY in the penalty (λ=0 (naive) vs λ=0.01 (pre-chosen, per Phase 12 §8's λ*=None verdict) — see results/phase13_ab_report.md:303-305)
-  2. The headline result is a 2×2 table reporting both acquisition and retention for both arms (not retention-only)
-  3. The forgetting-curve figure is committed: retention PPL vs fine-tune steps per arm, dashed baseline at 2.1066, acquisition companion panel
-  4. The λ stability–plasticity frontier plot (retention vs acquisition, one point per λ from the sweep logs) is committed
-
-**Plans**: 4 plans
-
-Plans:
-**Wave 1**
-
-- [x] 13-01-PLAN.md — Pre-registered A/B driver (`finetune_ab.py`) + driver unit tests + report preamble with pre-registration table (D-10 ordering: committed before either arm runs)
-
-**Wave 2** *(blocked on 13-01)*
-
-- [x] 13-02-PLAN.md — Run both 4000-step arms (EWC first: step-250 twin drift check + D-11 cross-check vs finetune_prod.csv) → committed per-arm CSVs
-
-**Wave 3** *(blocked on 13-02)*
-
-- [x] 13-03-PLAN.md — VIZ-01 forgetting-curve + VIZ-04 six-point frontier figures + D-12 one-run both-endpoint retention samples
-
-**Wave 4** *(blocked on 13-03)*
-
-- [x] 13-04-PLAN.md — Finalize `results/phase13_ab_report.md`: 2×2 end-of-run table, gate verdict, D-11 table, D-05 threats-to-validity, D-09 reconciliation
-
-### Phase 14: Teach-Then-Recall Demo
-
-**Goal**: The core-value proof — a LoRA adapter on the frozen conversational base recalls taught user facts in a clean room: fresh process, empty prompt, no store, with a live memory on/off toggle
-**Depends on**: Phase 9 (LoRA), Phase 12 (conversational base); independent of Phase 13
-**Requirements**: DEMO-05, DEMO-06, DEMO-07
-**Success Criteria** (what must be TRUE):
-
-  1. 5-10 atomic user facts are taught via ~20-50 template/hand-written paraphrases per fact (zero external-API augmentation) into a LoRA adapter trained on the frozen conversational base
-  2. Fresh-process, empty-prompt scripted recall meets pre-registered thresholds, with a context-token dump proving no prompt leakage and the base-without-adapter control failing closed-book
-  3. Taught phrasings and never-seen phrasings are scored and reported separately (learning vs memorization), with all transcripts committed — failures included
-  4. In the Gradio demo, the adapter toggles on/off live — same process, same prompt, memory on/off
-
-**Plans**: 11 plans in 9 waves
-
-Plans:
-**Wave 1**
-
-- [x] 14-01-PLAN.md — Package seams — `build_recall_prompt` + `generate_text_from_ids` (wave 1)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 14-02-PLAN.md — Candidate pools + fact-set guessability gate + BLOCKING verdict (wave 2)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 14-03-PLAN.md — Lock the fact set + D-07 permanent tokenizer-census test (wave 3)
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 14-04-PLAN.md — Template-family grammar + masked teaching-bins builder + teaching tests (wave 4)
-- [x] 14-05-PLAN.md — Recall pre-registration — D-19 budget, scoring rules, context-dump renderer (wave 4)
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 14-06-PLAN.md — Scored recall harness — context dumps, clean-room proof, transcripts (wave 5)
-- [x] 14-07-PLAN.md — LoRA teaching-run driver + calibration decision rule (wave 5)
-
-**Wave 6** *(blocked on Wave 5 completion)*
-
-- [x] 14-08-PLAN.md — Gradio Blocks demo + D-17/D-18 tests + CI/Makefile demo extra (wave 6)
-
-**Wave 7** *(blocked on Wave 6 completion)*
-
-- [x] 14-09-PLAN.md — Calibration run (3 arms) + derive & commit locked numbers + BLOCKING verdict (wave 7)
-
-**Wave 8** *(blocked on Wave 7 completion)*
-
-- [x] 14-10-PLAN.md — Three D-11 controls + recall report writer with the D-20 reconciliation (wave 8)
-
-**Wave 9** *(blocked on Wave 8 completion)*
-
-- [x] 14-11-PLAN.md — Real teaching run + scored recall run + verdict + demo verification (wave 9) — 3/3 tasks; verdict recorded ADAPT (GO with two qualifications), demo verified in a live browser
-
-**UI hint**: yes
-**Research flag**: the clean-room protocol is synthesized from knowledge-injection literature (no canonical reference) and recall rates at 13.9M params are unknown — worth a discuss/spec pass on the teaching-set template grammar and threshold pre-registration before planning
-
-### Phase 15: Figures & Writeup
-
-**Goal**: The v2.0 narrative ships with the milestone's signature figures and honest numbers, in the same register as the v1.0 547-live-ids disclosure
-**Depends on**: Phase 13 (A/B checkpoints + curves), Phase 14 (recall numbers); pure read-side
-**Requirements**: VIZ-02, VIZ-03, DOC-02
-**Success Criteria** (what must be TRUE):
-
-  1. The weight-delta heatmap — relative Frobenius change `‖ΔW‖_F/‖W₀‖_F` on the layer×six-projection grid, log color scale — is committed to the repo
-  2. The three-panel figure juxtaposing the Fisher heatmap with naive-vs-EWC delta heatmaps is committed, showing EWC visibly dodging high-Fisher coordinates
-  3. REPORT.md and README carry the v2.0 narrative and demo.ipynb is updated with honest numbers (recall percentages, retention deltas, tokenizer-inflation tax), the named Fisher variant, and a real Limitations section
-
-**ROADMAP wording superseded (SC3, recorded 2026-08-02):** SC3 as written above requires that
-"demo.ipynb is updated with honest numbers". **D-13** supersedes that clause. The honest v2.0
-numbers ship in a **new, self-contained `demo_v2.ipynb`** — it runs standalone from a fresh clone
-using only committed `results/` files, with no shared cell state and no checkpoint dependency
-inherited from the v1.0 notebook — and `demo.ipynb` receives **only** a prepended independence
-statement, its eight existing cells left byte-unchanged by design (15-CONTEXT `<domain>` excludes
-changes to them). Everything SC3 asks for is present: the recall percentages, the retention
-deltas, the tokenizer-inflation tax, the named Fisher variant string
-`empirical_diag_fisher/groundtruth_targets/mean_normalized` read from `results/phase15_norms.json`,
-and the nine quoted limitations linked from `docs/REPORT.md`. Only the **file** changed. The
-substitution is recorded here rather than silently absorbed into the criterion's phrasing — a
-success criterion that quietly changed meaning is indistinguishable from one that was not met.
-
-**SC2 (recorded 2026-08-02): not narrowed — the gate PASSED.** D-11's miss branch, which would
-have narrowed "showing EWC visibly dodging high-Fisher coordinates", was **not** taken. Spearman
-ρ = 0.801544 with a 95% bootstrap CI of [0.597984, 0.920291] excluding zero (permutation
-p = 0.000010, descriptive); see `results/phase13_ab_report.md` → `## Phase 15 Addendum` for the
-full pre-registration table. SC2's wording stands, **bounded to the level the gate tests — the
-sign — and no further**: ρ is a rank correlation, not an effect size, and the magnitude stays
-descriptive at n = 36. The absence of a narrowing note here is a recorded outcome, not an
-omission.
-
-**Plans**: 8 plans
-
-Plans:
-**Wave 1** *(D-09 pre-registration boundary — this commit must precede every measurement)*
-
-- [x] 15-01-PLAN.md — Pre-registered correlation rule: pure-numpy tie-correct Spearman, permutation p, bootstrap CI, the D-11 gate and both verdict branches, committed before any number exists (Wave 1)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 15-02-PLAN.md — Extraction: six checkpoints (W₀ for the adapter is `convbase_best.pt`, not `best.pt`) → the committed `results/phase15_norms.json` (Wave 2)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 15-03-PLAN.md — VIZ-02 + VIZ-03 figures from the artifact only, with the D-07 AST + subprocess guard (Wave 3)
-- [x] 15-04-PLAN.md — Compute the correlation and append the dated Phase 15 verdict to `results/phase13_ab_report.md` (Wave 3)
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 15-05-PLAN.md — `docs/REPORT.md` v2.0: dated boundary marker, Decision sections, results narrative, nine quoted limitations (Wave 4)
-- [x] 15-06-PLAN.md — `README.md` v2.0: three headline numbers, each qualified inline at 547-live-ids density (Wave 4)
-- [x] 15-07-PLAN.md — New self-contained `demo_v2.ipynb`, prepended independence cell in `demo.ipynb`, SC3 supersession recorded (Wave 4)
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 15-08-PLAN.md — Doc-integrity tests: D-15 verbatim quotes, D-16 headline numbers, D-17 dated separation; full-suite gate (Wave 5)
+No phases planned. Run `/gsd:new-milestone` to scope the next milestone (questioning → research → requirements → roadmap).
 
 ## Progress
-
-**Execution Order:**
-Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
-(9, 10, 11 are mutually independent; 12 needs 10+11; 13 needs 12; 14 needs 9+12; 15 needs 13+14)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 | ----- | --------- | -------------- | ------ | --------- |
@@ -316,10 +77,12 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 15
 | 6. Generation & Sampling | v1.0 | 3/3 | Complete | 2026-06-06 |
 | 7. Evaluation | v1.0 | 3/3 | Complete | 2026-06-09 |
 | 8. Demo & Writeup | v1.0 | 8/8 | Complete | 2026-06-10 |
-| 9. LoRA Core | v2.0 | 4/4 | Complete   | 2026-06-11 |
-| 10. EWC Core | v2.0 | 3/3 | Complete    | 2026-06-12 |
-| 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete    | 2026-07-31 |
-| 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete    | 2026-08-01 |
-| 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete    | 2026-08-01 |
-| 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete   | 2026-08-02 |
-| 15. Figures & Writeup | v2.0 | 8/8 | Complete   | 2026-08-02 |
+| 9. LoRA Core | v2.0 | 4/4 | Complete | 2026-06-11 |
+| 10. EWC Core | v2.0 | 3/3 | Complete | 2026-06-12 |
+| 11. Conversational Data Pipeline | v2.0 | 4/4 | Complete | 2026-07-31 |
+| 12. Stage-2 Conversational Fine-Tune | v2.0 | 5/5 | Complete | 2026-08-01 |
+| 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete | 2026-08-02 |
+| 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
+| 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
+
+**Totals:** 15 phases, 68 plans, 2 milestones shipped.
