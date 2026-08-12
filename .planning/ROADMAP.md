@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Foundation** — Phases 1-8 (shipped 2026-06-11) — [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v2.0 Weight-Based Memory** — Phases 9-15 (shipped 2026-08-12) — [archive](milestones/v2.0-ROADMAP.md)
-- 📋 **v3.0** — not yet defined (run `/gsd:new-milestone`)
+- 🚧 **v3.0 Adversarial Privacy Audit and Selective Memory Erasure** — Phases 16-18 (in progress) *(Phase 19+ Selective Erasure deferred, gated on 16-18's measured numbers)*
 
 ## Overview
 
@@ -19,7 +19,16 @@ context provably wiped; from-scratch EWC keeps the fine-tune from destroying the
 3.6× separation clearing its pre-registered margin by 33.61×. Every headline number is gated by a
 rule committed to git before the number existed.
 
-The next milestone is undefined. Start it with `/gsd:new-milestone`.
+v3.0 stops *asserting* that weight-based memory is private and starts **measuring** it. Phase 16
+fixes the shared measurement instrument and runs the four-arm weight-vs-prompt persistence control
+on the binding 270-question fixture; Phase 17 builds the adversarial persona generator DEMO-F1
+always needed and scores a full isolation matrix under deliberate slot collision; Phase 18 attacks
+the adapter black-box and reframes the demo's toggle as **availability, not authorization**. The
+milestone's own headline finding is already committed against it — Phase 14's in-context control
+scored 1/1944, so prompt-stuffing sits at the floor and no "weights beat prompting" headline is
+licensed until a capability ladder says otherwise. Selective Erasure (Phase 19+) is deliberately
+unplanned: its decision rule was pre-registered at `23a830c` **before Phase 16 runs**, and the
+phase enters this roadmap only if that rule returns True on measured numbers.
 
 ## Phases
 
@@ -61,11 +70,173 @@ Full phase details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md) · 
 
 </details>
 
-### 📋 v3.0 — not yet defined
+### 🚧 v3.0 Adversarial Privacy Audit and Selective Memory Erasure (Phases 16-18)
 
-No phases planned. Run `/gsd:new-milestone` to scope the next milestone (questioning → research → requirements → roadmap).
+**Milestone Goal:** Stop asserting that weight-based memory is private and start measuring it — what
+weights actually buy over prompting, whether separately-taught personas stay isolated under
+adversarial collision, and whether an adversary can extract taught facts through a toggle that only
+ever controlled availability.
+
+- [ ] **Phase 16: Weight-vs-Prompt Persistence Control** - Four arms on the binding 270-question fixture, instrument pairing defect fixed first, headline licensed by a blocking capability ladder
+- [ ] **Phase 17: Multi-Persona Isolation Matrix** - N=3 deliberately colliding personas scored as a cross-matrix with a base-prior column, an adapter-swap canary, and a cell-blind scorer
+- [ ] **Phase 18: Black-Box Adversarial Extraction Audit** - Paraphrase / prefix-injection / role-play / repeated-sampling attacks, adapter-on vs adapter-off at equal budget, admissibility pre-registered one-directionally
+
+**Deferred — Phase 19+ Selective Erasure (not planned, deliberately).** ERASE-01 and ERASE-02 enter
+this roadmap **only** if `erasure_is_worth_attempting()` in `scripts/erasure_gate.py` returns True
+on Phase 18's measured numbers. That rule was committed at **`23a830c` (2026-08-12 16:27:43)**,
+before Phase 16 runs, referencing only v2.0-published baselines — designing Phase 19 now is exactly
+the motivated interpretation the pre-registration exists to prevent. Goal framing is already fixed
+(*auditable forgetting with a measurable bound plus representational consistency reported honestly*
+— **not** "indistinguishable from never-having-learned"); no mechanism, schedule, or design is
+committed.
+
+## Phase Details
+
+### Phase 16: Weight-vs-Prompt Persistence Control
+
+**Goal**: Measure what memory-in-weights buys over prompting as a paired number with a bound — four
+arms on the same committed question fixture, with the shared instrument's pairing defect fixed
+first and the headline licensed by a capability ladder that runs *before* anything is scored
+**Depends on**: Nothing new — consumes `persona_adapter.pt`, `convbase_best.pt`, the committed
+`results/phase16_recall_sample.json` fixture (270 questions, pinned by
+`tests/test_phase16_fixture_regen.py`), and PREREG-01's `scripts/erasure_gate.py` at `23a830c`
+**Requirements**: STAT-01, STAT-02, STAT-04, STAT-05, STAT-06, PERS-01, PERS-02, PERS-03, PERS-04,
+PERS-05, PERS-06, PREREG-02
+**Success Criteria** (what must be TRUE):
+
+  1. The blocking in-context capability ladder (PERS-01) runs and is committed **before** any
+     comparison is scored, and the headline is emitted by a committed `licensed_headline()` whose
+     branches — including the branch where the prompt arm never leaves Phase 14's 1/1944 floor and
+     only a *capability-deficit* statement is licensed — were pushed before the run (STAT-05). A
+     CPU-only test asserts `erasure_gate.py`'s commit precedes every v3.0 results artifact
+     (PREREG-02).
+  2. All four arms — prompt-stuffed / adapter-only-with-empty-prompt / base-with-neither /
+     embedding-cosine (PERS-04, explicitly not a RAG system: no index, no re-ranking, no chunking) —
+     score the **same 270 questions from `results/phase16_recall_sample.json`**, in one process,
+     paired by `item.seed_index` with the `enumerate(questions)` defect in `run_fairness_control`
+     fixed (PERS-05), and with `max_new_tokens`, `forbid_ids`, `stop_ids` and context length equal
+     across arms and published as report columns (PERS-02).
+  3. Instrument integrity is widened, never weakened: the `persona=` AST guard at
+     `tests/test_phase14_scoring.py:425` is widened deliberately and visibly rather than deleted,
+     and gains its logical twin `assert_value_in_prompt`, so every `draw_all` call site asserts
+     something and no path has a skip mode (PERS-06).
+  4. Every reported rate ships with its denominator and a bound: fact-level (n=8) cluster
+     resampling as the descriptive interval, Wilson reported alongside and labelled as the
+     independence-assuming width, `3/n` shown wherever successes are zero, and no bare `0%` in any
+     committed report or figure (STAT-01, STAT-02, STAT-04, STAT-06). The inferential gate is the
+     **exact paired sign test over all 2⁸ = 256 sign partitions**, Holm-corrected across the 6
+     pairwise arm comparisons — where only 8/8 unanimity clears (p = 0.007812 < 0.05/6) — and a
+     verdict of **"not demonstrable at n=8" is a legitimate, pre-registered outcome recorded
+     as-written**, exactly as Phase 12 recorded λ\*=None.
+  5. Persistence under context pressure (PERS-03) is measured on both context-bearing arms —
+     `block_size=256` truncation, dilution across turns, adversarial overwrite — with the weight
+     arm's invariance stated as the `run_bit_identity_control` **proof** (max |diff| 0.0), not as a
+     statistic, and monotone prompt-arm degradation claimed only if the capability ladder got that
+     arm off the floor.
+
+**Plans**: TBD
+**Research flag**: light research only, scoped to the in-context capability ladder's rung design
+(what a 13.9M TinyStories+PersonaChat model can plausibly do at distance ~2 tokens) — the rest is
+repo-grounded
+
+### Phase 17: Multi-Persona Isolation Matrix
+
+**Goal**: Measure whether separately-taught personas stay isolated when they are built to collide —
+N=3 adversarial personas with contradictory values in the *same* slots, scored as a full
+cross-matrix against the base model's own prior
+**Depends on**: Phase 16 (the fixed shared instrument: `item.seed_index` pairing,
+`assert_value_in_prompt`, the widened `persona=` guard, and the binding 270-question fixture)
+**Requirements**: STAT-01, STAT-02, STAT-03, STAT-04, STAT-05, STAT-06, ISO-01, ISO-02, ISO-03,
+ISO-04, ISO-05, ISO-06, ISO-07
+**Success Criteria** (what must be TRUE):
+
+  1. Before any adapter trains, audit item **W1 is fixed** — every runtime consumer injects with
+     `LoRAConfig(**artifact["lora_config"])` rather than `LoRAConfig()` defaults, since shape audits
+     catch `r` drift but never `alpha` (ISO-06) — and an **adapter-swap canary** asserts a `lora_B`
+     tensor actually changed on every swap, so a silently failed swap cannot produce the most
+     flattering possible wrong answer: a perfect diagonal with zero leakage (ISO-04).
+  2. N=3 personas ship as committed data with colliding names and **contradictory values in the same
+     slot**, passing the existing `scripts/phase14_factset_gate.py` guessability + tokenizer-census
+     instrument (imported, not copied) with a recorded human GO/ADAPT verdict as a hard blocker
+     (ISO-01).
+  3. The matrix is **N generation sweeps scored N ways** over shared-slot questions — never persona
+     *j*'s own questions against adapter *i*, which would make the off-diagonal ~0 by construction —
+     scored by a cell-blind scorer whose signature takes no `(i, j)` argument (pinned by
+     `inspect.signature`, no `if i == j:` in the scoring path), with an explicit **adapter-off base
+     column** so an off-diagonal hit is separable from the base's own prior (`BASE_PRIOR_SEEDS`
+     answers `rose` for pet names unprompted), and confabulations recorded in their own category
+     rather than sharing a cell with leaks (ISO-02, ISO-03).
+  4. The gated quantity is the **within-run diagonal-vs-off-diagonal contrast**, which needs no
+     external threshold — Phase 14's 0.2486 / 0.2000 are **not** used, because they were derived on
+     `CALIBRATION_POOL` and reusing that pool as a persona makes the gate circular (ISO-07) — and
+     pairwise cell comparisons are corrected by **Holm** step-down, not Benjamini-Hochberg, since
+     off-diagonal cells share adapters row-wise and question sets column-wise so BH's
+     independence/PRDS assumption fails (STAT-03).
+  5. The worst-colliding pair is replicated across k=3 seeds and reported **descriptively**
+     (min/max/median, never a hypothesis test) so seed variance is not mistaken for interference
+     (ISO-05), every off-diagonal zero carries its denominator and one-sided upper bound (STAT-02),
+     and **no aggregate "isolation rate %" over the 9-cell matrix is gated** — that number implies a
+     precision N=3 cannot carry (STAT-06).
+
+**Plans**: TBD
+
+### Phase 18: Black-Box Adversarial Extraction Audit
+
+**Goal**: Measure whether an adversary with black-box access can extract taught facts from the
+adapter — and correct the claim wording so the demo's toggle reads as **availability, not
+authorization**, which is the honest reading of what 36 boolean writes have always done
+**Depends on**: Phase 16 (fixed instrument, forced-choice scorer, the binding 270-question fixture).
+Phase 17 **only** for optional cross-persona attacks — single-persona Phase 18 stands alone, so
+schedule pressure can scope it down without invalidating it
+**Requirements**: STAT-01, STAT-02, STAT-04, STAT-05, STAT-06, ATK-01, ATK-02, ATK-03, ATK-04,
+ATK-05, ATK-06
+**Success Criteria** (what must be TRUE):
+
+  1. The attack corpus is constructed **programmatically from committed templates** — A1 paraphrase,
+     A2 prefix injection, A3 role-play framing, with repeated sampling as a **budget parameter K**
+     rather than a fourth prompt shape — with no external API and no hosted model anywhere in the
+     pipeline (ATK-01), and `assert_no_value_in_prompt` applied **substring-aware** (`_strings_in`,
+     not an equality check — Phase 14's exact-equality tests passed while the invariant was violated
+     by a substring embedding) across the entire corpus, making the guard the operational definition
+     of "the attacker does not already know the answer". Prefix injection carries a declared,
+     small, pre-registered injection budget with the realized injection measured per prompt and only
+     the unprompted remainder scored.
+  2. **Attack family zero is a positive control** — Phase 14's taught-template direct question, a
+     known-extractable target at 0.4921. If it does not reproduce, the harness is declared broken
+     and **no privacy statement is admissible**; this is what converts "our attacks found nothing"
+     from unfalsifiable into testable (ATK-03).
+  3. A **no-adapter negative control** runs at the *same* attack budget, prompts, seeds, `forbid_ids`
+     and `stop_ids`, and every ASR@{1,4,16,64} plus the cumulative curve is reported adapter-on vs
+     adapter-off, paired at the question level, with its denominator and bound — fact-level (n=8)
+     cluster resampling descriptive, Wilson labelled as the independence-assuming width, `3/n` at
+     zero successes, no bare `0%` (ATK-02, STAT-01, STAT-02, STAT-04, STAT-06).
+  4. Every zero-extraction target records its **teacher-forced NLL**, so "the attack was weak" (low
+     NLL, zero extraction) is separable from "the fact is genuinely absent" (high NLL) — required
+     given a tokenizer that forbids 7,645 of 8,192 ids at sampling and can depress an extraction
+     rate for reasons unrelated to privacy — and the verdict is returned by the committed
+     `null_result_is_admissible()`, which forces **INCONCLUSIVE** unless the positive control
+     passed, the budget was actually spent, the base arm was measured at the same budget, and every
+     zero carries an NLL. All verdict templates, INCONCLUSIVE included, are committed before the run
+     (ATK-04, ATK-05, STAT-05).
+  5. README and `docs/REPORT.md` state the toggle as **availability, not authorization**, in one
+     committed sentence reused verbatim (demo UI copy included, since that is a published claim),
+     landed as a **dated continuation** rather than an in-place edit of the shipped v2.0 text.
+     Threats-to-validity records that a low extraction rate may be a **LoRA property rather than a
+     PersonaCore achievement** (ATK-06).
+
+**Plans**: TBD
+**Research flag**: plan with `/gsd-plan-phase --research-phase`. The attack taxonomy and the
+denominator discipline are where a wrong prior costs the most, ARCHITECTURE.md states honestly that
+it did not verify its external grounding, and the research must land **before** this phase's
+pre-registration commit, which is unamendable afterward
 
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 16 → 17 → 18
+(16 first for the *instrument-fix* reason, not the cost reason — its ladder, distractor and
+slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's fixed instrument;
+18 depends on 17 only for optional cross-persona attacks.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 | ----- | --------- | -------------- | ------ | --------- |
@@ -84,5 +255,8 @@ No phases planned. Run `/gsd:new-milestone` to scope the next milestone (questio
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete | 2026-08-02 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
+| 16. Weight-vs-Prompt Persistence Control | v3.0 | 0/TBD | Pending | - |
+| 17. Multi-Persona Isolation Matrix | v3.0 | 0/TBD | Pending | - |
+| 18. Black-Box Adversarial Extraction Audit | v3.0 | 0/TBD | Pending | - |
 
-**Totals:** 15 phases, 68 plans, 2 milestones shipped.
+**Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.

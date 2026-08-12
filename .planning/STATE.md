@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: planning
-last_updated: "2026-08-12T18:41:47.797Z"
+last_updated: "2026-08-12T19:20:00.000Z"
 last_activity: 2026-08-12
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** v3.0 Adversarial Privacy Audit and Selective Memory Erasure — Phase 16 (Weight-vs-Prompt Measured Control) → 17 (Multi-Persona Isolation Matrix) → 18 (Black-Box Adversarial Extraction Audit); Phase 19+ Selective Erasure deferred pending 16-18 numbers. Defining requirements.
+**Current focus:** v3.0 Adversarial Privacy Audit and Selective Memory Erasure — roadmap created 2026-08-12: Phase 16 (Weight-vs-Prompt Persistence Control) → 17 (Multi-Persona Isolation Matrix) → 18 (Black-Box Adversarial Extraction Audit). 26/26 in-scope requirements mapped, 0 orphans. Phase 19+ Selective Erasure deliberately unplanned — it enters the roadmap only if `erasure_is_worth_attempting()` (pre-registered at `23a830c`, before Phase 16 runs) returns True on Phase 18's measured numbers.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 16 — Weight-vs-Prompt Persistence Control (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-08-12 — Milestone v3.0 started
+Status: Roadmap created, awaiting `/gsd-plan-phase 16`
+Last activity: 2026-08-12 — v3.0 roadmap created (Phases 16-18)
 
 ## Performance Metrics
 
@@ -79,6 +79,14 @@ Key carry-forwards for v2.0:
 - Two-mechanism stage split (research-converged, treat as made): stage 2 = full fine-tune ± EWC (the A/B); stage 3 personalization = LoRA on the frozen conversational base.
 - LOCKED contracts M2 must consume verbatim: `forward(idx, targets=None) -> (logits, loss)`; RNG-state-restore resume; `weights_only=True` slim artifacts.
 - vocab_size=8192 / eos_id=8184 locked; role tokens `<|user|>`/`<|assistant|>`/`<|system|>` (8185-8187) already reserved and decodable.
+Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
+
+- `results/phase16_recall_sample.json` (270 questions, committed) is THE binding evaluation fixture. Phases 17 and 18 consume that same fixture — no regenerated variant, no resampling; pinned by `tests/test_phase16_fixture_regen.py`.
+- Phase 16 is a FOUR-arm comparison — prompt-stuffed / adapter-only / base-with-neither / embedding-cosine (PERS-04) — framed neutrally with no presupposed winner. Phase 14's 1/1944 in-context control means prompt-stuffing is at the floor; a "weights beat prompting ~1000x" headline would be measuring a capability deficit and is refuted by a number already in this repo.
+- Bootstrap resampling is at FACT level (n=8), not question level. The exact paired sign test over 2^8 = 256 partitions is the inferential gate; the bootstrap CI is descriptive.
+- Under Holm (STAT-03) across 6 pairwise arm comparisons, only 8/8 unanimity clears (p = 0.007812 < 0.05/6). "Not demonstrable at n=8" is a legitimate pre-registered Phase-16 outcome, recorded as-written, exactly as Phase 12 recorded lambda*=None.
+- W1 (`LoRAConfig()` defaults instead of `LoRAConfig(**artifact["lora_config"])`) must land before ANY Phase-17 adapter trains — shape audits catch `r` drift but never `alpha`.
+
 - [Phase 12]: 12-01: val_mask_bin ships (USER LOCK 3) — in-loop val_loss gates best.pt selection, selected FOR assistant-token dialogue capability; unmasked CE would partially reward modeling user turns
 - [Phase 12]: 12-01: v1.0 eval block logs NO step-0 row — block runs after step += 1; Plan 12-04 must measure step-0 retention baseline outside train()
 - [Phase 12]: 12-02: masked_perplexity is THE frozen dialogue-val gate metric for all Phase 12 arms — oracle-proven hand-counted denominator; estimate_loss's random-batch mean disallowed for gates
@@ -178,9 +186,10 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 ## Session Continuity
 
 Last session: 2026-08-12
-Stopped at: v2.0 milestone completed and archived (phases moved to `milestones/v2.0-phases/`)
+Stopped at: v3.0 roadmap created — Phases 16-18 defined, 26/26 requirements mapped, Phase 19+ left deliberately unplanned behind the pre-registered erasure gate
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan the first v3.0 phase with /gsd-plan-phase 16
+- Phase 16 needs light research on the in-context capability ladder's rung design; Phase 18 needs `--research-phase` BEFORE its pre-registration commit (unamendable afterward)

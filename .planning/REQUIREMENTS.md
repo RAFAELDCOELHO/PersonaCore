@@ -200,3 +200,12 @@ Deferred — revisited when the numbers that gate them exist.
 | ATK-06 | 18 | Pending |
 | PREREG-01 | (pre-milestone) | Complete — `23a830c`, 2026-08-12 |
 | PREREG-02 | 16 | Pending |
+| ERASE-01 | 19+ (deferred) | Deferred — enters the roadmap only if `erasure_is_worth_attempting()` returns True on Phase 18's numbers |
+| ERASE-02 | 19+ (deferred) | Deferred — same gate |
+
+**Coverage (roadmapped 2026-08-12):** 26/26 in-scope v3.0 requirements are mapped to Phases 16-18;
+0 orphans. PREREG-01 is complete pre-milestone (`23a830c`). ERASE-01/02 are deliberately unmapped —
+Phase 19 does not exist in the roadmap and is created only by the pre-registered gate, never by
+planning. STAT-01..06 are cross-cutting by construction and are therefore satisfied *per phase*
+rather than in exactly one; the phase column above is the authoritative allocation and
+`ROADMAP.md` reproduces it unchanged.
