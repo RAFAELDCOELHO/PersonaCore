@@ -108,7 +108,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-03 | Phase 11 | Complete |
 | DATA-04 | Phase 11 | Complete |
 | DEBT-01 | Phase 12 | Complete (pre-work, 2026-07-31) |
-| DEBT-02 | Phase 12 | Complete (pre-work, 2026-07-31) |
+| DEBT-02 | Phase 12 | Complete — PPL half by design 2026-07-31 (`ca14a89`); warm-sampling half 2026-08-12 (`3781a97`) |
 | EWC-03 | Phase 12 | Complete |
 | TUNE-01 | Phase 12 | Complete |
 | TUNE-02 | Phase 12 | Complete |
