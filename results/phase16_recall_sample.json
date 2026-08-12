@@ -1,0 +1,1684 @@
+{
+  "fixture_id": "phase16_recall_sample",
+  "created": "2026-08-12",
+  "milestone": "v3.0",
+  "note": "method=exhaustive enumeration over render_family() for families {F1,F2,F4,F5,F6} (taught) and {F3,F7,F8} (held-out), filtered by contains_value (64 core questions excluded for naming their own value). Verified reproduction of Phase 14's original 270-question evaluation set -- regeneration matched exactly in order, including seed_index, against results/phase14_transcripts.md (666,255 bytes, 540 entries). Real proportion: 112 taught / 104 held-out over the 8 core facts (14:13 each), not the previously miscalculated 3:30. This IS Phase 14's original set, not a new sample.",
+  "seed_role": "seed=1337 governs the DRAWS, not this enumeration. build_question_sets() takes no seed and contains no RNG; question_seed(i) = 1337 + i, then +s per sampled draw. The question set below is seed-independent and deterministic by construction (ordered dict/tuple containers, sorted(family_ids)).",
+  "binding_decision": "BINDING FOR v3.0: Phases 17 and 18 MUST consume this exact fixture. No third version, no regenerated variant, no resampling. Cross-phase comparability in the isolation matrix (Phase 17) and the extraction audit (Phase 18) depends on the question set being identical to the one Phase 16 scored, which is itself Phase 14's original set. Any change here invalidates cross-phase comparison.",
+  "provenance": {
+    "generator": "scripts/phase14_recall.py::build_question_sets",
+    "factset": "scripts/phase14_factset.py",
+    "seed_constant": 1337,
+    "taught_family_ids": [
+      "F1",
+      "F2",
+      "F4",
+      "F5",
+      "F6"
+    ],
+    "heldout_family_ids": [
+      "F3",
+      "F7",
+      "F8"
+    ],
+    "core_facts": [
+      "cand_person_quillon",
+      "cand_dog_zorp",
+      "cand_cat_zibby",
+      "cand_sister_orsala",
+      "cand_town_brindlemoor",
+      "cand_street_marrowgate",
+      "cand_year_1987",
+      "cand_house_7412"
+    ],
+    "soft_facts": [
+      "cand_color_chartreuse",
+      "cand_food_marzipan"
+    ],
+    "verified_against": "results/phase14_transcripts.md",
+    "transcripts_sha256": "a86df5bffa26b15362ea3dc9334c0f83be5f7445196cbae135c9be38555d4aee",
+    "transcripts_bytes": 666255,
+    "excluded_by_contains_value": {
+      "core": 64,
+      "soft": 16
+    }
+  },
+  "counts": {
+    "core_taught": 112,
+    "core_held_out": 104,
+    "soft": 54,
+    "total": 270,
+    "per_core_fact": {
+      "taught": 14,
+      "held_out": 13
+    }
+  },
+  "questions": {
+    "core_taught": [
+      {
+        "seed_index": 0,
+        "fact_id": "cand_person_quillon",
+        "question": "what is the name you go by?",
+        "reserved": false
+      },
+      {
+        "seed_index": 1,
+        "fact_id": "cand_person_quillon",
+        "question": "so what is the name you go by?",
+        "reserved": false
+      },
+      {
+        "seed_index": 2,
+        "fact_id": "cand_person_quillon",
+        "question": "hey, what is the name you go by?",
+        "reserved": false
+      },
+      {
+        "seed_index": 3,
+        "fact_id": "cand_person_quillon",
+        "question": "what is the name you go by, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 4,
+        "fact_id": "cand_person_quillon",
+        "question": "what is the name you go by again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 5,
+        "fact_id": "cand_person_quillon",
+        "question": "tell me the name you go by.",
+        "reserved": false
+      },
+      {
+        "seed_index": 6,
+        "fact_id": "cand_person_quillon",
+        "question": "please tell me the name you go by.",
+        "reserved": false
+      },
+      {
+        "seed_index": 7,
+        "fact_id": "cand_person_quillon",
+        "question": "i would like to know the name you go by.",
+        "reserved": false
+      },
+      {
+        "seed_index": 8,
+        "fact_id": "cand_person_quillon",
+        "question": "let me know the name you go by.",
+        "reserved": false
+      },
+      {
+        "seed_index": 9,
+        "fact_id": "cand_person_quillon",
+        "question": "remind me of the name you go by.",
+        "reserved": false
+      },
+      {
+        "seed_index": 10,
+        "fact_id": "cand_person_quillon",
+        "question": "by the way, could you tell me what your friends call you?",
+        "reserved": false
+      },
+      {
+        "seed_index": 11,
+        "fact_id": "cand_person_quillon",
+        "question": "we got off topic. could you tell me what your friends call you?",
+        "reserved": false
+      },
+      {
+        "seed_index": 12,
+        "fact_id": "cand_person_quillon",
+        "question": "anyway, could you tell me what your friends call you?",
+        "reserved": false
+      },
+      {
+        "seed_index": 13,
+        "fact_id": "cand_person_quillon",
+        "question": "i was just thinking — could you tell me what your friends call you?",
+        "reserved": false
+      },
+      {
+        "seed_index": 14,
+        "fact_id": "cand_dog_zorp",
+        "question": "what is the name of your dog?",
+        "reserved": false
+      },
+      {
+        "seed_index": 15,
+        "fact_id": "cand_dog_zorp",
+        "question": "so what is the name of your dog?",
+        "reserved": false
+      },
+      {
+        "seed_index": 16,
+        "fact_id": "cand_dog_zorp",
+        "question": "hey, what is the name of your dog?",
+        "reserved": false
+      },
+      {
+        "seed_index": 17,
+        "fact_id": "cand_dog_zorp",
+        "question": "what is the name of your dog, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 18,
+        "fact_id": "cand_dog_zorp",
+        "question": "what is the name of your dog again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 19,
+        "fact_id": "cand_dog_zorp",
+        "question": "tell me the name of your dog.",
+        "reserved": false
+      },
+      {
+        "seed_index": 20,
+        "fact_id": "cand_dog_zorp",
+        "question": "please tell me the name of your dog.",
+        "reserved": false
+      },
+      {
+        "seed_index": 21,
+        "fact_id": "cand_dog_zorp",
+        "question": "i would like to know the name of your dog.",
+        "reserved": false
+      },
+      {
+        "seed_index": 22,
+        "fact_id": "cand_dog_zorp",
+        "question": "let me know the name of your dog.",
+        "reserved": false
+      },
+      {
+        "seed_index": 23,
+        "fact_id": "cand_dog_zorp",
+        "question": "remind me of the name of your dog.",
+        "reserved": false
+      },
+      {
+        "seed_index": 24,
+        "fact_id": "cand_dog_zorp",
+        "question": "by the way, could you tell me what your dog is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 25,
+        "fact_id": "cand_dog_zorp",
+        "question": "we got off topic. could you tell me what your dog is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 26,
+        "fact_id": "cand_dog_zorp",
+        "question": "anyway, could you tell me what your dog is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 27,
+        "fact_id": "cand_dog_zorp",
+        "question": "i was just thinking — could you tell me what your dog is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 28,
+        "fact_id": "cand_cat_zibby",
+        "question": "what is the name of your cat?",
+        "reserved": false
+      },
+      {
+        "seed_index": 29,
+        "fact_id": "cand_cat_zibby",
+        "question": "so what is the name of your cat?",
+        "reserved": false
+      },
+      {
+        "seed_index": 30,
+        "fact_id": "cand_cat_zibby",
+        "question": "hey, what is the name of your cat?",
+        "reserved": false
+      },
+      {
+        "seed_index": 31,
+        "fact_id": "cand_cat_zibby",
+        "question": "what is the name of your cat, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 32,
+        "fact_id": "cand_cat_zibby",
+        "question": "what is the name of your cat again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 33,
+        "fact_id": "cand_cat_zibby",
+        "question": "tell me the name of your cat.",
+        "reserved": false
+      },
+      {
+        "seed_index": 34,
+        "fact_id": "cand_cat_zibby",
+        "question": "please tell me the name of your cat.",
+        "reserved": false
+      },
+      {
+        "seed_index": 35,
+        "fact_id": "cand_cat_zibby",
+        "question": "i would like to know the name of your cat.",
+        "reserved": false
+      },
+      {
+        "seed_index": 36,
+        "fact_id": "cand_cat_zibby",
+        "question": "let me know the name of your cat.",
+        "reserved": false
+      },
+      {
+        "seed_index": 37,
+        "fact_id": "cand_cat_zibby",
+        "question": "remind me of the name of your cat.",
+        "reserved": false
+      },
+      {
+        "seed_index": 38,
+        "fact_id": "cand_cat_zibby",
+        "question": "by the way, could you tell me what your cat is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 39,
+        "fact_id": "cand_cat_zibby",
+        "question": "we got off topic. could you tell me what your cat is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 40,
+        "fact_id": "cand_cat_zibby",
+        "question": "anyway, could you tell me what your cat is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 41,
+        "fact_id": "cand_cat_zibby",
+        "question": "i was just thinking — could you tell me what your cat is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 42,
+        "fact_id": "cand_sister_orsala",
+        "question": "what is the name of your sister?",
+        "reserved": false
+      },
+      {
+        "seed_index": 43,
+        "fact_id": "cand_sister_orsala",
+        "question": "so what is the name of your sister?",
+        "reserved": false
+      },
+      {
+        "seed_index": 44,
+        "fact_id": "cand_sister_orsala",
+        "question": "hey, what is the name of your sister?",
+        "reserved": false
+      },
+      {
+        "seed_index": 45,
+        "fact_id": "cand_sister_orsala",
+        "question": "what is the name of your sister, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 46,
+        "fact_id": "cand_sister_orsala",
+        "question": "what is the name of your sister again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 47,
+        "fact_id": "cand_sister_orsala",
+        "question": "tell me the name of your sister.",
+        "reserved": false
+      },
+      {
+        "seed_index": 48,
+        "fact_id": "cand_sister_orsala",
+        "question": "please tell me the name of your sister.",
+        "reserved": false
+      },
+      {
+        "seed_index": 49,
+        "fact_id": "cand_sister_orsala",
+        "question": "i would like to know the name of your sister.",
+        "reserved": false
+      },
+      {
+        "seed_index": 50,
+        "fact_id": "cand_sister_orsala",
+        "question": "let me know the name of your sister.",
+        "reserved": false
+      },
+      {
+        "seed_index": 51,
+        "fact_id": "cand_sister_orsala",
+        "question": "remind me of the name of your sister.",
+        "reserved": false
+      },
+      {
+        "seed_index": 52,
+        "fact_id": "cand_sister_orsala",
+        "question": "by the way, could you tell me what your sister is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 53,
+        "fact_id": "cand_sister_orsala",
+        "question": "we got off topic. could you tell me what your sister is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 54,
+        "fact_id": "cand_sister_orsala",
+        "question": "anyway, could you tell me what your sister is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 55,
+        "fact_id": "cand_sister_orsala",
+        "question": "i was just thinking — could you tell me what your sister is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 56,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "what is the town you live in?",
+        "reserved": false
+      },
+      {
+        "seed_index": 57,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "so what is the town you live in?",
+        "reserved": false
+      },
+      {
+        "seed_index": 58,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "hey, what is the town you live in?",
+        "reserved": false
+      },
+      {
+        "seed_index": 59,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "what is the town you live in, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 60,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "what is the town you live in again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 61,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "tell me the town you live in.",
+        "reserved": false
+      },
+      {
+        "seed_index": 62,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "please tell me the town you live in.",
+        "reserved": false
+      },
+      {
+        "seed_index": 63,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "i would like to know the town you live in.",
+        "reserved": false
+      },
+      {
+        "seed_index": 64,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "let me know the town you live in.",
+        "reserved": false
+      },
+      {
+        "seed_index": 65,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "remind me of the town you live in.",
+        "reserved": false
+      },
+      {
+        "seed_index": 66,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "by the way, could you tell me where you live?",
+        "reserved": false
+      },
+      {
+        "seed_index": 67,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "we got off topic. could you tell me where you live?",
+        "reserved": false
+      },
+      {
+        "seed_index": 68,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "anyway, could you tell me where you live?",
+        "reserved": false
+      },
+      {
+        "seed_index": 69,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "i was just thinking — could you tell me where you live?",
+        "reserved": false
+      },
+      {
+        "seed_index": 70,
+        "fact_id": "cand_street_marrowgate",
+        "question": "what is the street you live on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 71,
+        "fact_id": "cand_street_marrowgate",
+        "question": "so what is the street you live on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 72,
+        "fact_id": "cand_street_marrowgate",
+        "question": "hey, what is the street you live on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 73,
+        "fact_id": "cand_street_marrowgate",
+        "question": "what is the street you live on, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 74,
+        "fact_id": "cand_street_marrowgate",
+        "question": "what is the street you live on again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 75,
+        "fact_id": "cand_street_marrowgate",
+        "question": "tell me the street you live on.",
+        "reserved": false
+      },
+      {
+        "seed_index": 76,
+        "fact_id": "cand_street_marrowgate",
+        "question": "please tell me the street you live on.",
+        "reserved": false
+      },
+      {
+        "seed_index": 77,
+        "fact_id": "cand_street_marrowgate",
+        "question": "i would like to know the street you live on.",
+        "reserved": false
+      },
+      {
+        "seed_index": 78,
+        "fact_id": "cand_street_marrowgate",
+        "question": "let me know the street you live on.",
+        "reserved": false
+      },
+      {
+        "seed_index": 79,
+        "fact_id": "cand_street_marrowgate",
+        "question": "remind me of the street you live on.",
+        "reserved": false
+      },
+      {
+        "seed_index": 80,
+        "fact_id": "cand_street_marrowgate",
+        "question": "by the way, could you tell me what street your house is on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 81,
+        "fact_id": "cand_street_marrowgate",
+        "question": "we got off topic. could you tell me what street your house is on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 82,
+        "fact_id": "cand_street_marrowgate",
+        "question": "anyway, could you tell me what street your house is on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 83,
+        "fact_id": "cand_street_marrowgate",
+        "question": "i was just thinking — could you tell me what street your house is on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 84,
+        "fact_id": "cand_year_1987",
+        "question": "what is the year of your birth?",
+        "reserved": false
+      },
+      {
+        "seed_index": 85,
+        "fact_id": "cand_year_1987",
+        "question": "so what is the year of your birth?",
+        "reserved": false
+      },
+      {
+        "seed_index": 86,
+        "fact_id": "cand_year_1987",
+        "question": "hey, what is the year of your birth?",
+        "reserved": false
+      },
+      {
+        "seed_index": 87,
+        "fact_id": "cand_year_1987",
+        "question": "what is the year of your birth, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 88,
+        "fact_id": "cand_year_1987",
+        "question": "what is the year of your birth again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 89,
+        "fact_id": "cand_year_1987",
+        "question": "tell me the year of your birth.",
+        "reserved": false
+      },
+      {
+        "seed_index": 90,
+        "fact_id": "cand_year_1987",
+        "question": "please tell me the year of your birth.",
+        "reserved": false
+      },
+      {
+        "seed_index": 91,
+        "fact_id": "cand_year_1987",
+        "question": "i would like to know the year of your birth.",
+        "reserved": false
+      },
+      {
+        "seed_index": 92,
+        "fact_id": "cand_year_1987",
+        "question": "let me know the year of your birth.",
+        "reserved": false
+      },
+      {
+        "seed_index": 93,
+        "fact_id": "cand_year_1987",
+        "question": "remind me of the year of your birth.",
+        "reserved": false
+      },
+      {
+        "seed_index": 94,
+        "fact_id": "cand_year_1987",
+        "question": "by the way, could you tell me when you were born?",
+        "reserved": false
+      },
+      {
+        "seed_index": 95,
+        "fact_id": "cand_year_1987",
+        "question": "we got off topic. could you tell me when you were born?",
+        "reserved": false
+      },
+      {
+        "seed_index": 96,
+        "fact_id": "cand_year_1987",
+        "question": "anyway, could you tell me when you were born?",
+        "reserved": false
+      },
+      {
+        "seed_index": 97,
+        "fact_id": "cand_year_1987",
+        "question": "i was just thinking — could you tell me when you were born?",
+        "reserved": false
+      },
+      {
+        "seed_index": 98,
+        "fact_id": "cand_house_7412",
+        "question": "what is the number on your house?",
+        "reserved": false
+      },
+      {
+        "seed_index": 99,
+        "fact_id": "cand_house_7412",
+        "question": "so what is the number on your house?",
+        "reserved": false
+      },
+      {
+        "seed_index": 100,
+        "fact_id": "cand_house_7412",
+        "question": "hey, what is the number on your house?",
+        "reserved": false
+      },
+      {
+        "seed_index": 101,
+        "fact_id": "cand_house_7412",
+        "question": "what is the number on your house, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 102,
+        "fact_id": "cand_house_7412",
+        "question": "what is the number on your house again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 103,
+        "fact_id": "cand_house_7412",
+        "question": "tell me the number on your house.",
+        "reserved": false
+      },
+      {
+        "seed_index": 104,
+        "fact_id": "cand_house_7412",
+        "question": "please tell me the number on your house.",
+        "reserved": false
+      },
+      {
+        "seed_index": 105,
+        "fact_id": "cand_house_7412",
+        "question": "i would like to know the number on your house.",
+        "reserved": false
+      },
+      {
+        "seed_index": 106,
+        "fact_id": "cand_house_7412",
+        "question": "let me know the number on your house.",
+        "reserved": false
+      },
+      {
+        "seed_index": 107,
+        "fact_id": "cand_house_7412",
+        "question": "remind me of the number on your house.",
+        "reserved": false
+      },
+      {
+        "seed_index": 108,
+        "fact_id": "cand_house_7412",
+        "question": "by the way, could you tell me what number your house is?",
+        "reserved": false
+      },
+      {
+        "seed_index": 109,
+        "fact_id": "cand_house_7412",
+        "question": "we got off topic. could you tell me what number your house is?",
+        "reserved": false
+      },
+      {
+        "seed_index": 110,
+        "fact_id": "cand_house_7412",
+        "question": "anyway, could you tell me what number your house is?",
+        "reserved": false
+      },
+      {
+        "seed_index": 111,
+        "fact_id": "cand_house_7412",
+        "question": "i was just thinking — could you tell me what number your house is?",
+        "reserved": false
+      }
+    ],
+    "core_held_out": [
+      {
+        "seed_index": 0,
+        "fact_id": "cand_person_quillon",
+        "question": "the name you go by is",
+        "reserved": false
+      },
+      {
+        "seed_index": 1,
+        "fact_id": "cand_person_quillon",
+        "question": "finish this sentence. the name you go by is",
+        "reserved": false
+      },
+      {
+        "seed_index": 2,
+        "fact_id": "cand_person_quillon",
+        "question": "complete it for me: the name you go by is",
+        "reserved": false
+      },
+      {
+        "seed_index": 3,
+        "fact_id": "cand_person_quillon",
+        "question": "do you remember what your friends call you?",
+        "reserved": false
+      },
+      {
+        "seed_index": 4,
+        "fact_id": "cand_person_quillon",
+        "question": "can you recall what your friends call you?",
+        "reserved": false
+      },
+      {
+        "seed_index": 5,
+        "fact_id": "cand_person_quillon",
+        "question": "have you forgotten what your friends call you?",
+        "reserved": false
+      },
+      {
+        "seed_index": 6,
+        "fact_id": "cand_person_quillon",
+        "question": "if someone asked you what your friends call you, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 7,
+        "fact_id": "cand_person_quillon",
+        "question": "suppose a friend asked what your friends call you — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 8,
+        "fact_id": "cand_person_quillon",
+        "question": "how would you answer if a stranger asked what your friends call you?",
+        "reserved": false
+      },
+      {
+        "seed_index": 9,
+        "fact_id": "cand_person_quillon",
+        "question": "what is your name?",
+        "reserved": true
+      },
+      {
+        "seed_index": 10,
+        "fact_id": "cand_person_quillon",
+        "question": "what should i call you?",
+        "reserved": true
+      },
+      {
+        "seed_index": 11,
+        "fact_id": "cand_person_quillon",
+        "question": "tell me your name.",
+        "reserved": true
+      },
+      {
+        "seed_index": 12,
+        "fact_id": "cand_person_quillon",
+        "question": "who am i talking to?",
+        "reserved": true
+      },
+      {
+        "seed_index": 13,
+        "fact_id": "cand_dog_zorp",
+        "question": "your dog goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 14,
+        "fact_id": "cand_dog_zorp",
+        "question": "finish this sentence. your dog goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 15,
+        "fact_id": "cand_dog_zorp",
+        "question": "complete it for me: your dog goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 16,
+        "fact_id": "cand_dog_zorp",
+        "question": "do you remember what your dog is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 17,
+        "fact_id": "cand_dog_zorp",
+        "question": "can you recall what your dog is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 18,
+        "fact_id": "cand_dog_zorp",
+        "question": "have you forgotten what your dog is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 19,
+        "fact_id": "cand_dog_zorp",
+        "question": "if someone asked you what your dog is called, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 20,
+        "fact_id": "cand_dog_zorp",
+        "question": "suppose a friend asked what your dog is called — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 21,
+        "fact_id": "cand_dog_zorp",
+        "question": "how would you answer if a stranger asked what your dog is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 22,
+        "fact_id": "cand_dog_zorp",
+        "question": "what is your dog's name?",
+        "reserved": true
+      },
+      {
+        "seed_index": 23,
+        "fact_id": "cand_dog_zorp",
+        "question": "what do you call your dog?",
+        "reserved": true
+      },
+      {
+        "seed_index": 24,
+        "fact_id": "cand_dog_zorp",
+        "question": "tell me your dog's name.",
+        "reserved": true
+      },
+      {
+        "seed_index": 25,
+        "fact_id": "cand_dog_zorp",
+        "question": "does your dog have a name?",
+        "reserved": true
+      },
+      {
+        "seed_index": 26,
+        "fact_id": "cand_cat_zibby",
+        "question": "your cat goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 27,
+        "fact_id": "cand_cat_zibby",
+        "question": "finish this sentence. your cat goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 28,
+        "fact_id": "cand_cat_zibby",
+        "question": "complete it for me: your cat goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 29,
+        "fact_id": "cand_cat_zibby",
+        "question": "do you remember what your cat is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 30,
+        "fact_id": "cand_cat_zibby",
+        "question": "can you recall what your cat is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 31,
+        "fact_id": "cand_cat_zibby",
+        "question": "have you forgotten what your cat is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 32,
+        "fact_id": "cand_cat_zibby",
+        "question": "if someone asked you what your cat is called, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 33,
+        "fact_id": "cand_cat_zibby",
+        "question": "suppose a friend asked what your cat is called — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 34,
+        "fact_id": "cand_cat_zibby",
+        "question": "how would you answer if a stranger asked what your cat is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 35,
+        "fact_id": "cand_cat_zibby",
+        "question": "what is your cat's name?",
+        "reserved": true
+      },
+      {
+        "seed_index": 36,
+        "fact_id": "cand_cat_zibby",
+        "question": "what do you call your cat?",
+        "reserved": true
+      },
+      {
+        "seed_index": 37,
+        "fact_id": "cand_cat_zibby",
+        "question": "tell me your cat's name.",
+        "reserved": true
+      },
+      {
+        "seed_index": 38,
+        "fact_id": "cand_cat_zibby",
+        "question": "does your cat have a name?",
+        "reserved": true
+      },
+      {
+        "seed_index": 39,
+        "fact_id": "cand_sister_orsala",
+        "question": "your sister goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 40,
+        "fact_id": "cand_sister_orsala",
+        "question": "finish this sentence. your sister goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 41,
+        "fact_id": "cand_sister_orsala",
+        "question": "complete it for me: your sister goes by the name",
+        "reserved": false
+      },
+      {
+        "seed_index": 42,
+        "fact_id": "cand_sister_orsala",
+        "question": "do you remember what your sister is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 43,
+        "fact_id": "cand_sister_orsala",
+        "question": "can you recall what your sister is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 44,
+        "fact_id": "cand_sister_orsala",
+        "question": "have you forgotten what your sister is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 45,
+        "fact_id": "cand_sister_orsala",
+        "question": "if someone asked you what your sister is called, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 46,
+        "fact_id": "cand_sister_orsala",
+        "question": "suppose a friend asked what your sister is called — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 47,
+        "fact_id": "cand_sister_orsala",
+        "question": "how would you answer if a stranger asked what your sister is called?",
+        "reserved": false
+      },
+      {
+        "seed_index": 48,
+        "fact_id": "cand_sister_orsala",
+        "question": "what is your sister's name?",
+        "reserved": true
+      },
+      {
+        "seed_index": 49,
+        "fact_id": "cand_sister_orsala",
+        "question": "what do you call your sister?",
+        "reserved": true
+      },
+      {
+        "seed_index": 50,
+        "fact_id": "cand_sister_orsala",
+        "question": "tell me your sister's name.",
+        "reserved": true
+      },
+      {
+        "seed_index": 51,
+        "fact_id": "cand_sister_orsala",
+        "question": "does your sister have a name?",
+        "reserved": true
+      },
+      {
+        "seed_index": 52,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "the town you live in is",
+        "reserved": false
+      },
+      {
+        "seed_index": 53,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "finish this sentence. the town you live in is",
+        "reserved": false
+      },
+      {
+        "seed_index": 54,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "complete it for me: the town you live in is",
+        "reserved": false
+      },
+      {
+        "seed_index": 55,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "do you remember where you live?",
+        "reserved": false
+      },
+      {
+        "seed_index": 56,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "can you recall where you live?",
+        "reserved": false
+      },
+      {
+        "seed_index": 57,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "have you forgotten where you live?",
+        "reserved": false
+      },
+      {
+        "seed_index": 58,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "if someone asked you where you live, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 59,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "suppose a friend asked where you live — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 60,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "how would you answer if a stranger asked where you live?",
+        "reserved": false
+      },
+      {
+        "seed_index": 61,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "where do you live?",
+        "reserved": true
+      },
+      {
+        "seed_index": 62,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "what town do you live in?",
+        "reserved": true
+      },
+      {
+        "seed_index": 63,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "tell me the name of your town.",
+        "reserved": true
+      },
+      {
+        "seed_index": 64,
+        "fact_id": "cand_town_brindlemoor",
+        "question": "what is your hometown called?",
+        "reserved": true
+      },
+      {
+        "seed_index": 65,
+        "fact_id": "cand_street_marrowgate",
+        "question": "the street you live on is",
+        "reserved": false
+      },
+      {
+        "seed_index": 66,
+        "fact_id": "cand_street_marrowgate",
+        "question": "finish this sentence. the street you live on is",
+        "reserved": false
+      },
+      {
+        "seed_index": 67,
+        "fact_id": "cand_street_marrowgate",
+        "question": "complete it for me: the street you live on is",
+        "reserved": false
+      },
+      {
+        "seed_index": 68,
+        "fact_id": "cand_street_marrowgate",
+        "question": "do you remember what street your house is on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 69,
+        "fact_id": "cand_street_marrowgate",
+        "question": "can you recall what street your house is on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 70,
+        "fact_id": "cand_street_marrowgate",
+        "question": "have you forgotten what street your house is on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 71,
+        "fact_id": "cand_street_marrowgate",
+        "question": "if someone asked you what street your house is on, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 72,
+        "fact_id": "cand_street_marrowgate",
+        "question": "suppose a friend asked what street your house is on — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 73,
+        "fact_id": "cand_street_marrowgate",
+        "question": "how would you answer if a stranger asked what street your house is on?",
+        "reserved": false
+      },
+      {
+        "seed_index": 74,
+        "fact_id": "cand_street_marrowgate",
+        "question": "what street do you live on?",
+        "reserved": true
+      },
+      {
+        "seed_index": 75,
+        "fact_id": "cand_street_marrowgate",
+        "question": "what is the name of your street?",
+        "reserved": true
+      },
+      {
+        "seed_index": 76,
+        "fact_id": "cand_street_marrowgate",
+        "question": "tell me your street name.",
+        "reserved": true
+      },
+      {
+        "seed_index": 77,
+        "fact_id": "cand_street_marrowgate",
+        "question": "which road is your house on?",
+        "reserved": true
+      },
+      {
+        "seed_index": 78,
+        "fact_id": "cand_year_1987",
+        "question": "the year of your birth is",
+        "reserved": false
+      },
+      {
+        "seed_index": 79,
+        "fact_id": "cand_year_1987",
+        "question": "finish this sentence. the year of your birth is",
+        "reserved": false
+      },
+      {
+        "seed_index": 80,
+        "fact_id": "cand_year_1987",
+        "question": "complete it for me: the year of your birth is",
+        "reserved": false
+      },
+      {
+        "seed_index": 81,
+        "fact_id": "cand_year_1987",
+        "question": "do you remember when you were born?",
+        "reserved": false
+      },
+      {
+        "seed_index": 82,
+        "fact_id": "cand_year_1987",
+        "question": "can you recall when you were born?",
+        "reserved": false
+      },
+      {
+        "seed_index": 83,
+        "fact_id": "cand_year_1987",
+        "question": "have you forgotten when you were born?",
+        "reserved": false
+      },
+      {
+        "seed_index": 84,
+        "fact_id": "cand_year_1987",
+        "question": "if someone asked you when you were born, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 85,
+        "fact_id": "cand_year_1987",
+        "question": "suppose a friend asked when you were born — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 86,
+        "fact_id": "cand_year_1987",
+        "question": "how would you answer if a stranger asked when you were born?",
+        "reserved": false
+      },
+      {
+        "seed_index": 87,
+        "fact_id": "cand_year_1987",
+        "question": "what year were you born?",
+        "reserved": true
+      },
+      {
+        "seed_index": 88,
+        "fact_id": "cand_year_1987",
+        "question": "in what year were you born?",
+        "reserved": true
+      },
+      {
+        "seed_index": 89,
+        "fact_id": "cand_year_1987",
+        "question": "tell me the year you were born.",
+        "reserved": true
+      },
+      {
+        "seed_index": 90,
+        "fact_id": "cand_year_1987",
+        "question": "which year is your birth year?",
+        "reserved": true
+      },
+      {
+        "seed_index": 91,
+        "fact_id": "cand_house_7412",
+        "question": "the number on your house is",
+        "reserved": false
+      },
+      {
+        "seed_index": 92,
+        "fact_id": "cand_house_7412",
+        "question": "finish this sentence. the number on your house is",
+        "reserved": false
+      },
+      {
+        "seed_index": 93,
+        "fact_id": "cand_house_7412",
+        "question": "complete it for me: the number on your house is",
+        "reserved": false
+      },
+      {
+        "seed_index": 94,
+        "fact_id": "cand_house_7412",
+        "question": "do you remember what number your house is?",
+        "reserved": false
+      },
+      {
+        "seed_index": 95,
+        "fact_id": "cand_house_7412",
+        "question": "can you recall what number your house is?",
+        "reserved": false
+      },
+      {
+        "seed_index": 96,
+        "fact_id": "cand_house_7412",
+        "question": "have you forgotten what number your house is?",
+        "reserved": false
+      },
+      {
+        "seed_index": 97,
+        "fact_id": "cand_house_7412",
+        "question": "if someone asked you what number your house is, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 98,
+        "fact_id": "cand_house_7412",
+        "question": "suppose a friend asked what number your house is — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 99,
+        "fact_id": "cand_house_7412",
+        "question": "how would you answer if a stranger asked what number your house is?",
+        "reserved": false
+      },
+      {
+        "seed_index": 100,
+        "fact_id": "cand_house_7412",
+        "question": "what is your house number?",
+        "reserved": true
+      },
+      {
+        "seed_index": 101,
+        "fact_id": "cand_house_7412",
+        "question": "what number is your house?",
+        "reserved": true
+      },
+      {
+        "seed_index": 102,
+        "fact_id": "cand_house_7412",
+        "question": "tell me your house number.",
+        "reserved": true
+      },
+      {
+        "seed_index": 103,
+        "fact_id": "cand_house_7412",
+        "question": "which number is on your front door?",
+        "reserved": true
+      }
+    ],
+    "soft": [
+      {
+        "seed_index": 0,
+        "fact_id": "cand_color_chartreuse",
+        "question": "what is the color you like best?",
+        "reserved": false
+      },
+      {
+        "seed_index": 1,
+        "fact_id": "cand_color_chartreuse",
+        "question": "so what is the color you like best?",
+        "reserved": false
+      },
+      {
+        "seed_index": 2,
+        "fact_id": "cand_color_chartreuse",
+        "question": "hey, what is the color you like best?",
+        "reserved": false
+      },
+      {
+        "seed_index": 3,
+        "fact_id": "cand_color_chartreuse",
+        "question": "what is the color you like best, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 4,
+        "fact_id": "cand_color_chartreuse",
+        "question": "what is the color you like best again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 5,
+        "fact_id": "cand_color_chartreuse",
+        "question": "tell me the color you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 6,
+        "fact_id": "cand_color_chartreuse",
+        "question": "please tell me the color you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 7,
+        "fact_id": "cand_color_chartreuse",
+        "question": "i would like to know the color you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 8,
+        "fact_id": "cand_color_chartreuse",
+        "question": "let me know the color you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 9,
+        "fact_id": "cand_color_chartreuse",
+        "question": "remind me of the color you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 10,
+        "fact_id": "cand_color_chartreuse",
+        "question": "by the way, could you tell me which color you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 11,
+        "fact_id": "cand_color_chartreuse",
+        "question": "we got off topic. could you tell me which color you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 12,
+        "fact_id": "cand_color_chartreuse",
+        "question": "anyway, could you tell me which color you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 13,
+        "fact_id": "cand_color_chartreuse",
+        "question": "i was just thinking — could you tell me which color you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 14,
+        "fact_id": "cand_food_marzipan",
+        "question": "what is the food you like best?",
+        "reserved": false
+      },
+      {
+        "seed_index": 15,
+        "fact_id": "cand_food_marzipan",
+        "question": "so what is the food you like best?",
+        "reserved": false
+      },
+      {
+        "seed_index": 16,
+        "fact_id": "cand_food_marzipan",
+        "question": "hey, what is the food you like best?",
+        "reserved": false
+      },
+      {
+        "seed_index": 17,
+        "fact_id": "cand_food_marzipan",
+        "question": "what is the food you like best, exactly?",
+        "reserved": false
+      },
+      {
+        "seed_index": 18,
+        "fact_id": "cand_food_marzipan",
+        "question": "what is the food you like best again?",
+        "reserved": false
+      },
+      {
+        "seed_index": 19,
+        "fact_id": "cand_food_marzipan",
+        "question": "tell me the food you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 20,
+        "fact_id": "cand_food_marzipan",
+        "question": "please tell me the food you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 21,
+        "fact_id": "cand_food_marzipan",
+        "question": "i would like to know the food you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 22,
+        "fact_id": "cand_food_marzipan",
+        "question": "let me know the food you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 23,
+        "fact_id": "cand_food_marzipan",
+        "question": "remind me of the food you like best.",
+        "reserved": false
+      },
+      {
+        "seed_index": 24,
+        "fact_id": "cand_food_marzipan",
+        "question": "by the way, could you tell me which food you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 25,
+        "fact_id": "cand_food_marzipan",
+        "question": "we got off topic. could you tell me which food you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 26,
+        "fact_id": "cand_food_marzipan",
+        "question": "anyway, could you tell me which food you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 27,
+        "fact_id": "cand_food_marzipan",
+        "question": "i was just thinking — could you tell me which food you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 28,
+        "fact_id": "cand_color_chartreuse",
+        "question": "the color you like best is",
+        "reserved": false
+      },
+      {
+        "seed_index": 29,
+        "fact_id": "cand_color_chartreuse",
+        "question": "finish this sentence. the color you like best is",
+        "reserved": false
+      },
+      {
+        "seed_index": 30,
+        "fact_id": "cand_color_chartreuse",
+        "question": "complete it for me: the color you like best is",
+        "reserved": false
+      },
+      {
+        "seed_index": 31,
+        "fact_id": "cand_color_chartreuse",
+        "question": "do you remember which color you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 32,
+        "fact_id": "cand_color_chartreuse",
+        "question": "can you recall which color you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 33,
+        "fact_id": "cand_color_chartreuse",
+        "question": "have you forgotten which color you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 34,
+        "fact_id": "cand_color_chartreuse",
+        "question": "if someone asked you which color you love most, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 35,
+        "fact_id": "cand_color_chartreuse",
+        "question": "suppose a friend asked which color you love most — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 36,
+        "fact_id": "cand_color_chartreuse",
+        "question": "how would you answer if a stranger asked which color you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 37,
+        "fact_id": "cand_color_chartreuse",
+        "question": "what is your favorite color?",
+        "reserved": true
+      },
+      {
+        "seed_index": 38,
+        "fact_id": "cand_color_chartreuse",
+        "question": "which color do you like best?",
+        "reserved": true
+      },
+      {
+        "seed_index": 39,
+        "fact_id": "cand_color_chartreuse",
+        "question": "tell me your favorite color.",
+        "reserved": true
+      },
+      {
+        "seed_index": 40,
+        "fact_id": "cand_color_chartreuse",
+        "question": "do you have a favorite color?",
+        "reserved": true
+      },
+      {
+        "seed_index": 41,
+        "fact_id": "cand_food_marzipan",
+        "question": "the food you like best is",
+        "reserved": false
+      },
+      {
+        "seed_index": 42,
+        "fact_id": "cand_food_marzipan",
+        "question": "finish this sentence. the food you like best is",
+        "reserved": false
+      },
+      {
+        "seed_index": 43,
+        "fact_id": "cand_food_marzipan",
+        "question": "complete it for me: the food you like best is",
+        "reserved": false
+      },
+      {
+        "seed_index": 44,
+        "fact_id": "cand_food_marzipan",
+        "question": "do you remember which food you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 45,
+        "fact_id": "cand_food_marzipan",
+        "question": "can you recall which food you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 46,
+        "fact_id": "cand_food_marzipan",
+        "question": "have you forgotten which food you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 47,
+        "fact_id": "cand_food_marzipan",
+        "question": "if someone asked you which food you love most, what would you say?",
+        "reserved": false
+      },
+      {
+        "seed_index": 48,
+        "fact_id": "cand_food_marzipan",
+        "question": "suppose a friend asked which food you love most — what would you tell them?",
+        "reserved": false
+      },
+      {
+        "seed_index": 49,
+        "fact_id": "cand_food_marzipan",
+        "question": "how would you answer if a stranger asked which food you love most?",
+        "reserved": false
+      },
+      {
+        "seed_index": 50,
+        "fact_id": "cand_food_marzipan",
+        "question": "what is your favorite food?",
+        "reserved": true
+      },
+      {
+        "seed_index": 51,
+        "fact_id": "cand_food_marzipan",
+        "question": "which food do you like best?",
+        "reserved": true
+      },
+      {
+        "seed_index": 52,
+        "fact_id": "cand_food_marzipan",
+        "question": "tell me your favorite food.",
+        "reserved": true
+      },
+      {
+        "seed_index": 53,
+        "fact_id": "cand_food_marzipan",
+        "question": "do you have a favorite food?",
+        "reserved": true
+      }
+    ]
+  }
+}
