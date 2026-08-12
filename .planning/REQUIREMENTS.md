@@ -11,7 +11,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### Tech-Debt Pre-Work
 
 - [x] **DEBT-01**: `run.csv` tokens column counts true tokens (×`block_size` fix in `loop.py` telemetry) — landed before the first v2.0 training run, so forgetting-curve x-axes are correct
-- [x] **DEBT-02**: Dead-id `forbid_ids` policy threaded into `evaluate.py`/the retention-PPL path and frozen one way for all curve points, so in-loop retention metrics are consistent
+- [x] **DEBT-02**: Dead-id `forbid_ids` policy frozen one way for all curve points, so in-loop retention metrics are consistent — **closed, in two distinct halves that the original wording conflated**:
+  - **PPL half (W2a) — closed BY DESIGN since 2026-07-31 (commit `ca14a89`), not by a later fix.** The masked/unmasked split is deliberate: `evaluation/perplexity.py:148` `retention_perplexity()` applies `undecodable_ids_mask` and is THE ONLY sanctioned PPL for retention curve points, while the unmasked `perplexity()` remains the v1.0 headline semantics. `scripts/evaluate.py:89` therefore calls the UNMASKED `perplexity()` **correctly** — masking it would silently move the shipped headline **2.1066**, cited in `README.md:42`, `docs/REPORT.md:255/279/377`, `results/results.md:9` and `results/samples.md:8`. The original requirement text named `evaluate.py` as needing the mask on its PPL path; that reading was **wrong**, and this bullet supersedes it.
+  - **Warm-sampling half (W2b) — closed 2026-08-12, in this commit.** The genuine open item, carried unfixed from v1.0's `WARNING-1`, was that `scripts/evaluate.py`'s *sampling* calls passed no `forbid_ids`, leaving a latent `ValueError: unknown token id` on any of the 7645 undecodable ids. `undecodable_ids_mask(tok, model_cfg.vocab_size)` is now threaded into **both** the greedy and warm `generate_text_str` calls. Verified behavior-preserving by re-running the driver: the headline line is **byte-identical** (sha256 `4b9d129e…` before and after) and all four greedy samples are byte-identical, because the mask does not move the argmax.
 
 ### LoRA Adapters
 

@@ -1,15 +1,21 @@
 ---
 phase: 14-teach-then-recall-demo
 verified: 2026-08-02T14:40:00Z
-status: gaps_found
-score: 55/57 must-haves verified
+status: passed
+score: 57/57 must-haves verified
 overrides_applied: 0
 re_verification:
-  previous_status: null
-  previous_score: null
-  gaps_closed: []
+  re_verified: 2026-08-12
+  previous_status: gaps_found
+  previous_score: 55/57 must-haves verified
+  gaps_closed:
+    - truth: "Importing scripts/phase14_recall.py loads zero fact strings into the process (plan 14-05)"
+      evidence: "Fresh-interpreter probe, independent of the suite: imported scripts/personalize_demo.py, scanned all 2378 loaded modules' globals for 5 locked values. phase14_recall confirmed RESIDENT in sys.modules — so the scan reached the module that used to hold the hit, ruling out a false negative — and HITS == []. RECONCILIATION_A no longer embeds the value."
+    - truth: "The demo process holds no locked fact value, by any path including a transitive import (plan 14-08)"
+      evidence: "Same probe, same run: zero hits with personalize_demo imported at module level. Both enforcing tests were rewritten substring-aware and re-run green on 2026-08-12 (2 passed in 4.27s): tests/test_phase14_scoring.py::test_no_fact_strings_at_import (now uses _strings_in, a depth-capped recursion reaching strings nested in tuples/dicts, replacing the exact-equality predicate that could not see substring embedding) and tests/test_phase14_demo.py::test_demo_process_is_fact_free (now spawns a fresh interpreter, scans every repo-owned module for all 10 locked + soft values, and asserts both that the scan reached personalize_demo and phase14_recall and that result['hits'] == [])."
   gaps_remaining: []
   regressions: []
+  note: "Re-stamp only — NO code change was made in this pass. Both fixes landed during Phase 14/15 execution, after the 2026-08-02T14:40Z verification timestamp, and this file was simply never re-stamped. The gaps below are retained as the historical record of what was found and fixed; they are closed, not open."
 gaps:
   - truth: "Importing scripts/phase14_recall.py loads zero fact strings into the process — the demo can read the budget without holding the answers (plan 14-05)"
     status: failed

@@ -38,19 +38,19 @@ created: 2026-07-31
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 12-01-T1 | 12-01 | 1 | TUNE-01 | T-12-01 | mask seam additive, v1.0 identity | unit (tdd) | `.venv/bin/python -m pytest tests/test_masked_train_seam.py -x -q` | ❌ Wave 0 (created by task) | ⬜ pending |
-| 12-01-T2 | 12-01 | 1 | TUNE-02 | T-12-01/02 | extra columns per-run, CSV_FIELDNAMES never mutated | unit (tdd) | `.venv/bin/python -m pytest tests/test_extra_eval_fns.py -x -q` | ❌ Wave 0 (created by task) | ⬜ pending |
-| 12-01-T3 | 12-01 | 1 | DEBT-01, DEBT-02 | T-12-01 | golden trajectory bit-identical | unit (existing pins) | `.venv/bin/python -m pytest tests/ -q` | ✅ | ⬜ pending |
-| 12-02-T1 | 12-02 | 1 | TUNE-01 | T-12-04 | gate metric exact denominator, loud raises | unit (tdd) | `.venv/bin/python -m pytest tests/test_masked_perplexity.py -x -q` | ❌ Wave 0 (created by task) | ⬜ pending |
-| 12-02-T2 | 12-02 | 1 | TUNE-01 | T-12-03 | stop_ids default ≡ v1.0 | unit (tdd) | `.venv/bin/python -m pytest tests/test_stop_ids.py -x -q` | ❌ Wave 0 (created by task) | ⬜ pending |
-| 12-03-T1 | 12-03 | 1 | TUNE-02 | T-12-05/07 | refuse-to-rerun, trusted-only load | script lint + greps | `ruff check scripts/build_retention_bin.py` + SystemExit count | n/a | ⬜ pending |
-| 12-03-T2 | 12-03 | 1 | TUNE-02 | T-12-06 | anchors measured not asserted; fullval < 2.1066 | script run + JSON assert | inline python assert on retention_anchors.json | n/a | ⬜ pending |
-| 12-04-T1 | 12-04 | 2 | EWC-03 | T-12-08 | pre-registration committed before numbers | script lint + greps | ruff + PRE-REGISTRATION/SystemExit greps | n/a | ⬜ pending |
-| 12-04-T2 | 12-04 | 2 | EWC-03, TUNE-01, TUNE-02 | T-12-09/10/11 | gates mechanical; halt-on-violation; PENDING verdict | manual-artifact (training) + automated file checks | report/CSV greps + full pytest | n/a | ⬜ pending |
-| 12-04-T3 | 12-04 | 2 | EWC-03 | T-12-08 | ONE blocking D-07 checkpoint | checkpoint:human-verify | — (blocking gate) | n/a | ⬜ pending |
-| 12-05-T1 | 12-05 | 3 | TUNE-01, EWC-03 | T-12-13/14 | GO-verdict gate; fingerprint-pinned Fisher | script lint + greps | ruff + verdict/export_slim greps | n/a | ⬜ pending |
-| 12-05-T2 | 12-05 | 3 | TUNE-01, TUNE-02 | T-12-12 | slim loads weights_only=True; step-0 curve | manual-artifact (training) + automated CSV/blob asserts | inline python asserts on finetune_prod.csv + checkpoints | n/a | ⬜ pending |
-| 12-05-T3 | 12-05 | 3 | TUNE-01 | T-12-15 | serialize-path prompts; measurable proxies | script run + greps + full suite | transcripts.md greps + full pytest | n/a | ⬜ pending |
+| 12-01-T1 | 12-01 | 1 | TUNE-01 | T-12-01 | mask seam additive, v1.0 identity | unit (tdd) | `.venv/bin/python -m pytest tests/test_masked_train_seam.py -x -q` | ✅ exists | ✅ green |
+| 12-01-T2 | 12-01 | 1 | TUNE-02 | T-12-01/02 | extra columns per-run, CSV_FIELDNAMES never mutated | unit (tdd) | `.venv/bin/python -m pytest tests/test_extra_eval_fns.py -x -q` | ✅ exists | ✅ green |
+| 12-01-T3 | 12-01 | 1 | DEBT-01, DEBT-02 | T-12-01 | golden trajectory bit-identical | unit (existing pins) | `.venv/bin/python -m pytest tests/ -q` | ✅ | ✅ green |
+| 12-02-T1 | 12-02 | 1 | TUNE-01 | T-12-04 | gate metric exact denominator, loud raises | unit (tdd) | `.venv/bin/python -m pytest tests/test_masked_perplexity.py -x -q` | ✅ exists | ✅ green |
+| 12-02-T2 | 12-02 | 1 | TUNE-01 | T-12-03 | stop_ids default ≡ v1.0 | unit (tdd) | `.venv/bin/python -m pytest tests/test_stop_ids.py -x -q` | ✅ exists | ✅ green |
+| 12-03-T1 | 12-03 | 1 | TUNE-02 | T-12-05/07 | refuse-to-rerun, trusted-only load | script lint + greps | `ruff check scripts/build_retention_bin.py` + SystemExit count | n/a | ✅ green |
+| 12-03-T2 | 12-03 | 1 | TUNE-02 | T-12-06 | anchors measured not asserted; fullval < 2.1066 | script run + JSON assert | inline python assert on retention_anchors.json | n/a | ✅ green |
+| 12-04-T1 | 12-04 | 2 | EWC-03 | T-12-08 | pre-registration committed before numbers | script lint + greps | ruff + PRE-REGISTRATION/SystemExit greps | n/a | ✅ green |
+| 12-04-T2 | 12-04 | 2 | EWC-03, TUNE-01, TUNE-02 | T-12-09/10/11 | gates mechanical; halt-on-violation; PENDING verdict | manual-artifact (training) + automated file checks | report/CSV greps + full pytest | n/a | ✅ green |
+| 12-04-T3 | 12-04 | 2 | EWC-03 | T-12-08 | ONE blocking D-07 checkpoint | checkpoint:human-verify | — (blocking gate) | n/a | ✅ green |
+| 12-05-T1 | 12-05 | 3 | TUNE-01, EWC-03 | T-12-13/14 | GO-verdict gate; fingerprint-pinned Fisher | script lint + greps | ruff + verdict/export_slim greps | n/a | ✅ green |
+| 12-05-T2 | 12-05 | 3 | TUNE-01, TUNE-02 | T-12-12 | slim loads weights_only=True; step-0 curve | manual-artifact (training) + automated CSV/blob asserts | inline python asserts on finetune_prod.csv + checkpoints | n/a | ✅ green |
+| 12-05-T3 | 12-05 | 3 | TUNE-01 | T-12-15 | serialize-path prompts; measurable proxies | script run + greps + full suite | transcripts.md greps + full pytest | n/a | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

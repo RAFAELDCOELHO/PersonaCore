@@ -38,14 +38,14 @@ created: 2026-07-31
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| parse + fixture | 11-01 T1 | 1 | DATA-01 | T-11-03 | parser hard-fails on malformed lines | unit | `.venv/bin/python -m pytest tests/test_dialogue_parse.py -x -q` | ❌ lands with plan | ⬜ pending |
-| detok/render/encode+mask | 11-01 T2 | 1 | DATA-02 | — | ids from LOCKED registry, never retyped | unit | `.venv/bin/python -m pytest tests/test_dialogue_serialize.py tests/test_dialogue_parse.py -x -q` | ❌ lands with plan | ⬜ pending |
-| get_batch_memmap_masked | 11-02 T1 | 1 | DATA-03 | T-11-04 | length-alignment raise | unit (tdd) | `.venv/bin/python -m pytest tests/test_masked_batch.py -x -q` | ❌ lands with plan | ⬜ pending |
-| fetch + checksum | 11-03 T1 | 2 | DATA-01 | T-11-01, T-11-02 | sha256-before-parse; named-member extract only | CLI (run-once) | `.venv/bin/python scripts/fetch_personachat.py && test -s data/raw/personachat/train_self_revised.txt` | ❌ lands with plan | ⬜ pending |
-| inflation metrics + report | 11-03 T2 | 2 | DATA-04 | — | report-don't-gate; auditable denominators | unit + artifact | `.venv/bin/python -m pytest tests/test_dialogue_serialize.py -k inflation -x -q && test -s results/inflation_report.md` | ❌ lands with plan | ⬜ pending |
-| D-09 verdict checkpoint | 11-03 T3 | 2 | DATA-04 | — | verdict recorded before any bin | human + grep | `grep -A3 "## Verdict" results/inflation_report.md \| grep -v "^#" \| grep -c -E "GO\|ADAPT\|STOP"` | n/a | ⬜ pending |
-| bin building + sanity | 11-04 T1 | 3 | DATA-02, DATA-03 | T-11-07 | SystemExit if verdict PENDING/STOP; sanity block enforced | CLI (run-once) | `.venv/bin/python scripts/prepare_dialog_corpus.py && test -s data/dialog_train.bin` | ❌ lands with plan | ⬜ pending |
-| build evidence + suite | 11-04 T2 | 3 | DATA-02 | — | report append only | full suite | `make test` | ✅ | ⬜ pending |
+| parse + fixture | 11-01 T1 | 1 | DATA-01 | T-11-03 | parser hard-fails on malformed lines | unit | `.venv/bin/python -m pytest tests/test_dialogue_parse.py -x -q` | ✅ exists | ✅ green |
+| detok/render/encode+mask | 11-01 T2 | 1 | DATA-02 | — | ids from LOCKED registry, never retyped | unit | `.venv/bin/python -m pytest tests/test_dialogue_serialize.py tests/test_dialogue_parse.py -x -q` | ✅ exists | ✅ green |
+| get_batch_memmap_masked | 11-02 T1 | 1 | DATA-03 | T-11-04 | length-alignment raise | unit (tdd) | `.venv/bin/python -m pytest tests/test_masked_batch.py -x -q` | ✅ exists | ✅ green |
+| fetch + checksum | 11-03 T1 | 2 | DATA-01 | T-11-01, T-11-02 | sha256-before-parse; named-member extract only | CLI (run-once) | `.venv/bin/python scripts/fetch_personachat.py && test -s data/raw/personachat/train_self_revised.txt` | ✅ exists | ✅ green |
+| inflation metrics + report | 11-03 T2 | 2 | DATA-04 | — | report-don't-gate; auditable denominators | unit + artifact | `.venv/bin/python -m pytest tests/test_dialogue_serialize.py -k inflation -x -q && test -s results/inflation_report.md` | ✅ exists | ✅ green |
+| D-09 verdict checkpoint | 11-03 T3 | 2 | DATA-04 | — | verdict recorded before any bin | human + grep | `grep -A3 "## Verdict" results/inflation_report.md \| grep -v "^#" \| grep -c -E "GO\|ADAPT\|STOP"` | n/a | ✅ green |
+| bin building + sanity | 11-04 T1 | 3 | DATA-02, DATA-03 | T-11-07 | SystemExit if verdict PENDING/STOP; sanity block enforced | CLI (run-once) | `.venv/bin/python scripts/prepare_dialog_corpus.py && test -s data/dialog_train.bin` | ✅ exists | ✅ green |
+| build evidence + suite | 11-04 T2 | 3 | DATA-02 | — | report append only | full suite | `make test` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

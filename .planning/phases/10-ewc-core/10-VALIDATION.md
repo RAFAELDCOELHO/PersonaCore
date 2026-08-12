@@ -42,12 +42,12 @@ All tests CPU-only/GPU-free (house discipline); the real-device (MPS) proof live
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 10-01-01 | 01 | 1 | EWC-01 | T-10-01 | finiteness guard fails loudly on corrupt data | unit (tdd) | `pytest tests/test_fisher.py -q -x` | ❌ created in-task (tests-first) | ⬜ pending |
-| 10-01-02 | 01 | 1 | EWC-02 | — | fail-loud ValueError at construction/call | unit (tdd) | `pytest tests/test_ewc_penalty.py -q -x && make test` | ❌ created in-task (tests-first) | ⬜ pending |
-| 10-02-01 | 02 | 2 | EWC-02 | T-10-04 | golden provenance pinned (captured_at_sha) | fixture capture + structural check | inline `python -c` JSON structure assertion | ❌ created in-task | ⬜ pending |
-| 10-02-02 | 02 | 2 | EWC-02 | T-10-03 | default-None ≡ v1.0 checkpoints | unit (tdd) + full suite | `pytest tests/test_loop_penalty_fn.py -q -x && make test` | ❌ created in-task (tests-first) | ⬜ pending |
-| 10-03-01 | 03 | 2 | EWC-01 | T-10-06 | weights_only=True choke point + schema gate | unit (tdd) | `pytest tests/test_fisher_checkpoint.py -q -x && make test` | ❌ created in-task (tests-first) | ⬜ pending |
-| 10-03-02 | 03 | 2 | EWC-01 | T-10-05/T-10-07 | trusted-own-file load; cache stays untracked | smoke (scripted SystemExit checks) | `python scripts/estimate_fisher_tinystories.py` + load_fisher check + rerun-refusal check | ❌ created in-task | ⬜ pending |
+| 10-01-01 | 01 | 1 | EWC-01 | T-10-01 | finiteness guard fails loudly on corrupt data | unit (tdd) | `pytest tests/test_fisher.py -q -x` | ✅ exists | ✅ green |
+| 10-01-02 | 01 | 1 | EWC-02 | — | fail-loud ValueError at construction/call | unit (tdd) | `pytest tests/test_ewc_penalty.py -q -x && make test` | ✅ exists | ✅ green |
+| 10-02-01 | 02 | 2 | EWC-02 | T-10-04 | golden provenance pinned (captured_at_sha) | fixture capture + structural check | inline `python -c` JSON structure assertion | ✅ exists | ✅ green |
+| 10-02-02 | 02 | 2 | EWC-02 | T-10-03 | default-None ≡ v1.0 checkpoints | unit (tdd) + full suite | `pytest tests/test_loop_penalty_fn.py -q -x && make test` | ✅ exists | ✅ green |
+| 10-03-01 | 03 | 2 | EWC-01 | T-10-06 | weights_only=True choke point + schema gate | unit (tdd) | `pytest tests/test_fisher_checkpoint.py -q -x && make test` | ✅ exists | ✅ green |
+| 10-03-02 | 03 | 2 | EWC-01 | T-10-05/T-10-07 | trusted-own-file load; cache stays untracked | smoke (scripted SystemExit checks) | `python scripts/estimate_fisher_tinystories.py` + load_fisher check + rerun-refusal check | ✅ exists | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
