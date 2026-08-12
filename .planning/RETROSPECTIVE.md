@@ -54,6 +54,82 @@
 
 ---
 
+## Milestone: v2.0 — Weight-Based Memory
+
+**Shipped:** 2026-08-12
+**Phases:** 7 (09-15) | **Plans:** 39 | **Commits:** 364 over 62 days
+
+### What Was Built
+
+From-scratch LoRA (`lora/`: config, layer, injection, toggle/eject, merge/unmerge) and from-scratch
+EWC (`continual/`: per-example diagonal Fisher, Kirkpatrick penalty, persistence), spliced into the
+untouched v1.0 training loop through additive seams proven bit-identical when off. A `dialogue/`
+package turned PersonaChat into masked training bins. Phase 12 fine-tuned `best.pt` into a
+conversational base; Phase 13 ran the unconfounded EWC A/B; Phase 14 delivered the core-value proof
+— a LoRA adapter recalling taught facts from an empty prompt in a fresh process, with a live on/off
+toggle; Phase 15 shipped the signature figures and the v2.0 writeup.
+
+### What Worked
+
+- **Pre-registration in committed code, not prose.** Every gate is a module-level literal pushed
+  before the run it judges, and verdicts import those constants rather than retyping them. This is
+  the single highest-leverage practice of the milestone: it made "the threshold moved" structurally
+  impossible to do quietly, and git history is the proof.
+- **Gating only what the sample size supports.** Retention gated / acquisition descriptive;
+  correlation sign gated / magnitude descriptive at n=36. Prevented both an EWC "win" bought by
+  failing to learn and a rank correlation being read as an effect size.
+- **Controls designed to be falsifiable.** The adapter-off arm scoring exactly 0/2430 on identical
+  prompts is worth more than the 0.4921 recall number, because it is the thing that could have come
+  back wrong and didn't.
+- **Front-loading unit-testable work.** Phases 9, 10, 11 are mutually independent and all landed
+  before any long training run, so every expensive run stood on already-pinned components.
+
+### What Was Inefficient
+
+- **Stale artifacts accumulated silently.** Phase 14's VERIFICATION sat at `gaps_found 55/57` long
+  after both gaps were fixed; 50 status cells across the 09-13 VALIDATION maps still carried
+  plan-time "not yet written" marks; two quick tasks read as incomplete. None was real work — all of
+  it was metadata drift that had to be re-verified from scratch at milestone close. A re-stamp step
+  at phase close would have cost minutes instead of a full audit pass.
+- **A v1.0 warning crossed two entire milestones unfixed.** `evaluate.py` sampling without
+  `forbid_ids` was recorded in the v1.0 audit, carried into v2.0's audit, and only closed at v2.0
+  close — a one-line fix. Recording a warning is not the same as scheduling it.
+- **One requirement's wording outlived its decision.** DEBT-02 named `evaluate.py`'s PPL path as
+  needing the mask; the masked/unmasked split was deliberately frozen 2026-07-31 and made that
+  wording wrong. It survived because nobody re-read the requirement against the decision that
+  superseded it — and it nearly drove a "fix" that would have silently moved the published 2.1066.
+
+### Patterns Established
+
+- **Structural enforcement over declared invariants.** An AST walk plus a fresh-interpreter probe to
+  prove a plotting module cannot open a checkpoint; a token-id check rather than a template review
+  to prove no fact value reached a scored prompt; a mask-object comparison rather than an assertion
+  that two masks match. Guards are watched failing before being trusted.
+- **Extract once, then plot only from the committed artifact.** A committed PNG whose inputs are
+  gitignored is an assertion, not evidence.
+- **Honest negatives are appended to, never edited.** Dated continuation sections that explicitly
+  state they do not amend what they follow.
+
+### Key Lessons
+
+1. **A threshold chosen after seeing the data is not a threshold** — and the only durable defense is
+   putting it in a pushed commit, not in a paragraph promising you did.
+2. **A declared invariant is true the day it is written and silently false after the next
+   refactor.** If it matters, something must fail loudly when it breaks.
+3. **Verification artifacts rot faster than code.** Re-stamp at phase close, or pay for a full
+   re-audit later.
+4. **"Documented" is not "scheduled."** A warning with no owner and no phase crosses milestones.
+5. **Re-read requirements against the decisions that superseded them.** Stale requirement text is
+   more dangerous than a missing requirement, because it reads as authoritative.
+
+### Cost Observations
+
+- Sessions: multi-session across 62 days; all training local on M3/MPS, fp32, zero paid compute.
+- Notable: the two 4000-step A/B arms took 37.6 and 38.3 minutes each — the expensive resource in
+  this milestone was not GPU time but the discipline of committing gates before runs.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -61,13 +137,33 @@
 | Milestone | Phases | Plans | Key Change |
 |-----------|--------|-------|------------|
 | v1.0 | 8 | 29 | Established Wave-0 RED scaffolds, gap-closure re-verification loops, and M2-seam-as-acceptance-criteria |
+| v2.0 | 7 | 39 | Pre-registration in committed code before any number exists; gate-only-what-n-supports; structural enforcement replacing declared invariants; honest negatives appended-to rather than edited |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Suite Status | Runtime Deps Added |
 |-----------|-------|--------------|--------------------|
 | v1.0 | 137 (+1 CUDA skip) | green, CPU-only | numpy, regex, torch[cpu extra], gradio[demo extra] |
+| v2.0 | 408 (+1 CUDA skip) | green, CPU-only | none — v2.0 added three hand-rolled subsystems (`lora/`, `continual/`, `dialogue/`) and zero runtime dependencies |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. (Single milestone so far — candidates to verify in v2.0: verifier-before-celebration; warnings-need-gates; fix-all-consumers.)
+1. **Warnings need gates, not just records.** *Predicted after v1.0, confirmed by v2.0.* The v1.0
+   audit's `evaluate.py` warm-sampling warning was carried into the v2.0 audit and still not fixed —
+   it took a milestone-close audit two milestones later to close a one-line change. A warning with
+   no owner and no phase does not get done.
+2. **Verifier-before-celebration.** *Predicted after v1.0, confirmed by v2.0.* Phase 14 recorded
+   `gaps_found` and Phase 15 recorded `human_needed`; both were genuinely closed in code well before
+   their artifacts said so, and neither was re-stamped. The verifier is only load-bearing if its
+   verdict is refreshed when reality changes.
+3. **Fix all consumers, not the one that reported it.** *Predicted after v1.0, confirmed by v2.0.*
+   The dead-id mask was fixed for the demo in v1.0 and left unfixed in `evaluate.py` — same
+   mechanism, same failure mode, different caller. When v2.0 finally closed it, the mask went into
+   *both* the greedy and warm calls rather than only the one the warning named.
+4. **New in v2.0 — the record must be tamper-evident, not merely honest.** Prose promising a
+   threshold was pre-registered is worth nothing; a gate constant in a commit that provably precedes
+   its artifact is worth everything. The same logic converted three declared invariants into
+   mechanisms that fail loudly.
+5. **New in v2.0 — stale requirement text is more dangerous than a missing requirement.** It reads
+   as authoritative, and acting on it can break a published result. Re-read requirements against the
+   decisions that superseded them.
