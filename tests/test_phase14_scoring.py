@@ -11,8 +11,11 @@ CPU-only, GPU/MPS-free, no checkpoint I/O, no model load, no generation. Pins:
   6. ``test_substring_gate`` / ``test_contradiction_detector`` — the D-10 scoring rules.
   7. ``test_render_context_dump_shape`` — D-18's three-line format and the startup scaffold.
   8. ``test_no_fact_strings_at_import`` — the clean-room property the demo process depends on.
-  9. ``test_persona_argument_is_scoped_to_the_fairness_control`` — the ordinary recall path stays
-     provably bare; only D-11.1's control may pass ``persona=``.
+  9. ``test_persona_argument_is_scoped_to_the_fairness_control`` /
+     ``test_every_draw_all_call_site_asserts_something`` — the two D-21 structural guards, walking
+     ``scripts/*.py`` + ``src/**/*.py`` in full: the ordinary recall path stays provably bare and
+     only D-11.1's control may pass ``persona=``, and every drawing path is covered by a named
+     in-prompt assertion.
  10. ``test_recall_report_carries_every_preregistered_section`` / ``test_recall_report_refuses``
      — the report writer renders end to end on synthetic records, and a recorded verdict is not
      clobbered by a rerun.
@@ -403,24 +406,96 @@ def test_no_fact_strings_at_import():
     assert embedded_fact_values(driver, forbidden) == []
 
 
-def _build_recall_prompt_call_sites():
-    """Every ``build_recall_prompt(...)`` call in the driver, tagged with its enclosing function.
+# --- D-21: the structural guards below scan a FILE SET, never one hard-coded path --------------
+#
+# ``scripts/*.py`` plus ``src/**/*.py``, walked in full. The widening is deliberate and visible
+# (D-21, literal: "sem exceção por conveniência de arquivo novo"): a Phase 17 file carrying
+# ``persona=`` must fail this suite rather than go unscanned, and deletion of either guard is
+# forbidden (PERS-06).
+
+_PROMPT_DEFINITION_FILE = "src/personacore/dialogue/serialize.py"
+
+# D-21's allowlist, keyed by ``(file, function)``. The assertion below is HARD EQUALITY, so an
+# entry with no matching call site turns this test red exactly as loudly as an unlisted call site
+# does. A future phase adding a ``persona=`` call site therefore adds its entry in the SAME commit
+# as the call site — being a new file buys no exemption, and nothing may be pre-added.
+PERSONA_ALLOWLIST = (
+    # The D-11.1 fairness control: a fact value in the ``<|system|>`` span IS the measurement
+    # here, and the same function proves the value is in view via ``assert_value_in_prompt``.
+    ("scripts/phase14_recall.py", "run_fairness_control"),
+)
+
+_IN_PROMPT_ASSERTIONS = frozenset({"assert_value_in_prompt", "assert_no_value_in_prompt"})
+
+
+def _scanned_files():
+    """The D-21 file set: ``scripts/*.py`` + ``src/**/*.py``.
+
+    Deliberately not cached: the deliberate-RED probes that prove these guards bite add and
+    remove files under ``scripts/``, and a cache would make the guards blind to exactly the
+    thing they are being tested against.
+    """
+    return sorted((_REPO_ROOT / "scripts").glob("*.py")) + sorted(
+        (_REPO_ROOT / "src").rglob("*.py")
+    )
+
+
+def _enclosing_functions(tree):
+    """``{node: enclosing FunctionDef/AsyncFunctionDef or None}`` for every node in ``tree``.
+
+    ``ast.walk`` is breadth-first, so a parent is always resolved before its children.
+    """
+    enclosing = {tree: None}
+    for parent in ast.walk(tree):
+        owner = (
+            parent
+            if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef))
+            else enclosing[parent]
+        )
+        for child in ast.iter_child_nodes(parent):
+            enclosing[child] = owner
+    return enclosing
+
+
+def _call_sites(callee):
+    """Every ``callee(...)`` call in the D-21 file set as ``(file, function, keyword names)``.
 
     AST rather than ``inspect.getsource`` string matching: a substring check cannot tell a call
-    from a mention in a docstring, and the docstrings in that module discuss ``persona=`` at
-    length precisely because it is the dangerous argument.
+    from a mention in a docstring, and the docstrings in ``scripts/phase14_recall.py`` discuss
+    ``persona=`` at length precisely because it is the dangerous argument.
+
+    Three things a single-file, ``FunctionDef``-only walk gets wrong once the scan widens:
+    ``async def`` bodies count; a call at MODULE scope is recorded as ``"<module>"`` rather than
+    dropped, because a module-level ``persona=`` is the most dangerous placement there is; and
+    the attribute form ``serialize.build_recall_prompt(...)`` matches as well as the bare name.
+
+    A ``**splat`` keyword has ``kw.arg is None`` and is kept in the set, so an unanalysable call
+    lands in the "not the bare form" bucket instead of passing as "at least it is not persona".
     """
-    tree = ast.parse((_REPO_ROOT / "scripts" / "phase14_recall.py").read_text(encoding="utf-8"))
     sites = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        for inner in ast.walk(node):
-            if isinstance(inner, ast.Call) and getattr(inner.func, "id", None) == (
-                "build_recall_prompt"
-            ):
-                sites.append((node.name, {kw.arg for kw in inner.keywords}))
+    for path in _scanned_files():
+        file = path.relative_to(_REPO_ROOT).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        enclosing = _enclosing_functions(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if callee not in (getattr(node.func, "id", None), getattr(node.func, "attr", None)):
+                continue
+            owner = enclosing[node]
+            sites.append(
+                (
+                    file,
+                    "<module>" if owner is None else owner.name,
+                    frozenset(kw.arg for kw in node.keywords),
+                )
+            )
     return sites
+
+
+def _build_recall_prompt_call_sites():
+    """Every ``build_recall_prompt(...)`` call in the D-21 file set, tagged ``(file, function)``."""
+    return _call_sites("build_recall_prompt")
 
 
 def test_persona_argument_is_scoped_to_the_fairness_control():
@@ -437,17 +512,39 @@ def test_persona_argument_is_scoped_to_the_fairness_control():
     convention a future edit can break silently. ``tests/test_phase14_demo.py`` pins the
     matching property for the demo process (``persona=`` absent from its source entirely); this
     is the harness half, where the argument legitimately appears exactly once.
+
+    **Scope (D-21): ``scripts/*.py`` and ``src/**/*.py`` in full**, not one hard-coded path — a
+    guard keyed to a single file is green and blind the moment a new file carries the argument.
+    A future phase that adds a ``persona=`` call site must add its ``PERSONA_ALLOWLIST`` entry in
+    the SAME commit as the call site; the assertion is hard equality, so the guard has no
+    convenience exemption for new files and no entry may be pre-added ahead of its call site.
     """
+    scanned = _scanned_files()
+    assert len(scanned) >= 2, (
+        f"the D-21 scan collapsed to {len(scanned)} file(s) — a broken glob makes this guard "
+        "green by scanning nothing, which is the exact failure mode the widening exists to close"
+    )
+
     sites = _build_recall_prompt_call_sites()
     assert sites, "no build_recall_prompt call sites found — the AST walk stopped working"
 
-    with_persona = [name for name, kwargs in sites if "persona" in kwargs]
-    assert with_persona == ["run_fairness_control"]
+    # HARD EQUALITY against the allowlist. Never `in`, never a subset relation: a membership
+    # check is the guard getting weaker while looking bigger (16-RESEARCH Pitfall 3).
+    with_persona = sorted((file, func) for file, func, kwargs in sites if "persona" in kwargs)
+    assert with_persona == sorted(PERSONA_ALLOWLIST), (
+        f"persona= call sites {with_persona} do not equal PERSONA_ALLOWLIST "
+        f"{sorted(PERSONA_ALLOWLIST)}. An unlisted site puts a fact value in a prompt nothing "
+        "vetted; a listed site with no call is an exemption granted to code that no longer exists."
+    )
 
     # Everything else is the BARE form: two positionals, zero keywords.
-    assert [name for name, kwargs in sites if kwargs and "persona" not in kwargs] == []
+    assert [(f, fn) for f, fn, kwargs in sites if kwargs and "persona" not in kwargs] == []
+
+    # The POSITIVE half: a guard that only forbids is satisfied by deleting every call site.
+    functions = {func for _, func, _ in sites}
     for expected in ("complete_question", "render_context_dump", "assert_no_value_in_prompt"):
-        assert expected in {name for name, _ in sites}
+        assert expected in functions
+    assert _PROMPT_DEFINITION_FILE in {p.relative_to(_REPO_ROOT).as_posix() for p in scanned}
 
 
 def _fake_question(question, *, fact_id, split, reserved=False, k=5, contradiction=()):
