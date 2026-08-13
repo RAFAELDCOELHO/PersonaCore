@@ -90,7 +90,34 @@ notes in place):
   `p = 0.015625 > 0.0083333` (unclearable), and — decisively — the prompt-stuffed × base-neither
   pair is expected to tie on nearly all 8 facts given Phase 14's committed `1/1944`, which would
   drop that pair to `n≈0` where the test is **undefined**, not merely unclearable, and the Holm
-  family becomes ill-formed. Under "ties against", that pair simply becomes 0/8, `p = 1.0`.
+  family becomes ill-formed. Under "ties against", that pair becomes 0/8.
+
+  > **CORRECTION 2026-08-12 (post-plan-check).** The original last sentence of D-08 claimed that
+  > 0/8 gives `p = 1.0`. **That was wrong under a pure two-sided test**, where 0/8 is exactly as
+  > extreme as 8/8: both give `p = 0.0078125`. As written, a pair on which *all eight facts tied*
+  > would have entered the Holm family as a significant result — a false positive in the
+  > over-claiming direction, which is the failure mode this milestone exists to prevent. Caught by
+  > `gsd-plan-checker`, not by the discussion. Resolved by D-29 below; the numeric claims in D-09
+  > and SC4 are unaffected.
+
+- **D-29:** **The sign test is two-sided in MAGNITUDE and directional in ALTERNATIVE — and the
+  direction is a pre-registered literal.** `sign_test_exact` returns the two-sided p when
+  `positives > SIGN_TEST_N / 2`, and `1.0` otherwise. A module-level `SIGN_TEST_ALTERNATIVE`
+  literal declares the expected direction of each of the 6 `HOLM_FAMILY_PAIRS` entries **before
+  any run** — same blind pre-registration discipline that governs every other rule in this
+  milestone. Without it the direction could be fixed after seeing the signs, which is precisely
+  what STAT-05 exists to prevent, in the one phase whose entire product is a pre-registration.
+  Consequences, all verified by enumeration over the 256 sign partitions:
+
+  | outcome | value | effect |
+  |---|---|---|
+  | 8/8 in the declared direction | `0.0078125` | clears at `0.05/6 = 0.0083333` — **SC4 and D-09's 6.7% margin unchanged** |
+  | 7/8 | `0.0703125` | fails, as before |
+  | 0/8 (all tied, or all against) | `1.0` | fails — the hole this decision closes |
+
+  No ROADMAP amendment is required: SC4's pinned `p = 0.007812` is the value this construction
+  still produces. Tests must pin **both** failing directions — `[0]*8 → 1.0` and `[-1]*8 → 1.0` —
+  so the direction filter cannot silently invert.
 - **D-09:** **The Holm family is closed at exactly the 6 pairs**, `C(4,2)`, as SC4 already writes.
   Alpha at the first step is `0.05/6 = 0.0083333`; 8/8 unanimity on the exact two-sided sign test
   over all `2^8 = 256` sign partitions gives `p = 0.0078125`; margin `0.0005208`, **6.7%
