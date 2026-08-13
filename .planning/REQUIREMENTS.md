@@ -54,9 +54,16 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   conditions** — fact in the context window vs adapter-only with an empty prompt — with arms paired
   by `seed_index`, and reports the raw floor honestly rather than as a victory.
 - [ ] **PERS-03**: **Persistence under context pressure** is measured: truncation at
-  `block_size=256`, dilution across turns, and adversarial overwrite. This is the axis where the
-  weight arm is invariant *by proof* (`run_bit_identity_control`, max |diff| 0.0) and the prompt arm
-  is not, and it is the phase's load-bearing result.
+  `block_size=256`, **dilution within the persona span**, and adversarial overwrite. This is the
+  axis where the weight arm is invariant *by proof* (`run_bit_identity_control`, max |diff| 0.0)
+  and the prompt arm is not, and it is the phase's load-bearing result.
+  *(Amended 2026-08-12: was "dilution across turns". Falsified by measurement during Phase 16
+  planning — `build_recall_prompt` (`src/personacore/dialogue/serialize.py:92`) passes exactly one
+  turn to `encode_dialogue`, so no turns axis exists on the recall path; and `cap_persona` (`:115`)
+  is never called by it — only by `scripts/make_transcripts.py:134` and
+  `scripts/prepare_dialog_corpus.py:104` — so `PERSONA_CAP = 140` does not constrain the span
+  either. Dilution therefore happens inside the persona span, which reaches the 448-token target
+  directly. The measured quantity is unchanged; only the mechanism wording was wrong.)*
 - [ ] **PERS-04**: An **embedding / cosine-similarity baseline** is measured as a fourth arm over
   the existing fact set — a simple comparison, explicitly **NOT a RAG system**: no formal index, no
   re-ranking, no chunking. It exists to place a retrieval-flavoured reference point next to the

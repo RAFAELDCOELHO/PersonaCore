@@ -139,7 +139,16 @@ first and the headline licensed by a capability ladder that runs *before* anythi
      a measurement; base-with-neither and embedding-cosine are **not applicable by construction** —
      the former holds the fact nowhere, and the latter holds it in the candidate pool, which is not
      the context window.)* —
-     `block_size=256` truncation, dilution across turns, adversarial overwrite — with the weight
+     `block_size=256` truncation, **dilution within the persona span**, adversarial overwrite
+     *(amended 2026-08-12: was "dilution across turns". Measured during planning and falsified:
+     `build_recall_prompt` (`src/personacore/dialogue/serialize.py:92`) calls
+     `encode_dialogue(tok, list(persona), [(question, "")])` — exactly ONE turn — so **no turns
+     axis exists** on the recall path. The `PERSONA_CAP = 140` premise that motivated the turns
+     wording is also false here: `cap_persona` (`:115`) is called only by
+     `scripts/make_transcripts.py:134` and `scripts/prepare_dialog_corpus.py:104`, never by
+     `build_recall_prompt`, so the cap does not constrain this path and the persona span reaches
+     the 448-token target directly. Truncation remains real and is derived from the dilution axis
+     crossing `block_size`, not declared independently.)* — with the weight
      arm's invariance stated as the `run_bit_identity_control` **proof** (max |diff| 0.0), not as a
      statistic, and monotone prompt-arm degradation claimed only if the capability ladder got that
      arm off the floor.
