@@ -2,9 +2,10 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: planning
-last_updated: "2026-08-12T19:20:00.000Z"
-last_activity: 2026-08-12
+status: Context gathered, awaiting /gsd-plan-phase 16
+stopped_at: v3.0 roadmap created — Phases 16-18 defined, 26/26 requirements mapped, Phase 19+ left deliberately unplanned behind the pre-registered erasure gate
+last_updated: "2026-08-13T01:07:46.135Z"
+last_activity: "2026-08-12 — Phase 16 discussion complete: 6 areas, 31 decisions, 16-CONTEXT.md landed; ROADMAP SC2/SC5 amended"
 progress:
   total_phases: 3
   completed_phases: 0
@@ -26,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 
 Phase: 16 — Weight-vs-Prompt Persistence Control (not started)
 Plan: —
-Status: Roadmap created, awaiting `/gsd-plan-phase 16`
-Last activity: 2026-08-12 — v3.0 roadmap created (Phases 16-18)
+Status: Context gathered, awaiting /gsd-plan-phase 16
+Last activity: 2026-08-12 — Phase 16 discussion complete: 6 areas, 31 decisions, 16-CONTEXT.md landed; ROADMAP SC2/SC5 amended
 
 ## Performance Metrics
 
@@ -79,6 +80,7 @@ Key carry-forwards for v2.0:
 - Two-mechanism stage split (research-converged, treat as made): stage 2 = full fine-tune ± EWC (the A/B); stage 3 personalization = LoRA on the frozen conversational base.
 - LOCKED contracts M2 must consume verbatim: `forward(idx, targets=None) -> (logits, loss)`; RNG-state-restore resume; `weights_only=True` slim artifacts.
 - vocab_size=8192 / eos_id=8184 locked; role tokens `<|user|>`/`<|assistant|>`/`<|system|>` (8185-8187) already reserved and decodable.
+
 Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 
 - `results/phase16_recall_sample.json` (270 questions, committed) is THE binding evaluation fixture. Phases 17 and 18 consume that same fixture — no regenerated variant, no resampling; pinned by `tests/test_phase16_fixture_regen.py`.
