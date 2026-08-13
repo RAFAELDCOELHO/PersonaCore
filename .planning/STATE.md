@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: v3.0 roadmap created — Phases 16-18 defined, 26/26 requirements mapped, Phase 19+ left deliberately unplanned behind the pre-registered erasure gate
-last_updated: "2026-08-13T17:01:17.521Z"
+stopped_at: Completed 16-04-PLAN.md
+last_updated: "2026-08-13T17:23:17.260Z"
 last_activity: 2026-08-13
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 11
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 16 (weight-vs-prompt-persistence-control) — EXECUTING
-Plan: 4 of 11
+Plan: 5 of 11
 Status: Ready to execute
 Last activity: 2026-08-13
 
@@ -69,6 +69,7 @@ Last activity: 2026-08-13
 | Phase 16 P01 | 20min | 3 tasks | 3 files |
 | Phase 16 P02 | 25min | 2 tasks | 2 files |
 | Phase 16 P03 | 16min | 2 tasks | 1 files |
+| Phase 16 P04 | 12min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -154,6 +155,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 16]: 16-02: results/phase14_recall_report.md deliberately NOT amended (D-19 / T-16-07) — The PERS-05 seed fix changes which streams are drawn by design, so the committed Phase 14 number does not reproduce bit-for-bit. Mitigation is disclosure, not prevention: the report stays byte-unchanged and Phase 16 re-runs the control post-fix and reports the delta separately (D-13).
 - [Phase 16]: 16-03: the persona= AST guard scans scripts/*.py + src/**/*.py (69 files) with hard equality against a one-entry (file, function) PERSONA_ALLOWLIST — widening the scan never weakens the assertion
 - [Phase 16]: 16-03: every draw_all call site must be covered by an in-prompt assertion, in place or via a NAMED DRAW_ALL_ASSERTED_BY indirection whose asserter must exist — a dangling entry fails
+- [Phase 16]: PERS-01 ladder thresholds pre-registered: LADDER_CELL_PASS_K=10 at n=216, z priced at one-sided 1-0.05/6 — Anchored to the COMMITTED Phase 14 fairness-control floor (1 of 216 questions), never the post-fix re-run; the literal is pinned to its derivation by test so it cannot drift (T-16-13)
+- [Phase 16]: licensed_headline() is total over all 128 rung subsets with a first-class all-fail branch and no investigate-the-instrument escape hatch (D-14) — All-fail is the outcome the evidence predicts (Phase 14 measured this model at the floor); a branch written after seeing the number is not a pre-registration
+- [Phase 16]: phase14_factset_gate.probe_guessability() widens the guessability instrument additively (D-16), 0 deletions — Phase 16 and Phase 17 ISO-01 import one implementation instead of copying it; a duplicated rule is a rule that can drift
 
 ### Pending Todos
 
@@ -196,8 +200,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-13T17:00:40.921Z
-Stopped at: v3.0 roadmap created — Phases 16-18 defined, 26/26 requirements mapped, Phase 19+ left deliberately unplanned behind the pre-registered erasure gate
+Last session: 2026-08-13T17:23:17.253Z
+Stopped at: Completed 16-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
