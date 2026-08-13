@@ -37,7 +37,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   has declined scipy in committed code twice (`continual/fisher.py`, `scripts/phase15_stats.py`)
   and taking it now — in a milestone whose entire output is trust in a measurement — would retcon
   both.
-- [ ] **STAT-05**: Every gate is a **module-level literal in a committed driver, pushed before the
+- [x] **STAT-05**: Every gate is a **module-level literal in a committed driver, pushed before the
   run it judges**, and every verdict is computed by *importing* those constants rather than
   retyping them in prose. Carried forward from v2.0 unchanged.
 - [ ] **STAT-06**: Nothing is gated that the sample size cannot support. Anything resting on n=8
@@ -50,7 +50,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   comparison is scored — establishing what the base model can do with a fact in its context at
   increasing distance. Phase 16's framing depends on its outcome, so it cannot be discovered
   mid-phase.
-- [ ] **PERS-02**: The paired weight-vs-prompt comparison scores the **same questions under both
+- [x] **PERS-02**: The paired weight-vs-prompt comparison scores the **same questions under both
   conditions** — fact in the context window vs adapter-only with an empty prompt — with arms paired
   by `seed_index`, and reports the raw floor honestly rather than as a victory.
 - [ ] **PERS-03**: **Persistence under context pressure** is measured: truncation at
@@ -64,7 +64,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   `scripts/prepare_dialog_corpus.py:104` — so `PERSONA_CAP = 140` does not constrain the span
   either. Dilution therefore happens inside the persona span, which reaches the 448-token target
   directly. The measured quantity is unchanged; only the mechanism wording was wrong.)*
-- [ ] **PERS-04**: An **embedding / cosine-similarity baseline** is measured as a fourth arm over
+- [x] **PERS-04**: An **embedding / cosine-similarity baseline** is measured as a fourth arm over
   the existing fact set — a simple comparison, explicitly **NOT a RAG system**: no formal index, no
   re-ranking, no chunking. It exists to place a retrieval-flavoured reference point next to the
   prompt and weight arms, not to build retrieval.
@@ -184,12 +184,12 @@ Deferred — revisited when the numbers that gate them exist.
 | STAT-02 | 16, 17, 18 | Pending |
 | STAT-03 | 17 | Pending |
 | STAT-04 | 16, 17, 18 | Pending |
-| STAT-05 | 16, 17, 18 | Pending |
+| STAT-05 | 16, 17, 18 | Complete |
 | STAT-06 | 16, 17, 18 | Pending |
 | PERS-01 | 16 | Pending |
-| PERS-02 | 16 | Pending |
+| PERS-02 | 16 | Complete |
 | PERS-03 | 16 | Pending |
-| PERS-04 | 16 | Pending |
+| PERS-04 | 16 | Complete |
 | PERS-05 | 16 | Complete |
 | PERS-06 | 16 | Complete |
 | ISO-01 | 17 | Pending |

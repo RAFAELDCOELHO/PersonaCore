@@ -187,7 +187,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 16-08-PLAN.md — four-arm driver: `CONDITION_ORDER`, shared parity config, arm D cosine
+- [x] 16-08-PLAN.md — four-arm driver: `CONDITION_ORDER`, shared parity config, arm D cosine
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -327,7 +327,7 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete | 2026-08-02 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
-| 16. Weight-vs-Prompt Persistence Control | v3.0 | 7/11 | In Progress|  |
+| 16. Weight-vs-Prompt Persistence Control | v3.0 | 8/11 | In Progress|  |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 0/TBD | Pending | - |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 0/TBD | Pending | - |
 
