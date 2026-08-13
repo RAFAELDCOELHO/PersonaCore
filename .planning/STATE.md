@@ -4,13 +4,13 @@ milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
 stopped_at: v3.0 roadmap created — Phases 16-18 defined, 26/26 requirements mapped, Phase 19+ left deliberately unplanned behind the pre-registered erasure gate
-last_updated: "2026-08-13T16:22:31.212Z"
+last_updated: "2026-08-13T16:42:25.094Z"
 last_activity: 2026-08-13
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 11
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 16 (weight-vs-prompt-persistence-control) — EXECUTING
-Plan: 2 of 11
+Plan: 3 of 11
 Status: Ready to execute
 Last activity: 2026-08-13
 
@@ -67,6 +67,7 @@ Last activity: 2026-08-13
 | Phase 15 P07 | 22min | 3 tasks | 3 files |
 | Phase 15 P08 | 34min | 2 tasks | 1 files |
 | Phase 16 P01 | 20min | 3 tasks | 3 files |
+| Phase 16 P02 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -148,6 +149,8 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 15]: 15-08: DEF-15-01's recorded one-line fix is wrong — CI runs bare ruff with no .venv, so pointing Makefile:16 at .venv/bin/ruff would break CI; the correct fix is python -m ruff
 - [Phase 16]: STAT-04 is now test-enforced: tests/test_package.py pins pyproject.toml by sha256 (read as bytes) — a new runtime dependency, a new extra or a widened specifier all turn a committed test red; if one is genuinely needed, PYPROJECT_SHA256 is updated in the SAME commit as a reviewed decision, never silently
 - [Phase 16]: PREREG-02 is now test-enforced by commit ANCESTRY, not committer dates: tests/test_phase16_prereg.py — the pre-registered erasure rule (23a830c) must be a git ancestor of the first commit adding every results/phase1[678]_* artifact; CI runs fetch-depth: 0 so the query resolves. A phase writing results under a new prefix must add it to V3_ARTIFACT_GLOBS — assert checked catches an empty match set, not an incomplete one
+- [Phase 16]: 16-02: the in-prompt guard's verdict is the UNION of its string and id-run detectors, not their intersection — The plan prescribed proving BOTH levels. Measurement falsified it on 54 of 216 core fairness prompts (2 of 8 facts): a leading-space BPE merge breaks the contiguous id run while the value is fully in view. UNION is the true De Morgan twin of assert_no_value_in_prompt's NOT(string) AND NOT(ids), and is strictly stronger than the string-only check it replaces.
+- [Phase 16]: 16-02: results/phase14_recall_report.md deliberately NOT amended (D-19 / T-16-07) — The PERS-05 seed fix changes which streams are drawn by design, so the committed Phase 14 number does not reproduce bit-for-bit. Mitigation is disclosure, not prevention: the report stays byte-unchanged and Phase 16 re-runs the control post-fix and reports the delta separately (D-13).
 
 ### Pending Todos
 
@@ -190,7 +193,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-13T16:21:58.194Z
+Last session: 2026-08-13T16:41:12.198Z
 Stopped at: v3.0 roadmap created — Phases 16-18 defined, 26/26 requirements mapped, Phase 19+ left deliberately unplanned behind the pre-registered erasure gate
 Resume file: None
 

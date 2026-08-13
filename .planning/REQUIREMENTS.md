@@ -68,11 +68,11 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   the existing fact set — a simple comparison, explicitly **NOT a RAG system**: no formal index, no
   re-ranking, no chunking. It exists to place a retrieval-flavoured reference point next to the
   prompt and weight arms, not to build retrieval.
-- [ ] **PERS-05**: The `enumerate(questions)` seeding defect in `run_fairness_control` is fixed to
+- [x] **PERS-05**: The `enumerate(questions)` seeding defect in `run_fairness_control` is fixed to
   use `item.seed_index` — the same CR-01 pairing defect `stamp_seed_indices` was written to close,
   left unfixed in that path because Phase 14 never compared it against anything. Phase 16 does, so
   unpaired arms would silently invalidate the comparison past the first arm boundary.
-- [ ] **PERS-06**: The AST guard pinning `persona=` to exactly one caller
+- [x] **PERS-06**: The AST guard pinning `persona=` to exactly one caller
   (`tests/test_phase14_scoring.py:425`) is **widened deliberately and visibly**, never deleted, and
   gains a logical twin `assert_value_in_prompt` so every `draw_all` caller asserts something and no
   path has a skip mode. Deleting the guard is precisely the "declared invariant silently becomes
@@ -190,8 +190,8 @@ Deferred — revisited when the numbers that gate them exist.
 | PERS-02 | 16 | Pending |
 | PERS-03 | 16 | Pending |
 | PERS-04 | 16 | Pending |
-| PERS-05 | 16 | Pending |
-| PERS-06 | 16 | Pending |
+| PERS-05 | 16 | Complete |
+| PERS-06 | 16 | Complete |
 | ISO-01 | 17 | Pending |
 | ISO-02 | 17 | Pending |
 | ISO-03 | 17 | Pending |
