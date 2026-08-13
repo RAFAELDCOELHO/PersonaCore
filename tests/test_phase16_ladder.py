@@ -1321,3 +1321,80 @@ def test_main_still_supports_vet_and_defaults_to_the_full_ladder(monkeypatch):
         ladder.main()
     assert "unrecognized argument" in str(typo.value)
     assert ran == ["vet", "ladder"], "an unrecognized flag must not fall through to a run"
+
+
+# =============================================================================================
+# Run provenance (16-07 pre-run hardening): the code that ran, proven rather than named
+# =============================================================================================
+#
+# `provenance.git_sha()` is `git rev-parse HEAD` and nothing more, so a single end-of-run capture
+# proves less than it reads: it never inspects the working tree, and Python has already imported
+# the driver into memory by the time the first forward pass runs. `run_full_ladder` therefore
+# captures the SHA BEFORE the run with the tree proven clean, and re-checks it after. These tests
+# pin the failure path, because `assert_ladder_report_not_clobbered` makes the run un-re-runnable —
+# a provenance defect discovered afterwards cannot be corrected.
+
+
+def test_sha_unchanged_accepts_an_intact_run():
+    """GREEN: the same SHA at both ends is the normal path and must stay silent."""
+    sha = "fc7651f0000000000000000000000000000000ab"
+    assert ladder.assert_sha_unchanged(sha, sha) is None
+
+
+def test_sha_divergence_aborts_before_the_report_is_written():
+    """RED: HEAD moving mid-run must abort, naming BOTH SHAs.
+
+    Forced artificially rather than by mutating git: `assert_sha_unchanged` is pure over its two
+    arguments precisely so this failure path is observable without a checkout. A guard whose
+    failure nobody has watched is a guard nobody has verified (15-03 precedent).
+    """
+    start = "fc7651f0000000000000000000000000000000ab"
+    end = "0000000deadbeef0000000000000000000000cd"
+    with pytest.raises(SystemExit) as diverged:
+        ladder.assert_sha_unchanged(start, end)
+    message = str(diverged.value)
+    assert start in message and end in message, "the abort must name both SHAs, not just one"
+    assert "DURING" in message, "the message must say WHEN the divergence happened"
+
+
+def test_run_own_artifacts_are_excluded_from_the_cleanliness_check():
+    """The run's own two outputs cannot make its own guard abort.
+
+    16-07 launches via `... | tee results/phase16_ladder_raw.log`, which creates the log before
+    Python starts. A cleanliness check counting it would abort every run at second zero — a guard
+    failing closed on its own correct usage. Both paths are excluded; nothing else is.
+    """
+    assert ladder.RUN_OWN_ARTIFACTS == (
+        "results/phase16_ladder_report.md",
+        "results/phase16_ladder_raw.log",
+    )
+    assert all("scripts/" not in art and "src/" not in art for art in ladder.RUN_OWN_ARTIFACTS), (
+        "no code path may be excluded from the cleanliness check"
+    )
+
+
+def test_run_full_ladder_captures_provenance_before_the_first_forward_pass():
+    """Order is the whole point: capture must precede the model load, not follow the run.
+
+    An AST walk over `run_full_ladder`'s statement list, so this is a fact about the source rather
+    than about a comment claiming it.
+    """
+    function = _function_def(_parse("scripts/phase16_ladder.py"), "run_full_ladder")
+    order = [
+        name
+        for statement in function.body
+        for name in _called_names(statement)
+        if name
+        in {
+            "capture_run_provenance",
+            "load_adapted_model",
+            "assert_sha_unchanged",
+            "write_ladder_report",
+        }
+    ]
+    assert order.index("capture_run_provenance") < order.index("load_adapted_model"), (
+        "the SHA must be captured before the weights load, or it describes the wrong moment"
+    )
+    assert order.index("assert_sha_unchanged") < order.index("write_ladder_report"), (
+        "divergence must abort BEFORE the report is written, not after"
+    )

@@ -1486,6 +1486,75 @@ def write_ladder_report(cell_results, top_rung_result, provenance_lines):
     return text
 
 
+# ===== Run provenance: the code that ran, proven, not merely named ============================
+#
+# `provenance.git_sha()` is `git rev-parse HEAD` and nothing more. On its own, captured once at
+# report-write time, it is weaker than it reads:
+#
+#   * it never inspects the WORKING TREE, so it cannot tell a clean checkout from one carrying
+#     uncommitted edits -- a dirty run would still print a clean-looking SHA;
+#   * Python imports this module into memory before the first forward pass, so a checkout DURING
+#     the ~90-minute run would not change the executing code. An end-only SHA can therefore name a
+#     commit that is not the code that produced the numbers, with no signal that it happened.
+#
+# That gap matters here specifically because `assert_ladder_report_not_clobbered` makes this run
+# un-re-runnable: a weak provenance line is attached to the result permanently. So the SHA is
+# captured BEFORE the first forward pass, the tree is required clean at that moment, and the SHA is
+# re-checked after the last one. Both facts reach the report.
+
+# The two artifacts THIS run exists to produce. They are excluded from the cleanliness check
+# because 16-07 launches via `... | tee results/phase16_ladder_raw.log`, which creates the log
+# before Python starts -- a check that counted it would abort every run at second zero, which is a
+# guard failing closed on its own correct usage. Nothing else is excluded: these two paths hold no
+# code, and any other dirty path is exactly what the check exists to catch.
+RUN_OWN_ARTIFACTS = ("results/phase16_ladder_report.md", "results/phase16_ladder_raw.log")
+
+
+def capture_run_provenance():
+    """The SHA at the START of the run, with the tree proven clean at that same moment.
+
+    Aborts rather than recording, because a dirty tree is not something the report can caveat its
+    way out of: the SHA would name code that is not what ran, and the reader has no way to see it.
+    Returns the SHA.
+    """
+    import subprocess
+
+    from personacore.provenance import git_sha
+
+    dirty = [
+        line
+        for line in subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=pathlib.Path(__file__).resolve().parent.parent,
+        ).stdout.splitlines()
+        if line.strip() and not any(art in line for art in RUN_OWN_ARTIFACTS)
+    ]
+    _prove(
+        not dirty,
+        "the working tree is dirty at the start of the ladder run, so the recorded git SHA would "
+        "name code that is not what ran:\n  " + "\n  ".join(dirty) + "\n"
+        "Commit or stash before launching -- this run cannot be repeated once its report is "
+        "committed, so its provenance cannot be corrected afterwards.",
+    )
+    return git_sha()
+
+
+def assert_sha_unchanged(sha_at_start, sha_at_end):
+    """Prove HEAD did not move between the first forward pass and the report write.
+
+    Pure over its two arguments precisely so the divergence case is testable without mutating git:
+    a guard whose failure path nobody has watched is a guard nobody has verified (15-03 precedent).
+    """
+    _prove(
+        sha_at_start == sha_at_end,
+        f"HEAD moved DURING the ladder run: {sha_at_start} at start, {sha_at_end} at report "
+        "write. The modules were already imported, so the numbers came from the START commit "
+        "while the report would have credited the end one. Neither SHA describes the run alone.",
+    )
+
+
 def run_full_ladder():
     """The whole ladder on the real weights: six synthetic cells, then the top rung, then a report.
 
@@ -1500,10 +1569,15 @@ def run_full_ladder():
 
     from personacore.config import RuntimeConfig
     from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
     from personacore.seeding import seed_everything
 
     started = time.time()
     assert_ladder_report_not_clobbered()
+    # BEFORE the first forward pass: the tree must be clean and the SHA is captured here, not at
+    # report-write time. See RUN_OWN_ARTIFACTS above for why an end-only SHA proves less than it
+    # reads. Ordered after the clobber guard so the cheapest refusal still runs first.
+    sha_at_start = capture_run_provenance()
     summary = preflight_device(strict=True)
     print(f"[phase16_ladder] preflight: {summary}")
     device = RuntimeConfig().device
@@ -1534,11 +1608,19 @@ def run_full_ladder():
     print(f"[phase16_ladder] rung {TOP_RUNG}: {format_cell(top_row)}")
 
     wall = time.time() - started
+    # AFTER the last forward pass: HEAD must still be where it was. Aborts before the report is
+    # written, so a run whose code identity is ambiguous never produces a committed verdict.
+    sha_at_end = git_sha()
+    assert_sha_unchanged(sha_at_start, sha_at_end)
     provenance_lines = recall.echo_provenance(summary, device, artifact) + [
         f"torch: {torch.__version__}",
         f"ladder wall clock: {wall / 60:.1f} min",
         f"rungs: {len(RUNG_DIFFICULTY_ORDER)} x {LADDER_CELL_QUESTIONS} questions x "
         f"{LADDER_CELL_DRAWS} draws",
+        # BOTH halves recorded, not just the surviving one: a reader can see that the identity was
+        # checked across the run rather than asserted once at the end.
+        f"git SHA at run start (tree proven clean): {sha_at_start}",
+        f"git SHA at report write: {sha_at_end} (asserted equal to the start SHA)",
     ]
     write_ladder_report(cell_results, top_rung_result, provenance_lines)
     print(f"[phase16_ladder] ladder complete in {wall / 60:.1f} min")
