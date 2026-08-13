@@ -1175,13 +1175,42 @@ def run_fairness_control(model, tok, device, forbid, questions, statements):
 
     14-RESEARCH F4 measured this base failing 6/6 in-context probes, so a NEGATIVE here is the
     expected result and D-20's three-part reconciliation is pre-registered for it.
+
+    **PERS-05 — the seed comes off the ITEM, never off this loop's position.** This control used to
+    draw with ``enumerate(questions)``: the question's index in the concatenated
+    ``core_taught + core_held_out`` list it is handed. The scored arms draw with the index
+    ``stamp_seed_indices`` stamps per ARM, each restarting at 0, so every question past the first
+    arm drew a DIFFERENT ``question_seed(index) + s`` here than it drew when scored. That is the
+    same CR-01 defect ``stamp_seed_indices`` closed for ``run_scored_recall``, surviving in the one
+    arm Phase 14 never compared against anything — which is precisely why it survived.
+
+    **D-19 — this CHANGES the number, by design.** Different seeds draw different completions, so
+    the count this function produced for the committed Phase 14 report does not reproduce
+    bit-for-bit after the fix. That is the definition of the defect, not a regression: Phase 14
+    never compared this arm against another, so pairing was not in play there; Phase 16 does
+    compare, which is why the fix is a prerequisite rather than polish.
+    ``results/phase14_recall_report.md`` is deliberately NOT amended — the published number stays
+    exactly as published, and Phase 16 re-runs this control post-fix and reports the delta
+    separately (D-13), as a measurement of this fix's impact rather than a silent assertion that it
+    did not matter.
     """
     _prove(questions, "the fairness control received no questions to check")
     _prove(statements, "the fairness control received no first-person statements")
 
     asked = []
     with adapter_disabled(model):
-        for index, item in enumerate(questions):
+        for item in questions:
+            # PERS-05: the seed comes off the ITEM, never off this loop's position — see the
+            # docstring. `-1` means `stamp_seed_indices` was never called, and an unstamped item
+            # would draw from a stream no scored arm ever used, so the comparison this control
+            # feeds would not be paired at all. Same sentinel shape as `run_scored_recall`.
+            _prove(
+                item.seed_index >= 0,
+                f"question {item.question!r} reached the fairness control carrying no seed "
+                "index — `stamp_seed_indices` must stamp every arm before it is drawn, or this "
+                "control draws from a stream the scored arms never used and the comparison is "
+                "unpaired while reporting a paired number (PERS-05)",
+            )
             statement = statements[item.fact.id]
             # The one sanctioned appearance of a fact value in a prompt in this entire phase.
             prompt_ids = build_recall_prompt(tok, item.question, persona=[statement])
@@ -1190,13 +1219,14 @@ def run_fairness_control(model, tok, device, forbid, questions, statements):
                 f"the fairness prompt for {item.question!r} does not actually carry "
                 f"{item.fact.value!r} — the control measures nothing if the fact is not in view",
             )
-            completions, stopped = draw_all(model, tok, prompt_ids, device, forbid, index)
+            completions, stopped = draw_all(model, tok, prompt_ids, device, forbid, item.seed_index)
             k, n = score_question(completions, item.fact.value)
             asked.append(
                 {
                     "question": item.question,
                     "fact_id": item.fact.id,
                     "split": item.split,
+                    "seed_index": item.seed_index,
                     "persona": statement,
                     "prompt_ids": prompt_ids,
                     "completions": completions,

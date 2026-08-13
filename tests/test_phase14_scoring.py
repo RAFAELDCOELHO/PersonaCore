@@ -27,6 +27,7 @@ an ``importlib.util.spec_from_file_location`` load runs no guard, no model load,
 """
 
 import ast
+import contextlib
 import importlib.util
 import pathlib
 import sys
@@ -746,3 +747,127 @@ def test_scored_question_sets_are_value_free_and_match_the_committed_seam():
     assert {i.fact.id for i in core_taught} == {f.id for f in fs.LOCKED_FACTS}
     reserved = {i.question for i in core_held_out + soft_held_out if i.reserved}
     assert reserved == {p for probes in fs.RESERVED_HELDOUT_PROBES.values() for p in probes}
+
+
+# =====================================================================================
+# ===== PERS-05 — the fairness control draws each question's OWN seed =====
+# =====================================================================================
+
+# A synthetic value, never a locked one: these tests are ABOUT the instrument, so binding them to
+# real fact material would make them re-fail whenever the fact set is re-rolled.
+_FAKE_VALUE = "wibblex"
+
+
+def _driver_function(name):
+    """The named ``FunctionDef`` out of the driver's AST — never ``inspect.getsource`` matching.
+
+    The docstrings in ``run_fairness_control`` discuss the defects these tests pin BY NAME, so a
+    substring search over the source cannot tell a live call from the prose explaining why it is
+    gone. The same argument ``_build_recall_prompt_call_sites`` already makes for ``persona=``.
+    """
+    tree = ast.parse((_REPO_ROOT / "scripts" / "phase14_recall.py").read_text(encoding="utf-8"))
+    found = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name]
+    assert len(found) == 1, f"expected exactly one {name!r} in the driver, found {len(found)}"
+    return found[0]
+
+
+class _FakeFact:
+    """The two attributes ``run_fairness_control`` reads off ``item.fact``: ``id`` and ``value``."""
+
+    def __init__(self, fact_id, value):
+        self.id = fact_id
+        self.value = value
+
+
+def _fairness_items(seed_indices):
+    """Fake ``RecallItem``s whose ``seed_index`` values are deliberately NON-positional.
+
+    That is the whole premise: if the seeds happened to equal ``0, 1, 2`` the test could not tell
+    ``item.seed_index`` from ``enumerate``, which is exactly the defect PERS-05 names.
+    """
+    return tuple(
+        pr.RecallItem(
+            fact=_FakeFact(f"fake_fact_{position}", _FAKE_VALUE),
+            question=f"what is the name of your fake thing number {position}?",
+            split="held-out",
+            reserved=False,
+            seed_index=seed,
+        )
+        for position, seed in enumerate(seed_indices)
+    )
+
+
+def _run_fairness(monkeypatch, items):
+    """Drive ``run_fairness_control`` with no model, recording the seed each draw is handed.
+
+    ``build_recall_prompt``, ``contains_value`` and ``score_question`` run FOR REAL against the
+    real tokenizer — only the two things that need a loaded model are replaced. The in-prompt
+    assertion is therefore genuinely exercised rather than stubbed past.
+    """
+    seen = []
+
+    def _fake_draw_all(model, tokenizer, prompt_ids, device, forbid, index):
+        seen.append(index)
+        return [f"i think it is {_FAKE_VALUE}", "no idea"], [True, False]
+
+    monkeypatch.setattr(pr, "draw_all", _fake_draw_all)
+    monkeypatch.setattr(pr, "adapter_disabled", lambda model: contextlib.nullcontext())
+    statements = {i.fact.id: f"my fake thing is named {_FAKE_VALUE}." for i in items}
+    result = pr.run_fairness_control(None, tok, "cpu", None, items, statements)
+    return seen, result
+
+
+def test_fairness_control_seeds_from_the_item_not_the_loop_position(monkeypatch):
+    """PERS-05: each draw is seeded from the question's OWN ``seed_index``, not its list position.
+
+    The defect (D-17): ``run_fairness_control`` drew with ``enumerate(questions)``, the position in
+    the concatenated ``core_taught + core_held_out`` list it is handed, while the scored arms draw
+    with the index ``stamp_seed_indices`` stamps per ARM. Every question past the first arm drew a
+    different stream here than it drew when scored, so the control was comparable to the scored
+    arms but not PAIRED with them — and Phase 16 is the first phase to actually compare them, which
+    is why Phase 14 never caught it.
+    """
+    items = _fairness_items((7, 3, 11))
+    seen, result = _run_fairness(monkeypatch, items)
+
+    assert seen == [7, 3, 11]
+    assert seen != list(range(len(items)))  # the defect's signature, named so a reader sees it
+    assert [entry["seed_index"] for entry in result["questions"]] == [7, 3, 11]
+
+    # The pairing claim is IN THE RECORD, matching what `run_scored_recall` already writes — a
+    # claim absent from the record is not auditable afterwards.
+    assert all("seed_index" in entry for entry in result["questions"])
+    # `n_answerable` keeps its question-unit shape: 3 answerable questions out of 6 draws. This is
+    # the STAT-01-legal numerator every Phase 16 ladder cell compares against.
+    assert (result["k"], result["n"]) == (3, 6)
+    assert result["n_answerable"] == 3
+
+
+def test_fairness_control_has_no_enumerate_over_questions():
+    """PERS-05, structurally: no ``enumerate`` survives anywhere inside the control.
+
+    A behavioural test alone would pass against ``enumerate(questions)`` re-introduced beside the
+    fix and used for something else; the invariant is that this function consumes NO positional
+    index at all, so it is asserted over the AST rather than over one call's arguments.
+    """
+    control = _driver_function("run_fairness_control")
+    enumerates = [
+        node
+        for node in ast.walk(control)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "enumerate"
+    ]
+    assert enumerates == []
+
+
+def test_fairness_control_refuses_an_unstamped_item(monkeypatch):
+    """An item that never passed through ``stamp_seed_indices`` aborts instead of drawing.
+
+    ``-1`` is ``RecallItem``'s unstamped sentinel. Without this guard a skipped stamping call would
+    draw from ``question_seed(-1)`` — a stream no scored arm ever used — and produce a number that
+    looks paired and is not. Same shape as ``run_scored_recall``'s guard, which is the point:
+    both arms refuse the same way.
+    """
+    with pytest.raises(SystemExit) as excinfo:
+        _run_fairness(monkeypatch, _fairness_items((7, -1)))
+    assert "PERS-05" in str(excinfo.value)
+    assert "stamp_seed_indices" in str(excinfo.value)
