@@ -194,6 +194,64 @@ def arm_config_record(forbid):
     }
 
 
+# The parity columns SC2 publishes, named ONCE. `assert_arm_parity` iterates this tuple, so a
+# field added to `arm_config_record` and not to this tuple is a column nothing checks.
+PARITY_COLUMNS = (
+    "max_new_tokens",
+    "stop_ids",
+    "context_length",
+    "n_draws",
+    "forbid_ids_sha256",
+)
+
+
+def assert_arm_parity(records):
+    """PERS-02: the four arms ran under the SAME budget, mask, stop set and context length.
+
+    Compared field by field across the four ``run_condition`` records, plus an IDENTITY check
+    that every arm's config came off the one ``SHARED_ARM_CONFIG`` object. Both halves are needed:
+    equality catches a value that changed, identity catches a second ``ArmConfig`` instance built
+    from retyped literals that happen to agree today.
+
+    ``forbid_ids`` is compared by its sha256 content hash rather than by object identity — the
+    mask is large, device-resident and rebuilt per process, so identity is meaningless across the
+    four fresh processes D-01 requires while the content hash is exactly what must match.
+
+    A comparison of arms whose generation budgets differ is a comparison of configurations, so
+    this aborts rather than annotating the report.
+    """
+    _prove(
+        len(records) == len(CONDITION_ORDER),
+        f"arm parity was asked to check {len(records)} records but the comparison has "
+        f"{len(CONDITION_ORDER)} conditions — a missing arm cannot be found by comparing the "
+        "ones that are present",
+    )
+    _prove(
+        sorted(record["condition"] for record in records) == sorted(CONDITION_ORDER),
+        "the records handed to arm parity are not the four pre-registered conditions: "
+        f"{sorted(record['condition'] for record in records)} vs {sorted(CONDITION_ORDER)}",
+    )
+    configs = [record["config"] for record in records]
+    for column in PARITY_COLUMNS:
+        seen = {config[column] for config in configs}
+        _prove(
+            len(seen) == 1,
+            f"arms disagree on {column!r}: {sorted(map(str, seen))} — a comparison of arms whose "
+            "generation settings differ is a comparison of configurations, and the difference is "
+            "invisible in every rate the run reports",
+        )
+    off_object = [
+        record["condition"]
+        for record in records
+        if record["config"]["shared_arm_config"] is not SHARED_ARM_CONFIG
+    ]
+    _prove(
+        not off_object,
+        f"arm(s) {off_object} carry a config that is not the SHARED_ARM_CONFIG object — the "
+        "PERS-02 claim is that there is ONE object, not that four copies agree today",
+    )
+
+
 # =============================================================================================
 # ===== THE BINDING FIXTURE (270 questions) — read, never regenerated =====
 # =============================================================================================
@@ -279,3 +337,177 @@ def load_fixture_items():
             "chosen' denominator claim rests on that balance holding exactly",
         )
     return by_tier
+
+
+# =============================================================================================
+# ===== ARM DISPATCH — the committed instrument invoked per condition =====
+# =============================================================================================
+
+# D-01, and the two companion notes it is reported alongside. All three appear together in the
+# report because each one answers a different "why is this isolated enough" question, and any one
+# of them alone reads as the whole argument.
+PROCESS_SPLIT_NOTE = (
+    "The run splits into FOUR fresh processes, one per condition, and questions run sequentially "
+    "within a process. Not one process for all four arms: a single process would carry whatever "
+    "the previous arm left in it across the arm boundary, which is the one boundary this "
+    "comparison is about. And not one process per question, which would be 1,080 model loads for "
+    "an isolation nothing needs — see NO_KV_CACHE_NOTE (there is no per-step state to survive a "
+    "question) and SEQUENTIAL_QUESTIONS_JUSTIFICATION (the adapter toggle leaves no residue, "
+    "proven at fixture scope AND on the real weights). The split is defence-in-depth at the arm "
+    "boundary, not a repair for a leak anyone measured."
+)
+
+# The per-question record shape, named ONCE for all four arms. Plan 16-09's `aggregate_by_fact`
+# keys on `record["fact_id"]` and groups by `record["split"]`, so a missing key here is a
+# `KeyError` several waves after the mistake was made — `assert_record_shape` moves that failure
+# back to the arm that produced it.
+PER_QUESTION_KEYS = ("fact_id", "split", "seed_index", "k", "n")
+
+# The fixture's tiers mapped to the COMMITTED Phase 14 tier labels. Arm A is scored per tier and
+# the labels are read from the instrument rather than retyped, so the report's section names and
+# the harness's cannot drift.
+TIER_LABELS = {
+    "core_taught": recall.CORE_TAUGHT_TIER,
+    "core_held_out": recall.CORE_HELDOUT_TIER,
+    "soft": recall.SOFT_TIER,
+}
+
+
+def all_items(items_by_tier):
+    """The three tiers concatenated in the fixture's own order — arms B, C and D's call shape."""
+    return tuple(item for tier in FIXTURE_TIER_COUNTS for item in items_by_tier[tier])
+
+
+def fairness_statements():
+    """``fact.id -> that fact's own first-person taught statement`` — arm B's persona span.
+
+    Built exactly the way ``phase14_recall.main()`` builds it
+    (``SLOT_FORMS[fact.slot].ans1.format(v=fact.value)``), from the LAZILY imported fact set, so
+    the statements this driver hands the control are the same strings Phase 14 handed it.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    return {
+        fact.id: fs.SLOT_FORMS[fact.slot].ans1.format(v=fact.value)
+        for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS
+    }
+
+
+def normalize_by_split(returned):
+    """Flatten whatever an arm returned onto ONE per-question list, regrouped by each entry's split.
+
+    The committed arms disagree about their return shape, and the disagreement is load-bearing
+    rather than sloppy: arm A is scored per TIER so it returns three tier records; arms B and C are
+    scored over the concatenation so they return one record apiece whose ``questions`` list already
+    carries ``split`` per entry; arm D returns per-question entries directly.
+
+    The regrouping keys on each ENTRY's own ``split`` field and never on which record it came out
+    of. That distinction is the whole point: arm A's ``core_taught`` record happens to hold only
+    taught questions today, but a grouping that assumed so would silently mislabel the moment a
+    tier stopped being split-pure — and the mislabelling is invisible in the resulting rate.
+    """
+    records = [returned] if isinstance(returned, dict) else list(returned)
+    entries = [
+        entry
+        for record in records
+        for entry in (record["questions"] if "questions" in record else [record])
+    ]
+    by_split = {}
+    for entry in entries:
+        by_split.setdefault(entry["split"], []).append(entry)
+    return by_split
+
+
+def assert_record_shape(record):
+    """``_prove`` every per-question entry carries all five ``PER_QUESTION_KEYS``.
+
+    Called at the END of ``run_condition`` so a missing key aborts at the arm that produced it.
+    Without this, the first symptom is plan 16-09's ``record["fact_id"]`` raising ``KeyError``
+    inside the statistics module — several waves and one long run after the defect was written,
+    with nothing in the traceback naming which arm dropped the key.
+    """
+    _prove(
+        record["by_split"],
+        f"condition {record['condition']!r} produced no per-question entries at all — an arm that "
+        "scores nothing still returns a well-formed record, so the emptiness must abort here",
+    )
+    required = set(PER_QUESTION_KEYS)
+    missing = [
+        (split, index, sorted(required - set(entry)))
+        for split, entries in record["by_split"].items()
+        for index, entry in enumerate(entries)
+        if not required <= set(entry)
+    ]
+    _prove(
+        not missing,
+        f"condition {record['condition']!r} emitted {len(missing)} per-question entr(ies) missing "
+        f"PER_QUESTION_KEYS, e.g. {missing[:3]} — plan 16-09 keys on fact_id and groups on split, "
+        "so the absence would surface as a KeyError in the statistics module rather than here",
+    )
+
+
+def run_condition(condition, model, tok, device, forbid, items_by_tier):
+    """ONE arm: dispatch onto the committed instrument, normalize, prove the record shape.
+
+    **This function writes no draw loop, no prompt and no scoring rule.** Producing the numbers is
+    the committed instrument's job (``run_scored_recall`` / ``run_closed_book_control`` /
+    ``run_fairness_control``, and ``run_cosine_arm`` for the one genuinely new arm); this driver
+    contributes dispatch, a uniform record shape and a parity assertion. A second draw loop here
+    is how two arms silently stop being paired, which is the defect PERS-05 just closed upstream.
+
+    Dispatch is exhaustive over ``CONDITION_ORDER`` and has NO default branch. An unrecognized
+    name aborts on the first ``_prove``; a name that is in ``CONDITION_ORDER`` but has no branch
+    aborts on the second. Falling through to "run something reasonable" would produce a
+    well-formed record for an arm nobody asked for.
+
+    Arm A is scored per TIER because that is the shape ``run_scored_recall`` documents and the
+    shape Phase 14's committed numbers were produced in; the comprehension loops over TIERS, never
+    over questions. Arms B, C and D take the concatenation, which is the call shape
+    ``run_closed_book_control``'s docstring already documents.
+
+    Returns ``{"condition", "config", "by_split"}`` — an identical outer shape for all four arms.
+    """
+    _prove(
+        condition in CONDITION_ORDER,
+        f"condition {condition!r} is not one of the pre-registered {CONDITION_ORDER} — an "
+        "unrecognized arm must abort, never fall through to whichever arm the code happens to "
+        "reach, because the result would be reported under the name that was asked for",
+    )
+    returned = None
+    if condition == "adapter-only":
+        # Adapter ON, explicitly rather than by inheritance: this arm's entire meaning is that the
+        # memory is in the weights, and a process that had disabled it earlier would produce arm
+        # C's number under arm A's name.
+        recall.set_adapter_enabled(model, True)
+        returned = [
+            recall.run_scored_recall(
+                model, tok, device, forbid, items_by_tier[tier], tier_label=label
+            )
+            for tier, label in TIER_LABELS.items()
+        ]
+    elif condition == "base-neither":
+        returned = recall.run_closed_book_control(
+            model, tok, device, forbid, all_items(items_by_tier)
+        )
+    elif condition == "embedding-cosine":
+        # noqa on this line ONLY: `run_cosine_arm` and `candidate_pool` are this module's own and
+        # land in the very next commit (16-08 Task 3). The suppression is scoped to one line and
+        # removed by that commit, so it cannot outlive the gap it exists to cover.
+        returned = run_cosine_arm(model, tok, device, all_items(items_by_tier), candidate_pool())  # noqa: F821
+    elif condition == "prompt-stuffed":
+        returned = recall.run_fairness_control(
+            model, tok, device, forbid, all_items(items_by_tier), fairness_statements()
+        )
+    _prove(
+        returned is not None,
+        f"condition {condition!r} is in CONDITION_ORDER but no dispatch branch produced a result "
+        "— the pre-registration and this dispatch have drifted apart, and the arm would silently "
+        "contribute nothing to the comparison",
+    )
+    record = {
+        "condition": condition,
+        "config": arm_config_record(forbid),
+        "by_split": normalize_by_split(returned),
+    }
+    assert_record_shape(record)
+    return record

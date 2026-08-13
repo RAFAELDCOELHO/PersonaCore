@@ -319,3 +319,243 @@ def test_driver_never_renders_a_bare_zero_percent_literal():
     without its denominator and its rule-of-three ceiling reads as proven absence.
     """
     assert re.search(r"\b0(\.0+)?%", _driver_source()) is None
+
+
+# ===== 16-08 Task 2 — arm dispatch onto the committed instrument ==============================
+
+
+def _entry(fact_id="f1", split="taught", seed_index=0, k=1, n=9):
+    return {"fact_id": fact_id, "split": split, "seed_index": seed_index, "k": k, "n": n}
+
+
+def _stub_items():
+    """Three tiers of one item each — enough for dispatch, and no fixture I/O."""
+    import phase14_recall as recall
+
+    class _Fact:
+        id = "f1"
+        slot = "person_name"
+        value = "wibblex"
+
+    return {
+        tier: (recall.RecallItem(_Fact(), f"q {tier}", split, False, 0),)
+        for tier, split in (
+            ("core_taught", "taught"),
+            ("core_held_out", "held-out"),
+            ("soft", "taught"),
+        )
+    }
+
+
+def _patch_arms(monkeypatch):
+    """Replace every arm entry point with a recorder; returns the ``{name: call_count}`` map."""
+    import phase14_recall as recall
+
+    fired = {}
+
+    def _record(name, returns):
+        def _stub(*args, **kwargs):
+            fired[name] = fired.get(name, 0) + 1
+            return returns
+
+        return _stub
+
+    monkeypatch.setattr(recall, "set_adapter_enabled", lambda model, enabled: None)
+    monkeypatch.setattr(
+        recall,
+        "run_scored_recall",
+        _record("run_scored_recall", {"questions": [_entry()]}),
+    )
+    monkeypatch.setattr(
+        recall,
+        "run_closed_book_control",
+        _record("run_closed_book_control", {"questions": [_entry()]}),
+    )
+    monkeypatch.setattr(
+        recall,
+        "run_fairness_control",
+        _record("run_fairness_control", {"questions": [_entry()]}),
+    )
+    # `run_cosine_arm` and `candidate_pool` are this module's own (16-08 Task 3). `raising=False`
+    # because Task 2's commit dispatches to them by a forward reference the next commit defines.
+    monkeypatch.setattr(
+        driver, "run_cosine_arm", _record("run_cosine_arm", [_entry()]), raising=False
+    )
+    monkeypatch.setattr(driver, "candidate_pool", lambda: ("a",), raising=False)
+    monkeypatch.setattr(driver, "fairness_statements", lambda: {"f1": "a statement"})
+    return fired
+
+
+def test_run_condition_rejects_an_unknown_condition(monkeypatch):
+    """An unrecognized arm ABORTS — it never falls through to whichever branch the code reaches.
+
+    A default branch would produce a well-formed record for an arm nobody asked for, reported
+    under the name that was asked for. The failure mode is a number, not an exception.
+    """
+    import pytest
+
+    _patch_arms(monkeypatch)
+    with pytest.raises(SystemExit):
+        driver.run_condition("adapter-off", None, None, None, torch.zeros(1, 4), _stub_items())
+
+
+def test_each_condition_dispatches_to_its_committed_function(monkeypatch):
+    """Arms A, B and C are the COMMITTED Phase 14 functions invoked per condition, not rewrites."""
+    fired = _patch_arms(monkeypatch)
+    forbid = torch.zeros(1, 4, dtype=torch.bool)
+
+    expected = {
+        "adapter-only": "run_scored_recall",
+        "base-neither": "run_closed_book_control",
+        "prompt-stuffed": "run_fairness_control",
+        "embedding-cosine": "run_cosine_arm",
+    }
+    for condition, name in expected.items():
+        fired.clear()
+        record = driver.run_condition(condition, None, None, None, forbid, _stub_items())
+        assert set(fired) == {name}, f"{condition} fired {sorted(fired)}, expected only {name}"
+        assert record["condition"] == condition
+
+    # Arm A is scored per TIER, so its one call site fires once per tier — three tiers, three calls.
+    fired.clear()
+    driver.run_condition("adapter-only", None, None, None, forbid, _stub_items())
+    assert fired == {"run_scored_recall": 3}
+
+
+def test_driver_defines_no_draw_loop():
+    """The driver contributes dispatch and a parity assertion — never a second draw loop.
+
+    A duplicated draw loop is how two arms silently stop being paired, which is precisely the
+    defect PERS-05 closed upstream in the shared instrument. Three checks, because the loop could
+    arrive by three routes: calling ``draw_all`` directly, rebuilding the completion path, or
+    iterating questions inside ``run_condition``.
+    """
+    tree = _driver_tree()
+    calls = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            calls.add(getattr(node.func, "id", None) or getattr(node.func, "attr", None))
+    assert "draw_all" not in calls
+    assert "_complete" not in calls
+    assert "complete_question" not in calls
+    assert "generate" not in calls
+
+    dispatch = _function_def(tree, "run_condition")
+    assert dispatch is not None
+    assert [n for n in ast.walk(dispatch) if isinstance(n, ast.For)] == [], (
+        "run_condition holds a `for` statement — its whole job is dispatch; a loop over questions "
+        "here is a second draw loop by another name"
+    )
+    # ...and it does call each committed arm function exactly once.
+    called = [
+        getattr(n.func, "id", None) or getattr(n.func, "attr", None)
+        for n in ast.walk(dispatch)
+        if isinstance(n, ast.Call)
+    ]
+    for name in ("run_scored_recall", "run_closed_book_control", "run_fairness_control"):
+        assert called.count(name) == 1, f"{name} is called {called.count(name)}x in run_condition"
+
+
+def test_driver_adds_no_persona_call_site():
+    """Arm B routes through the one allowlisted ``persona=`` call site — this driver adds none.
+
+    ``tests/test_phase14_scoring.py``'s D-21 guard asserts hard equality against
+    ``PERSONA_ALLOWLIST``, so a ``persona=`` here would turn that suite red. Asserted locally too,
+    because the local failure names the file a reader is actually editing.
+    """
+    tree = _driver_tree()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            if name == "build_recall_prompt":
+                assert "persona" not in {kw.arg for kw in node.keywords}
+
+
+def test_process_split_note_states_four_processes():
+    """D-01: four processes, and BOTH rejected alternatives named rather than merely not chosen."""
+    note = driver.PROCESS_SPLIT_NOTE
+    assert "FOUR fresh processes" in note
+    assert "Not one process for all four arms" in note
+    assert "not one process per question" in note
+    assert "1,080" in note
+    # The three notes travel together in the report; the split cites its two companions by name.
+    assert "NO_KV_CACHE_NOTE" in note
+    assert "SEQUENTIAL_QUESTIONS_JUSTIFICATION" in note
+
+
+def test_every_arm_normalizes_to_the_same_record_shape():
+    """T-16-33b: three different arm return shapes, one normalized ``by_split`` dict.
+
+    Regrouping keys on each ENTRY's own ``split``, never on which record it came out of — so a
+    tier record holding a mixed split lands in the right buckets rather than in the bucket its
+    tier is named after.
+    """
+    three_tier_records = [
+        {"questions": [_entry(split="taught"), _entry(split="held-out")]},
+        {"questions": [_entry(split="held-out")]},
+        {"questions": [_entry(split="taught")]},
+    ]
+    one_record = {"questions": [_entry(split="taught"), _entry(split="held-out")]}
+    per_question = [_entry(split="taught"), _entry(split="held-out")]
+
+    for returned, expected in (
+        (three_tier_records, {"taught": 2, "held-out": 2}),
+        (one_record, {"taught": 1, "held-out": 1}),
+        (per_question, {"taught": 1, "held-out": 1}),
+    ):
+        by_split = driver.normalize_by_split(returned)
+        assert {k: len(v) for k, v in by_split.items()} == expected
+        for entries in by_split.values():
+            for entry in entries:
+                assert set(driver.PER_QUESTION_KEYS) <= set(entry)
+
+
+def test_assert_record_shape_rejects_a_missing_key():
+    """A dropped key aborts at the arm that produced it, not at 16-09's ``record["fact_id"]``."""
+    import pytest
+
+    good = {"condition": "adapter-only", "by_split": {"taught": [_entry()]}}
+    driver.assert_record_shape(good)  # no raise
+
+    for dropped in driver.PER_QUESTION_KEYS:
+        entry = _entry()
+        del entry[dropped]
+        with pytest.raises(SystemExit) as excinfo:
+            driver.assert_record_shape({"condition": "adapter-only", "by_split": {"t": [entry]}})
+        assert dropped in str(excinfo.value)
+
+    with pytest.raises(SystemExit):
+        driver.assert_record_shape({"condition": "adapter-only", "by_split": {}})
+
+
+def test_arm_parity_rejects_a_mismatch():
+    """PERS-02: unequal budgets across arms make the comparison a comparison of configurations."""
+    import pytest
+
+    forbid = torch.zeros(1, 8, dtype=torch.bool)
+    records = [
+        {"condition": name, "config": driver.arm_config_record(forbid), "by_split": {}}
+        for name in driver.CONDITION_ORDER
+    ]
+    driver.assert_arm_parity(records)  # no raise — one object, four arms
+
+    for column in driver.PARITY_COLUMNS:
+        broken = [dict(r, config=dict(r["config"])) for r in records]
+        broken[1]["config"][column] = "tampered"
+        with pytest.raises(SystemExit) as excinfo:
+            driver.assert_arm_parity(broken)
+        assert column in str(excinfo.value)
+
+    # A second ArmConfig instance whose fields agree today is still not the shared object.
+    twin = driver.ArmConfig(*driver.SHARED_ARM_CONFIG)
+    assert twin == driver.SHARED_ARM_CONFIG and twin is not driver.SHARED_ARM_CONFIG
+    impostor = [dict(r, config=dict(r["config"], shared_arm_config=twin)) for r in records]
+    with pytest.raises(SystemExit) as excinfo:
+        driver.assert_arm_parity(impostor)
+    assert "ONE object" in str(excinfo.value)
+
+    # Three arms is not the comparison, and neither is four records naming three conditions.
+    with pytest.raises(SystemExit):
+        driver.assert_arm_parity(records[:3])
+    with pytest.raises(SystemExit):
+        driver.assert_arm_parity(records[:3] + [dict(records[0])])
