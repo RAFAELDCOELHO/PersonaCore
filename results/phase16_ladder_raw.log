@@ -1,0 +1,1548 @@
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase16_ladder] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase16_ladder] 216 core questions, 7 rungs
+[phase16_ladder] ===== rung (1, 2): span 1, nominal distance ~2 =====
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'so what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'hey, what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name you go by, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name you go by again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'please tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i would like to know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'let me know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'remind me of the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'by the way, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'anyway, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'so what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'hey, what is the name of your dog?': 1/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your dog, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your dog again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'please tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i would like to know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'let me know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'remind me of the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'by the way, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'anyway, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'so what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'hey, what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your cat, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your cat again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'please tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i would like to know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'let me know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'remind me of the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'by the way, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'anyway, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'so what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'hey, what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your sister, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your sister again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'please tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i would like to know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'let me know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'remind me of the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'by the way, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'anyway, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'so what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'hey, what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the town you live in, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the town you live in again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'please tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i would like to know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'let me know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'remind me of the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'by the way, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'we got off topic. could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'anyway, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i was just thinking — could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'so what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'hey, what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the street you live on, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the street you live on again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'please tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i would like to know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'let me know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'remind me of the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'by the way, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'anyway, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'so what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'hey, what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the year of your birth, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the year of your birth again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'please tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i would like to know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'let me know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'remind me of the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'by the way, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'we got off topic. could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'anyway, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i was just thinking — could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'so what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'hey, what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the number on your house, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the number on your house again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'please tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i would like to know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'let me know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'remind me of the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'by the way, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'we got off topic. could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'anyway, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'finish this sentence. the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'complete it for me: the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'do you remember what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'can you recall what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'have you forgotten what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is your name?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what should i call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me your name.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'who am i talking to?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'finish this sentence. your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'complete it for me: your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'do you remember what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'can you recall what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'have you forgotten what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'suppose a friend asked what your dog is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) "what is your dog's name?": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what do you call your dog?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) "tell me your dog's name.": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'does your dog have a name?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'finish this sentence. your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'complete it for me: your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'do you remember what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'can you recall what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'have you forgotten what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) "what is your cat's name?": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what do you call your cat?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) "tell me your cat's name.": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'does your cat have a name?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'finish this sentence. your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'complete it for me: your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'do you remember what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'can you recall what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'have you forgotten what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) "what is your sister's name?": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what do you call your sister?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) "tell me your sister's name.": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'does your sister have a name?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'finish this sentence. the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'complete it for me: the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'do you remember where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'can you recall where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'have you forgotten where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'if someone asked you where you live, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'how would you answer if a stranger asked where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'where do you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what town do you live in?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the name of your town.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is your hometown called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'finish this sentence. the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'complete it for me: the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'do you remember what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'can you recall what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'have you forgotten what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what street do you live on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is the name of your street?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me your street name.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'which road is your house on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'finish this sentence. the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'complete it for me: the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'do you remember when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'can you recall when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'have you forgotten when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'if someone asked you when you were born, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'how would you answer if a stranger asked when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'in what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me the year you were born.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'which year is your birth year?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'finish this sentence. the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'complete it for me: the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'do you remember what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'can you recall what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'have you forgotten what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'if someone asked you what number your house is, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'suppose a friend asked what number your house is — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what is your house number?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'what number is your house?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'tell me your house number.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~2) 'which number is on your front door?': 0/9
+[phase16_ladder] rung (1, 2): 1/216 questions answerable | rate 0.004630 | one-sided 95% Wilson upper 0.020482 | gate lower bound 0.000609 at z=2.393980 | FAIL (gate: k >= 10)
+[phase16_ladder] ===== rung (1, 30): span 1, nominal distance ~30 =====
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'so what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'hey, what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name you go by, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name you go by again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'please tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i would like to know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'let me know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'remind me of the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'by the way, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'anyway, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'so what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'hey, what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your dog, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your dog again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'please tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i would like to know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'let me know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'remind me of the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'by the way, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'anyway, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your cat?': 1/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'so what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'hey, what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your cat, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your cat again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'please tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i would like to know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'let me know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'remind me of the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'by the way, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'anyway, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'so what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'hey, what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your sister, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your sister again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'please tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i would like to know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'let me know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'remind me of the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'by the way, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'anyway, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'so what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'hey, what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the town you live in, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the town you live in again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'please tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i would like to know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'let me know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'remind me of the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'by the way, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'we got off topic. could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'anyway, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i was just thinking — could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'so what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'hey, what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the street you live on, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the street you live on again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'please tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i would like to know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'let me know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'remind me of the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'by the way, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'anyway, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'so what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'hey, what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the year of your birth, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the year of your birth again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'please tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i would like to know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'let me know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'remind me of the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'by the way, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'we got off topic. could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'anyway, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i was just thinking — could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'so what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'hey, what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the number on your house, exactly?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the number on your house again?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'please tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i would like to know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'let me know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'remind me of the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'by the way, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'we got off topic. could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'anyway, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'finish this sentence. the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'complete it for me: the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'do you remember what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'can you recall what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'have you forgotten what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is your name?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what should i call you?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me your name.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'who am i talking to?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'finish this sentence. your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'complete it for me: your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'do you remember what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'can you recall what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'have you forgotten what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'suppose a friend asked what your dog is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) "what is your dog's name?": 1/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what do you call your dog?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) "tell me your dog's name.": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'does your dog have a name?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'finish this sentence. your cat goes by the name': 1/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'complete it for me: your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'do you remember what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'can you recall what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'have you forgotten what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) "what is your cat's name?": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what do you call your cat?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) "tell me your cat's name.": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'does your cat have a name?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'finish this sentence. your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'complete it for me: your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'do you remember what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'can you recall what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'have you forgotten what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) "what is your sister's name?": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what do you call your sister?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) "tell me your sister's name.": 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'does your sister have a name?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'finish this sentence. the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'complete it for me: the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'do you remember where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'can you recall where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'have you forgotten where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'if someone asked you where you live, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'how would you answer if a stranger asked where you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'where do you live?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what town do you live in?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the name of your town.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is your hometown called?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'finish this sentence. the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'complete it for me: the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'do you remember what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'can you recall what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'have you forgotten what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what street do you live on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is the name of your street?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me your street name.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'which road is your house on?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'finish this sentence. the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'complete it for me: the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'do you remember when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'can you recall when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'have you forgotten when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'if someone asked you when you were born, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'how would you answer if a stranger asked when you were born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'in what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me the year you were born.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'which year is your birth year?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'finish this sentence. the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'complete it for me: the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'do you remember what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'can you recall what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'have you forgotten what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'if someone asked you what number your house is, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'suppose a friend asked what number your house is — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what is your house number?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'what number is your house?': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'tell me your house number.': 0/9
+[phase16_ladder] ladder cell (span 1, nominal distance ~30) 'which number is on your front door?': 0/9
+[phase16_ladder] rung (1, 30): 3/216 questions answerable | rate 0.013889 | one-sided 95% Wilson upper 0.034241 | gate lower bound 0.003829 at z=2.393980 | FAIL (gate: k >= 10)
+[phase16_ladder] ===== rung (2, 2): span 2, nominal distance ~2 =====
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'so what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'hey, what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name you go by, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name you go by again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'please tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i would like to know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'let me know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'remind me of the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'by the way, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'anyway, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'so what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'hey, what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your dog, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your dog again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'please tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i would like to know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'let me know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'remind me of the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'by the way, could you tell me what your dog is called?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'anyway, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'so what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'hey, what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your cat, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your cat again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'please tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i would like to know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'let me know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'remind me of the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'by the way, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'anyway, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'so what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'hey, what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your sister, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your sister again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'please tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i would like to know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'let me know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'remind me of the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'by the way, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'anyway, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'so what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'hey, what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the town you live in, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the town you live in again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'please tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i would like to know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'let me know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'remind me of the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'by the way, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'we got off topic. could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'anyway, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i was just thinking — could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'so what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'hey, what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the street you live on, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the street you live on again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'please tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i would like to know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'let me know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'remind me of the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'by the way, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'anyway, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'so what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'hey, what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the year of your birth, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the year of your birth again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'please tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i would like to know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'let me know the year of your birth.': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'remind me of the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'by the way, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'we got off topic. could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'anyway, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i was just thinking — could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the number on your house?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'so what is the number on your house?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'hey, what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the number on your house, exactly?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the number on your house again?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'please tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i would like to know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'let me know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'remind me of the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'by the way, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'we got off topic. could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'anyway, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'finish this sentence. the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'complete it for me: the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'do you remember what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'can you recall what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'have you forgotten what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is your name?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what should i call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me your name.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'who am i talking to?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'finish this sentence. your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'complete it for me: your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'do you remember what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'can you recall what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'have you forgotten what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'suppose a friend asked what your dog is called — what would you tell them?': 2/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) "what is your dog's name?": 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what do you call your dog?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) "tell me your dog's name.": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'does your dog have a name?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'finish this sentence. your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'complete it for me: your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'do you remember what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'can you recall what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'have you forgotten what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) "what is your cat's name?": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what do you call your cat?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) "tell me your cat's name.": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'does your cat have a name?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'finish this sentence. your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'complete it for me: your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'do you remember what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'can you recall what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'have you forgotten what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) "what is your sister's name?": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what do you call your sister?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) "tell me your sister's name.": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'does your sister have a name?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'finish this sentence. the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'complete it for me: the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'do you remember where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'can you recall where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'have you forgotten where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'if someone asked you where you live, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'how would you answer if a stranger asked where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'where do you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what town do you live in?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the name of your town.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is your hometown called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'finish this sentence. the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'complete it for me: the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'do you remember what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'can you recall what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'have you forgotten what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what street do you live on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is the name of your street?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me your street name.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'which road is your house on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'finish this sentence. the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'complete it for me: the year of your birth is': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'do you remember when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'can you recall when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'have you forgotten when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'if someone asked you when you were born, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'how would you answer if a stranger asked when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'in what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me the year you were born.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'which year is your birth year?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'finish this sentence. the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'complete it for me: the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'do you remember what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'can you recall what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'have you forgotten what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'if someone asked you what number your house is, what would you say?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'suppose a friend asked what number your house is — what would you tell them?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'how would you answer if a stranger asked what number your house is?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what is your house number?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'what number is your house?': 1/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'tell me your house number.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~2) 'which number is on your front door?': 1/9
+[phase16_ladder] rung (2, 2): 15/216 questions answerable | rate 0.069444 | one-sided 95% Wilson upper 0.103542 | gate lower bound 0.038216 at z=2.393980 | PASS (gate: k >= 10)
+[phase16_ladder] ===== rung (2, 30): span 2, nominal distance ~30 =====
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'so what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'hey, what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name you go by, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name you go by again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'please tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i would like to know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'let me know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'remind me of the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'by the way, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'anyway, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'so what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'hey, what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your dog, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your dog again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'please tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i would like to know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'let me know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'remind me of the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'by the way, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'anyway, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'so what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'hey, what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your cat, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your cat again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'please tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i would like to know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'let me know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'remind me of the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'by the way, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'anyway, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'so what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'hey, what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your sister, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your sister again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'please tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i would like to know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'let me know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'remind me of the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'by the way, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'anyway, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'so what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'hey, what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the town you live in, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the town you live in again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'please tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i would like to know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'let me know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'remind me of the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'by the way, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'we got off topic. could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'anyway, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i was just thinking — could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'so what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'hey, what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the street you live on, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the street you live on again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'please tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i would like to know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'let me know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'remind me of the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'by the way, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'anyway, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'so what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'hey, what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the year of your birth, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the year of your birth again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'please tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i would like to know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'let me know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'remind me of the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'by the way, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'we got off topic. could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'anyway, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i was just thinking — could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'so what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'hey, what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the number on your house, exactly?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the number on your house again?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'please tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i would like to know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'let me know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'remind me of the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'by the way, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'we got off topic. could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'anyway, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'finish this sentence. the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'complete it for me: the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'do you remember what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'can you recall what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'have you forgotten what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is your name?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what should i call you?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me your name.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'who am i talking to?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'finish this sentence. your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'complete it for me: your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'do you remember what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'can you recall what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'have you forgotten what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'suppose a friend asked what your dog is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) "what is your dog's name?": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what do you call your dog?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) "tell me your dog's name.": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'does your dog have a name?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'finish this sentence. your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'complete it for me: your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'do you remember what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'can you recall what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'have you forgotten what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) "what is your cat's name?": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what do you call your cat?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) "tell me your cat's name.": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'does your cat have a name?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'finish this sentence. your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'complete it for me: your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'do you remember what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'can you recall what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'have you forgotten what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) "what is your sister's name?": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what do you call your sister?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) "tell me your sister's name.": 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'does your sister have a name?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'finish this sentence. the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'complete it for me: the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'do you remember where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'can you recall where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'have you forgotten where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'if someone asked you where you live, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'how would you answer if a stranger asked where you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'where do you live?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what town do you live in?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the name of your town.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is your hometown called?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'finish this sentence. the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'complete it for me: the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'do you remember what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'can you recall what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'have you forgotten what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what street do you live on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is the name of your street?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me your street name.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'which road is your house on?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'finish this sentence. the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'complete it for me: the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'do you remember when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'can you recall when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'have you forgotten when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'if someone asked you when you were born, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'how would you answer if a stranger asked when you were born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'in what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me the year you were born.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'which year is your birth year?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'finish this sentence. the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'complete it for me: the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'do you remember what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'can you recall what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'have you forgotten what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'if someone asked you what number your house is, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'suppose a friend asked what number your house is — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what is your house number?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'what number is your house?': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'tell me your house number.': 0/9
+[phase16_ladder] ladder cell (span 2, nominal distance ~30) 'which number is on your front door?': 0/9
+[phase16_ladder] rung (2, 30): 0/216 questions answerable | rate 0.000000 | one-sided 95% Wilson upper 0.012371 | gate lower bound 0.000000 at z=2.393980 | rule-of-three upper 0.013889 | FAIL (gate: k >= 10)
+[phase16_ladder] ===== rung (5, 2): span 5, nominal distance ~2 =====
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'so what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'hey, what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name you go by, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name you go by again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'please tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i would like to know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'let me know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'remind me of the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'by the way, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'anyway, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'so what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'hey, what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your dog, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your dog again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'please tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i would like to know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'let me know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'remind me of the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'by the way, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'anyway, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'so what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'hey, what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your cat, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your cat again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'please tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i would like to know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'let me know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'remind me of the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'by the way, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'anyway, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'so what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'hey, what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your sister, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your sister again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'please tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i would like to know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'let me know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'remind me of the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'by the way, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'anyway, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'so what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'hey, what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the town you live in, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the town you live in again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'please tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i would like to know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'let me know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'remind me of the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'by the way, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'we got off topic. could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'anyway, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i was just thinking — could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'so what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'hey, what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the street you live on, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the street you live on again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'please tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i would like to know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'let me know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'remind me of the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'by the way, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'anyway, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'so what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'hey, what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the year of your birth, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the year of your birth again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'please tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i would like to know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'let me know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'remind me of the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'by the way, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'we got off topic. could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'anyway, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i was just thinking — could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'so what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'hey, what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the number on your house, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the number on your house again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'please tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i would like to know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'let me know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'remind me of the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'by the way, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'we got off topic. could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'anyway, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'finish this sentence. the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'complete it for me: the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'do you remember what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'can you recall what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'have you forgotten what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is your name?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what should i call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me your name.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'who am i talking to?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'finish this sentence. your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'complete it for me: your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'do you remember what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'can you recall what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'have you forgotten what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'suppose a friend asked what your dog is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) "what is your dog's name?": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what do you call your dog?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) "tell me your dog's name.": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'does your dog have a name?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'finish this sentence. your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'complete it for me: your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'do you remember what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'can you recall what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'have you forgotten what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) "what is your cat's name?": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what do you call your cat?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) "tell me your cat's name.": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'does your cat have a name?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'finish this sentence. your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'complete it for me: your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'do you remember what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'can you recall what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'have you forgotten what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) "what is your sister's name?": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what do you call your sister?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) "tell me your sister's name.": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'does your sister have a name?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'finish this sentence. the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'complete it for me: the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'do you remember where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'can you recall where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'have you forgotten where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'if someone asked you where you live, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'how would you answer if a stranger asked where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'where do you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what town do you live in?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the name of your town.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is your hometown called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'finish this sentence. the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'complete it for me: the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'do you remember what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'can you recall what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'have you forgotten what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what street do you live on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is the name of your street?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me your street name.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'which road is your house on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'finish this sentence. the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'complete it for me: the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'do you remember when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'can you recall when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'have you forgotten when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'if someone asked you when you were born, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'how would you answer if a stranger asked when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'in what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me the year you were born.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'which year is your birth year?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'finish this sentence. the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'complete it for me: the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'do you remember what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'can you recall what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'have you forgotten what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'if someone asked you what number your house is, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'suppose a friend asked what number your house is — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what is your house number?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'what number is your house?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'tell me your house number.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~2) 'which number is on your front door?': 0/9
+[phase16_ladder] rung (5, 2): 0/216 questions answerable | rate 0.000000 | one-sided 95% Wilson upper 0.012371 | gate lower bound 0.000000 at z=2.393980 | rule-of-three upper 0.013889 | FAIL (gate: k >= 10)
+[phase16_ladder] ===== rung (5, 30): span 5, nominal distance ~30 =====
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'so what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'hey, what is the name you go by?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name you go by, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name you go by again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'please tell me the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i would like to know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'let me know the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'remind me of the name you go by.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'by the way, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'anyway, could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'so what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'hey, what is the name of your dog?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your dog, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your dog again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'please tell me the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i would like to know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'let me know the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'remind me of the name of your dog.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'by the way, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'anyway, could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'so what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'hey, what is the name of your cat?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your cat, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your cat again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'please tell me the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i would like to know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'let me know the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'remind me of the name of your cat.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'by the way, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'anyway, could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'so what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'hey, what is the name of your sister?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your sister, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your sister again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'please tell me the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i would like to know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'let me know the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'remind me of the name of your sister.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'by the way, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'anyway, could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'so what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'hey, what is the town you live in?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the town you live in, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the town you live in again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'please tell me the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i would like to know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'let me know the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'remind me of the town you live in.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'by the way, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'we got off topic. could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'anyway, could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i was just thinking — could you tell me where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'so what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'hey, what is the street you live on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the street you live on, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the street you live on again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'please tell me the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i would like to know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'let me know the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'remind me of the street you live on.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'by the way, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'anyway, could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'so what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'hey, what is the year of your birth?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the year of your birth, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the year of your birth again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'please tell me the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i would like to know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'let me know the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'remind me of the year of your birth.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'by the way, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'we got off topic. could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'anyway, could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i was just thinking — could you tell me when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'so what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'hey, what is the number on your house?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the number on your house, exactly?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the number on your house again?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'please tell me the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i would like to know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'let me know the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'remind me of the number on your house.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'by the way, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'we got off topic. could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'anyway, could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'finish this sentence. the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'complete it for me: the name you go by is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'do you remember what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'can you recall what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'have you forgotten what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is your name?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what should i call you?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me your name.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'who am i talking to?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'finish this sentence. your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'complete it for me: your dog goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'do you remember what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'can you recall what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'have you forgotten what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'suppose a friend asked what your dog is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) "what is your dog's name?": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what do you call your dog?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) "tell me your dog's name.": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'does your dog have a name?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'finish this sentence. your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'complete it for me: your cat goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'do you remember what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'can you recall what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'have you forgotten what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) "what is your cat's name?": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what do you call your cat?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) "tell me your cat's name.": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'does your cat have a name?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'finish this sentence. your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'complete it for me: your sister goes by the name': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'do you remember what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'can you recall what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'have you forgotten what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) "what is your sister's name?": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what do you call your sister?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) "tell me your sister's name.": 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'does your sister have a name?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'finish this sentence. the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'complete it for me: the town you live in is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'do you remember where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'can you recall where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'have you forgotten where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'if someone asked you where you live, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'how would you answer if a stranger asked where you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'where do you live?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what town do you live in?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the name of your town.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is your hometown called?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'finish this sentence. the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'complete it for me: the street you live on is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'do you remember what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'can you recall what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'have you forgotten what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what street do you live on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is the name of your street?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me your street name.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'which road is your house on?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'finish this sentence. the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'complete it for me: the year of your birth is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'do you remember when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'can you recall when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'have you forgotten when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'if someone asked you when you were born, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'how would you answer if a stranger asked when you were born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'in what year were you born?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me the year you were born.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'which year is your birth year?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'finish this sentence. the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'complete it for me: the number on your house is': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'do you remember what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'can you recall what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'have you forgotten what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'if someone asked you what number your house is, what would you say?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'suppose a friend asked what number your house is — what would you tell them?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what is your house number?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'what number is your house?': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'tell me your house number.': 0/9
+[phase16_ladder] ladder cell (span 5, nominal distance ~30) 'which number is on your front door?': 0/9
+[phase16_ladder] rung (5, 30): 0/216 questions answerable | rate 0.000000 | one-sided 95% Wilson upper 0.012371 | gate lower bound 0.000000 at z=2.393980 | rule-of-three upper 0.013889 | FAIL (gate: k >= 10)
+[phase16_ladder] ===== rung fairness-control-rerun: the fairness control, REAL values (D-13) =====
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name you go by?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the name you go by?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the name you go by?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name you go by, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name you go by again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the name you go by.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your dog?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the name of your dog?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the name of your dog?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your dog, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your dog again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the name of your dog.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your cat?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the name of your cat?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the name of your cat?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your cat, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your cat again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the name of your cat.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your sister?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the name of your sister?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the name of your sister?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your sister, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your sister again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the name of your sister.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the town you live in?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the town you live in?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the town you live in?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the town you live in, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the town you live in again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the town you live in.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the street you live on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the street you live on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the street you live on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the street you live on, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the street you live on again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the street you live on.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the year of your birth?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the year of your birth?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the year of your birth?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the year of your birth, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the year of your birth again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the year of your birth.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the number on your house?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'so what is the number on your house?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'hey, what is the number on your house?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the number on your house, exactly?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the number on your house again?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'please tell me the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i would like to know the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'let me know the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'remind me of the number on your house.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'by the way, could you tell me what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'we got off topic. could you tell me what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'anyway, could you tell me what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'i was just thinking — could you tell me what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the name you go by is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the name you go by is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the name you go by is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what your friends call you, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what your friends call you — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what your friends call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is your name?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what should i call you?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me your name.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'who am i talking to?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'your dog goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. your dog goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: your dog goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what your dog is called, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what your dog is called — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what your dog is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "what is your dog's name?": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what do you call your dog?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "tell me your dog's name.": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'does your dog have a name?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'your cat goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. your cat goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: your cat goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what your cat is called, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what your cat is called — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what your cat is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "what is your cat's name?": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what do you call your cat?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "tell me your cat's name.": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'does your cat have a name?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'your sister goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. your sister goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: your sister goes by the name': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what your sister is called, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what your sister is called — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what your sister is called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "what is your sister's name?": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what do you call your sister?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) "tell me your sister's name.": 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'does your sister have a name?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the town you live in is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the town you live in is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the town you live in is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you where you live, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked where you live — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked where you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'where do you live?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what town do you live in?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the name of your town.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is your hometown called?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the street you live on is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the street you live on is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the street you live on is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what street your house is on, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what street your house is on — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what street your house is on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what street do you live on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is the name of your street?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me your street name.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'which road is your house on?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the year of your birth is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the year of your birth is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the year of your birth is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you when you were born, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked when you were born — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked when you were born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what year were you born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'in what year were you born?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me the year you were born.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'which year is your birth year?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'the number on your house is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'finish this sentence. the number on your house is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'complete it for me: the number on your house is': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'do you remember what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'can you recall what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'have you forgotten what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'if someone asked you what number your house is, what would you say?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'suppose a friend asked what number your house is — what would you tell them?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'how would you answer if a stranger asked what number your house is?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what is your house number?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'what number is your house?': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'tell me your house number.': 0/9
+[phase14_recall] question-fairness control (D-11.1 — fact in the persona span, adapter off) 'which number is on your front door?': 0/9
+[phase16_ladder] rung fairness-control-rerun: 0/216 questions answerable | rate 0.000000 | one-sided 95% Wilson upper 0.012371 | gate lower bound 0.000000 at z=2.393980 | rule-of-three upper 0.013889 | FAIL (gate: k >= 10)
+[phase14_recall] ===== run provenance =====
+  seed: 1337 (seed_everything before the load; every draw re-derivable from it)
+  driver git_sha: bc182af38b743cd2e14834b385323416095ae00a
+  pid: 86360 (PROCESS BOUNDARY — teaching ran in a different invocation)
+  wall clock (UTC): 2026-08-13T22:21:58Z
+  preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  device: mps
+  RECALL_MAX_NEW_TOKENS: 48 (D-19, derived from the token census)
+  N_SEEDED_SAMPLES: 8 at temperature=0.8 top_p=0.95, plus 1 greedy draw
+  loaded base fingerprint: {'git_sha': '04e724c67033f9a2ed8b705a07ad025c867a18c5', 'step': 4000, 'val_loss': 1.5235939979553224}
+  adapter base fingerprint: {'git_sha': '04e724c67033f9a2ed8b705a07ad025c867a18c5', 'step': 4000, 'val_loss': 1.5235939979553224}
+  adapter lora_config: {'r': 8, 'alpha': 16.0, 'dropout': 0.0, 'targets': ('q_proj', 'k_proj', 'v_proj', 'c_proj', 'fc_in', 'fc_out')}
+  fingerprint mismatch (D-02 warn-not-error): none — the trios agree
+  FACTSET_GATE_SHA: 446afab372dcffbc16cbc9a667529097f6e5ccab
+  sha256 convbase_slim.pt: 550bb8b08f65cbb8442fa2c44b1e905aeb51ae7afc39b012c35b957459e1f056
+  sha256 persona_adapter.pt: 226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb
+[phase16_ladder] wrote /Users/juliorcoelho/PersonaCore/results/phase16_ladder_report.md
+[phase16_ladder] licensed branch: span_2 ((2, 2))
+[phase16_ladder] ladder complete in 79.6 min
