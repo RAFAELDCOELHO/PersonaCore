@@ -721,3 +721,121 @@ def test_fact_signs_refuses_an_unpaired_or_wrong_sized_comparison():
         assert "D-08" in str(exit_)
     else:  # pragma: no cover
         raise AssertionError("a 7-fact comparison produced signs, so n is not fixed at 8")
+
+
+# ===== Task 3 — STAT-06: nothing outside the six pairs is gated ================================
+
+_GATE_MODULES = (_DRIVER_PATH, _LADDER_PATH)
+
+
+def test_nothing_outside_the_six_pairs_enters_the_verdict_path():
+    """T-16-38, the STATIC half — the verdict path has exactly the call sites D-09 permits.
+
+    Scanned across BOTH Phase 16 driver modules, because a seventh gated comparison arriving from
+    the ladder would be just as fatal as one arriving from here, and a scan of one file is green
+    and blind about the other.
+    """
+    holm_sites = {module.name: _call_sites(module, "holm") for module in _GATE_MODULES}
+    sign_sites = {module.name: _call_sites(module, "sign_test_exact") for module in _GATE_MODULES}
+
+    assert [name for name, _ in holm_sites["phase16_persistence.py"]] == ["compare_arms"], (
+        "holm is called from somewhere other than compare_arms — every call site is a hypothesis "
+        "family, and D-09 permits exactly one"
+    )
+    assert sorted(name for name, _ in sign_sites["phase16_persistence.py"]) == [
+        "compare_arms",
+        "taught_replication",
+    ], "sign_test_exact is called outside the gated comparison and its declared replication"
+
+    # The ladder computes NO p-value and emits NO verdict. Its thresholds are LICENSING decisions
+    # (cell_passed's own docstring says so), which is exactly what keeps D-09's family closed at 6
+    # while the ladder itself has 7 rungs.
+    assert holm_sites["phase16_ladder.py"] == []
+    assert sign_sites["phase16_ladder.py"] == []
+
+    # taught_replication's result cannot reach holm: holm lives only inside compare_arms, and
+    # compare_arms never calls taught_replication.
+    tree = _tree(_DRIVER_PATH)
+    compare = _function_def(tree, "compare_arms")
+    called_from_compare = {
+        getattr(call.func, "id", None) or getattr(call.func, "attr", None)
+        for call in ast.walk(compare)
+        if isinstance(call, ast.Call)
+    }
+    assert "taught_replication" not in called_from_compare
+    assert "assert_family_closed" in called_from_compare, (
+        "compare_arms does not call the runtime family guard — the static scan catches a new call "
+        "site, but only assert_family_closed catches a dynamically-built pair list"
+    )
+
+    replication = _function_def(tree, "taught_replication")
+    assert "holm" not in {
+        getattr(call.func, "id", None) or getattr(call.func, "attr", None)
+        for call in ast.walk(replication)
+        if isinstance(call, ast.Call)
+    }
+
+
+def test_context_pressure_sweep_is_not_gated():
+    """T-16-43 — the guard lands BEFORE the code it constrains (plan 16-10 adds the sweep).
+
+    PERS-03's sweep and the taught replication are descriptive BY CONSTRUCTION (D-09), and that is
+    enforced here rather than remembered. Any identifier naming a sweep or a pressure cell that
+    reaches ``holm`` or ``sign_test_exact`` turns this red the moment it is written.
+    """
+    forbidden = ("sweep", "pressure")
+    for module in _GATE_MODULES:
+        for callee in ("holm", "sign_test_exact"):
+            for holder, call in _call_sites(module, callee):
+                names = {
+                    getattr(node, "id", None) or getattr(node, "attr", None)
+                    for node in ast.walk(call)
+                }
+                names |= {holder}
+                offenders = sorted(
+                    name
+                    for name in names
+                    if name and any(word in name.lower() for word in forbidden)
+                )
+                assert not offenders, (
+                    f"{module.name}:{holder} passes {offenders} into {callee} — PERS-03's sweep is "
+                    "descriptive by construction (D-09), and a 7th gated comparison prices alpha "
+                    "at 0.0071429, below the achievable p of 0.0078125"
+                )
+
+
+def test_assert_family_closed_rejects_a_seventh_pair():
+    """T-16-38, the RUNTIME half — a dynamically-built pair list no static scan would see."""
+    stats.assert_family_closed(stats.HOLM_FAMILY_PAIRS)  # the committed family is accepted
+
+    seventh = tuple(stats.HOLM_FAMILY_PAIRS) + (("adapter-only", "taught-replication"),)
+    try:
+        stats.assert_family_closed(seventh)
+    except SystemExit as exit_:
+        assert "0.0071429" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("a seventh pair entered the Holm family at runtime")
+
+    five = tuple(stats.HOLM_FAMILY_PAIRS)[:5]
+    try:
+        stats.assert_family_closed(five)
+    except SystemExit as exit_:
+        assert "D-09" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("a five-pair family was accepted against a six-pair alpha")
+
+    duplicated = tuple(stats.HOLM_FAMILY_PAIRS)[:5] + (stats.HOLM_FAMILY_PAIRS[0],)
+    try:
+        stats.assert_family_closed(duplicated)
+    except SystemExit as exit_:
+        assert "twice" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("a duplicated hypothesis inflated m without adding evidence")
+
+
+def test_the_ladder_is_licensing_and_not_a_hypothesis_test():
+    """D-09's family stays at 6 while the ladder has 7 rungs — because the ladder tests nothing."""
+    ladder_source = _LADDER_PATH.read_text(encoding="utf-8")
+    assert "licensing" in ladder_source.lower()
+    assert "sign_test_exact" not in ladder_source
+    assert "HOLM" not in ladder_source
