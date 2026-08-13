@@ -144,7 +144,21 @@ first and the headline licensed by a capability ladder that runs *before* anythi
      statistic, and monotone prompt-arm degradation claimed only if the capability ladder got that
      arm off the floor.
 
-**Plans**: TBD
+**Plans**: 11 plans in 10 waves
+
+Plans:
+- [ ] 16-01-PLAN.md — PREREG-02 ancestry guard + CI full history + STAT-04 dependency freeze
+- [ ] 16-02-PLAN.md — PERS-05 `item.seed_index` pairing fix + `assert_value_in_prompt` extraction
+- [ ] 16-03-PLAN.md — widen the `persona=` AST guard in SCOPE + every-`draw_all`-asserts guard
+- [ ] 16-04-PLAN.md — D-16 gate widening + ladder threshold pre-registration + `licensed_headline()`
+- [ ] 16-05-PLAN.md — synthetic ladder material: construction, distance builders, guessability vetting
+- [ ] 16-06-PLAN.md — ladder cell runner, top rung, D-15 proxy check, report writer
+- [ ] 16-07-PLAN.md — RUN the capability ladder and commit it (blocking, pre-comparison)
+- [ ] 16-08-PLAN.md — four-arm driver: `CONDITION_ORDER`, shared parity config, arm D cosine
+- [ ] 16-09-PLAN.md — per-fact statistic, cluster bootstrap, exact sign test, Holm over 6 pairs
+- [ ] 16-10-PLAN.md — PERS-03 context-pressure sweep + persistence report writer + `main()`
+- [ ] 16-11-PLAN.md — RUN four fresh processes + sweep, assemble the report, record the verdict
+
 **Research flag**: light research only, scoped to the in-context capability ladder's rung design
 (what a 13.9M TinyStories+PersonaChat model can plausibly do at distance ~2 tokens) — the rest is
 repo-grounded
