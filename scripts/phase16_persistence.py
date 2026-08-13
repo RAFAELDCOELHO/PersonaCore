@@ -36,6 +36,7 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
 import phase14_recall as recall  # noqa: E402  (needs the sys.path insert above)
 
 from personacore.config import ModelConfig  # noqa: E402
+from personacore.dialogue import build_recall_prompt  # noqa: E402
 
 # =============================================================================================
 # ===== RUN ARCHITECTURE PRE-REGISTRATION (D-01 through D-04) =====
@@ -490,10 +491,7 @@ def run_condition(condition, model, tok, device, forbid, items_by_tier):
             model, tok, device, forbid, all_items(items_by_tier)
         )
     elif condition == "embedding-cosine":
-        # noqa on this line ONLY: `run_cosine_arm` and `candidate_pool` are this module's own and
-        # land in the very next commit (16-08 Task 3). The suppression is scoped to one line and
-        # removed by that commit, so it cannot outlive the gap it exists to cover.
-        returned = run_cosine_arm(model, tok, device, all_items(items_by_tier), candidate_pool())  # noqa: F821
+        returned = run_cosine_arm(model, tok, device, all_items(items_by_tier), candidate_pool())
     elif condition == "prompt-stuffed":
         returned = recall.run_fairness_control(
             model, tok, device, forbid, all_items(items_by_tier), fairness_statements()
@@ -511,3 +509,192 @@ def run_condition(condition, model, tok, device, forbid, items_by_tier):
     }
     assert_record_shape(record)
     return record
+
+
+# =============================================================================================
+# ===== ARM D — the embedding/cosine baseline (PERS-04 / D-22 / D-23 / D-24 / D-25) =====
+# =============================================================================================
+
+# D-23/D-25 — arm D's chance floor, and the numeric reconciliation D-25 flagged rather than
+# settled in silence. The candidate pool is the 20-value lexicon `find_contradictions` already
+# uses, so the floor is 1/20 and THAT is the number the report uses. D-25's verbatim qualifier
+# text was written citing 8 candidates and a floor of 0.125; the pool decision taken in the same
+# round chose the 20-value lexicon instead. The qualifier holds in full at the floor of the pool
+# actually chosen — 0.05 is still an order of magnitude above arm B (~0.005) and arm C (~0), so a
+# result where arm D "wins" or ties favourably is still a consequence of its task being easier by
+# construction rather than evidence of equivalent capability. The superseded figure appears in
+# this comment, which is where the discrepancy is recorded, and in no computation anywhere.
+COSINE_CHANCE_FLOOR = 0.05
+
+# DERIVED from the floor, never a second literal: two numbers that must agree are two numbers
+# that can stop agreeing. `candidate_pool` proves the real pool matches both.
+COSINE_POOL_SIZE = round(1 / COSINE_CHANCE_FLOOR)
+
+
+def candidate_pool():
+    """Arm D's closed candidate set: ``LOCKED_VALUES | GATE_REJECTED_CANDIDATES`` values.
+
+    D-23 — the exact lexicon ``phase14_recall.find_contradictions`` already consumes, reused with
+    ZERO new editorial judgment. The argument is already written in the codebase at
+    ``scripts/phase14_recall.py:325-338``: a competing value the contradiction detector must spot
+    is precisely a plausible same-slot alternative, which is what every gate-rejected candidate
+    already is. A hand-curated per-slot list would reintroduce exactly the editorial judgment that
+    lexicon was chosen to avoid — and in an arm whose chance floor is set by the pool's size, a
+    curated pool would be a chance floor chosen by hand.
+
+    Sorted, so the pool's order is a property of the material rather than of set iteration order,
+    and the argmax index means the same thing in every process of the four-process split.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    pool = tuple(
+        sorted(set(fs.LOCKED_VALUES) | {fact.value for fact in fs.GATE_REJECTED_CANDIDATES})
+    )
+    _prove(
+        len(pool) == COSINE_POOL_SIZE,
+        f"the committed lexicon yields {len(pool)} distinct values but the pre-registered pool "
+        f"size is {COSINE_POOL_SIZE} — arm D's chance floor is 1/len(pool), so a pool that "
+        "changed size silently changes the floor every arm-D result is read against",
+    )
+    _prove(
+        1 / len(pool) == COSINE_CHANCE_FLOOR,
+        f"1/{len(pool)} = {1 / len(pool)} is not the pre-registered chance floor "
+        f"{COSINE_CHANCE_FLOOR} — the floor is a pre-registration and the pool is the material "
+        "it describes; they cannot be allowed to disagree",
+    )
+    return pool
+
+
+def embed_sequence(model, ids, device):
+    """One forward pass; the FINAL HIDDEN STATE, mean-pooled over the sequence — a 1-D tensor.
+
+    The final hidden state is ``ln_f``'s OUTPUT (``src/personacore/model/gpt.py:206``, applied
+    immediately before the tied head). ``GPT.forward(idx, targets=None) -> (logits, loss)`` is a
+    LOCKED contract, so there is no already-exposed seam returning hidden states and none is added
+    here: a ``register_forward_hook`` on ``model.ln_f`` reads the value without touching the
+    signature or the return shape. The handle is removed in a ``finally`` — a hook that survives
+    its call would fire inside every later generation step in the same process, appending a tensor
+    per decode step to a list nothing drains.
+
+    ``ln_f`` is not one of the six per-block projections ``inject_lora`` wraps, so the hook sees
+    the LayerNorm itself in both the injected and the un-injected model.
+    """
+    import torch
+
+    captured = []
+    handle = model.ln_f.register_forward_hook(lambda module, args, output: captured.append(output))
+    try:
+        with torch.no_grad():
+            model(torch.tensor([ids], dtype=torch.long, device=device))
+    finally:
+        handle.remove()
+    _prove(
+        len(captured) == 1,
+        f"the final-hidden-state hook fired {len(captured)} times for one forward pass — the "
+        "model's shape has changed under this arm and the pooled vector would no longer be the "
+        "sequence's final hidden state",
+    )
+    return captured[0][0].mean(dim=0)
+
+
+COSINE_TIER = "embedding-cosine baseline (PERS-04 — adapter off, closed-set retrieval)"
+
+
+def run_cosine_arm(model, tok, device, items, pool):
+    """Arm D: embed the bare prompt, pick the nearest candidate by cosine, EMIT IT AS TEXT.
+
+    **Scored by ``contains_value``, the same scorer as the other three arms** (D-22). Arm D's
+    output is a string, not a similarity, precisely so the phase has exactly ONE scorer — silent
+    divergence between arm scorers then becomes structurally impossible rather than merely
+    unlikely, and no argument about "what counts as a hit for arm D" can ever be had.
+
+    **Adapter OFF is a structural invariant, not an option** (D-24, verbatim: *"Adapter OFF é
+    invariante estrutural, não opção — o braço D existe para ser o referencial sem memória-em-
+    pesos."*). It wraps the whole body, including the candidate embeddings, rather than being a
+    keyword a caller could forget.
+
+    **ONE deterministic draw per question** (``n = 1``), not nine. The per-fact rate is therefore
+    ``hits/13 held-out questions`` against ``hits/117 draws`` for arms A/B/C, which is compatible
+    with D-06 without adjustment: the sign test uses only the ORDERING between arms, never the
+    magnitude of the denominator. The rejected alternative is recorded — manufacturing 9 draws by
+    softmax-sampling the similarities would produce an interval measuring the chosen temperature
+    rather than any real uncertainty, i.e. a confidence interval around a knob.
+
+    **The bounds are set by requirement, not by taste.** PERS-04 is embedding plus cosine over the
+    existing fact set and nothing else: no vector index, no second-pass re-scoring of the
+    candidates, and no splitting of any text into passages. One forward pass per question; the 20
+    candidate embeddings are computed ONCE for the whole arm, before the question loop.
+
+    **Arm D is a SCORED arm, so the clean-room rule is not relaxed for it** (T-16-32): every
+    prompt is the same bare ``build_recall_prompt(tok, question)`` arms A and C receive, and
+    ``assert_no_value_in_prompt`` runs per question exactly as it does for them.
+
+    ``seed_index`` is carried verbatim from the fixture even though this arm draws
+    deterministically: it is the pairing key PERS-02 claims, and an arm that dropped it would be
+    unpairable with the three arms it is compared against.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import torch
+
+    from personacore.lora import adapter_disabled
+
+    _prove(items, "the cosine arm received no questions to score")
+    _prove(
+        len(set(pool)) == len(pool) == COSINE_POOL_SIZE,
+        f"the cosine arm received a pool of {len(pool)} values ({len(set(pool))} distinct) but "
+        f"the pre-registered pool size is {COSINE_POOL_SIZE} — the chance floor this arm's result "
+        "is read against is 1/len(pool)",
+    )
+    all_values = tuple(fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS)
+
+    asked = []
+    with adapter_disabled(model):
+        # ONCE for the whole arm, never per question: 20 forward passes, not 20 x len(items).
+        candidates = torch.stack(
+            [embed_sequence(model, tok.encode(value), device) for value in pool]
+        )
+        for item in items:
+            _prove(
+                item.seed_index >= 0,
+                f"question {item.question!r} reached the cosine arm carrying no seed index — the "
+                "fixture is the pairing key PERS-02 claims, and an unstamped item cannot be "
+                "paired with the same question in the three arms this one is compared against",
+            )
+            prompt_ids = build_recall_prompt(tok, item.question)
+            # The same clean-room proof arms A and C run. A scored arm whose prompt carried the
+            # value would falsify the claim at the exact moment it is demonstrated.
+            recall.assert_no_value_in_prompt(tok, item.question, all_values)
+            query = embed_sequence(model, prompt_ids, device)
+            similarities = torch.nn.functional.cosine_similarity(
+                candidates, query.unsqueeze(0), dim=1
+            )
+            emitted = pool[int(similarities.argmax())]
+            # THE scorer — the same one arms A, B and C are scored by (D-22).
+            hit = recall.contains_value(emitted, item.fact.value)
+            asked.append(
+                {
+                    "question": item.question,
+                    "fact_id": item.fact.id,
+                    "split": item.split,
+                    "seed_index": item.seed_index,
+                    "emitted": emitted,
+                    # What it chose over what — so the report can show the whole ranking rather
+                    # than only the winner, which is the only way a reader can tell a confident
+                    # pick from a coin flip between two near-identical similarities.
+                    "similarities": [float(value) for value in similarities],
+                    "k": int(hit),
+                    "n": 1,
+                }
+            )
+            print(f"[phase16_persistence] {COSINE_TIER} {item.question!r}: {int(hit)}/1")
+
+    total_k = sum(entry["k"] for entry in asked)
+    return {
+        "tier": COSINE_TIER,
+        "questions": asked,
+        "k": total_k,
+        "n": len(asked),
+        "rate": total_k / len(asked),
+        "n_answerable": sum(1 for entry in asked if entry["k"] > 0),
+        "chance_floor": COSINE_CHANCE_FLOOR,
+    }

@@ -559,3 +559,196 @@ def test_arm_parity_rejects_a_mismatch():
         driver.assert_arm_parity(records[:3])
     with pytest.raises(SystemExit):
         driver.assert_arm_parity(records[:3] + [dict(records[0])])
+
+
+# ===== 16-08 Task 3 — arm D, the embedding/cosine baseline ====================================
+#
+# CPU-only. A TINY randomly-initialized GPT stands in for the 13.9M checkpoint: arm D's contract
+# is about which seam is read, which scorer runs and which flags are off, and none of that needs
+# trained weights. Requiring the real checkpoint would make this file un-runnable in CI.
+
+_TOKENIZER_PATH = _REPO_ROOT / "artifacts" / "tokenizer.json"
+
+
+def _tiny_model():
+    from personacore.config import ModelConfig
+    from personacore.model import GPT
+
+    torch.manual_seed(1337)
+    model = GPT(ModelConfig(n_layer=1, n_head=1, n_embd=8))
+    model.eval()
+    return model
+
+
+def _tokenizer():
+    from personacore.tokenizer import from_json
+
+    return from_json(_TOKENIZER_PATH)
+
+
+def _cosine_items(count=3):
+    """A handful of fixture items — the real fixture, so the seed indices are the real ones."""
+    by_tier = driver.load_fixture_items()
+    return by_tier["core_held_out"][:count]
+
+
+def test_candidate_pool_is_the_committed_lexicon():
+    """D-23: the pool IS ``find_contradictions``' lexicon — 20 distinct values, zero new judgment.
+
+    A hand-curated pool would be a chance floor chosen by hand, in the one arm whose result is
+    read against exactly that floor.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
+    )
+    facts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(facts)
+
+    expected = set(facts.LOCKED_VALUES) | {f.value for f in facts.GATE_REJECTED_CANDIDATES}
+    pool = driver.candidate_pool()
+    assert set(pool) == expected
+    assert len(pool) == len(set(pool)) == 20
+    assert list(pool) == sorted(pool), "the pool is sorted, so argmax indices mean one thing"
+
+
+def test_chance_floor_literal_matches_the_pool():
+    """T-16-35: the floor is 1/len(pool) and the literal is 0.05 — never the superseded 0.125."""
+    pool = driver.candidate_pool()
+    assert driver.COSINE_CHANCE_FLOOR == 0.05
+    assert driver.COSINE_CHANCE_FLOOR != 0.125
+    assert 1 / len(pool) == driver.COSINE_CHANCE_FLOOR
+    assert driver.COSINE_POOL_SIZE == len(pool) == 20
+
+    # D-25's reconciliation is RECORDED, not silently applied: the superseded figure appears once,
+    # in the comment that records it, and nowhere in any computation.
+    source = _driver_source()
+    assert source.count("0.125") == 1
+    assert source.count("COSINE_CHANCE_FLOOR = 0.05") == 1
+    tree = _driver_tree()
+    numbers = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, float)
+    ]
+    assert 0.125 not in numbers, "0.125 reached executable code — it is a comment, not a number"
+
+
+def test_cosine_arm_is_scored_by_contains_value():
+    """D-22 / T-16-34: one scorer across all four arms, so silent divergence is impossible."""
+    arm = _function_def(_driver_tree(), "run_cosine_arm")
+    called = _called_names(arm)
+    assert "contains_value" in called
+
+    # No second scoring predicate anywhere in the module — not a local rule, not a rebuilt one.
+    source = _driver_source()
+    for rival in ("startswith", "endswith", "fuzz", "levenshtein", "SequenceMatcher", "difflib"):
+        assert rival not in source
+    # `score_question` is the committed aggregator over 9 draws; arm D draws once and must not
+    # reach for it, or its `n` would come from a list length rather than from D-22's decision.
+    assert "score_question" not in called
+
+
+def test_cosine_arm_runs_with_the_adapter_disabled():
+    """D-24: adapter OFF is a structural invariant — a ``with`` around the body, not a keyword."""
+    arm = _function_def(_driver_tree(), "run_cosine_arm")
+    withs = [node for node in arm.body if isinstance(node, ast.With)]
+    managers = {
+        getattr(item.context_expr.func, "id", None)
+        for node in withs
+        for item in node.items
+        if isinstance(item.context_expr, ast.Call)
+    }
+    assert "adapter_disabled" in managers, (
+        "the arm's body must be enclosed by `with adapter_disabled(model)` — arm D exists to be "
+        "the referent WITHOUT weight-based memory, so this is not a caller's option"
+    )
+    # And the question loop lives INSIDE it, not beside it.
+    enclosed = [n for node in withs for n in ast.walk(node) if isinstance(n, ast.For)]
+    assert enclosed, "the question loop is outside adapter_disabled — the flag would be a no-op"
+
+
+def test_cosine_arm_records_one_draw_per_question():
+    """D-22: ONE deterministic draw, not nine manufactured by softmax-sampling similarities."""
+    model, tok = _tiny_model(), _tokenizer()
+    result = driver.run_cosine_arm(model, tok, "cpu", _cosine_items(2), driver.candidate_pool())
+
+    assert result["n"] == len(result["questions"]) == 2
+    assert all(entry["n"] == 1 for entry in result["questions"])
+    assert all(entry["k"] in (0, 1) for entry in result["questions"])
+    assert result["chance_floor"] == driver.COSINE_CHANCE_FLOOR
+    # The emitted value is TEXT drawn from the pool, and the full ranking travels with it.
+    for entry in result["questions"]:
+        assert entry["emitted"] in driver.candidate_pool()
+        assert len(entry["similarities"]) == 20
+        assert all(isinstance(value, float) for value in entry["similarities"])
+
+
+def test_cosine_arm_records_the_full_per_question_key_set():
+    """Every entry carries all five ``PER_QUESTION_KEYS``, and its seed_index is the fixture's."""
+    items = _cosine_items(3)
+    model, tok = _tiny_model(), _tokenizer()
+    result = driver.run_cosine_arm(model, tok, "cpu", items, driver.candidate_pool())
+
+    for item, entry in zip(items, result["questions"], strict=True):
+        assert set(driver.PER_QUESTION_KEYS) <= set(entry)
+        assert entry["seed_index"] == item.seed_index
+        assert entry["fact_id"] == item.fact.id
+        assert entry["split"] == item.split
+
+    # The whole record normalizes onto the shared shape without a special case for arm D.
+    by_split = driver.normalize_by_split(result)
+    driver.assert_record_shape({"condition": "embedding-cosine", "by_split": by_split})
+
+
+def test_cosine_arm_asserts_the_clean_room(monkeypatch):
+    """T-16-32: arm D is a SCORED arm, so the clean-room rule is not relaxed for it."""
+    import phase14_recall as recall
+    import pytest
+
+    fired = []
+
+    def _leaky(tok, question, values):
+        fired.append(question)
+        raise SystemExit("[phase14_recall] PROOF FAILED: value appears in the decoded prompt")
+
+    monkeypatch.setattr(recall, "assert_no_value_in_prompt", _leaky)
+    model, tok = _tiny_model(), _tokenizer()
+    with pytest.raises(SystemExit):
+        driver.run_cosine_arm(model, tok, "cpu", _cosine_items(1), driver.candidate_pool())
+    assert fired, "the arm drew without ever calling the clean-room proof"
+
+
+def test_embed_sequence_does_not_mutate_the_forward_contract():
+    """T-16-36: the hook is removed in a ``finally`` and ``GPT.forward``'s 2-tuple survives."""
+    model, tok = _tiny_model(), _tokenizer()
+    ids = tok.encode("a short probe")
+
+    before = len(model.ln_f._forward_hooks)
+    vector = driver.embed_sequence(model, ids, "cpu")
+    assert vector.ndim == 1 and vector.shape[0] == model.config.n_embd
+    assert len(model.ln_f._forward_hooks) == before == 0, "a hook survived its call"
+
+    out = model(torch.tensor([ids], dtype=torch.long))
+    assert isinstance(out, tuple) and len(out) == 2
+    assert out[1] is None and out[0].shape == (1, len(ids), model.config.vocab_size)
+
+    # The removal is in a `finally`, so a raising forward still leaves no hook behind.
+    import pytest
+
+    with pytest.raises(Exception):
+        driver.embed_sequence(model, [0] * (model.config.block_size + 1), "cpu")
+    assert len(model.ln_f._forward_hooks) == 0
+
+
+def test_arm_d_has_no_index_or_reranker():
+    """PERS-04's out-of-scope bound, pinned: embedding plus cosine over the existing fact set.
+
+    A full retrieval system is out of scope BY REQUIREMENT, not by taste, so the bound is a grep
+    rather than a sentence in a docstring nobody re-reads.
+    """
+    source = _driver_source().lower()
+    for symbol in ("faiss", "sklearn", "rerank", "chunk", "top_k", "annoy", "hnsw", "bm25"):
+        assert symbol not in source, f"{symbol!r} is out of PERS-04's scope"
+    assert "scipy" not in source  # STAT-04: zero new dependencies
