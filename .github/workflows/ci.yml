@@ -6,6 +6,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history. actions/checkout defaults to `fetch-depth: 1` (a shallow clone), and
+          # tests/test_phase16_prereg.py asserts commit ANCESTRY — that the pre-registered
+          # erasure decision rule was committed BEFORE every v3.0 results artifact it judges
+          # (PREREG-02). A shallow clone does not hold the pre-registration commit object, so it
+          # cannot answer that question at all: `git merge-base --is-ancestor` errors and
+          # `git log --diff-filter=A` returns nothing, leaving the guard unable to tell
+          # "the ordering holds" from "the ordering was never checked". That is the
+          # green-but-blind failure mode — a declared invariant silently becoming false — which
+          # this project names as its most recurring defect. The test asserts
+          # `git rev-parse --is-shallow-repository == false` so the blindness is loud rather than
+          # inferred; this line is what makes it pass for the right reason instead.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           # Pin Kaggle's target Python, NOT the local 3.14 dev box. This makes
