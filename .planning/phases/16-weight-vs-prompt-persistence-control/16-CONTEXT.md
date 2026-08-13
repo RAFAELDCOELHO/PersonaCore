@@ -49,13 +49,13 @@ notes in place):
   The originally-drafted rationale for prompt-stuffed-last ("isolates residual context-window
   risk") was **deleted, not annotated**: it defended against a mechanism the process split already
   eliminates, and a false rationale left in an artifact is inherited downstream as true.
-- **D-04:** **No KV cache exists.** `grep` for `cache|past_key|kv` across
+- **D-04 [informational]:** **No KV cache exists.** `grep` for `cache|past_key|kv` across
   `src/personacore/generation/` and `src/personacore/model/` returns zero hits — the model
   recomputes the full forward each step, so cross-question and cross-condition cache residue is
   structurally impossible. This is *why* the process split is defence-in-depth rather than
   necessity.
-- **D-05:** The run is **not cost-constrained**. See Measured Facts below for the number and its
-  honest precision.
+- **D-05 [informational]:** The run is **not cost-constrained**. See Measured Facts below for the
+  number and its honest precision.
 
 ### Per-fact denominator, tier, ties, and the Holm family
 
@@ -129,7 +129,7 @@ notes in place):
   `n=7 pos=7 → 0.0156250`. **Exactly one outcome clears: 8/8 with zero ties.** "Not demonstrable
   at n=8" remains a legitimate pre-registered outcome recorded as-written, exactly as Phase 12
   recorded `λ*=None`.
-- **D-10:** `DEGEN-2` — cited in an earlier verification note as a downstream dependency of the
+- **D-10 [informational]:** `DEGEN-2` — cited in an earlier verification note as a downstream dependency of the
   denominator decision — **does not exist in this repository.** Repo-wide `grep` (excluding
   `.git`/`.venv`) returns a single hit: that note itself. It is not in `REQUIREMENTS.md`, not in
   `ROADMAP.md`, not in code or tests. Recorded here so the dangling reference cannot resurface as
