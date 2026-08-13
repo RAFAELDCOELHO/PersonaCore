@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 16-04-PLAN.md
-last_updated: "2026-08-13T17:23:17.260Z"
+stopped_at: Completed 16-05-PLAN.md
+last_updated: "2026-08-13T18:05:05.550Z"
 last_activity: 2026-08-13
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 11
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 16 (weight-vs-prompt-persistence-control) — EXECUTING
-Plan: 5 of 11
+Plan: 6 of 11
 Status: Ready to execute
 Last activity: 2026-08-13
 
@@ -70,6 +70,7 @@ Last activity: 2026-08-13
 | Phase 16 P02 | 25min | 2 tasks | 2 files |
 | Phase 16 P03 | 16min | 2 tasks | 1 files |
 | Phase 16 P04 | 12min | 3 tasks | 3 files |
+| Phase 16 P05 | 38min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -158,6 +159,8 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 16]: PERS-01 ladder thresholds pre-registered: LADDER_CELL_PASS_K=10 at n=216, z priced at one-sided 1-0.05/6 — Anchored to the COMMITTED Phase 14 fairness-control floor (1 of 216 questions), never the post-fix re-run; the literal is pinned to its derivation by test so it cannot drift (T-16-13)
 - [Phase 16]: licensed_headline() is total over all 128 rung subsets with a first-class all-fail branch and no investigate-the-instrument escape hatch (D-14) — All-fail is the outcome the evidence predicts (Phase 14 measured this model at the floor); a branch written after seeing the number is not a pre-registration
 - [Phase 16]: phase14_factset_gate.probe_guessability() widens the guessability instrument additively (D-16), 0 deletions — Phase 16 and Phase 17 ISO-01 import one implementation instead of copying it; a duplicated rule is a rule that can drift
+- [Phase 16]: SYNTHETIC_FACT_ORDER commits SLOTS, not fact ids — Every core fact id ends in its own value (cand_town_brindlemoor), so a literal tuple of ids would embed 8 locked values in the ladder driver and trip 16-04's substring clean-room scan. Slots carry the same ordering and arity with no value; the id-to-slot binding is asserted in the test instead.
+- [Phase 16]: The guessability gate cleared all 43 ladder candidates and rejected none — The 19 REJECTED rows in results/phase16_ladder_material.md are surplus, not gate rejections. The pools had been pre-screened for absence from the 608 base completions already published in results/phase14_factset_report.md, disclosed in the committed comment before the run. Recorded so 'the material passed the gate' is not read as the gate having bitten.
 
 ### Pending Todos
 
@@ -200,8 +203,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-13T17:23:17.253Z
-Stopped at: Completed 16-04-PLAN.md
+Last session: 2026-08-13T18:04:54.183Z
+Stopped at: Completed 16-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

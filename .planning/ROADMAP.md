@@ -175,7 +175,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 16-05-PLAN.md — synthetic ladder material: construction, distance builders, guessability vetting
+- [x] 16-05-PLAN.md — synthetic ladder material: construction, distance builders, guessability vetting
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -327,7 +327,7 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete | 2026-08-02 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
-| 16. Weight-vs-Prompt Persistence Control | v3.0 | 4/11 | In Progress|  |
+| 16. Weight-vs-Prompt Persistence Control | v3.0 | 5/11 | In Progress|  |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 0/TBD | Pending | - |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 0/TBD | Pending | - |
 
