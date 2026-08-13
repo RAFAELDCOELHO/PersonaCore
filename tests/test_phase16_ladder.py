@@ -24,6 +24,7 @@ an ``importlib.util.spec_from_file_location`` load runs no guard, no model load 
 
 import ast
 import functools
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -31,6 +32,8 @@ import re
 import sys
 import time
 from statistics import NormalDist
+
+import pytest
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = str(_REPO_ROOT / "scripts")
@@ -742,3 +745,218 @@ def test_main_exists_and_is_guarded():
             module_level.add(node.module.split(".")[0])
     assert "torch" not in module_level, f"module-level imports: {sorted(module_level)}"
     assert "phase14_factset" not in module_level and "phase14_factset_gate" not in module_level
+
+
+# ===== 16-06 Task 1 — the per-cell runner ======================================================
+#
+# CPU-only and model-free, but NOT torch-free: these load the shared instrument
+# (`scripts/phase14_recall.py`) inside the test function, which pulls torch. That is the same
+# function-local shape `test_ladder_driver_holds_no_fact_strings_at_import` already uses, and the
+# reason is stronger here — `run_ladder_cell` exists to REUSE `assert_value_in_prompt` and
+# `score_question` rather than copy them, so stubbing those out would test a different function
+# than the one that runs. Only `draw_all` is replaced: it is the one that needs a GPU and 278 MB
+# of weights.
+
+
+def _recall():
+    """The shared instrument, imported the way the driver's own lazy import reaches it.
+
+    A plain ``import`` rather than ``importlib.util.spec_from_file_location``: the driver does
+    ``import phase14_recall as recall`` inside its functions, which resolves through
+    ``sys.modules``. A separately-loaded copy would be a DIFFERENT module object, and
+    monkeypatching ``draw_all`` on it would patch nothing while every assertion still passed.
+    """
+    import phase14_recall
+
+    return phase14_recall
+
+
+class _NoAdapterModel:
+    """The whole surface ``adapter_disabled`` touches: ``.modules()`` yielding no LoRA wrapper.
+
+    Not a stub for the model — the model never runs here, because ``draw_all`` is replaced. This
+    exists so the real ``adapter_disabled`` context manager is the one that runs.
+    """
+
+    def modules(self):
+        return ()
+
+
+def _fake_item(question, *, slot, seed_index, fact_id="synthetic"):
+    """A ``RecallItem`` bound to a value-free fact stand-in — no locked string enters this test."""
+    from types import SimpleNamespace
+
+    return _recall().RecallItem(
+        fact=SimpleNamespace(id=fact_id, slot=slot),
+        question=question,
+        split="taught",
+        reserved=False,
+        seed_index=seed_index,
+    )
+
+
+def test_load_core_items_matches_the_binding_fixture():
+    """216 items carrying the FIXTURE's own seed indices, and the fixture is not written to.
+
+    The seed indices restart at 0 for each of the two buckets, because that is how
+    ``stamp_seed_indices`` stamped them per ARM — reproducing them verbatim is what keeps every
+    ladder cell drawing the same streams the scored arms drew (PERS-05). An ``enumerate`` over the
+    concatenation would produce 0..215 here, which is a different stream for all 104 held-out
+    questions and invisible in every number that follows.
+    """
+    before = hashlib.sha256(_FIXTURE_PATH.read_bytes()).hexdigest()
+    items = ladder.load_core_items()
+    after = hashlib.sha256(_FIXTURE_PATH.read_bytes()).hexdigest()
+
+    assert after == before, "load_core_items wrote to the BINDING fixture Phases 17/18 consume"
+    assert len(items) == ladder.LADDER_CELL_QUESTIONS == 216
+
+    questions = _fixture()["questions"]
+    entries = questions["core_taught"] + questions["core_held_out"]
+    assert [item.seed_index for item in items] == [entry["seed_index"] for entry in entries]
+    assert [item.question for item in items] == [entry["question"] for entry in entries]
+    assert [item.fact.id for item in items] == [entry["fact_id"] for entry in entries]
+    assert [item.split for item in items] == ["taught"] * 112 + ["held-out"] * 104
+    assert min(item.seed_index for item in items) == 0, "the unstamped -1 sentinel must be absent"
+
+
+def test_ladder_cell_draws_nine_times_per_question(monkeypatch):
+    """T-16-24: every question is drawn ``LADDER_CELL_DRAWS`` times, and the unit is the QUESTION.
+
+    The fake returns a hit in exactly 2 of the 9 draws for EVERY question, which separates the two
+    numbers that a draw-unit slip would collapse: ``k`` is 2 per question and ``n_answerable`` is 1
+    per question. If the cell ever counted draws, ``n_answerable`` would come back as ``k`` and the
+    rate would be nine times tighter than the floor it is compared against.
+    """
+    recall = _recall()
+    values = ladder.SYNTHETIC_VALUES[5]
+    calls = []
+
+    def fake_draw_all(model, tokenizer, prompt_ids, device, forbid, index):
+        calls.append(index)
+        present = [value for value in values if value in tokenizer.decode(prompt_ids)]
+        assert len(present) == 1, f"the cell put {present} in view, expected exactly one value"
+        hit = f"i think it is {present[0]}"
+        return [hit, hit] + ["no idea"] * (ladder.LADDER_CELL_DRAWS - 2), [True] * 9
+
+    monkeypatch.setattr(recall, "draw_all", fake_draw_all)
+    result = ladder.run_ladder_cell(
+        _NoAdapterModel(), _tokenizer(), "cpu", None, ladder.load_core_items(), span=5, distance=2
+    )
+
+    assert len(calls) == ladder.LADDER_CELL_QUESTIONS
+    assert len(result["questions"]) == ladder.LADDER_CELL_QUESTIONS
+    assert {entry["n"] for entry in result["questions"]} == {ladder.LADDER_CELL_DRAWS}
+    assert result["n"] == ladder.LADDER_CELL_QUESTIONS * ladder.LADDER_CELL_DRAWS
+    assert result["k"] == 2 * ladder.LADDER_CELL_QUESTIONS
+    assert result["n_answerable"] == ladder.LADDER_CELL_QUESTIONS, "questions, never draws"
+    assert result["cell"] == ladder.cell_report(ladder.LADDER_CELL_QUESTIONS)
+    assert result["distances"]["max"] <= 3, "the near row's measured distance, not its label"
+
+
+def test_ladder_cell_seeds_from_the_fixture_seed_index(monkeypatch):
+    """PERS-05: the seed comes off the ITEM, never off the loop position — and -1 aborts.
+
+    The seed indices below are deliberately non-positional and non-monotonic, so a loop-position
+    seed would produce ``0, 1, 2`` and be caught. This is the defect that survived Phase 14 in the
+    one arm nothing was compared against; the ladder is compared against that arm's number, so the
+    same defect here would unpair the comparison while every count still summed correctly.
+    """
+    recall = _recall()
+    drawn = []
+
+    def fake_draw_all(model, tokenizer, prompt_ids, device, forbid, index):
+        drawn.append(index)
+        return ["no idea"] * ladder.LADDER_CELL_DRAWS, [True] * ladder.LADDER_CELL_DRAWS
+
+    monkeypatch.setattr(recall, "draw_all", fake_draw_all)
+    items = (
+        _fake_item("what is your name?", slot="person_name", seed_index=77),
+        _fake_item("where did you grow up?", slot="hometown", seed_index=3),
+        _fake_item("what is your street?", slot="street", seed_index=41),
+    )
+    result = ladder.run_ladder_cell(
+        _NoAdapterModel(), _tokenizer(), "cpu", None, items, span=2, distance=30
+    )
+
+    assert drawn == [77, 3, 41]
+    assert [entry["seed_index"] for entry in result["questions"]] == [77, 3, 41]
+    assert result["n_answerable"] == 0
+    assert "rule_of_three_upper" in result["cell"], "a zero cell never reports a bare rate"
+
+    unstamped = (_fake_item("what is your name?", slot="person_name", seed_index=-1),)
+    with pytest.raises(SystemExit) as unpaired:
+        ladder.run_ladder_cell(
+            _NoAdapterModel(), _tokenizer(), "cpu", None, unstamped, span=2, distance=30
+        )
+    assert "seed index" in str(unpaired.value)
+
+
+def test_ladder_cell_asserts_the_value_is_in_the_prompt(monkeypatch):
+    """T-16-23: a prompt that does not carry its value is an abort, never a reported rate.
+
+    A floor-level rung is evidence of INCAPACITY only if the thing being copied was provably in
+    view. Without this, a builder that silently dropped the value would produce exactly the number
+    the ladder expects to see, and it would license the SC1 capability-deficit statement off a
+    measurement of nothing at all.
+    """
+    recall = _recall()
+    drawn = []
+
+    def fake_draw_all(model, tokenizer, prompt_ids, device, forbid, index):
+        drawn.append(index)
+        return ["no idea"] * ladder.LADDER_CELL_DRAWS, [True] * ladder.LADDER_CELL_DRAWS
+
+    monkeypatch.setattr(recall, "draw_all", fake_draw_all)
+    monkeypatch.setattr(
+        ladder,
+        "build_near_prompt",
+        lambda tok, question, value: ladder.build_recall_prompt(tok, question),
+    )
+
+    items = (_fake_item("what is your name?", slot="person_name", seed_index=0),)
+    with pytest.raises(SystemExit) as blind:
+        ladder.run_ladder_cell(
+            _NoAdapterModel(), _tokenizer(), "cpu", None, items, span=1, distance=2
+        )
+
+    assert "measures nothing" in str(blind.value)
+    assert drawn == [], "the cell drew from a prompt whose value was never proven to be in view"
+
+
+def test_ladder_cell_runs_with_the_adapter_disabled():
+    """The base is what the ladder measures, and that is structural rather than a caller's choice.
+
+    Asserted on the AST because the runtime path is the one place it could be removed without any
+    test noticing: with ``draw_all`` faked, an enabled adapter changes nothing observable here.
+    """
+    function = _function_def(_parse("scripts/phase16_ladder.py"), "run_ladder_cell")
+    assert function is not None
+
+    withs = [node for node in ast.walk(function) if isinstance(node, ast.With)]
+    assert withs, "run_ladder_cell no longer wraps its loop in a context manager"
+    assert any(
+        "adapter_disabled" in _called_names(item.context_expr)
+        for node in withs
+        for item in node.items
+    ), "the ladder measures the BASE; the adapter being off is an invariant, not an option"
+
+
+def test_ladder_cell_reuses_the_shared_instrument_rather_than_copying_it():
+    """One draw loop and one scorer in this milestone, both imported (T-16-19, T-16-24).
+
+    A duplicated draw loop is how two arms silently stop being paired, and a second scorer is how
+    two arms silently stop measuring the same thing. Calling ``assert_value_in_prompt`` IN PLACE
+    is also what satisfies 16-03's every-``draw_all``-asserts guard without a
+    ``DRAW_ALL_ASSERTED_BY`` exemption — an indirection on this exact path would be a new exemption
+    on the path that guard exists for.
+    """
+    tree = _parse("scripts/phase16_ladder.py")
+    called = _called_names(_function_def(tree, "run_ladder_cell"))
+    assert {"draw_all", "score_question", "assert_value_in_prompt"} <= called
+
+    defined = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    assert defined.isdisjoint({"draw_all", "_complete", "score_question", "contains_value"}), (
+        "the ladder defines its own generation or scoring loop — it must parametrize the "
+        "committed instrument, never re-implement it"
+    )

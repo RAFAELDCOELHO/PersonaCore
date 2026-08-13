@@ -25,7 +25,9 @@ once, so taking one for the milestone whose entire output is trust in a measurem
 both refusals.
 """
 
+import json
 import pathlib
+import statistics
 import sys
 import time
 
@@ -819,6 +821,198 @@ def _write_material_report(rows, survivors, summary, torch_version, driver_sha, 
             blocks.append("")
 
     MATERIAL_PATH.write_text("\n".join(blocks), encoding="utf-8")
+
+
+# =============================================================================================
+# THE RUN — one cell of the ladder, over the binding fixture's own 216 core questions
+# =============================================================================================
+
+# The BINDING fixture (v3.0): Phases 17 and 18 consume it UNCHANGED. This driver READS it and
+# writes nothing to it — a regenerated or resampled variant would break cross-phase comparison.
+FIXTURE_PATH = _REPO_ROOT / "results" / "phase16_recall_sample.json"
+
+# The two distance rows, NAMED from the committed lattice rather than retyped as literals: the
+# builder branch in `run_ladder_cell` must never be able to drift from `LADDER_DISTANCES`.
+NEAR_DISTANCE, FAR_DISTANCE = LADDER_DISTANCES
+
+
+def _prove(condition, message):
+    """Loud proof: ``SystemExit`` naming the violated contract (never an ``-O``-strippable one).
+
+    Same register and same reason as ``phase14_recall._prove``, with this module's own prefix. It
+    is four lines rather than an import of the private twin because an abort that names the wrong
+    driver sends its reader to the wrong file, and because this module's cheap paths must stay
+    importable without pulling torch.
+    """
+    if not condition:
+        raise SystemExit(f"[phase16_ladder] PROOF FAILED: {message}")
+
+
+def load_core_items():
+    """The binding fixture's 216 core questions, as ``RecallItem``s carrying its OWN seed indices.
+
+    ``core_taught`` (112) + ``core_held_out`` (104). The ``seed_index`` is read VERBATIM from the
+    fixture and never re-enumerated: it is the per-ARM index ``stamp_seed_indices`` stamped, each
+    arm restarting at 0, so the ladder draws exactly the streams the scored arms draw. Re-deriving
+    it from this loop's position is PERS-05's defect, committed here as a read rather than as an
+    ``enumerate``.
+
+    The length is PROVEN equal to ``LADDER_CELL_QUESTIONS`` rather than trusted (T-16-24). If the
+    fixture and the pre-registered denominator ever disagree, every cell stops being comparable to
+    the floor — and the failure is silent, because a cell over 200 questions still produces a
+    perfectly well-formed rate. The run aborts instead of rescaling.
+
+    The fact objects are resolved through the LAZILY imported fact set, so the locked values live
+    in this process only while a run is in flight and never in this module's string surface
+    (T-16-16). ``split`` is reconstructed from which bucket the entry came out of — the fixture
+    records ``seed_index``/``fact_id``/``question``/``reserved`` and leaves the split implicit in
+    its two lists.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import phase14_recall as recall
+
+    fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    fact_by_id = {fact.id: fact for fact in fs.LOCKED_FACTS}
+    items = tuple(
+        recall.RecallItem(
+            fact=fact_by_id[entry["fact_id"]],
+            question=entry["question"],
+            split=split,
+            reserved=entry["reserved"],
+            seed_index=entry["seed_index"],
+        )
+        for key, split in (("core_taught", "taught"), ("core_held_out", "held-out"))
+        for entry in fixture["questions"][key]
+    )
+    _prove(
+        len(items) == LADDER_CELL_QUESTIONS,
+        f"{FIXTURE_PATH.name} yielded {len(items)} core questions but the pre-registration "
+        f"committed {LADDER_CELL_QUESTIONS} — the cell would no longer be scored over the same "
+        "set as the floor it is compared against, and the mismatch is invisible in the reported "
+        "rate. Fix the fixture or re-derive the floor; never rescale the denominator silently",
+    )
+    return items
+
+
+def run_ladder_cell(model, tok, device, forbid, items, *, span, distance):
+    """ONE ladder cell: the SAME 216 questions at the SAME 9 draws as the floor.
+
+    Both halves of that sentence are load-bearing, and neither is free to be traded for wall clock.
+    ``n_answerable`` is a MAX-OVER-DRAWS statistic — a question counts if ANY of its draws carried
+    the value — so its noise floor scales with the draw count. The same count taken at 4 draws is a
+    different quantity that is not comparable to the committed floor, and the incomparability does
+    not show up anywhere in the number itself. The draw count is therefore not a parameter here: it
+    comes from the shared ``phase14_recall.draw_all`` (1 greedy + ``N_SEEDED_SAMPLES``), which is
+    the same loop the floor was measured through, and ``LADDER_CELL_DRAWS`` is what the tests pin
+    it against.
+
+    **Inside ``adapter_disabled``, structurally.** The ladder asks what the BASE can do with a
+    value placed in its own context window; the adapted model already carries a persona in its
+    weights, so measuring it would answer a different question while producing the same shaped
+    number. It is an invariant of every rung, not an option, which is why it wraps the whole loop
+    rather than being a keyword a caller could forget.
+
+    **Every prompt is proven to carry its value before anything is drawn from it** (T-16-23). A
+    floor-level rung is evidence of INCAPACITY only if the thing being copied was provably there to
+    copy; without that proof the same number is equally consistent with a builder that quietly
+    dropped the value, and the two readings license opposite headlines. ``assert_value_in_prompt``
+    aborts rather than warning, for the same reason.
+
+    ``span`` selects the material (``SYNTHETIC_VALUES[span]``, positionally aligned to
+    ``SYNTHETIC_FACT_ORDER``); ``distance`` selects the row's prompt builder. Returns the
+    per-question records plus the cell's ``cell_report`` row under ``"cell"``.
+    """
+    import phase14_recall as recall  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    from personacore.lora import adapter_disabled
+
+    _prove(
+        span in SYNTHETIC_VALUES,
+        f"span {span} has no committed material — the rungs are {LADDER_SPANS}",
+    )
+    _prove(
+        distance in LADDER_DISTANCES,
+        f"distance {distance} is not a committed row: {LADDER_DISTANCES}",
+    )
+    values = SYNTHETIC_VALUES[span]
+    tier = f"ladder cell (span {span}, nominal distance ~{distance})"
+
+    asked = []
+    with adapter_disabled(model):
+        for item in items:
+            # Position is the whole alignment: SYNTHETIC_VALUES[span][i] is the material for the
+            # fact at position i of SYNTHETIC_FACT_ORDER. A slot outside that order has no
+            # material, and `.index` would raise a bare ValueError naming nothing.
+            _prove(
+                item.fact.slot in SYNTHETIC_FACT_ORDER,
+                f"slot {item.fact.slot!r} has no committed synthetic value — the fixture and "
+                "SYNTHETIC_FACT_ORDER have drifted apart, so some questions would be scored "
+                "against another fact's material",
+            )
+            value = values[SYNTHETIC_FACT_ORDER.index(item.fact.slot)]
+            # Resolved by NAME at call time, never through a pre-built table: the two builders are
+            # the row, and a table of function objects would silently keep the old one.
+            build = build_near_prompt if distance == NEAR_DISTANCE else build_far_prompt
+            prompt_ids = build(tok, item.question, value)
+            recall.assert_value_in_prompt(tok, prompt_ids, [value])
+            # MEASURED per question (T-16-21). The far row is a DISTRIBUTION, not a constant, so
+            # the row's label (~30) is never what the report prints.
+            measured_distance = ladder_distance(tok, prompt_ids, value)
+            # PERS-05: the seed comes off the ITEM, never off this loop's position. `-1` is the
+            # unstamped sentinel; an unstamped item would draw from a stream no scored arm used.
+            _prove(
+                item.seed_index >= 0,
+                f"question {item.question!r} reached a ladder cell carrying no seed index — the "
+                "cell would draw from a stream the floor never used, and the comparison would be "
+                "unpaired while still reporting a paired-looking number (PERS-05)",
+            )
+            completions, stopped = recall.draw_all(
+                model, tok, prompt_ids, device, forbid, item.seed_index
+            )
+            k, n = recall.score_question(completions, value)
+            asked.append(
+                {
+                    "question": item.question,
+                    "fact_id": item.fact.id,
+                    "split": item.split,
+                    "seed_index": item.seed_index,
+                    "value": value,
+                    "prompt_ids": prompt_ids,
+                    "measured_distance": measured_distance,
+                    "completions": completions,
+                    "hits": [recall.contains_value(c, value) for c in completions],
+                    "stopped": stopped,
+                    "k": k,
+                    "n": n,
+                }
+            )
+            print(f"[phase16_ladder] {tier} {item.question!r}: {k}/{n}")
+
+    # The floor's own statistic, computed the same way `run_fairness_control` computes it: a
+    # QUESTION counts once if ANY draw carried the value (STAT-01), never once per draw.
+    n_answerable = sum(1 for entry in asked if entry["k"] > 0)
+    measured = [entry["measured_distance"] for entry in asked]
+    return {
+        "tier": tier,
+        "span": span,
+        "distance": distance,
+        "questions": asked,
+        "k": sum(entry["k"] for entry in asked),
+        "n": sum(entry["n"] for entry in asked),
+        "n_answerable": n_answerable,
+        # Min/median/max, never a single number: the far row spans 13 to 60 tokens over this
+        # fixture's questions, and rendering that spread as its label would be a distribution
+        # published as a constant.
+        "distances": {
+            "min": min(measured),
+            "median": statistics.median(measured),
+            "max": max(measured),
+        },
+        # NESTED, not merged: `cell_report`'s row keys `questions` to the DENOMINATOR while this
+        # dict keys it to the per-question records, and `run_fairness_control` — whose return shape
+        # the top rung has — uses the records meaning. Merging would destroy one of the two.
+        "cell": cell_report(n_answerable),
+    }
 
 
 def main():
