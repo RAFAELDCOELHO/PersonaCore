@@ -112,7 +112,13 @@ PERS-05, PERS-06, PREREG-02
      (PREREG-02).
   2. All four arms — prompt-stuffed / adapter-only-with-empty-prompt / base-with-neither /
      embedding-cosine (PERS-04, explicitly not a RAG system: no index, no re-ranking, no chunking) —
-     score the **same 270 questions from `results/phase16_recall_sample.json`**, in one process,
+     score the **same 270 questions from `results/phase16_recall_sample.json`**, in **four fresh
+     processes, one per condition** *(amended 2026-08-12: was "in one process". The split is
+     licensed by the no-residue evidence that closed area 1 of the Phase 16 discussion —
+     `tests/test_lora_toggle.py:77,95,105` at FIXTURE scope, **and**
+     `scripts/phase14_recall.py:1336 run_bit_identity_control` at max |diff| 0.0 on the real 13.9M
+     convbase. Both are required: the Phase 9 tests run on a fixture model, so citing them alone
+     would inherit a fixture-scope guarantee as a real-weights one.)*,
      paired by `item.seed_index` with the `enumerate(questions)` defect in `run_fairness_control`
      fixed (PERS-05), and with `max_new_tokens`, `forbid_ids`, `stop_ids` and context length equal
      across arms and published as report columns (PERS-02).
@@ -128,7 +134,12 @@ PERS-05, PERS-06, PREREG-02
      pairwise arm comparisons — where only 8/8 unanimity clears (p = 0.007812 < 0.05/6) — and a
      verdict of **"not demonstrable at n=8" is a legitimate, pre-registered outcome recorded
      as-written**, exactly as Phase 12 recorded λ\*=None.
-  5. Persistence under context pressure (PERS-03) is measured on both context-bearing arms —
+  5. Persistence under context pressure (PERS-03) is measured on **the prompt-stuffed arm alone —
+     the only arm that carries the fact in the context window** *(amended 2026-08-12: was "on both
+     context-bearing arms". The adapter-only arm receives a formal invariance **proof** rather than
+     a measurement; base-with-neither and embedding-cosine are **not applicable by construction** —
+     the former holds the fact nowhere, and the latter holds it in the candidate pool, which is not
+     the context window.)* —
      `block_size=256` truncation, dilution across turns, adversarial overwrite — with the weight
      arm's invariance stated as the `run_bit_identity_control` **proof** (max |diff| 0.0), not as a
      statistic, and monotone prompt-arm degradation claimed only if the capability ladder got that
