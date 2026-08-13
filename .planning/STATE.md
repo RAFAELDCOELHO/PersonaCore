@@ -4,13 +4,13 @@ milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
 stopped_at: v3.0 roadmap created — Phases 16-18 defined, 26/26 requirements mapped, Phase 19+ left deliberately unplanned behind the pre-registered erasure gate
-last_updated: "2026-08-13T03:05:28.029Z"
-last_activity: 2026-08-13 -- Phase 16 planning complete
+last_updated: "2026-08-13T16:22:31.212Z"
+last_activity: 2026-08-13
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 11
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** v3.0 Adversarial Privacy Audit and Selective Memory Erasure — roadmap created 2026-08-12: Phase 16 (Weight-vs-Prompt Persistence Control) → 17 (Multi-Persona Isolation Matrix) → 18 (Black-Box Adversarial Extraction Audit). 26/26 in-scope requirements mapped, 0 orphans. Phase 19+ Selective Erasure deliberately unplanned — it enters the roadmap only if `erasure_is_worth_attempting()` (pre-registered at `23a830c`, before Phase 16 runs) returns True on Phase 18's measured numbers.
+**Current focus:** Phase 16 — weight-vs-prompt-persistence-control
 
 ## Current Position
 
-Phase: 16 — Weight-vs-Prompt Persistence Control (not started)
-Plan: —
+Phase: 16 (weight-vs-prompt-persistence-control) — EXECUTING
+Plan: 2 of 11
 Status: Ready to execute
-Last activity: 2026-08-13 -- Phase 16 planning complete
+Last activity: 2026-08-13
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Last activity: 2026-08-13 -- Phase 16 planning complete
 | Phase 15 P06 | 17min | 2 tasks | 1 files |
 | Phase 15 P07 | 22min | 3 tasks | 3 files |
 | Phase 15 P08 | 34min | 2 tasks | 1 files |
+| Phase 16 P01 | 20min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,8 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 15]: Phase 15 SC2 not narrowed: the Fisher/delta correlation gate PASSED (rho 0.801544, CI [0.597984, 0.920291] excludes zero), so D-11's miss branch was not taken and the absence of a narrowing note is a recorded outcome
 - [Phase 15]: 15-08: L8's self-citation is verified against docs/REPORT.md MINUS its Limitations section, not via git show — quoting a file into itself self-satisfies, and subprocess is forbidden in this module
 - [Phase 15]: 15-08: DEF-15-01's recorded one-line fix is wrong — CI runs bare ruff with no .venv, so pointing Makefile:16 at .venv/bin/ruff would break CI; the correct fix is python -m ruff
+- [Phase 16]: STAT-04 is now test-enforced: tests/test_package.py pins pyproject.toml by sha256 (read as bytes) — a new runtime dependency, a new extra or a widened specifier all turn a committed test red; if one is genuinely needed, PYPROJECT_SHA256 is updated in the SAME commit as a reviewed decision, never silently
+- [Phase 16]: PREREG-02 is now test-enforced by commit ANCESTRY, not committer dates: tests/test_phase16_prereg.py — the pre-registered erasure rule (23a830c) must be a git ancestor of the first commit adding every results/phase1[678]_* artifact; CI runs fetch-depth: 0 so the query resolves. A phase writing results under a new prefix must add it to V3_ARTIFACT_GLOBS — assert checked catches an empty match set, not an incomplete one
 
 ### Pending Todos
 
@@ -187,7 +190,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-12
+Last session: 2026-08-13T16:21:58.194Z
 Stopped at: v3.0 roadmap created — Phases 16-18 defined, 26/26 requirements mapped, Phase 19+ left deliberately unplanned behind the pre-registered erasure gate
 Resume file: None
 

@@ -138,7 +138,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   published v2.0 baselines 4.5733 / 3.891140 — with SUCCESS/FAILURE/INCONCLUSIVE verdicts and an
   explicit descriptive-not-gated clause for representational consistency. Stdlib only, no torch, no
   numpy.
-- [ ] **PREREG-02**: A CPU-only test asserts the `erasure_gate.py` commit **precedes** every v3.0
+- [x] **PREREG-02**: A CPU-only test asserts the `erasure_gate.py` commit **precedes** every v3.0
   results artifact, so the ordering is structurally enforced rather than merely true today.
 
 ---
@@ -206,7 +206,7 @@ Deferred — revisited when the numbers that gate them exist.
 | ATK-05 | 18 | Pending |
 | ATK-06 | 18 | Pending |
 | PREREG-01 | (pre-milestone) | Complete — `23a830c`, 2026-08-12 |
-| PREREG-02 | 16 | Pending |
+| PREREG-02 | 16 | Complete |
 | ERASE-01 | 19+ (deferred) | Deferred — enters the roadmap only if `erasure_is_worth_attempting()` returns True on Phase 18's numbers |
 | ERASE-02 | 19+ (deferred) | Deferred — same gate |
 
