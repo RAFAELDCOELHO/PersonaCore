@@ -39,6 +39,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
+from _verdict import VERDICT_SECTION, recorded_verdict  # noqa: E402  (needs the insert above)
 from erasure_gate import rule_of_three, wilson_upper_bound  # noqa: E402  (needs the insert above)
 
 from personacore.dialogue import ASSISTANT_ID, build_recall_prompt  # noqa: E402
@@ -1216,17 +1217,363 @@ def proxy_validity(cell_results, top_rung_result):
     }
 
 
-def main():
-    """One mode, named explicitly. A default here would be a half-defined run driver."""
-    if "--vet" not in sys.argv[1:]:
+# =============================================================================================
+# THE REPORT — written by the driver, its text committed BEFORE the numbers it will carry
+# =============================================================================================
+
+LADDER_REPORT_PATH = _REPO_ROOT / "results" / "phase16_ladder_report.md"  # COMMITTED evidence
+
+# D-14's licensing rule, VERBATIM from 16-CONTEXT.md. Reproduced as a single-source constant so a
+# re-wrap or a tidy-up cannot silently paraphrase the pre-registration:
+# `test_report_carries_the_d14_verbatim_clause` rebuilds it from that file and compares byte for
+# byte (T-16-27). Portuguese because that is the language it was recorded in; translating it here
+# would be the paraphrase the test exists to catch.
+D14_CLAUSE = (
+    "licensed_headline() ramifica no degrau mais alto aprovado, com threshold literal "
+    'módulo-level commitado por célula antes da corrida (STAT-05). Ramo "nenhum degrau aprovado" '
+    "licencia só o enunciado de déficit de capacidade do SC1. Violação de monotonicidade "
+    "registrada como anomalia de instrumento no relatório, sem parar a corrida — mas nomeada "
+    "explicitamente, não silenciada."
+)
+
+REPORT_FRAMING = (
+    "**What this report is FOR.** It licenses — or refuses to license — this phase's headline, "
+    "and PERS-01 requires it RECORDED BEFORE any comparison is scored. Everything downstream "
+    "reads it as a committed fact; nothing downstream may re-run, re-anchor or re-interpret it. "
+    "The thresholds below were committed in git before this run produced a single number, and "
+    "the verdict section is `licensed_headline()`'s own output rather than prose written around "
+    "the result.\n"
+    "\n"
+    "**An all-fail ladder is a NORMAL, PRE-REGISTERED outcome — not a broken instrument.** Phase "
+    "14 already measured this exact model with this exact prompt builder at the floor cited "
+    "below. There is deliberately no 'the ladder failed, investigate the instrument' branch: that "
+    "would be an unwritten branch discovered after seeing the result. The instrument-broken "
+    "signal is NON-MONOTONICITY — a harder rung passing while an easier one fails — which is "
+    "reported under its own heading, named explicitly, without stopping the run and without "
+    "moving the licensed branch."
+)
+
+
+def assert_ladder_report_not_clobbered():
+    """A RECORDED verdict is committed evidence. Refuse to overwrite it (T-16-22).
+
+    Mirrors ``phase14_recall.assert_report_not_clobbered``, and called at the TOP of the run for
+    the same reason: a multi-hour run that refuses to write its report at the end has already been
+    wasted. Here the stake is higher than a wasted run — PERS-01 makes this report the licensing
+    boundary for the whole phase, so a second run over a recorded verdict destroys the evidence
+    everything downstream rests on.
+
+    **Anchored on the SECTION via ``_verdict.VERDICT_SECTION``, never on ``split`` of the heading
+    literal** — the 15-04 CR-02 defect. Taking the tail after the LAST occurrence of the heading
+    string put the guard's read inside a later section that quotes it, which never says PENDING, so
+    the guard fired on every legitimate re-drive and ``--force`` became the only way through. An
+    operator who learns that a force flag is always required passes it after a human HAS recorded a
+    verdict, and the guard then destroys exactly the material it exists to protect. There is no
+    force flag here at all: this driver's report is written once.
+
+    ``None`` (no verdict section) and a body without ``PENDING`` are both refusals — a file that is
+    not this writer's output must not be blindly overwritten either.
+    """
+    if not LADDER_REPORT_PATH.exists():
+        return
+    recorded = recorded_verdict(LADDER_REPORT_PATH.read_text(encoding="utf-8"))
+    if recorded is None or "PENDING" not in recorded:
         raise SystemExit(
-            "[phase16_ladder] usage: python scripts/phase16_ladder.py --vet\n"
-            "  --vet  measure every SYNTHETIC_CANDIDATES entry, clear it through the guessability "
-            "gate, and write results/phase16_ladder_material.md.\n"
-            "There is no default mode: the full-ladder run belongs to a later plan and must be "
-            "asked for by name, never inherited by an argumentless invocation."
+            f"[phase16_ladder] {LADDER_REPORT_PATH} already carries a recorded verdict — it is "
+            "the committed PERS-01 licensing decision, recorded before any comparison was scored. "
+            "Re-running over it would destroy the evidence this phase rests on, and the new "
+            "number could not be re-derived without breaking the pre-registration. There is no "
+            "force flag: if this report must genuinely be regenerated, delete it in a reviewed "
+            "commit so the removal is visible in the diff."
         )
-    vet_synthetic_candidates()
+
+
+def _rung_rows(cell_results, top_rung_result):
+    """``{rung: cell_report row}`` for all seven rungs — the shape the committed helpers take.
+
+    ``licensed_headline`` and ``monotonicity_anomalies`` were committed in 16-04 against
+    ``cell_report`` ROWS, not against run results, so the conversion happens once here rather than
+    at each call site. Every rung must be present: a six-row ladder rendered as a full one is a
+    partial measurement presented as a complete one.
+    """
+    rows = {}
+    for rung in RUNG_DIFFICULTY_ORDER:
+        result = top_rung_result if rung == TOP_RUNG else cell_results.get(rung)
+        _prove(
+            result is not None,
+            f"rung {rung} is missing from the ladder results — a report rendering "
+            f"{len(cell_results)} synthetic cells as the committed ladder would present a partial "
+            "measurement as a complete one",
+        )
+        rows[rung] = cell_report(result["n_answerable"])
+    return rows
+
+
+def write_ladder_report(cell_results, top_rung_result, provenance_lines):
+    """Write ``results/phase16_ladder_report.md`` — the committed PERS-01 licensing decision.
+
+    Every framing string is a module-level constant committed before the run (the ``D-20``
+    register Phase 14 established), every number is interpolated from the run or formatted by the
+    committed helpers, and the verdict is ``licensed_headline``'s output rather than prose written
+    around it. A report whose text is written after the numbers is a report written to fit them.
+    """
+    assert_ladder_report_not_clobbered()
+
+    rows = _rung_rows(cell_results, top_rung_result)
+    delta = top_rung_delta(top_rung_result)
+    proxy = proxy_validity(cell_results, top_rung_result)
+    anomalies = monotonicity_anomalies(rows)
+    licence = licensed_headline([rung for rung, row in rows.items() if row["passed"]])
+    floor = delta["committed_floor"]
+
+    blocks = [
+        "# Phase 16 Capability Ladder (PERS-01 / STAT-01 / STAT-02 / STAT-05)",
+        "",
+        "## Run Provenance",
+        "",
+    ]
+    blocks += [f"- {line}" for line in provenance_lines]
+    blocks += ["", "## What This Ladder Licenses", "", REPORT_FRAMING, "", "## Pre-registration"]
+    blocks += [
+        "",
+        "Committed in `scripts/phase16_ladder.py` BEFORE this run, and printed here by formatting "
+        "those constants — never by retyping them (T-16-15).",
+        "",
+        "| constant | value |",
+        "| --- | --- |",
+    ]
+    # "Every LADDER_* constant" is true BY CONSTRUCTION rather than by a hand-kept list: a
+    # constant added later appears here without anyone remembering to add it. The report's own
+    # path is not a pre-registered quantity, which is why the framing prose is named
+    # REPORT_FRAMING rather than LADDER_-anything: this filter is a prefix, not a judgement.
+    blocks += [
+        f"| `{name}` | `{value}` |"
+        for name, value in sorted(globals().items())
+        if name.startswith("LADDER_") and not name.endswith("_PATH")
+    ]
+
+    blocks += [
+        "",
+        "## The Rungs",
+        "",
+        "One row per rung of `RUNG_DIFFICULTY_ORDER`, easiest first. The distance column is the "
+        "MEASURED token distance from the value's end to the `<|assistant|>` trigger over this "
+        "run's own prompts (T-16-21) — the grid's `~2` / `~30` are labels, and the far row is a "
+        "DISTRIBUTION rather than a constant, so min / median / max are all printed. Every cell "
+        "carries its denominator and a bound; a cell scoring nothing also carries the "
+        "rule-of-three ceiling (STAT-02).",
+        "",
+        "| rung | span | measured distance (min / median / max) | cell |",
+        "| --- | --- | --- | --- |",
+    ]
+    for rung in RUNG_DIFFICULTY_ORDER:
+        if rung == TOP_RUNG:
+            span = "median 5 (real taught values)"
+            distances = "not measured — the shared control records no per-question distance"
+        else:
+            span = rung[0]
+            measured = cell_results[rung]["distances"]
+            distances = f"{measured['min']} / {measured['median']:g} / {measured['max']}"
+        # The committed formatter renders every number; only its separator is swapped, because a
+        # pipe is the markdown table's own delimiter.
+        blocks.append(
+            f"| `{rung}` | {span} | {distances} | {format_cell(rows[rung]).replace(' | ', ' · ')} |"
+        )
+
+    rerun = delta["rerun"]
+    blocks += [
+        "",
+        "## Top Rung — the fairness control RE-RUN post-fix (D-13 / D-19)",
+        "",
+        f"Committed floor: `{delta['citation']}`. The SAME control over the SAME questions, "
+        "re-run on REAL taught values after the PERS-05 pairing fix.",
+        "",
+        "| unit | count | rate | one-sided 95% Wilson upper | note |",
+        "| --- | --- | --- | --- | --- |",
+        f"| committed floor, {floor['draws']['label']} | "
+        f"{floor['draws']['successes']} of {floor['draws']['n']} | "
+        f"{floor['draws']['rate']:.6f} | {floor['draws']['wilson_upper_95']:.6f} | "
+        "reported for reconciliation with the committed Phase 14 report; NOT a legal unit for "
+        "inference |",
+        f"| committed floor, {floor['questions']['label']} | "
+        f"{floor['questions']['successes']} of {floor['questions']['n']} | "
+        f"{floor['questions']['rate']:.6f} | {floor['questions']['wilson_upper_95']:.6f} | "
+        "the unit every number in this milestone is compared in |",
+        f"| this re-run, {floor['questions']['label']} | "
+        f"{rerun['n_answerable']} of {rerun['questions']} | {rerun['rate']:.6f} | "
+        f"{rerun['wilson_upper_95']:.6f} | draws: {rerun['k']} of {rerun['n']} |",
+        "",
+        f"**Measured delta, in question units: {delta['difference_questions']:+d} answerable "
+        f"questions** out of {rerun['questions']}.",
+        "",
+        "**D-19 — this number is not expected to reproduce the committed one bit-for-bit.** The "
+        "PERS-05 fix changes WHICH SEEDS ARE DRAWN: the control used to seed from its own loop "
+        "position and now seeds from each question's stamped index, so different completions come "
+        "back. That is the DEFINITION of the defect, not a regression — Phase 14 never compared "
+        "this arm against anything, so pairing was not in play there; Phase 16 does compare, which "
+        "is why the fix is a prerequisite rather than polish. `results/phase14_recall_report.md` "
+        "is deliberately NOT amended: the published number stays exactly as published, and the "
+        "delta above is a REPORTED MEASUREMENT of the fix's impact rather than a silent assertion "
+        "that it did not matter. It never fed a threshold — the gate stays anchored to the "
+        "committed number, because re-anchoring it to a number this phase measured would be "
+        "setting the gate after seeing data.",
+        "",
+        "**Why both units are printed** (T-16-26). The draw-unit bound is roughly nine times "
+        "tighter than the question-unit one. Citing the draw unit alone makes the prompt arm look "
+        f"far more definitively at zero than STAT-01's unit supports, and the ceiling if the floor "
+        f"had scored nothing at all would still be {floor['rule_of_three_upper']:.6f} "
+        f"(rule of three at {floor['questions']['n']} questions).",
+        "",
+        "## Proxy Validity (D-15)",
+        "",
+        f"The `{proxy['cell']}` synthetic cell against the top rung: same prompt position, same "
+        "span length, same denominator, same draw count — differing in MATERIAL (a gate-cleared "
+        "synthetic string versus the real taught value). If they diverge badly, every low rung of "
+        "this ladder is suspect and any reading built on those rungs must say so.",
+        "",
+        f"- synthetic `{proxy['cell']}`: **{proxy['synthetic_answerable']} of "
+        f"{proxy['questions']}** answerable questions",
+        f"- top rung (real values): **{proxy['real_answerable']} of {proxy['questions']}** "
+        "answerable questions",
+        f"- difference: **{proxy['difference']:+d}** questions",
+        f"- committed rule: {proxy['rule']}",
+        f"- **VERDICT: `{proxy['verdict']}`**",
+        "",
+        proxy["frame_caveat"],
+        "",
+        "## Monotonicity Anomalies",
+        "",
+        "A harder rung passing while an easier one fails means the rungs are not ordered by the "
+        "difficulty the grid claims, and every reading built on that order is suspect. Per D-14 "
+        "an anomaly is NAMED here without stopping the run and without moving the licensed "
+        "branch — this is the instrument-broken signal, and an all-fail ladder is not.",
+        "",
+    ]
+    blocks += (
+        [
+            f"- **ANOMALY** — `{harder}` passed while the easier `{easier}` failed"
+            for easier, harder in anomalies
+        ]
+        if anomalies
+        else ["_None: no harder rung passed while an easier one failed._"]
+    )
+
+    blocks += [
+        "",
+        "## Verdict",
+        "",
+        f"**Branch: `{licence['branch']}`** — highest passed rung: `{licence['highest_passed']}`.",
+        "",
+        licence["statement"],
+        "",
+        "### The pre-registered licensing rule (D-14, verbatim)",
+        "",
+        f"> {D14_CLAUSE}",
+        "",
+    ]
+
+    text = "\n".join(blocks)
+    # The guard that protects this file on the NEXT run reads a `## Verdict` SECTION. A report this
+    # writer produced must be one that guard can anchor on, or the protection is nominal.
+    _prove(
+        VERDICT_SECTION.search(text) is not None,
+        "the rendered report carries no `## Verdict` section the clobber guard could anchor on, "
+        "so a later run would overwrite the committed licensing decision in silence",
+    )
+    LADDER_REPORT_PATH.write_text(text, encoding="utf-8")
+    print(f"[phase16_ladder] wrote {LADDER_REPORT_PATH}")
+    print(f"[phase16_ladder] licensed branch: {licence['branch']} ({licence['highest_passed']})")
+    return text
+
+
+def run_full_ladder():
+    """The whole ladder on the real weights: six synthetic cells, then the top rung, then a report.
+
+    Order is not incidental. The clobber guard runs BEFORE anything expensive, because a run that
+    refuses to write its report at the end has already been wasted. The rungs run in
+    ``RUNG_DIFFICULTY_ORDER`` so the raw log reads easiest-to-hardest and a partial run is still
+    interpretable. The report is written LAST, from the numbers, with text that was committed
+    before them.
+    """
+    import phase14_recall as recall  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import torch
+
+    from personacore.config import RuntimeConfig
+    from personacore.preflight import preflight_device
+    from personacore.seeding import seed_everything
+
+    started = time.time()
+    assert_ladder_report_not_clobbered()
+    summary = preflight_device(strict=True)
+    print(f"[phase16_ladder] preflight: {summary}")
+    device = RuntimeConfig().device
+    # ONE seed constant in play, the instrument's own: `draw_all` derives every per-draw generator
+    # from `phase14_recall.question_seed`, so a fresh literal here would be free to drift from the
+    # one that actually drives the draws.
+    seed_everything(recall.SEED)
+
+    model, _model_cfg, tok, forbid, artifact = recall.load_adapted_model(device)
+    items = load_core_items()
+    print(f"[phase16_ladder] {len(items)} core questions, {len(RUNG_DIFFICULTY_ORDER)} rungs")
+
+    cell_results = {}
+    for rung in RUNG_DIFFICULTY_ORDER:
+        if rung == TOP_RUNG:
+            continue
+        span, distance = rung
+        print(
+            f"[phase16_ladder] ===== rung {rung}: span {span}, nominal distance ~{distance} ====="
+        )
+        result = run_ladder_cell(model, tok, device, forbid, items, span=span, distance=distance)
+        cell_results[rung] = result
+        print(f"[phase16_ladder] rung {rung}: {format_cell(result['cell'])}")
+
+    print(f"[phase16_ladder] ===== rung {TOP_RUNG}: the fairness control, REAL values (D-13) =====")
+    top_rung_result = run_top_rung(model, tok, device, forbid, items)
+    top_row = cell_report(top_rung_result["n_answerable"])
+    print(f"[phase16_ladder] rung {TOP_RUNG}: {format_cell(top_row)}")
+
+    wall = time.time() - started
+    provenance_lines = recall.echo_provenance(summary, device, artifact) + [
+        f"torch: {torch.__version__}",
+        f"ladder wall clock: {wall / 60:.1f} min",
+        f"rungs: {len(RUNG_DIFFICULTY_ORDER)} x {LADDER_CELL_QUESTIONS} questions x "
+        f"{LADDER_CELL_DRAWS} draws",
+    ]
+    write_ladder_report(cell_results, top_rung_result, provenance_lines)
+    print(f"[phase16_ladder] ladder complete in {wall / 60:.1f} min")
+
+
+_USAGE = (
+    "[phase16_ladder] usage: python scripts/phase16_ladder.py [--vet]\n"
+    "  (no arguments)  run the full PERS-01 capability ladder and write "
+    "results/phase16_ladder_report.md — the licensing decision PERS-01 requires recorded before "
+    "any comparison is scored.\n"
+    "  --vet           the ONE-TIME material vetting run (already executed; re-running it "
+    "regenerates results/phase16_ladder_material.md, it does not re-choose the material).\n"
+    "An unrecognized argument is refused rather than ignored: silently falling through to a "
+    "multi-hour run because a flag was mistyped is the expensive failure here."
+)
+
+
+def main():
+    """Two modes, both named; an unrecognized argument is refused rather than ignored.
+
+    16-05 shipped this driver with ``--vet`` as its only mode and an argumentless invocation
+    exiting non-zero, because the full-ladder run belonged to a later plan and must not have been
+    inherited by accident. That plan is this one: the ladder run IS this driver's job now, so the
+    no-argument default is the full run and 16-07 invokes it bare. The refusal that mattered is
+    kept where it still matters — an argument this driver does not recognize exits non-zero
+    instead of launching ~80 minutes of generation.
+    """
+    args = sys.argv[1:]
+    unknown = [arg for arg in args if arg != "--vet"]
+    if unknown:
+        raise SystemExit(f"[phase16_ladder] unrecognized argument(s) {unknown}\n{_USAGE}")
+    if "--vet" in args:
+        vet_synthetic_candidates()
+        return
+    run_full_ladder()
 
 
 if __name__ == "__main__":

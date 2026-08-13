@@ -1083,3 +1083,241 @@ def test_proxy_validity_rule_is_committed_not_derived():
 
     with pytest.raises(SystemExit):
         ladder.proxy_validity({}, _fake_top_rung(0))
+
+
+# ===== 16-06 Task 3 — the report writer, the clobber guard, and the extended main() ============
+
+_CONTEXT_PATH = (
+    _REPO_ROOT
+    / ".planning"
+    / "phases"
+    / "16-weight-vs-prompt-persistence-control"
+    / "16-CONTEXT.md"
+)
+
+
+def _d14_clause_from_context():
+    """D-14's clause rebuilt from 16-CONTEXT.md itself — the source of truth, not a copy of it.
+
+    The clause lives there as a hard-wrapped markdown blockquote, so the wrapping is undone (the
+    quote markers stripped, the lines joined by single spaces, the enclosing quotation marks
+    removed) and nothing else. Comparing against the file rather than against a second literal is
+    what makes a silent re-wrap or a tidy-up fail (T-16-27).
+    """
+    lines = _CONTEXT_PATH.read_text(encoding="utf-8").splitlines()
+    start = next(index for index, line in enumerate(lines) if "**D-14:**" in line)
+    quoted = []
+    for line in lines[start:]:
+        stripped = line.strip()
+        if stripped.startswith(">"):
+            quoted.append(stripped[1:].strip())
+        elif quoted:
+            break
+    assert quoted, "no blockquote found under D-14 — 16-CONTEXT.md moved and this test is blind"
+    return " ".join(quoted).strip('"')
+
+
+def _fake_cell(span, distance, n_answerable, *, distances=(1, 1, 1)):
+    """One ladder cell result in the shape ``run_ladder_cell`` returns."""
+    return {
+        "tier": f"ladder cell (span {span}, nominal distance ~{distance})",
+        "span": span,
+        "distance": distance,
+        "questions": [],
+        "k": 0,
+        "n": 216 * ladder.LADDER_CELL_DRAWS,
+        "n_answerable": n_answerable,
+        "distances": dict(zip(("min", "median", "max"), distances)),
+        "cell": ladder.cell_report(n_answerable),
+    }
+
+
+def _render(monkeypatch, tmp_path, answerable_by_rung, top_answerable):
+    """Render a report into ``tmp_path`` and return its text — never touching results/."""
+    monkeypatch.setattr(ladder, "LADDER_REPORT_PATH", tmp_path / "phase16_ladder_report.md")
+    cells = {
+        rung: _fake_cell(
+            rung[0],
+            rung[1],
+            answerable_by_rung[rung],
+            distances=(13, 26.0, 60) if rung[1] == 30 else (1, 1, 1),
+        )
+        for rung in ladder.RUNG_DIFFICULTY_ORDER
+        if rung != ladder.TOP_RUNG
+    }
+    return ladder.write_ladder_report(cells, _fake_top_rung(top_answerable), ["seed: 1337"])
+
+
+def test_report_writer_emits_every_rung_and_no_bare_zero_percent(monkeypatch, tmp_path):
+    """All 7 rungs, the zero cell's rule-of-three ceiling, and no bare zero rate anywhere (STAT-02).
+
+    A zero cell rendered as a bare rate is the single most over-readable thing this report could
+    contain, and the ceiling is what makes "nothing was measured here" a bounded statement instead
+    of a claim of certainty. The rung count is asserted structurally because a six-row table would
+    present a partial ladder as a complete one while every individual number stayed correct.
+    """
+    answerable = dict.fromkeys(
+        [rung for rung in ladder.RUNG_DIFFICULTY_ORDER if rung != ladder.TOP_RUNG], 0
+    )
+    answerable[(2, 2)] = ladder.LADDER_CELL_PASS_K
+    text = _render(monkeypatch, tmp_path, answerable, top_answerable=0)
+
+    rows = [line for line in text.splitlines() if line.startswith("| `(") or "`fairness" in line]
+    assert len(rows) == len(ladder.RUNG_DIFFICULTY_ORDER) == 7, rows
+    for rung in ladder.RUNG_DIFFICULTY_ORDER:
+        assert f"| `{rung}` |" in text, f"rung {rung} is missing from the table"
+
+    assert not re.search(r"\b0(\.0+)?%", text), "a bare zero percentage reached the report"
+    assert f"{rule_of_three(216):.6f}" in text, "a zero cell reported no rule-of-three ceiling"
+    assert "PASS" in text and "FAIL" in text
+    assert "13 / 26 / 60" in text, "the far row's distance was rendered as a constant"
+
+    # A partial ladder is refused rather than rendered as a complete one.
+    monkeypatch.setattr(ladder, "LADDER_REPORT_PATH", tmp_path / "partial.md")
+    with pytest.raises(SystemExit):
+        ladder.write_ladder_report({(1, 2): _fake_cell(1, 2, 0)}, _fake_top_rung(0), [])
+
+
+def test_report_carries_the_d14_verbatim_clause(monkeypatch, tmp_path):
+    """T-16-27: the pre-registration clause is byte-identical to 16-CONTEXT.md's own text.
+
+    Compared against a single-source constant AND against the CONTEXT file, so neither a re-wrap
+    in the driver nor a quiet paraphrase in the report can pass. A pre-registration that can be
+    reworded after the fact is not one.
+    """
+    assert ladder.D14_CLAUSE == _d14_clause_from_context()
+
+    text = _render(
+        monkeypatch,
+        tmp_path,
+        dict.fromkeys(
+            [rung for rung in ladder.RUNG_DIFFICULTY_ORDER if rung != ladder.TOP_RUNG], 0
+        ),
+        top_answerable=0,
+    )
+    assert ladder.D14_CLAUSE in text
+    assert "no_rung_passed" in text, "the all-fail branch is first-class, not an error path"
+    assert ladder.HEADLINE_BRANCHES["no_rung_passed"] in text
+
+
+def test_report_prints_both_floor_units_with_the_draw_unit_labelled(monkeypatch, tmp_path):
+    """T-16-26: the forbidden unit is printed WITH its label, never on its own.
+
+    The draw-unit bound is ~9x tighter. It is reported so a reader can reconcile this run with the
+    committed Phase 14 report, and labelled so the tighter number cannot be the one that gets
+    quoted. Both denominators must be visible: a rate without its denominator is the defect this
+    milestone exists to stop.
+    """
+    text = _render(
+        monkeypatch,
+        tmp_path,
+        dict.fromkeys(
+            [rung for rung in ladder.RUNG_DIFFICULTY_ORDER if rung != ladder.TOP_RUNG], 0
+        ),
+        top_answerable=2,
+    )
+    floor = ladder.floor_in_both_units()
+
+    assert f"{floor['draws']['successes']} of {floor['draws']['n']}" in text
+    assert f"{floor['questions']['successes']} of {floor['questions']['n']}" in text
+    assert ladder.DRAW_UNIT_LABEL in text and "forbid" in ladder.DRAW_UNIT_LABEL.lower()
+    assert ladder.QUESTION_UNIT_LABEL in text
+    assert f"{floor['draws']['wilson_upper_95']:.6f}" in text
+    assert f"{floor['questions']['wilson_upper_95']:.6f}" in text
+
+    assert "+1 answerable questions" in text, "the delta is reported, not asserted to be zero"
+    assert "D-19" in text and "WHICH SEEDS ARE DRAWN" in text
+    assert "proxy_consistent" in text or "proxy_diverges" in text
+    assert ladder.PROXY_FRAME_CAVEAT in text, "the D-15 caveat never travels separately"
+    assert "Monotonicity Anomalies" in text, "an absent section reads as an oversight"
+
+
+def test_clobber_guard_refuses_to_overwrite_a_recorded_verdict(monkeypatch, tmp_path):
+    """T-16-22: a recorded verdict is committed evidence — the licensing boundary of the phase.
+
+    Three states, three behaviours: no file is fine, a PENDING body is fine (an interrupted run
+    may be re-driven), and a file carrying a real verdict — or no verdict section at all — is
+    refused. The middle case is what CR-02 broke: a guard that fires on legitimate re-drives
+    teaches its operator to force past it, and then it destroys the evidence it exists to protect.
+    """
+    report = tmp_path / "phase16_ladder_report.md"
+    monkeypatch.setattr(ladder, "LADDER_REPORT_PATH", report)
+
+    ladder.assert_ladder_report_not_clobbered()  # absent: nothing to protect yet
+
+    report.write_text("# ladder\n\n## Verdict\n\nPENDING\n", encoding="utf-8")
+    ladder.assert_ladder_report_not_clobbered()  # an interrupted run may be re-driven
+
+    report.write_text(
+        f"# ladder\n\n## Verdict\n\n**Branch: `no_rung_passed`**\n\n> {ladder.D14_CLAUSE}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit) as recorded:
+        ladder.assert_ladder_report_not_clobbered()
+    assert "committed PERS-01 licensing decision" in str(recorded.value)
+
+    report.write_text("# ladder\n\nno verdict section at all\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        ladder.assert_ladder_report_not_clobbered()
+
+    # And the writer refuses too, not only main() — the run must not reach the write and then
+    # discover the file it cannot overwrite.
+    report.write_text("# ladder\n\n## Verdict\n\nrecorded\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        ladder.write_ladder_report({}, _fake_top_rung(0), [])
+
+
+def test_clobber_guard_anchors_on_the_verdict_section():
+    """The 15-04 CR-02 fix, structurally: the SECTION regex, never a split on the heading literal.
+
+    ``text.split("## Verdict")[-1]`` takes the tail after the LAST occurrence of a string that
+    also appears in prose — including in a report that quotes its own heading. That tail never
+    says PENDING, so the guard fired on every legitimate re-drive until ``--force`` became routine,
+    and a routine force flag destroys the hand-recorded evidence. One shared, anchored read.
+    """
+    source = (_REPO_ROOT / "scripts" / "phase16_ladder.py").read_text(encoding="utf-8")
+    assert 'split("## Verdict")' not in source
+    assert "VERDICT_SECTION" in source
+
+    tree = _parse("scripts/phase16_ladder.py")
+    imported = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "_verdict"
+        for alias in node.names
+    }
+    assert {"VERDICT_SECTION", "recorded_verdict"} <= imported, (
+        "the anchored read must be IMPORTED from scripts/_verdict.py — a re-implementation here "
+        "would be the sixth hand-copied instance of the read CR-02 consolidated"
+    )
+    assert "recorded_verdict" in _called_names(
+        _function_def(tree, "assert_ladder_report_not_clobbered")
+    )
+
+
+def test_main_still_supports_vet_and_defaults_to_the_full_ladder(monkeypatch):
+    """16-05's ``--vet`` mode survives; the no-argument default is now the full ladder run.
+
+    16-05 refused an argumentless invocation because the ladder run belonged to a later plan and
+    must not have been inherited by accident. This is that plan, and 16-07 invokes this driver
+    bare — so the default moves, and the refusal is kept where it still earns its keep: an
+    argument this driver does not recognize exits non-zero instead of launching ~80 minutes of
+    generation on a typo.
+    """
+    ran = []
+    monkeypatch.setattr(ladder, "vet_synthetic_candidates", lambda: ran.append("vet"))
+    monkeypatch.setattr(ladder, "run_full_ladder", lambda: ran.append("ladder"))
+
+    monkeypatch.setattr(sys, "argv", ["phase16_ladder.py", "--vet"])
+    ladder.main()
+    assert ran == ["vet"]
+
+    monkeypatch.setattr(sys, "argv", ["phase16_ladder.py"])
+    ladder.main()
+    assert ran == ["vet", "ladder"]
+
+    monkeypatch.setattr(sys, "argv", ["phase16_ladder.py", "--force"])
+    with pytest.raises(SystemExit) as typo:
+        ladder.main()
+    assert "unrecognized argument" in str(typo.value)
+    assert ran == ["vet", "ladder"], "an unrecognized flag must not fall through to a run"
