@@ -421,6 +421,54 @@ def assert_no_value_in_prompt(tok, question, values):
         )
 
 
+def assert_value_in_prompt(tok, prompt_ids, values):
+    """The logical twin of ``assert_no_value_in_prompt``: prove every value IS in the model's view.
+
+    Same two detectors, same ``_prove``/``SystemExit`` register, opposite polarity. The twin guards
+    the SCORED paths, where a value reaching the prompt falsifies the claim at the moment it is
+    demonstrated. This guards the paths where the value in the prompt IS the measurement: the
+    D-11.1 fairness control, and every rung of the in-context capability ladder built on it. Both
+    failures are silent by default and both destroy the number — a rung whose value never reached
+    the context measures nothing while still reporting a rate. Checking at both levels is what
+    makes the ladder's low rungs auditable at all rather than merely plausible: a floor result is
+    only evidence of incapacity if the thing being copied was provably there to copy.
+
+    **Both levels are computed; the verdict is their UNION, not their intersection.** The two
+    detectors are blind to different things, so either one firing means the value is in view:
+
+    * the normalized-string check reads the DECODED prompt, so it cannot see a value whose
+      characters survive tokenization but detokenize differently;
+    * the contiguous-id-run check reads the ids, so it cannot see a value split across a BPE merge
+      boundary. Byte-level BPE is context-dependent: a value preceded by a space merges its first
+      characters into an id the standalone encoding spells out separately, so the standalone
+      sequence is not a contiguous run even though the value is fully in view.
+
+    **Requiring BOTH was measured false against the committed fixture** — 54 of 216 core fairness
+    prompts, 2 of the 8 core facts — where the decoded string carries the value and the standalone
+    encoding is not a contiguous run, exactly by the leading-space merge above. ``contains_value``'s
+    docstring already records the asymmetry that settles the operator: an id-subsequence check is a
+    diagnostic whose FALSE POSITIVES are free and whose FALSE NEGATIVES are not. In the twin's
+    absence direction a false positive only aborts a run that was going to leak, so the twin ANDs
+    two absences. Here the cost inverts — a false negative aborts a run whose fact WAS in view — so
+    the two presences are ORed. It is the same union of detectors, asserted from both sides.
+
+    ``prompt_ids`` rather than a question string: callers build prompts with a persona span or with
+    the value inside the question text, so rebuilding from a bare question would check a different
+    prompt than the one actually drawn from. ``values`` is a PARAMETER, never a module-level
+    constant — this module holds no fact strings at import time (LAZY-IMPORT RULE).
+    """
+    decoded = normalize(tok.decode(prompt_ids))
+    for value in values:
+        in_string = normalize(value) in decoded
+        in_ids = _is_contiguous_subsequence(prompt_ids, tok.encode(value))
+        _prove(
+            in_string or in_ids,
+            f"value {value!r} is in the prompt neither as a normalized string nor as a contiguous "
+            f"id run — the prompt does not carry the fact it exists to put in view, so anything "
+            f"drawn from it measures nothing while still reporting a rate",
+        )
+
+
 # =====================================================================================
 # ===== THE HARNESS — model load, provenance, and the per-question completion helper =====
 # =====================================================================================
@@ -1214,11 +1262,10 @@ def run_fairness_control(model, tok, device, forbid, questions, statements):
             statement = statements[item.fact.id]
             # The one sanctioned appearance of a fact value in a prompt in this entire phase.
             prompt_ids = build_recall_prompt(tok, item.question, persona=[statement])
-            _prove(
-                contains_value(tok.decode(prompt_ids), item.fact.value),
-                f"the fairness prompt for {item.question!r} does not actually carry "
-                f"{item.fact.value!r} — the control measures nothing if the fact is not in view",
-            )
+            # PERS-06: the named twin, not an inline assertion. Two in-prompt checks of differing
+            # strictness living side by side is exactly how the stricter one stops being the one
+            # that runs, so the inline `_prove(contains_value(...))` is deleted, not kept beside it.
+            assert_value_in_prompt(tok, prompt_ids, [item.fact.value])
             completions, stopped = draw_all(model, tok, prompt_ids, device, forbid, item.seed_index)
             k, n = score_question(completions, item.fact.value)
             asked.append(

@@ -871,3 +871,185 @@ def test_fairness_control_refuses_an_unstamped_item(monkeypatch):
         _run_fairness(monkeypatch, _fairness_items((7, -1)))
     assert "PERS-05" in str(excinfo.value)
     assert "stamp_seed_indices" in str(excinfo.value)
+
+
+# =====================================================================================
+# ===== PERS-06 — `assert_value_in_prompt`, the named twin =====
+# =====================================================================================
+
+
+class _SplitTokenizer:
+    """A tokenizer double whose two views DISAGREE on purpose — the whole premise of these tests.
+
+    ``decode`` and ``encode`` are independent stubs, so a case where the string check sees the
+    value and the id check does not (and the converse) is LITERAL rather than hunted for in real
+    BPE merge behavior. ``_FixedTokenizer`` makes the same argument for the fit guard's boundary.
+    """
+
+    def __init__(self, decoded, encodings):
+        self._decoded = decoded
+        self._encodings = encodings
+
+    def decode(self, ids):
+        return self._decoded
+
+    def encode(self, text):
+        return self._encodings[text]
+
+
+def test_assert_value_in_prompt_is_the_named_twin():
+    """PERS-06 / D-18: the assertion is a named, public function whose values are a PARAMETER.
+
+    It existed inline and unnamed inside ``run_fairness_control``, so nothing outside that one
+    function could reach it — and Phases 17 and 18 consume this same file (D-20). A guard that
+    cannot be called is a guard the next caller reimplements slightly differently.
+    """
+    import inspect
+
+    assert callable(pr.assert_value_in_prompt)
+    assert not pr.assert_value_in_prompt.__name__.startswith("_")  # public, like its twin
+
+    params = list(inspect.signature(pr.assert_value_in_prompt).parameters)
+    assert params[-1] == "values"
+    assert params == ["tok", "prompt_ids", "values"]
+    # `prompt_ids`, not `question`: the callers build prompts with a persona span or with the value
+    # inside the question, so rebuilding from a bare question would check a different prompt than
+    # the one drawn from. That divergence is the twin's one structural difference.
+    assert "question" not in params
+
+
+def test_assert_value_in_prompt_holds_no_module_level_values():
+    """LAZY-IMPORT RULE: the values come from the caller, never from this module.
+
+    ``test_no_fact_strings_at_import`` pins that no fact string is resident at import time. This
+    pins the mechanism that keeps it true for the new guard: a default argument or a module-level
+    constant fed to it would put the locked values back in the demo's address space.
+    """
+    fn = _driver_function("assert_value_in_prompt")
+    assert fn.args.defaults == []  # no default on any parameter, `values` included
+    assert fn.args.kw_defaults == []
+
+    module_level = set()
+    tree = ast.parse((_REPO_ROOT / "scripts" / "phase14_recall.py").read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            module_level |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            module_level.add(node.target.id)
+    assert module_level, "the module-level constant scan found nothing — the AST walk broke"
+
+    for call in _calls_to("assert_value_in_prompt"):
+        for arg in call.args:
+            names = {n.id for n in ast.walk(arg) if isinstance(n, ast.Name)}
+            assert not (names & module_level), f"module-level constant passed as values: {names}"
+
+
+def _calls_to(name):
+    """Every call to ``name`` anywhere in the driver."""
+    tree = ast.parse((_REPO_ROOT / "scripts" / "phase14_recall.py").read_text(encoding="utf-8"))
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == name
+    ]
+
+
+def test_assert_value_in_prompt_checks_both_levels():
+    """Both detectors are live, and the verdict is their UNION — either one is enough.
+
+    The two detectors are blind to different things, so the guard fires only when NEITHER sees the
+    value. Deleting either level is caught by the case the other one covers, which is what makes
+    this the RED-observable pin on "both levels":
+
+    * string sees it / ids do not  -> in view (the measured BPE-merge-boundary case below)
+    * ids see it / string does not -> in view
+    * neither                      -> SystemExit
+    """
+    ids = [1, 2, 3, 4, 5]
+
+    # String sees it, the id run does not. Deleting the STRING level would wrongly abort here.
+    string_only = _SplitTokenizer(f"the answer is {_FAKE_VALUE}", {_FAKE_VALUE: [91, 92]})
+    pr.assert_value_in_prompt(string_only, ids, [_FAKE_VALUE])
+
+    # The id run sees it, the decoded string does not. Deleting the ID level wrongly aborts here.
+    ids_only = _SplitTokenizer("nothing legible here", {_FAKE_VALUE: [2, 3, 4]})
+    pr.assert_value_in_prompt(ids_only, ids, [_FAKE_VALUE])
+
+    # Neither detector sees it: the prompt does not carry the fact it exists to put in view.
+    neither = _SplitTokenizer("nothing legible here", {_FAKE_VALUE: [91, 92]})
+    with pytest.raises(SystemExit) as excinfo:
+        pr.assert_value_in_prompt(neither, ids, [_FAKE_VALUE])
+    assert _FAKE_VALUE in str(excinfo.value)  # the message names the offender, like its twin
+
+    # `values` is a sequence and EVERY entry is checked — not just the first.
+    with pytest.raises(SystemExit):
+        pr.assert_value_in_prompt(
+            _SplitTokenizer(f"the answer is {_FAKE_VALUE}", {_FAKE_VALUE: [91], "absent": [92]}),
+            ids,
+            [_FAKE_VALUE, "absent"],
+        )
+
+
+def test_assert_value_in_prompt_accepts_the_measured_bpe_boundary_case():
+    """The real prompts the fairness control builds must all pass. Measured, not assumed.
+
+    54 of the 216 core fairness prompts — 2 of the 8 core facts — carry their value in the decoded
+    string while the value's STANDALONE encoding is not a contiguous id run, because the leading
+    space merges its first characters into a different id. Those values are unambiguously in the
+    model's view. An intersection of the two detectors would abort a quarter of the control's
+    questions, so this pins the union against a future tightening that looks stricter and is
+    simply wrong. CPU-only: no model, no draws — prompt construction and the guard, nothing else.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
+    )
+    fs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fs)
+
+    core_taught, core_held_out, _ = pr.build_question_sets(fs.LOCKED_FACTS)
+    statements = {f.id: fs.SLOT_FORMS[f.slot].ans1.format(v=f.value) for f in fs.LOCKED_FACTS}
+
+    split_level = 0
+    for item in core_taught + core_held_out:
+        prompt_ids = build_recall_prompt(tok, item.question, persona=[statements[item.fact.id]])
+        pr.assert_value_in_prompt(tok, prompt_ids, [item.fact.value])  # SystemExit on a miss
+        if not pr._is_contiguous_subsequence(prompt_ids, tok.encode(item.fact.value)):
+            split_level += 1
+
+    # The premise itself is asserted: if the fixture ever stopped exercising the merge-boundary
+    # case, this test would still pass while having verified nothing about it.
+    assert split_level > 0, "no prompt exercises the BPE merge boundary — the premise is gone"
+
+
+def test_fairness_control_calls_the_named_twin():
+    """T-16-08: the control calls the named guard, and the weaker inline assertion is GONE.
+
+    Two in-prompt assertions of differing strictness living side by side is exactly how the
+    stricter one stops being the one that runs, so the extraction has to be a MOVE and not a copy.
+    AST rather than a substring scan: the docstring and the comment beside the call both discuss
+    the deleted assertion by name.
+    """
+    control = _driver_function("run_fairness_control")
+    called = {
+        node.func.id
+        for node in ast.walk(control)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "assert_value_in_prompt" in called
+
+    # `contains_value` may still be called for the per-completion `hits` flags — what must be gone
+    # is `contains_value` in an ASSERTION position, i.e. as an argument to `_prove`.
+    proved = [
+        node
+        for node in ast.walk(control)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "_prove"
+    ]
+    assert proved, "the control's own `_prove` guards vanished — the AST walk stopped working"
+    for node in proved:
+        inner = {
+            c.func.id
+            for arg in node.args
+            for c in ast.walk(arg)
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+        }
+        assert "contains_value" not in inner
