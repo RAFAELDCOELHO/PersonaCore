@@ -109,6 +109,7 @@ first and the headline licensed by a capability ladder that runs *before* anythi
      only a *capability-deficit* statement is licensed — were pushed before the run (STAT-05). A
      CPU-only test asserts `erasure_gate.py`'s commit precedes every v3.0 results artifact
      (PREREG-02).
+
   2. All four arms — prompt-stuffed / adapter-only-with-empty-prompt / base-with-neither /
      embedding-cosine (PERS-04, explicitly not a RAG system: no index, no re-ranking, no chunking) —
      score the **same 270 questions from `results/phase16_recall_sample.json`**, in **four fresh
@@ -121,10 +122,12 @@ first and the headline licensed by a capability ladder that runs *before* anythi
      paired by `item.seed_index` with the `enumerate(questions)` defect in `run_fairness_control`
      fixed (PERS-05), and with `max_new_tokens`, `forbid_ids`, `stop_ids` and context length equal
      across arms and published as report columns (PERS-02).
+
   3. Instrument integrity is widened, never weakened: the `persona=` AST guard at
      `tests/test_phase14_scoring.py:425` is widened deliberately and visibly rather than deleted,
      and gains its logical twin `assert_value_in_prompt`, so every `draw_all` call site asserts
      something and no path has a skip mode (PERS-06).
+
   4. Every reported rate ships with its denominator and a bound: fact-level (n=8) cluster
      resampling as the descriptive interval, Wilson reported alongside and labelled as the
      independence-assuming width, `3/n` shown wherever successes are zero, and no bare `0%` in any
@@ -133,6 +136,7 @@ first and the headline licensed by a capability ladder that runs *before* anythi
      pairwise arm comparisons — where only 8/8 unanimity clears (p = 0.007812 < 0.05/6) — and a
      verdict of **"not demonstrable at n=8" is a legitimate, pre-registered outcome recorded
      as-written**, exactly as Phase 12 recorded λ\*=None.
+
   5. Persistence under context pressure (PERS-03) is measured on **the prompt-stuffed arm alone —
      the only arm that carries the fact in the context window** *(amended 2026-08-12: was "on both
      context-bearing arms". The adapter-only arm receives a formal invariance **proof** rather than
@@ -156,16 +160,45 @@ first and the headline licensed by a capability ladder that runs *before* anythi
 **Plans**: 11 plans in 10 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 16-01-PLAN.md — PREREG-02 ancestry guard + CI full history + STAT-04 dependency freeze
 - [ ] 16-02-PLAN.md — PERS-05 `item.seed_index` pairing fix + `assert_value_in_prompt` extraction
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 16-03-PLAN.md — widen the `persona=` AST guard in SCOPE + every-`draw_all`-asserts guard
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 16-04-PLAN.md — D-16 gate widening + ladder threshold pre-registration + `licensed_headline()`
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 16-05-PLAN.md — synthetic ladder material: construction, distance builders, guessability vetting
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 16-06-PLAN.md — ladder cell runner, top rung, D-15 proxy check, report writer
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 16-07-PLAN.md — RUN the capability ladder and commit it (blocking, pre-comparison)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 16-08-PLAN.md — four-arm driver: `CONDITION_ORDER`, shared parity config, arm D cosine
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 16-09-PLAN.md — per-fact statistic, cluster bootstrap, exact sign test, Holm over 6 pairs
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 16-10-PLAN.md — PERS-03 context-pressure sweep + persistence report writer + `main()`
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 16-11-PLAN.md — RUN four fresh processes + sweep, assemble the report, record the verdict
 
 **Research flag**: light research only, scoped to the in-context capability ladder's rung design
@@ -187,10 +220,12 @@ cross-matrix against the base model's own prior
      catch `r` drift but never `alpha` (ISO-06) — and an **adapter-swap canary** asserts a `lora_B`
      tensor actually changed on every swap, so a silently failed swap cannot produce the most
      flattering possible wrong answer: a perfect diagonal with zero leakage (ISO-04).
+
   2. N=3 personas ship as committed data with colliding names and **contradictory values in the same
      slot**, passing the existing `scripts/phase14_factset_gate.py` guessability + tokenizer-census
      instrument (imported, not copied) with a recorded human GO/ADAPT verdict as a hard blocker
      (ISO-01).
+
   3. The matrix is **N generation sweeps scored N ways** over shared-slot questions — never persona
      *j*'s own questions against adapter *i*, which would make the off-diagonal ~0 by construction —
      scored by a cell-blind scorer whose signature takes no `(i, j)` argument (pinned by
@@ -198,12 +233,14 @@ cross-matrix against the base model's own prior
      column** so an off-diagonal hit is separable from the base's own prior (`BASE_PRIOR_SEEDS`
      answers `rose` for pet names unprompted), and confabulations recorded in their own category
      rather than sharing a cell with leaks (ISO-02, ISO-03).
+
   4. The gated quantity is the **within-run diagonal-vs-off-diagonal contrast**, which needs no
      external threshold — Phase 14's 0.2486 / 0.2000 are **not** used, because they were derived on
      `CALIBRATION_POOL` and reusing that pool as a persona makes the gate circular (ISO-07) — and
      pairwise cell comparisons are corrected by **Holm** step-down, not Benjamini-Hochberg, since
      off-diagonal cells share adapters row-wise and question sets column-wise so BH's
      independence/PRDS assumption fails (STAT-03).
+
   5. The worst-colliding pair is replicated across k=3 seeds and reported **descriptively**
      (min/max/median, never a hypothesis test) so seed variance is not mistaken for interference
      (ISO-05), every off-diagonal zero carries its denominator and one-sided upper bound (STAT-02),
@@ -232,15 +269,18 @@ schedule pressure can scope it down without invalidating it
      of "the attacker does not already know the answer". Prefix injection carries a declared,
      small, pre-registered injection budget with the realized injection measured per prompt and only
      the unprompted remainder scored.
+
   2. **Attack family zero is a positive control** — Phase 14's taught-template direct question, a
      known-extractable target at 0.4921. If it does not reproduce, the harness is declared broken
      and **no privacy statement is admissible**; this is what converts "our attacks found nothing"
      from unfalsifiable into testable (ATK-03).
+
   3. A **no-adapter negative control** runs at the *same* attack budget, prompts, seeds, `forbid_ids`
      and `stop_ids`, and every ASR@{1,4,16,64} plus the cumulative curve is reported adapter-on vs
      adapter-off, paired at the question level, with its denominator and bound — fact-level (n=8)
      cluster resampling descriptive, Wilson labelled as the independence-assuming width, `3/n` at
      zero successes, no bare `0%` (ATK-02, STAT-01, STAT-02, STAT-04, STAT-06).
+
   4. Every zero-extraction target records its **teacher-forced NLL**, so "the attack was weak" (low
      NLL, zero extraction) is separable from "the fact is genuinely absent" (high NLL) — required
      given a tokenizer that forbids 7,645 of 8,192 ids at sampling and can depress an extraction
@@ -249,6 +289,7 @@ schedule pressure can scope it down without invalidating it
      passed, the budget was actually spent, the base arm was measured at the same budget, and every
      zero carries an NLL. All verdict templates, INCONCLUSIVE included, are committed before the run
      (ATK-04, ATK-05, STAT-05).
+
   5. README and `docs/REPORT.md` state the toggle as **availability, not authorization**, in one
      committed sentence reused verbatim (demo UI copy included, since that is a published claim),
      landed as a **dated continuation** rather than an in-place edit of the shipped v2.0 text.
