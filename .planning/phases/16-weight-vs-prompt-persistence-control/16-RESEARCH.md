@@ -590,23 +590,44 @@ Every surface below is CPU-only and torch-free except where noted.
 | A4 | Multiplicity should be priced into the per-cell z rather than disclosed in prose only | Q1 | Both are defensible. The literal is 10 under z-pricing and 8 without; the planner must pick ONE before the run and record which and why |
 | A5 | `~80 min` ladder estimate assumes ladder cells run at arm-B per-question cost (3.183 s median) | Environment Availability | Ladder cells run the base model with a persona span — same configuration as arm B — so this should hold; the CONTEXT.md 11.5% cross-run spread on arm A means treat it as ±15% |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> **All four open items below were settled during planning (2026-08-12) and are now
+> pre-registration, not preference.** Phases 17 and 18 read this file — the resolutions are inlined
+> here so a later reader does not re-open a question that already has a committed answer in a plan.
 
 1. **Does the top rung share `LADDER_CELL_PASS_K`, or is it exempt?**
-   - What we know: D-13 makes the fairness-control re-run the top rung; D-14 says the threshold is
+   - What we knew: D-13 makes the fairness-control re-run the top rung; D-14 says the threshold is
      "per cell" (6 cells). The re-run's prior is 1/216, so it would need ≥ 10/216 to pass.
-   - What's unclear: whether `licensed_headline()` treats the top rung as a passable rung or purely
-     as the D-13 delta measurement.
-   - Recommendation: **apply the same literal to all 7 rungs.** `k_min = 10` at n = 216 is identical
-     whether multiplicity is priced at 6 or 7, so this costs nothing and removes an ambiguity that
-     would otherwise be resolved after seeing the number.
+   - What was unclear: whether `licensed_headline()` treats the top rung as a passable rung or
+     purely as the D-13 delta measurement.
+   - **RESOLVED — `16-04-PLAN.md` §Choice 3.** The same literal applies to all 7 rungs. `k_min` is
+     10 at `n = 216` whether multiplicity is priced at 6 cells or 7 rungs (`z = 2.393980` and
+     `z = 2.449998` both yield 10), so it costs nothing and removes an ambiguity that would
+     otherwise be resolved after seeing a number.
 
 2. **How many synthetic values per cell?**
-   - What we know: D-12 requires token-length matching and guessability filtering; the 216 core
+   - What we knew: D-12 requires token-length matching and guessability filtering; the 216 core
      questions span 8 facts.
-   - Recommendation: one synthetic value **per fact** (8 per cell), so each of the 216 questions gets
-     the synthetic value matched to its own slot. This preserves the fixture's balance (14 taught +
-     13 held-out per fact) and keeps the per-fact grouping key from D-06 usable on ladder output too.
+   - **RESOLVED — `16-05-PLAN.md` Task 1 (`SYNTHETIC_FACT_ORDER`) and Task 2 (`SYNTHETIC_VALUES`).**
+     One synthetic value **per fact**, 8 per span, positionally aligned to the fixture's own
+     `provenance.core_facts` order, so each of the 216 questions gets the synthetic value matched to
+     its own slot. This preserves the fixture's balance (14 taught + 13 held-out per fact) and keeps
+     D-06's per-fact grouping key usable on ladder output too.
+
+3. **Assumptions Log A1 — cell size `n`.**
+   - **RESOLVED — `16-04-PLAN.md` §Choice 1.** `LADDER_CELL_QUESTIONS = 216`, the full core set
+     (112 `core_taught` + 104 `core_held_out`). Identical to the floor's `n` and the top rung's `n`,
+     which is what makes the comparison against `1/216` apples-to-apples and what D-15's
+     proxy-validity check requires.
+
+4. **Assumptions Log A4 — price multiplicity into `z`, or disclose it in prose?**
+   - **RESOLVED — `16-04-PLAN.md` §Choice 2.** Priced into the per-cell `z`:
+     `LADDER_CELL_Z = 2.393979799818510`, the one-sided `1 - 0.05/6` quantile. A false pass licenses
+     the STRONGER headline, which is the over-licensing direction this milestone exists to avoid;
+     the cost is two extra questions. This is a **choice of literal, not a hypothesis test** — no
+     p-value is computed on the ladder and no verdict is emitted there, so D-09's Holm family stays
+     closed at exactly the 6 arm pairs and STAT-06 is untouched.
 
 ## Sources
 
