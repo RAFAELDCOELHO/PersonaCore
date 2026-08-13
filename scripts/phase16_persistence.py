@@ -20,6 +20,7 @@ duplicated draw loop is how two arms silently stop being paired.
 """
 
 import hashlib
+import itertools
 import json
 import pathlib
 import random
@@ -956,3 +957,292 @@ def report_proportion(successes, n_questions, n_draws):
             f"95% Wilson upper bound {row['wilson_upper_95']:.6f}; {n_draws} draws)"
         )
     return row
+
+
+# =============================================================================================
+# ===== THE INFERENTIAL GATE — exact paired sign test + Holm across exactly 6 pairs =====
+# =============================================================================================
+
+# D-09 — THE FAMILY IS CLOSED AT EXACTLY THESE 6 PAIRS, C(4, 2) over CONDITION_ORDER, and the
+# arithmetic behind that closure is the whole reason nothing else in Phase 16 may be gated:
+#
+#     alpha at Holm's first step  = 0.05 / 6 = 0.0083333
+#     8/8 unanimity on the exact two-sided sign test over 2**8 = 256 partitions = 0.0078125
+#     margin                      = 0.0005208, i.e. 6.7% RELATIVE to the achievable p
+#     m = 7                       -> alpha = 0.0071429 < 0.0078125  -> the headline dies
+#
+# A SEVENTH gated comparison therefore kills the result arithmetically, at ANY outcome, including
+# perfect unanimity. That is why the taught replication (D-07) and the PERS-03 context-pressure
+# sweep are descriptive BY CONSTRUCTION and never enter this family — STAT-06 with arithmetic
+# behind it, not just principle. `assert_family_closed` enforces it at runtime and
+# `tests/test_phase16_stats.py` enforces it statically across BOTH Phase 16 driver modules.
+#
+# DERIVED from CONDITION_ORDER, never a hand-typed list of six: a retyped family is a family that
+# can stop matching the arms it claims to compare.
+HOLM_FAMILY_PAIRS = tuple(itertools.combinations(CONDITION_ORDER, 2))
+
+HOLM_ALPHA = 0.05
+
+# D-08 — n is FIXED at 8, always, pre-registered. Ties count AGAINST the alternative and are
+# folded into the unfavourable count; they are never discarded and never shrink this denominator.
+# Discarding ties (the textbook rule) is rejected on two grounds. One tie would give n = 7, where
+# unanimity is p = 0.015625 > 0.0083333 and the gate is unclearable. And decisively: the
+# prompt-stuffed x base-neither pair is expected to tie on nearly all 8 facts given Phase 14's
+# committed 1/1944, which would drop that pair to n ~ 0 where the test is UNDEFINED — not merely
+# underpowered — and the whole Holm family becomes ill-formed. Under "ties against", that pair is
+# simply 0/8. `sign_test_exact` takes no `n` parameter and must never grow one: an `n=` argument
+# would install precisely the knob this decision locks.
+SIGN_TEST_N = 8
+
+# D-29 / T-16-39c — THE DECLARED DIRECTION OF THE ALTERNATIVE, PER PAIR, COMMITTED BEFORE ANY RUN.
+#
+# The rule for every pair is the same and is stated explicitly rather than left to a convention a
+# reader would have to reconstruct: THE FIRST ARM OF THE PAIR EXCEEDS THE SECOND. It exists as a
+# committed literal because without one the direction could be fixed AFTER the signs are visible,
+# which is exactly what STAT-05 forbids — in the one phase whose entire product is a
+# pre-registration. `sign_test_exact`'s caller reads the direction from here; it is never inferred
+# from the signs in hand. Spelled out per pair rather than generated, so a reviewer audits six
+# committed statements instead of a comprehension; `assert_family_closed` proves the key set equals
+# HOLM_FAMILY_PAIRS exactly, so the two cannot drift apart in silence.
+SIGN_TEST_ALTERNATIVE = {
+    ("adapter-only", "base-neither"): "adapter-only exceeds base-neither",
+    ("adapter-only", "embedding-cosine"): "adapter-only exceeds embedding-cosine",
+    ("adapter-only", "prompt-stuffed"): "adapter-only exceeds prompt-stuffed",
+    ("base-neither", "embedding-cosine"): "base-neither exceeds embedding-cosine",
+    ("base-neither", "prompt-stuffed"): "base-neither exceeds prompt-stuffed",
+    ("embedding-cosine", "prompt-stuffed"): "embedding-cosine exceeds prompt-stuffed",
+}
+
+# D-07's pre-registration text, VERBATIM and not paraphrasable. Split across two source lines only
+# because it exceeds the line limit; implicit concatenation reproduces it byte for byte, and
+# `tests/test_phase16_stats.py` asserts it against `16-CONTEXT.md` rather than against a second
+# hand-typed copy.
+TAUGHT_TIER_STATUS = (
+    "o resultado do tier taught nunca altera, reforça formalmente, nem substitui o veredito do "
+    "tier held-out — é evidência corroborante reportada, não gate."
+)
+
+
+def _sign(first_rate, second_rate):
+    """``+1`` / ``-1`` / ``0`` for one fact under one pair, in the pair's own arm order.
+
+    A TIE returns ``0``, which ``sign_test_exact`` folds into the count AGAINST the alternative
+    (D-08). It is never dropped, so the denominator stays at ``SIGN_TEST_N``.
+    """
+    return (first_rate > second_rate) - (first_rate < second_rate)
+
+
+def fact_signs(per_fact_by_arm, pair):
+    """The 8 per-fact signs for one pair, in sorted fact order.
+
+    ``per_fact_by_arm`` is ``{arm: {fact_id: {"rate": ...}}}`` — one ``aggregate_by_fact`` result
+    per arm, all on the SAME tier. The comparison is on ``rate``, and D-22 is satisfied without
+    adjustment: arm D's denominator is 13 questions where arms A/B/C carry 117 draws, and the sign
+    test uses only the ORDERING between two arms, never the magnitude of either denominator.
+    """
+    first, second = pair
+    _prove(
+        first in per_fact_by_arm and second in per_fact_by_arm,
+        f"pair {pair} names an arm absent from {sorted(per_fact_by_arm)} — a pair whose arm never "
+        "ran would silently contribute a fabricated sign to the family",
+    )
+    facts = sorted(per_fact_by_arm[first])
+    _prove(
+        facts == sorted(per_fact_by_arm[second]),
+        f"pair {pair} is unpaired: {first} covers {facts} and {second} covers "
+        f"{sorted(per_fact_by_arm[second])}. PERS-02's whole claim is that the arms score the SAME "
+        "questions, so a fact present in one arm and absent from the other has no sign at all",
+    )
+    _prove(
+        len(facts) == SIGN_TEST_N,
+        f"pair {pair} carries {len(facts)} facts but n is pre-registered at {SIGN_TEST_N} and is "
+        "fixed (D-08) — a different count is a different test from the one committed",
+    )
+    return tuple(
+        _sign(per_fact_by_arm[first][fact]["rate"], per_fact_by_arm[second][fact]["rate"])
+        for fact in facts
+    )
+
+
+def sign_test_exact(signs):
+    """The exact paired sign test: two-sided in MAGNITUDE, DIRECTIONAL in ALTERNATIVE (D-29).
+
+    ``signs`` is a length-``SIGN_TEST_N`` sequence of ``+1`` / ``-1`` / ``0``. Ties count AGAINST
+    the alternative and ``n`` stays 8 (D-08) — a tie is folded into the unfavourable count, never
+    discarded and never shrinking the denominator. There is deliberately NO ``n`` parameter.
+
+    Three steps, in this order:
+
+    1. ``positives`` = the count of signs in the declared direction.
+    2. **If ``positives <= SIGN_TEST_N / 2``, return ``1.0`` immediately.** The observation is not
+       in the declared direction, so it is not evidence for the alternative at any magnitude.
+    3. Otherwise compute the two-sided p by ENUMERATING all ``2 ** SIGN_TEST_N`` = 256 sign
+       partitions under the null and summing those at least as extreme, in either tail, as the
+       observed count. No closed-form binomial shortcut: D-09 specifies the enumeration and the
+       enumeration is what the tests pin.
+
+    **Step 2 is a DEFECT FIX, not a refinement.** Under a pure two-sided test ``0/8`` is exactly as
+    extreme as ``8/8`` and both give ``0.0078125``, so a pair on which ALL EIGHT FACTS TIED would
+    have entered the Holm family as a SIGNIFICANT result — a false positive in the over-claiming
+    direction, which is the failure mode this milestone exists to prevent. D-08 originally claimed
+    0/8 gives p = 1.0 and was wrong; D-29 is what actually delivers it, via this filter. The
+    expected direction is read from ``SIGN_TEST_ALTERNATIVE``, never inferred from the signs in
+    hand (T-16-39c / STAT-05).
+
+    The enumerated values: ``8/8 -> 0.0078125``, ``7/8 -> 0.0703125``, ``4/8 -> 1.0``,
+    ``1/8 -> 1.0``, ``0/8 -> 1.0``. The Holm first-step margin at ``alpha = 0.05/6`` is unchanged
+    by the direction filter, so SC4 and D-09 need no amendment.
+    """
+    signs = tuple(signs)
+    _prove(
+        len(signs) == SIGN_TEST_N,
+        f"the sign test received {len(signs)} signs but n is pre-registered at {SIGN_TEST_N} and "
+        "is FIXED (D-08) — ties are folded in against the alternative rather than discarded, so "
+        "nothing may shrink this denominator",
+    )
+    _prove(
+        all(sign in (-1, 0, 1) for sign in signs),
+        f"the sign test received {signs}, which is not a sequence of +1 / -1 / 0 — a magnitude "
+        "reaching this function means a difference was passed where its sign was expected",
+    )
+    positives = sum(1 for sign in signs if sign > 0)
+    if positives <= SIGN_TEST_N / 2:
+        return 1.0
+    observed = abs(positives - SIGN_TEST_N / 2)
+    total = 2**SIGN_TEST_N  # all 256 sign partitions under the null, enumerated below
+    at_least_as_extreme = sum(
+        1
+        for partition in itertools.product((0, 1), repeat=SIGN_TEST_N)
+        if abs(sum(partition) - SIGN_TEST_N / 2) >= observed
+    )
+    return at_least_as_extreme / total
+
+
+def assert_family_closed(entered_pairs):
+    """T-16-38 — the RUNTIME half: exactly ``HOLM_FAMILY_PAIRS`` entered the gate, no more, no less.
+
+    The static AST scan in ``tests/test_phase16_stats.py`` catches a NEW CALL SITE; this catches a
+    DYNAMICALLY-BUILT pair list. Both are needed because a seventh gated comparison can arrive by
+    either route, and either one alone leaves the other open.
+    """
+    entered = tuple(entered_pairs)
+    _prove(
+        len(entered) == len(set(entered)),
+        f"the same pair entered the Holm family twice: {entered}. A duplicated hypothesis inflates "
+        "m without adding evidence, which lowers alpha for every other pair at no cost to itself",
+    )
+    _prove(
+        set(entered) == set(HOLM_FAMILY_PAIRS),
+        f"{len(set(entered))} pair(s) entered the Holm family, but D-09 closes it at exactly "
+        f"{len(HOLM_FAMILY_PAIRS)}: {sorted(set(entered) ^ set(HOLM_FAMILY_PAIRS))} differ. At "
+        "m = 7 alpha is 0.0071429, below the achievable p of 0.0078125, so the headline dies "
+        "arithmetically at every possible outcome — including perfect unanimity",
+    )
+    _prove(
+        set(SIGN_TEST_ALTERNATIVE) == set(HOLM_FAMILY_PAIRS),
+        f"SIGN_TEST_ALTERNATIVE declares a direction for {sorted(SIGN_TEST_ALTERNATIVE)} but the "
+        f"family is {sorted(HOLM_FAMILY_PAIRS)} — an undeclared pair is a pair whose direction "
+        "could be fixed after its signs are visible, which is what STAT-05 forbids",
+    )
+
+
+def holm(p_values):
+    """Holm step-down across the closed family. Returns ``[(pair, p, alpha_at_step, rejected)]``.
+
+    ``p_values`` is ``{pair: p}``. Sorted ascending, ``p_(i)`` is compared against
+    ``HOLM_ALPHA / (m - i)`` and **rejection STOPS at the first failure** — every subsequent
+    hypothesis is retained regardless of its own p-value, which is the whole point of step-down.
+
+    ``m`` is ``len(HOLM_FAMILY_PAIRS)``, READ from the constant and never retyped: a second literal
+    for the family size is a second number that can stop agreeing with the family it prices.
+
+    Holm over Benjamini-Hochberg per STAT-03: these arms share questions and adapters, so BH's
+    independence/PRDS assumption fails while Holm is valid under arbitrary dependence.
+
+    The comparison is STRICT (``<``), so a p exactly ON the boundary FAILS — the same arbitration
+    ``scripts/phase15_stats.py`` committed for its own gate. It is a distinction without a
+    difference here and is recorded rather than relied on: the achievable p values are multiples of
+    1/256 (0.0078125, 0.0703125, 0.2890625, 0.7265625, 1.0) and the step alphas are 0.05/k for
+    k = 1..6, and no member of either set equals a member of the other.
+    """
+    m = len(HOLM_FAMILY_PAIRS)
+    _prove(
+        len(p_values) == m,
+        f"holm received {len(p_values)} p-values but the family is closed at {m} (D-09) — a "
+        "family priced at one size and populated at another is not the test that was registered",
+    )
+    ordered = sorted(p_values.items(), key=lambda item: item[1])
+    results = []
+    rejecting = True
+    for index, (pair, p) in enumerate(ordered):
+        alpha_at_step = HOLM_ALPHA / (m - index)
+        rejecting = rejecting and p < alpha_at_step
+        results.append((pair, p, alpha_at_step, rejecting))
+    return results
+
+
+def compare_arms(per_fact_by_arm, *, tier):
+    """THE FORMAL VERDICT — the gated tier only, Holm-corrected across exactly the 6 pairs.
+
+    ``tier`` must be ``GATED_TIER``. D-07 makes held-out the single formal verdict; the taught tier
+    runs the same protocol in ``taught_replication`` and is explicitly outside this family.
+
+    ``_prove``s that exactly 6 p-values entered — not 5, not 7 — via ``assert_family_closed``, and
+    that the arms handed in are exactly ``CONDITION_ORDER``. A run with a missing or extra arm
+    would produce a family of the wrong size, and the family's size is what prices alpha.
+    """
+    _prove(
+        tier == GATED_TIER,
+        f"compare_arms was asked to gate tier {tier!r}, but D-07 gates {GATED_TIER!r} and ONLY "
+        f"{GATED_TIER!r}. Gating both tiers takes the family from 6 to 12, alpha to 0.05/12 = "
+        "0.0041667, and 8/8 unanimity (0.0078125) then FAILS — the gate becomes unclearable at "
+        "every possible outcome. The taught tier runs through taught_replication, never here",
+    )
+    _prove(
+        set(per_fact_by_arm) == set(CONDITION_ORDER),
+        f"compare_arms received arms {sorted(per_fact_by_arm)} but the pre-registered conditions "
+        f"are {sorted(CONDITION_ORDER)} — the family's size is what prices alpha, so an arm count "
+        "that disagrees with the pre-registration is a different test from the committed one",
+    )
+    signs = {pair: fact_signs(per_fact_by_arm, pair) for pair in HOLM_FAMILY_PAIRS}
+    p_values = {pair: sign_test_exact(pair_signs) for pair, pair_signs in signs.items()}
+    assert_family_closed(tuple(p_values))
+    return {
+        "tier": tier,
+        "gated": True,
+        "alternative": dict(SIGN_TEST_ALTERNATIVE),
+        "signs": signs,
+        "p_values": p_values,
+        "holm": holm(p_values),
+    }
+
+
+def taught_replication(per_fact_by_arm):
+    """The taught tier under the SAME protocol — a pre-registered replication, NEVER a gate (D-07).
+
+    Verbatim, and not paraphrasable: *"o resultado do tier taught nunca altera, reforça
+    formalmente, nem substitui o veredito do tier held-out — é evidência corroborante reportada,
+    não gate."* — carried on the returned record as ``TAUGHT_TIER_STATUS`` so the clause travels
+    with the numbers into the report rather than being remembered separately from them.
+
+    It computes the same per-pair p-values and returns them with ``gated: False`` and NO alpha and
+    NO rejection flags, so there is nothing here that could be read as a verdict. **Its result must
+    never be passed to ``holm``** — doing so would take the family to 12 and make the gate
+    unclearable at every outcome. ``tests/test_phase16_stats.py`` enforces that statically.
+    """
+    _prove(
+        set(per_fact_by_arm) == set(CONDITION_ORDER),
+        f"taught_replication received arms {sorted(per_fact_by_arm)} but the pre-registered "
+        f"conditions are {sorted(CONDITION_ORDER)} — a replication run over a different arm set "
+        "is not a replication of the gated comparison",
+    )
+    signs = {pair: fact_signs(per_fact_by_arm, pair) for pair in HOLM_FAMILY_PAIRS}
+    p_values = {pair: sign_test_exact(pair_signs) for pair, pair_signs in signs.items()}
+    return {
+        "tier": REPLICATION_TIER,
+        "gated": False,
+        "status": TAUGHT_TIER_STATUS,
+        "alternative": dict(SIGN_TEST_ALTERNATIVE),
+        "signs": signs,
+        "p_values": p_values,
+    }

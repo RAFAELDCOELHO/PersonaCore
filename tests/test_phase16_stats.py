@@ -402,3 +402,322 @@ def test_stats_use_only_stdlib_and_erasure_gate():
     assert "Random" in calls
     assert "seed" not in calls
     assert "default_rng" not in calls
+
+
+# ===== Task 2 — the exact sign test over 256 partitions, and Holm across exactly 6 pairs =====
+
+UNANIMITY_P = 0.0078125
+SEVEN_OF_EIGHT_P = 0.0703125
+
+
+def test_sign_test_reproduces_the_verified_enumeration():
+    """The three numbers D-09 verified by enumeration — two from production, one counterfactual.
+
+    ``n=8 pos=8 -> 0.0078125`` and ``n=8 pos=7 -> 0.0703125`` come from ``sign_test_exact``.
+
+    ``n=7 pos=7 -> 0.0156250`` is the **D-08 COUNTERFACTUAL** — the number the discarded-ties rule
+    WOULD have produced — and it is enumerated INLINE below rather than obtained from the
+    production function. ``sign_test_exact`` takes no ``n`` parameter and must not grow one:
+    ``SIGN_TEST_N = 8`` is module-level and pre-registered (D-08), so adding an ``n=`` argument to
+    make this test pass would install precisely the knob D-08 locks — and the test written to pin
+    the counterfactual would have become the reason the knob exists.
+    """
+    assert stats.sign_test_exact([1] * 8) == UNANIMITY_P
+    assert stats.sign_test_exact([1] * 7 + [-1]) == SEVEN_OF_EIGHT_P
+
+    # The counterfactual, enumerated here and only here: all 2**7 sign partitions at n = 7, those
+    # at least as extreme as 7/7 in either tail, over the 128 equally likely partitions.
+    n = 7
+    extreme = sum(
+        1
+        for partition in itertools.product((0, 1), repeat=n)
+        if abs(sum(partition) - n / 2) >= abs(n - n / 2)
+    )
+    assert extreme / 2**n == 0.015625
+    assert extreme / 2**n > stats.HOLM_ALPHA / len(stats.HOLM_FAMILY_PAIRS), (
+        "the discarded-ties rule would have been UNCLEARABLE: one tie drops n to 7, where even "
+        "unanimity gives 0.015625 against a first-step alpha of 0.0083333 (D-08)"
+    )
+
+    assert "n" not in {
+        arg.arg for arg in _function_def(_tree(_DRIVER_PATH), "sign_test_exact").args.args
+    }
+
+
+def test_ties_count_against_and_do_not_shrink_n():
+    """D-08 / T-16-39 — a tie is folded in AGAINST the alternative, and the denominator stays 8."""
+    with_tie = stats.sign_test_exact([1] * 7 + [0])
+    with_negative = stats.sign_test_exact([1] * 7 + [-1])
+    assert with_tie == with_negative == SEVEN_OF_EIGHT_P
+    assert stats.SIGN_TEST_N == 8
+
+    # A 7-long sequence is refused outright: nothing may shrink the pre-registered denominator.
+    try:
+        stats.sign_test_exact([1] * 7)
+    except SystemExit as exit_:
+        assert "D-08" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("a 7-sign sequence was accepted, so the denominator is not fixed")
+
+
+def test_an_all_tie_pair_is_defined_and_scores_one():
+    """D-08's expected prompt-stuffed x base-neither case, and the hole D-29 closes.
+
+    Eight ties give ``p = 1.0`` — not a ``ZeroDivisionError``, not ``None``, and NOT ``0.0078125``.
+    Phase 14's committed 1/1944 makes near-total ties on that pair the predicted outcome, so this
+    is the case the family most likely actually hits.
+    """
+    p = stats.sign_test_exact([0] * 8)
+    assert p == 1.0
+    assert p != UNANIMITY_P
+
+
+def test_the_direction_filter_cannot_silently_invert():
+    """D-29 / T-16-39b — BOTH failing directions are pinned, so the filter cannot invert.
+
+    An implementation that flipped the comparison would pass one of these and fail the other, which
+    is why one of them alone is not enough.
+    """
+    assert stats.sign_test_exact([0] * 8) == 1.0
+    assert stats.sign_test_exact([-1] * 8) == 1.0
+
+
+def test_p_is_one_below_the_midpoint():
+    """``1.0`` at or below n/2, and a value under 1.0 ONLY above it (D-29)."""
+    assert stats.sign_test_exact([1] * 4 + [-1] * 4) == 1.0
+    assert stats.sign_test_exact([1] + [-1] * 7) == 1.0
+    for positives in range(9):
+        p = stats.sign_test_exact([1] * positives + [-1] * (8 - positives))
+        if positives > stats.SIGN_TEST_N / 2:
+            assert p < 1.0, positives
+        else:
+            assert p == 1.0, positives
+
+
+def test_sign_test_enumerates_rather_than_using_a_closed_form():
+    """D-09 specifies the enumeration, and the enumeration is what these tests pin."""
+    body = _function_def(_tree(_DRIVER_PATH), "sign_test_exact")
+    calls = {
+        getattr(call.func, "attr", None) for call in ast.walk(body) if isinstance(call, ast.Call)
+    }
+    assert "product" in calls, "the 256 partitions are not enumerated"
+    assert "comb" not in calls, "a closed-form binomial stood in for the enumeration"
+    powers = [
+        node
+        for node in ast.walk(body)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow)
+    ]
+    assert any(getattr(node.right, "id", None) == "SIGN_TEST_N" for node in powers), (
+        "the denominator is not `2 ** SIGN_TEST_N` — a retyped 256 is a number free to stop "
+        "agreeing with the n it claims to enumerate"
+    )
+
+
+def test_sign_test_alternative_is_declared_for_every_holm_pair():
+    """T-16-39c / STAT-05 — the direction is a committed literal, not a post-hoc choice."""
+    assert set(stats.SIGN_TEST_ALTERNATIVE) == set(stats.HOLM_FAMILY_PAIRS)
+    assert len(stats.SIGN_TEST_ALTERNATIVE) == 6
+    for (first, second), declaration in stats.SIGN_TEST_ALTERNATIVE.items():
+        assert declaration == f"{first} exceeds {second}"
+
+    # Module-level ONLY: an assignment inside any function would let the direction be built after
+    # a run starts, which is the whole thing this constant exists to prevent.
+    tree = _tree(_DRIVER_PATH)
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for inner in ast.walk(node):
+            targets = []
+            if isinstance(inner, ast.Assign):
+                targets = inner.targets
+            elif isinstance(inner, (ast.AugAssign, ast.AnnAssign)):
+                targets = [inner.target]
+            assert "SIGN_TEST_ALTERNATIVE" not in {
+                getattr(target, "id", None) for target in targets
+            }, f"SIGN_TEST_ALTERNATIVE is assigned inside {node.name}"
+
+
+def test_only_eight_over_eight_clears_the_first_holm_step():
+    """D-09's 6.7% margin — computed from the constants, never retyped from the prose."""
+    first_step_alpha = stats.HOLM_ALPHA / len(stats.HOLM_FAMILY_PAIRS)
+    assert UNANIMITY_P < first_step_alpha
+    assert SEVEN_OF_EIGHT_P > first_step_alpha
+
+    margin = first_step_alpha - UNANIMITY_P
+    assert round(margin, 6) == 0.000521
+    assert round(margin / UNANIMITY_P, 3) == 0.067  # 6.7% relative to the achievable p
+
+
+def test_family_of_seven_would_kill_the_headline():
+    """D-09's load-bearing arithmetic, so a 7th gated comparison fails a TEST, not a run.
+
+    Both halves are asserted. The consequence: one more member prices alpha below the achievable
+    p, at every possible outcome including perfect unanimity. And the present state: the family as
+    committed still clears. Adding a 7th pair turns the second assertion red immediately.
+    """
+    m = len(stats.HOLM_FAMILY_PAIRS)
+    assert stats.HOLM_ALPHA / (m + 1) < UNANIMITY_P
+    assert stats.HOLM_ALPHA / 7 < UNANIMITY_P
+    assert stats.HOLM_ALPHA / m > UNANIMITY_P, (
+        f"the family is at m = {m}, where alpha = {stats.HOLM_ALPHA / m} does not exceed the "
+        f"achievable p of {UNANIMITY_P} — the headline is dead arithmetically at every outcome"
+    )
+
+
+def test_holm_family_is_exactly_six_pairs():
+    """D-09 — C(4, 2) over CONDITION_ORDER, closed, distinct, and priced at its own length."""
+    pairs = stats.HOLM_FAMILY_PAIRS
+    assert len(pairs) == 6
+    assert len(set(pairs)) == 6
+    assert isinstance(pairs, tuple)
+    for first, second in pairs:
+        assert first in stats.CONDITION_ORDER
+        assert second in stats.CONDITION_ORDER
+        assert first != second
+    assert set(pairs) == set(itertools.combinations(stats.CONDITION_ORDER, 2))
+
+    # An arm count that disagrees with the pre-registration aborts rather than repricing alpha.
+    three_arms = _per_fact_by_arm(
+        {arm: (0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2) for arm in stats.CONDITION_ORDER[:3]}
+    )
+    try:
+        stats.compare_arms(three_arms, tier="held-out")
+    except SystemExit as exit_:
+        assert "prices alpha" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("compare_arms accepted three arms and priced a six-pair family")
+
+
+def test_holm_reads_the_family_length_rather_than_a_retyped_six():
+    """A retyped divisor is a number free to stop agreeing with the family it prices."""
+    body = _function_def(_tree(_DRIVER_PATH), "holm")
+    divisors = [
+        node.right
+        for node in ast.walk(body)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+    ]
+    assert divisors, "holm computes no alpha at all"
+    for divisor in divisors:
+        assert not (isinstance(divisor, ast.Constant) and divisor.value == 6)
+
+
+def test_holm_stops_at_the_first_failure():
+    """Step-down: once one hypothesis is retained, every LATER one is retained too.
+
+    The last p here is ``0.04`` against a final-step alpha of ``0.05/1``, so on its own it would
+    clear comfortably. It is retained anyway, because the SECOND-smallest failed. That retention is
+    the property — an implementation that simply compared each p against its own step alpha would
+    reject it and pass every other assertion in this file.
+    """
+    pairs = list(stats.HOLM_FAMILY_PAIRS)
+    p_values = dict(zip(pairs, [UNANIMITY_P, 0.012, 0.013, 0.014, 0.015, 0.04]))
+    results = stats.holm(p_values)
+
+    assert [rejected for *_, rejected in results] == [True, False, False, False, False, False]
+    assert results[0][1] == UNANIMITY_P
+    assert results[0][2] == stats.HOLM_ALPHA / 6
+    assert results[1][2] == stats.HOLM_ALPHA / 5
+    assert [p for _, p, _, _ in results] == sorted(p for _, p, _, _ in results)
+
+    last_pair, last_p, last_alpha, last_rejected = results[-1]
+    assert last_p < last_alpha, "the retention case was not constructed"
+    assert last_rejected is False, (
+        f"{last_pair} was rejected at p = {last_p} < alpha {last_alpha} even though an earlier "
+        "hypothesis was retained — the step-down stop is not implemented"
+    )
+
+    # And the family as committed: six unanimous p-values clear every step, 0.05/6 through 0.05/1.
+    all_unanimous = dict(zip(pairs, [UNANIMITY_P] * 6))
+    assert all(rejected for *_, rejected in stats.holm(all_unanimous))
+
+
+def test_holm_refuses_a_family_of_the_wrong_size():
+    """A family priced at 6 and populated at 5 is not the test that was registered."""
+    short = dict(zip(list(stats.HOLM_FAMILY_PAIRS)[:5], [UNANIMITY_P] * 5))
+    try:
+        stats.holm(short)
+    except SystemExit as exit_:
+        assert "D-09" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("holm priced a six-pair family against five p-values")
+
+
+def test_compare_arms_produces_the_predicted_unanimous_verdict():
+    """The end-to-end shape on the outcome 16-CONTEXT.md predicts: A over everything, 8/8."""
+    per_fact_by_arm = _per_fact_by_arm(
+        {
+            "adapter-only": (0.615, 0.590, 0.504, 0.316, 0.197, 0.385, 0.128, 0.051),
+            "embedding-cosine": (0.10, 0.10, 0.10, 0.05, 0.05, 0.05, 0.05, 0.05),
+            "base-neither": (0.01, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            "prompt-stuffed": (0.0,) * 8,
+        }
+    )
+    verdict = stats.compare_arms(per_fact_by_arm, tier="held-out")
+
+    assert verdict["gated"] is True
+    assert verdict["tier"] == "held-out"
+    assert len(verdict["p_values"]) == 6
+    assert verdict["p_values"][("adapter-only", "prompt-stuffed")] == UNANIMITY_P
+    assert verdict["signs"][("adapter-only", "prompt-stuffed")] == (1,) * 8
+    # base-neither vs prompt-stuffed: two facts favour, six tie -> 2/8, below the midpoint -> 1.0.
+    assert verdict["p_values"][("base-neither", "prompt-stuffed")] == 1.0
+    assert verdict["alternative"] == dict(stats.SIGN_TEST_ALTERNATIVE)
+    assert [row[0] for row in verdict["holm"]] and len(verdict["holm"]) == 6
+
+
+def test_compare_arms_refuses_to_gate_the_taught_tier():
+    """D-07 — gating both tiers takes the family to 12, where unanimity itself fails."""
+    per_fact_by_arm = _per_fact_by_arm(
+        {arm: (0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2) for arm in stats.CONDITION_ORDER}
+    )
+    try:
+        stats.compare_arms(per_fact_by_arm, tier="taught")
+    except SystemExit as exit_:
+        assert "0.0041667" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("the taught tier was gated, taking the Holm family from 6 to 12")
+
+
+def test_taught_tier_carries_the_verbatim_clause_and_is_not_gated():
+    """D-07's clause byte-for-byte against ``16-CONTEXT.md``, and no verdict machinery attached."""
+    assert stats.TAUGHT_TIER_STATUS == _context_blockquote("- **D-07:**")
+
+    per_fact_by_arm = _per_fact_by_arm(
+        {
+            "adapter-only": (0.810, 0.746, 0.643, 0.516, 0.508, 0.452, 0.143, 0.119),
+            "embedding-cosine": (0.10, 0.10, 0.10, 0.05, 0.05, 0.05, 0.05, 0.05),
+            "base-neither": (0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            "prompt-stuffed": (0.0,) * 8,
+        }
+    )
+    replication = stats.taught_replication(per_fact_by_arm)
+
+    assert replication["gated"] is False
+    assert replication["tier"] == "taught"
+    assert replication["status"] == stats.TAUGHT_TIER_STATUS
+    assert "não gate" in replication["status"]
+    # No alpha, no rejection flag, no Holm result — nothing that could be read as a verdict.
+    assert "holm" not in replication
+    assert "alpha" not in replication
+    assert len(replication["p_values"]) == 6
+
+
+def test_fact_signs_refuses_an_unpaired_or_wrong_sized_comparison():
+    """PERS-02 pairs the arms; D-08 fixes n at 8. Both are aborts, not warnings."""
+    pair = ("adapter-only", "prompt-stuffed")
+    unpaired = _per_fact_by_arm({"adapter-only": (0.9,) * 8, "prompt-stuffed": (0.1,) * 8})
+    del unpaired["prompt-stuffed"]["fact_7"]
+    try:
+        stats.fact_signs(unpaired, pair)
+    except SystemExit as exit_:
+        assert "unpaired" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("an unpaired fact set produced signs anyway")
+
+    seven = _per_fact_by_arm({"adapter-only": (0.9,) * 7, "prompt-stuffed": (0.1,) * 7})
+    try:
+        stats.fact_signs(seven, pair)
+    except SystemExit as exit_:
+        assert "D-08" in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("a 7-fact comparison produced signs, so n is not fixed at 8")
