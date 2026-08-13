@@ -547,6 +547,94 @@ def test_persona_argument_is_scoped_to_the_fairness_control():
     assert _PROMPT_DEFINITION_FILE in {p.relative_to(_REPO_ROOT).as_posix() for p in scanned}
 
 
+# An assertion may run one level up from the draw, but ONLY when the indirection is NAMED: an
+# unnamed indirection is indistinguishable from a missing assertion. Exactly one real case today
+# — ``complete_question`` builds and draws the BARE scored prompt, and the absence proof runs in
+# its caller ``run_scored_recall``, over the ``prompt_ids`` it returns. Every future entry costs
+# an explicit, reviewed line here, and a DANGLING entry (one whose named asserter is not in the
+# scan, or does not assert) fails the guard rather than quietly excusing its site.
+DRAW_ALL_ASSERTED_BY = {
+    ("scripts/phase14_recall.py", "complete_question"): "run_scored_recall",
+}
+
+
+def _function_index():
+    """``(asserting, decorated)`` sets of ``(file, function)`` over the D-21 file set.
+
+    ``asserting`` holds every def that calls ``assert_value_in_prompt`` or
+    ``assert_no_value_in_prompt``; ``decorated`` holds every def carrying a decorator. Sets rather
+    than a dict so two same-named defs in one file union instead of shadowing each other — a
+    lookup that silently picked one of the two would be the blind spot these guards exist to close.
+    """
+    asserting, decorated = set(), set()
+    for path in _scanned_files():
+        file = path.relative_to(_REPO_ROOT).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            called = {
+                getattr(call.func, "id", None) or getattr(call.func, "attr", None)
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+            }
+            if called & _IN_PROMPT_ASSERTIONS:
+                asserting.add((file, node.name))
+            if node.decorator_list:
+                decorated.add((file, node.name))
+    return asserting, decorated
+
+
+def test_every_draw_all_call_site_asserts_something():
+    """PERS-06's POSITIVE half: no drawing path may skip the in-prompt proof entirely.
+
+    ``assert_no_value_in_prompt`` proves values stay OUT of scored prompts;
+    ``assert_value_in_prompt`` proves values are IN the prompts that exist to carry them. A path
+    that draws without asserting either is a path where NEITHER property is checked — the rate it
+    reports measures nothing while still looking like a measurement.
+
+    This guard keys on the DRAWING call, not on the argument name, and that is the point:
+    16-RESEARCH records that Phase 16's distance-~2 ladder rungs carry the fact value inside the
+    ``question`` string rather than in a ``persona=`` span, which makes them invisible to
+    ``test_persona_argument_is_scoped_to_the_fairness_control`` by construction. This test is what
+    covers them.
+
+    Same D-21 file set as the ``persona=`` guard: ``scripts/*.py`` + ``src/**/*.py`` in full.
+    """
+    sites = _call_sites("draw_all")
+    assert sites, "no draw_all call sites found — the AST walk stopped working"
+    assert len(sites) >= 2, (
+        f"only {len(sites)} draw_all call site(s) found — there are two today "
+        "(complete_question and run_fairness_control), so a smaller number means the scan "
+        "collapsed and this guard is green over nothing"
+    )
+
+    asserting, decorated = _function_index()
+
+    for file, func, _ in sites:
+        where = f"{file}::{func}"
+        # No skip mode, in either of its two shapes.
+        assert not func.startswith("_skip"), f"{where} — a drawing path has no skip mode"
+        assert (file, func) not in decorated, (
+            f"{where} draws completions and is decorated; a decorator can replace the function "
+            "this analysis was performed on, so the assertion it appears to make is not provable"
+        )
+        if (file, func) in asserting:
+            continue
+        assert DRAW_ALL_ASSERTED_BY.get((file, func)) is not None, (
+            f"{where} draws completions but calls neither assert_value_in_prompt nor "
+            "assert_no_value_in_prompt, and is not listed in DRAW_ALL_ASSERTED_BY. Either assert "
+            "in place, or name the caller that asserts on its behalf — nothing draws unchecked."
+        )
+
+    for (file, func), named in DRAW_ALL_ASSERTED_BY.items():
+        assert (file, named) in asserting, (
+            f"DRAW_ALL_ASSERTED_BY[({file!r}, {func!r})] names {named!r}, which is not a function "
+            "in the scan that calls an in-prompt assertion. A dangling entry is a silent "
+            "exemption: it excuses a drawing path by pointing at nothing."
+        )
+
+
 def _fake_question(question, *, fact_id, split, reserved=False, k=5, contradiction=()):
     """One entry in the shape ``run_scored_recall`` produces, with nothing the writer ignores."""
     completions = [f"my answer is {i}" for i in range(k + 1)]
