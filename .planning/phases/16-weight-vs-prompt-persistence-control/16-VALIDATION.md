@@ -58,13 +58,13 @@ with `ModuleNotFoundError` rather than the assertion it was written to make.
 | 16-01 T1 | 16-01 | 1 | PREREG-02 | T-16-02 | CI clones full history so the ancestry query resolves | static | `.venv/bin/python -c "…'fetch-depth: 0' in ci.yml"` | ✅ ci.yml | ⬜ pending |
 | 16-01 T2 | 16-01 | 1 | PREREG-02 | T-16-01/03/04 | prereg commit is a git ancestor of every v3.0 artifact; loud on shallow clone; loud on empty match | unit | `.venv/bin/pytest tests/test_phase16_prereg.py -q` | ❌ W0 | ⬜ pending |
 | 16-01 T3 | 16-01 | 1 | STAT-04 | T-16-SC | `pyproject.toml` byte-identical to v2.0 close | unit | `.venv/bin/pytest tests/test_package.py -q` | ⚠️ extend | ⬜ pending |
-| 16-02 T1 | 16-02 | 2 | PERS-05 | T-16-05 | `run_fairness_control` pairs on `item.seed_index`, not `enumerate` | unit + AST | `.venv/bin/pytest tests/test_phase14_scoring.py -q` | ⚠️ extend | ⬜ pending |
-| 16-02 T2 | 16-02 | 2 | PERS-06 | T-16-06 | `assert_value_in_prompt` named, `values` a parameter, two-level check | unit + AST | `.venv/bin/pytest tests/test_phase14_scoring.py -q` | ⚠️ extend | ⬜ pending |
-| 16-03 T1 | 16-03 | 3 | PERS-06 | T-16-07 | every `draw_all` call site asserts; `persona=` guard scans `scripts/*.py` + `src/` with hard-equality allowlist | AST | `.venv/bin/pytest tests/test_phase14_scoring.py -q` | ⚠️ widen | ⬜ pending |
+| 16-02 T1 | 16-02 | 1 | PERS-05 | T-16-05 | `run_fairness_control` pairs on `item.seed_index`, not `enumerate` | unit + AST | `.venv/bin/pytest tests/test_phase14_scoring.py -q` | ⚠️ extend | ⬜ pending |
+| 16-02 T2 | 16-02 | 1 | PERS-06 | T-16-06 | `assert_value_in_prompt` named, `values` a parameter, two-level check | unit + AST | `.venv/bin/pytest tests/test_phase14_scoring.py -q` | ⚠️ extend | ⬜ pending |
+| 16-03 T1 | 16-03 | 2 | PERS-06 | T-16-07 | every `draw_all` call site asserts; `persona=` guard scans `scripts/*.py` + `src/` with hard-equality allowlist | AST | `.venv/bin/pytest tests/test_phase14_scoring.py -q` | ⚠️ widen | ⬜ pending |
 | 16-04 T1 | 16-04 | 3 | PERS-01 | T-16-08 | `probe_guessability` public; gate imported, never copied (D-16) | unit + AST | `.venv/bin/pytest tests/test_phase14_factset.py -q` | ✅ exists | ⬜ pending |
 | 16-04 T2 | 16-04 | 3 | STAT-01/02/05, PERS-01 | T-16-09..17 | threshold literals equal their derivation; `licensed_headline()` total over the rung lattice; no bare `0%` | unit | `.venv/bin/pytest tests/test_phase16_ladder.py -q` | ❌ W0 | ⬜ pending |
 | 16-05 T1 | 16-05 | 4 | PERS-01 | T-16-19/21 | measured distances (≤3 / [25,35]); no instructed-copy framing; near builder passes no `persona=` | unit + AST | `.venv/bin/pytest tests/test_phase16_ladder.py tests/test_phase14_scoring.py -q` | ❌ W0 | ⬜ pending |
-| 16-05 T2 | 16-05 | 4 | PERS-01, STAT-05 | T-16-18/20 | every synthetic value token-length-matched and gate-rejected before becoming a literal; rejects on the record | unit | `.venv/bin/pytest tests/test_phase16_ladder.py -q` | ❌ W0 | ⬜ pending |
+| 16-05 T2 | 16-05 | 4 | PERS-01, STAT-05 | T-16-18/20 | every synthetic value token-length-matched and gate-CLEARED (`clean == True`) before becoming a literal; the rejected candidates on the record | unit | `.venv/bin/pytest tests/test_phase16_ladder.py -q` | ❌ W0 | ⬜ pending |
 | 16-06 T1-T3 | 16-06 | 5 | PERS-01, STAT-02/05 | T-16-22..25 | clobber guard anchored on `VERDICT_SECTION`; D-14 clause verbatim; both floor units | unit + AST | `.venv/bin/pytest tests/test_phase16_ladder.py -q` | ❌ W0 | ⬜ pending |
 | 16-07 T1-T2 | 16-07 | 6 | PERS-01 | T-16-26..31 | the ladder ran and was committed **before** anything was compared | artifact | `.venv/bin/pytest tests/test_phase16_ladder.py tests/test_phase16_prereg.py -q` | ❌ W0 | ⬜ pending |
 | 16-08 T1 | 16-08 | 7 | PERS-02, STAT-05 | T-16-33/33b | `CONDITION_ORDER` locked; four scalar parity fields on one object read by identity; `forbid` runtime-injected + content-hashed; `PER_QUESTION_KEYS` names the record shape once | unit + AST | `.venv/bin/pytest tests/test_phase16_driver.py -q` | ❌ W0 | ⬜ pending |
@@ -136,6 +136,7 @@ that creates it.
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
+| The synthetic-value vetting run (`--vet`) | PERS-01, STAT-05 | Loads the real base model to probe >= 36 candidates (~576 completions); not CPU-only, not CI-runnable | 16-05 Task 2: launch in the BACKGROUND (`2>&1 \| tee /tmp/phase16_vet.log`) and poll — the Bash ceiling is 10 min and the run is **15-25 min**; a foreground call leaves a truncated `results/phase16_ladder_material.md`. The committed audit record is that material report; the raw log is scratch and is not committed. |
 | The ladder run | PERS-01 | Requires the real 13.9M weights on MPS; ~90 min ±15%; not CPU-only, not CI-runnable | 16-07: run the committed driver on the local M3 after the full CPU suite is green. Background + poll — the Bash ceiling is 10 min. Record raw per-question output as log evidence. |
 | The four-arm run | PERS-02, PERS-04 | Real weights; ~39 min (35-44) across four fresh processes | 16-11 Task 1: one process per condition, in `CONDITION_ORDER`, never concurrent. |
 | The context-pressure sweep | PERS-03 | Real weights; **100 min floor, up to ~3 h** — the 3.18 s/question median was measured at the 46-token nominal prompt and cells run to 448 tokens with no KV cache | 16-11 Task 1, inside the `prompt-stuffed` invocation. A 2 h cell is expected, not a hang. Record per-cell wall clock. |
@@ -156,4 +157,7 @@ Everything else has automated CPU-only verification.
       the unsupported system 3.14
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** validated against the 11 committed plans (2026-08-12, post-plan-check revision).
+**Approval:** validated against the 11 committed plans (2026-08-12, post-plan-check revision round 3).
+Wave column realigned to the plans' own `wave:` frontmatter (1,1,2,3,4,5,6,7,8,9,10) — the table had
+16-02 at 2 and 16-03 at 3, and placed 16-03 and 16-04 in the same wave despite
+`16-04 depends_on: ["16-03"]`. The frontmatter graph was correct and is unchanged.

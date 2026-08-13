@@ -349,8 +349,32 @@ context past 256 — so a "truncation" cell built independently is just the larg
 a second name, and the report states one effect twice.
 **How to avoid:** design the sweep as a single ordered dilution axis with `block_size` crossed at a
 named step, and label the cells past that step as *dilution + truncation*, never as an independent
-pressure. `PERSONA_CAP = 140` [VERIFIED: `serialize.py:21`] caps the persona span, so dilution past
-that must come from turns, not persona lines.
+pressure.
+
+**Where the dilution actually goes — and the `PERSONA_CAP` premise this pitfall used to carry, which
+was itself false.** An earlier revision of this section read: *"`PERSONA_CAP = 140` [VERIFIED:
+`serialize.py:21`] caps the persona span, so dilution past that must come from turns, not persona
+lines."* The constant does exist at `serialize.py:21`, but **nothing on this path enforces it**
+[VERIFIED: measured in-session 2026-08-12]:
+
+- `cap_persona` (`serialize.py:115`) is the ONLY enforcer of `PERSONA_CAP`, and its only call sites
+  are `scripts/make_transcripts.py:134` and `scripts/prepare_dialog_corpus.py:104`.
+  `build_recall_prompt` (`:92`) **never calls it** — the cap does not bite on the recall path.
+- `build_recall_prompt` calls `encode_dialogue(tok, list(persona), [(question, "")])` — **exactly one
+  turn**. There is no turns axis to dilute along.
+
+Consequence: the persona span reaches the 448-token target directly, and **all dilution happens
+inside the persona span**. This stays filed as a pitfall because the constant's mere *existence*
+invites the wrong inference — it did exactly that here, and the wrong inference propagated all the
+way up into ROADMAP SC5 and REQUIREMENTS PERS-03 ("dilution across turns"), both amended to
+**"dilution within the persona span"** at `79fa01a`. Phases 17 and 18 read this file: inherit the
+corrected mechanism above, not the struck sentence.
+
+Truncation itself is unaffected — still real, still derived from the dilution axis crossing
+`block_size`. Only the *mechanism of the dilution* was mis-stated. `generate` crops to the **last**
+`block_size` ids (`src/personacore/generation/core.py:65`, `idx[:, -bs:]`), so the fact-bearing
+statement must sit at the **head** of the diluted persona span for a crossing cell to measure
+anything at all.
 
 ### Pitfall 5: assuming synthetic strings might be ungeneratable
 **Status: verified non-issue, recorded so it is not re-litigated.** With 7,645 of 8,192 ids masked as
