@@ -8,7 +8,10 @@ that these thresholds judge.
 
 Nothing executes at import. Constants and pure functions only (the ``finetune_ab.py`` "gate
 formulas as pure functions" precedent), so an ``importlib`` load in a CPU-only test runs no guard,
-no model load and no generation. ``main()`` arrives with the run driver, under a ``__main__`` guard.
+no model load and no generation. ``main()`` is ``__main__``-guarded and supports exactly one mode,
+``--vet``: the ONE-TIME run that measures every synthetic candidate and clears it through the
+guessability gate before it becomes a committed constant. No-argument invocation exits non-zero
+rather than picking a default; the full-ladder run is a later plan's mode, not a silent one here.
 
 LAZY-IMPORT RULE — inherited, and load-bearing here. ``phase14_factset`` and
 ``phase14_factset_gate`` may be imported ONLY inside functions. The gate imports the fact set at
@@ -24,6 +27,7 @@ both refusals.
 
 import pathlib
 import sys
+import time
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -454,6 +458,31 @@ SYNTHETIC_CANDIDATES = {
     ),
 }
 
+# THE MATERIAL. The first EIGHT survivors of each pool above, in committed pool order, positionally
+# aligned to SYNTHETIC_FACT_ORDER: SYNTHETIC_VALUES[span][i] is the material for the fact at
+# position i. Transcribed by hand from the `--vet` run recorded in
+# `results/phase16_ladder_material.md` (driver commit 308eafb, seed 1337, MPS, torch 2.7.1), the
+# same register as `phase14_factset`'s locked set -- the driver never parses its own report at
+# runtime, and git history is the pre-registration proof.
+#
+# Every value here was MEASURED at its declared token length and CLEARED by
+# `phase14_factset_gate.probe_guessability` (clean == True) BEFORE it became this constant. From
+# this point the ladder READS this tuple; it does not re-vet. Re-running `--vet` regenerates the
+# report, it does not re-choose the material.
+#
+# Recorded honestly, because the number matters when reading the evidence: the guessability gate
+# cleared all 43 candidates and rejected NONE. The 19 REJECTED rows in the report are surplus --
+# pools oversized past 8 -- not gate rejections. The gate ran on every candidate (4 reserved probes
+# x 4 draws each, all quoted verbatim in the report); its filter simply did not fire, because the
+# pools were pre-screened for absence from the 608 base completions already published in
+# `results/phase14_factset_report.md` before this order was committed. That screen is disclosed
+# above rather than presented as the gate's own work.
+SYNTHETIC_VALUES = {
+    1: ("iko", "ora", "mma", "ko", "arden", "leepy", "unny", "ower"),
+    2: ("kez", "zil", "nyv", "pyk", "xog", "kiz", "vez", "zof"),
+    5: ("vraskil", "quenlow", "urvellen", "ferrowin", "ombrast", "pyrralt", "sombrek", "ashkell"),
+}
+
 # ===== The two distance rows' FRAMES ==========================================================
 #
 # Natural PersonaChat-register text in both rows, held CONSTANT (D-11). No instructed-copy framing
@@ -546,3 +575,264 @@ def build_far_prompt(tok, question, value):
     on; the difference is that this value is synthetic, gate-cleared and never a taught fact.
     """
     return build_recall_prompt(tok, question, persona=[FAR_FRAME.format(value=value)])
+
+
+# =============================================================================================
+# The vetting run (D-12 / D-16 / T-16-18) — the ONE-TIME measurement behind SYNTHETIC_VALUES
+# =============================================================================================
+
+MATERIAL_PATH = _REPO_ROOT / "results" / "phase16_ladder_material.md"  # COMMITTED evidence
+
+
+def vet_synthetic_candidates():
+    """Measure every candidate and clear it through the guessability gate. Returns the survivors.
+
+    Two hard filters, in this order, and both are RECORDED for every candidate rather than only
+    for the ones that fail:
+
+    1. ``phase14_factset.token_census`` — the candidate's token count must be EXACTLY its span, and
+       its byte-fallback round-trip must be exact. A "span 5" rung carrying a 6-token value is not
+       the rung the pre-registration named, and a value the tokenizer cannot represent exactly
+       makes every downstream match on it meaningless.
+    2. ``phase14_factset_gate.probe_guessability`` — the D-16 public entry point, IMPORTED and never
+       copied. ``clean is False`` is a hard reject: D-12 names exactly one risk the synthetic choice
+       introduces, and it is that a string the base already knows would INFLATE a rung and license a
+       stronger headline than the data supports (T-16-18).
+
+    The probes run on the BASE, with the adapter DISABLED. The question is about the base's own
+    prior; the adapted model has been taught a persona and its answers would be about that instead.
+
+    **Probe questions are assigned positionally, from the committed pool order, never from how many
+    earlier candidates happened to pass.** Candidate at pool position ``i`` is probed with the
+    reserved questions of ``SYNTHETIC_FACT_ORDER[i % 8]``. That correspondence is fixed by two
+    tuples both committed before any probe ran, so the instrument's INPUT cannot depend on the
+    instrument's own OUTPUT — which is what "probe with the questions of the slot this candidate
+    would land in" would quietly do, since the landing slot is only known after the earlier verdicts
+    are in. It also rotates all eight reserved phrasings across the pool instead of asking one
+    slot's four questions over and over.
+
+    Selection is the first EIGHT survivors per span, in committed pool order, assigned positionally
+    to ``SYNTHETIC_FACT_ORDER``. Never "whichever looked best" (T-16-20). Fewer than eight survivors
+    is a hole, not a smaller ladder: it exits non-zero rather than shipping a short row.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import phase14_factset_gate as gate
+    import phase14_recall as recall
+    import torch
+
+    from personacore.config import RuntimeConfig
+    from personacore.lora import adapter_disabled
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+    from personacore.seeding import seed_everything
+
+    started = time.time()
+    summary = preflight_device(strict=True)
+    print(f"[phase16_ladder] preflight: {summary}")
+    device = RuntimeConfig().device
+    # ONE seed constant in play, the gate's own: `probe_guessability` seeds its per-probe
+    # torch.Generator `gate.SEED + index` internally, so re-declaring 1337 here would be a second
+    # literal free to drift from the one that actually drives the draws.
+    seed_everything(gate.SEED)
+
+    # The adapter file is loaded and then switched OFF rather than skipped, because this is the
+    # loader whose `weights_only=True` choke points and LOAD-BEFORE-INJECT ordering the rest of the
+    # milestone measures through; a second, parallel base-only loader is how two arms silently stop
+    # being the same model.
+    model, model_cfg, tok, forbid, _artifact = recall.load_adapted_model(device)
+    id_by_slot = {fact.slot: fact.id for fact in fs.LOCKED_FACTS}
+    probes_by_position = [fs.GATE_PROBES[id_by_slot[slot]] for slot in SYNTHETIC_FACT_ORDER]
+
+    rows = {}
+    survivors = {}
+    probe_index = 0
+    with adapter_disabled(model):
+        for span in LADDER_SPANS:
+            rows[span] = []
+            survivors[span] = []
+            for position, candidate in enumerate(SYNTHETIC_CANDIDATES[span]):
+                slot = SYNTHETIC_FACT_ORDER[position % len(SYNTHETIC_FACT_ORDER)]
+                questions = probes_by_position[position % len(SYNTHETIC_FACT_ORDER)]
+                n_tokens, roundtrip = fs.token_census(tok, candidate)
+                row = {
+                    "candidate": candidate,
+                    "tokens": n_tokens,
+                    "roundtrip": roundtrip,
+                    "probe_slot": slot,
+                    "n_probes": 0,
+                    "n_completions": 0,
+                    "clean": None,
+                    "verdict": "REJECTED",
+                    "reason": "",
+                }
+                if n_tokens != span:
+                    row["reason"] = f"token count {n_tokens} != span {span}"
+                elif not roundtrip:
+                    row["reason"] = "byte-fallback round-trip is not exact"
+                else:
+                    probe = gate.probe_guessability(
+                        model, tok, device, forbid, candidate, questions, start_index=probe_index
+                    )
+                    probe_index += probe["n_probes"]
+                    row["n_probes"] = probe["n_probes"]
+                    row["n_completions"] = probe["n_completions"]
+                    row["clean"] = probe["clean"]
+                    row["probe_detail"] = probe["probes"]
+                    if not probe["clean"]:
+                        row["reason"] = "the base already emits this string (guessability, D-12)"
+                    elif len(survivors[span]) >= len(SYNTHETIC_FACT_ORDER):
+                        row["reason"] = "surplus: the pool is oversized, first 8 survivors selected"
+                    else:
+                        row["verdict"] = "SELECTED"
+                        row["reason"] = f"slot {len(survivors[span])} of SYNTHETIC_FACT_ORDER"
+                        survivors[span].append(candidate)
+                rows[span].append(row)
+                print(
+                    f"[phase16_ladder] span {span} {candidate:10} tokens={n_tokens} "
+                    f"clean={row['clean']} {row['verdict']} ({row['reason']})"
+                )
+            if len(survivors[span]) < len(SYNTHETIC_FACT_ORDER):
+                raise SystemExit(
+                    f"[phase16_ladder] span {span} cleared only {len(survivors[span])} of the "
+                    f"{len(SYNTHETIC_FACT_ORDER)} values it needs. That is a HOLE in the ladder's "
+                    "material, not a smaller ladder: widen SYNTHETIC_CANDIDATES and re-vet, and "
+                    "never relax either filter to make the count fit."
+                )
+
+    wall = time.time() - started
+    _write_material_report(rows, survivors, summary, torch.__version__, git_sha(), gate, wall)
+
+    print("[phase16_ladder] ===== paste-ready material =====")
+    print("SYNTHETIC_VALUES = {")
+    for span in LADDER_SPANS:
+        print(f"    {span}: {tuple(survivors[span])!r},")
+    print("}")
+    print(f"[phase16_ladder] wrote {MATERIAL_PATH}  wall {wall / 60:.1f} min")
+    print(
+        f"  base: {model_cfg.n_layer}-layer model, adapter DISABLED, on {device}  "
+        f"seed={gate.SEED}  driver git_sha={git_sha()}"
+    )
+    return survivors
+
+
+def _write_material_report(rows, survivors, summary, torch_version, driver_sha, gate, wall):
+    """The committed audit record: EVERY candidate, with its measurement and its verdict.
+
+    Rejected candidates stay in the table. A material list whose rejects are invisible is not
+    auditable — it reads as a pool that happened to be perfect, and a silent re-pick would leave no
+    trace in the diff (T-16-20).
+    """
+    blocks = [
+        "# Phase 16 Ladder Material (D-12 / D-16 / T-16-18 / T-16-20)",
+        "",
+        "> **What these numbers are:** the ONE-TIME vetting of every synthetic candidate the",
+        "> PERS-01 capability ladder could use, measured BEFORE the surviving values became the",
+        "> committed `SYNTHETIC_VALUES` constant in `scripts/phase16_ladder.py`. Two filters, both",
+        "> already-validated instruments imported rather than copied (D-16): the D-02(a) tokenizer",
+        "> census (`phase14_factset.token_census`) and the D-02(b) base-guessability probe",
+        "> (`phase14_factset_gate.probe_guessability`), run against the FROZEN base with the",
+        "> persona adapter DISABLED.",
+        "> **What they are not:** a recall measurement. Nothing here is a ladder result — the",
+        "> ladder had not run when this file was written, which is the point: material chosen",
+        "> after seeing which candidates passed would be material chosen after seeing data.",
+        "",
+        "## Run Provenance",
+        "",
+        f"- Driver commit: `{driver_sha}`",
+        f"- Device: `{summary}`",
+        f"- torch: `{torch_version}`",
+        f"- Seed: `{gate.SEED}` — `seed_everything({gate.SEED})`, then a per-probe "
+        f"`torch.Generator({gate.SEED} + probe_index)` inside `probe_guessability`",
+        f"- Decoding: greedy + {gate.PROBE_SEEDS - 1} warm draws (temperature {gate.TEMPERATURE}, "
+        f"top_p {gate.TOP_P}), `max_new_tokens={gate.PROBE_MAX_NEW_TOKENS}`, dead ids forbidden",
+        f"- Wall clock: {wall / 60:.1f} min",
+        "",
+        "## Method",
+        "",
+        "1. **Token census.** `token_census(tok, candidate)` must return exactly the row's span",
+        "   and an exact byte-fallback round-trip. Unlike Phase 14's D-04 census — where the",
+        "   count was a recorded field that could never reject — the count IS a reject criterion",
+        "   here, because span length is the ladder's independent variable (D-11).",
+        "2. **Guessability.** `probe_guessability` prompts the un-adapted base with four reserved",
+        "   probe questions and takes `clean` to be True iff the candidate appears in ZERO of the",
+        "   resulting completions. ONE containment out of N is a FAIL — the same unforgiving",
+        "   boundary Phase 14 used, and the same function.",
+        "3. **Selection.** The first eight survivors per span, in the committed pool order,",
+        "   assigned positionally to `SYNTHETIC_FACT_ORDER`. Probe questions come from position",
+        "   `i % 8` of that same committed order, so the probe INPUT never depends on earlier",
+        "   probe RESULTS.",
+        "",
+        f"`SYNTHETIC_FACT_ORDER` = {', '.join(f'`{slot}`' for slot in SYNTHETIC_FACT_ORDER)}",
+        "",
+    ]
+
+    for span in LADDER_SPANS:
+        span_rows = rows[span]
+        n_selected = sum(1 for row in span_rows if row["verdict"] == "SELECTED")
+        blocks += [
+            f"## Span {span} — {len(span_rows)} candidates, {n_selected} selected",
+            "",
+            "| # | candidate | tokens | round-trip | probe slot | probes | completions | clean | "
+            "verdict | reason |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for position, row in enumerate(span_rows):
+            clean = "n/a" if row["clean"] is None else str(row["clean"])
+            blocks.append(
+                f"| {position} | `{row['candidate']}` | {row['tokens']} | "
+                f"{'exact' if row['roundtrip'] else 'FAILED'} | `{row['probe_slot']}` | "
+                f"{row['n_probes']} | {row['n_completions']} | {clean} | **{row['verdict']}** | "
+                f"{row['reason']} |"
+            )
+        blocks += [
+            "",
+            f"Selected, in `SYNTHETIC_FACT_ORDER` position order: "
+            f"{', '.join(f'`{value}`' for value in survivors[span])}",
+            "",
+        ]
+
+    blocks += [
+        "## Probe Completions (verbatim)",
+        "",
+        "Every completion the base produced for every candidate that reached the probe, quoted",
+        "raw so a reader can judge the close-call tier themselves rather than taking the",
+        "mechanical verdict on trust. A candidate rejected on token count never reached this",
+        "stage and has no block here.",
+        "",
+    ]
+    for span in LADDER_SPANS:
+        for row in rows[span]:
+            if not row.get("probe_detail"):
+                continue
+            blocks += [
+                f"### span {span} — `{row['candidate']}` — **{row['verdict']}** "
+                f"(clean={row['clean']})",
+                "",
+            ]
+            for probe in row["probe_detail"]:
+                blocks.append(
+                    f"- Q `{probe['question']}` — prompt = {len(probe['prompt_ids'])} ids"
+                )
+                for index, text in enumerate(probe["completions"]):
+                    mode = "greedy" if index == 0 else f"warm {index}"
+                    blocks.append(f"  - {mode}: `{text.replace(chr(10), chr(92) + 'n')}`")
+            blocks.append("")
+
+    MATERIAL_PATH.write_text("\n".join(blocks), encoding="utf-8")
+
+
+def main():
+    """One mode, named explicitly. A default here would be a half-defined run driver."""
+    if "--vet" not in sys.argv[1:]:
+        raise SystemExit(
+            "[phase16_ladder] usage: python scripts/phase16_ladder.py --vet\n"
+            "  --vet  measure every SYNTHETIC_CANDIDATES entry, clear it through the guessability "
+            "gate, and write results/phase16_ladder_material.md.\n"
+            "There is no default mode: the full-ladder run belongs to a later plan and must be "
+            "asked for by name, never inherited by an argumentless invocation."
+        )
+    vet_synthetic_candidates()
+
+
+if __name__ == "__main__":
+    main()

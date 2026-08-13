@@ -599,3 +599,146 @@ def test_synthetic_fact_order_matches_the_binding_fixture():
 
     assert ladder.SYNTHETIC_FACT_ORDER == tuple(slot_by_id[fact_id] for fact_id in core_facts)
     assert len(set(ladder.SYNTHETIC_FACT_ORDER)) == 8, "one synthetic value per fact, per span"
+
+
+# ===== 16-05 Task 2 — the vetted material, and the run that produced it =======================
+
+_MATERIAL_PATH = _REPO_ROOT / "results" / "phase16_ladder_material.md"
+
+
+def _factset():
+    """The fact set, loaded INSIDE the test. It is the thing being kept out of the driver."""
+    spec = importlib.util.spec_from_file_location(
+        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
+    )
+    facts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(facts)
+    return facts
+
+
+def test_synthetic_values_have_the_declared_token_length():
+    """Every committed value is EXACTLY its span, measured — never assumed (PITFALLS-12).
+
+    Span length is the ladder's independent variable (D-11): a "span 5" cell carrying a 6-token
+    value is not the rung the pre-registration named, and every reading of where capability dies
+    would be off by the same amount. Measured here with the real frozen tokenizer, through the same
+    ``token_census`` the vetting run used, so the constant and the report cannot disagree.
+    """
+    tok = _tokenizer()
+    census = _factset().token_census
+
+    for span, values in sorted(ladder.SYNTHETIC_VALUES.items()):
+        for value in values:
+            n_tokens, roundtrip = census(tok, value)
+            assert n_tokens == span, f"{value!r} is {n_tokens} tokens, not {span}"
+            assert roundtrip, f"{value!r} does not round-trip exactly — no match on it would mean"
+
+
+def test_synthetic_values_are_eight_per_span_and_aligned_to_the_fact_order():
+    """Three spans, eight values each, all 24 distinct — and every one from its committed pool.
+
+    Distinctness across spans as well as within one: a value shared by two spans would make two
+    cells' hits indistinguishable in any per-value grouping of the run's output. Pool membership is
+    what makes selection auditable — a value that is not in ``SYNTHETIC_CANDIDATES`` was never
+    vetted in the committed order and cannot have been "the first eight survivors".
+    """
+    values = ladder.SYNTHETIC_VALUES
+    assert sorted(values) == list(ladder.LADDER_SPANS)
+
+    flat = [value for span in ladder.LADDER_SPANS for value in values[span]]
+    assert all(len(values[span]) == len(ladder.SYNTHETIC_FACT_ORDER) for span in values)
+    assert len(set(flat)) == len(flat) == 24
+
+    for span in ladder.LADDER_SPANS:
+        pool = ladder.SYNTHETIC_CANDIDATES[span]
+        assert set(values[span]) <= set(pool)
+        # First-8-survivors in committed order: the selection preserves pool order (T-16-20).
+        positions = [pool.index(value) for value in values[span]]
+        assert positions == sorted(positions), (
+            f"span {span} material is not in committed pool order — selection was re-picked"
+        )
+
+
+def test_synthetic_values_are_recorded_in_the_material_report():
+    """The constant and its evidence are one artifact: every value is a SELECTED row.
+
+    And the gate must be shown to have RUN on each of them, not merely to have been available:
+    every selected row carries ``clean = True`` with a non-zero probe and completion count, which
+    is the property T-16-18 actually needs. A rejection count alone would not give it — the surplus
+    rows below would satisfy "something was rejected" even if the probe had been skipped entirely.
+    """
+    report = _MATERIAL_PATH.read_text(encoding="utf-8")
+    rows = [line for line in report.splitlines() if line.startswith("| ") and "**" in line]
+    selected = [line for line in rows if "**SELECTED**" in line]
+    rejected = [line for line in rows if "**REJECTED**" in line]
+
+    assert len(selected) == 24, f"{len(selected)} SELECTED rows, expected 24"
+    assert rejected, "a filter that rejected nothing did not run"
+
+    for span, values in sorted(ladder.SYNTHETIC_VALUES.items()):
+        for value in values:
+            matching = [line for line in selected if f"`{value}`" in line]
+            assert len(matching) == 1, f"span {span} value {value!r}: {len(matching)} SELECTED rows"
+            fields = [cell.strip() for cell in matching[0].strip("|").split("|")]
+            _index, _candidate, tokens, roundtrip, _slot, probes, completions, clean = fields[:8]
+            assert tokens == str(span) and roundtrip == "exact"
+            assert clean == "True", f"{value!r} was committed with clean={clean!r}"
+            assert int(probes) > 0 and int(completions) > 0, (
+                f"{value!r} is in the constant with {probes} probes — it was never gate-cleared"
+            )
+
+
+def test_synthetic_values_are_not_locked_values():
+    """No synthetic value may contain, or be contained by, any locked or soft fact value.
+
+    Containment both ways, because either direction breaks a measurement. A synthetic containing a
+    locked value would put a taught fact in a ladder prompt — the demo-killing leak. A synthetic
+    CONTAINED BY one would make the ladder's substring scoring fire on the base saying the real
+    value, so a rung would pass on evidence that has nothing to do with the synthetic span.
+    """
+    from test_phase14_scoring import embedded_fact_values
+
+    facts = _factset()
+    forbidden = tuple(f.value for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS)
+    assert len(forbidden) == 10
+
+    # Direction 1 — a locked value embedded anywhere in the driver, the constant included.
+    assert embedded_fact_values(ladder, forbidden) == []
+
+    # Direction 2 — a synthetic value embedded inside a locked one, which the scan above cannot see.
+    for span, values in sorted(ladder.SYNTHETIC_VALUES.items()):
+        for value in values:
+            inside = [locked for locked in forbidden if value in locked.lower()]
+            assert inside == [], f"span {span} value {value!r} is a substring of {inside}"
+
+
+def test_main_exists_and_is_guarded():
+    """A run driver, not a script that runs on import (T-16-16).
+
+    The ``__main__`` guard is what lets every test in this file load the module with ``importlib``
+    and get constants instead of a model load. The torch check is the other half: an import of
+    torch at MODULE level would drag the whole runtime into every CPU-only test that touches this
+    file, and is the first step of the same drift.
+    """
+    assert callable(ladder.main)
+    assert callable(ladder.vet_synthetic_candidates)
+
+    tree = _parse("scripts/phase16_ladder.py")
+    guards = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and getattr(node.test.left, "id", None) == "__name__"
+    ]
+    assert len(guards) == 1, "exactly one `if __name__ == '__main__':` block"
+    assert _called_names(guards[0]) == {"main"}
+
+    module_level = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            module_level |= {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            module_level.add(node.module.split(".")[0])
+    assert "torch" not in module_level, f"module-level imports: {sorted(module_level)}"
+    assert "phase14_factset" not in module_level and "phase14_factset_gate" not in module_level
