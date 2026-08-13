@@ -263,3 +263,172 @@ def test_rung_difficulty_order_is_a_permutation_of_the_lattice():
         "span-major ordering: span length is the primary suspect for where capability dies at "
         "this scale, so it dominates distance in the licensing order (D-11)"
     )
+
+
+# ===== Task 3 — the licence: total, all-fail-first-class, and free of retyped thresholds ======
+
+# The expectation table, written by hand rather than derived from the driver's own span lookup:
+# indexed by the position in RUNG_DIFFICULTY_ORDER of the HIGHEST passed rung. A test that
+# recomputed the branch the same way the driver does would only prove the code agrees with itself.
+_EXPECTED_BRANCH_BY_INDEX = (
+    "span_1",  # (1, 2)
+    "span_1",  # (1, 30)
+    "span_2",  # (2, 2)
+    "span_2",  # (2, 30)
+    "span_5_synthetic",  # (5, 2)
+    "span_5_synthetic",  # (5, 30)
+    "top_rung_real",  # TOP_RUNG
+)
+
+
+def test_licensed_headline_is_total():
+    """D-14: every one of the 2**7 outcomes lands on one of the five committed branches.
+
+    Totality is the property that makes this a pre-registration. A subset that fell through — an
+    unhandled combination, a KeyError, a ``None`` statement — would be a branch decided after the
+    run, by whoever was looking at the number when it broke.
+    """
+    order = ladder.RUNG_DIFFICULTY_ORDER
+    assert len(ladder.HEADLINE_BRANCHES) == 5, "exactly five branches, and no sixth"
+
+    seen = 0
+    for mask in range(2 ** len(order)):
+        subset = [rung for index, rung in enumerate(order) if mask >> index & 1]
+        result = ladder.licensed_headline(subset)
+
+        assert result["branch"] in ladder.HEADLINE_BRANCHES, (subset, result["branch"])
+        assert isinstance(result["statement"], str) and result["statement"].strip()
+
+        highest_index = max((i for i, r in enumerate(order) if r in subset), default=None)
+        if highest_index is None:
+            assert result["branch"] == "no_rung_passed"
+            assert result["highest_passed"] is None
+        else:
+            assert result["branch"] == _EXPECTED_BRANCH_BY_INDEX[highest_index], subset
+            assert result["highest_passed"] == order[highest_index]
+        assert result["statement"] == ladder.HEADLINE_BRANCHES[result["branch"]]
+        seen += 1
+
+    assert seen == 128, f"enumerated {seen} subsets, expected 128"
+
+
+def test_all_fail_branch_is_the_sc1_capability_deficit_statement():
+    """D-14 / RESEARCH Q2: no rung passing is a FIRST-CLASS outcome, not a broken instrument.
+
+    Phase 14 measured this exact model with this exact prompt builder at the floor, so this is the
+    branch the evidence actually predicts. It must license the SC1 capability-deficit statement and
+    refuse the comparative claim in so many words — a branch that merely omits the stronger claim
+    would leave the reader free to supply it.
+    """
+    result = ladder.licensed_headline(())
+    assert result["branch"] == "no_rung_passed"
+    assert result["highest_passed"] is None
+
+    statement = result["statement"].lower()
+    assert "capability" in statement
+    assert "licenses no claim that weights beat prompting" in statement
+    assert "not licensed" in statement
+    assert "investigate the instrument" in statement, (
+        "the refusal of an escape hatch is part of the pre-registration: adding one after the run "
+        "would be an unwritten branch discovered after seeing the result"
+    )
+    assert str(ladder.LADDER_CELL_PASS_K) in result["statement"]
+
+
+def test_licensed_headline_retypes_no_threshold_literal():
+    """T-16-15: no verdict string may carry a retyped threshold digit.
+
+    A number typed into prose is a number free to drift from the constant it claims to state, and
+    the drift is invisible — the tests still pass, the report still reads fine, and the published
+    verdict quietly stops describing the gate that produced it. Where a statement needs a number it
+    interpolates the constant, which is why f-string FORMATTED values are the permitted path and
+    plain string constants are not.
+
+    ``LADDER_FLOOR_SOURCE`` is the single allowlisted exception: it is a CITATION of a committed
+    report line, so the digits in it are the identity of the source, not a restatement of a
+    threshold. Allowlisted by name, and asserted to actually carry a forbidden substring so the
+    exception is proved live rather than decorative.
+    """
+    forbidden = ("10/216", "0.0463", "0.020481", "2.39397", "1/1944")
+    tree = _parse("scripts/phase16_ladder.py")
+
+    allowlisted = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "LADDER_FLOOR_SOURCE" for t in node.targets)
+    }
+    assert len(allowlisted) == 1, "LADDER_FLOOR_SOURCE must exist exactly once to be allowlisted"
+    assert any(f in ladder.LADDER_FLOOR_SOURCE for f in forbidden), (
+        "the allowlisted citation no longer carries a forbidden substring — the exception is "
+        "either dead or the scan is no longer scanning what it claims to"
+    )
+
+    scanned = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    assert len(scanned) >= 10, "the string scan collapsed — it can no longer see verdict prose"
+
+    offenders = [
+        node.value
+        for node in scanned
+        if id(node) not in allowlisted and any(f in node.value for f in forbidden)
+    ]
+    assert offenders == [], offenders
+
+
+def test_monotonicity_anomalies_do_not_change_the_branch():
+    """D-14: an anomaly is NAMED in the report; it never stops the run and never moves the licence.
+
+    Non-monotonicity — not failure — is the instrument-broken signal (RESEARCH Pitfall 6). It is
+    reported next to the branch, deliberately separate from it, so a licence cannot be argued away
+    by pointing at an awkward cell, and an awkward cell cannot be silently absorbed into a licence.
+    """
+    order = ladder.RUNG_DIFFICULTY_ORDER
+    results = {rung: ladder.cell_report(0) for rung in order}
+    results[(5, 30)] = ladder.cell_report(ladder.LADDER_CELL_PASS_K)  # a hard rung passing alone
+
+    anomalies = ladder.monotonicity_anomalies(results)
+    assert anomalies, "a hard rung passing while every easier one fails IS the anomaly"
+    assert ((1, 2), (5, 30)) in anomalies
+    assert all(harder == (5, 30) for _easier, harder in anomalies)
+
+    passed = [rung for rung, row in results.items() if row["passed"]]
+    anomalous = ladder.licensed_headline(passed)
+    assert anomalous["branch"] == ladder.licensed_headline([(5, 30)])["branch"]
+    assert anomalous["branch"] == "span_5_synthetic"
+
+    monotone = {rung: ladder.cell_report(ladder.LADDER_CELL_PASS_K) for rung in order[:5]}
+    assert ladder.monotonicity_anomalies(monotone) == []
+    assert ladder.monotonicity_anomalies({}) == []
+
+
+def test_ladder_driver_holds_no_fact_strings_at_import():
+    """T-16-16: no locked or soft fact value reaches this driver, docstrings included.
+
+    Both edges are covered by one scan. The direct edge is a value typed into the file; the
+    transitive one is a module-level ``import phase14_factset_gate``, which imports the fact set at
+    ITS module level and would drag every locked value into this driver's address space.
+
+    ``embedded_fact_values`` is reused verbatim from ``tests/test_phase14_scoring.py`` rather than
+    re-implemented, for the reason that test already gives: it scans SUBSTRING containment over
+    every string the module holds — attributes, strings nested in its containers, and docstrings —
+    because the real leak Phase 14 found was a value quoted inside a report paragraph, invisible to
+    whole-string equality.
+
+    Both imports are function-local on purpose. ``test_phase14_scoring`` pulls torch, and the fact
+    set is the very thing under test; neither belongs in this file's import surface.
+    """
+    from test_phase14_scoring import embedded_fact_values
+
+    spec = importlib.util.spec_from_file_location(
+        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
+    )
+    facts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(facts)
+
+    forbidden = tuple(f.value for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS)
+    assert len(forbidden) == 10  # all 8 locked + both soft — no tier is exempt from the scan
+    assert embedded_fact_values(ladder, forbidden) == []
