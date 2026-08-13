@@ -1015,6 +1015,207 @@ def run_ladder_cell(model, tok, device, forbid, items, *, span, distance):
     }
 
 
+# =============================================================================================
+# THE TOP RUNG (D-13) — the fairness control RE-RUN post-fix, on REAL taught values
+# =============================================================================================
+
+
+def run_top_rung(model, tok, device, forbid, items):
+    """The hardest rung: the D-11.1 fairness control itself, re-run post-fix on REAL values.
+
+    Not a citation of Phase 14's number and not a re-implementation of its control — the SAME
+    function, called with the same statement map ``phase14_recall.main()`` builds. D-13 revised the
+    earlier decision to reuse the published number as-is, and the revision is recorded rather than
+    overwritten: reusing it would have asserted that the PERS-05 pairing fix did not matter, which
+    is precisely the thing the re-run measures.
+
+    **It can never be arm B.** PERS-01 requires the ladder recorded BEFORE any comparison is
+    scored, so a top rung taken from the comparison would license the comparison with the
+    comparison. It is measured here, in the ladder's own run, ahead of everything it licenses.
+
+    What distinguishes it from the ``(span 5, distance ~30)`` synthetic cell is the MATERIAL: real
+    taught values instead of gate-cleared synthetic ones. That is the whole content of D-15's
+    proxy-validity check, and it is why this rung reuses the control instead of parametrizing
+    ``run_ladder_cell`` — the control IS the thing the synthetic rows are a proxy for.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import phase14_recall as recall
+
+    _prove(
+        len(items) == LADDER_CELL_QUESTIONS,
+        f"the top rung received {len(items)} questions but the ladder's denominator is "
+        f"{LADDER_CELL_QUESTIONS} — its delta against the committed floor, and D-15's subtraction "
+        "against the synthetic cell, are only defined at a shared denominator",
+    )
+    # Built HERE from the lazily-imported fact set, exactly as `phase14_recall.main()` builds it:
+    # the control never reaches for fact strings itself (LAZY-IMPORT RULE), and neither does this
+    # module at import time.
+    statements = {
+        fact.id: fs.SLOT_FORMS[fact.slot].ans1.format(v=fact.value)
+        for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS
+    }
+    return recall.run_fairness_control(model, tok, device, forbid, items, statements)
+
+
+# The two units the committed floor can be stated in, and which one may carry an inference. The
+# labels are constants so the report cannot print the forbidden unit without printing why it is
+# forbidden (T-16-26).
+DRAW_UNIT_LABEL = "draws — the unit STAT-01 FORBIDS for inference"
+QUESTION_UNIT_LABEL = "questions — the STAT-01 unit"
+
+
+def floor_in_both_units():
+    """The committed floor stated in BOTH units, every number COMPUTED from the shared bounds.
+
+    The draw-unit bound is roughly NINE TIMES tighter than the question-unit one, and citing the
+    draw unit alone makes the prompt arm look far more definitively at zero than the legal unit
+    supports. Publishing both side by side, with the draw unit labelled as the one STAT-01 forbids
+    for inference, is what stops the tighter number being the one that gets quoted (T-16-26).
+
+    Nothing here is retyped: the draw denominator is ``LADDER_FLOOR_QUESTIONS *
+    LADDER_CELL_DRAWS`` and both bounds come from ``erasure_gate.wilson_upper_bound``, so the
+    printed arithmetic cannot drift from the constants it claims to state. The numerator is the
+    same integer in both units for the reason the floor comment above gives: one hit across all
+    draws means exactly one question had ``k >= 1``.
+
+    ``rule_of_three_upper`` is the ceiling the floor WOULD have had at zero successes, reported
+    alongside so a reader can see how little separates the committed floor from nothing at all.
+    """
+    draws = LADDER_FLOOR_QUESTIONS * LADDER_CELL_DRAWS
+    return {
+        "draws": {
+            "successes": LADDER_FLOOR_ANSWERABLE,
+            "n": draws,
+            "rate": LADDER_FLOOR_ANSWERABLE / draws,
+            "wilson_upper_95": wilson_upper_bound(LADDER_FLOOR_ANSWERABLE, draws),
+            "label": DRAW_UNIT_LABEL,
+        },
+        "questions": {
+            "successes": LADDER_FLOOR_ANSWERABLE,
+            "n": LADDER_FLOOR_QUESTIONS,
+            "rate": LADDER_FLOOR_ANSWERABLE / LADDER_FLOOR_QUESTIONS,
+            "wilson_upper_95": wilson_upper_bound(LADDER_FLOOR_ANSWERABLE, LADDER_FLOOR_QUESTIONS),
+            "label": QUESTION_UNIT_LABEL,
+        },
+        "rule_of_three_upper": rule_of_three(LADDER_FLOOR_QUESTIONS),
+        "source": LADDER_FLOOR_SOURCE,
+    }
+
+
+def top_rung_delta(top_rung_result):
+    """The re-run against the COMMITTED number — as structured data, never as a claim of no change.
+
+    **D-19, in full.** The PERS-05 fix changes WHICH SEEDS ARE DRAWN: the control used to seed from
+    its own loop position and now seeds from the item's stamped index, so different completions come
+    back and the count this code produced for the committed Phase 14 report does not reproduce
+    bit-for-bit. That is the DEFINITION of the defect, not a regression — Phase 14 never compared
+    this arm against anything, so pairing was not in play there; Phase 16 does compare, which is why
+    the fix is a prerequisite rather than polish.
+
+    Three consequences, all deliberate:
+
+    * ``results/phase14_recall_report.md`` is NOT amended. The published number stays exactly as
+      published, and this delta is reported separately (D-13).
+    * The delta is a REPORTED MEASUREMENT of the fix's impact. It is never a silent assertion that
+      the fix did not matter, which is what reusing the published number would have been.
+    * It never feeds a threshold. ``LADDER_FLOOR_*`` and ``LADDER_CELL_PASS_K`` stay anchored to
+      the committed number; re-anchoring them to this one would set the gate after seeing data,
+      which is the single failure a pre-registration exists to prevent.
+
+    The difference is reported in QUESTION units, because that is the unit STAT-01 permits and the
+    unit both numbers are natively in.
+    """
+    n_questions = len(top_rung_result["questions"])
+    _prove(
+        n_questions == LADDER_FLOOR_QUESTIONS,
+        f"the top rung scored {n_questions} questions against a floor of {LADDER_FLOOR_QUESTIONS} "
+        "— a difference between two different denominators is not a delta",
+    )
+    answerable = top_rung_result["n_answerable"]
+    return {
+        "committed_floor": floor_in_both_units(),
+        "rerun": {
+            "n_answerable": answerable,
+            "questions": n_questions,
+            "rate": answerable / n_questions,
+            "wilson_upper_95": wilson_upper_bound(answerable, n_questions),
+            "k": top_rung_result["k"],
+            "n": top_rung_result["n"],
+        },
+        "difference_questions": answerable - LADDER_FLOOR_ANSWERABLE,
+        "citation": LADDER_FLOOR_SOURCE,
+    }
+
+
+# D-15's proxy cell: the hardest SYNTHETIC rung, which is by construction the rung immediately
+# below the top one in the committed difficulty order. Derived from that order rather than retyped,
+# so the pair being compared cannot drift from the lattice.
+PROXY_CELL = RUNG_DIFFICULTY_ORDER[-2]
+
+# The divergence rule, committed HERE — before either number exists. The threshold is the cell
+# gate's own integer rather than a second literal: a separate one would be free to be chosen once
+# the two counts were on the table, which is exactly the move this milestone exists to block.
+PROXY_DIVERGENCE_RULE = (
+    f"DIVERGES when the two cells differ by at least {LADDER_CELL_PASS_K} answerable questions "
+    f"out of {LADDER_CELL_QUESTIONS} — the same integer LADDER_CELL_PASS_K sets for a cell to "
+    "pass, so the synthetic substitution is called unfair exactly when it moves the count by as "
+    "much as passing a rung does"
+)
+
+# Recorded, not silently repaired (16-05's handover concern). D-15 says the two cells differ ONLY
+# in material; with the committed builder signature they also differ in FRAME, and a number read
+# without that caveat would be read as stronger than it is.
+PROXY_FRAME_CAVEAT = (
+    "CAVEAT — these two cells also differ in FRAME, not only in material. `build_far_prompt`'s "
+    "committed signature carries no fact id, so its persona line is ONE fact-agnostic sentence "
+    "used for all eight facts, while the fairness control gives each fact its own first-person "
+    "taught statement. For the name slot the two frames coincide; for the other seven the "
+    "synthetic cell's persona names a different slot than the question asks about, which the "
+    "control never does. The signature is locked, so this is reported as a limit on the "
+    "comparison rather than repaired by changing it. It makes the two verdicts asymmetric: "
+    "CONSISTENT is the stronger reading, because it holds despite the extra difference, while "
+    "DIVERGES is ambiguous between the frame and the material and cannot separate them."
+)
+
+
+def proxy_validity(cell_results, top_rung_result):
+    """D-15: is the synthetic substitution a fair proxy for the real taught values?
+
+    The ``(span 5, distance ~30)`` cell and the top rung are the same prompt position, the same
+    median span length, the same denominator and the same draw count. Comparing them directly is
+    the only check in this phase on whether the ladder's synthetic material behaves like the real
+    material — and if they diverge badly, EVERY low rung of the ladder is suspect and the report
+    must say so rather than quietly reporting the rungs as if they stood.
+
+    It costs zero: both measurements already exist in the approved design, so this is a
+    subtraction between two numbers the run produces anyway.
+
+    The rule is ``PROXY_DIVERGENCE_RULE``, committed above before either number existed, and its
+    threshold is ``LADDER_CELL_PASS_K`` rather than a fresh literal. ``PROXY_FRAME_CAVEAT`` travels
+    in the returned dict so the number cannot be rendered without it.
+    """
+    _prove(
+        PROXY_CELL in cell_results,
+        f"the proxy-validity check needs the {PROXY_CELL} cell and it was not measured — D-15's "
+        "comparison is not optional, it is what tells the ladder's low rungs from noise",
+    )
+    synthetic = cell_results[PROXY_CELL]["n_answerable"]
+    real = top_rung_result["n_answerable"]
+    difference = synthetic - real
+    return {
+        "cell": PROXY_CELL,
+        "synthetic_answerable": synthetic,
+        "real_answerable": real,
+        "questions": LADDER_CELL_QUESTIONS,
+        "difference": difference,
+        "rule": PROXY_DIVERGENCE_RULE,
+        "verdict": "proxy_diverges"
+        if abs(difference) >= LADDER_CELL_PASS_K
+        else "proxy_consistent",
+        "frame_caveat": PROXY_FRAME_CAVEAT,
+    }
+
+
 def main():
     """One mode, named explicitly. A default here would be a half-defined run driver."""
     if "--vet" not in sys.argv[1:]:

@@ -960,3 +960,126 @@ def test_ladder_cell_reuses_the_shared_instrument_rather_than_copying_it():
         "the ladder defines its own generation or scoring loop — it must parametrize the "
         "committed instrument, never re-implement it"
     )
+
+
+# ===== 16-06 Task 2 — the top rung, its delta, and D-15's proxy-validity check ==================
+
+
+def _fake_top_rung(n_answerable, *, k=None, n=None):
+    """A fairness-control-shaped result: the top rung IS that function's return, not a new shape."""
+    return {
+        "tier": "question-fairness control",
+        "questions": [{"k": 0, "n": ladder.LADDER_CELL_DRAWS} for _ in range(216)],
+        "k": n_answerable if k is None else k,
+        "n": 216 * ladder.LADDER_CELL_DRAWS if n is None else n,
+        "n_answerable": n_answerable,
+    }
+
+
+def test_top_rung_calls_the_shared_fairness_control():
+    """D-13: the top rung is a RE-RUN of the committed control, never a second implementation.
+
+    A parallel copy would drift from the arm it is compared against — different seeds, a different
+    persona construction, a different scorer — while still producing a number that looks like a
+    delta. The absence of a question loop is the structural half of the same claim: if this
+    function iterated questions itself, it would be that second copy no matter what it called.
+    """
+    tree = _parse("scripts/phase16_ladder.py")
+    function = _function_def(tree, "run_top_rung")
+    assert function is not None
+
+    assert "run_fairness_control" in _called_names(function)
+    assert not [node for node in ast.walk(function) if isinstance(node, ast.For)], (
+        "run_top_rung grew its own question loop — the top rung must BE the shared control"
+    )
+    assert "run_ladder_cell" not in _called_names(function), (
+        "the top rung is not a synthetic cell: real taught values are exactly what makes it the "
+        "rung the synthetic rows are a proxy FOR (D-15)"
+    )
+
+
+def test_top_rung_delta_reports_both_units_with_the_draw_unit_labelled():
+    """T-16-26: both units, and the forbidden one says so. The delta never feeds a threshold.
+
+    Nine times the difference in the upper bound between the two units. The draw unit is reported
+    because the committed Phase 14 report states the number that way and a reader must be able to
+    reconcile the two; it is labelled because reporting it unlabelled is how the tighter bound
+    becomes the one that gets quoted.
+    """
+    delta = ladder.top_rung_delta(_fake_top_rung(4, k=9, n=1944))
+    floor = delta["committed_floor"]
+
+    assert floor["draws"]["n"] == ladder.LADDER_FLOOR_QUESTIONS * ladder.LADDER_CELL_DRAWS == 1944
+    assert floor["questions"]["n"] == ladder.LADDER_FLOOR_QUESTIONS == 216
+    assert floor["questions"]["wilson_upper_95"] == wilson_upper_bound(1, 216)
+    assert floor["questions"]["wilson_upper_95"] == ladder.LADDER_FLOOR_UPPER_95
+    assert floor["draws"]["wilson_upper_95"] < floor["questions"]["wilson_upper_95"] / 8, (
+        "the draw-unit bound is ~9x tighter — that gap is the whole reason both are printed"
+    )
+    assert "forbid" in floor["draws"]["label"].lower()
+    assert "forbid" not in floor["questions"]["label"].lower()
+
+    assert delta["rerun"]["n_answerable"] == 4
+    assert delta["rerun"]["questions"] == 216
+    assert delta["rerun"]["rate"] == 4 / 216
+    assert delta["difference_questions"] == 4 - ladder.LADDER_FLOOR_ANSWERABLE
+    assert "phase14_recall_report.md" in delta["citation"]
+
+    mismatched = _fake_top_rung(4)
+    mismatched["questions"] = mismatched["questions"][:100]
+    with pytest.raises(SystemExit):
+        ladder.top_rung_delta(mismatched)
+
+
+def test_floor_in_both_units_matches_the_context_measurement():
+    """The five numbers 16-CONTEXT.md recorded, RECOMPUTED here rather than transcribed.
+
+    ``round(x, 6)`` pins the recorded arithmetic without hard-coding full float precision, so this
+    test says "the committed decimals are what this code produces" and nothing more.
+    """
+    floor = ladder.floor_in_both_units()
+
+    assert round(floor["draws"]["rate"], 6) == 0.000514
+    assert round(floor["draws"]["wilson_upper_95"], 6) == 0.002302
+    assert round(floor["questions"]["rate"], 6) == 0.004630
+    assert round(floor["questions"]["wilson_upper_95"], 6) == 0.020482
+    assert round(floor["rule_of_three_upper"], 6) == 0.013889
+    assert floor["rule_of_three_upper"] == rule_of_three(216)
+    assert floor["source"] == ladder.LADDER_FLOOR_SOURCE
+
+
+def test_proxy_validity_rule_is_committed_not_derived():
+    """D-15: the divergence rule is the cell gate's own integer, and both verdicts are reachable.
+
+    A fresh literal here would be a threshold free to be chosen once the two counts were on the
+    table. The AST check is what makes "it references LADDER_CELL_PASS_K" a fact rather than a
+    comment, and reaching both verdicts is what stops one branch from being decorative.
+    """
+    function = _function_def(_parse("scripts/phase16_ladder.py"), "proxy_validity")
+    assert function is not None
+    names = {node.id for node in ast.walk(function) if isinstance(node, ast.Name)}
+    assert "LADDER_CELL_PASS_K" in names, "the divergence threshold is not the committed integer"
+
+    assert ladder.PROXY_CELL == (5, 30)
+    assert ladder.PROXY_CELL in ladder.RUNG_DIFFICULTY_ORDER
+
+    k = ladder.LADDER_CELL_PASS_K
+    consistent = ladder.proxy_validity(
+        {ladder.PROXY_CELL: {"n_answerable": k - 1}}, _fake_top_rung(0)
+    )
+    diverges = ladder.proxy_validity({ladder.PROXY_CELL: {"n_answerable": k}}, _fake_top_rung(0))
+    assert consistent["verdict"] == "proxy_consistent"
+    assert diverges["verdict"] == "proxy_diverges"
+    assert consistent["difference"] == k - 1 and diverges["difference"] == k
+
+    # Symmetric: the real values scoring far ABOVE the synthetic ones is divergence too.
+    inverted = ladder.proxy_validity({ladder.PROXY_CELL: {"n_answerable": 0}}, _fake_top_rung(k))
+    assert inverted["verdict"] == "proxy_diverges" and inverted["difference"] == -k
+
+    assert str(k) in consistent["rule"], "the rule states its own threshold, formatted"
+    assert consistent["frame_caveat"] == ladder.PROXY_FRAME_CAVEAT, (
+        "the caveat travels with the number, so no report can render one without the other"
+    )
+
+    with pytest.raises(SystemExit):
+        ladder.proxy_validity({}, _fake_top_rung(0))
