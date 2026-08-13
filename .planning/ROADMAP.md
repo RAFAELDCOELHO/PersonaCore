@@ -191,7 +191,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 16-09-PLAN.md — per-fact statistic, cluster bootstrap, exact sign test, Holm over 6 pairs
+- [x] 16-09-PLAN.md — per-fact statistic, cluster bootstrap, exact sign test, Holm over 6 pairs
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -327,7 +327,7 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 13. EWC A/B No-Forgetting Experiment | v2.0 | 4/4 | Complete | 2026-08-02 |
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
-| 16. Weight-vs-Prompt Persistence Control | v3.0 | 8/11 | In Progress|  |
+| 16. Weight-vs-Prompt Persistence Control | v3.0 | 9/11 | In Progress|  |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 0/TBD | Pending | - |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 0/TBD | Pending | - |
 

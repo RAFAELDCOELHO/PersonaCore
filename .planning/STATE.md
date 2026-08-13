@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 16-08-PLAN.md
-last_updated: "2026-08-13T23:15:20.316Z"
+stopped_at: Completed 16-09-PLAN.md
+last_updated: "2026-08-13T23:44:32.498Z"
 last_activity: 2026-08-13
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 11
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 16 (weight-vs-prompt-persistence-control) — EXECUTING
-Plan: 8 of 11
+Plan: 9 of 11
 Status: Ready to execute
 Last activity: 2026-08-13
 
@@ -73,6 +73,7 @@ Last activity: 2026-08-13
 | Phase 16 P05 | 38min | 2 tasks | 4 files |
 | Phase 16 P06 | 30min | 3 tasks | 2 files |
 | Phase 16 P08 | 35min | 3 tasks | 2 files |
+| Phase 16 P09 | 55min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -168,6 +169,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 16]: 16-06: the ladder's clobber guard has NO --force flag, and the report's top-rung distance reads 'not measured' rather than being back-filled — A force flag that becomes routine destroys the hand-recorded verdict it protects (15-04 CR-02); if the report must be regenerated the honest path is deleting it in a reviewed commit. The taught statements end in a period, so ladder_distance would raise on every top-rung prompt at the END of an ~80-minute run — the report names what was and was not measured instead.
 - [Phase 16]: Arm parity is one SHARED_ARM_CONFIG object asserted by identity, never four agreeing literals; forbid_ids is runtime-injected and recorded by sha256 content hash — undecodable_ids_mask needs a loaded tokenizer so it cannot be an import-time constant, and a torch tensor has no useful is-identity after .to(device)
 - [Phase 16]: COSINE_CHANCE_FLOOR = 0.05 with D-25's numeric reconciliation recorded in the comment beside it; the superseded 0.125 is AST-pinned out of executable code — the pool decision chose the 20-value lexicon, so the qualifier's cited floor and the pool's actual floor disagree; recording the discrepancy beats silently using one number
+- [Phase 16]: 16-09: the cluster bootstrap is TWO-STAGE by USER DECISION at the wave-8 checkpoint — facts resampled first (STATE.md:94, n=8), then that fact's questions (STAT-01/D-06). Stage-2-only yields a zero-width interval on a within-fact-homogeneous fixture, narrower than the sign test beside it
+- [Phase 16]: 16-09: sign_test_exact returns 1.0 whenever positives <= SIGN_TEST_N/2 (D-29) — under a pure two-sided test an all-tied pair scores 0.0078125 and would have CLEARED Holm at 0.0083333; reproduced by deliberate-RED and restored byte-identical
+- [Phase 16]: 16-09: no coverage/collision floor anywhere — the 6435 fact-multisets (C(15,8)) are NOT equiprobable, so a >= 6435*0.95 floor is unreachable by construction (~57% drawn at N=10000)
 
 ### Pending Todos
 
@@ -210,8 +214,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-13T23:15:20.310Z
-Stopped at: Completed 16-08-PLAN.md
+Last session: 2026-08-13T23:44:32.492Z
+Stopped at: Completed 16-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
