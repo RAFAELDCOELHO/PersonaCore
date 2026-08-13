@@ -108,6 +108,51 @@ def _probe(model, tok, device, forbid, question, index):
     return prompt_ids, texts
 
 
+def probe_guessability(model, tok, device, forbid, value, questions, *, start_index=0):
+    """D-16: the PUBLIC guessability entry point — probe an ARBITRARY string, not a pool member.
+
+    This module measured guessability only for candidates of ``phase14_factset``, through
+    ``main()``. Phase 16's capability ladder needs the same measurement for a SYNTHETIC span, and
+    Phase 17's ISO-01 needs it again for its own material — so the surface is widened here, in the
+    instrument itself, rather than copied into a phase driver. That is the ISO-01 precedent stated
+    as a rule: **import this instrument, never copy it.** A second copy is a second guessability
+    rule that can drift from this one, and the whole point of the gate is that exactly one rule
+    decides whether the base already knows a value. The widening lands in this file (not in a
+    Phase 16 file) precisely because Phase 17 consumes the same import path.
+
+    The rule's objective half is unchanged and is ``phase14_factset.exact_match_clean``: ``clean``
+    is True iff the normalized value appears in ZERO of the completions across ALL questions. The
+    boundary is deliberately unforgiving — ONE containment out of N is a FAIL. The close-call tier
+    that catches semantic proximity stays a human judgment recorded with quoted evidence, exactly
+    as in ``main()``; nothing here renders a verdict.
+
+    **The caller supplies ``questions``**, so this function holds no fact material of its own: no
+    ``GATE_PROBES`` lookup, no pool iteration, no value list. It is a probe over whatever string
+    and whatever questions it is handed.
+
+    Probing itself is delegated to ``_probe`` — same ``build_recall_prompt`` call, same
+    greedy-plus-warm-draw regime, same per-probe ``torch.Generator(SEED + index)`` seeding, same
+    ``STOP_IDS`` and ``forbid`` mask. ``start_index`` offsets that seeding so a caller running
+    several batches gets disjoint streams (``main()``'s ``len(probe_cache)`` discipline, exposed).
+
+    Returns ``{value, probes: [{question, prompt_ids, completions}], n_probes, n_completions,
+    clean}`` — every completion verbatim, so the caller can quote them in its own report.
+    """
+    probes = []
+    texts = []
+    for offset, question in enumerate(questions):
+        prompt_ids, completions = _probe(model, tok, device, forbid, question, start_index + offset)
+        probes.append({"question": question, "prompt_ids": prompt_ids, "completions": completions})
+        texts += completions
+    return {
+        "value": value,
+        "probes": probes,
+        "n_probes": len(probes),
+        "n_completions": len(texts),
+        "clean": fs.exact_match_clean(texts, value),
+    }
+
+
 def _quote(text):
     """Verbatim completion on ONE markdown line — literal newlines/tabs shown as escapes."""
     return text.replace("\n", "\\n").replace("\t", "\\t")
