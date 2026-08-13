@@ -1,0 +1,265 @@
+{
+  "phase": "16",
+  "phase_name": "Weight-vs-Prompt Persistence Control",
+  "timestamp": "2026-08-12T20:15:00Z",
+  "areas_completed": [
+    "Run architecture & condition order",
+    "Per-fact denominator + tie policy",
+    "Capability ladder rungs (PERS-01)",
+    "Instrument surgery placement (PERS-05/PERS-06)",
+    "Four-arm parity + cosine arm scoring (PERS-02/PERS-04)",
+    "Context-pressure sweep design (PERS-03)"
+  ],
+  "areas_remaining": [],
+  "decisions": {
+    "Run architecture & condition order": [
+      {
+        "question": "Run architecture for the four arms",
+        "answer": "FOUR FRESH PROCESSES, one per condition. Questions run sequentially within the same process inside a condition. NOT one process for all arms, and NOT a process per question (1,080).",
+        "options_presented": [
+          "Fresh process per arm (4 loads, +6.6s)",
+          "One process, all four arms (ROADMAP SC2 as written)",
+          "Fresh process per question x arm (1,080 loads, +29.8 min)"
+        ]
+      },
+      {
+        "question": "Formal justification for sequential questions within one condition",
+        "answer": "MUST cite BOTH, explicitly, in CONTEXT.md - never implicit: (1) tests/test_lora_toggle.py:77 test_toggle_round_trip_bit_identity (disable == base exactly, re-enable == adapter exactly), :105 test_adapter_disabled_preserves_prior_state (CM restores prior per-module values, not blanket True), :95 test_adapter_disabled_exception_safe (try/finally); AND (2) Phase 14 D-11.3 run_bit_identity_control, max |diff| 0.0 on the REAL 13.9M convbase + real persona adapter. Reason both are required: the Phase 9 tests run on a FIXTURE model, stated at phase14_recall.py:1341-1344. Citing only Phase 9 would inherit a fixture-scope guarantee as a real-weights one.",
+        "options_presented": ["user-specified, verified against source before acceptance"]
+      },
+      {
+        "question": "CONDITION_ORDER",
+        "answer": "CONFIRMADO PELO USUARIO 2026-08-12 - a flag foi resolvida, nao herdada. LOCKED as a module-level constant, pre-registered before the run: (1) adapter-only, (2) base-neither, (3) embedding-cosine, (4) prompt-stuffed. // RACIONAL GRAVADO, as duas razoes que sobrevivem: pre-registrar a ordem impede escolhe-la depois de ver numeros; e sob interrupcao 'adapter-only primeiro' garante que o resultado mais critico ja esta em maos. // SENTENCA EXPLICITA exigida pelo usuario, verbatim: \"sob o split de quatro processos frescos, o resultado é invariante à ordem — a ordem é pré-registro puro, sem efeito físico sobre o resultado.\" // REMOVIDO: a justificativa original para prompt-stuffed-por-ultimo ('isolates residual context-window risk') foi APAGADA do racional, nao mantida com ressalva. Ela era defesa-em-profundidade contra um mecanismo que o split de processos ja elimina; racional falso removido e racional que ninguem herda rio-abaixo.",
+        "options_presented": [
+          "remover a frase e adicionar invariancia de ordem explicita (ESCOLHIDA)",
+          "remover a frase, manter so as duas razoes que sobrevivem",
+          "manter a frase, marcada como redundante"
+        ]
+      },
+      {
+        "question": "Measured wall-clock cost (the user asked this be confirmed before locking response length or scoring detail)",
+        "answer": "RETRATADO 2026-08-12, ANTES do resume desta sessao. 45.0min foi um ponto estimado insustentavel - n=3, spread quase 2x (1.60/2.94/2.50s por pergunta), band min-max de 28.8-52.9min nao exclui variacao larga. NAO citavel como evidencia de log. Substituido por medicao de n=30 no inicio desta sessao. // A afirmacao 'COST IS NOT A CONSTRAINT' cai junto com o ponto: ela dependia inteiramente do n=3 retratado e nao sobrevive a ele. // Sobrevive a retratacao apenas o que nao depende do n: (a) observacao UNICA (n=1, igualmente nao citavel como distribuicao) de process+import+load 1.66s (import 1.01 / load 0.65) na M3/MPS, .venv/bin/python, exit 0; (b) a correcao estrutural, independente de tempo - 270 x 4 = 1,080 sao pares (question, arm), NAO chamadas de modelo; cada pergunta faz 9 draws (N_SEEDED_SAMPLES=8 + 1 greedy), logo 9,720 completions.",
+        "options_presented": ["RETRACTED - o ponto n=3 nao e citavel; substituido por medicao n=30 no inicio desta sessao"]
+      },
+      {
+        "question": "Wall-clock cost, MEDIDO n=30 (substitui o ponto n=3 retratado acima)",
+        "answer": "MEDIDO 2026-08-12, .venv/bin/python, exit 0, device=mps, torch 2.7.1, RECALL_MAX_NEW_TOKENS=48, 9 draws/pergunta (N_SEEDED_SAMPLES=8 + 1 greedy), caminho real load_adapted_model -> build_recall_prompt -> draw_all sobre convbase_slim + persona_adapter reais. AMOSTRA: stride deterministico de 9 sobre as 270 do fixture em ordem de tier -> n=30 (core_taught 13 / core_held_out 11 / soft 6). Sem aleatoriedade na selecao. // TEMPOS BRUTOS por pergunta, em segundos, na ordem medida: 1.583, 2.062, 1.590, 3.291, 2.104, 2.227, 2.291, 2.149, 2.341, 4.764, 2.673, 3.072, 1.854, 2.882, 1.590, 1.611, 1.930, 1.643, 2.229, 2.050, 2.900, 3.004, 5.424, 2.703, 2.305, 2.499, 3.184, 5.340, 2.969, 3.346. // ESTATISTICA: mediana 2.323 s/pergunta; min 1.583; max 5.424; spread 3.43x; media 2.654; sd 1.012; SE 0.185. // PROJECAO para os 1,080 pares (question, arm): ponto 47.8 min pela media, 41.8 min pela mediana, IC 95% sobre a media [41.0, 54.6] min. NAO usar o band min-max 28.5-97.6 min como incerteza do total - ele e o total hipotetico se TODA pergunta fosse a mais rapida/lenta, nao a incerteza de uma soma de 1,080. // DESCARTADOS das estatisticas, cada um n=1 e igualmente nao citavel como distribuicao: warm-up 2.959s (primeiro dispatch MPS paga init de kernel), import 0.65s, load_adapted_model 0.49s. // O QUE A MEDICAO PROVA SOBRE A RETRATACAO: o n=3 tinha max 2.94s e spread 1.84x; o n=30 tem max 5.424s e spread 3.43x. O n=3 nunca observou a cauda - a retratacao estava certa, nao apenas cautelosa. Que 45.0 min caia dentro do IC [41.0, 54.6] e coincidencia, nao vindicacao: o ponto correto e 47.8 min e so e afirmavel com o band junto.",
+        "options_presented": ["medido n=30, exit 0, tempos brutos preservados como evidencia"]
+      },
+      {
+        "question": "FECHADO - os quatro bracos medidos, n=30 cada, um processo (fecha a suposicao 'um braco x4')",
+        "answer": "MEDIDO 2026-08-12, .venv/bin/python, exit 0, device=mps, torch 2.7.1, um unico processo, mesmo stride-9 (n=30, tiers 13/11/6). Braco B usou span de persona SINTETICO de 13 tokens, casado com a MEDIANA dos comprimentos reais dos statements em primeira pessoa (n=10, min/max 11/25) - nenhum valor ensinado entrou em prompt algum; compute depende do comprimento, nao do conteudo. Prompt: bare=33 tokens, stuffed=46 tokens. // RESULTADO, s/pergunta: A adapter-only mediana 2.181, min/max 1.518/4.575, spread 3.01x, media 2.380, sd 0.732. B prompt-stuffed mediana 3.183, min/max 2.162/4.025, spread 1.86x, media 3.219, sd 0.459. C base-neither mediana 3.185, min/max 2.390/4.017, spread 1.68x, media 3.106, sd 0.408. D cosine-proxy mediana 0.009, min/max 0.008/0.012, media 0.009, sd 0.001. // TOTAL: soma das quatro medias 8.713 s/pergunta x 270 = 39.2 min; IC 95% intra-run [37.6, 40.8] min (IGNORA a covariancia entre bracos pareados nas mesmas perguntas - declarado, nao escondido). A extrapolacao aposentada 'um braco x4' dava 42.8 min. // PREVISAO MINHA FALSIFICADA, registrada como erro: eu previ que C base-neither seria MAIS RAPIDO que A por nao fazer os matmuls de LoRA. C e MAIS LENTO (3.106 vs 2.380, +30%). A causa e contagem de passos de decode, nao custo por passo: o modelo adaptado atinge STOP_IDS mais cedo porque responde e para, enquanto a base diverge ate o teto de 48 tokens. O custo do run e governado por quando cada braco PARA, nao por quanto compute cada passo faz. Isso e exatamente o que a medicao existia para pegar. // D e PROXY, nao medicao: o braco PERS-04 nao existe ainda, entao o que foi cronometrado e o unico forward pass que tal braco precisa para embeddar uma pergunta (os 8 embeddings de fato saem uma vez, os cossenos sao despreziveis). E limite inferior, nao medida do braco.",
+        "options_presented": ["quatro bracos medidos no mesmo processo, exit 0"]
+      },
+      {
+        "question": "Precisao citavel do total (a incerteza que domina NAO e a intra-run)",
+        "answer": "O braco A foi medido DUAS vezes de forma independente nesta sessao, mesmas 30 perguntas: media 2.654 s (primeira passada) vs 2.380 s (passada dos quatro bracos) - diferenca de 11.5% entre runs. Essa variacao entre runs e MAIOR que o IC 95% intra-run do total ([37.6, 40.8] min, +-4%), logo o IC intra-run SUBESTIMA a incerteza real e nao deve ser citado sozinho. NUMERO CITAVEL: aproximadamente 39 min, realisticamente 35-44 min aplicando os +-11.5% observados entre runs. NAO citar 39.2 min com uma casa decimal - essa precisao nao existe. // O que e solido independente disso, porque e uma ordem de grandeza e nao um ponto: custo NAO e restricao para o run de Phase 16 sob nenhuma das leituras (a mais lenta observada ainda fica bem abaixo de uma hora), e a divisao em quatro processos custa 4 x ~1s de load, ruido frente ao total.",
+        "options_presented": ["duas medicoes independentes do mesmo braco, diferenca reportada em vez de suprimida"]
+      }
+    ],
+    "Per-fact denominator + tie policy": [
+      {
+        "question": "Estatistica e denominador por fato",
+        "answer": "RESOLVIDO POR ARITMETICA, nao por escolha. O fixture e perfeitamente balanceado - verificado sobre results/phase16_recall_sample.json: cada um dos 8 fatos core tem EXATAMENTE 14 perguntas core_taught e 13 core_held_out (4 reserved), com 9 draws por pergunta, logo 126 e 117 draws por fato por tier. Com n identico em toda pergunta, sum(k)/sum(n) e IGUAL digito a digito a mean(k_i/9): o ponto NAO depende da escolha entre 'pooled draws' e 'media das taxas por pergunta'. A escolha so afeta o INTERVALO, e STAT-01 ja obriga reamostrar PERGUNTAS. // DECIDIDO: estatistica por fato = k/n sobre as perguntas daquele fato x 9 draws; denominador reportado nas duas formas (perguntas para o intervalo, draws para a contagem bruta) por STAT-02. Intervalo descritivo = cluster bootstrap reamostrando perguntas dentro do fato; Wilson ao lado, rotulado como a largura que assume independencia; 3/n onde os sucessos forem zero. // IMPLEMENTACAO: trocar a chave de agrupamento em scripts/phase14_recall.py:838-843 de record['split'] para o fact_id. O fixture ja carrega fact_id por pergunta - schema verificado: {'seed_index': 0, 'fact_id': 'cand_person_quillon', 'question': ..., 'reserved': false}. Nenhuma estrutura de dados nova.",
+        "options_presented": ["resolvido por aritmetica - o balanceamento do fixture torna as duas leituras identicas no ponto"]
+      },
+      {
+        "question": "Tier primario do gate + replica taught",
+        "answer": "DECIDIDO pelo usuario (opcao 3). VEREDITO FORMAL UNICO: tier core_held_out. O tier taught roda em paralelo, mesmo protocolo, reportado como replica pre-registrada concordante ou discordante, EXPLICITAMENTE FORA da familia de Holm. // TEXTO DE PRE-REGISTRO, travado ANTES de qualquer corrida real, verbatim do usuario e nao parafraseavel: \"o resultado do tier taught nunca altera, reforça formalmente, nem substitui o veredito do tier held-out — é evidência corroborante reportada, não gate.\" // POR QUE EXATAMENTE UM TIER PODE SER GATED, verificado por enumeracao: D-10 proibe pooling taught+held-out, entao cada fato rende dois numeros. Gatear ambos leva a familia de Holm de 6 para 12; o alpha do primeiro passo cai para 0.05/12 = 0.0041667 e a unanimidade 8/8 (p = 0.0078125) FALHA. Com m=12 o gate e inclaravel em QUALQUER desfecho, inclusive unanimidade perfeita nos dois tiers. // POR QUE HELD-OUT E NAO TAUGHT: results/phase14_recall_report.md:54 - o tier taught mede recall em familias de template que o adapter treinou, onde sucesso e compativel com memorizacao de superficie; held-out e o tier que distingue fato internalizado de fraseado memorizado. Gatear a manchete no taught enfraqueceria exatamente a afirmacao que o v3.0 existe para sustentar.",
+        "options_presented": [
+          "held-out gated, taught descritivo",
+          "taught gated, held-out descritivo",
+          "held-out gated + taught como replica pre-registrada nao-gated (ESCOLHIDA)"
+        ]
+      },
+      {
+        "question": "Politica de empate no sign test exato",
+        "answer": "DECIDIDO: empate conta CONTRA a alternativa; n FIXO em 8, sempre, pre-registrado. Nunca infla significancia e o denominador fica travado desde a pre-registracao (STAT-02). // POR QUE NAO 'descartar empates' (o livro-texto): um unico empate leva n=7, onde a unanimidade da p = 0.015625 > 0.0083333 e o gate fica inclaravel. E - o caso decisivo - o par B prompt-stuffed x C base-neither deve empatar em quase todos os 8 fatos, porque o Phase 14 ja mediu o braco prompt em 1/1944 = 0.0005 (results/phase14_recall_report.md:378), ou seja 7 dos 8 fatos em exatamente 0. Sob descarte, esse par cai para n~0 e o teste fica INDEFINIDO, nao apenas inclaravel, e a familia de Holm fica mal-formada. Sob 'empate contra', o mesmo par vira 0/8, p = 1.0: definido e inofensivo. // ONDE O EMPATE NAO ESTA, verificado contra dados ja commitados: nenhum dos 8 fatos zera no braco adapter, em nenhum tier. Taxas held-out por fato extraidas das tabelas de results/phase14_recall_report.md - sister_orsala 72/117 = 0.615, cat_zibby 69/117 = 0.590, dog_zorp 59/117 = 0.504, town_brindlemoor 45/117 = 0.385, street_marrowgate 37/117 = 0.316, person_quillon 23/117 = 0.197, year_1987 15/117 = 0.128, house_7412 6/117 = 0.051; as somas reproduzem 496/1008 taught e 326/936 held-out publicados. Para o par da manchete A adapter x B prompt, ZERO empates sao esperados e 8/8 e o desfecho previsto.",
+        "options_presented": [
+          "empate conta contra a alternativa, n fixo em 8 (ESCOLHIDA)",
+          "descartar empates, n encolhe (livro-texto)",
+          "descartar empates + piso pre-registrado de n"
+        ]
+      },
+      {
+        "question": "Tamanho e fechamento da familia de Holm",
+        "answer": "DECIDIDO: exatamente os 6 pares C(4,2), como o SC4 ja escreve - esta decisao NAO exige emenda ao SC4. Alpha do primeiro passo 0.05/6 = 0.0083333; a unanimidade 8/8 no sign test exato bilateral sobre as 2^8 = 256 particoes de sinal da p = 0.0078125; margem 0.0005208, 6.7% relativo. // A MARGEM E LOAD-BEARING E ISSO PRECISA ESTAR NO PRE-REGISTRO: m=7 ja da alpha = 0.0071429 < 0.0078125 e derruba a manchete. Logo a familia e FECHADA em 6 e NADA MAIS no Phase 16 pode ser gated - PERS-03 (context pressure) e a replica taught inclusos, ambos descritivos por construcao. Isso e STAT-06 com aritmetica atras, nao apenas principio. // Verificado por enumeracao das 2^8 particoes: n=8 pos=8 -> p=0.0078125; n=8 pos=7 -> p=0.0703125; n=7 pos=7 -> p=0.0156250. Existe UM unico desfecho que clareia: 8/8 sem empates. 'Not demonstrable at n=8' continua sendo desfecho pre-registrado legitimo (SC4), registrado as-written como o Phase 12 registrou lambda*=None.",
+        "options_presented": [
+          "travar exatamente os 6 pares como SC4 ja escreve (ESCOLHIDA)",
+          "reduzir a 3 pares testaveis",
+          "reduzir a 1 par (so a manchete)"
+        ]
+      },
+      {
+        "question": "Referencia pendente DEGEN-2 - a nota que tornou esta area BLOCKING",
+        "answer": "NAO EXISTE NO REPOSITORIO. grep -rn 'DEGEN' em todo o repo, excluindo .git e .venv, retorna UM unico hit: a propria verification_note deste checkpoint. DEGEN-2 nao esta em .planning/REQUIREMENTS.md, nao esta em .planning/ROADMAP.md, e nao esta em codigo nem em teste. A decisao do denominador era real e esta tomada acima; a dependencia declarada rio-abaixo ('upstream de DEGEN-2's threshold') nao e verificavel e NAO sera propagada para o CONTEXT.md. Registrado aqui em vez de apagado, para que a nota original nao reapareca como fato em uma sessao futura.",
+        "options_presented": ["referencia pendente, verificada por grep repo-wide"]
+      }
+    ],
+    "Capability ladder rungs (PERS-01)": [
+      {
+        "question": "Fatos do instrumento que reenquadram o ladder - medidos antes de desenhar os degraus",
+        "answer": "MEDIDO 2026-08-12, .venv/bin/python, device=mps, carregando convbase_slim + persona_adapter reais via R.load_adapted_model. (a) TOKENIZER: 547 dos 8192 ids sao decodificaveis; 7645 sao mascarados como forbid_ids ao amostrar (undecodable_ids_mask, src/personacore/generation/text.py:31, que ja documenta os 547). Composicao dos 547 por comprimento em bytes: 1B=256, 2B=63, 3B=74, 4B=55, 5B=55, 6B=21, 7B=12, 8B=2, 9B=1 - ou seja, um tokenizer QUASE-CARACTERE com poucos merges. (b) MODELO: n_layer=6, n_head=6, n_embd=384, block_size=256. (c) VALORES: os 8 valores locked tem comprimento em tokens [4,4,4,5,5,6,8,8], mediana 5; os 2 soft tem [6,6]. // CONSEQUENCIA PARA O DESENHO: reproduzir um valor NAO e copia de um token unico - e copia de uma sequencia de 4 a 8 tokens sobre um vocab quase-caractere, num modelo de 6 camadas. Isso e uma tarefa de inducao sustentada, materialmente mais dificil que a inducao de token unico que a intuicao de 'distancia ~2' sugere. Por isso o eixo COMPRIMENTO DE SPAN entrou no ladder ao lado de DISTANCIA.",
+        "options_presented": ["medido antes do desenho, exit 0"]
+      },
+      {
+        "question": "Forma do ladder - o que varia entre degraus",
+        "answer": "DECIDIDO: GRADE 2-D, comprimento de span x distancia. Span de 1 / 2 / 5 tokens x distancia ~2 / ~30 tokens ate o gatilho <|assistant|> = 6 celulas, com o framing de PERGUNTA NATURAL constante em todas as celulas. // POR QUE 2-D e nao distancia pura: os valores reais tem 4-8 tokens sobre um vocab de 547 ids, entao comprimento de span e o suspeito primario de onde a capacidade morre, e um ladder so de distancia nao o detectaria - falharia em todas as distancias sem distinguir 'nao consegue copiar 5 tokens' de 'nao consegue usar contexto', que licenciam manchetes diferentes. // POR QUE O FRAMING FICA CONSTANTE E NATURAL: um degrau de copia instruida ('repeat this: X') esta fora da distribuicao de um modelo TinyStories+PersonaChat, entao a falha dele nao distingue incapacidade de nao-seguir-instrucao e portanto nao licencia nada. Manter o framing fixo remove esse confound do ladder inteiro.",
+        "options_presented": [
+          "grade 2-D span x distancia (ESCOLHIDA)",
+          "distancia pura com span real fixo (4 degraus)",
+          "3 degraus minimos incluindo copia explicita"
+        ]
+      },
+      {
+        "question": "Material dos degraus",
+        "answer": "DECIDIDO pelo usuario, verbatim: \"strings sintéticas nos degraus novos, filtradas pelo mesmo guessability gate já validado (D-01/D-05, Fase 14/16), comprimento casado com os valores reais. Degrau mais alto = fairness control do Phase 14 (1/1944), reusado como está, sem nova corrida. Zero novos sítios de valor-em-prompt.\" // CONSEQUENCIA: a clean room D-16 nao se amplia. O Phase 14 registra o fairness control como o UNICO lugar da fase onde um valor de fato aparece legitimamente num prompt (results/phase14_recall_report.md, secao Control 1); reusar aquele numero em vez de recorre-lo mantem essa propriedade verdadeira no Phase 16 tambem. O assert_value_in_prompt do PERS-06 nao precisa cobrir caminho novo por causa do ladder. // GUARDA OBRIGATORIA: as strings sinteticas passam pelo guessability gate porque uma string sintetica que por acidente seja uma palavra que a base ja conhece INFLARIA o ladder e licenciaria uma manchete mais forte do que os dados sustentam. Isso e o unico risco que a escolha sintetica introduz, e o gate existente o fecha.",
+        "options_presented": [
+          "sintetico nos degraus novos + reuso do fairness control no topo (ESCOLHIDA)",
+          "valores taught reais em todos os degraus",
+          "ambos, sintetico como controle pareado do real"
+        ]
+      },
+      {
+        "question": "Como o ladder licencia a manchete",
+        "answer": "DECIDIDO pelo usuario, verbatim: \"licensed_headline() ramifica no degrau mais alto aprovado, com threshold literal módulo-level commitado por célula antes da corrida (STAT-05). Ramo \\\"nenhum degrau aprovado\\\" licencia só o enunciado de déficit de capacidade do SC1. Violação de monotonicidade registrada como anomalia de instrumento no relatório, sem parar a corrida — mas nomeada explicitamente, não silenciada.\" // Cada uma das 6 celulas tem seu criterio de aprovacao como literal module-level num driver commitado ANTES da corrida que ele julga (STAT-05), e o veredito e computado IMPORTANDO essas constantes, nunca redigitando-as em prosa. // MONOTONICIDADE: se uma celula mais dificil aprova e uma mais facil reprova, isso e registrado no relatorio como anomalia de instrumento, nomeada explicitamente. Nao aborta a corrida.",
+        "options_presented": [
+          "threshold literal por celula + ramo no degrau mais alto aprovado (ESCOLHIDA)",
+          "binario: saiu do chao do Phase 14 ou nao",
+          "threshold por celula + monotonicidade como parada dura"
+        ]
+      },
+      {
+        "question": "Checagem de validade do proxy que cai de graca da combinacao das duas escolhas acima",
+        "answer": "NAO PEDIDA, ZERO MEDICAO EXTRA, mas cai de graca e deve ser registrada. A celula (span 5 tokens, distancia ~30) e a mesma configuracao do fairness control do Phase 14 reusado no topo do ladder - mesma posicao no prompt, mesmo comprimento mediano de span - diferindo APENAS no material: sintetico contra valor taught real. Comparar as duas testa diretamente se a string sintetica e um proxy justo do valor real. Se divergirem muito, a substituicao sintetica nao e valida e todo degrau baixo do ladder fica suspeito. Custo: zero, porque as duas medicoes ja existem no desenho aprovado.",
+        "options_presented": ["derivada, nao escolhida - registrada para o planner"]
+      },
+      {
+        "question": "Nota de engenharia sobre reusar o guessability gate",
+        "answer": "VERIFICADO: scripts/phase14_factset_gate.py existe (21.643 bytes, 2026-08-02). Mas expoe apenas main() e helpers privados (_probe:87, _complete:73, _quote:111, assert_report_not_clobbered:116) - NAO tem hoje uma API publica que receba uma string arbitraria e devolva um veredito de guessability. O ISO-01 estabelece o precedente de IMPORTAR esse instrumento em vez de copiar; aplicar o mesmo precedente aqui exige alargar a superficie publica do arquivo. Isso deve ser feito de forma deliberada e visivel, no mesmo registro do alargamento da guarda AST do PERS-06 - nunca copiando a logica para um script novo, que e exatamente o modo de falha que o projeto nomeia como recorrente. Ponto para o planner resolver, nao decisao pendente do usuario.",
+        "options_presented": ["verificado por leitura do arquivo e listagem dos defs"]
+      },
+      {
+        "question": "REVISAO do topo do ladder - decidida na area 3, revista na area 4 com evidencia nova",
+        "answer": "REVISADO, nao sobrescrito. A area 3 decidiu 'topo = fairness control do Phase 14 reusado como esta, sem nova corrida'. Duas evidencias que NAO estavam na mesa naquele momento mudaram a decisao: (a) o fix do PERS-05 troca os seeds, entao o numero commitado foi produzido por codigo que nao existe mais na forma corrigida, e seria o unico numero pre-fix da fase; (b) o numero commitado esta na unidade de DRAWS, que o STAT-01 proibe, e a diferenca nao e cosmetica - Wilson upper 0.002302 em 1/1944 draws contra 0.020482 em 1/216 perguntas, 9x. // DECISAO REVISTA pelo usuario: recorrer o fairness control POS-FIX (~12 min, ruido frente aos ~39 min do run) e reportar o delta contra o numero commitado como MEDICAO do impacto do PERS-05, nao como assercao silenciosa de que 'nao importou'. Continua sendo pre-comparacao, entao o PERS-01 segue satisfeito. // O QUE SOBREVIVE DA AREA 3 SEM MUDANCA: material sintetico nos degraus novos filtrado pelo guessability gate, grade 2-D span x distancia, framing natural constante, e o licensed_headline() ramificando no degrau mais alto aprovado.",
+        "options_presented": [
+          "recorrer pos-fix E reportar o delta como medicao do impacto (ESCOLHIDA)",
+          "manter o reuso, apenas reafirmado em 1/216",
+          "recorrer pos-fix e usar so o novo, citando o antigo como prior"
+        ]
+      }
+    ],
+    "Instrument surgery placement (PERS-05/PERS-06)": [
+      {
+        "question": "PERS-05 - o defeito exato e o que o fix muda",
+        "answer": "CONFIRMADO por leitura: scripts/phase14_recall.py:1184 faz 'for index, item in enumerate(questions)' e passa esse 'index' POSICIONAL direto para draw_all(model, tok, prompt_ids, device, forbid, index) na linha 1193. O fix e trocar por item.seed_index. // CONSEQUENCIA QUE PRECISA ESTAR NO RELATORIO: o fix MUDA quais seeds sao sorteados, logo o numero que aquele codigo produziu no Phase 14 nao reproduz bit-a-bit depois do fix. Isso nao e regressao - e a definicao do defeito. O Phase 14 nunca comparou esse braco com nada (o proprio texto do PERS-05 diz isso), entao o pareamento nao estava em jogo la; no Phase 16 esta, e por isso o fix e pre-requisito e nao polimento.",
+        "options_presented": ["verificado por leitura das linhas 1184 e 1193"]
+      },
+      {
+        "question": "PERS-06 - o gemeo assert_value_in_prompt ja existe, inline e sem nome",
+        "answer": "CONFIRMADO por leitura: phase14_recall.py:1188-1192 ja executa exatamente a asercao pedida - _prove(contains_value(tok.decode(prompt_ids), item.fact.value), ...) - so que inline dentro de run_fairness_control, sem nome proprio. A cirurgia do PERS-06 e EXTRAIR isso como gemeo nomeado de assert_no_value_in_prompt (:398), que ja tem a forma alvo: recebe tok, question e os values como PARAMETRO (nunca constante module-level, LAZY-IMPORT RULE), e checa nos dois niveis, string normalizada e sequencia de ids. Nao e escrever uma asercao nova - e dar nome e simetria a uma que ja roda.",
+        "options_presented": ["verificado por leitura de :398-416 e :1188-1192"]
+      },
+      {
+        "question": "Onde a cirurgia cai",
+        "answer": "DECIDIDO pelo usuario, opcao hibrida: PERS-05 (item.seed_index) e a extracao de assert_value_in_prompt caem em scripts/phase14_recall.py, o INSTRUMENTO COMPARTILHADO, porque Phases 17 e 18 consomem o mesmo arquivo e um fix que nao mora la e um fix que eles nao herdam - que e literalmente o modo de falha que o PERS-05 existe para impedir. O driver do Phase 16 vai para arquivo proprio, sem inchar um arquivo que ja passa de 1.300 linhas e que outras duas fases tambem vao editar.",
+        "options_presented": [
+          "hibrido: fix + gemeo no compartilhado, driver do 16 em arquivo novo (ESCOLHIDA)",
+          "tudo in-place em phase14_recall.py",
+          "tudo em modulo novo que importa phase14_recall"
+        ]
+      },
+      {
+        "question": "Forma do alargamento da guarda AST",
+        "answer": "DECIDIDO pelo usuario, verbatim: \"guarda AST varre scripts/*.py e src/ completos, allowlist explícita nomeada por arquivo+função. Qualquer call site com persona= fora da allowlist falha a suíte imediatamente — sem exceção por conveniência de arquivo novo.\" // ESTADO ATUAL, verificado: tests/test_phase14_scoring.py::test_persona_argument_is_scoped_to_the_fairness_control parseia UM arquivo (scripts/phase14_recall.py, hard-coded no helper _build_recall_prompt_call_sites) e afirma igualdade dura with_persona == ['run_fairness_control']. // POR QUE ALARGAR O ESCOPO E NAO SO A LISTA: se a guarda continuasse varrendo um arquivo so, um arquivo novo do Phase 17 com persona= simplesmente nao seria varrido e passaria em silencio. 'Invariante declarada vira falsa em silencio' e o defeito que o proprio projeto nomeia como o mais recorrente, e o PERS-06 existe por causa dele. Alargar so a allowlist deixaria a guarda tecnicamente verde e substantivamente cega. // O alargamento e DELIBERADO E VISIVEL, nunca delecao - requisito literal do PERS-06.",
+        "options_presented": [
+          "varre scripts/*.py e src/ completos, allowlist por arquivo+funcao (ESCOLHIDA)",
+          "allowlist por arquivo, so nos arquivos ja nomeados",
+          "marcador declarativo no codigo que o AST reconhece"
+        ]
+      },
+      {
+        "question": "O 1/1944 esta na unidade que o STAT-01 proibe - quanto isso muda",
+        "answer": "MEDIDO com as funcoes stdlib do proprio repo (scripts/erasure_gate.py: wilson_upper_bound:139, rule_of_three:161), zero dependencia nova: 1/1944 = 0.000514 com Wilson upper 95% 0.002302, contra 1/216 = 0.004630 com Wilson upper 95% 0.020482. NOVE VEZES de diferenca no limite superior. Para referencia, rule_of_three(216) = 0.013889, o teto que valeria se fossem 0/216. // O STAT-01 declara a PERGUNTA como unidade, nunca o draw. Citar '1/1944' faz o braco prompt parecer muito mais definitivamente no zero do que a unidade legal sustenta, e reusar esse numero como esta importaria uma violacao de STAT-01 para dentro do Phase 16. // O codigo JA computa a versao correta: run_fairness_control retorna n_answerable na linha 1219, que e o numerador em perguntas. O relatorio do Phase 14 ja diz em prosa '1 of those questions produced at least one completion' - o numero certo existe, so nao e o que foi para a manchete.",
+        "options_presented": ["medido com as funcoes ja commitadas do repo, exit 0"]
+      }
+    ],
+    "Four-arm parity + cosine arm scoring (PERS-02/PERS-04)": [
+      {
+        "question": "Como o braco cosseno produz uma saida pontuavel",
+        "answer": "DECIDIDO: o braco D emite o valor do argmax cosseno COMO TEXTO, pontuado pelo MESMO contains_value dos outros tres bracos. A fase inteira passa a ter UM scorer so, entao divergencia silenciosa entre scorers de bracos e estruturalmente impossivel, nao apenas improvavel. // RESOLUCAO: 1 draw DETERMINISTICO por pergunta, nao 9. A taxa por fato vira acertos/13 perguntas held-out, contra acertos/117 draws nos bracos A/B/C. Isso e compativel com a area 2 sem ajuste: o sign test usa apenas a ORDEM entre bracos, nunca a magnitude do denominador, e a area 2 ja estabeleceu que o balanceamento do fixture torna taxa-por-draw e media-de-taxas-por-pergunta identicas no ponto. // REJEITADA a variante de fabricar 9 draws amostrando softmax sobre as similaridades: o intervalo resultante mediria a temperatura escolhida, nao incerteza real do braco.",
+        "options_presented": [
+          "argmax -> emite o valor -> mesmo contains_value (ESCOLHIDA)",
+          "metrica de recuperacao separada em coluna propria",
+          "argmax -> valor -> mesmo scorer, com 9 draws por softmax"
+        ]
+      },
+      {
+        "question": "Conjunto de candidatos do argmax e piso de acaso resultante",
+        "answer": "DECIDIDO pelo usuario, verbatim: \"pool = LOCKED_VALUES ∪ {f.value for f in GATE_REJECTED_CANDIDATES} = 20 valores distintos, piso de acaso 0.05. Reuso direto do lexicon já commitado para find_contradictions, sem escolha editorial nova.\" // MEDIDO: LOCKED_FACTS=8, SOFT_TIER_FACTS=2, GATE_REJECTED_CANDIDATES=12; a uniao dos valores da 20 distintos, piso 1/20 = 0.05. Para contraste, 8 candidatos dariam 0.125 e 10 dariam 0.10. // POR QUE O REUSO E JUSTIFICADO SEM ARGUMENTO NOVO: a base de codigo ja faz exatamente esse argumento para o detector de contradicao (phase14_recall.py:325-338) - um valor competidor que o detector precisa enxergar e precisamente uma alternativa plausivel do mesmo slot, que e o que todo candidato rejeitado ja e; sao material commitado e auditavel do gate do plano 14-02, exigindo ZERO julgamento editorial novo.",
+        "options_presented": [
+          "lexicon commitado de 20 valores, piso 0.05 (ESCOLHIDA)",
+          "so os 8 fatos core, piso 0.125",
+          "os 10 fatos, piso 0.10"
+        ]
+      },
+      {
+        "question": "Origem do embedding",
+        "answer": "DECIDIDO pelo usuario, verbatim: \"embedding = estado oculto final do modelo base, adapter OFF, mean-pooled sobre a sequência. Um forward pass por pergunta, custo já medido (0.009s/pergunta na tabela de custo dos quatro braços). Adapter OFF é invariante estrutural, não opção — o braço D existe para ser o referencial sem memória-em-pesos.\" // Zero dependencia nova (STAT-04): usa o proprio modelo ja carregado e adapter_disabled, que ja tem prova de no-residue (tests/test_lora_toggle.py:77,95,105 em escopo de fixture, e run_bit_identity_control com max |diff| 0.0 em pesos reais). // O custo de 0.009 s/pergunta na tabela dos quatro bracos era rotulado PROXY porque o braco nao existia; com esta decisao ele deixa de ser proxy e passa a ser o custo do braco como especificado - um unico forward pass sobre o prompt e, adicionalmente, os 20 embeddings de candidato calculados UMA vez para o run inteiro.",
+        "options_presented": [
+          "estado oculto final do base, adapter OFF, mean-pooled (ESCOLHIDA)",
+          "embeddings de token (wte) do base, mean-pooled",
+          "os dois lado a lado como sensibilidade"
+        ]
+      },
+      {
+        "question": "Qualificador PRE-REGISTRADO dos tres pares que envolvem o braco D",
+        "answer": "INSTRUCAO DO USUARIO, verbatim: \"Registra no CONTEXT.md, antes de qualquer corrida: os três pares envolvendo o braço D (cosine-proxy) operam sobre recuperação em conjunto fechado (8 candidatos, piso de acaso 0.125) contra geração de vocabulário aberto nos braços A/B/C (piso ~0.005 e ~0). Qualquer resultado onde D \\\"vence\\\" ou empata favoravelmente precisa ser lido à luz desse piso estrutural — não é evidência de capacidade equivalente, é consequência da tarefa ser mais fácil por construção. Isso NÃO invalida os pares com D nem os remove da família de Holm (margem intacta, 0.0078125 < 0.0083333) — só qualifica a interpretação de qualquer resultado favorável a D no relatório final.\" // RECONCILIACAO NUMERICA, sinalizada e nao silenciada: o texto acima cita 8 candidatos e piso 0.125, mas a decisao de pool tomada na MESMA rodada de respostas escolheu o lexicon de 20 valores, cujo piso e 0.05. O qualificador vale integralmente com o numero do pool efetivamente escolhido - piso 0.05, ainda uma ordem de grandeza acima do braco B (~0.005) e do C (~0). A substancia da instrucao nao muda: recuperacao em conjunto fechado e mais facil por construcao que geracao de vocabulario aberto, e todo resultado favoravel a D deve ser lido assim. O numero a usar no CONTEXT.md e no relatorio e 0.05.",
+        "options_presented": ["instrucao direta do usuario, com o piso reconciliado ao pool escolhido"]
+      }
+    ],
+    "Context-pressure sweep design (PERS-03)": [
+      {
+        "question": "Em quais bracos a varredura de pressao de contexto roda",
+        "answer": "DECIDIDO pelo usuario: SO NO BRACO B. Verbatim: \"varredura de pressão de contexto roda só em B. A recebe prova de invariância (run_bit_identity_control, max |diff| 0.0), citada, não remedida. C e D declarados explicitamente não-aplicáveis no CONTEXT.md, com a razão de cada um (C: sem fato em lugar nenhum; D: fato no pool de candidatos, não na janela de contexto).\" // POR QUE A PERGUNTA EXISTIA: o SC5 dizia 'both context-bearing arms', mas depois que a area 5 definiu o braco D como argmax cosseno sobre um pool fechado, so o braco B carrega o fato na JANELA DE CONTEXTO. Em D o fato vive no pool de candidatos, que nao e contexto. Sem essa decisao o planner teria que adivinhar quais eram os 'dois' bracos. // NAO-APLICABILIDADE E DECLARADA, NAO OMITIDA: C e D aparecem no relatorio com a razao de cada um, para que a ausencia seja legivel como decisao e nao como esquecimento.",
+        "options_presented": [
+          "so no braco B, A por prova, C/D nao-aplicaveis declarados (ESCOLHIDA)",
+          "nos bracos B e D",
+          "nos tres bracos que recebem prompt (B, C, D)"
+        ]
+      },
+      {
+        "question": "Acoplamento estrutural entre truncamento e diluicao - nota para o planner",
+        "answer": "MEDIDO nesta sessao: o prompt tem 33 tokens na forma bare e 46 com o span de persona, contra block_size=256 (lido de cfg.block_size no modelo real). CONSEQUENCIA: truncamento em 256 NAO MORDE no prompt nominal - ele so passa a existir depois que a diluicao empurrar o contexto alem de 256 tokens. Truncamento e diluicao NAO sao knobs independentes; truncamento e o regime que a diluicao alcanca quando cresce o suficiente. O SC5 lista os tres como se fossem paralelos. O planner precisa desenhar a varredura com essa dependencia explicita, senao a celula de truncamento mede exatamente a mesma coisa que a celula de diluicao mais alta e o relatorio reporta duas vezes o mesmo efeito com nomes diferentes.",
+        "options_presented": ["derivado de medicao, nao escolhido - nota para o planner"]
+      },
+      {
+        "question": "Emendas ao ROADMAP aplicadas",
+        "answer": "APLICADAS 2026-08-12 em .planning/ROADMAP.md, um commit isolado cobrindo as duas. // SC2: 'in one process' -> 'four fresh processes, one per condition', com nota datada citando tests/test_lora_toggle.py:77,95,105 em escopo de FIXTURE e scripts/phase14_recall.py:1336 run_bit_identity_control em max |diff| 0.0 nos pesos reais, e a razao de ambos serem necessarios. // SC5: 'on both context-bearing arms' -> 'the prompt-stuffed arm alone - the only arm that carries the fact in the context window', com nota datada explicando prova para A e nao-aplicabilidade por construcao para C e D. // RECONCILIACAO DE INSTRUCOES, sinalizada e nao resolvida em silencio: a resposta sobre SC2 dizia 'commit isolado, sem tocar SC5 nesta mesma passada'; a resposta posterior sobre PERS-03 instruiu emendar SC5 no 'mesmo commit isolado que já emendou SC2' e forneceu o texto exato. Seguida a instrucao POSTERIOR e mais especifica: uma emenda isolada cobrindo os dois criterios.",
+        "options_presented": ["aplicado conforme instrucao, com a reconciliacao sinalizada ao usuario"]
+      }
+    ]
+  },
+  "deferred_ideas": [],
+  "canonical_refs": [
+    ".planning/ROADMAP.md - Phase 16 goal + SC1-SC5. SC2 at line 115 requires the four arms score the fixture 'in one process'. THE FOUR-PROCESS DECISION CONTRADICTS THIS and requires a visible, dated amendment to SC2 before planning proceeds.",
+    ".planning/REQUIREMENTS.md - STAT-01..06, PERS-01..06, PREREG-02",
+    "results/phase16_recall_sample.json - the BINDING 270-question fixture (112 core taught / 104 core held-out / 54 soft, 8 core facts, 40 reserved D-08 probes); Phases 17/18 MUST consume it unchanged",
+    "tests/test_phase16_fixture_regen.py - pins the fixture against build_question_sets and the Phase 14 transcripts",
+    "tests/test_lora_toggle.py:77,95,105 - the Phase 9 toggle no-residue proofs (FIXTURE scope)",
+    "scripts/phase14_recall.py:1336 run_bit_identity_control - the REAL-weights bit-identity proof, max |diff| 0.0",
+    "scripts/phase14_recall.py:315-322 score_question, :842-850 tier rate - the harness's own unit is hits/DRAWS per tier, never pooled",
+    "scripts/phase14_recall.py:1147 run_fairness_control - holds the PERS-05 enumerate(questions) defect at :1184",
+    "scripts/phase14_recall.py:152,542 - N_SEEDED_SAMPLES=8 + 1 greedy = 9 draws; per-draw torch.Generator, no module-level RNG",
+    "scripts/phase14_recall.py:622-625 - Phase 14's decision AGAINST per-question subprocesses (argued about questions, never about arms)",
+    "tests/test_phase14_scoring.py:425 - the persona= AST guard PERS-06 widens rather than deletes",
+    "scripts/erasure_gate.py - PREREG-01 at 23a830c; also holds stdlib-only wilson_upper_bound:139 and rule_of_three:161",
+    "results/phase14_recall_report.md:58-59,378 - 496/1008 taught, 326/936 held-out, 1/1944 in-context fairness floor",
+    ".planning/milestones/v2.0-phases/14-teach-then-recall-demo/14-CONTEXT.md - D-16 clean-room process boundary, D-12 gate-miss policy, D-17/D-18 structural-enforcement register"
+  ],
+  "verification_notes": [
+    "NO KV CACHE EXISTS: grep for cache|past_key|kv across src/personacore/generation/ and src/personacore/model/ returns zero hits. The model recomputes the full forward each step, so cross-question and cross-condition cache residue is structurally impossible.",
+    "RESOLVIDO 2026-08-12 na area 2 (esta nota substitui a versao OPEN/BLOCKING anterior). O denominador por fato ficou resolvido por aritmetica - o fixture e balanceado 14 taught / 13 held-out por fato, entao o ponto e invariante a escolha. A politica de empate ficou 'empate conta contra a alternativa, n fixo em 8': o cenario que tornava o gate inclaravel (um empate levando n a 7, p = 0.015625 > 0.0083333) nao pode mais ocorrer, porque n nunca encolhe. A referencia a DEGEN-2 na versao anterior desta nota e PENDENTE - grep repo-wide retorna zero hits fora deste arquivo.",
+    "A fabricated granularity figure was removed from the staging notes and never reached any committed artifact (verified: repo-wide grep returns zero hits)."
+  ]
+}
