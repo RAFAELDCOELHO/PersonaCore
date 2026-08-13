@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 16-05-PLAN.md
-last_updated: "2026-08-13T18:05:05.550Z"
+stopped_at: Completed 16-06-PLAN.md
+last_updated: "2026-08-13T18:38:38.716Z"
 last_activity: 2026-08-13
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 11
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 16 (weight-vs-prompt-persistence-control) — EXECUTING
-Plan: 6 of 11
+Plan: 7 of 11
 Status: Ready to execute
 Last activity: 2026-08-13
 
@@ -71,6 +71,7 @@ Last activity: 2026-08-13
 | Phase 16 P03 | 16min | 2 tasks | 1 files |
 | Phase 16 P04 | 12min | 3 tasks | 3 files |
 | Phase 16 P05 | 38min | 2 tasks | 4 files |
+| Phase 16 P06 | 30min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -161,6 +162,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 16]: phase14_factset_gate.probe_guessability() widens the guessability instrument additively (D-16), 0 deletions — Phase 16 and Phase 17 ISO-01 import one implementation instead of copying it; a duplicated rule is a rule that can drift
 - [Phase 16]: SYNTHETIC_FACT_ORDER commits SLOTS, not fact ids — Every core fact id ends in its own value (cand_town_brindlemoor), so a literal tuple of ids would embed 8 locked values in the ladder driver and trip 16-04's substring clean-room scan. Slots carry the same ordering and arity with no value; the id-to-slot binding is asserted in the test instead.
 - [Phase 16]: The guessability gate cleared all 43 ladder candidates and rejected none — The 19 REJECTED rows in results/phase16_ladder_material.md are surplus, not gate rejections. The pools had been pre-screened for absence from the 608 base completions already published in results/phase14_factset_report.md, disclosed in the committed comment before the run. Recorded so 'the material passed the gate' is not read as the gate having bitten.
+- [Phase 16]: 16-06: the whole PERS-01 ladder pipeline is committed BEFORE it produces a number — cell runner, top rung, D-15 proxy check, report text and verdict branch — PERS-01 makes the ladder blocking and requires it recorded before any comparison is scored; a report whose text is written after the numbers is a report written to fit them. results/phase16_ladder_report.md does not exist — 16-07 owns the run.
+- [Phase 16]: 16-06: D-15's two cells differ in FRAME as well as material, recorded as PROXY_FRAME_CAVEAT rather than repaired — build_far_prompt's locked signature carries no fact id, so its persona line is one fact-agnostic sentence while run_fairness_control uses each fact's own taught statement. Implemented AS LOCKED (16-05's handover concern, decided explicitly here); the caveat travels inside proxy_validity's returned dict so no renderer can emit the number without it, and it makes the verdicts asymmetric — proxy_consistent is the stronger reading, proxy_diverges cannot separate frame from material.
+- [Phase 16]: 16-06: the ladder's clobber guard has NO --force flag, and the report's top-rung distance reads 'not measured' rather than being back-filled — A force flag that becomes routine destroys the hand-recorded verdict it protects (15-04 CR-02); if the report must be regenerated the honest path is deleting it in a reviewed commit. The taught statements end in a period, so ladder_distance would raise on every top-rung prompt at the END of an ~80-minute run — the report names what was and was not measured instead.
 
 ### Pending Todos
 
@@ -203,8 +207,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-13T18:04:54.183Z
-Stopped at: Completed 16-05-PLAN.md
+Last session: 2026-08-13T18:38:38.710Z
+Stopped at: Completed 16-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
