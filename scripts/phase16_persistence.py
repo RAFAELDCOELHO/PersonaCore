@@ -22,6 +22,8 @@ duplicated draw loop is how two arms silently stop being paired.
 import hashlib
 import json
 import pathlib
+import random
+import statistics
 import sys
 from typing import NamedTuple
 
@@ -34,6 +36,12 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
 import phase14_recall as recall  # noqa: E402  (needs the sys.path insert above)
+
+# STAT-04 — the ONLY bounds source in this milestone, IMPORTED and never copied. A third-party
+# statistics package has been declined in committed code twice and is forbidden here (the D-16
+# register: import the instrument, never re-implement it). `tests/test_package.py` sha256-pins
+# `pyproject.toml`, so a new dependency cannot arrive quietly alongside a new statistic.
+from erasure_gate import rule_of_three, wilson_upper_bound  # noqa: E402  (needs the insert above)
 
 from personacore.config import ModelConfig  # noqa: E402
 from personacore.dialogue import build_recall_prompt  # noqa: E402
@@ -698,3 +706,253 @@ def run_cosine_arm(model, tok, device, items, pool):
         "n_answerable": sum(1 for entry in asked if entry["k"] > 0),
         "chance_floor": COSINE_CHANCE_FLOOR,
     }
+
+
+# =============================================================================================
+# ===== THE PER-FACT STATISTIC AND THE ONE REPORTING SHAPE (D-06 / STAT-01 / STAT-02) =====
+# =============================================================================================
+
+# The two splits `normalize_by_split` emits, named once. These are `RecallItem.split` values
+# (`phase14_recall.py:732`), NOT the fixture's tier names — the fixture says "core_held_out" and
+# the record says "held-out", and keying the statistics on the wrong one of the two would group
+# nothing and report a rate over an empty set.
+TIER_SPLITS = ("taught", "held-out")
+
+# D-07 — exactly ONE tier is gated, and it is held-out. Gating both would take the Holm family
+# from 6 to 12, alpha to 0.05/12 = 0.0041667, and 8/8 unanimity (p = 0.0078125) would then FAIL:
+# the gate becomes unclearable at every possible outcome, including perfect unanimity in both
+# tiers. Held-out and not taught because `results/phase14_recall_report.md:54` records that taught
+# measures recall on template families the adapter trained on, where success is compatible with
+# surface memorization; held-out is the tier that distinguishes an internalized fact from a
+# memorized phrasing.
+GATED_TIER = "held-out"
+REPLICATION_TIER = "taught"
+
+# ----- Bootstrap discretion, exercised and RECORDED (16-09 §"Planner discretion") -------------
+#
+# 10,000 resamples, seed 1337, PERCENTILE method — the same count, seed and method as the Phase 15
+# precedent (`scripts/phase15_stats.py:76-91`), reused so the two pre-registrations are readable
+# against each other rather than each inventing its own convention.
+#
+# THE PERCENTILE BOOTSTRAP IS BIASED AND ANTI-CONSERVATIVE AT SMALL n. n here is 8 FACTS — smaller
+# than Phase 15's 36 cells, so the bias is LARGER here, not smaller. BCa would correct it at real
+# complexity cost. Phase 15's precedent is to NAME the bias in the pre-registration rather than to
+# upgrade the method once a result is visible, and that is what this comment is: an interval method
+# chosen after seeing the number is a knob, and the diff against this block is what makes such an
+# upgrade visible instead of silent. Do not upgrade to BCa after the numbers land.
+#
+# This interval is DESCRIPTIVE and is never a gate (STAT-06). The inferential gate is
+# `sign_test_exact` + `holm` below, and nothing else in this phase is gated at all (D-09).
+BOOTSTRAP_RESAMPLES = 10000
+BOOTSTRAP_SEED = 1337
+BOOTSTRAP_ALPHA = 0.05
+BOOTSTRAP_METHOD = "two_stage_cluster_percentile_bootstrap"
+
+# STAT-02 / T-16-41 — Wilson travels with the sentence that says what it is NOT. A bound presented
+# without this label reads as the phase's width, and it is not: it is the width the data would have
+# had if the questions were independent, which they are not.
+WILSON_LABEL = (
+    "one-sided 95% Wilson upper bound computed as if the questions were INDEPENDENT. They are "
+    "not — questions cluster inside facts — so this width UNDERSTATES the real uncertainty. The "
+    "DESCRIPTIVE interval for this phase is the two-stage cluster bootstrap (`cluster_bootstrap`); "
+    "Wilson is reported alongside it, labelled, for comparability with every other rate in this "
+    "milestone, and never as the phase's own width."
+)
+
+
+def aggregate_by_fact(records, *, tier):
+    """Group per-question records by ``fact_id`` — D-06's grouping-key change, and nothing else.
+
+    This is ``phase14_recall.py:838-843``'s tier aggregation with ONE substitution: the grouping
+    key is ``record["fact_id"]`` instead of ``record["split"]``. The shape is followed rather than
+    a second aggregation idiom invented, so the two stay readable against each other.
+
+    ``records`` is a flat list of per-question entries carrying 16-08's ``PER_QUESTION_KEYS``
+    (``fact_id``, ``split``, ``seed_index``, ``k``, ``n``), normalized by ``run_condition`` across
+    all four arms — so ``record["fact_id"]`` is read DIRECTLY and never re-derived from the
+    question text or from a fixture index. ``tier`` is one of ``TIER_SPLITS`` and every record must
+    already belong to it; a mixed list would silently pool taught with held-out, which D-10 forbids.
+
+    Returns ``{fact_id: {questions, k, n_draws, n_questions, n_answerable, rate}}``, where
+    ``questions`` is that fact's ``(k, n)`` pairs — the exact input ``cluster_bootstrap`` resamples,
+    so the caller never re-groups a second time.
+
+    ``rate`` is ``k / n_draws``. On this perfectly balanced fixture — every core fact carries
+    exactly 14 ``core_taught`` + 13 ``core_held_out`` questions at 9 draws each, 126 / 117 draws —
+    ``sum(k)/sum(n)`` equals ``mean(k_i/9)`` DIGIT FOR DIGIT, so the choice between them affects
+    only the INTERVAL and not the point estimate. That is why D-06 calls the denominator question
+    resolved by arithmetic rather than chosen. STAT-01 mandates that the interval resamples
+    QUESTIONS, which is what stage 2 of ``cluster_bootstrap`` does.
+    """
+    _prove(
+        tier in TIER_SPLITS,
+        f"tier {tier!r} is not one of {TIER_SPLITS} — these are RecallItem.split values, not the "
+        "fixture's tier names, and aggregating on the wrong one groups an empty set into a rate",
+    )
+    _prove(records, f"tier {tier!r} received no per-question records to aggregate")
+    required = set(PER_QUESTION_KEYS)
+    grouped = {}
+    for record in records:
+        _prove(
+            required <= set(record),
+            f"a record in tier {tier!r} is missing {sorted(required - set(record))} of "
+            f"PER_QUESTION_KEYS — 16-08's assert_record_shape should have aborted at the arm that "
+            "produced it, so reaching the statistics with a hole means that guard was bypassed",
+        )
+        _prove(
+            record["split"] == tier,
+            f"a record with split {record['split']!r} reached the {tier!r} aggregation. D-10 "
+            "forbids pooling taught with held-out: each fact yields TWO numbers, and silently "
+            "merging them would produce one rate that belongs to neither tier",
+        )
+        _prove(
+            record["n"] > 0,
+            f"question {record['fact_id']!r}/{record['seed_index']} carries n = {record['n']} "
+            "draws — a zero denominator cannot enter a rate or a resample",
+        )
+        grouped.setdefault(record["fact_id"], []).append((record["k"], record["n"]))
+    return {
+        fact_id: {
+            "questions": tuple(questions),
+            "k": sum(k for k, _ in questions),
+            "n_draws": sum(n for _, n in questions),
+            "n_questions": len(questions),
+            "n_answerable": sum(1 for k, _ in questions if k > 0),
+            "rate": sum(k for k, _ in questions) / sum(n for _, n in questions),
+        }
+        for fact_id, questions in sorted(grouped.items())
+    }
+
+
+def cluster_bootstrap(
+    per_fact_questions,
+    *,
+    resamples=BOOTSTRAP_RESAMPLES,
+    seed=BOOTSTRAP_SEED,
+    alpha=BOOTSTRAP_ALPHA,
+):
+    """TWO-STAGE cluster bootstrap: resample the FACTS, then the QUESTIONS inside each one.
+
+    ``per_fact_questions`` is ``{fact_id: [(k, n), ...]}`` — exactly ``aggregate_by_fact``'s
+    ``questions`` field. Returns the ``(lo, hi)`` percentile bounds of the pooled rate
+    ``sum(k)/sum(n)``. DESCRIPTIVE only; it is never a gate (STAT-06).
+
+    **Both stages are required, and each one is required by a different committed source.**
+
+    * **Stage 1 — resample the 8 FACTS with replacement.** ``.planning/STATE.md:94``:
+      *"Bootstrap resampling is at FACT level (n=8), not question level."* Without stage 1 the
+      interval is conditional on these exact 8 facts and is therefore NARROWER than the fact-level
+      sign test standing beside it — an interval claiming more than the gate it accompanies, which
+      is this milestone's own over-claiming failure mode.
+    * **Stage 2 — resample that resampled fact's own QUESTIONS with replacement.**
+      ``REQUIREMENTS.md:25-28`` (STAT-01): *"Bootstrap resampling resamples questions."* Its stated
+      rationale targets the DRAW as the illegal unit — treating 496/1008 as 1008 i.i.d. Bernoulli
+      trials — and stage 2 honours that literally. STAT-01 is not a ruling on facts-versus-questions
+      as the cluster. ``16-CONTEXT.md`` D-06 likewise keeps the QUESTION as the resampled unit.
+
+    The 16-09 plan text originally specified stage 2 alone, with the 8 facts held FIXED. That was
+    corrected by explicit USER DECISION at the wave-8 checkpoint, and ``16-09-PLAN.md``'s Task 1
+    wording was updated in the same commit so the plan and this function do not disagree.
+
+    **Why no coverage or collision floor is asserted anywhere.** On the FACT layer alone the number
+    of distinct outcomes is the multiset coefficient ``C(8 + 8 - 1, 8) = C(15, 8) = 6435``
+    (``math.comb(15, 8)``); the full two-stage space is far larger. Those 6435 multisets are NOT
+    equiprobable — a multiset's probability carries its multinomial weight, so a balanced draw
+    (one of each fact, ``8!`` orderings) is orders of magnitude likelier than an all-same draw
+    (1 ordering) — and coupon-collector reasoning over 6435 uniform items therefore does not apply.
+    At ``BOOTSTRAP_RESAMPLES`` (10,000) roughly 57% of the fact-multisets are actually drawn
+    (measured upstream: 3692 at seed 1337, 3649 at seed 42). A floor such as ``>= 6435 * 0.95`` is
+    unreachable BY CONSTRUCTION and must never be written here or in the tests.
+
+    ``random.Random(seed)`` is a LOCAL generator — stdlib only, no numpy RNG to diverge from, no
+    third-party statistics package, and the global python/numpy/torch streams are untouched (the
+    ``fisher.py`` Pitfall-3 register, the same discipline as ``phase15_stats.bootstrap_ci``).
+    """
+    fact_ids = sorted(per_fact_questions)
+    _prove(fact_ids, "the cluster bootstrap received no facts to resample")
+    _prove(
+        resamples >= 2,
+        f"resamples = {resamples}: a percentile needs at least two resampled statistics",
+    )
+    for fact_id in fact_ids:
+        questions = per_fact_questions[fact_id]
+        _prove(questions, f"fact {fact_id!r} carries no questions to resample in stage 2")
+        _prove(
+            all(n > 0 for _, n in questions),
+            f"fact {fact_id!r} carries a question with a zero denominator — a resample that drew "
+            "only such questions would divide by zero, so this aborts at the input instead",
+        )
+    rng = random.Random(seed)  # LOCAL generator — the global RNG streams are never touched.
+    n_facts = len(fact_ids)
+    rates = []
+    for _ in range(resamples):
+        numerator = denominator = 0
+        for _ in range(n_facts):
+            # STAGE 1 — the FACTS, with replacement. This is the between-fact variability that a
+            # question-only bootstrap conditions away (STATE.md:94, n = 8).
+            questions = per_fact_questions[fact_ids[rng.randrange(n_facts)]]
+            for _ in range(len(questions)):
+                # STAGE 2 — that RESAMPLED fact's own questions, with replacement (STAT-01, D-06).
+                k, n = questions[rng.randrange(len(questions))]
+                numerator += k
+                denominator += n
+        rates.append(numerator / denominator)
+    # `method="inclusive"` is the (n-1)*p linear interpolation numpy's default quantile uses, so
+    # this reads the same way `phase15_stats.bootstrap_ci` does without importing numpy. n = 40
+    # cut points puts alpha/2 = 0.025 at the first and 1 - alpha/2 = 0.975 at the last, DERIVED
+    # from alpha rather than typed as a second literal that must agree with it.
+    cuts = statistics.quantiles(rates, n=round(2 / alpha), method="inclusive")
+    return cuts[0], cuts[-1]
+
+
+def report_proportion(successes, n_questions, n_draws):
+    """STAT-02's single reporting shape — used by every rate this phase publishes.
+
+    ``successes`` and ``n_questions`` are in the STAT-01 unit (QUESTIONS: a question counts once,
+    however many of its draws hit). ``n_draws`` travels alongside as the raw-count denominator, so
+    the record carries the denominator BOTH ways and a reader never has to guess which unit a rate
+    was computed in (T-16-40 — the reported unit is the repudiation surface).
+
+    Three things are always present and one is conditional:
+
+    * ``rate`` over questions, with ``n_questions`` and ``n_draws`` beside it.
+    * ``wilson_upper_95`` from ``erasure_gate.wilson_upper_bound`` — IMPORTED, never re-derived.
+    * ``wilson_label`` — ``WILSON_LABEL``, naming it as the independence-assuming width (T-16-41).
+    * ``rule_of_three_upper`` — present ONLY when ``successes == 0``, where the two bounds
+      disagree slightly and publishing both is what stops the quieter one being chosen later.
+
+    ``formatted`` never renders a bare zero percentage. A zero rate renders as its numerator over
+    its denominator with the bound attached — ``0/104 questions (95% Wilson upper bound ...)`` —
+    because a bare zero percentage states a certainty the sample does not have, and STAT-02 forbids
+    it in any committed report or figure. ``tests/test_phase16_driver.py`` pins the same property
+    at the source level for this whole module, so the literal is not typed here either.
+    """
+    _prove(n_questions > 0, "a proportion over zero questions has no denominator to report")
+    _prove(n_draws > 0, "a proportion over zero draws has no raw count to report")
+    _prove(
+        0 <= successes <= n_questions,
+        f"{successes} successes outside [0, {n_questions}] questions — `successes` is in the "
+        "STAT-01 QUESTION unit here, not the draw unit; passing a draw count would silently "
+        "report a rate above 1 and a Wilson bound over an impossible proportion",
+    )
+    row = {
+        "rate": successes / n_questions,
+        "successes": successes,
+        "n_questions": n_questions,
+        "n_draws": n_draws,
+        "wilson_upper_95": wilson_upper_bound(successes, n_questions),
+        "wilson_label": WILSON_LABEL,
+    }
+    if successes == 0:
+        row["rule_of_three_upper"] = rule_of_three(n_questions)
+        row["formatted"] = (
+            f"{successes}/{n_questions} questions "
+            f"(95% Wilson upper bound {row['wilson_upper_95']:.6f}; "
+            f"rule-of-three upper bound {row['rule_of_three_upper']:.6f}; {n_draws} draws)"
+        )
+    else:
+        row["formatted"] = (
+            f"{successes}/{n_questions} questions (rate {row['rate']:.6f}; "
+            f"95% Wilson upper bound {row['wilson_upper_95']:.6f}; {n_draws} draws)"
+        )
+    return row
