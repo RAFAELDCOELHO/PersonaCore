@@ -423,6 +423,14 @@ PERSONA_ALLOWLIST = (
     # The D-11.1 fairness control: a fact value in the ``<|system|>`` span IS the measurement
     # here, and the same function proves the value is in view via ``assert_value_in_prompt``.
     ("scripts/phase14_recall.py", "run_fairness_control"),
+    # The PERS-01 ladder's distance-~30 row (16-05). Same shape, same justification: the rung asks
+    # whether the base can use a value placed in its own context window, so a prompt WITHOUT the
+    # value in view would measure nothing while still reporting a rate. Two things narrow it
+    # further — the value is SYNTHETIC and guessability-gated, never a taught fact, so no locked
+    # value enters a prompt by this route; and the ladder's other row (``build_near_prompt``)
+    # carries its value inside the question string and is deliberately NOT here, because it passes
+    # no keyword at all. Added in the same commit as the call site, as this allowlist requires.
+    ("scripts/phase16_ladder.py", "build_far_prompt"),
 )
 
 _IN_PROMPT_ASSERTIONS = frozenset({"assert_value_in_prompt", "assert_no_value_in_prompt"})

@@ -23,7 +23,9 @@ an ``importlib.util.spec_from_file_location`` load runs no guard, no model load 
 """
 
 import ast
+import functools
 import importlib.util
+import json
 import pathlib
 import re
 import sys
@@ -432,3 +434,168 @@ def test_ladder_driver_holds_no_fact_strings_at_import():
     forbidden = tuple(f.value for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS)
     assert len(forbidden) == 10  # all 8 locked + both soft — no tier is exempt from the scan
     assert embedded_fact_values(ladder, forbidden) == []
+
+
+# ===== 16-05 Task 1 — the material's ordering and the two distance rows =======================
+#
+# Still CPU-only and torch-free. These need the REAL frozen tokenizer at `artifacts/tokenizer.json`
+# — the distances are MEASURED (T-16-21), and a stub tokenizer would measure a different grid than
+# the one the run uses — but no model, no checkpoint and no GPU.
+
+_TOKENIZER_PATH = _REPO_ROOT / "artifacts" / "tokenizer.json"
+_FIXTURE_PATH = _REPO_ROOT / "results" / "phase16_recall_sample.json"
+
+# The five framings D-11 rules out. An instructed-copy rung is out of distribution for a
+# TinyStories + PersonaChat model, so its failure cannot separate incapacity from
+# instruction-following failure — and a rung that licenses nothing has no place on a ladder whose
+# only output is a licence.
+_INSTRUCTED_COPY = ("repeat", "echo", "say the word", "copy", "verbatim")
+
+
+@functools.lru_cache(maxsize=1)
+def _tokenizer():
+    """The FROZEN production tokenizer — never retrained, and never a stub here."""
+    from personacore.tokenizer import from_json
+
+    return from_json(_TOKENIZER_PATH)
+
+
+@functools.lru_cache(maxsize=1)
+def _fixture():
+    """The binding fixture: the committed question set the ladder is scored over."""
+    return json.loads(_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+
+def _core_questions():
+    """All 216 core questions (taught + held-out), the cell denominator's own set."""
+    questions = _fixture()["questions"]
+    return [item["question"] for item in questions["core_taught"] + questions["core_held_out"]]
+
+
+def test_near_prompt_places_the_value_within_three_tokens_of_the_trigger():
+    """The distance-~2 row is measured at every span, over the whole fixture — not sampled.
+
+    This row is the ladder's real discriminator: if the base cannot use a value sitting two tokens
+    from the trigger, no farther placement will help. So the claim "~2" has to be a measurement of
+    every prompt the run will build, not of a representative one.
+    """
+    tok = _tokenizer()
+    questions = _core_questions()
+    assert len(questions) == ladder.LADDER_CELL_QUESTIONS
+
+    for span, pool in sorted(ladder.SYNTHETIC_CANDIDATES.items()):
+        value = pool[0]
+        distances = {
+            ladder.ladder_distance(tok, ladder.build_near_prompt(tok, question, value), value)
+            for question in questions
+        }
+        assert max(distances) <= 3, f"span {span}: near distances {sorted(distances)}"
+
+
+def test_far_prompt_places_the_value_near_thirty_tokens_from_the_trigger():
+    """The distance-~30 row, measured — and the spread is recorded rather than hidden.
+
+    The distance here is ``2 + len(question)`` by construction (the value ends the persona span, so
+    what separates it from the trigger is the ``<|user|>`` id, the whole user turn, and the trigger
+    itself). This fixture's questions run 11 to 58 tokens, so the row's distance is a DISTRIBUTION,
+    not a constant: min 13, median 26, max 60. The median is what "~30" names and what is pinned to
+    ``[25, 35]``; the spread belongs to the committed question set, not to the frame, and no amount
+    of persona filler removes it — filler shifts the whole distribution up, taking the long tail
+    past 60 to buy the short one.
+
+    What IS invariant, and is asserted as such: every far prompt places the value strictly farther
+    than the near row's ceiling. Two rows that could overlap would not be two rows.
+    """
+    tok = _tokenizer()
+    value = ladder.SYNTHETIC_CANDIDATES[5][0]
+    distances = sorted(
+        ladder.ladder_distance(tok, ladder.build_far_prompt(tok, question, value), value)
+        for question in _core_questions()
+    )
+
+    median = distances[len(distances) // 2]
+    assert 25 <= median <= 35, f"median far distance {median}, distances {distances[:5]}..."
+    assert min(distances) > 3, "the far row must never collapse into the near row"
+
+
+def test_frames_carry_no_instructed_copy_language():
+    """D-11's framing rule, pinned on the constants a reviewer can read in one place."""
+    for frame in (ladder.NEAR_FRAME, ladder.FAR_FRAME):
+        lowered = frame.lower()
+        assert [word for word in _INSTRUCTED_COPY if word in lowered] == [], frame
+
+    assert "{value}" in ladder.NEAR_FRAME and "{question}" in ladder.NEAR_FRAME
+    assert "{value}" in ladder.FAR_FRAME
+    assert ladder.NEAR_FRAME.rstrip().endswith("{value}"), (
+        "the near row's whole claim is that the value sits at the END of the user turn"
+    )
+
+
+def test_frame_is_constant_across_spans_within_a_row():
+    """Span is the ONLY variable within a distance row (D-11).
+
+    Proved structurally: build each row's prompt for a one-token value and for a five-token value,
+    decode both, blank the value out of each — and the remaining prompt must be identical. A frame
+    that varied with span would make every cross-span comparison in that row a comparison of two
+    things at once, and reading the difference as "span length" would be wrong.
+    """
+    tok = _tokenizer()
+    question = _core_questions()[0]
+    short, long = ladder.SYNTHETIC_CANDIDATES[1][0], ladder.SYNTHETIC_CANDIDATES[5][0]
+
+    for build in (ladder.build_near_prompt, ladder.build_far_prompt):
+        skeletons = {
+            tok.decode(build(tok, question, value)).replace(value, "\x00")
+            for value in (short, long)
+        }
+        assert len(skeletons) == 1, f"{build.__name__} frame is not constant across spans"
+
+
+def test_near_prompt_uses_no_persona_argument():
+    """T-16-19: the distance-~2 site really is the bare form, so its coverage route is the real one.
+
+    ``test_persona_argument_is_scoped_to_the_fairness_control`` keys on an ARGUMENT NAME, so it
+    cannot see this call site at all — the value rides inside the ``question`` string. That is not a
+    hole to be closed by widening that guard; it is why the every-``draw_all``-asserts guard exists.
+    But the claim "this site is invisible to the persona guard" is only true while the site actually
+    passes no keywords, and nothing else in the suite would notice if it started to. This does.
+    """
+    function = _function_def(_parse("scripts/phase16_ladder.py"), "build_near_prompt")
+    assert function is not None
+
+    calls = [
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call)
+        and "build_recall_prompt"
+        in (getattr(node.func, "id", None), getattr(node.func, "attr", None))
+    ]
+    assert calls, "build_near_prompt no longer builds a recall prompt"
+    assert all(not call.keywords for call in calls), (
+        "build_near_prompt passed a keyword to build_recall_prompt — if that keyword is persona=, "
+        "the site is no longer the distance-~2 row and PERSONA_ALLOWLIST is now wrong"
+    )
+
+
+def test_synthetic_fact_order_matches_the_binding_fixture():
+    """The material's ordering cannot drift from the fixture it is aligned to (T-16-20).
+
+    ``SYNTHETIC_VALUES[span][i]`` is the material for the fact at position ``i``, so a reordering
+    misaligns every value to the wrong fact — silently, with every count still summing correctly.
+    The driver commits SLOTS rather than fact ids because each core fact id ends in its own value
+    and a literal tuple of ids would embed eight locked values in the driver (T-16-16, the scan
+    above). The id -> slot resolution therefore happens HERE, against the lazily-loaded fact set,
+    which pins the ordering and the binding in one assertion.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
+    )
+    facts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(facts)
+
+    slot_by_id = {fact.id: fact.slot for fact in facts.LOCKED_FACTS}
+    core_facts = _fixture()["provenance"]["core_facts"]
+    assert len(core_facts) == 8
+
+    assert ladder.SYNTHETIC_FACT_ORDER == tuple(slot_by_id[fact_id] for fact_id in core_facts)
+    assert len(set(ladder.SYNTHETIC_FACT_ORDER)) == 8, "one synthetic value per fact, per span"

@@ -35,6 +35,8 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
 
 from erasure_gate import rule_of_three, wilson_upper_bound  # noqa: E402  (needs the insert above)
 
+from personacore.dialogue import ASSISTANT_ID, build_recall_prompt  # noqa: E402
+
 # =============================================================================================
 # PERS-01 capability-ladder pre-registration (STAT-05)
 # =============================================================================================
@@ -341,3 +343,206 @@ def monotonicity_anomalies(cell_results):
         for harder in measured[index + 1 :]
         if harder in passed
     ]
+
+
+# =============================================================================================
+# The ladder's MATERIAL (D-12) and the two distance-row prompt builders (D-11)
+# =============================================================================================
+#
+# D-12 makes the new rungs SYNTHETIC strings, token-length-matched to the real values and filtered
+# through the already-validated guessability gate -- and it names exactly one risk the synthetic
+# choice introduces: a synthetic string the base ALREADY KNOWS would inflate a rung and license a
+# stronger headline than the data supports. `vet_synthetic_candidates` closes that by importing the
+# gate (D-16), never by copying it.
+#
+# The pools below are committed BEFORE any probe runs (T-16-20). Selection is first-8-SURVIVORS in
+# this committed order, so "which candidates were chosen" is answered by git history rather than by
+# whichever ones looked best once the probe results were in.
+
+# The 8 core facts in the BINDING FIXTURE's own order -- `provenance.core_facts` of
+# `results/phase16_recall_sample.json`, which is also `phase14_factset.LOCKED_FACTS` order.
+# Position is LOAD-BEARING: `SYNTHETIC_VALUES[span][i]` is the material for the fact at position
+# `i`, so a wrong order misaligns every value to the wrong fact, silently.
+# `test_synthetic_fact_order_matches_the_binding_fixture` resolves the fixture's fact ids to their
+# slots through the lazily-imported fact set and asserts equality, so this tuple cannot drift.
+#
+# SLOTS, not fact ids, and that substitution is FORCED rather than stylistic: every core fact id
+# ends in its own value (the id for the hometown fact literally spells the town), so a literal
+# tuple of ids would embed 8 locked values in this module's string surface and turn
+# `test_ladder_driver_holds_no_fact_strings_at_import` red -- that scan is SUBSTRING containment
+# over every string this module holds (T-16-16). The slots carry the same ordering, the same
+# arity, and no value.
+SYNTHETIC_FACT_ORDER = (
+    "person_name",
+    "pet_name",
+    "cat_name",
+    "sibling_name",
+    "hometown",
+    "street",
+    "birth_year",
+    "house_number",
+)
+
+# Candidate pools, keyed by SPAN (token length of the in-context value). Deliberately OVERSIZED --
+# 14+ candidates for 8 slots -- so the gate can reject without leaving a hole (D-12). Their token
+# length is NOT asserted here: `phase14_factset.token_census` MEASURES it at vet time and the
+# measurement is recorded per candidate in `results/phase16_ladder_material.md`. A hard-coded
+# length would be exactly the "assumed, never measured" defect PITFALLS-12 names.
+#
+# Register: lowercase ASCII, pronounceable, not English. Authoring aid, disclosed because it is an
+# input to the committed order: every candidate below was checked for absence from the 608 base
+# completions ALREADY PUBLISHED in `results/phase14_factset_report.md`, and the pools are ordered
+# most-nonsense-first. That is a screen against published evidence, not against this plan's probe
+# results -- the probe had not run when this tuple was committed, which is the property T-16-20
+# needs.
+#
+# Span 1 is the constrained row and the pool shows it. This tokenizer holds only 118 single-token
+# lowercase-ASCII alphabetic strings in total, and 94 of them already appear in those committed
+# base completions; what survives is fragment-shaped rather than name-shaped. That is a property of
+# a 547-decodable-id near-character vocabulary, not a choice -- and it is also why the span-1 rung
+# is the one whose guessability gate matters most: a one-token value is a substring of far more
+# English than a five-token one, and a substring hit is a false PASS that inflates the easiest rung.
+SYNTHETIC_CANDIDATES = {
+    1: (
+        "iko",
+        "ora",
+        "mma",
+        "ko",
+        "arden",
+        "leepy",
+        "unny",
+        "ower",
+        "ooked",
+        "uiet",
+        "ax",
+        "umped",
+        "ump",
+        "ved",
+    ),
+    2: (
+        "kez",
+        "zil",
+        "nyv",
+        "pyk",
+        "xog",
+        "kiz",
+        "vez",
+        "zof",
+        "nyk",
+        "kov",
+        "xar",
+        "pyz",
+        "kix",
+        "zog",
+    ),
+    5: (
+        "vraskil",
+        "quenlow",
+        "urvellen",
+        "ferrowin",
+        "ombrast",
+        "pyrralt",
+        "sombrek",
+        "ashkell",
+        "brumvel",
+        "lumbrek",
+        "nivelle",
+        "orbrant",
+        "pravik",
+        "sarnok",
+        "wyndal",
+    ),
+}
+
+# ===== The two distance rows' FRAMES ==========================================================
+#
+# Natural PersonaChat-register text in both rows, held CONSTANT (D-11). No instructed-copy framing
+# ("do this to the word X") anywhere: that framing is out of distribution for a TinyStories +
+# PersonaChat model, so its failure could not separate incapacity from instruction-following
+# failure and would therefore license nothing. `test_frames_carry_no_instructed_copy_language`
+# pins the five forbidden substrings.
+#
+# Within a distance row the frame is IDENTICAL across spans -- only the substituted value changes
+# -- so span is the only variable in that row (D-11), and
+# `test_frame_is_constant_across_spans_within_a_row` proves it structurally rather than by reading.
+
+# Distance ~2: the value rides at the END of the USER turn, so the only token between it and the
+# `<|assistant|>` trigger is the trigger itself. It CANNOT ride in a persona span: a persona value
+# sits ~30 tokens back (the whole user turn is in between), which is the other row.
+NEAR_FRAME = "{question} i think you told me it was {value}"
+
+# Distance ~30: a first-person persona statement, the SAME path `run_fairness_control` takes -- so
+# the top rung is a direct comparison and D-15's proxy-validity check is a subtraction rather than
+# an argument. The value ends the statement because the distance is already `2 + len(question)`
+# tokens and this fixture's questions run 11-58 tokens; trailing persona filler only pushes the row
+# further from its ~30 label. Measured over the fixture's 216 core questions: min 13, MEDIAN 26,
+# max 60 -- the median is the pinned number, and the spread is the questions', not the frame's.
+FAR_FRAME = "my name is {value}"
+
+
+def ladder_distance(tok, prompt_ids, value):
+    """MEASURED token distance from the END of ``value`` to the ``<|assistant|>`` trigger.
+
+    Measured, never assumed (T-16-21): the grid's rows are labelled ~2 and ~30, and a label is not
+    a measurement. Both the tests and the run report cite this number, so "distance ~30" is never
+    the plan's approximation quoted back as a result.
+
+    Returns the INDEX DIFFERENCE — 1 when the value's last token is immediately followed by the
+    trigger. The value's end is located by decoding growing prefixes rather than by searching for
+    ``tok.encode(value)`` as a contiguous run, because byte-level BPE is context-dependent: a value
+    preceded by a space merges its first characters into an id the standalone encoding spells out
+    separately, so the standalone sequence is frequently NOT a contiguous run even though the value
+    is fully in view. That is the same measured asymmetry ``assert_value_in_prompt`` records (54 of
+    216 committed fairness prompts), and an id-run search would mis-measure exactly those.
+
+    A prefix that cuts a multi-byte glyph is skipped rather than fatal — this fixture's questions
+    carry em dashes, and a truncated UTF-8 sequence provably does not end with an ASCII value.
+    """
+    # ponytail: O(n^2) decode scan over a <= 61-token prompt. Fine at this size; if a caller ever
+    # measures thousands of prompts, decode once and track byte offsets instead.
+    trigger = prompt_ids.index(ASSISTANT_ID)
+    for end in range(1, trigger + 1):
+        try:
+            text = tok.decode(prompt_ids[:end])
+        except UnicodeDecodeError:
+            continue
+        if text.endswith(value):
+            return trigger - (end - 1)
+    raise ValueError(
+        f"value {value!r} does not end any prefix of the prompt — the builder did not place it in "
+        "view, so anything drawn from this prompt measures nothing while still reporting a rate"
+    )
+
+
+def build_near_prompt(tok, question, value):
+    """The distance-~2 rung's prompt: the value at the END of the user turn.
+
+    **This call site passes NO ``persona=`` argument, and that is structural, not incidental.**
+    ``build_recall_prompt`` puts a persona span in front of the user turn, so a value placed there
+    sits ~30 tokens from the trigger — the OTHER row. Distance ~2 is only reachable by carrying the
+    value inside the ``question`` string, which makes this call site INVISIBLE to
+    ``tests/test_phase14_scoring.py::test_persona_argument_is_scoped_to_the_fairness_control``: that
+    guard keys on an argument name this site does not use. It is not a gap in that guard and must
+    not be closed by widening it. The coverage route is the other one — the every-``draw_all``-
+    asserts guard, satisfied by the run driver calling ``assert_value_in_prompt`` on what this
+    returns (T-16-19), and ``test_near_prompt_uses_no_persona_argument`` pins that this site really
+    is the bare form so the claimed route is the real one.
+    """
+    return build_recall_prompt(tok, NEAR_FRAME.format(question=question, value=value))
+
+
+def build_far_prompt(tok, question, value):
+    """The distance-~30 rung's prompt: the value in the ``<|system|>`` persona span.
+
+    Same path as ``phase14_recall.run_fairness_control`` — the ladder's top rung and this row
+    differ in MATERIAL (synthetic vs real taught value) rather than in mechanism, which is what
+    makes D-15's proxy-validity check a subtraction between two cells instead of an argument.
+
+    **This is a sanctioned ``persona=`` call site**, listed in ``PERSONA_ALLOWLIST`` in the same
+    commit that created it. The value in the persona span IS the measurement here, exactly as in
+    the fairness control: the rung asks whether the base can use a value placed in its own context
+    window, so a prompt without it in view would measure nothing. Everywhere else in this project a
+    fact value reaching a prompt is the demo-killing failure ``assert_no_value_in_prompt`` aborts
+    on; the difference is that this value is synthetic, gate-cleared and never a taught fact.
+    """
+    return build_recall_prompt(tok, question, persona=[FAR_FRAME.format(value=value)])
