@@ -100,8 +100,7 @@ first and the headline licensed by a capability ladder that runs *before* anythi
 **Depends on**: Nothing new — consumes `persona_adapter.pt`, `convbase_best.pt`, the committed
 `results/phase16_recall_sample.json` fixture (270 questions, pinned by
 `tests/test_phase16_fixture_regen.py`), and PREREG-01's `scripts/erasure_gate.py` at `23a830c`
-**Requirements**: STAT-01, STAT-02, STAT-04, STAT-05, STAT-06, PERS-01, PERS-02, PERS-03, PERS-04,
-PERS-05, PERS-06, PREREG-02
+**Requirements**: STAT-01, STAT-02, STAT-04, STAT-05, STAT-06, PERS-01, PERS-02, PERS-03, PERS-04, PERS-05, PERS-06, PREREG-02
 **Success Criteria** (what must be TRUE):
 
   1. The blocking in-context capability ladder (PERS-01) runs and is committed **before** any
@@ -157,8 +156,7 @@ N=3 adversarial personas with contradictory values in the *same* slots, scored a
 cross-matrix against the base model's own prior
 **Depends on**: Phase 16 (the fixed shared instrument: `item.seed_index` pairing,
 `assert_value_in_prompt`, the widened `persona=` guard, and the binding 270-question fixture)
-**Requirements**: STAT-01, STAT-02, STAT-03, STAT-04, STAT-05, STAT-06, ISO-01, ISO-02, ISO-03,
-ISO-04, ISO-05, ISO-06, ISO-07
+**Requirements**: STAT-01, STAT-02, STAT-03, STAT-04, STAT-05, STAT-06, ISO-01, ISO-02, ISO-03, ISO-04, ISO-05, ISO-06, ISO-07
 **Success Criteria** (what must be TRUE):
 
   1. Before any adapter trains, audit item **W1 is fixed** — every runtime consumer injects with
@@ -199,8 +197,7 @@ authorization**, which is the honest reading of what 36 boolean writes have alwa
 **Depends on**: Phase 16 (fixed instrument, forced-choice scorer, the binding 270-question fixture).
 Phase 17 **only** for optional cross-persona attacks — single-persona Phase 18 stands alone, so
 schedule pressure can scope it down without invalidating it
-**Requirements**: STAT-01, STAT-02, STAT-04, STAT-05, STAT-06, ATK-01, ATK-02, ATK-03, ATK-04,
-ATK-05, ATK-06
+**Requirements**: STAT-01, STAT-02, STAT-04, STAT-05, STAT-06, ATK-01, ATK-02, ATK-03, ATK-04, ATK-05, ATK-06
 **Success Criteria** (what must be TRUE):
 
   1. The attack corpus is constructed **programmatically from committed templates** — A1 paraphrase,
