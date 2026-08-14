@@ -1764,3 +1764,26 @@ def test_sweep_no_baseline_caveat_is_emitted_and_names_both_readings(monkeypatch
     assert "does NOT support" in caveat, "the rejected reading must be named, not merely avoided"
     assert "no measurable effect was observable" in caveat, "the supported reading must be stated"
     assert "baseline" in caveat, "the reason the sweep is uninformative is the missing baseline"
+
+
+def test_ladder_anomaly_caveat_accompanies_the_monotone_permission(monkeypatch, tmp_path):
+    """D-28's LOCKED qualification: a report citing the permission must say what came WITH it.
+
+    The permission itself is correct at the branch level — `span_2` is not `no_rung_passed`, so
+    `monotone_claim_allowed` returns True and D-28 is unchanged. But the ladder licensed that rung
+    while BOTH easier rungs failed, with no established mechanism, and a reader of this report
+    alone would never learn it. 16-CONTEXT.md records the requirement verbatim: any report citing
+    the permission MUST attach the note. Caught by the phase verifier after the first assembly
+    shipped the permission without it.
+    """
+    text = _render(monkeypatch, tmp_path)
+    assert driver.LADDER_ANOMALY_CAVEAT in text
+    # The point is that a reader of the REPORT learns of the anomalies, not that a constant exists.
+    assert "anomal" in text.lower(), "the report never mentions the anomalies in any wording"
+
+    caveat = driver.LADDER_ANOMALY_CAVEAT
+    assert "(2, 2)" in caveat and "(1, 2)" in caveat and "(1, 30)" in caveat, (
+        "the caveat must name the rungs, or it is an unfalsifiable hedge"
+    )
+    assert "FALSIFIED" in caveat, "the discarded induction-head reading must be named as falsified"
+    assert "not an omission" in caveat, "the conservative reading was declined by explicit decision"

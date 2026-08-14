@@ -46,7 +46,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
 
 ## Weight-vs-Prompt Persistence Control (Phase 16)
 
-- [ ] **PERS-01**: A **blocking in-context capability ladder** runs and is recorded *before* any
+- [x] **PERS-01**: A **blocking in-context capability ladder** runs and is recorded *before* any
   comparison is scored — establishing what the base model can do with a fact in its context at
   increasing distance. Phase 16's framing depends on its outcome, so it cannot be discovered
   mid-phase.
@@ -186,7 +186,7 @@ Deferred — revisited when the numbers that gate them exist.
 | STAT-04 | 16, 17, 18 | Pending |
 | STAT-05 | 16, 17, 18 | Complete |
 | STAT-06 | 16, 17, 18 | Complete |
-| PERS-01 | 16 | Pending |
+| PERS-01 | 16 | Complete |
 | PERS-02 | 16 | Complete |
 | PERS-03 | 16 | Complete |
 | PERS-04 | 16 | Complete |

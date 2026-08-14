@@ -1810,13 +1810,40 @@ def run_sweep(model, tok, device, forbid, items, statements):
 
 PERSISTENCE_REPORT_PATH = _REPO_ROOT / "results" / "phase16_persistence_report.md"
 
+# D-28's LOCKED reading qualification, recorded in 16-CONTEXT.md: the permission itself is
+# UNCHANGED and correct at the branch level, but a report that cites it must say what the licensed
+# rung came WITH. Emitted rather than left to the reader — the same structural discipline as
+# LADDER_PROXY_DEGENERATE_CAVEAT, HEADLINE_MECHANISM_CAVEAT and SWEEP_NO_BASELINE_CAVEAT.
+LADDER_ANOMALY_CAVEAT = (
+    "**The licensed rung came with two mechanically unexplained anomalies.** The committed ladder "
+    "recorded `(2, 2)` passing while BOTH easier rungs — `(1, 2)` and `(1, 30)` — failed, and it "
+    "names them as instrument anomalies without claiming a mechanism. An induction-head reading "
+    "(a longer span offering more to prefix-match on) was FALSIFIED by span 5 scoring 0 of 216 at "
+    "both distances, so `(span 2, distance 1)` is a narrow island rather than a point on a "
+    "monotone surface, and the ladder's grid contains no cell that separates the remaining "
+    "candidate explanations. A stronger, more conservative reading — claiming no monotone "
+    "degradation below `span_5_synthetic` — remains available and was NOT taken here: that is an "
+    "explicit decision recorded before this run, not an omission. Cite the permission above and "
+    "this paragraph together, or neither."
+)
+
 PERSISTENCE_REPORT_FRAMING = (
     "**What this report is.** The four-arm weight-versus-prompt comparison this phase exists to "
     "run, plus its descriptive interval, its one inferential gate and its pre-registered "
     "qualifiers. Every framing string below is a module-level constant in "
-    "`scripts/phase16_persistence.py`, committed to git BEFORE the run that filled it; every "
-    "number is interpolated from the run or formatted by a committed helper. A report whose text "
-    "is written after the numbers is a report written to fit them.\n"
+    "`scripts/phase16_persistence.py`; every number is interpolated from the run or formatted by a "
+    "committed helper. A report whose text is written after the numbers is a report written to fit "
+    "them.\n"
+    "\n"
+    "**Two exceptions, disclosed rather than glossed.** All framing strings predate the run that "
+    "filled this report EXCEPT `SWEEP_NO_BASELINE_CAVEAT` and `LADDER_ANOMALY_CAVEAT`, both added "
+    "after the arms were scored, at the human-verification checkpoint. Both WEAKEN what the report "
+    "claims — one records that the flat sweep is uninformative, the other that the licensed rung "
+    "came with unexplained anomalies — so neither was written to fit a number. Relatedly, the four "
+    "arms were recorded at one git SHA and this report was assembled at a later one, after two "
+    "report-generation fixes; NO arm was re-run and the arm JSONs are byte-unchanged, so the "
+    "numbers regenerate identically. Stated here because a reader of this file alone would "
+    "otherwise have to take the preceding sentence as unqualified.\n"
     "\n"
     "**What it may not claim.** The headline is the CAPABILITY LADDER's own output, cited in "
     "`## Verdict` below, and this report may not claim more than that ladder licensed. "
@@ -2450,6 +2477,9 @@ def write_persistence_report(arm_records, comparison, replication, sweep, proven
             if monotone_claim_allowed(licence["branch"])
             else MONOTONE_CLAIM_REFUSED
         ).format(branch=licence["branch"], statement=licence["statement"]),
+        "",
+        # D-28's LOCKED reading qualification: any report citing the permission must carry this.
+        LADDER_ANOMALY_CAVEAT,
         "",
         "## The Floor in Both Units (STAT-01 / T-16-26)",
         "",

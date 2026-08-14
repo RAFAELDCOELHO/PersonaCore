@@ -96,7 +96,9 @@ One block per condition process. D-01 splits this run into FOUR fresh processes,
 
 ## What This Report Is
 
-**What this report is.** The four-arm weight-versus-prompt comparison this phase exists to run, plus its descriptive interval, its one inferential gate and its pre-registered qualifiers. Every framing string below is a module-level constant in `scripts/phase16_persistence.py`, committed to git BEFORE the run that filled it; every number is interpolated from the run or formatted by a committed helper. A report whose text is written after the numbers is a report written to fit them.
+**What this report is.** The four-arm weight-versus-prompt comparison this phase exists to run, plus its descriptive interval, its one inferential gate and its pre-registered qualifiers. Every framing string below is a module-level constant in `scripts/phase16_persistence.py`; every number is interpolated from the run or formatted by a committed helper. A report whose text is written after the numbers is a report written to fit them.
+
+**Two exceptions, disclosed rather than glossed.** All framing strings predate the run that filled this report EXCEPT `SWEEP_NO_BASELINE_CAVEAT` and `LADDER_ANOMALY_CAVEAT`, both added after the arms were scored, at the human-verification checkpoint. Both WEAKEN what the report claims — one records that the flat sweep is uninformative, the other that the licensed rung came with unexplained anomalies — so neither was written to fit a number. Relatedly, the four arms were recorded at one git SHA and this report was assembled at a later one, after two report-generation fixes; NO arm was re-run and the arm JSONs are byte-unchanged, so the numbers regenerate identically. Stated here because a reader of this file alone would otherwise have to take the preceding sentence as unqualified.
 
 **What it may not claim.** The headline is the CAPABILITY LADDER's own output, cited in `## Verdict` below, and this report may not claim more than that ladder licensed. **'Not demonstrable at n = 8' is a legitimate, pre-registered outcome recorded as-written**, exactly as Phase 12 recorded its own null. If the gate does not clear, that is the result — not a prompt to re-run, soften, or add an unplanned analysis.
 
@@ -257,6 +259,8 @@ PROOF, cited and not re-measured: `scripts/phase14_recall.py:1336 run_bit_identi
 ### Monotone degradation (D-28)
 
 D-28's condition is met at the branch level: the committed ladder branch is `span_2`, so at least one rung passed and the prompt arm was not at the floor everywhere. **That is the whole of what is licensed, and the branch statement in `## Verdict` bounds it.** A monotone reading of the cells above describes the degradation of a capability the ladder LOCATED at that rung — not of this arm's ability to carry the real taught values, which are longer than the passing rung's span and on which every longer-span rung failed. Read the two together or neither.
+
+**The licensed rung came with two mechanically unexplained anomalies.** The committed ladder recorded `(2, 2)` passing while BOTH easier rungs — `(1, 2)` and `(1, 30)` — failed, and it names them as instrument anomalies without claiming a mechanism. An induction-head reading (a longer span offering more to prefix-match on) was FALSIFIED by span 5 scoring 0 of 216 at both distances, so `(span 2, distance 1)` is a narrow island rather than a point on a monotone surface, and the ladder's grid contains no cell that separates the remaining candidate explanations. A stronger, more conservative reading — claiming no monotone degradation below `span_5_synthetic` — remains available and was NOT taken here: that is an explicit decision recorded before this run, not an omission. Cite the permission above and this paragraph together, or neither.
 
 ## The Floor in Both Units (STAT-01 / T-16-26)
 
