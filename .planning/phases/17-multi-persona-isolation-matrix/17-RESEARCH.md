@@ -1389,7 +1389,14 @@ additional seeds each — see Open Question 3.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED 2026-08-14 — CONTEXT D-17..D-21)
+
+> All five questions below were closed in `17-CONTEXT.md` **before planning ran**: Q1 -> D-17
+> (frozenset on a double match), Q2 -> D-18 (all six Holm rejections), Q3 -> D-19 (`worst_pair`
+> with its committed tie-break), Q4 -> D-20 (`LoRAConfig()` defaults), Q5 -> D-21 (Phase 17
+> ships its own six-pairs twin). Each is a pre-registration under STAT-05 and lands as a
+> committed literal in plan 17-01. The recommendations below are kept verbatim as the reasoning
+> the decisions were taken on; the decisions themselves live in CONTEXT.
 
 1. **What does the scorer return when a completion contains two personas' values for the same slot?**
    - *What we know:* D-12 fixes the label domain as `persona_a | persona_b | persona_c | none` and
