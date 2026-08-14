@@ -1315,6 +1315,16 @@ def compare_cells(per_cell):
         "p_values": p_values,
         "holm": rows,
         "cleared": personas.gate_cleared(rows),
+        # The two ACHIEVABLE p values this design can produce, returned from HERE rather than
+        # recomputed by the writer. §Pre-Registration publishes the margin between the first step
+        # alpha and slot unanimity as a known property of the design, and that number has to be the
+        # same instrument's output as the p values it is compared against — a writer that called
+        # `sign_test_exact` for itself would be a SECOND call site, which the D-21 scan refuses for
+        # exactly this reason: every call site is a hypothesis family and D-08 permits one.
+        "achievable": {
+            "unanimity": persistence.sign_test_exact((1,) * persistence.SIGN_TEST_N),
+            "one_tie": persistence.sign_test_exact((1,) * (persistence.SIGN_TEST_N - 1) + (0,)),
+        },
     }
 
 
@@ -1539,8 +1549,9 @@ def render_report(matrix, described, gate, sweep_records, prior_anchor, *, resam
     rows = personas.PERSONAS + (personas.BASE_ROW,)
     family = len(persistence.HOLM_FAMILY_PAIRS)
     step_alphas = [persistence.HOLM_ALPHA / (family - index) for index in range(family)]
-    unanimity = persistence.sign_test_exact((1,) * persistence.SIGN_TEST_N)
-    one_tie = persistence.sign_test_exact((1,) * (persistence.SIGN_TEST_N - 1) + (0,))
+    # Read off the gate's own return rather than recomputed here — see `compare_cells`.
+    unanimity = gate["achievable"]["unanimity"]
+    one_tie = gate["achievable"]["one_tie"]
     cleared = personas.gate_cleared(gate["holm"])
 
     blocks = [
