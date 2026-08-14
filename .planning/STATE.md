@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-05-PLAN.md
-last_updated: "2026-08-14T22:12:01.269Z"
-last_activity: "2026-08-14 -- 17-05 complete: ISO-01 pre-flight instrument on the un-adapted base, probe_guessability imported never copied; the report's own verdict boilerplate would have disarmed its clobber guard and was moved above the section"
+stopped_at: Completed 17-06-PLAN.md
+last_updated: "2026-08-14T22:42:08.656Z"
+last_activity: "2026-08-14 -- 17-06 complete: the ISO-04 canary in both layers, mutation-proved; --train/--sweep/--report with no mode that runs two sweeps; the base column's control property carried by adapter_enabled, because no weight digest can witness it"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 16
-  percent: 33
+  completed_plans: 17
+  percent: 35
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 6 of 11
+Plan: 7 of 11
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-05 complete: ISO-01 pre-flight instrument on the un-adapted base, probe_guessability imported never copied; the report's own verdict boilerplate would have disarmed its clobber guard and was moved above the section
+Last activity: 2026-08-14 -- 17-06 complete: the ISO-04 canary in both layers, mutation-proved; --train/--sweep/--report with no mode that runs two sweeps; the base column's control property carried by adapter_enabled, because no weight digest can witness it
 
 ## Performance Metrics
 
@@ -81,6 +81,7 @@ Last activity: 2026-08-14 -- 17-05 complete: ISO-01 pre-flight instrument on the
 | Phase 17 P03 | 19min | 2 tasks | 2 files |
 | Phase 17 P04 | 18min | 3 tasks | 4 files |
 | Phase 17 P05 | 41min | 2 tasks | 3 files |
+| Phase 17 P06 | 28min | 4 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -249,8 +250,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T22:11:44.226Z
-Stopped at: Completed 17-05-PLAN.md
+Last session: 2026-08-14T22:41:58.791Z
+Stopped at: Completed 17-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

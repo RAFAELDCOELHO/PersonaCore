@@ -307,7 +307,7 @@ Plans:
 
 - [x] 17-05-PLAN.md — the GPU pre-flight gate driver (imports `probe_guessability`, never copies it)
   and the blocking-verdict tests
-- [ ] 17-06-PLAN.md — the ISO-04 canary in both layers, plus the `--train` / `--sweep` / `--report`
+- [x] 17-06-PLAN.md — the ISO-04 canary in both layers, plus the `--train` / `--sweep` / `--report`
   argument surface with no mode that runs two sweeps, and `run_one_sweep` / `run_one_persona_training`
 
 **Wave 4** *(blocked on Wave 3)*
@@ -407,7 +407,7 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
-| 17. Multi-Persona Isolation Matrix | v3.0 | 5/11 | In Progress|  |
+| 17. Multi-Persona Isolation Matrix | v3.0 | 6/11 | In Progress|  |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 0/TBD | Pending | - |
 
 **Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.
