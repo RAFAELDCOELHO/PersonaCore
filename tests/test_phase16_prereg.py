@@ -55,6 +55,11 @@ V3_ARTIFACT_GLOBS = ("results/phase16_*", "results/phase17_*", "results/phase18_
 
 PREREG_ARTIFACT = "scripts/erasure_gate.py"
 
+# STAT-05: Phase 17's OWN pre-registration — the gate constants only, never the persona material.
+# See `test_phase17_prereg_is_frozen_before_every_phase17_result` for why that boundary is what
+# makes this pin survivable.
+PHASE17_PREREG_ARTIFACT = "scripts/phase17_personas.py"
+
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
@@ -123,4 +128,77 @@ def test_prereg_commit_exists_and_touches_the_erasure_gate():
     assert PREREG_ARTIFACT in touched, (
         f"commit {PREREG_COMMIT} does not touch {PREREG_ARTIFACT}; it is not the "
         f"pre-registration commit. Files it does touch:\n{touched}"
+    )
+
+
+def test_phase17_prereg_is_frozen_before_every_phase17_result():
+    """STAT-05: Phase 17's gate constants never moved after a Phase 17 number existed.
+
+    **Derived from history, not pinned to a SHA — and that is the stronger form, not merely the
+    smaller one.** A hand-pinned SHA needs a separate identity check to stop it silently pointing
+    at an unrelated early commit (the third failure mode this module's header describes), and even
+    when correct it only asserts that ONE commit came first: it happily permits a LATER edit to the
+    pre-registration after the numbers are visible, which is precisely the manoeuvre STAT-05
+    exists to forbid. Asking git for EVERY commit that touches the file and requiring each to be an
+    ancestor of every result is self-identifying — there is no pin to get wrong — and it catches
+    the post-hoc edit.
+
+    The test above pins the ERASURE rule (`23a830c`), which predates all of v3.0 and is therefore
+    trivially satisfied by anything Phase 17 writes. It does not pin Phase 17's own
+    pre-registration, and this does.
+
+    **What this deliberately does NOT cover, because the boundary is what makes the guard
+    survivable.** `scripts/phase17_persona_facts.py` — the 24 minted values, their measured token
+    census and the derived forbidden set — is NOT pinned. ROADMAP SC2's ADAPT branch is a
+    *sanctioned* outcome in which named values are replaced AFTER
+    `results/phase17_personas_report.md` has been committed; since `--diff-filter=A` returns the
+    EARLIEST add, pinning the material would turn an explicitly planned outcome permanently red
+    with no recovery short of history surgery. What IS pinned is what must never move once a number
+    exists: the family, the declared directions, the seeds, the gate rule, the tie-break and the
+    all-fail branch. A future commit that moves the persona material INTO the pinned file re-arms
+    exactly that trap — do not.
+
+    **Stated vacuous pass in Waves 1-3.** No `results/phase17_*` artifact exists until plan 17-07
+    commits `results/phase17_personas_report.md`, so `checked` is legitimately 0 until then; the
+    empty-match assertion below therefore guards the *shape* of the query rather than its
+    population. Plans 17-07 and 17-09 each carry an acceptance criterion requiring `checked > 0`,
+    which is where this stops being vacuous.
+    """
+    # Same reason as the guard above: a shallow clone does not hold the earlier commit objects, so
+    # it cannot answer an ancestry question — it can only fail to find one. Assert, never skip.
+    assert _git("rev-parse", "--is-shallow-repository") == "false", (
+        "shallow clone: the pre-registration commit objects are absent, so this guard cannot "
+        "distinguish 'the ordering holds' from 'the ordering was never checked'. "
+        "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+    )
+
+    prereg_commits = _git("log", "--format=%H", "--", PHASE17_PREREG_ARTIFACT).split()
+    assert prereg_commits, (
+        f"{PHASE17_PREREG_ARTIFACT} has no commits — this guard would be scanning a "
+        "pre-registration that does not exist, which is green and blind in the worst possible "
+        "place. Plan 17-01 Task 1 commits it."
+    )
+
+    tracked_artifacts = _git("ls-files", "results/phase17_*").split()
+
+    checked = 0
+    for artifact in tracked_artifacts:
+        adds = _git("log", "--diff-filter=A", "--format=%H", "--", artifact).split()
+        # git log is newest-first, so the commit that ADDED the file is the last entry. Taking the
+        # earliest add is what makes a delete-and-re-add cycle unable to launder the ordering.
+        first_add = adds[-1]
+        for prereg in prereg_commits:
+            subprocess.run(
+                ("git", "merge-base", "--is-ancestor", prereg, first_add),
+                cwd=_ROOT,
+                check=True,
+            )
+            checked += 1
+
+    assert checked == len(prereg_commits) * len(tracked_artifacts), (
+        f"checked {checked} pairs but {len(prereg_commits)} pre-registration commit(s) x "
+        f"{len(tracked_artifacts)} tracked artifact(s) is "
+        f"{len(prereg_commits) * len(tracked_artifacts)} — a `git ls-files` pattern that matches "
+        "nothing while artifacts sit on disk would otherwise make this green having checked "
+        "nothing."
     )
