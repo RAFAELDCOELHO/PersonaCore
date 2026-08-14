@@ -1,0 +1,46 @@
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase17_persona_gate] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase17_persona_gate] forbid_ids: 7645 masked, sha256 79b55770f4dc
+[phase17_persona_gate] four minting filters passed over 24 values
+[phase17_persona_gate] census: 24 values, 0 diverged from the literal
+[phase17_persona_gate] base fingerprint: sha=04e724c67033f9a2ed8b705a07ad025c867a18c5 step=4000 val=1.5235939979553224 (no adapter injected, no adapter weights loaded)
+[phase17_persona_gate] probed slot person_name    13 fresh question(s)
+[phase17_persona_gate] probed slot pet_name       13 fresh question(s)
+[phase17_persona_gate] probed slot cat_name       13 fresh question(s)
+[phase17_persona_gate] probed slot sibling_name   13 fresh question(s)
+[phase17_persona_gate] probed slot hometown       13 fresh question(s)
+[phase17_persona_gate] probed slot street         13 fresh question(s)
+[phase17_persona_gate] probed slot birth_year     13 fresh question(s)
+[phase17_persona_gate] probed slot house_number   13 fresh question(s)
+[phase17_persona_gate] persona_a  p17_a_person_name      clean     0/52
+[phase17_persona_gate] persona_a  p17_a_pet_name         clean     0/52
+[phase17_persona_gate] persona_a  p17_a_cat_name         clean     0/52
+[phase17_persona_gate] persona_a  p17_a_sibling_name     clean     0/52
+[phase17_persona_gate] persona_a  p17_a_hometown         clean     0/52
+[phase17_persona_gate] persona_a  p17_a_street           clean     0/52
+[phase17_persona_gate] persona_a  p17_a_birth_year       clean     0/52
+[phase17_persona_gate] persona_a  p17_a_house_number     clean     0/52
+[phase17_persona_gate] persona_b  p17_b_person_name      clean     0/52
+[phase17_persona_gate] persona_b  p17_b_pet_name         clean     0/52
+[phase17_persona_gate] persona_b  p17_b_cat_name         clean     0/52
+[phase17_persona_gate] persona_b  p17_b_sibling_name     clean     0/52
+[phase17_persona_gate] persona_b  p17_b_hometown         clean     0/52
+[phase17_persona_gate] persona_b  p17_b_street           clean     0/52
+[phase17_persona_gate] persona_b  p17_b_birth_year       clean     0/52
+[phase17_persona_gate] persona_b  p17_b_house_number     clean     0/52
+[phase17_persona_gate] persona_c  p17_c_person_name      clean     0/52
+[phase17_persona_gate] persona_c  p17_c_pet_name         clean     0/52
+[phase17_persona_gate] persona_c  p17_c_cat_name         clean     0/52
+[phase17_persona_gate] persona_c  p17_c_sibling_name     clean     0/52
+[phase17_persona_gate] persona_c  p17_c_hometown         clean     0/52
+[phase17_persona_gate] persona_c  p17_c_street           clean     0/52
+[phase17_persona_gate] persona_c  p17_c_birth_year       clean     0/52
+[phase17_persona_gate] persona_c  p17_c_house_number     clean     0/52
+[phase17_persona_gate] ===== provenance =====
+  seed: 1337 (seed_everything; per-probe Generator SEED + i)
+  driver git_sha: 1c97a107a11a549754e10a0bea2dc559c702b2ae
+  pid: 24732  wall: 2.1 min
+  preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  base fingerprint: git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5 step=4000 val_loss=1.5235939979553224
+  base build: load_slim only — no adapter injected, no adapter weights loaded
+[phase17_persona_gate] wrote /Users/juliorcoelho/PersonaCore/results/phase17_personas_report.md: 24 values, 24 clean on the mechanical floor
