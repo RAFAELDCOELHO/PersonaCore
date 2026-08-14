@@ -96,7 +96,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   that produces the most flattering possible wrong answer: a perfect diagonal and zero leakage.
 - [ ] **ISO-05**: The **worst-colliding pair is replicated across seeds**, so seed variance is not
   mistaken for interference.
-- [ ] **ISO-06**: Audit item **W1 is fixed before any adapter trains**: runtime consumers inject
+- [x] **ISO-06**: Audit item **W1 is fixed before any adapter trains**: runtime consumers inject
   with `LoRAConfig(**artifact["lora_config"])` rather than `LoRAConfig()` defaults. Shape audits
   catch `r` drift but **not `alpha`** — no shape change — so with N adapters a divergent alpha
   applies the delta at the wrong magnitude, silently. Two lines, and Phase 17 multiplies the call
@@ -197,7 +197,7 @@ Deferred — revisited when the numbers that gate them exist.
 | ISO-03 | 17 | Pending |
 | ISO-04 | 17 | Pending |
 | ISO-05 | 17 | Pending |
-| ISO-06 | 17 | Pending |
+| ISO-06 | 17 | Complete |
 | ISO-07 | 17 | Complete |
 | ATK-01 | 18 | Pending |
 | ATK-02 | 18 | Pending |

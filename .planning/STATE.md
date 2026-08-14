@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-08-14T20:21:28.928Z"
-last_activity: "2026-08-14 -- 17-01 complete: Phase 17 pre-registration committed; ordering guard and stats tests watched failing"
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-08-14T20:47:06.272Z"
+last_activity: "2026-08-14 -- 17-02 complete: teach_persona widened additively with seed=/prefix=; ISO-06 consumer guard watched failing"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 12
+  completed_plans: 13
   percent: 33
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 2 of 11
+Plan: 3 of 11
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-01 complete: Phase 17 pre-registration committed; ordering guard and stats tests watched failing
+Last activity: 2026-08-14 -- 17-02 complete: teach_persona widened additively with seed=/prefix=; ISO-06 consumer guard watched failing
 
 ## Performance Metrics
 
@@ -77,6 +77,7 @@ Last activity: 2026-08-14 -- 17-01 complete: Phase 17 pre-registration committed
 | Phase 16 P09 | 55min | 3 tasks | 3 files |
 | Phase 16 P10 | 95min | 3 tasks | 2 files |
 | Phase 17 P01 | 34min | 3 tasks | 4 files |
+| Phase 17 P02 | 17min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -184,6 +185,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-01: _GATE_MODULES is a GLOB over scripts/phase17_*.py, not a hand-listed tuple (D-21) — 17-03/17-04/17-05 drivers enter every static scan automatically, closing the F-08 blindness Phase 16's file-scoped tuple left open
 - [Phase 17]: 17-01: CORE_SLOTS is THE canonical slot list, verified against results/phase16_recall_sample.json by deriving fact_id->slot through phase14_factset — exact first-appearance order, 13 questions x 8 slots = 104; 17-03's material and 17-04's regrouping are each checked against IT, never against each other
 - [Phase 17]: 17-01: the plan's module-level-call acceptance command is vacuous (the sys.path bootstrap is nested in an if, so a tree.body scan finds 0 calls and all([]) is True) — replaced by a committed module-SCOPE walk, test_nothing_executes_at_import
+- [Phase 17]: 17-02: seed= and prefix= widen the committed teach_persona recipe additively (D-16 import-never-copy) — the prefix is threaded to BOTH internal arm_outputs call sites because train_arm's build_arm_bins call REBINDS paths, so a prefix applied only at the refuse_if_exists site would guard phase17_ paths while exporting the adapter to phase14_
+- [Phase 17]: 17-02: bin/mask deliberately NOT prefixed (they carry no phase label today, so prefixing MOVES an existing path) and the real-arm shippable adapter exception stays unconditional on prefix — Phase 17 never passes real, so a prefix-aware exception would be dead code weakening a pinned cross-plan contract
+- [Phase 17]: 17-02: the ISO-06 AST guard splits inject_lora call sites into PRODUCER (bare LoRAConfig(), D-20's r=8/alpha=16 anchor — correct as-is) and CONSUMER (LoRAConfig(**artifact['lora_config'])), resolving a Name argument through module-level assignments because both producers pass the LORA_CFG constant; hard equality on all three buckets, watched RED
 
 ### Pending Todos
 
@@ -227,9 +231,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T20:19:37.824Z
-Stopped at: Completed 17-01-PLAN.md
-Resume file: .planning/phases/17-multi-persona-isolation-matrix/17-02-PLAN.md
+Last session: 2026-08-14T20:46:55.192Z
+Stopped at: Completed 17-02-PLAN.md
+Resume file: .planning/phases/17-multi-persona-isolation-matrix/17-03-PLAN.md
 
 ## Operator Next Steps
 
