@@ -74,7 +74,7 @@ def lora_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
 
 
 def load_adapter_weights(model: nn.Module, artifact: dict) -> None:
-    """Apply an adapter dict onto an injected model behind an exact key+shape audit (P4).
+    """Apply an adapter dict onto an injected model behind an exact key+shape+scale audit (P4).
 
     Raises ``ValueError`` BEFORE any tensor is loaded when ``artifact["adapter"]`` keys do
     not exactly match the model's ``lora_`` keys (naming the symmetric difference), or when
@@ -83,6 +83,13 @@ def load_adapter_weights(model: nn.Module, artifact: dict) -> None:
     shape-MATCHING tensor first and only raises the size-mismatch error at the end, so
     without it a crafted artifact with a correct key set would half-apply and leave the
     model corrupted when the exception surfaces.
+
+    The SCALE audit closes W1 (v2.0-MILESTONE-AUDIT.md:45). Keys and shapes catch a wrong
+    ``r``, but ``alpha`` changes no tensor shape at all — it moves only
+    ``LoRALinear.scale = alpha / r``, so an adapter injected under a config that is not its
+    own applies its delta at the wrong magnitude, silently. This is the single choke point
+    every consumer already routes through, so auditing HERE covers callers that do not exist
+    yet, not just the three that prompted it.
     """
     expected = {k: v for k, v in model.state_dict().items() if "lora_" in k}
     got = artifact["adapter"]
@@ -103,6 +110,23 @@ def load_adapter_weights(model: nn.Module, artifact: dict) -> None:
             f"adapter tensor shape/dtype mismatch on {bad_shapes} — the artifact was "
             "trained at a different rank or base shape; refusing to load."
         )
+    # W1: `alpha` is shape-invisible, so the two audits above cannot see it. Exact equality is
+    # deliberate — LoRALinear.__init__ computes `alpha / r` with the same operation on the same
+    # operands, so a matching config gives a bit-identical float; a tolerance would only weaken
+    # this. Skipped when the artifact carries no config: tests apply one model's lora_state_dict
+    # onto another, where no artifact exists. Not an escape hatch for real files — load_adapter
+    # (checkpoint.py:246) raises when `lora_config` is missing, so anything read off disk has it.
+    if "lora_config" in artifact:
+        cfg = artifact["lora_config"]
+        want = cfg["alpha"] / cfg["r"]
+        found = sorted({m.scale for m in model.modules() if isinstance(m, LoRALinear)})
+        if found not in ([], [want]):
+            raise ValueError(
+                f"adapter scale mismatch: the artifact was trained at alpha={cfg['alpha']} / "
+                f"r={cfg['r']} (scale {want}) but this model was injected at scale(s) {found} — "
+                "the delta would be applied at the wrong magnitude; refusing to load. Inject "
+                "with LoRAConfig(**artifact['lora_config']), not LoRAConfig() defaults."
+            )
     model.load_state_dict(artifact["adapter"], strict=False)
 
 

@@ -195,6 +195,38 @@ def test_load_adapter_weights_refuses_wrong_rank():
         assert torch.equal(v, after[k]), f"wrong-rank refusal mutated {k}"
 
 
+def test_load_adapter_weights_refuses_wrong_alpha():
+    """W1 (v2.0-MILESTONE-AUDIT.md:45): `alpha` is invisible to the key and shape audits.
+
+    An artifact taught at alpha=32 and injected under alpha=16 has an IDENTICAL key set and
+    IDENTICAL tensor shapes — only `LoRALinear.scale = alpha / r` differs, so before this audit
+    the delta was applied at the wrong magnitude with no error at all. Shipped consumers were
+    benign only because the committed adapter's config happened to equal `LoRAConfig()`; a
+    Phase-17 adapter taught at another alpha would not be.
+    """
+    model, _, lora_cfg, _ = _build_injected(r=4)  # scale = 16.0 / 4 = 4.0.
+    donor, _, _, _ = _build_injected(r=4)
+    _nudge_lora_b(donor, seed=17)
+    adapter = lora_state_dict(donor)
+    before = {k: v.clone() for k, v in lora_state_dict(model).items()}
+
+    drifted = {"r": lora_cfg.r, "alpha": 32.0, "dropout": 0.0, "targets": PROJECTIONS}
+    with pytest.raises(ValueError, match="scale mismatch"):
+        load_adapter_weights(model, {"adapter": adapter, "lora_config": drifted})
+
+    # The refusal precedes the load, like the key and shape audits beside it.
+    after = lora_state_dict(model)
+    for k, v in before.items():
+        assert torch.equal(v, after[k]), f"scale refusal mutated {k}"
+
+    # Positive control: the artifact's OWN config loads. Without it this test would also pass
+    # against an audit that rejected every artifact.
+    honest = {"r": lora_cfg.r, "alpha": lora_cfg.alpha, "dropout": 0.0, "targets": PROJECTIONS}
+    load_adapter_weights(model, {"adapter": adapter, "lora_config": honest})
+    k0 = sorted(adapter)[0]
+    assert torch.equal(lora_state_dict(model)[k0], adapter[k0])
+
+
 def test_snapshot_params_detached_clones():
     model, _, _, _ = _build_injected()
     snap = snapshot_params(model)
