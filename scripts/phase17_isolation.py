@@ -904,6 +904,229 @@ def build_parser():
     return parser
 
 
+# =============================================================================================
+# ===== The two run bodies — ONE sweep, or ONE persona trained, per process ====================
+# =============================================================================================
+
+# ISO-01's blocking human verdict. `teach_persona.train_arm` gates on PHASE 14's report from the
+# inside and that call is deliberately untouched, so calling `_require_go_verdict` with THIS report
+# here makes BOTH gates fire: Phase 14's fact set was cleared, and Phase 17's own material was.
+PHASE17_REPORT = _REPO_ROOT / "results" / "phase17_personas_report.md"
+
+
+def run_one_sweep(sweep, seed=None):
+    """ONE sweep, in this process, start to finish — and this process can run no other.
+
+    The order is not incidental:
+
+    1. **Refuse to clobber the record FIRST**, before anything expensive. A recorded sweep is
+       evidence; discovering the collision after ~5 minutes of generation has already wasted the run
+       whether or not the file survives.
+    2. Preflight, device, ``seed_everything(recall.SEED)`` — ONE seed constant in play, the
+       instrument's own. **The generation seed is ``question_seed(index)`` and is IDENTICAL across
+       all four sweeps.** D-14's distinct seeds are TRAINING/INIT seeds; varying the generation seed
+       per sweep would destroy cell-to-cell comparability, and it is exactly what ISO-03 forbids of
+       the adapter-off column.
+    3. Load, and record two digests plus one flag either way — see ``BASE_COLUMN_NOTE`` for why the
+       flag cannot be derived from the digests.
+    4. ONE ``forbid_ids`` mask, recorded by content hash. Never a second mask.
+    5. Generate, extending the clean-room proof to Phase 17's OWN material.
+    6. Write the raw completions. **No ``value``, no ``k``, no ``n``, no ``hits``** — those are
+       per-persona and belong to the scoring pass. Writing them here would put the cell into the
+       generation record, which is the one thing this two-pass design exists to prevent (SC3).
+
+    The report is NOT written here. It is assembled from all four records by ``--report``, which is
+    what makes the four-process split a precondition of publishing rather than a claim made inside
+    one process.
+    """
+    import contextlib
+    import json
+    import os
+    import time
+
+    import phase14_recall as recall  # LAZY — see the module docstring's LAZY-IMPORT RULE
+    import torch
+
+    from personacore.checkpoint import load_adapter
+    from personacore.config import RuntimeConfig
+    from personacore.lora import LoRALinear, adapter_disabled
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+    from personacore.seeding import seed_everything
+
+    started = time.time()
+    resolved = resolve_seed("sweep", sweep, seed)
+    record_path = resolved["record"]
+    _prove(
+        not record_path.exists(),
+        f"{record_path} already exists — a sweep record is RECORDED EVIDENCE, and a rerun on "
+        "drifted code, a drifted adapter or a drifted fixture would silently replace the "
+        "completions every cell in this row was scored from. Delete it in a reviewed commit if it "
+        "genuinely must be regenerated",
+    )
+
+    summary = preflight_device(strict=True)
+    print(f"[phase17_isolation] preflight: {summary}")
+    device = RuntimeConfig().device
+    seed_everything(recall.SEED)
+
+    # The base sweep loads the SAME way the adapter sweeps do — Phase 14's persona_adapter.pt, which
+    # `load_adapted_model` reads by default — and then generates inside `adapter_disabled`. Never a
+    # second un-adapted model: the context manager is measured bit-identical to the un-adapted base
+    # (max abs diff exactly 0.0) and a separately-built model would be a second load path free to
+    # differ from the one the three adapter rows ran through.
+    model, model_cfg, tok, forbid, base_artifact = recall.load_adapted_model(device)
+    _prove(
+        model_cfg.block_size == persistence.SHARED_ARM_CONFIG.context_length,
+        f"the loaded checkpoint's block_size is {model_cfg.block_size} but the parity column is "
+        f"{persistence.SHARED_ARM_CONFIG.context_length} — the published context_length would "
+        "describe a model none of these completions was produced by",
+    )
+    _, seam_digest = persistence.resolve_forbid(tok, model_cfg.vocab_size)
+    _prove(
+        persistence.forbid_digest(forbid) == seam_digest,
+        "the mask the loader threaded into this sweep does not match `resolve_forbid`'s — the "
+        "forbid_ids hash this record publishes would describe a mask the sweep never generated "
+        "under, and ISO-03's 'identical forbid_ids across all four sweeps' would be unverifiable",
+    )
+
+    if sweep == personas.BASE_ROW:
+        adapter_enabled = False
+        adapter_file_sha256 = recall._sha256(recall.ADAPTER_PATH)
+        generation_context = adapter_disabled(model)
+    else:
+        adapter_enabled = True
+        artifact_path = resolved["adapter"]
+        _prove(
+            artifact_path.exists(),
+            f"{artifact_path} is missing — sweep {sweep!r} has no trained adapter. Run "
+            f"`python scripts/phase17_isolation.py --train {sweep}` in its own process first",
+        )
+        # weights_only=True through the single choke point; `torch.load` is never called directly
+        # on a shareable artifact anywhere in this path.
+        artifact = load_adapter(
+            artifact_path, expected_fingerprint=base_artifact["loaded_base_fingerprint"]
+        )
+        lora_b_sha256 = load_adapter_with_canary(model, artifact, label=sweep)
+        adapter_file_sha256 = recall._sha256(artifact_path)
+        generation_context = contextlib.nullcontext()
+
+    by_slot = held_out_by_slot()
+    # The clean-room proof, extended to THIS phase's material: the binding fixture's own guard #4
+    # checks only Phase 14's 10 values, so nothing upstream has ever proved that a Phase 17 value is
+    # absent from these 104 questions at generation time.
+    minted = sorted({value for row in values_by_slot().values() for value in row.values()})
+
+    entries = []
+    with generation_context:
+        if sweep == personas.BASE_ROW:
+            gated_on = sorted(
+                name
+                for name, module in model.named_modules()
+                if isinstance(module, LoRALinear) and module.enabled
+            )
+            _prove(
+                not gated_on,
+                f"the adapter-off sweep entered generation with {gated_on} still enabled "
+                "(ISO-03). This runtime check is the ONLY witness that the delta branch was "
+                "inert: `enabled` is a plain Python bool kept out of state_dict(), so no weight "
+                "digest and no artifact can see it, and the recorded adapter_enabled flag is only "
+                "as true as this assertion makes it",
+            )
+            lora_b_sha256 = lora_b_digest(model)
+
+        for slot in personas.CORE_SLOTS:
+            for item in by_slot[slot]:
+                recall.assert_no_value_in_prompt(tok, item.question, minted)
+                # `complete_question` builds the prompt itself, in the BARE two-positional form,
+                # and returns `prompt_ids` — so this driver never builds one. `index` is the
+                # fixture's OWN seed_index, read verbatim, which is what pairs the four sweeps.
+                drawn = recall.complete_question(
+                    model, tok, item.question, device, forbid, index=item.seed_index
+                )
+                _prove(
+                    len(drawn["completions"]) == persistence.SHARED_ARM_CONFIG.n_draws,
+                    f"question {item.seed_index} drew {len(drawn['completions'])} completions but "
+                    f"the shared arm config commits {persistence.SHARED_ARM_CONFIG.n_draws} — the "
+                    "draw budget is read off the ONE parity object precisely so a sweep cannot "
+                    "generate under a different one and publish its rate as comparable",
+                )
+                entries.append(
+                    {
+                        "slot": slot,
+                        "seed_index": item.seed_index,
+                        "question": item.question,
+                        "fact_id": item.fact.id,
+                        "prompt_ids": drawn["prompt_ids"],
+                        "completions": drawn["completions"],
+                        "stopped": drawn["stopped"],
+                    }
+                )
+
+    wall = time.time() - started
+    payload = {
+        SWEEP_LABEL_KEY: sweep,
+        "seed": resolved["seed"],
+        "git_sha": git_sha(),
+        "pid": os.getpid(),
+        "device": str(device),
+        "torch": torch.__version__,
+        "wall_clock_min": wall / 60,
+        LORA_B_DIGEST_KEY: lora_b_sha256,
+        ADAPTER_FILE_DIGEST_KEY: adapter_file_sha256,
+        ADAPTER_ENABLED_KEY: adapter_enabled,
+        # The four parity columns PLUS `forbid_ids_sha256`, read off the ONE shared object through
+        # the committed Phase 16 seam. The forbid hash lives HERE and nowhere else in this payload:
+        # two copies of one hash in one file is two places it can stop agreeing about the same mask.
+        "config": persistence.serializable_config(persistence.arm_config_record(forbid)),
+        "forbid_ids_masked": int(forbid.sum().item()),
+        "vocab_size": model_cfg.vocab_size,
+        "base_column_note": BASE_COLUMN_NOTE,
+        SWEEP_QUESTIONS_KEY: entries,
+    }
+    record_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    print(f"[phase17_isolation] wrote {record_path} in {wall / 60:.1f} min")
+    return payload
+
+
+def run_one_persona_training(persona, seed=None):
+    """Train ONE persona adapter through the COMMITTED recipe — never a Phase 17 copy of it.
+
+    Committed here, with the sweep body, rather than in the run plan: the whole pipeline is in git
+    history before it produces a number (Phase 16's 16-06 register). This function contributes a
+    gate, a seed and a name — the recipe itself is ``teach_persona``'s, imported unchanged, because
+    a copied recipe is a second recipe free to drift from the one every published number came from.
+
+    ``prefix="phase17"`` is passed AT THE CALL, which is what makes ``teach_persona.arm_outputs``
+    resolve to ``checkpoints/phase17_{arm}_adapter.pt`` at BOTH of the call sites inside
+    ``train_arm`` — the one that guards with ``refuse_if_exists`` and the one reached through
+    ``build_arm_bins``, which rebinds the paths the export half writes to. Without it the run
+    produces a Phase-17 adapter under a Phase-14 name.
+
+    ``arm_outputs`` is deliberately NOT called here to "choose" a path. ``train_arm`` owns its own
+    write targets, and a second opinion about them is exactly how the two drift; the path printed
+    below is resolved through ``resolve_seed``, which reads that same function.
+    """
+    import phase14_factset as fs  # LAZY — see the module docstring's LAZY-IMPORT RULE
+    import teach_persona
+
+    verdict = teach_persona._require_go_verdict(PHASE17_REPORT)
+    print(f"[phase17_isolation] ISO-01 verdict in {PHASE17_REPORT.name}: {verdict}")
+
+    resolved = resolve_seed("train", persona, seed)
+    print(
+        f"[phase17_isolation] training arm {resolved['arm']!r} at seed {resolved['seed']} "
+        f"-> {resolved['adapter']}"
+    )
+    return teach_persona.train_arm(
+        resolved["arm"],
+        facts=_minted_facts()[persona],
+        family_ids=fs.TAUGHT_FAMILY_IDS,
+        seed=resolved["seed"],
+        prefix="phase17",
+    )
+
+
 def main(argv=None):
     """Dispatch — exhaustive over the three modes, with NO default branch.
 
@@ -926,15 +1149,13 @@ def main(argv=None):
             args.train in personas.PERSONAS,
             f"--train {args.train!r} is not one of {personas.PERSONAS}",
         )
-        # Task 3 of this plan defines it, below the ISO-04 canary it depends on.
-        result = run_one_persona_training(args.train, seed=args.seed)  # noqa: F821
+        result = run_one_persona_training(args.train, seed=args.seed)
     elif args.sweep is not None:
         _prove(
             args.sweep in SWEEPS,
             f"--sweep {args.sweep!r} is not one of {SWEEPS}",
         )
-        # Task 3 of this plan defines it, below the ISO-04 canary it depends on.
-        result = run_one_sweep(args.sweep, seed=args.seed)  # noqa: F821
+        result = run_one_sweep(args.sweep, seed=args.seed)
     elif args.report:
         # `run_report_mode` is plan 17-08's — it consumes the four records this file writes.
         result = run_report_mode()  # noqa: F821
