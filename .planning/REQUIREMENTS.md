@@ -32,7 +32,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
 - [ ] **STAT-03**: Multiple comparisons across the isolation matrix use **Holm** step-down, not
   Benjamini-Hochberg: off-diagonal cells share adapters row-wise and question sets column-wise, so
   BH's independence/PRDS assumption fails while Holm is valid under arbitrary dependence.
-- [ ] **STAT-04**: **Zero new runtime dependencies.** `pyproject.toml` is byte-identical at v3.0
+- [x] **STAT-04**: **Zero new runtime dependencies.** `pyproject.toml` is byte-identical at v3.0
   close. The ~50-60 lines of new statistics are hand-rolled in the established style; this project
   has declined scipy in committed code twice (`continual/fisher.py`, `scripts/phase15_stats.py`)
   and taking it now — in a milestone whose entire output is trust in a measurement — would retcon
@@ -183,7 +183,7 @@ Deferred — revisited when the numbers that gate them exist.
 | STAT-01 | 16, 17, 18 | Complete |
 | STAT-02 | 16, 17, 18 | Complete |
 | STAT-03 | 17 | Pending |
-| STAT-04 | 16, 17, 18 | Pending |
+| STAT-04 | 16, 17, 18 | Complete |
 | STAT-05 | 16, 17, 18 | Complete |
 | STAT-06 | 16, 17, 18 | Complete |
 | PERS-01 | 16 | Complete |

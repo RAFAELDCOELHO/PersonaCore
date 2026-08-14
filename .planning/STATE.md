@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: executing
-stopped_at: Completed 16-10-PLAN.md
-last_updated: "2026-08-14T00:28:54.659Z"
+status: ready_to_plan
+stopped_at: Phase 16 complete (11/11) — ready to discuss Phase 17
+last_updated: 2026-08-14T12:04:15.543Z
 last_activity: 2026-08-14
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** Phase 16 — weight-vs-prompt-persistence-control
+**Current focus:** Phase 17 — multi persona isolation matrix
 
 ## Current Position
 
-Phase: 16 (weight-vs-prompt-persistence-control) — EXECUTING
-Plan: 10 of 11
-Status: Ready to execute
+Phase: 17
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-08-14
 
 ## Performance Metrics
@@ -46,6 +46,7 @@ Last activity: 2026-08-14
 | 11 | 4 | - | - |
 | 12 | 5 | - | - |
 | 13 | 4 | - | - |
+| 16 | 11 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 | Phase 12 P01 | 14min | 3 tasks | 3 files |
