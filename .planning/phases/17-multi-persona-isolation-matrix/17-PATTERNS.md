@@ -16,8 +16,9 @@
 | New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
 |-------------------|------|-----------|----------------|---------------|
 | `scripts/phase17_personas.py` (new) | config/data module — committed literals, pure helpers | none (import-time constants) | `scripts/phase14_factset.py` + `phase16_persistence.py:1003-1035` | composite (both halves exact) |
+| `scripts/phase17_persona_facts.py` (new) | data module — the 24 minted values, census, derived forbidden set | none (import-time constants) | `scripts/phase14_factset.py:390-475` | exact |
 | `scripts/phase17_persona_gate.py` (new) | driver (GPU pre-flight) | batch GPU probe → markdown report + blocking verdict | `scripts/phase14_factset_gate.py` | exact |
-| `scripts/phase17_isolation.py` (new) | driver (two-mode: sweep / report) | generate→disk (GPU), then score→report (CPU) | `scripts/phase16_persistence.py` | exact |
+| `scripts/phase17_isolation.py` (new) | driver (four-mode: train / sweep / report / replicate) | generate→disk (GPU), then score→report (CPU) | `scripts/phase16_persistence.py` | exact |
 | `tests/test_phase17_personas.py` (new) | test (CPU, tokenizer-only) | fixture-load + assert | `tests/test_phase14_factset.py` | exact |
 | `tests/test_phase17_scoring.py` (new) | test (CPU, static AST + tiny-GPT) | AST scan + in-memory model | `tests/test_phase14_scoring.py:409-643` + `tests/test_lora_inject.py` | composite (both halves exact) |
 | `tests/test_phase17_stats.py` (new) | test (CPU, static AST + pure stats) | AST scan + pure-function assert | `tests/test_phase16_stats.py` | exact |
@@ -1094,9 +1095,12 @@ would be wrong* → *which decision id it violates*.
 ```python
     import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
 ```
-Phase 17's inverse also matters: `phase17_personas.py` holds the 24 values at module scope by
+Phase 17's inverse also matters: `phase17_persona_facts.py` holds the 24 values at module scope by
 design (it IS the committed data), so `phase17_isolation.py` must import it **lazily** to keep the
-values out of the scored driver's string surface.
+values out of the scored driver's string surface. The values live in their own module rather than in
+`phase17_personas.py` because the ordering guard in `tests/test_phase16_prereg.py` pins every commit
+touching the pre-registration to precede every `results/phase17_*` artifact, and ROADMAP SC2's ADAPT
+branch legitimately edits values after the gate report is committed.
 
 ### Nothing executes at import; `main()` under a `__main__` guard
 **Source:** `scripts/phase16_persistence.py:8-10, 2855-2865`

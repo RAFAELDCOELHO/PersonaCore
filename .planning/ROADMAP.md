@@ -271,7 +271,7 @@ cross-matrix against the base model's own prior
      and **no aggregate "isolation rate %" over the 9-cell matrix is gated** — that number implies a
      precision N=3 cannot carry (STAT-06).
 
-**Plans**: 10 plans across 6 waves
+**Plans**: 11 plans across 6 waves
 
 Plans:
 
@@ -297,7 +297,7 @@ Plans:
 - [ ] 17-05-PLAN.md — the GPU pre-flight gate driver (imports `probe_guessability`, never copies it)
   and the blocking-verdict tests
 - [ ] 17-06-PLAN.md — the ISO-04 canary in both layers, plus the `--train` / `--sweep` / `--report`
-  argument surface with no mode that runs two sweeps
+  argument surface with no mode that runs two sweeps, and `run_one_sweep` / `run_one_persona_training`
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -309,6 +309,8 @@ Plans:
 
 - [ ] 17-09-PLAN.md — RUN: three adapters at three seeds, four sweeps in four fresh processes,
   assemble the matrix and record the verdict
+- [ ] 17-11-PLAN.md — the `--replicate` mode and the append-only ISO-05 addendum writer, committed
+  before plan 17-10 runs it so no public artifact is produced by an ad-hoc script
 
 **Wave 6** *(blocked on Wave 5)*
 
