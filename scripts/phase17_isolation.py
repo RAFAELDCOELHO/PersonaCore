@@ -1382,6 +1382,452 @@ def base_prior_anchor(base_texts):
     }
 
 
+# =============================================================================================
+# ===== The report writer — committed BEFORE it produces a number (D-10 / D-11 / D-15 / D-18) ==
+# =============================================================================================
+#
+# Every framing string below is a module-level constant committed before the four sweeps run: a
+# report whose text is written AFTER the numbers is a report written to fit them. The D-20 register
+# Phase 14 established and 16-07 followed.
+
+BASE_COLUMN_PURPOSE = (
+    "Each base cell `(base, j)` is the rate at which the UN-ADAPTED model produced persona *j*'s "
+    "value, over the same questions, the same `seed_index` per question, the same `forbid_ids` "
+    "mask and the same `stop_ids` as the three adapter rows. **This is what it is FOR:** it "
+    'is the quantitative separator of *"adapter i leaked persona j\'s value"* from *"the base was '
+    'going to say something like that anyway"*, and every off-diagonal in column *j* is read '
+    "against it. Without it an off-diagonal number has no reading at all."
+)
+
+CLUSTERING_ENDS_LABEL = (
+    "**Both ends of the clustering assumption are published at every cell.** This phase's headline "
+    "is a set of zeros, so the ceiling a zero admits is the number a reader will quote — and one "
+    "end alone is the end that flatters the claim. The QUESTION-level rule-of-three bound treats "
+    "the questions as independent (they are not: 13 questions cluster inside each slot) and is the "
+    "OPTIMISTIC end. The SLOT-level bound treats each slot as a single observation and is the "
+    "CONSERVATIVE end. The two-stage cluster bootstrap beside each cell is the estimate of where "
+    "between the two ends the truth actually sits."
+)
+
+CATEGORY_ROW_PROPERTY_NOTE = (
+    "**These four counts are a ROW property and are printed once per row, not once per cell.** "
+    "`classify` takes no column index by design (D-12), so the counts partition that row's "
+    "questions by what the row's OWN completions contained — they are identical across a row's "
+    "three cells. The PER-COLUMN number is the answerable count in §The Matrix. A reader who takes "
+    "a row's `leak` count as *\"how often persona j's value appeared under adapter i\"* has read "
+    "the wrong field."
+)
+
+BASE_PRIOR_DERIVATION_NOTE = (
+    "`base_prior` is DERIVED post-hoc by coincidence against the adapter-off column (D-13), never "
+    "scored: it is the set of completions that carried no persona's value and coincided with what "
+    "the un-adapted model produced for the same slot. The base row's own `leak` and `diagonal` "
+    "counts are zero BY CONSTRUCTION (`own=None` makes `classify`'s branch 1 unreachable and its "
+    "branch 2 catch every non-empty label set before branch 3), so a non-zero one there is a bug "
+    "`classify` — not a finding."
+)
+
+BASE_PRIOR_SEED_ANCHOR_NOTE = (
+    "The seed list below is a SANITY ANCHOR on the 2 of 8 core slots it covers, and a SCREENING "
+    "seed list for candidate values — never an enumeration of what the base may say, so a match "
+    "against it could not be a complete test even on those two slots. If the adapter-off column "
+    "does NOT reproduce them, that is a **sweep problem to investigate before trusting the "
+    "derivation on the other six slots**, and it is printed here rather than suppressed. It is not "
+    "a finding either way."
+)
+
+GATE_PUBLISHING_NOTE = (
+    "All six Holm rows are published here regardless of outcome, so a partial result stays "
+    "readable. **Publishing the rows is not the same as clearing the gate** (D-18): the verdict "
+    "below is `gate_cleared`'s own return value over exactly these rows, and it is True only when "
+    "all six reject."
+)
+
+D11_MILESTONE_PATTERN = (
+    "**D-11 — this is Phase 17's instance of a milestone pattern, not a local device.** Separating "
+    "*instrument-blind* from *phenomenon-absent* recurs across v3.0 and is recorded in "
+    "`17-CONTEXT.md` as a pattern to note wherever it does: Phase 16's D-30 made *\"the arm could "
+    'not detect it"* separable from *"the arm found nothing"*, the branch above does the same '
+    "for this matrix, and Phase 18's SC4 will do it again with teacher-forced NLL making *\"the "
+    'attack was weak"* separable from *"the fact is genuinely absent"*. This report is where a '
+    "reader can see the pattern rather than be told about it."
+)
+
+# The cross-phase anchors D-10's fork needs to be DECIDABLE — every one labelled with its unit,
+# because Phase 14's number and Phase 16's number are not in the same unit and conflating them is
+# exactly how "not judgeable" would be argued either way.
+COMPARISON_ANCHORS = (
+    "**Anchors for reading the diagonal, each labelled with its unit.** Phase 16's `adapter-only` "
+    "arm scored **0.865385** on the same 104-question `core_held_out` tier in the QUESTION unit, "
+    "with a two-stage cluster bootstrap 95% of (0.721154, 0.971154) and a Wilson upper bound of "
+    "0.911252; its `base-neither` arm scored **0/104** there, Wilson upper 0.025355, rule of three "
+    "0.028846. Phase 14's **0.3483** is the DRAW-unit rate over the same run and is NOT comparable "
+    "to the question-unit numbers in this report — the two differ by more than a factor of two on "
+    "this tier. The three Phase 17 adapters trained at `LoRAConfig()` defaults precisely so these "
+    "anchors stay readable (D-20)."
+)
+
+REPLICATION_DESCRIPTIVE_NOTE = (
+    "**Descriptive only.** ISO-05's k=3 seed replication is min / max / median and NEVER a "
+    "hypothesis test (D-16): `gate_cleared` is closed at the six pre-registered comparisons and "
+    "structurally cannot admit a replication row. The pair below is `worst_pair`'s output — a "
+    "function committed in Wave 1, before the matrix was read — over the six ordered off-diagonal "
+    "rates shown with it. Its tie-break is load-bearing rather than decoration: the hoped-for "
+    "outcome of this phase is that every off-diagonal is zero, which makes the selection a "
+    "three-way tie exactly in the success case."
+)
+
+# ONE greppable line, and the ONLY place in this module that carries this phrase. Plan 17-10 Task 3
+# replaces exactly this line and asserts everything else above the addendum is byte-identical, so a
+# second occurrence anywhere would make that replacement ambiguous.
+REPLICATION_PENDING_LINE = "**ISO-05 replication result: not yet measured.**"
+
+
+def _matrix_cell_text(entry):
+    """One cell as ONE string: the STAT-02 shape, then this phase's own width, then both ends.
+
+    Rendered through ``report_proportion``'s ``formatted`` so no cell can print a bare percentage —
+    a zero rate without its denominator and its ceiling states a certainty the sample does not have.
+    """
+    proportion = entry["proportion"]
+    return (
+        f"{proportion['formatted']}; cluster bootstrap 95% "
+        f"({entry['bootstrap'][0]:.6f}, {entry['bootstrap'][1]:.6f}); rule of three "
+        f"3/{proportion['n_questions']} = {entry['rule_of_three_questions']:.6f} (question-level) "
+        f"/ 3/{personas.SLOTS_EXPECTED} = {entry['rule_of_three_slots']:.6f} (slot-level)"
+    )
+
+
+_NOT_RECORDED = "(not recorded)"
+
+
+def _provenance_row(record):
+    """One sweep's provenance line — load-bearing fields indexed, cosmetic ones with a SENTINEL.
+
+    ``git_sha``, ``pid``, both digests and ``adapter_enabled`` are indexed directly because
+    ``assert_sweeps_ran_on_distinct_weights`` has already refused any record missing them. The rest
+    is read with a VISIBLE ``(not recorded)`` rather than a silent blank: a record without a device
+    or a wall clock was not written by ``run_one_sweep``, and publishing the hole is honest.
+    """
+    wall = record.get("wall_clock_min")
+    clock = f"{wall:.1f}" if isinstance(wall, (int, float)) else _NOT_RECORDED
+    forbid = str(record.get("config", {}).get("forbid_ids_sha256", _NOT_RECORDED))
+    return (
+        f"| `{record[SWEEP_LABEL_KEY]}` | `{record['git_sha']}` | {record['pid']} | "
+        f"`{record.get('device', _NOT_RECORDED)}` | {clock} | "
+        f"`{record[LORA_B_DIGEST_KEY][:16]}…` | `{record[ADAPTER_FILE_DIGEST_KEY][:16]}…` | "
+        f"{record[ADAPTER_ENABLED_KEY]} | `{forbid[:16]}…` |"
+    )
+
+
+def render_report(matrix, described, gate, sweep_records, prior_anchor, *, resamples):
+    """Write ``results/phase17_isolation_report.md`` and return its text.
+
+    The verdict is COMPUTED by importing ``gate_cleared``, never retyped as prose beside the rows —
+    a hand-written headline is a headline free to disagree with the instrument that produced it.
+    All six Holm rows are published whatever the outcome, and when the gate does not clear the
+    pre-registered ``ALL_FAIL_BRANCH`` is emitted IN FULL together with both of the things it
+    requires: (a) the three diagonal magnitudes with their bootstrap intervals, and (b) the
+    adapter-off column read off this same matrix rather than restated.
+
+    Two `_prove`s run over the RENDERED TEXT before it is written, because the source-level scans
+    cannot see a number a format string produced: the report must carry a ``## Verdict`` section the
+    clobber guard can anchor on, and it must contain no bare zero percentage anywhere (STAT-02).
+    """
+    import re
+
+    rows = personas.PERSONAS + (personas.BASE_ROW,)
+    family = len(persistence.HOLM_FAMILY_PAIRS)
+    step_alphas = [persistence.HOLM_ALPHA / (family - index) for index in range(family)]
+    unanimity = persistence.sign_test_exact((1,) * persistence.SIGN_TEST_N)
+    one_tie = persistence.sign_test_exact((1,) * (persistence.SIGN_TEST_N - 1) + (0,))
+    cleared = personas.gate_cleared(gate["holm"])
+
+    blocks = [
+        "# Phase 17 — Multi-Persona Isolation Matrix "
+        "(ISO-02 / ISO-03 / ISO-05 / STAT-01 / STAT-02 / STAT-03 / STAT-06)",
+        "",
+        "## Pre-Registration",
+        "",
+        f"The family, the direction of every alternative, the seeds and the gate rule were "
+        f"committed in `scripts/phase17_personas.py` at `{prereg_commit()}` — before a persona "
+        "value was minted, before an adapter trained and before any `results/phase17_*` artifact "
+        "existed. `tests/test_phase16_prereg.py` asserts by git ANCESTRY that every commit "
+        "touching that file precedes every Phase 17 result's first add, so the ordering is a "
+        "property of the history rather than a claim made in this paragraph. Every constant "
+        "below is IMPORTED here, never retyped.",
+        "",
+        f"**Unit of analysis: the `{personas.SIGN_UNIT}` (STAT-01).** A cell counts a question "
+        "once if ANY of that row's draws for it carried the column persona's value. The paired "
+        f"observation is per SLOT over the {personas.SLOTS_EXPECTED} core slots, ties folded "
+        "against the alternative, n fixed.",
+        "",
+        f"**Training seeds (D-14), one per persona:** `{personas.PERSONA_SEEDS}`. The gated "
+        "contrast is WITHIN an adapter, so the seed cancels inside it; D-15 is the price.",
+        "",
+        f"**Holm step alphas at m = {family}:** "
+        + ", ".join(f"{alpha:.7f}" for alpha in step_alphas)
+        + ".",
+        "",
+        f"**The {step_alphas[0] - unanimity:.7f} margin is a known property of this design, stated "
+        "before the run.** The achievable p values are multiples of 1/256: slot unanimity gives "
+        f"{unanimity:.7f}, which clears the first step at {step_alphas[0]:.7f} by "
+        f"{step_alphas[0] - unanimity:.7f}, while a SINGLE tie gives {one_tie:.7f} — above even "
+        f"the last step's alpha of {step_alphas[-1]:.7f}. So the gate requires all "
+        f"{family * persistence.SIGN_TEST_N} slot-level observations "
+        f"({family} comparisons x {persistence.SIGN_TEST_N} slots) to favour the diagonal. There "
+        "is no partial credit anywhere in this design.",
+        "",
+        f"**The adapter-off row `{personas.BASE_ROW}` is COMPUTED and PUBLISHED but NOT a member "
+        "of the family.** The family is derived over the three personas only. Admitting the base "
+        f"row would make a seventh comparison, pricing Holm's first alpha at "
+        f"{persistence.HOLM_ALPHA / (family + 1):.7f} — BELOW the achievable {unanimity:.7f} — so "
+        "the headline would die arithmetically at every possible outcome, including perfect "
+        "unanimity. `assert_phase17_family_closed` refuses any pair naming it at runtime, and a "
+        "static scan refuses a new call site.",
+        "",
+        "| # | comparison | declared alternative (committed before the run) |",
+        "| --- | --- | --- |",
+    ]
+    for index, pair in enumerate(personas.HOLM_FAMILY_CELLS, start=1):
+        blocks.append(f"| {index} | `{pair[0]}` vs `{pair[1]}` | {gate['alternative'][pair]} |")
+
+    blocks += [
+        "",
+        "## The Matrix",
+        "",
+        BASE_COLUMN_PURPOSE,
+        "",
+        CLUSTERING_ENDS_LABEL,
+        "",
+        f"Interval: `{persistence.BOOTSTRAP_METHOD}`, {resamples:,} resamples, seed "
+        f"{persistence.BOOTSTRAP_SEED}, alpha {persistence.BOOTSTRAP_ALPHA}, with the SLOT as the "
+        "cluster.",
+        "",
+        f"**Wilson label (T-16-41).** {persistence.WILSON_LABEL.replace('fact', 'slot')}",
+        "",
+        "| row (adapter) | "
+        + " | ".join(f"column `{label}`" for label in personas.PERSONAS)
+        + " |",
+        "| --- | " + " | ".join("---" for _ in personas.PERSONAS) + " |",
+    ]
+    for row in rows:
+        cells = " | ".join(
+            _matrix_cell_text(described[(row, label)]) for label in personas.PERSONAS
+        )
+        blocks.append(f"| `{row}` | {cells} |")
+
+    blocks += [
+        "",
+        "## Categories",
+        "",
+        CATEGORY_ROW_PROPERTY_NOTE,
+        "",
+        BASE_PRIOR_DERIVATION_NOTE,
+        "",
+        "| row (adapter) | " + " | ".join(f"`{name}`" for name in CATEGORIES) + " |",
+        "| --- | " + " | ".join("---" for _ in CATEGORIES) + " |",
+    ]
+    for row in rows:
+        entry = matrix[(row, personas.PERSONAS[0])]
+        blocks.append(f"| `{row}` | " + " | ".join(str(entry[name]) for name in CATEGORIES) + " |")
+
+    blocks += [
+        "",
+        BASE_PRIOR_SEED_ANCHOR_NOTE,
+        "",
+        "| slot | seeded prior | reproduced by the adapter-off column |",
+        "| --- | --- | --- |",
+    ]
+    for slot, entry in prior_anchor.items():
+        seeds = ", ".join(f"`{seed}`" for seed in entry["seeds"])
+        verdict = (
+            "yes"
+            if entry["reproduced"]
+            else "**NO — investigate this sweep before trusting the derivation on the other slots**"
+        )
+        blocks.append(f"| `{slot}` | {seeds} | {verdict} |")
+
+    blocks += [
+        "",
+        "## Gate",
+        "",
+        f"> {personas.GATE_AGGREGATION_RATIONALE}",
+        "",
+        GATE_PUBLISHING_NOTE,
+        "",
+        "| comparison | slot signs | exact p | alpha at step | rejected |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for pair, p, alpha_at_step, rejected in gate["holm"]:
+        signs = " ".join(f"{sign:+d}" for sign in gate["signs"][pair])
+        blocks.append(
+            f"| `{pair[0]}` vs `{pair[1]}` | {signs} | {p:.7f} | {alpha_at_step:.7f} | "
+            f"{'YES' if rejected else 'no'} |"
+        )
+
+    rejected_rows = [row for row in gate["holm"] if row[-1]]
+    blocks += [
+        "",
+        "## Verdict",
+        "",
+        f"**`gate_cleared` returns `{cleared}`** over the six rows above — "
+        f"{len(rejected_rows)} of {len(personas.HOLM_FAMILY_CELLS)} comparisons rejected. That "
+        "line is the imported function's own return value, not prose written around the numbers.",
+        "",
+    ]
+    if cleared:
+        blocks += [
+            "All six pre-registered comparisons rejected at their Holm step, so the phase's claim "
+            "— that separately-taught personas stay isolated in the weights — is DEMONSTRATED at "
+            "the pre-registered level:",
+            "",
+        ]
+        blocks += [
+            f"- `{pair[0]}` vs `{pair[1]}` — {gate['alternative'][pair]}; p = {p:.7f} < alpha "
+            f"{alpha_at_step:.7f}"
+            for pair, p, alpha_at_step, _ in gate["holm"]
+        ]
+    else:
+        blocks += [
+            "The gate did not clear, so the PRE-REGISTERED all-fail branch fires, in full and "
+            "as written before any adapter trained:",
+            "",
+            f"> {personas.ALL_FAIL_BRANCH}",
+            "",
+            "### (a) The diagonal magnitude, per persona",
+            "",
+            "| persona | diagonal cell | answerable / questions + bounds | cluster bootstrap 95% |",
+            "| --- | --- | --- | --- |",
+        ]
+        for label in personas.PERSONAS:
+            entry = described[(label, label)]
+            blocks.append(
+                f"| `{label}` | `({label}, {label})` | {entry['proportion']['formatted']} | "
+                f"({entry['bootstrap'][0]:.6f}, {entry['bootstrap'][1]:.6f}) |"
+            )
+        blocks += [
+            "",
+            "### (b) The adapter-off column",
+            "",
+            "Read off §The Matrix rather than restated, so the two cannot disagree.",
+            "",
+            "| cell | answerable / questions and bounds | cluster bootstrap 95% |",
+            "| --- | --- | --- |",
+        ]
+        for label in personas.PERSONAS:
+            entry = described[(personas.BASE_ROW, label)]
+            blocks.append(
+                f"| `({personas.BASE_ROW}, {label})` | {entry['proportion']['formatted']} | "
+                f"({entry['bootstrap'][0]:.6f}, {entry['bootstrap'][1]:.6f}) |"
+            )
+        blocks += [
+            "",
+            "### The fork, rendered explicitly",
+            "",
+            "**If the diagonal is LOW**, this matrix has **NO POWER** to judge isolation: the "
+            "adapters did not reliably reproduce their own values, so an off-diagonal near zero is "
+            'what an instrument that measures nothing produces. *"Not demonstrated"* then means '
+            '**"not judgeable"** — never *"isolation failed"*.',
+            "",
+            "**If the diagonal is HIGH and an off-diagonal is also high enough to block slot "
+            "unanimity**, that is a REAL LEAKAGE FINDING and is reported as one: persona *j*'s "
+            "value appeared under adapter *i* at a rate this test cannot separate from adapter "
+            "*i*'s own recall.",
+            "",
+            "**The three diagonals are three separate ANCHORS and never a RANKING (D-15).** With "
+            "one seed per persona a between-persona difference confounds content with "
+            "initialization, so no sentence in this report orders the personas by diagonal.",
+            "",
+            COMPARISON_ANCHORS,
+            "",
+            D11_MILESTONE_PATTERN,
+        ]
+
+    off_diagonal = {
+        (first, second): matrix[(first, second)]["rate"]
+        for first in personas.PERSONAS
+        for second in personas.PERSONAS
+        if first != second
+    }
+    selected = personas.worst_pair(off_diagonal)
+    blocks += [
+        "",
+        "## Replication (ISO-05)",
+        "",
+        REPLICATION_DESCRIPTIVE_NOTE,
+        "",
+        "| ordered off-diagonal cell | question-unit rate (the selection input) |",
+        "| --- | --- |",
+    ]
+    for cell in sorted(off_diagonal):
+        blocks.append(f"| `({cell[0]}, {cell[1]})` | {off_diagonal[cell]:.6f} |")
+    blocks += [
+        "",
+        f"**Selected pair:** `{selected[0]}` / `{selected[1]}`, at the pre-registered replication "
+        f"seeds `{personas.REPLICATION_SEEDS[selected[0]]}` and "
+        f"`{personas.REPLICATION_SEEDS[selected[1]]}` (k = 3 counting the original seed).",
+        "",
+        REPLICATION_PENDING_LINE,
+        "",
+        "## Provenance",
+        "",
+        "One block per sweep process. Four distinct pids are what EVIDENCE the process split "
+        "rather than assert it, and the two weight digests carry two different claims: the live "
+        "digest says WHICH WEIGHTS were resident, the file digest says WHICH FILE was read, and "
+        f"neither can witness inertness — {BASE_COLUMN_NOTE}",
+        "",
+        "| sweep | git SHA | pid | device | wall clock (min) | live `lora_B` sha256 | adapter file "
+        "sha256 | adapter enabled | `forbid_ids` sha256 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    blocks += [_provenance_row(record) for record in sweep_records]
+    blocks.append("")
+
+    text = "\n".join(blocks)
+    _prove(
+        _verdict.recorded_verdict(text) is not None,
+        "the rendered report carries no `## Verdict` section the clobber guard could anchor on, so "
+        "a later run would overwrite this phase's committed evidence in silence",
+    )
+    _prove(
+        re.search(r"\b0(\.0+)?%", text) is None,
+        "the rendered report contains a bare zero percentage — STAT-02 forbids it in any committed "
+        "report or figure, because a bare zero states a certainty the sample does not have. Every "
+        "zero renders as its numerator over its denominator with BOTH ends of the clustering "
+        "assumption attached",
+    )
+    ISOLATION_REPORT_PATH.write_text(text, encoding="utf-8")
+    print(f"[phase17_isolation] wrote {ISOLATION_REPORT_PATH}")
+    return text
+
+
+def prereg_commit():
+    """The commit that ADDED ``scripts/phase17_personas.py`` — the citation, resolved not asserted.
+
+    ``phase16_persistence.ladder_report_commit``'s register, with ``--diff-filter=A`` because that
+    is the filter ``tests/test_phase16_prereg.py``'s ordering guard itself uses: it returns the
+    EARLIEST add, which is the commit the ancestry rule is anchored on. The last line of the log is
+    the oldest, so the citation is the commit a reader can actually check the ordering against.
+    """
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "log", "--diff-filter=A", "--format=%h", "--", str(PREREG_PATH)],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_ROOT,
+    )
+    adds = result.stdout.split()
+    _prove(
+        adds,
+        f"{PREREG_PATH} has no add commit in this repository — the pre-registration must be "
+        "COMMITTED before the matrix that cites it, and that ordering is this phase's whole "
+        "defence against a constant chosen after seeing a number (STAT-05)",
+    )
+    return adds[-1]
+
+
 def run_report_mode(*, resamples=persistence.BOOTSTRAP_RESAMPLES):
     """Assemble ``results/phase17_isolation_report.md`` from the four recorded sweeps.
 
@@ -1424,7 +1870,7 @@ def run_report_mode(*, resamples=persistence.BOOTSTRAP_RESAMPLES):
 
     described = describe_matrix(matrix, draws_per_question(records), resamples=resamples)
     gate = compare_cells(cell_rates(matrix))
-    return render_report(  # noqa: F821  (`render_report` is Task 2 of this same plan)
+    return render_report(
         matrix,
         described,
         gate,
