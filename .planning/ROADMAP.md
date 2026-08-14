@@ -287,7 +287,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 17-03-PLAN.md — mint the 24 contradictory values (3 personas x 8 core slots) through the
+- [x] 17-03-PLAN.md — mint the 24 contradictory values (3 personas x 8 core slots) through the
   committed filters, with the transcribed token census (ISO-01)
 - [ ] 17-04-PLAN.md — the pure-CPU scoring core: cell-blind scorer, slot regrouping, four-category
   assembly, and the empirical confirmation of the no-op-swap failure shape SC1 defers to it
@@ -396,7 +396,7 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
-| 17. Multi-Persona Isolation Matrix | v3.0 | 2/11 | In Progress|  |
+| 17. Multi-Persona Isolation Matrix | v3.0 | 3/11 | In Progress|  |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 0/TBD | Pending | - |
 
 **Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.

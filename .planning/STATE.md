@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-08-14T20:47:06.272Z"
-last_activity: "2026-08-14 -- 17-02 complete: teach_persona widened additively with seed=/prefix=; ISO-06 consumer guard watched failing"
+stopped_at: Completed 17-03-PLAN.md
+last_updated: "2026-08-14T21:19:32.812Z"
+last_activity: "2026-08-14 -- 17-03 complete: 24 contradictory persona values minted, censused and filter-pinned outside the git-pinned pre-registration"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 13
+  completed_plans: 14
   percent: 33
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 3 of 11
+Plan: 4 of 11
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-02 complete: teach_persona widened additively with seed=/prefix=; ISO-06 consumer guard watched failing
+Last activity: 2026-08-14 -- 17-03 complete: 24 contradictory persona values minted, censused and filter-pinned outside the git-pinned pre-registration
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Last activity: 2026-08-14 -- 17-02 complete: teach_persona widened additively wi
 | Phase 16 P10 | 95min | 3 tasks | 2 files |
 | Phase 17 P01 | 34min | 3 tasks | 4 files |
 | Phase 17 P02 | 17min | 2 tasks | 3 files |
+| Phase 17 P03 | 19min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -188,6 +189,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-02: seed= and prefix= widen the committed teach_persona recipe additively (D-16 import-never-copy) — the prefix is threaded to BOTH internal arm_outputs call sites because train_arm's build_arm_bins call REBINDS paths, so a prefix applied only at the refuse_if_exists site would guard phase17_ paths while exporting the adapter to phase14_
 - [Phase 17]: 17-02: bin/mask deliberately NOT prefixed (they carry no phase label today, so prefixing MOVES an existing path) and the real-arm shippable adapter exception stays unconditional on prefix — Phase 17 never passes real, so a prefix-aware exception would be dead code weakening a pinned cross-plan contract
 - [Phase 17]: 17-02: the ISO-06 AST guard splits inject_lora call sites into PRODUCER (bare LoRAConfig(), D-20's r=8/alpha=16 anchor — correct as-is) and CONSUMER (LoRAConfig(**artifact['lora_config'])), resolving a Name argument through module-level assignments because both producers pass the LORA_CFG constant; hard equality on all three buckets, watched RED
+- [Phase 17]: 17-03: the 24 minted values live in scripts/phase17_persona_facts.py and FORBIDDEN_VALUES is DERIVED by walking six committed Phase 14 containers plus BASE_PRIOR_SEEDS — D-06 zero-reuse holds by construction, and the pinned pre-registration file stays byte-untouched so SC2's ADAPT branch survives
+- [Phase 17]: 17-03: the four mechanical filters structurally CANNOT see D-05 — filter_substring_disjoint passes tarrowgate/marrowgate happily (edit distance 1, neither contains the other), so a measured neighbour screen was added as a committed test: names >= 3, 4-digit numerics >= 2 (the achievable bar at fixed length 4 over a 10-symbol alphabet)
+- [Phase 17]: 17-03: the four filters rejected 0 of the 24 committed values; across 34 measured candidates filter_token_budget's rule rejected 2 (vurthwaite 10 ids, thornebank 9) and the D-05 screen rejected 2 (tarrowgate, and 1971 at distance 1 from CALIBRATION_POOL's 1974) — a filter that bit nothing is recorded as such
+- [Phase 17]: 17-03: phase17_personas is imported LAZILY by the material module because it MEASURABLY pulls torch into sys.modules (via phase16_persistence -> phase14_recall) while phase14_factset does not — so the Fact literals import at module scope and the four filters do not
+- [Phase 17]: 17-03: ISO-01 deliberately NOT marked complete — 17-05 and 17-07 also claim it and both the guessability half and SC2's blocking human verdict are theirs; the 17-01 over-claim pattern avoided rather than repeated
 
 ### Pending Todos
 
@@ -231,9 +237,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T20:46:55.192Z
-Stopped at: Completed 17-02-PLAN.md
-Resume file: .planning/phases/17-multi-persona-isolation-matrix/17-03-PLAN.md
+Last session: 2026-08-14T21:19:13.013Z
+Stopped at: Completed 17-03-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
