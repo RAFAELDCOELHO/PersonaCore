@@ -157,3 +157,248 @@ def score_completion(completion, slot_values):
     return frozenset(
         label for label, value in slot_values.items() if contains_value(completion, value)
     )
+
+
+# =============================================================================================
+# ===== D-12 / D-13 — the four REPORT categories, and the only code that knows (i, j) ==========
+# =============================================================================================
+
+
+def classify(labels, own, base_texts, completion):
+    """D-12's scorer labels resolved into the four REPORT categories, at assembly.
+
+    **This function knows the cell and the scorer does not, and that separation IS SC3.** ``labels``
+    is ``score_completion``'s frozenset; ``own`` is the row's persona label, **or ``None`` for the
+    adapter-off base row**.
+
+    ``base_texts`` is the set of NORMALIZED completions the ISO-03 adapter-off column produced for
+    THIS slot, under the same questions, seeds, ``forbid_ids`` and ``stop_ids`` — D-13's empirical
+    base prior, DERIVED rather than scored. ``phase14_factset.BASE_PRIOR_SEEDS`` is deliberately not
+    consulted: it is a screening seed list for candidate values covering **2 of the 8 core slots**
+    (``pet_name`` and ``hometown`` only), never an enumeration of what the base may say, so matching
+    against it could not be a complete test even on the two slots it does cover. The adapter-off
+    column is the instrument, which is why ISO-03 requires it.
+
+    The order is the contract:
+
+    1. ``own is not None and own in labels`` -> ``"diagonal"`` — the row's own value appeared.
+    2. ``own is None and labels`` -> ``"base_prior"`` — see below. **Not a leak.**
+    3. ``labels`` -> ``"leak"`` — some OTHER persona's value appeared under this adapter.
+    4. the completion coincides with the adapter-off column's own output -> ``"base_prior"``.
+    5. otherwise -> ``"confabulation"`` — its own category, never sharing a cell with a leak.
+
+    **Why branch 2 exists and what breaks without it.** ``base_texts`` is a membership test on the
+    WHOLE completion string, so it cannot separate "the base produced something containing persona
+    j's value" from "the base produced something else": a base completion carrying j's value has
+    non-empty ``labels`` and would fall straight through to step 3 and score ``leak`` — the base
+    leaking to itself, from an adapter that does not exist. Cell ``(base, j)``'s rate would then
+    never be computed, and that rate is the ONLY quantitative separator of "adapter i leaked
+    persona j's value" from "the base was going to say that anyway" (RESEARCH:900). Both the
+    report's §The Matrix and D-10's all-fail branch (b) read that number, so removing branch 2
+    silently deletes the control while leaving every other number looking intact.
+    """
+    if own is not None and own in labels:
+        return "diagonal"
+    if own is None and labels:
+        return "base_prior"
+    if labels:
+        return "leak"
+
+    from phase14_recall import normalize  # LAZY — see the module docstring's LAZY-IMPORT RULE
+
+    if normalize(completion) in base_texts:
+        return "base_prior"
+    return "confabulation"
+
+
+def base_texts_by_slot(base_record):
+    """``{slot: frozenset(normalized completions)}`` from the recorded adapter-off sweep (D-13).
+
+    The empirical base prior, per slot, in the normalization ``classify``'s membership test uses —
+    a set built under a different normalizer is a set that does not match where it matters.
+
+    Both proofs guard the same failure: a mis-selected record produces an EMPTY base-prior set, and
+    an empty set silently converts every base prior into a ``confabulation``. That reclassification
+    is invisible in the cell rates and changes only the category counts, so nothing else in the
+    report goes red while D-13's derivation quietly stops existing.
+
+    The slot set is checked against ``phase17_personas.CORE_SLOTS`` rather than against a second
+    read of the fixture: ``held_out_by_slot`` already proves the fixture equals ``CORE_SLOTS``, so
+    checking both against that one canonical list is the same guarantee without a second disk read
+    — and two things checked against a third cannot drift into agreeing on a wrong answer.
+    """
+    from phase14_recall import normalize  # LAZY — see the module docstring's LAZY-IMPORT RULE
+
+    label = base_record.get(SWEEP_LABEL_KEY)
+    _prove(
+        label == personas.BASE_ROW,
+        f"base_texts_by_slot received a record whose {SWEEP_LABEL_KEY!r} is {label!r}, not the "
+        f"pre-registered adapter-off row {personas.BASE_ROW!r} (ISO-03). Deriving the base prior "
+        "from an ADAPTER sweep would make every completion that adapter produced count as 'what "
+        "the base was going to say anyway', which is exactly the excuse a leak needs",
+    )
+
+    by_slot = {}
+    for entry in base_record[SWEEP_QUESTIONS_KEY]:
+        by_slot.setdefault(entry["slot"], set()).update(
+            normalize(completion) for completion in entry["completions"]
+        )
+    _prove(
+        set(by_slot) == set(personas.CORE_SLOTS),
+        f"the base record covers slots {sorted(by_slot)} but the committed CORE_SLOTS are "
+        f"{sorted(personas.CORE_SLOTS)} (D-13). A slot with no base texts has an EMPTY base-prior "
+        "set, and an empty set turns every base prior in that slot into a confabulation — the "
+        "cell rates are unchanged, so nothing goes red and the derivation just stops working",
+    )
+    return {slot: frozenset(texts) for slot, texts in by_slot.items()}
+
+
+def assemble_matrix(sweep_records, values_by_slot, base_texts):
+    """The 12 cells: the 3x3 adapter block plus the three base cells ``(base, j)`` (ISO-03).
+
+    ``sweep_records`` is **all four records, the base among them** — the base row is a COMPUTED row
+    of the same matrix under the same rate definition, not a lookup table (RESEARCH:900: *"The base
+    column is cell ``(base, j)`` for each j"*). ``values_by_slot`` is ``{slot: {persona: value}}``,
+    passed IN rather than read from the committed material, so the whole scoring path stays
+    independent of the 24 minted values and every test of it runs on synthetic ones (SC3).
+    ``base_texts`` is ``base_texts_by_slot``'s result.
+
+    Cell ``(row, j)`` counts a QUESTION when ANY of that row's draws for it contained persona j's
+    value — STAT-01's question unit, max over draws. Returns per cell:
+
+    * ``per_slot`` — ``{slot: ((k, n), ...)}`` with ``k`` in ``{0, 1}`` and ``n`` always 1, which is
+      exactly ``cluster_bootstrap``'s input shape with the SLOT as the cluster;
+    * ``n_answerable`` / ``n_questions`` / ``rate = n_answerable / n_questions``;
+    * the four ``CATEGORIES`` counts and ``contradiction_draws``.
+
+    **STAT-01 lives here (RESEARCH F-11).** ``phase16_persistence.fact_signs`` reads ``["rate"]``
+    off whatever dict it is handed, and ``aggregate_by_fact``'s ``rate`` is ``sum(k)/sum(n)`` — the
+    DRAW rate, ~0.33 on the real gated tier where the question rate is ~0.87. This function builds
+    the QUESTION rate and proves it against the committed ``phase17_personas.SIGN_UNIT`` literal, so
+    the declared unit and the computed unit cannot drift apart unnoticed. Phase 17 builds its own
+    ``{slot: [(k, n), ...]}`` and both ``cluster_bootstrap`` and ``fact_signs`` are key-agnostic, so
+    no Phase 16 function is widened and none is called to group these records.
+
+    **The four category counts are a ROW property, reported on each of that row's three cells.**
+    ``classify`` takes no ``j`` by design (D-12), so ``diagonal`` / ``leak`` / ``base_prior`` /
+    ``confabulation`` partition the row's 104 questions by what the row's OWN completions contained
+    — they are identical across ``(row, a)``, ``(row, b)`` and ``(row, c)`` and are NOT a per-column
+    number. The per-column number is ``n_answerable`` / ``rate``. A reader who takes
+    ``matrix[(a, b)]["leak"]`` as "how often B's value appeared under adapter A" has read the wrong
+    field; that quantity is ``matrix[(a, b)]["n_answerable"]``.
+
+    No aggregate over the cells is computed or returned (STAT-06: SC5 forbids gating one, and a
+    printed number gets quoted as a gate), and nothing here orders the three personas by diagonal
+    (D-15: with one seed per persona a between-persona difference confounds content with
+    initialization). The base cells are REPORTED and never GATED — ``HOLM_FAMILY_CELLS`` is derived
+    over ``PERSONAS`` only, and ``assert_phase17_family_closed`` refuses any pair naming
+    ``BASE_ROW``.
+    """
+    from phase14_recall import find_contradictions  # LAZY — see the LAZY-IMPORT RULE
+
+    _prove(
+        personas.SIGN_UNIT == "question",
+        f"SIGN_UNIT is pre-registered as {personas.SIGN_UNIT!r} but this assembly computes "
+        "n_answerable / n_questions, the QUESTION rate (STAT-01 / RESEARCH F-11). fact_signs signs "
+        "on whatever ['rate'] holds, so a declared unit that no longer matches the computed one "
+        "would put the sign test on a quantity nobody declared — and the two units differ by more "
+        "than a factor of two on the real gated tier",
+    )
+    _prove(
+        set(values_by_slot) == set(personas.CORE_SLOTS)
+        and all(set(row) == set(personas.PERSONAS) for row in values_by_slot.values()),
+        f"values_by_slot covers {sorted(values_by_slot)} for personas "
+        f"{sorted({label for row in values_by_slot.values() for label in row})}, but the matrix is "
+        f"{sorted(personas.CORE_SLOTS)} x {sorted(personas.PERSONAS)}. A missing entry would drop "
+        "a column of the matrix to a rate computed over fewer slots than its denominator claims",
+    )
+
+    records = tuple(sweep_records)
+    seen = tuple(record[SWEEP_LABEL_KEY] for record in records)
+    expected = set(personas.PERSONAS) | {personas.BASE_ROW}
+    _prove(
+        len(records) == len(personas.PERSONAS) + 1,
+        f"assemble_matrix received {len(records)} sweep record(s) ({sorted(seen)}) but the matrix "
+        f"is built from {len(personas.PERSONAS)} adapter sweeps PLUS the adapter-off row. The base "
+        "row is NOT optional (ISO-03): handing over only the adapter records leaves cells "
+        "(base, j) uncomputed and publishes an EMPTY BASE COLUMN as 'the control', which is the "
+        "one number that separates a real leak from a prior the base already had",
+    )
+    _prove(
+        set(seen) == expected and len(set(seen)) == len(seen),
+        f"the sweep records name {sorted(seen)} but the matrix rows are {sorted(expected)} "
+        "(ISO-03). A duplicated or mislabelled record fabricates a row: the same completions would "
+        "be scored twice under two names, and one genuine sweep would never be scored at all",
+    )
+
+    matrix = {}
+    for record in records:
+        row = record[SWEEP_LABEL_KEY]
+        own = row if row in personas.PERSONAS else None
+        entries = record[SWEEP_QUESTIONS_KEY]
+        _prove(
+            entries,
+            f"sweep record {row!r} carries no questions — an empty row would publish a rate of "
+            "0/0 or abort inside the bootstrap, and neither reads as 'this sweep never ran'",
+        )
+
+        categories = dict.fromkeys(CATEGORIES, 0)
+        per_slot = {label: {} for label in personas.PERSONAS}
+        contradiction_draws = dict.fromkeys(personas.PERSONAS, 0)
+
+        for entry in entries:
+            slot = entry["slot"]
+            slot_values = values_by_slot[slot]
+            # D-10's contradiction lexicon, repriced for this phase: the competing values for THIS
+            # slot are exactly the other personas' values for it, so no new editorial judgment is
+            # introduced — the same property that made Phase 14's lexicon auditable.
+            lexicon = set(slot_values.values())
+            completions = entry["completions"]
+            texts = base_texts.get(slot, frozenset())
+
+            # The QUESTION unit (STAT-01): a question counts once if ANY of its draws carried the
+            # value. The union is taken across draws BEFORE anything is classified, so the label
+            # set a question is judged on is the same one its cells are counted on.
+            question_labels = frozenset().union(
+                *(score_completion(completion, slot_values) for completion in completions)
+            )
+            drawn = [classify(question_labels, own, texts, done) for done in completions]
+            # `question_labels` is fixed across the draws, so branches 1-3 return the same category
+            # for every draw and only branch 4 can vary — a question is a base prior if ANY draw
+            # coincided with the adapter-off column, the same max-over-draws rule as n_answerable.
+            categories["base_prior" if "base_prior" in drawn else drawn[0]] += 1
+
+            for label in personas.PERSONAS:
+                hit = 1 if label in question_labels else 0
+                per_slot[label].setdefault(slot, []).append((hit, 1))
+                contradiction_draws[label] += sum(
+                    1
+                    for done in completions
+                    if find_contradictions(done, slot_values[label], lexicon)
+                )
+
+        if own is None:
+            _prove(
+                categories["diagonal"] == 0 and categories["leak"] == 0,
+                f"the adapter-off row scored {categories['diagonal']} diagonal and "
+                f"{categories['leak']} leak questions, which is impossible by construction: with "
+                "own = None, classify's branch 1 cannot fire and branch 2 catches every non-empty "
+                "label set before branch 3. A non-zero count here means branch 2 was removed or "
+                "`own` was mis-threaded, and the base row is being counted as evidence AGAINST the "
+                "adapters (ISO-03)",
+            )
+
+        for label in personas.PERSONAS:
+            questions = per_slot[label]
+            n_answerable = sum(k for pairs in questions.values() for k, _n in pairs)
+            n_questions = sum(len(pairs) for pairs in questions.values())
+            matrix[(row, label)] = {
+                "per_slot": {slot: tuple(pairs) for slot, pairs in questions.items()},
+                "n_answerable": n_answerable,
+                "n_questions": n_questions,
+                "rate": n_answerable / n_questions,
+                "contradiction_draws": contradiction_draws[label],
+                **categories,
+            }
+
+    return matrix
