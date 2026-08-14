@@ -37,3 +37,11 @@ reformat-or-not decision for the 7 stale files.
 
 **Suggested resolution:** quick task — change `Makefile:16` to `python -m ruff check . && python -m
 ruff format --check .`, then run `make format` once and commit the resulting no-op-behaviour diff.
+
+**Update (17-01 close, then 17-04 close):** the count is now **9**, not 8. Two Phase 17 test files
+joined the list purely because ruff 0.1.15 predates the assert-message wrapping style ruff 0.9+
+emits — `tests/test_phase17_stats.py` (17-01) and `tests/test_phase17_scoring.py` (17-04). The
+disagreement is entirely `assert cond, (\n "msg"\n)` versus `assert (\n cond\n), "msg"`; both files
+are clean under `.venv/bin/ruff` 0.15.16, which is the version CI installs and runs. Reformatting
+them to satisfy the stale shim would turn the CI-version check red, so the count growing with each
+new Phase 17 test file is expected until the `Makefile:16` fix lands.

@@ -243,7 +243,18 @@ cross-matrix against the base model's own prior
      depend on the shape — and is the operative point of this criterion — is that both shapes are
      equally fake and equally invisible without the canary, and the guard sits in the same place
      either way, so the canary requirement is unchanged regardless of which shape the confirmation
-     finds.)*
+     finds.)* *(amended 2026-08-14, third correction — **CONFIRMED, superseding the MEDIUM-confidence
+     paragraph above, which is left in place as the record of what was argued before it was
+     measured.** Measured in `tests/test_phase17_scoring.py::test_no_op_swap_produces_the_recorded_shape`
+     on synthetic four-record sweeps through the real `assemble_matrix`, in plan 17-04: the shape IS
+     **column collapse**. The resident adapter's column reads 1.0 in all three adapter rows, every
+     other adapter cell reads 0.0, and the diagonal reads **(1.0, 0.0, 0.0)** — two of the three
+     diagonal cells fall with the columns rather than the diagonal being perfected. The base row is
+     unaffected at 0.0 across all three columns. The pre-registered gate would **NOT** clear on it:
+     only the two comparisons in the resident row reject (p = 0.0078125 each, 8/8 unanimity), the
+     other four give p = 1.0, so 2 of 6 reject and `gate_cleared` is `False` under D-18. The MEDIUM
+     confidence is discharged; the canary requirement is unchanged, exactly as the paragraph above
+     predicted it would be.)*
 
   2. N=3 personas ship as committed data with colliding names and **contradictory values in the same
      slot**, passing the existing `scripts/phase14_factset_gate.py` guessability + tokenizer-census
