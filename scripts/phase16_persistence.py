@@ -1862,6 +1862,31 @@ WALL_CLOCK_NOTE = (
 
 # The one thing the ladder does NOT license this report to cite, recorded here so a reader who
 # follows the citation in `## Verdict` does not pick up the wrong evidence from the other end.
+# D-30, recorded in 16-CONTEXT.md BEFORE the four-arm run and emitted here so the qualification
+# cannot depend on whoever writes the final prose remembering it. Same structural discipline as
+# LADDER_PROXY_DEGENERATE_CAVEAT below and as D-28's monotone permission: a reading rule nobody is
+# forced to apply is a reading rule that goes missing exactly when the number looks good.
+HEADLINE_MECHANISM_CAVEAT = (
+    "**This comparison alone does not distinguish two mechanisms, and does not claim to.** An "
+    "adapter-over-prompt result here is consistent with BOTH (1) personalization genuinely living "
+    "in the weights, and (2) prompt-stuffing being structurally incapable of recovering a span as "
+    "long as the material it is scored on. The committed capability ladder measured the second "
+    "directly: the synthetic, guessability-gate-cleared span-5 cells `(5, 2)` and `(5, 30)` each "
+    "scored 0 answerable questions of 216, and the top rung on the REAL taught values scored 0 of "
+    "216, against real value token lengths of [4,4,4,5,5,6,8,8] (median 5). Because the synthetic "
+    "values are gate-cleared, the base provably had no prior knowledge of them, so that zero is "
+    "not about which strings were chosen — it is span length. The prompt arm's floor is therefore "
+    "explained by measured incapacity at the length of its own material, independently of what the "
+    "adapter does. Separating the two would require comparing the arms on material INSIDE the "
+    "proven ceiling (~2 tokens); no such condition exists here, because the adapter was trained on "
+    "the real 4-8 token values and building a 2-token adapter is a separate training run. That was "
+    "checked before this run and found unavailable — so this qualification is an explicit "
+    "decision, not an omission. What the result licenses is precise: AT THIS SCALE, weight-based "
+    "memory achieves what prompting cannot. Whether it would still win where prompting is capable "
+    "is NOT tested here, and a headline omitting that is measuring a capability deficit and "
+    "calling it a mechanism win."
+)
+
 LADDER_PROXY_DEGENERATE_CAVEAT = (
     "**This report does not cite the ladder's D-15 `proxy_consistent` verdict as validation of "
     "anything.** That check compared two cells which BOTH scored zero answerable questions out of "
@@ -2432,6 +2457,9 @@ def write_persistence_report(arm_records, comparison, replication, sweep, proven
         licence["statement"],
         "",
         LADDER_PROXY_DEGENERATE_CAVEAT,
+        "",
+        # D-30: emitted beside the headline, never left to the reader to remember.
+        HEADLINE_MECHANISM_CAVEAT,
         "",
         "### The pre-registered gate outcome, as-written",
         "",

@@ -286,6 +286,41 @@ notes in place):
   > as a validated monotone mechanism. Recorded as an explicit choice so a future reader cannot
   > mistake the more conservative reading for an oversight.
 
+- **D-30:** **How the headline pair (A adapter x D prompt-stuffed) must be READ, recorded BEFORE the
+  four-arm run, not after seeing the number.** If the predicted 8/8 arrives and clears Holm, the
+  report MUST state explicitly that the result is **consistent with TWO mechanisms and this
+  experiment alone does not distinguish them**:
+
+  1. personalization genuinely lives in the weights (the milestone's claim); and
+  2. prompt-stuffing is **structurally incapable** of recovering a span longer than the ceiling the
+     ladder already measured.
+
+  **Measured basis, all from the committed `results/phase16_ladder_report.md` (16-07):** the
+  synthetic, guessability-gate-cleared **span-5** cells `(5, 2)` and `(5, 30)` scored **0/216 each**,
+  and the top rung on the **real** taught values scored **0/216**. The real taught value token
+  lengths are `[4,4,4,5,5,6,8,8]` — **median 5**. Because the synthetic values are gate-cleared, the
+  base provably has no prior knowledge of them, so the zero is **not** about which particular strings
+  were used: it is span length. Arm D's floor is therefore explained by **measured incapacity at the
+  length of the material it is scored on**, independently of anything the adapter does.
+
+  **Why the comparison cannot separate the two.** Separating them requires a condition where
+  prompt-stuffing is CAPABLE — adapter versus prompt-stuffing on material inside the proven ceiling
+  (~2 tokens). No such cell exists: the adapter was trained on the real 4-8 token values, and
+  building a 2-token adapter is a new training run, out of scope here. This was checked before the
+  run and found unavailable; option 1 (honest qualification) is taken because option 2 (a
+  distinguishing measurement) does not exist cheaply — **an explicit decision, not an omission.**
+
+  **This is qualification, not weakening.** The A > D result stands as measured, and what it
+  licenses is precise: *at this scale*, weight-based memory achieves what prompting cannot. Whether
+  weight-based memory would still win where prompting is capable is **not tested by this
+  experiment**. A "weights beat prompting" headline that omits this is measuring a capability
+  deficit and calling it a mechanism win — the failure mode this milestone exists to prevent, and
+  the one STATE.md's v3.0 carry-forward already flags via Phase 14's committed `1/1944`.
+
+  Enforced structurally, not by memory: the report writer emits this qualification beside the
+  headline pair, pinned by a test — the same discipline applied to arm D's `proxy_consistent`
+  verdict and to D-28's monotone permission.
+
 ### Claude's Discretion
 
 Nothing was delegated wholesale. The planner retains normal latitude on: exact bootstrap

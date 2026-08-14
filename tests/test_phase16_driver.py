@@ -1335,6 +1335,27 @@ def test_report_headline_is_imported_from_the_ladder(monkeypatch, tmp_path):
     assert ladder.HEADLINE_BRANCHES["span_2"] in text
     assert "phase16_ladder_report.md" in text
     assert driver.LADDER_PROXY_DEGENERATE_CAVEAT in text
+    # D-30: the headline's two-mechanism qualification is emitted beside the branch, not left to
+    # whoever writes the final prose. Recorded in 16-CONTEXT.md BEFORE the run.
+    assert driver.HEADLINE_MECHANISM_CAVEAT in text
+
+
+def test_headline_mechanism_caveat_names_its_measured_basis():
+    """D-30's qualification must carry the ladder numbers that make it a finding, not an opinion.
+
+    A caveat that merely says "two mechanisms are possible" is an unfalsifiable hedge. This one is
+    load-bearing because the ladder MEASURED the second mechanism: gate-cleared synthetic span-5
+    cells scored zero, so the prompt arm's floor is explained by span length rather than by which
+    strings were chosen. Pinning the numbers keeps a future edit from softening it into a hedge.
+    """
+    caveat = driver.HEADLINE_MECHANISM_CAVEAT
+    for token in ("(5, 2)", "(5, 30)", "216", "[4,4,4,5,5,6,8,8]", "median 5"):
+        assert token in caveat, f"D-30 caveat no longer names its measured basis: {token!r} missing"
+    assert "gate-cleared" in caveat, (
+        "the no-prior-knowledge control is what makes the zero mean span"
+    )
+    assert "AT THIS SCALE" in caveat, "the scope limit is the whole point of the qualification"
+    assert "not an omission" in caveat, "D-30 records an explicit decision, not a gap"
 
 
 def test_report_prints_four_provenance_blocks(monkeypatch, tmp_path):
