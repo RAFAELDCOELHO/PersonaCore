@@ -231,7 +231,19 @@ cross-matrix against the base model's own prior
      `LoRAConfig(**artifact["lora_config"])` rather than `LoRAConfig()` defaults, since shape audits
      catch `r` drift but never `alpha` (ISO-06) — and an **adapter-swap canary** asserts a `lora_B`
      tensor actually changed on every swap, so a silently failed swap cannot produce the most
-     flattering possible wrong answer: a perfect diagonal with zero leakage (ISO-04).
+     flattering possible wrong answer: **column collapse — one column high, the rest zero**
+     (ISO-04) *(amended 2026-08-14, second correction: was "a perfect diagonal with zero leakage".
+     **Confidence: MEDIUM — argued from the mechanics of the ISO-02 design, not measured
+     empirically.** The argument: under N generation sweeps scored N ways, a swap that silently
+     no-ops leaves every sweep generating from whichever adapter was actually resident, so that one
+     persona's values appear in every row — its column scores high while the other columns fall
+     to ~0, taking two of the three diagonal cells down with them rather than perfecting the
+     diagonal. **The exact failure shape is to be CONFIRMED during the ISO-04 canary
+     implementation in Phase 17; it is not asserted as established fact here.** What does not
+     depend on the shape — and is the operative point of this criterion — is that both shapes are
+     equally fake and equally invisible without the canary, and the guard sits in the same place
+     either way, so the canary requirement is unchanged regardless of which shape the confirmation
+     finds.)*
 
   2. N=3 personas ship as committed data with colliding names and **contradictory values in the same
      slot**, passing the existing `scripts/phase14_factset_gate.py` guessability + tokenizer-census
