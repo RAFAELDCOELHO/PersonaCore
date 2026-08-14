@@ -267,6 +267,25 @@ notes in place):
 - **D-28:** Monotone prompt-arm degradation is claimed **only if** the capability ladder got that
   arm off the floor (SC5, unchanged).
 
+  > **READING QUALIFICATION, added 2026-08-13 after the ladder ran (16-07). The decision itself is
+  > UNCHANGED and there is no code change: `monotone_claim_allowed("span_2")` correctly returns
+  > `True`, because D-28's condition is branch-level and `span_2` is not `no_rung_passed`.** What is
+  > added is the same contextual discipline already applied to arm D's `proxy_consistent` verdict:
+  > any report that cites this permission MUST attach this note verbatim —
+  >
+  > *"o ladder licenciou span 2 com duas anomalias mecanicamente não explicadas (incluindo a
+  > falsificação da hipótese de induction-head); uma leitura monotônica mais forte (sem claim
+  > abaixo de `span_5_synthetic`) permanece disponível como alternativa mais conservadora, não
+  > escolhida aqui por decisão explícita, não por omissão."*
+  >
+  > The measured basis: `(2, 2)` passed at 15/216 while BOTH easier rungs failed, and span 5 scored
+  > exactly 0/216 at both distances — which falsifies the induction-head reading proposed during the
+  > run (if a longer span gave more to prefix-match on, span 5 should have exceeded span 2). The
+  > mechanism behind the single passing cell is therefore OPEN, and the grid contains no cell that
+  > separates the candidate explanations. The permission stands; what it licenses must not be read
+  > as a validated monotone mechanism. Recorded as an explicit choice so a future reader cannot
+  > mistake the more conservative reading for an oversight.
+
 ### Claude's Discretion
 
 Nothing was delegated wholesale. The planner retains normal latitude on: exact bootstrap
