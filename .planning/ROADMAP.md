@@ -271,7 +271,49 @@ cross-matrix against the base model's own prior
      and **no aggregate "isolation rate %" over the 9-cell matrix is gated** — that number implies a
      precision N=3 cannot carry (STAT-06).
 
-**Plans**: TBD
+**Plans**: 10 plans across 6 waves
+
+Plans:
+
+**Wave 1** *(pre-registration first — STAT-05 makes task order part of correctness)*
+
+- [ ] 17-01-PLAN.md — commit the pre-registration: six-comparison Holm family, per-comparison
+  direction, seeds, the D-18 all-six gate rule, the D-19 `worst_pair` tie-break, the D-10 all-fail
+  branch, the four minting filters; plus the git-history guard that turns red if any of it is edited
+  after a `results/phase17_*` artifact exists
+- [ ] 17-02-PLAN.md — widen the instruments additively: `seed=` on `teach_persona.train_arm` /
+  `build_arm_bins` (D-14 has no other route), a phase-aware `arm_outputs` prefix, and the ISO-06
+  consumer-site AST regression
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 17-03-PLAN.md — mint the 24 contradictory values (3 personas x 8 core slots) through the
+  committed filters, with the transcribed token census (ISO-01)
+- [ ] 17-04-PLAN.md — the pure-CPU scoring core: cell-blind scorer, slot regrouping, four-category
+  assembly, and the empirical confirmation of the no-op-swap failure shape SC1 defers to it
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 17-05-PLAN.md — the GPU pre-flight gate driver (imports `probe_guessability`, never copies it)
+  and the blocking-verdict tests
+- [ ] 17-06-PLAN.md — the ISO-04 canary in both layers, plus the `--train` / `--sweep` / `--report`
+  argument surface with no mode that runs two sweeps
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 17-07-PLAN.md — RUN the pre-flight gate and take the **blocking human GO/ADAPT verdict** (SC2)
+- [ ] 17-08-PLAN.md — the `--report` mode: cross-process ISO-04 proof, the gate assembled from
+  imported Phase 16 statistics, descriptive CIs, and the report writer with the D-10 branch
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 17-09-PLAN.md — RUN: three adapters at three seeds, four sweeps in four fresh processes,
+  assemble the matrix and record the verdict
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 17-10-PLAN.md — ISO-05: select the worst-colliding pair with the pre-registered rule, replicate
+  at k=3 seeds, append the descriptive addendum with zero deletions
 
 ### Phase 18: Black-Box Adversarial Extraction Audit
 
