@@ -206,14 +206,35 @@ def test_scorer_is_cell_blind():
 
 
 def test_nothing_executes_at_import():
-    """The driver's own claim: the ``sys.path`` bootstrap is the ONLY module-scope call.
+    """The driver's own claim: the ``sys.path`` bootstrap is the ONLY unguarded module-scope call.
 
     Written as a walk to module SCOPE rather than a scan of ``tree.body``, because the bootstrap is
     nested inside an ``if`` — a scan restricted to ``tree.body`` finds zero calls and passes while
     checking nothing. Every CPU-only test in this file loads the driver with ``importlib`` on the
-    strength of the claim this pins, and plan 17-06 will add a ``main()`` that loads a model.
+    strength of the claim this pins, and plan 17-06's ``main()`` loads a model and generates.
+
+    The ``if __name__ == "__main__":`` block is excluded, because that guard is precisely what
+    makes its body NOT run under ``importlib`` — and the exclusion is paid for rather than granted:
+    the guard must exist exactly once and call exactly ``main``. Without those two assertions the
+    exclusion would be an escape hatch that a second, differently-shaped guard could widen
+    (``tests/test_phase16_ladder.py::test_main_exists_and_is_guarded``'s register).
     """
     tree = _tree(_ISOLATION_PATH)
+    guards = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and getattr(node.test.left, "id", None) == "__name__"
+    ]
+    assert len(guards) == 1, "exactly one `if __name__ == '__main__':` block"
+    guarded = {node for guard in guards for node in ast.walk(guard)}
+    assert {
+        node.func.id
+        for node in guarded
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    } == {"main"}, "the __main__ guard must call main() and nothing else"
+
     enclosing = _enclosing_functions(tree)
     module_scope_calls = [
         ast.unparse(node.value)
@@ -221,6 +242,7 @@ def test_nothing_executes_at_import():
         if isinstance(node, ast.Expr)
         and isinstance(node.value, ast.Call)
         and enclosing.get(node) is None
+        and node not in guarded
     ]
     assert all(call.startswith("sys.path.insert") for call in module_scope_calls), (
         f"scripts/phase17_isolation.py runs {module_scope_calls} at import"
@@ -229,6 +251,32 @@ def test_nothing_executes_at_import():
         f"expected exactly the one sys.path bootstrap call, found {module_scope_calls} — a vacuous "
         "count here would make this guard green against a file that lost its bootstrap"
     )
+
+
+def test_the_material_has_exactly_one_reader():
+    """SC3's structural half, as a committed pin rather than a one-shot acceptance grep.
+
+    17-04's handover makes this a CROSS-PLAN contract: nothing in the scoring path may read the
+    minted material, because ``assemble_matrix`` takes ``values_by_slot`` as a PARAMETER and that
+    is what lets every matrix test above run on synthetic values. One named reader is the checkable
+    form of it — a second one is where the coupling starts, and the coupling is invisible until a
+    test that should have been independent starts agreeing with the committed material for free.
+    """
+    tree = _tree(_ISOLATION_PATH)
+    readers = sorted(
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and "PERSONA_FACTS" in ast.unparse(node)
+    )
+    assert readers == ["_minted_facts"], (
+        f"{readers} name the minted material; exactly one accessor may. `slot_values` (scoring) "
+        "and `run_one_persona_training` (teaching) need different shapes of it and both route "
+        "through that one function"
+    )
+    assert iso._minted_facts is not None
+    for name in ("score_completion", "classify", "base_texts_by_slot", "assemble_matrix"):
+        body = ast.unparse(_function_def(tree, name))
+        assert "_minted_facts" not in body, f"{name} reads the material — the scoring path may not"
 
 
 # ---------------------------------------------------------------------------------------------

@@ -679,3 +679,273 @@ def assert_sweeps_ran_on_distinct_weights(sweep_records):
         "(ISO-03). Expected there is Phase 14's persona_adapter.pt, which load_adapted_model loads "
         f"by default: {BASE_COLUMN_NOTE}",
     )
+
+
+# =============================================================================================
+# ===== SC3 — the ONE lazy reader of the minted material, and the mapping the scorer takes =====
+# =============================================================================================
+
+
+def _minted_facts():
+    """The persona material, lazily. **The only function in this file that reads it.**
+
+    Two consumers need it and they need different shapes: ``slot_values`` needs a slot's three
+    values (scoring), ``run_one_persona_training`` needs a persona's eight ``Fact`` objects
+    (teaching). Routing both through one accessor keeps the material's name off every other
+    function in this module, which is what makes the scoring path's independence checkable by
+    inspection rather than by trust — ``assemble_matrix`` takes ``values_by_slot`` as a PARAMETER
+    and nothing in it reaches this function (SC3's structural half, and 17-04's handover contract).
+
+    The import is LAZY for the module docstring's reason: ``scripts/phase17_persona_facts.py``
+    holds the 24 minted values at module scope by design, so importing it at THIS module's import
+    time would put every persona value into the scored driver's own string surface.
+    """
+    import phase17_persona_facts
+
+    return phase17_persona_facts.PERSONA_FACTS
+
+
+def slot_values(slot):
+    """``{persona_label: value}`` for ONE slot — the mapping ``score_completion`` scores against.
+
+    Both proofs check D-04 AT THE POINT OF USE rather than trusting the minting filters that ran in
+    another process. Three entries, because a slot missing a persona would drop that column's
+    contribution for that slot while the denominator still counted all 13 questions; and three
+    DISTINCT values, because two personas sharing a value would make every correct answer for one
+    of them register as a leak for the other, manufacturing an off-diagonal hit out of the material
+    rather than measuring one in the model.
+    """
+    values = {
+        persona: fact.value
+        for persona, facts in _minted_facts().items()
+        for fact in facts
+        if fact.slot == slot
+    }
+    _prove(
+        set(values) == set(personas.PERSONAS),
+        f"slot {slot!r} resolves to values for {sorted(values)} but the matrix rows are "
+        f"{sorted(personas.PERSONAS)} (D-04). A persona with no value in a slot contributes "
+        "nothing to that slot's 13 questions while the cell denominator still counts them, so the "
+        "published rate would be computed over fewer slots than it claims",
+    )
+    _prove(
+        len(set(values.values())) == len(values),
+        f"slot {slot!r}'s three values are not distinct (D-04) — two personas answering a slot "
+        "with the SAME string makes every correct answer for one of them also a hit for the other, "
+        "so the off-diagonal counts leakage that never happened and the gate closes on the choice "
+        "of material rather than on the model's behaviour",
+    )
+    return values
+
+
+def values_by_slot():
+    """``{slot: {persona_label: value}}`` over ``CORE_SLOTS`` — ``assemble_matrix``'s parameter.
+
+    This is the seam that keeps the whole scoring core testable on SYNTHETIC values: the material
+    is assembled HERE, at the run's edge, and handed in. Nothing inside the scoring path reads it,
+    which is why every matrix test in ``tests/test_phase17_scoring.py`` runs on values that
+    deliberately disagree with the committed ones (SC3).
+    """
+    return {slot: slot_values(slot) for slot in personas.CORE_SLOTS}
+
+
+# =============================================================================================
+# ===== The CLI — three modes, and no mode that runs two sweeps (ISO-04 / RESEARCH Pattern 3) ==
+# =============================================================================================
+
+SWEEP_RECORD_DIR = _REPO_ROOT / "results"
+
+_USAGE = (
+    "usage: python scripts/phase17_isolation.py\n"
+    "         (--train {persona_a,persona_b,persona_c}\n"
+    "          | --sweep {persona_a,persona_b,persona_c,base}\n"
+    "          | --report) [--seed INT]\n"
+    "\n"
+    "  --train NAME   train EXACTLY ONE persona adapter into checkpoints/phase17_NAME_adapter.pt.\n"
+    "  --sweep NAME   generate EXACTLY ONE sweep's completions and write\n"
+    "                 results/phase17_sweep_NAME.json. `base` is the ISO-03 adapter-off column.\n"
+    "  --report       assemble the isolation matrix from the four sweep records already on disk.\n"
+    "  --seed INT     the ISO-05 replication seed. With --train it overrides the pre-registered\n"
+    "                 PERSONA_SEEDS entry; with --sweep it selects the seed-scoped artifact and\n"
+    "                 record. It must be a member of that persona's REPLICATION_SEEDS, and it is\n"
+    "                 REFUSED for `base` (see resolve_seed).\n"
+    "\n"
+    "There is deliberately NO mode that runs more than one sweep. Four fresh processes, one\n"
+    "per sweep, and the only structural way to guarantee that is to make a single process\n"
+    "incapable of running two. A convenience flag would turn the process split from a PROPERTY\n"
+    "of this driver into a convention an operator is trusted to follow.\n"
+    "\n"
+    "For Phase 17 the split is stronger than it was for Phase 16: fresh processes make the ISO-04\n"
+    "in-process swap failure impossible IN THE FIRST PLACE, because no process ever holds two\n"
+    "adapters. The canary then only has to prove the cross-process claim, which is the harder\n"
+    "and more valuable half. `--train` is admitted as a third action only because it generates\n"
+    "nothing and scores nothing; the group still makes one process incapable of running two."
+)
+
+
+def sweep_record_path(sweep, seed=None):
+    """Where ONE sweep's raw completions land. Read from the module global so tests can redirect."""
+    _prove(
+        sweep in SWEEPS,
+        f"sweep {sweep!r} is not one of the pre-registered {SWEEPS} — a record filed under an "
+        "unrecognized name would be scored as whichever row the report happened to reach",
+    )
+    stem = f"phase17_sweep_{sweep}" if seed is None else f"phase17_sweep_{sweep}_seed{seed}"
+    return SWEEP_RECORD_DIR / f"{stem}.json"
+
+
+def resolve_seed(mode, target, seed):
+    """Validate ``--seed`` against the pre-registration and return this run's names and paths.
+
+    Returns ``{"seed", "arm", "adapter", "record"}``. ``arm`` is the persona for a default-seed run
+    and ``{persona}_seed{seed}`` for an ISO-05 replicate, so ``refuse_if_exists`` protects each run
+    independently and no two runs ever share a write target. ``adapter`` is resolved through
+    ``teach_persona.arm_outputs(arm, prefix="phase17")`` — the SAME function ``train_arm`` uses to
+    choose its own write targets, so the path the sweep loads and the path the training wrote
+    cannot drift apart.
+
+    An explicit ``--seed`` equal to that persona's ``PERSONA_SEEDS`` entry resolves to the SAME arm
+    and the SAME unscoped record as no ``--seed`` at all: the default run has exactly one canonical
+    set of paths, whether or not the operator spelled its seed out.
+
+    ``--sweep base`` with any ``--seed`` is REFUSED, for two independent reasons stated together in
+    the message. The base column has no persona and therefore no ``REPLICATION_SEEDS`` entry, so
+    there is nothing to validate the value against; and the replication reuses the single base sweep
+    by design (D-13 derives the base prior from ONE adapter-off column under one set of questions
+    and seeds, so a per-seed base column would be four controls where the design has one).
+    """
+    import teach_persona
+
+    _prove(
+        mode in ("train", "sweep"),
+        f"resolve_seed was called for mode {mode!r}; it resolves seeds for 'train' and 'sweep' "
+        "only, and --report reads whatever records are on disk rather than choosing a seed",
+    )
+    if target == personas.BASE_ROW:
+        _prove(
+            mode == "sweep" and seed is None,
+            f"--seed {seed!r} was given for the adapter-off row {personas.BASE_ROW!r}, and it is "
+            "refused for two independent reasons. (1) The base column has no persona, so it has no "
+            "REPLICATION_SEEDS entry and there is nothing to validate the value against — any "
+            "integer would be accepted, which is not validation. (2) ISO-05's replication reuses "
+            "the SINGLE base sweep by design: D-13 derives the base prior from one adapter-off "
+            "column under one set of questions and seeds, so a per-seed base column would be four "
+            "controls where the design has exactly one",
+        )
+        return {"seed": None, "arm": None, "adapter": None, "record": sweep_record_path(target)}
+
+    _prove(
+        target in personas.PERSONAS,
+        f"{target!r} is not one of the pre-registered personas {personas.PERSONAS}",
+    )
+    default = personas.PERSONA_SEEDS[target]
+    if seed is None:
+        seed = default
+    _prove(
+        seed in personas.REPLICATION_SEEDS[target],
+        f"--seed {seed} is not one of {target!r}'s pre-registered "
+        f"{personas.REPLICATION_SEEDS[target]} (ISO-05, committed in Wave 1 before the matrix "
+        "existed). An arbitrary seed on the command line is a training run outside the "
+        "pre-registration, and its adapter would enter the replication as if it had been declared",
+    )
+    replicate = seed != default
+    arm = f"{target}_seed{seed}" if replicate else target
+    return {
+        "seed": seed,
+        "arm": arm,
+        "adapter": teach_persona.arm_outputs(arm, prefix="phase17")["adapter"],
+        "record": sweep_record_path(target, seed=seed if replicate else None),
+    }
+
+
+def build_parser():
+    """The argument surface as a spec a test can read: three modes, no fourth, and no pair.
+
+    ``--train`` and ``--sweep`` are constrained by argparse itself to ``PERSONAS`` and ``SWEEPS``,
+    so an unrecognized name exits non-zero with the legal names printed rather than reaching a
+    dispatch that would have to invent a refusal. Exactly one of the three is REQUIRED: an
+    argumentless invocation must not fall through to "run something reasonable" when the reasonable
+    thing is a multi-hour generation run. ``--seed`` sits OUTSIDE the group because it modifies the
+    chosen mode rather than being one.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="phase17_isolation.py",
+        description=(
+            "Phase 17 multi-persona isolation matrix — ONE persona trained, or ONE sweep "
+            "generated, per process."
+        ),
+        epilog=_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--train",
+        choices=personas.PERSONAS,
+        help="train the single persona adapter this process is responsible for",
+    )
+    mode.add_argument(
+        "--sweep",
+        choices=SWEEPS,
+        help="generate the single sweep this process is responsible for",
+    )
+    mode.add_argument(
+        "--report",
+        action="store_true",
+        help="assemble the matrix from the four sweep records on disk",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="the ISO-05 replication seed (must be pre-registered; refused for the base row)",
+    )
+    return parser
+
+
+def main(argv=None):
+    """Dispatch — exhaustive over the three modes, with NO default branch.
+
+    The ``run_condition`` register: the target is proved to be in its expected tuple FIRST, and a
+    result is proved to have been produced LAST. A name in ``SWEEPS`` with no dispatch branch means
+    the pre-registration and this dispatch have drifted apart, and the sweep would silently
+    contribute nothing while looking like it ran.
+
+    ``phase14_recall``'s per-tier scored-recall entry point is deliberately NOT reachable from
+    here, at any depth. It scores against ``item.fact.value`` — which is PHASE 14's value, not this
+    phase's — and re-running it per cell is exactly the N^2 cost ISO-02 exists to prevent. Phase 17
+    generates once per sweep and scores the recorded completions afterwards. (That function's name
+    is deliberately not written out anywhere in this file: this plan's acceptance criteria grep
+    this source for it, and a docstring mention would make that scan hit on prose.)
+    """
+    args = build_parser().parse_args(argv)
+    result = None
+    if args.train is not None:
+        _prove(
+            args.train in personas.PERSONAS,
+            f"--train {args.train!r} is not one of {personas.PERSONAS}",
+        )
+        # Task 3 of this plan defines it, below the ISO-04 canary it depends on.
+        result = run_one_persona_training(args.train, seed=args.seed)  # noqa: F821
+    elif args.sweep is not None:
+        _prove(
+            args.sweep in SWEEPS,
+            f"--sweep {args.sweep!r} is not one of {SWEEPS}",
+        )
+        # Task 3 of this plan defines it, below the ISO-04 canary it depends on.
+        result = run_one_sweep(args.sweep, seed=args.seed)  # noqa: F821
+    elif args.report:
+        # `run_report_mode` is plan 17-08's — it consumes the four records this file writes.
+        result = run_report_mode()  # noqa: F821
+    _prove(
+        result is not None,
+        "the selected mode produced no result — a name in the parser's choices with no dispatch "
+        "branch means the pre-registration and this dispatch have drifted apart, and the run would "
+        "look like it happened while contributing nothing",
+    )
+    return result
+
+
+if __name__ == "__main__":
+    main()
