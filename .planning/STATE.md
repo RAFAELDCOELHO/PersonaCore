@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: planning
-stopped_at: Phase 17 context gathered
-last_updated: "2026-08-14T13:12:26.801Z"
-last_activity: "2026-08-14 - Completed quick task 260814-d0j: closed W1 (LoRA consumers inject the artifact's own config; scale audited at load_adapter_weights)"
+status: executing
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-08-14T20:21:28.928Z"
+last_activity: "2026-08-14 -- 17-01 complete: Phase 17 pre-registration committed; ordering guard and stats tests watched failing"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 22
+  completed_plans: 12
   percent: 33
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** Phase 17 — multi persona isolation matrix
+**Current focus:** Phase 17 — multi-persona-isolation-matrix
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-08-14 - Completed quick task 260814-d0j: closed W1 (LoRA consumers inject the artifact's own config; scale audited at load_adapter_weights)
+Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
+Plan: 2 of 11
+Status: Ready to execute
+Last activity: 2026-08-14 -- 17-01 complete: Phase 17 pre-registration committed; ordering guard and stats tests watched failing
 
 ## Performance Metrics
 
@@ -76,6 +76,7 @@ Last activity: 2026-08-14 - Completed quick task 260814-d0j: closed W1 (LoRA con
 | Phase 16 P08 | 35min | 3 tasks | 2 files |
 | Phase 16 P09 | 55min | 3 tasks | 3 files |
 | Phase 16 P10 | 95min | 3 tasks | 2 files |
+| Phase 17 P01 | 34min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -176,6 +177,13 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 16]: 16-09: no coverage/collision floor anywhere — the 6435 fact-multisets (C(15,8)) are NOT equiprobable, so a >= 6435*0.95 floor is unreachable by construction (~57% drawn at N=10000)
 - [Phase 16]: D-25's verbatim qualifier is READ from 16-CONTEXT.md at report time, not stored as a module constant — a constant would be a second 0.125 and a committed 16-08 test pins that count at 1
 - [Phase 16]: D-28 implemented as locked (span_2 permits the monotone claim); the ladder's ceiling renders in the SAME paragraph as the permission — a permission printed alone is the sentence a reader quotes
+- [Phase 17]: 17-01: the Phase 17 pre-registration is TWO files — gate constants in scripts/phase17_personas.py (pinned by a git-ancestry test), the 24 minted values in scripts/phase17_persona_facts.py (deliberately NOT pinned); the split is what lets ROADMAP SC2's ADAPT branch replace values after results/phase17_personas_report.md exists without turning the guard permanently red
+- [Phase 17]: 17-01: the STAT-05 ordering guard is DERIVED from history (every commit touching the driver must be an ancestor of every results/phase17_* first-add), not pinned to a SHA — self-identifying, needs no identity test, and it catches the post-hoc edit a SHA pin permits; watched RED on a prereg edit and GREEN on a material edit
+- [Phase 17]: 17-01: D-18 gate_cleared requires all six Holm rejections and returns False on a truncated family; D-19 worst_pair implements the tie-break AS the sort key (-mean, index_i, index_j) so the all-zero three-way tie — which is the phase's SUCCESS case — resolves to (persona_a, persona_b)
+- [Phase 17]: 17-01: the ISO-05/STAT-06 identifier ban stays CALL-SITE-scoped exactly as tests/test_phase16_stats.py:806-823 is — widening it to module-level assignment targets is self-invalidating, because REPLICATION_SEEDS is such a target in the very file the glob scans and 17-01 Task 1 mandates it
+- [Phase 17]: 17-01: _GATE_MODULES is a GLOB over scripts/phase17_*.py, not a hand-listed tuple (D-21) — 17-03/17-04/17-05 drivers enter every static scan automatically, closing the F-08 blindness Phase 16's file-scoped tuple left open
+- [Phase 17]: 17-01: CORE_SLOTS is THE canonical slot list, verified against results/phase16_recall_sample.json by deriving fact_id->slot through phase14_factset — exact first-appearance order, 13 questions x 8 slots = 104; 17-03's material and 17-04's regrouping are each checked against IT, never against each other
+- [Phase 17]: 17-01: the plan's module-level-call acceptance command is vacuous (the sys.path bootstrap is nested in an if, so a tree.body scan finds 0 calls and all([]) is True) — replaced by a committed module-SCOPE walk, test_nothing_executes_at_import
 
 ### Pending Todos
 
@@ -219,9 +227,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T13:12:26.794Z
-Stopped at: Phase 17 context gathered
-Resume file: .planning/phases/17-multi-persona-isolation-matrix/17-CONTEXT.md
+Last session: 2026-08-14T20:19:37.824Z
+Stopped at: Completed 17-01-PLAN.md
+Resume file: .planning/phases/17-multi-persona-isolation-matrix/17-02-PLAN.md
 
 ## Operator Next Steps
 

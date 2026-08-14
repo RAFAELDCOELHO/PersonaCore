@@ -160,6 +160,22 @@ its own reason. The union is the plan's tuple exactly.
 Portuguese into it. Pasting would have put a second hand-typed copy in the same file the constant
 exists to be the single copy of.
 
+**4. [Rule 1 - Bug] `requirements mark-complete` over-claimed three requirements**
+
+- **Found during:** state updates.
+- **Issue:** the plan's frontmatter lists `[STAT-03, STAT-04, STAT-05, STAT-06, ISO-05, ISO-07]`,
+  and `requirements mark-complete` checks every id it is handed. But **STAT-03 is also claimed by
+  17-08, and ISO-05 by 17-08, 17-10 and 17-11** — the first plan to name a requirement marks it
+  Complete for the whole phase. ISO-05 reads "the worst-colliding pair is replicated across seeds";
+  no adapter has trained and no pair has been selected, so a Complete there is flatly false in the
+  one artifact a reader consults to see what is actually done. (STAT-04/05/06 were already Complete
+  from Phase 16 and were unaffected.)
+- **Fix:** `STAT-03` and `ISO-05` restored to `[ ]` / `Pending` in `REQUIREMENTS.md`; the plans that
+  actually deliver them will mark them. **ISO-07 kept Complete** — 17-01 is its only claimant and
+  `test_no_phase14_thresholds` enforces it across a glob that grows with every future Phase 17
+  driver, so it is genuinely discharged here.
+- **Files modified:** `.planning/REQUIREMENTS.md`
+
 ## Deliberate-RED Proofs (guards watched failing)
 
 Every guard this plan ships was observed red before being trusted.

@@ -101,7 +101,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   catch `r` drift but **not `alpha`** — no shape change — so with N adapters a divergent alpha
   applies the delta at the wrong magnitude, silently. Two lines, and Phase 17 multiplies the call
   sites from 2 to N.
-- [ ] **ISO-07**: The matrix is **not gated against Phase 14's 0.2486 / 0.2000 thresholds** — those
+- [x] **ISO-07**: The matrix is **not gated against Phase 14's 0.2486 / 0.2000 thresholds** — those
   were derived on `CALIBRATION_POOL`, so reusing that pool as a persona makes the gate circular.
   The gated quantity is the within-run diagonal-vs-off-diagonal contrast, which needs no external
   threshold.
@@ -198,7 +198,7 @@ Deferred — revisited when the numbers that gate them exist.
 | ISO-04 | 17 | Pending |
 | ISO-05 | 17 | Pending |
 | ISO-06 | 17 | Pending |
-| ISO-07 | 17 | Pending |
+| ISO-07 | 17 | Complete |
 | ATK-01 | 18 | Pending |
 | ATK-02 | 18 | Pending |
 | ATK-03 | 18 | Pending |
