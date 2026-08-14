@@ -38,6 +38,13 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
 
 import phase14_recall as recall  # noqa: E402  (needs the sys.path insert above)
 
+# The COMMITTED capability ladder (16-07: run, reported and committed before this driver's report
+# writer existed). IMPORTED, never restated — `licensed_headline` decides what this phase is
+# allowed to publish, and a headline retyped here would be free to drift from the branch that was
+# actually licensed (T-16-47). Import-cheap: stdlib plus `_verdict`, `erasure_gate` and
+# `personacore.dialogue`, with its own fact-set imports lazy.
+import phase16_ladder as ladder  # noqa: E402  (needs the sys.path insert above)
+
 # STAT-04 — the ONLY bounds source in this milestone, IMPORTED and never copied. A third-party
 # statistics package has been declined in committed code twice and is forbidden here (the D-16
 # register: import the instrument, never re-implement it). `tests/test_package.py` sha256-pins
@@ -45,7 +52,7 @@ import phase14_recall as recall  # noqa: E402  (needs the sys.path insert above)
 from erasure_gate import rule_of_three, wilson_upper_bound  # noqa: E402  (needs the insert above)
 
 from personacore.config import ModelConfig  # noqa: E402
-from personacore.dialogue import build_recall_prompt  # noqa: E402
+from personacore.dialogue import build_recall_prompt, detokenize  # noqa: E402
 
 # =============================================================================================
 # ===== RUN ARCHITECTURE PRE-REGISTRATION (D-01 through D-04) =====
@@ -1245,4 +1252,537 @@ def taught_replication(per_fact_by_arm):
         "alternative": dict(SIGN_TEST_ALTERNATIVE),
         "signs": signs,
         "p_values": p_values,
+    }
+
+
+# =============================================================================================
+# ===== PERS-03 CONTEXT PRESSURE — ONE dilution axis, truncation DERIVED (D-26 / D-27 / D-28) ==
+# =============================================================================================
+#
+# THE SWEEP IS DESCRIPTIVE BY CONSTRUCTION AND IS NEVER GATED (D-09 / STAT-06). Attaching a
+# threshold or a p-value to any cell below would take the Holm family from 6 to 7, price alpha at
+# 0.0071429 — below the achievable p of 0.0078125 — and kill the headline arithmetically at every
+# outcome. `tests/test_phase16_stats.py::test_context_pressure_sweep_is_not_gated` landed BEFORE
+# this code and enforces it against the concrete symbols here.
+
+# `block_size` READ from the committed config, never retyped. Every cell's pressure LABEL is
+# derived from whether its target crosses this number, so a retyped literal that drifted from the
+# model would relabel every cell while every rate stayed identical. The `_prove` is at module level
+# on purpose: a config change must be a LOUD import failure, not a quietly relabelled sweep. It is
+# the only import-time execution in this module and it touches no tokenizer, model or device.
+SWEEP_BLOCK_SIZE = ModelConfig.block_size
+_prove(
+    SWEEP_BLOCK_SIZE == 256,
+    f"ModelConfig.block_size is {SWEEP_BLOCK_SIZE}, not the 256 this sweep's crossing point was "
+    "pre-registered against (16-CONTEXT.md §Measured Facts). SWEEP_PROMPT_TARGETS was chosen so "
+    "the crossing falls between two NAMED cells; a different block size moves the crossing and "
+    "silently relabels which cells truncate",
+)
+
+# 16-CONTEXT.md §Measured Facts — CITED, never re-derived. The recall prompt is 33 tokens bare and
+# 46 with a 13-token persona span, so 46 is the sweep's nominal first cell (statement only, no
+# filler). Both numbers are inputs to the LENGTH TARGETING only; no rate is computed from them.
+#
+# Measured here for the report, and it is a DISTRIBUTION rather than the nominal: over the binding
+# fixture's own 270 questions the bare prompt runs 14 / 28 / 63 tokens (min / median / max),
+# because the prompt is `3 role ids + len(question ids)` and the fixture's questions differ in
+# length. 33 is the committed nominal, not a constant the run reproduces — which is exactly why
+# every cell below records its MEASURED length distribution alongside its target (the 16-07
+# lesson: the far row is 13 / 26 / 60, never "~30").
+SWEEP_NOMINAL_BARE_PROMPT = 33
+SWEEP_NOMINAL_PERSONA_SPAN = 13
+
+# Planner discretion, exercised inside D-27's constraint and recorded (16-CONTEXT §Claude's
+# Discretion names the dilution step sizes as discretionary; the CROSSING is not). `block_size` is
+# crossed between 224 and 320, so exactly two of the six cells are `dilution + truncation` and four
+# are `dilution` alone.
+SWEEP_PROMPT_TARGETS = (46, 96, 160, 224, 320, 448)
+_prove(
+    SWEEP_PROMPT_TARGETS[0] == SWEEP_NOMINAL_BARE_PROMPT + SWEEP_NOMINAL_PERSONA_SPAN,
+    f"the sweep's first cell is {SWEEP_PROMPT_TARGETS[0]} tokens but the committed nominal is "
+    f"{SWEEP_NOMINAL_BARE_PROMPT} bare + {SWEEP_NOMINAL_PERSONA_SPAN} persona — the axis must "
+    "START at the measured nominal, or its first cell is already a pressure nobody declared",
+)
+
+# How close a built cell must land to its target. The floor on this is structural: the shortest
+# filler line costs ~5 ids in this near-character-level vocabulary, so no builder can land closer
+# than about half that on every statement. Measured over all ten committed statements, the
+# hill-climb below lands within 3 on every cell whose target the statement can reach at all.
+SWEEP_LENGTH_TOLERANCE = 5
+
+# The dilution material. PersonaChat-register first-person lines that touch NO scored slot — no
+# name, pet, sibling, town, street, birth year, house number, colour or food — in the same spirit
+# as `phase14_recall.UNRELATED_QUESTIONS`. `assert_filler_carries_no_value` proves that against the
+# committed fact set AND the candidate pool at run time rather than by eye, because a filler line
+# that happened to carry a locked value would put a second answer in the persona span and the cell
+# would report a rate that measures the filler.
+SWEEP_FILLER_LINES = (
+    "i often help my neighbours carry their shopping bags home.",
+    "i take the early bus to work and listen to the radio on the way.",
+    "i like watching old movies on quiet rainy afternoons.",
+    "i keep a few small plants on the balcony and water them daily.",
+    "i have been learning to play the guitar for about a year now.",
+    "i try to read a little every night before going to sleep.",
+    "i usually go to bed early and wake up before sunrise.",
+    "i enjoy long walks when the weather is mild.",
+    "i work at the library on weekdays.",
+    "i am saving up for a holiday.",
+    "i talk too much.",
+    "i work hard.",
+    "i sleep.",
+)
+
+ASSERT_VALUE_IN_PROMPT_CAVEAT = (
+    "CAVEAT — `assert_value_in_prompt` PASSES on the truncated cells, and that pass must never be "
+    "read as 'the value was in view'. `phase14_recall.run_fairness_control` asserts over the full "
+    "`prompt_ids` it built, while `personacore/generation/core.py:65` feeds the model "
+    "`idx[:, -bs:]` — the LAST `block_size` ids. On a cell whose prompt exceeds `block_size` the "
+    "assertion is therefore checking a region the model never sees. That is not a defect in the "
+    "assertion: it proves the value was PLACED, which is what the cell is built to do. The entire "
+    "point of the crossing cells is that the placed value is then cropped away, and every such "
+    "cell below reports the statement's own token offset so the crop is shown rather than assumed."
+)
+
+ADVERSARIAL_OVERWRITE_NOTE = (
+    "SC5's third pressure, on its OWN axis at nominal length — NOT a point on the dilution axis. A "
+    "contradicting same-slot value is folded into the taught statement, AFTER the taught value, "
+    "inside that same string. It is a STATEMENT, not a prompt: "
+    "`phase14_recall.run_fairness_control` builds its own prompt from the `statements` map "
+    "(`phase14_recall.py:1262-1264`) and accepts no prebuilt prompt, so a prompt builder for this "
+    "cell would be dead code on this route. The competitor is drawn from the committed 20-value "
+    "lexicon (`candidate_pool`, D-23) by a fixed rotation, never hand-picked. SLOT MATCHING IS NOT "
+    "ATTEMPTED and that is recorded rather than repaired: the committed lexicon carries no slot "
+    "partition, and inventing one would be exactly the editorial judgment D-23 chose that lexicon "
+    "to avoid. The competitor is therefore a plausible same-lexicon alternative, which is the "
+    "property `find_contradictions` already relies on, and not necessarily a same-slot one."
+)
+
+# The overwrite cell's label. Deliberately neither `dilution` nor `dilution + truncation`, so a
+# reader (and `assert_no_gate_on_sweep`-style greps) can tell the off-axis row from the six on-axis
+# ones without counting.
+OVERWRITE_PRESSURE_LABEL = "adversarial overwrite (own axis, nominal length)"
+
+# D-26's table, as data. Each entry states its own reason as a full sentence so an absence reads as
+# a decision rather than an oversight.
+SWEEP_APPLICABILITY = {
+    "adapter-only": (
+        "proof",
+        "PROOF, cited and not re-measured: `scripts/phase14_recall.py:1336 "
+        "run_bit_identity_control` measured max |diff| exactly 0.0 between the adapter-off logits "
+        "and the un-adapted base on the real 13.9M convbase with the real persona adapter. The "
+        "weight arm's memory is not in the context window at all, so context pressure cannot "
+        "reach it; an invariance PROOF is stronger evidence of that than any statistic, and "
+        "re-measuring it under pressure would replace a proof with an estimate.",
+    ),
+    "base-neither": (
+        "not_applicable",
+        "NOT APPLICABLE: the fact is nowhere — not in the weights, not in the context window — so "
+        "there is no context-borne memory for dilution, truncation or overwriting to act on. A "
+        "swept cell here would report a rate that measured nothing while still looking measured.",
+    ),
+    "embedding-cosine": (
+        "not_applicable",
+        "NOT APPLICABLE: the fact lives in the closed candidate pool this arm retrieves over, and "
+        "the pool is not the context window. Pressuring the prompt would leave the retrieval set "
+        "untouched, so the cell would vary the one thing this arm does not read.",
+    ),
+    "prompt-stuffed": (
+        "measured",
+        "MEASURED: the only arm carrying the fact in the context window, which is the surface "
+        "every SC5 pressure acts on. All six dilution cells and the overwrite cell run here and "
+        "nowhere else (D-26).",
+    ),
+}
+
+
+def sweep_cells():
+    """The SIX on-axis dilution cells. There is NO independent truncation axis (D-27).
+
+    Truncation cannot fire until dilution has already pushed the context past ``block_size``: the
+    recall prompt is 33 tokens bare and 46 with a persona span, against a 256-token window. A
+    truncation cell built independently would therefore be *the largest dilution cell under a
+    second name*, and the report would state one effect twice. So this returns ONE ordered
+    dilution axis and each cell's ``pressure_label`` is DERIVED from whether its target crosses
+    ``SWEEP_BLOCK_SIZE`` — ``"dilution"`` at or below it, ``"dilution + truncation"`` above it.
+
+    Six cells, exactly two of which cross. The overwrite cell is deliberately NOT a member here:
+    it is a third pressure on its own axis at nominal length, and ``run_sweep`` runs it as a
+    SEVENTH run after these six. That is why the wall-clock budget and the threat model both say
+    "7 cells (6 dilution + 1 overwrite)" while this tuple holds 6 — the two counts are consistent,
+    not a discrepancy, and rendering this function's output alone would show 6 rows against 7 runs
+    in the log and read as a dropped cell.
+    """
+    return tuple(
+        {
+            "target_tokens": target,
+            "crosses_block_size": target > SWEEP_BLOCK_SIZE,
+            "pressure_label": (
+                "dilution + truncation" if target > SWEEP_BLOCK_SIZE else "dilution"
+            ),
+        }
+        for target in SWEEP_PROMPT_TARGETS
+    )
+
+
+def _persona_span_ids(tok, lines):
+    """The persona span's ids, encoded EXACTLY as ``encode_dialogue`` will encode them.
+
+    ``build_recall_prompt(tok, question, persona=[span])`` reaches
+    ``tok.encode("\\n".join(detokenize(p) for p in persona), allowed_special="none")``
+    (``serialize.py:82``). The sweep hands the joined lines in as a SINGLE persona string, so that
+    reduces to ``tok.encode(detokenize(span), ...)`` — reproduced here rather than measured through
+    ``build_recall_prompt(..., persona=...)``, because this module adds NO ``persona=`` call site
+    (D-21's allowlist is hard equality and this plan does not touch it).
+    """
+    return tok.encode(detokenize("\n".join(lines)), allowed_special="none")
+
+
+def _nominal_prompt_tokens(tok, lines):
+    """The built prompt's length at the NOMINAL question, measured with the tokenizer.
+
+    ``prompt = [<|system|>] + persona ids + [<|user|>] + question ids + [<|assistant|>]``, so the
+    only term the sweep varies is the persona span. The three role ids and the nominal question's
+    ids are already inside the committed ``SWEEP_NOMINAL_BARE_PROMPT``, which makes this exact
+    arithmetic rather than an estimate — at the nominal question length. Real questions run 14-63
+    tokens bare, so every cell also records its MEASURED distribution from the run itself.
+    """
+    return SWEEP_NOMINAL_BARE_PROMPT + len(_persona_span_ids(tok, lines))
+
+
+def assert_filler_carries_no_value():
+    """No filler line may carry a locked value, a soft-tier value, or a candidate-pool value.
+
+    A filler line that happened to contain one would put a SECOND answer in the persona span, and
+    the cell's rate would then measure the filler rather than the pressure — invisibly, because
+    the number would still look like a measurement. Checked with ``contains_value``, the phase's
+    single scorer, so "carries a value" means here exactly what it means when a draw is scored.
+    """
+    import phase14_factset as fs  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    values = set(candidate_pool()) | {fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS}
+    carrying = sorted(
+        {
+            line
+            for line in SWEEP_FILLER_LINES
+            for value in values
+            if recall.contains_value(line, value)
+        }
+    )
+    _prove(
+        not carrying,
+        f"{len(carrying)} filler line(s) carry a scored value, e.g. {carrying[:2]} — the dilution "
+        "material would then answer the question it is supposed to bury, and the cell's rate would "
+        "measure the filler instead of the pressure",
+    )
+
+
+def build_diluted_persona(tok, statement, target_tokens):
+    """The diluted persona span for one fact at one target, with the measurements that prove it.
+
+    **All dilution happens INSIDE the persona span, and there is no turns axis to dilute along.**
+    ``build_recall_prompt`` (``src/personacore/dialogue/serialize.py:92``) calls
+    ``encode_dialogue(tok, persona, [(question, "")])`` — exactly ONE turn. And ``PERSONA_CAP``
+    does NOT bite on this route: it is enforced only by ``cap_persona``
+    (``serialize.py:115``), which ``build_recall_prompt`` never calls, so the persona span reaches
+    448 tokens directly.
+
+    **Both facts are written here because an earlier draft of this plan inherited the OPPOSITE
+    premise** from 16-RESEARCH Pitfall 4 — which asserted, stamped ``[VERIFIED]``, that the cap
+    forces dilution to come from added turns. That sentence was struck and corrected at ``79fa01a``
+    along with ROADMAP SC5 and REQUIREMENTS PERS-03 ("dilution across turns" -> "dilution within
+    the persona span"). Recording the correction at the call site is what stops Phases 17 and 18
+    re-inheriting it.
+
+    **Placement is load-bearing, not cosmetic.** ``generate`` crops to the LAST ``block_size`` ids
+    (``src/personacore/generation/core.py:65`` — ``idx_cond = idx[:, -bs:]``), so truncation removes
+    the HEAD of the prompt. The fact-bearing statement therefore sits at the head of the span and
+    filler is APPENDED after it. Prepending filler would leave the statement inside the trailing
+    256-token window, and the ``crosses_block_size`` cells would measure nothing while still
+    emitting a number.
+
+    The fill is a hill-climb: append whichever filler line brings the built prompt CLOSEST to the
+    target, and stop when no line improves it. Greedy longest-that-fits was measured first and left
+    a 6-token gap on some statements; the hill-climb lands within 3 on every reachable cell.
+
+    Returns the line list under ``lines`` together with the measurements the report needs, because
+    re-measuring them at the call site would be a second place they can be wrong:
+
+    * ``achieved_prompt_tokens`` — the nominal built length, and ``overshoots_target`` when the
+      statement alone already exceeds the target (true for the two soft-tier statements at the 46
+      cell, which are 25 and 22 ids against a 13-id nominal — recorded, never trimmed).
+    * ``statement_head_offset`` — 1: the statement's ids begin immediately after ``<|system|>``.
+    * ``statement_end_offset`` — a CONSERVATIVE end, encoding the statement together with its
+      newline separator so any BPE merge across that boundary is counted INSIDE the statement's run
+      rather than excluded from it.
+    """
+    lines = [statement]
+    achieved = _nominal_prompt_tokens(tok, lines)
+    while True:
+        length, line = min(
+            ((_nominal_prompt_tokens(tok, lines + [f]), f) for f in SWEEP_FILLER_LINES),
+            key=lambda pair: (abs(pair[0] - target_tokens), pair[0]),
+        )
+        if abs(length - target_tokens) >= abs(achieved - target_tokens):
+            break
+        lines.append(line)
+        achieved = length
+    span_ids = _persona_span_ids(tok, lines)
+    _prove(
+        span_ids[: len(tok.encode(detokenize(statement), allowed_special="none"))]
+        == tok.encode(detokenize(statement), allowed_special="none"),
+        f"the statement is not at the HEAD of the diluted span for target {target_tokens} — "
+        "`generate` crops to the LAST block_size ids, so a statement anywhere but the head would "
+        "survive truncation and the crossing cells would measure nothing while emitting a number",
+    )
+    return {
+        "lines": tuple(lines),
+        "target_tokens": target_tokens,
+        "achieved_prompt_tokens": achieved,
+        "overshoots_target": achieved > target_tokens + SWEEP_LENGTH_TOLERANCE,
+        "persona_span_tokens": len(span_ids),
+        "statement_head_offset": 1,
+        "statement_end_offset": 1
+        + len(tok.encode(detokenize(statement) + "\n", allowed_special="none")),
+    }
+
+
+def overwrite_competitor(value, pool):
+    """The contradicting value for one fact: the NEXT pool member after its own, wrapping.
+
+    Deterministic and hand-free. When the fact's own value is in the committed lexicon the
+    rotation spreads competitors across facts instead of giving every fact the same one; when it
+    is not, the first pool member that is not this fact's own value is taken. Either way the
+    choice is a property of the sorted committed pool, never an editorial judgment (D-23).
+    """
+    _prove(pool, "the overwrite cell was handed an empty candidate pool")
+    if value in pool:
+        candidate = pool[(pool.index(value) + 1) % len(pool)]
+    else:
+        candidate = next((entry for entry in pool if entry != value), None)
+    _prove(
+        candidate is not None and candidate != value,
+        f"no pool member differs from {value!r} — an 'overwrite' by the fact's own value is not a "
+        "contradiction, and the cell would report the undiluted arm under a pressure's name",
+    )
+    return candidate
+
+
+def build_overwrite_statement(statement, competitor):
+    """A STATEMENT STRING carrying the taught value and then a contradicting one — not a prompt.
+
+    See ``ADVERSARIAL_OVERWRITE_NOTE`` for why this returns a statement: the fairness control
+    builds its own prompt from the ``statements`` map, so this cell routes through that map exactly
+    as every dilution cell does. This module therefore adds NO new ``persona=`` call site and NO
+    new ``draw_all`` call site — ``PERSONA_ALLOWLIST`` stays at exactly two entries and the widened
+    D-21 guard in ``tests/test_phase14_scoring.py`` stays green without that file being touched.
+
+    The competitor is placed AFTER the taught value inside the same string, so the taught value is
+    still at the head of the span and ``assert_value_in_prompt`` still finds it.
+    """
+    _prove(statement and competitor, "the overwrite cell needs both a statement and a competitor")
+    return f"{statement} actually it is {competitor}."
+
+
+def sweep_applicability():
+    """D-26 as a four-arm table: one arm MEASURED, one PROOF, two NOT APPLICABLE — with reasons.
+
+    Every arm appears, and every entry carries its own reason as a full sentence, so an arm's
+    absence from the sweep reads as a recorded decision rather than as an oversight.
+    """
+    _prove(
+        set(SWEEP_APPLICABILITY) == set(CONDITION_ORDER),
+        f"the applicability table covers {sorted(SWEEP_APPLICABILITY)} but the pre-registered "
+        f"conditions are {sorted(CONDITION_ORDER)} — an arm with no stated treatment is an arm "
+        "whose absence from the sweep is undocumented",
+    )
+    return {
+        condition: {
+            "treatment": SWEEP_APPLICABILITY[condition][0],
+            "reason": SWEEP_APPLICABILITY[condition][1],
+        }
+        for condition in CONDITION_ORDER
+    }
+
+
+def monotone_claim_allowed(ladder_branch):
+    """D-28: monotone prompt-arm degradation may be claimed ONLY if the ladder got arm B off floor.
+
+    Reads the branch the COMMITTED ladder recorded in 16-07; it never re-derives it and never
+    re-runs it. Every branch except ``no_rung_passed`` means some rung passed, i.e. the base could
+    use a value placed in its own context window at some span — which is the minimum required for
+    a degradation curve on that arm to be about pressure rather than about the arm being at the
+    floor before any pressure was applied.
+    """
+    _prove(
+        ladder_branch in ladder.HEADLINE_BRANCHES,
+        f"branch {ladder_branch!r} is not one of the committed ladder branches "
+        f"{sorted(ladder.HEADLINE_BRANCHES)} — a branch invented here could license a claim the "
+        "ladder never made",
+    )
+    return ladder_branch != "no_rung_passed"
+
+
+def _length_spread(values):
+    """``{min, median, max}`` — a length is a DISTRIBUTION and is never rendered as a constant.
+
+    The 16-07 lesson, applied: the ladder's far row measured 13 / 26 / 60 and printing "~30" would
+    have hidden the whole spread. Every prompt length this sweep publishes goes through here.
+    """
+    ordered = sorted(values)
+    _prove(ordered, "a length spread was asked for over no measurements")
+    return {"min": ordered[0], "median": statistics.median(ordered), "max": ordered[-1]}
+
+
+def _sweep_cell_result(cell, built, record):
+    """One cell's published row: its targets, its MEASURED lengths, and its rate with a bound.
+
+    ``built`` is ``{fact_id: build_diluted_persona(...)}`` and ``record`` is the fairness control's
+    own return. The crop evidence is computed against each question's OWN measured prompt length —
+    the statement's id run is outside the trailing ``block_size`` window exactly when
+    ``statement_end_offset <= prompt_len - SWEEP_BLOCK_SIZE`` — so the report shows the value was
+    cropped rather than asserting it from the nominal.
+    """
+    questions = record["questions"]
+    measured = [len(entry["prompt_ids"]) for entry in questions]
+    outside = [
+        entry
+        for entry, length in zip(questions, measured, strict=True)
+        if built[entry["fact_id"]]["statement_end_offset"] <= length - SWEEP_BLOCK_SIZE
+    ]
+    return {
+        **cell,
+        "nominal_prompt_tokens": _length_spread(
+            [entry["achieved_prompt_tokens"] for entry in built.values()]
+        ),
+        "measured_prompt_tokens": _length_spread(measured),
+        "n_over_block_size": sum(1 for length in measured if length > SWEEP_BLOCK_SIZE),
+        "statement_head_offset": 1,
+        "statement_end_offset": _length_spread(
+            [entry["statement_end_offset"] for entry in built.values()]
+        ),
+        "n_statement_outside_window": len(outside),
+        "overshooting_facts": sorted(
+            fact_id for fact_id, entry in built.items() if entry["overshoots_target"]
+        ),
+        "k": record["k"],
+        "n": record["n"],
+        "n_answerable": record["n_answerable"],
+        "proportion": report_proportion(record["n_answerable"], len(questions), record["n"]),
+    }
+
+
+def run_sweep(model, tok, device, forbid, items, statements):
+    """The PERS-03 sweep: six dilution cells on ONE axis, then the overwrite cell on its own.
+
+    **Arm B only** (D-26). ``sweep_applicability`` states the other three arms' treatments with
+    their reasons, and this function measures none of them.
+
+    **Seven runs, six on-axis cells.** ``sweep_cells()`` returns the six dilution cells; the
+    adversarial overwrite runs once afterwards at nominal length as a SEVENTH run on its own axis.
+    The returned ``cells`` list therefore carries 7 entries and the report renders all 7, with the
+    overwrite row labelled off-axis. Rendering ``sweep_cells()`` alone would show 6 rows against 7
+    runs in the log and read as a dropped cell.
+
+    **Every cell goes through the ``statements`` map — this function never builds a prompt.** The
+    dilution cells substitute the joined diluted span for that fact's statement; the overwrite cell
+    substitutes ``build_overwrite_statement``. ``phase14_recall.run_fairness_control`` then builds
+    the prompt exactly as it does for the undiluted arm, which is what keeps the sweep on the same
+    instrument as the arm it pressures.
+
+    **The first cell is the nominal condition.** At target 46 no filler fits, so cell 1 is the
+    undiluted arm re-run on the same axis — the baseline row every later cell is read against.
+
+    **Descriptive only** (D-09 / STAT-06). No threshold, no p-value, no gate: a seventh gated
+    comparison prices Holm's first step at 0.0071429, below the achievable 0.0078125.
+
+    Budget: 7 x 270 questions x >=3.18 s is a ~100 min FLOOR, and the 3.18 s median was measured at
+    the 46-token nominal. There is no KV cache (D-04), so every decode step recomputes the full
+    forward and per-question cost grows with prompt length. Budget 100 min to ~3 h; a single cell
+    taking 2 h is EXPECTED, not a hang. Do not trim the cell set to fit a clock.
+    """
+    _prove(items, "the context-pressure sweep received no questions")
+    _prove(statements, "the context-pressure sweep received no first-person statements")
+    assert_filler_carries_no_value()
+    pool = candidate_pool()
+
+    cells = sweep_cells()
+    _prove(
+        len(cells) == len(SWEEP_PROMPT_TARGETS) == 6,
+        f"the dilution axis holds {len(cells)} cells but six were pre-registered — the crossing "
+        "point was chosen against that set, so a different one relabels which cells truncate",
+    )
+
+    results = []
+    for cell in cells:
+        built = {
+            fact_id: build_diluted_persona(tok, statement, cell["target_tokens"])
+            for fact_id, statement in statements.items()
+        }
+        print(
+            f"[phase16_persistence] ===== sweep cell {cell['target_tokens']} tokens "
+            f"({cell['pressure_label']}) ====="
+        )
+        record = recall.run_fairness_control(
+            model,
+            tok,
+            device,
+            forbid,
+            items,
+            {fact_id: "\n".join(entry["lines"]) for fact_id, entry in built.items()},
+        )
+        results.append(_sweep_cell_result(cell, built, record))
+        formatted = results[-1]["proportion"]["formatted"]
+        print(f"[phase16_persistence] sweep cell {cell['target_tokens']}: {formatted}")
+
+    # The fact's own value comes off the ITEMS, never parsed back out of its statement string: a
+    # parser would silently pick the wrong token the moment a SLOT_FORM changed shape.
+    values = {item.fact.id: item.fact.value for item in items}
+    _prove(
+        set(statements) == set(values),
+        f"the sweep holds statements for {sorted(set(statements) - set(values))} that no question "
+        f"asks about, and questions for {sorted(set(values) - set(statements))} with no statement "
+        "— the overwrite cell needs each fact's own value, and a partial map would abort mid-cell "
+        "after the dilution cells had already spent an hour",
+    )
+    competitors = {fact_id: overwrite_competitor(values[fact_id], pool) for fact_id in statements}
+    overwritten = {
+        fact_id: build_overwrite_statement(statement, competitors[fact_id])
+        for fact_id, statement in statements.items()
+    }
+    built = {
+        fact_id: {
+            "lines": (statement,),
+            "target_tokens": SWEEP_PROMPT_TARGETS[0],
+            "achieved_prompt_tokens": _nominal_prompt_tokens(tok, [statement]),
+            "overshoots_target": False,
+            "persona_span_tokens": len(_persona_span_ids(tok, [statement])),
+            "statement_head_offset": 1,
+            "statement_end_offset": 1
+            + len(tok.encode(detokenize(statement) + "\n", allowed_special="none")),
+        }
+        for fact_id, statement in overwritten.items()
+    }
+    print(f"[phase16_persistence] ===== sweep cell {OVERWRITE_PRESSURE_LABEL} =====")
+    record = recall.run_fairness_control(model, tok, device, forbid, items, overwritten)
+    results.append(
+        {
+            **_sweep_cell_result(
+                {
+                    "target_tokens": SWEEP_PROMPT_TARGETS[0],
+                    "crosses_block_size": False,
+                    "pressure_label": OVERWRITE_PRESSURE_LABEL,
+                },
+                built,
+                record,
+            ),
+            "competitors": competitors,
+        }
+    )
+    return {
+        "cells": results,
+        "applicability": sweep_applicability(),
+        "block_size": SWEEP_BLOCK_SIZE,
+        "targets": SWEEP_PROMPT_TARGETS,
+        "assert_value_in_prompt_caveat": ASSERT_VALUE_IN_PROMPT_CAVEAT,
+        "adversarial_overwrite_note": ADVERSARIAL_OVERWRITE_NOTE,
     }

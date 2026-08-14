@@ -752,3 +752,418 @@ def test_arm_d_has_no_index_or_reranker():
     for symbol in ("faiss", "sklearn", "rerank", "chunk", "top_k", "annoy", "hnsw", "bm25"):
         assert symbol not in source, f"{symbol!r} is out of PERS-04's scope"
     assert "scipy" not in source  # STAT-04: zero new dependencies
+
+
+# ===== 16-10 Task 1 — the PERS-03 context-pressure sweep ======================================
+#
+# CPU-only and generation-free. The dilution builder is exercised against the REAL frozen
+# tokenizer, because "the built prompt reaches its target" is a claim about tokenization and an
+# estimate would prove nothing. No model is loaded: `run_sweep`'s only model-touching call is the
+# committed fairness control, which these tests stub.
+
+_SERIALIZE_PATH = _REPO_ROOT / "src" / "personacore" / "dialogue" / "serialize.py"
+_LADDER_PATH = _REPO_ROOT / "scripts" / "phase16_ladder.py"
+
+
+def _core_statement():
+    """The statement whose span is the committed 13-token nominal (`46 = 33 bare + 13`)."""
+    from personacore.dialogue import detokenize
+
+    tok = _tokenizer()
+    for statement in driver.fairness_statements().values():
+        if len(tok.encode(detokenize(statement), allowed_special="none")) == (
+            driver.SWEEP_NOMINAL_PERSONA_SPAN
+        ):
+            return statement
+    raise AssertionError(
+        f"no committed statement encodes to the {driver.SWEEP_NOMINAL_PERSONA_SPAN}-token nominal "
+        "persona span 16-CONTEXT.md records — the cited measurement and the material disagree"
+    )
+
+
+def test_truncation_cells_are_derived_from_crossing_block_size():
+    """D-27: the label IS the crossing. Exactly two of the six cells truncate."""
+    cells = driver.sweep_cells()
+    assert len(cells) == 6
+    for cell in cells:
+        crosses = cell["target_tokens"] > driver.SWEEP_BLOCK_SIZE
+        assert cell["crosses_block_size"] is crosses
+        assert ("truncation" in cell["pressure_label"]) is crosses, cell
+    assert sum(1 for cell in cells if cell["crosses_block_size"]) == 2
+    assert [cell["target_tokens"] for cell in cells] == list(driver.SWEEP_PROMPT_TARGETS)
+
+
+def test_there_is_no_independent_truncation_axis():
+    """T-16-44: one cell source, and no constant holding a truncation target list of its own.
+
+    A separately-declared truncation axis would be the largest dilution cell under a second name,
+    and the report would state one effect twice.
+    """
+    source = _driver_source()
+    assert "TRUNCATION_TARGETS" not in source
+    assert "TRUNCATION_CELLS" not in source
+    tree = _driver_tree()
+    named = {
+        target.id
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    assert not [name for name in named if name.startswith("TRUNCATION")], sorted(named)
+
+    # `sweep_cells` is the single source of cells: nothing else iterates SWEEP_PROMPT_TARGETS.
+    readers = [
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and "SWEEP_PROMPT_TARGETS"
+        in {inner.id for inner in ast.walk(node) if isinstance(inner, ast.Name)}
+    ]
+    assert readers == ["sweep_cells", "run_sweep"], readers
+
+
+def test_sweep_block_size_is_read_from_the_model_config():
+    """The crossing point is `ModelConfig.block_size`, never a retyped 256 free to drift."""
+    from personacore.config import ModelConfig
+
+    assert driver.SWEEP_BLOCK_SIZE == ModelConfig.block_size == 256
+    assigned = [
+        node.value
+        for node in _driver_tree().body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "SWEEP_BLOCK_SIZE"
+            for target in node.targets
+        )
+    ]
+    assert len(assigned) == 1
+    assert not isinstance(assigned[0], ast.Constant), (
+        "SWEEP_BLOCK_SIZE is assigned a literal — every cell's pressure label is derived from it, "
+        "so a copy that drifted from the model would relabel the sweep while every rate stayed"
+    )
+
+
+def test_diluted_prompt_reaches_its_target_length():
+    """Every cell lands within `SWEEP_LENGTH_TOLERANCE` of its target, on the real tokenizer."""
+    tok = _tokenizer()
+    statement = _core_statement()
+    for target in driver.SWEEP_PROMPT_TARGETS:
+        built = driver.build_diluted_persona(tok, statement, target)
+        assert abs(built["achieved_prompt_tokens"] - target) <= driver.SWEEP_LENGTH_TOLERANCE, (
+            f"target {target} built to {built['achieved_prompt_tokens']}"
+        )
+        assert built["overshoots_target"] is False
+        assert built["lines"][0] == statement
+
+
+def test_persona_cap_does_not_constrain_this_path():
+    """The OPPOSITE of the premise an earlier draft of 16-10 inherited, asserted with its reason.
+
+    16-RESEARCH Pitfall 4 asserted, stamped ``[VERIFIED]``, that ``PERSONA_CAP`` caps the persona
+    span so dilution must come from added turns. That sentence was struck and corrected at
+    ``79fa01a``. The measured facts: ``build_recall_prompt`` (``serialize.py:92``) never calls
+    ``cap_persona`` (``serialize.py:115``), which is the ONLY enforcer of the cap, so the persona
+    span reaches 448 tokens directly and all dilution is persona-span-internal.
+    """
+    from personacore.dialogue import PERSONA_CAP
+
+    tree = ast.parse(_SERIALIZE_PATH.read_text(encoding="utf-8"))
+    builder = _function_def(tree, "build_recall_prompt")
+    assert builder is not None
+    assert "cap_persona" not in _called_names(builder), (
+        "build_recall_prompt calls cap_persona — the sweep's premise that the cap does not bite "
+        "on this route has stopped being true, and the largest cells would be silently trimmed"
+    )
+    assert _function_def(tree, "cap_persona") is not None
+
+    built = driver.build_diluted_persona(_tokenizer(), _core_statement(), 448)
+    assert built["persona_span_tokens"] > PERSONA_CAP, (
+        f"the 448 cell's persona span is {built['persona_span_tokens']} tokens, not above the "
+        f"{PERSONA_CAP}-token cap — the cap would then be in force on this path after all"
+    )
+
+
+def test_the_statement_sits_at_the_head_of_the_diluted_span():
+    """Filler is APPENDED. The statement's offset is below every filler line's, at every target."""
+    from personacore.dialogue import detokenize
+
+    tok = _tokenizer()
+    statement = _core_statement()
+    for target in driver.SWEEP_PROMPT_TARGETS:
+        lines = driver.build_diluted_persona(tok, statement, target)["lines"]
+        offsets = [
+            1 + len(tok.encode(detokenize("\n".join(lines[:index])), allowed_special="none"))
+            for index in range(len(lines))
+        ]
+        assert offsets[0] == 1, offsets
+        assert all(offset > offsets[0] for offset in offsets[1:]), offsets
+        assert offsets == sorted(offsets)
+
+
+def test_truncated_cells_actually_drop_the_statement():
+    """The crossing cells' statement is provably OUTSIDE the trailing `block_size` window.
+
+    Built through the REAL prompt builder and checked against the real trailing window, not
+    against the nominal arithmetic: without this a prepend bug would leave the truncation cells
+    measuring nothing while still emitting a number.
+    """
+    from personacore.dialogue import build_recall_prompt, detokenize
+
+    tok = _tokenizer()
+    statement = _core_statement()
+    question = driver.load_fixture_items()["core_held_out"][0].question
+    statement_ids = tok.encode(detokenize(statement), allowed_special="none")
+
+    crossed = 0
+    for cell in driver.sweep_cells():
+        built = driver.build_diluted_persona(tok, statement, cell["target_tokens"])
+        span = "\n".join(built["lines"])
+        prompt_ids = build_recall_prompt(tok, question, persona=[span])
+        window = prompt_ids[-driver.SWEEP_BLOCK_SIZE :]
+        present = any(
+            window[i : i + len(statement_ids)] == statement_ids
+            for i in range(len(window) - len(statement_ids) + 1)
+        )
+        if cell["crosses_block_size"]:
+            crossed += 1
+            assert len(prompt_ids) > driver.SWEEP_BLOCK_SIZE
+            assert not present, f"cell {cell['target_tokens']} kept the statement in view"
+            assert built["statement_end_offset"] <= len(prompt_ids) - driver.SWEEP_BLOCK_SIZE
+        else:
+            assert present, f"cell {cell['target_tokens']} dropped a statement it should keep"
+    assert crossed == 2
+
+
+def test_no_turns_axis_exists():
+    """There is one turn and the sweep never builds a prompt — every cell goes via `statements`."""
+    tree = _driver_tree()
+    imported = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        for alias in node.names
+    }
+    assert "encode_dialogue" not in imported
+    calls = {
+        getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+    }
+    assert "encode_dialogue" not in calls
+
+    sweep = _function_def(tree, "run_sweep")
+    assert sweep is not None
+    called = _called_names(sweep)
+    assert "build_recall_prompt" not in called, "run_sweep builds a prompt instead of a statement"
+    assert "run_fairness_control" in called
+
+    # `build_recall_prompt` passes exactly ONE turn — the fact that leaves no turns axis at all.
+    builder = _function_def(
+        ast.parse(_SERIALIZE_PATH.read_text(encoding="utf-8")), "build_recall_prompt"
+    )
+    turns = [
+        node
+        for node in ast.walk(builder)
+        if isinstance(node, ast.Call) and (getattr(node.func, "id", None) == "encode_dialogue")
+    ]
+    assert len(turns) == 1
+    assert isinstance(turns[0].args[2], ast.List) and len(turns[0].args[2].elts) == 1
+
+
+def test_sweep_runs_on_arm_b_only():
+    """D-26: one arm measured, one proof, two not applicable — each with its own reason."""
+    applicability = driver.sweep_applicability()
+    assert sorted(applicability) == sorted(driver.CONDITION_ORDER)
+    assert list(applicability) == list(driver.CONDITION_ORDER)
+    treatments = [entry["treatment"] for entry in applicability.values()]
+    assert treatments.count("measured") == 1
+    assert treatments.count("proof") == 1
+    assert treatments.count("not_applicable") == 2
+    assert applicability["prompt-stuffed"]["treatment"] == "measured"
+    assert applicability["adapter-only"]["treatment"] == "proof"
+    for condition, entry in applicability.items():
+        assert entry["reason"].strip(), condition
+    assert "run_bit_identity_control" in applicability["adapter-only"]["reason"]
+    assert "0.0" in applicability["adapter-only"]["reason"]
+
+
+def test_monotone_claim_requires_the_ladder():
+    """D-28: the claim is licensed by the COMMITTED ladder branch, never by this driver."""
+    import phase16_ladder as ladder
+    import pytest
+
+    assert driver.monotone_claim_allowed("no_rung_passed") is False
+    for branch in ladder.HEADLINE_BRANCHES:
+        assert driver.monotone_claim_allowed(branch) is (branch != "no_rung_passed")
+    with pytest.raises(SystemExit):
+        driver.monotone_claim_allowed("span_9000")
+
+
+def test_overwrite_competitor_comes_from_the_committed_pool():
+    """D-23: the contradicting value is a pool member, never hand-picked, never the fact's own."""
+    pool = driver.candidate_pool()
+    by_tier = driver.load_fixture_items()
+    values = {item.fact.value for tier in by_tier for item in by_tier[tier]}
+    assert values
+    for value in sorted(values):
+        competitor = driver.overwrite_competitor(value, pool)
+        assert competitor in pool
+        assert competitor != value
+    # Deterministic: the same value yields the same competitor on every process of the split.
+    first = sorted(values)[0]
+    assert driver.overwrite_competitor(first, pool) == driver.overwrite_competitor(first, pool)
+
+
+def test_overwrite_returns_a_statement_not_a_prompt():
+    """A STATEMENT STRING with the competitor AFTER the taught value; no prompt builder exists."""
+    statement = "my name is quillon."
+    overwritten = driver.build_overwrite_statement(statement, "zibby")
+    assert isinstance(overwritten, str)
+    assert overwritten.startswith(statement)
+    assert "quillon" in overwritten and "zibby" in overwritten
+    assert overwritten.index("quillon") < overwritten.index("zibby")
+    assert "build_overwrite_prompt" not in _driver_source()
+    assert not hasattr(driver, "build_overwrite_prompt")
+
+
+def _stub_fairness(monkeypatch, tok, seen):
+    """Replace the committed fairness control with a recorder shaped like its real return."""
+    import phase14_recall as recall
+
+    def _stub(model, tokenizer, device, forbid, questions, statements):
+        seen.append(statements)
+        entries = []
+        for index, item in enumerate(questions):
+            span = statements[item.fact.id]
+            length = driver._nominal_prompt_tokens(tokenizer, [span])
+            entries.append(
+                {
+                    "question": item.question,
+                    "fact_id": item.fact.id,
+                    "split": item.split,
+                    "seed_index": item.seed_index,
+                    "persona": span,
+                    "prompt_ids": list(range(length)),
+                    "k": index % 2,
+                    "n": 9,
+                }
+            )
+        return {
+            "tier": recall.FAIRNESS_TIER,
+            "questions": entries,
+            "k": sum(entry["k"] for entry in entries),
+            "n": 9 * len(entries),
+            "rate": 0.0,
+            "n_answerable": sum(1 for entry in entries if entry["k"] > 0),
+        }
+
+    monkeypatch.setattr(recall, "run_fairness_control", _stub)
+
+
+def test_run_sweep_covers_six_on_axis_cells_plus_the_overwrite(monkeypatch):
+    """`sweep_cells()` is 6; `run_sweep` returns 7, the seventh off-axis at nominal length.
+
+    Pins the 6-vs-7 relationship so a future edit cannot drop the overwrite row by rendering
+    `sweep_cells()` — the wall-clock budget and the threat model both say "7 cells (6 dilution +
+    1 overwrite)", and the two counts are consistent rather than a discrepancy.
+    """
+    tok = _tokenizer()
+    by_tier = driver.load_fixture_items()
+    items = tuple(by_tier["core_held_out"][:2] + by_tier["core_taught"][:2])
+    statements = {
+        fact_id: statement
+        for fact_id, statement in driver.fairness_statements().items()
+        if fact_id in {item.fact.id for item in items}
+    }
+    seen = []
+    _stub_fairness(monkeypatch, tok, seen)
+
+    result = driver.run_sweep(None, tok, "cpu", None, items, statements)
+    cells = result["cells"]
+    assert len(driver.sweep_cells()) == 6
+    assert len(cells) == 7
+    assert len(seen) == 7, "seven runs of the committed control, one per cell"
+
+    on_axis = cells[:6]
+    assert [cell["target_tokens"] for cell in on_axis] == list(driver.SWEEP_PROMPT_TARGETS)
+    assert sum(1 for cell in on_axis if cell["crosses_block_size"]) == 2
+
+    overwrite = cells[-1]
+    assert overwrite["pressure_label"] == driver.OVERWRITE_PRESSURE_LABEL
+    assert overwrite["pressure_label"] not in ("dilution", "dilution + truncation")
+    assert overwrite["crosses_block_size"] is False
+    assert overwrite["target_tokens"] == driver.SWEEP_PROMPT_TARGETS[0]
+    assert set(overwrite["competitors"]) == set(statements)
+
+    for cell in cells:
+        assert cell["statement_head_offset"] == 1
+        assert set(cell["measured_prompt_tokens"]) == {"min", "median", "max"}
+        assert cell["proportion"]["n_questions"] == len(items)
+        assert "wilson_label" in cell["proportion"]
+    # The crossing cells drop the statement out of view for every question they scored.
+    for cell in on_axis:
+        if cell["crosses_block_size"]:
+            assert cell["n_statement_outside_window"] == len(items), cell
+            assert cell["n_over_block_size"] == len(items)
+        else:
+            assert cell["n_statement_outside_window"] == 0, cell
+    assert result["applicability"] == driver.sweep_applicability()
+    assert result["assert_value_in_prompt_caveat"] == driver.ASSERT_VALUE_IN_PROMPT_CAVEAT
+
+
+def test_the_sweep_adds_no_persona_or_draw_all_call_site():
+    """D-21 stays at two entries: the sweep routes via the `statements` map, not a new prompt."""
+    tree = _driver_tree()
+    persona_sites = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (getattr(node.func, "id", None) or getattr(node.func, "attr", None))
+        == "build_recall_prompt"
+        and any(keyword.arg == "persona" for keyword in node.keywords)
+    ]
+    assert persona_sites == []
+    calls = {
+        getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+    }
+    assert "draw_all" not in calls
+
+    scoring = importlib.util.spec_from_file_location(
+        "phase14_scoring_guard", _REPO_ROOT / "tests" / "test_phase14_scoring.py"
+    )
+    module = importlib.util.module_from_spec(scoring)
+    scoring.loader.exec_module(module)
+    assert len(module.PERSONA_ALLOWLIST) == 2, module.PERSONA_ALLOWLIST
+    assert len(module.DRAW_ALL_ASSERTED_BY) == 1
+
+
+def test_sweep_is_not_gated():
+    """STAT-06 / D-09, re-asserted against the concrete sweep code 16-09's guard predates.
+
+    A seventh gated comparison prices Holm's first step at 0.0071429, below the achievable p of
+    0.0078125, and the headline dies arithmetically at every outcome.
+    """
+    tree = _driver_tree()
+    enclosing = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for inner in ast.walk(node):
+                enclosing.setdefault(inner, node.name)
+    for gate in ("holm", "sign_test_exact", "assert_family_closed", "compare_arms"):
+        holders = {
+            enclosing.get(node)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and (getattr(node.func, "id", None) or getattr(node.func, "attr", None)) == gate
+        }
+        assert "run_sweep" not in holders, f"run_sweep reaches {gate}"
+        assert not {holder for holder in holders if holder and "sweep" in holder.lower()}, gate
+
+    sweep = _function_def(tree, "run_sweep")
+    called = _called_names(sweep)
+    for gate in ("holm", "sign_test_exact", "compare_arms", "taught_replication"):
+        assert gate not in called
+    assert "report_proportion" not in called  # it runs in the per-cell helper, still ungated
