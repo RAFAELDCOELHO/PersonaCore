@@ -187,26 +187,41 @@ def _require_go_verdict(report_path):
     return verdict
 
 
-def arm_outputs(arm):
+def arm_outputs(arm, *, prefix="phase14"):
     """Name-scoped write targets for one arm — no two arms ever share a path.
 
-    ONE deliberate exception to the ``phase14_{arm}`` naming: the ``real`` arm's adapter is
+    ONE deliberate exception to the ``{prefix}_{arm}`` naming: the ``real`` arm's adapter is
     ``checkpoints/persona_adapter.pt``, not ``phase14_real_adapter.pt``. That is the SHIPPABLE
     persona file, and both downstream consumers already hardcode that name —
     ``scripts/phase14_recall.py``'s ``ADAPTER_PATH`` (plan 14-06) and the Gradio demo (plan
     14-08). The calibration arms keep their scoped names because they are disposable evidence,
     never shipped. Disjointness across every arm pair is preserved and CI-tested.
+
+    ``prefix`` (Phase 17, D-14) scopes the three paths that carry the phase label today —
+    ``adapter``, ``csv`` and ``checkpoint`` — so a Phase-17 run's artifacts say which phase
+    produced them instead of claiming Phase 14's. It defaults to ``"phase14"``, so every
+    existing caller resolves to byte-identical paths.
+
+    Two deliberate non-widenings:
+
+    * ``bin`` and ``mask`` carry NO phase prefix today (``data/persona_{arm}_train.bin``).
+      Inventing one would MOVE an existing path, which is the opposite of additive; the arm
+      name already scopes them and Phase 17's arm names are its own.
+    * the ``real`` exception is UNCONDITIONAL on ``prefix``. It is the shippable path two
+      consumers hardcode and ``test_real_arm_adapter_is_the_shippable_path`` pins; Phase 17
+      never passes ``real``, so a prefix-aware exception would be dead code that weakened a
+      cross-plan contract to serve a caller that does not exist.
     """
     adapter = (
         _REPO_ROOT / "checkpoints" / "persona_adapter.pt"
         if arm == "real"
-        else _REPO_ROOT / "checkpoints" / f"phase14_{arm}_adapter.pt"
+        else _REPO_ROOT / "checkpoints" / f"{prefix}_{arm}_adapter.pt"
     )
     return {
         "bin": _REPO_ROOT / "data" / f"persona_{arm}_train.bin",
         "mask": _REPO_ROOT / "data" / f"persona_{arm}_train_mask.bin",
-        "csv": _REPO_ROOT / "results" / f"phase14_{arm}" / "run.csv",
-        "checkpoint": _REPO_ROOT / "checkpoints" / f"phase14_{arm}_latest.pt",
+        "csv": _REPO_ROOT / "results" / f"{prefix}_{arm}" / "run.csv",
+        "checkpoint": _REPO_ROOT / "checkpoints" / f"{prefix}_{arm}_latest.pt",
         "adapter": adapter,
     }
 
@@ -400,16 +415,22 @@ def arm_spec(arm):
     raise SystemExit(f"[teach_persona] unknown arm {arm!r} — expected one of {ARMS}")
 
 
-def build_arm_bins(arm, facts, family_ids, *, second_person=False, replay_ratio=0.0):
+def build_arm_bins(
+    arm, facts, family_ids, *, second_person=False, replay_ratio=0.0, seed=SEED, prefix="phase14"
+):
     """Render, encode, write and prove one arm's teaching bins; return ``(tok, stats, paths)``.
 
     The whole bins half behind one call, so the training half (below) has exactly one seam into
     it and no arm can be trained on bins built by a different code path.
+
+    ``seed`` and ``prefix`` are Phase 17's additive widening (D-14 / D-16: import this
+    instrument, never copy it). Both default to today's values, so every Phase-14 arm builds
+    bit-identical bins at bit-identical paths.
     """
-    outputs = arm_outputs(arm)
+    outputs = arm_outputs(arm, prefix=prefix)
     refuse_if_exists([outputs["bin"], outputs["mask"]])
 
-    seed_everything(SEED)
+    seed_everything(seed)
     tok = from_json(TOKENIZER_PATH)  # FROZEN production artifact — never retrain
     episodes = render_episodes(facts, family_ids, second_person=second_person)
     started = time.time()
@@ -423,7 +444,7 @@ def build_arm_bins(arm, facts, family_ids, *, second_person=False, replay_ratio=
         f"[{stats['episode_len_min']}, {stats['episode_len_max']}]"
     )
     print(
-        f"[teach_persona] bins provenance: seed={SEED} git_sha={git_sha()} pid={os.getpid()} "
+        f"[teach_persona] bins provenance: seed={seed} git_sha={git_sha()} pid={os.getpid()} "
         f"torch={torch.__version__} arm={arm} second_person={second_person} "
         f"replay_ratio={replay_ratio} mask_fraction={stats['mask_fraction']:.4f} "
         f"wall={time.time() - started:.1f}s "
@@ -498,11 +519,24 @@ EVAL_INTERVAL = 10  # 20 curve points over the run — the collateral-collapse t
 CHECKPOINT_INTERVAL = 50  # a killed run loses <= 50 steps; 200 steps needs no heavier cadence
 
 
-def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
+def train_arm(
+    arm, *, facts, family_ids, second_person=False, replay_ratio=0.0, seed=SEED, prefix="phase14"
+):
     """Build one arm's bins, train ONLY its LoRA parameters on them, and export the adapter.
 
     Returns a dict carrying the arm paths, the bins stats, the final train loss, and the
     adapter-ON/adapter-OFF masked dialogue-val PPL pair (the no-collateral-collapse endpoint).
+
+    ``seed`` and ``prefix`` are Phase 17's additive widening, and both are threaded THROUGH to
+    ``build_arm_bins`` rather than only used here. That is load-bearing: the ``build_arm_bins``
+    call below REBINDS ``paths``, so the export half writes to the dict IT returned. A prefix
+    applied here but not there would guard the ``phase17_`` paths with ``refuse_if_exists``
+    while exporting the adapter to ``phase14_`` — a Phase-17 artifact under a Phase-14 name,
+    which is a false provenance claim, not a cosmetic one.
+
+    ``seed`` (D-14) reaches all three seeding sites: the bins build, the GPT/LoRA-init draw and
+    ``TrainConfig``. Phase 17 needs three adapters at three DISTINCT seeds; identical seeds
+    would make three personas share one initialization draw and one data order.
     """
     verdict = _require_go_verdict(FACTSET_REPORT)
     print(f"[teach_persona] D-06 verdict: {verdict} — proceeding with arm {arm!r}")
@@ -513,7 +547,7 @@ def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
         cal_verdict = _require_go_verdict(CALIBRATION_REPORT)
         print(f"[teach_persona] calibration verdict: {cal_verdict} — real arm cleared (W-02)")
 
-    paths = arm_outputs(arm)
+    paths = arm_outputs(arm, prefix=prefix)
     # Refuse on ALL five targets up front, before a single token is written: discovering a
     # recorded checkpoint only after rebuilding the bins would already have clobbered them.
     refuse_if_exists(
@@ -537,7 +571,13 @@ def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
         )
 
     tok, stats, paths = build_arm_bins(
-        arm, facts, family_ids, second_person=second_person, replay_ratio=replay_ratio
+        arm,
+        facts,
+        family_ids,
+        second_person=second_person,
+        replay_ratio=replay_ratio,
+        seed=seed,
+        prefix=prefix,
     )
     # weights_only=False: the FULL resume checkpoint carries pickled optimizer/RNG/numpy
     # objects. TRUSTED-only read of the project's OWN checkpoint (T-14-04) — never a foreign
@@ -560,7 +600,7 @@ def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
     # draw. Seeding once at the top would make the data order depend on the bins path. Everything
     # hoisted above it (the checkpoint read, the dead-id mask) consumes no RNG, so the training
     # trajectory is byte-for-byte what it was before the mask was introduced.
-    seed_everything(SEED)
+    seed_everything(seed)
 
     model = GPT(model_cfg)
     model.load_state_dict(blob["model"])  # LOAD BEFORE INJECT — the load-bearing ordering.
@@ -600,7 +640,7 @@ def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
             max_steps=MAX_STEPS,
             batch_size=BATCH_SIZE,
             weight_decay=WEIGHT_DECAY,
-            seed=SEED,
+            seed=seed,
         ),
         runtime_config=runtime,
         model=model,
@@ -685,7 +725,7 @@ def train_arm(arm, *, facts, family_ids, second_person=False, replay_ratio=0.0):
         f"({(ppl_on - ppl_off) / ppl_off:+.2%} over {scored_on:,} scored targets)"
     )
     print(
-        f"[teach_persona] run provenance: arm={arm} seed={SEED} lr={LR} "
+        f"[teach_persona] run provenance: arm={arm} seed={seed} lr={LR} "
         f"weight_decay={WEIGHT_DECAY} batch_size={BATCH_SIZE} max_steps={MAX_STEPS} "
         f"warmup_steps={WARMUP_STEPS} block_size={BLOCK_SIZE} "
         f"base_fingerprint=(git_sha={blob['git_sha']}, step={blob['step']}, "

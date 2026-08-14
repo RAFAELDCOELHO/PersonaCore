@@ -31,7 +31,9 @@ CPU-only, GPU/MPS-free, checkpoint-free and corpus-free: every bin inspected her
 synthetic bin written into ``tmp_path``, never the production teaching bin under ``data/``.
 """
 
+import ast
 import importlib.util
+import inspect
 import pathlib
 import sys
 
@@ -515,6 +517,127 @@ def test_real_arm_adapter_is_the_shippable_path():
     for arm in tp.ARMS:
         if arm != "real":
             assert tp.arm_outputs(arm)["adapter"].name == f"phase14_{arm}_adapter.pt"
+
+
+# ===== Phase 17's additive widening of the Phase 14 training instrument (D-14 / D-16) =====
+#
+# Phase 17 needs three adapters at three DISTINCT seeds, written under a ``phase17_`` prefix.
+# It gets them by widening THIS recipe rather than copying it: a copied ``train_arm`` is a
+# second training recipe that can drift from the one every published Phase-14/16 number came
+# from. These three tests pin both halves of "additive" — the new keywords reach every site
+# that needs them, and the defaults leave every existing arm bit-identical.
+
+_TEACH_PATH = _REPO_ROOT / "scripts" / "teach_persona.py"
+
+
+def _teach_calls(function_name, callee):
+    """Every ``callee(...)`` call inside ``function_name``'s body, as ``ast.Call`` nodes.
+
+    AST rather than a source substring: a substring cannot tell a call from a mention in a
+    docstring, and both widened functions now document the call they make.
+    """
+    tree = ast.parse(_TEACH_PATH.read_text(encoding="utf-8"))
+    owners = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    ]
+    assert len(owners) == 1, f"expected exactly one {function_name} definition, found {owners}"
+    return [
+        node
+        for node in ast.walk(owners[0])
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == callee
+    ]
+
+
+def test_seed_parameter_defaults_to_the_module_constant():
+    """D-14: the training seed is a PARAMETER now, and it defaults to today's constant.
+
+    Two halves, and both are needed. ``inspect.signature`` proves the keyword exists and that
+    an existing caller who passes nothing still gets ``SEED`` — that is what keeps every
+    Phase-14 arm's trajectory bit-for-bit unchanged. The AST half proves the parameter actually
+    REACHED the seeding sites: a widened signature whose body still reads the module global is
+    a signature that accepts a seed and ignores it, which is worse than no widening at all
+    because it looks like it worked.
+    """
+    for name in ("build_arm_bins", "train_arm"):
+        params = inspect.signature(getattr(tp, name)).parameters
+        assert "seed" in params, f"{name} has no seed keyword"
+        assert params["seed"].default == tp.SEED, name
+        assert params["seed"].kind is inspect.Parameter.KEYWORD_ONLY, name
+
+    tree = ast.parse(_TEACH_PATH.read_text(encoding="utf-8"))
+    survivors = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "id", None) == "seed_everything"
+        and any(getattr(arg, "id", None) == "SEED" for arg in node.args)
+    ]
+    assert not survivors, (
+        f"{len(survivors)} seed_everything(SEED) call(s) survived the widening — a caller "
+        "passing seed=1338 would still get 1337 at that site, and three Phase-17 personas "
+        "would share one initialization draw and one training data order"
+    )
+
+
+@pytest.mark.parametrize("arm", tp.ARMS)
+def test_arm_outputs_prefix_is_additive(arm):
+    """The prefix moves exactly three paths, and the default moves none of them.
+
+    ``bin`` and ``mask`` carry no phase label today, so they are NOT prefixed: inventing one
+    would move an existing path, which is a rename wearing an additive change's clothes.
+    """
+    root = tp._REPO_ROOT
+    default = tp.arm_outputs(arm)
+    assert default == tp.arm_outputs(arm, prefix="phase14")
+    assert default["bin"] == root / "data" / f"persona_{arm}_train.bin"
+    assert default["mask"] == root / "data" / f"persona_{arm}_train_mask.bin"
+    assert default["csv"] == root / "results" / f"phase14_{arm}" / "run.csv"
+    assert default["checkpoint"] == root / "checkpoints" / f"phase14_{arm}_latest.pt"
+
+    moved = tp.arm_outputs(arm, prefix="phase17")
+    assert {k for k in default if moved[k] != default[k]} == {"csv", "checkpoint"} | (
+        set() if arm == "real" else {"adapter"}
+    )
+    assert moved["csv"] == root / "results" / f"phase17_{arm}" / "run.csv"
+    assert moved["checkpoint"] == root / "checkpoints" / f"phase17_{arm}_latest.pt"
+
+    # The shippable-path exception is prefix-INDEPENDENT: two consumers hardcode this name and
+    # `test_real_arm_adapter_is_the_shippable_path` pins it. Phase 17 never passes "real".
+    assert tp.arm_outputs("real", prefix="phase17")["adapter"].name == "persona_adapter.pt"
+
+
+def test_prefix_reaches_both_arm_outputs_call_sites():
+    """The B1 regression: ``arm_outputs`` is called TWICE inside this module's training chain.
+
+    Neither call is reachable by a caller of ``train_arm``, so widening only ``arm_outputs``
+    produces a signature nobody can use. And the two are not interchangeable: the
+    ``build_arm_bins`` call inside ``train_arm`` REBINDS ``paths``, so the export half at the
+    bottom writes to whatever dict the BINS call returned. Thread the prefix at one site and
+    not the other and ``refuse_if_exists`` guards ``checkpoints/phase17_*`` while the adapter
+    lands at ``checkpoints/phase14_persona_a_adapter.pt`` — a Phase-17 artifact under a
+    Phase-14 name, which is a false provenance claim, and plans 17-09/17-10 assert
+    ``checkpoints/phase17_*`` and would fail on a file that exists under the other name.
+    """
+    sites = _teach_calls("build_arm_bins", "arm_outputs") + _teach_calls("train_arm", "arm_outputs")
+    assert len(sites) == 2, (
+        f"expected exactly 2 internal arm_outputs call sites, found {len(sites)} — a new one "
+        "that forgets prefix= writes a Phase-17 run's artifacts under a phase14_ name"
+    )
+    for call in sites:
+        assert "prefix" in {kw.arg for kw in call.keywords}, (
+            "arm_outputs called without prefix= inside the training chain — see this test's "
+            "docstring for why a partially-threaded prefix is worse than none"
+        )
+
+    inner = _teach_calls("train_arm", "build_arm_bins")
+    assert len(inner) == 1, f"expected 1 build_arm_bins call inside train_arm, found {len(inner)}"
+    assert {kw.arg for kw in inner[0].keywords} >= {"seed", "prefix"}, (
+        "train_arm calls build_arm_bins without threading seed= and prefix= — the bins would "
+        "be built at the default seed and the returned paths would carry the default prefix, "
+        "and that returned dict is what the export half writes to"
+    )
 
 
 def test_refuse_if_exists_names_the_offender(tmp_path):
