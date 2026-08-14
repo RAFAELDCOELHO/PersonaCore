@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: ready_to_plan
-stopped_at: Phase 16 complete (11/11); W1 closed (quick 260814-d0j) — ready to discuss Phase 17
-last_updated: 2026-08-14T12:41:00.000Z
-last_activity: 2026-08-14
+status: planning
+stopped_at: Phase 17 context gathered
+last_updated: "2026-08-14T13:12:26.801Z"
+last_activity: "2026-08-14 - Completed quick task 260814-d0j: closed W1 (LoRA consumers inject the artifact's own config; scale audited at load_adapter_weights)"
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 11
   completed_plans: 11
-  percent: 0
+  percent: 33
 ---
 
 # Project State
@@ -219,9 +219,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T00:28:46.487Z
-Stopped at: Completed 16-10-PLAN.md
-Resume file: None
+Last session: 2026-08-14T13:12:26.794Z
+Stopped at: Phase 17 context gathered
+Resume file: .planning/phases/17-multi-persona-isolation-matrix/17-CONTEXT.md
 
 ## Operator Next Steps
 
