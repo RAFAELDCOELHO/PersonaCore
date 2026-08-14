@@ -22,6 +22,7 @@ phase17_persona_facts.py`` defines no ``main()`` and imports no torch, so an ``i
 runs nothing.
 """
 
+import ast
 import importlib.util
 import json
 import pathlib
@@ -38,6 +39,7 @@ if _SCRIPTS not in sys.path:
 
 _PREREG_PATH = _REPO_ROOT / "scripts" / "phase17_personas.py"
 _MATERIAL_PATH = _REPO_ROOT / "scripts" / "phase17_persona_facts.py"
+_GATE_PATH = _REPO_ROOT / "scripts" / "phase17_persona_gate.py"
 _FIXTURE_PATH = _REPO_ROOT / "results" / "phase16_recall_sample.json"
 
 
@@ -53,9 +55,27 @@ personas = _load("phase17_personas")
 fs = _load("phase14_factset")
 
 import phase14_recall as recall  # noqa: E402  (needs the sys.path insert above)
+import teach_persona as teaching  # noqa: E402  (the GO/ADAPT enforcement under test)
+from _verdict import recorded_verdict  # noqa: E402  (the ONE anchored section read)
 
 _FACTS = material.all_facts()
 _VALUES = tuple(fact.value for fact in _FACTS)
+
+# Every adapter-reaching call the ISO-01 pre-flight must never make. Named here rather than inline
+# so the AST scan below and a future reader see ONE list: an adapter arriving by any of these four
+# routes produces the same wrong measurement.
+_ADAPTER_CALLS = ("load_adapted_model", "inject_lora", "load_adapter_weights", "load_adapter")
+
+
+def _called_names(node):
+    """Every callee name reached from ``node``, bare (``f()``) and attribute (``m.f()``) alike."""
+    return {
+        name
+        for child in ast.walk(node)
+        if isinstance(child, ast.Call)
+        for name in (getattr(child.func, "id", None), getattr(child.func, "attr", None))
+        if name
+    }
 
 
 @pytest.fixture(scope="module")
@@ -349,3 +369,256 @@ def test_material_is_not_in_the_pinned_prereg_file():
             f"the minted value {value!r} is in the pinned pre-registration file; the material must "
             "stay in scripts/phase17_persona_facts.py so the ADAPT branch can replace it"
         )
+
+
+# =============================================================================================
+# ===== ISO-01's GPU half: the un-adapted-base pin and the blocking verdict ====================
+# =============================================================================================
+#
+# Everything below is CPU-only and checkpoint-free. The base pin is a STATIC AST assertion over
+# `scripts/phase17_persona_gate.py`, and the verdict guards run against synthetic report texts in
+# `tmp_path`. Neither loads a model, and neither says anything about what the base actually
+# produces — that measurement stays checkpoint-specific and belongs to plan 17-07.
+
+
+def test_the_probe_runs_on_an_unadapted_base():
+    """ISO-01 / TH-17-42 — the guessability probe measures the BASE, pinned structurally.
+
+    Measured in the working tree, which is the whole reason this needs a pin rather than care:
+    ``phase14_recall``'s adapted-model loader (``:496``) looks like the shared model-build entry
+    point and Phase 16 does call it, but it defaults its adapter path to the shippable persona file
+    under ``checkpoints/`` (``:516``), raises if that file is absent (``:530``), wraps every
+    allowlisted projection (``:557``) and copies the adapter tensors in (``:565``) — all
+    unconditionally. **It has no un-adapted return path.** Calling it without an adapter path does
+    not give the base; it gives Phase 14's TAUGHT persona.
+
+    A taught model is LESS likely than the base to emit the 24 minted values, so probing one returns
+    a FLATTERINGLY CLEAN gate: a human reads zero containments, records GO, and the whole RESEARCH
+    F-13 inference — "an off-diagonal hit cannot be the base's own prior" — then rests on a
+    measurement of a different model. The failure looks exactly like success, which is why the rule
+    is asserted structurally instead of trusted.
+    """
+    tree = ast.parse(_GATE_PATH.read_text(encoding="utf-8"))
+
+    offenders = sorted(name for name in _called_names(tree) if name in _ADAPTER_CALLS)
+    assert not offenders, (
+        f"scripts/phase17_persona_gate.py calls {offenders}. Every one of those routes attaches a "
+        "trained adapter, and a probe against an adapted model under-reports guessability — so the "
+        "ISO-01 gate would come back clean for the wrong reason and a human would sign GO on the "
+        "wrong model"
+    )
+
+    # FOUND before its contents are asserted: a scan that resolves to nothing passes vacuously, so a
+    # rename of the builder would otherwise turn this guard green by finding no function at all.
+    builders = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "build_unadapted_base"
+    ]
+    assert len(builders) == 1, (
+        f"expected exactly one build_unadapted_base in scripts/phase17_persona_gate.py, found "
+        f"{len(builders)}. This scan asserts what that function does, so a rename or a duplicate "
+        "would make it green while checking nothing"
+    )
+    assert "load_slim" in _called_names(builders[0]), (
+        "build_unadapted_base does not call load_slim. The base must come through the SHAREABLE "
+        "slim artifact and the restricted unpickler (weights_only=True, T-14-22 / TH-17-14), not "
+        "through the full-resume checkpoint read that the Phase 14 gate necessarily uses"
+    )
+
+
+@pytest.mark.parametrize("verdict", ["PENDING", "STOP"])
+def test_verdict_blocks(tmp_path, verdict):
+    """ISO-01 / ROADMAP SC2 — no adapter trains until a human records GO or ADAPT.
+
+    ``teach_persona._require_go_verdict`` takes a PATH, so Phase 17 calls it with its own report
+    rather than writing a third copy of the verdict read. Watched refusing all three ways it can be
+    handed an unrecorded gate: STOP, PENDING, and a file with no ``## Verdict`` section at all.
+
+    The ``try / except / else: raise`` shape is deliberate — under a bare call a guard that silently
+    stopped raising would leave this test green while the gate it enforces had disappeared.
+    """
+    report = tmp_path / "phase17_personas_report.md"
+    report.write_text(
+        f"# Phase 17 Persona Pre-Flight Report\n\n## Verdict\n\n{verdict} — user decision.\n",
+        encoding="utf-8",
+    )
+    try:
+        teaching._require_go_verdict(report)
+    except SystemExit as exit_:
+        assert verdict in str(exit_)
+        # The abort must name the file. This function is no longer Phase 14's alone: an operator
+        # told only "the fact-set report" would go edit results/phase14_factset_report.md, which is
+        # the wrong artifact AND one that already carries a recorded GO.
+        assert str(report) in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError(
+            f"a {verdict} verdict cleared the gate — teaching may only run on GO/ADAPT (D-06), and "
+            "an unrecorded gate that trains anyway spends four hours of adapter runs on material "
+            "no human ever looked at"
+        )
+
+
+def test_verdict_blocks_a_report_with_no_verdict_section(tmp_path):
+    """A file with no ``## Verdict`` section is REFUSED, never read as an implicit pass."""
+    report = tmp_path / "phase17_personas_report.md"
+    report.write_text("# Phase 17 Persona Pre-Flight Report\n\n## Base\n\nsome text\n", "utf-8")
+    try:
+        teaching._require_go_verdict(report)
+    except SystemExit as exit_:
+        assert str(report) in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError("a report with no verdict section cleared the gate")
+
+
+@pytest.mark.parametrize("verdict", ["GO", "ADAPT"])
+def test_verdict_clears_on_go_and_adapt(tmp_path, verdict):
+    """The positive control. Without it this suite also passes against a gate that refuses ALL."""
+    report = tmp_path / "phase17_personas_report.md"
+    report.write_text(f"# R\n\n## Verdict\n\n{verdict} — recorded at the checkpoint.\n", "utf-8")
+    assert teaching._require_go_verdict(report) == verdict
+
+
+def test_verdict_read_is_anchored_on_the_section(tmp_path):
+    """CR-02 — the verdict read anchors on the SECTION, never the tail after the last mention.
+
+    The fixture is the shape this report invites: the instructions tell the human to record the
+    verdict under the ``## Verdict`` heading, so a rationale that says which section it was written
+    in puts the literal INSIDE the recorded verdict. ``VERDICT_SECTION`` anchors on a heading at
+    LINE START up to the next ``## ``, so it reads GO; the naive tail after the last occurrence of
+    the literal lands mid-sentence and reads the next word as the verdict.
+    """
+    text = (
+        "# Phase 17 Persona Pre-Flight Report\n\n"
+        "## Recording The Verdict\n\n"
+        "Replace the line under the `## Verdict` heading below BY HAND with GO or ADAPT.\n\n"
+        "## Verdict\n\n"
+        "GO — the base produced none of the 24 minted values. Recorded in the `## Verdict`\n"
+        "section by hand, per the instructions above.\n"
+    )
+
+    # INTENTIONAL CONTROL — do not delete in a future cleanup. This is the defect itself, kept
+    # beside the fix: on THIS input the naive tail returns a different answer, and `PENDING` is not
+    # in it either, so both the enforcement and the clobber guard would read it wrong.
+    naive = text.split("## Verdict")[-1]
+    anchored = recorded_verdict(text)
+    assert naive != anchored, (
+        "the naive tail and the anchored section agree on this fixture, so the fixture no longer "
+        "exercises CR-02 — a regression to text.split('## Verdict')[-1] would pass unnoticed"
+    )
+    assert not naive.strip().startswith("GO")
+    assert anchored.strip().startswith("GO")
+
+    # Tied to the real enforcement, not just to the regex: the gate the training run consults reads
+    # the anchored section and comes back GO.
+    report = tmp_path / "phase17_personas_report.md"
+    report.write_text(text, encoding="utf-8")
+    assert teaching._require_go_verdict(report) == "GO"
+
+
+def test_gate_report_clobber_guard_bites(tmp_path, monkeypatch):
+    """TH-17-15 — a recorded verdict is committed evidence; a rerun must not silently reset it.
+
+    Module-level and zero-arg on purpose: an inline block in ``main()`` is unreachable from any test
+    without a 278 MB checkpoint and an MPS device, which is exactly how the same defect survived the
+    first CR-02 fix in Phase 14. Here it is exercised with nothing but a ``tmp_path`` file.
+    """
+    gate = _load("phase17_persona_gate")
+    report = tmp_path / "phase17_personas_report.md"
+    monkeypatch.setattr(gate, "REPORT_PATH", report)
+    monkeypatch.setattr(sys, "argv", ["phase17_persona_gate.py"])
+
+    report.write_text("# R\n\n## Verdict\n\nGO — recorded at the checkpoint.\n", encoding="utf-8")
+    try:
+        gate.assert_report_not_clobbered()
+    except SystemExit as exit_:
+        assert str(report) in str(exit_)
+    else:  # pragma: no cover
+        raise AssertionError(
+            "the gate overwrote a recorded GO verdict. That verdict is the blocking human judgment "
+            "ROADMAP SC2 requires and it cannot be regenerated by re-running the measurement"
+        )
+
+    # POSITIVE CONTROL. Without it this test also passes against a guard that refuses everything,
+    # which would leave --force as the only way to re-drive an interrupted run — and an operator who
+    # learns --force is always required passes it after a human HAS recorded a verdict.
+    report.write_text("# R\n\n## Verdict\n\nPENDING — user decision.\n", encoding="utf-8")
+    gate.assert_report_not_clobbered()
+
+    # --force is the ONE documented override over a genuinely recorded verdict.
+    report.write_text("# R\n\n## Verdict\n\nSTOP — the material is not usable.\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["phase17_persona_gate.py", "--force"])
+    gate.assert_report_not_clobbered()
+
+
+def test_gate_report_renders_and_does_not_read_as_recorded(tmp_path, monkeypatch):
+    """The report writer runs end to end, and its OWN output re-drives without ``--force``.
+
+    Two failures this closes, neither of which any other test in this phase can see:
+
+    1. ``main()`` first renders its report at the END of a GPU run. A ``KeyError`` in one table row
+       would cost that whole run rather than a red test, and 17-07 would have no artifact to judge.
+    2. CR-02's round-trip. The guard reads the verdict SECTION — heading to end of file — so
+       boilerplate left under it travels INTO the recorded verdict. The first draft of this report
+       explained the STOP/PENDING rule *inside* the verdict section, which kept the literal
+       ``PENDING`` in the recorded text forever: the guard would have stayed disarmed after a human
+       wrote GO, and a rerun would have destroyed the judgment it exists to protect. The
+       instructions live in their own section ABOVE the verdict for exactly that reason, and this
+       asserts the property rather than the placement.
+
+    The model and the probe are stubbed; the tokenizer, the fixture, the filters and the census are
+    REAL, so this exercises every line of the writer on the committed material.
+    """
+    from personacore.config import ModelConfig
+
+    gate = _load("phase17_persona_gate")
+    report = tmp_path / "phase17_personas_report.md"
+    monkeypatch.setattr(gate, "REPORT_PATH", report)
+    monkeypatch.setattr(sys, "argv", ["phase17_persona_gate.py"])
+    # strict=True refuses a CPU-only box, so CI would fail here for an unrelated reason.
+    monkeypatch.setattr(gate, "preflight_device", lambda strict=True: {"device": "cpu"})
+    monkeypatch.setattr(gate, "RuntimeConfig", lambda: type("R", (), {"device": "cpu"})())
+    monkeypatch.setattr(
+        gate,
+        "build_unadapted_base",
+        lambda device: (None, ModelConfig(), {"git_sha": "0" * 7, "step": 4000, "val_loss": 1.52}),
+    )
+
+    def stub_probe(model, tok, device, forbid, value, questions, *, start_index=0):
+        probes = [
+            {"question": q, "prompt_ids": [1, 2, 3], "completions": [f"c{start_index + i}-{k}"]}
+            for i, q in enumerate(questions)
+            for k in range(1)
+        ]
+        texts = [text for probe in probes for text in probe["completions"]]
+        return {"value": value, "probes": probes, "clean": fs.exact_match_clean(texts, value)}
+
+    monkeypatch.setattr(gate.instrument, "probe_guessability", stub_probe)
+    gate.main()
+
+    text = report.read_text(encoding="utf-8")
+    for heading in (
+        "## Base",
+        "## Tokenizer Census",
+        "## Guessability",
+        "## Filters",
+        "## Recording The Verdict",
+        "## Provenance",
+        "## Verdict",
+    ):
+        assert heading in text, heading
+    assert text.index("## Recording The Verdict") < text.index("## Verdict")
+    assert "No adapter was injected and no adapter weights were loaded." in text
+    assert text.count("clean=") == 24  # one flag per minted value
+
+    # The round-trip: the writer's own output must still read as UNRECORDED.
+    gate.assert_report_not_clobbered()
+    assert "PENDING" in recorded_verdict(text)
+
+    # And once a human records GO in that section, the guard must bite.
+    report.write_text(
+        text.replace("PENDING — user decision at the ISO-01 checkpoint (ROADMAP SC2).", "GO — ok."),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit):
+        gate.assert_report_not_clobbered()
