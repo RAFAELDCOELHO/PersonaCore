@@ -193,7 +193,26 @@ def test_sum_over_draws_equals_mean_of_per_question_rates_on_the_balanced_fixtur
 
 def test_cluster_bootstrap_is_deterministic_under_its_seed():
     """Two calls at one seed return identical bounds — the interval is byte-reproducible."""
-    fixture = _balanced_fixture((0, 1, 2, 4, 5, 7, 8, 9))
+    # WITHIN-fact variation is required here. `_balanced_fixture` gives every question inside a
+    # fact the same k, so under STAT-01's question-level statistic the rate collapses to "fraction
+    # of resampled facts with k > 0" — nine possible values, and two seeds land on identical
+    # percentiles. That makes the seed-sensitivity assertion below unexercisable rather than false.
+    # Mixed k per fact restores a statistic fine-grained enough for the check to mean something.
+    fixture = {
+        f"fact_{index}": [(k, 9) for k in ks]
+        for index, ks in enumerate(
+            (
+                (0, 0, 0, 1, 0, 2, 0, 0, 3, 0, 0, 1, 0),
+                (9, 7, 0, 5, 8, 0, 6, 9, 4, 0, 7, 8, 3),
+                (2, 0, 1, 0, 3, 0, 0, 4, 0, 1, 0, 2, 0),
+                (9, 9, 8, 7, 9, 6, 8, 9, 7, 9, 8, 9, 5),
+                (0, 1, 0, 0, 2, 0, 1, 0, 0, 3, 0, 0, 1),
+                (5, 4, 6, 3, 5, 7, 4, 6, 2, 5, 3, 4, 6),
+                (0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 2, 0, 0),
+                (8, 6, 9, 7, 5, 8, 6, 9, 4, 7, 8, 5, 9),
+            )
+        )
+    }
     first = stats.cluster_bootstrap(fixture, resamples=400, seed=1337)
     second = stats.cluster_bootstrap(fixture, resamples=400, seed=1337)
     assert first == second
@@ -839,3 +858,41 @@ def test_the_ladder_is_licensing_and_not_a_hypothesis_test():
     assert "licensing" in ladder_source.lower()
     assert "sign_test_exact" not in ladder_source
     assert "HOLM" not in ladder_source
+
+
+def test_cluster_bootstrap_interval_brackets_its_own_point_estimate():
+    """A confidence interval that excludes the rate it accompanies is not that rate's interval.
+
+    This is the general invariant, not a spot fix. It went RED against the shipped 16-11 run, where
+    ``cluster_bootstrap`` resampled the DRAW-level rate ``sum(k)/sum(n)`` while the report published
+    the QUESTION-level answerable rate beside it: adapter-only came out at 0.865385 with a published
+    95% interval of (0.208333, 0.489316), so the point estimate sat far outside its own bounds. Two
+    different statistics printed as though one described the other — and a reader would reasonably
+    read it as a computational error rather than a unit choice.
+
+    STAT-01 settles which unit is correct: the QUESTION is the unit of analysis, never the draw. So
+    the resampled statistic must be ``n_answerable / n_questions``, matching the rate it brackets.
+
+    Written to fail against the defect and pass after the fix, so the guard is proven rather than
+    assumed. It is deliberately generic: any future change that lets the interval drift off its own
+    estimate goes red here regardless of which unit was mixed in.
+    """
+    driver = _load_driver()
+    # A fact set with real spread: some questions answerable at several draws, some at none. The
+    # point estimate and the interval must describe the SAME quantity on it.
+    # Mirrors the SHAPE of the real gated tier — 8 facts x 13 questions — because that shape is
+    # what separates the two units. A question is answerable if ANY of its 9 draws hits, so a
+    # per-question k of 3/9 gives a HIGH question rate (11 of 13 answerable) beside a LOW draw rate
+    # (33/117 ~ 0.28). A smaller fixture produces an interval wide enough to swallow both units, and
+    # the guard then passes without ever exercising the defect.
+    per_fact = {f"fact_{i}": [(3, 9)] * 11 + [(0, 9)] * 2 for i in range(8)}
+    questions = [q for qs in per_fact.values() for q in qs]
+    point = sum(1 for k, _ in questions if k > 0) / len(questions)
+
+    lo, hi = driver.cluster_bootstrap(per_fact)
+    assert lo <= point <= hi, (
+        f"the bootstrap interval ({lo:.6f}, {hi:.6f}) does not contain the question-level rate it "
+        f"accompanies ({point:.6f}). An interval and its point estimate must be the SAME "
+        "statistic; STAT-01 fixes that as answerable QUESTIONS over questions, never draws."
+    )
+    assert 0.0 <= lo <= hi <= 1.0, "a proportion interval must stay inside [0, 1]"

@@ -909,9 +909,15 @@ def cluster_bootstrap(
             questions = per_fact_questions[fact_ids[rng.randrange(n_facts)]]
             for _ in range(len(questions)):
                 # STAGE 2 — that RESAMPLED fact's own questions, with replacement (STAT-01, D-06).
-                k, n = questions[rng.randrange(len(questions))]
-                numerator += k
-                denominator += n
+                k, _n = questions[rng.randrange(len(questions))]
+                # STAT-01: the QUESTION is the unit of analysis, never the draw. A question counts
+                # once if ANY of its draws carried the value — the same max-over-draws statistic
+                # `n_answerable` uses everywhere else in this milestone. Accumulating `k` and `n`
+                # instead computes the DRAW rate, a different quantity: on the real gated tier that
+                # is ~0.33 where the question rate is ~0.87, so the published interval would not
+                # contain the rate printed beside it. Caught on the 16-11 run, before approval.
+                numerator += 1 if k > 0 else 0
+                denominator += 1
         rates.append(numerator / denominator)
     # `method="inclusive"` is the (n-1)*p linear interpolation numpy's default quantile uses, so
     # this reads the same way `phase15_stats.bootstrap_ci` does without importing numpy. n = 40
