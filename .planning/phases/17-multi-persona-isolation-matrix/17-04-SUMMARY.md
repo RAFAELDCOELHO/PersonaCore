@@ -183,6 +183,21 @@ taxonomy is equally unambiguous: row A scores 104 `diagonal`, rows B and C score
 - **Files modified:** `scripts/phase17_isolation.py`
 - **Commit:** `6c60f84`
 
+**4. [Rule 1 - Bug] `requirements mark-complete` would over-claim ISO-02 and ISO-03**
+
+- **Found during:** state updates.
+- **Issue:** the plan's frontmatter lists `[ISO-02, ISO-03]` and `requirements mark-complete` checks
+  every id it is handed — but **17-06 and 17-09 also claim both, and 17-08 also claims ISO-03**, and
+  the first plan to name a requirement marks it Complete for the whole phase. ISO-02 as written
+  reads "the isolation **matrix** scores shared-slot questions against every persona's value" and
+  ISO-03 "the **matrix** carries an explicit adapter-off control column". No adapter has trained, no
+  sweep has run and no matrix exists — this plan ships the machinery that will produce both. A
+  Complete there would be flatly false in the one artifact a reader consults to see what is done.
+- **Fix:** `requirements mark-complete` was **not run**. ISO-02 and ISO-03 stay `[ ]` / `Pending`;
+  17-09 runs the sweeps and 17-08 publishes the matrix and the column. This is 17-01's recorded
+  over-claim pattern and 17-03's avoidance of it, applied a third time rather than repeated.
+- **Files modified:** none (the fix is an omission)
+
 ### Interpretation recorded
 
 **The four category counts are a ROW property, reported on each of that row's three cells.**

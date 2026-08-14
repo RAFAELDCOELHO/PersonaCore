@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-03-PLAN.md
-last_updated: "2026-08-14T21:19:32.812Z"
-last_activity: "2026-08-14 -- 17-03 complete: 24 contradictory persona values minted, censused and filter-pinned outside the git-pinned pre-registration"
+stopped_at: Completed 17-04-PLAN.md
+last_updated: "2026-08-14T21:42:35.645Z"
+last_activity: "2026-08-14 -- 17-04 complete: cell-blind scorer + 12-cell matrix with a computed base row; ROADMAP SC1's no-op-swap shape CONFIRMED as column collapse"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 14
+  completed_plans: 15
   percent: 33
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 4 of 11
+Plan: 5 of 11
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-03 complete: 24 contradictory persona values minted, censused and filter-pinned outside the git-pinned pre-registration
+Last activity: 2026-08-14 -- 17-04 complete: cell-blind scorer + 12-cell matrix with a computed base row; ROADMAP SC1's no-op-swap shape CONFIRMED as column collapse
 
 ## Performance Metrics
 
@@ -79,6 +79,7 @@ Last activity: 2026-08-14 -- 17-03 complete: 24 contradictory persona values min
 | Phase 17 P01 | 34min | 3 tasks | 4 files |
 | Phase 17 P02 | 17min | 2 tasks | 3 files |
 | Phase 17 P03 | 19min | 2 tasks | 2 files |
+| Phase 17 P04 | 18min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -194,6 +195,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-03: the four filters rejected 0 of the 24 committed values; across 34 measured candidates filter_token_budget's rule rejected 2 (vurthwaite 10 ids, thornebank 9) and the D-05 screen rejected 2 (tarrowgate, and 1971 at distance 1 from CALIBRATION_POOL's 1974) — a filter that bit nothing is recorded as such
 - [Phase 17]: 17-03: phase17_personas is imported LAZILY by the material module because it MEASURABLY pulls torch into sys.modules (via phase16_persistence -> phase14_recall) while phase14_factset does not — so the Fact literals import at module scope and the four filters do not
 - [Phase 17]: 17-03: ISO-01 deliberately NOT marked complete — 17-05 and 17-07 also claim it and both the guessability half and SC2's blocking human verdict are theirs; the 17-01 over-claim pattern avoided rather than repeated
+- [Phase 17]: 17-04: generation and scoring are two separate passes, so cell-blindness is STRUCTURAL — score_completion takes (completion, slot_values) and literally cannot learn which sweep produced a string; pinned at signature, public name and body AST, and watched RED with an added i= parameter
+- [Phase 17]: 17-04: classify's own-is-None branch is what makes the base row a COMPUTED row rather than a leak against itself — deleting it fails the unit test AND trips assemble_matrix's own runtime _prove, so the B4 regression is caught at two independent layers
+- [Phase 17]: 17-04: the four category counts are a ROW property reported on each of that row's three cells (classify takes no j by design, D-12) — the per-column number is n_answerable; cell-scoping was rejected because branch 1 fires before branch 3, making a cell-scoped leak a conditional quantity nobody declared
+- [Phase 17]: 17-04: ROADMAP SC1's no-op-swap shape CONFIRMED by measurement — column collapse, diagonal (1.0, 0.0, 0.0), base row unaffected, and only 2 of 6 Holm comparisons reject so the pre-registered gate does NOT clear; the MEDIUM-confidence paragraph is left in place, marked superseded
 
 ### Pending Todos
 
@@ -237,8 +242,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T21:19:13.013Z
-Stopped at: Completed 17-03-PLAN.md
+Last session: 2026-08-14T21:42:24.289Z
+Stopped at: Completed 17-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
