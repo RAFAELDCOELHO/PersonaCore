@@ -31,6 +31,13 @@ import json
 import pathlib
 import sys
 
+import torch
+import torch.nn as nn
+
+from personacore.config import ModelConfig
+from personacore.lora import LoRAConfig, inject_lora, lora_state_dict
+from personacore.model import GPT
+
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = str(_REPO_ROOT / "scripts")
 if _SCRIPTS not in sys.path:
@@ -613,3 +620,309 @@ def test_no_op_swap_produces_the_recorded_shape():
         "a no-op adapter swap cleared the pre-registered gate — the fabricated matrix would then "
         "be published as an isolation result"
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# ISO-04 — the adapter-swap canary, BOTH layers, watched failing
+# ---------------------------------------------------------------------------------------------
+#
+# The tiny-GPT substrate is copied from `tests/test_lora_inject.py:50-70` rather than imported:
+# tests may restate a fixture, and the three helpers there are the canonical shape for a CPU LoRA
+# model in this repo. `vocab_size`/`eos_id` stay at the LOCKED defaults; everything else is shrunk.
+# No checkpoint I/O anywhere below.
+#
+# `torch` enters this file HERE and only here, for these fixtures. It is not a new cost: the driver
+# this whole file loads imports `phase16_persistence` -> `phase14_recall`, which puts torch in
+# `sys.modules` before any test runs. What stays true is the property that matters — no test below
+# loads a checkpoint, reaches a GPU or generates a token.
+
+
+def _tiny_config():
+    return ModelConfig(block_size=32, n_layer=1, n_head=2, n_embd=16)
+
+
+def _build_injected(r=4):
+    """Seeded tiny GPT with LoRA injected — `lora_B` is all zeros here (the identity gate)."""
+    torch.manual_seed(1234)
+    model = GPT(_tiny_config())
+    inject_lora(model, LoRAConfig(r=r))
+    return model
+
+
+def _nudge_lora_b(model, seed):
+    """Make the adapter delta nonzero and distinctive, so an apply is observable."""
+    torch.manual_seed(seed)
+    with torch.no_grad():
+        for name, param in model.named_parameters():
+            if "lora_B" in name:
+                nn.init.normal_(param)
+
+
+def _artifact(model):
+    return {"adapter": {k: v.clone() for k, v in lora_state_dict(model).items()}}
+
+
+def _zeroed(artifact):
+    """The same artifact with every ``lora_B`` zeroed — an adapter that is the identity gate."""
+    return {
+        "adapter": {
+            k: (torch.zeros_like(v) if k.endswith("lora_B") else v.clone())
+            for k, v in artifact["adapter"].items()
+        }
+    }
+
+
+def _refuses(call, substring):
+    """Run ``call``, require a ``SystemExit`` whose message carries ``substring``, return it.
+
+    The ``try/except/else`` shape: the ``else`` is what turns "the guard did not fire" into a
+    failure. A bare ``pytest.raises`` would pass on ANY ``SystemExit``, which is how a guard that
+    aborts for the wrong reason gets mistaken for a guard that works.
+    """
+    try:
+        call()
+    except SystemExit as exit_:
+        message = str(exit_)
+        assert substring in message, f"raised, but not for {substring!r}: {message}"
+        return message
+    else:
+        raise AssertionError(f"no SystemExit — the guard never fired for {substring!r}")
+
+
+def test_swap_canary_bites():
+    """ISO-04's in-process layer, mutation-proved on the deliberate no-op swap.
+
+    All three personas share an identical ``lora_`` key set, identical shapes and an identical
+    ``lora_config``, so every audit inside ``load_adapter_weights`` passes for the WRONG artifact.
+    Loading the same artifact twice is that failure made deliberate, and it is what this watches.
+    """
+    donor = _build_injected()
+    _nudge_lora_b(donor, seed=7)
+    artifact_a = _artifact(donor)
+
+    # (i) the honest load — the positive control. Without it this test would also pass against a
+    # canary that refused every artifact, which is the failure a refusal-only test cannot see.
+    model = _build_injected()
+    digest = iso.load_adapter_with_canary(model, artifact_a, label="persona_a")
+    assert len(digest) == 64 and int(digest, 16) >= 0
+
+    # (ii) the SAME artifact again: no lora_B moves, and that is the silent swap.
+    message = _refuses(
+        lambda: iso.load_adapter_with_canary(model, artifact_a, label="persona_a"), "ISO-04"
+    )
+    assert "changed NO lora_B tensor" in message
+
+    # (iii) an all-zero lora_B artifact onto a model that holds a real one: the load DOES change
+    # tensors, so (ii)'s proof passes and the identity gate is the one that has to bite.
+    victim = _build_injected()
+    _nudge_lora_b(victim, seed=21)
+    identity = _refuses(
+        lambda: iso.load_adapter_with_canary(victim, _zeroed(artifact_a), label="persona_b"),
+        "identity gate",
+    )
+    assert "contribute exactly nothing" in identity
+
+
+def test_lora_b_digest_distinguishes_two_artifacts():
+    """The digest is a function of the WEIGHTS — not of the process, and not of the file."""
+    first = _build_injected()
+    _nudge_lora_b(first, seed=7)
+    second = _build_injected()
+    _nudge_lora_b(second, seed=13)
+    assert iso.lora_b_digest(first) != iso.lora_b_digest(second)
+
+    artifact = _artifact(first)
+    left, right = _build_injected(), _build_injected()
+    iso.load_adapter_with_canary(left, artifact, label="persona_a")
+    iso.load_adapter_with_canary(right, artifact, label="persona_a")
+    assert iso.lora_b_digest(left) == iso.lora_b_digest(right) == iso.lora_b_digest(first)
+
+
+# ---------------------------------------------------------------------------------------------
+# ISO-04 / ISO-03 — the cross-process layer, on synthetic records
+# ---------------------------------------------------------------------------------------------
+
+
+def _weight_records():
+    """The well-formed four-record set — the POSITIVE CONTROL every mutation below starts from."""
+    records = _clean_records()
+    for n, record in enumerate(records):
+        label = record[iso.SWEEP_LABEL_KEY]
+        record.update(
+            {
+                "git_sha": "0" * 40,
+                "pid": 4100 + n,
+                iso.LORA_B_DIGEST_KEY: f"live-{label}",
+                iso.ADAPTER_FILE_DIGEST_KEY: f"file-{label}",
+                iso.ADAPTER_ENABLED_KEY: label != personas.BASE_ROW,
+            }
+        )
+    return records
+
+
+def _by_label(records):
+    return {record[iso.SWEEP_LABEL_KEY]: record for record in records}
+
+
+def _set(label, field, value):
+    """A mutation that overwrites one field of one record IN PLACE, on the records list itself."""
+
+    def change(records):
+        _by_label(records)[label][field] = value
+
+    return change
+
+
+def _drop(label):
+    """A mutation that removes one whole sweep record — the list, not a lookup view of it."""
+
+    def change(records):
+        records[:] = [r for r in records if r[iso.SWEEP_LABEL_KEY] != label]
+
+    return change
+
+
+def _mutated(change):
+    """A fresh well-formed four-record set with ``change`` applied, as a zero-argument call."""
+    records = _weight_records()
+    change(records)
+    return lambda: iso.assert_sweeps_ran_on_distinct_weights(records)
+
+
+def test_report_refuses_identical_digests():
+    """ISO-04 cross-process: assembling a report from sweeps that shared weights is unreachable.
+
+    Six mutations, six distinct aborts, plus the positive control. The two digest modes are
+    SEPARATE claims and both are checked: two sweeps can read two different files and still end up
+    holding the same weights (a load that no-opped), and two sweeps can hold different weights
+    while the record claims they read one file (a mislabelled artifact). Neither implies the other.
+    """
+    iso.assert_sweeps_ran_on_distinct_weights(_weight_records())  # must NOT raise.
+
+    messages = [
+        _refuses(
+            _mutated(_set("persona_b", iso.LORA_B_DIGEST_KEY, "live-persona_a")),
+            "distinct live lora_B digest",
+        ),
+        _refuses(
+            _mutated(_set("persona_c", iso.ADAPTER_FILE_DIGEST_KEY, "file-persona_a")),
+            "distinct artifact file",
+        ),
+        _refuses(
+            _mutated(_set(personas.BASE_ROW, iso.LORA_B_DIGEST_KEY, "live-persona_a")),
+            "the control is not a control",
+        ),
+        _refuses(_mutated(_set("persona_b", "pid", 4100)), "distinct pid"),
+        _refuses(_mutated(_set("persona_c", "git_sha", "f" * 40)), "git SHAs"),
+        _refuses(_mutated(_drop("persona_a")), "a missing sweep cannot be found"),
+    ]
+    assert len(set(messages)) == len(messages), "two failure modes share one abort message"
+
+    # The file-digest mode bites even when the LIVE digests differ — the point of recording both.
+    records = _weight_records()
+    by_label = _by_label(records)
+    by_label["persona_b"][iso.ADAPTER_FILE_DIGEST_KEY] = by_label["persona_a"][
+        iso.ADAPTER_FILE_DIGEST_KEY
+    ]
+    assert (
+        by_label["persona_b"][iso.LORA_B_DIGEST_KEY] != by_label["persona_a"][iso.LORA_B_DIGEST_KEY]
+    )
+    _refuses(lambda: iso.assert_sweeps_ran_on_distinct_weights(records), "distinct artifact file")
+
+
+def test_sweeps_are_pairable():
+    """ISO-02: the ``(slot, seed_index, question)`` TRIPLE, which a bare index check cannot do.
+
+    The mutation leaves ``seed_index`` alone, so the bare index set is still exactly ``0..103`` in
+    every record and a check written on it would be green — while persona B answered 104 different
+    questions from the ones every other row was scored on.
+    """
+    records = _weight_records()
+    by_label = _by_label(records)
+    indices = {
+        label: {entry["seed_index"] for entry in record[iso.SWEEP_QUESTIONS_KEY]}
+        for label, record in by_label.items()
+    }
+    for entry in by_label["persona_b"][iso.SWEEP_QUESTIONS_KEY]:
+        entry["question"] = f"a different {entry['slot']} question {entry['seed_index']}"
+
+    assert len(set(map(frozenset, indices.values()))) == 1, "the bare index sets still match"
+    assert indices["persona_b"] == set(range(personas.SLOTS_EXPECTED * personas.QUESTIONS_PER_SLOT))
+    _refuses(
+        lambda: iso.assert_sweeps_ran_on_distinct_weights(records),
+        "different (slot, seed_index, question) set",
+    )
+
+
+def test_base_column_is_a_control():
+    """ISO-03, in its CORRECTED form: the flag carries the claim, because no digest can.
+
+    **The planning-time expectation that the base sweep carries the all-zero ``lora_B`` digest was
+    an error, corrected here so it is not re-derived.** ``adapter_disabled`` flips
+    ``LoRALinear.enabled`` — a plain Python bool at ``src/personacore/lora/layer.py:35``, kept out
+    of ``state_dict()`` so it can never reach an artifact (D-05) — and leaves ``lora_B`` exactly as
+    loaded. Against a real run the base sweep's digest is therefore Phase 14's
+    ``persona_adapter.pt``, MEASURED at ``433cc42f...`` where a zeroed-``lora_B`` digest is
+    ``3ff92f1b...``. An assertion built on the wrong expectation would abort the report after all
+    four GPU sweeps had already been paid for.
+
+    So the record carries two independent fields and neither is asked to prove the other's claim:
+    ``adapter_enabled`` (whether the delta branch could execute) and ``lora_b_sha256`` (which
+    weights were resident). What is asserted about the base DIGEST is only that it differs from all
+    three adapters' — an equal one means the control ran on a Phase 17 adapter's weights.
+    """
+    records = _weight_records()
+    by_label = _by_label(records)
+    base = by_label[personas.BASE_ROW]
+    assert base[iso.ADAPTER_ENABLED_KEY] is False
+    assert all(by_label[label][iso.ADAPTER_ENABLED_KEY] is True for label in personas.PERSONAS)
+    assert base[iso.LORA_B_DIGEST_KEY] not in {
+        by_label[label][iso.LORA_B_DIGEST_KEY] for label in personas.PERSONAS
+    }
+
+    enabled_base = _refuses(
+        _mutated(_set(personas.BASE_ROW, iso.ADAPTER_ENABLED_KEY, True)),
+        "ONLY evidence the delta branch was inert",
+    )
+    disabled_adapter = _refuses(
+        _mutated(_set("persona_a", iso.ADAPTER_ENABLED_KEY, False)),
+        "the base model under a persona's name",
+    )
+    assert enabled_base != disabled_adapter
+
+    # And the corrected assertion, stated positively: the guard does NOT require the base digest to
+    # be any particular value — only that it is none of the adapters'. A synthetic base carrying an
+    # arbitrary resident-adapter digest passes, which is what a real run produces.
+    resident = _weight_records()
+    _by_label(resident)[personas.BASE_ROW][iso.LORA_B_DIGEST_KEY] = "live-phase14-persona-adapter"
+    iso.assert_sweeps_ran_on_distinct_weights(resident)
+
+
+def test_seed_is_refused_for_the_base_sweep():
+    """ISO-05's seed, validated against the pre-registration — including the base case."""
+    message = _refuses(
+        lambda: iso.resolve_seed("sweep", personas.BASE_ROW, personas.PERSONA_SEEDS["persona_a"]),
+        "two independent reasons",
+    )
+    assert "no REPLICATION_SEEDS entry" in message  # (1) nothing to validate against
+    assert "four controls where the design has exactly one" in message  # (2) D-13's single column
+
+    replicate_seed = personas.REPLICATION_SEEDS["persona_a"][1]
+    replicate = iso.resolve_seed("sweep", "persona_a", replicate_seed)
+    assert replicate["arm"] == f"persona_a_seed{replicate_seed}"
+    assert replicate["adapter"].name == f"phase17_persona_a_seed{replicate_seed}_adapter.pt"
+    assert replicate["record"].name == f"phase17_sweep_persona_a_seed{replicate_seed}.json"
+
+    # The DEFAULT seed spelled out explicitly resolves to the same canonical paths as no --seed.
+    default = iso.resolve_seed("sweep", "persona_a", personas.PERSONA_SEEDS["persona_a"])
+    assert default["arm"] == "persona_a"
+    assert default["record"] == iso.resolve_seed("sweep", "persona_a", None)["record"]
+
+    _refuses(lambda: iso.resolve_seed("sweep", "persona_a", 999), "pre-registered")
+
+    # The positive control on the refusal above: the base sweep with NO --seed is the normal path
+    # and must resolve. Without this the refusal test would also pass against a guard that refused
+    # the base row outright, which would make the ISO-03 column unrunnable.
+    unseeded = iso.resolve_seed("sweep", personas.BASE_ROW, None)
+    assert unseeded["seed"] is None and unseeded["adapter"] is None
+    assert unseeded["record"].name == f"phase17_sweep_{personas.BASE_ROW}.json"
