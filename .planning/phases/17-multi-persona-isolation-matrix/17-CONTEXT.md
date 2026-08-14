@@ -181,13 +181,79 @@ That closes half of SC1; the ISO-04 adapter-swap canary is still to build.
   separate, already-roadmapped layer — descriptive only (min/max/median, never a hypothesis test),
   and it does not govern the seed policy of the initial three adapters.
 
+### Pre-registration decisions confirmed 2026-08-14 (post-research, pre-planning)
+
+`17-RESEARCH.md` §Open Questions handed five decisions to the planner. All five are confirmed
+here **before planning runs**, so the plan does not have to assume them. Per STAT-05 every one is a
+**pre-registration**, not an implementation detail: each must land as a committed literal **before
+any adapter trains**.
+
+- **D-17 [confirms RESEARCH Open Q1]:** on a **double match** — one completion carrying two
+  personas' values for the same slot — the scorer returns a **`frozenset`** over the same four
+  labels rather than picking a winner. No arbitrary priority order, and D-12's letter is preserved:
+  the return domain stays `persona_a | persona_b | persona_c | none`, now as a set over those
+  labels. A double match is itself evidence about interference and must not be silently collapsed
+  to a single label.
+
+- **D-18 [confirms RESEARCH Open Q2 — the highest-risk open item]:** **"the gate cleared" requires
+  ALL SIX Holm rejections, not at least one.** D-08 locked the family (6 comparisons) and the
+  correction (Holm step-down) but left the aggregation rule for the phase verdict open; this closes
+  it. Recorded rationale, **verbatim and required**:
+
+  > "os seis pares testam diretamente vazamento entre as três personas reais (não contra pisos
+  > estruturais como na Fase 16), então uma alegação de isolamento parcial não sustenta o objetivo
+  > da fase."
+
+  Unpacked: every one of the six comparisons is a **live isolation claim between two real
+  personas**, unlike Phase 16's 6-pair family — which tested arms against structural floors and
+  could therefore publish a meaningful 3-of-6 outcome. Here one retained comparison means one
+  persona's value appeared under another persona's adapter at a rate the test cannot separate from
+  that adapter's own recall, and "separately-taught personas stay isolated" is then simply not
+  demonstrated. **Phase 16's partial-clear precedent does not transfer.**
+
+  *Consequence:* D-10's pre-registered all-fail branch fires on **anything less than six**. All six
+  Holm rows are published regardless of outcome so a partial result stays readable — publishing the
+  rows is not the same as clearing the gate.
+
+- **D-19 [confirms RESEARCH Open Q3]:** ISO-05's "worst-colliding pair" is a **committed function,
+  fixed before the matrix is read**:
+
+  > `worst_pair = argmax over the 3 unordered pairs {i,j} of mean(rate(i,j), rate(j,i))`, in the
+  > **question unit** (STAT-01), tie-broken **deterministically by lowest index — smallest `i`,
+  > then smallest `j`**.
+
+  The tie-break is load-bearing, not decoration: with N=3 the **hoped-for** outcome is that every
+  off-diagonal is zero, which makes `argmax` a **three-way tie exactly in the success case**.
+  Without a committed tie-break the "mechanical" rule silently degrades into a post-hoc choice
+  precisely where it matters most. Under the triple tie at 0.0 the rule selects pair `(0, 1)`.
+
+  **k=3 counts the original seed** — the already-trained adapter plus **2 additional seeds per
+  persona of the selected pair**: 4 extra adapters + 4 extra sweeps, ~23 min (RESEARCH §Cost
+  Model). This reuses work already done and keeps the selecting run inside the explicitly
+  descriptive set (D-16 — min/max/median, never a hypothesis test).
+
+- **D-20 [confirms RESEARCH Open Q4; resolves the Claude's-Discretion item below]:** the three
+  Phase 17 adapters train at **`LoRAConfig()` defaults — `r=8`, `alpha=16.0`, scale 2.0**. A
+  non-default alpha is now *safe* (the `src/personacore/lora/inject.py:119-129` audit would catch a
+  consumer that ignored it) but buys nothing this phase measures, and it would **cost the anchor**:
+  at defaults the three Phase 17 diagonals are directly readable against Phase 14's 0.3483 (draw
+  unit) and Phase 16's 0.865385 (question unit) — exactly what D-10's all-fail branch needs to
+  separate "not judgeable" from "leakage found".
+
+- **D-21 [confirms RESEARCH Open Q5]:** Phase 17 ships its **own twin** of Phase 16's
+  `test_nothing_outside_the_six_pairs_enters_the_verdict_path`. `_GATE_MODULES` in
+  `tests/test_phase16_stats.py` is **file-scoped to Phase 16's two drivers**, so a Phase 17 driver
+  calling `holm` is today **neither red nor covered** — the discipline does not transfer by
+  inheritance and must be re-established against Phase 17's own driver modules.
+
 ### Claude's Discretion
 
 - Draws per question. Phase 16 used 9 draws over 104 questions (936 draws per arm); reusing 9
   preserves cross-phase comparability and is the default unless research shows otherwise.
-- Adapter hyperparameters beyond the seed (rank, alpha, steps, LR). Note that D-06's minted values
-  and the now-audited `lora_config` path mean a non-default alpha is safe to use if research
-  prefers one — the scale audit will catch any consumer that fails to read it.
+- Adapter hyperparameters beyond the seed (steps, LR). **Rank and alpha are no longer discretionary
+  — D-20 fixes them at `LoRAConfig()` defaults** *(2026-08-14: this bullet previously left a
+  non-default alpha open, noting the now-audited `lora_config` path made one safe. It is still
+  safe; it is now declined, because it would cost the D-10 diagonal anchor.)*
 - Sweep ordering and process isolation, following Phase 16's D-01/D-03 pattern.
 - Report layout, figure choices, and file naming under `results/phase17_*`.
 
