@@ -215,7 +215,19 @@ cross-matrix against the base model's own prior
 **Requirements**: STAT-01, STAT-02, STAT-03, STAT-04, STAT-05, STAT-06, ISO-01, ISO-02, ISO-03, ISO-04, ISO-05, ISO-06, ISO-07
 **Success Criteria** (what must be TRUE):
 
-  1. Before any adapter trains, audit item **W1 is fixed** — every runtime consumer injects with
+  1. Before any adapter trains, audit item **W1 is fixed** *(amended 2026-08-14: W1 was **already
+     closed** before Phase 17 planning began — verified in the working tree during research, not
+     taken on report. All three runtime consumers already inject at the artifact's own config:
+     `scripts/phase14_recall.py:557`, `scripts/phase14_recall.py:1457`, and
+     `scripts/personalize_demo.py:448`; and `src/personacore/lora/inject.py:119-129` audits every
+     `LoRALinear.scale` against the artifact's `alpha / r` at the load choke point, raising on
+     mismatch. `scripts/teach_persona.py:478` and `scripts/train_adapter_smoke.py:63` retain
+     `LoRAConfig()` deliberately and correctly — they **create** artifacts rather than load them,
+     and that default is the diagonal anchor D-20 preserves. **Only the ISO-04 half of this
+     criterion remains open**: the existing canaries at `scripts/teach_persona.py:638` and
+     `scripts/train_adapter_smoke.py:118` cover **training** — trainables moved, frozen base
+     bit-untouched — and `_nudge_lora_b` is a test helper, so no **swap** path asserts anything
+     today. Landed in quick-260814-d0j.)* — every runtime consumer injects with
      `LoRAConfig(**artifact["lora_config"])` rather than `LoRAConfig()` defaults, since shape audits
      catch `r` drift but never `alpha` (ISO-06) — and an **adapter-swap canary** asserts a `lora_B`
      tensor actually changed on every swap, so a silently failed swap cannot produce the most
