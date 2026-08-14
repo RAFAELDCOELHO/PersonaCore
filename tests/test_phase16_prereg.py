@@ -158,11 +158,14 @@ def test_phase17_prereg_is_frozen_before_every_phase17_result():
     all-fail branch. A future commit that moves the persona material INTO the pinned file re-arms
     exactly that trap — do not.
 
-    **Stated vacuous pass in Waves 1-3.** No `results/phase17_*` artifact exists until plan 17-07
-    commits `results/phase17_personas_report.md`, so `checked` is legitimately 0 until then; the
-    empty-match assertion below therefore guards the *shape* of the query rather than its
-    population. Plans 17-07 and 17-09 each carry an acceptance criterion requiring `checked > 0`,
-    which is where this stops being vacuous.
+    **No longer vacuous, and now unable to become vacuous again.** Through Waves 1-3 no
+    `results/phase17_*` artifact existed, so `checked` was legitimately 0 and the product assertion
+    below read `0 == 1 * 0` — green, having checked nothing. Plan 17-07 committed
+    `results/phase17_personas_report.md` (and its run log), which is where that stopped. The
+    `assert checked` that follows the product assertion is what keeps it stopped: the product alone
+    would go quietly green again the moment the artifacts left the `git ls-files` match set, which
+    is failure mode 2 from this module's own header arriving in the half that did not guard against
+    it.
     """
     # Same reason as the guard above: a shallow clone does not hold the earlier commit objects, so
     # it cannot answer an ancestry question — it can only fail to find one. Assert, never skip.
@@ -201,4 +204,13 @@ def test_phase17_prereg_is_frozen_before_every_phase17_result():
         f"{len(prereg_commits) * len(tracked_artifacts)} — a `git ls-files` pattern that matches "
         "nothing while artifacts sit on disk would otherwise make this green having checked "
         "nothing."
+    )
+    # The product above is satisfied by 0 == n * 0, so it cannot by itself tell "the ordering
+    # holds" from "there was nothing to ask". Plan 17-07 committed the first `results/phase17_*`
+    # artifact; from here on an empty match set means the artifacts were renamed, moved or deleted,
+    # never that Phase 17 has not run yet.
+    assert checked, (
+        f"no committed Phase 17 result was checked — `git ls-files results/phase17_*` matched "
+        f"{tracked_artifacts}. Plan 17-07 committed results/phase17_personas_report.md, so an "
+        "empty match set now means the artifacts moved and this STAT-05 guard is green and blind."
     )
