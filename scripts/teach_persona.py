@@ -164,7 +164,14 @@ ARMS = ("cal_first_person", "cal_first_person_replay", "cal_second_person", "rea
 
 
 def _require_go_verdict(report_path):
-    """D-06 gate: hard-exit unless the report's ``## Verdict`` section reads GO or ADAPT."""
+    """D-06 gate: hard-exit unless the report's ``## Verdict`` section reads GO or ADAPT.
+
+    Every abort NAMES ``report_path``. It takes a path, so it is not a Phase 14 gate any more —
+    Phase 17's ISO-01 gate calls it with ``results/phase17_personas_report.md``, and the two
+    branches below that used to say only "the fact-set report" would send that operator to
+    ``results/phase14_factset_report.md``: the wrong file, and one that already carries a recorded
+    GO. An abort at a blocking gate has to name the artifact it is blocking on.
+    """
     if not report_path.exists():
         raise SystemExit(
             f"[teach_persona] {report_path} missing — run "
@@ -174,15 +181,15 @@ def _require_go_verdict(report_path):
     section = re.search(r"^## Verdict\b(.*?)(?=^## |\Z)", text, flags=re.M | re.S)
     if section is None:
         raise SystemExit(
-            "[teach_persona] no '## Verdict' section in the fact-set report — the D-06 verdict "
+            f"[teach_persona] no '## Verdict' section in {report_path} — the D-06 verdict "
             "must be recorded before any teaching bin is built."
         )
     word = re.search(r"[A-Za-z]+", section.group(1))
     verdict = word.group(0).upper() if word else "PENDING"
     if verdict not in ("GO", "ADAPT"):
         raise SystemExit(
-            f"[teach_persona] recorded verdict is {verdict!r} — teaching bins may only be built "
-            "on GO/ADAPT (D-06). STOP/PENDING must be escalated, not bypassed."
+            f"[teach_persona] recorded verdict in {report_path} is {verdict!r} — teaching bins "
+            "may only be built on GO/ADAPT (D-06). STOP/PENDING must be escalated, not bypassed."
         )
     return verdict
 
