@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-04-PLAN.md
-last_updated: "2026-08-14T21:42:35.645Z"
-last_activity: "2026-08-14 -- 17-04 complete: cell-blind scorer + 12-cell matrix with a computed base row; ROADMAP SC1's no-op-swap shape CONFIRMED as column collapse"
+stopped_at: Completed 17-05-PLAN.md
+last_updated: "2026-08-14T22:12:01.269Z"
+last_activity: "2026-08-14 -- 17-05 complete: ISO-01 pre-flight instrument on the un-adapted base, probe_guessability imported never copied; the report's own verdict boilerplate would have disarmed its clobber guard and was moved above the section"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 15
+  completed_plans: 16
   percent: 33
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 5 of 11
+Plan: 6 of 11
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-04 complete: cell-blind scorer + 12-cell matrix with a computed base row; ROADMAP SC1's no-op-swap shape CONFIRMED as column collapse
+Last activity: 2026-08-14 -- 17-05 complete: ISO-01 pre-flight instrument on the un-adapted base, probe_guessability imported never copied; the report's own verdict boilerplate would have disarmed its clobber guard and was moved above the section
 
 ## Performance Metrics
 
@@ -80,6 +80,7 @@ Last activity: 2026-08-14 -- 17-04 complete: cell-blind scorer + 12-cell matrix 
 | Phase 17 P02 | 17min | 2 tasks | 3 files |
 | Phase 17 P03 | 19min | 2 tasks | 2 files |
 | Phase 17 P04 | 18min | 3 tasks | 4 files |
+| Phase 17 P05 | 41min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -199,6 +200,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-04: classify's own-is-None branch is what makes the base row a COMPUTED row rather than a leak against itself — deleting it fails the unit test AND trips assemble_matrix's own runtime _prove, so the B4 regression is caught at two independent layers
 - [Phase 17]: 17-04: the four category counts are a ROW property reported on each of that row's three cells (classify takes no j by design, D-12) — the per-column number is n_answerable; cell-scoping was rejected because branch 1 fires before branch 3, making a cell-scoped leak a conditional quantity nobody declared
 - [Phase 17]: 17-04: ROADMAP SC1's no-op-swap shape CONFIRMED by measurement — column collapse, diagonal (1.0, 0.0, 0.0), base row unaffected, and only 2 of 6 Holm comparisons reject so the pre-registered gate does NOT clear; the MEDIUM-confidence paragraph is left in place, marked superseded
+- [Phase 17]: 17-05: the ISO-01 gate's `## Verdict` section holds the verdict and NOTHING else — the first draft put the STOP/PENDING instructions inside it, which would have kept the literal PENDING inside the recorded verdict forever and left assert_report_not_clobbered permanently disarmed after a human wrote GO; they moved to `## Recording The Verdict` above it, and the round-trip is asserted both ways (own output re-drives, a recorded GO raises)
+- [Phase 17]: 17-05: probe_guessability is called ONCE PER SLOT on that slot's uncached questions and all 24 verdicts derive from the per-question cache through fs.exact_match_clean — F-07's 416-completion cache and the instrument's (value, questions) signature pull opposite ways, and deriving all 24 identically keeps no value judged by a different code path than its slot-mates; the anchor's returned clean is _proved equal to the cache-derived answer, which catches a flattening that dropped a draw
+- [Phase 17]: 17-05: the gate driver has NO literal import torch — it needs no torch symbol (load_slim loads, collect is already @torch.no_grad(), preflight_device returns the version, the mask moves by method call) and an unused import fails the ruff criterion; measured instead — torch enters sys.modules transitively through the sibling imports, and the MPS-fallback env set at line 56 precedes the first torch-importing sibling at line 66
+- [Phase 17]: 17-05: five acceptance greps forbid the very identifiers the plan's action text asks the docstring to name (load_adapted_model, inject_lora, load_adapter_weights, load_adapter, weights_only=False) — the mechanical criterion won and build_unadapted_base's docstring carries the whole argument with phase14_recall.py:496 and :516/:530/:557/:565 as pointers instead of identifiers; all five greps return 0
+- [Phase 17]: 17-05: teach_persona._require_go_verdict now names report_path in EVERY abort — it stopped being a Phase 14 gate when ISO-01 started calling it with the Phase 17 report, and 'no ## Verdict section in the fact-set report' would send a Phase 17 operator to results/phase14_factset_report.md, which already carries a recorded GO so the wrong fix would look like it worked
+- [Phase 17]: 17-05: ISO-01 still NOT marked complete (third plan running) — the guessability measurement needs convbase_slim.pt on MPS and cannot enter a CPU-only suite, and SC2's GO/ADAPT verdict is a blocking human decision; 17-07 runs the measurement, records the verdict and marks the requirement
 
 ### Pending Todos
 
@@ -242,8 +249,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T21:42:24.289Z
-Stopped at: Completed 17-04-PLAN.md
+Last session: 2026-08-14T22:11:44.226Z
+Stopped at: Completed 17-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
