@@ -1167,3 +1167,326 @@ def test_sweep_is_not_gated():
     for gate in ("holm", "sign_test_exact", "compare_arms", "taught_replication"):
         assert gate not in called
     assert "report_proportion" not in called  # it runs in the per-cell helper, still ungated
+
+
+# ===== 16-10 Task 2 — the persistence report writer and its clobber guard =====================
+#
+# Every render below writes to a tmp_path. `results/phase16_persistence_report.md` is plan 16-11's
+# artifact and must not exist until the real four-arm run produces it — a test that created it
+# would trip the clobber guard on the run it exists to protect.
+
+_HELD_OUT_PER_FACT = 13
+_TAUGHT_PER_FACT = 14
+
+
+def _arm_record(condition, per_fact_k, *, pid):
+    """One arm's record in `run_condition`'s shape, plus what `main()` adds for the report."""
+    core = sorted(driver.core_fact_ids())
+    by_split = {"held-out": [], "taught": []}
+    for index, fact_id in enumerate(core):
+        for split, count in (("held-out", _HELD_OUT_PER_FACT), ("taught", _TAUGHT_PER_FACT)):
+            by_split[split] += [
+                {
+                    "fact_id": fact_id,
+                    "split": split,
+                    "seed_index": seed,
+                    "k": per_fact_k(condition, index),
+                    "n": 9,
+                }
+                for seed in range(count)
+            ]
+    return {
+        "condition": condition,
+        "config": driver.arm_config_record(torch.zeros(1, 8192)),
+        "by_split": by_split,
+        "provenance": [f"pid: {pid} (PROCESS BOUNDARY)", "driver git_sha: deadbee"],
+        "forbid_ids_masked": 7645,
+        "vocab_size": 8192,
+    }
+
+
+def _dominant(condition, index):
+    """Arm A beats every arm on every fact; arm B beats the two floor arms on 7 of 8."""
+    return {"adapter-only": 5, "prompt-stuffed": 0 if index == 0 else 1}.get(condition, 0)
+
+
+def _all_tied(condition, index):
+    return 3
+
+
+def _sweep_fixture():
+    cells = []
+    for cell in driver.sweep_cells():
+        crosses = cell["crosses_block_size"]
+        cells.append(
+            {
+                **cell,
+                "nominal_prompt_tokens": {"min": 44, "median": 46, "max": 48},
+                "measured_prompt_tokens": {"min": 30, "median": 46, "max": 78},
+                "n_over_block_size": 270 if crosses else 0,
+                "statement_head_offset": 1,
+                "statement_end_offset": {"min": 13, "median": 15, "max": 27},
+                "n_statement_outside_window": 270 if crosses else 0,
+                "overshooting_facts": [],
+                "k": 0,
+                "n": 2430,
+                "n_answerable": 0,
+                "proportion": driver.report_proportion(0, 270, 2430),
+            }
+        )
+    cells.append({**cells[0], "pressure_label": driver.OVERWRITE_PRESSURE_LABEL, "competitors": {}})
+    return {
+        "cells": cells,
+        "applicability": driver.sweep_applicability(),
+        "block_size": driver.SWEEP_BLOCK_SIZE,
+        "targets": driver.SWEEP_PROMPT_TARGETS,
+        "assert_value_in_prompt_caveat": driver.ASSERT_VALUE_IN_PROMPT_CAVEAT,
+        "adversarial_overwrite_note": driver.ADVERSARIAL_OVERWRITE_NOTE,
+    }
+
+
+def _render(monkeypatch, tmp_path, per_fact_k=_dominant):
+    """Render a full report from constructed records, into a tmp_path — never into `results/`."""
+    target = tmp_path / "phase16_persistence_report.md"
+    monkeypatch.setattr(driver, "PERSISTENCE_REPORT_PATH", target)
+    # The two-stage bootstrap is exercised by `tests/test_phase16_stats.py`; 10,000 resamples over
+    # four arms here would cost seconds per test to re-prove someone else's property.
+    monkeypatch.setattr(driver, "cluster_bootstrap", lambda per_fact: (0.194444, 0.486111))
+
+    records = [
+        _arm_record(condition, per_fact_k, pid=1000 + index)
+        for index, condition in enumerate(driver.CONDITION_ORDER)
+    ]
+    gated = driver.per_fact_by_arm(records, tier=driver.GATED_TIER)
+    taught = driver.per_fact_by_arm(records, tier=driver.REPLICATION_TIER)
+    text = driver.write_persistence_report(
+        records,
+        driver.compare_arms(gated, tier=driver.GATED_TIER),
+        driver.taught_replication(taught),
+        _sweep_fixture(),
+        ["report assembly pid: 2000", "driver git_sha: deadbee"],
+    )
+    assert target.read_text(encoding="utf-8") == text
+    assert not driver.PERSISTENCE_REPORT_PATH.parent.samefile(_REPO_ROOT / "results")
+    return text
+
+
+def test_report_has_no_bare_zero_percent(monkeypatch, tmp_path):
+    """STAT-02: a zero renders as its numerator over its denominator with a bound — never `0%`.
+
+    The constructed records include an arm that scores nothing on every fact, so the zero path is
+    the one under test rather than an unexercised branch.
+    """
+    text = _render(monkeypatch, tmp_path)
+    assert re.search(r"\b0(\.0+)?%", text) is None
+    assert "rule of three" in text
+    assert "0 / 13" in text
+
+
+def test_report_carries_every_verbatim_clause(monkeypatch, tmp_path):
+    """D-03, D-07 and D-25 appear byte for byte, compared against `16-CONTEXT.md` itself."""
+    text = _render(monkeypatch, tmp_path)
+    for anchor in ("- **D-03:**", "- **D-07:**", "- **D-25:**"):
+        clause = _context_blockquote(anchor)
+        assert clause in text, f"{anchor} is not reproduced verbatim in the report"
+    assert driver.arm_d_qualifier() == _context_blockquote("- **D-25:**")
+    assert driver.CONDITION_ORDER_PREREGISTRATION in text
+    assert driver.TAUGHT_TIER_STATUS in text
+
+
+def test_report_states_the_arm_d_floor_as_0_05(monkeypatch, tmp_path):
+    """The operative floor is 0.05; the superseded figure appears once, in the reconciliation."""
+    text = _render(monkeypatch, tmp_path)
+    assert "0.05" in text
+    assert text.count("0.125") == 1
+    section = text.split("## The Arm-D Structural Floor", 1)[1].split("\n## ", 1)[0]
+    assert "0.125" in section, "the superseded figure is outside the reconciliation section"
+    assert driver.ARM_D_FLOOR_RECONCILIATION in text
+
+
+def test_report_publishes_the_four_parity_columns(monkeypatch, tmp_path):
+    """SC2: the four scalar columns plus `forbid_ids`, one row per arm."""
+    text = _render(monkeypatch, tmp_path)
+    for column in ("`max_new_tokens`", "`stop_ids`", "`context_length`", "`n_draws`"):
+        assert column in text, column
+    assert "`forbid_ids`" in text
+    parity = text.split("## Arm Parity", 1)[1].split("\n## ", 1)[0]
+    for condition in driver.CONDITION_ORDER:
+        assert f"| `{condition}` |" in parity, condition
+    assert "D-22" in parity, "arm D's realized single draw is published without its reason"
+
+
+def test_report_headline_is_imported_from_the_ladder(monkeypatch, tmp_path):
+    """T-16-47: the headline is `licensed_headline`'s output, never a branch statement retyped."""
+    tree = _driver_tree()
+    writer = _function_def(tree, "write_persistence_report")
+    assert writer is not None
+    assert "licensed_headline" in _called_names(writer)
+    assert "import phase16_ladder" in _driver_source()
+
+    import phase16_ladder as ladder
+
+    source = _driver_source()
+    for statement in ladder.HEADLINE_BRANCHES.values():
+        assert statement[:60] not in source, "a ladder branch statement is duplicated in the driver"
+
+    text = _render(monkeypatch, tmp_path)
+    assert ladder.HEADLINE_BRANCHES["span_2"] in text
+    assert "phase16_ladder_report.md" in text
+    assert driver.LADDER_PROXY_DEGENERATE_CAVEAT in text
+
+
+def test_report_prints_four_provenance_blocks(monkeypatch, tmp_path):
+    """D-01: four pids, so the process split is evidenced by the artifact rather than asserted."""
+    text = _render(monkeypatch, tmp_path)
+    for index, condition in enumerate(driver.CONDITION_ORDER):
+        assert f"### Condition `{condition}` — its own process" in text
+        assert f"pid: {1000 + index}" in text
+    assert text.count("### Condition `") == len(driver.CONDITION_ORDER)
+
+
+def test_arm_d_soft_row_states_the_structural_zero(monkeypatch, tmp_path):
+    """Arm D's soft-tier zero is a property of the POOL — it never gets dressed in a bound."""
+    text = _render(monkeypatch, tmp_path)
+    assert driver.SOFT_TIER_EXCLUSION in text
+    assert "BY CONSTRUCTION" in driver.SOFT_TIER_EXCLUSION
+    soft = text.split("**The soft tier is not reported per fact here", 1)[1].split("\n## ", 1)[0]
+    assert "rule-of-three" in soft, "the reason names the bound it refuses to print"
+    for line in text.splitlines():
+        if "soft" in line.lower() and "embedding-cosine" in line:
+            assert "rule of three" not in line.lower(), line
+
+
+def test_report_carries_the_truncation_caveat(monkeypatch, tmp_path):
+    """The `assert_value_in_prompt` pass on a truncated cell is never 'the value was in view'."""
+    text = _render(monkeypatch, tmp_path)
+    assert driver.ASSERT_VALUE_IN_PROMPT_CAVEAT in text
+    pressure = text.split("## Context Pressure (PERS-03)", 1)[1].split("\n## ", 1)[0]
+    assert driver.ASSERT_VALUE_IN_PROMPT_CAVEAT in pressure
+    assert "cap_persona" in pressure and "never calls" in pressure
+    assert driver.ADVERSARIAL_OVERWRITE_NOTE in pressure
+    for treatment in ("**measured**", "**proof**", "**not_applicable**"):
+        assert treatment in pressure
+    assert pressure.count("| `dilution` |") == 0  # labels render bare, not as code spans
+    assert "dilution + truncation" in pressure
+    assert driver.OVERWRITE_PRESSURE_LABEL in pressure
+
+
+def test_report_never_quotes_the_over_precise_wall_clock(monkeypatch, tmp_path):
+    """T-16-50: the intra-run interval cannot contain a repeat of its own measurement."""
+    text = _render(monkeypatch, tmp_path)
+    assert "39.2" not in text
+    assert "39.2" not in _driver_source()
+    assert "~39 min" in text and "35-44 min" in text
+    assert "11.5%" in text
+
+
+def test_report_carries_both_floor_units(monkeypatch, tmp_path):
+    """T-16-26: the draw unit is printed WITH the label naming it the one STAT-01 forbids."""
+    import phase16_ladder as ladder
+
+    text = _render(monkeypatch, tmp_path)
+    assert ladder.DRAW_UNIT_LABEL in text
+    assert ladder.QUESTION_UNIT_LABEL in text
+    assert ladder.LADDER_FLOOR_SOURCE in text
+    assert "1944" in text and "216" in text
+
+
+def test_report_records_not_demonstrable_when_no_pair_clears(monkeypatch, tmp_path):
+    """A null is a pre-registered OUTCOME, rendered from a committed string, not written after."""
+    text = _render(monkeypatch, tmp_path, per_fact_k=_all_tied)
+    assert driver.NOT_DEMONSTRABLE in text
+    assert "NOT DEMONSTRABLE AT n = 8" in text
+    verdict = text.split("\n## Verdict", 1)[1]
+    assert "cleared their Holm step" not in verdict
+    gate = text.split("## The Inferential Gate", 1)[1].split("\n## ", 1)[0]
+    rows = [line for line in gate.splitlines() if line.startswith("| `") and " x `" in line]
+    assert len(rows) == 6
+    assert all(row.rstrip().endswith("| no |") for row in rows), rows
+    assert all("| 1.0000000 |" in row for row in rows), rows
+
+
+def test_report_renders_exactly_six_holm_rows(monkeypatch, tmp_path):
+    """D-09: six pairs in the gate table, and the taught replication carries no alpha at all."""
+    text = _render(monkeypatch, tmp_path)
+    gate = text.split("## The Inferential Gate", 1)[1].split("\n## ", 1)[0]
+    rows = [line for line in gate.splitlines() if line.startswith("| `") and " x `" in line]
+    assert len(rows) == len(driver.HOLM_FAMILY_PAIRS) == 6, rows
+    assert f"{driver.HOLM_ALPHA} / 6 = 0.0083333" in gate
+
+    replication = text.split("## Taught Replication", 1)[1].split("\n## ", 1)[0]
+    assert "alpha at step" not in replication
+    assert "rejected" not in replication.lower()
+    assert (
+        len(
+            [line for line in replication.splitlines() if line.startswith("| `") and " x `" in line]
+        )
+        == 6
+    )
+
+
+def test_clobber_guard_anchors_on_the_verdict_section(tmp_path, monkeypatch):
+    """T-16-49: a recorded verdict is refused; a PENDING one is not; a foreign file is refused."""
+    import pytest
+
+    target = tmp_path / "report.md"
+    monkeypatch.setattr(driver, "PERSISTENCE_REPORT_PATH", target)
+
+    driver.assert_persistence_report_not_clobbered()  # absent file: nothing to protect
+
+    target.write_text("# r\n\n## Verdict\n\nPENDING\n", encoding="utf-8")
+    driver.assert_persistence_report_not_clobbered()
+
+    target.write_text("# r\n\n## Verdict\n\nspan_2, recorded.\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        driver.assert_persistence_report_not_clobbered()
+
+    target.write_text("# not this writer's output\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        driver.assert_persistence_report_not_clobbered()
+
+    # A PROSE mention of the heading below a recorded verdict must not rescue it (15-04 CR-02).
+    target.write_text(
+        "## Verdict\n\nspan_2, recorded.\n\n## Later\n\nsee the heading above — PENDING nothing.\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit):
+        driver.assert_persistence_report_not_clobbered()
+
+    source = _driver_source()
+    assert 'split("## Verdict")' not in source
+    assert "VERDICT_SECTION" in source
+
+
+def test_report_monotone_claim_carries_the_ladder_ceiling(monkeypatch, tmp_path):
+    """D-28 as locked, WITH its ceiling in the same paragraph as the permission.
+
+    The committed branch is `span_2`, so D-28's branch-level condition is met — but that branch
+    licenses a two-token in-context copy while the material this comparison scores is 4-8 tokens
+    long. A permission printed alone is the sentence a reader quotes, so the bound travels with it.
+    """
+    text = _render(monkeypatch, tmp_path)
+    assert driver.MONOTONE_CLAIM_LICENSED.format(branch="span_2", statement="") in text
+    assert driver.MONOTONE_CLAIM_REFUSED.format(branch="span_2", statement="") not in text
+    assert "That is the whole of what is licensed" in text
+    assert "longer than the passing rung's span" in text
+    for template in (driver.MONOTONE_CLAIM_LICENSED, driver.MONOTONE_CLAIM_REFUSED):
+        assert "{branch}" in template, "the branch is interpolated, never retyped per outcome"
+
+
+def test_report_tables_have_no_pipe_bearing_cells(monkeypatch, tmp_path):
+    """A pipe inside a markdown cell silently splits the row into extra columns."""
+    text = _render(monkeypatch, tmp_path)
+    header_widths = {}
+    for line in text.splitlines():
+        if not line.startswith("| ") or set(line.strip()) <= set("| -"):
+            continue
+        width = line.count("|")
+        header_widths.setdefault(width, 0)
+        header_widths[width] += 1
+    rows = [line for line in text.splitlines() if line.startswith("| ")]
+    assert rows
+    # Every row of a given table has the same pipe count as its own header; a stray pipe inside a
+    # cell shows up as a width nobody else shares.
+    orphan = [width for width, count in header_widths.items() if count == 1]
+    assert not orphan, f"row widths {orphan} appear once — a cell probably carries a bare pipe"
