@@ -56,6 +56,51 @@ SWEEP_LABEL_KEY = "sweep"
 # indistinguishable in the report from a category that genuinely never occurred.
 CATEGORIES = ("diagonal", "leak", "base_prior", "confabulation")
 
+# The four sweeps: three adapters plus the ISO-03 adapter-off row. DERIVED from the
+# pre-registration, never a retyped four-tuple — a hand-typed list is a second copy free to stop
+# agreeing with the personas the gate was registered on.
+SWEEPS = personas.PERSONAS + (personas.BASE_ROW,)
+
+# The three provenance fields every sweep record carries about its weights. Constants for the same
+# reason as `SWEEP_QUESTIONS_KEY`: the sweep writer and `assert_sweeps_ran_on_distinct_weights` are
+# the two sides of one contract, and a literal spelled twice is a `KeyError` at report time — after
+# the four GPU sweeps have already been spent.
+#
+# The three are NOT interchangeable and none may stand in for another:
+#   * `lora_b_sha256`        — WHICH WEIGHTS were resident, digested off the LIVE tensors.
+#   * `adapter_file_sha256`  — WHICH FILE was read, digested off the bytes on disk.
+#   * `adapter_enabled`      — WHETHER THE DELTA BRANCH could execute at all.
+LORA_B_DIGEST_KEY = "lora_b_sha256"
+ADAPTER_FILE_DIGEST_KEY = "adapter_file_sha256"
+ADAPTER_ENABLED_KEY = "adapter_enabled"
+
+# ISO-03 — what makes the adapter-off column a control, and what does NOT. Written down because the
+# wrong version of this was believed during planning and would otherwise be re-derived.
+#
+# `personacore.lora.adapter_disabled` flips `LoRALinear.enabled`, which is a plain Python bool
+# (`src/personacore/lora/layer.py:35`) deliberately kept out of `state_dict()` so it can never
+# pollute an artifact (D-05). It therefore leaves `lora_B` EXACTLY AS LOADED. For the base sweep
+# that is Phase 14's `checkpoints/persona_adapter.pt`, which `phase14_recall.load_adapted_model`
+# loads by default — resident, and inert.
+#
+# **NO WEIGHT DIGEST CAN WITNESS "THE ADAPTER WAS OFF."** The flag lives outside every tensor, so
+# the record carries two independent fields instead of asking one to prove the other's claim:
+# `lora_b_sha256` says which weights were resident, `adapter_enabled` says whether the delta branch
+# could execute. The base sweep additionally proves the second AT RUNTIME by asserting every
+# `LoRALinear.enabled` is False inside the `adapter_disabled` context.
+#
+# An earlier draft of this phase expected the base sweep to carry the all-zero `lora_B` digest. That
+# is FALSE against every real run, and an assertion built on it would abort the report after the
+# four sweeps were paid for. This note exists so the expectation is not re-derived from the same
+# wrong premise.
+BASE_COLUMN_NOTE = (
+    "the adapter-off column is a control because `adapter_disabled` gates the delta branch off, "
+    "NOT because its weights are zeroed: the context manager flips a plain Python bool that never "
+    "enters state_dict(), so the base sweep's live lora_B digest is whichever adapter was resident "
+    "(Phase 14's persona_adapter.pt, loaded by default). `adapter_enabled` is therefore the ONLY "
+    "field that can witness inertness, and `lora_b_sha256` is never asked to."
+)
+
 
 def _prove(condition, message):
     """Loud proof: ``SystemExit`` naming the violated contract (never an ``-O``-strippable assert).
@@ -402,3 +447,235 @@ def assemble_matrix(sweep_records, values_by_slot, base_texts):
             }
 
     return matrix
+
+
+# =============================================================================================
+# ===== ISO-04 — the adapter-swap canary, in BOTH layers =======================================
+# =============================================================================================
+#
+# All three personas share an identical `lora_` key set, identical shapes and an identical
+# `lora_config`, so every audit in `load_adapter_weights` — keys, shape/dtype and scale — passes for
+# the WRONG artifact. The load path is structurally silent about adapter identity, which is exactly
+# the property ISO-04 exists to close.
+
+
+def lora_b_digest(model):
+    """sha256 over every LIVE ``lora_B`` tensor, in sorted module-name order.
+
+    **The LIVE tensors, deliberately, and NOT the artifact file's digest.** A file digest proves
+    which file was READ; it can never prove the tensors reached the model — a load that silently
+    no-ops leaves the file digest looking perfect. Both digests are recorded per sweep for exactly
+    that reason (``LORA_B_DIGEST_KEY`` and ``ADAPTER_FILE_DIGEST_KEY``), and neither substitutes for
+    the other: identical live digests mean two sweeps ran on the same weights, identical file
+    digests mean the same artifact was named twice, and each can happen without the other.
+
+    Bytes are read off a detached CPU copy so the digest is stable across MPS, CUDA and CPU — the
+    same discipline as ``phase16_persistence.forbid_digest``, for the same reason.
+    """
+    import hashlib
+
+    from personacore.lora import LoRALinear
+
+    resident = {
+        name: module.lora_B
+        for name, module in model.named_modules()
+        if isinstance(module, LoRALinear)
+    }
+    digest = hashlib.sha256()
+    for name in sorted(resident):
+        digest.update(resident[name].detach().to("cpu").contiguous().numpy().tobytes())
+    return digest.hexdigest()
+
+
+def load_adapter_with_canary(model, artifact, *, label):
+    """ISO-04's IN-PROCESS layer: load an adapter, prove the load did something, return a digest.
+
+    Snapshots every ``lora_B``, calls ``personacore.lora.load_adapter_weights`` (whose three audits
+    run BEFORE any tensor is copied — never a bare ``strict=False``, which half-applies and raises
+    at the end on a corrupted model), then proves two things the audits structurally cannot see:
+    that at least one ``lora_B`` MOVED, and that no ``lora_B`` is entirely zero.
+
+    **The LIMIT of this layer, which is why the cross-process layer is the unskippable half.** In a
+    fresh process the prior state is always Phase 14's adapter — that is what ``load_adapted_model``
+    loaded — so "at least one ``lora_B`` changed" is satisfied by loading ANY Phase 17 artifact. It
+    catches a double load and it catches an identity adapter. **It cannot tell persona A's artifact
+    from persona B's.** That discrimination is ``assert_sweeps_ran_on_distinct_weights``'s job:
+    pairwise-distinct LIVE digests across the four records, plus the artifact file digests recorded
+    beside them.
+
+    **Where this canary lives, and why NOT inside ``load_adapter_weights`` (declined with a measured
+    reason, not overlooked).** Putting a "some ``lora_B`` changed / none is entirely zero" assertion
+    at ``src/personacore/lora/inject.py``'s choke point would be the smaller diff and would cover
+    ``scripts/personalize_demo.py`` and every future consumer rather than only this driver. That is
+    a real advantage, and it is declined because ``load_adapter_weights`` legitimately supports
+    RE-APPLYING AN IDENTICAL ADAPTER ONTO THE MODEL IT CAME FROM. The measured case is
+    ``tests/test_lora_artifact.py::test_real_slim_two_artifact_load_cpu``: it nudges ``lora_B``,
+    exports that model's own adapter, and loads it straight back onto the SAME model — so no
+    ``lora_B`` changes, and a must-differ assertion at the choke point would refuse a committed v2.0
+    test that is exercising the export/load round-trip correctly. (``checkpoints/model_slim.pt``
+    exists in this tree, so that test's ``skipif`` does not engage and it runs locally.)
+
+    The general principle: a same-adapter re-apply is a VALID use of the library call, so "the
+    adapter resident after this load must DIFFER from the one before it" is a **Phase 17 run
+    contract**, not a library invariant. It belongs with the run.
+    """
+    import torch
+
+    from personacore.lora import LoRALinear, load_adapter_weights
+
+    before = {
+        name: module.lora_B.detach().clone()
+        for name, module in model.named_modules()
+        if isinstance(module, LoRALinear)
+    }
+    _prove(
+        before,
+        f"sweep {label!r} tried to load an adapter onto a model with no LoRALinear modules — "
+        "injection never happened, so `load_adapter_weights` has no keys to audit against and "
+        "every completion this sweep produced would come from the bare base model",
+    )
+
+    load_adapter_weights(model, artifact)
+
+    after = {
+        name: module.lora_B
+        for name, module in model.named_modules()
+        if isinstance(module, LoRALinear)
+    }
+    _prove(
+        any(not torch.equal(after[name], tensor) for name, tensor in before.items()),
+        f"loading sweep {label!r}'s adapter changed NO lora_B tensor (ISO-04). All three personas "
+        "share an identical lora_ key set, identical shapes and an identical lora_config, so every "
+        "audit in load_adapter_weights passes for the WRONG artifact — a no-op swap is invisible "
+        "in the completions and the matrix it produces is fabricated: the resident adapter's "
+        "column reads high in every row while the other two read zero",
+    )
+    zeroed = sorted(name for name, tensor in after.items() if not bool(tensor.any()))
+    _prove(
+        not zeroed,
+        f"sweep {label!r} loaded an adapter whose lora_B is all-zero at {zeroed} — that is the "
+        "identity gate (`src/personacore/lora/layer.py:30` initialises lora_B to zeros so a fresh "
+        "wrapper is bit-identical to the bare Linear), not an adapter. The delta branch would "
+        "contribute exactly nothing and this sweep would be the base model wearing a persona name",
+    )
+    return lora_b_digest(model)
+
+
+def assert_sweeps_ran_on_distinct_weights(sweep_records):
+    """ISO-04's CROSS-PROCESS layer, and the unskippable half. Runs BEFORE any scoring.
+
+    ``assert_arms_are_pairable``'s register (``phase16_persistence.py:2658``), repriced for this
+    phase and extended with the two claims specific to it — ISO-04's weight distinctness and
+    ISO-03's control property. Every refusal here is cheaper than a published matrix that should
+    never have been assembled.
+
+    * **One ``git_sha``** across all four records — four processes, ONE codebase.
+    * **Four DISTINCT pids** — the process split, evidenced rather than asserted.
+    * **Identical ``(slot, seed_index, question)`` sets.** The TRIPLE rather than the bare index,
+      because every sweep's bare index set is ``0..103`` and would match trivially while the
+      questions behind it differed (D-02 keys on the slot, never on ``fact_id``).
+    * **ISO-04:** the three adapter sweeps' live ``lora_B`` digests are pairwise distinct AND their
+      artifact file digests are pairwise distinct. The two are separate claims and neither implies
+      the other.
+    * **ISO-03, in its CORRECTED form:** the base record's ``adapter_enabled`` is ``False`` and
+      every adapter record's is ``True``; and separately, the base record's live digest differs
+      from all three adapter digests.
+
+    **The base record's digest is NOT compared against a zeroed-``lora_B`` digest, and must not
+    be.** ``adapter_disabled`` flips a plain Python bool and leaves ``lora_B`` exactly as loaded, so
+    against a real run the base sweep's digest is Phase 14's ``persona_adapter.pt`` (see
+    ``BASE_COLUMN_NOTE``). That assertion fails on every honest run; ``adapter_enabled`` is the one
+    field that can carry the claim, and it is the field this checks.
+    """
+    records = tuple(sweep_records)
+    seen = tuple(record[SWEEP_LABEL_KEY] for record in records)
+    _prove(
+        sorted(seen) == sorted(SWEEPS),
+        f"the report was handed sweeps {sorted(seen)} but the pre-registration commits "
+        f"{sorted(SWEEPS)} — a missing sweep cannot be found by comparing the ones that are "
+        "present, and a duplicated one would be scored twice under two names",
+    )
+    by_label = {record[SWEEP_LABEL_KEY]: record for record in records}
+    adapters = [by_label[label] for label in personas.PERSONAS]
+    base = by_label[personas.BASE_ROW]
+
+    shas = {record["git_sha"] for record in records}
+    _prove(
+        len(shas) == 1,
+        f"the four sweeps recorded {len(shas)} different git SHAs ({sorted(shas)}) — the code "
+        "changed mid-run, so the sweeps did not run the same instrument and the cells they "
+        "produced are not cells of one matrix",
+    )
+    pids = {record["pid"] for record in records}
+    _prove(
+        len(pids) == len(SWEEPS),
+        f"the four sweep records carry {len(pids)} distinct pid(s) ({sorted(pids)}) — one "
+        "process per sweep is what makes the in-process swap failure impossible in the first "
+        "place, and two sweeps sharing a process crossed the exact boundary ISO-04 isolates",
+    )
+
+    keyed = {
+        record[SWEEP_LABEL_KEY]: {
+            (entry["slot"], entry["seed_index"], entry["question"])
+            for entry in record[SWEEP_QUESTIONS_KEY]
+        }
+        for record in records
+    }
+    reference = keyed[SWEEPS[0]]
+    for label in SWEEPS[1:]:
+        _prove(
+            keyed[label] == reference,
+            f"sweep {label!r} generated a different (slot, seed_index, question) set from "
+            f"{SWEEPS[0]!r}: {len(keyed[label] ^ reference)} entries differ, e.g. "
+            f"{sorted(keyed[label] ^ reference)[:3]}. Cell-to-cell comparability rests entirely "
+            "on the four sweeps answering the SAME questions under the SAME seeds — and the bare "
+            "index set is 0..n-1 in every sweep, so it matches trivially while the questions "
+            "behind it differ",
+        )
+
+    live = {record[SWEEP_LABEL_KEY]: record[LORA_B_DIGEST_KEY] for record in adapters}
+    _prove(
+        len(set(live.values())) == len(adapters),
+        f"the three adapter sweeps recorded {len(set(live.values()))} distinct live lora_B "
+        f"digest(s) ({live}) — two sweeps ran on the SAME resident weights (ISO-04). Every "
+        "off-diagonal in those rows is then fabricated and their diagonal is one number reported "
+        "twice under two persona names",
+    )
+    files = {record[SWEEP_LABEL_KEY]: record[ADAPTER_FILE_DIGEST_KEY] for record in adapters}
+    _prove(
+        len(set(files.values())) == len(adapters),
+        f"the three adapter sweeps read {len(set(files.values()))} distinct artifact file(s) "
+        f"({files}) — the same adapter file was named under two persona names (ISO-04). This is a "
+        "separate claim from the live digests and neither implies the other: a file digest proves "
+        "which file was read, a live digest proves which weights the model ended up holding",
+    )
+
+    _prove(
+        base[ADAPTER_ENABLED_KEY] is False,
+        f"the {personas.BASE_ROW!r} record carries {ADAPTER_ENABLED_KEY} = "
+        f"{base[ADAPTER_ENABLED_KEY]!r} (ISO-03). This flag is the ONLY evidence the delta branch "
+        "was inert: `enabled` is a plain Python bool outside state_dict(), so no weight digest and "
+        "no artifact can witness it. A base column generated with the adapter live is not a "
+        "control, it is a fourth adapter row mislabelled as one",
+    )
+    live_adapter_flags = {
+        record[SWEEP_LABEL_KEY]: record[ADAPTER_ENABLED_KEY]
+        for record in adapters
+        if record[ADAPTER_ENABLED_KEY] is not True
+    }
+    _prove(
+        not live_adapter_flags,
+        f"adapter sweep(s) {live_adapter_flags} did not record {ADAPTER_ENABLED_KEY} = True "
+        "(ISO-03). An adapter sweep generated with the delta branch gated off is the base model "
+        "under a persona's name: its row would read as perfect isolation while measuring nothing",
+    )
+    collisions = sorted(
+        label for label, digest in live.items() if digest == base[LORA_B_DIGEST_KEY]
+    )
+    _prove(
+        not collisions,
+        f"the {personas.BASE_ROW!r} sweep's live lora_B digest equals {collisions}'s — the "
+        "adapter-off column ran on a Phase 17 adapter's weights, so the control is not a control "
+        "(ISO-03). Expected there is Phase 14's persona_adapter.pt, which load_adapted_model loads "
+        f"by default: {BASE_COLUMN_NOTE}",
+    )
