@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: ready_to_plan
-stopped_at: Phase 16 complete (11/11) — ready to discuss Phase 17
-last_updated: 2026-08-14T12:04:15.543Z
+stopped_at: Phase 16 complete (11/11); W1 closed (quick 260814-d0j) — ready to discuss Phase 17
+last_updated: 2026-08-14T12:41:00.000Z
 last_activity: 2026-08-14
 progress:
   total_phases: 3
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 Phase: 17
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-08-14
+Last activity: 2026-08-14 - Completed quick task 260814-d0j: closed W1 (LoRA consumers inject the artifact's own config; scale audited at load_adapter_weights)
 
 ## Performance Metrics
 
@@ -97,7 +97,7 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - Phase 16 is a FOUR-arm comparison — prompt-stuffed / adapter-only / base-with-neither / embedding-cosine (PERS-04) — framed neutrally with no presupposed winner. Phase 14's 1/1944 in-context control means prompt-stuffing is at the floor; a "weights beat prompting ~1000x" headline would be measuring a capability deficit and is refuted by a number already in this repo.
 - Bootstrap resampling is at FACT level (n=8), not question level. The exact paired sign test over 2^8 = 256 partitions is the inferential gate; the bootstrap CI is descriptive.
 - Under Holm (STAT-03) across 6 pairwise arm comparisons, only 8/8 unanimity clears (p = 0.007812 < 0.05/6). "Not demonstrable at n=8" is a legitimate pre-registered Phase-16 outcome, recorded as-written, exactly as Phase 12 recorded lambda*=None.
-- W1 (`LoRAConfig()` defaults instead of `LoRAConfig(**artifact["lora_config"])`) must land before ANY Phase-17 adapter trains — shape audits catch `r` drift but never `alpha`.
+- ~~W1 (`LoRAConfig()` defaults instead of `LoRAConfig(**artifact["lora_config"])`) must land before ANY Phase-17 adapter trains — shape audits catch `r` drift but never `alpha`.~~ **CLOSED 2026-08-14 (`0a26702`, `ec3e94a`)** — quick task 260814-d0j, landed before any Phase-17 planning. Fixed at the choke point, not only at the three call sites: `load_adapter_weights` now audits every `LoRALinear.scale` against `lora_config["alpha"]/["r"]`, so a Phase-17 consumer that forgets to read the config fails loudly at load time instead of applying the delta at the wrong magnitude. Mutation-proved (audit stripped → the same alpha=32-vs-16 artifact loads silently). Behavioural no-op: 0 files changed under `results/`.
 
 - [Phase 12]: 12-01: val_mask_bin ships (USER LOCK 3) — in-loop val_loss gates best.pt selection, selected FOR assistant-token dialogue capability; unmasked CE would partially reward modeling user turns
 - [Phase 12]: 12-01: v1.0 eval block logs NO step-0 row — block runs after step += 1; Plan 12-04 must measure step-0 retention baseline outside train()
@@ -188,7 +188,7 @@ None open. Both v2.0 blockers are resolved:
 - ~~Phase 12 research flag: λ selection + full-FT LR/budget calibration.~~ **Resolved** — the calibration smoke ran fully pre-registered and returned an honest all-fail (λ\*=None, "EWC not demonstrable at this budget"); production used a separately-recorded discretionary λ=0.01.
 - ~~DEBT-01/02 must land before the first v2.0 fine-tune step.~~ **Resolved** — DEBT-01 landed 2026-07-31 pre-work. DEBT-02 turned out to be two items: the PPL half was closed by design in the same pre-work (`ca14a89`), and the warm-sampling half — the genuine v1.0 carry-over — was closed 2026-08-12 (`3781a97`).
 
-Carried into v3.0 as non-blocking notes (see `milestones/v2.0-MILESTONE-AUDIT.md`): W1 runtime consumers inject with `LoRAConfig()` defaults rather than the artifact's own; W3 one λ=0 frontier point is a hand-entered literal; `scripts/evaluate.py` is unseeded, so `results/samples.md` is not reproducible run to run.
+Carried into v3.0 as non-blocking notes (see `milestones/v2.0-MILESTONE-AUDIT.md`): ~~W1 runtime consumers inject with `LoRAConfig()` defaults rather than the artifact's own~~ **CLOSED 2026-08-14 (`0a26702`, `ec3e94a`)** — it was the one carry-over the milestone audit marked as blocking Phase 17, so it landed first; W3 one λ=0 frontier point is a hand-entered literal; `scripts/evaluate.py` is unseeded, so `results/samples.md` is not reproducible run to run.
 
 ### Quick Tasks Completed
 
@@ -197,6 +197,7 @@ Carried into v3.0 as non-blocking notes (see `milestones/v2.0-MILESTONE-AUDIT.md
 | 260605-lgy | MPS device-layer support: RuntimeConfig MPS detection (fp32/AMP-off, bf16-Pascal guard intact) + hard rename preflight_p100 → preflight_device (CUDA-P100 → MPS → CPU) | 2026-06-05 | 398b74e | [260605-lgy-add-mps-support-to-the-device-layer-runt](./quick/260605-lgy-add-mps-support-to-the-device-layer-runt/) |
 | 260801-r9y | Phase-13 closeout corrections: ROADMAP SC1 names the arms that actually ran (λ=0 vs pre-chosen λ=0.01, citing the A/B report); stop-fraction note derived from measured counts in script + markdown; plot_phase13 fails loudly on a missing/blank column and pins the frontier endpoint to step 1250 (both PNGs SHA-256-identical) | 2026-08-01 | d679440, 8812638, f0bae0b | [260801-r9y-SUMMARY.md](./quick/260801-r9y-SUMMARY.md) |
 | 260802-h3g | CR-02 follow-through (14-SECURITY UF-4): the anchored verdict-SECTION read extracted to `scripts/_verdict.py` and wired into the two remaining naive `split("## Verdict")[-1]` guards — `teach_persona._refuse_clobber` and `phase14_factset_gate`, whose inline `main()` block was extracted so it is testable without a checkpoint. RED proven against the unmodified guards; the naive tail is kept in the test as a regression tripwire | 2026-08-02 | f16ce64, 2b8ed33, a39b753 | [260802-h3g-anchor-the-verdict-section-clobber-guard](./quick/260802-h3g-anchor-the-verdict-section-clobber-guard/) |
+| 260814-d0j | W1 closed before any Phase-17 adapter work: `load_adapter_weights` gains a third audit — every `LoRALinear.scale` checked against the artifact's own `lora_config["alpha"]/["r"]` — because `alpha` is shape-invisible and the key/shape audits could never see it. The three runtime consumers (`phase14_recall.load_adapted_model`, `run_bit_identity_control`, `personalize_demo.build_demo`) now inject at the artifact's config instead of `LoRAConfig()` defaults; the two producers are untouched. Mutation-proved; 579 passed / 1 skipped; 0 files changed under `results/` | 2026-08-14 | 0a26702, ec3e94a | [260814-d0j-close-w1-lora-consumers-inject-config-de](./quick/260814-d0j-close-w1-lora-consumers-inject-config-de/) |
 
 ## Deferred Items
 
