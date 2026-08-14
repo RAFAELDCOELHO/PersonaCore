@@ -428,7 +428,6 @@ def build_demo() -> gr.Blocks:
     # every wrapped projection's state-dict keys with a `.base.` infix, so injecting first would
     # break every key the checkpoint carries.
     model.load_state_dict(ckpt["model"])
-    inject_lora(model, LoRAConfig())
 
     # The trio is READ off the loaded base, never recomputed (D-02 provenance).
     fingerprint = {
@@ -441,7 +440,13 @@ def build_demo() -> gr.Blocks:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         artifact = load_adapter(ADAPTER_PATH, expected_fingerprint=fingerprint)
-    # Key + shape audit BEFORE a single tensor is copied (09-REVIEW CR-02).
+
+    # W1: inject at the ARTIFACT's own rank/alpha, never LoRAConfig() defaults. `alpha` moves
+    # LoRALinear.scale with no shape change, so defaults would apply this persona's delta at the
+    # wrong magnitude — a demo answering from a mis-scaled adapter, with nothing raised. Reading
+    # the persona file touches no model state, so this preserves the LOAD BEFORE INJECT ordering.
+    inject_lora(model, LoRAConfig(**artifact["lora_config"]))
+    # Key + shape + scale audit BEFORE a single tensor is copied (09-REVIEW CR-02, W1).
     load_adapter_weights(model, artifact)
 
     runtime = RuntimeConfig(device="cpu")  # pin CPU explicitly — never drift to MPS in the demo.

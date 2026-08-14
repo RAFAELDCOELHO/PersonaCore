@@ -527,14 +527,6 @@ def load_adapted_model(device, adapter_path=None):
     # break every key the checkpoint carries.
     model.load_state_dict(ckpt["model"])
 
-    n_wrapped = inject_lora(model, LoRAConfig())
-    _prove(
-        n_wrapped == 6 * model_cfg.n_layer,
-        f"inject_lora wrapped {n_wrapped} projections but the base has "
-        f"{model_cfg.n_layer} layers, so exactly {6 * model_cfg.n_layer} were expected "
-        "(6 allowlisted projections per block) — the adapter would apply to the wrong model",
-    )
-
     if not adapter_path.exists():
         raise SystemExit(
             f"[phase14_recall] missing {adapter_path} — the taught persona file. Run "
@@ -556,7 +548,20 @@ def load_adapted_model(device, adapter_path=None):
     artifact["fingerprint_warnings"] = [
         str(w.message) for w in caught if issubclass(w.category, UserWarning)
     ]
-    # Key + shape audit BEFORE a single tensor is copied (09-REVIEW CR-02).
+
+    # W1: inject at the ARTIFACT's own rank/alpha, never LoRAConfig() defaults. `alpha` moves
+    # LoRALinear.scale with no shape change, so defaults would apply this adapter's delta at the
+    # wrong magnitude and no audit would see it. Reading the persona file above touches no model
+    # state, so it sits between the base load and the injection without disturbing the
+    # LOAD BEFORE INJECT ordering.
+    n_wrapped = inject_lora(model, LoRAConfig(**artifact["lora_config"]))
+    _prove(
+        n_wrapped == 6 * model_cfg.n_layer,
+        f"inject_lora wrapped {n_wrapped} projections but the base has "
+        f"{model_cfg.n_layer} layers, so exactly {6 * model_cfg.n_layer} were expected "
+        "(6 allowlisted projections per block) — the adapter would apply to the wrong model",
+    )
+    # Key + shape + scale audit BEFORE a single tensor is copied (09-REVIEW CR-02, W1).
     load_adapter_weights(model, artifact)
 
     model.to(device)
@@ -1445,8 +1450,12 @@ def run_bit_identity_control(tok, questions):
     # projection's state-dict keys with a `.base.` infix.
     gated = GPT(model_cfg)
     gated.load_state_dict(ckpt["model"])
-    inject_lora(gated, LoRAConfig())
-    load_adapter_weights(gated, load_adapter(ADAPTER_PATH))
+    # W1: the artifact's OWN rank/alpha, never LoRAConfig() defaults — see load_adapted_model.
+    # Bit identity holds under any scale (the disabled branch never executes), but injecting a
+    # config that is not the artifact's own would make this control prove it for the wrong model.
+    art = load_adapter(ADAPTER_PATH)
+    inject_lora(gated, LoRAConfig(**art["lora_config"]))
+    load_adapter_weights(gated, art)
     set_adapter_enabled(gated, False)
     gated.to(device).eval()
 
