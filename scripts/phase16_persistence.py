@@ -2466,3 +2466,320 @@ def write_persistence_report(arm_records, comparison, replication, sweep, proven
     PERSISTENCE_REPORT_PATH.write_text(text, encoding="utf-8")
     print(f"[phase16_persistence] wrote {PERSISTENCE_REPORT_PATH}")
     return text
+
+
+# =============================================================================================
+# ===== main() — ONE condition per invocation, and no way to run two (D-01 / T-16-46) =========
+# =============================================================================================
+
+ARM_RECORD_DIR = _REPO_ROOT / "results"
+
+_USAGE = (
+    "usage: python scripts/phase16_persistence.py (--condition NAME | --report)\n"
+    "\n"
+    "  --condition NAME   run EXACTLY ONE arm and write results/phase16_arm_NAME.json.\n"
+    "                     NAME must be one of the pre-registered conditions.\n"
+    "  --report           assemble results/phase16_persistence_report.md from the four arm\n"
+    "                     records already on disk.\n"
+    "\n"
+    "There is deliberately NO mode that runs more than one condition. D-01 requires four fresh\n"
+    "processes, one per arm, and the only structural way to guarantee that is to make a single\n"
+    "process incapable of running two. A convenience flag would turn the process split from a\n"
+    "PROPERTY of this driver into a convention an operator is trusted to follow."
+)
+
+
+def build_parser():
+    """The argument surface, as a spec a test can read: two mutually exclusive modes, no third.
+
+    ``--condition`` is constrained to ``CONDITION_ORDER`` by argparse itself, so an unrecognized
+    arm exits non-zero with the four legal names printed rather than reaching a dispatch that
+    would have to invent a refusal. Exactly one of the two modes is REQUIRED: an argumentless
+    invocation must not fall through to "run something reasonable" when the reasonable thing is a
+    multi-hour generation run.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="phase16_persistence.py",
+        description="Phase 16 four-arm weight-vs-prompt comparison — ONE condition per process.",
+        epilog=_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--condition",
+        choices=CONDITION_ORDER,
+        help="the single pre-registered arm this process runs",
+    )
+    mode.add_argument(
+        "--report",
+        action="store_true",
+        help="assemble the report from the four arm records on disk",
+    )
+    return parser
+
+
+def arm_record_path(condition):
+    """Where one arm's raw record lands. Read from the module global so tests can redirect it."""
+    _prove(
+        condition in CONDITION_ORDER,
+        f"condition {condition!r} is not one of the pre-registered {CONDITION_ORDER}",
+    )
+    return ARM_RECORD_DIR / f"phase16_arm_{condition}.json"
+
+
+def serializable_config(config):
+    """The parity columns in a JSON-safe shape, DERIVED from ``PARITY_COLUMNS``.
+
+    ``shared_arm_config`` is deliberately dropped: object identity is an IN-PROCESS property and
+    cannot survive a file, so writing it would record something that means nothing on the other
+    side. ``--report`` re-establishes it through
+    ``assert_recorded_config_matches_the_shared_object``, and only after proving every recorded
+    column equals the live object's own field.
+    """
+    row = {column: config[column] for column in PARITY_COLUMNS}
+    row["stop_ids"] = sorted(config["stop_ids"])
+    return row
+
+
+def assert_recorded_config_matches_the_shared_object(condition, recorded):
+    """Prove a JSON-loaded config equals ``SHARED_ARM_CONFIG``, then restore what JSON dropped.
+
+    The four scalar columns are compared against the live object's OWN fields — not against four
+    literals — so a record written by a process holding a different config aborts here rather than
+    being silently rehydrated into agreement. What ``assert_arm_parity`` then adds on top is the
+    genuinely cross-process check this cannot make: that all four arms recorded the SAME
+    ``forbid_ids`` content hash, which no single record can attest to on its own.
+    """
+    for column, expected in (
+        ("max_new_tokens", SHARED_ARM_CONFIG.max_new_tokens),
+        ("context_length", SHARED_ARM_CONFIG.context_length),
+        ("n_draws", SHARED_ARM_CONFIG.n_draws),
+    ):
+        _prove(
+            recorded[column] == expected,
+            f"arm {condition!r} recorded {column} = {recorded[column]!r} but SHARED_ARM_CONFIG "
+            f"holds {expected!r} — that arm ran under a different generation budget from the one "
+            "this report would publish for it, and the difference is invisible in its rate",
+        )
+    _prove(
+        sorted(recorded["stop_ids"]) == sorted(SHARED_ARM_CONFIG.stop_ids),
+        f"arm {condition!r} recorded stop_ids {recorded['stop_ids']} against "
+        f"{sorted(SHARED_ARM_CONFIG.stop_ids)} — the arms stopped on different tokens",
+    )
+    return {
+        **recorded,
+        "stop_ids": SHARED_ARM_CONFIG.stop_ids,
+        "shared_arm_config": SHARED_ARM_CONFIG,
+    }
+
+
+def assert_arms_are_pairable(arm_records):
+    """PERS-02's pairing claim, checked rather than assumed: same code, same questions, same seeds.
+
+    Three proofs, and each closes a different way four processes can stop being one comparison:
+
+    * **One ``git_sha`` across all four.** Four processes, ONE codebase. A mismatch means the code
+      changed mid-run and the arms are not comparable — and the report would publish them as if
+      they were.
+    * **Four DISTINCT pids.** D-01's split, evidenced. One pid appearing twice means two arms
+      shared a process, which is the single boundary this comparison is about.
+    * **Identical ``(fact_id, split, seed_index)`` sets.** PERS-02 claims the arms are PAIRED by
+      ``seed_index``; asserting it here is what makes the claim checkable. The TRIPLE rather than
+      the bare index, because every arm's bare index set is 0..n-1 and would match trivially while
+      the questions behind it differed.
+    """
+    _prove(
+        sorted(record["condition"] for record in arm_records) == sorted(CONDITION_ORDER),
+        f"the report was handed {sorted(r['condition'] for r in arm_records)} but the "
+        f"pre-registration commits {sorted(CONDITION_ORDER)} — a missing arm cannot be found by "
+        "comparing the ones that are present",
+    )
+    shas = {record["git_sha"] for record in arm_records}
+    _prove(
+        len(shas) == 1,
+        f"the four arms recorded {len(shas)} different git SHAs ({sorted(shas)}) — the code "
+        "changed mid-run, so the arms did not run the same instrument and their comparison is not "
+        "a comparison of arms",
+    )
+    pids = {record["pid"] for record in arm_records}
+    _prove(
+        len(pids) == len(CONDITION_ORDER),
+        f"the four arm records carry {len(pids)} distinct pid(s) ({sorted(pids)}) — D-01 requires "
+        "four FRESH processes, and two arms sharing one process crossed the exact boundary this "
+        "comparison exists to isolate",
+    )
+    keyed = {
+        record["condition"]: {
+            (entry["fact_id"], entry["split"], entry["seed_index"])
+            for entries in record["by_split"].values()
+            for entry in entries
+        }
+        for record in arm_records
+    }
+    reference = keyed[CONDITION_ORDER[0]]
+    for condition in CONDITION_ORDER[1:]:
+        _prove(
+            keyed[condition] == reference,
+            f"arm {condition!r} scored a different (fact, split, seed_index) set from "
+            f"{CONDITION_ORDER[0]!r}: {len(keyed[condition] ^ reference)} entries differ, e.g. "
+            f"{sorted(keyed[condition] ^ reference)[:3]}. PERS-02's whole claim is that the arms "
+            "score the SAME questions under the SAME seeds, so an unpaired arm would report a "
+            "paired number",
+        )
+
+
+def run_one_condition(condition):
+    """ONE arm, in this process, start to finish — and this process can run no other.
+
+    Order is not incidental: the clobber guard runs BEFORE anything expensive, because a run that
+    refuses to write its report at the end has already been wasted. The report is NOT written here
+    — it is assembled from all four records by ``--report``, which is what makes the four-process
+    split a precondition of publishing rather than a claim made inside one process.
+    """
+    import os
+    import time
+
+    import torch
+
+    from personacore.config import RuntimeConfig
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+    from personacore.seeding import seed_everything
+
+    started = time.time()
+    assert_persistence_report_not_clobbered()
+    summary = preflight_device(strict=True)
+    print(f"[phase16_persistence] preflight: {summary}")
+    device = RuntimeConfig().device
+    # ONE seed constant in play, the instrument's own: `draw_all` derives every per-draw generator
+    # from `phase14_recall.question_seed`, so a fresh literal here would drift from the one that
+    # actually drives the draws.
+    seed_everything(recall.SEED)
+
+    model, model_cfg, tok, forbid, artifact = recall.load_adapted_model(device)
+    # 16-08's recorded gap, closed HERE because this is where the loaded config is finally in
+    # scope. `ArmConfig.context_length` reads `ModelConfig.block_size` — the DATACLASS DEFAULT —
+    # while the run loads its config from `convbase_slim.pt`. They agree today. If a future
+    # checkpoint ever changed it, `assert_arm_parity` would still pass (all four arms read the
+    # same default) while the published `context_length` column disagreed with the model that
+    # actually generated every number under it.
+    _prove(
+        model_cfg.block_size == SHARED_ARM_CONFIG.context_length,
+        f"the loaded checkpoint's block_size is {model_cfg.block_size} but the pre-registered "
+        f"parity column is {SHARED_ARM_CONFIG.context_length} (ModelConfig's default) — the SC2 "
+        "column would describe a context length this model does not have, and every rate "
+        "published under it would have been produced at the other one",
+    )
+    # `resolve_forbid` is 16-08's declared auditable seam; `load_adapted_model` builds its own
+    # mask the same way (`phase14_recall.py:568`). The LOADER's object is the one threaded into
+    # every arm — structural parity with the committed instrument, unchanged — and the seam is
+    # used to PROVE the published hash describes that object rather than a different mask.
+    _, seam_digest = resolve_forbid(tok, model_cfg.vocab_size)
+    _prove(
+        forbid_digest(forbid) == seam_digest,
+        "the mask the loader threaded into the arms does not match `resolve_forbid`'s — the "
+        "forbid_ids hash this report publishes would describe a mask no arm actually generated "
+        "under",
+    )
+
+    items_by_tier = load_fixture_items()
+    record = run_condition(condition, model, tok, device, forbid, items_by_tier)
+    sweep = None
+    if condition == "prompt-stuffed":
+        # D-26 — the sweep runs on arm B and nowhere else. Arm A receives a cited PROOF; arms C
+        # and D are declared not applicable, each with its own stated reason.
+        sweep = run_sweep(
+            model, tok, device, forbid, all_items(items_by_tier), fairness_statements()
+        )
+
+    wall = time.time() - started
+    provenance = recall.echo_provenance(summary, device, artifact) + [
+        f"torch: {torch.__version__}",
+        f"condition: {condition} (ONE per process — D-01)",
+        f"condition wall clock: {wall / 60:.1f} min",
+    ]
+    payload = {
+        "condition": condition,
+        "git_sha": git_sha(),
+        "pid": os.getpid(),
+        "device": str(device),
+        "wall_clock_min": wall / 60,
+        "provenance": provenance,
+        "config": serializable_config(record["config"]),
+        "forbid_ids_masked": int(forbid.sum().item()),
+        "vocab_size": model_cfg.vocab_size,
+        "by_split": record["by_split"],
+        "sweep": sweep,
+    }
+    path = arm_record_path(condition)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    print(f"[phase16_persistence] wrote {path} in {wall / 60:.1f} min")
+    return payload
+
+
+def run_report_mode():
+    """Assemble the report from the four arm records — refusing arms that are not one comparison.
+
+    Every refusal here is cheaper than a published number that should not have been published:
+    a missing arm, a code change mid-run, two arms in one process, an unpaired question set, or a
+    parity column that stopped agreeing. ``assert_arm_parity`` is CALLED here — 16-08 committed it
+    and 16-09 recorded that nothing called it yet, so this is the wiring that turns it from a
+    definition into a check.
+    """
+    arm_records = []
+    for condition in CONDITION_ORDER:
+        path = arm_record_path(condition)
+        _prove(
+            path.exists(),
+            f"{path} is missing — the report assembles from all FOUR arm records or from none. "
+            f"Run `--condition {condition}` in its own fresh process first",
+        )
+        record = json.loads(path.read_text(encoding="utf-8"))
+        _prove(
+            record["condition"] == condition,
+            f"{path} carries condition {record['condition']!r} — an arm record filed under "
+            "another arm's name would be published under the name it was filed as",
+        )
+        record["config"] = assert_recorded_config_matches_the_shared_object(
+            condition, record["config"]
+        )
+        arm_records.append(record)
+
+    assert_arms_are_pairable(arm_records)
+    assert_arm_parity(arm_records)
+
+    gated = per_fact_by_arm(arm_records, tier=GATED_TIER)
+    taught = per_fact_by_arm(arm_records, tier=REPLICATION_TIER)
+    sweeps = [record["sweep"] for record in arm_records if record.get("sweep")]
+    _prove(
+        len(sweeps) == 1,
+        f"{len(sweeps)} arm record(s) carry a context-pressure sweep — D-26 runs it on the "
+        "prompt-stuffed arm and on no other, so any count but one means the sweep was run "
+        "somewhere its result cannot be interpreted",
+    )
+    return write_persistence_report(
+        arm_records,
+        compare_arms(gated, tier=GATED_TIER),
+        taught_replication(taught),
+        sweeps[0],
+        [
+            f"report assembled from {len(arm_records)} arm records at {ARM_RECORD_DIR}",
+            f"arm git SHA (identical across all four): {arm_records[0]['git_sha']}",
+            f"arm pids: {sorted(record['pid'] for record in arm_records)}",
+        ],
+    )
+
+
+def main():
+    """Dispatch. ONE condition per invocation, or the report — and nothing that runs two arms."""
+    args = build_parser().parse_args()
+    if args.report:
+        run_report_mode()
+    else:
+        run_one_condition(args.condition)
+
+
+if __name__ == "__main__":
+    main()

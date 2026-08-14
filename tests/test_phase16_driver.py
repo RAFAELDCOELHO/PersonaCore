@@ -22,6 +22,7 @@ pre-registration constants MUST live in the committed driver for git history to 
 
 import ast
 import importlib.util
+import json
 import pathlib
 import re
 import sys
@@ -1490,3 +1491,235 @@ def test_report_tables_have_no_pipe_bearing_cells(monkeypatch, tmp_path):
     # cell shows up as a width nobody else shares.
     orphan = [width for width, count in header_widths.items() if count == 1]
     assert not orphan, f"row widths {orphan} appear once — a cell probably carries a bare pipe"
+
+
+# ===== 16-10 Task 3 — main(): one condition per process =======================================
+#
+# No model is loaded and no arm record is written into `results/`: `ARM_RECORD_DIR` is redirected
+# to a tmp_path in every test below. `results/phase16_arm_*.json` are plan 16-11's artifacts.
+
+
+def _arm_payload(condition, *, pid, git_sha="deadbee", seed_shift=0, forbid_sha=None):
+    """One arm's JSON payload in `run_one_condition`'s shape, without running anything."""
+    record = _arm_record(condition, _dominant, pid=pid)
+    config = driver.serializable_config(record["config"])
+    if forbid_sha is not None:
+        config["forbid_ids_sha256"] = forbid_sha
+    by_split = {
+        split: [{**entry, "seed_index": entry["seed_index"] + seed_shift} for entry in entries]
+        for split, entries in record["by_split"].items()
+    }
+    return {
+        "condition": condition,
+        "git_sha": git_sha,
+        "pid": pid,
+        "device": "cpu",
+        "wall_clock_min": 1.0,
+        "provenance": [f"pid: {pid} (PROCESS BOUNDARY)", f"driver git_sha: {git_sha}"],
+        "config": config,
+        "forbid_ids_masked": 7645,
+        "vocab_size": 8192,
+        "by_split": by_split,
+        "sweep": _sweep_fixture() if condition == "prompt-stuffed" else None,
+    }
+
+
+def _write_arms(monkeypatch, tmp_path, conditions=driver.CONDITION_ORDER, **overrides):
+    monkeypatch.setattr(driver, "ARM_RECORD_DIR", tmp_path)
+    monkeypatch.setattr(driver, "PERSISTENCE_REPORT_PATH", tmp_path / "report.md")
+    monkeypatch.setattr(driver, "cluster_bootstrap", lambda per_fact: (0.194444, 0.486111))
+    for index, condition in enumerate(conditions):
+        payload = _arm_payload(condition, pid=1000 + index, **overrides.get(condition, {}))
+        driver.arm_record_path(condition).write_text(
+            json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+        )
+    return tmp_path
+
+
+def test_main_requires_a_single_condition():
+    """D-01 / T-16-46: one arm per invocation, and no flag that runs two."""
+    import pytest
+
+    parser = driver.build_parser()
+    flags = {option for action in parser._actions for option in action.option_strings}
+    assert "--all" not in flags, flags
+    assert '"--all"' not in _driver_source()
+    assert "--condition" in flags and "--report" in flags
+
+    with pytest.raises(SystemExit):
+        parser.parse_args([])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--condition", "adapter-only-ish"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--condition", "adapter-only", "--report"])
+    for condition in driver.CONDITION_ORDER:
+        assert parser.parse_args(["--condition", condition]).condition == condition
+    assert parser.parse_args(["--report"]).report is True
+
+
+def test_report_mode_requires_all_four_arms(monkeypatch, tmp_path):
+    """Three arms on disk is not a four-arm comparison, and the family's size prices alpha."""
+    import pytest
+
+    _write_arms(monkeypatch, tmp_path, conditions=driver.CONDITION_ORDER[:3])
+    with pytest.raises(SystemExit, match="missing"):
+        driver.run_report_mode()
+
+
+def test_report_mode_rejects_mismatched_git_sha(monkeypatch, tmp_path):
+    """T-16-45: four processes, ONE codebase — a mismatch means the arms ran different code."""
+    import pytest
+
+    _write_arms(monkeypatch, tmp_path, **{"prompt-stuffed": {"git_sha": "cafef00d"}})
+    with pytest.raises(SystemExit, match="git SHA"):
+        driver.run_report_mode()
+
+
+def test_report_mode_asserts_identical_seed_index_sets(monkeypatch, tmp_path):
+    """PERS-02's pairing claim is CHECKED at report time, never assumed."""
+    import pytest
+
+    _write_arms(monkeypatch, tmp_path, **{"base-neither": {"seed_shift": 100}})
+    with pytest.raises(SystemExit, match="seed_index"):
+        driver.run_report_mode()
+
+
+def test_report_mode_requires_four_distinct_pids(monkeypatch, tmp_path):
+    """Two arms in one process crossed the exact boundary this comparison exists to isolate."""
+    import pytest
+
+    monkeypatch.setattr(driver, "ARM_RECORD_DIR", tmp_path)
+    for condition in driver.CONDITION_ORDER:
+        driver.arm_record_path(condition).write_text(
+            json.dumps(_arm_payload(condition, pid=7777)), encoding="utf-8"
+        )
+    with pytest.raises(SystemExit, match="pid"):
+        driver.run_report_mode()
+
+
+def test_report_mode_calls_assert_arm_parity(monkeypatch, tmp_path):
+    """16-08 defined it and nothing called it. This is the wiring, pinned two ways.
+
+    Structurally, so a future edit cannot drop the call in silence; and LIVE, by handing the
+    report four arms whose `forbid_ids` hashes disagree — the one parity column no single arm
+    record can attest to on its own.
+    """
+    import pytest
+
+    tree = _driver_tree()
+    reporter = _function_def(tree, "run_report_mode")
+    assert reporter is not None
+    assert "assert_arm_parity" in _called_names(reporter), (
+        "run_report_mode does not call assert_arm_parity — PERS-02's parity claim would ship as "
+        "an unexecuted function, which is exactly what 16-08 and 16-09 both flagged"
+    )
+    holders = {
+        holder
+        for holder in (
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and "assert_arm_parity" in _called_names(node)
+        )
+    }
+    assert holders == {"run_report_mode"}, holders
+
+    _write_arms(monkeypatch, tmp_path, **{"embedding-cosine": {"forbid_sha": "00" * 32}})
+    with pytest.raises(SystemExit, match="forbid_ids_sha256"):
+        driver.run_report_mode()
+
+
+def test_report_mode_assembles_from_four_agreeing_arms(monkeypatch, tmp_path):
+    """The happy path: four agreeing arms produce the report, and it is written once."""
+    _write_arms(monkeypatch, tmp_path)
+    text = driver.run_report_mode()
+    assert "## Verdict" in text
+    assert (tmp_path / "report.md").read_text(encoding="utf-8") == text
+    assert text.count("### Condition `") == 4
+    assert "arm pids: [1000, 1001, 1002, 1003]" in text
+
+
+def test_report_mode_requires_exactly_one_sweep(monkeypatch, tmp_path):
+    """D-26: the sweep runs on arm B and nowhere else, checked at assembly."""
+    import pytest
+
+    monkeypatch.setattr(driver, "ARM_RECORD_DIR", tmp_path)
+    monkeypatch.setattr(driver, "PERSISTENCE_REPORT_PATH", tmp_path / "report.md")
+    for index, condition in enumerate(driver.CONDITION_ORDER):
+        payload = _arm_payload(condition, pid=1000 + index)
+        payload["sweep"] = _sweep_fixture()  # every arm swept — D-26 says exactly one
+        driver.arm_record_path(condition).write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(SystemExit, match="sweep"):
+        driver.run_report_mode()
+
+
+def test_sweep_runs_only_for_the_prompt_stuffed_condition():
+    """D-26 as CODE: `run_sweep` is reachable from exactly one branch of `run_one_condition`."""
+    body = _function_def(_driver_tree(), "run_one_condition")
+    assert body is not None
+    guarded = [
+        node
+        for node in ast.walk(body)
+        if isinstance(node, ast.If) and "run_sweep" in _called_names(node)
+    ]
+    assert len(guarded) == 1, "run_sweep is not behind exactly one condition test"
+    test = ast.unparse(guarded[0].test)
+    assert test == "condition == 'prompt-stuffed'", test
+    assert not guarded[0].orelse, "an else-branch would give another arm a path to the sweep"
+
+    # And the context_length proof 16-08 asked this plan to add, against the LOADED config.
+    proofs = [
+        ast.unparse(node)
+        for node in ast.walk(body)
+        if isinstance(node, ast.Compare) and "model_cfg.block_size" in ast.unparse(node)
+    ]
+    assert proofs == ["model_cfg.block_size == SHARED_ARM_CONFIG.context_length"], proofs
+
+
+def test_main_is_guarded_and_import_is_cheap():
+    """Importing the driver loads no model, no tokenizer and no checkpoint."""
+    import time
+
+    source = _driver_source()
+    assert 'if __name__ == "__main__":' in source
+    assert hasattr(driver, "main")
+
+    started = time.time()
+    spec = importlib.util.spec_from_file_location("phase16_persistence_reload", _DRIVER_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    elapsed = time.time() - started
+    assert elapsed < 3, f"import took {elapsed:.2f}s"
+    assert module.CONDITION_ORDER == driver.CONDITION_ORDER
+
+    tree = _driver_tree()
+    called = {
+        getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+        for node in _module_level_nodes(tree)
+        if isinstance(node, ast.Call)
+    }
+    for expensive in (
+        "undecodable_ids_mask",
+        "from_json",
+        "load_adapted_model",
+        "load_fixture_items",
+        "run_condition",
+        "run_sweep",
+        "write_persistence_report",
+        "preflight_device",
+        "seed_everything",
+    ):
+        assert expensive not in called, expensive
+
+    # `main` is called at module level EXACTLY ONCE, and only under the `__name__` guard.
+    guards = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.If) and "__name__" in ast.unparse(node.test)
+    ]
+    assert len(guards) == 1
+    assert _called_names(guards[0]) == {"main"}
+    unguarded = [
+        node for node in tree.body if not isinstance(node, ast.If) and "main" in _called_names(node)
+    ]
+    assert unguarded == []
