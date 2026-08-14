@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-06-PLAN.md
-last_updated: "2026-08-14T22:42:08.656Z"
-last_activity: "2026-08-14 -- 17-06 complete: the ISO-04 canary in both layers, mutation-proved; --train/--sweep/--report with no mode that runs two sweeps; the base column's control property carried by adapter_enabled, because no weight digest can witness it"
+stopped_at: Completed 17-08-PLAN.md
+last_updated: "2026-08-14T23:18:20.353Z"
+last_activity: "2026-08-14 -- 17-08 complete: the --report mode with the ISO-04 cross-process proof running BEFORE any scoring, the gate assembled entirely from imported Phase 16 statistics with the family closed at both levels and the base row published but never gated, and the whole report writer including D-10's all-fail branch committed before a single Phase 17 number exists"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 17
-  percent: 35
+  completed_plans: 18
+  percent: 33
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 7 of 11
+Plan: 8 of 11
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-06 complete: the ISO-04 canary in both layers, mutation-proved; --train/--sweep/--report with no mode that runs two sweeps; the base column's control property carried by adapter_enabled, because no weight digest can witness it
+Last activity: 2026-08-14 -- 17-08 complete: the --report mode with the ISO-04 cross-process proof running BEFORE any scoring, the gate assembled entirely from imported Phase 16 statistics with the family closed at both levels and the base row published but never gated, and the whole report writer including D-10's all-fail branch committed before a single Phase 17 number exists
 
 ## Performance Metrics
 
@@ -82,6 +82,7 @@ Last activity: 2026-08-14 -- 17-06 complete: the ISO-04 canary in both layers, m
 | Phase 17 P04 | 18min | 3 tasks | 4 files |
 | Phase 17 P05 | 41min | 2 tasks | 3 files |
 | Phase 17 P06 | 28min | 4 tasks | 2 files |
+| Phase 17 P08 | 32min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -207,6 +208,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-05: five acceptance greps forbid the very identifiers the plan's action text asks the docstring to name (load_adapted_model, inject_lora, load_adapter_weights, load_adapter, weights_only=False) — the mechanical criterion won and build_unadapted_base's docstring carries the whole argument with phase14_recall.py:496 and :516/:530/:557/:565 as pointers instead of identifiers; all five greps return 0
 - [Phase 17]: 17-05: teach_persona._require_go_verdict now names report_path in EVERY abort — it stopped being a Phase 14 gate when ISO-01 started calling it with the Phase 17 report, and 'no ## Verdict section in the fact-set report' would send a Phase 17 operator to results/phase14_factset_report.md, which already carries a recorded GO so the wrong fix would look like it worked
 - [Phase 17]: 17-05: ISO-01 still NOT marked complete (third plan running) — the guessability measurement needs convbase_slim.pt on MPS and cannot enter a CPU-only suite, and SC2's GO/ADAPT verdict is a blocking human decision; 17-07 runs the measurement, records the verdict and marks the requirement
+- [Phase 17]: 17-08: the two achievable p values the report publishes as a design property are RETURNED BY compare_cells, never recomputed by the writer — a second sign_test_exact call site is a second hypothesis family, caught by the new D-21 scan on its first run
+- [Phase 17]: 17-08: report_proportion's raw-count denominator is the RECORDED draws-per-question times each cell's own question count, never SHARED_ARM_CONFIG.n_draws — the latter renders '9 draws' beside '0/104 questions'
+- [Phase 17]: 17-08: the four category counts render once per ROW, never once per cell (D-12) — the per-column number is n_answerable, and mislabelling it is a live repudiation surface
 
 ### Pending Todos
 
@@ -250,8 +254,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T22:41:58.791Z
-Stopped at: Completed 17-06-PLAN.md
+Last session: 2026-08-14T23:15:17.884Z
+Stopped at: Completed 17-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

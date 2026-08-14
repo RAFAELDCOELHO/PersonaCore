@@ -29,7 +29,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
 - [x] **STAT-02**: Every proportion is reported with a **confidence bound and its denominator** —
   Wilson interval, plus the rule-of-three `3/n` shown alongside whenever successes are zero. No
   bare `0%` appears in any committed report or figure.
-- [ ] **STAT-03**: Multiple comparisons across the isolation matrix use **Holm** step-down, not
+- [x] **STAT-03**: Multiple comparisons across the isolation matrix use **Holm** step-down, not
   Benjamini-Hochberg: off-diagonal cells share adapters row-wise and question sets column-wise, so
   BH's independence/PRDS assumption fails while Holm is valid under arbitrary dependence.
 - [x] **STAT-04**: **Zero new runtime dependencies.** `pyproject.toml` is byte-identical at v3.0
@@ -182,7 +182,7 @@ Deferred — revisited when the numbers that gate them exist.
 |----|-------|--------|
 | STAT-01 | 16, 17, 18 | Complete |
 | STAT-02 | 16, 17, 18 | Complete |
-| STAT-03 | 17 | Pending |
+| STAT-03 | 17 | Complete |
 | STAT-04 | 16, 17, 18 | Complete |
 | STAT-05 | 16, 17, 18 | Complete |
 | STAT-06 | 16, 17, 18 | Complete |

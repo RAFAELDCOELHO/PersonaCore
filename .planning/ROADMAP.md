@@ -313,7 +313,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3)*
 
 - [ ] 17-07-PLAN.md — RUN the pre-flight gate and take the **blocking human GO/ADAPT verdict** (SC2)
-- [ ] 17-08-PLAN.md — the `--report` mode: cross-process ISO-04 proof, the gate assembled from
+- [x] 17-08-PLAN.md — the `--report` mode: cross-process ISO-04 proof, the gate assembled from
   imported Phase 16 statistics, descriptive CIs, and the report writer with the D-10 branch
 
 **Wave 5** *(blocked on Wave 4)*
