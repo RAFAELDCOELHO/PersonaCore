@@ -53,7 +53,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
 - [x] **PERS-02**: The paired weight-vs-prompt comparison scores the **same questions under both
   conditions** — fact in the context window vs adapter-only with an empty prompt — with arms paired
   by `seed_index`, and reports the raw floor honestly rather than as a victory.
-- [ ] **PERS-03**: **Persistence under context pressure** is measured: truncation at
+- [x] **PERS-03**: **Persistence under context pressure** is measured: truncation at
   `block_size=256`, **dilution within the persona span**, and adversarial overwrite. This is the
   axis where the weight arm is invariant *by proof* (`run_bit_identity_control`, max |diff| 0.0)
   and the prompt arm is not, and it is the phase's load-bearing result.
@@ -188,7 +188,7 @@ Deferred — revisited when the numbers that gate them exist.
 | STAT-06 | 16, 17, 18 | Complete |
 | PERS-01 | 16 | Pending |
 | PERS-02 | 16 | Complete |
-| PERS-03 | 16 | Pending |
+| PERS-03 | 16 | Complete |
 | PERS-04 | 16 | Complete |
 | PERS-05 | 16 | Complete |
 | PERS-06 | 16 | Complete |

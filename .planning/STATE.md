@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 16-09-PLAN.md
-last_updated: "2026-08-13T23:44:32.498Z"
-last_activity: 2026-08-13
+stopped_at: Completed 16-10-PLAN.md
+last_updated: "2026-08-14T00:28:54.659Z"
+last_activity: 2026-08-14
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 16 (weight-vs-prompt-persistence-control) — EXECUTING
-Plan: 9 of 11
+Plan: 10 of 11
 Status: Ready to execute
-Last activity: 2026-08-13
+Last activity: 2026-08-14
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Last activity: 2026-08-13
 | Phase 16 P06 | 30min | 3 tasks | 2 files |
 | Phase 16 P08 | 35min | 3 tasks | 2 files |
 | Phase 16 P09 | 55min | 3 tasks | 3 files |
+| Phase 16 P10 | 95min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,8 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 16]: 16-09: the cluster bootstrap is TWO-STAGE by USER DECISION at the wave-8 checkpoint — facts resampled first (STATE.md:94, n=8), then that fact's questions (STAT-01/D-06). Stage-2-only yields a zero-width interval on a within-fact-homogeneous fixture, narrower than the sign test beside it
 - [Phase 16]: 16-09: sign_test_exact returns 1.0 whenever positives <= SIGN_TEST_N/2 (D-29) — under a pure two-sided test an all-tied pair scores 0.0078125 and would have CLEARED Holm at 0.0083333; reproduced by deliberate-RED and restored byte-identical
 - [Phase 16]: 16-09: no coverage/collision floor anywhere — the 6435 fact-multisets (C(15,8)) are NOT equiprobable, so a >= 6435*0.95 floor is unreachable by construction (~57% drawn at N=10000)
+- [Phase 16]: D-25's verbatim qualifier is READ from 16-CONTEXT.md at report time, not stored as a module constant — a constant would be a second 0.125 and a committed 16-08 test pins that count at 1
+- [Phase 16]: D-28 implemented as locked (span_2 permits the monotone claim); the ladder's ceiling renders in the SAME paragraph as the permission — a permission printed alone is the sentence a reader quotes
 
 ### Pending Todos
 
@@ -214,8 +217,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-13T23:44:32.492Z
-Stopped at: Completed 16-09-PLAN.md
+Last session: 2026-08-14T00:28:46.487Z
+Stopped at: Completed 16-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
