@@ -1744,3 +1744,23 @@ def test_main_is_guarded_and_import_is_cheap():
         node for node in tree.body if not isinstance(node, ast.If) and "main" in _called_names(node)
     ]
     assert unguarded == []
+
+
+def test_sweep_no_baseline_caveat_is_emitted_and_names_both_readings(monkeypatch, tmp_path):
+    """A flat sweep is evidence about pressure only if pressure had something to act on.
+
+    All seven PERS-03 cells scored 0/270. Read carelessly that says "context pressure had no
+    effect"; what it actually says is "no effect was observable given zero baseline recall". The
+    arm entered the sweep at the capability floor the ladder had already measured, so there was
+    nothing for dilution or overwriting to erode. Emitting the distinction beside the cells — not
+    leaving it to the reader — is the same structural discipline as LADDER_PROXY_DEGENERATE_CAVEAT
+    and HEADLINE_MECHANISM_CAVEAT: a caveat nobody is forced to apply goes missing exactly when the
+    number is convenient.
+    """
+    text = _render(monkeypatch, tmp_path)
+    assert driver.SWEEP_NO_BASELINE_CAVEAT in text
+
+    caveat = driver.SWEEP_NO_BASELINE_CAVEAT
+    assert "does NOT support" in caveat, "the rejected reading must be named, not merely avoided"
+    assert "no measurable effect was observable" in caveat, "the supported reading must be stated"
+    assert "baseline" in caveat, "the reason the sweep is uninformative is the missing baseline"

@@ -1872,6 +1872,20 @@ WALL_CLOCK_NOTE = (
 # cannot depend on whoever writes the final prose remembering it. Same structural discipline as
 # LADDER_PROXY_DEGENERATE_CAVEAT below and as D-28's monotone permission: a reading rule nobody is
 # forced to apply is a reading rule that goes missing exactly when the number looks good.
+# A flat sweep is only evidence about pressure if there was something for pressure to act on.
+# Emitted beside the cells rather than left to the reader, same discipline as
+# LADDER_PROXY_DEGENERATE_CAVEAT and HEADLINE_MECHANISM_CAVEAT.
+SWEEP_NO_BASELINE_CAVEAT = (
+    "**All seven cells scored 0/270, and that is UNINFORMATIVE about context-pressure degradation "
+    "specifically because there was no baseline signal to degrade.** The capability floor already "
+    "established by the committed ladder means dilution and adversarial pressure had nothing to "
+    "erode: the arm entered the sweep at zero and stayed there. This result does NOT support "
+    "'context pressure had no effect' — it supports only 'no measurable effect was observable "
+    "given zero baseline recall.' The two readings are not interchangeable, and only the second "
+    "one is what was measured. A sweep that could speak to PERS-03's question would need an arm "
+    "that recovers the fact at the least-diluted cell, which this arm does not."
+)
+
 HEADLINE_MECHANISM_CAVEAT = (
     "**This comparison alone does not distinguish two mechanisms, and does not claim to.** An "
     "adapter-over-prompt result here is consistent with BOTH (1) personalization genuinely living "
@@ -2410,6 +2424,8 @@ def write_persistence_report(arm_records, comparison, replication, sweep, proven
     ]
     blocks += _sweep_rows(sweep)
     blocks += [
+        "",
+        SWEEP_NO_BASELINE_CAVEAT,
         "",
         ASSERT_VALUE_IN_PROMPT_CAVEAT,
         "",
