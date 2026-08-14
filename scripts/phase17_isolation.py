@@ -37,6 +37,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
+import _verdict  # noqa: E402  (needs the sys.path insert above)
 import phase16_persistence as persistence  # noqa: E402  (needs the sys.path insert above)
 import phase17_personas as personas  # noqa: E402  (needs the sys.path insert above)
 
@@ -1127,6 +1128,312 @@ def run_one_persona_training(persona, seed=None):
     )
 
 
+# =============================================================================================
+# ===== STAT-01..06 — the report mode: the proof FIRST, then scoring, then the imported gate ===
+# =============================================================================================
+
+ISOLATION_REPORT_PATH = _REPO_ROOT / "results" / "phase17_isolation_report.md"
+
+# The pre-registration file, cited by the report so a reader can check the ordering claim rather
+# than take it. Resolved through the SAME path the ancestry guard in `tests/test_phase16_prereg.py`
+# pins, never a second spelling of it.
+PREREG_PATH = _REPO_ROOT / "scripts" / "phase17_personas.py"
+
+
+def assert_isolation_report_not_clobbered():
+    """A RECORDED verdict is committed evidence. Refuse to overwrite it — FIRST, and cheapest.
+
+    ``phase16_persistence.assert_persistence_report_not_clobbered``'s register, repriced for this
+    phase. Called before a single sweep record is READ, let alone scored: a report run that refuses
+    at the end has already spent its reader's attention, and here the refusal costs nothing.
+
+    **Anchored on the SECTION via ``_verdict.recorded_verdict``, never on a split of the heading
+    literal** — the 15-04 CR-02 defect, whose one shared copy this imports. ``None`` (no verdict
+    section at all) and a body without ``PENDING`` are both refusals: a file this writer did not
+    produce must not be blindly overwritten either. There is no force flag.
+    """
+    if not ISOLATION_REPORT_PATH.exists():
+        return
+    recorded = _verdict.recorded_verdict(ISOLATION_REPORT_PATH.read_text(encoding="utf-8"))
+    if recorded is None or "PENDING" not in recorded:
+        raise SystemExit(
+            f"[phase17_isolation] {ISOLATION_REPORT_PATH} already carries a recorded verdict — it "
+            "is this phase's committed isolation evidence, assembled from four GPU sweeps that "
+            "cannot be re-derived without breaking the pre-registration's ordering guarantee. "
+            "There is no force flag: if it genuinely must be regenerated, delete it in a reviewed "
+            "commit so the removal is visible in the diff."
+        )
+
+
+def read_sweep_records():
+    """The four UNSCOPED sweep records, read by NAME rather than found by a glob.
+
+    Each record is read from ``sweep_record_path(sweep)`` with no ``seed``, so plan 17-11's
+    seed-scoped replicate records (``phase17_sweep_persona_a_seed1437.json``) are structurally
+    unreachable from here rather than filtered out afterwards — a glob would sweep them up the
+    moment ISO-05 runs, and a replicate scored into the matrix is a seventh and eighth row of a
+    matrix closed at four.
+
+    Reading by name gives exactly ``len(SWEEPS)`` records by construction; what is NOT free is that
+    each file holds the row it was FILED as, so that is proved.
+    """
+    import json
+
+    records = []
+    for sweep in SWEEPS:
+        path = sweep_record_path(sweep)
+        _prove(
+            path.exists(),
+            f"{path} is missing — the matrix assembles from all {len(SWEEPS)} sweep records or "
+            f"from none. Run `python scripts/phase17_isolation.py --sweep {sweep}` in its own "
+            "fresh process first",
+        )
+        record = json.loads(path.read_text(encoding="utf-8"))
+        _prove(
+            record.get(SWEEP_LABEL_KEY) == sweep,
+            f"{path} carries {SWEEP_LABEL_KEY} = {record.get(SWEEP_LABEL_KEY)!r} — a record filed "
+            f"under {sweep!r} but labelled otherwise would be published as the row it was filed "
+            "as, which is a whole row of the matrix attributed to the wrong adapter",
+        )
+        records.append(record)
+    seen = {record[SWEEP_LABEL_KEY] for record in records}
+    _prove(
+        seen == set(SWEEPS),
+        f"the records on disk name {sorted(seen)} but the pre-registration commits "
+        f"{sorted(SWEEPS)} — the base row is not optional (ISO-03)",
+    )
+    return records
+
+
+def draws_per_question(sweep_records):
+    """The ONE draw budget every recorded question carries — the report's RAW-COUNT denominator.
+
+    ``report_proportion``'s third argument is the raw-count denominator and renders as
+    ``"{n} draws"`` beside a question-unit numerator. Handing it the PER-QUESTION budget would
+    publish ``0/104 questions (... ; 9 draws)`` — understating the raw count by two orders of
+    magnitude, on the one axis T-16-40 records as the repudiation surface. So the budget is read
+    off the records here and multiplied by each cell's own question count in ``describe_matrix``.
+
+    Proved single-valued across all four sweeps AND equal to what each record's own ``config``
+    published. The second half is the stronger claim: a record whose completions disagree with the
+    parity block it publishes describes a generation budget none of its completions came from.
+    """
+    counts = {
+        len(entry["completions"])
+        for record in sweep_records
+        for entry in record[SWEEP_QUESTIONS_KEY]
+    }
+    _prove(
+        len(counts) == 1,
+        f"the recorded questions carry {sorted(counts)} completions — the four sweeps must share "
+        "ONE draw budget or their cells are not cells of one matrix, and the raw-count denominator "
+        "this report publishes would describe some questions and not others",
+    )
+    n_draws = counts.pop()
+    for record in sweep_records:
+        published = record.get("config", {}).get("n_draws")
+        _prove(
+            published == n_draws,
+            f"sweep {record[SWEEP_LABEL_KEY]!r} recorded {n_draws} completions per question but "
+            f"its own config publishes n_draws = {published!r} — the parity column and the "
+            "completions behind it disagree, so the published budget describes a run that did not "
+            "happen",
+        )
+    return n_draws
+
+
+def cell_rates(matrix):
+    """``{cell: {slot: {"rate": ...}}}`` over the NINE ADAPTER cells — ``fact_signs``'s input.
+
+    ``fact_signs(per_fact_by_arm, pair)`` reads ``["rate"]`` off whatever dict it is handed; here
+    the "arms" are cell tuples and the "facts" are slot strings (verified during research). The
+    rate is ``sum(k) / sum(n)`` over that slot's ``(k, n)`` pairs, and ``assemble_matrix`` builds
+    those pairs in the QUESTION unit with ``n == 1`` — so this is STAT-01's unit by construction and
+    the DRAW rate is not even representable from the cell's ``per_slot`` field.
+
+    **The three base cells are dropped HERE, deliberately, and the drop is the point.** They are
+    computed, published in §The Matrix and read by D-10's all-fail branch — but the committed
+    family is derived over ``PERSONAS`` only, and a base cell entering it would make a seventh
+    comparison: at m = 7 Holm's first alpha is 0.0071429, below the achievable p of 0.0078125, so
+    the headline would die arithmetically at every possible outcome including perfect unanimity.
+    ``compare_cells`` re-proves the absence rather than trusting this filter.
+    """
+    return {
+        cell: {
+            slot: {"rate": sum(k for k, _n in pairs) / sum(n for _k, n in pairs)}
+            for slot, pairs in entry["per_slot"].items()
+        }
+        for cell, entry in matrix.items()
+        if cell[0] in personas.PERSONAS
+    }
+
+
+def compare_cells(per_cell):
+    """THE FORMAL VERDICT — Holm-corrected across exactly the six ``HOLM_FAMILY_CELLS``.
+
+    ``compare_arms``'s register (``phase16_persistence.py:1205``), repriced for this phase. **This
+    is the ONE function in this module permitted to call ``holm`` or ``sign_test_exact``**, and
+    ``tests/test_phase17_stats.py``'s D-21 twin asserts exactly that across all four Phase 17
+    drivers — Phase 16's own scan is file-scoped to Phase 16's two, so the discipline does not
+    transfer by inheritance and had to be re-established here.
+
+    Nothing statistical is written: every function is IMPORTED and STAT-04 is satisfied literally by
+    import. The expensive part of ``sign_test_exact`` is not its arithmetic — it is the four
+    committed decisions it carries, each a recorded defect fix, and re-deriving the arithmetic loses
+    the decisions.
+
+    Both halves of the family closure run, because either alone leaves the other open:
+    ``assert_phase17_family_closed`` catches a dynamically-built cell list, the static AST scan
+    catches a new call site, and ``assert_family_length_matches_phase16`` catches F-08's coincidence
+    — ``holm`` prices alpha off PHASE 16's ``HOLM_FAMILY_PAIRS``, and the two families agreeing at 6
+    is ``C(4,2) == 3x2``, not a shared design.
+    """
+    _prove(
+        personas.SIGN_UNIT == "question",
+        f"SIGN_UNIT is pre-registered as {personas.SIGN_UNIT!r} but the gate is assembled on "
+        "n_answerable / n_questions, the QUESTION rate (STAT-01 / RESEARCH F-11). fact_signs signs "
+        "on whatever ['rate'] holds, so a declared unit that no longer matches the computed one "
+        "puts the whole gate on a quantity nobody registered — and the two units differ by more "
+        "than a factor of two on the real gated tier",
+    )
+    intruders = sorted(cell for cell in per_cell if personas.BASE_ROW in cell)
+    _prove(
+        not intruders,
+        f"{intruders} reached the gate, but the adapter-off row {personas.BASE_ROW!r} is a "
+        "PUBLISHED CONTROL and never a gated comparison (ISO-03). Gating it would make a seventh "
+        "comparison, and at m = 7 Holm's first alpha is 0.0071429 — below the achievable p of "
+        "0.0078125 — so the headline would die arithmetically at every possible outcome",
+    )
+    signs = {pair: persistence.fact_signs(per_cell, pair) for pair in personas.HOLM_FAMILY_CELLS}
+    p_values = {pair: persistence.sign_test_exact(pair_signs) for pair, pair_signs in signs.items()}
+    personas.assert_phase17_family_closed(tuple(p_values))
+    personas.assert_family_length_matches_phase16(len(persistence.HOLM_FAMILY_PAIRS))
+    rows = persistence.holm(p_values)
+    return {
+        "alternative": dict(personas.CELL_ALTERNATIVE),
+        "signs": signs,
+        "p_values": p_values,
+        "holm": rows,
+        "cleared": personas.gate_cleared(rows),
+    }
+
+
+def describe_matrix(matrix, n_draws_per_question, *, resamples=persistence.BOOTSTRAP_RESAMPLES):
+    """The DESCRIPTIVE block for all 12 cells, base row included. Never a gate (STAT-06).
+
+    Per cell: the phase's own width (``cluster_bootstrap`` over ``per_slot``, with the SLOT as the
+    cluster — key-agnostic, so no Phase 16 function is widened), ``report_proportion``'s STAT-02
+    shape (Wilson upper, the rule of three at zero, and both denominators), and the two ends of the
+    clustering assumption.
+
+    **Both rule-of-three ends are published at every cell, not only at zero.** Phase 17's zeros are
+    the headline, so the ceiling a zero admits is the number a reader will quote: the question-level
+    ``3/n_questions`` treats the questions as independent (they are not — 13 cluster inside each
+    slot) and is the OPTIMISTIC end, while the slot-level ``3/SLOTS_EXPECTED`` treats each slot as
+    one observation and is the CONSERVATIVE end. Publishing one alone is publishing the end that
+    flatters the claim; the cluster bootstrap is the estimate of where between them the truth sits.
+
+    ``resamples`` defaults to the PRE-REGISTERED ``BOOTSTRAP_RESAMPLES``, read from the committed
+    constant and never retyped. It is a parameter only so a CPU-only test can exercise the whole
+    assembly without paying 10,000 resamples twelve times; ``run_report_mode`` never passes it and
+    the count actually used is PRINTED in the report, so a lowered one is visible in the artifact
+    rather than hidden in a call.
+    """
+    described = {}
+    for cell, entry in matrix.items():
+        described[cell] = {
+            "proportion": persistence.report_proportion(
+                entry["n_answerable"],
+                entry["n_questions"],
+                entry["n_questions"] * n_draws_per_question,
+            ),
+            "bootstrap": persistence.cluster_bootstrap(entry["per_slot"], resamples=resamples),
+            "rule_of_three_questions": persistence.rule_of_three(entry["n_questions"]),
+            "rule_of_three_slots": persistence.rule_of_three(personas.SLOTS_EXPECTED),
+        }
+    return described
+
+
+def base_prior_anchor(base_texts):
+    """D-13's sanity anchor: did the adapter-off column reproduce the two priors it was seeded on?
+
+    ``phase14_factset.BASE_PRIOR_SEEDS`` covers **2 of the 8 core slots** and is a SCREENING SEED
+    LIST for candidate values, never an enumeration of what the base may say — so this can only ever
+    be an anchor, and matching against it could not be a complete test even on the two slots it does
+    cover. It is reported and never asserted on: a miss is a **sweep problem to investigate before
+    trusting the derivation on the other six slots**, not a finding, and not something to suppress.
+
+    Returns ``{slot: {"seeds": (...), "reproduced": bool}}`` over the covered core slots only.
+    """
+    import phase14_factset as fs  # LAZY — see the module docstring's LAZY-IMPORT RULE
+    from phase14_recall import contains_value  # LAZY — same rule
+
+    return {
+        slot: {
+            "seeds": seeds,
+            "reproduced": any(
+                contains_value(text, seed)
+                for text in base_texts.get(slot, frozenset())
+                for seed in seeds
+            ),
+        }
+        for slot, seeds in sorted(fs.BASE_PRIOR_SEEDS.items())
+        if slot in personas.CORE_SLOTS
+    }
+
+
+def run_report_mode(*, resamples=persistence.BOOTSTRAP_RESAMPLES):
+    """Assemble ``results/phase17_isolation_report.md`` from the four recorded sweeps.
+
+    Pure CPU: no torch, no model, no tokenizer, no generation. The ORDER is not incidental and each
+    step is a precondition of the next:
+
+    1. **Refuse to clobber a recorded verdict.** FIRST, before a byte is read.
+    2. Read the four UNSCOPED records by name (never a glob — 17-11's replicates must not enter).
+    3. ``assert_sweeps_ran_on_distinct_weights`` — **BEFORE any scoring**. This is ISO-04's
+       unskippable half and the reason it exists: assembling the matrix is IMPOSSIBLE unless the
+       sweeps provably ran on different weights, because a silently no-opped swap produces a
+       fabricated matrix in which one column reads high in every row (the shape 17-04 measured).
+    4. The base row's empirical prior texts (D-13).
+    5. ``assemble_matrix`` over **all four records** — the base row is a COMPUTED row of the same
+       matrix under the same rate definition (RESEARCH:900), and ``classify`` handles it with
+       ``own=None``. Passing only the adapter records leaves cells ``(base, j)`` uncomputed, which
+       is exactly the number §The Matrix and D-10's branch (b) are required to publish;
+       ``base_texts`` cannot cover the gap, because ``classify``'s ordering scores any completion
+       carrying persona j's value as ``leak`` long before the ``base_texts`` membership test is
+       reached.
+    6. The descriptive block for all 12 cells, then the gate over the nine adapter cells.
+    7. The writer.
+
+    NOTHING here computes a pooled rate over the cells (STAT-06: SC5 forbids gating one, and a
+    printed number gets quoted as a gate). Phase 16's per-fact grouping helper is likewise never
+    reached at any depth: its ``rate`` is ``sum(k)/sum(n)`` — the DRAW rate — and STAT-01 makes the
+    QUESTION the unit of analysis, so routing this matrix through it would silently reprice every
+    published cell. (That function's name is deliberately not written out here: this plan's
+    acceptance criteria grep this source for it, and a docstring mention would make that scan hit on
+    prose. ``tests/test_phase17_stats.py`` asserts the absence of a CALL SITE, which is the
+    invariant the grep is a proxy for.) No step orders the three personas by diagonal (D-15).
+    """
+    assert_isolation_report_not_clobbered()
+    records = read_sweep_records()
+    assert_sweeps_ran_on_distinct_weights(records)
+
+    by_label = {record[SWEEP_LABEL_KEY]: record for record in records}
+    base_texts = base_texts_by_slot(by_label[personas.BASE_ROW])
+    matrix = assemble_matrix(records, values_by_slot(), base_texts)
+
+    described = describe_matrix(matrix, draws_per_question(records), resamples=resamples)
+    gate = compare_cells(cell_rates(matrix))
+    return render_report(  # noqa: F821  (`render_report` is Task 2 of this same plan)
+        matrix,
+        described,
+        gate,
+        records,
+        base_prior_anchor(base_texts),
+        resamples=resamples,
+    )
+
+
 def main(argv=None):
     """Dispatch — exhaustive over the three modes, with NO default branch.
 
@@ -1157,8 +1464,9 @@ def main(argv=None):
         )
         result = run_one_sweep(args.sweep, seed=args.seed)
     elif args.report:
-        # `run_report_mode` is plan 17-08's — it consumes the four records this file writes.
-        result = run_report_mode()  # noqa: F821
+        # Never passes `resamples`: the published interval always runs at the pre-registered
+        # BOOTSTRAP_RESAMPLES, and the count actually used is printed in the report either way.
+        result = run_report_mode()
     _prove(
         result is not None,
         "the selected mode produced no result — a name in the parser's choices with no dispatch "
