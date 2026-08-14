@@ -15,9 +15,14 @@ Pins the post-load injection machinery on a tiny CPU fixture:
   7. Key-audited apply — ``load_adapter_weights`` reproduces logits across identically
      injected models; a corrupted dict raises ``ValueError`` BEFORE any weight loads (P4).
   8. ``snapshot_params`` — detached clones immune to later in-place mutation (the canary).
+  9. ISO-06 — every ``inject_lora`` CONSUMER call site in the repo injects at the artifact's
+     own ``lora_config``, not at ``LoRAConfig()`` defaults (static AST scan, bottom of file).
 
 CPU-only, GPU-free.
 """
+
+import ast
+import pathlib
 
 import pytest
 import torch
@@ -238,3 +243,165 @@ def test_snapshot_params_detached_clones():
         param.add_(1.0)
     assert torch.equal(snap[name], original)  # snapshot immune to the mutation.
     assert not torch.equal(snap[name], param)
+
+
+# ===== ISO-06: the regression half of the W1 fix (quick task 260814-d0j) =====
+#
+# `src/personacore/lora/inject.py` already RAISES on a scale mismatch at load time, and
+# `test_load_adapter_weights_refuses_wrong_alpha` above pins that runtime audit. This block is
+# the STATIC half, and it exists because Phase 17 multiplies the consumer call sites from three
+# to N+1: a new sweep driver that forgets `**artifact["lora_config"]` would be caught only at
+# runtime, in the middle of an ~hour-long GPU sweep, instead of in CI in one second.
+
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# HARD-EQUALITY allowlists, as (file, enclosing function). A Phase-17 driver adds ONE visible
+# line here — never a membership relation, which is the guard getting weaker while looking
+# bigger. The enclosing function names were resolved from the AST, not typed from memory.
+INJECT_LORA_CONSUMERS = (
+    ("scripts/personalize_demo.py", "build_demo"),
+    ("scripts/phase14_recall.py", "load_adapted_model"),
+    ("scripts/phase14_recall.py", "run_bit_identity_control"),
+)
+
+INJECT_LORA_PRODUCERS = (
+    ("scripts/teach_persona.py", "train_arm"),
+    ("scripts/train_adapter_smoke.py", "main"),
+)
+
+
+def _scanned_files():
+    """The D-21 file set: ``scripts/*.py`` + ``src/**/*.py``.
+
+    Deliberately not cached: the deliberate-RED probe that proves this guard bites edits a file
+    under ``scripts/``, and a cache would make the guard blind to exactly what it is tested on.
+    """
+    return sorted((_REPO_ROOT / "scripts").glob("*.py")) + sorted(
+        (_REPO_ROOT / "src").rglob("*.py")
+    )
+
+
+def _enclosing_functions(tree):
+    """``{node: enclosing FunctionDef/AsyncFunctionDef or None}``; ``ast.walk`` is breadth-first,
+    so a parent is always resolved before its children."""
+    enclosing = {tree: None}
+    for parent in ast.walk(tree):
+        owner = (
+            parent
+            if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef))
+            else enclosing[parent]
+        )
+        for child in ast.iter_child_nodes(parent):
+            enclosing[child] = owner
+    return enclosing
+
+
+def _is_bare_lora_config(node):
+    """``LoRAConfig()`` with no arguments — the PRODUCER form, and D-20's diagonal anchor."""
+    return (
+        isinstance(node, ast.Call)
+        and getattr(node.func, "id", None) == "LoRAConfig"
+        and not node.args
+        and not node.keywords
+    )
+
+
+def _reads_artifact_config(node):
+    """``LoRAConfig(**<expr>["lora_config"])`` — the CONSUMER form ISO-06 requires."""
+    if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "LoRAConfig"):
+        return False
+    return any(
+        keyword.arg is None
+        and isinstance(keyword.value, ast.Subscript)
+        and isinstance(keyword.value.slice, ast.Constant)
+        and keyword.value.slice.value == "lora_config"
+        for keyword in node.keywords
+    )
+
+
+def _classify_inject_lora_sites():
+    """Every ``inject_lora(model, cfg)`` in the scanned set, bucketed by what ``cfg`` is.
+
+    A bare ``ast.Name`` second argument is resolved through the module's own top-level
+    assignments, because both producers pass a module constant (``LORA_CFG``) rather than an
+    inline call. Resolving it means a rebind to ``LoRAConfig(alpha=32.0)`` lands in the
+    unclassified bucket and fails — D-20's anchor moving is exactly what this should catch.
+    """
+    consumers, producers, unclassified = set(), set(), set()
+    for path in _scanned_files():
+        file = path.relative_to(_REPO_ROOT).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        enclosing = _enclosing_functions(tree)
+        bindings = {
+            target.id: node.value
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if "inject_lora" not in (
+                getattr(node.func, "id", None),
+                getattr(node.func, "attr", None),
+            ):
+                continue
+            owner = enclosing[node]
+            site = (file, "<module>" if owner is None else owner.name)
+            config = node.args[1] if len(node.args) > 1 else None
+            if isinstance(config, ast.Name):
+                config = bindings.get(config.id, config)
+            if _reads_artifact_config(config):
+                consumers.add(site)
+            elif _is_bare_lora_config(config):
+                producers.add(site)
+            else:
+                unclassified.add(site)
+    return consumers, producers, unclassified
+
+
+def test_every_inject_lora_consumer_reads_the_artifact_config():
+    """ISO-06, the STATIC half: a consumer that injects at defaults turns this red in CI.
+
+    PRODUCER vs CONSUMER is the whole distinction, and it is why "fix every LoRAConfig()" is
+    the wrong instinct:
+
+    * A **producer** DEFINES the config an adapter will be taught under and then carry in its
+      own artifact. ``teach_persona.train_arm`` and ``train_adapter_smoke.main`` are the two,
+      and ``LoRAConfig()`` there is correct — it is D-20's diagonal anchor, ``r=8,
+      alpha=16.0``. Change it and Phase 17's diagonals stop being readable against Phase 14's
+      taught-recall 0.3483 and Phase 16's 0.865385, because the adapters would no longer have
+      been taught at the rank and scale those numbers were measured at.
+    * A **consumer** READS an artifact written earlier and must inject at THAT artifact's
+      config. ``alpha`` is invisible to the key and shape audits — an alpha=32 artifact under
+      an alpha=16 injection has an identical key set and identical shapes — so before the W1
+      fix the delta was silently applied at the wrong magnitude.
+
+    Hard equality on all three buckets, never ``in``: a membership check would pass while a
+    fourth, defaulted call site sat beside the three allowlisted ones.
+    """
+    scanned = _scanned_files()
+    assert len(scanned) >= 2, (
+        f"the ISO-06 scan collapsed to {len(scanned)} file(s) — a broken glob makes this guard "
+        "green by scanning nothing, which is the exact failure mode it exists to close"
+    )
+
+    consumers, producers, unclassified = _classify_inject_lora_sites()
+
+    assert sorted(consumers) == sorted(INJECT_LORA_CONSUMERS), (
+        "the inject_lora CONSUMER set moved. A site that dropped **artifact['lora_config'] "
+        "injects at LoRAConfig() defaults and applies the adapter delta at the wrong scale; a "
+        "NEW Phase-17 consumer belongs in INJECT_LORA_CONSUMERS as one visible line.\n"
+        f"  found:    {sorted(consumers)}\n  expected: {sorted(INJECT_LORA_CONSUMERS)}"
+    )
+    assert sorted(producers) == sorted(INJECT_LORA_PRODUCERS), (
+        "the inject_lora PRODUCER set moved. These sites DEFINE the config an artifact will "
+        "carry, and bare LoRAConfig() is correct there — it is D-20's anchor (r=8, alpha=16).\n"
+        f"  found:    {sorted(producers)}\n  expected: {sorted(INJECT_LORA_PRODUCERS)}"
+    )
+    assert not unclassified, (
+        f"inject_lora call site(s) matching neither form: {sorted(unclassified)}. An "
+        "unanalysable config expression is not evidence of correctness — write it as "
+        "LoRAConfig(**artifact['lora_config']) (consumer) or bare LoRAConfig() (producer)."
+    )
