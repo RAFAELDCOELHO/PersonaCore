@@ -247,3 +247,20 @@ rests on documentation integrity, which is why they are escalated rather than wa
 _Verified: 2026-08-15T16:33:06Z at commit afd86ea_
 _Verifier: Claude (gsd-verifier) — goal-backward, FORCE stance_
 _Every number in this report was measured by the verifier in this session. Nothing was taken from SUMMARY.md._
+
+---
+
+## Human Gate Discharged — 2026-08-15
+
+The four items above were referred for a human decision. All four were decided and executed; this section records the discharge rather than editing the `human_needed` verdict above, which stands as what the verifier found.
+
+| # | item | resolution | commit |
+| --- | --- | --- | --- |
+| 1 | collateral caveat absent from both published reports | appended to `results/phase17_isolation_report.md` and `results/phase17_personas_report.md`, below the protected cut | `1383773` |
+| 2 | WR-01 under-documented in §Categories | precision note appended, recording the verifier's correction that the forcing is a CALL-SITE property (branch 5 IS reachable in `classify` alone) | `1383773` |
+| 3 | `replay_ratio` stated as 0.5 | corrected to **1.0** at source (`teach_persona.py:129,151`); dated note records the earlier revision | `3c31648` |
+| 4 | malformed SUMMARY frontmatters | **five** found, not two — 17-04, 17-05, 17-06, 17-10, 17-11; `yaml.safe_load` now passes 11/11 | `a260d96` |
+
+**Post-resolution state, measured:** full suite `651 passed, 1 skipped`, exit `0`. `test_report_addendum_is_additive` passes — every byte above the replication placeholder is unchanged. The personas report's `## Verdict` section still reads `GO`, contains no `PENDING`, and `assert_report_not_clobbered` remains armed.
+
+Item 4 exceeded its stated scope: two files were reported, five were malformed, in three variants of one class (colon-space in a sequence item, colon-space on a continuation line, and a reserved backtick starting a plain scalar). All five were repaired rather than the two named.
