@@ -385,7 +385,15 @@ Plans:
 **Goal**: Measure whether an adversary with black-box access can extract taught facts from the
 adapter — and correct the claim wording so the demo's toggle reads as **availability, not
 authorization**, which is the honest reading of what 36 boolean writes have always done
-**Depends on**: Phase 16 (fixed instrument, forced-choice scorer, the binding 270-question fixture).
+**Depends on**: Phase 16 — **the shared instrument that exists in the tree today**:
+`item.seed_index` pairing, `cluster_bootstrap`, `sign_test_exact`, `holm`/`HOLM_ALPHA`
+(`scripts/phase16_persistence.py`), and the binding 270-question fixture.
+**NOT inherited — new construction inside this phase's D-04 pinned file** (corrected 2026-08-15
+from research, which found the original wording ungrounded): there is **no forced-choice scorer**
+anywhere in `scripts/`, `src/` or `tests/` — it was a FEATURES.md proposal Phase 16 never shipped —
+and **no teacher-forced NLL / exposure machinery**; `scripts/erasure_gate.py:210` holds only the
+`zero_results_have_nll` *gate parameter*, with nothing that computes the quantity it gates on.
+Both instruments are therefore built, not reused, and land inside the unamendable pin (D-28).
 Phase 17 **only** for optional cross-persona attacks — single-persona Phase 18 stands alone, so
 schedule pressure can scope it down without invalidating it
 **Requirements**: STAT-01, STAT-02, STAT-04, STAT-05, STAT-06, ATK-01, ATK-02, ATK-03, ATK-04, ATK-05, ATK-06

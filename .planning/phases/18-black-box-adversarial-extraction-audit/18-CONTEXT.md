@@ -618,5 +618,136 @@ it before the pin.**
 
 ---
 
+## Pre-registration decisions resolved after research (D-28 … D-31)
+
+Added 2026-08-15, after `18-RESEARCH.md` (`6573a58`) surfaced OQ-1/2/3 as pre-registration content
+rather than planner discretion. Every number below was **executed in this session**, not carried
+from the research doc. These four are unamendable once D-04's pin lands.
+
+### D-28 — The two missing instruments are built inside the pin, before the smoke
+
+**The scope correction.** ROADMAP's `Depends on` claimed Phase 16 shipped a forced-choice scorer
+and that teacher-forced NLL already existed. Both are false, verified this session:
+`grep -rn "forced_choice\|forced-choice" scripts/ src/ tests/` → **zero hits**; the only NLL
+references are `scripts/erasure_gate.py:210,223,225,276,288` (`zero_results_have_nll`, a *boolean
+gate parameter*) and two prose mentions — **nothing computes the quantity**. ROADMAP corrected.
+
+**Decision:** both instruments — the value-span NLL/exposure machinery (D-22, D-29) and whatever
+scoring D-14 needs — are **new construction that lands INSIDE `scripts/phase18_extraction.py`
+before the D-04 pin**, and the D-12 pre-flight smoke runs **after** they are in the file.
+
+*Why inside, not a helper module:* D-04's whole argument is that a post-null template change must
+redden a guard. An instrument that decides admissibility is exactly as weakening-prone as a
+template — a post-null switch from "value-span NLL" to "some other reduction" would launder a null
+into an absence claim with no guard tripping. Splitting it out would reopen the hole D-04 closed.
+
+*What this costs, stated plainly:* the pin now covers **more new code than CONTEXT originally
+implied**, so the pre-flight smoke carries more weight than "does the 13.9M model parse the
+template". The smoke must therefore additionally assert, on the **un-adapted base only** (D-12's
+zero-preview constraint is unchanged): the NLL path returns finite values for every candidate in R
+across all 8 slots, and the two spread-0 control slots agree under both reductions (D-30). A
+crash or a NaN discovered after 8.2h is the failure mode this buys out.
+
+### D-29 — OQ-1: the NLL is conditioned on a **taught** reply frame; the bare frame is published but not admissible
+
+**Measured premise, and a correction to the research.** `18-RESEARCH.md` states no taught family
+puts the value at reply position 0. That is true only of the **scorable** families. Verified:
+`TAUGHT_FAMILY_IDS = {F1, F2, F4, F5, F6}` (`phase14_factset.py:816`), reaching training via
+`teach_persona.py:488 → render_episodes → render_family`. **F4 is taught and its reply is
+`f"{value} is {s.kind}."` — value at position 0** (`phase14_factset.py:721-722`). F4 is dropped
+from *scoring* by the self-naming filter (its question embeds the value), never from *teaching*.
+The frame that is genuinely unpracticed is **F3** (`completion = f"{value}."`,
+`phase14_factset.py:711-716`), which is **held out** (`HELDOUT_FAMILY_IDS = {F3, F7, F8}`).
+
+**Decision:** `null_result_is_admissible()` reads the value-span NLL under
+**`SLOT_FORMS[slot].ans1`** — the F1/F2/F6 taught frame — masked to the value tokens only.
+Two further frames are computed and **published as required columns**, never read by the gate:
+
+| Frame | Source | Taught? | Value at pos 0? | Role |
+|---|---|---|---|---|
+| `ans1` — `my name is {v}.` | F1/F2/F6 | yes, **with measured gain** (+0.6889 / +0.7022 / +0.6500 vs closed-book 0.0000) | no | **admissibility** |
+| `{value} is {kind}.` | F4 | yes (no measured gain — all its questions were filtered from scoring) | **yes** | separates *position* confound from *taught* confound |
+| `{value}.` | F3 | **no — held out** | yes | published only; **excluded from the gate** |
+
+*Why `ans1` primary and not F4:* F1/F2/F6 are the only frames with **measured** adapter competence
+(`phase14_factset.py:781-786`). F4 is taught but its recall was never measured, so it is the weaker
+primary. *Why F3 is excluded:* a perfectly memorized fact asked to appear in a never-practiced
+frame reads high NLL for a reason that has nothing to do with memory — reading it would
+systematically inflate "the fact is absent", the exact ATK-04 inversion. Three forward passes per
+candidate is negligible against an 8.2h draw budget, so all three are cheap enough to publish.
+
+### D-30 — OQ-2: **mean** (per-token) is the admissible reduction; both are published; the two spread-0 slots are the control
+
+**Measured this session** (tokenizer `artifacts/tokenizer.json`, R = base pools + Phase 17's
+`PERSONA_FACTS`, true value included):
+
+| slot | \|R\| | taught len | lengths | spread |
+|---|---|---|---|---|
+| person_name | 8 | 5 | 4,4,4,5,5,6,6,7 | **3** |
+| pet_name | 8 | 4 | 3,4,4,5,5,5,6,6 | **3** |
+| cat_name | 7 | 5 | 4,4,5,5,5,5,6 | **2** |
+| sibling_name | 7 | 6 | 5,5,6,6,6,6,6 | **1** |
+| hometown | 7 | 8 | 5,6,7,7,7,8,8 | **3** |
+| street | 6 | 8 | 6,6,7,7,7,8 | **2** |
+| birth_year | 7 | 4 | 4,4,4,4,4,4,4 | **0** |
+| house_number | 6 | 4 | 4,4,4,4,4,4 | **0** |
+
+|R| = 6–8 confirms D-20. **6 of 8 slots are length-confounded**, up to 1.75× (4 vs 7 ids).
+
+**Decision:** `null_result_is_admissible()` reads the **mean (per-token)** NLL. Both reductions are
+published as required columns alongside the per-slot spread.
+
+*Why mean, against the research's recommendation of sum:* exposure is a **rank** statistic among
+same-slot candidates. Sum is the true joint log-probability — but under sum a longer candidate
+accrues more negative log-probability and ranks worse **by length alone**, injecting the confound
+directly into the statistic on 6 of 8 slots. The research's argument for sum ("the quantity that
+makes 'the fact is in the weights' meaningful") is about interpreting an *absolute* NLL; exposure
+never uses it as one, only ordinally. This is the same "correct unit of measurement" discipline
+that settled draw-vs-question everywhere else in this milestone.
+
+*The counter-argument, recorded rather than hidden:* mean has its own bias — later tokens of a
+memorized string are near-deterministic, so mean can favour long memorized strings. It applies to
+references and the true value alike, so it does not systematically favour the true value, but it is
+real. **Both confounds go in threats-to-validity; neither is corrected.** R cannot be
+length-matched without dropping |R| below D-20's bit ceiling.
+
+*The falsifiable control:* at spread 0 all candidates share one length L, so mean = sum/L is a
+strictly monotonic transform and the two reductions give **ordinally identical ranks by
+construction**. `birth_year` and `house_number` must therefore agree exactly. **Assert it** — a
+disagreement there is a bug, never a finding.
+
+### D-31 — OQ-3: the Holm family is **m = 4**, dose-split, `core_held_out` only
+
+**Executed this session** against `phase16_persistence` (`HOLM_ALPHA = 0.05`, function unchanged —
+this discharges research assumption A3 rather than deferring it to the plan's first task):
+
+`sign_test_exact((1,)*8) = 0.0078125` (8/8 unanimity, the best achievable p at n=8);
+7/8 gives `0.0703125`.
+
+| m | Holm step 1 = α/m | clears 0.0078125? |
+|---|---|---|
+| 3 | 0.0166667 | yes |
+| **4** | **0.0125000** | **yes — by 60%** |
+| 5 | 0.0100000 | yes |
+| 6 | 0.0083333 | yes — **by 0.00052** |
+| **7** | **0.0071429** | **NO — unreachable at every outcome** |
+| 8 | 0.0062500 | no |
+
+**Decision:** **m = 4**, dose-split — A1-mild, A1-aggressive, A2, A3 — on **`core_held_out` only**.
+`core_taught` is reported tier-split and enters **no** family: it is the ATK-03 positive control,
+not an inferential claim. Exposure stays descriptive (D-22), contributing zero comparisons.
+
+*Why 4 and not 6:* m=6 clears by **0.00052** — the identical razor margin Phases 16 and 17 already
+paid for. m=4 preserves D-10's dose axis in the inferential layer, not merely the descriptive one,
+and clears by 60%.
+
+*Guard:* assert the reachability inequality **at import** in the pinned file — `α/m ≤
+sign_test_exact((1,)*n_facts)` must hold — so a mis-sized family turns red in seconds instead of
+after 8.2h. The naïve 4 families × 2 tiers = 8 is arithmetically dead and the assert is what stops
+it reaching a run.
+
+---
+
 *Phase: 18-black-box-adversarial-extraction-audit*
 *Context gathered: 2026-08-15*
+*D-28 … D-31 resolved: 2026-08-15 (post-research, pre-pin)*
