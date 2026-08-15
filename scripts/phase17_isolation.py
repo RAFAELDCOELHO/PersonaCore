@@ -760,12 +760,17 @@ _USAGE = (
     "usage: python scripts/phase17_isolation.py\n"
     "         (--train {persona_a,persona_b,persona_c}\n"
     "          | --sweep {persona_a,persona_b,persona_c,base}\n"
-    "          | --report) [--seed INT]\n"
+    "          | --report\n"
+    "          | --replicate) [--seed INT]\n"
     "\n"
     "  --train NAME   train EXACTLY ONE persona adapter into checkpoints/phase17_NAME_adapter.pt.\n"
     "  --sweep NAME   generate EXACTLY ONE sweep's completions and write\n"
     "                 results/phase17_sweep_NAME.json. `base` is the ISO-03 adapter-off column.\n"
     "  --report       assemble the isolation matrix from the four sweep records already on disk.\n"
+    "  --replicate    ISO-05, DESCRIPTIVE ONLY: select the worst-colliding pair with the\n"
+    "                 pre-registered `worst_pair`, score its seed-scoped replicate sweeps, write\n"
+    "                 results/phase17_replication.json and APPEND the addendum to the isolation\n"
+    "                 report. It takes no --seed: the seeds are REPLICATION_SEEDS, all of them.\n"
     "  --seed INT     the ISO-05 replication seed. With --train it overrides the pre-registered\n"
     "                 PERSONA_SEEDS entry; with --sweep it selects the seed-scoped artifact and\n"
     "                 record. It must be a member of that persona's REPLICATION_SEEDS, and it is\n"
@@ -774,7 +779,8 @@ _USAGE = (
     "There is deliberately NO mode that runs more than one sweep. Four fresh processes, one\n"
     "per sweep, and the only structural way to guarantee that is to make a single process\n"
     "incapable of running two. A convenience flag would turn the process split from a PROPERTY\n"
-    "of this driver into a convention an operator is trusted to follow.\n"
+    "of this driver into a convention an operator is trusted to follow. `--replicate` does not\n"
+    "weaken that property: like `--report` it scores and renders, generating nothing.\n"
     "\n"
     "For Phase 17 the split is stronger than it was for Phase 16: fresh processes make the ISO-04\n"
     "in-process swap failure impossible IN THE FIRST PLACE, because no process ever holds two\n"
@@ -860,14 +866,19 @@ def resolve_seed(mode, target, seed):
 
 
 def build_parser():
-    """The argument surface as a spec a test can read: three modes, no fourth, and no pair.
+    """The argument surface as a spec a test can read: four modes, no fifth, and no pair.
 
     ``--train`` and ``--sweep`` are constrained by argparse itself to ``PERSONAS`` and ``SWEEPS``,
     so an unrecognized name exits non-zero with the legal names printed rather than reaching a
-    dispatch that would have to invent a refusal. Exactly one of the three is REQUIRED: an
+    dispatch that would have to invent a refusal. Exactly one of the four is REQUIRED: an
     argumentless invocation must not fall through to "run something reasonable" when the reasonable
     thing is a multi-hour generation run. ``--seed`` sits OUTSIDE the group because it modifies the
     chosen mode rather than being one.
+
+    ``--replicate`` (plan 17-11) is the fourth action and joins the SAME required mutually exclusive
+    group, so the group still admits exactly one action per process. It scores recorded records and
+    renders text — it trains nothing and generates nothing — so admitting it does not weaken the
+    "no process runs two sweeps" property the group exists to hold.
     """
     import argparse
 
@@ -895,6 +906,11 @@ def build_parser():
         "--report",
         action="store_true",
         help="assemble the matrix from the four sweep records on disk",
+    )
+    mode.add_argument(
+        "--replicate",
+        action="store_true",
+        help="ISO-05: score the pre-registered seed replicates and APPEND the addendum (D-16)",
     )
     parser.add_argument(
         "--seed",
@@ -1370,8 +1386,23 @@ def base_prior_anchor(base_texts):
     ``phase14_factset.BASE_PRIOR_SEEDS`` covers **2 of the 8 core slots** and is a SCREENING SEED
     LIST for candidate values, never an enumeration of what the base may say — so this can only ever
     be an anchor, and matching against it could not be a complete test even on the two slots it does
-    cover. It is reported and never asserted on: a miss is a **sweep problem to investigate before
-    trusting the derivation on the other six slots**, not a finding, and not something to suppress.
+    cover. It is reported and never asserted on, and a miss is not a finding either way.
+
+    **A miss points UPSTREAM, at the seed list's own provenance — not at the sweep being scored.**
+    An earlier revision of this docstring sent a reader to investigate the sweep before trusting the
+    derivation on the other six slots. That investigation has since been performed and the cause is
+    not in any sweep: ``BASE_PRIOR_SEEDS`` was measured under GREEDY decoding from a bare
+    ``<|system|>`` prompt (``scripts/phase14_factset.py:295-296`` records it verbatim), which is a
+    different decoding regime from the SAMPLED sweeps scored here, under a different prompt, with
+    ``forbid_ids`` masked and ``stop_ids`` set. A sampled sweep is not required to reproduce a
+    greedy mode. Corroborated independently: the ISO-01 pre-flight ran the un-adapted base through a
+    different code path over 416 completions and produced the ``pet_name`` seed ``rose`` zero times
+    (``results/phase17_personas_report.md``). Re-sending the next reader at the sweep would be
+    re-running work already done, so this docstring points at the cause instead.
+
+    **The verdict itself is unchanged.** ``reproduced`` is still a plain ``any``-over-seeds match
+    and a miss still renders as a miss — what was corrected is where the reader is sent, not what
+    is reported.
 
     Returns ``{slot: {"seeds": (...), "reproduced": bool}}`` over the covered core slots only.
     """
@@ -1440,10 +1471,19 @@ BASE_PRIOR_DERIVATION_NOTE = (
 BASE_PRIOR_SEED_ANCHOR_NOTE = (
     "The seed list below is a SANITY ANCHOR on the 2 of 8 core slots it covers, and a SCREENING "
     "seed list for candidate values — never an enumeration of what the base may say, so a match "
-    "against it could not be a complete test even on those two slots. If the adapter-off column "
-    "does NOT reproduce them, that is a **sweep problem to investigate before trusting the "
-    "derivation on the other six slots**, and it is printed here rather than suppressed. It is not "
-    "a finding either way."
+    "against it could not be a complete test even on those two slots. A miss is printed here "
+    "rather than suppressed, and it is not a finding either way.\n\n"
+    "**Where a miss points: UPSTREAM, at the seed list's own provenance — not at the sweep scored "
+    "here.** An earlier revision of this note sent a reader to investigate this sweep. That "
+    "investigation was performed and the cause is not in any sweep: `BASE_PRIOR_SEEDS` was "
+    "measured under GREEDY decoding from a bare `<|system|>` prompt "
+    "(`scripts/phase14_factset.py:295-296` records it verbatim), a different decoding regime from "
+    "the SAMPLED sweeps scored here, under a different prompt, with `forbid_ids` masked and "
+    "`stop_ids` set — and a sampled sweep is not required to reproduce a greedy mode. Corroborated "
+    "independently by a different instrument: the ISO-01 pre-flight ran the pure un-adapted base "
+    "through its own code path over 416 completions and produced the `pet_name` seed `rose` zero "
+    "times (`results/phase17_personas_report.md`). The `reproduced` column below is unchanged — a "
+    "miss still reads as a miss; what was corrected is where it sends the reader."
 )
 
 GATE_PUBLISHING_NOTE = (
@@ -1655,7 +1695,8 @@ def render_report(matrix, described, gate, sweep_records, prior_anchor, *, resam
         verdict = (
             "yes"
             if entry["reproduced"]
-            else "**NO — investigate this sweep before trusting the derivation on the other slots**"
+            else "**NO — the known cause is upstream, in the seed list's own provenance; see the "
+            "note above**"
         )
         blocks.append(f"| `{slot}` | {seeds} | {verdict} |")
 
@@ -1891,8 +1932,590 @@ def run_report_mode(*, resamples=persistence.BOOTSTRAP_RESAMPLES):
     )
 
 
+# =============================================================================================
+# ===== ISO-05 — the replication mode: DESCRIPTIVE ONLY, and an append that stays an append ====
+# =============================================================================================
+#
+# Committed BEFORE it renders a single replication number, for the same reason the report writer
+# above was. `results/phase17_replication.json` and the addendum are PUBLIC committed artifacts, so
+# they get the same discipline as `results/phase17_isolation_report.md`; a script improvised in a
+# later plan, after the numbers already exist, has no pre-registration at all.
+#
+# The ordering claim here is NARROWER than §The report writer's and is stated exactly rather than
+# inherited: the four main sweeps have already run and their matrix is recorded, so what every
+# framing string below predates is the SIX REPLICATE SWEEPS and the numbers they produce. The
+# selection rule itself (`personas.worst_pair`) predates even the main matrix — it was committed in
+# Wave 1 — and is CALLED here, never re-derived.
+
+REPLICATION_RECORD_PATH = _REPO_ROOT / "results" / "phase17_replication.json"
+
+REPLICATION_ADDENDUM_HEADING = "## Replication Addendum (ISO-05)"
+
+# Replaces `REPLICATION_PENDING_LINE`. That one line is the ONLY thing above the appended section
+# this mode may touch, and the sentence below claims exactly what this mode did — not that the file
+# is otherwise pristine, which would be false of a report that already carries hand-appended
+# sections from earlier plans.
+#
+# It names the appended section WITHOUT its `## ` prefix, deliberately. A heading literal repeated
+# in prose is the CR-02 defect this repository already paid for once (`scripts/_verdict.py:6-14`):
+# a guard that anchors on the literal rather than on the section then finds the prose copy, and the
+# next reader of this file should not have to discover that a second time.
+REPLICATION_MEASURED_LINE = (
+    "**ISO-05 replication result: measured — see the *Replication Addendum (ISO-05)* section at "
+    "the END of this report.** This single line is the only line the replication mode replaced; "
+    "everything else it wrote was an insertion at the end of the file."
+)
+
+REPLICATION_ADDENDUM_DESCRIPTIVE_NOTE = (
+    "**This whole section is DESCRIPTIVE ONLY and is never a hypothesis test (D-16 / ISO-05 / "
+    "STAT-06).** It reports the minimum, maximum and median of the selected pair's mean "
+    "off-diagonal rate across its k = 3 pre-registered seeds, and nothing else. No correction "
+    "step, no threshold and no verdict is computed here: `gate_cleared` is closed at the six "
+    "pre-registered comparisons and structurally cannot admit a replication row, so no number "
+    "below can either clear or fail this phase's gate. Read the spread, not a decision."
+)
+
+REPLICATION_ADDENDUM_NO_RANKING_NOTE = (
+    "**D-15, restated for this section: the replication makes SEED VARIANCE readable; it does not "
+    "license an ordering.** The main matrix carries one seed per persona, so its three diagonals "
+    "are three separate anchors and never a ranking — a between-persona difference there confounds "
+    "persona content with initialization. The seeds below vary the initialization for the two "
+    "personas of the selected pair only, which is exactly what makes the spread of THEIR "
+    "off-diagonal rates readable. Nothing here says which persona isolates better, and no sentence "
+    "in this section orders the three personas."
+)
+
+REPLICATION_SELECTION_NOTE = (
+    "The pair below is `phase17_personas.worst_pair`'s output — a function committed in Wave 1, "
+    "before the matrix was read — over the six ordered off-diagonal rates beside it. Those six "
+    "rates were read OUT OF THE FOUR RECORDED SWEEPS through the same `assemble_matrix` path the "
+    "main report used, never re-parsed from this report's rendered markdown: the rendered numbers "
+    "are formatted strings with bounds attached, and re-parsing them would make the selection "
+    "depend on the report's layout rather than on the recorded evidence. Their denominators and "
+    "bounds are published per cell in §The Matrix."
+)
+
+REPLICATION_TIE_BREAK_DECIDED = (
+    "**The pre-registered tie-break DECIDED this selection.** More than one unordered pair shares "
+    "the highest mean off-diagonal rate, so the pair named above is the lowest-index member of a "
+    "tie — an outcome of the rule, and NOT a finding about those two personas. This is the case "
+    "the tie-break was committed for: the hoped-for outcome of this phase is that every "
+    "off-diagonal is zero, which makes the selection a three-way tie exactly in the success case."
+)
+
+REPLICATION_TIE_BREAK_NOT_DECIDED = (
+    "**The pre-registered tie-break did NOT decide this selection.** Exactly one unordered pair "
+    "holds the highest mean off-diagonal rate, so the pair named above is that maximum rather than "
+    "the lowest-index member of a tie."
+)
+
+
+def _question_triples(record):
+    """One sweep's ``(slot, seed_index, question)`` set — the generation side, comparably keyed.
+
+    The TRIPLE rather than the bare index, for ``assert_sweeps_ran_on_distinct_weights``'s recorded
+    reason: every sweep's bare index set is ``0..n-1`` and matches trivially while the questions
+    behind it differ. That committed guard builds the same set inline and is deliberately NOT
+    refactored to call this — it is 17-06's surface, it is the guard the published matrix already
+    ran under, and editing it to share a helper with a later plan's code would change a proof that
+    has already been exercised in production for no gain in what either one asserts.
+    """
+    return {
+        (entry["slot"], entry["seed_index"], entry["question"])
+        for entry in record[SWEEP_QUESTIONS_KEY]
+    }
+
+
+def replicate_record_path(persona, seed):
+    """The record path for ONE pre-registered replicate seed, with the default seed UNSCOPED.
+
+    ``resolve_seed`` owns this same ``seed != PERSONA_SEEDS[persona]`` rule for ``--train`` and
+    ``--sweep``, and is deliberately not called here: it resolves an adapter path through
+    ``teach_persona.arm_outputs``, which imports torch at module scope, and this mode is CPU-only
+    by construction — no torch, no model, no generation. What is shared instead is the thing that
+    actually has to agree, ``sweep_record_path``, so the path this reads is built by the same
+    function the sweep wrote through.
+
+    The first pre-registered seed is the persona's ``PERSONA_SEEDS`` entry and its record is the
+    UNSCOPED one plan 17-09 already produced — REUSED, never re-run. k = 3 counts that original.
+    """
+    _prove(
+        seed in personas.REPLICATION_SEEDS[persona],
+        f"seed {seed} is not one of {persona!r}'s pre-registered "
+        f"{personas.REPLICATION_SEEDS[persona]} (ISO-05, committed in Wave 1 before the matrix "
+        "existed). A replication assembled over a seed nobody declared is a replication chosen "
+        "after seeing the numbers it replicates",
+    )
+    default = personas.PERSONA_SEEDS[persona]
+    return sweep_record_path(persona, seed=None if seed == default else seed)
+
+
+def read_replicate_records(pair, reference_triples):
+    """The ``k x 2`` seed-scoped records for the selected pair, proved comparable before scoring.
+
+    Returns ``{(persona, seed): record}``. Every proof here is cheaper than a published replication
+    that should never have been assembled, and each one names a different way the six could fail to
+    be six independent measurements of the same questions:
+
+    * **Six records present**, named by path — a missing one aborts before anything is scored.
+    * **Six DISTINCT pids** — one process per sweep, evidenced rather than asserted.
+    * **Six DISTINCT live ``lora_B`` digests** and **six DISTINCT artifact file digests.** Two
+      separate claims and neither implies the other (ISO-04's own two-claim structure): a file
+      digest says WHICH FILE was read, a live digest says which weights the model ended up holding.
+      Equal digests across two seeds means the seed never reached the initialization draw, and the
+      "spread across seeds" would then be one number reported three times.
+    * **``adapter_enabled`` True on all six.** A replicate generated with the delta branch gated off
+      is the base model under a persona's name: its off-diagonal would read as perfect isolation
+      while measuring nothing.
+    * **The same ``(slot, seed_index, question)`` set as the main sweeps.** Only an identical
+      generation side makes the seed variance readable — a different question set would vary the
+      questions and the initialization together and attribute the whole difference to the seed.
+
+    **``git_sha`` is RECORDED per cell and deliberately NOT proved single-valued.** Two of these six
+    records are the main sweeps, produced in plan 17-09; the other four are produced later, at a
+    later commit, by construction. A one-SHA proof here would refuse every honest run.
+    """
+    import json
+
+    records = {}
+    for persona in pair:
+        for seed in personas.REPLICATION_SEEDS[persona]:
+            path = replicate_record_path(persona, seed)
+            _prove(
+                path.exists(),
+                f"{path} is missing — the replication assembles over all "
+                f"{len(personas.REPLICATION_SEEDS[persona])} pre-registered seeds of both selected "
+                f"personas or over none. Run `python scripts/phase17_isolation.py --sweep "
+                f"{persona} --seed {seed}` in its own fresh process first (the first seed's record "
+                "is the unscoped one from the main matrix and is reused rather than re-run)",
+            )
+            record = json.loads(path.read_text(encoding="utf-8"))
+            _prove(
+                record.get(SWEEP_LABEL_KEY) == persona,
+                f"{path} carries {SWEEP_LABEL_KEY} = {record.get(SWEEP_LABEL_KEY)!r} but was read "
+                f"as {persona!r}'s seed {seed} — a record filed under one persona and labelled "
+                "another would put one adapter's completions into the other's seed spread",
+            )
+            records[(persona, seed)] = record
+
+    labelled = sorted(records)
+    for field, why in (
+        (
+            "pid",
+            "one process per sweep is what makes the in-process swap failure impossible in the "
+            "first place, and two replicates sharing a process crossed the boundary ISO-04 "
+            "isolates",
+        ),
+        (
+            LORA_B_DIGEST_KEY,
+            "two replicate sweeps ran on the SAME resident weights, so the seed never reached the "
+            "initialization draw and the spread across seeds is one number reported more than once",
+        ),
+        (
+            ADAPTER_FILE_DIGEST_KEY,
+            "two replicate sweeps read the SAME adapter file under two seed names. This is a "
+            "separate claim from the live digests and neither implies the other",
+        ),
+    ):
+        values = [records[key][field] for key in labelled]
+        _prove(
+            len(set(values)) == len(values),
+            f"the {len(values)} replicate records carry {len(set(values))} distinct {field} "
+            f"value(s) across {labelled} — {why}",
+        )
+
+    disabled = sorted(key for key in labelled if records[key][ADAPTER_ENABLED_KEY] is not True)
+    _prove(
+        not disabled,
+        f"replicate record(s) {disabled} did not record {ADAPTER_ENABLED_KEY} = True. A replicate "
+        "generated with the delta branch gated off is the base model under a persona's name: its "
+        "off-diagonal rate would read as perfect isolation while measuring nothing (ISO-03/ISO-04)",
+    )
+
+    for key in labelled:
+        triples = _question_triples(records[key])
+        _prove(
+            triples == reference_triples,
+            f"replicate {key} answered a different (slot, seed_index, question) set from the main "
+            f"sweeps: {len(triples ^ reference_triples)} entries differ, e.g. "
+            f"{sorted(triples ^ reference_triples)[:3]}. The seed variance is only readable when "
+            "the generation side is IDENTICAL — a different question set varies the questions and "
+            "the initialization together and attributes the whole difference to the seed",
+        )
+    return records
+
+
+def replication_payload(matrix, main_records, replicates, pair, tie_break_decided):
+    """The ``results/phase17_replication.json`` payload — min / max / median, and nothing else.
+
+    Every rate travels through ``report_proportion``, so no number appears without its denominator
+    and its bound and the rule of three travels with every zero (STAT-02). The per-seed provenance
+    is carried per CELL rather than once for the run, because these six records were written by six
+    processes and — for ``git_sha`` — at two different commits (see ``read_replicate_records``).
+
+    **No p value, no threshold, no verdict at any depth (D-16 / ISO-05 / STAT-06).** The summary is
+    the min / max / median of the selected pair's MEAN off-diagonal rate across the seed indices —
+    the same quantity ``worst_pair`` maximises, so the spread is reported on the axis the selection
+    was made on rather than on a second one invented for the addendum.
+    """
+    import statistics
+
+    first, second = pair
+    third = next(name for name in personas.PERSONAS if name not in pair)
+    by_label = {record[SWEEP_LABEL_KEY]: record for record in main_records}
+    base_texts = base_texts_by_slot(by_label[personas.BASE_ROW])
+    values = values_by_slot()
+    seed_lists = {persona: personas.REPLICATION_SEEDS[persona] for persona in pair}
+    n_seeds = len(seed_lists[first])
+    _prove(
+        len(seed_lists[second]) == n_seeds,
+        f"the selected personas carry {len(seed_lists[first])} and {len(seed_lists[second])} "
+        "pre-registered seeds — the pair's mean off-diagonal rate is defined per SEED INDEX, and "
+        "unequal lists would pair a seed of one persona with nothing on the other side",
+    )
+
+    cells = []
+    per_index = []
+    for index in range(n_seeds):
+        seeds = {persona: seed_lists[persona][index] for persona in pair}
+        scored = [
+            replicates[(first, seeds[first])],
+            replicates[(second, seeds[second])],
+            by_label[third],
+            by_label[personas.BASE_ROW],
+        ]
+        # The base record and the un-selected persona's record come from the MAIN sweeps: D-13
+        # derives the base prior from ONE adapter-off column under one set of questions and seeds,
+        # so a per-seed base column would be four controls where the design has exactly one — the
+        # same reason `resolve_seed` refuses `--sweep base --seed`. The third persona is present
+        # only to satisfy `assemble_matrix`'s four-record contract; its cells are not read, and it
+        # cannot influence the two that are, because cell (i, j) counts what ROW i's own completions
+        # contained and depends on no other row's record.
+        seed_matrix = assemble_matrix(scored, values, base_texts)
+        n_draws = draws_per_question(scored)
+
+        rates = []
+        for row, target in ((first, second), (second, first)):
+            entry = seed_matrix[(row, target)]
+            rates.append(entry["rate"])
+            record = replicates[(row, seeds[row])]
+            cells.append(
+                {
+                    "persona": row,
+                    "target": target,
+                    "seed": seeds[row],
+                    "seed_index": index,
+                    "record": str(replicate_record_path(row, seeds[row]).name),
+                    "proportion": persistence.report_proportion(
+                        entry["n_answerable"],
+                        entry["n_questions"],
+                        entry["n_questions"] * n_draws,
+                    ),
+                    LORA_B_DIGEST_KEY: record[LORA_B_DIGEST_KEY],
+                    ADAPTER_FILE_DIGEST_KEY: record[ADAPTER_FILE_DIGEST_KEY],
+                    "pid": record["pid"],
+                    "git_sha": record["git_sha"],
+                    "wall_clock_min": record.get("wall_clock_min"),
+                }
+            )
+        per_index.append(
+            {
+                "seed_index": index,
+                "seeds": {persona: seeds[persona] for persona in pair},
+                "mean_off_diagonal_rate": sum(rates) / len(rates),
+            }
+        )
+
+    spread = [entry["mean_off_diagonal_rate"] for entry in per_index]
+    off_diagonal = {
+        (i, j): matrix[(i, j)]["rate"]
+        for i in personas.PERSONAS
+        for j in personas.PERSONAS
+        if i != j
+    }
+    return {
+        "selected_pair": list(pair),
+        "selection_inputs": {f"{i} -> {j}": rate for (i, j), rate in sorted(off_diagonal.items())},
+        "selection_pair_means": {
+            f"{i} + {j}": (off_diagonal[(i, j)] + off_diagonal[(j, i)]) / 2
+            for i, j in _unordered_pairs()
+        },
+        "tie_break_decided": tie_break_decided,
+        "seeds": {persona: list(seed_lists[persona]) for persona in pair},
+        "unit": personas.SIGN_UNIT,
+        "cells": cells,
+        "pair_mean_off_diagonal_by_seed_index": per_index,
+        "pair_mean_off_diagonal_across_seeds": {
+            "min": min(spread),
+            "max": max(spread),
+            "median": statistics.median(spread),
+        },
+        "descriptive_only": REPLICATION_ADDENDUM_DESCRIPTIVE_NOTE,
+    }
+
+
+def _unordered_pairs():
+    """The three unordered persona pairs in ``PERSONAS`` order — ``worst_pair``'s candidates."""
+    import itertools
+
+    return tuple(itertools.combinations(personas.PERSONAS, 2))
+
+
+def render_replication_addendum(payload):
+    """The addendum text. Returns a string; writes nothing (the append helper owns the file)."""
+    import re
+
+    pair = payload["selected_pair"]
+    summary = payload["pair_mean_off_diagonal_across_seeds"]
+    blocks = [
+        REPLICATION_ADDENDUM_HEADING,
+        "",
+        "*Appended by `python scripts/phase17_isolation.py --replicate`. Everything above this "
+        "heading is untouched except the one pointer line in §Replication (ISO-05).*",
+        "",
+        REPLICATION_ADDENDUM_DESCRIPTIVE_NOTE,
+        "",
+        REPLICATION_ADDENDUM_NO_RANKING_NOTE,
+        "",
+        "### The selection",
+        "",
+        REPLICATION_SELECTION_NOTE,
+        "",
+        "| ordered off-diagonal cell | question-unit rate (the selection input) |",
+        "| --- | --- |",
+    ]
+    blocks += [f"| `({cell})` | {rate:.6f} |" for cell, rate in payload["selection_inputs"].items()]
+    blocks += [
+        "",
+        "| unordered pair | mean of its two off-diagonal rates |",
+        "| --- | --- |",
+    ]
+    blocks += [
+        f"| `{cell}` | {mean:.6f} |" for cell, mean in payload["selection_pair_means"].items()
+    ]
+    blocks += [
+        "",
+        f"**Selected pair:** `{pair[0]}` / `{pair[1]}`, at the pre-registered seeds "
+        f"`{payload['seeds'][pair[0]]}` and `{payload['seeds'][pair[1]]}` "
+        f"(k = {len(payload['seeds'][pair[0]])} counting the original).",
+        "",
+        REPLICATION_TIE_BREAK_DECIDED
+        if payload["tie_break_decided"]
+        else REPLICATION_TIE_BREAK_NOT_DECIDED,
+        "",
+        "### The seed spread",
+        "",
+        "One row per (persona, seed). The rate is the off-diagonal cell `(persona, target)` in the "
+        f"{payload['unit']} unit, published with both denominators and its bound so no number here "
+        "appears without them. `git SHA` differs between the first seed and the rest by "
+        "construction: the first seed's sweep is the one the main matrix already recorded, reused "
+        "rather than re-run.",
+        "",
+        "| persona | seed | seed index | off-diagonal cell | rate |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    blocks += [
+        f"| `{cell['persona']}` | `{cell['seed']}` | {cell['seed_index']} | "
+        f"`({cell['persona']}, {cell['target']})` | {cell['proportion']['formatted']} |"
+        for cell in payload["cells"]
+    ]
+    blocks += [
+        "",
+        "| persona | seed | pid | git SHA | live `lora_B` sha256 | adapter file sha256 |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    blocks += [
+        f"| `{cell['persona']}` | `{cell['seed']}` | {cell['pid']} | `{cell['git_sha']}` | "
+        f"`{cell[LORA_B_DIGEST_KEY][:16]}…` | `{cell[ADAPTER_FILE_DIGEST_KEY][:16]}…` |"
+        for cell in payload["cells"]
+    ]
+    blocks += [
+        "",
+        "| seed index | seeds | mean off-diagonal rate of the pair |",
+        "| --- | --- | --- |",
+    ]
+    blocks += [
+        f"| {entry['seed_index']} | "
+        + ", ".join(f"`{persona}`=`{seed}`" for persona, seed in entry["seeds"].items())
+        + f" | {entry['mean_off_diagonal_rate']:.6f} |"
+        for entry in payload["pair_mean_off_diagonal_by_seed_index"]
+    ]
+    blocks += [
+        "",
+        f"**Minimum {summary['min']:.6f} / maximum {summary['max']:.6f} / median "
+        f"{summary['median']:.6f}** of the selected pair's mean off-diagonal rate across its "
+        f"{len(payload['pair_mean_off_diagonal_by_seed_index'])} seed indices. That is the whole "
+        "ISO-05 result: three descriptive numbers over the axis the selection was made on. Each "
+        "underlying cell is published with its own denominator and bound in the table above.",
+        "",
+    ]
+
+    text = "\n".join(blocks)
+    _prove(
+        re.search(r"\b0(\.0+)?%", text) is None,
+        "the rendered replication addendum contains a bare zero percentage — STAT-02 forbids it in "
+        "any committed report or figure, because a bare zero states a certainty the sample does "
+        "not have. Every cell renders through report_proportion with its denominators attached",
+    )
+    _prove(
+        _verdict.recorded_verdict(text) is None,
+        "the rendered replication addendum carries a `## Verdict` section of its own. ISO-05 is "
+        "DESCRIPTIVE ONLY (D-16) and the report has exactly one verdict, recorded above it; a "
+        "second one would also be the section every clobber guard in this phase anchors on",
+    )
+    return text
+
+
+def append_addendum(path, addendum):
+    """APPEND a section to a recorded report, replacing EXACTLY one placeholder line above it.
+
+    There is deliberately no override flag and no rewrite path. A flag that disables this guard
+    becomes routine, and an operator who learns to pass it routinely passes it after a human HAS
+    recorded a verdict — at which point the guard destroys precisely the hand-recorded evidence it
+    exists to protect. That is Phase 16's 16-06 decision and CR-02 before it, and the recovery is
+    the same one this phase uses everywhere else: if a report genuinely must be regenerated, delete
+    it in a reviewed commit so the removal is visible in the diff.
+
+    The implementation is textual and surgical rather than a re-render, because ``render_report``
+    rewrites the WHOLE file — running it again would destroy every hand-appended section the report
+    has accumulated along with the verdict. Here the prefix before the placeholder is carried
+    through byte-identically, the placeholder line becomes a pointer, and the addendum is
+    concatenated at the end. Everything else is an insertion.
+
+    ``_prove``s the placeholder occurs EXACTLY once, before writing. Zero means the report is not
+    the shape this writer was committed against; two means guessing which one to replace, and
+    guessing is how an append silently becomes a rewrite. The count found is named in the message.
+    """
+    text = path.read_text(encoding="utf-8")
+    found = text.count(REPLICATION_PENDING_LINE)
+    _prove(
+        found == 1,
+        f"{path} carries {found} occurrence(s) of the placeholder line "
+        f"{REPLICATION_PENDING_LINE!r}, and this writer replaces EXACTLY ONE. At {found} there is "
+        "no unambiguous line to replace — zero means the file is not the shape this writer was "
+        "committed against (already appended to, or not this writer's output at all), and more "
+        "than one means choosing between them, which is how an append silently becomes a rewrite",
+    )
+    before, after = text.split(REPLICATION_PENDING_LINE)
+    updated = before + REPLICATION_MEASURED_LINE + after
+    if not updated.endswith("\n"):
+        updated += "\n"
+    updated = updated + "\n" + addendum.rstrip("\n") + "\n"
+    _prove(
+        _verdict.recorded_verdict(updated) == _verdict.recorded_verdict(text),
+        f"appending to {path} changed its recorded `## Verdict` section. The verdict is this "
+        "phase's committed evidence and an addendum may only be ADDED beside it — a writer that "
+        "moves it has rewritten the report under cover of an append",
+    )
+    _prove(
+        updated.startswith(before) and addendum.rstrip("\n") in updated,
+        f"the rewritten {path} does not carry its original prefix byte-identically, or lost the "
+        "addendum it was appending — the append-only property is the whole guarantee this helper "
+        "offers and it is checked on the produced bytes, not assumed from the construction",
+    )
+    path.write_text(updated, encoding="utf-8")
+    print(f"[phase17_isolation] appended the ISO-05 addendum to {path}")
+    return updated
+
+
+def run_replicate_mode():
+    """ISO-05, end to end. CPU-only: no torch, no model, no tokenizer, no generation.
+
+    The order is the contract, and each step is a precondition of the next:
+
+    1. **The report must exist AND carry a recorded verdict.** The replication is an ADDENDUM to a
+       recorded result; running it against a missing or unrecorded report would be writing a
+       conclusion before there is one to append it to.
+    2. **Refuse to clobber ``results/phase17_replication.json``.** Recorded evidence, named path.
+    3. Read the four UNSCOPED records, re-run ISO-04's cross-process proof over them, and assemble
+       the SAME matrix the main report did. The six off-diagonal rates come out of the RECORDS,
+       never out of the rendered markdown.
+    4. Call the pre-registered ``worst_pair`` — never a hand-rolled maximum — and record separately
+       whether its tie-break decided the outcome.
+    5. Read and prove the six seed-scoped records, then score them through the same
+       ``assemble_matrix`` path with the SINGLE base column reused (D-13).
+    6. Write the payload, then APPEND the addendum.
+
+    **Nothing here computes a p value, a sign vector, a correction step or a verdict** (D-16 /
+    ISO-05 / STAT-06). ``gate_cleared`` is closed at the six pre-registered comparisons and
+    structurally cannot admit a replication row, so the output is min / max / median and nothing
+    else. No step orders the three personas (D-15).
+    """
+    import json
+
+    _prove(
+        ISOLATION_REPORT_PATH.exists(),
+        f"{ISOLATION_REPORT_PATH} does not exist. ISO-05 is an ADDENDUM to a recorded isolation "
+        "result: run `python scripts/phase17_isolation.py --report` over the four sweeps first. "
+        "Appending a replication to a report that was never assembled would publish a conclusion "
+        "before there is one to append it to",
+    )
+    recorded = _verdict.recorded_verdict(ISOLATION_REPORT_PATH.read_text(encoding="utf-8"))
+    _prove(
+        recorded is not None and recorded.strip(),
+        f"{ISOLATION_REPORT_PATH} carries no recorded `## Verdict` section. The replication "
+        "describes the spread around a result that has already been recorded; against an "
+        "unrecorded report there is nothing for it to be an addendum TO, and the file is not this "
+        "phase's report writer's output",
+    )
+    _prove(
+        not REPLICATION_RECORD_PATH.exists(),
+        f"{REPLICATION_RECORD_PATH} already exists — it is recorded ISO-05 evidence and this mode "
+        "will not overwrite it. If it genuinely must be regenerated, delete it in a reviewed "
+        "commit so the removal is visible in the diff",
+    )
+
+    records = read_sweep_records()
+    assert_sweeps_ran_on_distinct_weights(records)
+    by_label = {record[SWEEP_LABEL_KEY]: record for record in records}
+    base_texts = base_texts_by_slot(by_label[personas.BASE_ROW])
+    matrix = assemble_matrix(records, values_by_slot(), base_texts)
+
+    off_diagonal = {
+        (i, j): matrix[(i, j)]["rate"]
+        for i in personas.PERSONAS
+        for j in personas.PERSONAS
+        if i != j
+    }
+    expected = {(i, j) for i in personas.PERSONAS for j in personas.PERSONAS if i != j}
+    _prove(
+        set(off_diagonal) == expected,
+        f"the selection inputs are {sorted(off_diagonal)} but D-19 selects over exactly the six "
+        f"ordered off-diagonal cells {sorted(expected)} — a missing cell would let a pair's mean "
+        "be computed from one direction only, and a diagonal cell would put a persona's own recall "
+        "into a leakage statistic",
+    )
+    pair = personas.worst_pair(off_diagonal)
+
+    # Whether the pre-registered tie-break DECIDED the outcome, recorded rather than inferred from
+    # the result. In the hoped-for all-zero case this is True and the answer is the lowest-index
+    # pair — a tie-break outcome, never a finding about those two personas.
+    means = {
+        candidate: (off_diagonal[candidate] + off_diagonal[candidate[::-1]]) / 2
+        for candidate in _unordered_pairs()
+    }
+    _prove(
+        pair in means,
+        f"worst_pair returned {pair}, which is not one of the three unordered pairs "
+        f"{sorted(means)} — the selection and the tie detection are reading different candidate "
+        "sets, so the recorded tie_break_decided would describe a selection that did not happen",
+    )
+    tie_break_decided = list(means.values()).count(max(means.values())) > 1
+
+    reference = _question_triples(by_label[SWEEPS[0]])
+    replicates = read_replicate_records(pair, reference)
+    payload = replication_payload(matrix, records, replicates, pair, tie_break_decided)
+
+    REPLICATION_RECORD_PATH.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(f"[phase17_isolation] wrote {REPLICATION_RECORD_PATH}")
+    append_addendum(ISOLATION_REPORT_PATH, render_replication_addendum(payload))
+    return payload
+
+
 def main(argv=None):
-    """Dispatch — exhaustive over the three modes, with NO default branch.
+    """Dispatch — exhaustive over the four modes, with NO default branch.
 
     The ``run_condition`` register: the target is proved to be in its expected tuple FIRST, and a
     result is proved to have been produced LAST. A name in ``SWEEPS`` with no dispatch branch means
@@ -1924,6 +2547,20 @@ def main(argv=None):
         # Never passes `resamples`: the published interval always runs at the pre-registered
         # BOOTSTRAP_RESAMPLES, and the count actually used is printed in the report either way.
         result = run_report_mode()
+    elif args.replicate:
+        # `--seed` is REFUSED here rather than ignored. The replication reads ALL of the selected
+        # pair's REPLICATION_SEEDS by construction, so a seed on the command line means the
+        # operator believed they were scoping the run — and a silently ignored flag would let them
+        # keep believing it while the mode read every seed anyway.
+        _prove(
+            args.seed is None,
+            f"--replicate was given --seed {args.seed}. ISO-05 reads every one of the selected "
+            "pair's pre-registered REPLICATION_SEEDS by construction, so there is no seed to "
+            "select: a seed here would either be ignored (and the operator would believe a "
+            "scoping that did not happen) or would narrow a k=3 replication to k=1 without saying "
+            "so in the artifact",
+        )
+        result = run_replicate_mode()
     _prove(
         result is not None,
         "the selected mode produced no result — a name in the parser's choices with no dispatch "
