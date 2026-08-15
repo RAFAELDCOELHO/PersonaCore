@@ -356,7 +356,7 @@ Plans:
 
 - [x] 17-09-PLAN.md — RUN: three adapters at three seeds, four sweeps in four fresh processes,
   assemble the matrix and record the verdict
-- [ ] 17-11-PLAN.md — the `--replicate` mode and the append-only ISO-05 addendum writer, committed
+- [x] 17-11-PLAN.md — the `--replicate` mode and the append-only ISO-05 addendum writer, committed
   before plan 17-10 runs it so no public artifact is produced by an ad-hoc script
 
 **Wave 6** *(blocked on Wave 5)*
@@ -443,7 +443,7 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
-| 17. Multi-Persona Isolation Matrix | v3.0 | 9/11 | In Progress|  |
+| 17. Multi-Persona Isolation Matrix | v3.0 | 10/11 | In Progress|  |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 0/TBD | Pending | - |
 
 **Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.

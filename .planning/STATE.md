@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-09-PLAN.md
-last_updated: "2026-08-15T01:26:54.359Z"
-last_activity: "2026-08-14 -- 17-09 complete: three adapters trained at seeds 1337/1338/1339, four sweeps ran in four fresh processes at one git SHA, and the isolation gate CLEARED — all six Holm comparisons rejected at p = 0.0078125 each, diagonals 104/104 and 103/104 and 103/104 questions, all six off-diagonals 0/104, and the adapter-off base row 0/104 on every persona"
+stopped_at: Completed 17-11-PLAN.md (17-10 still PENDING — it runs the mode this plan committed)
+last_updated: "2026-08-15T11:12:47.320Z"
+last_activity: "2026-08-15 -- 17-11 complete: --replicate is committed with its append-only addendum writer BEFORE it renders a number; 24 tests in test_phase17_stats.py; the D-13 remediation pointer corrected at all three generator sites with the reproduced verdict logic byte-unchanged; results/phase17_isolation_report.md untouched (sha256 6096aaf6, the 9fcfc50 addendum intact); ISO-05 NOT marked — nothing replicated yet, 17-10 owns the run"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 20
+  completed_plans: 21
   percent: 33
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 10 of 11
+Plan: 10 of 11 (17-11 done out of order; 17-10 is the remaining plan)
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-09 complete: three adapters trained at seeds 1337/1338/1339, four sweeps ran in four fresh processes at one git SHA, and the isolation gate CLEARED — all six Holm comparisons rejected at p = 0.0078125 each, diagonals 104/104 and 103/104 and 103/104 questions, all six off-diagonals 0/104, and the adapter-off base row 0/104 on every persona
+Last activity: 2026-08-15 -- 17-11 complete: --replicate is committed with its append-only addendum writer BEFORE it renders a number; 24 tests in test_phase17_stats.py; the D-13 remediation pointer corrected at all three generator sites with the reproduced verdict logic byte-unchanged; results/phase17_isolation_report.md untouched (sha256 6096aaf6, the 9fcfc50 addendum intact); ISO-05 NOT marked — nothing replicated yet, 17-10 owns the run
 
 ## Performance Metrics
 
@@ -85,6 +85,7 @@ Last activity: 2026-08-14 -- 17-09 complete: three adapters trained at seeds 133
 | Phase 17 P08 | 32min | 3 tasks | 2 files |
 | Phase 17 P07 | 60min | 2 tasks | 3 files |
 | Phase 17 P09 | 70min | 3 tasks | 9 files |
+| Phase 17 P11 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -223,6 +224,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-09: the D-13 anchor is a PARTIAL miss and is published as such — 'the country' reproduced for hometown (7/108 base draws), 'rose' did NOT for pet_name (0/103); investigated BEFORE the matrix was read and traced to BASE_PRIOR_SEEDS' own provenance (greedy decode from a bare system prompt, phase14_factset.py:295-296) rather than to the sweep, corroborated by the ISO-01 pre-flight producing 'rose' zero times across 416 completions on the pure un-adapted base
 - [Phase 17]: 17-09: F-13 is labeled CHECKPOINT-SPECIFIC in the isolation report itself (04e724c6 / step 4000 / val_loss 1.5235939979553224) with an explicit RE-RUN requirement for any future checkpoint — the committed report writer makes no F-13 claim at all, so the label went into a dated hand-appended Scope Addendum that alters no rate, no p, no alpha and no verdict
 - [Phase 17]: 17-09: 17-07's handover prediction that the base's 'i am a college student' attractor and '<|assistant|>' leakage would appear in the adapter completions is FALSIFIED by measurement — 47 and 56 of 936 draws in the base column, 0 of 936 in each of the three adapter columns; both are published Phase 13 properties (79 naive / 70 EWC) and are recorded in the report as such, never as Phase 17 findings
+- [Phase 17]: 17-11: the D-13 remediation pointer was corrected at THREE generator sites, not the two named — BASE_PRIOR_SEED_ANCHOR_NOTE is the only one that renders into the report, so fixing the other two alone would leave the published defect regenerating on the next --report run
+- [Phase 17]: 17-11: append_addendum is textual and surgical, never a re-render — render_report rewrites the WHOLE file and would destroy the recorded verdict, 17-09's Scope Addendum and the 9fcfc50 D-13 addendum together; do NOT run --report again to pick up the corrected pointer
+- [Phase 17]: 17-11: git_sha is recorded per replicate cell and deliberately NOT proved single-valued — two of the six records are 17-09's, produced at an earlier commit by construction, so a one-SHA proof would refuse every honest run
+- [Phase 17]: 17-11: resolve_seed is not reused for replicate path resolution (it resolves an adapter through teach_persona.arm_outputs, which imports torch, and --replicate is CPU-only); sweep_record_path — the thing that must agree with the sweep writer — IS shared
+- [Phase 17]: 17-11: ISO-05 stays Pending — this plan ships the rendering path and produces no number; 17-10 runs it. Fifth application of 17-01's recorded over-claim-avoidance pattern
 
 ### Pending Todos
 
@@ -266,8 +272,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-15T01:26:16.347Z
-Stopped at: Completed 17-07-PLAN.md
+Last session: 2026-08-15T11:11:51.595Z
+Stopped at: Completed 17-11-PLAN.md (17-10 still PENDING — it runs the mode this plan committed)
 Resume file: None
 
 ## Operator Next Steps
