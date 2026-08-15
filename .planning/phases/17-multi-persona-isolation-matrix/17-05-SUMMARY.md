@@ -42,7 +42,7 @@ key-files:
 decisions:
   - the driver has no literal `import torch`; torch arrives transitively and the MPS-fallback env
     set is ordered against that, measured
-  - `## Verdict` holds the verdict and NOTHING else — instructions live in `## Recording The
+  - the `## Verdict` section holds the verdict and NOTHING else — instructions live in `## Recording The
     Verdict` above it, or the clobber guard stays disarmed forever after a human writes GO
   - probe_guessability is called ONCE PER SLOT and all 24 verdicts derive from the cache through
     exact_match_clean, so no value is judged by a different code path than its slot-mates

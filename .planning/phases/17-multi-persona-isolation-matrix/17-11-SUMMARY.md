@@ -40,10 +40,10 @@ decisions:
     appended at render_report:1688) and render_report's own inline per-slot verdict literal, which
     does NOT reference the constant. Only base_prior_anchor's docstring is dead text. Fixing any
     proper subset would have left the published defect regenerating on the next --report run
-  - resolve_seed is NOT reused for replicate path resolution: it resolves an adapter path through
+  - resolve_seed is NOT reused for replicate path resolution — it resolves an adapter path through
     teach_persona.arm_outputs, which imports torch, and this mode is CPU-only. sweep_record_path —
     the thing that actually has to agree — IS shared
-  - git_sha is recorded per replicate cell and deliberately NOT proved single-valued: two of the
+  - git_sha is recorded per replicate cell and deliberately NOT proved single-valued — two of the
     six records are 17-09's, produced at an earlier commit BY CONSTRUCTION
 metrics:
   duration: 25min

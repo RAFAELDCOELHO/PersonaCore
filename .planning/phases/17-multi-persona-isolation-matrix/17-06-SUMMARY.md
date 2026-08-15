@@ -6,7 +6,7 @@ tags: [iso-02, iso-03, iso-04, iso-05, d-04, d-13, d-14, d-20, th-17-18, th-17-4
 requires:
   - scripts/phase17_isolation.py (the 17-04 scoring core — extended ADDITIVELY, nothing edited)
   - src/personacore/lora (load_adapter_weights / adapter_disabled / LoRALinear — imported, and
-    deliberately NOT modified: `git diff -- src/personacore/lora/` is empty)
+    deliberately NOT modified — `git diff -- src/personacore/lora/` is empty)
   - scripts/phase14_recall.py (load_adapted_model, complete_question, question_seed, _sha256,
     assert_no_value_in_prompt, SEED, ADAPTER_PATH — imported, never copied)
   - scripts/phase16_persistence.py (SHARED_ARM_CONFIG, resolve_forbid, forbid_digest,

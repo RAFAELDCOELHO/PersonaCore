@@ -16,7 +16,7 @@ provides:
   - SWEEP_QUESTIONS_KEY / SWEEP_LABEL_KEY / CATEGORIES (the sweep-record contract)
   - tests/test_phase17_scoring.py (11 CPU-only tests)
 affects:
-  - plan 17-06 (extends THIS file additively: the ISO-04 canary, values_by_slot, --sweep/--train,
+  - plan 17-06 (extends THIS file additively — the ISO-04 canary, values_by_slot, --sweep/--train,
     main() under a __main__ guard; must write records under SWEEP_QUESTIONS_KEY / SWEEP_LABEL_KEY)
   - plan 17-08 (run_report_mode consumes assemble_matrix's 12 cells and its per_slot shape)
   - plan 17-11 (the ISO-05 replication reuses the same scoring core)

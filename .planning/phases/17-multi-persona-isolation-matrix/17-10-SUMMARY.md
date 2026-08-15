@@ -29,7 +29,7 @@ tech-stack:
     - a plan that writes NO code and produces a public artifact only through modes committed in
       earlier waves — git diff -- scripts/ empty across all three tasks
     - a detached run whose success is read from an on-disk exit-code sentinel, never from log text
-    - the same append-only property proved twice: synthetically on the writer (17-11) and on the
+    - the same append-only property proved twice — synthetically on the writer (17-11) and on the
       PUBLISHED bytes (here)
 key-files:
   created:
