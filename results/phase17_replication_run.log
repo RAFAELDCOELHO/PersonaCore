@@ -81,3 +81,33 @@
 [teach_persona] run provenance: arm=persona_b_seed1538 seed=1538 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=d866f593e4b9141adde523350d5d61b6d406f44e pid=56009 device=mps torch=2.7.1 second_person=False replay_ratio=0.0 mask_fraction=0.3535 final_train_loss=0.0666 utc=2026-08-15T11:29:44Z
 --- exit 0 for persona_b seed 1538 @ 2026-08-15T11:29:45Z ---
 === TRAINING wrapper finished rc=0 @ 2026-08-15T11:29:45Z ===
+
+=== phase17 ISO-05 replication — SWEEPS (plan 17-10 Task 2) ===
+=== wrapper pid 58328 started 2026-08-15T11:31:41Z ===
+
+--- --sweep persona_a --seed 1437  @ 2026-08-15T11:31:41Z ---
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase17_isolation] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase17_isolation] wrote /Users/juliorcoelho/PersonaCore/results/phase17_sweep_persona_a_seed1437.json in 3.1 min
+--- exit 0 for sweep persona_a seed 1437 @ 2026-08-15T11:34:47Z ---
+
+--- --sweep persona_a --seed 1537  @ 2026-08-15T11:34:47Z ---
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase17_isolation] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase17_isolation] wrote /Users/juliorcoelho/PersonaCore/results/phase17_sweep_persona_a_seed1537.json in 3.1 min
+--- exit 0 for sweep persona_a seed 1537 @ 2026-08-15T11:37:56Z ---
+
+--- --sweep persona_b --seed 1438  @ 2026-08-15T11:37:56Z ---
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase17_isolation] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase17_isolation] wrote /Users/juliorcoelho/PersonaCore/results/phase17_sweep_persona_b_seed1438.json in 3.2 min
+--- exit 0 for sweep persona_b seed 1438 @ 2026-08-15T11:41:10Z ---
+
+--- --sweep persona_b --seed 1538  @ 2026-08-15T11:41:10Z ---
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase17_isolation] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase17_isolation] wrote /Users/juliorcoelho/PersonaCore/results/phase17_sweep_persona_b_seed1538.json in 3.2 min
+--- exit 0 for sweep persona_b seed 1538 @ 2026-08-15T11:44:21Z ---
+=== SWEEP wrapper finished rc=0 @ 2026-08-15T11:44:21Z ===
+[phase17_isolation] wrote /Users/juliorcoelho/PersonaCore/results/phase17_replication.json
+[phase17_isolation] appended the ISO-05 addendum to /Users/juliorcoelho/PersonaCore/results/phase17_isolation_report.md

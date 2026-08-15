@@ -130,7 +130,7 @@ All six pre-registered comparisons rejected at their Holm step, so the phase's c
 
 **Selected pair:** `persona_a` / `persona_b`, at the pre-registered replication seeds `(1337, 1437, 1537)` and `(1338, 1438, 1538)` (k = 3 counting the original seed).
 
-**ISO-05 replication result: not yet measured.**
+**ISO-05 replication result: measured — see the *Replication Addendum (ISO-05)* section at the END of this report.** This single line is the only line the replication mode replaced; everything else it wrote was an insertion at the end of the file.
 
 ## Provenance
 
@@ -198,3 +198,64 @@ attached**:
 The same scope applies wherever this phase's later plans invoke it. Nothing in §Gate or §Verdict
 depends on F-13: the six comparisons are computed from the three adapter rows alone, and the base
 row that contextualizes them is the measured adapter-off column in §The Matrix, not the pre-flight.
+
+## Replication Addendum (ISO-05)
+
+*Appended by `python scripts/phase17_isolation.py --replicate`. Everything above this heading is untouched except the one pointer line in §Replication (ISO-05).*
+
+**This whole section is DESCRIPTIVE ONLY and is never a hypothesis test (D-16 / ISO-05 / STAT-06).** It reports the minimum, maximum and median of the selected pair's mean off-diagonal rate across its k = 3 pre-registered seeds, and nothing else. No correction step, no threshold and no verdict is computed here: `gate_cleared` is closed at the six pre-registered comparisons and structurally cannot admit a replication row, so no number below can either clear or fail this phase's gate. Read the spread, not a decision.
+
+**D-15, restated for this section: the replication makes SEED VARIANCE readable; it does not license an ordering.** The main matrix carries one seed per persona, so its three diagonals are three separate anchors and never a ranking — a between-persona difference there confounds persona content with initialization. The seeds below vary the initialization for the two personas of the selected pair only, which is exactly what makes the spread of THEIR off-diagonal rates readable. Nothing here says which persona isolates better, and no sentence in this section orders the three personas.
+
+### The selection
+
+The pair below is `phase17_personas.worst_pair`'s output — a function committed in Wave 1, before the matrix was read — over the six ordered off-diagonal rates beside it. Those six rates were read OUT OF THE FOUR RECORDED SWEEPS through the same `assemble_matrix` path the main report used, never re-parsed from this report's rendered markdown: the rendered numbers are formatted strings with bounds attached, and re-parsing them would make the selection depend on the report's layout rather than on the recorded evidence. Their denominators and bounds are published per cell in §The Matrix.
+
+| ordered off-diagonal cell | question-unit rate (the selection input) |
+| --- | --- |
+| `(persona_a -> persona_b)` | 0.000000 |
+| `(persona_a -> persona_c)` | 0.000000 |
+| `(persona_b -> persona_a)` | 0.000000 |
+| `(persona_b -> persona_c)` | 0.000000 |
+| `(persona_c -> persona_a)` | 0.000000 |
+| `(persona_c -> persona_b)` | 0.000000 |
+
+| unordered pair | mean of its two off-diagonal rates |
+| --- | --- |
+| `persona_a + persona_b` | 0.000000 |
+| `persona_a + persona_c` | 0.000000 |
+| `persona_b + persona_c` | 0.000000 |
+
+**Selected pair:** `persona_a` / `persona_b`, at the pre-registered seeds `[1337, 1437, 1537]` and `[1338, 1438, 1538]` (k = 3 counting the original).
+
+**The pre-registered tie-break DECIDED this selection.** More than one unordered pair shares the highest mean off-diagonal rate, so the pair named above is the lowest-index member of a tie — an outcome of the rule, and NOT a finding about those two personas. This is the case the tie-break was committed for: the hoped-for outcome of this phase is that every off-diagonal is zero, which makes the selection a three-way tie exactly in the success case.
+
+### The seed spread
+
+One row per (persona, seed). The rate is the off-diagonal cell `(persona, target)` in the question unit, published with both denominators and its bound so no number here appears without them. `git SHA` differs between the first seed and the rest by construction: the first seed's sweep is the one the main matrix already recorded, reused rather than re-run.
+
+| persona | seed | seed index | off-diagonal cell | rate |
+| --- | --- | --- | --- | --- |
+| `persona_a` | `1337` | 0 | `(persona_a, persona_b)` | 0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws) |
+| `persona_b` | `1338` | 0 | `(persona_b, persona_a)` | 0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws) |
+| `persona_a` | `1437` | 1 | `(persona_a, persona_b)` | 0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws) |
+| `persona_b` | `1438` | 1 | `(persona_b, persona_a)` | 0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws) |
+| `persona_a` | `1537` | 2 | `(persona_a, persona_b)` | 0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws) |
+| `persona_b` | `1538` | 2 | `(persona_b, persona_a)` | 0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws) |
+
+| persona | seed | pid | git SHA | live `lora_B` sha256 | adapter file sha256 |
+| --- | --- | --- | --- | --- | --- |
+| `persona_a` | `1337` | 72355 | `b6b2feddfe6714393af24563076fde8f6209acc3` | `ab0a8d678521d078…` | `b420c22ac0d576a1…` |
+| `persona_b` | `1338` | 72803 | `b6b2feddfe6714393af24563076fde8f6209acc3` | `5a35d2056f9938e7…` | `7d6dde9eef0bbbc6…` |
+| `persona_a` | `1437` | 58442 | `f2c02729b627d488d8a8251ee77f82fdd8c19045` | `346a3038b26f11a7…` | `4a3527ed6430a638…` |
+| `persona_b` | `1438` | 60163 | `f2c02729b627d488d8a8251ee77f82fdd8c19045` | `23a92b0d453ebe37…` | `3581358a5e11dd30…` |
+| `persona_a` | `1537` | 60031 | `f2c02729b627d488d8a8251ee77f82fdd8c19045` | `8411c2de8ac7b0be…` | `a9da13dee7c33db5…` |
+| `persona_b` | `1538` | 60297 | `f2c02729b627d488d8a8251ee77f82fdd8c19045` | `82f5ed5f01f1e38c…` | `e2f4f802c4fac80d…` |
+
+| seed index | seeds | mean off-diagonal rate of the pair |
+| --- | --- | --- |
+| 0 | `persona_a`=`1337`, `persona_b`=`1338` | 0.000000 |
+| 1 | `persona_a`=`1437`, `persona_b`=`1438` | 0.000000 |
+| 2 | `persona_a`=`1537`, `persona_b`=`1538` | 0.000000 |
+
+**Minimum 0.000000 / maximum 0.000000 / median 0.000000** of the selected pair's mean off-diagonal rate across its 3 seed indices. That is the whole ISO-05 result: three descriptive numbers over the axis the selection was made on. Each underlying cell is published with its own denominator and bound in the table above.

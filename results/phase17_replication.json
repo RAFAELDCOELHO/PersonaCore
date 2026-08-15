@@ -1,0 +1,199 @@
+{
+  "cells": [
+    {
+      "adapter_file_sha256": "b420c22ac0d576a15d55cb2f666558e27e3f4c421801e688e207dc328fdab7f6",
+      "git_sha": "b6b2feddfe6714393af24563076fde8f6209acc3",
+      "lora_b_sha256": "ab0a8d678521d078f4343f585358a6fc850929c09a8f4ceb83dd795c53db75c3",
+      "persona": "persona_a",
+      "pid": 72355,
+      "proportion": {
+        "formatted": "0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws)",
+        "n_draws": 936,
+        "n_questions": 104,
+        "rate": 0.0,
+        "rule_of_three_upper": 0.028846153846153848,
+        "successes": 0,
+        "wilson_label": "one-sided 95% Wilson upper bound computed as if the questions were INDEPENDENT. They are not \u2014 questions cluster inside facts \u2014 so this width UNDERSTATES the real uncertainty. The DESCRIPTIVE interval for this phase is the two-stage cluster bootstrap (`cluster_bootstrap`); Wilson is reported alongside it, labelled, for comparability with every other rate in this milestone, and never as the phase's own width.",
+        "wilson_upper_95": 0.025355228664941235
+      },
+      "record": "phase17_sweep_persona_a.json",
+      "seed": 1337,
+      "seed_index": 0,
+      "target": "persona_b",
+      "wall_clock_min": 3.182090250651042
+    },
+    {
+      "adapter_file_sha256": "7d6dde9eef0bbbc6946b653b05a71d5c7469dc2c44ee9f7b6188edc4d1a05ad4",
+      "git_sha": "b6b2feddfe6714393af24563076fde8f6209acc3",
+      "lora_b_sha256": "5a35d2056f9938e700317f655ef4e7857e9a2cab038533e38f4383a2cfa47937",
+      "persona": "persona_b",
+      "pid": 72803,
+      "proportion": {
+        "formatted": "0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws)",
+        "n_draws": 936,
+        "n_questions": 104,
+        "rate": 0.0,
+        "rule_of_three_upper": 0.028846153846153848,
+        "successes": 0,
+        "wilson_label": "one-sided 95% Wilson upper bound computed as if the questions were INDEPENDENT. They are not \u2014 questions cluster inside facts \u2014 so this width UNDERSTATES the real uncertainty. The DESCRIPTIVE interval for this phase is the two-stage cluster bootstrap (`cluster_bootstrap`); Wilson is reported alongside it, labelled, for comparability with every other rate in this milestone, and never as the phase's own width.",
+        "wilson_upper_95": 0.025355228664941235
+      },
+      "record": "phase17_sweep_persona_b.json",
+      "seed": 1338,
+      "seed_index": 0,
+      "target": "persona_a",
+      "wall_clock_min": 3.2279141346613565
+    },
+    {
+      "adapter_file_sha256": "4a3527ed6430a638adbce4b8982761d180b52fd8491f172ffe6cc66bc9089887",
+      "git_sha": "f2c02729b627d488d8a8251ee77f82fdd8c19045",
+      "lora_b_sha256": "346a3038b26f11a7f92e74b16777ea07a092e05da23bc0d7254679584d0c8d00",
+      "persona": "persona_a",
+      "pid": 58442,
+      "proportion": {
+        "formatted": "0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws)",
+        "n_draws": 936,
+        "n_questions": 104,
+        "rate": 0.0,
+        "rule_of_three_upper": 0.028846153846153848,
+        "successes": 0,
+        "wilson_label": "one-sided 95% Wilson upper bound computed as if the questions were INDEPENDENT. They are not \u2014 questions cluster inside facts \u2014 so this width UNDERSTATES the real uncertainty. The DESCRIPTIVE interval for this phase is the two-stage cluster bootstrap (`cluster_bootstrap`); Wilson is reported alongside it, labelled, for comparability with every other rate in this milestone, and never as the phase's own width.",
+        "wilson_upper_95": 0.025355228664941235
+      },
+      "record": "phase17_sweep_persona_a_seed1437.json",
+      "seed": 1437,
+      "seed_index": 1,
+      "target": "persona_b",
+      "wall_clock_min": 3.0929322322209676
+    },
+    {
+      "adapter_file_sha256": "3581358a5e11dd306d195448d38b9c381ed130f71733939a65e57609688cac06",
+      "git_sha": "f2c02729b627d488d8a8251ee77f82fdd8c19045",
+      "lora_b_sha256": "23a92b0d453ebe3797ee4e3dd19ae64f7cf945db498073082ade0a7b0df1a483",
+      "persona": "persona_b",
+      "pid": 60163,
+      "proportion": {
+        "formatted": "0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws)",
+        "n_draws": 936,
+        "n_questions": 104,
+        "rate": 0.0,
+        "rule_of_three_upper": 0.028846153846153848,
+        "successes": 0,
+        "wilson_label": "one-sided 95% Wilson upper bound computed as if the questions were INDEPENDENT. They are not \u2014 questions cluster inside facts \u2014 so this width UNDERSTATES the real uncertainty. The DESCRIPTIVE interval for this phase is the two-stage cluster bootstrap (`cluster_bootstrap`); Wilson is reported alongside it, labelled, for comparability with every other rate in this milestone, and never as the phase's own width.",
+        "wilson_upper_95": 0.025355228664941235
+      },
+      "record": "phase17_sweep_persona_b_seed1438.json",
+      "seed": 1438,
+      "seed_index": 1,
+      "target": "persona_a",
+      "wall_clock_min": 3.2328758517901104
+    },
+    {
+      "adapter_file_sha256": "a9da13dee7c33db5f278bda4c4d8b307cb69735567f5e7f9e2dad1339fddc97d",
+      "git_sha": "f2c02729b627d488d8a8251ee77f82fdd8c19045",
+      "lora_b_sha256": "8411c2de8ac7b0be25a70777d9774efea48b66e236cb95d4d0614ab641e505b0",
+      "persona": "persona_a",
+      "pid": 60031,
+      "proportion": {
+        "formatted": "0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws)",
+        "n_draws": 936,
+        "n_questions": 104,
+        "rate": 0.0,
+        "rule_of_three_upper": 0.028846153846153848,
+        "successes": 0,
+        "wilson_label": "one-sided 95% Wilson upper bound computed as if the questions were INDEPENDENT. They are not \u2014 questions cluster inside facts \u2014 so this width UNDERSTATES the real uncertainty. The DESCRIPTIVE interval for this phase is the two-stage cluster bootstrap (`cluster_bootstrap`); Wilson is reported alongside it, labelled, for comparability with every other rate in this milestone, and never as the phase's own width.",
+        "wilson_upper_95": 0.025355228664941235
+      },
+      "record": "phase17_sweep_persona_a_seed1537.json",
+      "seed": 1537,
+      "seed_index": 2,
+      "target": "persona_b",
+      "wall_clock_min": 3.1278206507364907
+    },
+    {
+      "adapter_file_sha256": "e2f4f802c4fac80d9120d6023bc6b44a4c7ed1644c876fd580abd6f679af4188",
+      "git_sha": "f2c02729b627d488d8a8251ee77f82fdd8c19045",
+      "lora_b_sha256": "82f5ed5f01f1e38ce66af7af705e5472d4ed41c0abb6ef2cf123621a80fb6123",
+      "persona": "persona_b",
+      "pid": 60297,
+      "proportion": {
+        "formatted": "0/104 questions (95% Wilson upper bound 0.025355; rule-of-three upper bound 0.028846; 936 draws)",
+        "n_draws": 936,
+        "n_questions": 104,
+        "rate": 0.0,
+        "rule_of_three_upper": 0.028846153846153848,
+        "successes": 0,
+        "wilson_label": "one-sided 95% Wilson upper bound computed as if the questions were INDEPENDENT. They are not \u2014 questions cluster inside facts \u2014 so this width UNDERSTATES the real uncertainty. The DESCRIPTIVE interval for this phase is the two-stage cluster bootstrap (`cluster_bootstrap`); Wilson is reported alongside it, labelled, for comparability with every other rate in this milestone, and never as the phase's own width.",
+        "wilson_upper_95": 0.025355228664941235
+      },
+      "record": "phase17_sweep_persona_b_seed1538.json",
+      "seed": 1538,
+      "seed_index": 2,
+      "target": "persona_a",
+      "wall_clock_min": 3.1512044509251913
+    }
+  ],
+  "descriptive_only": "**This whole section is DESCRIPTIVE ONLY and is never a hypothesis test (D-16 / ISO-05 / STAT-06).** It reports the minimum, maximum and median of the selected pair's mean off-diagonal rate across its k = 3 pre-registered seeds, and nothing else. No correction step, no threshold and no verdict is computed here: `gate_cleared` is closed at the six pre-registered comparisons and structurally cannot admit a replication row, so no number below can either clear or fail this phase's gate. Read the spread, not a decision.",
+  "pair_mean_off_diagonal_across_seeds": {
+    "max": 0.0,
+    "median": 0.0,
+    "min": 0.0
+  },
+  "pair_mean_off_diagonal_by_seed_index": [
+    {
+      "mean_off_diagonal_rate": 0.0,
+      "seed_index": 0,
+      "seeds": {
+        "persona_a": 1337,
+        "persona_b": 1338
+      }
+    },
+    {
+      "mean_off_diagonal_rate": 0.0,
+      "seed_index": 1,
+      "seeds": {
+        "persona_a": 1437,
+        "persona_b": 1438
+      }
+    },
+    {
+      "mean_off_diagonal_rate": 0.0,
+      "seed_index": 2,
+      "seeds": {
+        "persona_a": 1537,
+        "persona_b": 1538
+      }
+    }
+  ],
+  "seeds": {
+    "persona_a": [
+      1337,
+      1437,
+      1537
+    ],
+    "persona_b": [
+      1338,
+      1438,
+      1538
+    ]
+  },
+  "selected_pair": [
+    "persona_a",
+    "persona_b"
+  ],
+  "selection_inputs": {
+    "persona_a -> persona_b": 0.0,
+    "persona_a -> persona_c": 0.0,
+    "persona_b -> persona_a": 0.0,
+    "persona_b -> persona_c": 0.0,
+    "persona_c -> persona_a": 0.0,
+    "persona_c -> persona_b": 0.0
+  },
+  "selection_pair_means": {
+    "persona_a + persona_b": 0.0,
+    "persona_a + persona_c": 0.0,
+    "persona_b + persona_c": 0.0
+  },
+  "tie_break_decided": true,
+  "unit": "question"
+}
