@@ -35,9 +35,11 @@ key-files:
     - scripts/phase17_isolation.py (1937 -> 2574 lines)
     - tests/test_phase17_stats.py (975 -> 1279 lines)
 decisions:
-  - the D-13 pointer was corrected at THREE sites, not the two named — the third
-    (BASE_PRIOR_SEED_ANCHOR_NOTE) is the only one that actually renders into the report, so
-    fixing the other two alone would have left the published defect regenerating
+  - the D-13 pointer was corrected at THREE sites, not the two named. TWO of the three render
+    into the report and regenerate INDEPENDENTLY — BASE_PRIOR_SEED_ANCHOR_NOTE (module constant,
+    appended at render_report:1688) and render_report's own inline per-slot verdict literal, which
+    does NOT reference the constant. Only base_prior_anchor's docstring is dead text. Fixing any
+    proper subset would have left the published defect regenerating on the next --report run
   - resolve_seed is NOT reused for replicate path resolution: it resolves an adapter path through
     teach_persona.arm_outputs, which imports torch, and this mode is CPU-only. sweep_record_path —
     the thing that actually has to agree — IS shared
@@ -155,10 +157,54 @@ the ISO-01 pre-flight producing `rose` **zero times across 416 completions** on 
 
 **It was corrected at three sites, not the two named in the direction.** The two named were
 `base_prior_anchor`'s docstring (~1373) and `render_report`'s per-slot verdict cell (~1658). The
-third — `BASE_PRIOR_SEED_ANCHOR_NOTE` — carried the identical sentence and is **the only one of the
-three that actually renders into the report**. Fixing the two named sites alone would have left the
-published defect regenerating on the next `--report` run, which is the exact failure the direction
-exists to close. All three now point at the seed list's provenance.
+third — `BASE_PRIOR_SEED_ANCHOR_NOTE` — carried the identical sentence. Fixing the two named sites
+alone would have left the published defect regenerating on the next `--report` run, which is the
+exact failure the direction exists to close. All three now point at the seed list's provenance.
+
+**Which of the three actually regenerate — measured, because an earlier draft of this SUMMARY got
+it wrong.** That draft claimed `BASE_PRIOR_SEED_ANCHOR_NOTE` was *"the only one of the three that
+actually renders into the report"*. **That claim is false and is retracted here, not preserved
+beside the correct one.** Measured against the source:
+
+| site | renders into the report? | evidence |
+| --- | --- | --- |
+| `base_prior_anchor` docstring (~1373) | **no** — dead text | a docstring; never emitted |
+| `render_report` per-slot verdict cell (~1658, now ~1695) | **YES** | `blocks.append(f"\| \`{slot}\` \| {seeds} \| {verdict} \|")`; produced report line 61 verbatim |
+| `BASE_PRIOR_SEED_ANCHOR_NOTE` (1471) | **YES** | appended at `render_report:1688`; produced report line 56 |
+
+**TWO of the three render, and they are INDEPENDENT sources.** The verdict cell is an inline string
+literal inside `render_report`'s loop; `grep -n BASE_PRIOR_SEED_ANCHOR_NOTE scripts/phase17_isolation.py`
+returns exactly two hits — the definition at 1471 and the single append at 1688 — and neither is in
+the verdict-cell branch. The cell is **not** derived from the constant, which is why it needed its
+own edit and got one. Only the docstring is dead text, and it needed no correction for regeneration
+reasons at all.
+
+### Precedent — the named exception to the line-1399 rule
+
+`scripts/phase17_isolation.py:1399` states the phase rule: framing strings are module-level
+constants committed BEFORE the numbers, because *"a report whose text is written AFTER the numbers
+is a report written to fit them."* This plan **violated the letter of that rule** by rewriting
+`BASE_PRIOR_SEED_ANCHOR_NOTE` after the numbers existed. Recorded plainly, not buried.
+
+**The trigger that justifies it is REGENERATION, not dead-vs-live text.** `render_report` rewrites
+the entire report file. An external addendum in the artifact — the route taken at `9fcfc50` —
+corrects what is *published today*, but the next `--report` run overwrites the whole file and
+re-emits the old text from the generator. The addendum does not survive regeneration; the generator
+is what regenerates. So for a factually-wrong string that a generator will reproduce, declared
+supersession **inside** the source constant is the only route that produces a durable correction.
+
+**The condition on the exception:** the replacement text must explicitly name that an earlier
+revision existed and was superseded — never a silent rewrite. The new
+`BASE_PRIOR_SEED_ANCHOR_NOTE` does this in its own body (*"An earlier revision of this note sent a
+reader to investigate this sweep"*), so a reader of the constant learns the history from the
+constant, not only from this SUMMARY.
+
+**Scope — this does NOT open a general exception to the 1399 rule.** It opens one specific, named
+case: *correcting a factually-wrong diagnostic pointer whose defect regenerates.* It does not
+extend to softening a threshold, re-pricing a result, redefining a success criterion, or making a
+miss read as a success. The boundary was kept visible on purpose: `reproduced` is still a plain
+`any`-over-seeds match (its diff is docstring-only) and a miss still renders bold **NO** first, so
+the verdict logic can be checked independently of the prose that surrounds it.
 
 **What did NOT change, checked rather than asserted:**
 
