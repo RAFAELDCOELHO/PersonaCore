@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: ready_to_plan
-stopped_at: Phase 17 complete (11/11) — ready to discuss Phase 18
-last_updated: 2026-08-15T17:21:31.816Z
-last_activity: "2026-08-15 -- 17-10 complete: ISO-05 measured and published as an addendum. Six off-diagonal rates all 0.000000 fed the pre-registered `worst_pair`, which returned persona_a/persona_b with `tie_break_decided=true` (the three-way tie — a tie-break outcome, never a finding about those two personas). Six cells at 0/104 questions each; min/max/median all 0.000000, descriptive only (D-16). The report's pre-append bytes and its recorded verdict are unchanged"
+status: planning
+stopped_at: Phase 18 context gathered
+last_updated: "2026-08-15T20:16:24.181Z"
+last_activity: 2026-08-15
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 22
   completed_plans: 22
-  percent: 33
+  percent: 67
 ---
 
 # Project State
@@ -279,9 +279,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-15T11:53:47.335Z
-Stopped at: Completed 17-11-PLAN.md (17-10 still PENDING — it runs the mode this plan committed)
-Resume file: None
+Last session: 2026-08-15T20:16:24.174Z
+Stopped at: Phase 18 context gathered
+Resume file: .planning/phases/18-black-box-adversarial-extraction-audit/18-CONTEXT.md
 
 ## Operator Next Steps
 
