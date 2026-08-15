@@ -395,18 +395,35 @@ def _is_contiguous_subsequence(haystack, needle):
     return any(haystack[i : i + span] == needle for i in range(len(haystack) - span + 1))
 
 
-def assert_no_value_in_prompt(tok, question, values):
+def assert_no_value_in_prompt(tok, question, values, *, prompt_ids=None):
     """14-RESEARCH Pattern 8 clean-room proof: no fact value crossed into the model's context.
 
     Checked at BOTH levels for every value: the normalized string is absent from the decoded prompt,
     and the value's encoded id sequence is not a contiguous run inside the prompt ids. The string
     check alone can miss a leak that survives detokenization differently; the token check cannot.
 
+    ``prompt_ids`` (keyword-only, D-03) is the REALIZED id list to check. When it is ``None`` — the
+    default, and every Phase 14/16/17 call site — the prompt is rebuilt from ``question`` exactly as
+    before. When it is supplied, **the corpus is checked against the bytes the model receives rather
+    than against a reconstruction**, which is the only way a prompt the question string cannot
+    describe can be checked at all: Phase 18's A2 appends injected ids AFTER the prompt and A3
+    carries a persona span, so a rebuild would clear a different prompt than the one actually drawn
+    from. The widening is signature-symmetric with the twin ``assert_value_in_prompt(tok,
+    prompt_ids, values)`` — that one takes ids INSTEAD of a question because it never had a question
+    path to preserve; this one takes ids AS WELL AS one. ``question`` therefore stays a REQUIRED
+    positional and is still named in both abort messages, so an abort on a caller-built A2 or A3
+    prompt points at the source question rather than at an anonymous id list.
+
+    Both detectors keep running on ``ids`` and keep being ANDed on both paths — either one firing
+    aborts. The polarity is what makes AND correct here and OR correct in the twin: in this
+    direction a false positive only aborts a run that was going to leak, so two absences are
+    required; there the cost inverts (see that docstring's measured 54-of-216 case).
+
     ``values`` is a PARAMETER, never a module-level constant — this module holds no fact strings at
     import time (see the LAZY-IMPORT RULE in the module docstring). The caller in ``main()`` passes
     them in from the lazily-imported fact set.
     """
-    ids = build_recall_prompt(tok, question)
+    ids = build_recall_prompt(tok, question) if prompt_ids is None else prompt_ids
     decoded = normalize(tok.decode(ids))
     for value in values:
         _prove(
