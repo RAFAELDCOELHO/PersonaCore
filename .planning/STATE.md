@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: executing
-stopped_at: Completed 17-11-PLAN.md (17-10 still PENDING — it runs the mode this plan committed)
-last_updated: "2026-08-15T11:12:47.320Z"
-last_activity: "2026-08-15 -- 17-11 complete: --replicate is committed with its append-only addendum writer BEFORE it renders a number; 24 tests in test_phase17_stats.py; the D-13 remediation pointer corrected at all three generator sites with the reproduced verdict logic byte-unchanged; results/phase17_isolation_report.md untouched (sha256 6096aaf6, the 9fcfc50 addendum intact); ISO-05 NOT marked — nothing replicated yet, 17-10 owns the run"
+status: verifying
+stopped_at: Completed 17-10-PLAN.md — all 11 Phase 17 plans done
+last_updated: "2026-08-15T11:56:00.000Z"
+last_activity: "2026-08-15 -- 17-10 complete: ISO-05 measured and published as an addendum. Six off-diagonal rates all 0.000000 fed the pre-registered `worst_pair`, which returned persona_a/persona_b with `tie_break_decided=true` (the three-way tie — a tie-break outcome, never a finding about those two personas). Six cells at 0/104 questions each; min/max/median all 0.000000, descriptive only (D-16). The report's pre-append bytes and its recorded verdict are unchanged"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 21
+  completed_plans: 22
   percent: 33
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 
 ## Current Position
 
-Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 10 of 11 (17-11 done out of order; 17-10 is the remaining plan)
-Status: Ready to execute
-Last activity: 2026-08-15 -- 17-11 complete: --replicate is committed with its append-only addendum writer BEFORE it renders a number; 24 tests in test_phase17_stats.py; the D-13 remediation pointer corrected at all three generator sites with the reproduced verdict logic byte-unchanged; results/phase17_isolation_report.md untouched (sha256 6096aaf6, the 9fcfc50 addendum intact); ISO-05 NOT marked — nothing replicated yet, 17-10 owns the run
+Phase: 17 (multi-persona-isolation-matrix) — ALL 11 PLANS COMPLETE
+Plan: 11 of 11 (17-11 ran out of order in Wave 5; 17-10 closed the phase)
+Status: Phase complete — ready for phase verification
+Last activity: 2026-08-15 -- 17-10 complete: ISO-05 measured and published as an addendum. Six off-diagonal rates all 0.000000 fed the pre-registered `worst_pair`, which returned persona_a/persona_b with `tie_break_decided=true` (the three-way tie — a tie-break outcome, never a finding about those two personas). Six cells at 0/104 questions each; min/max/median all 0.000000, descriptive only (D-16). The report's pre-append bytes and its recorded verdict are unchanged
 
 ## Performance Metrics
 
@@ -86,6 +86,7 @@ Last activity: 2026-08-15 -- 17-11 complete: --replicate is committed with its a
 | Phase 17 P07 | 60min | 2 tasks | 3 files |
 | Phase 17 P09 | 70min | 3 tasks | 9 files |
 | Phase 17 P11 | 25min | 2 tasks | 2 files |
+| Phase 17 P10 | 40min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -229,6 +230,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-11: git_sha is recorded per replicate cell and deliberately NOT proved single-valued — two of the six records are 17-09's, produced at an earlier commit by construction, so a one-SHA proof would refuse every honest run
 - [Phase 17]: 17-11: resolve_seed is not reused for replicate path resolution (it resolves an adapter through teach_persona.arm_outputs, which imports torch, and --replicate is CPU-only); sweep_record_path — the thing that must agree with the sweep writer — IS shared
 - [Phase 17]: 17-11: ISO-05 stays Pending — this plan ships the rendering path and produces no number; 17-10 runs it. Fifth application of 17-01's recorded over-claim-avoidance pattern
+- [Phase 17]: 17-10: ISO-05 is MEASURED — the pre-registered worst_pair, CALLED by the committed --replicate mode rather than re-derived, read all six ordered off-diagonal rates at 0.000000 (0/104 questions each) out of the sweep RECORDS and returned persona_a/persona_b with tie_break_decided=true. That is the THREE-WAY TIE the success case was always going to produce: the pair is a tie-break outcome and NOT a finding about those two personas
+- [Phase 17]: 17-10: the k=3 replication is 0/104 questions (0/936 draws) in every one of the six cells (2 personas x 3 seeds), Wilson upper bound 0.025355 and rule-of-three 0.028846 on each; the pair's mean off-diagonal rate is min 0.000000 / max 0.000000 / median 0.000000 across the three seed indices. DESCRIPTIVE ONLY (D-16) — no p value, no alpha, no Holm row, no sign test at any depth. gate_cleared is closed at the six pre-registered comparisons and structurally cannot admit a replication row, so this number neither clears, weakens nor re-prices the gate
+- [Phase 17]: 17-10: the isolation report was EXTENDED, never edited — 62 insertions / 1 deletion against 9fcfc50, and that one deletion is the placeholder line becoming a pointer at the appended section. The 15,306 bytes above it are byte-identical, the recorded verdict reads back unchanged at 1,402 chars, and the dated 9fcfc50 D-13 supersession addendum is still present exactly once. test_report_addendum_is_additive pins that on the REAL artifact (17-11's synthetic twin proves only the writer); both probes watched failing
+- [Phase 17]: 17-10: the four replicate adapters inherit 17-09's replay_ratio=0.0 collateral collapse and are equally NOT shippable demo substrate. Six lora_B digests are pairwise distinct with 0 of 36 identical tensors across all 15 pairs — that proves the seed reached the init draw, and proves nothing about conversational retention
+- [Phase 17]: 17-10: STAT-05 checked = 21 (1 prereg commit d549e0b x 21 tracked results/phase17_* paths), 0 untracked — was 11 at 17-09/17-11; scripts/phase17_personas.py is still at d549e0b and still uneditable
 
 ### Pending Todos
 
@@ -272,7 +278,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-15T11:11:51.595Z
+Last session: 2026-08-15T11:53:47.335Z
 Stopped at: Completed 17-11-PLAN.md (17-10 still PENDING — it runs the mode this plan committed)
 Resume file: None
 

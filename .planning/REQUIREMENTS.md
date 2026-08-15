@@ -94,7 +94,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
 - [x] **ISO-04**: An **adapter-swap canary** asserts a `lora_B` tensor actually changed on every
   swap. All personas share identical `lora_` key sets, so a silently failed swap is a full no-op
   that produces the most flattering possible wrong answer: a perfect diagonal and zero leakage.
-- [ ] **ISO-05**: The **worst-colliding pair is replicated across seeds**, so seed variance is not
+- [x] **ISO-05**: The **worst-colliding pair is replicated across seeds**, so seed variance is not
   mistaken for interference.
 - [x] **ISO-06**: Audit item **W1 is fixed before any adapter trains**: runtime consumers inject
   with `LoRAConfig(**artifact["lora_config"])` rather than `LoRAConfig()` defaults. Shape audits
@@ -196,7 +196,7 @@ Deferred — revisited when the numbers that gate them exist.
 | ISO-02 | 17 | Complete |
 | ISO-03 | 17 | Complete |
 | ISO-04 | 17 | Complete |
-| ISO-05 | 17 | Pending |
+| ISO-05 | 17 | Complete |
 | ISO-06 | 17 | Complete |
 | ISO-07 | 17 | Complete |
 | ATK-01 | 18 | Pending |

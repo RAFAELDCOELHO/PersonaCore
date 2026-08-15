@@ -41,6 +41,7 @@ import importlib.util
 import json
 import pathlib
 import re
+import subprocess
 import sys
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -1276,4 +1277,101 @@ def test_replicate_seeds_come_from_the_preregistration(monkeypatch, tmp_path):
         raise AssertionError("the replication assembled over five of its six records")
     assert not iso.REPLICATION_RECORD_PATH.exists(), (
         "the payload was written despite the run aborting on a missing record"
+    )
+
+
+# =============================================================================================
+# ===== Plan 17-10 — the SAME property, on the PUBLISHED artifact ==============================
+# =============================================================================================
+
+_REPORT_REL = "results/phase17_isolation_report.md"
+_REPORT_PATH = _REPO_ROOT / _REPORT_REL
+
+
+def _git_bytes(*args):
+    """git stdout as BYTES, decoded UTF-8 here rather than by the ambient locale.
+
+    ``text=True`` decodes with the locale encoding, and this report carries em-dashes: under a
+    POSIX/ASCII ``LANG`` — which is a plausible CI shell — that raises instead of comparing.
+    """
+    done = subprocess.run(("git", *args), cwd=_REPO_ROOT, capture_output=True, check=True)
+    return done.stdout.decode("utf-8")
+
+
+def test_report_addendum_is_additive():
+    """TH-17-37, on the artifact that was actually PUBLISHED — the twin of the synthetic test above.
+
+    ``test_addendum_writer_is_append_only`` proves the WRITER appends. This proves what the writer
+    actually DID to ``results/phase17_isolation_report.md``, which is a different claim: a writer
+    can be append-only and still have been run against a file some other hand had already rewritten.
+    The bytes above the addendum are this phase's committed evidence — the recorded verdict, 17-09's
+    F-13 scope label and `## Scope Addendum`, and the dated D-13 supersession block — and every one
+    of them is destroyed by a single `--report` re-run, because ``render_report`` rewrites the WHOLE
+    file. This test is what makes that visible in CI rather than in a reader's memory.
+
+    The pre-append revision is DERIVED, never pinned to a hash: the newest committed revision of the
+    report that still carries ``REPLICATION_PENDING_LINE`` is BY DEFINITION the one before the
+    append, and that stays true however many commits later touch the file.
+    """
+    assert _REPORT_PATH.exists(), f"{_REPORT_REL} is missing — plan 17-09 committed it"
+    assert _git_bytes("rev-parse", "--is-shallow-repository").strip() == "false", (
+        "shallow clone: the pre-append revision of the report is not in the object store, so this "
+        "guard cannot distinguish 'the append was additive' from 'the history was never read'. "
+        "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+    )
+
+    before = None
+    for revision in _git_bytes("log", "--format=%H", "--", _REPORT_REL).split():  # newest first
+        blob = _git_bytes("show", f"{revision}:{_REPORT_REL}")
+        if iso.REPLICATION_PENDING_LINE in blob:
+            before = blob
+            break
+    assert before is not None, (
+        f"no committed revision of {_REPORT_REL} carries "
+        f"{iso.REPLICATION_PENDING_LINE!r}, so there is no pre-append state to compare against. "
+        "Either the placeholder never existed (the report is not this phase's writer's output) or "
+        "the history was rewritten"
+    )
+    after = _REPORT_PATH.read_text(encoding="utf-8")
+
+    cut = before.index(iso.REPLICATION_PENDING_LINE)
+    assert after[:cut] == before[:cut], (
+        f"the published {_REPORT_REL} no longer starts with its pre-append bytes. Everything above "
+        "the placeholder is recorded evidence: the verdict, the F-13 scope label, the Scope "
+        "Addendum and the dated D-13 supersession block"
+    )
+
+    before_lines, after_lines = before.splitlines(), after.splitlines()
+    changed = [(old, new) for old, new in zip(before_lines, after_lines) if old != new]
+    assert changed == [(iso.REPLICATION_PENDING_LINE, iso.REPLICATION_MEASURED_LINE)], (
+        f"exactly one published line may differ, and it is the placeholder becoming a pointer at "
+        f"the appended section: {changed}"
+    )
+    assert after_lines[: len(before_lines)] == [
+        iso.REPLICATION_MEASURED_LINE if line == iso.REPLICATION_PENDING_LINE else line
+        for line in before_lines
+    ], "a published line was moved, deleted or reordered rather than left in place"
+    assert len(after_lines) > len(before_lines), "nothing was appended"
+    assert iso.REPLICATION_ADDENDUM_HEADING in "\n".join(after_lines[len(before_lines) :]), (
+        "the addendum heading is not in the appended region, so the section was spliced into the "
+        "body rather than added after it"
+    )
+
+    assert _verdict.recorded_verdict(after) == _verdict.recorded_verdict(before), (
+        "the recorded `## Verdict` section changed. It is the section every clobber guard in this "
+        "phase anchors on, and the one thing an addendum exists to sit BESIDE"
+    )
+
+    # D-16 / ISO-05 / STAT-06 — the replication is DESCRIPTIVE and reaches no test, checked on the
+    # published block rather than on the renderer's return value.
+    block = after[after.index(iso.REPLICATION_ADDENDUM_HEADING) :]
+    for banned in ("p =", "alpha", "rejected"):
+        assert banned not in block.lower(), (
+            f"the published ISO-05 addendum contains {banned!r}. ISO-05 is descriptive only "
+            "(D-16): `gate_cleared` is closed at the six pre-registered comparisons and "
+            "structurally cannot admit a replication row"
+        )
+    assert re.search(r"\b0(\.0+)?%", block) is None, (
+        "the published ISO-05 addendum carries a bare zero percentage (STAT-02) — a bare zero "
+        "states a certainty the sample does not have, and every cell here has a denominator"
     )

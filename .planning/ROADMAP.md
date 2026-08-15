@@ -317,6 +317,22 @@ adapters trained at seeds 1337 / 1338 / 1339, four sweeps in four fresh processe
   `worst_pair` selected `persona_a` / `persona_b` off the pre-registered tie-break, which is the
   three-way tie at `0.000000` the success case was always going to produce. Plans 17-10 and 17-11
   own the measurement.
+- **SC5 — 2026-08-15, now FULLY MET (plan 17-10).** The ISO-05 half is measured and published.
+  `worst_pair` — called by the committed `--replicate` mode, never re-derived — read all six
+  ordered off-diagonal rates at `0.000000` (`0/104` questions each) out of the sweep RECORDS and
+  returned `persona_a` / `persona_b` with `tie_break_decided: true`: the three-way tie the success
+  case was always going to produce, so the pair is a **tie-break outcome and not a finding about
+  those two personas**. Four additional adapters trained at the pre-registered
+  `REPLICATION_SEEDS` (`1437`, `1537`, `1438`, `1538`) and four sweeps ran in four fresh processes;
+  across the six cells (2 personas x 3 seeds) the off-diagonal rate is `0/104` questions
+  (`0/936` draws) every time, Wilson upper bound `0.025355`, rule-of-three `0.028846`. The pair's
+  mean off-diagonal rate is **min `0.000000` / max `0.000000` / median `0.000000`** across the
+  three seed indices — **descriptive only (D-16)**: no p value, no alpha, no Holm row and no sign
+  test anywhere near it, and `gate_cleared` is closed at the six pre-registered comparisons and
+  structurally cannot admit a replication row. Published as an APPEND to
+  `results/phase17_isolation_report.md` (62 insertions / 1 deletion, and that one deletion is the
+  placeholder line becoming a pointer), with `test_report_addendum_is_additive` pinning the
+  property against the real artifact.
 
 **Plans**: 11 plans across 6 waves
 
@@ -361,7 +377,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 17-10-PLAN.md — ISO-05: select the worst-colliding pair with the pre-registered rule, replicate
+- [x] 17-10-PLAN.md — ISO-05: select the worst-colliding pair with the pre-registered rule, replicate
   at k=3 seeds, append the descriptive addendum with zero deletions
 
 ### Phase 18: Black-Box Adversarial Extraction Audit
