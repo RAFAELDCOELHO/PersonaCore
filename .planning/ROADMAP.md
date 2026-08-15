@@ -435,7 +435,25 @@ schedule pressure can scope it down without invalidating it
      Threats-to-validity records that a low extraction rate may be a **LoRA property rather than a
      PersonaCore achievement** (ATK-06).
 
-**Plans**: TBD
+**Plans**: 16 plans in 13 waves
+
+Plans:
+- [ ] 18-01-PLAN.md — additive `family=` widening of `holm`, `prompt_ids` path on `assert_no_value_in_prompt`
+- [ ] 18-02-PLAN.md — `draw_all(n_samples=)`, deterministic fake model, D-09 prefix stability, D-06 strided seeds
+- [ ] 18-03-PLAN.md — the D-04 pin: header, `_prove`, pre-registration literals, D-31 import-time reachability, ancestry guard
+- [ ] 18-04-PLAN.md — attack templates: A1's two doses, A3's role scaffold + allowlist entry, A2's id split and D-19 guard
+- [ ] 18-05-PLAN.md — corpus builder over all 216 core questions with the D-11 schema and D-16 partitioned guards
+- [ ] 18-06-PLAN.md — the two D-28 instruments: taught-frame span NLL (D-29) and exposure rank (D-20/D-30)
+- [ ] 18-07-PLAN.md — `null_result_is_admissible()`, D-24 threat-model literals, `licensed_conclusion()`
+- [ ] 18-08-PLAN.md — question-unit scoring, the ASR ladder, D-25/D-26 unique successes
+- [ ] 18-09-PLAN.md — D-01 exact hit-vector control, the m=4 Holm family, the `erasure_is_worth_attempting` handoff
+- [ ] 18-10-PLAN.md — run surface: smoke mode, two arm modes, parser with no two-arm option
+- [ ] 18-11-PLAN.md — report renderer, clobber guard, append-only continuation (last driver commit)
+- [ ] 18-12-PLAN.md — SC5: D-23 demo copy plus dated additive continuations in README and docs/REPORT.md
+- [ ] 18-13-PLAN.md — D-12 pre-flight smoke run, measured throughput, the K decision (checkpoint)
+- [ ] 18-14-PLAN.md — corpus artifact committed and the byte-equality guard activated
+- [ ] 18-15-PLAN.md — the two-arm scored run and the positive-control confirmation (checkpoint)
+- [ ] 18-16-PLAN.md — report, recorded verdict, REPORT.md continuation, requirement marking (checkpoint)
 **Research flag**: plan with `/gsd-plan-phase --research-phase`. The attack taxonomy and the
 denominator discipline are where a wrong prior costs the most, ARCHITECTURE.md states honestly that
 it did not verify its external grounding, and the research must land **before** this phase's
