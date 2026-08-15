@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: verifying
-stopped_at: Completed 17-10-PLAN.md — all 11 Phase 17 plans done
-last_updated: "2026-08-15T11:56:00.000Z"
+status: ready_to_plan
+stopped_at: Phase 17 complete (11/11) — ready to discuss Phase 18
+last_updated: 2026-08-15T17:21:31.816Z
 last_activity: "2026-08-15 -- 17-10 complete: ISO-05 measured and published as an addendum. Six off-diagonal rates all 0.000000 fed the pre-registered `worst_pair`, which returned persona_a/persona_b with `tie_break_decided=true` (the three-way tie — a tie-break outcome, never a finding about those two personas). Six cells at 0/104 questions each; min/max/median all 0.000000, descriptive only (D-16). The report's pre-append bytes and its recorded verdict are unchanged"
 progress:
   total_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** Phase 17 — multi-persona-isolation-matrix
+**Current focus:** Phase 18 — black box adversarial extraction audit
 
 ## Current Position
 
-Phase: 17 (multi-persona-isolation-matrix) — ALL 11 PLANS COMPLETE
-Plan: 11 of 11 (17-11 ran out of order in Wave 5; 17-10 closed the phase)
-Status: Phase complete — ready for phase verification
-Last activity: 2026-08-15 -- 17-10 complete: ISO-05 measured and published as an addendum. Six off-diagonal rates all 0.000000 fed the pre-registered `worst_pair`, which returned persona_a/persona_b with `tie_break_decided=true` (the three-way tie — a tie-break outcome, never a finding about those two personas). Six cells at 0/104 questions each; min/max/median all 0.000000, descriptive only (D-16). The report's pre-append bytes and its recorded verdict are unchanged
+Phase: 18
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-15
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Last activity: 2026-08-15 -- 17-10 complete: ISO-05 measured and published as an
 | 12 | 5 | - | - |
 | 13 | 4 | - | - |
 | 16 | 11 | - | - |
+| 17 | 11 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 | Phase 12 P01 | 14min | 3 tasks | 3 files |
