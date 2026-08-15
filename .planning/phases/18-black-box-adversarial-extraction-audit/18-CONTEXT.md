@@ -741,10 +741,19 @@ not an inferential claim. Exposure stays descriptive (D-22), contributing zero c
 paid for. m=4 preserves D-10's dose axis in the inferential layer, not merely the descriptive one,
 and clears by 60%.
 
-*Guard:* assert the reachability inequality **at import** in the pinned file — `α/m ≤
-sign_test_exact((1,)*n_facts)` must hold — so a mis-sized family turns red in seconds instead of
-after 8.2h. The naïve 4 families × 2 tiers = 8 is arithmetically dead and the assert is what stops
-it reaching a run.
+*Guard:* assert the reachability inequality **at import** in the pinned file —
+`sign_test_exact((1,)*n_facts) < HOLM_ALPHA / m` must hold — so a mis-sized family turns red in
+seconds instead of after 8.2h. At m=4 that is `0.0078125 < 0.0125` ✅; at m=7 it is
+`0.0078125 < 0.0071429` ✗. The comparison is **strict** because `holm` itself compares strictly
+(`p < alpha_at_step`, `scripts/phase16_persistence.py:1200`). The naïve 4 families × 2 tiers = 8 is
+arithmetically dead and the assert is what stops it reaching a run.
+
+> *Transcription correction, 2026-08-15 (same day, pre-pin):* this guard was first written
+> `α/m ≤ sign_test_exact((1,)*n_facts)`, which is `0.0125 ≤ 0.0078125` — **inverted, and false**.
+> Asserted at import in that form it would have made the pinned driver unimportable. The
+> **decision is unchanged** (m=4, dose-split, `core_held_out` only, reachability asserted at
+> import); only the written direction of the inequality is corrected. `18-VALIDATION.md` and
+> `18-03-PLAN.md:17` already carried the correct direction.
 
 ---
 
