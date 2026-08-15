@@ -22,6 +22,13 @@ What is pinned here:
      of Phase 16's six-pairs scan; the question unit proved on a fixture where the two candidate
      units ORDER DIFFERENTLY; the base row proved PUBLISHED and proved NOT GATED; both ends of the
      clustering assumption at every zero; the all-fail branch; and the clobber refusal.
+  6. **ISO-05 / D-16 / D-15 / D-19** (plan 17-11) — the ``--replicate`` mode: the addendum proved
+     APPEND-ONLY on the produced bytes, the ambiguous-placeholder refusal, the descriptive-only
+     contract on both the rendered text and the JSON payload, the selection proved to be read from
+     the RECORDS rather than re-parsed from the rendered markdown, and the seeds proved to be the
+     pre-registration's own. Every one runs on synthetic records and a synthetic report in
+     ``tmp_path``: no replication artifact exists yet, and a test that needed one would be
+     untestable until the wave after this — which is the whole failure plan 17-11 removes.
 
 Plan 17-08's additions load ``scripts/phase17_isolation.py`` as well. That driver is equally inert
 at import (its own ``sys.path`` bootstrap plus a ``__main__`` guard), and every test below that runs
@@ -973,3 +980,300 @@ def test_report_refuses_a_clobber(monkeypatch, tmp_path):
         )
     else:  # pragma: no cover
         raise AssertionError("the report mode found four sweep records in an empty directory")
+
+
+# =============================================================================================
+# ===== Plan 17-11 — ISO-05: the append-only property and the descriptive-only contract ========
+# =============================================================================================
+#
+# Everything below runs on SYNTHETIC records and a SYNTHETIC report in `tmp_path`. No replication
+# artifact exists on disk yet and none may: `git status --short results/` is empty for this plan by
+# design. A test that needed the real artifact would be unwritable until the wave that produces it,
+# which is exactly the ordering failure this plan exists to remove — the writer is committed, and
+# proved, BEFORE it renders a number.
+
+
+def _synthetic_report(*, placeholders=1):
+    """An isolation report in the SHAPE the append helper was committed against, and no more.
+
+    A synthetic report rather than a rendered one on purpose: the append helper's contract is about
+    BYTES around one greppable line, not about the report writer's content, and a fixture built from
+    the writer would make this test pass or fail for reasons that belong to the writer's tests.
+    """
+    lines = ["# Phase 17 — synthetic", "", "## Verdict", ""]
+    lines += [
+        "`gate_cleared` returns `True` over the six rows above.",
+        "",
+        "## Replication (ISO-05)",
+    ]
+    for index in range(placeholders):
+        lines += [
+            "",
+            f"| `(persona_a, persona_b)` | {index}.000000 |",
+            "",
+            iso.REPLICATION_PENDING_LINE,
+        ]
+    lines += ["", "## Provenance", "", "| sweep | pid |", "| --- | --- |", ""]
+    return "\n".join(lines)
+
+
+def _seeded_record(persona, seed, index):
+    """One REPLICATE sweep: the same questions, a different process, provably different weights."""
+    record = _sweep_record(persona, _says(persona))
+    record["pid"] = 5100 + 10 * personas.PERSONAS.index(persona) + index
+    record[iso.LORA_B_DIGEST_KEY] = f"live-{persona}-{seed}".ljust(64, "e")
+    record[iso.ADAPTER_FILE_DIGEST_KEY] = f"file-{persona}-{seed}".ljust(64, "f")
+    # A LATER commit than the main sweeps, by construction: the extra seeds are trained and swept in
+    # a plan after the one that recorded the matrix. `read_replicate_records` records `git_sha` per
+    # cell and deliberately does not prove it single-valued, and this fixture is what would go red
+    # if it ever did.
+    record["git_sha"] = "1" * 40
+    return record
+
+
+def _replicate_setup(monkeypatch, tmp_path):
+    """Four main sweeps, the four extra seed-scoped ones and a rendered report, all in tmp_path."""
+    monkeypatch.setattr(iso, "SWEEP_RECORD_DIR", tmp_path)
+    monkeypatch.setattr(iso, "ISOLATION_REPORT_PATH", tmp_path / "phase17_isolation_report.md")
+    monkeypatch.setattr(iso, "REPLICATION_RECORD_PATH", tmp_path / "phase17_replication.json")
+    records = _clean_records()
+    for record in records:
+        iso.sweep_record_path(record[iso.SWEEP_LABEL_KEY]).write_text(
+            json.dumps(record), encoding="utf-8"
+        )
+    for persona in personas.PERSONAS:
+        for index, seed in enumerate(personas.REPLICATION_SEEDS[persona]):
+            if index:
+                iso.sweep_record_path(persona, seed=seed).write_text(
+                    json.dumps(_seeded_record(persona, seed, index)), encoding="utf-8"
+                )
+    iso.run_report_mode(resamples=_RESAMPLES)
+    return records
+
+
+def _addendum_of(text):
+    """The appended section alone, split on the heading at LINE START — never on a prose mention."""
+    parts = text.split(f"\n{iso.REPLICATION_ADDENDUM_HEADING}\n", 1)
+    assert len(parts) == 2, "the appended addendum section is missing from the report"
+    return iso.REPLICATION_ADDENDUM_HEADING + "\n" + parts[1]
+
+
+def _json_keys(payload):
+    """Every mapping key at every depth — a shallow check would miss a nested `p_value`."""
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            yield key
+            yield from _json_keys(value)
+    elif isinstance(payload, list):
+        for value in payload:
+            yield from _json_keys(value)
+
+
+def test_addendum_writer_is_append_only(tmp_path):
+    """TH-17-37 — an append must not become a rewrite, proved on the PRODUCED BYTES.
+
+    The recorded verdict is committed evidence assembled from four GPU sweeps that cannot be
+    re-derived without breaking the pre-registration's ordering guarantee. Four separate claims,
+    because each admits a different way a "rewrite under cover of an addendum" could pass the
+    others: the prefix is byte-identical, exactly ONE line differs anywhere above the addendum,
+    everything else is a pure insertion at the end, and the verdict section reads back unchanged.
+    """
+    report = tmp_path / "report.md"
+    before = _synthetic_report()
+    report.write_text(before, encoding="utf-8")
+    addendum = f"{iso.REPLICATION_ADDENDUM_HEADING}\n\nmin / max / median: 0.000000\n"
+
+    after = iso.append_addendum(report, addendum)
+    assert after == report.read_text(encoding="utf-8"), (
+        "append_addendum returned text that is not what it wrote to disk"
+    )
+
+    cut = before.index(iso.REPLICATION_PENDING_LINE)
+    assert after[:cut] == before[:cut], (
+        "the bytes before the placeholder line changed. A writer that re-renders the report "
+        "instead of appending destroys every hand-recorded section above it — which on the real "
+        "artifact is the verdict, the F-13 scope label and the dated D-13 addendum"
+    )
+
+    before_lines = before.splitlines()
+    after_lines = after.splitlines()
+    changed = [(old, new) for old, new in zip(before_lines, after_lines) if old != new]
+    assert changed == [(iso.REPLICATION_PENDING_LINE, iso.REPLICATION_MEASURED_LINE)], (
+        f"exactly one line above the addendum may change, and it is the placeholder: {changed}"
+    )
+    assert len(after_lines) > len(before_lines), "the addendum was not appended at all"
+    assert after_lines[: len(before_lines)] == [
+        iso.REPLICATION_MEASURED_LINE if line == iso.REPLICATION_PENDING_LINE else line
+        for line in before_lines
+    ], "a line above the addendum was moved, deleted or reordered rather than left in place"
+    assert addendum.strip() in "\n".join(after_lines[len(before_lines) :]), (
+        "the addendum is not entirely an insertion after the original text"
+    )
+
+    assert _verdict.recorded_verdict(after) == _verdict.recorded_verdict(before), (
+        "the recorded `## Verdict` section changed. It is the section every clobber guard in this "
+        "phase anchors on, and it is the one thing an addendum exists to sit BESIDE"
+    )
+
+
+def test_addendum_refuses_an_ambiguous_placeholder(tmp_path):
+    """Zero placeholders and two are both refusals, and the message names the count found.
+
+    Guessing which occurrence to replace is how an append silently becomes a rewrite: at zero the
+    file is not the shape this writer was committed against (already appended to, or not this
+    writer's output at all), and at two the writer would be choosing. The file must be left
+    byte-identical in both cases — a refusal that has already written is not a refusal.
+    """
+    for count in (0, 2):
+        report = tmp_path / f"report_{count}.md"
+        original = _synthetic_report(placeholders=count)
+        report.write_text(original, encoding="utf-8")
+        assert original.count(iso.REPLICATION_PENDING_LINE) == count, "the fixture is wrong"
+
+        try:
+            iso.append_addendum(report, f"{iso.REPLICATION_ADDENDUM_HEADING}\n")
+        except SystemExit as exit_:
+            assert f"carries {count} occurrence(s)" in str(exit_), (
+                f"the refusal does not name the count found, so a reader cannot tell a "
+                f"never-appended report from an already-appended one: {exit_}"
+            )
+        else:  # pragma: no cover
+            raise AssertionError(f"append_addendum accepted {count} placeholder line(s)")
+        assert report.read_text(encoding="utf-8") == original, (
+            "the report was written despite the refusal"
+        )
+
+
+def test_replication_output_is_descriptive_only(monkeypatch, tmp_path):
+    """D-16 / ISO-05 / STAT-06 — min / max / median, and no hypothesis test at any depth.
+
+    Asserted on BOTH surfaces because neither covers the other: the rendered addendum is what a
+    reader quotes, and the JSON payload is what a later script would read. The identifier ban in
+    this file is call-site scoped and would not catch a p value that never touches ``holm``.
+    """
+    _replicate_setup(monkeypatch, tmp_path)
+    payload = iso.run_replicate_mode()
+    addendum = _addendum_of(iso.ISOLATION_REPORT_PATH.read_text(encoding="utf-8"))
+
+    for banned in ("p =", "alpha", "rejected"):
+        assert banned not in addendum.lower(), (
+            f"the replication addendum carries {banned!r}. ISO-05 is descriptive by construction "
+            "(D-16) and `gate_cleared` structurally cannot admit a replication row, so a number "
+            "here can neither clear nor fail the gate — rendering one as if it could is the "
+            "repudiation surface TH-17-38 records"
+        )
+    assert re.search(r"\b0(\.0+)?%", addendum) is None, (
+        "the replication addendum prints a bare zero percentage (STAT-02)"
+    )
+    assert "descriptive" in addendum.lower(), (
+        "the addendum does not say it is descriptive — D-16's statement is what stops the spread "
+        "below it being quoted as a result"
+    )
+    assert "never a ranking" in addendum, (
+        "the addendum lost D-15's no-ranking sentence: with one seed per persona in the main "
+        "matrix the three diagonals are three separate anchors, and this replication is what makes "
+        "seed variance readable rather than what licenses an ordering"
+    )
+
+    keys = set(_json_keys(payload))
+    assert {"min", "max", "median"} <= keys, f"the payload is not min/max/median shaped: {keys}"
+    assert not ({"p_value", "alpha", "rejected"} & keys), (
+        f"the replication payload carries a hypothesis-test key: {sorted(keys)}"
+    )
+    on_disk = json.loads(iso.REPLICATION_RECORD_PATH.read_text(encoding="utf-8"))
+    assert set(_json_keys(on_disk)) == keys, "the written payload differs from the returned one"
+
+
+def test_worst_pair_is_read_from_the_records_not_the_report():
+    """TH-17-36 — the selection reads the RECORDED evidence, never the rendered markdown.
+
+    The rendered numbers are formatted strings with bounds and denominators attached
+    (``report_proportion``'s ``formatted``), so re-parsing them would make the selection depend on
+    the report's LAYOUT rather than on the recorded evidence — and a layout change would silently
+    move which pair ISO-05 replicates. Structural rather than textual: the argument handed to
+    ``worst_pair`` is traced back to its single assignment and that assignment must index the
+    matrix. ``run_replicate_mode`` does read the report, but only to prove a verdict was recorded.
+    """
+    body = _function_def(_tree(_ISOLATION_PATH), "run_replicate_mode")
+    assert body is not None, "run_replicate_mode is missing — a scan that finds nothing is green"
+    calls = [node for node in ast.walk(body) if isinstance(node, ast.Call)]
+    called = {
+        (getattr(node.func, "id", None) or getattr(node.func, "attr", None)) for node in calls
+    }
+    for name in ("worst_pair", "assemble_matrix", "read_sweep_records"):
+        assert name in called, (
+            f"run_replicate_mode does not call {name} — it calls {sorted(called)}"
+        )
+
+    regex = sorted(name for name in called if name in ("search", "findall", "finditer", "match"))
+    assert not regex, (
+        f"run_replicate_mode runs {regex} — the selection inputs must come from the sweep records, "
+        "not from a regex over the rendered report"
+    )
+
+    selection = next(
+        node
+        for node in calls
+        if (getattr(node.func, "id", None) or getattr(node.func, "attr", None)) == "worst_pair"
+    )
+    assert len(selection.args) == 1 and isinstance(selection.args[0], ast.Name), (
+        "worst_pair is called on an inline expression, so what it selects over cannot be traced"
+    )
+    sources = [
+        ast.unparse(node.value)
+        for node in ast.walk(body)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == selection.args[0].id for t in node.targets)
+    ]
+    assert len(sources) == 1, f"{selection.args[0].id} is assigned {len(sources)} times: {sources}"
+    assert "matrix[" in sources[0], (
+        f"worst_pair's input is built from {sources[0]!r} rather than by indexing the assembled "
+        "matrix — the six rates must come out of the records the matrix was scored from"
+    )
+    assert "read_text" not in sources[0], "worst_pair's input is parsed out of a file's text"
+
+
+def test_replicate_seeds_come_from_the_preregistration(monkeypatch, tmp_path):
+    """ISO-05 / D-19 — the seeds are ``REPLICATION_SEEDS``, and the first one is already trained.
+
+    k = 3 COUNTS THE ORIGINAL: the first entry is the persona's ``PERSONA_SEEDS`` seed and resolves
+    to the UNSCOPED record the main matrix already scored, reused rather than re-run. A missing
+    record must abort naming its path, because the alternative — a replication assembled over
+    whichever seeds happened to be on disk — is a k chosen after seeing the numbers.
+    """
+    for persona in personas.PERSONAS:
+        assert personas.REPLICATION_SEEDS[persona][0] == personas.PERSONA_SEEDS[persona], (
+            f"{persona}'s replication seeds do not start at its trained seed, so k = 3 would mean "
+            "three NEW adapters rather than the original plus two"
+        )
+        assert iso.replicate_record_path(
+            persona, personas.PERSONA_SEEDS[persona]
+        ) == iso.sweep_record_path(persona), (
+            "the first pre-registered seed does not resolve to the unscoped record, so the "
+            "already-recorded sweep would be re-run instead of reused"
+        )
+
+    _replicate_setup(monkeypatch, tmp_path)
+    payload = iso.run_replicate_mode()
+    pair = payload["selected_pair"]
+    assert {(cell["persona"], cell["seed"]) for cell in payload["cells"]} == {
+        (persona, seed) for persona in pair for seed in personas.REPLICATION_SEEDS[persona]
+    }, "the mode read a seed set other than the pre-registered one"
+    for persona in pair:
+        assert payload["seeds"][persona] == list(personas.REPLICATION_SEEDS[persona])
+
+    missing = iso.sweep_record_path(pair[0], seed=personas.REPLICATION_SEEDS[pair[0]][1])
+    missing.unlink()
+    iso.REPLICATION_RECORD_PATH.unlink()
+    try:
+        iso.run_replicate_mode()
+    except SystemExit as exit_:
+        assert str(missing) in str(exit_), (
+            f"the abort does not name the missing record path, so an operator cannot tell which "
+            f"sweep to run: {exit_}"
+        )
+    else:  # pragma: no cover
+        raise AssertionError("the replication assembled over five of its six records")
+    assert not iso.REPLICATION_RECORD_PATH.exists(), (
+        "the payload was written despite the run aborting on a missing record"
+    )
