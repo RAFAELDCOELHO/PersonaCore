@@ -259,3 +259,33 @@ One row per (persona, seed). The rate is the off-diagonal cell `(persona, target
 | 2 | `persona_a`=`1537`, `persona_b`=`1538` | 0.000000 |
 
 **Minimum 0.000000 / maximum 0.000000 / median 0.000000** of the selected pair's mean off-diagonal rate across its 3 seed indices. That is the whole ISO-05 result: three descriptive numbers over the axis the selection was made on. Each underlying cell is published with its own denominator and bound in the table above.
+
+## Addendum — Collateral Dialogue Collapse (2026-08-15)
+
+*Appended below the ISO-05 addendum. Nothing above this heading is altered — `test_report_addendum_is_additive` pins every byte above the replication placeholder to its pre-append committed revision.*
+
+**The three adapters measured in this report are NOT shippable demo substrate.** This is a limitation of the artifacts, stated here because a reader of the evidence should not have to open a planning document to find it.
+
+| adapter | val loss | change vs its base |
+| --- | --- | --- |
+| `persona_a` | 14.2507 | **+211.60%** |
+| `persona_b` | 14.9068 | **+225.95%** |
+| `persona_c` | 15.6121 | **+241.37%** |
+
+Phase 14's shipped `real` arm recorded **+27.16%** on the same measure. The cause is structural, not a defect in this phase's measurement: Phase 14's `real` arm trained with replay at `REAL_RUN_REPLAY_RATIO = REPLAY_ARM_RATIO = 1.0` (`scripts/teach_persona.py:129,151`) — 220 episodes, 20,036 tokens = 10,018 teaching + 10,018 replay — while `run_one_persona_training` calls `train_arm` at the committed default **`replay_ratio=0.0`** (176 episodes, ~7,500 tokens, no replay). Replay is the mechanism that protects dialogue capability, and these three adapters have none.
+
+**This is recorded, not repaired.** Changing the training recipe after the gate report existed would place code after the report it obeys — the same ordering discipline the pre-registration enforces. This phase measures isolation, not conversational retention, and the isolation result above is unaffected: collateral collapse acts on dialogue quality, not on whether a persona's value appears under another persona's adapter.
+
+**Scope.** The `+27.16%` comparison is against Phase 14's `real` arm specifically. The percentages above are this run's, at the three pre-registered seeds; they are not a claim about LoRA personalization in general.
+
+## Addendum — Precision Note on §Categories, base row (2026-08-15)
+
+*Appended, not a rewrite of §Categories. Everything above is unaltered.*
+
+The base row of §Categories reads `| base | 0 | 0 | 104 | 0 |`. The note in that section explains that `leak` and `diagonal` are zero BY CONSTRUCTION. That is true but **incomplete**: for the base row all four counts are forced, so the row carries no information about the base at any cell.
+
+With `own=None`, `classify` reaches branch 2 (`own is None and labels` → `base_prior`) for every non-empty label set, and branch 4's membership test (`normalize(completion) in base_texts`) is evaluated against the base row's **own** completions — so it matches everything remaining. Branches 3 (`leak`) and 5 (`confabulation`) are therefore unreachable **for this row**, and the result is `(0, 0, n_questions, 0)` for any input whatsoever. Verified by mutating the base sweep — garbage strings, then persona_a's value, then all three personas' values — the row stayed `(0, 0, 104, 0)` throughout.
+
+**The precise attribution: this is a CALL-SITE property, not a property of `classify`.** Branch 5 is reachable in `classify` itself; it becomes unreachable only under the base row's argument binding, where `base_texts` is the same set the completion is drawn from. A reader auditing `classify` in isolation will find nothing wrong with it, which is exactly why the forcing is recorded here rather than as a defect in the function.
+
+**What is NOT affected: the control.** The base row in §The Matrix — `0/104` in all three columns — is computed by `cell_rates`, not by `classify`, and it moves with the data: the same mutation sweep drove it `[0,0,0]` → `[104,0,0]` → `[104,104,104]`. That row is the genuine adapter-off control and every off-diagonal in the gate is read against it. The gate result is untouched by this note.

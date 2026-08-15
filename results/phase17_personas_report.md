@@ -749,3 +749,15 @@ person_name produces generic proper nouns (charlier, angela), hometown/street pr
 real places, birth_year/house_number produce zero matching-shape numerics. Two known
 artifacts noted, neither moving toward minted strings: the college-student attractor
 and Phase-13's already-published role-token leakage.
+
+## Addendum — Collateral Dialogue Collapse in the Adapters This Gate Cleared (2026-08-15)
+
+*Appended after the recorded verdict. The `## Verdict` section above is unaltered and still holds the verdict and nothing else.*
+
+This report gates the **material** — it establishes that the un-adapted base cannot already produce the 24 minted values, which is what makes the isolation matrix measurable. It says nothing about the adapters subsequently trained on that material, and a reader should not infer they are usable.
+
+**They are not: the three adapters trained from this GO-gated material are NOT shippable demo substrate.**
+
+Measured in `results/phase17_isolation_report.md`: val loss `persona_a` 14.2507 (**+211.60%**), `persona_b` 14.9068 (**+225.95%**), `persona_c` 15.6121 (**+241.37%**), against Phase 14's shipped `real` arm at **+27.16%**. Cause: Phase 14's `real` arm trained with replay at `REAL_RUN_REPLAY_RATIO = REPLAY_ARM_RATIO = 1.0` (`scripts/teach_persona.py:129,151`), while `run_one_persona_training` calls `train_arm` at the committed default **`replay_ratio=0.0`** — no replay, and replay is what protects dialogue capability.
+
+Recorded, not repaired: changing the recipe after the gate report existed would put code after the report it obeys. The GO verdict above is unaffected — it concerns the base's guessability of the minted values, a measurement taken before any adapter existed.
