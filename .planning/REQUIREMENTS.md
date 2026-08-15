@@ -80,7 +80,7 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
 
 ## Multi-Persona Isolation Matrix (Phase 17)
 
-- [ ] **ISO-01**: An **adversarial persona generator** produces **N=3** personas with colliding
+- [x] **ISO-01**: An **adversarial persona generator** produces **N=3** personas with colliding
   names and *contradictory values in the same slot*. Personas that differ in easy ways make
   isolation look perfect for trivial reasons — the single most likely way this phase produces a
   worthless green result.
@@ -192,7 +192,7 @@ Deferred — revisited when the numbers that gate them exist.
 | PERS-04 | 16 | Complete |
 | PERS-05 | 16 | Complete |
 | PERS-06 | 16 | Complete |
-| ISO-01 | 17 | Pending |
+| ISO-01 | 17 | Complete |
 | ISO-02 | 17 | Pending |
 | ISO-03 | 17 | Pending |
 | ISO-04 | 17 | Pending |

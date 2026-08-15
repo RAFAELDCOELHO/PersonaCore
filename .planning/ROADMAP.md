@@ -312,7 +312,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 17-07-PLAN.md — RUN the pre-flight gate and take the **blocking human GO/ADAPT verdict** (SC2)
+- [x] 17-07-PLAN.md — RUN the pre-flight gate and take the **blocking human GO/ADAPT verdict** (SC2)
 - [x] 17-08-PLAN.md — the `--report` mode: cross-process ISO-04 proof, the gate assembled from
   imported Phase 16 statistics, descriptive CIs, and the report writer with the D-10 branch
 
@@ -407,7 +407,7 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 14. Teach-Then-Recall Demo | v2.0 | 11/11 | Complete | 2026-08-02 |
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
-| 17. Multi-Persona Isolation Matrix | v3.0 | 6/11 | In Progress|  |
+| 17. Multi-Persona Isolation Matrix | v3.0 | 8/11 | In Progress|  |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 0/TBD | Pending | - |
 
 **Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.

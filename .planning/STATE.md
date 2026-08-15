@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-08-PLAN.md
-last_updated: "2026-08-14T23:18:20.353Z"
-last_activity: "2026-08-14 -- 17-08 complete: the --report mode with the ISO-04 cross-process proof running BEFORE any scoring, the gate assembled entirely from imported Phase 16 statistics with the family closed at both levels and the base row published but never gated, and the whole report writer including D-10's all-fail branch committed before a single Phase 17 number exists"
+stopped_at: Completed 17-07-PLAN.md
+last_updated: "2026-08-15T00:26:52.063Z"
+last_activity: "2026-08-14 -- 17-07 complete: the ISO-01 pre-flight ran on the un-adapted base and came back 24/24 clean at 0/52 containments over 416 quoted completions, a human read them and committed GO by hand in 5183e0e after the executor was denied permission to commit one, and the clobber guard flipped permissive to armed so re-driving the gate now requires --force"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 18
+  completed_plans: 19
   percent: 33
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 8 of 11
+Plan: 9 of 11
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-08 complete: the --report mode with the ISO-04 cross-process proof running BEFORE any scoring, the gate assembled entirely from imported Phase 16 statistics with the family closed at both levels and the base row published but never gated, and the whole report writer including D-10's all-fail branch committed before a single Phase 17 number exists
+Last activity: 2026-08-14 -- 17-07 complete: the ISO-01 pre-flight ran on the un-adapted base and came back 24/24 clean at 0/52 containments over 416 quoted completions, a human read them and committed GO by hand in 5183e0e after the executor was denied permission to commit one, and the clobber guard flipped permissive to armed so re-driving the gate now requires --force
 
 ## Performance Metrics
 
@@ -83,6 +83,7 @@ Last activity: 2026-08-14 -- 17-08 complete: the --report mode with the ISO-04 c
 | Phase 17 P05 | 41min | 2 tasks | 3 files |
 | Phase 17 P06 | 28min | 4 tasks | 2 files |
 | Phase 17 P08 | 32min | 3 tasks | 2 files |
+| Phase 17 P07 | 60min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -211,6 +212,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-08: the two achievable p values the report publishes as a design property are RETURNED BY compare_cells, never recomputed by the writer — a second sign_test_exact call site is a second hypothesis family, caught by the new D-21 scan on its first run
 - [Phase 17]: 17-08: report_proportion's raw-count denominator is the RECORDED draws-per-question times each cell's own question count, never SHARED_ARM_CONFIG.n_draws — the latter renders '9 draws' beside '0/104 questions'
 - [Phase 17]: 17-08: the four category counts render once per ROW, never once per cell (D-12) — the per-column number is n_answerable, and mislabelling it is a live repudiation surface
+- [Phase 17]: 17-07: the ISO-01 gate ran on the un-adapted base (convbase_slim, git 04e724c6/step 4000/val 1.5235939979553224, no adapter injected) and returned 24/24 clean at 0/52 containments over 416 completions — RESEARCH F-13 now holds: an off-diagonal hit cannot be the base's own prior, it must come from adapter i; the claim is checkpoint-specific to 04e724c6 and is NOT a standing invariant
+- [Phase 17]: 17-07: ROADMAP SC2's GO verdict is recorded by hand in 5183e0e — the executor stopped at the checkpoint, recorded nothing, and its git commit of the verdict was DENIED by the permission system three times; it did not route around the denial. That closed path is TH-17-23's actual mitigation, NOT the git author field, which is Rafael on all three commits including the two the agent made and therefore distinguishes nothing
+- [Phase 17]: 17-07: assert_report_not_clobbered flipped permissive -> ARMED the moment GO was recorded — re-driving scripts/phase17_persona_gate.py now requires --force, which would destroy the hand-written verdict; per 17-05 handover 4 the honest recovery is a reviewed deletion commit, never --force. Measured both directions at HEAD
+- [Phase 17]: 17-07: STAT-05 stopped being vacuous — the report is the first results/phase17_* artifact (6e7bad0), checked = 2, and the Phase 17 guard gained the empty-match assertion its Phase 16 sibling already carried because the product assertion alone is satisfied by 0 == n * 0; watched RED. scripts/phase17_personas.py is now permanently uneditable at d549e0b
+- [Phase 17]: 17-07: ISO-01 marked complete HERE and only here — claimant set re-derived across every plan in every phase is exactly 17-03/17-05/17-07, both predecessors explicitly deferred, and both D-06 conditions (checkpoint-specific guessability pass 6e7bad0, SC2 blocking human verdict 5183e0e) have now happened
 
 ### Pending Todos
 
@@ -254,8 +260,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-14T23:15:17.884Z
-Stopped at: Completed 17-08-PLAN.md
+Last session: 2026-08-15T00:26:52.057Z
+Stopped at: Completed 17-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
