@@ -51,7 +51,7 @@ created: 2026-08-15
 | ATK-01 / D-19 | Round-trip guard is **RED** on a mid-UTF-8 split — asserts `SystemExit`, not `UnicodeDecodeError` | unit | `pytest tests/test_phase18_corpus.py::test_roundtrip_guard_is_red_on_mid_utf8 -x` | ❌ W0 |
 | ATK-01 / D-03 | Static scan: `scripts/phase18_*.py` holds no fact value in any string **or docstring** | unit | `pytest tests/test_phase18_prereg.py::test_no_fact_values_in_phase18_modules -x` | ❌ W0 |
 | ATK-01 / D-08 | `PERSONA_ALLOWLIST` hard equality holds with the new third entry | unit | `pytest tests/test_phase14_scoring.py -k persona_argument -x` | ✅ `:422` |
-| ATK-01 / D-11 | Corpus schema carries `family, dose, fact_id, slot, seed_index`; `family == "reserved"` for exactly the 32 flagged probes | unit | `pytest tests/test_phase18_corpus.py::test_schema_and_reserved_family -x` | ❌ W0 |
+| ATK-01 / D-11 | Corpus schema carries `family, dose, fact_id, slot, seed_index`; `source_family == "reserved"` for exactly the 32 flagged probes (`family` holds the attack shape) | unit | `pytest tests/test_phase18_corpus.py::test_schema_and_reserved_family -x` | ❌ W0 |
 | ATK-03 / D-09 | `draw_all` prefix stability — draws 0..8 at `n_samples=63` byte-identical to `n_samples=8` | unit | `pytest tests/test_phase18_draws.py::test_prefix_is_budget_independent -x` | ❌ W0 |
 | ATK-03 / D-06 | `question_seed(index*K) == SEED + index*K`; 216×64 strided seed set has zero collisions | unit | `pytest tests/test_phase18_draws.py::test_strided_seeds_are_disjoint -x` | ❌ W0 |
 | ATK-03 / D-01 | Family-zero comparison is **exact hit-vector equality** against the parsed 112 taught rows | unit | `pytest tests/test_phase18_prereg.py::test_family_zero_compares_the_vector -x` | ❌ W0 |
@@ -65,10 +65,10 @@ created: 2026-08-15
 | ATK-05 | `scripts/erasure_gate.py` byte-untouched since `23a830c` (D-27) | unit | `pytest tests/test_phase18_prereg.py::test_erasure_gate_untouched -x` | ❌ W0 |
 | **ATK-05 / D-28** | **Both new instruments (NLL/exposure, D-14 scoring) live INSIDE `scripts/phase18_extraction.py` — no admissibility logic in a helper module** | unit | `pytest tests/test_phase18_prereg.py::test_instruments_are_inside_the_pin -x` | ❌ W0 |
 | **D-12 / D-28** | **Smoke additionally asserts finite NLL for every candidate in R across all 8 slots, and spread-0 control agreement — on the un-adapted base only** | unit | `pytest tests/test_phase18_prereg.py::test_smoke_covers_nll_path -x` | ❌ W0 |
-| ATK-06 / D-23 | README + `docs/REPORT.md` continuations are **additive** (0 deletions); the sentence appears verbatim in all three surfaces | unit | `pytest tests/test_phase18_docs.py::test_continuation_is_additive -x` | ❌ W0 |
+| ATK-06 / D-23 | README + `docs/REPORT.md` continuations are **additive** (0 deletions); the sentence appears verbatim in all three surfaces | unit | `pytest tests/test_phase18_docs.py::test_docs_continuation_is_additive -x` | ❌ W0 |
 | ATK-06 / D-24 | Conclusion sentence produced by the committed function from committed literals; ATK-06 LoRA caveat is a required adjacent sentence | unit | `pytest tests/test_phase18_docs.py::test_conclusion_is_templated -x` | ❌ W0 |
 | STAT-01 | Every published proportion declares `unit == "question"`; no prompt/draw-level denominator | unit | `pytest tests/test_phase18_prereg.py::test_every_rate_declares_its_unit -x` | ❌ W0 |
-| STAT-02 | No bare `0%` in any committed report **or figure label**; every zero carries denominator + Wilson + `3/n` | unit | `pytest tests/test_phase18_docs.py::test_no_bare_zero_percent -x` | ❌ W0 |
+| STAT-02 | No bare `0%` in any committed report **or figure label**; every zero carries denominator + Wilson + `3/n` | unit | `pytest tests/test_phase18_docs.py::test_no_bare_zero_percent_in_docs -x` and `::test_no_bare_zero_percent_in_rendered_report -x` | ❌ W0 |
 | STAT-04 | `pyproject.toml` unchanged | unit | `pytest tests/test_phase16_prereg.py -k dependency_freeze -x` | ✅ 16-01 |
 | **STAT-06 / D-31** | **Holm family size m=4 asserted at import; m≥7 must raise** | unit | `pytest tests/test_phase18_prereg.py::test_holm_family_is_reachable -x` | ❌ W0 |
 | D-12 | Pre-flight smoke covers all four prompt shapes, floors against measured 56/936 and 47/936 attractors, never touches the adapter | unit | `pytest tests/test_phase18_prereg.py::test_smoke_scope_is_base_only -x` | ❌ W0 |
