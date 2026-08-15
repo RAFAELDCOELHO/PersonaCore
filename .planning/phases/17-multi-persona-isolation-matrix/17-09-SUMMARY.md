@@ -302,11 +302,20 @@ anomalous.** Measured masked dialogue-val PPL, adapter OFF `4.5733` in all three
 | `persona_c` | 15.6121 | +241.37% |
 
 Phase 14's shipped `real` arm recorded **+27.16%**. The difference is not a defect and not a
-finding about isolation: Phase 14's `real` arm trained at `replay_ratio=0.5` (220 episodes, 20,036
-tokens = 10,018 teaching + 10,018 replay), while `run_one_persona_training` calls `train_arm` at
+finding about isolation: Phase 14's `real` arm trained at **`replay_ratio=1.0`** (220 episodes,
+20,036 tokens = 10,018 teaching + 10,018 replay), while `run_one_persona_training` calls `train_arm` at
 the committed default `replay_ratio=0.0` (176 episodes, ~7,500 tokens, no replay). Replay is the
 mechanism that protects dialogue capability, and these adapters have none. **This is recorded, not
 repaired** — changing the recipe after the gate report would put code after the report it obeys,
+
+> **Correction — 2026-08-15.** An earlier revision of this paragraph stated Phase 14's `real` arm
+> trained at `replay_ratio=0.5`. That is wrong and is corrected above, not left standing. Measured:
+> `teach_persona.py:129` `REPLAY_ARM_RATIO = 1.0` and `:151` `REAL_RUN_REPLAY_RATIO = REPLAY_ARM_RATIO`,
+> so the ARGUMENT is `1.0` and `want = round(1.0 x 10,018) = 10,018` — which is what reproduces the
+> 10,018 teaching + 10,018 replay split quoted above. `0.5` is the resulting replay FRACTION of the
+> 20,036-token total, not the parameter. The error propagated two layers (into an orchestrator
+> briefing and into a verifier prompt) before measurement caught it; the token counts and the
+> +27.16% were never affected.
 and this phase measures isolation, not conversational retention. It does mean the three Phase 17
 adapters are **not shippable demo substrate** and no claim about them should imply otherwise.
 
