@@ -34,6 +34,9 @@ import sys
 
 import pytest
 
+from personacore.dialogue import build_recall_prompt
+from personacore.tokenizer import from_json
+
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = str(_REPO_ROOT / "scripts")
 if _SCRIPTS not in sys.path:
@@ -48,6 +51,14 @@ def _load(name):
 
 
 stats = _load("phase16_persistence")
+recall = _load("phase14_recall")
+
+tok = from_json(_REPO_ROOT / "artifacts" / "tokenizer.json")
+
+# Never a locked fact value: this file holds no fact strings, for the same reason
+# ``scripts/phase14_recall.py`` holds none at import (its LAZY-IMPORT RULE).
+_FAKE_VALUE = "wibblex"
+_VALUE_FREE_QUESTION = "what is my fake thing called?"
 
 # 8/8 unanimity on the exact paired sign test over 2**8 partitions — the best achievable p at n = 8
 # and the number every Holm family in this project is ultimately priced against.
@@ -166,3 +177,156 @@ def test_holm_family_is_keyword_only():
     """
     with pytest.raises(TypeError):
         stats.holm(dict(zip(PHASE18_FAMILY, [UNANIMITY_P] * 4)), PHASE18_FAMILY)
+
+
+# =====================================================================================
+# ===== D-03 — `assert_no_value_in_prompt` reads the BYTES the model receives =====
+# =====================================================================================
+
+
+class _SplitTokenizer:
+    """A tokenizer double whose two views DISAGREE on purpose — the premise, made literal.
+
+    Same double, same argument as ``tests/test_phase14_scoring.py``'s: ``decode`` and ``encode``
+    are independent stubs, so "the string detector sees it and the id detector does not" (and the
+    converse) is a LITERAL rather than a case hunted for in real BPE merge behavior. It is
+    reproduced here rather than imported because importing a private fixture across test modules
+    couples this file's RED-ness to an unrelated file's refactors.
+    """
+
+    def __init__(self, decoded, encodings):
+        self._decoded = decoded
+        self._encodings = encodings
+
+    def decode(self, ids):
+        return self._decoded
+
+    def encode(self, text):
+        return self._encodings[text]
+
+
+def test_assert_no_value_in_prompt_question_path_is_unchanged():
+    """The default path is the Phase 14/16/17 path, byte for byte — no ``prompt_ids``, no change.
+
+    Both directions, on the REAL tokenizer: a value-free question returns ``None``, and a question
+    naming the value aborts. This half is green before AND after the widening by construction —
+    that is what "additive" means, and it is asserted rather than assumed.
+    """
+    assert recall.assert_no_value_in_prompt(tok, _VALUE_FREE_QUESTION, [_FAKE_VALUE]) is None
+
+    with pytest.raises(SystemExit) as excinfo:
+        recall.assert_no_value_in_prompt(tok, f"is my thing {_FAKE_VALUE}?", [_FAKE_VALUE])
+    assert _FAKE_VALUE in str(excinfo.value)
+
+
+def test_assert_no_value_in_prompt_reads_the_passed_ids_and_never_rebuilds():
+    """D-03 — the corpus is checked against the bytes the model receives, not a reconstruction.
+
+    ``build_recall_prompt`` is replaced with a landmine, so "never rebuilds" is proved by the call
+    that would explode rather than by reading the source. This is the whole point of the widening:
+    A2 appends injected ids after the prompt and A3 carries a persona span, and NEITHER is
+    reconstructible from the question string, so a guard that rebuilds is checking a different
+    prompt than the one the model was actually driven with.
+    """
+    ids = build_recall_prompt(tok, _VALUE_FREE_QUESTION)
+
+    def _landmine(*args, **kwargs):  # pragma: no cover — reaching it IS the failure
+        raise AssertionError("assert_no_value_in_prompt rebuilt the prompt it was handed")
+
+    original = recall.build_recall_prompt
+    recall.build_recall_prompt = _landmine
+    try:
+        assert (
+            recall.assert_no_value_in_prompt(
+                tok, _VALUE_FREE_QUESTION, [_FAKE_VALUE], prompt_ids=ids
+            )
+            is None
+        )
+    finally:
+        recall.build_recall_prompt = original
+
+
+def test_assert_no_value_in_prompt_sees_a_value_only_in_the_passed_ids():
+    """T-18-01-02 — the widened path reads the passed bytes, so it is no escape hatch.
+
+    The A3 shape on the real tokenizer: the question is value-free, so the DEFAULT path passes it
+    (asserted here, because that pass is exactly the blindness the widening exists to remove), and
+    the value rides in on a persona span that only the realized ids carry. A guard that kept
+    rebuilding would return ``None`` on a prompt that has the fact fully in view.
+    """
+    leaky_ids = build_recall_prompt(
+        tok, _VALUE_FREE_QUESTION, persona=[f"my fake thing is named {_FAKE_VALUE}."]
+    )
+
+    # The blindness being removed: the question alone is clean.
+    assert recall.assert_no_value_in_prompt(tok, _VALUE_FREE_QUESTION, [_FAKE_VALUE]) is None
+
+    with pytest.raises(SystemExit) as excinfo:
+        recall.assert_no_value_in_prompt(
+            tok, _VALUE_FREE_QUESTION, [_FAKE_VALUE], prompt_ids=leaky_ids
+        )
+    message = str(excinfo.value)
+    assert _FAKE_VALUE in message
+    # `question` stays a required positional and is still named, so an abort on a caller-built A2
+    # or A3 prompt points at the source question rather than at an anonymous id list.
+    assert _VALUE_FREE_QUESTION in message
+
+
+def test_assert_no_value_in_prompt_keeps_both_detectors_anded_on_the_widened_path():
+    """Neither detector was weakened, reordered or made optional while the keyword was added.
+
+    The two are blind to different things, so the absence twin ANDs two absences: EITHER one firing
+    must abort. Pinned from both directions, which is what makes a deleted level RED —
+
+    * the decoded string carries the value, the standalone id run does not (the measured
+      BPE-merge-boundary case; this is also the plan's "value in the question, absent from the
+      passed ids" behaviour, since the question is embedded in the ids it was built from);
+    * the id run carries it, the decoded string does not.
+
+    Deleting the string level leaves the first case silent; deleting the id level leaves the
+    second silent. Both must abort, and a prompt where neither sees it must not.
+    """
+    ids = [1, 2, 3, 4, 5]
+
+    string_only = _SplitTokenizer(f"the answer is {_FAKE_VALUE}", {_FAKE_VALUE: [91, 92]})
+    with pytest.raises(SystemExit) as string_exit:
+        recall.assert_no_value_in_prompt(
+            string_only, _VALUE_FREE_QUESTION, [_FAKE_VALUE], prompt_ids=ids
+        )
+    assert "decoded prompt" in str(string_exit.value)
+
+    ids_only = _SplitTokenizer("nothing legible here", {_FAKE_VALUE: [2, 3, 4]})
+    with pytest.raises(SystemExit) as ids_exit:
+        recall.assert_no_value_in_prompt(
+            ids_only, _VALUE_FREE_QUESTION, [_FAKE_VALUE], prompt_ids=ids
+        )
+    assert "contiguous id run" in str(ids_exit.value)
+
+    neither = _SplitTokenizer("nothing legible here", {_FAKE_VALUE: [91, 92]})
+    assert (
+        recall.assert_no_value_in_prompt(
+            neither, _VALUE_FREE_QUESTION, [_FAKE_VALUE], prompt_ids=ids
+        )
+        is None
+    )
+
+    # `values` is a sequence and EVERY entry is checked — not just the first.
+    with pytest.raises(SystemExit):
+        recall.assert_no_value_in_prompt(
+            _SplitTokenizer("nothing legible here", {_FAKE_VALUE: [91], "absent": [2, 3]}),
+            _VALUE_FREE_QUESTION,
+            [_FAKE_VALUE, "absent"],
+            prompt_ids=ids,
+        )
+
+
+def test_assert_no_value_in_prompt_prompt_ids_is_keyword_only_and_symmetric_with_its_twin():
+    """The widening is signature-symmetric with ``assert_value_in_prompt(tok, prompt_ids, values)``.
+
+    Keyword-only, so none of the committed three-positional call sites can acquire a fourth
+    argument by accident, and ``question`` stays required — the twin takes ids INSTEAD of a
+    question because it never had a question path to preserve; this one takes ids AS WELL AS one.
+    """
+    ids = build_recall_prompt(tok, _VALUE_FREE_QUESTION)
+    with pytest.raises(TypeError):
+        recall.assert_no_value_in_prompt(tok, _VALUE_FREE_QUESTION, [_FAKE_VALUE], ids)
