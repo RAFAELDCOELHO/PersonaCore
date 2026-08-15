@@ -60,6 +60,33 @@ The seed list below is a SANITY ANCHOR on the 2 of 8 core slots it covers, and a
 | `hometown` | `the country` | yes |
 | `pet_name` | `rose` | **NO — investigate this sweep before trusting the derivation on the other slots** |
 
+> **Addendum — 2026-08-15. Supersedes the remediation pointer above; changes no verdict and no gate result.**
+>
+> **Both counts in this addendum are numbers of DISTINCT completion strings — deduplicated by the
+> `frozenset` in `base_prior_anchor` — and are NOT rates over draws.** Do not read `7/108` or `0/104`
+> as the same unit as the `n/104 questions` and `936 draws` figures elsewhere in this report: the
+> denominators count different things.
+>
+> The pre-committed note above directs a reader to investigate **this sweep**. That investigation was
+> performed, and the cause is upstream of this sweep rather than in it.
+> `phase14_factset.BASE_PRIOR_SEEDS` was measured under greedy decoding from a bare `<|system|>`
+> prompt (`scripts/phase14_factset.py:295-296`, which records it verbatim as "measured on
+> `convbase_slim.pt` (greedy, bare `<|system|>`)") — a different decoding regime from the sampled
+> sweeps scored here. The ISO-01 pre-flight corroborates this independently: `rose` appeared **zero
+> times across 416 completions** on the un-adapted base (`results/phase17_personas_report.md`, which
+> records 104 unique questions and 416 completions generated). The miss is a property of the seed
+> list's provenance, not evidence of a defective sweep.
+>
+> Re-measured directly on `results/phase17_sweep_base.json`:
+> `hometown` / `the country` matched **7 of 108 distinct completions** (9 of 117 raw draws);
+> `pet_name` / `rose` matched **0 of 104 distinct completions** (0 of 117 raw draws). The two
+> verdicts in the table above are unchanged — the anchor reproduced on `hometown` and did not on
+> `pet_name`.
+>
+> D-13 was never a member of the formal gate: `gate_cleared` is closed at the six pre-registered
+> comparisons and structurally cannot admit an anchor row. This addendum corrects a misdirecting
+> remediation pointer in published evidence. It does not alter, weaken, or re-price any gate result.
+
 ## Gate
 
 > os seis pares testam diretamente vazamento entre as três personas reais (não contra pisos estruturais como na Fase 16), então uma alegação de isolamento parcial não sustenta o objetivo da fase.
