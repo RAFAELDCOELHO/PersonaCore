@@ -743,4 +743,9 @@ STOP and on an unrecorded verdict alike.
 
 ## Verdict
 
-PENDING — user decision at the ISO-01 checkpoint (ROADMAP SC2).
+GO — 0/52 containments across all 24 minted values under 4 draws/question, 8 slots.
+Semantic read confirms categorical separation: names produce concept-not-token,
+person_name produces generic proper nouns (charlier, angela), hometown/street produce
+real places, birth_year/house_number produce zero matching-shape numerics. Two known
+artifacts noted, neither moving toward minted strings: the college-student attractor
+and Phase-13's already-published role-token leakage.
