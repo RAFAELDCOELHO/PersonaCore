@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 17-07-PLAN.md
-last_updated: "2026-08-15T00:26:52.063Z"
-last_activity: "2026-08-14 -- 17-07 complete: the ISO-01 pre-flight ran on the un-adapted base and came back 24/24 clean at 0/52 containments over 416 quoted completions, a human read them and committed GO by hand in 5183e0e after the executor was denied permission to commit one, and the clobber guard flipped permissive to armed so re-driving the gate now requires --force"
+stopped_at: Completed 17-09-PLAN.md
+last_updated: "2026-08-15T01:26:54.359Z"
+last_activity: "2026-08-14 -- 17-09 complete: three adapters trained at seeds 1337/1338/1339, four sweeps ran in four fresh processes at one git SHA, and the isolation gate CLEARED — all six Holm comparisons rejected at p = 0.0078125 each, diagonals 104/104 and 103/104 and 103/104 questions, all six off-diagonals 0/104, and the adapter-off base row 0/104 on every persona"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 22
-  completed_plans: 19
+  completed_plans: 20
   percent: 33
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 17 (multi-persona-isolation-matrix) — EXECUTING
-Plan: 9 of 11
+Plan: 10 of 11
 Status: Ready to execute
-Last activity: 2026-08-14 -- 17-07 complete: the ISO-01 pre-flight ran on the un-adapted base and came back 24/24 clean at 0/52 containments over 416 quoted completions, a human read them and committed GO by hand in 5183e0e after the executor was denied permission to commit one, and the clobber guard flipped permissive to armed so re-driving the gate now requires --force
+Last activity: 2026-08-14 -- 17-09 complete: three adapters trained at seeds 1337/1338/1339, four sweeps ran in four fresh processes at one git SHA, and the isolation gate CLEARED — all six Holm comparisons rejected at p = 0.0078125 each, diagonals 104/104 and 103/104 and 103/104 questions, all six off-diagonals 0/104, and the adapter-off base row 0/104 on every persona
 
 ## Performance Metrics
 
@@ -84,6 +84,7 @@ Last activity: 2026-08-14 -- 17-07 complete: the ISO-01 pre-flight ran on the un
 | Phase 17 P06 | 28min | 4 tasks | 2 files |
 | Phase 17 P08 | 32min | 3 tasks | 2 files |
 | Phase 17 P07 | 60min | 2 tasks | 3 files |
+| Phase 17 P09 | 70min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -217,6 +218,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-07: assert_report_not_clobbered flipped permissive -> ARMED the moment GO was recorded — re-driving scripts/phase17_persona_gate.py now requires --force, which would destroy the hand-written verdict; per 17-05 handover 4 the honest recovery is a reviewed deletion commit, never --force. Measured both directions at HEAD
 - [Phase 17]: 17-07: STAT-05 stopped being vacuous — the report is the first results/phase17_* artifact (6e7bad0), checked = 2, and the Phase 17 guard gained the empty-match assertion its Phase 16 sibling already carried because the product assertion alone is satisfied by 0 == n * 0; watched RED. scripts/phase17_personas.py is now permanently uneditable at d549e0b
 - [Phase 17]: 17-07: ISO-01 marked complete HERE and only here — claimant set re-derived across every plan in every phase is exactly 17-03/17-05/17-07, both predecessors explicitly deferred, and both D-06 conditions (checkpoint-specific guessability pass 6e7bad0, SC2 blocking human verdict 5183e0e) have now happened
+- [Phase 17]: 17-09: the gate CLEARED — all six Holm comparisons rejected at p = 0.0078125 each (8/8 slot unanimity) against step alphas 0.0083333..0.0500000, gate_cleared returns True, re-derived independently by parsing the report's own six published rows back through the imported function; diagonals 104/104, 103/104, 103/104 questions and ALL SIX off-diagonals 0/104
+- [Phase 17]: 17-09: the adapter-off base row is 0/104 questions and 0/936 draws on each of the three personas' values — the ISO-01 pre-flight's zero-containment result reproduced by a second instrument on a different code path, so every off-diagonal zero has an EMPIRICAL leak-vs-prior separator rather than an inherited one
+- [Phase 17]: 17-09: the D-13 anchor is a PARTIAL miss and is published as such — 'the country' reproduced for hometown (7/108 base draws), 'rose' did NOT for pet_name (0/103); investigated BEFORE the matrix was read and traced to BASE_PRIOR_SEEDS' own provenance (greedy decode from a bare system prompt, phase14_factset.py:295-296) rather than to the sweep, corroborated by the ISO-01 pre-flight producing 'rose' zero times across 416 completions on the pure un-adapted base
+- [Phase 17]: 17-09: F-13 is labeled CHECKPOINT-SPECIFIC in the isolation report itself (04e724c6 / step 4000 / val_loss 1.5235939979553224) with an explicit RE-RUN requirement for any future checkpoint — the committed report writer makes no F-13 claim at all, so the label went into a dated hand-appended Scope Addendum that alters no rate, no p, no alpha and no verdict
+- [Phase 17]: 17-09: 17-07's handover prediction that the base's 'i am a college student' attractor and '<|assistant|>' leakage would appear in the adapter completions is FALSIFIED by measurement — 47 and 56 of 936 draws in the base column, 0 of 936 in each of the three adapter columns; both are published Phase 13 properties (79 naive / 70 EWC) and are recorded in the report as such, never as Phase 17 findings
 
 ### Pending Todos
 
@@ -260,7 +266,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-15T00:26:52.057Z
+Last session: 2026-08-15T01:26:16.347Z
 Stopped at: Completed 17-07-PLAN.md
 Resume file: None
 

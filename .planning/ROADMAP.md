@@ -282,6 +282,42 @@ cross-matrix against the base model's own prior
      and **no aggregate "isolation rate %" over the 9-cell matrix is gated** — that number implies a
      precision N=3 cannot carry (STAT-06).
 
+**Measured outcome, 2026-08-14 (plan 17-09, `results/phase17_isolation_report.md`).** Three
+adapters trained at seeds 1337 / 1338 / 1339, four sweeps in four fresh processes (pids 72355 /
+72803 / 73385 / 73652) at one git SHA `b6b2fed`, then `--report`.
+
+- **SC3 — MET.** The matrix is 3 generation sweeps scored 3 ways over the 104 shared-slot
+  `core_held_out` questions plus the adapter-off row, all four records carrying an identical
+  `(slot, seed_index, question)` triple set. Diagonals `104/104`, `103/104`, `103/104` questions;
+  **all six off-diagonals `0/104`**; the base row `0/104` on each of the three personas' values
+  (`0/936` draws). Confabulations sit in their own category (`0`, `1`, `1` per row), not folded
+  into leaks. **One clause of SC3 as written is falsified by measurement and is corrected rather
+  than quietly satisfied:** the parenthetical "`BASE_PRIOR_SEEDS` answers `rose` for pet names
+  unprompted" does **not** reproduce in this regime — `the country` reproduced for `hometown`
+  (7 of 108 base draws) but `rose` appeared in **0 of 103** `pet_name` base draws. Investigated
+  before the matrix was read: `BASE_PRIOR_SEEDS` was measured under *greedy decoding from a bare
+  `<|system|>` prompt* (`scripts/phase14_factset.py:295-296`), a different decoder from this
+  sweep's 9-draw sampled recall, and the ISO-01 pre-flight on the pure un-adapted base
+  independently produced `rose` zero times across 416 completions while producing `the country`
+  11 times. The miss is a property of the seed list's provenance, not of this sweep; D-13 already
+  scopes `BASE_PRIOR_SEEDS` as a screening list covering 2 of 8 core slots, never an enumeration
+  of what the base may say. The empirical adapter-off column — which SC3 also requires and which
+  is the instrument D-13 designates — is present and is what the off-diagonals are read against.
+- **SC4 — MET.** The gated quantity is the within-adapter diagonal-vs-off-diagonal contrast at
+  the slot level (n=8). All six Holm comparisons rejected, each at `p = 0.0078125` (8/8 slot
+  unanimity) against step alphas `0.0083333 … 0.0500000`; `gate_cleared` returns `True`,
+  re-derived independently by parsing the report's own six published rows and handing them back
+  to the imported function. Phase 14's `0.2486` / `0.2000` appear nowhere (ISO-07).
+- **SC5 — HALF MET, half still open.** The STAT-02 and STAT-06 halves are met: every zero cell
+  publishes its denominator, its one-sided Wilson upper bound (`0.025355`), its rule-of-three
+  bound at BOTH clustering ends (`3/104 = 0.028846` question-level, `3/8 = 0.375000` slot-level)
+  and its two-stage cluster bootstrap interval, and no aggregate rate over the nine cells is
+  computed or gated anywhere. The **ISO-05 replication half is NOT met by this plan** — the
+  report's `## Replication (ISO-05)` section carries its single `not yet measured` line, and
+  `worst_pair` selected `persona_a` / `persona_b` off the pre-registered tie-break, which is the
+  three-way tie at `0.000000` the success case was always going to produce. Plans 17-10 and 17-11
+  own the measurement.
+
 **Plans**: 11 plans across 6 waves
 
 Plans:

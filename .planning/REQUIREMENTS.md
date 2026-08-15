@@ -84,14 +84,14 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
   names and *contradictory values in the same slot*. Personas that differ in easy ways make
   isolation look perfect for trivial reasons — the single most likely way this phase produces a
   worthless green result.
-- [ ] **ISO-02**: The isolation matrix scores **shared-slot questions** against every persona's
+- [x] **ISO-02**: The isolation matrix scores **shared-slot questions** against every persona's
   value. Scoring persona *j*'s own questions against adapter *i* makes the off-diagonal ~0 by
   construction, which merely re-proves `0/2430` at N^2 the cost. This also collapses cost from N^2
   sweeps to **N sweeps scored N ways**.
-- [ ] **ISO-03**: The matrix carries an explicit **adapter-off control column**, so an off-diagonal
+- [x] **ISO-03**: The matrix carries an explicit **adapter-off control column**, so an off-diagonal
   hit is distinguishable from the base model's own prior (`BASE_PRIOR_SEEDS` records this base
   answering `rose` for pet names unprompted).
-- [ ] **ISO-04**: An **adapter-swap canary** asserts a `lora_B` tensor actually changed on every
+- [x] **ISO-04**: An **adapter-swap canary** asserts a `lora_B` tensor actually changed on every
   swap. All personas share identical `lora_` key sets, so a silently failed swap is a full no-op
   that produces the most flattering possible wrong answer: a perfect diagonal and zero leakage.
 - [ ] **ISO-05**: The **worst-colliding pair is replicated across seeds**, so seed variance is not
@@ -193,9 +193,9 @@ Deferred — revisited when the numbers that gate them exist.
 | PERS-05 | 16 | Complete |
 | PERS-06 | 16 | Complete |
 | ISO-01 | 17 | Complete |
-| ISO-02 | 17 | Pending |
-| ISO-03 | 17 | Pending |
-| ISO-04 | 17 | Pending |
+| ISO-02 | 17 | Complete |
+| ISO-03 | 17 | Complete |
+| ISO-04 | 17 | Complete |
 | ISO-05 | 17 | Pending |
 | ISO-06 | 17 | Complete |
 | ISO-07 | 17 | Complete |
