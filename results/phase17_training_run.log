@@ -1,0 +1,58 @@
+=== START --train persona_a  2026-08-15T00:57:55Z ===
+[phase17_isolation] ISO-01 verdict in phase17_personas_report.md: GO
+[phase17_isolation] training arm 'persona_a' at seed 1337 -> /Users/juliorcoelho/PersonaCore/checkpoints/phase17_persona_a_adapter.pt
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'persona_a'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 8 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3678 / min 0.1803 / max 0.5714
+[teach_persona] persona_a: 176 episodes, 7,531 tokens (7,531 teaching + 0 replay), episode length mean 42.8 [22, 70]
+[teach_persona] bins provenance: seed=1337 git_sha=07dfaf06d0afb2a3fab387074079cfa0110b94a8 pid=68323 torch=2.7.1 arm=persona_a second_person=False replay_ratio=0.0 mask_fraction=0.3563 wall=0.1s utc=2026-08-15T00:57:56Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/data/persona_persona_a_train.bin + /Users/juliorcoelho/PersonaCore/data/persona_persona_a_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase17_persona_a_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5733 / ON 14.2507 (+211.60% over 270,203 scored targets)
+[teach_persona] run provenance: arm=persona_a seed=1337 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=07dfaf06d0afb2a3fab387074079cfa0110b94a8 pid=68323 device=mps torch=2.7.1 second_person=False replay_ratio=0.0 mask_fraction=0.3563 final_train_loss=0.0591 utc=2026-08-15T00:59:16Z
+=== END --train persona_a rc=0 wall=82s  2026-08-15T00:59:17Z ===
+=== WRITE-PATH OK: checkpoints/phase17_persona_a_adapter.pt present, zero phase14_persona_* ===
+=== START --train persona_b  2026-08-15T00:59:17Z ===
+[phase17_isolation] ISO-01 verdict in phase17_personas_report.md: GO
+[phase17_isolation] training arm 'persona_b' at seed 1338 -> /Users/juliorcoelho/PersonaCore/checkpoints/phase17_persona_b_adapter.pt
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'persona_b'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 8 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3658 / min 0.1884 / max 0.5714
+[teach_persona] persona_b: 176 episodes, 7,476 tokens (7,476 teaching + 0 replay), episode length mean 42.5 [24, 69]
+[teach_persona] bins provenance: seed=1338 git_sha=07dfaf06d0afb2a3fab387074079cfa0110b94a8 pid=70239 torch=2.7.1 arm=persona_b second_person=False replay_ratio=0.0 mask_fraction=0.3535 wall=0.1s utc=2026-08-15T00:59:17Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/data/persona_persona_b_train.bin + /Users/juliorcoelho/PersonaCore/data/persona_persona_b_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase17_persona_b_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5733 / ON 14.9068 (+225.95% over 270,203 scored targets)
+[teach_persona] run provenance: arm=persona_b seed=1338 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=07dfaf06d0afb2a3fab387074079cfa0110b94a8 pid=70239 device=mps torch=2.7.1 second_person=False replay_ratio=0.0 mask_fraction=0.3535 final_train_loss=0.0648 utc=2026-08-15T01:00:37Z
+=== END --train persona_b rc=0 wall=80s  2026-08-15T01:00:37Z ===
+=== START --train persona_c  2026-08-15T01:00:37Z ===
+[phase17_isolation] ISO-01 verdict in phase17_personas_report.md: GO
+[phase17_isolation] training arm 'persona_c' at seed 1339 -> /Users/juliorcoelho/PersonaCore/checkpoints/phase17_persona_c_adapter.pt
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'persona_c'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 8 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3719 / min 0.2000 / max 0.5625
+[teach_persona] persona_c: 176 episodes, 7,606 tokens (7,606 teaching + 0 replay), episode length mean 43.2 [27, 70]
+[teach_persona] bins provenance: seed=1339 git_sha=07dfaf06d0afb2a3fab387074079cfa0110b94a8 pid=70303 torch=2.7.1 arm=persona_c second_person=False replay_ratio=0.0 mask_fraction=0.3598 wall=0.1s utc=2026-08-15T01:00:38Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/data/persona_persona_c_train.bin + /Users/juliorcoelho/PersonaCore/data/persona_persona_c_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase17_persona_c_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5733 / ON 15.6121 (+241.37% over 270,203 scored targets)
+[teach_persona] run provenance: arm=persona_c seed=1339 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=07dfaf06d0afb2a3fab387074079cfa0110b94a8 pid=70303 device=mps torch=2.7.1 second_person=False replay_ratio=0.0 mask_fraction=0.3598 final_train_loss=0.0870 utc=2026-08-15T01:01:56Z
+=== END --train persona_c rc=0 wall=80s  2026-08-15T01:01:57Z ===
