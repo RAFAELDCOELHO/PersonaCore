@@ -146,6 +146,13 @@ Both instruments are ready for Phase 18 driver code:
 - **The A2/A3 driver plans** can call `assert_no_value_in_prompt(tok, question, values, prompt_ids=realized_ids)`. Note D-16's partition: the strict no-value guard is still expected to run on the `build_recall_prompt` output for *every* family including A2 (proving the question-derived portion is value-free everywhere), with A2's appended tail getting its own bounded `≥ 1 and ≤ ⌊ids/4⌋` assertion. The widening enables that second check; it does not perform it.
 - Neither `scripts/phase16_persistence.py` nor `scripts/phase14_recall.py` is under a STAT-05 ancestry pin (only `scripts/erasure_gate.py` and `scripts/phase17_personas.py` are), so these edits do not disturb any pre-registration ordering guard. Verified against `tests/test_phase16_prereg.py`.
 
+## Self-Check: PASSED
+
+- All 4 claimed files present on disk (2 modified sources, 1 new test file, this SUMMARY).
+- All 5 claimed commits present in `git log`: `bd5a2df`, `1161593`, `11fecd6`, `3cf3286`, `bcad2c1`.
+- `git status --short` clean — nothing uncommitted.
+- `git diff --name-only c1e21d4..HEAD` lists exactly 4 paths; **no `STATE.md`, no `ROADMAP.md`, no `REQUIREMENTS.md`** (orchestrator owns the first two; the third is genuinely unchanged).
+
 ---
 *Phase: 18-black-box-adversarial-extraction-audit*
 *Completed: 2026-08-15*
