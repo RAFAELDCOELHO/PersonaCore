@@ -3334,12 +3334,18 @@ def run_smoke(device):
 
 
 def _render_smoke_report(record):
-    """The pre-flight report text — counts over their denominators, and no percent sign anywhere.
+    """The pre-flight report text — every count over its denominator, and no rendered percentage.
 
     STAT-02 forbids a bare zero percentage in any committed report, and the cheapest way to keep
-    that true of a document whose whole content is small counts is to publish no percentages at
-    all: every number below is either a count over its denominator, a rate in draws per minute, or
-    a bound printed to six places. There is nothing to render as ``0%`` because there is no ``%``.
+    that true of a document whose whole content is small counts is to render no quantity as a
+    percentage at all: every number below is a count over its denominator, a rate in draws per
+    minute, or a bound printed to six places. The only per-cent signs in the file are the two
+    inside the phrase "95% bound", which name a confidence level rather than report a measurement,
+    so there is no measured quantity that could be rendered as a bare zero.
+
+    ``draws_per_min`` is written once per shape, in its own line, and NOT also as a table column.
+    Plan 18-13's K decision is taken off these four figures and one number spelled in two places
+    is one number that can stop agreeing with itself in an editor.
 
     Carries no quantity about the taught column, which is D-12's zero-preview constraint arriving
     as a property of the produced bytes rather than as an instruction to whoever writes them.
@@ -3367,19 +3373,28 @@ def _render_smoke_report(record):
         f"{SMOKE_PROMPTS_PER_SHAPE} prompts per shape, strided across that shape's whole corpus",
         f"slice so both tiers are covered, at {SMOKE_DRAWS_PER_PROMPT} draws each.",
         "",
-        "| shape | prompts | draws | distinct | stop-terminated | draws_per_min |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| shape | prompts | draws | distinct completions | stop-terminated |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for shape in record["shapes"]:
         lines.append(
             f"| {shape['shape']} | {shape['prompts']} | {shape['draws']} | "
-            f"{shape['distinct_completions']} | {shape['stop_terminated']}/{shape['draws']} | "
-            f"{shape['draws_per_min']:.2f} |"
+            f"{shape['distinct_completions']} | {shape['stop_terminated']}/{shape['draws']} |"
         )
     lines += [
         "",
         "Every shape passed the decode/encode/decode round-trip on all of its prompts, terminated",
         "on a stop id at least once, and produced no prompt whose draws were one repeated string.",
+        "",
+        "### Measured throughput",
+        "",
+    ]
+    for shape in record["shapes"]:
+        lines.append(
+            f"- `{shape['shape']}`: {shape['draws_per_min']:.2f} draws_per_min "
+            f"({shape['draws']} draws in {shape['minutes']:.2f} min)"
+        )
+    lines += [
         "",
         "## Degeneration attractors",
         "",
@@ -3418,7 +3433,7 @@ def _render_smoke_report(record):
         "not one of the four measured shapes, so it is projected at the SLOWEST measured rate —",
         "the conservative choice, and stated rather than hidden.",
         "",
-        "| shape | prompts | draws (both arms) | draws_per_min | minutes |",
+        "| shape | prompts | draws (both arms) | rate applied | minutes |",
         "| --- | --- | --- | --- | --- |",
     ]
     for row in record["projection"]:
