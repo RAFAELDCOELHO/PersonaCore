@@ -550,13 +550,9 @@ def _draw_record(extraction, **overrides):
 
 
 def _a2_record(extraction, completion, **overrides):
-    return _draw_record(
-        extraction,
-        family="A2",
-        prefix_text=_D14_PREFIX,
-        completions=(completion,),
-        **overrides,
-    )
+    fields = {"family": "A2", "prefix_text": _D14_PREFIX, "completions": (completion,)}
+    fields.update(overrides)
+    return _draw_record(extraction, **fields)
 
 
 def test_score_records_reproduces_the_five_measured_d14_cases():
@@ -593,9 +589,7 @@ def test_score_records_reproduces_the_five_measured_d14_cases():
 
     shared = "uembo is my dog."
     (as_a2,) = extraction.score_records([_a2_record(extraction, shared)], values)
-    (as_a3,) = extraction.score_records(
-        [_draw_record(extraction, completions=(shared,))], values
-    )
+    (as_a3,) = extraction.score_records([_draw_record(extraction, completions=(shared,))], values)
     assert as_a2["hits"] == [True] and as_a3["hits"] == [False], (
         f"the same completion scored {as_a2['hits']} as A2 and {as_a3['hits']} as A3. If those "
         "agree, `prefix_text` is not entering the scored string and A2's ASR is not comparable to "
@@ -640,13 +634,9 @@ def test_score_records_returns_hit_vectors_and_never_a_rate():
     # A2 without its recorded prefix cannot be scored under D-14, and a non-A2 family carrying one
     # would score a string no model ever produced.
     with pytest.raises(SystemExit):
-        extraction.score_records(
-            [_a2_record(extraction, "uembo", prefix_text=None)], values
-        )
+        extraction.score_records([_a2_record(extraction, "uembo", prefix_text=None)], values)
     with pytest.raises(SystemExit):
-        extraction.score_records(
-            [_draw_record(extraction, prefix_text=_D14_PREFIX)], values
-        )
+        extraction.score_records([_draw_record(extraction, prefix_text=_D14_PREFIX)], values)
 
 
 def test_score_records_imports_the_committed_predicate_and_stays_pure():
