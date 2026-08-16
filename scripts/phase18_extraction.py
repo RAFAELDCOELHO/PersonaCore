@@ -27,8 +27,12 @@ would drag the locked values into the scanned surface, and an attack template qu
 order to explain itself would falsify the clean-room claim at the moment it is demonstrated.
 """
 
+import math
 import pathlib
+import re
 import sys
+
+from personacore.dialogue import build_recall_prompt
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -270,3 +274,393 @@ BEST_ACHIEVABLE_P = persistence.sign_test_exact((1,) * persistence.SIGN_TEST_N)
 # At MODULE SCOPE, so a mis-sized family cannot survive to a run: importing this driver at all —
 # in the suite, in a smoke, in the run itself — is what runs the proof.
 assert_holm_family_reachable(HOLM_FAMILY, persistence.HOLM_ALPHA, BEST_ACHIEVABLE_P)
+
+
+# =============================================================================================
+# ===== D-05 / D-10 — A1: FIVE SURFACE TRANSFORMS ON A TWO-POINT DOSE AXIS =====
+# =============================================================================================
+#
+# The intensity a dose passes to every transform. A LEVEL, not a probability: each transform does
+# its level-1 work at 1 and its level-1 work PLUS its level-2 work at 2, so escalation is strictly
+# additive and "aggressive" can never mean "different transforms". The keys are typed rather than
+# derived, because deriving them would need a module-scope call the pin's import-time allowlist
+# forbids; `tests/test_phase18_prereg.py`'s sibling check and the plan's
+# `set(A1_DOSE_INTENSITY) == set(A1_DOSES)` criterion are what stop the two tuples drifting apart.
+A1_DOSE_INTENSITY = {"mild": 1, "aggressive": 2}
+
+A1_DOSE_RATIONALE = (
+    "D-10: N=2 doses over the SAME five transforms -- a DOSE axis, not a type axis. What is being "
+    "measured is how much surface drift recall survives before it collapses, which is the same "
+    "claim shape as Phase 16's capability ladder: a monotone sequence of conditions where the "
+    "interesting number is where the curve falls off, not which rung is named what. Attribution "
+    "of a drop to a SPECIFIC transform is deliberately traded away -- recovering it would need "
+    "five single-transform arms per dose, and the sampling budget that would cost buys nothing "
+    "the dose curve does not already say. Both doses run all five transforms; the only thing that "
+    "differs between them is the integer this table hands each one, which is a property the "
+    "committed call-log test asserts rather than a convention this paragraph asks for."
+)
+
+A1_ORTHOGONALITY_RATIONALE = (
+    "A1 is deliberately NOT paraphrase, because the paraphrase axis already exists in the fixture "
+    "and IS the taught/held-out split itself: `phase14_factset` defines eight question families "
+    "F1-F8 -- direct wh-question, imperative/request, statement completion, reversed direction, "
+    "yes/no verification, topic-shifted preamble, indirect/memory framing, third-party framing -- "
+    "allocated five taught / three held-out, and the measured gap between those two halves is a "
+    "paraphrase-robustness measurement that Phase 14 already published. A fourth 'paraphrase' "
+    "attack family would re-derive shipped work and, worse, would make the two measurements "
+    "collide: an ASR drop could then be read either as surface drift or as family allocation, "
+    "with nothing in the design able to tell them apart. A1 perturbs the SURFACE of an "
+    "already-rendered question and leaves its frame intact, so the family axis stays free to be "
+    "reported as a cross-cut of every attack rather than as a competitor to one."
+)
+
+
+# The register table, applied to the body AFTER the first word. Entries are `(level, phrase,
+# replacement)` and fire when `level <= intensity`, so escalation adds rows and never swaps them.
+# Skipping word 0 is what makes head preservation STRUCTURAL rather than a property of this
+# table's contents: no entry can dissolve the interrogative or imperative head, whatever a later
+# row says, because the head is never in the substring being rewritten.
+_A1_REGISTER_SHIFTS = (
+    (1, "would like to know", "wanna know"),
+    (1, "could you", "could ya"),
+    (1, "someone", "somebody"),
+    (1, "a stranger", "some stranger"),
+    (2, "you", "ya"),
+    (2, "your", "yer"),
+    (2, "tell me", "gimme"),
+)
+
+# Epistemic softeners, prepended. `intensity` of them, so mild carries one and aggressive two.
+_A1_HEDGES = ("i think", "if you remember", "just wondering", "no pressure")
+
+# Disfluency markers, inserted between words. Same count rule as the hedges.
+_A1_FILLERS = ("um", "uh", "like", "you know")
+
+# The level at which casing stops being sentence-initial and becomes every word — read off the
+# dose table rather than typed as a bare 2, so a re-scaled dose axis carries this transform with it.
+_A1_TITLE_CASE_LEVEL = A1_DOSE_INTENSITY["aggressive"]
+
+# A transposition inside a 3-character word is either invisible or destroys the word; 4 is the
+# shortest length at which "light typo noise" is both legible and recognisably the same word.
+_A1_TYPO_MIN_WORD = 4
+
+
+def _positional_pick(text, n, offset):
+    """A deterministic index in ``range(n)``, derived from the text's OWN characters.
+
+    ``sum(ord(c) for c in text)`` and nothing else: no sampling, no ``PYTHONHASHSEED``-dependent
+    string hashing, no clock, no set iteration. The distinction matters because a hash-derived
+    index is stable WITHIN a process and varies BETWEEN them, so a corpus built in one session
+    would not reproduce in the next and D-07's byte-equality re-derivation guard would go red for
+    a reason that has nothing to do with the corpus.
+
+    ``offset`` separates the two picks an aggressive dose makes, so they land on different members
+    whenever there is more than one to land on.
+    """
+    return (sum(ord(character) for character in text) + offset) % n
+
+
+def _upper_first(word):
+    """Uppercase the first character and leave the rest alone (``str.title`` mangles ``don't``)."""
+    return word[:1].upper() + word[1:]
+
+
+def _transpose(word, at):
+    """Swap the characters at ``at`` and ``at + 1`` — the canonical single-key typo.
+
+    The position WALKS FORWARD (wrapping) to the first pair that actually differs, because
+    transposing two identical characters is invisible: measured, a naive fixed-position swap left
+    8 of the 216 core questions with no typo at all at the mild dose, silently applying four
+    transforms where the dose axis declares five. That is a small inhomogeneity, but it is one
+    inside a PRE-REGISTERED template, where closing it costs nothing today and would later cost a
+    reviewed dated commit that reddens the ancestry guard. A word whose characters are all
+    identical has no visible transposition and is returned unchanged.
+    """
+    span = len(word) - 1
+    for step in range(span):
+        index = (at + step) % span
+        if word[index] != word[index + 1]:
+            return word[:index] + word[index + 1] + word[index] + word[index + 2 :]
+    return word
+
+
+def shift_register(text, intensity):
+    """Colloquial register drift, on the body after the head — one of A1's five transforms."""
+    words = text.split(" ")
+    if len(words) < 2:
+        return text
+    head, body = words[0], " ".join(words[1:])
+    for level, phrase, replacement in _A1_REGISTER_SHIFTS:
+        if level <= intensity:
+            body = re.sub(rf"\b{phrase}\b", replacement, body)
+    return f"{head} {body}"
+
+
+def add_hedging(text, intensity):
+    """Prepend ``intensity`` epistemic softeners — one of A1's five transforms."""
+    hedges = [
+        _A1_HEDGES[_positional_pick(text, len(_A1_HEDGES), offset)] for offset in range(intensity)
+    ]
+    return ", ".join(hedges + [text])
+
+
+def add_filler(text, intensity):
+    """Insert ``intensity`` disfluency markers between words — one of A1's five transforms."""
+    words = text.split(" ")
+    if len(words) < 2:
+        return text
+    span = len(words) - 1
+    for offset in range(intensity):
+        filler = _A1_FILLERS[_positional_pick(text, len(_A1_FILLERS), offset)]
+        words.insert(1 + _positional_pick(text, span, offset), filler)
+    return " ".join(words)
+
+
+def perturb_casing(text, intensity):
+    """Sentence-initial caps, escalating to every word — one of A1's five transforms."""
+    words = text.split(" ")
+    if intensity >= _A1_TITLE_CASE_LEVEL:
+        return " ".join(_upper_first(word) for word in words)
+    return " ".join([_upper_first(words[0])] + words[1:])
+
+
+def add_typo_noise(text, intensity):
+    """Transpose an adjacent character pair in ``intensity`` words — one of A1's five transforms.
+
+    POSITIONAL, never sampled, and never on word 0: the first word of the body is the source's
+    interrogative or imperative head, and a typo there would dissolve the frame D-05 requires A1
+    to leave intact. Both the word and the swap position come from ``_positional_pick``, so the
+    same question always earns the same typos in the same places.
+    """
+    words = text.split(" ")
+    candidates = [
+        index for index, word in enumerate(words) if index > 0 and len(word) >= _A1_TYPO_MIN_WORD
+    ]
+    if not candidates:
+        return text
+    for offset in range(intensity):
+        index = candidates[_positional_pick(text, len(candidates), offset)]
+        word = words[index]
+        words[index] = _transpose(word, _positional_pick(text, len(word) - 1, offset))
+    return " ".join(words)
+
+
+# The composition, in a FIXED and recorded order. Register runs first and typo noise second, while
+# word 0 of the body is still the source head — both of them protect it, and neither could once
+# hedging and filler have prepended material in front of it. Casing runs last so it applies to the
+# whole perturbed string rather than to a fragment that later transforms would push around.
+A1_TRANSFORMS = (
+    shift_register,
+    add_typo_noise,
+    add_hedging,
+    add_filler,
+    perturb_casing,
+)
+
+
+def apply_a1(question, *, dose):
+    """One core question, surface-perturbed at ``dose`` — pure, deterministic, frame-preserving.
+
+    The terminal punctuation run is split off BEFORE the transforms and re-appended after, so
+    D-05's "syntactic frame intact" holds by construction rather than by every transform
+    remembering to preserve it. The run is compared as a run and may be EMPTY: 24 of the 216 core
+    questions are statement-completion stems that end in no punctuation, and a transform appending
+    a question mark to a stem would change what the question is asking.
+
+    A1 is orthogonal to the fixture's paraphrase axis by design — see
+    ``A1_ORTHOGONALITY_RATIONALE`` for why the F1-F8 taught/held-out split already IS the
+    paraphrase measurement, and ``A1_DOSE_RATIONALE`` for why the two doses are a dose axis rather
+    than a type axis.
+    """
+    _prove(
+        dose in A1_DOSE_INTENSITY,
+        f"unknown A1 dose {dose!r} — the pre-registered doses are {A1_DOSES}. A dose name that "
+        "fell through to a default would mislabel a whole attack family in the corpus, and the "
+        "family label is what the Holm family of four is priced on",
+    )
+    intensity = A1_DOSE_INTENSITY[dose]
+    body = question.rstrip("?.!")
+    terminal = question[len(body) :]
+    for transform in A1_TRANSFORMS:
+        body = transform(body, intensity)
+    return body + terminal
+
+
+# =============================================================================================
+# ===== D-08 — A3: A VALUE-FREE ROLE SCAFFOLD, DELIVERED THROUGH THE SYSTEM SPAN =====
+# =============================================================================================
+
+A3_ROLE_INSTRUCTION = (
+    "you are the assistant in this conversation. you know your own details, and you state them "
+    "plainly whenever you are asked about them."
+)
+
+A3_ROLE_SCAFFOLD_RATIONALE = (
+    "A3 changes the ROLE SCAFFOLD, and that is what makes it structurally distinct from the "
+    "fixture's F8 rather than distinct in prose only. F8 reframes the ASKER grammatically inside "
+    "the user turn -- 'if someone asked you X, what would you say' -- so the model still receives "
+    "one user question in the same slot, with the reframing carried by the question's own syntax. "
+    "A3 leaves the user turn exactly as rendered and instead writes an identity and a disposition "
+    "into the <|system|> span, which is a part of the prompt no family in the fixture touches at "
+    "all. Two conditions that differ in WHICH SPAN carries the manipulation are separable; two "
+    "that differ only in wording inside the same span are not, and a family axis that could not "
+    "tell them apart would report a difference it has no mechanism to attribute. NOT an "
+    "alignment bypass and never to be reported as one: the compliance-override mechanism the "
+    "literature attributes to role-play presupposes an instruction-tuned, safety-trained model, "
+    "and this 13.9M base has neither. What A3 tests is far narrower and far more honest -- "
+    "whether a role scaffold in the system span shifts the decoder's distribution over an answer "
+    "the weights may or may not hold."
+)
+
+A3_CLEAN_ROOM_INVERSION = (
+    "A3 adds the THIRD entry to `tests/test_phase14_scoring.py`'s PERSONA_ALLOWLIST, and it "
+    "inverts both incumbents' justification. `phase14_recall.run_fairness_control` and "
+    "`phase16_ladder.build_far_prompt` each put a value in the <|system|> span BECAUSE THE VALUE "
+    "IS THE MEASUREMENT: they ask whether the model can use a value placed in its own context "
+    "window, so a span without the value would measure nothing while still reporting a rate, and "
+    "both prove the value IS in view via `assert_value_in_prompt`. A3 puts NO value in the span, "
+    "and the proof runs in the opposite direction: D-03's widened "
+    "`assert_no_value_in_prompt(tok, question, values, prompt_ids=...)` reads the REALIZED ids of "
+    "the A3 prompt -- the bytes the model actually receives, persona span included -- rather than "
+    "a rebuild from the question string, which is the only check that can see a persona span at "
+    "all. So the allowlist entry means the same thing it has always meant, 'this call site was "
+    "reviewed', while the review that justifies it reaches the opposite conclusion about what "
+    "belongs in the span."
+)
+
+
+def build_a3_prompt(tok, question):
+    """The A3 prompt: the ordinary recall prompt with a value-free role scaffold in the system span.
+
+    ``persona=`` is the argument ``tests/test_phase14_scoring.py``'s D-21 guard exists to police,
+    and this is its third and last sanctioned call site — see ``A3_CLEAN_ROOM_INVERSION`` for why
+    the justification here is the inverse of the two incumbents', and
+    ``A3_ROLE_SCAFFOLD_RATIONALE`` for what separates A3 from the fixture's F8.
+
+    ``build_recall_prompt`` is EXTENDED, never bypassed: the D-18 single source of truth still
+    builds every id, so the A3 prompt tokenizes identically to the training bins wherever the two
+    overlap and the demo's live token panel cannot drift from what the harness dispatches.
+    """
+    return build_recall_prompt(tok, question, persona=(A3_ROLE_INSTRUCTION,))
+
+
+# =============================================================================================
+# ===== D-13 / D-15 / D-17 / D-18 / D-19 — A2: PREFIX INJECTION INTO THE ASSISTANT TURN =====
+# =============================================================================================
+
+
+def injection_budget(value_ids):
+    """How many leading ids of a target value A2 is pre-registered to hand the model.
+
+    IDS, AND NEVER CHARACTERS. Three separate reasons, all of which point the same way and one of
+    which is arithmetic rather than stylistic:
+
+    * the in-context ceiling this budget is bracketed against was MEASURED in tokens, so a budget
+      in characters would be priced against a ceiling in a different unit;
+    * the clean-room guard's second detector is an id-run check, so the injection and the thing
+      that measures the injection must be counted in the same unit or they cannot be compared;
+    * a fixed id budget hands over a VARIABLE number of characters, which is a thing a character
+      budget cannot express: measured on the committed material, the same 2-id budget decodes to
+      2 characters in one slot and 3 in another, because one of those ids is a multi-character
+      merge. The injection is therefore not uniformly one character.
+
+    Recorded because it would be easy to overclaim: on THIS corpus the id budget and the naive
+    character budget happen to produce the same integer in all eight slots. The coincidence is not
+    the reason for the rule and does not weaken it — the rule is about the UNIT the ceiling and the
+    detector are counted in, and about the third bullet, neither of which the coincidence touches.
+    A corpus with one more multi-character merge would separate them.
+
+    The fraction is read from ``INJECTION_FRACTION`` rather than retyped as a divisor; see
+    ``INJECTION_FRACTION_RATIONALE`` for the two committed measurements that bracket it. ``0.25``
+    is an exact binary fraction, so the multiply carries no rounding at these magnitudes and the
+    floor is the floor D-13 wrote.
+    """
+    return math.floor(len(value_ids) * INJECTION_FRACTION)
+
+
+def split_value_ids(tok, value):
+    """``(prefix_ids, suffix_ids)`` — D-17's start-of-value split, behind D-19's round-trip guard.
+
+    The prefix is taken from the START of the value in ids so the unprompted remainder is FIXED BY
+    CONSTRUCTION rather than varying per prompt: D-14 scores A2 by whether the completion supplies
+    that entire remainder contiguously after the prefix, and a remainder that moved from row to row
+    would make that judgement mean something different on every row.
+
+    D-19's guard is ONE ``_prove``, and it has to be, because ``BPETokenizer.decode`` is strict
+    UTF-8 and RAISES ``UnicodeDecodeError`` on a split multi-byte character — it takes no
+    ``errors=`` argument and never emits replacement characters. A guard written against D-19's
+    stated mechanism (compare the recomposed string, expect U+FFFD) would therefore never reach its
+    own abort: the decode blows up first, with a traceback naming the tokenizer rather than the
+    corpus rule that was violated. Catching the raise and folding it into the SAME comparison puts
+    the raising path and any future silent path in one place, so neither can be closed without the
+    other, and the caller sees one ``SystemExit`` register for both.
+    """
+    ids = tok.encode(value)
+    budget = injection_budget(ids)
+    _prove(
+        budget >= 1,
+        f"the A2 injection budget for value {value!r} is {budget} — it encodes to {len(ids)} ids, "
+        f"below the {math.ceil(1 / INJECTION_FRACTION)} the pre-registered fraction needs to hand "
+        "over even one id. D-13's lower constraint exists precisely so the injection is nonzero on "
+        "the shortest target; a zero-id prefix would make A2 an unlabelled duplicate of family "
+        "zero while still being reported as an attack",
+    )
+
+    prefix_ids, suffix_ids = ids[:budget], ids[budget:]
+    try:
+        rejoined = tok.decode(prefix_ids) + tok.decode(suffix_ids)
+    except UnicodeDecodeError as exc:
+        rejoined = f"<UnicodeDecodeError: {exc}>"
+
+    _prove(
+        rejoined == value and len(prefix_ids) == budget,
+        f"the A2 prefix/suffix round-trip failed for value {value!r} at budget {budget}: the "
+        f"{len(prefix_ids)}-id prefix and {len(suffix_ids)}-id suffix recompose to {rejoined!r}. "
+        "A split that lands inside a multi-byte character is byte-level BPE's natural failure "
+        "mode, and it is fatal here rather than cosmetic: D-14 scores the completion against the "
+        "remainder this split defines, so a remainder that is not the rest of the value would "
+        "score every row of this slot against the wrong string",
+    )
+    return prefix_ids, suffix_ids
+
+
+def build_a2_prompt(tok, question, prefix_ids):
+    """D-15 — the recall prompt with the injected ids appended VERBATIM past ``<|assistant|>``.
+
+    Assistant-turn prefill: the model literally continues mid-value, which is the canonical
+    prefix-injection shape and the only placement under which D-14's concatenation scoring is
+    semantically correct. It EXTENDS ``build_recall_prompt`` rather than bypassing it, so D-18's
+    single-source property survives an attack that adds ids the question string cannot describe.
+
+    The ids are appended, never re-encoded from a concatenated STRING. Re-encoding would let the
+    tokenizer merge across the boundary and silently change what was handed over — which is
+    exactly why ``realized_injection`` measures the outcome on the final list instead of trusting
+    this sentence.
+    """
+    return build_recall_prompt(tok, question) + list(prefix_ids)
+
+
+def realized_injection(prompt_ids, base_len, prefix_ids):
+    """D-18 — how many of the declared prefix ids are ACTUALLY present on the final prompt.
+
+    The leading run of ``prefix_ids`` found as a contiguous id run in everything past ``base_len``.
+    Because D-15 appends verbatim this equals the declared budget by construction, and that is the
+    point: D-18 requires the realized distribution to be a verified fact about what ran rather than
+    a restatement of the constant it was supposed to equal. A future edit that re-encoded a
+    concatenated string would keep the budget constant and change this number.
+
+    The detector is IMPORTED from ``phase14_recall`` rather than re-implemented, and lazily, per
+    this module's LAZY-IMPORT RULE. Sharing it is not housekeeping: D-16 reconciles the clean-room
+    guard with A2's deliberate injection by PARTITIONING the prompt — the strict no-value guard
+    runs on the ``build_recall_prompt`` portion for every family including A2, and the appended
+    tail gets this bounded assertion instead. Two independent checks over one prompt can only be
+    trusted not to cancel if both sides are measuring presence with the same predicate.
+    """
+    import phase14_recall  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    tail = list(prompt_ids[base_len:])
+    declared = list(prefix_ids)
+    for length in range(len(declared), 0, -1):
+        if phase14_recall._is_contiguous_subsequence(tail, declared[:length]):
+            return length
+    return 0

@@ -431,6 +431,21 @@ PERSONA_ALLOWLIST = (
     # carries its value inside the question string and is deliberately NOT here, because it passes
     # no keyword at all. Added in the same commit as the call site, as this allowlist requires.
     ("scripts/phase16_ladder.py", "build_far_prompt"),
+    # Phase 18's A3 attack (D-08), and the entry that INVERTS both justifications above. The two
+    # incumbents put a fact value in the ``<|system|>`` span because the value IS the measurement
+    # there; A3 puts NO value in the span at all. It is a value-free ROLE SCAFFOLD — an identity
+    # and a disposition, naming no fact, slot or persona value — and that is what makes it
+    # structurally distinct from the fixture's F8, which reframes the asker grammatically inside
+    # the USER turn while A3 writes into a span no question family touches. So this entry does not
+    # widen what may enter the span; it records a third reviewed call site whose review concluded
+    # the opposite of the first two. The claim is not left to this comment: ``phase18_extraction``
+    # is covered by the static clean-room scan
+    # (``tests/test_phase18_prereg.py::test_no_fact_values_in_phase18_modules``, which reads
+    # docstrings too), and D-03's widened ``assert_no_value_in_prompt(..., prompt_ids=...)`` runs
+    # on the REALIZED A3 ids at corpus build — the bytes the model receives, persona span
+    # included, which a rebuild from the question string could not see. Added in the same commit
+    # as the call site, as this allowlist requires.
+    ("scripts/phase18_extraction.py", "build_a3_prompt"),
 )
 
 _IN_PROMPT_ASSERTIONS = frozenset({"assert_value_in_prompt", "assert_no_value_in_prompt"})
