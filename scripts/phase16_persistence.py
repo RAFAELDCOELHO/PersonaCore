@@ -1167,15 +1167,24 @@ def assert_family_closed(entered_pairs):
     )
 
 
-def holm(p_values):
+def holm(p_values, *, family=HOLM_FAMILY_PAIRS):
     """Holm step-down across the closed family. Returns ``[(pair, p, alpha_at_step, rejected)]``.
 
     ``p_values`` is ``{pair: p}``. Sorted ascending, ``p_(i)`` is compared against
     ``HOLM_ALPHA / (m - i)`` and **rejection STOPS at the first failure** — every subsequent
     hypothesis is retained regardless of its own p-value, which is the whole point of step-down.
 
-    ``m`` is ``len(HOLM_FAMILY_PAIRS)``, READ from the constant and never retyped: a second literal
-    for the family size is a second number that can stop agreeing with the family it prices.
+    ``m`` is ``len(family)``, READ from the family this call was handed and never retyped: a second
+    literal for the family size is a second number that can stop agreeing with the family it
+    prices. The default is ``HOLM_FAMILY_PAIRS``, so every Phase 16 and Phase 17 caller keeps the
+    closed six-pair family and arithmetic it already published, bit for bit.
+
+    ``family`` is KEYWORD-ONLY. Phase 18's D-31 prices a family of FOUR — the dose-split
+    ``A1-mild`` / ``A1-aggressive`` / ``A2`` / ``A3`` attack families on ``core_held_out`` — and
+    this keyword is what lets it reuse the pinned statistic instead of copying it, since a
+    Phase-18-local ``holm`` would be a second rule the report could not attribute (STAT-04, and
+    Phase 16 D-16's ``probe_guessability`` precedent). Only ``len(family)`` is read, so the
+    members may be Phase 16's pairs or Phase 18's family NAMES with no branch on either.
 
     Holm over Benjamini-Hochberg per STAT-03: these arms share questions and adapters, so BH's
     independence/PRDS assumption fails while Holm is valid under arbitrary dependence.
@@ -1184,13 +1193,17 @@ def holm(p_values):
     ``scripts/phase15_stats.py`` committed for its own gate. It is a distinction without a
     difference here and is recorded rather than relied on: the achievable p values are multiples of
     1/256 (0.0078125, 0.0703125, 0.2890625, 0.7265625, 1.0) and the step alphas are 0.05/k for
-    k = 1..6, and no member of either set equals a member of the other.
+    k = 1..6, and no member of either set equals a member of the other. **The strictness is equally
+    inconsequential at m = 4**: the first step is 0.05/4 = 0.0125 and the best achievable p at
+    n = 8 is 0.0078125, so unanimity clears by 60% rather than m = 6's 0.00052 — D-31's whole
+    reason for choosing 4 over the 6 this project has twice paid the razor margin for.
     """
-    m = len(HOLM_FAMILY_PAIRS)
+    m = len(family)
     _prove(
         len(p_values) == m,
-        f"holm received {len(p_values)} p-values but the family is closed at {m} (D-09) — a "
-        "family priced at one size and populated at another is not the test that was registered",
+        f"holm received {len(p_values)} p-values but the family it was handed is closed at {m} "
+        "(D-09) — a family priced at one size and populated at another is not the test that was "
+        "registered",
     )
     ordered = sorted(p_values.items(), key=lambda item: item[1])
     results = []
