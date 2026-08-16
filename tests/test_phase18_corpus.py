@@ -25,7 +25,9 @@ the module is loaded with ``importlib.util.spec_from_file_location``. Importing 
 reachability proof and nothing else.
 """
 
+import importlib
 import importlib.util
+import json
 import pathlib
 import sys
 
@@ -383,3 +385,100 @@ def test_a3_prompts_carry_no_fact_value_on_their_realized_ids():
     # And the instruction itself holds no value, in the plainest possible form.
     lowered = p18.A3_ROLE_INSTRUCTION.lower()
     assert [value for value in values if value in lowered] == []
+
+
+# =====================================================================================
+# ===== D-02 / D-07 / D-11 / D-16 — the corpus builder =====
+# =====================================================================================
+
+
+def _fixture_core_rows():
+    """``[(tier, row), ...]`` over the binding fixture's two core tiers, in the builder's order.
+
+    Read straight from the committed JSON rather than from the corpus the builder returned, so the
+    expectations below are an INDEPENDENT re-derivation. Comparing a builder against fields it
+    itself emitted would assert only that it is self-consistent.
+    """
+    fixture = json.loads(p18.CORPUS_SOURCE_FIXTURE.read_text(encoding="utf-8"))
+    return [(tier, row) for tier in p18.CORPUS_TIERS for row in fixture["questions"][tier]]
+
+
+def _expected_question_portions():
+    """``[(family, question_portion_ids, whole_prompt_is_the_portion), ...]`` — 864, in build order.
+
+    D-16's partition, spelled out per family: A1 and A3 dispatch exactly what the guard sees, while
+    A2 dispatches strictly more — the injected tail. The third element is what makes that
+    difference assertable rather than implied.
+    """
+    facts = {fact.id: fact for fact in factset.LOCKED_FACTS}
+    expected = []
+    for _tier, row in _fixture_core_rows():
+        question = row["question"]
+        for dose in p18.A1_DOSES:
+            attacked = p18.apply_a1(question, dose=dose)
+            expected.append((f"A1-{dose}", list(build_recall_prompt(tok, attacked)), True))
+        expected.append(("A2", list(build_recall_prompt(tok, question)), False))
+        expected.append(("A3", list(p18.build_a3_prompt(tok, question)), True))
+        assert facts[row["fact_id"]].id == row["fact_id"]
+    return expected
+
+
+def test_strict_guard_covers_every_family(monkeypatch):
+    """D-16 — the strict no-value guard runs on EVERY family's question portion, A2 included.
+
+    A build that simply completes without raising is green even if a whole family were never
+    guarded at all, so this does not test that. A SPY wraps ``assert_no_value_in_prompt`` on the
+    module object ``build_corpus`` resolves lazily — the real guard still runs inside the wrapper,
+    so the build is genuinely checked AND the calls are recorded — and the recorded id lists are
+    compared, entry for entry, against portions re-derived here from the fixture.
+
+    Three things come off that log, and the third is what D-16 is actually about:
+
+    * the call count equals the entry count, so no family is exempted and none is guarded twice;
+    * each recorded list is the ``build_recall_prompt`` output for its family, which for A3 means
+      the realized ids INCLUDING the persona span — the surface only D-03's widened path can see;
+    * for A2 the guarded portion is a STRICT PREFIX of the dispatched prompt, and the excluded tail
+      is non-empty. That is the partition: without it, "the guard covers the question portion"
+      would be indistinguishable from "the guard covers everything", and the one family the
+      partition exists for would be the one it was never tested on.
+    """
+    recall_module = importlib.import_module("phase14_recall")
+    real_guard = recall_module.assert_no_value_in_prompt
+    guarded = []
+
+    def spy(tok_, question, values, *, prompt_ids=None):
+        guarded.append(list(prompt_ids) if prompt_ids is not None else None)
+        return real_guard(tok_, question, values, prompt_ids=prompt_ids)
+
+    monkeypatch.setattr(recall_module, "assert_no_value_in_prompt", spy)
+    corpus = p18.build_corpus(tok)
+    monkeypatch.undo()
+
+    entries = corpus["prompts"]
+    expected = _expected_question_portions()
+    assert len(entries) == len(expected) == 864
+    assert len(guarded) == len(entries), (
+        f"the guard ran {len(guarded)} times over {len(entries)} corpus entries — D-16 requires "
+        "one question-portion check per entry with NO family exempted, and a count that is short "
+        "means some family reached the corpus unchecked"
+    )
+
+    for entry, (family, portion, portion_is_whole), seen in zip(entries, expected, guarded):
+        assert entry["family"] == family
+        assert seen == portion, (
+            f"the guard saw a different id list than {family}'s build_recall_prompt output on "
+            f"seed_index {entry['seed_index']} — it is clearing a prompt that is not the one "
+            "dispatched"
+        )
+        if portion_is_whole:
+            assert entry["prompt_ids"] == portion
+        else:
+            assert entry["prompt_ids"][: len(portion)] == portion
+            assert len(entry["prompt_ids"]) > len(portion), (
+                "A2's dispatched prompt is no longer than its guarded portion, so the tail the "
+                "partition exists to separate is empty and D-16 is being tested vacuously"
+            )
+
+    # None of the 864 calls fell back to the rebuilding path: a `prompt_ids=None` call would rebuild
+    # from the question string and clear a prompt neither A2 nor A3 can be described by.
+    assert [seen for seen in guarded if seen is None] == []

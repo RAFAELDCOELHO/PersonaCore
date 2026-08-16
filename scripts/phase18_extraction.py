@@ -715,6 +715,10 @@ RESERVED_SOURCE_FAMILY = "reserved"
 #
 # `slot` is recorded rather than looked up, and that is D-11's load-bearing consequence: the report
 # renderer never imports the fact set, so no fact value can enter the render path.
+#
+# `realized_injection` is D-18's per-slot distribution recorded as a FACT ABOUT WHAT RAN, not a
+# number the report recomputes later. It is an int on every A2 entry and `None` everywhere else,
+# the same shape `dose` already carries for the two non-A1 families.
 CORPUS_ENTRY_KEYS = (
     "family",
     "dose",
@@ -723,6 +727,7 @@ CORPUS_ENTRY_KEYS = (
     "tier",
     "seed_index",
     "source_family",
+    "realized_injection",
     "prompt_ids",
 )
 
@@ -822,12 +827,38 @@ def build_corpus(tok):
     Returns a dict and writes NOTHING. D-04's commit order requires this pin to precede the
     first-add commit of every ``results/phase18_*`` path, so the artifact writer is a later plan's
     and this function stays callable from a CPU-only test that leaves no trace on disk.
+
+    **D-16 — TWO INDEPENDENT CHECKS, DELIBERATELY NOT ONE SUM.** The clean-room guard and A2's
+    deliberate injection are reconciled by PARTITIONING the prompt, and the partition is what makes
+    SC1's "across the entire corpus" literally true with NO family exempted:
+
+    * the strict ``assert_no_value_in_prompt`` runs on the ``build_recall_prompt`` output for
+      EVERY family — the whole prompt for A1 and A3, the base portion before the tail for A2;
+    * A2's appended tail gets a separate two-sided bound, ``1 <= realized <= injection_budget``,
+      measured on the FINAL post-concatenation id list.
+
+    Written as one net quantity — "total value material in the prompt is within budget" — a leak in
+    the question and a shortfall in the tail would CANCEL, and the sum would report a corpus that
+    is simultaneously leaking and under budget as clean. Checked independently they cannot: the
+    question portion must hold ZERO value material and the tail must hold BETWEEN ONE AND THE
+    BUDGET, and no value of one can pay for a violation in the other.
+
+    A3's guard runs on the realized ids INCLUDING the persona span, which is the entire reason D-03
+    widened the guard with a ``prompt_ids`` path: a rebuild from the question string would clear a
+    prompt that is not the one drawn from, and a persona span is invisible to it by construction.
     """
     import phase14_factset as factset  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import phase14_recall  # LAZY — same rule; this module holds no fact strings at import.
 
     fixture = json.loads(CORPUS_SOURCE_FIXTURE.read_text(encoding="utf-8"))
     facts_by_id = {fact.id: fact for fact in factset.LOCKED_FACTS}
     prefixes = {fact.id: split_value_ids(tok, fact.value)[0] for fact in factset.LOCKED_FACTS}
+    budgets = {fact.id: injection_budget(tok.encode(fact.value)) for fact in factset.LOCKED_FACTS}
+
+    # A PARAMETER read through the lazy import, never a module constant: this driver holds no fact
+    # strings at import time, because D-03's static scan walks every string it does hold. No tier is
+    # exempt — the soft tier is excluded from the pre-registered GATE, never from the clean room.
+    values = [fact.value for fact in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS]
 
     prompts = []
     for tier in CORPUS_TIERS:
@@ -851,31 +882,63 @@ def build_corpus(tok):
                 "source_family": _source_family(factset, fact, row),
             }
 
+            # A1 — the question portion IS the whole prompt, so the guard sees every id dispatched.
+            # The ATTACKED question is what the abort names, because that is the string the ids were
+            # encoded from; naming the source question would send a reader to text without the leak.
             for dose in A1_DOSES:
+                attacked = apply_a1(question, dose=dose)
+                a1_ids = build_recall_prompt(tok, attacked)
+                phase14_recall.assert_no_value_in_prompt(
+                    tok, attacked, values, prompt_ids=list(a1_ids)
+                )
                 prompts.append(
                     _corpus_entry(
                         family=f"A1-{dose}",
                         dose=dose,
                         **shared,
-                        prompt_ids=list(build_recall_prompt(tok, apply_a1(question, dose=dose))),
+                        realized_injection=None,
+                        prompt_ids=list(a1_ids),
                     )
                 )
 
+            # A2 — the guard runs on the BASE portion, before the tail. A2 is not exempted from the
+            # clean-room claim; the partition is what lets it be checked at all.
+            base_ids = build_recall_prompt(tok, question)
+            phase14_recall.assert_no_value_in_prompt(
+                tok, question, values, prompt_ids=list(base_ids)
+            )
+            a2_ids = build_a2_prompt(tok, question, prefixes[fact.id])
+            realized = realized_injection(a2_ids, len(base_ids), prefixes[fact.id])
+            _prove(
+                1 <= realized <= budgets[fact.id],
+                f"A2 realized {realized} injected ids on slot {fact.slot!r} against a declared "
+                f"budget of {budgets[fact.id]} for question {question!r}. The bound is TWO-SIDED "
+                "on purpose: zero would make A2 an unlabelled duplicate of family zero while still "
+                "being reported as an attack, and more than the budget would hand the model more "
+                "than D-13 pre-registered. Measured on the FINAL id list, because subword "
+                "re-merge at the concatenation boundary is the real risk that a construction "
+                "claim asserts away rather than checks",
+            )
             prompts.append(
                 _corpus_entry(
                     family="A2",
                     dose=None,
                     **shared,
-                    prompt_ids=list(build_a2_prompt(tok, question, prefixes[fact.id])),
+                    realized_injection=realized,
+                    prompt_ids=list(a2_ids),
                 )
             )
 
+            # A3 — the guard runs on the realized ids INCLUDING the persona span (D-03).
+            a3_ids = build_a3_prompt(tok, question)
+            phase14_recall.assert_no_value_in_prompt(tok, question, values, prompt_ids=list(a3_ids))
             prompts.append(
                 _corpus_entry(
                     family="A3",
                     dose=None,
                     **shared,
-                    prompt_ids=list(build_a3_prompt(tok, question)),
+                    realized_injection=None,
+                    prompt_ids=list(a3_ids),
                 )
             )
 
