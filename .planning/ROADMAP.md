@@ -439,9 +439,9 @@ schedule pressure can scope it down without invalidating it
 
 Plans:
 - [x] 18-01-PLAN.md — additive `family=` widening of `holm`, `prompt_ids` path on `assert_no_value_in_prompt`
-- [ ] 18-02-PLAN.md — `draw_all(n_samples=)`, deterministic fake model, D-09 prefix stability, D-06 strided seeds
+- [x] 18-02-PLAN.md — `draw_all(n_samples=)`, deterministic fake model, D-09 prefix stability, D-06 strided seeds
 - [x] 18-03-PLAN.md — the D-04 pin: header, `_prove`, pre-registration literals, D-31 import-time reachability, ancestry guard
-- [ ] 18-04-PLAN.md — attack templates: A1's two doses, A3's role scaffold + allowlist entry, A2's id split and D-19 guard
+- [x] 18-04-PLAN.md — attack templates: A1's two doses, A3's role scaffold + allowlist entry, A2's id split and D-19 guard
 - [ ] 18-05-PLAN.md — corpus builder over all 216 core questions with the D-11 schema and D-16 partitioned guards
 - [ ] 18-06-PLAN.md — the two D-28 instruments: taught-frame span NLL (D-29) and exposure rank (D-20/D-30)
 - [ ] 18-07-PLAN.md — `null_result_is_admissible()`, D-24 threat-model literals, `licensed_conclusion()`
@@ -486,6 +486,6 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
-| 18. Black-Box Adversarial Extraction Audit | v3.0 | 2/16 | In Progress|  |
+| 18. Black-Box Adversarial Extraction Audit | v3.0 | 4/16 | In Progress|  |
 
 **Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.
