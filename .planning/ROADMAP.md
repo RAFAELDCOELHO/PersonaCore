@@ -443,7 +443,7 @@ Plans:
 - [x] 18-03-PLAN.md — the D-04 pin: header, `_prove`, pre-registration literals, D-31 import-time reachability, ancestry guard
 - [x] 18-04-PLAN.md — attack templates: A1's two doses, A3's role scaffold + allowlist entry, A2's id split and D-19 guard
 - [x] 18-05-PLAN.md — corpus builder over all 216 core questions with the D-11 schema and D-16 partitioned guards
-- [ ] 18-06-PLAN.md — the two D-28 instruments: taught-frame span NLL (D-29) and exposure rank (D-20/D-30)
+- [x] 18-06-PLAN.md — the two D-28 instruments: taught-frame span NLL (D-29) and exposure rank (D-20/D-30)
 - [ ] 18-07-PLAN.md — `null_result_is_admissible()`, D-24 threat-model literals, `licensed_conclusion()`
 - [ ] 18-08-PLAN.md — question-unit scoring, the ASR ladder, D-25/D-26 unique successes
 - [ ] 18-09-PLAN.md — D-01 exact hit-vector control, the m=4 Holm family, the `erasure_is_worth_attempting` handoff
@@ -486,6 +486,6 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
-| 18. Black-Box Adversarial Extraction Audit | v3.0 | 5/16 | In Progress|  |
+| 18. Black-Box Adversarial Extraction Audit | v3.0 | 6/16 | In Progress|  |
 
 **Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.
