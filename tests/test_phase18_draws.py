@@ -271,3 +271,146 @@ def test_nll_frame_is_taught_not_bare(fake_lm):
             scored["f3_bare"]["nll_sum"], rel=1e-12
         )
         assert scored["ans1"]["nll_sum"] != scored["f3_bare"]["nll_sum"]
+
+
+# D-20's measured reference-set sizes, one row per core slot. Written as the SIZES rather than as
+# the values: the sizes are the claim (|R| = 6-8 is what buys the 2.58-3.00 bit ceiling), and a
+# test listing the values would be a second copy of the fact set free to stop agreeing with it.
+_MEASURED_REFERENCE_SIZES = {
+    "person_name": 8,
+    "pet_name": 8,
+    "cat_name": 7,
+    "sibling_name": 7,
+    "hometown": 7,
+    "street": 6,
+    "birth_year": 7,
+    "house_number": 6,
+}
+
+_MEASURED_LENGTH_SPREADS = {
+    "person_name": 3,
+    "pet_name": 3,
+    "cat_name": 2,
+    "sibling_name": 1,
+    "hometown": 3,
+    "street": 2,
+    "birth_year": 0,
+    "house_number": 0,
+}
+
+
+def _slot_nlls(model, slot, reduction):
+    """``{candidate: nll}`` over the slot's whole reference set, through the REAL instrument."""
+    return {
+        value: extraction.value_span_nll(
+            model, _TOKENIZER, "cpu", slot=slot, value=value, frame=extraction.ADMISSIBLE_NLL_FRAME
+        )[f"nll_{reduction}"]
+        for value in extraction.reference_set_for(slot)
+    }
+
+
+def test_exposure_ceilings_per_slot():
+    """D-20: |R| = 6-8 per slot, same-slot only, no duplicates — and the ceiling that buys.
+
+    The sizes are asserted INDIVIDUALLY rather than as a range, because the range is the thing a
+    silently shrunken pool would still satisfy. ``FEATURES.md``'s pooled 28-reference figure spans
+    eleven slots; held to same-slot references the base pools alone give 3-5, and it is Phase 17's
+    24 minted values — three per core slot, gate-cleared against this same base checkpoint — that
+    lift |R| to the sizes below.
+
+    Cross-slot contamination is checked as pairwise disjointness over all 28 slot pairs. A model
+    prefers a name over a year for a name question regardless of memorization, so a reference set
+    that leaked one cross-slot candidate would hand the taught value a rank it earned from slot
+    plausibility rather than from exposure.
+    """
+    sets = {slot: extraction.reference_set_for(slot) for slot in _MEASURED_REFERENCE_SIZES}
+    taught = {fact.slot: fact.value for fact in _locked_facts()}
+
+    for slot, expected in _MEASURED_REFERENCE_SIZES.items():
+        references = sets[slot]
+        assert len(references) == expected, (
+            f"{slot} has |R| = {len(references)} against the measured {expected}"
+        )
+        assert len(set(references)) == len(references), f"{slot} has a duplicate reference"
+        assert taught[slot] in references, (
+            f"{slot}'s taught value is not in its own reference set — a rank cannot be computed "
+            "for a candidate that is not among the candidates"
+        )
+        assert (
+            extraction.reference_length_spread(_TOKENIZER, slot) == (_MEASURED_LENGTH_SPREADS[slot])
+        )
+
+    slots = sorted(sets)
+    for i, left in enumerate(slots):
+        for right in slots[i + 1 :]:
+            assert set(sets[left]).isdisjoint(sets[right]), (
+                f"{left} and {right} share a reference candidate"
+            )
+
+    # The ceiling is the exposure of rank 1 — published per slot, never inherited from a pooled
+    # figure computed over a different set.
+    for slot, size in _MEASURED_REFERENCE_SIZES.items():
+        best = extraction.exposure_rank(
+            dict.fromkeys(sets[slot], 0.0) | {taught[slot]: -1.0},
+            taught_value=taught[slot],
+            reduction=extraction.ADMISSIBLE_NLL_REDUCTION,
+            length_spread=extraction.reference_length_spread(_TOKENIZER, slot),
+        )
+        assert best["rank"] == 1
+        assert best["n_references"] == size
+        assert best["ceiling_bits"] == pytest.approx(math.log2(size))
+        assert best["exposure_bits"] == pytest.approx(math.log2(size))
+        assert best["length_spread"] == _MEASURED_LENGTH_SPREADS[slot]
+    assert min(_MEASURED_REFERENCE_SIZES.values()) == 6
+    assert max(_MEASURED_REFERENCE_SIZES.values()) == 8
+
+
+def test_mean_is_admissible_and_spread0_agrees(fake_lm):
+    """D-30: the gate reads the MEAN, and on the two spread-0 slots both reductions must agree.
+
+    At spread 0 every candidate shares one token length L, so mean = sum/L is a strictly monotonic
+    transform and the two rankings are ordinally identical BY CONSTRUCTION. That makes the control
+    falsifiable rather than decorative: a disagreement on ``birth_year`` or ``house_number`` can
+    only be a bug in the mask, the reduction or the ordering, and is never a finding about the
+    model.
+
+    Non-vacuity is asserted alongside it. On at least one length-confounded slot the two reductions
+    must actually DISAGREE somewhere in the ordering — otherwise "they agree at spread 0" would be
+    true of an instrument in which the reduction never mattered at all, and the control would be
+    measuring nothing.
+    """
+    assert extraction.ADMISSIBLE_NLL_REDUCTION == "mean"
+    assert extraction.SPREAD_ZERO_CONTROL_SLOTS == ("birth_year", "house_number")
+    for slot in extraction.SPREAD_ZERO_CONTROL_SLOTS:
+        assert _MEASURED_LENGTH_SPREADS[slot] == 0
+
+    taught = {fact.slot: fact.value for fact in _locked_facts()}
+    rankings = {}
+    for slot in _MEASURED_REFERENCE_SIZES:
+        spread = extraction.reference_length_spread(_TOKENIZER, slot)
+        rankings[slot] = {
+            reduction: extraction.exposure_rank(
+                _slot_nlls(fake_lm, slot, reduction),
+                taught_value=taught[slot],
+                reduction=reduction,
+                length_spread=spread,
+            )
+            for reduction in extraction.NLL_REDUCTIONS
+        }
+
+    for slot in extraction.SPREAD_ZERO_CONTROL_SLOTS:
+        assert extraction.assert_spread_zero_reductions_agree(
+            slot, rankings[slot]["sum"], rankings[slot]["mean"]
+        )
+        assert rankings[slot]["sum"]["rank"] == rankings[slot]["mean"]["rank"]
+
+    confounded = [s for s in _MEASURED_REFERENCE_SIZES if _MEASURED_LENGTH_SPREADS[s] > 0]
+    assert any(
+        rankings[slot]["sum"]["ranking"] != rankings[slot]["mean"]["ranking"] for slot in confounded
+    ), "the two reductions never disagree anywhere, so the spread-0 agreement measures nothing"
+
+    # The confound is PUBLISHED, never corrected — every record carries it.
+    assert extraction.EXPOSURE_THREATS_TO_VALIDITY
+    for slot in _MEASURED_REFERENCE_SIZES:
+        for reduction in extraction.NLL_REDUCTIONS:
+            assert rankings[slot][reduction]["length_spread"] == _MEASURED_LENGTH_SPREADS[slot]

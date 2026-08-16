@@ -1110,3 +1110,185 @@ def value_span_nll(model, tok, device, *, slot, value, frame):
     context_ids = [ASSISTANT_ID] + list(tok.encode(preamble))
     row = span_nll_from_ids(model, context_ids, list(tok.encode(value)), device)
     return {"slot": slot, "frame": frame, **row}
+
+
+# =============================================================================================
+# ===== D-20 / D-22 / D-30 — THE EXPOSURE REFERENCE SET AND THE RANK =====
+# =============================================================================================
+
+# D-30's falsifiable internal control. These two slots have a MEASURED token-length spread of zero,
+# so every candidate shares one length L, mean = sum/L is a strictly monotonic transform, and the
+# two reductions must rank identically. A disagreement there is a bug and never a finding.
+SPREAD_ZERO_CONTROL_SLOTS = ("birth_year", "house_number")
+
+# D-30 — both confounds, published as a required field on every exposure record. Neither is
+# corrected, and the reason is a hard constraint rather than a preference.
+EXPOSURE_THREATS_TO_VALIDITY = (
+    "Exposure is a RANK among same-slot candidates, and the reference set was never "
+    "length-matched. Two confounds, both real and both uncorrected. (1) SUM injects length "
+    "directly into the rank on 6 of the 8 core slots — a longer candidate accrues more negative "
+    "log-probability and ranks worse by length alone, up to a 1.75x length ratio within one slot; "
+    "this is why the admissible reduction is the MEAN, against the research recommendation, since "
+    "the statistic is used ordinally and never as an absolute log-probability. (2) MEAN has its "
+    "own bias in the other direction — later tokens of a memorized string are near-deterministic, "
+    "so a per-token average can favour long memorized strings; it applies to the references and "
+    "the taught value alike, so it does not systematically favour the taught value, but it is "
+    "real. Neither is corrected because R cannot be length-matched without dropping |R| below the "
+    "D-20 bit ceiling, and a smaller R costs more resolution than the confound costs accuracy. "
+    "The per-slot token-length spread travels beside every exposure number so a reader sees which "
+    "of the eight slots the confound can reach at all."
+)
+
+
+def reference_set_for(slot):
+    """D-20 — the same-slot exposure reference set R: 6 to 8 candidates INCLUDING the taught value.
+
+    R is the three committed base pools filtered to this slot, plus Phase 17's 24 minted values
+    (three per core slot, zero overlap with the base pools or the taught values, gate-cleared
+    against this same base checkpoint at 24/24 clean over 416 completions), plus the taught value
+    itself — which must be in R because a rank cannot be computed for a candidate that is not among
+    the candidates. Both fact-set modules are imported LAZILY (module docstring, LAZY-IMPORT RULE):
+    they hold their material at MODULE level by design, and a module-level import here would drag
+    every one of those values into the surface D-03's static scan walks.
+
+    SAME-SLOT, and the filter is the whole design. A model prefers a name over a year for a name
+    question regardless of memorization, so a cross-slot reference would hand the taught value a
+    rank it earned from slot-type plausibility. Register needs no filter: register lives in the
+    QUESTION frame, not in the value, and the values are proper nouns and numerals that carry none
+    of it — which is why the second-person arm's pool contributes to R on equal terms.
+
+    POOLING ACROSS SLOTS IS DECLINED, deliberately. The research doc's pooled 28-reference figure
+    (FEATURES.md:358) spans ELEVEN slots, and the wider ceiling it advertises is mostly resolution
+    in slot-type plausibility — a confound dressed as precision. This phase publishes its own
+    per-slot ceiling instead, computed from the |R| this function actually returns.
+    """
+    import phase14_factset as factset  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import phase17_persona_facts as persona_facts  # LAZY — same rule, same reason.
+
+    taught = {fact.slot: fact for fact in factset.LOCKED_FACTS}
+    _prove(
+        slot in taught,
+        f"slot {slot!r} carries no taught fact, so it has no exposure target. The eight core slots "
+        "are the ones the gate is defined over; a slot name that is not one of them is a typo the "
+        "ranking would otherwise absorb silently",
+    )
+    pools = (
+        factset.GATE_REJECTED_CANDIDATES,
+        factset.CALIBRATION_POOL,
+        factset.REGISTER_ARM_POOL,
+    )
+    values = [fact.value for pool in pools for fact in pool if fact.slot == slot]
+    values += [
+        fact.value
+        for minted in persona_facts.PERSONA_FACTS.values()
+        for fact in minted
+        if fact.slot == slot
+    ]
+    values.append(taught[slot].value)
+    _prove(
+        len(set(values)) == len(values),
+        f"slot {slot!r} assembled {len(values)} references with only {len(set(values))} distinct — "
+        "a duplicated candidate inflates |R| and therefore the published ceiling, while giving the "
+        "ranking one fewer real alternative than the ceiling claims",
+    )
+    _prove(
+        6 <= len(values) <= 8,
+        f"slot {slot!r} assembled |R| = {len(values)}, outside D-20's MEASURED 6-8. The bit "
+        "ceiling log2(|R|) is published as this phase's own number rather than inherited, so an "
+        "|R| that has moved silently reprices every exposure figure the report carries",
+    )
+    return tuple(values)
+
+
+def reference_length_spread(tok, slot):
+    """R-12's confound as a number: ``max - min`` token length over the slot's reference set.
+
+    Published beside every exposure figure and never corrected — see
+    ``EXPOSURE_THREATS_TO_VALIDITY``. Measured through the live tokenizer rather than transcribed,
+    so a tokenizer change surfaces here instead of leaving a stale constant agreeing with nothing.
+    """
+    lengths = [len(tok.encode(value)) for value in reference_set_for(slot)]
+    return max(lengths) - min(lengths)
+
+
+def exposure_rank(nll_by_candidate, *, taught_value, reduction, length_spread):
+    """Carlini exposure — ``log2(|R|) - log2(rank)`` of the taught value among its same-slot R.
+
+    Ascending by NLL, so rank 1 is the LOWEST NLL and its exposure is exactly the ceiling
+    ``log2(|R|)``: 2.5850 bits at |R| = 6 through 3.0000 at |R| = 8. Ties break on the candidate
+    string so the rank is reproducible across processes — an insertion-order tie-break would make
+    the number depend on how R was assembled rather than on what was measured.
+
+    ``length_spread`` is REQUIRED rather than optional. The plan's signature omitted it and cannot
+    produce the record D-30 specifies without it: the spread is a required published field, and a
+    field that a caller may forget is a field that will be missing from the one record a reader
+    checks. Pure by design — no model, no tokenizer, no device — which is what keeps the whole
+    ranking layer unit-testable on CPU, the same property ``phase17_isolation``'s scorer has.
+
+    ``ranking`` is returned for the D-30 spread-0 control to compare and is deliberately NOT
+    propagated into the published record: it is a tuple of candidate values, and D-11's schema
+    keeps fact material out of the artifact by recording ``slot`` instead.
+    """
+    _prove(
+        reduction in NLL_REDUCTIONS,
+        f"reduction {reduction!r} is not one of the pre-registered {NLL_REDUCTIONS}. Both are "
+        f"published; exactly one — {ADMISSIBLE_NLL_REDUCTION!r} — is read by the admissibility "
+        "gate, and a third reduction invented at a call site is the post-null switch D-04 exists "
+        "to make visible",
+    )
+    _prove(
+        taught_value in nll_by_candidate,
+        "the taught value was not scored among its own reference set, so it has no rank. An "
+        "exposure computed against a set that excludes its target is a number about the "
+        "references only",
+    )
+    _prove(
+        6 <= len(nll_by_candidate) <= 8,
+        f"the ranking spans {len(nll_by_candidate)} candidates, outside D-20's measured |R| = 6-8. "
+        "The ceiling is derived from this count, so a short set publishes a ceiling the design "
+        "never measured",
+    )
+    ordered = tuple(sorted(nll_by_candidate, key=lambda value: (nll_by_candidate[value], value)))
+    rank = 1 + ordered.index(taught_value)
+    ceiling = math.log2(len(ordered))
+    return {
+        "reduction": reduction,
+        "rank": rank,
+        "n_references": len(ordered),
+        "exposure_bits": ceiling - math.log2(rank),
+        "ceiling_bits": ceiling,
+        "length_spread": length_spread,
+        "ranking": ordered,
+    }
+
+
+def assert_spread_zero_reductions_agree(slot, sum_record, mean_record):
+    """D-30's falsifiable control — returns True when it RAN, ``SystemExit`` when it failed.
+
+    At spread 0 every candidate shares one token length L, so ``mean = sum / L`` is a strictly
+    monotonic transform of ``sum`` and the two orderings are identical by construction, ties
+    included. Asserting it is what turns "the reduction choice is defensible" into a claim that can
+    fail: a disagreement on these two slots can only mean the span mask, the reduction or the
+    ordering has moved, and it is never a finding about the model.
+
+    Returns False on the six length-confounded slots rather than raising, so the caller can record
+    that the control did not apply instead of silently reporting a check it never ran.
+    """
+    if slot not in SPREAD_ZERO_CONTROL_SLOTS:
+        return False
+    _prove(
+        sum_record["length_spread"] == 0 and mean_record["length_spread"] == 0,
+        f"slot {slot!r} is a declared spread-0 control but the measured spread is "
+        f"{sum_record['length_spread']} / {mean_record['length_spread']}. The control's premise is "
+        "the shared token length; without it the monotonic-transform argument does not hold and "
+        "the assertion below would be testing something else",
+    )
+    _prove(
+        sum_record["ranking"] == mean_record["ranking"],
+        f"slot {slot!r} has token-length spread 0, so mean = sum/L is strictly monotonic and the "
+        f"two reductions MUST rank identically — yet sum ranks the taught value "
+        f"{sum_record['rank']} and mean ranks it {mean_record['rank']}. This is a defect in the "
+        "span mask, the reduction or the ordering. It is not a finding, and it must not be "
+        "reported as one",
+    )
+    return True
