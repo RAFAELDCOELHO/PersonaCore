@@ -3000,6 +3000,38 @@ def _rate_lower_bound(successes, n):
     return 1.0 - erasure_gate.wilson_upper_bound(n - successes, n)
 
 
+def _guarded_span(entry):
+    """D-16's partition, recovered from a corpus entry alone — the ids the strict guard runs on.
+
+    The whole prompt for A1 and A3; everything BEFORE the appended tail for A2. D-15 appends the
+    injected ids past ``<|assistant|>`` verbatim and D-18's ``realized_injection`` is the measured
+    length of that run, so the base portion is recoverable from the artifact without the fact value
+    and without a rebuild — which is what lets both the pre-flight and the run re-prove the
+    clean-room claim on the exact ids they are about to dispatch.
+
+    Written as ONE function because the alternative is the partition spelled twice, and D-16's
+    argument is that the two checks must not be able to cancel: a partition that drifted between
+    the smoke and the run would leave one of them checking a span that is not the one the claim is
+    about, in the phase whose entire output is trust in that claim.
+    """
+    realized = entry["realized_injection"]
+    _prove(
+        (entry["family"] == "A2") == isinstance(realized, int),
+        f"family {entry['family']!r} carries realized_injection {realized!r}. D-11 records that "
+        "field as an int on every A2 entry and None everywhere else, and the partition below "
+        "reads it to decide where the guarded span ends",
+    )
+    if realized is None:
+        return list(entry["prompt_ids"])
+    _prove(
+        realized >= 1,
+        f"A2 entry for fact {entry['fact_id']!r} at seed_index {entry['seed_index']} realized "
+        "zero injected ids, which would make it an unlabelled duplicate of family zero while "
+        "still being reported as an attack",
+    )
+    return list(entry["prompt_ids"][:-realized])
+
+
 def _smoke_sample(entries):
     """``SMOKE_PROMPTS_PER_SHAPE`` prompts spread across one shape's whole corpus slice.
 
@@ -3088,6 +3120,10 @@ def run_smoke(device):
     print(f"[phase18_extraction] base fingerprint: sha={ckpt['git_sha']} step={ckpt['step']}")
 
     corpus = build_corpus(tok)
+    # No tier is exempt from the clean room — the soft tier is excluded from the pre-registered
+    # GATE, never from this list. Read through the lazy import, so this module holds no fact
+    # strings at import time (D-03's static scan walks every string it does hold).
+    values = [fact.value for fact in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS]
     by_family = {}
     for entry in corpus["prompts"]:
         by_family.setdefault(entry["family"], []).append(entry)
@@ -3119,6 +3155,13 @@ def run_smoke(device):
                 "string that does not come back is a prompt the tokenizer cannot represent, and "
                 "every completion drawn from it would be about something else",
             )
+            # PERS-06 — nothing draws unchecked, and the check runs on the ids about to be
+            # dispatched rather than on the object they came from. D-16's partition: the whole
+            # prompt for A1 and A3, everything before A2's appended tail. `build_corpus` proved
+            # this moments ago on the same entries; re-proving it here costs microseconds and
+            # makes the drawing path self-guarding instead of trusting a caller.
+            base_ids = _guarded_span(entry)
+            recall.assert_no_value_in_prompt(tok, tok.decode(base_ids), values, prompt_ids=base_ids)
             drawn, stopped = recall.draw_all(
                 model,
                 tok,
@@ -3523,6 +3566,10 @@ def run_arm(arm, device):
     )
 
     taught = {fact.slot: fact.value for fact in factset.LOCKED_FACTS}
+    # No tier is exempt from the clean room — the soft tier is excluded from the pre-registered
+    # GATE, never from this list. The same set `build_corpus` guarded against, read through the
+    # lazy import so this module holds no fact strings at import time.
+    values = [fact.value for fact in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS]
     generation_context = adapter_disabled(model) if arm == ARMS[1] else contextlib.nullcontext()
 
     draws = []
@@ -3545,12 +3592,12 @@ def run_arm(arm, device):
         for entry in prompts:
             is_a2 = entry["family"] == "A2"
             realized = entry["realized_injection"]
-            _prove(
-                is_a2 == isinstance(realized, int),
-                f"family {entry['family']!r} carries realized_injection {realized!r}. D-11 records "
-                "that field as an int on every A2 entry and None everywhere else, and the scorer "
-                "reads the injected prefix from it",
-            )
+            # PERS-06 — nothing draws unchecked. D-16's partition, re-proved on the ids ACTUALLY
+            # dispatched rather than inherited from the process that wrote them: the corpus was
+            # guarded when it was built, but a run that trusts an artifact it did not check is a
+            # run whose clean-room claim rests on a file's provenance instead of on its bytes.
+            base_ids = _guarded_span(entry)
+            recall.assert_no_value_in_prompt(tok, tok.decode(base_ids), values, prompt_ids=base_ids)
             # D-15 appends the injected ids past `<|assistant|>` VERBATIM and D-18's
             # `realized_injection` is the measured length of that appended run, so the final
             # `realized` ids of an A2 prompt ARE the prefix. Decoded off the ARTIFACT rather than
@@ -3723,5 +3770,176 @@ def _self_check():
     )
 
 
-if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
-    _self_check()
+# =============================================================================================
+# ===== main() — ONE mode per invocation, and NO WAY to run two arms (D-07 / T-18-10-04) ======
+# =============================================================================================
+
+_USAGE = (
+    "usage: python scripts/phase18_extraction.py (--smoke | --corpus | --arm ARM | --report)\n"
+    "\n"
+    "  --smoke        D-12 pre-flight on the UN-ADAPTED base at checkpoints/convbase_slim.pt.\n"
+    "                 Measures draws_per_min per prompt shape and writes\n"
+    "                 results/phase18_preflight_report.md. Touches no adapter and reports no\n"
+    "                 quantity from the taught column.\n"
+    "  --corpus       build the 864 guarded attack prompts and write results/phase18_corpus.json.\n"
+    "                 Refuses to overwrite an existing corpus: it is the join key every arm\n"
+    "                 record carries, so regenerating it after a run silently repoints the run.\n"
+    "  --arm ARM      run EXACTLY ONE arm and write results/phase18_arm_ARM.json. ARM must be one\n"
+    "                 of the two pre-registered names. Refuses to overwrite an existing record.\n"
+    "  --report       assemble results/phase18_extraction_report.md from the arm records already\n"
+    "                 on disk.\n"
+    "\n"
+    "  (no arguments) run the CPU-only admissibility self-check and exit. No model, no\n"
+    "                 checkpoint, no tokenizer, no device.\n"
+    "\n"
+    "There is deliberately NO mode that runs more than one arm. D-07 pairs the two arms by\n"
+    "dispatching one recorded prompt object in two FRESH processes, and the only structural way\n"
+    "to guarantee that split is to make a single process incapable of running two. A convenience\n"
+    "flag would turn the process split from a PROPERTY of this driver into a convention an\n"
+    "operator is trusted to follow — and the operator who most needs the guarantee is the one\n"
+    "running an eight-hour job at midnight."
+)
+
+
+def build_parser():
+    """The argument surface, as a spec a test can read: four mutually exclusive modes, no fifth.
+
+    ``--arm`` is constrained to ``ARMS`` by argparse itself, so a misspelled arm exits non-zero
+    with the two legal names printed rather than reaching a dispatch that would have to invent a
+    refusal. Exactly one mode is REQUIRED at the parser level; the argumentless invocation is
+    handled BEFORE the parser is reached, under ``__main__``, so that "run the CPU self-check" and
+    "fall through to something reasonable" stay different things. The reasonable thing here would
+    be a multi-hour generation run, and no flagless command should ever start one.
+
+    Every option is a store_true or a constrained choice. Nothing takes a list, nothing takes a
+    count, and nothing has a default that changes what gets measured.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="phase18_extraction.py",
+        description=(
+            "Phase 18 black-box adversarial extraction audit — ONE mode per process, "
+            "ONE arm per process."
+        ),
+        epilog=_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--smoke",
+        action="store_true",
+        help="D-12 pre-flight on the un-adapted base; measures throughput per prompt shape",
+    )
+    mode.add_argument(
+        "--corpus",
+        action="store_true",
+        help="build and write results/phase18_corpus.json, the input both arms dispatch",
+    )
+    mode.add_argument(
+        "--arm",
+        choices=ARMS,
+        help="run the single named arm in this process and write its record",
+    )
+    mode.add_argument(
+        "--report",
+        action="store_true",
+        help="assemble the report from the arm records already on disk",
+    )
+    return parser
+
+
+def run_corpus():
+    """``--corpus`` — build D-02/D-11's 864 prompts and write the artifact both arms dispatch.
+
+    The clobber refusal is the point of having a mode at all rather than a one-line script. The
+    corpus sha256 is the join key every arm record carries, so regenerating it between the two
+    arms — or after them — would silently repoint every completion at prompts nothing was drawn
+    from, while leaving two records that still look paired.
+
+    Serialized through ``canonical_json`` with NO trailing newline, because plan 18-14's standing
+    guard re-derives the corpus from this same pinned builder and asserts BYTE equality against the
+    committed file. A newline added for tidiness would make that guard fail for a reason that has
+    nothing to do with the corpus.
+    """
+    import phase14_recall as recall  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    from personacore.tokenizer import from_json
+
+    _prove(
+        not CORPUS_PATH.exists(),
+        f"{CORPUS_PATH} already exists. The corpus is the INPUT both arms dispatch and its sha256 "
+        "is the join key their records carry, so rebuilding it would repoint every completion at "
+        "prompts nothing was drawn from while leaving two records that still look paired. Delete "
+        "it in a reviewed commit if it genuinely must be regenerated",
+    )
+    tok = from_json(recall.TOKENIZER_PATH)  # FROZEN production artifact — never retrained.
+    corpus = build_corpus(tok)
+    CORPUS_PATH.write_text(canonical_json(corpus), encoding="utf-8")
+    digest = corpus_sha256(corpus)
+    print(f"[phase18_extraction] wrote {CORPUS_PATH}: {len(corpus['prompts'])} prompts, {digest}")
+    return {"path": str(CORPUS_PATH), "entries": len(corpus["prompts"]), "sha256": digest}
+
+
+def main(argv=None):
+    """Dispatch — exhaustive over the four modes, with NO default branch.
+
+    The ``run_condition`` register ``phase17_isolation.main`` established: the target is proved to
+    be in its expected tuple FIRST, and a result is proved to have been produced LAST. A name in
+    the parser's choices with no dispatch branch means the pre-registration and this dispatch have
+    drifted apart, and the mode would silently contribute nothing while looking like it ran.
+
+    The device is resolved ONCE here and threaded into the two modes that load a model; each of
+    them runs its own ``preflight_device(strict=True)``, because the resolved summary is part of
+    the provenance THEY record and a summary passed down from here would describe a check the
+    record cannot show was made.
+    """
+    args = build_parser().parse_args(argv)
+    result = None
+    if args.smoke:
+        result = run_smoke(_resolved_device())
+    elif args.corpus:
+        result = run_corpus()
+    elif args.arm is not None:
+        _prove(
+            args.arm in ARMS,
+            f"--arm {args.arm!r} is not one of the pre-registered {ARMS}",
+        )
+        result = run_arm(args.arm, _resolved_device())
+    elif args.report:
+        # The renderer is the LAST driver commit (plan 18-11) and may not have landed yet. A
+        # NameError here would send an operator to read a 3,000-line pinned driver to discover a
+        # plan ordering; this says the same thing in one line.
+        _prove(
+            "run_report" in globals(),
+            "--report needs the report renderer, which is the last commit of this "
+            "pre-registration and has not landed yet. Nothing is wrong with your invocation and "
+            "nothing on disk is missing: there is no report to assemble until both arm records "
+            "exist anyway. Run --smoke, --corpus or --arm",
+        )
+        result = run_report()  # noqa: F821 — defined by the renderer commit; proved above.
+    _prove(
+        result is not None,
+        "the selected mode produced no result — a name in the parser's choices with no dispatch "
+        "branch means the pre-registration and this dispatch have drifted apart, and the run "
+        "would look like it happened while contributing nothing",
+    )
+    return result
+
+
+def _resolved_device():
+    """The ONE device resolution both model-loading modes go through."""
+    from personacore.config import RuntimeConfig
+
+    return RuntimeConfig().device
+
+
+if __name__ == "__main__":  # pragma: no cover - the modes and the self-check, not a test suite
+    # Argumentless runs the CPU-only self-check rather than erroring on a missing mode. The parser
+    # requires a mode by design, so this branch is what keeps `python scripts/phase18_extraction.py`
+    # meaning "prove the admissibility gate still works on this laptop" — a check that costs
+    # seconds and needs no model, which is the whole reason D-27's mutation proof lives in-file.
+    if sys.argv[1:]:
+        main()
+    else:
+        _self_check()

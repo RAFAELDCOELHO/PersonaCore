@@ -271,6 +271,7 @@ def test_erasure_gate_untouched():
 _IMPORT_TIME_CALLEES = (
     "_self_check",  # the __main__ self-check — guarded by __name__, runs on no import
     "assert_holm_family_reachable",  # D-31's proof — this is what must run at import
+    "main",  # the __main__ dispatch — guarded by __name__, runs on no import
     "pathlib.Path",  # _REPO_ROOT
     "pathlib.Path(__file__).resolve",  # _REPO_ROOT
     "persistence.sign_test_exact",  # BEST_ACHIEVABLE_P, derived from the instrument
@@ -1718,4 +1719,84 @@ def test_one_corpus_two_arms():
         "the driver carries a force-style override. An arm record is the completions every "
         "published rate was scored from; a flag that replaces one turns a rerun on drifted code "
         "into a silent substitution"
+    )
+
+
+def test_no_multi_arm_mode():
+    """T-18-10-04 — a single process is INCAPABLE of running two arms, and the parser proves it.
+
+    D-07's pairing rests on two fresh processes dispatching one recorded prompt object. A
+    ``--both`` convenience flag would turn that from a property of this driver into a convention an
+    operator is trusted to follow at midnight, eight hours into a job — so the guarantee is that
+    the surface offers no way to express it. Three separate ways it could be expressed are closed
+    here: a fifth mode, an ``--arm`` that accepts a name outside the pre-registered pair, and any
+    option that accumulates or takes more than one value.
+
+    The mutually exclusive group is read off argparse's own structure rather than off ``--help``
+    text, because the text is what a reader checks and the structure is what argparse enforces.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    parser = extraction.build_parser()
+
+    groups = parser._mutually_exclusive_groups
+    assert len(groups) == 1, (
+        f"the parser has {len(groups)} mutually exclusive groups. Two groups is two independent "
+        "one-of choices, and a mode from each could be selected in the same invocation"
+    )
+    group = groups[0]
+    assert group.required, (
+        "the mode group is not required, so an argumentless parse would fall through to a default "
+        "branch. The reasonable-looking default here is a multi-hour generation run"
+    )
+
+    options = sorted(action.dest for action in group._group_actions)
+    assert options == ["arm", "corpus", "report", "smoke"], (
+        f"the parser's modes are {options}, not the four this driver dispatches. A fifth mode with "
+        "no dispatch branch would contribute nothing while looking like it ran; a missing one "
+        "would be unreachable from the terminal that operates this phase"
+    )
+
+    for action in group._group_actions:
+        assert action.nargs in (0, None), (
+            f"--{action.dest} takes nargs={action.nargs!r}. An option that accepts more than one "
+            "value is an option that accepts two arms, which is exactly the mode this parser "
+            "exists not to have"
+        )
+        assert type(action).__name__ != "_AppendAction", (
+            f"--{action.dest} appends. Repeating it would accumulate arms into a list, and the "
+            "process split would depend on the operator not repeating a flag"
+        )
+
+    arm = next(action for action in group._group_actions if action.dest == "arm")
+    assert tuple(arm.choices) == extraction.ARMS, (
+        f"--arm accepts {tuple(arm.choices)}, not the pre-registered {extraction.ARMS}. The arm "
+        "name is the axis every ASR_on - ASR_off contrast is taken over"
+    )
+
+    # A repeated --arm does not accumulate: argparse overwrites, so the parsed value is ONE
+    # string and the process still runs one arm. Asserted rather than assumed, because the
+    # failure it would represent — a list of arms reaching run_arm — is the mode this test
+    # exists to prove absent, and "the last one wins" is what makes that impossible to express.
+    repeated = parser.parse_args(["--arm", "adapter-on", "--arm", "adapter-off"])
+    assert repeated.arm == "adapter-off" and isinstance(repeated.arm, str), (
+        f"repeating --arm produced {repeated.arm!r}. A collection here would reach run_arm as "
+        "two arms in one process, and D-07's pairing rests on the split being structural"
+    )
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--smoke", "--arm", "adapter-on"])
+    with pytest.raises(SystemExit):
+        parser.parse_args([])
+
+    for argv, dest in (
+        (["--smoke"], "smoke"),
+        (["--corpus"], "corpus"),
+        (["--report"], "report"),
+    ):
+        parsed = parser.parse_args(argv)
+        assert getattr(parsed, dest) is True and parsed.arm is None
+    assert parser.parse_args(["--arm", extraction.ARMS[1]]).arm == extraction.ARMS[1]
+
+    assert "NO mode that runs more than one arm" in extraction._USAGE, (
+        "_USAGE does not record WHY there is no two-arm mode. The next person to find the split "
+        "inconvenient will read this text, and an unexplained absence reads as an oversight"
     )
