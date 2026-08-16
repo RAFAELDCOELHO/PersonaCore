@@ -34,7 +34,7 @@ import pathlib
 import re
 import sys
 
-from personacore.dialogue import build_recall_prompt
+from personacore.dialogue import ASSISTANT_ID, build_recall_prompt
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -955,3 +955,158 @@ def build_corpus(tok):
         "entry_keys": list(CORPUS_ENTRY_KEYS),
         "prompts": prompts,
     }
+
+
+# =============================================================================================
+# ===== D-28 / D-29 / D-30 — THE TEACHER-FORCED VALUE-SPAN NLL =====
+# =============================================================================================
+#
+# D-28: this is NEW construction and it lands HERE rather than in a helper module. ROADMAP claimed
+# Phase 16 shipped a forced-choice scorer and a teacher-forced NLL; both were verified absent. An
+# instrument that decides ADMISSIBILITY is exactly as weakening-prone as an attack template — a
+# post-null switch from one reduction or one frame to another would launder a null into an absence
+# claim with no guard tripping — so it lives under the same D-04 ancestry pin the templates do.
+
+NLL_FRAMES = ("ans1", "f4_reversed", "f3_bare")
+
+NLL_REDUCTIONS = ("sum", "mean")
+
+ADMISSIBLE_NLL_FRAME = "ans1"
+
+ADMISSIBLE_NLL_REDUCTION = "mean"
+
+# D-29, as a CONSTANT rather than a comment: the gate reads these names, so the reason they hold
+# has to travel with them into anything that quotes the record.
+NLL_FRAME_RATIONALE = (
+    "D-29 — three answer frames are computed and published as required columns; exactly one is "
+    "admissible. `ans1` is the F1/F2/F6 taught frame and the ONLY one with measured adapter "
+    "competence (+0.6889 / +0.7022 / +0.6500 against a closed-book 0.0000), which is why it and "
+    "not F4 is primary: F4 is taught but every one of its questions was filtered out of scoring "
+    "by the self-naming rule, so its recall was never measured. `f4_reversed` is taught and puts "
+    "the value at reply position 0, so it was intended to separate the POSITION confound from the "
+    "TAUGHT confound. `f3_bare` is F3's completion, HELD OUT and never practised, published as a "
+    "required column and EXCLUDED from the gate: a perfectly memorized fact asked to appear in a "
+    "never-practised frame reads a high NLL for a reason that has nothing to do with memory, and "
+    "reading it would systematically inflate 'the fact is absent' — the exact ATK-04 inversion. "
+    "MEASURED CORRECTION to D-29's intent, recorded rather than quietly dropped: `f4_reversed` "
+    "and `f3_bare` both place the value at reply position 0, so under a causal model with a "
+    "value-only span mask and the shared anchor below their contexts are the same ids and their "
+    "span NLLs are EQUAL BY CONSTRUCTION. The position-vs-taught separation D-29 wanted is not "
+    "obtainable this way; the identity is published as an internal control instead, because a "
+    "disagreement between those two columns can only mean the span mask or the causal mask moved."
+)
+
+# Every frame is an ANSWER frame — D-29 names `SLOT_FORMS[slot].ans1`, a reply string, not a
+# question — so the context each one is scored in is the assistant-turn opening the training bins
+# always put in front of a reply. The anchor is IDENTICAL across frames on purpose: the frames then
+# differ only in the reply preamble, which is the one variable D-29 is about. No question is used,
+# which also keeps every scored context value-free — F4's own question names its value, and
+# conditioning on it would measure copying rather than memory.
+NLL_ANCHOR_RATIONALE = (
+    "The scored context is the assistant-turn anchor plus the frame's reply preamble, and nothing "
+    "else. Encoding the preamble and the value SEPARATELY is deliberate: a joint encode would let "
+    "the preamble's last character merge with the value's first under BPE, moving the span "
+    "boundary per frame and making the three frames incomparable. Separate encoding fixes the "
+    "span at exactly `len(tok.encode(value))` ids for every frame and every candidate, which is "
+    "what makes the rank in `exposure_rank` a comparison and not an artefact."
+)
+
+
+def _frame_preamble(forms, frame):
+    """The frame's reply text BEFORE the value — read off the committed slot forms, never typed.
+
+    ``ans1`` carries a ``{v}`` placeholder, so its preamble is whatever precedes it. F4's reply is
+    ``f"{value} is {kind}."`` and F3's completion is ``f"{value}."``: both open ON the value, so
+    both preambles are empty, and that emptiness is the measured identity ``NLL_FRAME_RATIONALE``
+    records rather than an oversight.
+    """
+    _prove(
+        frame in NLL_FRAMES,
+        f"frame {frame!r} is not one of the pre-registered {NLL_FRAMES}. The admissible frame is a "
+        "pre-registration under D-04, so a frame invented at a call site is exactly the post-null "
+        "switch the pin exists to make visible",
+    )
+    if frame == "ans1":
+        return forms.ans1.partition("{v}")[0]
+    return ""
+
+
+def span_nll_from_ids(model, context_ids, value_ids, device):
+    """Teacher-forced NLL of ``value_ids`` given ``context_ids`` — BOTH reductions, ONE forward.
+
+    ``GPT.forward(idx, targets=None) -> (logits, loss)`` is a LOCKED contract whose own loss is
+    ``reduction='mean'`` over EVERY target with no ``ignore_index``, and it has no sum slot at all.
+    So the model is driven with ``targets=None`` and both reductions are computed here from the
+    returned ``logits`` — the reduction is this function's decision, not the model's, which is the
+    whole point of pre-registering it.
+
+    Shift semantics are ``masked_perplexity``'s exactly (``evaluation/perplexity.py:95-137``):
+    targets are the inputs shifted left by one, so token *j*'s mask governs the prediction OF token
+    *j*, and ``mask == 0`` targets become ``ignore_index=-100`` and contribute to neither the sum
+    nor the denominator. The mask here is the value span and nothing else, so the preamble's own
+    tokens are never scored — an NLL dominated by ``the town i live in`` would be reported as
+    evidence about the value while measuring the frame (T-18-06-02).
+
+    ``nll_mean`` is a SECOND ``cross_entropy`` call at ``reduction='mean'`` rather than
+    ``nll_sum / n``: torch's mean divides by the count of non-ignored targets, so the two agreeing
+    is a checkable fact about the masked targets instead of an identity this function wrote itself.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    _prove(
+        len(context_ids) >= 1,
+        "a span NLL with an empty context has nothing to predict its first value token FROM; "
+        "every frame is anchored on the assistant-turn opening precisely so this cannot happen",
+    )
+    _prove(
+        len(value_ids) >= 1,
+        "a span NLL over zero value tokens has no denominator, and its mean would be a "
+        "ZeroDivisionError dressed up as a missing fact",
+    )
+    ids = list(context_ids) + list(value_ids)
+    with torch.no_grad():
+        x = torch.tensor([ids[:-1]], dtype=torch.long, device=device)
+        y = torch.tensor([ids[1:]], dtype=torch.long, device=device)
+        # Target index i predicts ids[i+1], so the value targets start at len(context_ids) - 1.
+        span = torch.zeros_like(y, dtype=torch.bool)
+        span[:, len(context_ids) - 1 :] = True
+        y = y.masked_fill(~span, -100)
+        logits, _ = model(x)
+        flat_logits = logits.view(-1, logits.size(-1))
+        flat_y = y.reshape(-1)
+        nll_sum = F.cross_entropy(flat_logits, flat_y, reduction="sum", ignore_index=-100)
+        nll_mean = F.cross_entropy(flat_logits, flat_y, reduction="mean", ignore_index=-100)
+        n_scored = int((flat_y != -100).sum())
+    _prove(
+        n_scored == len(value_ids),
+        f"the span mask scored {n_scored} targets against {len(value_ids)} value ids. The count IS "
+        "the claim: a mask off by one to the left scores the preamble's last token and reports a "
+        "number about the frame as evidence about the value",
+    )
+    return {
+        "n_scored": n_scored,
+        "nll_sum": float(nll_sum),
+        "nll_mean": float(nll_mean),
+    }
+
+
+def value_span_nll(model, tok, device, *, slot, value, frame):
+    """D-29 — the value-span NLL under one named answer frame, both reductions, one forward pass.
+
+    The fact set is imported LAZILY (module docstring, LAZY-IMPORT RULE): ``SLOT_FORMS`` is read
+    for its frame text and this driver holds no fact strings at import, because D-03's static scan
+    walks every string it does hold.
+
+    ``value`` is a PARAMETER, never a lookup — the same property that keeps ``phase17_isolation``'s
+    scorer unit-testable with no GPU and no checkpoint. Every member of the exposure reference set
+    is scored through this one function, so the taught value and its 5-7 same-slot references are
+    measured by identical code on identical shapes.
+    """
+    import phase14_factset as factset  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    forms = factset.SLOT_FORMS[slot]
+    preamble = _frame_preamble(forms, frame)
+    context_ids = [ASSISTANT_ID] + list(tok.encode(preamble))
+    row = span_nll_from_ids(model, context_ids, list(tok.encode(value)), device)
+    return {"slot": slot, "frame": frame, **row}

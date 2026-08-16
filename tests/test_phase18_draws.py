@@ -32,15 +32,26 @@ while leaving the seed arithmetic in the source looking correct.
 ``test_strided_seeds_are_disjoint`` is the other half: D-06 replaces family zero's ``SEED + index``
 with ``SEED + index*K`` for the attacks, and the collapse it removes is a MEASURED quantity — 216
 questions x 64 draws land on 279 distinct seeds unstrided, and on all 13,824 strided.
+
+**The second half of this file is the INSTRUMENT layer (D-28/D-29/D-30).** The teacher-forced
+value-span NLL and the Carlini exposure rank decide whether a zero is *admissible*, which makes
+them exactly as weakening-prone as an attack template — so they live inside the D-04 pin and their
+semantics are fixed here. Four things are pinned that a reading of the source cannot establish:
+that the scored span is the VALUE and nothing else, that the gate's frame is the taught one and
+never the held-out bare frame, that the eight per-slot reference sets are the measured 6-8, and
+that on the two spread-0 slots the sum-ordered and mean-ordered rankings are IDENTICAL — the
+falsifiable internal control D-30 asks for, where a disagreement is a bug and never a finding.
 """
 
 import importlib.util
+import math
 import pathlib
 import sys
 
+import pytest
 import torch
 
-from personacore.dialogue import build_recall_prompt
+from personacore.dialogue import ASSISTANT_ID, build_recall_prompt
 from personacore.tokenizer import from_json
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -166,3 +177,97 @@ def test_strided_seeds_are_disjoint(fake_lm):
 
     for src in (0, 1, 2, 111):
         assert recall.question_seed(src * K) == recall.SEED + src * K
+
+
+# =============================================================================================
+# ===== D-28 / D-29 / D-30 — the span NLL and the exposure rank ================================
+# =============================================================================================
+#
+# The fact set is loaded LAZILY here for the same reason the pinned driver loads it lazily: a
+# module-level import would put the locked values in this file's import surface, and the values are
+# read off the committed material rather than retyped so a test cannot keep passing after the set
+# it guards has moved.
+
+
+def _locked_facts():
+    """The eight core taught facts, read through the committed fact set — never transcribed."""
+    factset = _load("phase14_factset")
+    return factset.LOCKED_FACTS
+
+
+def test_nll_is_span_masked(fake_lm):
+    """D-29/T-18-06-02: the scored targets are the VALUE tokens and nothing but the value tokens.
+
+    Two independent properties, because either alone is satisfiable by a broken instrument. The
+    COUNT — an NLL over a whole reply frame would score the preamble too and would then report a
+    number about ``my name is`` as evidence about the value. And the INVARIANCE — under ``fake_lm``
+    the logits at position *t* are a pure hash of the id at position *t*, so two contexts sharing
+    their FINAL token predict the span identically; a mask that leaked one target to the left would
+    pick up the differing preamble and the equality would break.
+
+    The mean/sum relation is checked against the two independent ``F.cross_entropy`` reductions,
+    not against ``sum / n`` recomputed here, so it is a fact about the masked targets rather than
+    an identity this test wrote itself.
+    """
+    for fact in _locked_facts():
+        expected = len(_TOKENIZER.encode(fact.value))
+        for frame in extraction.NLL_FRAMES:
+            row = extraction.value_span_nll(
+                fake_lm, _TOKENIZER, "cpu", slot=fact.slot, value=fact.value, frame=frame
+            )
+            assert row["n_scored"] == expected, (
+                f"{fact.slot}/{frame} scored {row['n_scored']} targets against "
+                f"{expected} value ids — the span mask is not the value"
+            )
+            assert math.isfinite(row["nll_sum"])
+            assert row["nll_mean"] * row["n_scored"] == pytest.approx(row["nll_sum"], rel=1e-6)
+
+    # Preamble invariance: same final context token, different text before it.
+    value_ids = _TOKENIZER.encode(_locked_facts()[0].value)
+    tail = _TOKENIZER.encode("my name is ")
+    long_ctx = [ASSISTANT_ID] + _TOKENIZER.encode("well, i suppose ") + tail
+    short_ctx = [ASSISTANT_ID] + tail
+    assert len(long_ctx) > len(short_ctx)
+    long_row = extraction.span_nll_from_ids(fake_lm, long_ctx, value_ids, "cpu")
+    short_row = extraction.span_nll_from_ids(fake_lm, short_ctx, value_ids, "cpu")
+    assert long_row["n_scored"] == short_row["n_scored"] == len(value_ids)
+    assert long_row["nll_sum"] == pytest.approx(short_row["nll_sum"], rel=1e-9)
+
+
+def test_nll_frame_is_taught_not_bare(fake_lm):
+    """D-29: three frames are published, ``ans1`` is the gate's, and F3's bare frame never is.
+
+    The exclusion is the whole point. A perfectly memorized fact asked to appear in a frame it was
+    never practised in reads a high NLL for a reason that has nothing to do with memory, so a gate
+    reading ``f3_bare`` would systematically inflate "the fact is absent" — the exact ATK-04
+    inversion this instrument exists to prevent.
+
+    The last assertion records a MEASURED consequence of the construction rather than a design
+    intent. D-29 wanted ``f4_reversed`` to separate the position confound from the taught confound,
+    but both it and ``f3_bare`` put the value at reply position 0, so under a causal model with a
+    value-only span mask and the shared ``<|assistant|>`` anchor their contexts are the same ids
+    and their span NLLs are equal BY CONSTRUCTION — nothing after the span can reach it. Asserted
+    as a second internal control: a disagreement here means the span mask or the causal mask has
+    moved, never that F4 and F3 differ in memorization.
+    """
+    assert len(extraction.NLL_FRAMES) == 3
+    assert len(set(extraction.NLL_FRAMES)) == 3
+    assert extraction.ADMISSIBLE_NLL_FRAME == "ans1"
+    assert extraction.ADMISSIBLE_NLL_REDUCTION == "mean"
+    assert extraction.ADMISSIBLE_NLL_FRAME in extraction.NLL_FRAMES
+    assert extraction.ADMISSIBLE_NLL_REDUCTION in extraction.NLL_REDUCTIONS
+    assert "f3_bare" in extraction.NLL_FRAMES
+    assert extraction.ADMISSIBLE_NLL_FRAME != "f3_bare"
+
+    for fact in _locked_facts()[:2]:
+        scored = {
+            frame: extraction.value_span_nll(
+                fake_lm, _TOKENIZER, "cpu", slot=fact.slot, value=fact.value, frame=frame
+            )
+            for frame in extraction.NLL_FRAMES
+        }
+        assert tuple(scored) == extraction.NLL_FRAMES
+        assert scored["f4_reversed"]["nll_sum"] == pytest.approx(
+            scored["f3_bare"]["nll_sum"], rel=1e-12
+        )
+        assert scored["ans1"]["nll_sum"] != scored["f3_bare"]["nll_sum"]
