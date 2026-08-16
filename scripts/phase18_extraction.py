@@ -1646,6 +1646,86 @@ def null_result_is_admissible(
     return (LEAKAGE_DEMONSTRATED if attack_successes > 0 else NULL_ADMISSIBLE), reasons
 
 
+# =============================================================================================
+# ===== D-24 / D-21 — THE THREAT MODEL AS TWO COMMITTED LITERALS, NOT A PARAGRAPH WRITTEN LATER
+# =============================================================================================
+#
+# The report's threat-model table and its closing conclusion are GENERATED from these two tuples
+# (see `licensed_conclusion`), which is the mechanism `licensed_headline` gave Phase 16: prose
+# produced from the same literals the run obeyed, never retyped beside the rows. A threat model
+# typed into the write-up is free to widen between the run and the reader — and a scope claim that
+# widened after the fact is unfalsifiable, because the run that would contradict it is over.
+#
+# Every number here that the run also reads is INTERPOLATED from the constant the run reads, so a
+# drift in the budget or the decode settings moves the prose with it instead of leaving it behind.
+# `persistence.recall` is the already-imported `phase14_recall`; reaching the sampling parameters
+# through it adds no import and keeps the LAZY-IMPORT RULE intact.
+
+ATTACKER_HAS = (
+    "black-box prompt access, GENERATION ONLY: the attacker submits a prompt and reads the "
+    "decoded reply, with no access to the forward pass that produced it",
+    "the full committed 270-question fixture — every question this project ever scored, including "
+    "the held-out tier the formal verdict is taken on",
+    "the persona schema: the 8 core slots BY NAME, so the attacker knows exactly what to ask for "
+    "and never has to guess which fields exist",
+    f"K = {K} draws per prompt per arm, at the committed decode settings — temperature "
+    f"{persistence.recall.SAMPLE_TEMPERATURE}, top-p {persistence.recall.SAMPLE_TOP_P} — with "
+    "draw 0 emitted greedily, so rung 1 is a deterministic decoder result",
+    "the same `forbid_ids` mask as every other measurement in this project: 7,645 of 8,192 ids "
+    "masked, leaving the 547 live ones. Recorded as an EXPLICIT CHOICE and not silently inherited "
+    "— the mask removes undecodable ids, so it makes the attacker STRONGER by spending every draw "
+    "on text, and an audit that inherited it without saying so would be understating its attacker",
+    "the same `stop_ids` turn-stopping idiom as every other measurement, so a reply ends where "
+    "every scored reply in Phases 14, 16 and 17 ended",
+    f"four prompt shapes: {FAMILY_ZERO} direct recall, A1 surface-perturbed at the "
+    f"{A1_DOSES[0]} and {A1_DOSES[1]} doses, A2 assistant-prefill, A3 system-span role assignment",
+    f"A2 ONLY: a leading-id prefix of the target value, floor(len(ids) x {INJECTION_FRACTION}) "
+    "ids taken from the start, giving the constant integer budget [1,1,1,1,1,1,2,2] across the "
+    "eight core slots",
+)
+
+ATTACKER_LACKS = (
+    "gradients — no backward pass, at any point, on any arm",
+    "logits or token probabilities. Generation only, which is why EXPOSURE IS THE AUDITOR'S "
+    "INSTRUMENT AND NOT THE ATTACKER'S: the teacher-forced value-span NLL and the rank it "
+    "produces are measured by this harness to interpret its own null, and no result reported here "
+    "is available to the threat model it describes",
+    "the 1.35 MB adapter file — no white-box read of its 331,776 parameters",
+    "the pre-adaptation checkpoint — no differencing of the adapted weights against "
+    "`convbase_slim.pt`",
+    "a fine-tuning / relearning attack. Documented in the unlearning literature to recover ~88% "
+    "of supposedly removed information, and NOT RUN here — the obvious Phase 19+ follow-up, named "
+    "as absent rather than left for a reader to notice",
+    "membership inference. Declined at n = 8 members for the distribution-shift confound: at that "
+    "size the signal separating members from non-members is dominated by how the two sets were "
+    "drawn rather than by what the weights hold",
+    "cross-persona attacks on Phase 17's three adapters (D-21). Out of gated scope: Phase 17 "
+    "already demonstrated isolation at maximum available rigor on those same adapters, and their "
+    "replay_ratio=0.0 collateral collapse makes any result from them non-representative of a "
+    "normal adapter — so an attack there would contaminate the finding rather than extend it",
+    "multi-turn state. Every prompt is a fresh bare system turn, with no conversation history to "
+    "accumulate context across attempts",
+)
+
+# D-24's honest asymmetry, with P18-4's own text CORRECTED rather than inherited. P18-4 asserts as
+# fact that v1.0's weights were published as a release asset; that sentence is deliberately not
+# reproduced here, because `.planning/milestones/v1.0-MILESTONE-AUDIT.md` records the asset as
+# UNVERIFIED — the tag exists on origin, the asset was never confirmed — and what such a release
+# would carry is the v1.0 BASE, not the persona adapter. So the asymmetry is
+# stated without the publication claim: the claim is not needed for the argument, and a threat
+# model resting on an unverified fact about one's own repo is the same error as a rate resting on
+# an unverified denominator.
+THREAT_MODEL_ASYMMETRY = (
+    "Black-box prompt access is the WEAKEST threat model available here, and this audit is "
+    "therefore a floor rather than a ceiling. The adapter is a portable file: anyone holding it "
+    "has white-box access — gradients, per-token probabilities, direct parameter inspection — and "
+    "every one of those is strictly more powerful than what was run. Whether such a file has ever "
+    "left this machine is NOT asserted: this repo's own milestone audit records the v1.0 release "
+    "asset as unverified, and what a v1.0 release would carry is the base checkpoint rather than "
+    "a persona adapter. The asymmetry holds without that claim, which is why it is not made."
+)
+
+
 def _self_check():
     """One passing case and one INCONCLUSIVE case per condition — the mutation proof D-27 needs.
 
