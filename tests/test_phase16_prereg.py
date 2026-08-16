@@ -60,6 +60,18 @@ PREREG_ARTIFACT = "scripts/erasure_gate.py"
 # makes this pin survivable.
 PHASE17_PREREG_ARTIFACT = "scripts/phase17_personas.py"
 
+# STAT-05: Phase 18's OWN pre-registration — and it is ONE file, not Phase 17's two (D-04). The
+# asymmetry is deliberate. Phase 17's split exists because ROADMAP SC2's ADAPT branch is a
+# SANCTIONED outcome in which persona values are replaced after a result exists, so pinning the
+# material would turn a planned outcome permanently red. Phase 18 has no equivalent: replacing an
+# attack template after seeing a null is the exact weakening ATK-03 exists to prevent, and an
+# unpinned file cannot tell a legitimate correction from that manoeuvre. So the templates, K, the
+# injection budget, the ASR ladder, the verdict prose and `null_result_is_admissible()` all sit
+# inside this one pinned file, and there is no unpinned sibling to move a rule into. The legitimate
+# need a split would serve — finding a template the 13.9M model cannot parse — is discharged before
+# the pin by the D-12 pre-flight smoke.
+PHASE18_PREREG_ARTIFACT = "scripts/phase18_extraction.py"
+
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
@@ -213,4 +225,88 @@ def test_phase17_prereg_is_frozen_before_every_phase17_result():
         f"no committed Phase 17 result was checked — `git ls-files results/phase17_*` matched "
         f"{tracked_artifacts}. Plan 17-07 committed results/phase17_personas_report.md, so an "
         "empty match set now means the artifacts moved and this STAT-05 guard is green and blind."
+    )
+
+
+def test_phase18_prereg_is_frozen_before_every_phase18_result():
+    """STAT-05: Phase 18's pin never moved after a Phase 18 number existed.
+
+    The line-for-line twin of the Phase 17 guard above, over `results/phase18_*`, and derived from
+    history for the same reason: every commit touching the pre-registration must be an ancestor of
+    every result's first-add, so a LATER edit is caught and not merely a wrong first commit.
+
+    **What this pins is larger than Phase 17's, deliberately.** Phase 17 pinned only the gate
+    constants and left `scripts/phase17_persona_facts.py` free, because ROADMAP SC2's ADAPT branch
+    is a sanctioned outcome in which persona values are replaced after a result exists. Phase 18's
+    D-04 has no equivalent: the attack templates, K, the injection budget, the ASR ladder, the
+    verdict prose and the admissibility rule are ALL inside the single pinned file, because
+    replacing a template after seeing a null is the exact weakening ATK-03 exists to prevent and no
+    unpinned file can tell that manoeuvre from a legitimate fix. The cost is paid on purpose: after
+    the pin, changing an attack is a reviewed dated commit that reddens this guard.
+
+    **Vacuous today, and that is a recorded state rather than a hidden one.** D-04 fixes the commit
+    order as smoke -> pin -> corpus -> run -> results, so at the moment the pin lands there are
+    zero `results/phase18_*` artifacts and `checked` is 0 — the product assertion below reads
+    `0 == n * 0` and is green having compared nothing. The closing assertion is what keeps that
+    from surviving the artifacts' arrival: it ties `checked` to whether anything was tracked at
+    all, so the first committed Phase 18 result makes a still-empty match set red instead of
+    quietly green. That is failure mode 2 from this module's header, arriving in the half that has
+    not yet had anything to check.
+
+    `V3_ARTIFACT_GLOBS` is NOT widened — it already carries `results/phase18_*`, and the assertion
+    below is what stops this test and that tuple drifting into naming two different things.
+    """
+    artifact_glob = "results/phase18_*"
+    assert artifact_glob in V3_ARTIFACT_GLOBS, (
+        f"{artifact_glob} is not in V3_ARTIFACT_GLOBS {V3_ARTIFACT_GLOBS} — this guard and the "
+        "erasure-rule guard above would be watching two different sets of paths"
+    )
+
+    # Same reason as the two guards above: a shallow clone does not hold the earlier commit
+    # objects, so it cannot answer an ancestry question — it can only fail to find one.
+    assert _git("rev-parse", "--is-shallow-repository") == "false", (
+        "shallow clone: the pre-registration commit objects are absent, so this guard cannot "
+        "distinguish 'the ordering holds' from 'the ordering was never checked'. "
+        "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+    )
+
+    prereg_commits = _git("log", "--format=%H", "--", PHASE18_PREREG_ARTIFACT).split()
+    assert prereg_commits, (
+        f"{PHASE18_PREREG_ARTIFACT} has no commits — this guard would be scanning a "
+        "pre-registration that does not exist, which is green and blind in the worst possible "
+        "place. Plan 18-03 Task 1 commits it."
+    )
+
+    tracked_artifacts = _git("ls-files", artifact_glob).split()
+
+    checked = 0
+    for artifact in tracked_artifacts:
+        adds = _git("log", "--diff-filter=A", "--format=%H", "--", artifact).split()
+        # git log is newest-first, so the commit that ADDED the file is the last entry. Taking the
+        # earliest add is what makes a delete-and-re-add cycle unable to launder the ordering.
+        first_add = adds[-1]
+        for prereg in prereg_commits:
+            subprocess.run(
+                ("git", "merge-base", "--is-ancestor", prereg, first_add),
+                cwd=_ROOT,
+                check=True,
+            )
+            checked += 1
+
+    assert checked == len(prereg_commits) * len(tracked_artifacts), (
+        f"checked {checked} pairs but {len(prereg_commits)} pre-registration commit(s) x "
+        f"{len(tracked_artifacts)} tracked artifact(s) is "
+        f"{len(prereg_commits) * len(tracked_artifacts)} — a `git ls-files` pattern that matches "
+        "nothing while artifacts sit on disk would otherwise make this green having checked "
+        "nothing."
+    )
+    # The product above is satisfied by 0 == n * 0. Today both sides ARE zero and that is correct:
+    # D-04 forbids a `results/phase18_*` artifact existing before the pin is complete. This ties
+    # the two together so the equivalence, not the count, is what is asserted — green while no
+    # artifact is tracked, and demanding a non-zero `checked` from the first one onward.
+    assert bool(checked) == bool(tracked_artifacts), (
+        f"checked {checked} pair(s) against {len(tracked_artifacts)} tracked artifact(s) matching "
+        f"`git ls-files {artifact_glob}` — those disagree, so either committed Phase 18 results "
+        "went unchecked or the ancestry loop ran on paths the match set does not contain. A "
+        "STAT-05 guard that checks zero artifacts once results exist is green and blind."
     )
