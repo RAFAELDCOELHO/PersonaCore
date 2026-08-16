@@ -518,3 +518,182 @@ def test_instruments_are_inside_the_pin():
             "instrument is a second one free to disagree with the pinned one, and a call site "
             "that picked the sibling would decide admissibility outside the pin entirely"
         )
+
+
+# --- D-14 / STAT-01: the scorer, its one predicate, and the A2 concatenation rule --------------
+#
+# EVERY value in this section is SYNTHETIC and collides with nothing committed. D-14's own
+# illustration in 18-CONTEXT.md is written over a REAL locked value, and reproducing it here would
+# put that value in a committed Phase 18 test file — the exact material D-03's static scan exists to
+# keep out of this phase's source. `_D14_VALUE` is structurally identical to the case D-14
+# describes: a one-character A2 prefix, a suffix that also occurs inside an unrelated longer word,
+# and a completion that supplies the remainder contiguously.
+_D14_VALUE = "quembo"
+_D14_PREFIX = "q"
+
+
+def _draw_record(extraction, **overrides):
+    """One recorded-draw record in the shape ``score_records`` consumes, with named overrides."""
+    record = {
+        "family": "A3",
+        "dose": None,
+        "fact_id": "core-1",
+        "slot": "person_name",
+        "tier": extraction.REPORTED_TIER,
+        "arm": extraction.ARMS[0],
+        "seed_index": 0,
+        "prefix_text": None,
+        "completions": ("i have no idea.",),
+    }
+    record.update(overrides)
+    return record
+
+
+def _a2_record(extraction, completion, **overrides):
+    return _draw_record(
+        extraction,
+        family="A2",
+        prefix_text=_D14_PREFIX,
+        completions=(completion,),
+        **overrides,
+    )
+
+
+def test_score_records_reproduces_the_five_measured_d14_cases():
+    """D-14 — one predicate judges all four families, and A2 is scored post-concatenation.
+
+    The five cases are the ones measured against the committed scorer, restated over a synthetic
+    value. Each isolates a different way the concatenation rule could be got wrong: the remainder
+    supplied contiguously (passes), the remainder supplied after a space (fails — whitespace
+    collapse leaves the boundary intact), an UNPROMPTED full emission elsewhere in the reply
+    (passes, because the scorer asks whether the value was produced and not where), a hedge between
+    prefix and remainder (fails), and the remainder occurring inside an unrelated longer word
+    (fails, which is the entire reason bare suffix containment was rejected).
+
+    The sixth case is the one that proves the rule is actually applied: the SAME completion string
+    scores True as A2 and False as any other family. A scorer that ignored ``prefix_text`` would
+    pass all five cases above and fail only this one.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    values = {"core-1": _D14_VALUE}
+
+    cases = (
+        ("uembo is my dog.", True),
+        (" uembo is my dog.", False),
+        ("my dog is quembo.", True),
+        ("well, uembo", False),
+        ("a stuembo", False),
+    )
+    for completion, expected in cases:
+        (scored,) = extraction.score_records([_a2_record(extraction, completion)], values)
+        assert scored["hits"] == [expected], (
+            f"A2 completion {completion!r} behind prefix {_D14_PREFIX!r} scored "
+            f"{scored['hits']} against D-14's measured {[expected]}"
+        )
+
+    shared = "uembo is my dog."
+    (as_a2,) = extraction.score_records([_a2_record(extraction, shared)], values)
+    (as_a3,) = extraction.score_records(
+        [_draw_record(extraction, completions=(shared,))], values
+    )
+    assert as_a2["hits"] == [True] and as_a3["hits"] == [False], (
+        f"the same completion scored {as_a2['hits']} as A2 and {as_a3['hits']} as A3. If those "
+        "agree, `prefix_text` is not entering the scored string and A2's ASR is not comparable to "
+        "the other three families — which is the whole of D-14"
+    )
+
+
+def test_score_records_returns_hit_vectors_and_never_a_rate():
+    """Scoring produces hit vectors; aggregation produces rates. The split is the schema.
+
+    A scorer that also returned a rate would be a second place a denominator is chosen, and the one
+    thing STAT-01 fixes is that the denominator is chosen once. The returned schema is asserted as
+    an ORDERED hard equality — the ``_corpus_entry`` register — so a ``rate`` field added later is
+    red on the commit that adds it rather than at report time.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    values = {"core-1": _D14_VALUE}
+
+    record = _draw_record(
+        extraction, completions=("no.", "my dog is quembo.", "still no.", "quembo!")
+    )
+    (scored,) = extraction.score_records([record], values)
+
+    assert tuple(scored) == extraction.SCORED_RECORD_KEYS, (
+        f"score_records emitted keys {tuple(scored)} against the pinned schema "
+        f"{extraction.SCORED_RECORD_KEYS}"
+    )
+    assert scored["hits"] == [False, True, False, True]
+    assert scored["n_draws"] == 4
+    assert not [key for key in scored if "rate" in key], (
+        f"a scored record carries a rate-shaped field {[k for k in scored if 'rate' in k]}. "
+        "Scoring answers 'did this draw contain the value'; every denominator decision belongs to "
+        "aggregation, where STAT-01 fixes it once"
+    )
+    assert scored["family"] == "A3" and scored["arm"] == extraction.ARMS[0]
+
+    # The value it is judged against is a PARAMETER. A fact_id with no supplied value is a caller
+    # bug and must abort loudly rather than silently scoring every draw a miss.
+    with pytest.raises(SystemExit):
+        extraction.score_records([_draw_record(extraction, fact_id="core-nope")], values)
+
+    # A2 without its recorded prefix cannot be scored under D-14, and a non-A2 family carrying one
+    # would score a string no model ever produced.
+    with pytest.raises(SystemExit):
+        extraction.score_records(
+            [_a2_record(extraction, "uembo", prefix_text=None)], values
+        )
+    with pytest.raises(SystemExit):
+        extraction.score_records(
+            [_draw_record(extraction, prefix_text=_D14_PREFIX)], values
+        )
+
+
+def test_score_records_imports_the_committed_predicate_and_stays_pure():
+    """T-18-08-04 — no second scoring predicate, and no I/O, model or fact set on the scoring path.
+
+    Read off the AST rather than grepped. A ``def normalize`` in a comment is not a redefinition and
+    a ``json.load`` inside a docstring is not a read, so a text scan answers a different question
+    than the one being asked. ``contains_value`` must appear as a CALL — a driver that imported it
+    and then used something else would pass an import-only check.
+    """
+    tree = _tree(_EXTRACTION_PATH)
+    redefined = sorted(
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in ("contains_value", "normalize")
+    )
+    assert redefined == [], (
+        f"{_EXTRACTION_PATH.name} redefines {redefined}. D-14's ASR-comparability across all four "
+        "families rests on ONE predicate judging one question; a local copy is a second boundary "
+        "rule free to stop agreeing with every published Phase 14 and Phase 16 rate"
+    )
+
+    subtree = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "score_records"
+    )
+    callees = sorted(
+        {ast.unparse(node.func) for node in ast.walk(subtree) if isinstance(node, ast.Call)}
+    )
+    assert "contains_value" in callees, (
+        f"score_records does not call contains_value; it calls {callees}"
+    )
+    forbidden = [name for name in callees if name in ("open", "json.load", "json.loads")]
+    assert forbidden == [], f"score_records performs I/O via {forbidden}"
+    assert "torch" not in ast.unparse(subtree), "score_records references torch"
+    imported = sorted(
+        alias.name
+        for node in ast.walk(subtree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        for alias in (node.names if isinstance(node, ast.Import) else ())
+    ) + sorted(
+        node.module
+        for node in ast.walk(subtree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    )
+    assert "phase14_factset" not in imported, (
+        f"score_records imports the fact set ({imported}). It takes its values as a PARAMETER "
+        "precisely so it is unit-testable on synthetic material with no GPU and no checkpoint"
+    )
