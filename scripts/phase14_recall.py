@@ -609,6 +609,41 @@ def _complete(model, prompt_ids, device, forbid, **kw):
     return gen, len(gen) < RECALL_MAX_NEW_TOKENS
 
 
+def _decode_tolerant(tok, ids):
+    """``tok.decode`` with D-06's end-of-stream semantic: drop an incomplete trailing glyph.
+
+    A byte-level-BPE generation cut off at ``max_new_tokens`` or a stop id can end mid-character,
+    and ``undecodable_ids_mask`` cannot prevent it: that mask covers ids ABSENT from ``vocab``
+    (it stops ``ValueError: unknown token id``), while the 129 sampleable ids holding bare bytes
+    0x80-0xFF are exactly the pieces multi-byte glyphs are assembled from. Masking them would make
+    every non-ASCII character ungeneratable, so the truncation is tolerated rather than forbidden —
+    the ruling ``generation/text.py:104-112`` already made: "a cumulative buffer that ends mid-glyph
+    is NOT a defect".
+
+    This is that streaming policy applied to a single-shot decode. The running buffer withholds
+    trailing ids until they complete and never emits the ones that don't; peeling ids off the end
+    until the remainder decodes is the same thing evaluated once, at the end of the stream.
+
+    Strictness is preserved where it means something: a stream that decodes cleanly takes the
+    first branch and returns exactly what ``tok.decode`` returns, byte for byte. Only sequences
+    that would otherwise raise are touched — which is why no previously recorded artifact can
+    move, including Phase 14's 112 reference hit vectors (D-01).
+
+    ``ValueError`` is deliberately NOT caught: an unknown id is a genuine defect (WR-03) and must
+    still crash the run.
+    """
+    # ponytail: peels one id at a time — O(len(ids)) decodes worst case, but a partial glyph is
+    # at most 3 trailing bytes so it exits after ~1 extra call. Byte-level truncation would be
+    # tighter and would need a second copy of bpe.decode's assembly, which is the duplicate
+    # decode path D-18 exists to prevent.
+    for cut in range(len(ids), -1, -1):
+        try:
+            return tok.decode(ids[:cut])
+        except UnicodeDecodeError:
+            continue
+    return ""  # unreachable: decode([]) is "" — kept so the function is total by inspection.
+
+
 def draw_all(model, tok, prompt_ids, device, forbid, index, *, n_samples=N_SEEDED_SAMPLES):
     """All draws from ONE already-built prompt: greedy plus ``n_samples`` seeded samples.
 
@@ -639,7 +674,7 @@ def draw_all(model, tok, prompt_ids, device, forbid, index, *, n_samples=N_SEEDE
     stopped = []
 
     gen_ids, stop = _complete(model, prompt_ids, device, forbid, greedy=True)
-    completions.append(tok.decode(gen_ids))
+    completions.append(_decode_tolerant(tok, gen_ids))
     stopped.append(stop)
 
     for s in range(n_samples):
@@ -658,7 +693,7 @@ def draw_all(model, tok, prompt_ids, device, forbid, index, *, n_samples=N_SEEDE
             top_p=SAMPLE_TOP_P,
             generator=generator,
         )
-        completions.append(tok.decode(gen_ids))
+        completions.append(_decode_tolerant(tok, gen_ids))
         stopped.append(stop)
 
     return completions, stopped
