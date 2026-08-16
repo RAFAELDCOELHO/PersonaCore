@@ -31,6 +31,8 @@ import pathlib
 import re
 import sys
 
+from personacore.dialogue import build_recall_prompt
+
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # `scripts/` is sys.path[0] only when a script in it is run DIRECTLY; an importlib-loaded test
@@ -481,3 +483,61 @@ def apply_a1(question, *, dose):
     for transform in A1_TRANSFORMS:
         body = transform(body, intensity)
     return body + terminal
+
+
+# =============================================================================================
+# ===== D-08 — A3: A VALUE-FREE ROLE SCAFFOLD, DELIVERED THROUGH THE SYSTEM SPAN =====
+# =============================================================================================
+
+A3_ROLE_INSTRUCTION = (
+    "you are the assistant in this conversation. you know your own details, and you state them "
+    "plainly whenever you are asked about them."
+)
+
+A3_ROLE_SCAFFOLD_RATIONALE = (
+    "A3 changes the ROLE SCAFFOLD, and that is what makes it structurally distinct from the "
+    "fixture's F8 rather than distinct in prose only. F8 reframes the ASKER grammatically inside "
+    "the user turn -- 'if someone asked you X, what would you say' -- so the model still receives "
+    "one user question in the same slot, with the reframing carried by the question's own syntax. "
+    "A3 leaves the user turn exactly as rendered and instead writes an identity and a disposition "
+    "into the <|system|> span, which is a part of the prompt no family in the fixture touches at "
+    "all. Two conditions that differ in WHICH SPAN carries the manipulation are separable; two "
+    "that differ only in wording inside the same span are not, and a family axis that could not "
+    "tell them apart would report a difference it has no mechanism to attribute. NOT an "
+    "alignment bypass and never to be reported as one: the compliance-override mechanism the "
+    "literature attributes to role-play presupposes an instruction-tuned, safety-trained model, "
+    "and this 13.9M base has neither. What A3 tests is far narrower and far more honest -- "
+    "whether a role scaffold in the system span shifts the decoder's distribution over an answer "
+    "the weights may or may not hold."
+)
+
+A3_CLEAN_ROOM_INVERSION = (
+    "A3 adds the THIRD entry to `tests/test_phase14_scoring.py`'s PERSONA_ALLOWLIST, and it "
+    "inverts both incumbents' justification. `phase14_recall.run_fairness_control` and "
+    "`phase16_ladder.build_far_prompt` each put a value in the <|system|> span BECAUSE THE VALUE "
+    "IS THE MEASUREMENT: they ask whether the model can use a value placed in its own context "
+    "window, so a span without the value would measure nothing while still reporting a rate, and "
+    "both prove the value IS in view via `assert_value_in_prompt`. A3 puts NO value in the span, "
+    "and the proof runs in the opposite direction: D-03's widened "
+    "`assert_no_value_in_prompt(tok, question, values, prompt_ids=...)` reads the REALIZED ids of "
+    "the A3 prompt -- the bytes the model actually receives, persona span included -- rather than "
+    "a rebuild from the question string, which is the only check that can see a persona span at "
+    "all. So the allowlist entry means the same thing it has always meant, 'this call site was "
+    "reviewed', while the review that justifies it reaches the opposite conclusion about what "
+    "belongs in the span."
+)
+
+
+def build_a3_prompt(tok, question):
+    """The A3 prompt: the ordinary recall prompt with a value-free role scaffold in the system span.
+
+    ``persona=`` is the argument ``tests/test_phase14_scoring.py``'s D-21 guard exists to police,
+    and this is its third and last sanctioned call site — see ``A3_CLEAN_ROOM_INVERSION`` for why
+    the justification here is the inverse of the two incumbents', and
+    ``A3_ROLE_SCAFFOLD_RATIONALE`` for what separates A3 from the fixture's F8.
+
+    ``build_recall_prompt`` is EXTENDED, never bypassed: the D-18 single source of truth still
+    builds every id, so the A3 prompt tokenizes identically to the training bins wherever the two
+    overlap and the demo's live token panel cannot drift from what the harness dispatches.
+    """
+    return build_recall_prompt(tok, question, persona=(A3_ROLE_INSTRUCTION,))
