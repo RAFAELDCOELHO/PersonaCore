@@ -39,6 +39,7 @@ below, because a glob that stops matching makes each of them green over nothing.
 
 import ast
 import importlib.util
+import inspect
 import pathlib
 import re
 import subprocess
@@ -1083,3 +1084,119 @@ def test_unique_successes_is_descriptive_and_publishes_no_aggregate():
         extraction.unique_successes(
             mixed, draws=extraction.FAMILY_ZERO_DRAWS, families=attacks + (extraction.FAMILY_ZERO,)
         )
+
+
+# --- D-01: family zero's positive control compares the VECTOR, never the aggregate -------------
+
+
+def _recorded_from(reference, *, moved=None):
+    """Recorded rows reproducing ``reference`` exactly, optionally with ONE hit moved.
+
+    ``moved`` is ``(from_seed_index, to_seed_index)``. A hit is subtracted from the first question
+    and added to the second, so the aggregate numerator is UNCHANGED and only the per-question
+    vector differs. That case is the whole content of D-01: an aggregate that still sums to the
+    committed numerator while two questions diverge must fail, or the control is asserting the
+    consequence rather than the vector.
+    """
+    take, give = moved if moved else (None, None)
+    rows = []
+    for row in reference:
+        k = row["k"]
+        if row["seed_index"] == take:
+            k -= 1
+        elif row["seed_index"] == give:
+            k += 1
+        rows.append(
+            {
+                "fact_id": row["fact_id"],
+                "seed_index": row["seed_index"],
+                "hits": [True] * k + [False] * (row["n"] - k),
+                "n_draws": row["n"],
+            }
+        )
+    return rows
+
+
+def test_family_zero_compares_the_vector():
+    """D-01 — 112 rows compared row-for-row; ``496/1008`` falls out of that and asserts nothing.
+
+    The sum-preserving mismatch is the case that separates the two readings. Moving one hit from
+    one question to another leaves the numerator at exactly the committed value, so a harness
+    asserting the aggregate returns PASS on a run that diverged on two of its 112 questions. There
+    is no slack parameter anywhere in the signature, and its absence is asserted off the signature
+    rather than trusted: the quantity already reproduced exactly (0/112 per-question mismatches),
+    and a width around a quantity that reproduced exactly is a number with no derivation.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    reference = extraction.parse_phase14_taught_rows()
+
+    assert len(reference) == extraction.PHASE14_TAUGHT_QUESTIONS == 112, (
+        f"the taught parse produced {len(reference)} rows, not 112. A SHORT parse is the silent "
+        "failure this count exists to catch: every comparison below would pass over the rows that "
+        "were read and say nothing at all about the rows that were not"
+    )
+    assert {row["n"] for row in reference} == {extraction.FAMILY_ZERO_DRAWS}, (
+        "a taught row carries a draw count other than the committed 9 — the report's N and D-09's "
+        "budget are the same number and a divergence means one of them moved"
+    )
+    keys = [(row["fact_id"], row["seed_index"]) for row in reference]
+    assert len(set(keys)) == len(keys)
+
+    # The derived consequence, computed for the record and never compared as the assertion.
+    matches, mismatches, consequence = extraction.family_zero_matches(
+        _recorded_from(reference), reference
+    )
+    assert (matches, mismatches) == (True, [])
+    assert (consequence["successes"], consequence["n_draws"]) == (496, 1008)
+    assert "DERIVED CONSEQUENCE" in consequence["label"]
+
+    # THE CASE THAT MATTERS: one hit moved between two questions, aggregate unchanged at 496.
+    moved = _recorded_from(reference, moved=(0, 1))
+    assert sum(sum(row["hits"]) for row in moved) == consequence["successes"], (
+        "the sum-preserving fixture no longer preserves the sum, so it would fail for the ordinary "
+        "reason and would prove nothing about the aggregate being derived"
+    )
+    matches, mismatches, _ = extraction.family_zero_matches(moved, reference)
+    assert matches is False
+    assert sorted(row["seed_index"] for row in mismatches) == [0, 1], (
+        f"the mismatch list is {mismatches} — an abort has to name WHICH of the 112 diverged, or "
+        "the failure is unactionable at exactly the moment the whole phase depends on it"
+    )
+
+    # No slack knob of any spelling exists on either function.
+    banned = {"tol", "atol", "rtol", "band", "slack", "within", "epsilon", "eps"}
+    for name in ("family_zero_matches", "parse_phase14_taught_rows"):
+        params = set(inspect.signature(getattr(extraction, name)).parameters)
+        assert params & banned == set(), (
+            f"{name} takes {sorted(params & banned)}. A width parameter is the mechanism by which "
+            "a near-miss becomes a pass after it has been seen"
+        )
+
+
+def test_family_zero_refuses_a_short_or_repointed_control(tmp_path):
+    """A parse that reads fewer rows than the pre-registration must abort, not return them.
+
+    Run against a TRUNCATED COPY in ``tmp_path``: the tracked report is read and never written, so
+    a failed proof cannot leave the artifact edited. The recorded side is checked the same way — a
+    control covering 111 of the 112 committed questions is not "the control diverged", it is a
+    DIFFERENT control, and returning it as an ordinary mismatch would let a one-question run be
+    read as a normal failure of the real one.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    source = _REPO_ROOT / "results" / "phase14_recall_report.md"
+    lines = source.read_text(encoding="utf-8").splitlines()
+    end = next(
+        i
+        for i, line in enumerate(lines)
+        if line.startswith("### Per-question `k/N` — core held-out")
+    )
+    short = tmp_path / "short_report.md"
+    short.write_text("\n".join(lines[: end - 40] + lines[end:]) + "\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as excinfo:
+        extraction.parse_phase14_taught_rows(path=short)
+    assert "112" in str(excinfo.value)
+
+    reference = extraction.parse_phase14_taught_rows()
+    with pytest.raises(SystemExit):
+        extraction.family_zero_matches(_recorded_from(reference)[:-1], reference)
