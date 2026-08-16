@@ -253,16 +253,28 @@ def test_erasure_gate_untouched():
 
 # The complete allowlist of calls the pinned driver makes at MODULE SCOPE, as `ast.unparse` renders
 # each callee. HARD EQUALITY, the `PERSONA_ALLOWLIST` register: an entry with no matching call site
-# is as red as an unlisted call. Three of these are the file's reason to exist and the other three
-# are the `sys.path` bootstrap's own primitives; a `torch.load`, a `from_json` or a `json.loads`
+# is as red as an unlisted call. Three of these are the file's reason to exist and three more are
+# the `sys.path` bootstrap's own primitives; a `torch.load`, a `from_json` or a `json.loads`
 # arriving at module scope turns this red on the commit that adds it.
+#
+# The register WIDENS only by a reviewed commit, which is the whole mechanism — the last two
+# entries are 18-07's, and both are inert. `tuple` is the display that derives
+# `ADMISSIBILITY_ZERO_KEYS` from its four axes: it must be a module-level name because it is a
+# default argument, and it must be a TUPLE rather than a list or set because a mutable
+# quantification set can be narrowed at runtime by exactly the code the coverage check exists to
+# catch. `_self_check` sits behind `if __name__ == "__main__"` and therefore never runs on an
+# import at all; it is listed because this walk reads an `if` body as module scope, which is the
+# same reason it can see the bootstrap. Neither admits a load: every call nested inside them would
+# appear here under its own name.
 _IMPORT_TIME_CALLEES = (
+    "_self_check",  # the __main__ self-check — guarded by __name__, runs on no import
     "assert_holm_family_reachable",  # D-31's proof — this is what must run at import
     "pathlib.Path",  # _REPO_ROOT
     "pathlib.Path(__file__).resolve",  # _REPO_ROOT
     "persistence.sign_test_exact",  # BEST_ACHIEVABLE_P, derived from the instrument
     "str",  # the sys.path bootstrap's guard and its argument
     "sys.path.insert",  # the ONE permitted module-level side effect
+    "tuple",  # ADMISSIBILITY_ZERO_KEYS — a pure display over four committed axes
 )
 
 
@@ -335,6 +347,49 @@ def test_admissibility_precedence():
     extraction = _load("phase18_extraction", _EXTRACTION_PATH)
     gate = extraction.null_result_is_admissible
     inconclusive = extraction.VERDICTS[-1]
+
+    # FIRST, because every case below is built from this set: prove the set is the right set. A
+    # transcription slip in `CORE_SLOTS` or a lost axis in the product would leave the eight cases
+    # that follow green over a grid narrower than the one the run must cover — which is the very
+    # failure they exist to catch, arriving through the test instead of through the gate.
+    facts = _load("phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py")
+    assert extraction.CORE_SLOTS == tuple(fact.slot for fact in facts.LOCKED_FACTS), (
+        f"CORE_SLOTS is {extraction.CORE_SLOTS}, which is not the slots of the eight locked facts "
+        "in fixture order. The literal exists only because the LAZY-IMPORT RULE forbids reaching "
+        "the fact set at module scope; it is a transcription that must stay true, not a second "
+        "source of truth"
+    )
+    assert set(extraction.SPREAD_ZERO_CONTROL_SLOTS) <= set(extraction.CORE_SLOTS)
+    rebuilt = [
+        (slot, family, arm, tier)
+        for slot in extraction.CORE_SLOTS
+        for family in extraction.ATTACK_FAMILIES + (extraction.FAMILY_ZERO,)
+        for arm in extraction.ARMS
+        for tier in extraction.CORPUS_TIERS
+        if not (family == extraction.FAMILY_ZERO and tier == extraction.GATED_TIER)
+    ]
+    assert extraction.ADMISSIBILITY_ZERO_KEYS == tuple(rebuilt), (
+        "ADMISSIBILITY_ZERO_KEYS is not the product of the four committed axes minus the one "
+        "combination the design never runs"
+    )
+    assert len(extraction.ADMISSIBILITY_ZERO_KEYS) == 144, (
+        f"the pre-registered set holds {len(extraction.ADMISSIBILITY_ZERO_KEYS)} cells, not the "
+        "8 slots x (4 families x 2 tiers + A0 on taught only) x 2 arms = 144 the design measures"
+    )
+    assert isinstance(extraction.ADMISSIBILITY_ZERO_KEYS, tuple), (
+        "the quantification set is mutable — a set or list can be narrowed at runtime by exactly "
+        "the code the coverage check exists to catch"
+    )
+    assert not [
+        key
+        for key in extraction.ADMISSIBILITY_ZERO_KEYS
+        if key[1] == extraction.FAMILY_ZERO and key[3] == extraction.GATED_TIER
+    ], (
+        "the set demands (A0, core_held_out) cells. Family zero spends its 9 draws on the 112 "
+        "TAUGHT rows alone (D-01/D-09), so those 16 cells can never be supplied and condition "
+        "four would be unsatisfiable at every possible outcome — Pitfall 4's dead gate, arriving "
+        "as a coverage requirement instead of as an alpha"
+    )
 
     ok = dict(
         control_hit_vector_matches=True,
