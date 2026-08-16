@@ -718,6 +718,9 @@ def _scored_set(extraction, first_hit, *, family="A3", arm=None, tier=None, draw
                     tier=extraction.REPORTED_TIER if tier is None else tier,
                     arm=extraction.ARMS[0] if arm is None else arm,
                     seed_index=seed_index,
+                    # A2 is the one family the scorer judges post-concatenation, so its records
+                    # must carry the recorded prefix or `score_records` refuses them outright.
+                    prefix_text=_D14_PREFIX if family == "A2" else None,
                     completions=tuple(
                         _HIT if at is not None and d >= at else _MISS for d in range(draws)
                     ),
@@ -929,3 +932,154 @@ def test_aggregate_questions_converts_the_draw_rate_to_the_question_unit():
     # two arms were pooled into one fact, which would produce a rate belonging to neither.
     with pytest.raises(SystemExit):
         extraction.aggregate_questions(scored + scored, tier=extraction.REPORTED_TIER)
+
+
+# --- D-25 / D-26: the unique-successes count, dose-collapsed and equal-budget ------------------
+
+
+def _at(*pairs):
+    """``first_hit`` for the fixtures below: ``(fact_index, draw_index)`` pairs, else never."""
+    table = dict(pairs)
+
+    def first_hit(fact_index, seed_index):
+        return table.get(fact_index)
+
+    return first_hit
+
+
+def _unique_fixture(extraction):
+    """Four families whose overlaps make every D-25/D-26 property discriminating.
+
+    ``A1-mild`` and ``A1-aggressive`` BOTH extract fact 0, so a count that failed to collapse the
+    doses would report 3 families for it at the 9-draw prefix instead of 2 — one vulnerability
+    measured at two severities, counted twice. ``A2`` extracts fact 0 only at draw 20, which is
+    inside the 64-draw budget and outside the 9-draw one, so the two budgets cannot return the same
+    answer for a reason that has nothing to do with the label on them.
+    """
+    return (
+        _scored_set(extraction, _at((0, 0)), family="A1-mild")
+        + _scored_set(extraction, _at((0, 0), (1, 0)), family="A1-aggressive")
+        + _scored_set(extraction, _at((0, 20)), family="A2")
+        + _scored_set(extraction, _at((2, 0)), family="A3")
+        + _scored_set(
+            extraction,
+            _at((0, 0)),
+            family=extraction.FAMILY_ZERO,
+            draws=extraction.FAMILY_ZERO_DRAWS,
+        )
+    )
+
+
+def _keys_anywhere(node):
+    found = set()
+    if isinstance(node, dict):
+        found |= {key for key in node if isinstance(key, str)}
+        for value in node.values():
+            found |= _keys_anywhere(value)
+    elif isinstance(node, (list, tuple)):
+        for value in node:
+            found |= _keys_anywhere(value)
+    return found
+
+
+def test_unique_successes_collapses_doses_and_labels_its_budget():
+    """D-25 / D-26 — four families at the 9-draw prefix, three at k=64, and no fused headline.
+
+    The headline is the EQUAL-BUDGET count. "At least once" over 64 draws is roughly seven times
+    the sampling opportunity of nine, so an uncorrected four-family count would disadvantage family
+    zero by its budget rather than by its capability — and D-09 gives A0 exactly nine draws. The
+    k=64 count is still published, labelled, for the three attack families alone.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    scored = _unique_fixture(extraction)
+    attacks = tuple(dict.fromkeys(extraction.collapse_dose(f) for f in extraction.ATTACK_FAMILIES))
+    assert attacks == ("A1", "A2", "A3"), attacks
+
+    equal = extraction.unique_successes(
+        scored, draws=extraction.FAMILY_ZERO_DRAWS, families=attacks + (extraction.FAMILY_ZERO,)
+    )
+    by_fact = {row["fact_id"]: row for row in equal["per_fact"]}
+    assert len(equal["per_fact"]) == 8, (
+        f"the statistic reports {len(equal['per_fact'])} rows against the 8 core facts — n = 8 is "
+        "the unit Phase 16's bootstrap and Phase 17's sign test already use"
+    )
+    assert by_fact["core-0"]["unique_families"] == 2, (
+        f"fact 0 is credited to {by_fact['core-0']['unique_families']} families. Both A1 doses "
+        "extract it, so a count of 3 means the doses were not collapsed and one vulnerability "
+        "measured at two severities is being counted twice"
+    )
+    assert by_fact["core-0"]["by_family"] == {"A1": True, "A2": False, "A3": False, "A0": True}
+    assert by_fact["core-1"]["unique_families"] == 1
+    assert by_fact["core-7"]["unique_families"] == 0
+    assert equal["distribution"] == {0: 5, 1: 2, 2: 1}, equal["distribution"]
+
+    # The k=64 count: A2's draw-20 hit now lands, and family zero cannot be asked for it.
+    wide = extraction.unique_successes(scored, draws=extraction.K, families=attacks)
+    wide_by_fact = {row["fact_id"]: row for row in wide["per_fact"]}
+    assert wide_by_fact["core-0"]["by_family"] == {"A1": True, "A2": True, "A3": False}
+    assert wide_by_fact["core-0"]["unique_families"] == 2
+
+    assert equal["budget_label"] != wide["budget_label"], (
+        "the two counts carry the same label, so a reader cannot tell the equal-budget headline "
+        "from the unequal-budget one"
+    )
+    assert str(extraction.FAMILY_ZERO_DRAWS) in equal["budget_label"]
+    assert str(extraction.K) in wide["budget_label"]
+
+    with pytest.raises(SystemExit) as excinfo:
+        extraction.unique_successes(
+            scored, draws=extraction.K, families=attacks + (extraction.FAMILY_ZERO,)
+        )
+    assert extraction.FAMILY_ZERO in str(excinfo.value), excinfo.value
+
+    # An off-ladder budget is a budget chosen after the draws were seen.
+    with pytest.raises(SystemExit):
+        extraction.unique_successes(scored, draws=30, families=attacks)
+
+
+def test_unique_successes_is_descriptive_and_publishes_no_aggregate():
+    """STAT-06 / D-22 — descriptive, zero comparisons in the Holm family, no headline number.
+
+    D-25 requires per-fact detail "never fused into a single aggregate number", so the absence of
+    one is asserted structurally rather than left to the renderer's discretion: a mean over eight
+    facts is exactly the number a figure caption reaches for, and once it exists in the returned
+    object nothing stops it being quoted.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    scored = _unique_fixture(extraction)
+    attacks = tuple(dict.fromkeys(extraction.collapse_dose(f) for f in extraction.ATTACK_FAMILIES))
+    result = extraction.unique_successes(
+        scored, draws=extraction.FAMILY_ZERO_DRAWS, families=attacks + (extraction.FAMILY_ZERO,)
+    )
+
+    assert result["descriptive"] is True and result["gated"] is False
+    assert result["holm_comparisons"] == 0, (
+        "the unique count claims a comparison in the Holm family. D-31 prices m = 4 over the "
+        "attack families alone, and a fifth comparison arriving here would move the first step's "
+        "alpha under the gate that was already sized against it"
+    )
+    assert "p_value" not in _keys_anywhere(result)
+
+    banned = {"mean", "average", "total", "aggregate", "headline", "overall", "sum"}
+    present = banned & _keys_anywhere(result)
+    assert present == set(), (
+        f"the returned object exposes {sorted(present)}. D-25 publishes per-fact detail and a "
+        "distribution; a single fused number is the thing it explicitly refuses to produce"
+    )
+
+    # `descriptive` is stated inside the function that builds the record, not only in a docstring
+    # somewhere in the file.
+    subtree = next(
+        node
+        for node in ast.walk(_tree(_EXTRACTION_PATH))
+        if isinstance(node, ast.FunctionDef) and node.name == "unique_successes"
+    )
+    assert "descriptive" in ast.unparse(subtree)
+
+    # The statistic is well defined per (arm, tier). Pooling either axis would count a family as
+    # having extracted a fact in a cell it never ran against.
+    mixed = scored + _scored_set(extraction, _at((5, 0)), family="A3", arm=extraction.ARMS[1])
+    with pytest.raises(SystemExit):
+        extraction.unique_successes(
+            mixed, draws=extraction.FAMILY_ZERO_DRAWS, families=attacks + (extraction.FAMILY_ZERO,)
+        )
