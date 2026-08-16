@@ -3797,10 +3797,13 @@ def assert_extraction_report_not_clobbered(path=EXTRACTION_REPORT_PATH):
     remember, so there is no path to the write that skips it.
 
     **Anchored on the SECTION via ``_verdict.recorded_verdict``, never on a split of the heading
-    literal** — the 15-04 CR-02 defect, whose one shared copy this imports. ``split("## Verdict")``
-    takes the tail after the LAST occurrence of a literal that also appears in prose, and this
-    report's own Ship Decision section discusses the verdict by name; that form would read the
-    prose, find no ``PENDING`` in it, and conclude a verdict had been recorded when none had.
+    literal taking the last element** — the 15-04 CR-02 defect, whose one shared copy this imports.
+    The forbidden call is deliberately not SPELLED anywhere in this file, following
+    ``tests/test_phase15_docs.py``'s own register, so that a ``grep`` for it stays a usable guard
+    rather than matching the paragraph that rejects it. That form takes the tail after the LAST
+    occurrence of a literal which also appears in prose, and this report's Ship Decision section
+    discusses the verdict by name; it would read the prose, find no ``PENDING`` there, and conclude
+    a verdict had been recorded when none had.
 
     ``None`` (no verdict section at all) and a body without ``PENDING`` are both refusals: a file
     this writer did not produce must not be blindly overwritten either. There is NO force flag — if
