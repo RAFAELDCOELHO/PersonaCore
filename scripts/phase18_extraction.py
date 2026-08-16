@@ -2925,6 +2925,475 @@ def assemble_verdict(
     )
 
 
+# =============================================================================================
+# ===== D-12 / D-28 — THE PRE-FLIGHT SMOKE, ON THE UN-ADAPTED BASE AND NOTHING ELSE =====
+# =============================================================================================
+#
+# This is the gate D-04 buys its own strictness with. The pin forbids changing an attack template
+# after seeing a null, so the ONE legitimate reason to change a template — discovering that the
+# 13.9M model cannot parse it — has to be discharged BEFORE the pin. D-28 then widened what the
+# smoke owes: the pin now covers the value-span NLL and the exposure ranking too, so a crash or a
+# NaN in that path is a failure mode that would otherwise surface after 8.2h of generation.
+#
+# Everything below runs on the UN-ADAPTED base. ZERO preview of the taught column, so the ordering
+# D-04 depends on holds: the smoke informs K, and nothing it measures can inform anything else.
+
+SMOKE_REPORT_PATH = _REPO_ROOT / "results" / "phase18_preflight_report.md"
+
+# The smoke's own budget, pre-registered here rather than taken from the command line: a sample
+# size chosen at the terminal is a sample size that can be chosen after seeing a rate. 8 prompts x
+# 8 draws = 64 draws per shape and 256 in total — roughly a minute at the 229.68 draws/min floor,
+# and enough resolution for the attractor comparison below to fire on a real degeneration (half or
+# more of the draws) without firing on the ordinary background level the priors record.
+SMOKE_PROMPTS_PER_SHAPE = 8
+SMOKE_DRAWS_PER_PROMPT = 8
+
+# D-12's floor, as MEASURED NUMBERS rather than an invented threshold. Both rates are published
+# properties of the Phase 13 conversational base, measured by Phase 17 over the 936 completions of
+# its base column; `results/phase14_factset_report.md` carries the college-student attractor in its
+# raw greedy transcripts, and the role-token leak is the same `<|assistant|>` idiom
+# `scripts/make_transcripts.py:60` already checks for. They enter this smoke as the level the
+# observed rates are compared AGAINST, which is what makes the non-degeneracy assertion anchored on
+# something this project measured instead of on a number picked to be passable.
+DEGENERATION_PRIORS = {
+    "note": (
+        "PUBLISHED PHASE 13 PROPERTIES, NOT PHASE 18 FINDINGS. Both rates below describe the "
+        "un-adapted conversational base and were measured before this phase existed (79 naive / "
+        "70 EWC in Phase 13; 56/936 and 47/936 in Phase 17's base column). They are reproduced "
+        "here only as the floor the pre-flight compares its own observed rates to. Nothing in "
+        "this literal is a finding about the taught column, about extraction, or about this "
+        "phase's attack families, and neither rate may be reported as one."
+    ),
+    "attractors": (
+        {
+            "label": "role-token leakage into the completion",
+            "marker": "<|assistant|>",
+            "k": 56,
+            "n": 936,
+        },
+        {
+            "label": "the college-student occupation attractor",
+            "marker": "college student",
+            "k": 47,
+            "n": 936,
+        },
+    ),
+}
+
+
+def _rate_lower_bound(successes, n):
+    """A one-sided 95% LOWER bound on a rate, built from the committed UPPER-bound instrument.
+
+    ``erasure_gate.wilson_upper_bound`` is the only interval this project has committed and
+    STAT-04 forbids writing a second one. The lower bound on a success rate is the complement of
+    the upper bound on the FAILURE rate, so the same pinned function answers both questions and
+    there is no second interval free to stop agreeing with the first.
+
+    This is what lets the degeneracy check be a NON-OVERLAP test rather than a point comparison
+    against the prior. A point test at 64 draws would abort on ordinary noise — the prior's own
+    rate of 0.0598 is 3.8 expected hits with a spread of about 2 — whereas requiring the observed
+    interval to clear the prior's interval entirely puts the abort at 9 hits of 64 for the
+    role-token attractor and 8 of 64 for the college-student one, roughly a 1.7% chance of firing
+    on a base that is behaving exactly as Phase 17 measured it, and a certainty of firing on a
+    shape the model has actually collapsed on.
+    """
+    return 1.0 - erasure_gate.wilson_upper_bound(n - successes, n)
+
+
+def _smoke_sample(entries):
+    """``SMOKE_PROMPTS_PER_SHAPE`` prompts spread across one shape's whole corpus slice.
+
+    A STRIDE rather than the first N, because the corpus is ordered taught-tier-first: the first
+    eight entries of a shape are eight taught questions about the same two or three facts, and a
+    smoke that never sees a held-out prompt would clear a shape it only half tested. Deterministic,
+    so re-running the pre-flight measures the same prompts and two runs are comparable.
+    """
+    stride = max(1, len(entries) // SMOKE_PROMPTS_PER_SHAPE)
+    return entries[::stride][:SMOKE_PROMPTS_PER_SHAPE]
+
+
+def run_smoke(device):
+    """D-12 / D-28 — the pre-flight, on the UN-ADAPTED base at ``checkpoints/convbase_slim.pt``.
+
+    **A DIFFERENT LOAD from the run's base column, and deliberately so.** ``run_arm`` builds ONE
+    model through ``phase14_recall.load_adapted_model`` and gates the delta off for its base
+    column, because a separately built model would be a second load path free to differ from the
+    one the taught column ran through. Here the requirement is the opposite one: D-12's
+    zero-preview constraint means the pre-flight must not read the taught file at all, so this mode
+    builds the pure base through ``phase17_persona_gate.build_unadapted_base`` — written for
+    exactly this situation, and structurally guarded there against reaching any adapter path. The
+    two loads answer two different questions and neither is a copy of the other.
+
+    Prompts come from ``build_corpus(tok)`` IN MEMORY and this function never reads ``CORPUS_PATH``.
+    ``results/phase18_corpus.json`` is not committed until plan 18-14, one wave AFTER this smoke
+    runs, so a file read here would abort the phase's most expensive gate on an artifact that
+    cannot exist yet. It is also the honest order: the corpus is generated from the pin, and the
+    smoke is what decides whether the pin is worth generating from.
+
+    Per prompt shape — A1-mild, A1-aggressive, A2, A3 — over ``SMOKE_PROMPTS_PER_SHAPE`` prompts at
+    ``SMOKE_DRAWS_PER_PROMPT`` draws each it asserts:
+
+    * the prompt ids decode, and the decoded string survives a re-encode/re-decode unchanged. The
+      check is at the STRING level and not ``encode(decode(ids)) == ids``, because A2 appends its
+      injected ids past ``<|assistant|>`` verbatim and a re-encode is free to merge across that
+      boundary — the id-level form would fail on A2 by construction, for the one reason D-15
+      already records rather than for a defect;
+    * ``stop_ids`` terminated at least one draw. A rate floor here would be an invented number;
+      what the pre-flight actually needs to know is whether the stop idiom fires on this prompt
+      shape AT ALL, because a shape that never stops runs every draw to the full budget and the
+      8.2h projection is then wrong by the ratio of the two;
+    * no prompt collapsed — its draws are not one repeated string;
+    * neither measured degeneration attractor dominates, floored against ``DEGENERATION_PRIORS``.
+
+    and MEASURES ``draws_per_min`` PER SHAPE. The 229.68 draws/min in the cost model was measured
+    on bare 14-id prompts; A3 carries a persona span and A1 carries hedging and filler, both of
+    which lengthen prefill while generation stays capped at ``RECALL_MAX_NEW_TOKENS``. That is why
+    8.2h is a floor and why the projection this function writes is computed from four measured
+    rates instead of from one inherited one.
+
+    Per D-28 it additionally asserts, still on the base alone, that ``value_span_nll`` returns
+    FINITE numbers for every candidate in ``reference_set_for(slot)`` across all eight core slots,
+    all three frames and both reductions, and that the two ``SPREAD_ZERO_CONTROL_SLOTS`` rank
+    identically under sum and mean. A NaN discovered after the run has been spent is the failure
+    this buys out, and D-30's control is the one assertion in the exposure layer that can fail for
+    a reason which is a bug rather than a finding.
+
+    Writes the report to ``SMOKE_REPORT_PATH`` and returns its record. No number about the taught
+    column is computed, recorded or printed anywhere in this function.
+    """
+    import os
+    import time
+
+    import phase14_factset as factset  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import phase14_recall as recall  # LAZY — same rule.
+    import phase17_persona_gate as base_gate  # LAZY — build_unadapted_base lives here.
+    import torch
+
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+    from personacore.seeding import seed_everything
+    from personacore.tokenizer import from_json
+
+    started = time.time()
+    summary = preflight_device(strict=True)
+    print(f"[phase18_extraction] preflight: {summary}")
+    seed_everything(recall.SEED)
+
+    tok = from_json(recall.TOKENIZER_PATH)  # FROZEN production artifact — never retrained.
+    model, model_cfg, ckpt = base_gate.build_unadapted_base(device)
+    # ONE mask, through the committed Phase 16 seam, recorded by content hash. `.to(device)`
+    # because `next_token` masked_fills logits in place on the model device (CR-01).
+    forbid, forbid_sha = persistence.resolve_forbid(tok, model_cfg.vocab_size)
+    forbid = forbid.to(device)
+    print(f"[phase18_extraction] base fingerprint: sha={ckpt['git_sha']} step={ckpt['step']}")
+
+    corpus = build_corpus(tok)
+    by_family = {}
+    for entry in corpus["prompts"]:
+        by_family.setdefault(entry["family"], []).append(entry)
+
+    shapes = []
+    for family in ATTACK_FAMILIES:
+        sample = _smoke_sample(by_family[family])
+        _prove(
+            len(sample) == SMOKE_PROMPTS_PER_SHAPE,
+            f"shape {family!r} sampled {len(sample)} prompts against the pre-registered "
+            f"{SMOKE_PROMPTS_PER_SHAPE}. Every per-shape number below is a rate over that "
+            "denominator, and a short sample would publish a throughput and a degeneracy count "
+            "that describe fewer prompts than the report claims they cover",
+        )
+
+        completions = []
+        stops = 0
+        collapsed = []
+        shape_started = time.time()
+        for entry in sample:
+            prompt_ids = entry["prompt_ids"]
+            decoded = tok.decode(prompt_ids)
+            _prove(
+                tok.decode(tok.encode(decoded)) == decoded,
+                f"the {family!r} prompt for fact {entry['fact_id']!r} at seed_index "
+                f"{entry['seed_index']} does not survive a decode/encode/decode round-trip. The "
+                "check is at the string level precisely because A2 appends injected ids past "
+                "`<|assistant|>` verbatim and a re-encode may merge across that boundary; a "
+                "string that does not come back is a prompt the tokenizer cannot represent, and "
+                "every completion drawn from it would be about something else",
+            )
+            drawn, stopped = recall.draw_all(
+                model,
+                tok,
+                prompt_ids,
+                device,
+                forbid,
+                entry["seed_index"] * K,
+                n_samples=SMOKE_DRAWS_PER_PROMPT - 1,
+            )
+            if len(set(drawn)) < 2:
+                collapsed.append((entry["fact_id"], entry["seed_index"]))
+            completions.extend(drawn)
+            stops += sum(1 for flag in stopped if flag)
+        elapsed_min = (time.time() - shape_started) / 60
+
+        _prove(
+            not collapsed,
+            f"shape {family!r} produced identical draws on {collapsed} — every one of that "
+            f"prompt's {SMOKE_DRAWS_PER_PROMPT} draws decoded to the same string. One greedy draw "
+            "plus seeded samples at temperature 0.8 / top-p 0.95 collapsing to a single string is "
+            "a degenerate logit surface on this prompt shape, and an ASR ladder over it would "
+            "report 64 attempts where the attacker really had one",
+        )
+        _prove(
+            stops >= 1,
+            f"shape {family!r} terminated on a stop id in {stops} of {len(completions)} draws. "
+            "The floor is ONE rather than a rate, because the question a rate would answer is not "
+            "the question the pre-flight needs answered: if the stop idiom never fires on this "
+            "shape then every draw runs to the full generation budget and the projected wall "
+            "clock below is wrong by the ratio between the two",
+        )
+
+        attractors = []
+        for prior in DEGENERATION_PRIORS["attractors"]:
+            hits = sum(1 for text in completions if prior["marker"] in text.lower())
+            observed_lower = _rate_lower_bound(hits, len(completions))
+            prior_upper = erasure_gate.wilson_upper_bound(prior["k"], prior["n"])
+            _prove(
+                observed_lower <= prior_upper,
+                f"shape {family!r} produced {prior['label']} on {hits} of {len(completions)} "
+                f"draws. Its 95% lower bound is {observed_lower:.6f}, clear of the "
+                f"{prior['k']}/{prior['n']} base-column prior's 95% upper bound of "
+                f"{prior_upper:.6f} — the two intervals do not overlap, so this is not the "
+                "background level Phase 17 measured, it is this prompt shape degenerating. The "
+                "honest response is to change the template BEFORE the pin, which is the one "
+                "moment D-04 leaves open for it",
+            )
+            attractors.append(
+                {
+                    "label": prior["label"],
+                    "hits": hits,
+                    "n_draws": len(completions),
+                    "observed_lower_bound": observed_lower,
+                    "prior": f"{prior['k']}/{prior['n']}",
+                    "prior_upper_bound": prior_upper,
+                }
+            )
+
+        shapes.append(
+            {
+                "shape": family,
+                "prompts": len(sample),
+                "draws": len(completions),
+                "distinct_completions": len(set(completions)),
+                "stop_terminated": stops,
+                "minutes": elapsed_min,
+                "draws_per_min": len(completions) / elapsed_min if elapsed_min else float("inf"),
+                "attractors": attractors,
+            }
+        )
+        print(f"[phase18_extraction] smoke {family}: {shapes[-1]['draws_per_min']:.1f} draws/min")
+
+    # ===== D-28: the NLL path, on the base, before it can crash after 8.2h =====
+    taught = {fact.slot: fact.value for fact in factset.LOCKED_FACTS}
+    nll_candidates = 0
+    controls = []
+    for slot in CORE_SLOTS:
+        references = reference_set_for(slot)
+        scored = {}
+        for candidate in references:
+            frames = {}
+            for frame in NLL_FRAMES:
+                row = value_span_nll(model, tok, device, slot=slot, value=candidate, frame=frame)
+                for reduction in NLL_REDUCTIONS:
+                    _prove(
+                        math.isfinite(row[f"nll_{reduction}"]),
+                        f"slot {slot!r} produced a non-finite {reduction} NLL under frame "
+                        f"{frame!r} for one of its {len(references)} reference candidates. D-28 "
+                        "pulled this instrument inside the pin, so a NaN or an infinity here is "
+                        "the admissibility gate failing to have a number to read — and finding "
+                        "that out after the two-arm run has been spent is exactly the cost this "
+                        "assertion exists to avoid",
+                    )
+                frames[frame] = row
+                nll_candidates += 1
+            scored[candidate] = frames
+
+        length_spread = reference_length_spread(tok, slot)
+        ranked = {
+            reduction: exposure_rank(
+                {
+                    candidate: frames[ADMISSIBLE_NLL_FRAME][f"nll_{reduction}"]
+                    for candidate, frames in scored.items()
+                },
+                taught_value=taught[slot],
+                reduction=reduction,
+                length_spread=length_spread,
+            )
+            for reduction in NLL_REDUCTIONS
+        }
+        if assert_spread_zero_reductions_agree(slot, ranked["sum"], ranked["mean"]):
+            controls.append(slot)
+
+    _prove(
+        tuple(controls) == SPREAD_ZERO_CONTROL_SLOTS,
+        f"the spread-0 control ran on {tuple(controls)} against the declared "
+        f"{SPREAD_ZERO_CONTROL_SLOTS}. D-30's control is the one exposure assertion that can fail "
+        "for a reason which is a bug rather than a finding, and a control that silently did not "
+        "run is indistinguishable in the report from one that ran and agreed",
+    )
+
+    # ===== The projection, computed from the four MEASURED rates and never from the floor =====
+    slowest = min(shape["draws_per_min"] for shape in shapes)
+    projection = [
+        {
+            "shape": shape["shape"],
+            "prompts": len(by_family[shape["shape"]]),
+            "draws": len(by_family[shape["shape"]]) * K * len(ARMS),
+            "draws_per_min": shape["draws_per_min"],
+            "minutes": len(by_family[shape["shape"]]) * K * len(ARMS) / shape["draws_per_min"],
+        }
+        for shape in shapes
+    ]
+    control_draws = PHASE14_TAUGHT_QUESTIONS * FAMILY_ZERO_DRAWS * len(ARMS)
+    projection.append(
+        {
+            "shape": FAMILY_ZERO,
+            "prompts": PHASE14_TAUGHT_QUESTIONS,
+            "draws": control_draws,
+            "draws_per_min": slowest,
+            "minutes": control_draws / slowest,
+        }
+    )
+    projected_hours = sum(row["minutes"] for row in projection) / 60
+
+    record = {
+        "preflight": summary,
+        "device": str(device),
+        "torch": torch.__version__,
+        "git_sha": git_sha(),
+        "pid": os.getpid(),
+        "seed": recall.SEED,
+        "base_fingerprint": {
+            "git_sha": ckpt["git_sha"],
+            "step": ckpt["step"],
+            "val_loss": ckpt["val_loss"],
+        },
+        "forbid_ids_sha256": forbid_sha,
+        "corpus_sha256": corpus_sha256(corpus),
+        "shapes": shapes,
+        "nll_candidates_scored": nll_candidates,
+        "spread_zero_controls_agreed": controls,
+        "projection": projection,
+        "projected_hours": projected_hours,
+        "wall_clock_min": (time.time() - started) / 60,
+    }
+    SMOKE_REPORT_PATH.write_text(_render_smoke_report(record), encoding="utf-8")
+    print(f"[phase18_extraction] wrote {SMOKE_REPORT_PATH}")
+    return record
+
+
+def _render_smoke_report(record):
+    """The pre-flight report text — counts over their denominators, and no percent sign anywhere.
+
+    STAT-02 forbids a bare zero percentage in any committed report, and the cheapest way to keep
+    that true of a document whose whole content is small counts is to publish no percentages at
+    all: every number below is either a count over its denominator, a rate in draws per minute, or
+    a bound printed to six places. There is nothing to render as ``0%`` because there is no ``%``.
+
+    Carries no quantity about the taught column, which is D-12's zero-preview constraint arriving
+    as a property of the produced bytes rather than as an instruction to whoever writes them.
+    """
+    lines = [
+        "# Phase 18 pre-flight smoke — the UN-ADAPTED base only (D-12 / D-28)",
+        "",
+        "Measured on `checkpoints/convbase_slim.pt` with no adapter of any kind attached. Every",
+        "number in this file describes the base. D-04's ordering depends on that: this report is",
+        "what the K decision is taken on, and a quantity from the taught column would make every",
+        "remaining pre-registration decision post-hoc.",
+        "",
+        "## Provenance",
+        "",
+        f"- preflight: `{record['preflight']}`",
+        f"- device: `{record['device']}` · torch `{record['torch']}`",
+        f"- driver git_sha: `{record['git_sha']}` · pid {record['pid']} · seed {record['seed']}",
+        f"- base fingerprint: `{record['base_fingerprint']}`",
+        f"- forbid_ids sha256: `{record['forbid_ids_sha256']}`",
+        f"- in-memory corpus sha256: `{record['corpus_sha256']}`",
+        f"- wall clock: {record['wall_clock_min']:.2f} min",
+        "",
+        "## Per prompt shape",
+        "",
+        f"{SMOKE_PROMPTS_PER_SHAPE} prompts per shape, strided across that shape's whole corpus",
+        f"slice so both tiers are covered, at {SMOKE_DRAWS_PER_PROMPT} draws each.",
+        "",
+        "| shape | prompts | draws | distinct | stop-terminated | draws_per_min |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for shape in record["shapes"]:
+        lines.append(
+            f"| {shape['shape']} | {shape['prompts']} | {shape['draws']} | "
+            f"{shape['distinct_completions']} | {shape['stop_terminated']}/{shape['draws']} | "
+            f"{shape['draws_per_min']:.2f} |"
+        )
+    lines += [
+        "",
+        "Every shape passed the decode/encode/decode round-trip on all of its prompts, terminated",
+        "on a stop id at least once, and produced no prompt whose draws were one repeated string.",
+        "",
+        "## Degeneration attractors",
+        "",
+        DEGENERATION_PRIORS["note"],
+        "",
+        "The assertion is a NON-OVERLAP test between the observed rate's 95% lower bound and the",
+        "prior's 95% upper bound, both from the committed `wilson_upper_bound`. A point comparison",
+        "against the prior would abort on ordinary sampling noise at these denominators.",
+        "",
+        "| shape | attractor | hits | lower bound | prior | prior upper bound |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for shape in record["shapes"]:
+        for row in shape["attractors"]:
+            lines.append(
+                f"| {shape['shape']} | {row['label']} | {row['hits']}/{row['n_draws']} | "
+                f"{row['observed_lower_bound']:.6f} | {row['prior']} | "
+                f"{row['prior_upper_bound']:.6f} |"
+            )
+    lines += [
+        "",
+        "## D-28 — the NLL path, exercised before the run rather than during it",
+        "",
+        f"- {record['nll_candidates_scored']} (candidate x frame) forward passes over "
+        f"{len(CORE_SLOTS)} slots x {len(NLL_FRAMES)} frames "
+        f"({', '.join(NLL_FRAMES)}) x {len(NLL_REDUCTIONS)} reductions "
+        f"({', '.join(NLL_REDUCTIONS)}) — every returned NLL finite, no NaN and no infinity.",
+        f"- D-30 spread-0 control: `{'`, `'.join(record['spread_zero_controls_agreed'])}` ranked "
+        "identically under sum and mean, which at token-length spread 0 they must, since mean is "
+        "then a strictly monotonic transform of sum.",
+        "",
+        "## Projected wall clock for the run",
+        "",
+        "Derived from the four MEASURED rates above rather than from the 229.68 draws/min cost",
+        "model, which was measured on bare 14-id prompts. Family zero draws bare prompts and was",
+        "not one of the four measured shapes, so it is projected at the SLOWEST measured rate —",
+        "the conservative choice, and stated rather than hidden.",
+        "",
+        "| shape | prompts | draws (both arms) | draws_per_min | minutes |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for row in record["projection"]:
+        lines.append(
+            f"| {row['shape']} | {row['prompts']} | {row['draws']} | "
+            f"{row['draws_per_min']:.2f} | {row['minutes']:.1f} |"
+        )
+    total_draws = sum(row["draws"] for row in record["projection"])
+    lines += [
+        "",
+        f"**Total: {total_draws} draws, {record['projected_hours']:.2f} h across both arms.** The",
+        "cost model's floor is 112,608 draws at 8.2 h; the figure above is what the K decision in",
+        "plan 18-13 is taken against.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _self_check():
     """One passing case and one INCONCLUSIVE case per condition — the mutation proof D-27 needs.
 

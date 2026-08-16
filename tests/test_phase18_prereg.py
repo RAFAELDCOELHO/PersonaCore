@@ -1513,3 +1513,134 @@ def test_assemble_verdict_hands_off_four_question_unit_ints():
     assert extraction.LOWER_BOUND_SENTENCE in result["conclusion"]
     assert result["best_attack"] in result["conclusion"]
     assert extraction.BEST_ATTACK_RULE and "ERASURE_DECISION_RULE" in extraction.BEST_ATTACK_RULE
+
+
+# --- D-12 / D-28: the pre-flight smoke's SCOPE, read off the AST -------------------------------
+#
+# The three tokens below are the whole adapter surface this driver can reach. They belong in
+# `run_arm` and nowhere else: D-12's zero-preview constraint is what keeps the K decision in plan
+# 18-13 free of any quantity from the taught column, and a preview would make every remaining
+# pre-registration decision post-hoc. Written against the AST rather than a `grep` because the
+# smoke's docstring must be free to EXPLAIN why it does not take the adapted load — a text scan
+# cannot tell a call from the paragraph rejecting it, and the paragraph is the part a later reader
+# most needs.
+_ADAPTER_SURFACE = ("persona_adapter", "inject_lora", "adapter_disabled")
+
+
+def _function(tree, name):
+    """The top-level ``FunctionDef`` called ``name``, proved present rather than searched for."""
+    found = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name]
+    assert len(found) == 1, (
+        f"scripts/phase18_extraction.py defines {len(found)} top-level functions named {name!r}; "
+        "a second def would bind the later one and silently delete the guard below"
+    )
+    return found[0]
+
+
+def _calls(node):
+    return {ast.unparse(call.func) for call in ast.walk(node) if isinstance(call, ast.Call)}
+
+
+def _loads(node):
+    """Every name and attribute a function subtree READS — the reference set, not the text."""
+    names = {inner.id for inner in ast.walk(node) if isinstance(inner, ast.Name)}
+    return names | {inner.attr for inner in ast.walk(node) if isinstance(inner, ast.Attribute)}
+
+
+def test_smoke_scope_is_base_only():
+    """D-12 — the pre-flight touches the un-adapted base, the in-memory corpus, and nothing else.
+
+    Two separate claims, and the second is the one a reviewer would otherwise have to take on
+    trust. That ``run_smoke`` reaches no adapter surface — asserted on the source segment, so a
+    reference of ANY kind counts, not only a call. And that it builds its prompts by calling
+    ``build_corpus`` and never reads ``CORPUS_PATH``: the corpus artifact is committed one wave
+    AFTER the smoke runs, so a file read there would abort the phase's most expensive gate on an
+    artifact that cannot exist yet.
+
+    The other half of the scope claim — that the adapter surface DOES appear in ``run_arm``, so
+    the base column is gated off the ONE loaded model rather than not gated at all — lives in
+    ``test_one_corpus_two_arms``, which is where the arm's own structure is asserted.
+    """
+    tree = _tree(_EXTRACTION_PATH)
+    source = _EXTRACTION_PATH.read_text(encoding="utf-8")
+    smoke = _function(tree, "run_smoke")
+
+    smoke_source = ast.get_source_segment(source, smoke)
+    for token in _ADAPTER_SURFACE:
+        assert token not in smoke_source, (
+            f"run_smoke mentions {token!r}. D-12 runs the pre-flight on the UN-ADAPTED base only, "
+            "because the K decision plan 18-13 takes on this report must not be informed by any "
+            "quantity from the taught column — and a smoke that can reach the adapter at all is "
+            "one commit away from reporting one"
+        )
+
+    assert "build_corpus" in _calls(smoke), (
+        "run_smoke does not call build_corpus. Its prompts must be built IN MEMORY: "
+        "results/phase18_corpus.json is committed by plan 18-14, one wave after this smoke runs"
+    )
+    assert "CORPUS_PATH" not in _loads(smoke), (
+        "run_smoke reads CORPUS_PATH. That artifact does not exist when the smoke runs, and D-04's "
+        "forced order — smoke, then pin, then corpus, then run — is what makes it not exist"
+    )
+    for call in ("open", "json.load", "json.loads"):
+        assert call not in _calls(smoke), (
+            f"run_smoke calls {call}(). The pre-flight reads no artifact of its own; every input "
+            "is either a committed checkpoint, the frozen tokenizer, or built in memory"
+        )
+
+    priors = _load("phase18_extraction", _EXTRACTION_PATH).DEGENERATION_PRIORS
+    measured = {(row["k"], row["n"]) for row in priors["attractors"]}
+    assert measured == {(56, 936), (47, 936)}, (
+        f"the degeneration priors are {sorted(measured)}, not Phase 17's measured 56/936 and "
+        "47/936 base-column rates. D-12 floors the non-degeneracy check against a number this "
+        "project MEASURED precisely so it is not a threshold invented to be passable"
+    )
+    assert "NOT PHASE 18 FINDINGS" in priors["note"], (
+        "DEGENERATION_PRIORS carries no note scoping its two rates to the published Phase 13 "
+        "properties they are. Reproduced beside this phase's own numbers and unlabelled, they "
+        "read as findings of an extraction audit that measured neither of them"
+    )
+
+
+def test_smoke_covers_nll_path():
+    """D-28 — the instruments the pin swallowed are exercised BEFORE the run, not during it.
+
+    D-28 pulled the value-span NLL and the exposure ranking inside ``scripts/phase18_extraction.py``
+    because an instrument that decides admissibility is as weakening-prone as an attack template.
+    The cost it names explicitly is that the smoke now carries more weight: a NaN or a crash in
+    that path discovered after 8.2h of generation is the failure this buys out. So the smoke must
+    reach the NLL for every candidate in R across all eight slots and all three frames, must check
+    FINITENESS rather than merely calling the function, and must run D-30's spread-0 control —
+    the one exposure assertion whose failure is a bug and never a finding.
+    """
+    tree = _tree(_EXTRACTION_PATH)
+    smoke = _function(tree, "run_smoke")
+    calls = _calls(smoke)
+    reads = _loads(smoke)
+
+    for name in ("value_span_nll", "reference_set_for", "assert_spread_zero_reductions_agree"):
+        assert name in calls, (
+            f"run_smoke never calls {name}. D-28 requires the pre-flight to exercise the NLL and "
+            "exposure path on the base, since those instruments are inside the pin and a defect "
+            "in them surfaces as an unreadable admissibility gate after the run has been spent"
+        )
+    assert "math.isfinite" in calls, (
+        "run_smoke calls the NLL but never checks finiteness. Calling it proves it returns; the "
+        "failure D-28 names is a NaN, which returns perfectly well and then ranks unpredictably"
+    )
+    for constant in ("CORE_SLOTS", "NLL_FRAMES", "NLL_REDUCTIONS", "SPREAD_ZERO_CONTROL_SLOTS"):
+        assert constant in reads, (
+            f"run_smoke never reads {constant}, so its coverage is not the pre-registered one. "
+            "A hand-written subset of slots, frames or reductions is a subset free to stop "
+            "agreeing with the grid the admissibility gate is defined over"
+        )
+
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    assert extraction.SPREAD_ZERO_CONTROL_SLOTS == ("birth_year", "house_number")
+    assert len(extraction.CORE_SLOTS) == 8 and len(extraction.NLL_FRAMES) == 3
+    assert not extraction.SMOKE_REPORT_PATH.exists(), (
+        f"{extraction.SMOKE_REPORT_PATH} exists. Plan 18-13 runs the smoke and commits that "
+        "report as the FIRST results/phase18_* artifact, which is the commit that arms the "
+        "STAT-05 ancestry guard — an artifact appearing before the driver is complete would "
+        "freeze the pin mid-assembly"
+    )
