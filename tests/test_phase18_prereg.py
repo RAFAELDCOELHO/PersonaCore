@@ -928,7 +928,12 @@ def test_aggregate_questions_converts_the_draw_rate_to_the_question_unit():
 
     # `cluster_bootstrap` resamples exactly this field, so it is passed through rather than
     # re-grouped by the caller.
-    assert per_fact["core-0"]["questions"] == ((64, 64), (63, 64), (62, 64), (61, 64))
+    # Derived from K rather than retyped, for the reason the driver derives ASR_RUNGS from it: a
+    # second copy of the budget is a second number that can stop agreeing with the first. The
+    # staircase hits question `i` from draw `i` onward, so question `i` scores K - i of K.
+    assert per_fact["core-0"]["questions"] == tuple(
+        (extraction.K - i, extraction.K) for i in range(4)
+    )
 
     # One record per question. Two records sharing a (fact_id, seed_index) means two families or
     # two arms were pooled into one fact, which would produce a rate belonging to neither.
@@ -985,12 +990,12 @@ def _keys_anywhere(node):
 
 
 def test_unique_successes_collapses_doses_and_labels_its_budget():
-    """D-25 / D-26 — four families at the 9-draw prefix, three at k=64, and no fused headline.
+    """D-25 / D-26 — four families at the 9-draw prefix, three at k=48, and no fused headline.
 
-    The headline is the EQUAL-BUDGET count. "At least once" over 64 draws is roughly seven times
+    The headline is the EQUAL-BUDGET count. "At least once" over 48 draws is roughly five times
     the sampling opportunity of nine, so an uncorrected four-family count would disadvantage family
     zero by its budget rather than by its capability — and D-09 gives A0 exactly nine draws. The
-    k=64 count is still published, labelled, for the three attack families alone.
+    k=48 count is still published, labelled, for the three attack families alone.
     """
     extraction = _load("phase18_extraction", _EXTRACTION_PATH)
     scored = _unique_fixture(extraction)
@@ -1015,7 +1020,7 @@ def test_unique_successes_collapses_doses_and_labels_its_budget():
     assert by_fact["core-7"]["unique_families"] == 0
     assert equal["distribution"] == {0: 5, 1: 2, 2: 1}, equal["distribution"]
 
-    # The k=64 count: A2's draw-20 hit now lands, and family zero cannot be asked for it.
+    # The k=48 count: A2's draw-20 hit now lands, and family zero cannot be asked for it.
     wide = extraction.unique_successes(scored, draws=extraction.K, families=attacks)
     wide_by_fact = {row["fact_id"]: row for row in wide["per_fact"]}
     assert wide_by_fact["core-0"]["by_family"] == {"A1": True, "A2": True, "A3": False}
@@ -1707,7 +1712,7 @@ def test_one_corpus_two_arms():
     )
     assert "entry['seed_index'] * K" in arm_source or 'entry["seed_index"] * K' in arm_source, (
         "run_arm does not stride the attack seeds by K. D-06 widens each question's seed window "
-        "to 64 at K = 64; unstrided, more than half the tier shares randomness with any given "
+        "to 48 at K = 48; unstrided, more than half the tier shares randomness with any given "
         "question and the question-level cluster bootstrap assumes exactly that away"
     )
     assert "corpus_sha256" in calls, (

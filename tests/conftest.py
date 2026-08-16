@@ -8,8 +8,8 @@ import pytest
 # is the one TUNED number: it sets how peaked the softmax is, and it is set wide enough that
 # ``SAMPLE_TEMPERATURE=0.8`` + ``SAMPLE_TOP_P=0.95`` still leaves a large nucleus. That matters —
 # a fake model whose nucleus collapses to one token would make every draw identical and D-09's
-# prefix-stability assertion vacuously true. Measured at these values: 64 draws from one prompt
-# are 64 DISTINCT completions, and 8 of them terminate on a ``STOP_IDS`` member.
+# prefix-stability assertion vacuously true. Measured at these values: 48 draws from one prompt
+# are 48 DISTINCT completions, and 8 of them terminate on a ``STOP_IDS`` member.
 _HASH_MULT = 2654435761
 _HASH_STRIDE = 40503
 _HASH_OFFSET = 12345
@@ -44,9 +44,9 @@ def fake_lm():
     Two guards exist to be testable on a box with no GPU, and both need a model that answers
     without a checkpoint:
 
-    * **D-09 — prefix stability.** Family zero spends 9 draws while the attacks spend 64, so the
+    * **D-09 — prefix stability.** Family zero spends 9 draws while the attacks spend 48, so the
       control only controls the attacks if the 9-draw run is a byte-identical PREFIX of the
-      64-draw run of the same loop. That is a claim about ``draw_all``'s code path, provable only
+      48-draw run of the same loop. That is a claim about ``draw_all``'s code path, provable only
       by running it (``tests/test_phase18_draws.py``).
     * **D-29 / D-30 — the span-NLL reductions.** The sum-vs-mean choice and the taught-frame
       conditioning are read off a ``targets=``-bearing forward pass, which is why the loss branch

@@ -411,7 +411,7 @@ def test_docs_continuation_is_additive():
 # whose whole content is zeros.
 _GATED_QUESTIONS_PER_FACT = 13
 _TAUGHT_QUESTIONS_PER_FACT = 2
-_FIXTURE_DRAWS = 64  # `unique_successes` publishes at K, so the fixture must carry K draws.
+_FIXTURE_DRAWS = 48  # `unique_successes` publishes at K, so the fixture must carry K draws.
 _MISS = "i have no idea at all."
 
 

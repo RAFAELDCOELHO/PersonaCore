@@ -31,7 +31,7 @@ while leaving the seed arithmetic in the source looking correct.
 
 ``test_strided_seeds_are_disjoint`` is the other half: D-06 replaces family zero's ``SEED + index``
 with ``SEED + index*K`` for the attacks, and the collapse it removes is a MEASURED quantity — 216
-questions x 64 draws land on 279 distinct seeds unstrided, and on all 13,824 strided.
+questions x 48 draws land on 263 distinct seeds unstrided, and on all 10,368 strided.
 
 **The second half of this file is the INSTRUMENT layer (D-28/D-29/D-30).** The teacher-forced
 value-span NLL and the Carlini exposure rank decide whether a zero is *admissible*, which makes
@@ -71,7 +71,7 @@ def _load(name):
 recall = _load("phase14_recall")
 extraction = _load("phase18_extraction")
 
-# Imported, never retyped: K=64 and the 9-draw family-zero budget are pre-registered in
+# Imported, never retyped: K=48 and the 9-draw family-zero budget are pre-registered in
 # `scripts/phase18_extraction.py` (D-09/D-06), and `SEED` lives in the recall driver. A test that
 # re-typed any of them would keep passing after the constant it is guarding moved.
 K = extraction.K
@@ -116,7 +116,7 @@ def _draw_inputs(model):
 
 
 def test_prefix_is_budget_independent(fake_lm):
-    """D-09: the first 9 draws at the K=64 budget are the 9 draws family zero actually spends."""
+    """D-09: the first 9 draws at the K=48 budget are the 9 draws family zero actually spends."""
     tok, prompt_ids, forbid = _draw_inputs(fake_lm)
 
     # The fixture's own premise first: a model that answered differently on the second call would
@@ -165,15 +165,15 @@ def test_strided_seeds_are_disjoint(fake_lm):
     strided = {
         recall.question_seed(src * K) + s for src in range(N_SOURCE_QUESTIONS) for s in range(K)
     }
-    assert len(strided) == N_SOURCE_QUESTIONS * K == 13824
+    assert len(strided) == N_SOURCE_QUESTIONS * K == 10368
 
     unstrided = {
         recall.question_seed(src) + s for src in range(N_SOURCE_QUESTIONS) for s in range(K)
     }
-    # 279, the measured collapse D-06 names: the union of 216 length-64 windows each offset by one
-    # is a single contiguous run, so 13,824 draw slots share 279 seeds — 98% of the randomness the
+    # 263, the measured collapse D-06 names: the union of 216 length-48 windows each offset by one
+    # is a single contiguous run, so 10,368 draw slots share 263 seeds — 97% of the randomness the
     # question-level cluster bootstrap assumes is independent is not.
-    assert len(unstrided) == 279
+    assert len(unstrided) == 263
     assert len(unstrided) == N_SOURCE_QUESTIONS + K - 1
 
     for src in (0, 1, 2, 111):
