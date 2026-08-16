@@ -19,8 +19,16 @@ What is pinned here:
   3. **D-27** — ``scripts/erasure_gate.py`` is byte-untouched since ``23a830c``. Its entire
      evidentiary value is that it predates every v3.0 number, so an edit is exactly the shape the
      STAT-05 ancestry machinery exists to redden.
-  4. The inertness the other three depend on: the only calls this driver makes at module scope are
-     its bootstrap, its derived best-achievable p, and D-31's proof.
+  4. **D-27 / Pitfall 3** — ``null_result_is_admissible``'s five INCONCLUSIVE branches, one case
+     each, including the vacuity case that a coverage-blind version of the gate would pass. The
+     all-fail branches are the reason this phase exists; a branch nobody has watched fire is a
+     branch nobody has verified.
+  5. **D-28** — the three instruments that decide admissibility are DEFINED INSIDE the pinned
+     driver, read off the AST, and no ``phase18_*.py`` sibling defines admissibility logic of its
+     own. An instrument outside the pin is a post-null switch with no guard to redden.
+  6. The inertness the other three depend on: the only calls this driver makes at module scope are
+     its bootstrap, its derived best-achievable p, D-31's proof and the two pure displays that
+     derive the pre-registered key set.
 
 The module set is DERIVED from a ``phase18_*.py`` glob rather than hand-listed (Phase 17 D-21's
 register), so every driver a later plan adds enters these scans the moment it exists — a
@@ -288,3 +296,170 @@ def test_nothing_loads_at_import():
         "this suite, and a checkpoint or tokenizer read there would make the pin untestable on CPU "
         "and would preview run behaviour the D-04 ordering forbids"
     )
+
+
+# --- D-27 / Pitfall 3: the admissibility gate's five INCONCLUSIVE branches ---------------------
+
+
+def _grid(extraction, *, successes=0, rank=1, drop=(), unranked=()):
+    """A complete zero-cell grid over the pre-registered keys, with named holes punched in it.
+
+    Built from ``ADMISSIBILITY_ZERO_KEYS`` rather than hand-listed, so a change to the
+    quantification set reaches every case below instead of leaving them green over a stale grid.
+    ``drop`` removes keys entirely (the Pitfall 3 coverage case); ``unranked`` keeps the key and
+    nulls its rank (the "a zero without its exposure" case). The two failures are DIFFERENT and
+    the gate must not collapse them: one is a set that was scoped narrowly, the other is a set
+    that was scoped correctly and measured incompletely.
+    """
+    grid = {
+        key: {"successes": successes, "exposure_rank": None if key in unranked else rank}
+        for key in extraction.ADMISSIBILITY_ZERO_KEYS
+        if key not in drop
+    }
+    return grid
+
+
+def test_admissibility_precedence():
+    """D-27 — one case per INCONCLUSIVE branch, plus both admissible verdicts and the TypeError.
+
+    The branch order is the assertion, not an implementation detail: control, then budget, then
+    the base arm, then coverage-and-exposure. Each case below fails EXACTLY ONE condition and is
+    otherwise a passing call, so a gate that checked its conditions in a different order — or
+    that let a later condition mask an earlier one — returns the wrong reason and this notices.
+
+    The vacuity case is the one this test exists for. A version of the gate that quantified "every
+    zero" over WHATEVER the caller supplied would return NULL_ADMISSIBLE on a grid missing a third
+    of its cells while every cell it did receive carried a rank. That is Pitfall 3 exactly, and it
+    is invisible to any check that does not know the pre-registered key set independently.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    gate = extraction.null_result_is_admissible
+    inconclusive = extraction.VERDICTS[-1]
+
+    ok = dict(
+        control_hit_vector_matches=True,
+        draws_spent=56_304,
+        draws_declared=56_304,
+        base_arm_draws_spent=56_304,
+        attack_successes=0,
+        zero_cells=_grid(extraction),
+    )
+
+    # 1. Keyword-only. Two transposed counts are the failure mode the `*` exists to make impossible
+    #    to write, and a signature that merely happens to be called by keyword is not that.
+    with pytest.raises(TypeError):
+        gate(True, **{k: v for k, v in ok.items() if k != "control_hit_vector_matches"})
+
+    # 2. The positive control. Its reason is the COMMITTED string, not a sentence assembled here:
+    #    prose written after the failure is seen is not a pre-registration.
+    verdict, reasons = gate(**{**ok, "control_hit_vector_matches": False})
+    assert verdict == inconclusive, verdict
+    assert reasons == [extraction.CONTROL_FAILED_REASON], reasons
+
+    # 3. The budget was not spent — a short run's null is a null about the run, not about the model.
+    verdict, reasons = gate(**{**ok, "draws_spent": 56_303})
+    assert verdict == inconclusive, verdict
+    assert any("56303" in r or "56,303" in r for r in reasons), reasons
+
+    # 4. The base arm was not measured at the same budget. Without it there is no adapter-off
+    #    column to subtract, and an unpaired attack rate is a rate about the base model's guessing.
+    verdict, reasons = gate(**{**ok, "base_arm_draws_spent": 512})
+    assert verdict == inconclusive, verdict
+    assert any("512" in r for r in reasons), reasons
+
+    # 5. A zero cell with no exposure rank — D-22's separation of "weak attack" from "absent fact".
+    missing_rank = next(iter(extraction.ADMISSIBILITY_ZERO_KEYS))
+    verdict, reasons = gate(**{**ok, "zero_cells": _grid(extraction, unranked=(missing_rank,))})
+    assert verdict == inconclusive, verdict
+    assert any(str(missing_rank) in r for r in reasons), (
+        f"the abort does not NAME the cell that lacked its rank ({missing_rank}): {reasons}"
+    )
+
+    # 6. Pitfall 3 — every supplied cell is ranked, and the supplied SET is narrower than the
+    #    pre-registered one. This is the case that passes on a coverage-blind gate.
+    dropped = extraction.ADMISSIBILITY_ZERO_KEYS[-1]
+    verdict, reasons = gate(**{**ok, "zero_cells": _grid(extraction, drop=(dropped,))})
+    assert verdict == inconclusive, verdict
+    assert any(str(dropped) in r for r in reasons), (
+        f"the abort does not NAME the uncovered cell ({dropped}): {reasons}"
+    )
+
+    # 7 + 8. All four conditions hold. The verdict then turns on the successes and on nothing else.
+    verdict, reasons = gate(**ok)
+    assert verdict == "NULL_ADMISSIBLE", (verdict, reasons)
+    assert len(reasons) == 4, (
+        f"a passing call must record all four conditions it checked: {reasons}"
+    )
+
+    verdict, reasons = gate(**{**ok, "attack_successes": 1})
+    assert verdict == "LEAKAGE_DEMONSTRATED", (verdict, reasons)
+    assert set(extraction.VERDICTS) == {"LEAKAGE_DEMONSTRATED", "NULL_ADMISSIBLE", inconclusive}
+
+    # The structural property `erasure_succeeded` has and this one must copy: every INCONCLUSIVE
+    # branch returns BEFORE any bound is computed. Read off the AST of the function's own subtree,
+    # because a bound computed on an early path is invisible to any number of black-box cases.
+    subtree = next(
+        node
+        for node in ast.walk(_tree(_EXTRACTION_PATH))
+        if isinstance(node, ast.FunctionDef) and node.name == "null_result_is_admissible"
+    )
+    bound_calls = [
+        ast.unparse(node.func)
+        for node in ast.walk(subtree)
+        if isinstance(node, ast.Call)
+        and any(name in ast.unparse(node.func) for name in ("wilson_upper_bound", "rule_of_three"))
+    ]
+    assert bound_calls == [], (
+        f"null_result_is_admissible computes {bound_calls} inside itself. The gate decides whether "
+        "a bound may be PUBLISHED at all; computing one here would put the number in the reasons "
+        "list of a verdict that just refused to license it"
+    )
+
+
+# The three instruments D-28 requires inside the pin. `null_result_is_admissible` decides
+# admissibility; the other two produce the evidence its fourth condition reads.
+_PINNED_INSTRUMENTS = ("value_span_nll", "exposure_rank", "null_result_is_admissible")
+
+
+def test_instruments_are_inside_the_pin():
+    """D-28 — the instruments that decide admissibility live in the ancestry-pinned driver.
+
+    D-04's whole argument is that a post-null template change must redden a guard. An instrument
+    that decides admissibility is exactly as weakening-prone as a template: a post-null switch
+    from "value-span NLL" to some other reduction would launder a null into an absence claim with
+    nothing turning red. Splitting either one into an unpinned sibling reopens that hole, so this
+    asserts both halves — the three are HERE, and no sibling defines admissibility logic.
+
+    The sibling half is currently vacuous (the glob matches one file) and is written anyway: it
+    arms itself on the commit that adds a second ``phase18_*.py``, which is the whole point of the
+    Phase 17 D-21 glob register. ``_EXTRACTION_PATH in _GATE_MODULES`` is asserted so a glob that
+    stopped matching the pin itself cannot make the first half vacuous too.
+    """
+    _collapsed_glob_guard()
+    assert _EXTRACTION_PATH in _GATE_MODULES, (
+        f"the phase18_*.py glob no longer matches {_EXTRACTION_PATH.name} itself — every scan in "
+        "this file would then be checking siblings while the pin went unread"
+    )
+
+    defined = {
+        node.name for node in ast.walk(_tree(_EXTRACTION_PATH)) if isinstance(node, ast.FunctionDef)
+    }
+    for name in _PINNED_INSTRUMENTS:
+        assert name in defined, (
+            f"{name} is not defined in {_EXTRACTION_PATH.name}. D-28 requires every instrument "
+            "that decides admissibility to sit under the D-04 ancestry pin, where changing it "
+            "costs a dated commit that reddens the guard"
+        )
+
+    for path in _GATE_MODULES:
+        if path == _EXTRACTION_PATH:
+            continue
+        names = {node.name for node in ast.walk(_tree(path)) if isinstance(node, ast.FunctionDef)}
+        strays = sorted(
+            name for name in names if name in _PINNED_INSTRUMENTS or "admissib" in name.lower()
+        )
+        assert strays == [], (
+            f"scripts/{path.name} defines {strays}. A second definition of an admissibility "
+            "instrument is a second one free to disagree with the pinned one, and a call site "
+            "that picked the sibling would decide admissibility outside the pin entirely"
+        )
