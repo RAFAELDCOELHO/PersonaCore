@@ -394,6 +394,293 @@ def test_docs_continuation_is_additive():
         )
 
 
+# --------------------------------------------------------------------------- #
+# 18-11 — the RENDERED report: the half a source scan structurally cannot do
+# --------------------------------------------------------------------------- #
+#
+# Node ids below are deliberately distinct from 18-12's document-level pair above
+# (``test_docs_continuation_is_additive`` / ``test_no_bare_zero_percent_in_docs``). A duplicate
+# ``def`` in one module binds the later one and DELETES the earlier guard with no error and no
+# collection warning — the two pairs check different surfaces (published docs vs the report this
+# driver renders) and losing either to a name collision would be silent.
+
+# The all-zero fixture's shape. 8 facts x 13 questions is the 104 `core_held_out` questions the
+# gated tier actually holds, which is what makes the rendered rule-of-three read `3/104` — the
+# denominator a reader checks the ceiling against. The taught tier is deliberately SMALLER: the
+# tier-split section only has to render, and a second 104-question tier would double a fixture
+# whose whole content is zeros.
+_GATED_QUESTIONS_PER_FACT = 13
+_TAUGHT_QUESTIONS_PER_FACT = 2
+_FIXTURE_DRAWS = 64  # `unique_successes` publishes at K, so the fixture must carry K draws.
+_MISS = "i have no idea at all."
+
+
+def _zero_records(extraction, *, tier, questions_per_fact, families=None):
+    """Draw records for every (family, arm) cell of one tier, every completion a MISS.
+
+    All-zero is not an arbitrary fixture. It is this phase's HOPED-FOR outcome and the one input
+    that most tempts a bare ``0%`` — every proportion in the report is a zero, so a renderer that
+    dropped a denominator anywhere would be caught here and nowhere else.
+    """
+    families = extraction.ATTACK_FAMILIES if families is None else families
+    records = []
+    for family in families:
+        for arm in extraction.ARMS:
+            for fact_index, slot in enumerate(extraction.CORE_SLOTS):
+                for seed_index in range(questions_per_fact):
+                    records.append(
+                        {
+                            "family": family,
+                            "dose": family.split("-", 1)[1] if family.startswith("A1-") else None,
+                            "fact_id": f"core-{fact_index}",
+                            "slot": slot,
+                            "tier": tier,
+                            "arm": arm,
+                            "seed_index": seed_index,
+                            # A2 is the one family `score_records` judges post-concatenation, so it
+                            # must carry a recorded prefix or the scorer refuses the record.
+                            "prefix_text": "zz" if family == "A2" else None,
+                            "completions": [_MISS] * _FIXTURE_DRAWS,
+                        }
+                    )
+    # A value no completion contains, supplied as a PARAMETER — `score_records` takes its values
+    # that way precisely so a fixture never has to reach the fact set.
+    return extraction.score_records(records, {f"core-{i}": "unrelatedcanary" for i in range(8)})
+
+
+def _zero_verdict(extraction):
+    """``assemble_verdict``'s own record over the all-zero fixture — NULL_ADMISSIBLE.
+
+    The real orchestrator, not a hand-built dict: the verdict, the Holm rows, the handoff and the
+    conclusion paragraph the report publishes are the ones the committed instruments produced, so a
+    change to any of their shapes reddens the renderer here rather than at report time.
+
+    ``control_reference`` is supplied synthetically so this stays a test about the RENDERER; the
+    parse of the real committed taught rows is pinned in ``test_phase18_prereg.py``.
+    """
+    gated = _zero_records(extraction, tier=extraction.GATED_TIER, questions_per_fact=13)
+    reference = tuple(
+        {
+            "fact_id": f"core-{index // 14}",
+            "seed_index": index,
+            "question": f"q{index}",
+            "k": 0,
+            "n": extraction.FAMILY_ZERO_DRAWS,
+        }
+        for index in range(extraction.PHASE14_TAUGHT_QUESTIONS)
+    )
+    recorded = [
+        {
+            "fact_id": row["fact_id"],
+            "seed_index": row["seed_index"],
+            "hits": [False] * extraction.FAMILY_ZERO_DRAWS,
+            "n_draws": extraction.FAMILY_ZERO_DRAWS,
+        }
+        for row in reference
+    ]
+    per_fact_by_family = {
+        family: {
+            arm: extraction.aggregate_questions(
+                [record for record in gated if record["family"] == family and record["arm"] == arm],
+                tier=extraction.GATED_TIER,
+            )
+            for arm in extraction.ARMS
+        }
+        for family in extraction.ATTACK_FAMILIES
+    }
+    n_questions = 8 * _GATED_QUESTIONS_PER_FACT
+    return extraction.assemble_verdict(
+        control_recorded=recorded,
+        control_reference=reference,
+        admissibility={
+            "draws_spent": 1,
+            "draws_declared": 1,
+            "base_arm_draws_spent": 1,
+            "attack_successes": 0,
+            "zero_cells": {
+                key: {"successes": 0, "exposure_rank": 1}
+                for key in extraction.ADMISSIBILITY_ZERO_KEYS
+            },
+        },
+        per_fact_by_family=per_fact_by_family,
+        question_counts={
+            family: {arm: {"successes": 0, "n_questions": n_questions} for arm in extraction.ARMS}
+            for family in extraction.ATTACK_FAMILIES
+        },
+        resamples=32,  # DESCRIPTIVE intervals; no branch in this test reads their width.
+    )
+
+
+def _render_zero_report(extraction, path):
+    """Render the whole report from the all-zero fixture into ``path`` and return its text."""
+    gated = _zero_records(
+        extraction, tier=extraction.GATED_TIER, questions_per_fact=_GATED_QUESTIONS_PER_FACT
+    )
+    taught = _zero_records(
+        extraction, tier=extraction.REPORTED_TIER, questions_per_fact=_TAUGHT_QUESTIONS_PER_FACT
+    )
+    scored = gated + taught
+    ladders = [
+        extraction.asr_ladder(scored, family=family, arm=arm, tier=tier)
+        for tier in extraction.CORPUS_TIERS
+        for family in extraction.ATTACK_FAMILIES
+        for arm in extraction.ARMS
+    ]
+    curves = [
+        extraction.cumulative_by_attempt(scored, family=family, arm=arm, tier=tier)
+        for tier in extraction.CORPUS_TIERS
+        for family in extraction.ATTACK_FAMILIES
+        for arm in extraction.ARMS
+    ]
+    one_cell = [
+        record
+        for record in gated
+        if record["arm"] == extraction.ARMS[0] and record["seed_index"] == 0
+    ]
+    uniques = [
+        extraction.unique_successes(one_cell, draws=draws, families=("A1", "A2", "A3"))
+        for draws in (extraction.FAMILY_ZERO_DRAWS, extraction.K)
+    ]
+    return extraction.render_report(
+        ladders=ladders,
+        curves=curves,
+        injection=[
+            {"slot": slot, "realized": {budget: 27}}
+            for slot, budget in zip(
+                extraction.CORE_SLOTS, extraction.INJECTION_BUDGET_DECLARED, strict=True
+            )
+        ],
+        exposure=[
+            {
+                "slot": slot,
+                "admissible": (
+                    extraction.ADMISSIBLE_NLL_FRAME,
+                    extraction.ADMISSIBLE_NLL_REDUCTION,
+                ),
+                "nll": {
+                    frame: {reduction: 1.5 for reduction in extraction.NLL_REDUCTIONS}
+                    for frame in extraction.NLL_FRAMES
+                },
+                "rank": 1,
+                "exposure_bits": 3.0,
+                "ceiling_bits": 3.0,
+                "n_references": 8,
+                "length_spread": 0 if slot in extraction.SPREAD_ZERO_CONTROL_SLOTS else 3,
+                "spread_zero_control": slot in extraction.SPREAD_ZERO_CONTROL_SLOTS,
+                "descriptive_label": extraction.EXPOSURE_DESCRIPTIVE_LABEL,
+                "threats_to_validity": extraction.EXPOSURE_THREATS_TO_VALIDITY,
+            }
+            for slot in extraction.CORE_SLOTS
+        ],
+        uniques=uniques,
+        verdict=_zero_verdict(extraction),
+        provenance=[
+            {
+                "arm": arm,
+                "adapter_enabled": arm == extraction.ARMS[0],
+                "git_sha": "deadbee",
+                "pid": 4242 + index,
+                "device": "cpu",
+                "wall_clock_min": 492.0,
+                "corpus_sha256": "c" * 64,
+                "forbid_ids_sha256": "f" * 64,
+            }
+            for index, arm in enumerate(extraction.ARMS)
+        ],
+        path=path,
+    )
+
+
+def test_no_bare_zero_percent_in_rendered_report(tmp_path):
+    """STAT-02 over the RENDERED report — the half a source scan structurally cannot do.
+
+    ``test_no_bare_zero_percent_in_docs`` below scans two committed documents and
+    ``tests/test_phase18_prereg.py`` scans this driver's source. Neither can see a number a format
+    string produced, and that is precisely how a bare ``0%`` reaches a published report: nothing in
+    the template contains one. So the scan runs on the text ``render_report`` actually returns,
+    driven by the ALL-ZERO fixture — this phase's hoped-for outcome and the input where every
+    single proportion in the report is a zero.
+
+    The three positive assertions below are not decoration. A renderer that dropped its
+    denominators entirely would satisfy the bare-zero regex perfectly while publishing exactly the
+    certainty STAT-02 forbids, so the ceiling, the label and both denominators are asserted
+    PRESENT in the same pass that asserts the bare zero absent.
+    """
+    extraction = _load()
+    text = _render_zero_report(extraction, tmp_path / "phase18_extraction_report.md")
+
+    pattern = re.compile(r"\b0(\.0+)?%")
+    assert pattern.search("extracted 0% of 104 questions"), "the bare-zero regex stopped matching"
+    found = pattern.search(text)
+    assert found is None, (
+        f"the rendered report publishes a bare zero percentage at offset "
+        f"{found.start() if found else -1}: "
+        f"{text[max(0, found.start() - 90) : found.end() + 40]!r}"
+    )
+
+    assert "3/104" in text, (
+        "the rendered all-zero report never states the rule-of-three ceiling as `3/n`. A zero "
+        "published without its ceiling states a certainty 104 questions do not support"
+    )
+    assert extraction.persistence.WILSON_LABEL in text, (
+        "the Wilson bound is published without the label naming it as the INDEPENDENCE-ASSUMING "
+        "width — the assumption the whole clustering discussion in this phase exists to price"
+    )
+    assert "(fact-level, n = 8)" in text, (
+        "a zero was published with only the flattering question-level denominator. Both ends of "
+        "the clustering assumption travel together or not at all (CLUSTER_DENOMINATOR_RATIONALE)"
+    )
+    assert (tmp_path / "phase18_extraction_report.md").read_text(encoding="utf-8") == text, (
+        "render_report returned text it did not write, so the scan above checked a string the "
+        "artifact does not carry"
+    )
+
+
+def test_render_path_never_reaches_the_fact_set():
+    """D-11 — no function reachable from ``render_report`` imports a fact-set module.
+
+    D-11 records ``slot`` on every corpus entry, draw record and exposure record for exactly one
+    consequence: the report renderer never needs a fact VALUE, so it never imports one. Read off
+    the AST as a transitive closure over the driver's own call graph, because the property is about
+    what the render path CAN reach and not about what today's body happens to call.
+
+    The two modules are named rather than globbed. They are the only two that hold locked values at
+    module scope, which is why the driver's LAZY-IMPORT RULE exists for them specifically.
+    """
+    extraction_tree = ast.parse(_EXTRACTION_PATH.read_text(encoding="utf-8"))
+    functions = {
+        node.name: node
+        for node in ast.walk(extraction_tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert "render_report" in functions, "render_report is gone — this guard would check nothing"
+
+    seen, frontier, imports = set(), ["render_report"], {}
+    while frontier:
+        name = frontier.pop()
+        if name in seen or name not in functions:
+            continue
+        seen.add(name)
+        for node in ast.walk(functions[name]):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                frontier.append(node.func.id)
+            elif isinstance(node, ast.Import):
+                imports.setdefault(name, []).extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.setdefault(name, []).append(node.module)
+
+    assert len(seen) > 1, f"the closure over render_report found only {seen} — the walk broke"
+    forbidden = {"phase14_factset", "phase17_persona_facts"}
+    offenders = {name: sorted(forbidden.intersection(modules)) for name, modules in imports.items()}
+    offenders = {name: hit for name, hit in offenders.items() if hit}
+    assert offenders == {}, (
+        f"functions reachable from render_report import fact-set modules: {offenders}. D-11's "
+        "whole point is that the renderer works off `slot` alone, so no fact value can enter the "
+        "render path — an import here would put every locked value one attribute access away from "
+        "a paragraph in the published report"
+    )
+
+
 def test_no_bare_zero_percent_in_docs():
     """STAT-02 — no bare zero percentage in either committed doc surface.
 

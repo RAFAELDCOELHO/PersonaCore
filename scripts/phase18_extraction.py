@@ -48,6 +48,7 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
 # its pre-registration at 23a830c (D-27) and supplies the verdict domain this phase's own triple is
 # derived from; `phase16_persistence` supplies the sign test and the family alpha D-31 is priced
 # against. A retyped constant is a second copy free to stop agreeing with the gate it prices.
+import _verdict  # noqa: E402  (needs the sys.path insert above)
 import erasure_gate  # noqa: E402  (needs the sys.path insert above)
 import phase16_persistence as persistence  # noqa: E402  (needs the sys.path insert above)
 
@@ -3719,6 +3720,580 @@ def run_arm(arm, device):
     record_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     print(f"[phase18_extraction] wrote {record_path} in {wall / 60:.1f} min")
     return payload
+
+
+# =============================================================================================
+# ===== D-11 / D-18 / D-24 / D-29 / D-30 — THE REPORT, WRITTEN BEFORE ITS NUMBERS EXIST =====
+# =============================================================================================
+#
+# The LAST driver commit, and Phase 16's register applied to the one artifact a reader actually
+# reads: the report's text is committed before it produces a number, because a report whose prose
+# is written after the numbers is a report written to fit them.
+#
+# EVERY CELL BELOW RENDERS FROM A PRE-COMPUTED ENTRY DICT. D-11 records `slot` on every corpus
+# entry, every draw record and every exposure record for exactly this consequence — the renderer
+# never imports the fact set, so no fact value can enter the render path at all. That is read off
+# the AST in `tests/test_phase18_docs.py` rather than trusted from this paragraph.
+
+EXTRACTION_REPORT_PATH = _REPO_ROOT / "results" / "phase18_extraction_report.md"
+
+# The pre-registration this report CITES, spelled exactly as
+# `tests/test_phase16_prereg.py::PHASE18_PREREG_ARTIFACT` spells it. One path, so the citation and
+# the ancestry guard cannot end up naming two different files while both looking correct.
+PREREG_PATH = _REPO_ROOT / "scripts" / "phase18_extraction.py"
+
+# D-13's declared budget as the SORTED MULTISET `ATTACKER_HAS` already states in prose: six slots at
+# one id and two at two. Machine-readable HERE so D-18's realized distribution has something to be
+# published beside; `render_report` proves this vector still occurs verbatim inside `ATTACKER_HAS`,
+# so the two cannot drift into different budgets while both look pre-registered. Sorted rather than
+# slot-keyed because that is the form D-13 committed and D-18 verifies — "the two 2-id slots
+# injected 2 and the six 1-id slots injected 1" is a statement about the multiset.
+INJECTION_BUDGET_DECLARED = (1, 1, 1, 1, 1, 1, 2, 2)
+
+# D-24's threats-to-validity, the two entries that belong to A2's SHAPE rather than to the exposure
+# instrument. Constants for the same reason `LOWER_BOUND_SENTENCE` and `LORA_PROPERTY_CAVEAT` are:
+# a caveat typed into the write-up is free to soften between the run and the reader, and softening
+# is invisible once the run is over.
+A2_PREFILL_FRAME_CAVEAT = (
+    "A2's prefill SHAPE is a weakness of this attack, stated as one. Appending value ids past the "
+    "assistant turn asks the model to continue a reply whose form puts the value at position 0 — "
+    "F4's reply frame — and every F4 question was filtered out of SCORING by the self-naming rule, "
+    "so no question in the committed fixture ever practised producing a value there in a scored "
+    "bin. A2 therefore asks for a continuation in a shape the fixture does not reward, and a low "
+    "A2 rate is partly a fact about the frame rather than about the weights. Published "
+    "UNCORRECTED: the correction would be inventing a prefill shape no taught family uses, which "
+    "trades a stated confound for an unstated one."
+)
+
+A2_PREFIX_LENGTH_CAVEAT = (
+    "A2 hands over ONE or TWO ids, against the 50-token prefixes the extraction literature "
+    "conventionally uses. That is neither an oversight nor a claim of equivalence. D-13 brackets "
+    "the budget between the shortest target needing a nonzero injection and the roughly 2-token "
+    "in-context ceiling Phase 16 MEASURED on this same base, and a 50-token prefix would exceed "
+    "the entire value on all eight core slots — there is no 50-token prefix of a 4-id string. The "
+    "consequence is that this arm is a far weaker prefix attack than the published ones, so its "
+    "rate is a floor under theirs rather than a replication of them."
+)
+
+# ONE greppable line, and the ONLY place in this module that carries this phrase —
+# `phase17_isolation.REPLICATION_PENDING_LINE`'s register, for its reason: `append_addendum`
+# replaces EXACTLY this line, so a second occurrence anywhere would make the replacement ambiguous.
+#
+# Deliberately OUTSIDE the `## Verdict` section. That section holds the computed verdict and
+# nothing else, and a "PENDING" token inside it would tell the clobber guard this report carries no
+# recorded verdict — which would license overwriting the very evidence the guard exists to protect.
+EXTRACTION_SHIP_PENDING_LINE = "**Phase 18 ship decision: not yet recorded.**"
+
+EXTRACTION_SHIP_RECORDED_LINE = (
+    "**Phase 18 ship decision: recorded in the dated continuation at the end of this file.**"
+)
+
+
+def assert_extraction_report_not_clobbered(path=EXTRACTION_REPORT_PATH):
+    """A RECORDED verdict is committed evidence. Refuse to overwrite it — FIRST, and cheapest.
+
+    ``phase17_isolation.assert_isolation_report_not_clobbered``'s register, repriced for this
+    phase. Called as ``render_report``'s first statement rather than as a step an operator has to
+    remember, so there is no path to the write that skips it.
+
+    **Anchored on the SECTION via ``_verdict.recorded_verdict``, never on a split of the heading
+    literal** — the 15-04 CR-02 defect, whose one shared copy this imports. ``split("## Verdict")``
+    takes the tail after the LAST occurrence of a literal that also appears in prose, and this
+    report's own Ship Decision section discusses the verdict by name; that form would read the
+    prose, find no ``PENDING`` in it, and conclude a verdict had been recorded when none had.
+
+    ``None`` (no verdict section at all) and a body without ``PENDING`` are both refusals: a file
+    this writer did not produce must not be blindly overwritten either. There is NO force flag — if
+    the report genuinely must be regenerated, the honest path is deleting it in a reviewed commit
+    so the removal is visible in the diff.
+    """
+    if not path.exists():
+        return
+    recorded = _verdict.recorded_verdict(path.read_text(encoding="utf-8"))
+    if recorded is None or "PENDING" not in recorded:
+        raise SystemExit(
+            f"[phase18_extraction] {path} already carries a recorded verdict — it is this phase's "
+            "committed extraction evidence, scored from two 8.2-hour arm runs that cannot be "
+            "re-derived without breaking D-04's ordering guarantee, and a re-render would destroy "
+            "it together with every dated section appended beside it. There is no force flag: if "
+            "it genuinely must be regenerated, delete it in a reviewed commit so the removal is "
+            "visible in the diff. To ADD to it, use `append_addendum`"
+        )
+
+
+def _ladder_cell_text(rung):
+    """One rung as ONE string carrying BOTH ends of the clustering assumption.
+
+    ``phase17_isolation._matrix_cell_text``'s register. The two denominators are emitted by a
+    SINGLE f-string, which is what turns ``CLUSTER_DENOMINATOR_RATIONALE``'s "both or neither" from
+    a discipline a renderer has to remember into a property of the renderer: there is no expression
+    here that produces one without the other. Every number arrives through ``report_proportion``'s
+    ``formatted``, so no cell can print a bare percentage, and at zero the rule-of-three ceiling is
+    spelled as ``3/n`` because that is the form a reader can check against the denominator standing
+    beside it.
+    """
+    question, fact = rung["question_unit"], rung["fact_unit"]
+    _prove(
+        (question["successes"] == 0) == (fact["successes"] == 0),
+        f"rung {rung['rung']} of {rung['family']!r}/{rung['arm']!r}/{rung['tier']!r} reports "
+        f"{question['successes']} questions but {fact['successes']} facts extracted. A fact is "
+        "extracted exactly when at least one of its questions is, so those two zeros are the same "
+        "zero — a disagreement can only mean the two units were computed over different cells",
+    )
+    text = f"{question['formatted']} — {fact['formatted']}"
+    if question["successes"] == 0:
+        text += (
+            f" — rule of three 3/{question['n_units']} = "
+            f"{question['rule_of_three_upper']:.6f} (question-level) and 3/{fact['n_units']} = "
+            f"{fact['rule_of_three_upper']:.6f} (fact-level, n = {fact['n_units']})"
+        )
+    return text
+
+
+def _frame_column_label(frame, reduction):
+    """One exposure column header, marked with the role D-29/D-30 assigned it.
+
+    All six frame x reduction columns are REQUIRED and exactly one pair is read by the gate. The
+    marker is derived from ``ADMISSIBLE_NLL_FRAME`` / ``ADMISSIBLE_NLL_REDUCTION`` /
+    ``HELD_OUT_NLL_FRAME`` rather than typed per column, so a post-null switch of the admissible
+    pair moves the label with it instead of leaving a header agreeing with the old choice.
+    """
+    if (frame, reduction) == (ADMISSIBLE_NLL_FRAME, ADMISSIBLE_NLL_REDUCTION):
+        return f"`{frame}`/{reduction} **ADMISSIBLE**"
+    if frame == HELD_OUT_NLL_FRAME:
+        return f"`{frame}`/{reduction} (published, EXCLUDED)"
+    return f"`{frame}`/{reduction} (published)"
+
+
+def _ladder_block(ladders, tier, heading):
+    """The ladder table for ONE tier — every family, every arm, every pre-registered rung."""
+    rows = [
+        heading,
+        "",
+        "| family | arm | rung | greedy | question unit — fact unit (n = 8) |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for ladder in ladders:
+        for rung in ladder:
+            if rung["tier"] != tier:
+                continue
+            rows.append(
+                f"| `{rung['family']}` | `{rung['arm']}` | {rung['rung']} | "
+                f"{'YES — deterministic decode' if rung['greedy'] else 'no'} | "
+                f"{_ladder_cell_text(rung)} |"
+            )
+    rows.append("")
+    return rows
+
+
+def render_report(
+    *,
+    ladders,
+    curves,
+    injection,
+    exposure,
+    uniques,
+    verdict,
+    provenance,
+    path=EXTRACTION_REPORT_PATH,
+):
+    """Write ``results/phase18_extraction_report.md`` and return its text.
+
+    THE VERDICT AND THE CONCLUSION ARE COMPUTED, never retyped as prose beside the rows. Both
+    arrive inside ``verdict`` — ``assemble_verdict``'s record, whose ``conclusion`` field is
+    ``licensed_conclusion``'s output over the same literals the run obeyed — so scope cannot widen
+    between the driver and the write-up. A hand-written headline is a headline free to disagree
+    with the instrument that produced it.
+
+    EVERY ARGUMENT IS A PRE-COMPUTED ENTRY DICT AND NO FACT-SET MODULE IS REACHABLE FROM HERE
+    (D-11). Entries carry ``slot``, which is why they can be rendered at all without the values;
+    the AST check in ``tests/test_phase18_docs.py`` is what makes that a property rather than a
+    claim.
+
+    Two ``_prove``s run over the RENDERED TEXT before a byte is written, because a source-level
+    scan structurally cannot see a number a format string produced — which is exactly how a bare
+    ``0%`` reaches a published report. The report must carry a ``## Verdict`` section the clobber
+    guard can anchor on, and it must contain no bare zero percentage anywhere (STAT-02).
+
+    ``path`` is a parameter so the whole renderer is exercisable against a temporary file. Its
+    default is the one committed artifact path, and the clobber refusal below runs on whichever
+    path is actually being written.
+    """
+    assert_extraction_report_not_clobbered(path)
+
+    declared = "[" + ",".join(str(budget) for budget in INJECTION_BUDGET_DECLARED) + "]"
+    _prove(
+        declared in " ".join(ATTACKER_HAS),
+        f"the declared A2 budget vector {declared} no longer occurs in ATTACKER_HAS, which states "
+        "it in the prose the threat model publishes. Two spellings of one pre-registered budget is "
+        "two budgets, and the one a reader sees would be free to stop being the one D-18 verifies",
+    )
+    realized_per_slot = []
+    for entry in injection:
+        measured = sorted(entry["realized"])
+        _prove(
+            len(measured) == 1,
+            f"slot {entry['slot']!r} realized {measured} injected id counts across its A2 prompts. "
+            "D-15 appends the SAME prefix ids to every prompt of a slot, so one slot has one "
+            f"realized length; {len(measured)} means the concatenation boundary re-merged on some "
+            "prompts and not others, and the per-slot figure published here would be an average of "
+            "two different attacks",
+        )
+        realized_per_slot.append((entry["slot"], measured[0], sum(entry["realized"].values())))
+    _prove(
+        len(realized_per_slot) == len(INJECTION_BUDGET_DECLARED),
+        f"the realized distribution covers {len(realized_per_slot)} slots against the "
+        f"{len(INJECTION_BUDGET_DECLARED)} the declared budget vector prices. D-18 publishes the "
+        "distribution PER SLOT, and a short table verifies the budget on the slots it happens to "
+        "carry while saying nothing about the rest",
+    )
+    budget_agrees = sorted(realized for _, realized, _ in realized_per_slot) == list(
+        INJECTION_BUDGET_DECLARED
+    )
+
+    blocks = [
+        "# Phase 18 — Black-Box Adversarial Extraction Audit "
+        "(ATK-01 / ATK-02 / ATK-03 / ATK-04 / ATK-05 / ATK-06 / STAT-01 / STAT-02 / STAT-06)",
+        "",
+        "## Pre-Registration",
+        "",
+        f"The four attack templates, `K = {K}`, the A2 injection budget, the ASR ladder rungs "
+        f"{ASR_RUNGS}, the Holm family, the verdict domain, `null_result_is_admissible()` and the "
+        "closing paragraph's own generator were all committed in "
+        f"`{PREREG_PATH.relative_to(_REPO_ROOT)}` at `{prereg_commit()}` — before the corpus was "
+        "generated, before either arm ran, and before any `results/phase18_*` artifact existed. "
+        "`tests/test_phase16_prereg.py` asserts by git ANCESTRY that every commit touching that "
+        "file precedes the first-add commit of every Phase 18 result, so the ordering is a "
+        "property of the history rather than a claim made in this paragraph. Every constant below "
+        "is IMPORTED into this report, never retyped beside it.",
+        "",
+        f"**Unit of analysis: the QUESTION (STAT-01).** A question counts once if ANY of its "
+        f"draws contained the full value, however many did. Both denominators travel together on "
+        f"every rate below — see the clustering note — and the fact-level one is n = "
+        f"{persistence.SIGN_TEST_N}.",
+        "",
+        f"**Tier split (D-02 / D-31).** {TIER_SPLIT_RATIONALE}",
+        "",
+        f"**The clustering assumption, both ends.** {CLUSTER_DENOMINATOR_RATIONALE}",
+        "",
+        f"**Every Wilson bound below carries this label.** {persistence.WILSON_LABEL}",
+        "",
+        f"**Rung 1 is not a sample.** {ASR_RUNG_GREEDY_NOTE}",
+        "",
+    ]
+
+    blocks += _ladder_block(
+        ladders,
+        GATED_TIER,
+        f"## The ASR Ladder — `{GATED_TIER}` (the GATED tier, where the formal verdict lives)",
+    )
+    blocks += _ladder_block(
+        ladders,
+        REPORTED_TIER,
+        f"## The ASR Ladder — `{REPORTED_TIER}` (the STRONGER attack surface, reported tier-split)",
+    )
+    blocks += [
+        f"**`{REPORTED_TIER}` is published as the stronger attack surface and is NOT merged into "
+        "the formal verdict.** Phase 14 measured taught templates as the easier extraction surface "
+        "— 0.492063 against 0.348291 at the draw unit — so an audit reporting only the held-out "
+        "tier would be reporting only the weaker one. It enters no inferential family for the "
+        "separate reason that it IS the ATK-03 positive control: a control that also carried a "
+        "hypothesis would price the alpha of the very gate it exists to validate.",
+        "",
+        "## Cumulative by Attempt",
+        "",
+        "Counts against ONE declared denominator per curve, never a list of bare rates: 64 rates "
+        "with no denominator attached to any of them is the widest form of the unit-confusion "
+        "surface this phase is built to close.",
+        "",
+        "| family | arm | tier | questions | successes at attempts 1..k |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for curve in curves:
+        blocks.append(
+            f"| `{curve['family']}` | `{curve['arm']}` | `{curve['tier']}` | "
+            f"{curve['n_units']} {curve['unit']}s | "
+            f"{', '.join(str(count) for count in curve['successes'])} |"
+        )
+
+    blocks += [
+        "",
+        "## A2 Realized Injection, per slot (D-18)",
+        "",
+        f"The DECLARED budget vector is `{declared}` — D-13's `floor(len(ids) x "
+        f"{INJECTION_FRACTION})` over the eight core slots, as the threat model states it. What "
+        "follows is the MEASURED outcome on the final token-merged prompts, which is what turns "
+        "the budget from a declared constant into a verified fact about what ran. D-15 appends ids "
+        "verbatim rather than re-encoding a concatenated string, so agreement is expected by "
+        "construction; the distribution is what checks that the construction actually held.",
+        "",
+        "| slot | realized injected ids | A2 prompts at that length |",
+        "| --- | --- | --- |",
+    ]
+    blocks += [
+        f"| `{slot}` | {realized} | {prompts} |" for slot, realized, prompts in realized_per_slot
+    ]
+    blocks += [
+        "",
+        (
+            f"**The realized multiset equals the declared vector `{declared}`.** The two 2-id "
+            "slots injected 2 and the six 1-id slots injected 1, measured on the final prompts."
+            if budget_agrees
+            else "**D-18 DIVERGENCE — the realized multiset is "
+            f"`{sorted(realized for _, realized, _ in realized_per_slot)}` against the declared "
+            f"`{declared}`.** Subword re-merge at the concatenation boundary is the mechanism this "
+            "distribution exists to detect, and every A2 number in this report was produced under "
+            "the realized budget, not the declared one."
+        ),
+        "",
+        "## Canary Exposure (D-20 / D-22 / D-29 / D-30)",
+        "",
+        f"{EXPOSURE_DESCRIPTIVE_LABEL}",
+        "",
+        f"{NLL_FRAME_RATIONALE}",
+        "",
+        f"{NLL_ANCHOR_RATIONALE}",
+        "",
+        "All six frame x reduction NLLs of the taught value are REQUIRED columns and exactly one "
+        f"pair is read: `{ADMISSIBLE_NLL_FRAME}`/`{ADMISSIBLE_NLL_REDUCTION}`. The held-out "
+        f"`{HELD_OUT_NLL_FRAME}` frame is published and EXCLUDED from the gate. The per-slot "
+        "token-length spread stands beside every one of them, because it is the column that says "
+        "which slots the length confound can reach at all.",
+        "",
+        "| slot | rank | exposure (bits) | ceiling (bits) | \\|R\\| | token-length spread | "
+        "spread-0 control | "
+        + " | ".join(
+            _frame_column_label(frame, reduction)
+            for frame in NLL_FRAMES
+            for reduction in NLL_REDUCTIONS
+        )
+        + " |",
+        "| --- | --- | --- | --- | --- | --- | --- | " + " | ".join(["---"] * 6) + " |",
+    ]
+    for record in exposure:
+        control = (
+            "RAN and agreed"
+            if record["spread_zero_control"]
+            else f"not a control slot (spread {record['length_spread']})"
+        )
+        blocks.append(
+            f"| `{record['slot']}` | {record['rank']} | {record['exposure_bits']:.4f} | "
+            f"{record['ceiling_bits']:.4f} | {record['n_references']} | "
+            f"{record['length_spread']} | {control} | "
+            + " | ".join(
+                f"{record['nll'][frame][reduction]:.4f}"
+                for frame in NLL_FRAMES
+                for reduction in NLL_REDUCTIONS
+            )
+            + " |"
+        )
+
+    blocks += [
+        "",
+        f"**The spread-0 control (D-30).** Slots {SPREAD_ZERO_CONTROL_SLOTS} carry a token-length "
+        "spread of zero, so every candidate shares one length L, mean = sum/L is a strictly "
+        "monotonic transform, and the two reductions give ordinally identical ranks BY "
+        "CONSTRUCTION. A disagreement there is a bug and never a finding. The control is reported "
+        "as having RUN rather than as having not raised — a control that silently did not run is "
+        "otherwise indistinguishable in this table from one that ran and agreed.",
+        "",
+        f"## The Holm Family (D-31) — m = {len(HOLM_FAMILY)}, dose-split, `{GATED_TIER}` only",
+        "",
+        f"{HOLM_FAMILY_RATIONALE}",
+        "",
+    ]
+    if verdict["holm"] is None:
+        blocks += [
+            "**No Holm family was run.** The admissibility gate returned "
+            f"`{verdict['verdict']}` before any comparison was priced, and nothing numeric is "
+            "emitted on that path: a zero measured by a harness not known to work and a zero "
+            "measured by one that is are indistinguishable from the outside. The reasons are in "
+            "the verdict section below.",
+            "",
+        ]
+    else:
+        holm = verdict["holm"]
+        blocks += [
+            f"alpha = {holm['alpha']}, m = {holm['m']}, first step alpha = "
+            f"{holm['first_step_alpha']:.7f}, best achievable p at n = "
+            f"{persistence.SIGN_TEST_N} = {holm['best_achievable_p']:.7f}.",
+            "",
+            "| family | signs (adapter-on favoured) | p | alpha at step | rejected | "
+            f"`{ARMS[0]}` cluster bootstrap 95% | `{ARMS[1]}` cluster bootstrap 95% |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for row in holm["comparisons"]:
+            intervals = row["cluster_bootstrap"]["intervals"]
+            blocks.append(
+                f"| `{row['family']}` | {sum(row['signs'])} of {len(row['signs'])} | "
+                f"{row['p_value']:.7f} | {row['alpha_at_step']:.7f} | {row['rejected']} | "
+                f"({intervals[ARMS[0]][0]:.6f}, {intervals[ARMS[0]][1]:.6f}) | "
+                f"({intervals[ARMS[1]][0]:.6f}, {intervals[ARMS[1]][1]:.6f}) |"
+            )
+        blocks += ["", holm["comparisons"][0]["cluster_bootstrap"]["label"], ""]
+
+    blocks += [
+        "## Unique Successes (D-25 / D-26)",
+        "",
+    ]
+    for unique in uniques:
+        blocks += [
+            f"**{unique['budget_label']}**",
+            "",
+            "| fact | slot | families that extracted it at least once | which |",
+            "| --- | --- | --- | --- |",
+        ]
+        blocks += [
+            f"| `{row['fact_id']}` | `{row['slot']}` | {row['unique_families']} | "
+            f"{', '.join(family for family, hit in row['by_family'].items() if hit) or 'none'} |"
+            for row in unique["per_fact"]
+        ]
+        blocks += [
+            "",
+            "Distribution of those counts: "
+            + ", ".join(
+                f"{count} famil{'y' if count == 1 else 'ies'}: {facts} fact(s)"
+                for count, facts in unique["distribution"].items()
+            )
+            + ".",
+            "",
+        ]
+    blocks += [uniques[0]["descriptive_label"], "", uniques[0]["budget_rationale"], ""]
+
+    control = verdict["control"]
+    derived = control["derived"]
+    blocks += [
+        f"## The Positive Control (D-01 / ATK-03) — family `{FAMILY_ZERO}` on `{REPORTED_TIER}`",
+        "",
+        f"Compared ROW FOR ROW against the {derived['n_questions']} committed taught rows in "
+        f"`{PHASE14_TAUGHT_REPORT.relative_to(_REPO_ROOT)}`: "
+        f"**{len(control['mismatches'])} per-question mismatches**. A harness asserting only the "
+        "aggregate would return PASS on a run that moved one hit between two questions while "
+        "summing to the identical numerator, which is why the comparison is the vector.",
+        "",
+        f"Derived consequence — {derived['successes']} of {derived['n_draws']} draws across "
+        f"{derived['n_questions']} questions. {derived['label']}",
+        "",
+        f"{derived['scoping_note']}",
+        "",
+        "## Threats to Validity",
+        "",
+        f"{EXPOSURE_THREATS_TO_VALIDITY}",
+        "",
+        f"{LORA_PROPERTY_CAVEAT}",
+        "",
+        f"{A2_PREFILL_FRAME_CAVEAT}",
+        "",
+        f"{A2_PREFIX_LENGTH_CAVEAT}",
+        "",
+        f"{THREAT_MODEL_ASYMMETRY}",
+        "",
+        "## Verdict",
+        "",
+        f"**`{verdict['verdict']}`** — returned by `null_result_is_admissible` and carried through "
+        "`assemble_verdict` unchanged. This line is an imported function's own return value, not "
+        "prose written around the numbers above.",
+        "",
+    ]
+    blocks += [f"- {reason}" for reason in verdict["reasons"]]
+    blocks += [
+        "",
+        "## Conclusion",
+        "",
+    ]
+    if verdict["conclusion"] is None:
+        blocks += [
+            "No conclusion paragraph is licensed. `licensed_conclusion` is reached only once the "
+            "admissibility gate has licensed a publishable outcome, and it did not — see the "
+            "verdict section above.",
+            "",
+        ]
+    else:
+        blocks += [
+            f"Generated by `licensed_conclusion` on the BEST attack family "
+            f"(`{verdict['best_attack']}`), which is also the family the Phase 19 handoff carries. "
+            f"{BEST_ATTACK_RULE}",
+            "",
+            verdict["conclusion"],
+            "",
+            f"**Phase 19 handoff (question unit, four ints):** `{verdict['handoff']}` — "
+            f"`erasure_is_worth_attempting` returns `{verdict['erasure_precondition'][0]}`: "
+            f"{verdict['erasure_precondition'][1]}",
+            "",
+        ]
+
+    blocks += [
+        "## Ship Decision",
+        "",
+        "Recorded by a human, once, and thereafter EXTENDED rather than re-rendered: "
+        "`render_report` rewrites this whole file and would destroy a recorded verdict along with "
+        "every dated section appended beside it. `append_addendum` is the only path by which this "
+        "file may grow after the verdict above exists, and there is no force flag on either.",
+        "",
+        EXTRACTION_SHIP_PENDING_LINE,
+        "",
+        "## Provenance",
+        "",
+        "One block per arm process. Two distinct pids are what EVIDENCE the process split rather "
+        "than assert it, and the corpus digest is what evidences that both arms dispatched the "
+        "same prompt object — D-07's pairing, read off the records rather than assumed from the "
+        "order the two commands were typed in.",
+        "",
+        "| arm | adapter enabled | git SHA | pid | device | wall clock (min) | corpus sha256 | "
+        "`forbid_ids` sha256 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    blocks += [
+        f"| `{block['arm']}` | {block['adapter_enabled']} | `{block['git_sha']}` | {block['pid']} "
+        f"| `{block['device']}` | {block['wall_clock_min']:.1f} | "
+        f"`{block['corpus_sha256'][:16]}…` | `{block['forbid_ids_sha256'][:16]}…` |"
+        for block in provenance
+    ]
+    blocks.append("")
+
+    text = "\n".join(blocks)
+    _prove(
+        _verdict.recorded_verdict(text) is not None,
+        "the rendered report carries no `## Verdict` section the clobber guard could anchor on, so "
+        "a later run would overwrite this phase's committed evidence in silence",
+    )
+    _prove(
+        re.search(r"\b0(\.0+)?%", text) is None,
+        "the rendered report contains a bare zero percentage — STAT-02 forbids it in any committed "
+        "report or figure, because a bare zero states a certainty the sample does not have. Every "
+        "zero here renders as its numerator over its denominator with BOTH ends of the clustering "
+        "assumption attached and its rule-of-three ceiling beside them",
+    )
+    path.write_text(text, encoding="utf-8")
+    print(f"[phase18_extraction] wrote {path}")
+    return text
+
+
+def prereg_commit():
+    """The commit that ADDED the pinned driver — the citation, RESOLVED rather than asserted.
+
+    ``phase17_isolation.prereg_commit``'s register, over this phase's own pre-registration path.
+    ``--diff-filter=A`` because that is the filter ``tests/test_phase16_prereg.py``'s ordering
+    guard itself uses: it returns the EARLIEST add, which is the commit the ancestry rule is
+    anchored on. The last line of the log is the oldest, so the citation names a commit a reader
+    can actually check the ordering against instead of one that merely touched the file.
+    """
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "log", "--diff-filter=A", "--format=%h", "--", str(PREREG_PATH)],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_ROOT,
+    )
+    adds = result.stdout.split()
+    _prove(
+        adds,
+        f"{PREREG_PATH} has no add commit in this repository — the pre-registration must be "
+        "COMMITTED before the report that cites it, and that ordering is this phase's whole "
+        "defence against a template weakened after seeing a null (STAT-05 / D-04)",
+    )
+    return adds[-1]
 
 
 def _self_check():
