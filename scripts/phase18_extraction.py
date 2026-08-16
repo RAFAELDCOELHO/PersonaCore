@@ -2421,6 +2421,203 @@ def unique_successes(scored, *, draws, families):
     }
 
 
+# =============================================================================================
+# ===== D-01 — FAMILY ZERO'S POSITIVE CONTROL: THE VECTOR, AND THE AGGREGATE IT IMPLIES =====
+# =============================================================================================
+
+PHASE14_TAUGHT_REPORT = _REPO_ROOT / "results" / "phase14_recall_report.md"
+
+# The committed row count of the taught per-question table: 8 core facts x 14 taught template
+# questions each. Written as the number the parse must produce rather than as a product, because
+# the thing being checked is what the FILE holds — a report that lost a row to an edit, or a parse
+# that stopped early on a reformat, is exactly what this catches, and a formula over constants
+# would move with the constants instead of standing still against the artifact.
+PHASE14_TAUGHT_QUESTIONS = 112
+
+# The per-question column header, asserted verbatim before a single cell is read. A column
+# REORDER is the failure a positional parse cannot see: `k/N` read out of the `reserved` slot
+# produces 112 rows of well-formed nonsense and a control that compares them to itself.
+PHASE14_TAUGHT_HEADING = "### Per-question `k/N` — core taught"
+PHASE14_TAUGHT_COLUMNS = ("question", "fact", "split", "reserved", "k/N")
+
+FAMILY_ZERO_CONSEQUENCE_LABEL = (
+    "DERIVED CONSEQUENCE of the row-for-row comparison, never an independent assertion (D-01). "
+    "The comparison is the 112-entry per-question vector; this pair of totals is what that vector "
+    "sums to, and it is published because Phase 14 published it -- not because anything is checked "
+    "against it. A harness asserting the totals instead would return PASS on a run that moved one "
+    "hit from one question to another, which diverges on two of its 112 questions while summing to "
+    "the identical numerator. That case is committed as a test rather than described here. NO "
+    "WIDTH IS ALLOWED AROUND EITHER NUMBER: ATK-03/SC2 asks for reproduction 'within a band', and "
+    "the quantity has already reproduced EXACTLY -- 0 of 112 per-question mismatches, measured "
+    "against `results/phase16_arm_adapter-only.json` filtered to the 8 core slots. Putting a width "
+    "around a quantity that reproduced exactly discards measured precision to buy a number whose "
+    "value nothing derives."
+)
+
+FAMILY_ZERO_SCOPING_NOTE = (
+    "PERS-05's seeding defect was scoped to `run_fairness_control` (REQUIREMENTS.md:71) -- the "
+    "D-11.1 fairness control arm, NOT the scored adapter-on path this control reproduces. Reading "
+    "STATE.md's 'does not reproduce bit-for-bit' as covering the taught headline produces a "
+    "phantom delta of 0.0048 against the POOLED taught split (140 questions = 112 core + 28 soft), "
+    "which is a quantity Phase 14 never published. The comparison here is against the 112 CORE "
+    "taught rows, which is the split the report actually prints per question."
+)
+
+
+def parse_phase14_taught_rows(path=PHASE14_TAUGHT_REPORT):
+    """The 112 committed ``core_taught`` rows, parsed out of Phase 14's report.
+
+    Returns one row per question — ``fact_id``, ``seed_index``, ``question``, ``k``, ``n`` — in the
+    order the report prints them. ``seed_index`` is that ordinal position, which is not a choice:
+    ``results/phase16_arm_adapter-only.json`` numbers its core taught rows 0..111 in the SAME
+    order, so the two sides join on ``(fact_id, seed_index)`` without either one re-deriving an
+    index from question text.
+
+    WHAT THE REPORT PUBLISHES, AND THEREFORE WHAT THE VECTOR IS. The per-question table carries
+    ``k/N`` — the number of that question's draws that contained the value — and not the per-draw
+    booleans behind it. So the vector D-01 compares is the 112-entry vector of per-question hit
+    COUNTS, one entry per question, which is the finest granularity the committed artifact holds.
+    That is the same comparison D-01 recorded as giving 0 mismatches. It is stated here rather than
+    left implied, because "hit vector" could otherwise be read as the 1,008 per-draw booleans, and
+    a reader expecting those from this function would find them absent.
+
+    Three things abort rather than returning a shorter list. A missing heading (the report was
+    restructured and this parse is reading nothing). A row count other than the committed
+    ``PHASE14_TAUGHT_QUESTIONS`` (a SHORT parse is the silent failure mode: every comparison
+    downstream would pass over the rows that were read and say nothing about the rows that were
+    not). And a column header that no longer matches ``PHASE14_TAUGHT_COLUMNS`` positionally.
+    """
+    lines = pathlib.Path(path).read_text(encoding="utf-8").splitlines()
+    starts = [index for index, line in enumerate(lines) if line.strip() == PHASE14_TAUGHT_HEADING]
+    _prove(
+        len(starts) == 1,
+        f"{pathlib.Path(path).name} holds {len(starts)} lines equal to "
+        f"{PHASE14_TAUGHT_HEADING!r}, expected exactly one. With none this parse reads an empty "
+        "table and reports a control that compared nothing; with two it reads whichever came first",
+    )
+
+    table = []
+    for line in lines[starts[0] + 1 :]:
+        if line.startswith("#"):
+            break
+        if line.startswith("|"):
+            table.append([cell.strip() for cell in line.strip("|").split("|")])
+    _prove(
+        len(table) >= 2 and tuple(table[0]) == PHASE14_TAUGHT_COLUMNS,
+        f"the taught table's header is {tuple(table[0]) if table else ()}, not "
+        f"{PHASE14_TAUGHT_COLUMNS}. This parse is POSITIONAL, so a reordered column would be read "
+        "out of the wrong slot and produce 112 well-formed rows of the wrong quantity",
+    )
+
+    rows = []
+    for seed_index, cells in enumerate(table[2:]):
+        question, fact, split, _reserved, ratio = cells
+        successes, draws = ratio.split("/")
+        rows.append(
+            {
+                "fact_id": fact.strip("`"),
+                "seed_index": seed_index,
+                "question": question,
+                "k": int(successes),
+                "n": int(draws),
+            }
+        )
+
+    _prove(
+        len(rows) == PHASE14_TAUGHT_QUESTIONS,
+        f"the taught parse produced {len(rows)} rows against the committed "
+        f"{PHASE14_TAUGHT_QUESTIONS}. A short parse is a SILENT pass: the comparison that follows "
+        "would be exactly as green over 40 rows as over 112, while saying nothing whatsoever about "
+        "the 72 it never saw",
+    )
+    _prove(
+        all(row["n"] == FAMILY_ZERO_DRAWS for row in rows),
+        f"a taught row carries a draw count other than {FAMILY_ZERO_DRAWS}: "
+        f"{sorted({row['n'] for row in rows})}. The report's N and D-09's family-zero budget are "
+        "the same number, and a divergence means one of the two moved without the other",
+    )
+    _prove(
+        all(0 <= row["k"] <= row["n"] for row in rows),
+        "a taught row carries k outside [0, n], which is not a count of hits among its draws",
+    )
+    keys = [(row["fact_id"], row["seed_index"]) for row in rows]
+    _prove(
+        len(set(keys)) == len(keys),
+        "the taught parse produced two rows for one (fact_id, seed_index), so the join key is not "
+        "a key and one question's vector would silently shadow another's",
+    )
+    return tuple(rows)
+
+
+def family_zero_matches(recorded_rows, reference_rows):
+    """D-01 — the positive control, ROW FOR ROW. Returns ``(matches, mismatches, derived)``.
+
+    ``recorded_rows`` are this run's scored family-zero questions in ``SCORED_RECORD_KEYS`` shape
+    (``fact_id``, ``seed_index``, ``hits``, ``n_draws``); ``reference_rows`` are
+    ``parse_phase14_taught_rows()``'s committed rows. A question matches when ``sum(hits)`` equals
+    the committed ``k`` AND ``n_draws`` equals the committed ``n`` — see the parse's docstring for
+    why the count is the unit the artifact supports.
+
+    ``matches`` is True only when EVERY one of the 112 questions matched. ``mismatches`` names the
+    diverged questions by ``seed_index``, because an abort that says "the control failed" without
+    saying which of 112 diverged is unactionable at exactly the moment the whole phase depends on
+    it. ``derived`` carries the summed numerator and denominator under
+    ``FAMILY_ZERO_CONSEQUENCE_LABEL``: it is what the vector implies, and nothing here compares it.
+
+    There is deliberately NO width parameter of any spelling. The quantity has already reproduced
+    exactly, and a width around a quantity that reproduced exactly is a number with no derivation.
+
+    A recorded set that does not COVER the committed questions aborts instead of returning
+    mismatches. A run that scored 111 of the 112, or scored a different 112, is not "the control
+    diverged" — it is a DIFFERENT control, and returning that as an ordinary mismatch would let it
+    be read as a normal failure of the real one.
+
+    ``FAMILY_ZERO_SCOPING_NOTE`` travels in the returned record and is the reason this comparison
+    is expected to pass at all: PERS-05's seeding defect was scoped to the fairness control, not to
+    the scored path this reproduces.
+    """
+    reference = {(row["fact_id"], row["seed_index"]): row for row in reference_rows}
+    recorded = {(row["fact_id"], row["seed_index"]): row for row in recorded_rows}
+    _prove(
+        len(recorded) == len(recorded_rows),
+        "the recorded control holds two rows for one (fact_id, seed_index) — a duplicate question "
+        "contributes its vector twice and hides whichever copy it shadowed",
+    )
+    differ = sorted(set(reference) ^ set(recorded))[:_NAMED_CELL_LIMIT]
+    _prove(
+        set(recorded) == set(reference),
+        f"the recorded control covers {len(recorded)} questions against the committed "
+        f"{len(reference)}; {differ} differ. A control run over a different question set is a "
+        "different control, not a diverged one",
+    )
+
+    mismatches = []
+    for key, want in reference.items():
+        have = recorded[key]
+        got = sum(have["hits"])
+        if got != want["k"] or have["n_draws"] != want["n"]:
+            mismatches.append(
+                {
+                    "fact_id": want["fact_id"],
+                    "seed_index": want["seed_index"],
+                    "recorded_k": got,
+                    "reference_k": want["k"],
+                    "recorded_n": have["n_draws"],
+                    "reference_n": want["n"],
+                }
+            )
+    mismatches.sort(key=lambda row: row["seed_index"])
+
+    derived = {
+        "label": FAMILY_ZERO_CONSEQUENCE_LABEL,
+        "scoping_note": FAMILY_ZERO_SCOPING_NOTE,
+        "successes": sum(row["k"] for row in reference.values()),
+        "n_draws": sum(row["n"] for row in reference.values()),
+        "n_questions": len(reference),
+    }
+    return not mismatches, mismatches, derived
+
+
 def _self_check():
     """One passing case and one INCONCLUSIVE case per condition — the mutation proof D-27 needs.
 
