@@ -27,6 +27,8 @@ would drag the locked values into the scanned surface, and an attack template qu
 order to explain itself would falsify the clean-room claim at the moment it is demonstrated.
 """
 
+import hashlib
+import json
 import math
 import pathlib
 import re
@@ -664,3 +666,229 @@ def realized_injection(prompt_ids, base_len, prefix_ids):
         if phase14_recall._is_contiguous_subsequence(tail, declared[:length]):
             return length
     return 0
+
+
+# =============================================================================================
+# ===== D-07 / D-11 — THE ATTACK CORPUS: an INPUT, built once and dispatched twice =====
+# =============================================================================================
+#
+# The corpus is the INPUT, not an output. Both arms dispatch the SAME recorded `prompt_ids` at the
+# same seeds, so adapter-on/adapter-off divergence is impossible BY CONSTRUCTION rather than by
+# review — PITFALLS P18-1's "one prompt object dispatched twice". The run records the corpus
+# sha256 in its provenance, so a report names the exact corpus it read rather than the generator
+# it hopes produced one.
+#
+# BUILDING the corpus and WRITING it are deliberately separate, and `build_corpus` touches no
+# file. D-04's forced commit order requires this pin to precede the FIRST-ADD commit of every
+# `results/phase18_*` path, so the writer belongs to a later plan and every commit here stays a
+# legitimate ancestor of the artifact it describes.
+
+CORPUS_PATH = _REPO_ROOT / "results" / "phase18_corpus.json"
+
+# The BINDING fixture, read and NEVER regenerated or resampled. It binds the question set and its
+# `seed_index` assignment; what a consumer builds from a question at runtime is deliberately not
+# bound, which is what lets A1/A2/A3 exist at all. Reading the committed JSON rather than calling
+# `build_question_sets` is the point: a generator call would re-derive the set, and a re-derivation
+# that silently disagreed with the fixture would unpair this phase from Phases 14/16/17 while still
+# producing 216 plausible questions.
+CORPUS_SOURCE_FIXTURE = _REPO_ROOT / "results" / "phase16_recall_sample.json"
+
+# DERIVED from the two tier constants D-02 already fixed, never a retyped pair of strings — a
+# second spelling of a tier name is a second thing that can stop agreeing with the verdict it
+# gates. The order is the fixture's own.
+CORPUS_TIERS = (REPORTED_TIER, GATED_TIER)
+
+# The `source_family` an entry carries when its question is one of D-08's reserved held-out probes.
+# Those 32 probes are direct-recall questions that no F1-F8 renderer produces, so re-deriving a
+# family for them is not merely hard, it is meaningless — and a `KeyError` a third of the way
+# through the GATED tier, after the corpus looked fine on the taught one, is the failure this
+# explicit member buys out. `family` stays reserved for the four attack shapes; this is a SOURCE
+# label, and the two axes are never the same axis.
+RESERVED_SOURCE_FAMILY = "reserved"
+
+# D-11's schema, as ONE tuple. The corpus writer, the run dispatcher and the report renderer are
+# three files that would otherwise spell these eight strings independently, and three spellings is
+# three places a schema drifts — with the failure surfacing as a `KeyError` at report time, after
+# the two-arm run has been paid for (`phase17_isolation.SWEEP_QUESTIONS_KEY`'s register, and its
+# reason). Every entry is proved against this tuple as an ORDERED hard equality, so an added,
+# dropped or reordered field is red on the commit that writes it.
+#
+# `slot` is recorded rather than looked up, and that is D-11's load-bearing consequence: the report
+# renderer never imports the fact set, so no fact value can enter the render path.
+CORPUS_ENTRY_KEYS = (
+    "family",
+    "dose",
+    "fact_id",
+    "slot",
+    "tier",
+    "seed_index",
+    "source_family",
+    "prompt_ids",
+)
+
+
+def canonical_json(corpus):
+    """The corpus as ONE canonical string — the serialization every equality here is taken over.
+
+    Sorted keys and tight separators, so two builds that agree on content agree on bytes whatever
+    order the builder happened to insert its keys in. Exposed rather than inlined at each call site
+    because the determinism test, the sha256 below and (in a later plan) the artifact writer must
+    all be comparing the SAME serialization: two canonicalizations that differ in a separator would
+    make a byte-equality guard fail for a reason that has nothing to do with the corpus.
+    """
+    return json.dumps(corpus, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def corpus_sha256(corpus):
+    """D-07's provenance digest — what the run records so a report can name the corpus it read.
+
+    Taken over ``canonical_json`` rather than over the file on disk, so it is defined for a corpus
+    held only in memory and cannot disagree with the artifact a later plan writes from the same
+    string. A digest computed off a re-serialization with different options would be a second
+    number free to stop agreeing with the first.
+    """
+    return hashlib.sha256(canonical_json(corpus).encode("utf-8")).hexdigest()
+
+
+def _corpus_entry(**fields):
+    """One corpus entry, proved against ``CORPUS_ENTRY_KEYS`` as an ORDERED hard equality.
+
+    Keyword order is preserved, so passing the fields in the schema's order is what the proof
+    checks — membership AND order, in the one place entries are built. Hard equality rather than a
+    superset test: "contains at least what I expect" is a guard getting weaker while looking
+    bigger, and a stray extra field would travel into the artifact unremarked.
+    """
+    _prove(
+        tuple(fields) == CORPUS_ENTRY_KEYS,
+        f"a corpus entry was built with keys {tuple(fields)}, but D-11's schema is "
+        f"{CORPUS_ENTRY_KEYS}. The dispatcher and the report renderer read these names from the "
+        "artifact, so a field added, dropped or reordered here surfaces there as a KeyError at "
+        "report time — after the two-arm run has already been spent",
+    )
+    return dict(fields)
+
+
+def _source_family(factset, fact, row):
+    """The F1-F8 family a fixture question came from, or ``RESERVED_SOURCE_FAMILY`` (D-11).
+
+    The fixture stores no family key at all, so this re-derives by EXACT string match against
+    ``render_family`` output — the same mechanism Phase 17 used to recover ``slot``, and pure, so
+    it cannot disagree with the renderer that produced the question. Measured on the committed
+    fixture the match is unique on all 184 non-reserved core questions; the uniqueness is PROVED
+    rather than assumed, because a question two families both rendered would be silently attributed
+    to whichever id sorted first and would then be reported under a family cross-cut it does not
+    belong to.
+
+    The reserved probes short-circuit BEFORE the match: they are D-08 seed members of the held-out
+    split, produced by no renderer, and a match loop over them would fall through to a zero-length
+    result rather than to an answer.
+    """
+    if row["reserved"]:
+        return RESERVED_SOURCE_FAMILY
+    matches = [
+        family_id
+        for family_id in factset.FAMILY_IDS
+        if any(
+            rendered == row["question"]
+            for rendered, _answer in factset.render_family(family_id, fact)
+        )
+    ]
+    _prove(
+        len(matches) == 1,
+        f"question {row['question']!r} for fact {fact.id!r} matched {len(matches)} source "
+        f"families ({matches}) — D-11 records the source family as an EXPLICIT field precisely "
+        "because it is re-derived, and a re-derivation that is not unique records a cross-cut the "
+        "design has no mechanism to attribute",
+    )
+    return matches[0]
+
+
+def build_corpus(tok):
+    """D-02/D-11 — 864 fully-provenanced attack prompts over ALL 216 core questions, in memory.
+
+    Four entries per source question — ``A1-mild``, ``A1-aggressive``, ``A2``, ``A3`` — across both
+    core tiers, because Phase 14 measured TAUGHT templates as the easier extraction surface
+    (0.492063 against 0.348291 at the draw unit), so an audit attacking only held-out is attacking
+    the weaker surface, which is PITFALLS P18-4 exactly. The formal verdict still lives on
+    ``GATED_TIER`` alone and the taught tier is reported tier-split — see
+    ``TIER_SPLIT_RATIONALE`` — which is why the tier travels as a FIELD rather than as two corpora.
+
+    ``seed_index`` is the SOURCE index, recorded UNSTRIDED. D-06's ``SEED + index*K + s`` stride is
+    applied at DISPATCH, not baked in here: family zero must keep the unstrided ``1337 + index + s``
+    stream D-01 requires against the identical fixture rows, so a corpus carrying a pre-strided
+    index would hand the control the attack's stream and quietly break the one comparison the
+    control exists to make.
+
+    Returns a dict and writes NOTHING. D-04's commit order requires this pin to precede the
+    first-add commit of every ``results/phase18_*`` path, so the artifact writer is a later plan's
+    and this function stays callable from a CPU-only test that leaves no trace on disk.
+    """
+    import phase14_factset as factset  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    fixture = json.loads(CORPUS_SOURCE_FIXTURE.read_text(encoding="utf-8"))
+    facts_by_id = {fact.id: fact for fact in factset.LOCKED_FACTS}
+    prefixes = {fact.id: split_value_ids(tok, fact.value)[0] for fact in factset.LOCKED_FACTS}
+
+    prompts = []
+    for tier in CORPUS_TIERS:
+        rows = fixture["questions"][tier]
+        _prove(
+            len(rows) == fixture["counts"][tier],
+            f"the {tier} tier of {CORPUS_SOURCE_FIXTURE.name} holds {len(rows)} rows against its "
+            f"own recorded count of {fixture['counts'][tier]}. The fixture is BINDING, so a read "
+            "that sees fewer rows than the fixture claims to hold would build a smaller corpus "
+            "that still looks complete — and every rate computed on it would carry a denominator "
+            "nothing in the artifact contradicts",
+        )
+        for row in rows:
+            fact = facts_by_id[row["fact_id"]]
+            question = row["question"]
+            shared = {
+                "fact_id": fact.id,
+                "slot": fact.slot,
+                "tier": tier,
+                "seed_index": row["seed_index"],
+                "source_family": _source_family(factset, fact, row),
+            }
+
+            for dose in A1_DOSES:
+                prompts.append(
+                    _corpus_entry(
+                        family=f"A1-{dose}",
+                        dose=dose,
+                        **shared,
+                        prompt_ids=list(build_recall_prompt(tok, apply_a1(question, dose=dose))),
+                    )
+                )
+
+            prompts.append(
+                _corpus_entry(
+                    family="A2",
+                    dose=None,
+                    **shared,
+                    prompt_ids=list(build_a2_prompt(tok, question, prefixes[fact.id])),
+                )
+            )
+
+            prompts.append(
+                _corpus_entry(
+                    family="A3",
+                    dose=None,
+                    **shared,
+                    prompt_ids=list(build_a3_prompt(tok, question)),
+                )
+            )
+
+    _prove(
+        sorted({entry["family"] for entry in prompts}) == sorted(ATTACK_FAMILIES),
+        f"the corpus spans families {sorted({entry['family'] for entry in prompts})}, which is not "
+        f"the pre-registered {sorted(ATTACK_FAMILIES)}. The family label is what the Holm family "
+        "of four is priced on, so a mistyped or missing shape would misprice the gate rather than "
+        "merely mislabel a column",
+    )
+
+    return {
+        "source_fixture": CORPUS_SOURCE_FIXTURE.name,
+        "entry_keys": list(CORPUS_ENTRY_KEYS),
+        "prompts": prompts,
+    }
