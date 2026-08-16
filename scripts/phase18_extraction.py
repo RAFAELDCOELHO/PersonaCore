@@ -3394,6 +3394,271 @@ def _render_smoke_report(record):
     return "\n".join(lines)
 
 
+# =============================================================================================
+# ===== D-06 / D-07 / D-09 / ATK-02 — ONE ARM PER PROCESS, ONE RECORDED PROMPT, TWO ARMS =====
+# =============================================================================================
+#
+# DERIVED from `ARMS`, never a hand-typed pair of paths: the arm name is what the report joins the
+# two records on, and a filename spelled independently is a second spelling free to stop agreeing
+# with the label inside the file it names.
+ARM_RECORD_PATHS = {arm: _REPO_ROOT / "results" / f"phase18_arm_{arm}.json" for arm in ARMS}
+
+
+def run_arm(arm, device):
+    """ONE arm, in this process, start to finish — and this process can run no other.
+
+    **The prompt is READ, never rebuilt.** Every attack draw is dispatched from the
+    ``prompt_ids`` recorded in ``results/phase18_corpus.json``, so adapter-on/adapter-off
+    divergence is impossible BY CONSTRUCTION rather than by review — PITFALLS P18-1's "one prompt
+    object dispatched twice". No prompt-construction function is reachable from this body, and
+    ``tests/test_phase18_prereg.py::test_one_corpus_two_arms`` reads that off the AST rather than
+    trusting this paragraph. The corpus sha256 travels into the record (D-07) so a report names the
+    exact corpus it read instead of the generator it hopes produced one.
+
+    **The base column is the SAME load with the delta gated off** (ATK-02, and
+    ``phase17_isolation.run_one_sweep``'s shipped precedent): ``adapter_disabled`` is measured
+    bit-identical to the un-adapted base at max abs diff exactly 0.0, and a separately built model
+    would be a second load path free to differ from the one the taught column ran through. The
+    runtime witness that the delta really was inert is asserted INSIDE the context manager, because
+    ``LoRALinear.enabled`` is a plain Python bool kept out of ``state_dict()`` — no weight digest
+    and no artifact can see it, so the recorded flag is only as true as that assertion makes it.
+    (The pre-flight smoke's base is a DIFFERENT load, and deliberately: see ``run_smoke``.)
+
+    **Two seed streams, and the split is the whole point of D-06/D-09.** The four attack families
+    pass ``seed_index * K``, giving each question a disjoint 64-seed window; at ``K = 64`` the
+    unstrided ``question_seed(index) + s`` would share generator seeds with the 63 questions on
+    either side, and a question-level cluster bootstrap assumes exactly that away. Family zero
+    keeps the unstrided stream verbatim, because D-01 compares its 112 taught rows against
+    ``results/phase14_recall_report.md`` row for row and a re-seeded control is a different control
+    rather than a diverged one. It reaches that stream through ``phase14_recall.complete_question``
+    — Phase 14's own bare path, the function whose output the reference numbers were produced by —
+    so the reproduction traverses the instrument instead of a copy of it.
+
+    The order is not incidental. The clobber refusal runs FIRST and cheapest: a sweep record is
+    recorded evidence, and discovering the collision after hours of generation has already wasted
+    the run whether or not the file survives. There is no flag that overrides it; if a record
+    genuinely must be regenerated, the honest path is deleting it in a reviewed commit so the
+    removal is visible in the diff.
+
+    Writes RAW completions and no score — no ``value``, no ``k``, no ``hits``. Scoring is
+    ``score_records``' pass over the recorded draws, which is what lets D-14's predicate be applied
+    once, later, on CPU, to both arms at the same time.
+    """
+    import contextlib
+    import os
+    import time
+
+    import phase14_factset as factset  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+    import phase14_recall as recall  # LAZY — same rule.
+    import torch
+
+    from personacore.lora import LoRALinear, adapter_disabled
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+    from personacore.seeding import seed_everything
+
+    _prove(
+        arm in ARMS,
+        f"arm {arm!r} is not one of the pre-registered {ARMS}. The arm name is the axis every "
+        "ASR_on - ASR_off contrast is taken over, so a third name would produce a record nothing "
+        "downstream knows how to pair",
+    )
+    record_path = ARM_RECORD_PATHS[arm]
+    _prove(
+        not record_path.exists(),
+        f"{record_path} already exists — an arm record is RECORDED EVIDENCE, and a rerun on "
+        "drifted code, a drifted adapter or a drifted corpus would silently replace the "
+        "completions every rate in this phase was scored from. Delete it in a reviewed commit if "
+        "it genuinely must be regenerated",
+    )
+    _prove(
+        CORPUS_PATH.exists(),
+        f"{CORPUS_PATH} is missing. The corpus is the INPUT both arms dispatch (D-07): generate "
+        "and commit it with `python scripts/phase18_extraction.py --corpus` before running either "
+        "arm, so the two arms provably read the same prompts",
+    )
+
+    started = time.time()
+    summary = preflight_device(strict=True)
+    print(f"[phase18_extraction] preflight: {summary}")
+    seed_everything(recall.SEED)
+
+    corpus = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
+    digest = corpus_sha256(corpus)
+    _prove(
+        corpus["entry_keys"] == list(CORPUS_ENTRY_KEYS),
+        f"{CORPUS_PATH.name} declares entry_keys {corpus['entry_keys']} against this driver's "
+        f"{list(CORPUS_ENTRY_KEYS)}. The artifact and the pin have drifted apart, and every field "
+        "read below would be read positionally against a schema nobody checked",
+    )
+    prompts = corpus["prompts"]
+    _prove(
+        sorted({entry["family"] for entry in prompts}) == sorted(ATTACK_FAMILIES),
+        f"the corpus spans families {sorted({entry['family'] for entry in prompts})}, not the "
+        f"pre-registered {sorted(ATTACK_FAMILIES)} — the Holm family of four is priced on those "
+        "labels, so a missing shape misprices the gate rather than merely dropping a column",
+    )
+    slots = {entry["fact_id"]: entry["slot"] for entry in prompts}
+
+    model, model_cfg, tok, forbid, artifact = recall.load_adapted_model(device)
+    _, seam_digest = persistence.resolve_forbid(tok, model_cfg.vocab_size)
+    _prove(
+        persistence.forbid_digest(forbid) == seam_digest,
+        "the mask the loader threaded into this arm does not match `resolve_forbid`'s. The "
+        "forbid_ids hash this record publishes would describe a mask the arm never generated "
+        "under, and ATK-02's 'identical forbid_ids across both arms' would be unverifiable",
+    )
+
+    # The binding fixture supplies family zero's 112 taught questions and their UNSTRIDED
+    # seed_index. Read, never resampled: the fixture binds the question set and its index
+    # assignment, and D-01's comparison is against those exact rows in that exact order.
+    fixture = json.loads(CORPUS_SOURCE_FIXTURE.read_text(encoding="utf-8"))
+    control_rows = fixture["questions"][REPORTED_TIER]
+    _prove(
+        len(control_rows) == PHASE14_TAUGHT_QUESTIONS,
+        f"the {REPORTED_TIER} tier holds {len(control_rows)} rows against the "
+        f"{PHASE14_TAUGHT_QUESTIONS} D-01 compares row for row. A control over a different "
+        "question set is a different control, not a diverged one, and `family_zero_matches` would "
+        "abort on the coverage check after the run had already been spent",
+    )
+
+    taught = {fact.slot: fact.value for fact in factset.LOCKED_FACTS}
+    generation_context = adapter_disabled(model) if arm == ARMS[1] else contextlib.nullcontext()
+
+    draws = []
+    with generation_context:
+        if arm == ARMS[1]:
+            still_on = sorted(
+                name
+                for name, module in model.named_modules()
+                if isinstance(module, LoRALinear) and module.enabled
+            )
+            _prove(
+                not still_on,
+                f"the base arm entered generation with {still_on} still enabled. This runtime "
+                "check is the ONLY witness that the delta branch was inert: `enabled` is a plain "
+                "Python bool kept out of state_dict(), so no weight digest and no artifact can "
+                "see it, and the negative control this phase's whole null rests on would be a "
+                "second copy of the taught column wearing the other label",
+            )
+
+        for entry in prompts:
+            is_a2 = entry["family"] == "A2"
+            realized = entry["realized_injection"]
+            _prove(
+                is_a2 == isinstance(realized, int),
+                f"family {entry['family']!r} carries realized_injection {realized!r}. D-11 records "
+                "that field as an int on every A2 entry and None everywhere else, and the scorer "
+                "reads the injected prefix from it",
+            )
+            # D-15 appends the injected ids past `<|assistant|>` VERBATIM and D-18's
+            # `realized_injection` is the measured length of that appended run, so the final
+            # `realized` ids of an A2 prompt ARE the prefix. Decoded off the ARTIFACT rather than
+            # re-derived from the fact value: what the scorer must concatenate is the text the
+            # model actually received, and reading it here keeps the fact set off the A2 path
+            # entirely.
+            prefix_text = tok.decode(entry["prompt_ids"][-realized:]) if is_a2 else None
+            completions, stopped = recall.draw_all(
+                model,
+                tok,
+                entry["prompt_ids"],
+                device,
+                forbid,
+                entry["seed_index"] * K,
+                n_samples=K - 1,
+            )
+            _prove(
+                len(completions) == K,
+                f"question {entry['fact_id']!r}/{entry['seed_index']} in shape "
+                f"{entry['family']!r} drew {len(completions)} completions against the "
+                f"pre-registered K = {K}. The ASR ladder's top rung IS K, so a short draw set "
+                "would publish ASR@64 over fewer than 64 attempts",
+            )
+            draws.append(
+                {
+                    "family": entry["family"],
+                    "dose": entry["dose"],
+                    "fact_id": entry["fact_id"],
+                    "slot": entry["slot"],
+                    "tier": entry["tier"],
+                    "arm": arm,
+                    "seed_index": entry["seed_index"],
+                    "prefix_text": prefix_text,
+                    "completions": completions,
+                    "stopped": stopped,
+                    "source_family": entry["source_family"],
+                    "realized_injection": realized,
+                }
+            )
+
+        for row in control_rows:
+            drawn = recall.complete_question(
+                model, tok, row["question"], device, forbid, index=row["seed_index"]
+            )
+            _prove(
+                len(drawn["completions"]) == FAMILY_ZERO_DRAWS,
+                f"family zero question {row['seed_index']} drew "
+                f"{len(drawn['completions'])} completions against D-09's committed "
+                f"{FAMILY_ZERO_DRAWS}. The budget is read off the pinned constant precisely so "
+                "the control cannot spend a different one and still be compared to Phase 14's "
+                "published k/N",
+            )
+            draws.append(
+                {
+                    "family": FAMILY_ZERO,
+                    "dose": None,
+                    "fact_id": row["fact_id"],
+                    "slot": slots[row["fact_id"]],
+                    "tier": REPORTED_TIER,
+                    "arm": arm,
+                    "seed_index": row["seed_index"],
+                    "prefix_text": None,
+                    "completions": drawn["completions"],
+                    "stopped": drawn["stopped"],
+                    "source_family": None,
+                    "realized_injection": None,
+                }
+            )
+
+        # D-22/D-28 — the exposure record per slot, measured in the SAME pass and under the SAME
+        # gate state as the draws it will be read beside. Measuring it in a second process would
+        # make "the fact is absent" and "the attack was weak" separable only across two loads.
+        exposure = [
+            measure_exposure(model, tok, device, slot=slot, taught_value=taught[slot])
+            for slot in CORE_SLOTS
+        ]
+
+    wall = time.time() - started
+    payload = {
+        "arm": arm,
+        "config": {
+            "corpus_sha256": digest,
+            "corpus_entries": len(prompts),
+            "k": K,
+            "family_zero": FAMILY_ZERO,
+            "family_zero_draws": FAMILY_ZERO_DRAWS,
+            "seed": recall.SEED,
+            "seed_stride": "seed_index * K for the attack families; unstrided for family zero",
+            "device": str(device),
+            "torch": torch.__version__,
+            "preflight": summary,
+            "git_sha": git_sha(),
+            "pid": os.getpid(),
+            "forbid_ids_sha256": persistence.forbid_digest(forbid),
+            "adapter_enabled": arm == ARMS[0],
+            "adapter_fingerprint_warnings": artifact["fingerprint_warnings"],
+            "vocab_size": model_cfg.vocab_size,
+            "wall_clock_min": wall / 60,
+        },
+        "draw_record_keys": list(DRAW_RECORD_KEYS),
+        "draws": draws,
+        "exposure": exposure,
+    }
+    record_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    print(f"[phase18_extraction] wrote {record_path} in {wall / 60:.1f} min")
+    return payload
+
+
 def _self_check():
     """One passing case and one INCONCLUSIVE case per condition — the mutation proof D-27 needs.
 

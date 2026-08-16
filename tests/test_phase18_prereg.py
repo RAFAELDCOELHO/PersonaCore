@@ -1644,3 +1644,78 @@ def test_smoke_covers_nll_path():
         "STAT-05 ancestry guard — an artifact appearing before the driver is complete would "
         "freeze the pin mid-assembly"
     )
+
+
+# --- D-07 / ATK-02: one recorded prompt, two arms, two processes --------------------------------
+#
+# The four functions that turn a question into ids. None of them may be reached from `run_arm`:
+# D-07's guarantee is that both arms dispatch the SAME recorded `prompt_ids`, and a prompt rebuilt
+# inside an arm is a prompt whose pairing rests on the two rebuilds happening to agree.
+_PROMPT_BUILDERS = ("build_a1", "apply_a1", "build_a2_prompt", "build_a3_prompt")
+
+
+def test_one_corpus_two_arms():
+    """D-07 — the prompt is READ from the corpus, and no arm can rebuild one.
+
+    ``build_recall_prompt`` is checked separately from the three attack builders and for a
+    different reason. The attack builders are the ones D-07 is about: a rebuilt A1/A2/A3 prompt
+    unpairs the two arms silently, because nothing downstream compares the ids. ``build_recall_
+    prompt`` is the bare path family zero needs — and ``run_arm`` reaches it through
+    ``phase14_recall.complete_question`` instead, which is Phase 14's OWN function and the one
+    whose output the 496/1008 reference numbers were produced by. Calling it here would be a
+    second bare-prompt path free to drift from the one D-01 compares against.
+
+    ``draw_all`` is asserted at exactly ONE call site. Two would be two draw loops, and a
+    duplicated draw loop is how two arms stop being paired while both still look like they ran.
+    """
+    tree = _tree(_EXTRACTION_PATH)
+    source = _EXTRACTION_PATH.read_text(encoding="utf-8")
+    arm = _function(tree, "run_arm")
+    calls = _calls(arm)
+
+    for builder in _PROMPT_BUILDERS + ("build_recall_prompt",):
+        assert builder not in calls, (
+            f"run_arm calls {builder}(). D-07 dispatches the corpus's RECORDED prompt_ids once "
+            "per arm so adapter-on/adapter-off divergence is impossible by construction; a prompt "
+            "rebuilt inside an arm is paired only by the two rebuilds happening to agree, which "
+            "nothing downstream checks"
+        )
+
+    draw_sites = [call for call in calls if call.endswith("draw_all")]
+    assert draw_sites == ["recall.draw_all"], (
+        f"run_arm's draw_all call sites are {draw_sites}, not exactly ['recall.draw_all']. One "
+        "recorded prompt, two arms, ONE draw loop — a second loop is how the pairing is lost"
+    )
+    assert "recall.complete_question" in calls, (
+        "run_arm never calls complete_question, so family zero draws through something other than "
+        "Phase 14's own bare path. D-01 compares its 112 taught rows against the report that path "
+        "produced; a reimplementation would be compared against numbers it did not generate"
+    )
+
+    arm_source = ast.get_source_segment(source, arm)
+    assert "adapter_disabled" in arm_source, (
+        "run_arm never mentions adapter_disabled, so the base column is not gated off the ONE "
+        "loaded model. ATK-02's control is only paired if both arms come from a single load path; "
+        "a separately built un-adapted model is a second path free to differ"
+    )
+    assert "n_samples=K - 1" in arm_source, (
+        "run_arm does not pass n_samples=K - 1. draw_all emits one greedy draw plus n_samples "
+        "seeded ones, so K - 1 is what makes the attack budget exactly the pre-registered K"
+    )
+    assert "entry['seed_index'] * K" in arm_source or 'entry["seed_index"] * K' in arm_source, (
+        "run_arm does not stride the attack seeds by K. D-06 widens each question's seed window "
+        "to 64 at K = 64; unstrided, more than half the tier shares randomness with any given "
+        "question and the question-level cluster bootstrap assumes exactly that away"
+    )
+    assert "corpus_sha256" in calls, (
+        "run_arm never computes the corpus sha256. D-07 records it in the run's provenance so a "
+        "report can name the exact corpus it read rather than the generator it hopes produced one"
+    )
+
+    # No override on the clobber refusal, in any spelling. A record that can be replaced is not
+    # evidence, and the honest recovery is a reviewed deletion commit that shows in the diff.
+    assert not re.search(r"--force|force\s*=|force_|_force\b", source), (
+        "the driver carries a force-style override. An arm record is the completions every "
+        "published rate was scored from; a flag that replaces one turns a rerun on drifted code "
+        "into a silent substitution"
+    )
