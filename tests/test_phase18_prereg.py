@@ -881,6 +881,14 @@ def test_every_rate_declares_its_unit():
         assert not re.search(r"\b0(\.0+)?%", row["formatted"]), (
             f"a bare zero percentage was rendered: {row['formatted']!r}"
         )
+        # The RENDERED string names the unit too, not only the `unit` field beside it. A renderer
+        # that quotes `formatted` and nothing else is the common case, and `report_proportion`
+        # writes the noun "questions" unconditionally — so a fact-level zero would otherwise reach
+        # a report paragraph as "0/8 questions".
+        assert f"{row['unit']}s" in row["formatted"], (
+            f"the {row['unit']} proportion renders as {row['formatted']!r}, which names a "
+            "different unit than the one it counts"
+        )
 
 
 def test_aggregate_questions_converts_the_draw_rate_to_the_question_unit():
