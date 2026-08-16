@@ -20,3 +20,6 @@ data/
 .pytest_cache/
 .ruff_cache/
 .gstack/
+
+# Claude Code agent worktrees (isolation="worktree") — never commit these
+.claude/worktrees/
