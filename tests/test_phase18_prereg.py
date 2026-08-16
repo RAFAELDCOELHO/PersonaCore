@@ -1639,12 +1639,14 @@ def test_smoke_covers_nll_path():
     extraction = _load("phase18_extraction", _EXTRACTION_PATH)
     assert extraction.SPREAD_ZERO_CONTROL_SLOTS == ("birth_year", "house_number")
     assert len(extraction.CORE_SLOTS) == 8 and len(extraction.NLL_FRAMES) == 3
-    assert not extraction.SMOKE_REPORT_PATH.exists(), (
-        f"{extraction.SMOKE_REPORT_PATH} exists. Plan 18-13 runs the smoke and commits that "
-        "report as the FIRST results/phase18_* artifact, which is the commit that arms the "
-        "STAT-05 ancestry guard — an artifact appearing before the driver is complete would "
-        "freeze the pin mid-assembly"
-    )
+    # RETIRED in 18-13: an `assert not extraction.SMOKE_REPORT_PATH.exists()` stood here.
+    # `e37395e` (18-10) added it while the driver was mid-assembly, to stop a results/phase18_*
+    # artifact arming the STAT-05 ancestry guard before the pin was fully written. `ec18cfe`
+    # (18-11) landed `run_report` and completed the driver, which expired that precondition —
+    # and 18-13 is the plan that RUNS the smoke, so the guard had become an assertion that the
+    # pre-flight had not happened yet. The ordering it protected is now enforced where it
+    # belongs and where git can see it: `tests/test_phase16_prereg.py` proves every driver
+    # commit is an ancestor of this report's first-add.
 
 
 # --- D-07 / ATK-02: one recorded prompt, two arms, two processes --------------------------------
