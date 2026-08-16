@@ -2618,6 +2618,137 @@ def family_zero_matches(recorded_rows, reference_rows):
     return not mismatches, mismatches, derived
 
 
+# =============================================================================================
+# ===== D-31 / D-22 / DD-03 — THE HOLM FAMILY: FOUR COMPARISONS, ONE TIER, ONE CALL SITE =====
+# =============================================================================================
+
+CLUSTER_BOOTSTRAP_DESCRIPTIVE_LABEL = (
+    "DESCRIPTIVE under DD-03/STAT-06, with its known undercoverage STATED rather than implied. "
+    "The first stage resamples n = 8 fact clusters, and a percentile bootstrap over 8 clusters "
+    "undercovers: its nominal 95% interval is narrower than 95% in truth, and no amount of "
+    "resampling fixes that because the deficiency is in the 8, not in the 10,000. It is published "
+    "BESIDE the exact paired sign test and never instead of it. It also cannot convert a "
+    "comparison the sign test missed into one that passed, and that is structural rather than "
+    "promised: no branch anywhere reads these bounds -- `rejected` comes from `holm` alone."
+)
+
+HOLM_FAMILY_RATIONALE = (
+    "D-31: m = 4, dose-split (A1-mild, A1-aggressive, A2, A3), on the GATED tier only. The taught "
+    "tier enters NO family -- it is the ATK-03 positive control, and a control that also carried a "
+    "hypothesis would price the alpha of the very gate it exists to validate. Exposure is "
+    "descriptive under D-22 and likewise contributes zero comparisons. Why 4 and not 6: m = 6 "
+    "clears the best achievable p by 0.00052, the identical razor margin Phases 16 and 17 have "
+    "already paid for twice, while m = 4 clears it by 60% and keeps D-10's dose axis in the "
+    "INFERENTIAL layer rather than only the descriptive one. The naive 4 families x 2 tiers = 8 "
+    "is arithmetically dead at every possible outcome."
+)
+
+
+def run_holm_family(
+    per_fact_by_family,
+    *,
+    tier=GATED_TIER,
+    resamples=persistence.BOOTSTRAP_RESAMPLES,
+):
+    """D-31 — the four dose-split comparisons, priced and stepped by the PINNED instruments.
+
+    ``per_fact_by_family`` maps each family name to ``{arm: {fact_id: row}}`` — one
+    ``aggregate_questions`` result per (family, arm) on this tier. The inner mapping IS
+    ``persistence.fact_signs``'s own parameter, so the pairing checks it already makes (both arms
+    present, the same 8 facts under each, n fixed at ``SIGN_TEST_N``) are inherited rather than
+    restated. The sign is taken on ``rate``, which ``aggregate_questions`` puts in the QUESTION
+    unit; the draw rate travels beside it under its own name and is never what is ordered.
+
+    ONE ``sign_test_exact`` CALL SITE, once per comparison. The only other call in this driver is
+    the module-scope ``BEST_ACHIEVABLE_P`` that PRICES the family. 17-08 recorded that a second
+    call site is a second hypothesis family, and Phase 16 measured what that costs: a seventh
+    gated comparison prices Holm's first step at 0.0071429, below the best achievable p, killing
+    the headline at every possible outcome including perfect unanimity.
+
+    THE ARITY GUARD IS ``holm``'s, NOT A COPY OF IT. The p-values are built off the INPUT's own
+    members, so a five- or three-member family reaches ``holm`` with a mismatched count and is
+    refused there. A local count check before the call would make that guard unreachable and leave
+    the family size asserted in two places, free to disagree. What IS checked here is what ``holm``
+    structurally cannot see: it reads only ``len(family)``, so four members under the wrong NAMES
+    would step through it perfectly — that is caught after the call, against ``HOLM_FAMILY``.
+
+    ``HOLM_FAMILY_RATIONALE`` records why the family is four and why the taught tier is absent.
+    ``CLUSTER_BOOTSTRAP_DESCRIPTIVE_LABEL`` travels on every comparison with the interval it
+    describes, so neither can be published without the other.
+    """
+    _prove(
+        tier == GATED_TIER,
+        f"a Holm family was requested on tier {tier!r}, but D-31 puts the family on {GATED_TIER!r} "
+        f"ONLY. {REPORTED_TIER!r} is the ATK-03 positive control and enters no inferential family: "
+        f"{TIER_SPLIT_RATIONALE}",
+    )
+    # Re-proved AT CALL TIME as well as at import: the import-time proof runs against the constants
+    # as they were loaded, and this one runs against the family this call is actually stepping.
+    step_alpha = assert_holm_family_reachable(
+        HOLM_FAMILY, persistence.HOLM_ALPHA, BEST_ACHIEVABLE_P
+    )
+
+    signs = {}
+    p_values = {}
+    for family in sorted(per_fact_by_family):
+        family_signs = persistence.fact_signs(per_fact_by_family[family], ARMS)
+        signs[family] = family_signs
+        p_values[family] = persistence.sign_test_exact(family_signs)
+
+    stepped = persistence.holm(p_values, family=HOLM_FAMILY)
+    _prove(
+        len(stepped) == len(HOLM_FAMILY),
+        f"holm returned {len(stepped)} rows for a family of {len(HOLM_FAMILY)} — the number of "
+        "comparisons that entered the gate is not the number it was priced for",
+    )
+    _prove(
+        sorted(p_values) == sorted(HOLM_FAMILY),
+        f"the comparisons are {sorted(p_values)} but D-31 registers {sorted(HOLM_FAMILY)}. `holm` "
+        "reads only the family SIZE, so a substituted member of the right arity steps through it "
+        "untouched and publishes a comparison that was never pre-registered",
+    )
+
+    comparisons = []
+    for family, p_value, alpha_at_step, rejected in stepped:
+        per_arm = per_fact_by_family[family]
+        comparisons.append(
+            {
+                "family": family,
+                "tier": tier,
+                "signs": signs[family],
+                "p_value": p_value,
+                "alpha_at_step": alpha_at_step,
+                "rejected": rejected,
+                # The interval is a SUB-RECORD carrying its own descriptive flags, because the
+                # comparison around it is the opposite: this comparison IS gated, and flattening
+                # the two would put one pair of flags on a row where the two halves disagree.
+                "cluster_bootstrap": {
+                    "intervals": {
+                        arm: persistence.cluster_bootstrap(
+                            {fact_id: row["questions"] for fact_id, row in per_arm[arm].items()},
+                            resamples=resamples,
+                        )
+                        for arm in ARMS
+                    },
+                    "label": CLUSTER_BOOTSTRAP_DESCRIPTIVE_LABEL,
+                    "descriptive": True,
+                    "gated": False,
+                },
+                "descriptive": False,
+                "gated": True,
+            }
+        )
+    return {
+        "tier": tier,
+        "m": len(HOLM_FAMILY),
+        "alpha": persistence.HOLM_ALPHA,
+        "first_step_alpha": step_alpha,
+        "best_achievable_p": BEST_ACHIEVABLE_P,
+        "rationale": HOLM_FAMILY_RATIONALE,
+        "comparisons": tuple(comparisons),
+    }
+
+
 def _self_check():
     """One passing case and one INCONCLUSIVE case per condition — the mutation proof D-27 needs.
 

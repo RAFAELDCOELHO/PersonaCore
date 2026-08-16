@@ -1276,15 +1276,23 @@ def test_run_holm_family_is_four_comparisons_on_the_gated_tier():
     )
     assert all(row["signs"] == (1,) * persistence.SIGN_TEST_N for row in rows)
 
-    # The descriptive interval travels per comparison, per arm, carrying its own undercoverage.
+    # The interval travels per comparison, per arm, carrying its own undercoverage — and its
+    # descriptive flags sit on the interval rather than on the comparison, because the comparison
+    # around it is gated. One pair of flags for both would have to be wrong about one of them.
     for row in rows:
-        assert set(row["cluster_bootstrap"]) == set(extraction.ARMS)
+        bootstrap = row["cluster_bootstrap"]
+        assert set(bootstrap["intervals"]) == set(extraction.ARMS)
         for arm in extraction.ARMS:
-            lo, hi = row["cluster_bootstrap"][arm]
+            lo, hi = bootstrap["intervals"][arm]
             assert 0.0 <= lo <= hi <= 1.0
-        assert row["descriptive"] is True and row["gated"] is False
-        assert "n = 8" in row["cluster_bootstrap_label"]
-        assert "undercover" in row["cluster_bootstrap_label"].lower()
+        assert bootstrap["descriptive"] is True and bootstrap["gated"] is False
+        assert "n = 8" in bootstrap["label"]
+        assert "undercover" in bootstrap["label"].lower()
+        assert row["descriptive"] is False and row["gated"] is True, (
+            "the comparison is labelled descriptive. These four ARE the Holm family; labelling "
+            "them descriptive would make DD-03's 'the sign test is the only inferential "
+            "instrument' true by relabelling rather than by design"
+        )
 
     # The taught tier enters no family at all.
     with pytest.raises(SystemExit) as excinfo:
