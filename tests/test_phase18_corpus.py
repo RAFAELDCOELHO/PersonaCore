@@ -682,3 +682,119 @@ def test_corpus_builder_is_deterministic():
         f"this process's {digest!r} — the corpus is not reproducible across sessions, and D-07's "
         "re-derivation guarantee rests on exactly that"
     )
+
+
+def test_corpus_rederives_byte_identical():
+    """D-07's ARTIFACT half — the committed corpus is still what the pinned builder produces.
+
+    The in-memory half above proves the builder repeats itself. This proves the stronger and more
+    useful thing: the file both arms will DISPATCH is byte-for-byte what that builder emits today.
+    A corpus that no longer re-derives is a corpus nobody can attribute to a committed rule, and
+    the sha256 it is joined on would then name prompts nothing was drawn from.
+
+    **Field-by-field BEFORE byte-wise, on purpose.** A bare hash comparison reports "these two
+    strings differ" and sends a reader to diff a 375 KB single-line JSON by hand. Comparing the
+    schema, then every scalar field, then ``prompt_ids`` ELEMENT BY ELEMENT names the entry index,
+    the field and — for the ids — the position, so the failure states what drifted. The byte
+    assertion still runs last and is the one that actually carries the guarantee: the field loop
+    could in principle agree while the serialization differed (a separator, a trailing newline, an
+    ``ensure_ascii`` flag), and it is the BYTES the sha256 is taken over.
+
+    ``prompt_ids`` are compared element-for-element rather than by length or by decoded string.
+    Length agrees under any permutation, and two different id lists can decode to the same text
+    when a subword re-merges — the exact failure D-19's round-trip guard exists for. The ids ARE
+    the dispatched prompt (D-03), so they are the thing that has to match.
+
+    Per-entry keys are compared SORTED here, not ordered: ``canonical_json`` sets
+    ``sort_keys=True``, so the artifact's keys are alphabetical by construction and asserting
+    D-11's declared order against them would be red for a reason that is not about the corpus. The
+    ordered-schema proof lives where the order actually survives — ``_corpus_entry`` at build time
+    and ``test_schema_and_reserved_family`` on the in-memory build — and the artifact's own
+    ``entry_keys`` list, asserted below, is what carries that order onto disk.
+
+    The artifact is ASSERTED to exist rather than skipped over. A guard that skips when its subject
+    is missing is green for the wrong reason, and this one would be green in precisely the state it
+    exists to catch: the corpus deleted or never generated. D-04's ordering made a skip defensible
+    only until plan 18-14 wrote the file; from that commit on it is a live guard.
+    """
+    assert p18.CORPUS_PATH.exists(), (
+        f"{p18.CORPUS_PATH} is missing. The corpus is the INPUT both arms dispatch and its sha256 "
+        "is the join key their records carry, so this guard has nothing to check — which is the "
+        "one state it must NOT be green in. Generate it with "
+        "`python scripts/phase18_extraction.py --corpus`"
+    )
+    committed_bytes = p18.CORPUS_PATH.read_bytes()
+    committed = json.loads(committed_bytes.decode("utf-8"))
+    rebuilt = p18.build_corpus(tok)
+
+    assert (
+        committed["source_fixture"] == rebuilt["source_fixture"] == (p18.CORPUS_SOURCE_FIXTURE.name)
+    ), (
+        f"the artifact names source fixture {committed['source_fixture']!r} against the builder's "
+        f"{rebuilt['source_fixture']!r} — the corpus and the pin disagree about which BINDING "
+        "question set the attacks were derived from"
+    )
+    assert committed["entry_keys"] == rebuilt["entry_keys"] == list(p18.CORPUS_ENTRY_KEYS), (
+        f"the artifact declares entry_keys {committed['entry_keys']} against D-11's schema "
+        f"{list(p18.CORPUS_ENTRY_KEYS)} — the dispatcher and the report renderer read these names "
+        "from the artifact, so a drifted order surfaces there as a KeyError after the run is spent"
+    )
+
+    stored_entries, derived_entries = committed["prompts"], rebuilt["prompts"]
+    assert len(stored_entries) == len(derived_entries), (
+        f"the artifact holds {len(stored_entries)} entries against the builder's "
+        f"{len(derived_entries)} — every rate in the report carries this as its denominator, so a "
+        "corpus short by entries reports a proportion nothing in the artifact contradicts"
+    )
+
+    for index, (stored, derived) in enumerate(zip(stored_entries, derived_entries)):
+        assert sorted(stored) == sorted(derived) == sorted(p18.CORPUS_ENTRY_KEYS), (
+            f"entry {index}: the artifact carries fields {sorted(stored)} against D-11's schema "
+            f"{sorted(p18.CORPUS_ENTRY_KEYS)}"
+        )
+        for field in p18.CORPUS_ENTRY_KEYS:
+            if field == "prompt_ids":
+                continue  # compared element-for-element below, never as one blob.
+            assert stored[field] == derived[field], (
+                f"entry {index}: field {field!r} is {stored[field]!r} in the committed artifact "
+                f"but {derived[field]!r} when re-derived from the pinned builder — the artifact is "
+                "stale, or the pin moved under it"
+            )
+
+        stored_ids, derived_ids = stored["prompt_ids"], derived["prompt_ids"]
+        assert len(stored_ids) == len(derived_ids), (
+            f"entry {index} ({stored['family']}, {stored['slot']}): the committed prompt_ids hold "
+            f"{len(stored_ids)} ids against the re-derived {len(derived_ids)} — this is the ids "
+            "the model is fed, so a length change is a different prompt"
+        )
+        for position, (stored_id, derived_id) in enumerate(zip(stored_ids, derived_ids)):
+            assert stored_id == derived_id, (
+                f"entry {index} ({stored['family']}, {stored['slot']}): prompt_ids[{position}] is "
+                f"{stored_id} in the committed artifact but {derived_id} when re-derived — the "
+                "committed corpus is not the one this builder produces, so no completion drawn "
+                "from it can be attributed to the pinned templates"
+            )
+
+    rebuilt_bytes = p18.canonical_json(rebuilt).encode("utf-8")
+    if rebuilt_bytes != committed_bytes:
+        offset = next(
+            (
+                position
+                for position, (left, right) in enumerate(zip(committed_bytes, rebuilt_bytes))
+                if left != right
+            ),
+            min(len(committed_bytes), len(rebuilt_bytes)),
+        )
+        raise AssertionError(
+            f"the field-by-field comparison agreed but the canonical serializations differ at byte "
+            f"{offset} ({len(committed_bytes)} committed bytes against {len(rebuilt_bytes)} "
+            f"re-derived): committed {committed_bytes[offset : offset + 40]!r} against re-derived "
+            f"{rebuilt_bytes[offset : offset + 40]!r}. The fields agree, so this is the "
+            "SERIALIZATION — a separator, a trailing newline or an ensure_ascii flag — and the "
+            "sha256 both arm records carry is taken over these bytes, not over the fields"
+        )
+    assert hashlib.sha256(committed_bytes).hexdigest() == p18.corpus_sha256(rebuilt), (
+        "the bytes match but their digests do not, which can only mean corpus_sha256 stopped "
+        "being taken over canonical_json — the join key and the artifact would be two numbers free "
+        "to stop agreeing"
+    )
