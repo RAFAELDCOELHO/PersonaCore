@@ -681,6 +681,278 @@ def test_render_path_never_reaches_the_fact_set():
     )
 
 
+def test_addendum_append_is_additive(tmp_path):
+    """S-6 — a recorded verdict cannot be overwritten, and a continuation is provably ADDITIVE.
+
+    Three properties on a synthetic report, and all three are checked on the PRODUCED BYTES rather
+    than inferred from the construction that made them:
+
+      1. the prefix above the placeholder survives byte-for-byte, so nothing published above the
+         continuation can be silently reworded under cover of an append;
+      2. the recorded ``## Verdict`` section is unchanged — an addendum may be added BESIDE the
+         verdict and never on top of it;
+      3. the placeholder must occur exactly once. Zero and two are both refusals, because at zero
+         this is not the file the writer was committed against and at two the writer would be
+         GUESSING which line to replace, which is how an append becomes a rewrite.
+
+    The clobber refusal is exercised in the same node, because the two are one mechanism: the
+    refusal is what makes appending the only way forward, and a report carrying PENDING is the one
+    state a re-render is still legitimate in.
+    """
+    extraction = _load()
+    path = tmp_path / "phase18_extraction_report.md"
+
+    prefix = "# Synthetic report\n\nA published paragraph that must survive byte-for-byte.\n\n"
+    recorded = "## Verdict\n\nGO — recorded by a human on 2026-08-16.\n\n"
+    tail = f"## Ship Decision\n\n{extraction.EXTRACTION_SHIP_PENDING_LINE}\n"
+    path.write_text(prefix + recorded + tail, encoding="utf-8")
+    before = path.read_text(encoding="utf-8")
+
+    updated = extraction.append_addendum(path, "## Addendum — 2026-08-16\n\nA dated continuation.")
+
+    assert updated.startswith(prefix), (
+        "the append did not carry the published prefix through byte-identically — everything above "
+        "the placeholder is shipped text and an append may not touch it"
+    )
+    assert extraction._verdict.recorded_verdict(updated) == extraction._verdict.recorded_verdict(
+        before
+    ), "the append moved the recorded verdict, which is a rewrite wearing an append's name"
+    assert "A dated continuation." in updated, "the addendum itself was lost"
+    assert extraction.EXTRACTION_SHIP_PENDING_LINE not in updated, (
+        "the placeholder survived the append, so the report still advertises a ship decision as "
+        "unrecorded while carrying the dated section that records it"
+    )
+    assert extraction.EXTRACTION_SHIP_RECORDED_LINE in updated, "the pointer line was not written"
+    assert path.read_text(encoding="utf-8") == updated, (
+        "append_addendum returned bytes it did not write"
+    )
+
+    # Zero placeholders — the file has already been appended to, so there is no unambiguous line.
+    with pytest.raises(SystemExit):
+        extraction.append_addendum(path, "a second continuation")
+
+    # Two placeholders — the writer would have to CHOOSE, and choosing is the failure mode.
+    duplicated = tmp_path / "duplicated.md"
+    duplicated.write_text(
+        prefix + recorded + tail + f"\n{extraction.EXTRACTION_SHIP_PENDING_LINE}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit):
+        extraction.append_addendum(duplicated, "ambiguous")
+
+    # THE CLOBBER REFUSAL, both directions. A recorded non-PENDING verdict refuses; a PENDING one
+    # renders normally, which is what keeps an interrupted run re-drivable without a force flag.
+    with pytest.raises(SystemExit):
+        extraction.assert_extraction_report_not_clobbered(path)
+
+    pending = tmp_path / "pending.md"
+    pending.write_text(
+        f"{prefix}## Verdict\n\nPENDING — no ship decision recorded.\n\n{tail}", encoding="utf-8"
+    )
+    extraction.assert_extraction_report_not_clobbered(pending)  # returns, does not raise
+
+    # A file with no `## Verdict` section at all is NOT this writer's output and is also refused —
+    # `None` and an unrecorded body are deliberately different cases in `_verdict.recorded_verdict`.
+    foreign = tmp_path / "foreign.md"
+    foreign.write_text("# Somebody else's file\n\nPENDING appears here, in prose.\n", "utf-8")
+    with pytest.raises(SystemExit):
+        extraction.assert_extraction_report_not_clobbered(foreign)
+
+    # And the refusal is reached through the RENDER path, not only when called directly: a
+    # recorded verdict on disk stops render_report before it builds a single block.
+    with pytest.raises(SystemExit):
+        _render_zero_report(extraction, path)
+
+    # The same fixture renders into a PENDING report without complaint, so the guard refuses
+    # recorded evidence rather than refusing to run.
+    assert _render_zero_report(extraction, pending), "a PENDING report did not re-render"
+
+    source = _EXTRACTION_PATH.read_text(encoding="utf-8")
+    assert not re.search(r"--force|force\s*=|force_|_force\b", source), (
+        "an override flag appeared on the clobber refusal. A flag that disables this guard becomes "
+        "routine, and an operator who passes it routinely passes it after a human HAS recorded a "
+        "verdict — at which point it destroys the evidence it exists to protect"
+    )
+
+
+def _synthetic_arm_record(extraction, factset, arm, *, pid):
+    """One arm record in exactly the shape ``run_arm`` writes, over a MINIATURE corpus.
+
+    Two questions per fact per tier rather than the run's 27, because what is under test here is
+    the GLUE — the pairing proofs, the 144-cell grid, the aggregation and the render — and none of
+    those reads the corpus size. Family zero is the exception and is full-size: it carries all 112
+    committed taught rows with their recorded ``k``, because ``family_zero_matches`` compares
+    against the real report row for row and ABORTS on a control that covers a different set.
+    """
+    values = {fact.id: fact.value for fact in factset.LOCKED_FACTS}
+    slots = {fact.id: fact.slot for fact in factset.LOCKED_FACTS}
+    miss = "nothing of the sort was said here."
+
+    draws = []
+    for family in extraction.ATTACK_FAMILIES:
+        for tier in extraction.CORPUS_TIERS:
+            for fact in factset.LOCKED_FACTS:
+                for seed_index in range(2):
+                    draws.append(
+                        {
+                            "family": family,
+                            "dose": family.split("-", 1)[1] if family.startswith("A1-") else None,
+                            "fact_id": fact.id,
+                            "slot": fact.slot,
+                            "tier": tier,
+                            "arm": arm,
+                            "seed_index": seed_index,
+                            "prefix_text": "zz" if family == "A2" else None,
+                            "completions": [miss] * extraction.K,
+                            "stopped": [True] * extraction.K,
+                            "source_family": "F1",
+                            "realized_injection": (
+                                extraction.INJECTION_BUDGET_DECLARED[
+                                    extraction.CORE_SLOTS.index(fact.slot)
+                                ]
+                                if family == "A2"
+                                else None
+                            ),
+                        }
+                    )
+    for row in extraction.parse_phase14_taught_rows():
+        # `k` hits out of `n`, so the positive control reproduces the committed vector exactly.
+        completions = [values[row["fact_id"]]] * row["k"] + [miss] * (row["n"] - row["k"])
+        draws.append(
+            {
+                "family": extraction.FAMILY_ZERO,
+                "dose": None,
+                "fact_id": row["fact_id"],
+                "slot": slots[row["fact_id"]],
+                "tier": extraction.REPORTED_TIER,
+                "arm": arm,
+                "seed_index": row["seed_index"],
+                "prefix_text": None,
+                "completions": completions,
+                "stopped": [True] * row["n"],
+                "source_family": None,
+                "realized_injection": None,
+            }
+        )
+
+    attack_prompts = len(extraction.ATTACK_FAMILIES) * len(extraction.CORPUS_TIERS) * 8 * 2
+    return {
+        "arm": arm,
+        "config": {
+            "corpus_sha256": "c" * 64,
+            "corpus_entries": attack_prompts,
+            "k": extraction.K,
+            "forbid_ids_sha256": "f" * 64,
+            "adapter_enabled": arm == extraction.ARMS[0],
+            "git_sha": "deadbee",
+            "pid": pid,
+            "device": "cpu",
+            "wall_clock_min": 492.0,
+        },
+        "draw_record_keys": list(extraction.DRAW_RECORD_KEYS),
+        "draws": draws,
+        "exposure": [
+            {
+                "slot": slot,
+                "admissible": (
+                    extraction.ADMISSIBLE_NLL_FRAME,
+                    extraction.ADMISSIBLE_NLL_REDUCTION,
+                ),
+                "nll": {
+                    frame: {reduction: 1.5 for reduction in extraction.NLL_REDUCTIONS}
+                    for frame in extraction.NLL_FRAMES
+                },
+                "rank": 1,
+                "exposure_bits": 3.0,
+                "ceiling_bits": 3.0,
+                "n_references": 8,
+                "length_spread": 0 if slot in extraction.SPREAD_ZERO_CONTROL_SLOTS else 3,
+                "spread_zero_control": slot in extraction.SPREAD_ZERO_CONTROL_SLOTS,
+                "descriptive_label": extraction.EXPOSURE_DESCRIPTIVE_LABEL,
+                "threats_to_validity": extraction.EXPOSURE_THREATS_TO_VALIDITY,
+            }
+            for slot in extraction.CORE_SLOTS
+        ],
+    }
+
+
+def test_run_report_pairs_two_arms_and_renders(tmp_path):
+    """The `--report` mode function, driven END TO END on synthetic arm records.
+
+    ``run_report`` is the glue plan 18-10 named and deliberately did not define, and it fires for
+    the first time AFTER two 8.2-hour runs. An unexercised function at that position is the exact
+    failure mode the D-12 pre-flight buys out for the generation path, so it is bought out here for
+    the report path: two records on disk, the whole pipeline, a rendered file.
+
+    The pairing proofs are then falsified one at a time. A pipeline that ran is not evidence that
+    its refusals work, and every one of these is a way two records can look paired while measuring
+    different things — a swapped file, a shared process, a rebuilt corpus between the two arms.
+    """
+    extraction = _load()
+    # The fact set is loaded HERE, in the test, and never by anything the renderer can reach — the
+    # fixture needs the taught strings to build a control that reproduces, which is the same reason
+    # `score_records` takes its values as a parameter.
+    spec = importlib.util.spec_from_file_location(
+        "phase14_factset", _REPO_ROOT / "scripts" / "phase14_factset.py"
+    )
+    factset = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(factset)
+
+    paths = {arm: tmp_path / f"phase18_arm_{arm}.json" for arm in extraction.ARMS}
+    records = {
+        arm: _synthetic_arm_record(extraction, factset, arm, pid=4242 + index)
+        for index, arm in enumerate(extraction.ARMS)
+    }
+    for arm, path in paths.items():
+        path.write_text(json.dumps(records[arm]), encoding="utf-8")
+
+    report = tmp_path / "phase18_extraction_report.md"
+    text = extraction.run_report(record_paths=paths, path=report)
+
+    assert report.read_text(encoding="utf-8") == text
+    assert re.search(r"\b0(\.0+)?%", text) is None, "run_report rendered a bare zero percentage"
+    assert extraction._verdict.recorded_verdict(text) is not None
+    # The positive control reproduced, so the gate is reached and licenses a verdict rather than
+    # short-circuiting — which is what makes the Holm rows and the conclusion reachable at all.
+    assert "0 per-question mismatches" in text, text[:400]
+    licensed_null = extraction.VERDICTS[1]
+    assert licensed_null in text, (
+        f"an all-zero attack behind a control that reproduced exactly is {licensed_null!r} — a "
+        "null the gate has LICENSED. Any other verdict here means the pipeline reached the gate "
+        "with inputs it did not build"
+    )
+    assert "## Conclusion" in text and extraction.LOWER_BOUND_SENTENCE in text
+
+    # Re-running now refuses: the report carries a recorded, non-PENDING verdict.
+    with pytest.raises(SystemExit):
+        extraction.run_report(record_paths=paths, path=report)
+
+    # A swapped pair. Each file still holds a well-formed record; only the filing is wrong, which
+    # is precisely the case a glob-and-score reader cannot see.
+    swapped = {arm: tmp_path / f"swapped_{arm}.json" for arm in extraction.ARMS}
+    swapped[extraction.ARMS[0]].write_text(json.dumps(records[extraction.ARMS[1]]), "utf-8")
+    swapped[extraction.ARMS[1]].write_text(json.dumps(records[extraction.ARMS[0]]), "utf-8")
+    with pytest.raises(SystemExit):
+        extraction.run_report(record_paths=swapped, path=tmp_path / "swapped.md")
+
+    for field, value in (("pid", 4242), ("corpus_sha256", "d" * 64), ("k", 16)):
+        broken = tmp_path / f"broken_{field}.json"
+        record = json.loads(json.dumps(records[extraction.ARMS[1]]))
+        record["config"][field] = value
+        broken.write_text(json.dumps(record), encoding="utf-8")
+        mixed = dict(paths)
+        mixed[extraction.ARMS[1]] = broken
+        with pytest.raises(SystemExit):
+            extraction.run_report(record_paths=mixed, path=tmp_path / f"broken_{field}.md")
+
+    # And a missing record names the command that produces it rather than raising a FileNotFound.
+    with pytest.raises(SystemExit):
+        extraction.run_report(
+            record_paths={arm: tmp_path / "absent.json" for arm in extraction.ARMS},
+            path=tmp_path / "absent.md",
+        )
+
+
 def test_no_bare_zero_percent_in_docs():
     """STAT-02 — no bare zero percentage in either committed doc surface.
 
