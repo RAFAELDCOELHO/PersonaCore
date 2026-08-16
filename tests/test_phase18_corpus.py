@@ -25,10 +25,14 @@ the module is loaded with ``importlib.util.spec_from_file_location``. Importing 
 reachability proof and nothing else.
 """
 
+import ast
+import hashlib
 import importlib
 import importlib.util
 import json
+import os
 import pathlib
+import subprocess
 import sys
 
 import pytest
@@ -62,6 +66,42 @@ CORE_ITEMS = _TAUGHT + _HELDOUT
 CORE_QUESTIONS = [item.question for item in CORE_ITEMS]
 
 MILD, AGGRESSIVE = p18.A1_DOSES
+
+# DERIVED from a glob, never hand-listed (Phase 17 D-21's register): every `scripts/phase18_*.py` a
+# later plan adds enters the ATK-01 scan the moment its plan commits it.
+_PHASE18_MODULES = tuple(sorted((_REPO_ROOT / "scripts").glob("phase18_*.py")))
+
+# Matched on the ROOT package, so `urllib.request` is caught by `urllib`. `socket` is listed even
+# though nothing here would import it directly, because it is what every one of the others is
+# built on and is the shortest way to reach a network without naming one.
+_NETWORK_MODULES = frozenset({"requests", "urllib", "http", "socket", "httpx", "aiohttp"})
+
+# A fresh interpreter that builds the corpus and prints its sha256 — the cross-process half of
+# D-07. Written as a source string rather than a helper script so there is no second file to keep
+# in step with the builder it exercises.
+_SUBPROCESS_BUILD = """
+import importlib.util, pathlib, sys
+
+root = pathlib.Path(sys.argv[1])
+sys.path.insert(0, str(root / "scripts"))
+spec = importlib.util.spec_from_file_location(
+    "phase18_extraction", root / "scripts" / "phase18_extraction.py"
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+from personacore.tokenizer import from_json
+
+print(module.corpus_sha256(module.build_corpus(from_json(root / "artifacts" / "tokenizer.json"))))
+"""
+
+
+def _collapsed_glob_guard():
+    """A glob that stops matching makes every scan built on it green over nothing."""
+    assert len(_PHASE18_MODULES) >= 1, (
+        f"the phase18_*.py glob collapsed to {len(_PHASE18_MODULES)} file(s) — a broken glob makes "
+        "the ATK-01 scan green while reading no source at all"
+    )
 
 
 def test_the_core_corpus_is_the_216_questions_the_budget_was_priced_against():
@@ -482,3 +522,163 @@ def test_strict_guard_covers_every_family(monkeypatch):
     # None of the 864 calls fell back to the rebuilding path: a `prompt_ids=None` call would rebuild
     # from the question string and clear a prompt neither A2 nor A3 can be described by.
     assert [seen for seen in guarded if seen is None] == []
+
+
+def test_schema_and_reserved_family():
+    """D-11's schema as hard equality, and Pitfall 5's ``"reserved"`` cross-checked, never typed.
+
+    Keys are compared as an ORDERED tuple equality rather than as a superset. "Contains at least
+    what I expect" is a guard getting weaker while looking bigger (16-RESEARCH Pitfall 3), and an
+    extra field would ride into the artifact unremarked, to be read by a renderer that does not
+    know it exists.
+
+    The reserved count is DERIVED twice and typed zero times. Once from the fixture's own
+    ``reserved`` flag, which is what the builder reads — and on its own that would be a tautology,
+    asserting only that a copy happened. So it is derived a second time from
+    ``RESERVED_HELDOUT_PROBES`` itself, which is what makes the flag MEAN something: the flagged
+    questions must be exactly D-08's probe bank over the eight core facts. A hand-typed 32 would
+    agree with a fixture whose flags had drifted onto the wrong rows.
+
+    ``0`` on the taught tier is not a magic number, it is the claim: no taught question is a
+    reserved probe, because the probes are seed members of the HELD-OUT split by construction.
+    """
+    corpus = p18.build_corpus(tok)
+    entries = corpus["prompts"]
+    assert corpus["entry_keys"] == list(p18.CORPUS_ENTRY_KEYS)
+
+    for entry in entries:
+        assert tuple(entry) == p18.CORPUS_ENTRY_KEYS, (
+            f"entry keys {tuple(entry)} are not D-11's schema {p18.CORPUS_ENTRY_KEYS} — exact and "
+            "ordered, never a superset"
+        )
+
+    # The value shapes the two optional fields carry, so "the key is present" is not mistaken for
+    # "the field is populated where it must be".
+    for entry in entries:
+        is_a1 = entry["family"].startswith("A1-")
+        assert (entry["dose"] in p18.A1_DOSES) is is_a1
+        assert isinstance(entry["realized_injection"], int) is (entry["family"] == "A2")
+
+    # What the fixture itself flags, and which questions those flags land on.
+    flagged = [(tier, row) for tier, row in _fixture_core_rows() if row["reserved"]]
+    probes = {
+        probe for fact in factset.LOCKED_FACTS for probe in factset.RESERVED_HELDOUT_PROBES[fact.id]
+    }
+    assert {row["question"] for _tier, row in flagged} == probes, (
+        "the fixture's reserved flags do not land on D-08's probe bank — the flag the builder "
+        "trusts would then be labelling the wrong rows, and a count derived from it would agree "
+        "with the drift"
+    )
+    assert (
+        len(flagged)
+        == len(probes)
+        == sum(len(factset.RESERVED_HELDOUT_PROBES[fact.id]) for fact in factset.LOCKED_FACTS)
+    )
+
+    # Per tier: every flagged row is held-out, none is taught.
+    assert [tier for tier, _row in flagged if tier != p18.GATED_TIER] == []
+    taught_rows = [row for tier, row in _fixture_core_rows() if tier == p18.REPORTED_TIER]
+    assert [row for row in taught_rows if row["reserved"]] == []
+    assert len(taught_rows) == 112
+
+    # And the corpus agrees with the fixture row for row, keyed on (tier, seed_index).
+    expected = {(p18.GATED_TIER, row["seed_index"]) for _tier, row in flagged}
+    actual = {
+        (entry["tier"], entry["seed_index"])
+        for entry in entries
+        if entry["source_family"] == p18.RESERVED_SOURCE_FAMILY
+    }
+    assert actual == expected
+    reserved_entries = [
+        entry for entry in entries if entry["source_family"] == p18.RESERVED_SOURCE_FAMILY
+    ]
+    assert len(reserved_entries) == len(flagged) * len(p18.ATTACK_FAMILIES)
+
+    # Every other entry carries a real F1-F8 id — `"reserved"` is an explicit member of the SOURCE
+    # axis, and nothing else may leak into it.
+    others = {
+        entry["source_family"]
+        for entry in entries
+        if entry["source_family"] != p18.RESERVED_SOURCE_FAMILY
+    }
+    assert others <= set(factset.FAMILY_IDS) and others
+
+
+def test_no_network_imports():
+    """ATK-01's no-external-API clause proved STRUCTURALLY, not by reading the file and agreeing.
+
+    Two scans over every ``scripts/phase18_*.py``. Imports, so no networking module is reachable at
+    all; and string literals, so a URL cannot be smuggled in as data for a caller to fetch. The
+    literal scan reads the AST rather than the raw text, which is what makes "outside a comment"
+    true by construction: comments never enter an AST, so a URL cited in a rationale comment is
+    correctly exempt while the same characters in a constant are not.
+
+    Root-package matching (``urllib.request`` is caught by ``urllib``), because a submodule import
+    is the same reachability with a longer name.
+
+    The module set is a GLOB, so every driver a later Phase 18 plan adds enters this scan the
+    moment it exists — a hand-listed tuple would leave each new file silently uncovered, which is
+    the blindness Phase 17 D-21's register was introduced to close.
+    """
+    _collapsed_glob_guard()
+    for path in _PHASE18_MODULES:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                imported = [node.module] if node.module else []
+            else:
+                continue
+            for name in imported:
+                assert name.split(".")[0] not in _NETWORK_MODULES, (
+                    f"scripts/{path.name} imports {name!r} — ATK-01 requires the attack corpus to "
+                    "be generated with no external model and no external service, and a driver "
+                    "that can reach the network is a driver whose prompts cannot be shown to have "
+                    "come from the committed templates alone"
+                )
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                assert "http://" not in node.value and "https://" not in node.value, (
+                    f"scripts/{path.name} holds a URL in a string literal — a comment may cite a "
+                    "source, but a constant is data a later plan can fetch"
+                )
+
+
+def test_corpus_builder_is_deterministic():
+    """D-07's in-memory half: the same generator yields the same corpus, in and across processes.
+
+    Two builds in ONE process prove no accumulated state — a rotating index or a memo keyed on the
+    wrong thing. A third build in a SEPARATE INTERPRETER at a different ``PYTHONHASHSEED`` proves
+    the stronger and more specific thing: nothing in the path derives an index from ``hash()``,
+    which is stable WITHIN a process and varies BETWEEN them. That failure mode would leave both
+    in-process builds identical and still break the artifact re-derivation in the next session, for
+    a reason having nothing to do with the corpus.
+
+    The ARTIFACT half — byte-equality against a committed ``results/phase18_corpus.json`` — belongs
+    to the plan that may first write one. D-04's commit order puts the pin before the first-add
+    commit of every ``results/phase18_*`` path, so a guard asserting the artifact exists would be
+    red for the whole interval in which the ordering is being honoured.
+    """
+    first = p18.canonical_json(p18.build_corpus(tok))
+    second = p18.canonical_json(p18.build_corpus(tok))
+    assert first == second, "two builds in one process disagree — the builder carries state"
+
+    digest = hashlib.sha256(first.encode("utf-8")).hexdigest()
+    assert p18.corpus_sha256(p18.build_corpus(tok)) == digest
+
+    environment = dict(os.environ, PYTHONHASHSEED="987654")
+    completed = subprocess.run(
+        (sys.executable, "-c", _SUBPROCESS_BUILD, str(_REPO_ROOT)),
+        cwd=_REPO_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert completed.stdout.strip() == digest, (
+        f"a fresh interpreter at PYTHONHASHSEED=987654 built {completed.stdout.strip()!r} against "
+        f"this process's {digest!r} — the corpus is not reproducible across sessions, and D-07's "
+        "re-derivation guarantee rests on exactly that"
+    )
