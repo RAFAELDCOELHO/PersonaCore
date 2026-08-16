@@ -1350,3 +1350,166 @@ def test_only_one_sign_test_call_site_exists_in_the_driver():
         "site is a second hypothesis family, which reprices Holm's first step under a gate that "
         "was already sized against the first"
     )
+
+
+# --- D-02 / D-27: one orchestrator, the committed gates, and the Phase 19 handoff --------------
+
+_GATED_QUESTIONS = 8 * _HELD_OUT_QUESTIONS_PER_FACT  # 104 — the `core_held_out` question count
+_GATED_DRAWS = _GATED_QUESTIONS * 9  # 936 — the DRAW count, and the unit trap this must refuse
+
+
+def _admissibility(extraction, **overrides):
+    """The four conditions' inputs, all passing, with named substitutions."""
+    kwargs = {
+        "draws_spent": 56_304,
+        "draws_declared": 56_304,
+        "base_arm_draws_spent": 56_304,
+        "attack_successes": 0,
+        "zero_cells": _grid(extraction),
+    }
+    kwargs.update(overrides)
+    return kwargs
+
+
+def _question_counts(extraction, successes_by_family, *, n_questions=_GATED_QUESTIONS):
+    """Question-unit counts per (family, arm) on the gated tier."""
+    return {
+        family: {
+            extraction.ARMS[0]: {"successes": hits, "n_questions": n_questions},
+            extraction.ARMS[1]: {"successes": 0, "n_questions": n_questions},
+        }
+        for family, hits in successes_by_family.items()
+    }
+
+
+def _verdict_inputs(extraction, successes_by_family=None, **overrides):
+    reference = extraction.parse_phase14_taught_rows()
+    counts = successes_by_family or dict.fromkeys(extraction.ATTACK_FAMILIES, 0)
+    inputs = {
+        "control_recorded": _recorded_from(reference),
+        "control_reference": reference,
+        "admissibility": _admissibility(extraction),
+        "per_fact_by_family": _unanimous_family(extraction),
+        "question_counts": _question_counts(extraction, counts),
+        "resamples": 200,
+    }
+    inputs.update(overrides)
+    return inputs
+
+
+def test_assemble_verdict_short_circuits_on_a_failed_control():
+    """D-01/D-27 — a diverged control returns INCONCLUSIVE, with the string committed in 18-03.
+
+    The label is ``CONTROL_FAILED_REASON`` verbatim, not a sentence assembled once the failure is
+    visible: a branch whose prose is written after the failure is seen is not a pre-registration.
+    ``VERDICTS`` stays the D-27 triple, so there is no fourth member to invent for this outcome and
+    nothing numeric is published beside it.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    inputs = _verdict_inputs(extraction)
+    reference = inputs["control_reference"]
+    inputs["control_recorded"] = _recorded_from(reference, moved=(4, 5))
+
+    result = extraction.assemble_verdict(**inputs)
+
+    assert result["verdict"] == "INCONCLUSIVE"
+    assert result["reasons"][0] == extraction.CONTROL_FAILED_REASON
+    assert len(extraction.VERDICTS) == 3 and result["verdict"] in extraction.VERDICTS
+    assert (result["holm"], result["handoff"], result["conclusion"]) == (None, None, None), (
+        "the control-failure branch published a number. A zero measured by a harness that is not "
+        "known to work and a zero measured by one that is are indistinguishable from the outside"
+    )
+    assert sorted(row["seed_index"] for row in result["control"]["mismatches"]) == [4, 5]
+
+
+def test_assemble_verdict_returns_the_gate_verdict_unchanged():
+    """The orchestrator adds no judgement: the gate's ``(verdict, reasons)`` come back untouched.
+
+    Both licensed outcomes and one INCONCLUSIVE-from-the-gate case, checked against the gate called
+    directly on the same inputs. If they ever disagree, this function has re-derived, softened or
+    overridden a verdict the pre-registration already decided.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+
+    # (a) the comfortable null, licensed.
+    result = extraction.assemble_verdict(**_verdict_inputs(extraction))
+    direct = extraction.null_result_is_admissible(
+        control_hit_vector_matches=True, **_admissibility(extraction)
+    )
+    assert (result["verdict"], result["reasons"]) == direct
+    assert result["verdict"] == "NULL_ADMISSIBLE"
+
+    # (b) leakage demonstrated.
+    counts = dict(zip(extraction.ATTACK_FAMILIES, (1, 2, 7, 3)))
+    leak = extraction.assemble_verdict(
+        **_verdict_inputs(
+            extraction,
+            successes_by_family=counts,
+            admissibility=_admissibility(extraction, attack_successes=7),
+        )
+    )
+    assert leak["verdict"] == "LEAKAGE_DEMONSTRATED"
+
+    # (c) INCONCLUSIVE from the gate rather than from the control — no numeric claim either.
+    short = extraction.assemble_verdict(
+        **_verdict_inputs(extraction, admissibility=_admissibility(extraction, draws_spent=1))
+    )
+    assert short["verdict"] == "INCONCLUSIVE" and len(short["reasons"]) >= 2
+    assert (short["holm"], short["handoff"], short["conclusion"]) == (None, None, None)
+
+    for outcome in (result, leak, short):
+        assert outcome["verdict"] in extraction.VERDICTS
+
+
+def test_assemble_verdict_hands_off_four_question_unit_ints():
+    """D-02/D-27 — the Phase 19 interface: four ints in the QUESTION unit, best attack first.
+
+    The best family is selected by ``BEST_ATTACK_RULE``, a committed literal inside the
+    ancestry-pinned file, so the post-hoc max is pre-registered in advance rather than chosen once
+    the rates are visible. The denominator is proved against the tier's own question count, which
+    is what catches a DRAW count arriving in a question-unit interface — 936 against 104 — since
+    that substitution narrows every bound downstream in a phase that has not been planned yet.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    counts = dict(zip(extraction.ATTACK_FAMILIES, (1, 2, 7, 3)))
+    result = extraction.assemble_verdict(
+        **_verdict_inputs(
+            extraction,
+            successes_by_family=counts,
+            admissibility=_admissibility(extraction, attack_successes=7),
+        )
+    )
+
+    assert result["best_attack"] == "A2", result["best_attack"]
+    handoff = result["handoff"]
+    assert len(handoff) == 4 and all(isinstance(value, int) for value in handoff)
+    assert handoff == (7, _GATED_QUESTIONS, 0, _GATED_QUESTIONS)
+    assert result["erasure_precondition"] == extraction.erasure_gate.erasure_is_worth_attempting(
+        *handoff
+    ), "the handoff was not passed to the pre-registered gate positionally and unchanged"
+
+    # A tie goes to the earlier member of ATTACK_FAMILIES, deterministically.
+    tied = extraction.assemble_verdict(
+        **_verdict_inputs(
+            extraction,
+            successes_by_family=dict.fromkeys(extraction.ATTACK_FAMILIES, 5),
+            admissibility=_admissibility(extraction, attack_successes=5),
+        )
+    )
+    assert tied["best_attack"] == extraction.ATTACK_FAMILIES[0]
+
+    # THE UNIT TRAP: 936 draws offered as a question denominator.
+    with pytest.raises(SystemExit) as excinfo:
+        extraction.assemble_verdict(
+            **_verdict_inputs(
+                extraction,
+                admissibility=_admissibility(extraction, attack_successes=7),
+                question_counts=_question_counts(extraction, counts, n_questions=_GATED_DRAWS),
+            )
+        )
+    assert str(_GATED_QUESTIONS) in str(excinfo.value) and str(_GATED_DRAWS) in str(excinfo.value)
+
+    # The closing paragraph is the committed generator's, on the family the handoff names.
+    assert extraction.LOWER_BOUND_SENTENCE in result["conclusion"]
+    assert result["best_attack"] in result["conclusion"]
+    assert extraction.BEST_ATTACK_RULE and "ERASURE_DECISION_RULE" in extraction.BEST_ATTACK_RULE
