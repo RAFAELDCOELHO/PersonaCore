@@ -1003,3 +1003,58 @@ with the parameter-count consequence from `## Results`, lines 373-375:
 of the logits before sampling everywhere it matters — but they are counted in the headline
 parameter figure because they are part of the shipped tensor, and the effective vocabulary the
 model actually writes with is 547 ids.
+
+---
+
+## Claim Correction: The Memory Toggle Is Availability, Not Authorization (Phase 18, recorded 2026-08-16)
+
+**Appended, not edited — nothing above this line is amended.** This report's standing rule, set
+out under `## Milestone 1 Ends Here` and applied again in the Phase 15 tokenizer-corpus correction
+above, is that recorded text stands as written and corrections arrive dated and appended. This
+section is one of those. It states a claim correction only: no number from the Phase 18 run is
+quoted here, because none exists at the time it is recorded.
+
+### The reading being corrected
+
+The Milestone 2 material above presents the teach-then-recall demo's memory ON/OFF toggle as the
+live proof that personalization lives in the weights. The mechanism described is accurate and is
+not amended: unchecking the box flips 36 boolean flags on the adapter wrappers, reloads nothing,
+recomputes nothing, and leaves the prompt token panel byte-identical between the two states. That
+is what makes the demonstration honest — the answer changes while the context does not. What is
+corrected is the *reading* a switch labelled ON/OFF invites.
+
+The memory toggle is availability, not authorization: unchecking withholds the adapter's contribution from this process, it revokes no one's access to the weights and puts nothing beyond recovery.
+
+Withholding a contribution is not an access-control boundary and not erasure. With the toggle
+unchecked, every value the adapter learned is still present in its 331,776 parameters and the file
+on disk is untouched; the adapter is portable, so anyone holding it has white-box access —
+gradients, per-token probabilities, direct parameter inspection — which is strictly more powerful
+than the black-box prompt access a demo visitor has. The demo's one-way Reset is a different
+mechanism making a different claim and is outside this correction.
+
+This sentence is maintained in one place and copied to none: `TOGGLE_IS_AVAILABILITY` in
+`scripts/personalize_demo.py` is the source of truth that the Gradio label interpolates, and
+`tests/test_phase18_docs.py` asserts this document and `README.md` carry it character for
+character. The demo's own copy carries no dated correction marker, because there was nothing to
+correct there — its wording was already availability-framed and mechanically honest.
+
+### Threats to validity carried into the Phase 18 audit
+
+Phase 18 measures how much of the adapter's contents a black-box, prompt-only attacker can
+recover. Two bounds on whatever it reports are recorded here, in advance of its numbers:
+
+**A measured rate is a lower bound on leakage, never an upper bound on privacy.** Black-box prompt
+access is the weakest threat model available against these weights, so the audit is a floor and
+not a ceiling. A stronger attacker was not run, and nothing the audit finds excludes one.
+
+**A low extraction rate may be a property of LoRA rather than a PersonaCore achievement.** At this
+capacity — 331,776 trainable parameters adapting a 13.9M-parameter base — little may be recoverable
+simply because little is stored in a form a prompt can address, and this audit runs no arm
+separating that from a property of PersonaCore's design. Stated in advance because the alternative
+is letting a reader draw the flattering inference unaided once a number is on the page. The pinned
+wording is `LORA_PROPERTY_CAVEAT` in `scripts/phase18_extraction.py`, where a committed proof
+requires it to appear adjacent to the audit's closing sentence in generated prose rather than
+typed beside it by hand.
+
+The measured result, its denominator and its interval are appended to this report by Phase 18
+through this same additive path.

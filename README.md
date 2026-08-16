@@ -188,3 +188,31 @@ them and measured what came out:
   invalidate every checkpoint here, so the cost of keeping it was measured instead
 - Every bound on every claim above is collected and quoted from its source report in
   [docs/REPORT.md](docs/REPORT.md#milestone-2-limitations--nine-honest-negatives-quoted)
+
+## Claim correction — what the memory toggle demonstrates (recorded 2026-08-16)
+
+**Appended, not edited.** Everything above stands as written for v2.0. Recorded text in this
+project is corrected by dated note rather than in place, so no sentence above this line was
+changed to make this section true.
+
+The v2.0 text above presents the demo's live memory ON/OFF toggle over the same weights. The
+mechanism it describes is accurate and is not amended: unchecking flips 36 boolean flags on the
+adapter wrappers, reloads nothing, recomputes nothing, and leaves the prompt token panel
+identical between the two states. What the toggle *demonstrates* is narrower than a switch
+labelled ON/OFF invites a reader to assume.
+
+The memory toggle is availability, not authorization: unchecking withholds the adapter's contribution from this process, it revokes no one's access to the weights and puts nothing beyond recovery.
+
+Withholding a contribution is neither an access-control boundary nor erasure. With the box
+unchecked, everything the adapter learned is still present in its 331,776 parameters, the 1.35 MB
+file on disk is untouched, and anyone holding that file has white-box access — strictly more than
+the checkbox ever gave away. The one-way Reset is a different mechanism with a different claim and
+is outside this correction.
+
+Phase 18 is the black-box audit measuring how much of the adapter's contents a prompt-only
+attacker can recover, and its caveat is recorded here before its numbers exist: a low extraction
+rate may be a property of LoRA at this capacity — 331,776 trainable parameters adapting a
+13.9M-parameter base — rather than an achievement of PersonaCore's design, and that audit runs no
+arm separating the two. The pinned wording is `LORA_PROPERTY_CAVEAT` in
+`scripts/phase18_extraction.py`; the measured result and its interval are appended to
+[docs/REPORT.md](docs/REPORT.md) through the same additive path when the run completes.
