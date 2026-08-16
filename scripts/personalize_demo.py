@@ -301,10 +301,28 @@ EXAMPLES_CAPTION = (
     "results/phase14_recall_report.md."
 )
 MEMORY_LABEL = "Memory (331,776 LoRA parameters)"
+
+# SC5 / D-23 — the toggle's honest framing, written DIRECTLY with no dated-supersession marker.
+# There is no prior published claim in this demo to supersede: the copy below has always described
+# the mechanism truthfully (36 boolean writes, nothing reloaded, nothing recomputed), so a dated
+# correction marker here would invent a correction that never happened. README.md and
+# docs/REPORT.md DO carry published v2.0 text and DO get dated continuations instead.
+#
+# THIS CONSTANT IS THE SINGLE SOURCE OF TRUTH for the sentence. The other two surfaces are asserted
+# to contain it verbatim by tests/test_phase18_docs.py; retyping it anywhere makes a second copy,
+# free to stop agreeing with the one actually on screen.
+#
+# Out of scope, noted: RESET_LABEL's "delete the adapter from memory" is the one
+# authorization-flavoured string here, and Reset is a different mechanism from the toggle.
+TOGGLE_IS_AVAILABILITY = (
+    "The memory toggle is availability, not authorization: unchecking withholds the adapter's "
+    "contribution from this process, it revokes no one's access to the weights and puts nothing "
+    "beyond recovery."
+)
 MEMORY_INFO = (
     "Unchecked gates the adapter's contribution off: the model running is the frozen "
     "conversational base, unchanged from the checkpoint on disk. Nothing is reloaded and "
-    "nothing is recomputed — 36 boolean flags flip."
+    f"nothing is recomputed — 36 boolean flags flip. {TOGGLE_IS_AVAILABILITY}"
 )
 RESET_LABEL = "Reset — delete the adapter from memory"
 STATUS_ON = (
@@ -312,7 +330,7 @@ STATUS_ON = (
 )
 STATUS_OFF = (
     "**MEMORY: OFF** — the adapter is loaded but gated off. The model running is the "
-    "un-adapted conversational base."
+    f"un-adapted conversational base. {TOGGLE_IS_AVAILABILITY}"
 )
 STATUS_DELETED = (
     "**MEMORY: DELETED** — eject_adapter() removed all 36 adapter wrappers from this process. "
