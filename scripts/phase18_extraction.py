@@ -1726,6 +1726,125 @@ THREAT_MODEL_ASYMMETRY = (
 )
 
 
+# D-24's two REQUIRED closing sentences, as constants rather than as text inside the template, so
+# the `_prove`s below check for the committed wording and not for whatever the template currently
+# happens to say. Deleting either one from the template leaves its constant in place and turns the
+# render red — which is the mutation proof the pair exists to support.
+LOWER_BOUND_SENTENCE = "this is a lower bound on leakage, never an upper bound on privacy"
+
+LORA_PROPERTY_CAVEAT = (
+    "ATK-06, stated because the alternative is letting a reader draw the flattering inference "
+    "unaided: a low extraction rate may be a PROPERTY OF LoRA at this capacity — 331,776 "
+    "trainable parameters adapting a 13.9M-parameter base — rather than an achievement of "
+    "PersonaCore's design, and this audit runs no arm that separates the two."
+)
+
+
+def licensed_conclusion(*, successes, n_questions, arm, tier, families_run):
+    """D-24 — the report's closing paragraph, GENERATED from the literals the run obeyed.
+
+    The mechanism ``phase16_ladder.licensed_headline`` gave Phase 16, applied to the one paragraph
+    a reader is most likely to quote. Scope cannot widen between the driver and the write-up
+    because the scope sentences ARE ``ATTACKER_HAS`` and ``ATTACKER_LACKS``, read at call time; a
+    paragraph typed beside the rows would be a second copy, free to stop agreeing with the run on
+    the commit after it was written and impossible to falsify once the run is over.
+
+    Both bounds are IMPORTED from ``erasure_gate`` and never re-implemented here. That file is
+    byte-untouched since its pre-registration (D-27), so the interval this audit publishes is the
+    one a blind pre-registration defined — and a second local Wilson would be a second one free to
+    round differently from the gate that reads it.
+
+    THREE `_prove`s RUN ON THE PRODUCED TEXT, not on this source. A source-level scan structurally
+    cannot see a number a format string produced, which is precisely how a bare ``0%`` reaches a
+    published report: nothing in the template contains it. ``phase17_isolation.render_report``
+    makes the same move for the same reason.
+
+    ``successes`` is a count of QUESTIONS extracted at least once, the unit
+    ``erasure_gate.erasure_is_worth_attempting`` consumes downstream — never a count of draws.
+    """
+    _prove(
+        arm in ARMS,
+        f"arm {arm!r} is not one of the two committed arms {ARMS}. A conclusion naming an arm the "
+        "run did not measure is a scope claim with no measurement under it",
+    )
+    _prove(
+        tier in CORPUS_TIERS,
+        f"tier {tier!r} is not one of {CORPUS_TIERS}. The formal verdict lives on "
+        f"{GATED_TIER!r} and the taught tier is reported tier-split; a third tier name in the "
+        "conclusion would merge them in prose after the design kept them apart",
+    )
+    unrun = [family for family in families_run if family not in ADMISSIBILITY_FAMILIES]
+    _prove(
+        not unrun and len(families_run) > 0,
+        f"the conclusion names families {unrun or list(families_run)}, which are not among the "
+        f"pre-registered {ADMISSIBILITY_FAMILIES}. The families a paragraph claims to cover are a "
+        "scope claim like any other, and this one would be wider than the corpus",
+    )
+    _prove(
+        n_questions > 0 and 0 <= successes <= n_questions,
+        f"{successes} successes over {n_questions} questions is not a proportion. The unit is "
+        "QUESTIONS extracted at least once; a draw count arriving here would produce a rate with "
+        "the wrong denominator and a bound computed on it",
+    )
+
+    upper = erasure_gate.wilson_upper_bound(successes, n_questions)
+    families = ", ".join(families_run)
+
+    if successes == 0:
+        ceiling = erasure_gate.rule_of_three(n_questions)
+        measured = (
+            f"Across {families} on the {arm} arm, {successes} of {n_questions} {tier} questions "
+            f"were extracted at least once. That is stated as a COUNT and not as a percentage: a "
+            f"bare zero rate reads as a certainty {n_questions} questions do not support. The "
+            f"one-sided 95% Wilson upper bound is {upper:.2%}, and the rule-of-three ceiling is "
+            f"3/{n_questions} = {ceiling:.2%}. Both are published rather than one, because they "
+            "disagree slightly and naming which the gate reads is what stops the quieter of the "
+            "two being chosen after the fact."
+        )
+    else:
+        measured = (
+            f"Across {families} on the {arm} arm, {successes} of {n_questions} {tier} questions "
+            f"were extracted at least once — a rate of {successes / n_questions:.2%}, with a "
+            f"one-sided 95% Wilson upper bound of {upper:.2%}. The bound travels with the rate "
+            "everywhere it appears; a point estimate published alone would overstate the "
+            "precision of a single run."
+        )
+
+    scope = (
+        "SCOPE, as the run obeyed it and not as it might be paraphrased later. The attacker HAS: "
+        + "; ".join(ATTACKER_HAS)
+        + ". The attacker does NOT have: "
+        + "; ".join(ATTACKER_LACKS)
+        + "."
+    )
+
+    text = (
+        f"{measured}\n\n{scope}\n\n{THREAT_MODEL_ASYMMETRY}\n\n{LORA_PROPERTY_CAVEAT} "
+        f"Taken together with the scope above, {LOWER_BOUND_SENTENCE}."
+    )
+
+    _prove(
+        LOWER_BOUND_SENTENCE in text,
+        "the rendered conclusion does not carry D-24's required closing sentence. A result "
+        "published without it invites the inference the whole phase is built to refuse: that a "
+        "low measured rate under the weakest available threat model is evidence of privacy",
+    )
+    _prove(
+        LORA_PROPERTY_CAVEAT in text,
+        "the rendered conclusion does not carry ATK-06's caveat, which D-24 requires ADJACENT to "
+        "the closing sentence. Without it the closing claim reads as a finding about "
+        "PersonaCore's design rather than one this audit has no arm to attribute",
+    )
+    _prove(
+        re.search(r"\b0(\.0+)?%", text) is None,
+        f"the rendered conclusion contains a bare zero percentage: {text!r}. STAT-02 forbids it in "
+        "any committed report or figure. This proof runs on the PRODUCED TEXT because a source "
+        "scan cannot see a number a format string produced — which is exactly how one gets "
+        "published",
+    )
+    return text
+
+
 def _self_check():
     """One passing case and one INCONCLUSIVE case per condition — the mutation proof D-27 needs.
 
