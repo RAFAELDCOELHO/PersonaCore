@@ -237,13 +237,24 @@ def test_injection_budget_matches_the_pre_registered_vector():
     assert sorted(budgets) == [1, 1, 1, 1, 1, 1, 2, 2]
     assert budgets == [1, 1, 1, 1, 2, 2, 1, 1]
 
-    # The budget is over IDS, never characters — the two diverge on this near-character-level
-    # tokenizer, and a character-based budget would price two of the eight slots differently.
+    # The budget is over IDS, never characters. Measured, the two agree in COUNT on this corpus,
+    # and that coincidence is asserted rather than papered over — an "ids not chars" claim that
+    # rested on the counts differing would be an overclaim, and would quietly become false here.
+    # The rule rests on the UNIT instead: the in-context ceiling was measured in tokens and the
+    # clean-room guard's second detector is an id-run check.
     id_lengths = [len(tok.encode(fact.value)) for fact in factset.LOCKED_FACTS]
-    char_lengths = [len(fact.value) for fact in factset.LOCKED_FACTS]
     assert sorted(id_lengths) == [4, 4, 4, 5, 5, 6, 8, 8]
-    assert id_lengths != char_lengths
-    assert sorted(length // 4 for length in char_lengths) != sorted(budgets)
+    assert id_lengths != [len(fact.value) for fact in factset.LOCKED_FACTS]
+    assert budgets == [len(fact.value) // 4 for fact in factset.LOCKED_FACTS]
+
+    # What the two units genuinely do NOT agree on, and what a character budget could not express:
+    # a fixed id budget delivers a variable number of characters. The same 2-id budget decodes to
+    # 2 characters in one slot and 3 in another, so the injection is not uniformly one character.
+    decoded = [
+        len(tok.decode(p18.split_value_ids(tok, fact.value)[0])) for fact in factset.LOCKED_FACTS
+    ]
+    assert decoded == [1, 1, 1, 1, 2, 3, 1, 1]
+    assert sorted({pair for pair in zip(budgets, decoded)}) == [(1, 1), (2, 2), (2, 3)]
 
 
 def test_split_value_ids_takes_the_start_of_the_value():

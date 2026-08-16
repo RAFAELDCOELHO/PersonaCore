@@ -1114,7 +1114,20 @@ def test_run_sweep_covers_six_on_axis_cells_plus_the_overwrite(monkeypatch):
 
 
 def test_the_sweep_adds_no_persona_or_draw_all_call_site():
-    """D-21 stays at two entries: the sweep routes via the `statements` map, not a new prompt."""
+    """The SWEEP adds neither call site: it routes via the `statements` map, not a new prompt.
+
+    The allowlist half was written as ``len(PERSONA_ALLOWLIST) == 2`` — a GLOBAL count standing in
+    for a local claim. ``PERSONA_ALLOWLIST`` is shared across phases and is designed to grow: its
+    own comment requires a future phase adding a ``persona=`` call site to add its entry in the
+    same commit, and Phase 18's D-08 does exactly that for A3's value-free role scaffold. A global
+    count therefore made this Phase 16 guard red for a Phase 18 decision it has no opinion on,
+    while never having asserted the thing it is named after.
+
+    Asserted directly instead, and no more weakly: hard equality against an EMPTY list of entries
+    naming the sweep driver, plus a deletion guard on the two entries that existed when this test
+    was written. Neither is a membership test over the whole list — "the allowlist contains at
+    least what I expect" is the guard getting weaker while looking bigger (16-RESEARCH Pitfall 3).
+    """
     tree = _driver_tree()
     persona_sites = [
         node
@@ -1137,7 +1150,19 @@ def test_the_sweep_adds_no_persona_or_draw_all_call_site():
     )
     module = importlib.util.module_from_spec(scoring)
     scoring.loader.exec_module(module)
-    assert len(module.PERSONA_ALLOWLIST) == 2, module.PERSONA_ALLOWLIST
+    sweep_file = _DRIVER_PATH.relative_to(_REPO_ROOT).as_posix()
+    assert [entry for entry in module.PERSONA_ALLOWLIST if entry[0] == sweep_file] == [], (
+        f"{sweep_file} acquired a persona= allowlist entry — the sweep must route through the "
+        "statements map, and an entry here means a prompt was built instead"
+    )
+    for incumbent in (
+        ("scripts/phase14_recall.py", "run_fairness_control"),
+        ("scripts/phase16_ladder.py", "build_far_prompt"),
+    ):
+        assert incumbent in module.PERSONA_ALLOWLIST, (
+            f"{incumbent} left PERSONA_ALLOWLIST — a deleted entry is as much a change to the "
+            "reviewed set as an added one, and this guard has to see both directions"
+        )
     assert len(module.DRAW_ALL_ASSERTED_BY) == 1
 
 

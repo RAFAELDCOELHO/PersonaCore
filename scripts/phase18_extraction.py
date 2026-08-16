@@ -27,6 +27,7 @@ would drag the locked values into the scanned surface, and an attack template qu
 order to explain itself would falsify the clean-room claim at the moment it is demonstrated.
 """
 
+import math
 import pathlib
 import re
 import sys
@@ -541,3 +542,125 @@ def build_a3_prompt(tok, question):
     overlap and the demo's live token panel cannot drift from what the harness dispatches.
     """
     return build_recall_prompt(tok, question, persona=(A3_ROLE_INSTRUCTION,))
+
+
+# =============================================================================================
+# ===== D-13 / D-15 / D-17 / D-18 / D-19 — A2: PREFIX INJECTION INTO THE ASSISTANT TURN =====
+# =============================================================================================
+
+
+def injection_budget(value_ids):
+    """How many leading ids of a target value A2 is pre-registered to hand the model.
+
+    IDS, AND NEVER CHARACTERS. Three separate reasons, all of which point the same way and one of
+    which is arithmetic rather than stylistic:
+
+    * the in-context ceiling this budget is bracketed against was MEASURED in tokens, so a budget
+      in characters would be priced against a ceiling in a different unit;
+    * the clean-room guard's second detector is an id-run check, so the injection and the thing
+      that measures the injection must be counted in the same unit or they cannot be compared;
+    * a fixed id budget hands over a VARIABLE number of characters, which is a thing a character
+      budget cannot express: measured on the committed material, the same 2-id budget decodes to
+      2 characters in one slot and 3 in another, because one of those ids is a multi-character
+      merge. The injection is therefore not uniformly one character.
+
+    Recorded because it would be easy to overclaim: on THIS corpus the id budget and the naive
+    character budget happen to produce the same integer in all eight slots. The coincidence is not
+    the reason for the rule and does not weaken it — the rule is about the UNIT the ceiling and the
+    detector are counted in, and about the third bullet, neither of which the coincidence touches.
+    A corpus with one more multi-character merge would separate them.
+
+    The fraction is read from ``INJECTION_FRACTION`` rather than retyped as a divisor; see
+    ``INJECTION_FRACTION_RATIONALE`` for the two committed measurements that bracket it. ``0.25``
+    is an exact binary fraction, so the multiply carries no rounding at these magnitudes and the
+    floor is the floor D-13 wrote.
+    """
+    return math.floor(len(value_ids) * INJECTION_FRACTION)
+
+
+def split_value_ids(tok, value):
+    """``(prefix_ids, suffix_ids)`` — D-17's start-of-value split, behind D-19's round-trip guard.
+
+    The prefix is taken from the START of the value in ids so the unprompted remainder is FIXED BY
+    CONSTRUCTION rather than varying per prompt: D-14 scores A2 by whether the completion supplies
+    that entire remainder contiguously after the prefix, and a remainder that moved from row to row
+    would make that judgement mean something different on every row.
+
+    D-19's guard is ONE ``_prove``, and it has to be, because ``BPETokenizer.decode`` is strict
+    UTF-8 and RAISES ``UnicodeDecodeError`` on a split multi-byte character — it takes no
+    ``errors=`` argument and never emits replacement characters. A guard written against D-19's
+    stated mechanism (compare the recomposed string, expect U+FFFD) would therefore never reach its
+    own abort: the decode blows up first, with a traceback naming the tokenizer rather than the
+    corpus rule that was violated. Catching the raise and folding it into the SAME comparison puts
+    the raising path and any future silent path in one place, so neither can be closed without the
+    other, and the caller sees one ``SystemExit`` register for both.
+    """
+    ids = tok.encode(value)
+    budget = injection_budget(ids)
+    _prove(
+        budget >= 1,
+        f"the A2 injection budget for value {value!r} is {budget} — it encodes to {len(ids)} ids, "
+        f"below the {math.ceil(1 / INJECTION_FRACTION)} the pre-registered fraction needs to hand "
+        "over even one id. D-13's lower constraint exists precisely so the injection is nonzero on "
+        "the shortest target; a zero-id prefix would make A2 an unlabelled duplicate of family "
+        "zero while still being reported as an attack",
+    )
+
+    prefix_ids, suffix_ids = ids[:budget], ids[budget:]
+    try:
+        rejoined = tok.decode(prefix_ids) + tok.decode(suffix_ids)
+    except UnicodeDecodeError as exc:
+        rejoined = f"<UnicodeDecodeError: {exc}>"
+
+    _prove(
+        rejoined == value and len(prefix_ids) == budget,
+        f"the A2 prefix/suffix round-trip failed for value {value!r} at budget {budget}: the "
+        f"{len(prefix_ids)}-id prefix and {len(suffix_ids)}-id suffix recompose to {rejoined!r}. "
+        "A split that lands inside a multi-byte character is byte-level BPE's natural failure "
+        "mode, and it is fatal here rather than cosmetic: D-14 scores the completion against the "
+        "remainder this split defines, so a remainder that is not the rest of the value would "
+        "score every row of this slot against the wrong string",
+    )
+    return prefix_ids, suffix_ids
+
+
+def build_a2_prompt(tok, question, prefix_ids):
+    """D-15 — the recall prompt with the injected ids appended VERBATIM past ``<|assistant|>``.
+
+    Assistant-turn prefill: the model literally continues mid-value, which is the canonical
+    prefix-injection shape and the only placement under which D-14's concatenation scoring is
+    semantically correct. It EXTENDS ``build_recall_prompt`` rather than bypassing it, so D-18's
+    single-source property survives an attack that adds ids the question string cannot describe.
+
+    The ids are appended, never re-encoded from a concatenated STRING. Re-encoding would let the
+    tokenizer merge across the boundary and silently change what was handed over — which is
+    exactly why ``realized_injection`` measures the outcome on the final list instead of trusting
+    this sentence.
+    """
+    return build_recall_prompt(tok, question) + list(prefix_ids)
+
+
+def realized_injection(prompt_ids, base_len, prefix_ids):
+    """D-18 — how many of the declared prefix ids are ACTUALLY present on the final prompt.
+
+    The leading run of ``prefix_ids`` found as a contiguous id run in everything past ``base_len``.
+    Because D-15 appends verbatim this equals the declared budget by construction, and that is the
+    point: D-18 requires the realized distribution to be a verified fact about what ran rather than
+    a restatement of the constant it was supposed to equal. A future edit that re-encoded a
+    concatenated string would keep the budget constant and change this number.
+
+    The detector is IMPORTED from ``phase14_recall`` rather than re-implemented, and lazily, per
+    this module's LAZY-IMPORT RULE. Sharing it is not housekeeping: D-16 reconciles the clean-room
+    guard with A2's deliberate injection by PARTITIONING the prompt — the strict no-value guard
+    runs on the ``build_recall_prompt`` portion for every family including A2, and the appended
+    tail gets this bounded assertion instead. Two independent checks over one prompt can only be
+    trusted not to cancel if both sides are measuring presence with the same predicate.
+    """
+    import phase14_recall  # LAZY — see the LAZY-IMPORT RULE in the module docstring.
+
+    tail = list(prompt_ids[base_len:])
+    declared = list(prefix_ids)
+    for length in range(len(declared), 0, -1):
+        if phase14_recall._is_contiguous_subsequence(tail, declared[:length]):
+            return length
+    return 0
