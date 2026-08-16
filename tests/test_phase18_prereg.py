@@ -1200,3 +1200,145 @@ def test_family_zero_refuses_a_short_or_repointed_control(tmp_path):
     reference = extraction.parse_phase14_taught_rows()
     with pytest.raises(SystemExit):
         extraction.family_zero_matches(_recorded_from(reference)[:-1], reference)
+
+
+# --- D-31 / D-22: the Holm family is four comparisons, on one tier, from one sign-test site ----
+
+_HELD_OUT_QUESTIONS_PER_FACT = 13  # 8 core facts x 13 = the 104 `core_held_out` questions
+
+
+def _fact_rows(answerable, *, questions=_HELD_OUT_QUESTIONS_PER_FACT, draws=9):
+    """One arm's per-fact rows in ``aggregate_questions`` shape.
+
+    ``answerable`` is the count of that fact's questions extracted at least once, so ``rate`` is
+    the QUESTION-unit rate the sign test orders on and ``questions`` is the ``(k, n)`` list
+    ``cluster_bootstrap`` resamples — the two fields ``run_holm_family`` reads, built the way the
+    real aggregation builds them rather than typed as an unrelated pair of numbers.
+    """
+    rows = {}
+    for index in range(8):
+        hit = answerable[index]
+        pairs = tuple([(draws, draws)] * hit + [(0, draws)] * (questions - hit))
+        rows[f"fact_{index}"] = {
+            "questions": pairs,
+            "n_questions": questions,
+            "n_answerable": hit,
+            "unit": "question",
+            "rate": hit / questions,
+            "draw_rate": sum(k for k, _ in pairs) / sum(n for _, n in pairs),
+        }
+    return rows
+
+
+def _unanimous_family(extraction, *, on=5, off=1):
+    """Every family, both arms — adapter-on strictly above adapter-off on all 8 facts."""
+    return {
+        family: {
+            extraction.ARMS[0]: _fact_rows([on] * 8),
+            extraction.ARMS[1]: _fact_rows([off] * 8),
+        }
+        for family in extraction.HOLM_FAMILY
+    }
+
+
+def test_run_holm_family_is_four_comparisons_on_the_gated_tier():
+    """D-31 — m = 4, dose-split, ``core_held_out`` ONLY, and the gate can actually clear.
+
+    The unanimity case is the reachable success: 8/8 in the declared direction gives the best
+    achievable p at n = 8, and Holm's first step at m = 4 is 0.0125, so every comparison rejects.
+    That is the outcome D-31 chose m = 4 to keep available — at m = 7 the first step is 0.0071429
+    and this same input rejects nothing.
+
+    The taught tier raises rather than returning a fourth comparison: it is the ATK-03 positive
+    control, and a control that also carried a hypothesis would price the alpha of the very gate
+    it exists to validate.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    per_family = _unanimous_family(extraction)
+
+    result = extraction.run_holm_family(per_family, resamples=200)
+    rows = result["comparisons"]
+
+    assert len(rows) == len(extraction.HOLM_FAMILY) == 4
+    assert sorted(row["family"] for row in rows) == sorted(extraction.HOLM_FAMILY)
+    assert result["tier"] == extraction.GATED_TIER
+    assert result["m"] == 4
+
+    assert rows[0]["alpha_at_step"] == persistence.HOLM_ALPHA / 4 == 0.0125, (
+        f"the first step alpha is {rows[0]['alpha_at_step']}, not 0.05/4 — the family is being "
+        "priced at a size other than the one D-31 registered"
+    )
+    assert {row["p_value"] for row in rows} == {extraction.BEST_ACHIEVABLE_P}
+    assert all(row["rejected"] for row in rows), (
+        "8/8 unanimity on all four comparisons does not clear at m = 4, which would make the gate "
+        "unreachable at every possible outcome — the exact condition the import-time proof exists "
+        "to refuse"
+    )
+    assert all(row["signs"] == (1,) * persistence.SIGN_TEST_N for row in rows)
+
+    # The descriptive interval travels per comparison, per arm, carrying its own undercoverage.
+    for row in rows:
+        assert set(row["cluster_bootstrap"]) == set(extraction.ARMS)
+        for arm in extraction.ARMS:
+            lo, hi = row["cluster_bootstrap"][arm]
+            assert 0.0 <= lo <= hi <= 1.0
+        assert row["descriptive"] is True and row["gated"] is False
+        assert "n = 8" in row["cluster_bootstrap_label"]
+        assert "undercover" in row["cluster_bootstrap_label"].lower()
+
+    # The taught tier enters no family at all.
+    with pytest.raises(SystemExit) as excinfo:
+        extraction.run_holm_family(per_family, tier=extraction.REPORTED_TIER, resamples=200)
+    assert "D-31" in str(excinfo.value)
+
+
+def test_run_holm_family_refuses_a_mis_sized_family():
+    """A five- or three-member input raises THROUGH ``holm``'s own family guard, not around it.
+
+    The arity check is not re-implemented here: ``holm`` reads ``len(family)`` and ``_prove``s the
+    p-value count against it, so building the p-values off the INPUT's own members is what routes
+    a mis-sized family into the pinned instrument's guard. A local count check before the call
+    would make that guard unreachable and leave the pricing asserted in two places.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    per_family = _unanimous_family(extraction)
+
+    too_many = dict(per_family)
+    too_many["A4-invented"] = {
+        extraction.ARMS[0]: _fact_rows([5] * 8),
+        extraction.ARMS[1]: _fact_rows([1] * 8),
+    }
+    with pytest.raises(SystemExit) as excinfo:
+        extraction.run_holm_family(too_many, resamples=200)
+    assert "holm" in str(excinfo.value).lower()
+
+    too_few = {k: v for k, v in per_family.items() if k != extraction.HOLM_FAMILY[-1]}
+    with pytest.raises(SystemExit):
+        extraction.run_holm_family(too_few, resamples=200)
+
+    # Right arity, wrong names — caught after the call, since holm reads only the family SIZE.
+    renamed = dict(zip(("w", "x", "y", "z"), per_family.values()))
+    with pytest.raises(SystemExit):
+        extraction.run_holm_family(renamed, resamples=200)
+
+
+def test_only_one_sign_test_call_site_exists_in_the_driver():
+    """17-08's finding, enforced: a second ``sign_test_exact`` call site IS a second family.
+
+    Read off the AST rather than grepped, because a text match is equally happy inside the
+    docstring paragraph that explains the rule. Exactly two are permitted and each is named: the
+    module-scope ``BEST_ACHIEVABLE_P``, which is what prices the family, and the one inside
+    ``run_holm_family``, which is the family itself.
+    """
+    tree = _tree(_EXTRACTION_PATH)
+    enclosing = _enclosing_functions(tree)
+    sites = sorted(
+        (enclosing[node].name if enclosing.get(node) else "<module>")
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and ast.unparse(node.func).endswith("sign_test_exact")
+    )
+    assert sites == ["<module>", "run_holm_family"], (
+        f"sign_test_exact is called from {sites}. D-22 and 17-08 both record that a second call "
+        "site is a second hypothesis family, which reprices Holm's first step under a gate that "
+        "was already sized against the first"
+    )
