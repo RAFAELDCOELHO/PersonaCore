@@ -448,7 +448,7 @@ Plans:
 - [x] 18-08-PLAN.md — question-unit scoring, the ASR ladder, D-25/D-26 unique successes
 - [x] 18-09-PLAN.md — D-01 exact hit-vector control, the m=4 Holm family, the `erasure_is_worth_attempting` handoff
 - [x] 18-10-PLAN.md — run surface: smoke mode, two arm modes, parser with no two-arm option
-- [ ] 18-11-PLAN.md — report renderer, clobber guard, append-only continuation (last driver commit)
+- [x] 18-11-PLAN.md — report renderer, clobber guard, append-only continuation (last driver commit)
 - [x] 18-12-PLAN.md — SC5: D-23 demo copy plus dated additive continuations in README and docs/REPORT.md
 - [ ] 18-13-PLAN.md — D-12 pre-flight smoke run, measured throughput, the K decision (checkpoint)
 - [ ] 18-14-PLAN.md — corpus artifact committed and the byte-equality guard activated
@@ -486,6 +486,6 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
-| 18. Black-Box Adversarial Extraction Audit | v3.0 | 11/16 | In Progress|  |
+| 18. Black-Box Adversarial Extraction Audit | v3.0 | 12/16 | In Progress|  |
 
 **Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.
