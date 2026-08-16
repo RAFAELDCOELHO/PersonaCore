@@ -271,6 +271,7 @@ def test_erasure_gate_untouched():
 _IMPORT_TIME_CALLEES = (
     "_self_check",  # the __main__ self-check — guarded by __name__, runs on no import
     "assert_holm_family_reachable",  # D-31's proof — this is what must run at import
+    "main",  # the __main__ dispatch — guarded by __name__, runs on no import
     "pathlib.Path",  # _REPO_ROOT
     "pathlib.Path(__file__).resolve",  # _REPO_ROOT
     "persistence.sign_test_exact",  # BEST_ACHIEVABLE_P, derived from the instrument
@@ -1513,3 +1514,289 @@ def test_assemble_verdict_hands_off_four_question_unit_ints():
     assert extraction.LOWER_BOUND_SENTENCE in result["conclusion"]
     assert result["best_attack"] in result["conclusion"]
     assert extraction.BEST_ATTACK_RULE and "ERASURE_DECISION_RULE" in extraction.BEST_ATTACK_RULE
+
+
+# --- D-12 / D-28: the pre-flight smoke's SCOPE, read off the AST -------------------------------
+#
+# The three tokens below are the whole adapter surface this driver can reach. They belong in
+# `run_arm` and nowhere else: D-12's zero-preview constraint is what keeps the K decision in plan
+# 18-13 free of any quantity from the taught column, and a preview would make every remaining
+# pre-registration decision post-hoc. Written against the AST rather than a `grep` because the
+# smoke's docstring must be free to EXPLAIN why it does not take the adapted load — a text scan
+# cannot tell a call from the paragraph rejecting it, and the paragraph is the part a later reader
+# most needs.
+_ADAPTER_SURFACE = ("persona_adapter", "inject_lora", "adapter_disabled")
+
+
+def _function(tree, name):
+    """The top-level ``FunctionDef`` called ``name``, proved present rather than searched for."""
+    found = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name]
+    assert len(found) == 1, (
+        f"scripts/phase18_extraction.py defines {len(found)} top-level functions named {name!r}; "
+        "a second def would bind the later one and silently delete the guard below"
+    )
+    return found[0]
+
+
+def _calls(node):
+    return {ast.unparse(call.func) for call in ast.walk(node) if isinstance(call, ast.Call)}
+
+
+def _loads(node):
+    """Every name and attribute a function subtree READS — the reference set, not the text."""
+    names = {inner.id for inner in ast.walk(node) if isinstance(inner, ast.Name)}
+    return names | {inner.attr for inner in ast.walk(node) if isinstance(inner, ast.Attribute)}
+
+
+def test_smoke_scope_is_base_only():
+    """D-12 — the pre-flight touches the un-adapted base, the in-memory corpus, and nothing else.
+
+    Two separate claims, and the second is the one a reviewer would otherwise have to take on
+    trust. That ``run_smoke`` reaches no adapter surface — asserted on the source segment, so a
+    reference of ANY kind counts, not only a call. And that it builds its prompts by calling
+    ``build_corpus`` and never reads ``CORPUS_PATH``: the corpus artifact is committed one wave
+    AFTER the smoke runs, so a file read there would abort the phase's most expensive gate on an
+    artifact that cannot exist yet.
+
+    The other half of the scope claim — that the adapter surface DOES appear in ``run_arm``, so
+    the base column is gated off the ONE loaded model rather than not gated at all — lives in
+    ``test_one_corpus_two_arms``, which is where the arm's own structure is asserted.
+    """
+    tree = _tree(_EXTRACTION_PATH)
+    source = _EXTRACTION_PATH.read_text(encoding="utf-8")
+    smoke = _function(tree, "run_smoke")
+
+    smoke_source = ast.get_source_segment(source, smoke)
+    for token in _ADAPTER_SURFACE:
+        assert token not in smoke_source, (
+            f"run_smoke mentions {token!r}. D-12 runs the pre-flight on the UN-ADAPTED base only, "
+            "because the K decision plan 18-13 takes on this report must not be informed by any "
+            "quantity from the taught column — and a smoke that can reach the adapter at all is "
+            "one commit away from reporting one"
+        )
+
+    assert "build_corpus" in _calls(smoke), (
+        "run_smoke does not call build_corpus. Its prompts must be built IN MEMORY: "
+        "results/phase18_corpus.json is committed by plan 18-14, one wave after this smoke runs"
+    )
+    assert "CORPUS_PATH" not in _loads(smoke), (
+        "run_smoke reads CORPUS_PATH. That artifact does not exist when the smoke runs, and D-04's "
+        "forced order — smoke, then pin, then corpus, then run — is what makes it not exist"
+    )
+    for call in ("open", "json.load", "json.loads"):
+        assert call not in _calls(smoke), (
+            f"run_smoke calls {call}(). The pre-flight reads no artifact of its own; every input "
+            "is either a committed checkpoint, the frozen tokenizer, or built in memory"
+        )
+
+    priors = _load("phase18_extraction", _EXTRACTION_PATH).DEGENERATION_PRIORS
+    measured = {(row["k"], row["n"]) for row in priors["attractors"]}
+    assert measured == {(56, 936), (47, 936)}, (
+        f"the degeneration priors are {sorted(measured)}, not Phase 17's measured 56/936 and "
+        "47/936 base-column rates. D-12 floors the non-degeneracy check against a number this "
+        "project MEASURED precisely so it is not a threshold invented to be passable"
+    )
+    assert "NOT PHASE 18 FINDINGS" in priors["note"], (
+        "DEGENERATION_PRIORS carries no note scoping its two rates to the published Phase 13 "
+        "properties they are. Reproduced beside this phase's own numbers and unlabelled, they "
+        "read as findings of an extraction audit that measured neither of them"
+    )
+
+
+def test_smoke_covers_nll_path():
+    """D-28 — the instruments the pin swallowed are exercised BEFORE the run, not during it.
+
+    D-28 pulled the value-span NLL and the exposure ranking inside ``scripts/phase18_extraction.py``
+    because an instrument that decides admissibility is as weakening-prone as an attack template.
+    The cost it names explicitly is that the smoke now carries more weight: a NaN or a crash in
+    that path discovered after 8.2h of generation is the failure this buys out. So the smoke must
+    reach the NLL for every candidate in R across all eight slots and all three frames, must check
+    FINITENESS rather than merely calling the function, and must run D-30's spread-0 control —
+    the one exposure assertion whose failure is a bug and never a finding.
+    """
+    tree = _tree(_EXTRACTION_PATH)
+    smoke = _function(tree, "run_smoke")
+    calls = _calls(smoke)
+    reads = _loads(smoke)
+
+    for name in ("value_span_nll", "reference_set_for", "assert_spread_zero_reductions_agree"):
+        assert name in calls, (
+            f"run_smoke never calls {name}. D-28 requires the pre-flight to exercise the NLL and "
+            "exposure path on the base, since those instruments are inside the pin and a defect "
+            "in them surfaces as an unreadable admissibility gate after the run has been spent"
+        )
+    assert "math.isfinite" in calls, (
+        "run_smoke calls the NLL but never checks finiteness. Calling it proves it returns; the "
+        "failure D-28 names is a NaN, which returns perfectly well and then ranks unpredictably"
+    )
+    for constant in ("CORE_SLOTS", "NLL_FRAMES", "NLL_REDUCTIONS", "SPREAD_ZERO_CONTROL_SLOTS"):
+        assert constant in reads, (
+            f"run_smoke never reads {constant}, so its coverage is not the pre-registered one. "
+            "A hand-written subset of slots, frames or reductions is a subset free to stop "
+            "agreeing with the grid the admissibility gate is defined over"
+        )
+
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    assert extraction.SPREAD_ZERO_CONTROL_SLOTS == ("birth_year", "house_number")
+    assert len(extraction.CORE_SLOTS) == 8 and len(extraction.NLL_FRAMES) == 3
+    assert not extraction.SMOKE_REPORT_PATH.exists(), (
+        f"{extraction.SMOKE_REPORT_PATH} exists. Plan 18-13 runs the smoke and commits that "
+        "report as the FIRST results/phase18_* artifact, which is the commit that arms the "
+        "STAT-05 ancestry guard — an artifact appearing before the driver is complete would "
+        "freeze the pin mid-assembly"
+    )
+
+
+# --- D-07 / ATK-02: one recorded prompt, two arms, two processes --------------------------------
+#
+# The four functions that turn a question into ids. None of them may be reached from `run_arm`:
+# D-07's guarantee is that both arms dispatch the SAME recorded `prompt_ids`, and a prompt rebuilt
+# inside an arm is a prompt whose pairing rests on the two rebuilds happening to agree.
+_PROMPT_BUILDERS = ("build_a1", "apply_a1", "build_a2_prompt", "build_a3_prompt")
+
+
+def test_one_corpus_two_arms():
+    """D-07 — the prompt is READ from the corpus, and no arm can rebuild one.
+
+    ``build_recall_prompt`` is checked separately from the three attack builders and for a
+    different reason. The attack builders are the ones D-07 is about: a rebuilt A1/A2/A3 prompt
+    unpairs the two arms silently, because nothing downstream compares the ids. ``build_recall_
+    prompt`` is the bare path family zero needs — and ``run_arm`` reaches it through
+    ``phase14_recall.complete_question`` instead, which is Phase 14's OWN function and the one
+    whose output the 496/1008 reference numbers were produced by. Calling it here would be a
+    second bare-prompt path free to drift from the one D-01 compares against.
+
+    ``draw_all`` is asserted at exactly ONE call site. Two would be two draw loops, and a
+    duplicated draw loop is how two arms stop being paired while both still look like they ran.
+    """
+    tree = _tree(_EXTRACTION_PATH)
+    source = _EXTRACTION_PATH.read_text(encoding="utf-8")
+    arm = _function(tree, "run_arm")
+    calls = _calls(arm)
+
+    for builder in _PROMPT_BUILDERS + ("build_recall_prompt",):
+        assert builder not in calls, (
+            f"run_arm calls {builder}(). D-07 dispatches the corpus's RECORDED prompt_ids once "
+            "per arm so adapter-on/adapter-off divergence is impossible by construction; a prompt "
+            "rebuilt inside an arm is paired only by the two rebuilds happening to agree, which "
+            "nothing downstream checks"
+        )
+
+    draw_sites = [call for call in calls if call.endswith("draw_all")]
+    assert draw_sites == ["recall.draw_all"], (
+        f"run_arm's draw_all call sites are {draw_sites}, not exactly ['recall.draw_all']. One "
+        "recorded prompt, two arms, ONE draw loop — a second loop is how the pairing is lost"
+    )
+    assert "recall.complete_question" in calls, (
+        "run_arm never calls complete_question, so family zero draws through something other than "
+        "Phase 14's own bare path. D-01 compares its 112 taught rows against the report that path "
+        "produced; a reimplementation would be compared against numbers it did not generate"
+    )
+
+    arm_source = ast.get_source_segment(source, arm)
+    assert "adapter_disabled" in arm_source, (
+        "run_arm never mentions adapter_disabled, so the base column is not gated off the ONE "
+        "loaded model. ATK-02's control is only paired if both arms come from a single load path; "
+        "a separately built un-adapted model is a second path free to differ"
+    )
+    assert "n_samples=K - 1" in arm_source, (
+        "run_arm does not pass n_samples=K - 1. draw_all emits one greedy draw plus n_samples "
+        "seeded ones, so K - 1 is what makes the attack budget exactly the pre-registered K"
+    )
+    assert "entry['seed_index'] * K" in arm_source or 'entry["seed_index"] * K' in arm_source, (
+        "run_arm does not stride the attack seeds by K. D-06 widens each question's seed window "
+        "to 64 at K = 64; unstrided, more than half the tier shares randomness with any given "
+        "question and the question-level cluster bootstrap assumes exactly that away"
+    )
+    assert "corpus_sha256" in calls, (
+        "run_arm never computes the corpus sha256. D-07 records it in the run's provenance so a "
+        "report can name the exact corpus it read rather than the generator it hopes produced one"
+    )
+
+    # No override on the clobber refusal, in any spelling. A record that can be replaced is not
+    # evidence, and the honest recovery is a reviewed deletion commit that shows in the diff.
+    assert not re.search(r"--force|force\s*=|force_|_force\b", source), (
+        "the driver carries a force-style override. An arm record is the completions every "
+        "published rate was scored from; a flag that replaces one turns a rerun on drifted code "
+        "into a silent substitution"
+    )
+
+
+def test_no_multi_arm_mode():
+    """T-18-10-04 — a single process is INCAPABLE of running two arms, and the parser proves it.
+
+    D-07's pairing rests on two fresh processes dispatching one recorded prompt object. A
+    ``--both`` convenience flag would turn that from a property of this driver into a convention an
+    operator is trusted to follow at midnight, eight hours into a job — so the guarantee is that
+    the surface offers no way to express it. Three separate ways it could be expressed are closed
+    here: a fifth mode, an ``--arm`` that accepts a name outside the pre-registered pair, and any
+    option that accumulates or takes more than one value.
+
+    The mutually exclusive group is read off argparse's own structure rather than off ``--help``
+    text, because the text is what a reader checks and the structure is what argparse enforces.
+    """
+    extraction = _load("phase18_extraction", _EXTRACTION_PATH)
+    parser = extraction.build_parser()
+
+    groups = parser._mutually_exclusive_groups
+    assert len(groups) == 1, (
+        f"the parser has {len(groups)} mutually exclusive groups. Two groups is two independent "
+        "one-of choices, and a mode from each could be selected in the same invocation"
+    )
+    group = groups[0]
+    assert group.required, (
+        "the mode group is not required, so an argumentless parse would fall through to a default "
+        "branch. The reasonable-looking default here is a multi-hour generation run"
+    )
+
+    options = sorted(action.dest for action in group._group_actions)
+    assert options == ["arm", "corpus", "report", "smoke"], (
+        f"the parser's modes are {options}, not the four this driver dispatches. A fifth mode with "
+        "no dispatch branch would contribute nothing while looking like it ran; a missing one "
+        "would be unreachable from the terminal that operates this phase"
+    )
+
+    for action in group._group_actions:
+        assert action.nargs in (0, None), (
+            f"--{action.dest} takes nargs={action.nargs!r}. An option that accepts more than one "
+            "value is an option that accepts two arms, which is exactly the mode this parser "
+            "exists not to have"
+        )
+        assert type(action).__name__ != "_AppendAction", (
+            f"--{action.dest} appends. Repeating it would accumulate arms into a list, and the "
+            "process split would depend on the operator not repeating a flag"
+        )
+
+    arm = next(action for action in group._group_actions if action.dest == "arm")
+    assert tuple(arm.choices) == extraction.ARMS, (
+        f"--arm accepts {tuple(arm.choices)}, not the pre-registered {extraction.ARMS}. The arm "
+        "name is the axis every ASR_on - ASR_off contrast is taken over"
+    )
+
+    # A repeated --arm does not accumulate: argparse overwrites, so the parsed value is ONE
+    # string and the process still runs one arm. Asserted rather than assumed, because the
+    # failure it would represent — a list of arms reaching run_arm — is the mode this test
+    # exists to prove absent, and "the last one wins" is what makes that impossible to express.
+    repeated = parser.parse_args(["--arm", "adapter-on", "--arm", "adapter-off"])
+    assert repeated.arm == "adapter-off" and isinstance(repeated.arm, str), (
+        f"repeating --arm produced {repeated.arm!r}. A collection here would reach run_arm as "
+        "two arms in one process, and D-07's pairing rests on the split being structural"
+    )
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--smoke", "--arm", "adapter-on"])
+    with pytest.raises(SystemExit):
+        parser.parse_args([])
+
+    for argv, dest in (
+        (["--smoke"], "smoke"),
+        (["--corpus"], "corpus"),
+        (["--report"], "report"),
+    ):
+        parsed = parser.parse_args(argv)
+        assert getattr(parsed, dest) is True and parsed.arm is None
+    assert parser.parse_args(["--arm", extraction.ARMS[1]]).arm == extraction.ARMS[1]
+
+    assert "NO mode that runs more than one arm" in extraction._USAGE, (
+        "_USAGE does not record WHY there is no two-arm mode. The next person to find the split "
+        "inconvenient will read this text, and an unexplained absence reads as an oversight"
+    )
