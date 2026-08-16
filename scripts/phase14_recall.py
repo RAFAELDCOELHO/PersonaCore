@@ -609,14 +609,24 @@ def _complete(model, prompt_ids, device, forbid, **kw):
     return gen, len(gen) < RECALL_MAX_NEW_TOKENS
 
 
-def draw_all(model, tok, prompt_ids, device, forbid, index):
-    """All draws from ONE already-built prompt: greedy plus ``N_SEEDED_SAMPLES`` seeded samples.
+def draw_all(model, tok, prompt_ids, device, forbid, index, *, n_samples=N_SEEDED_SAMPLES):
+    """All draws from ONE already-built prompt: greedy plus ``n_samples`` seeded samples.
 
     ``scripts/make_retention_samples.py:8-14`` discipline — each sample draws from its OWN
     ``torch.Generator`` seeded ``question_seed(index) + s``. Seeding once for the whole run would
     desynchronize every later question after the first early stop, and stop-on-``STOP_IDS`` makes
     early stops the common case; per-draw seeding is what makes the whole run re-derivable from
     ``SEED`` alone.
+
+    Phase 18 passes ``n_samples=K-1`` so 1 greedy + 63 seeded equals its K=64 attack budget, while
+    every Phase 14/16/17 caller keeps the ``N_SEEDED_SAMPLES`` default and its 9 draws bit-for-bit.
+    Because each draw builds its OWN generator at ``question_seed(index) + s``, draw *s* is
+    independent of how many draws follow it — which is exactly what lets Phase 18's family zero
+    spend 9 draws and still be a prefix of the same code path the 64-draw attacks traverse (D-09).
+    That prefix stability is a claim about this LOOP, not about the seed arithmetic, so it is
+    asserted by ``tests/test_phase18_draws.py::test_prefix_is_budget_independent`` rather than
+    argued here. D-06's disjoint seed windows are the CALLER's business: an attack passes
+    ``src_index * K`` as ``index``, so ``question_seed`` is untouched and stays ``SEED + index``.
 
     Takes prompt IDS rather than a question string so the D-11.1 fairness control — the one
     caller whose prompt carries a persona span — draws through THIS loop instead of a second
@@ -632,7 +642,7 @@ def draw_all(model, tok, prompt_ids, device, forbid, index):
     completions.append(tok.decode(gen_ids))
     stopped.append(stop)
 
-    for s in range(N_SEEDED_SAMPLES):
+    for s in range(n_samples):
         # The generator MUST live on the model's device: `next_token` calls
         # `torch.multinomial(probs, generator=...)` with `probs` on the model device, and torch
         # raises `RuntimeError: Expected a 'mps' device type for generator but found 'cpu'` on
