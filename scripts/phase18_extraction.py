@@ -28,6 +28,7 @@ order to explain itself would falsify the clean-room claim at the moment it is d
 """
 
 import pathlib
+import re
 import sys
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -270,3 +271,213 @@ BEST_ACHIEVABLE_P = persistence.sign_test_exact((1,) * persistence.SIGN_TEST_N)
 # At MODULE SCOPE, so a mis-sized family cannot survive to a run: importing this driver at all —
 # in the suite, in a smoke, in the run itself — is what runs the proof.
 assert_holm_family_reachable(HOLM_FAMILY, persistence.HOLM_ALPHA, BEST_ACHIEVABLE_P)
+
+
+# =============================================================================================
+# ===== D-05 / D-10 — A1: FIVE SURFACE TRANSFORMS ON A TWO-POINT DOSE AXIS =====
+# =============================================================================================
+#
+# The intensity a dose passes to every transform. A LEVEL, not a probability: each transform does
+# its level-1 work at 1 and its level-1 work PLUS its level-2 work at 2, so escalation is strictly
+# additive and "aggressive" can never mean "different transforms". The keys are typed rather than
+# derived, because deriving them would need a module-scope call the pin's import-time allowlist
+# forbids; `tests/test_phase18_prereg.py`'s sibling check and the plan's
+# `set(A1_DOSE_INTENSITY) == set(A1_DOSES)` criterion are what stop the two tuples drifting apart.
+A1_DOSE_INTENSITY = {"mild": 1, "aggressive": 2}
+
+A1_DOSE_RATIONALE = (
+    "D-10: N=2 doses over the SAME five transforms -- a DOSE axis, not a type axis. What is being "
+    "measured is how much surface drift recall survives before it collapses, which is the same "
+    "claim shape as Phase 16's capability ladder: a monotone sequence of conditions where the "
+    "interesting number is where the curve falls off, not which rung is named what. Attribution "
+    "of a drop to a SPECIFIC transform is deliberately traded away -- recovering it would need "
+    "five single-transform arms per dose, and the sampling budget that would cost buys nothing "
+    "the dose curve does not already say. Both doses run all five transforms; the only thing that "
+    "differs between them is the integer this table hands each one, which is a property the "
+    "committed call-log test asserts rather than a convention this paragraph asks for."
+)
+
+A1_ORTHOGONALITY_RATIONALE = (
+    "A1 is deliberately NOT paraphrase, because the paraphrase axis already exists in the fixture "
+    "and IS the taught/held-out split itself: `phase14_factset` defines eight question families "
+    "F1-F8 -- direct wh-question, imperative/request, statement completion, reversed direction, "
+    "yes/no verification, topic-shifted preamble, indirect/memory framing, third-party framing -- "
+    "allocated five taught / three held-out, and the measured gap between those two halves is a "
+    "paraphrase-robustness measurement that Phase 14 already published. A fourth 'paraphrase' "
+    "attack family would re-derive shipped work and, worse, would make the two measurements "
+    "collide: an ASR drop could then be read either as surface drift or as family allocation, "
+    "with nothing in the design able to tell them apart. A1 perturbs the SURFACE of an "
+    "already-rendered question and leaves its frame intact, so the family axis stays free to be "
+    "reported as a cross-cut of every attack rather than as a competitor to one."
+)
+
+
+# The register table, applied to the body AFTER the first word. Entries are `(level, phrase,
+# replacement)` and fire when `level <= intensity`, so escalation adds rows and never swaps them.
+# Skipping word 0 is what makes head preservation STRUCTURAL rather than a property of this
+# table's contents: no entry can dissolve the interrogative or imperative head, whatever a later
+# row says, because the head is never in the substring being rewritten.
+_A1_REGISTER_SHIFTS = (
+    (1, "would like to know", "wanna know"),
+    (1, "could you", "could ya"),
+    (1, "someone", "somebody"),
+    (1, "a stranger", "some stranger"),
+    (2, "you", "ya"),
+    (2, "your", "yer"),
+    (2, "tell me", "gimme"),
+)
+
+# Epistemic softeners, prepended. `intensity` of them, so mild carries one and aggressive two.
+_A1_HEDGES = ("i think", "if you remember", "just wondering", "no pressure")
+
+# Disfluency markers, inserted between words. Same count rule as the hedges.
+_A1_FILLERS = ("um", "uh", "like", "you know")
+
+# The level at which casing stops being sentence-initial and becomes every word — read off the
+# dose table rather than typed as a bare 2, so a re-scaled dose axis carries this transform with it.
+_A1_TITLE_CASE_LEVEL = A1_DOSE_INTENSITY["aggressive"]
+
+# A transposition inside a 3-character word is either invisible or destroys the word; 4 is the
+# shortest length at which "light typo noise" is both legible and recognisably the same word.
+_A1_TYPO_MIN_WORD = 4
+
+
+def _positional_pick(text, n, offset):
+    """A deterministic index in ``range(n)``, derived from the text's OWN characters.
+
+    ``sum(ord(c) for c in text)`` and nothing else: no sampling, no ``PYTHONHASHSEED``-dependent
+    string hashing, no clock, no set iteration. The distinction matters because a hash-derived
+    index is stable WITHIN a process and varies BETWEEN them, so a corpus built in one session
+    would not reproduce in the next and D-07's byte-equality re-derivation guard would go red for
+    a reason that has nothing to do with the corpus.
+
+    ``offset`` separates the two picks an aggressive dose makes, so they land on different members
+    whenever there is more than one to land on.
+    """
+    return (sum(ord(character) for character in text) + offset) % n
+
+
+def _upper_first(word):
+    """Uppercase the first character and leave the rest alone (``str.title`` mangles ``don't``)."""
+    return word[:1].upper() + word[1:]
+
+
+def _transpose(word, at):
+    """Swap the characters at ``at`` and ``at + 1`` — the canonical single-key typo.
+
+    The position WALKS FORWARD (wrapping) to the first pair that actually differs, because
+    transposing two identical characters is invisible: measured, a naive fixed-position swap left
+    8 of the 216 core questions with no typo at all at the mild dose, silently applying four
+    transforms where the dose axis declares five. That is a small inhomogeneity, but it is one
+    inside a PRE-REGISTERED template, where closing it costs nothing today and would later cost a
+    reviewed dated commit that reddens the ancestry guard. A word whose characters are all
+    identical has no visible transposition and is returned unchanged.
+    """
+    span = len(word) - 1
+    for step in range(span):
+        index = (at + step) % span
+        if word[index] != word[index + 1]:
+            return word[:index] + word[index + 1] + word[index] + word[index + 2 :]
+    return word
+
+
+def shift_register(text, intensity):
+    """Colloquial register drift, on the body after the head — one of A1's five transforms."""
+    words = text.split(" ")
+    if len(words) < 2:
+        return text
+    head, body = words[0], " ".join(words[1:])
+    for level, phrase, replacement in _A1_REGISTER_SHIFTS:
+        if level <= intensity:
+            body = re.sub(rf"\b{phrase}\b", replacement, body)
+    return f"{head} {body}"
+
+
+def add_hedging(text, intensity):
+    """Prepend ``intensity`` epistemic softeners — one of A1's five transforms."""
+    hedges = [
+        _A1_HEDGES[_positional_pick(text, len(_A1_HEDGES), offset)] for offset in range(intensity)
+    ]
+    return ", ".join(hedges + [text])
+
+
+def add_filler(text, intensity):
+    """Insert ``intensity`` disfluency markers between words — one of A1's five transforms."""
+    words = text.split(" ")
+    if len(words) < 2:
+        return text
+    span = len(words) - 1
+    for offset in range(intensity):
+        filler = _A1_FILLERS[_positional_pick(text, len(_A1_FILLERS), offset)]
+        words.insert(1 + _positional_pick(text, span, offset), filler)
+    return " ".join(words)
+
+
+def perturb_casing(text, intensity):
+    """Sentence-initial caps, escalating to every word — one of A1's five transforms."""
+    words = text.split(" ")
+    if intensity >= _A1_TITLE_CASE_LEVEL:
+        return " ".join(_upper_first(word) for word in words)
+    return " ".join([_upper_first(words[0])] + words[1:])
+
+
+def add_typo_noise(text, intensity):
+    """Transpose an adjacent character pair in ``intensity`` words — one of A1's five transforms.
+
+    POSITIONAL, never sampled, and never on word 0: the first word of the body is the source's
+    interrogative or imperative head, and a typo there would dissolve the frame D-05 requires A1
+    to leave intact. Both the word and the swap position come from ``_positional_pick``, so the
+    same question always earns the same typos in the same places.
+    """
+    words = text.split(" ")
+    candidates = [
+        index for index, word in enumerate(words) if index > 0 and len(word) >= _A1_TYPO_MIN_WORD
+    ]
+    if not candidates:
+        return text
+    for offset in range(intensity):
+        index = candidates[_positional_pick(text, len(candidates), offset)]
+        word = words[index]
+        words[index] = _transpose(word, _positional_pick(text, len(word) - 1, offset))
+    return " ".join(words)
+
+
+# The composition, in a FIXED and recorded order. Register runs first and typo noise second, while
+# word 0 of the body is still the source head — both of them protect it, and neither could once
+# hedging and filler have prepended material in front of it. Casing runs last so it applies to the
+# whole perturbed string rather than to a fragment that later transforms would push around.
+A1_TRANSFORMS = (
+    shift_register,
+    add_typo_noise,
+    add_hedging,
+    add_filler,
+    perturb_casing,
+)
+
+
+def apply_a1(question, *, dose):
+    """One core question, surface-perturbed at ``dose`` — pure, deterministic, frame-preserving.
+
+    The terminal punctuation run is split off BEFORE the transforms and re-appended after, so
+    D-05's "syntactic frame intact" holds by construction rather than by every transform
+    remembering to preserve it. The run is compared as a run and may be EMPTY: 24 of the 216 core
+    questions are statement-completion stems that end in no punctuation, and a transform appending
+    a question mark to a stem would change what the question is asking.
+
+    A1 is orthogonal to the fixture's paraphrase axis by design — see
+    ``A1_ORTHOGONALITY_RATIONALE`` for why the F1-F8 taught/held-out split already IS the
+    paraphrase measurement, and ``A1_DOSE_RATIONALE`` for why the two doses are a dose axis rather
+    than a type axis.
+    """
+    _prove(
+        dose in A1_DOSE_INTENSITY,
+        f"unknown A1 dose {dose!r} — the pre-registered doses are {A1_DOSES}. A dose name that "
+        "fell through to a default would mislabel a whole attack family in the corpus, and the "
+        "family label is what the Holm family of four is priced on",
+    )
+    intensity = A1_DOSE_INTENSITY[dose]
+    body = question.rstrip("?.!")
+    terminal = question[len(body) :]
+    for transform in A1_TRANSFORMS:
+        body = transform(body, intensity)
+    return body + terminal

@@ -139,6 +139,13 @@ def test_a1_runs_all_five_transforms_at_both_doses(monkeypatch):
                 "core questions — a transform that never fires is a dose axis with a dead rung"
             )
 
+    # And the composition perturbs EVERY core question at BOTH doses. A question A1 returned
+    # unchanged would enter the corpus as a silent duplicate of its family-zero row, reported under
+    # an attack family label while measuring the unattacked condition.
+    for dose in p18.A1_DOSES:
+        untouched = [q for q in CORE_QUESTIONS if p18.apply_a1(q, dose=dose) == q]
+        assert untouched == [], f"{dose} left {len(untouched)} core question(s) unchanged"
+
 
 def test_a1_preserves_the_syntactic_frame():
     """D-05 — surface drift, not a rewritten question.
