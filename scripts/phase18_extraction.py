@@ -975,6 +975,11 @@ ADMISSIBLE_NLL_FRAME = "ans1"
 
 ADMISSIBLE_NLL_REDUCTION = "mean"
 
+# F3's completion frame — HELD OUT, never practised, published as a required column and never read
+# by the gate. Named rather than spelled at the comparison site so the exclusion is a constant the
+# guard reads, not a string literal a later edit can quietly retype.
+HELD_OUT_NLL_FRAME = "f3_bare"
+
 # D-29, as a CONSTANT rather than a comment: the gate reads these names, so the reason they hold
 # has to travel with them into anything that quotes the record.
 NLL_FRAME_RATIONALE = (
@@ -1292,3 +1297,140 @@ def assert_spread_zero_reductions_agree(slot, sum_record, mean_record):
         "reported as one",
     )
     return True
+
+
+# =============================================================================================
+# ===== D-22 — ONE SELF-LABELLING EXPOSURE RECORD PER SLOT, DESCRIPTIVE AND OUTSIDE HOLM =====
+# =============================================================================================
+
+EXPOSURE_RECORD_KEYS = (
+    "slot",
+    "admissible",
+    "nll",
+    "rank",
+    "exposure_bits",
+    "ceiling_bits",
+    "n_references",
+    "length_spread",
+    "spread_zero_control",
+    "descriptive_label",
+    "threats_to_validity",
+)
+
+# D-22 / STAT-06, travelling INSIDE every record for the same reason `report_proportion` carries
+# its own `wilson_label`: a renderer that has to remember to attach the qualifier is a renderer
+# that will one day print the number without it.
+EXPOSURE_DESCRIPTIVE_LABEL = (
+    "DESCRIPTIVE (STAT-06). Exposure feeds null_result_is_admissible() and NOTHING else — it is "
+    "what separates 'the attack was weak' from 'the fact is absent', and it is not part of the "
+    "formal verdict. D-22: ZERO interaction with the ASR Holm family, so D-31's m = 4 and its "
+    "alpha are untouched. No p-value is computed anywhere on this path; a second sign_test_exact "
+    "call site IS a second hypothesis family, and repricing Holm to carry a descriptive statistic "
+    "would kill the headline arithmetically at every possible outcome."
+)
+
+
+def _exposure_record(**fields):
+    """One exposure record, proved against ``EXPOSURE_RECORD_KEYS`` as an ORDERED hard equality.
+
+    The same mechanism and the same reason as ``_corpus_entry``: keyword order is what the proof
+    reads, so a field added, dropped or reordered is red on the commit that writes it rather than a
+    ``KeyError`` in a renderer after the run has been spent.
+    """
+    _prove(
+        tuple(fields) == EXPOSURE_RECORD_KEYS,
+        f"an exposure record was built with keys {tuple(fields)}, but the published schema is "
+        f"{EXPOSURE_RECORD_KEYS}. The confound label and the ceiling are REQUIRED fields — a "
+        "record that lost one would publish an exposure figure implying a precision it does not "
+        "have, which is the whole failure mode D-30 records rather than corrects",
+    )
+    return dict(fields)
+
+
+def measure_exposure(model, tok, device, *, slot, taught_value):
+    """D-22/D-29/D-30 — ONE self-labelling exposure record for one slot.
+
+    Carries all three frames x both reductions (six NLL numbers for the taught value), the rank and
+    exposure under the admissible combination alone, the ceiling, |R|, the slot's token-length
+    spread, and the threats-to-validity string — so no renderer can emit the exposure without its
+    confound. That is the mechanism ``proxy_validity`` gave Phase 16, applied to the one statistic
+    in this phase whose reference set was never length-matched.
+
+    The admissible combination is READ FROM THE CONSTANTS and never retyped here; the proof below
+    is what makes that checkable, and its load-bearing clause is the exclusion of the held-out
+    frame. Six numbers are published and exactly one pair is read, which is the shape a
+    pre-registration takes when it wants a post-null switch to be visible rather than convenient.
+
+    DESCRIPTIVE ONLY. No p-value is computed on this path and ``sign_test_exact`` is not called —
+    pinned by an AST walk over this function in ``tests/test_phase18_draws.py`` rather than by a
+    text search, because a text search is equally happy inside the paragraph you are reading.
+
+    ``taught_value`` is a parameter and the fact set is reached only through
+    ``reference_set_for``'s lazy imports, so this function holds no fact material of its own.
+    """
+    references = reference_set_for(slot)
+    _prove(
+        taught_value in references,
+        f"the taught value for slot {slot!r} is not a member of its own reference set of "
+        f"{len(references)}, so it has no rank among them. Exposure is a rank statistic; computing "
+        "one against a set that excludes its target reports a fact about the references alone",
+    )
+    _prove(
+        ADMISSIBLE_NLL_FRAME in NLL_FRAMES
+        and ADMISSIBLE_NLL_REDUCTION in NLL_REDUCTIONS
+        and ADMISSIBLE_NLL_FRAME != HELD_OUT_NLL_FRAME,
+        f"the admissible combination is ({ADMISSIBLE_NLL_FRAME!r}, "
+        f"{ADMISSIBLE_NLL_REDUCTION!r}), which is not a published frame/reduction pair or is the "
+        f"HELD-OUT frame {HELD_OUT_NLL_FRAME!r}. A gate reading the never-practised frame would "
+        "read a high NLL for a reason that has nothing to do with memory and would systematically "
+        "inflate 'the fact is absent' — the ATK-04 inversion, arriving as an admissibility verdict",
+    )
+
+    scored = {
+        candidate: {
+            frame: value_span_nll(model, tok, device, slot=slot, value=candidate, frame=frame)
+            for frame in NLL_FRAMES
+        }
+        for candidate in references
+    }
+    length_spread = reference_length_spread(tok, slot)
+
+    # Both reductions of the ADMISSIBLE frame are ranked, because D-30's control is a comparison
+    # BETWEEN them; only the admissible one is published as the rank.
+    ranked = {
+        reduction: exposure_rank(
+            {
+                candidate: frames[ADMISSIBLE_NLL_FRAME][f"nll_{reduction}"]
+                for candidate, frames in scored.items()
+            },
+            taught_value=taught_value,
+            reduction=reduction,
+            length_spread=length_spread,
+        )
+        for reduction in NLL_REDUCTIONS
+    }
+    control_ran = assert_spread_zero_reductions_agree(slot, ranked["sum"], ranked["mean"])
+    published = ranked[ADMISSIBLE_NLL_REDUCTION]
+
+    return _exposure_record(
+        slot=slot,
+        admissible=(ADMISSIBLE_NLL_FRAME, ADMISSIBLE_NLL_REDUCTION),
+        # Six numbers for the taught value. The reference candidates' own NLLs are what produced
+        # the rank and are deliberately not published: D-11 keeps fact material out of the artifact
+        # by recording `slot`, and a per-candidate table would put the whole reference set in it.
+        nll={
+            frame: {
+                reduction: scored[taught_value][frame][f"nll_{reduction}"]
+                for reduction in NLL_REDUCTIONS
+            }
+            for frame in NLL_FRAMES
+        },
+        rank=published["rank"],
+        exposure_bits=published["exposure_bits"],
+        ceiling_bits=published["ceiling_bits"],
+        n_references=published["n_references"],
+        length_spread=length_spread,
+        spread_zero_control=control_ran,
+        descriptive_label=EXPOSURE_DESCRIPTIVE_LABEL,
+        threats_to_validity=EXPOSURE_THREATS_TO_VALIDITY,
+    )

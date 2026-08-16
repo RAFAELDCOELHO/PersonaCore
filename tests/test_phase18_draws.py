@@ -43,6 +43,7 @@ that on the two spread-0 slots the sum-ordered and mean-ordered rankings are IDE
 falsifiable internal control D-30 asks for, where a disagreement is a bug and never a finding.
 """
 
+import ast
 import importlib.util
 import math
 import pathlib
@@ -414,3 +415,69 @@ def test_mean_is_admissible_and_spread0_agrees(fake_lm):
     for slot in _MEASURED_REFERENCE_SIZES:
         for reduction in extraction.NLL_REDUCTIONS:
             assert rankings[slot][reduction]["length_spread"] == _MEASURED_LENGTH_SPREADS[slot]
+
+
+def test_exposure_record_is_descriptive_and_self_labelling(fake_lm):
+    """D-22: one record per slot, carrying its own confound, and structurally outside Holm.
+
+    Two claims, and the second is the one a reading of the source cannot settle. That every record
+    carries the threats-to-validity string and the descriptive label INSIDE it, so a renderer
+    cannot emit an exposure figure without the qualifier — the mechanism ``report_proportion``'s
+    ``wilson_label`` already gives Phase 16. And that the exposure path computes no p-value: read
+    off the AST of ``measure_exposure`` itself rather than by a text search, because a text search
+    is equally happy inside a docstring saying the call is absent.
+    """
+    taught = {fact.slot: fact.value for fact in _locked_facts()}
+    records = {
+        slot: extraction.measure_exposure(
+            fake_lm, _TOKENIZER, "cpu", slot=slot, taught_value=taught[slot]
+        )
+        for slot in _MEASURED_REFERENCE_SIZES
+    }
+
+    for slot, record in records.items():
+        assert tuple(record) == extraction.EXPOSURE_RECORD_KEYS
+        assert record["admissible"] == ("ans1", "mean")
+        assert record["admissible"] == (
+            extraction.ADMISSIBLE_NLL_FRAME,
+            extraction.ADMISSIBLE_NLL_REDUCTION,
+        )
+        assert record["threats_to_validity"] == extraction.EXPOSURE_THREATS_TO_VALIDITY
+        assert record["descriptive_label"] == extraction.EXPOSURE_DESCRIPTIVE_LABEL
+        assert record["threats_to_validity"].strip()
+        assert record["descriptive_label"].strip()
+
+        # Six NLL numbers: three frames x two reductions, all finite.
+        assert tuple(record["nll"]) == extraction.NLL_FRAMES
+        flat = [
+            record["nll"][frame][reduction]
+            for frame in extraction.NLL_FRAMES
+            for reduction in extraction.NLL_REDUCTIONS
+        ]
+        assert len(flat) == 6
+        assert all(math.isfinite(value) for value in flat)
+
+        assert 1 <= record["rank"] <= record["n_references"]
+        assert record["n_references"] == _MEASURED_REFERENCE_SIZES[slot]
+        assert record["ceiling_bits"] == pytest.approx(math.log2(record["n_references"]))
+        assert record["exposure_bits"] == pytest.approx(
+            record["ceiling_bits"] - math.log2(record["rank"])
+        )
+        assert record["length_spread"] == _MEASURED_LENGTH_SPREADS[slot]
+        assert record["spread_zero_control"] is (slot in extraction.SPREAD_ZERO_CONTROL_SLOTS)
+
+    # D-22 / T-18-06-04, structurally: nothing on the exposure path opens a second hypothesis
+    # family. Walked over the function's OWN subtree, so a call anywhere else in the pinned driver
+    # (the D-31 import-time proof legitimately prices the family) is not confused for one here.
+    source = (_REPO_ROOT / "scripts" / "phase18_extraction.py").read_text(encoding="utf-8")
+    node = next(
+        n
+        for n in ast.walk(ast.parse(source))
+        if isinstance(n, ast.FunctionDef) and n.name == "measure_exposure"
+    )
+    callees = {ast.unparse(c.func) for c in ast.walk(node) if isinstance(c, ast.Call)}
+    assert not {name for name in callees if "sign_test" in name or "holm" in name}, (
+        f"measure_exposure calls {sorted(callees)} — a second `sign_test_exact` call site IS a "
+        "second hypothesis family, and D-22 keeps exposure descriptive precisely so D-31's m = 4 "
+        "stays priced on the four attack families alone"
+    )
