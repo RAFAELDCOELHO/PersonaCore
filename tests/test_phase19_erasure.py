@@ -1114,7 +1114,13 @@ def test_the_reachability_proof_goes_red_one_ulp_below_the_attainable_bound():
     one_ulp_low = math.nextafter(erasure.ERASURE_FLOOR_MIN, -math.inf)
 
     def _mutated(cal_rate):
-        return max(one_ulp_low, min(erasure.FLOOR_CEILING, erasure.lock_erasure_floor(cal_rate)))
+        """``lock_erasure_floor``'s EXPRESSION with the clamp constant moved down by one ulp.
+
+        Wrapping ``lock_erasure_floor``'s OUTPUT would be a no-op — it is already clamped at the
+        unmutated value, so the outer ``max`` would never bind and the mutation would prove
+        nothing. The clamp itself has to move, which is why the discount is recomputed here.
+        """
+        return max(one_ulp_low, min(erasure.FLOOR_CEILING, _grid_oracle(cal_rate)))
 
     with pytest.raises(SystemExit, match="unclearable|no outcome|perfect"):
         erasure.assert_erasure_floor_reachable(erasure.N_TARGET_QUESTIONS, _mutated)
@@ -1169,3 +1175,11 @@ def test_the_module_docstring_records_the_severity_the_floor_clamp_buys():
     assert "19-03" in erasure.__doc__
     # The import-time surface is declared honestly: the reachability proof is now part of it.
     assert "reachab" in doc
+
+    # Prose numbers are asserted against the functions that compute them (the 19-02 discipline),
+    # so a pinned sentence cannot quote a figure that stopped being true.
+    assert f"{erasure.ERASURE_FLOOR_MIN / erasure.FLOOR_DISCOUNT:.4f}" in erasure.__doc__
+    assert (
+        f"wilson_upper_bound(0, {erasure.N_TARGET_QUESTIONS}) = "
+        f"{erasure.ERASURE_FLOOR_MIN:.6f}" in erasure.assert_erasure_floor_reachable.__doc__
+    )

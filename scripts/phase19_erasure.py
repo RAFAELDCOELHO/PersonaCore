@@ -28,13 +28,27 @@ afterwards is a DATED CONTINUATION published beside the original text (``scripts
 decision D3), never an edit and never a ``--force`` flag. Editing a recorded rule after its number
 exists destroys the only thing that made the rule worth recording.
 
-WHAT THIS FILE HOLDS AT PLAN 19-02, AND WHAT IT DELIBERATELY DOES NOT
+WHAT THIS FILE HOLDS AT PLAN 19-03, AND WHAT IT DELIBERATELY DOES NOT
 --------------------------------------------------------------------
 Holds: the ordering contract above, the mechanism identity and its rule, the DERIVED component
-index, the ablation operator (19-01), and the target-selection rule with its two tie-breaks, the
-published eight-fact ranking and the derived (a) denominator (19-02). The calibrated floor, the
-noise-floor estimators, the arm runners and the report text are plans 19-03..19-06, and writing
-any of them here early would mean fixing them before the plan that reasons about them.
+index, the ablation operator (19-01), the target-selection rule with its two tie-breaks, the
+published eight-fact ranking and the derived (a) denominator (19-02), and the (a) floor-DERIVATION
+rule with its mirrored operator and its import-time reachability proof (19-03). The noise-floor
+estimators, the arm runners and the report text are plans 19-04..19-06, and writing any of them
+here early would mean fixing them before the plan that reasons about them.
+
+The (a) floor CONSTANT is not here and cannot be: it does not exist until a blind calibration has
+run, which is the whole content of ``scripts/erasure_gate.py:104-106``. What is committed here is
+the PROCEDURE and the ESTIMATOR that will produce it.
+
+A RECORDED CONSEQUENCE, stated here rather than left to be discovered from the arithmetic: the
+floor rule's outer clamp is the best bound a PERFECT ERASURE can attain (0 successes over the
+pooled denominator). Whenever that clamp binds — which includes every calibration rate below
+0.1518, and marginally beyond it because the discount snaps down to a four-decimal grid — the
+floor IS that bound, and condition (a) then clears ONLY on a perfect erasure. That is the intended
+severity and not an accident of rounding; ``floor_branch`` exists so the published report names
+which clamp bound rather than leaving a reader to re-derive how hard the criterion they are
+reading actually was.
 
 NO FACT VALUE MAY ENTER THIS FILE, IN ANY STRING, DOCSTRINGS INCLUDED. Every core ``fact_id`` ends
 in its own locked value (``scripts/phase17_personas.py:61``, ``scripts/phase17_isolation.py:128``),
@@ -47,11 +61,12 @@ Success criteria are INHERITED from ``scripts/erasure_gate.py`` (committed ``23a
 16:27:43 -0300, before Phase 16 ran) and are never re-authored here. That file fixed the BAR and
 deliberately fixed no design; this file commits the DESIGN it left open, and touches no bar.
 
-Nothing executes at import beyond the ``sys.path`` bootstrap below and the PURE derived-census
-proofs (the component census, and the two-source denominator cross-check). No file is read at
-import and no artifact is loaded: ``scripts/phase18_extraction.py`` holds the same discipline, and
-a pin that could not be imported without its inputs on disk would be a pin whose rules stop being
-quotable the moment a path moves. CPU-only, GPU-free, no checkpoint read, no network.
+Nothing executes at import beyond the ``sys.path`` bootstrap below and three PURE proofs — the
+component census, the two-source denominator cross-check, and the floor-REACHABILITY sweep. Each
+is pure arithmetic over already-committed constants. No file is read at import and no artifact is
+loaded: ``scripts/phase18_extraction.py`` holds the same discipline, and a pin that could not be
+imported without its inputs on disk would be a pin whose rules stop being quotable the moment a
+path moves. CPU-only, GPU-free, no checkpoint read, no network.
 """
 
 import json
@@ -781,7 +796,12 @@ ERASURE_FLOOR_RULE = (
     "the pooling departure, together with its two consequences, both computed and both recorded "
     "before any calibration number exists. BELOW cal_rate = 0.1518 the discounted value falls "
     "under the reachability clamp, so the floor is exactly 0.091079 and (a) then clears ONLY on a "
-    "PERFECT ERASURE. ABOVE cal_rate = 0.3333 the discounted value exceeds the ceiling, so the "
+    "PERFECT ERASURE. That figure is the CONTINUOUS crossover ERASURE_FLOOR_MIN / FLOOR_DISCOUNT "
+    "and is a sufficient condition, not an iff: because the discount snaps DOWN to the "
+    "four-decimal grid, the clamp still binds a hair beyond it. `floor_branch` reports which bound "
+    "actually applied for exactly this reason — so the branch is read off the rule rather than "
+    "inferred from this sentence. ABOVE cal_rate = 0.3333 the discounted value exceeds the "
+    "ceiling, so the "
     "floor saturates at 0.20 and the blind calibration stops discriminating — every rate above "
     "that point yields the identical floor, the more permissive end of the range (B4). Phase 14's "
     "calibration arm measured 0.4143 taught / 0.2506 held-out, which is a PRIOR and not a "
@@ -877,6 +897,58 @@ def floor_branch(cal_rate):
     return "discount"
 
 
+def assert_erasure_floor_reachable(n_questions, floor_fn):
+    """Q7.2 — prove (a) CAN be cleared before anything spends compute trying.
+
+    ``wilson_upper_bound(0, n_questions)`` is the BEST ATTAINABLE outcome: zero successes over
+    every scored question, a PERFECT erasure, and the smallest value the gate's own estimator can
+    return at that denominator. If any calibration rate could produce a floor below it, then no
+    outcome whatsoever satisfies (a) and the criterion is dead arithmetically rather than merely
+    strict. ``wilson_upper_bound(0, 27) = 0.091079`` is a FACT, not a proof; this is the proof.
+
+    The comparison is NON-STRICT, matching ``erasure_succeeded``'s own ``upper <= target_floor``
+    (``scripts/erasure_gate.py:230``). A bound exactly on the floor PASSES there and must pass
+    here, or this proof would refuse a floor the gate itself would accept — the mirror of the
+    strictness ``assert_holm_family_reachable`` records for Holm's ``p < alpha_at_step``.
+
+    ``floor_fn`` is a PARAMETER and is not assumed monotone, so the property is established by
+    SWEEPING its whole domain rather than by evaluating an endpoint and arguing. Returns the
+    attainable bound, so a report prints the number the phase was actually priced at instead of a
+    second copy computed beside it.
+    """
+    best_attainable = wilson_upper_bound(0, n_questions)
+    sweep = floor_sweep()
+    _prove(
+        sweep[0] == 0.0 and sweep[-1] == 1.0,
+        f"the reachability sweep runs over [{sweep[0]!r}, {sweep[-1]!r}] and not the closed unit "
+        "interval — the endpoints are exactly the two rates the clamps exist for, so an open grid "
+        "would skip the cases this proof is here to cover",
+    )
+    for cal_rate in sweep:
+        floor = floor_fn(cal_rate)
+        _prove(
+            best_attainable <= floor,
+            f"a calibration rate of {cal_rate!r} produces an (a) floor of {floor!r}, but the best "
+            f"attainable upper bound over {n_questions} questions — 0 successes, a PERFECT "
+            f"ERASURE — is {best_attainable!r}. No outcome whatsoever could clear that floor, so "
+            "condition (a) would be unclearable by construction rather than strict. Discovering "
+            "it after the calibration adapter, the calibration erasure, the noise-floor runs and "
+            "the target erasure have all spent their compute is exactly the cost this import-time "
+            "proof buys out — the same defect Phase 16 caught at m = 12 "
+            "(scripts/phase16_persistence.py:737-743) and Phase 18 at m = 8 "
+            "(results/phase18_extraction_report.md:160)",
+        )
+    return best_attainable
+
+
+# At MODULE SCOPE, so an unclearable (a) cannot survive to a run: importing this pin at all — in
+# the suite, in a smoke, in the run itself — is what runs the proof. The return value is
+# deliberately NOT bound to a third name for the same float; `ERASURE_FLOOR_MIN` is the constant
+# and `BEST_ATTAINABLE_TARGET_BOUND` (19-02) is its measurement-side twin. Callers that want the
+# number the phase was priced at call this and print what it returns.
+assert_erasure_floor_reachable(N_TARGET_QUESTIONS, lock_erasure_floor)
+
+
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
     # Smallest runnable check that fails if the derivation breaks. The census is PRINTED rather
     # than asserted against a literal — `component_index`'s own proof is what pins it.
@@ -915,4 +987,34 @@ if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
             f"upper bound at 0 successes = {BEST_ATTAINABLE_TARGET_BOUND:.6f} "
             f"(vs {wilson_upper_bound(0, TARGET_QUESTION_COUNTS['core_held_out']):.6f} "
             "on the held-out tier alone)"
+        )
+
+    if "--floor" in sys.argv:
+        # D2 requires BOTH directions be visible so a reader sees the choice rather than infers
+        # it. This prints the mirrored floor beside Phase 14's literal operator at every branch
+        # boundary, and re-runs the reachability proof so its returned bound is displayed rather
+        # than a second copy computed beside it. No artifact is read: pure arithmetic.
+        print(
+            f"[phase19_erasure] floor rule: max({ERASURE_FLOOR_MIN:.6f}, "
+            f"min({FLOOR_CEILING}, floor(cal_rate x {FLOOR_DISCOUNT}, 4dp)))"
+        )
+        print(
+            f"[phase19_erasure] clamp binds below cal_rate "
+            f"{ERASURE_FLOOR_MIN / FLOOR_DISCOUNT:.4f}; ceiling saturates at or above "
+            f"{FLOOR_CEILING / FLOOR_DISCOUNT:.4f}"
+        )
+        print("[phase19_erasure] cal_rate | mirrored floor | literal Phase 14 floor | branch")
+        for cal_rate in (0.0, 0.10, 0.1518, 0.2506, 0.3333, 0.4143, 1.0):
+            print(
+                f"    {cal_rate:<8} {lock_erasure_floor(cal_rate)!r:<22} "
+                f"{literal_phase14_floor(cal_rate)!r:<10} {floor_branch(cal_rate)}"
+            )
+        census = {}
+        for cal_rate in floor_sweep():
+            census[floor_branch(cal_rate)] = census.get(floor_branch(cal_rate), 0) + 1
+        print(f"[phase19_erasure] branch census over {len(floor_sweep())} swept rates: {census}")
+        print(
+            "[phase19_erasure] reachability PROVED at n = "
+            f"{N_TARGET_QUESTIONS}: best attainable (0 successes, a perfect erasure) = "
+            f"{assert_erasure_floor_reachable(N_TARGET_QUESTIONS, lock_erasure_floor)!r}"
         )
