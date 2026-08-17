@@ -555,7 +555,7 @@ unamendable-afterward ordering Phase 18 operated under.
 
 Plans:
 - [x] 19-01-PLAN.md — open the pin, arm its ancestry guard, prove rank-1 ablation is representable (A5)
-- [ ] 19-02-PLAN.md — the target fact by deterministic rule + tie-break (D7); n=27 derived (D5)
+- [x] 19-02-PLAN.md — the target fact by deterministic rule + tie-break (D7); n=27 derived (D5)
 - [ ] 19-03-PLAN.md — the mirrored floor operator (D2) and the module-scope reachability proof
 - [ ] 19-04-PLAN.md — `dialogue_ppl_noise_floor` (D3), the (b) estimator (D4), retention spec, `zero_results_have_nll`
 - [ ] 19-05-PLAN.md — descriptive-not-gated AST guard, single verdict path, Phase 18 parity, report text + marker pair
@@ -601,6 +601,6 @@ gate returned MOOT the milestone would have shipped at 18.)
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 16/16 | Complete   | 2026-08-17 |
-| 19. Selective Memory Erasure | v3.0 | 1/16 | In Progress | - |
+| 19. Selective Memory Erasure | v3.0 | 2/16 | In Progress | - |
 
-**Totals:** 18 phases complete, 85 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 1 of 16 plans).
+**Totals:** 18 phases complete, 86 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 2 of 16 plans).

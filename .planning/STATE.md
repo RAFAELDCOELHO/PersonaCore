@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 19-01-PLAN.md
-last_updated: "2026-08-17T22:23:33.961Z"
-last_activity: 2026-08-17
+stopped_at: Completed 19-02-PLAN.md
+last_updated: "2026-08-17T22:59:36.509Z"
+last_activity: 2026-08-17 -- 19-02 executed (target pinned at `b64cfc5`, denominator at `970028d`)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 39
-  percent: 72
+  completed_plans: 40
+  percent: 74
 ---
 
 # Project State
@@ -26,13 +26,15 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 2 of 16
-Status: Executing Phase 19 — 19-01 complete: the pin is open, its ancestry guard is armed, and A5
-is settled. `git ls-files 'results/phase19_*'` is still EMPTY and must stay empty through 19-07.
+Plan: 3 of 16
+Status: Executing Phase 19 — 19-02 complete: the target is pinned (`TARGET_SLOT = pet_name`, chosen
+by a tie-break that was LOAD-BEARING — four of eight slots tie at the ceiling 13/13) and the (a)
+denominator is pinned at n = 27, summed from the fixture's 14 taught + 13 held-out.
+`git ls-files 'results/phase19_*'` is still EMPTY and must stay empty through 19-07.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
 post-hoc decision.
-Last activity: 2026-08-17 -- 19-01 executed (pin armed at `6fd1755`, A5 proved at `a04067a`)
+Last activity: 2026-08-17 -- 19-02 executed (target pinned at `b64cfc5`, denominator at `970028d`)
 
 ## Performance Metrics
 
@@ -93,6 +95,7 @@ Last activity: 2026-08-17 -- 19-01 executed (pin armed at `6fd1755`, A5 proved a
 | Phase 17 P11 | 25min | 2 tasks | 2 files |
 | Phase 17 P10 | 40min | 3 tasks | 15 files |
 | Phase 19 P01 | 55min | 2 tasks | 3 files |
+| Phase 19 P02 | 42min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -246,6 +249,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-01: ablate_components takes and returns the export_adapter-shaped ARTIFACT, not the bare lora_ tensor dict — load_adapter_weights' scale audit reads artifact['lora_config'] (inject.py:119-129), so a tensor-only operator could not be round-tripped through the audit it must survive, and 19-06's 288-step sweep can write load_adapter_weights(model, ablate_components(art, [addr])) with every application re-passing the scale audit for free. 288 is DERIVED (len(extract_deltas.KEYS) x LoRAConfig().r) and never typed; the proof fires at import
 - [Phase 19]: 19-01: the Phase 19 pin is ONE file (Phase 18's shape), not Phase 17's two — Phase 19 has no ADAPT branch, so no sanctioned outcome replaces a rule after a number exists and there is no legitimate unpinned sibling to move a rule into. Every later Phase 19 rule (floor, target, denominator, estimators, report text) goes into scripts/phase19_erasure.py and is watched by the armed guard
 - [Phase 19]: 19-01: ERASE-01 deliberately NOT marked complete — 15 of the 16 Phase 19 plans claim it, and the requirement is 'selective erasure of a taught fact from the weights', which no plan before the verdict at 19-13 can discharge. STAT-05 was already complete at 16/17/18 and its traceability row gains Phase 19 when the pin closes at 19-07, not here. Sixth application of 17-01's recorded over-claim-avoidance pattern
+- [Phase 19]: 19-02: the pin is keyed by SLOT and publishes NO fact_id — all eight core fact ids embed their own locked value, so the plan's prescribed TARGET_FACT_ID literal would have written the erasure target's own answer into the pre-registration and a fact-id-keyed TARGET_RANKING would have written all eight. TARGET_SLOT is derived from TARGET_RANKING[0] and is exactly as specific (the slot<->id binding is 1:1 and committed); select_target_fact still RETURNS a fact_id (runtime data, never source), and target_fact_id(records) is the one committed resolution path. The pin's whole source is now scanned against all ten locked+soft values and was watched RED against the plan's exact literal. Third application of the phase17_personas.py:61 / SYNTHETIC_FACT_ORDER precedent
+- [Phase 19]: 19-02: the target-selection TIE-BREAK is LOAD-BEARING, not decorative — FOUR of the eight core gated slots tie at the ceiling 13/13 under A2 on core_held_out, so 'highest question-unit recall' alone returns a SET and tie-break 1 (lowest ans1/mean exposure NLL, most exposed wins) is what picks the target out of it. TARGET_SLOT = pet_name at NLL 0.13365373015403748, the lowest of all eight, so the target is simultaneously at ceiling recall and the most tightly held value in the adapter — the hardest erasure, which is the direction the tie-break was written to take. Had the tie-break been written after the ranking was visible, picking sibling_name (also 13/13, NLL 2.39) would have been a free two-clause edit. This is the concrete reason D7 required rule and tie-break in the SAME commit; pinned by test_the_tie_break_is_load_bearing_on_the_real_record
+- [Phase 19]: 19-02: the eight-fact ranking sums to 92/104 — string-identical to Phase 18's published handoff — so it is a DECOMPOSITION of an already-committed number, not a new measurement. The attack family is SELECTED by calling phase18_extraction.best_attack_family over all four dose-split families (A1-mild 87/104, A1-aggressive 30/104, A2 92/104, A3 85/104 -> A2), never typed as a literal; the denominator is proved against the cell's own draw-record count (8 x 13 = 104) in _handoff_counts' register, and the budget against the arm record's own config['k']
+- [Phase 19]: 19-02: N_TARGET_QUESTIONS = 27 is SUMMED from TARGET_QUESTION_COUNTS' two counted tiers (14 taught + 13 held-out) with zero integer literals equal to it anywhere in the pin (AST-checked, not grepped — a grep cannot tell a literal from two digits inside one of the eight published NLL floats). TARGET_QUESTION_COUNTS is a written constant re-counted from the fixture by test rather than derived at import: phase18_extraction's own guard records that a pinned driver does NO file I/O at module scope, and a pin unimportable without its inputs on disk is a pin whose rules stop being quotable when a path moves. A module-scope _prove ties the held-out count to TARGET_RANKING's head denominator — two artifacts, two instruments, one number
+- [Phase 19]: 19-02: pooling the tiers is DECLARED as a departure from Phase 18's separate-tier Holm pricing, and the arithmetic that forced it is computed not remembered — at n=13 the best attainable Wilson upper bound (0 successes, a perfect erasure) is 0.172267, so any floor below that is unclearable at EVERY outcome; at n=27 it is 0.091079. BEST_ATTAINABLE_TARGET_BOUND is exposed as a constant and is 19-03's hard floor-reachability ceiling. n=52/108 REFUSED: four dose-split renderings of one question are clustered the way nine draws are. wilson_upper_bound is imported from erasure_gate and pinned by OBJECT IDENTITY; the pin defines no such function and imports no math, so no sqrt is available to re-derive one
+- [Phase 19]: 19-02: the rule's own PROSE numbers are asserted against the committed function that computes them (f'{wilson_upper_bound(0, n):.6f}' in text) — measured consequence: mutating the taught count to 15 reddens TWO tests, the fixture re-count AND the prose check, so a denominator edit cannot leave a stale 0.091079 sitting in the pre-registration. Four deliberate mutations watched RED (swapped ranking head, TARGET_FACT_ID literal, typed 27, inflated taught count), all restored byte-identically
 
 ### Roadmap Evolution
 
@@ -310,16 +319,27 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-17T22:22:59.161Z
-Stopped at: Completed 19-01-PLAN.md
-Resume file: .planning/phases/19-selective-memory-erasure/19-02-PLAN.md
+Last session: 2026-08-17T22:59:36.509Z
+Stopped at: Completed 19-02-PLAN.md
+Resume file: .planning/phases/19-selective-memory-erasure/19-03-PLAN.md
 
 ## Operator Next Steps
 
-- Execute 19-02: pin the target fact (D7, deterministic rule + tie-break in the same commit) and
-  derive n=27 from the committed fixture (D5). Both go into `scripts/phase19_erasure.py`, which is
-  now watched by `test_phase19_prereg_is_frozen_before_every_phase19_result`
-- NO `results/phase19_*` artifact may be committed by 19-02..19-07. That ordering is the scientific
+- Execute 19-03: the BLIND calibration floor. It has a hard ceiling the pin now states as a
+  constant — `BEST_ATTAINABLE_TARGET_BOUND = 0.091079` is the Wilson upper bound a PERFECT erasure
+  (0 successes over n = 27) produces, so a calibrated floor below it cannot be cleared at any
+  outcome. The calibration must land inside that budget or the phase is arithmetically dead before
+  it runs, exactly as Phase 18's D-31 m=6 analysis was
+
+- The target is pinned as `TARGET_SLOT` and there is deliberately NO `TARGET_FACT_ID` constant —
+  resolve it at runtime with `target_fact_id(records)`. Writing the id into a source file reddens
+  the committed value scan, because every core fact_id embeds its own locked value
+
+- Pooling n = 27 is TWO `aggregate_questions` calls summed afterwards, never one merged-tier call:
+  the function hard-`_prove`s a single tier and `scripts/phase18_extraction.py` is uneditable at
+  `99716e0`, so there is no widening path. 19-04/19-05's arm runners must do it this way or abort
+
+- NO `results/phase19_*` artifact may be committed by 19-03..19-07. That ordering is the scientific
   guarantee of this phase, and the guard is already armed to catch a violation
 
 - Do not let planning re-author the success criteria. (a)/(b)/(c), the verdict domain, and the
