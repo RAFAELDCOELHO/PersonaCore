@@ -976,3 +976,115 @@ def test_no_bare_zero_percent_in_docs():
             f"{path.name} publishes a bare zero percentage at offset {found.start()}: "
             f"{text[max(0, found.start() - 90) : found.end() + 40]!r}"
         )
+
+
+# --------------------------------------------------------------------------- #
+# 18-16 — the PUBLISHED report: what the writer actually DID to it
+# --------------------------------------------------------------------------- #
+
+
+def _git_bytes(*args):
+    """``git`` stdout as text, from the repo root."""
+    import subprocess
+
+    return subprocess.run(
+        ["git", "-C", str(_REPO_ROOT), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+
+_EXTRACTION_REPORT_REL = "results/phase18_extraction_report.md"
+_EXTRACTION_REPORT = _REPO_ROOT / _EXTRACTION_REPORT_REL
+
+
+def test_extraction_report_addendum_is_additive():
+    """The twin of ``test_addendum_append_is_additive``, over the artifact that was PUBLISHED.
+
+    That test proves the WRITER appends, on a synthetic file in ``tmp_path``. This proves what the
+    writer actually DID to ``results/phase18_extraction_report.md``, which is a different claim: a
+    writer can be append-only and still have been run against a file some other hand rewrote first.
+    Modelled on ``test_phase17_stats.py::test_report_addendum_is_additive``, over this phase's
+    report and its own ship-decision placeholder.
+
+    The bytes above the placeholder are this phase's committed evidence — above all the recorded
+    ``## Verdict`` (``LEAKAGE_DEMONSTRATED``, returned by ``null_result_is_admissible`` and carried
+    through ``assemble_verdict`` unchanged) — and every byte of it is destroyed by a single
+    ``--report`` re-run, because ``render_report`` rewrites the WHOLE file. This test is what makes
+    that visible in CI rather than in a reader's memory.
+
+    The pre-append revision is DERIVED, never pinned to a hash: the newest committed revision of
+    the report that still carries ``EXTRACTION_SHIP_PENDING_LINE`` is BY DEFINITION the one before
+    the append, and that stays true however many commits later touch the file.
+    """
+    extraction = _load()
+    pending = extraction.EXTRACTION_SHIP_PENDING_LINE
+    recorded = extraction.EXTRACTION_SHIP_RECORDED_LINE
+
+    assert _EXTRACTION_REPORT.exists(), f"{_EXTRACTION_REPORT_REL} is missing — 18-16 committed it"
+    assert _git_bytes("rev-parse", "--is-shallow-repository").strip() == "false", (
+        "shallow clone: the pre-append revision of the report is not in the object store, so this "
+        "guard cannot distinguish 'the append was additive' from 'the history was never read'. "
+        "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+    )
+
+    before = None
+    for revision in _git_bytes("log", "--format=%H", "--", _EXTRACTION_REPORT_REL).split():
+        blob = _git_bytes("show", f"{revision}:{_EXTRACTION_REPORT_REL}")
+        if pending in blob:
+            before = blob
+            break
+    assert before is not None, (
+        f"no committed revision of {_EXTRACTION_REPORT_REL} carries {pending!r}, so there is no "
+        "pre-append state to compare against. Either the placeholder never existed (the report is "
+        "not this phase's writer's output) or the history was rewritten"
+    )
+    after = _EXTRACTION_REPORT.read_text(encoding="utf-8")
+
+    cut = before.index(pending)
+    assert after[:cut] == before[:cut], (
+        f"the published {_EXTRACTION_REPORT_REL} no longer starts with its pre-append bytes. "
+        "Everything above the placeholder is recorded evidence, including the verdict this phase's "
+        "entire measurement exists to license"
+    )
+
+    # The placeholder became a pointer exactly once, and the pending form is gone. Both halves
+    # matter: a file still carrying `pending` was never appended to, and one carrying both has
+    # been appended to twice by a writer that could not tell which line it replaced.
+    assert after.count(pending) == 0, (
+        f"{_EXTRACTION_REPORT_REL} still carries the pending ship-decision line after an append"
+    )
+    assert after.count(recorded) == 1, (
+        f"{_EXTRACTION_REPORT_REL} carries {after.count(recorded)} occurrences of the recorded "
+        "ship-decision line, and `append_addendum` writes exactly one"
+    )
+
+    # The verdict block, byte for byte. Sliced rather than hashed to a literal: a pinned digest
+    # would have to be edited by hand on any legitimate re-render, and an operator editing a
+    # digest to make a test pass is the failure this guard exists to catch.
+    def _verdict_block(text):
+        return text[text.index("## Verdict") : text.index("## Conclusion")]
+
+    assert _verdict_block(after) == _verdict_block(before), (
+        "the recorded `## Verdict` section changed across the append. An addendum may only be "
+        "ADDED beside the verdict; a writer that moves it has rewritten the report under cover of "
+        "an append"
+    )
+    assert "LEAKAGE_DEMONSTRATED" in _verdict_block(after), (
+        "the published verdict is no longer LEAKAGE_DEMONSTRATED — the value "
+        "`null_result_is_admissible` returned for this run"
+    )
+
+    # The addendum is present and carries what it was appended FOR: D-21's exclusion quantified.
+    # Without this, the guard would pass on an append that added an empty section.
+    tail = after[cut:]
+    for figure in ("211.60", "225.95", "241.37", "27.16"):
+        assert figure in tail, (
+            f"the dated continuation does not carry {figure}% — D-21's exclusion is recorded with "
+            "its mechanism but not its measured magnitude, which is the gap this append closed"
+        )
+    assert "phase17_isolation_report.md" in tail, (
+        "the dated continuation states the three percentages without citing the report they were "
+        "measured in — an unsourced figure in a published audit"
+    )

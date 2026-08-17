@@ -253,7 +253,7 @@ ATK-06, stated because the alternative is letting a reader draw the flattering i
 
 Recorded by a human, once, and thereafter EXTENDED rather than re-rendered: `render_report` rewrites this whole file and would destroy a recorded verdict along with every dated section appended beside it. `append_addendum` is the only path by which this file may grow after the verdict above exists, and there is no force flag on either.
 
-**Phase 18 ship decision: not yet recorded.**
+**Phase 18 ship decision: recorded in the dated continuation at the end of this file.**
 
 ## Provenance
 
@@ -263,3 +263,43 @@ One block per arm process. Two distinct pids are what EVIDENCE the process split
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `adapter-on` | True | `c71bade5162990cbd5ad65e577d6c4b4710acbcc` | 89185 | `mps` | 246.5 | `ff8e6e3c24987ac3…` | `79b55770f4dcfa94…` |
 | `adapter-off` | False | `c71bade5162990cbd5ad65e577d6c4b4710acbcc` | 9267 | `mps` | 270.1 | `ff8e6e3c24987ac3…` | `79b55770f4dcfa94…` |
+
+## Dated continuation — 2026-08-17: D-21's exclusion, quantified
+
+*Appended below the rendered report. Nothing above this heading is altered — an additivity guard
+of `test_report_addendum_is_additive`'s family pins every byte above the ship-decision placeholder
+to its pre-append committed revision (`6db37f7`), and `append_addendum` proves on the produced
+bytes that the recorded `## Verdict` section is unchanged.*
+
+The Scope section above excludes cross-persona attacks on Phase 17's three adapters (D-21) because
+"their replay_ratio=0.0 collateral collapse makes any result from them non-representative of a
+normal adapter". That mechanism was recorded; the **measured magnitude** was not. It is recorded
+here so the exclusion can be judged on evidence rather than on the word "collapse".
+
+From `results/phase17_isolation_report.md:270-272`:
+
+| adapter | val loss | change vs its base |
+| --- | --- | --- |
+| `persona_a` | 14.2507 | **+211.60%** |
+| `persona_b` | 14.9068 | **+225.95%** |
+| `persona_c` | 15.6121 | **+241.37%** |
+
+Phase 14's shipped `real` arm recorded **+27.16%** on the same measure — the arm whose adapter this
+audit actually attacked. The three Phase 17 adapters degraded roughly eight to nine times as far.
+
+The cause is structural rather than a measurement defect: Phase 14's `real` arm trained with replay
+at `REAL_RUN_REPLAY_RATIO = REPLAY_ARM_RATIO = 1.0`, while `run_one_persona_training` calls
+`train_arm` at the committed default `replay_ratio=0.0`. Replay is the mechanism that protects
+dialogue capability, and those three adapters have none.
+
+**What this does and does not license.** It supports the exclusion: an attack on an adapter that far
+outside the shipped configuration would measure that configuration, not persona leakage, and would
+contaminate this phase's finding rather than extend it. It does NOT weaken the verdict above — the
+verdict is taken on the Phase 14 `real` adapter at +27.16%, and no number in this addendum touches
+that measurement. It also does not claim the Phase 17 isolation result is affected: collateral
+collapse acts on dialogue quality, not on whether one persona's value appears under another
+persona's adapter.
+
+**Scope.** The +27.16% comparison is against Phase 14's `real` arm specifically. The three
+percentages are Phase 17's own, at its three pre-registered seeds; they are not a claim about LoRA
+personalization in general.
