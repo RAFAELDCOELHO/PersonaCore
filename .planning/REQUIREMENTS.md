@@ -157,7 +157,10 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
 
 ## Future Requirements
 
-Deferred — revisited when the numbers that gate them exist.
+**ERASE-01 and ERASE-02 are no longer future requirements** — the gate they were waiting on
+returned True on 2026-08-17 (`erasure_is_worth_attempting(92, 104, 0, 104)`), and both are now
+mapped to **Phase 19** in the table above. The original deferral text is kept verbatim below as the
+record of what was committed before the numbers existed; it is history, not current status.
 
 - **ERASE-01**: Selective erasure of a taught fact from the weights (Phase 19+). Enters the roadmap
   **only** if `erasure_is_worth_attempting()` returns True on Phase 18's measured numbers. Goal
@@ -219,12 +222,14 @@ Deferred — revisited when the numbers that gate them exist.
 | ATK-06 | 18 | Complete |
 | PREREG-01 | (pre-milestone) | Complete — `23a830c`, 2026-08-12 |
 | PREREG-02 | 16 | Complete |
-| ERASE-01 | 19+ (deferred) | Deferred — enters the roadmap only if `erasure_is_worth_attempting()` returns True on Phase 18's numbers |
-| ERASE-02 | 19+ (deferred) | Deferred — same gate |
+| ERASE-01 | 19 | Admitted 2026-08-17 — gate returned True on `(92, 104, 0, 104)`; scoped, not yet planned |
+| ERASE-02 | 19 | Admitted 2026-08-17 — same gate; ~90 s retrain reference is affordable on this M3 |
 
-**Coverage (roadmapped 2026-08-12):** 26/26 in-scope v3.0 requirements are mapped to Phases 16-18;
-0 orphans. PREREG-01 is complete pre-milestone (`23a830c`). ERASE-01/02 are deliberately unmapped —
-Phase 19 does not exist in the roadmap and is created only by the pre-registered gate, never by
-planning. STAT-01..06 are cross-cutting by construction and are therefore satisfied *per phase*
-rather than in exactly one; the phase column above is the authoritative allocation and
-`ROADMAP.md` reproduces it unchanged.
+**Coverage (roadmapped 2026-08-12; ERASE-01/02 admitted 2026-08-17):** 28/28 in-scope v3.0
+requirements are mapped to Phases 16-19; 0 orphans. PREREG-01 is complete pre-milestone
+(`23a830c`). ERASE-01/02 were deliberately unmapped until the pre-registered gate created Phase 19
+— `erasure_is_worth_attempting(92, 104, 0, 104)` → True, verified in `18-VERIFICATION.md` — which
+is the mechanism working as designed: the phase was authored by the rule, not by planning.
+STAT-01..06 are cross-cutting by construction and are therefore satisfied *per phase* rather than
+in exactly one; the phase column above is the authoritative allocation and `ROADMAP.md` reproduces
+it unchanged.

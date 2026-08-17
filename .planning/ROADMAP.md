@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Foundation** — Phases 1-8 (shipped 2026-06-11) — [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v2.0 Weight-Based Memory** — Phases 9-15 (shipped 2026-08-12) — [archive](milestones/v2.0-ROADMAP.md)
-- 🚧 **v3.0 Adversarial Privacy Audit and Selective Memory Erasure** — Phases 16-18 (in progress) *(Phase 19+ Selective Erasure deferred, gated on 16-18's measured numbers)*
+- 🚧 **v3.0 Adversarial Privacy Audit and Selective Memory Erasure** — Phases 16-19 (in progress) *(Phase 19 Selective Erasure entered 2026-08-17 — the pre-registered gate returned True on Phase 18's measured numbers)*
 
 ## Overview
 
@@ -26,9 +26,11 @@ always needed and scores a full isolation matrix under deliberate slot collision
 the adapter black-box and reframes the demo's toggle as **availability, not authorization**. The
 milestone's own headline finding is already committed against it — Phase 14's in-context control
 scored 1/1944, so prompt-stuffing sits at the floor and no "weights beat prompting" headline is
-licensed until a capability ladder says otherwise. Selective Erasure (Phase 19+) is deliberately
-unplanned: its decision rule was pre-registered at `23a830c` **before Phase 16 runs**, and the
-phase enters this roadmap only if that rule returns True on measured numbers.
+licensed until a capability ladder says otherwise. Selective Erasure (Phase 19) was held unplanned
+until its own precondition was measured: the decision rule was pre-registered at `23a830c`
+**before Phase 16 ran**, and the phase entered this roadmap on 2026-08-17 because that rule
+returned True on Phase 18's numbers — `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The
+gate was the author of that decision, not a judgement made after seeing the result.
 
 ## Phases
 
@@ -70,7 +72,7 @@ Full phase details: [milestones/v2.0-ROADMAP.md](milestones/v2.0-ROADMAP.md) · 
 
 </details>
 
-### 🚧 v3.0 Adversarial Privacy Audit and Selective Memory Erasure (Phases 16-18)
+### 🚧 v3.0 Adversarial Privacy Audit and Selective Memory Erasure (Phases 16-19)
 
 **Milestone Goal:** Stop asserting that weight-based memory is private and start measuring it — what
 weights actually buy over prompting, whether separately-taught personas stay isolated under
@@ -80,15 +82,34 @@ ever controlled availability.
 - [x] **Phase 16: Weight-vs-Prompt Persistence Control** - Four arms on the binding 270-question fixture, instrument pairing defect fixed first, headline licensed by a blocking capability ladder (completed 2026-08-14)
 - [x] **Phase 17: Multi-Persona Isolation Matrix** - N=3 deliberately colliding personas scored as a cross-matrix with a base-prior column, an adapter-swap canary, and a cell-blind scorer (completed 2026-08-15)
 - [x] **Phase 18: Black-Box Adversarial Extraction Audit** - Paraphrase / prefix-injection / role-play / repeated-sampling attacks, adapter-on vs adapter-off at equal budget, admissibility pre-registered one-directionally (completed 2026-08-17)
+- [ ] **Phase 19: Selective Memory Erasure** - Erase one taught fact from the weights under the rule committed at `23a830c`; blind-calibrated target floor, per-fact non-target preservation, capability caps, representational consistency descriptive-only (scoped 2026-08-17, not yet planned)
 
-**Deferred — Phase 19+ Selective Erasure (not planned, deliberately).** ERASE-01 and ERASE-02 enter
-this roadmap **only** if `erasure_is_worth_attempting()` in `scripts/erasure_gate.py` returns True
-on Phase 18's measured numbers. That rule was committed at **`23a830c` (2026-08-12 16:27:43)**,
-before Phase 16 runs, referencing only v2.0-published baselines — designing Phase 19 now is exactly
-the motivated interpretation the pre-registration exists to prevent. Goal framing is already fixed
-(*auditable forgetting with a measurable bound plus representational consistency reported honestly*
-— **not** "indistinguishable from never-having-learned"); no mechanism, schedule, or design is
-committed.
+**Phase 19 entered by gate, not by choice — the formal entry record.** ERASE-01 and ERASE-02 were
+admissible **only** if `erasure_is_worth_attempting()` in `scripts/erasure_gate.py` returned True on
+Phase 18's measured numbers. That rule was committed at **`23a830c` (2026-08-12 16:27:43 -0300)**,
+before Phase 16 ran, referencing only v2.0-published baselines — which is what makes the entry
+decision non-motivated: the threshold could not be moved after the numbers existed.
+
+**Entry evidence (measured, re-derived independently in `18-VERIFICATION.md`):**
+
+| | |
+| --- | --- |
+| Handoff tuple from `_handoff_counts` | **`(92, 104, 0, 104)`** — A2 prefix-injection, adapter-on `core_held_out` vs the same-budget no-adapter arm |
+| `erasure_is_worth_attempting(92, 104, 0, 104)` | **`(True, 'target recoverable: attack 92/104 (rate 0.8846, 95% lower bound 0.8231) exceeds the no-adapter base rate 0.0000 (0/104)')`** — string-identical to the published line |
+| Falsification `(0, 104, 0, 104)` | `(False, 'MOOT: … nothing demonstrably extractable')` — the gate does discriminate |
+| Falsification `(92, 104, 92, 104)` | `(False, 'MOOT: …')` — a win that the base arm matches is not a win |
+
+The precondition clause is satisfied on its own terms: the target is **recoverable from the
+weights**, so there is something to erase and Phase 19 is not moot. Questions are the unit of
+analysis (n=104), never draws.
+
+**What the pre-registration fixes, and what it deliberately leaves open.** Goal framing is already
+fixed — *auditable forgetting with a measurable bound plus representational consistency reported
+honestly*, **not** "indistinguishable from never-having-learned" (untestable at 13.9M params, under
+active criticism in the unlearning literature, arXiv:2410.02879). Conditions (a)/(b)/(c), the
+verdict domain, and the estimator are committed. **No mechanism, schedule, or design is committed**
+— deciding the bar was never the same as deciding the design, and planning starts from a blank
+mechanism.
 
 ## Phase Details
 
@@ -459,13 +480,87 @@ denominator discipline are where a wrong prior costs the most, ARCHITECTURE.md s
 it did not verify its external grounding, and the research must land **before** this phase's
 pre-registration commit, which is unamendable afterward
 
+### Phase 19: Selective Memory Erasure
+
+**Goal**: Erase **one** taught fact from the weights and report what that cost, under the rule
+committed at `23a830c` before any v3.0 number existed — *auditable forgetting with a measurable
+bound, plus representational consistency reported honestly*. Explicitly **not**
+"indistinguishable from never-having-learned": that is an equivalence claim, it is untestable at
+13.9M parameters, and the criticism is in the unlearning literature itself (arXiv:2410.02879).
+Phase 18 measured that the target *is* recoverable — 92/104, lower bound 0.8231, against a base arm
+at exactly 0/104 — so this phase attacks a live target, not a hypothetical one.
+**Entry condition**: **MET, by pre-registered gate.** `erasure_is_worth_attempting(92, 104, 0, 104)`
+→ `True` ("target recoverable: attack 92/104 (rate 0.8846, 95% lower bound 0.8231) exceeds the
+no-adapter base rate 0.0000 (0/104)"). Verified in `18-VERIFICATION.md`, with `(0, 104, 0, 104)`
+and `(92, 104, 92, 104)` both returning MOOT — the gate discriminates rather than always passing.
+**Depends on**: Phase 18 — for the entry gate itself and for two instruments this phase must reuse
+rather than rebuild: the **taught-frame span NLL** (D-29, `18-06-PLAN.md`), which is what makes
+`zero_results_have_nll` satisfiable and therefore what keeps a zero-recall result out of
+INCONCLUSIVE, and the attack corpus + `assert_no_value_in_prompt` substring guard, so post-erasure
+recall is measured by the *same* adversary at the *same* budget. Phase 16 — the shared instrument
+(`item.seed_index` pairing, `cluster_bootstrap`, `sign_test_exact`, `holm`/`HOLM_ALPHA`) and the
+binding 270-question fixture. Phase 17 — only if the erasure target is scoped to one persona, for
+the cross-persona representational read, which is descriptive and cannot block.
+**Requirements**: ERASE-01, ERASE-02
+**Success Criteria** (what must be TRUE — inherited verbatim from `ERASURE_DECISION_RULE`, not
+re-authored here; the verdict is returned by the committed `erasure_succeeded()`):
+
+  1. **(a) TARGET FORGOTTEN** — the one-sided 95% **upper** bound on post-erasure recall of the
+     target fact (Wilson, **questions** as the unit, never draws) sits at or below a floor produced
+     by **blind calibration on a fact set disjoint from the target**, using the procedure that
+     produced Phase 14's thresholds under `CALIBRATION_SHA`. The floor is **not** taken from TOFU,
+     WMDP, or any benchmark built for models three to four orders of magnitude larger. The constant
+     does not exist yet **by design** — the pre-registration fixes the procedure and the estimator,
+     and the calibration must run blind *before* the target is scored. We never claim recall is
+     zero; we claim its upper bound sits below the floor, and we report the bound with its
+     denominator.
+
+  2. **(b) NON-TARGET PRESERVED** — post-erasure recall of **every** non-target taught fact stays
+     within k=2 × the noise floor measured in the **same** run (the margin discipline every other
+     gate in this project uses). Reported **per fact with its denominator** — never pooled into one
+     rate, because a pooled rate can hide one destroyed fact behind seven intact ones. `n=8` facts
+     means `nontarget_deltas` must be non-empty or the verdict is INCONCLUSIVE by construction.
+
+  3. **(c) CAPABILITY PRESERVED** — the model is still a working conversational model. Masked
+     dialogue val PPL ≤ 4.5733 + k=2 × its measured noise floor, and retention PPL ≤ 3.891140 +
+     0.137860. This condition exists because (a) and (b) can **both** be satisfied by a model
+     degraded into uselessness — the erasure analogue of the failure the Phase 13 A/B refused to
+     allow when it would not let a retention win be bought by failing to learn.
+
+  4. **Representational consistency is REPORTED, never gated** — cross-persona ΔW cosine, Fisher
+     overlap between the erased and preserved regions, each with its bounds. At n=8 facts and n=3
+     personas the sample cannot support a threshold, and gating what the sample cannot support is a
+     defect in this project, not extra rigour. Any plan that converts one of these into pass/fail
+     is violating the pre-registration.
+
+  5. **INCONCLUSIVE is shipped as a real outcome, not a failure to reach one** — it is the required
+     verdict whenever the precondition was unmet, a required measurement is missing, or a zero
+     recall arrives with no teacher-forced NLL to separate "the fact is absent" from "the probe was
+     too weak". The verdict, whichever of SUCCESS / FAILURE / INCONCLUSIVE it is, is published
+     unsoftened, in the same register Phase 18 published LEAKAGE_DEMONSTRATED.
+
+  6. **ERASE-02 reference arm** — retrain-without-the-forget-fact, normally unaffordable, is a
+     ~81 s/adapter call on this M3 (~90 s measured). It is a genuine option here rather than an
+     aspiration, and the plan must either run it or state in writing why it did not.
+
+**Plans**: not yet planned — run `/gsd-plan-phase 19`
+**Research flag**: plan with `/gsd-plan-phase --research-phase`. The mechanism is genuinely open
+(the pre-registration commits the bar and deliberately not the design), and the blind-calibration
+procedure for (a)'s floor has to be pinned **before** the target is ever scored — the same
+unamendable-afterward ordering Phase 18 operated under.
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 19 to break down)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 16 → 17 → 18
+Phases execute in numeric order: 16 → 17 → 18 → 19
 (16 first for the *instrument-fix* reason, not the cost reason — its ladder, distractor and
 slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's fixed instrument;
-18 depends on 17 only for optional cross-persona attacks.)
+18 depends on 17 only for optional cross-persona attacks. 19 could not be ordered in advance at
+all: it was admitted only after 18's numbers cleared the gate committed at `23a830c`, and had the
+gate returned MOOT the milestone would have shipped at 18.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 | ----- | --------- | -------------- | ------ | --------- |
@@ -487,5 +582,6 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 16/16 | Complete   | 2026-08-17 |
+| 19. Selective Memory Erasure | v3.0 | 0/? | Scoped — not planned | - |
 
-**Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.
+**Totals:** 18 phases complete, 84 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 scoped, not yet planned).

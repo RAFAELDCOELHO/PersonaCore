@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: completed
-stopped_at: Phase 18 complete — ship decision recorded, verified at 4f9e330
-last_updated: "2026-08-17T17:41:50.609Z"
+status: in_progress
+stopped_at: Phase 19 scoped into v3.0 by the pre-registered gate — not yet planned
+last_updated: "2026-08-17T18:20:00.000Z"
 last_activity: 2026-08-17
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 3
   total_plans: 38
   completed_plans: 38
-  percent: 100
+  percent: 75
 ---
 
 # Project State
@@ -21,13 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** Phase 18 — black-box-adversarial-extraction-audit
+**Current focus:** Phase 19 — selective-memory-erasure (scoped, not yet planned)
 
 ## Current Position
 
-Phase: 18 — COMPLETE
-Plan: 16 of 16
-Status: Phase 18 complete
+Phase: 19 — SCOPED (not planned)
+Plan: 0 of ? — run `/gsd-plan-phase 19 --research-phase`
+Status: v3.0 reopened at Phases 16-19. Phase 18 shipped complete (16/16, SHIP AS-IS at `4f9e330`);
+Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
+`erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
+post-hoc decision.
 Last activity: 2026-08-17
 
 ## Performance Metrics
@@ -237,9 +240,29 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-10: the four replicate adapters inherit 17-09's replay_ratio=0.0 collateral collapse and are equally NOT shippable demo substrate. Six lora_B digests are pairwise distinct with 0 of 36 identical tensors across all 15 pairs — that proves the seed reached the init draw, and proves nothing about conversational retention
 - [Phase 17]: 17-10: STAT-05 checked = 21 (1 prereg commit d549e0b x 21 tracked results/phase17_* paths), 0 untracked — was 11 at 17-09/17-11; scripts/phase17_personas.py is still at d549e0b and still uneditable
 
+### Roadmap Evolution
+
+- **2026-08-17 — Phase 19 added: Selective Memory Erasure.** v3.0 reopened from `Phases 16-18` to
+  `Phases 16-19`, milestone status `completed` → `in_progress`. This was **not** a scope decision.
+  `scripts/erasure_gate.py` was committed at `23a830c` (2026-08-12 16:27:43 -0300), before Phase 16
+  ran, and it holds the only rule that can create this phase. Phase 18's measured handoff
+  `(92, 104, 0, 104)` — A2 prefix-injection, adapter-on `core_held_out` vs the same-budget
+  no-adapter arm — returns `erasure_is_worth_attempting(...)` → `True`, message string-identical to
+  the published report line: *"target recoverable: attack 92/104 (rate 0.8846, 95% lower bound
+  0.8231) exceeds the no-adapter base rate 0.0000 (0/104)"*. Re-derived independently in
+  `18-VERIFICATION.md`; falsification cases `(0, 104, 0, 104)` and `(92, 104, 92, 104)` both return
+  MOOT, so the gate discriminates rather than always passing. ERASE-01/ERASE-02 moved from
+  *Future Requirements* to Phase 19 (28/28 mapped, 0 orphans). Success criteria are inherited
+  verbatim from `ERASURE_DECISION_RULE` rather than re-authored; **no mechanism, schedule, or
+  design is committed** — the pre-registration fixed the bar and deliberately not the design.
+- Had the gate returned MOOT, v3.0 would have shipped at Phase 18 as-is. The SHIP AS-IS decision
+  recorded at `4f9e330` remains valid for 18; it is not withdrawn by this reopening.
+
 ### Pending Todos
 
-None yet.
+- Phase 19 needs `/gsd-plan-phase 19 --research-phase`. Two ordering constraints carry real risk:
+  (a)'s target floor comes from a **blind calibration on a fact set disjoint from the target** and
+  must be pinned **before** the target is ever scored, and the mechanism is genuinely unchosen.
 
 ### Blockers/Concerns
 
@@ -279,11 +302,20 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-17T17:41:50.602Z
-Stopped at: Phase 18 complete — ship decision recorded, verified at 4f9e330
-Resume file: .planning/phases/18-black-box-adversarial-extraction-audit/18-VERIFICATION.md
+Last session: 2026-08-17T18:20:00.000Z
+Stopped at: Phase 19 scoped into v3.0 by the pre-registered gate — not yet planned
+Resume file: .planning/ROADMAP.md (Phase 19 detail block) — entry evidence in
+.planning/phases/18-black-box-adversarial-extraction-audit/18-VERIFICATION.md
 
 ## Operator Next Steps
 
-- Plan the first v3.0 phase with /gsd-plan-phase 16
-- Phase 16 needs light research on the in-context capability ladder's rung design; Phase 18 needs `--research-phase` BEFORE its pre-registration commit (unamendable afterward)
+- Plan Phase 19 with `/gsd-plan-phase 19 --research-phase`
+- Research must land before anything is pinned: the (a) floor requires a **blind** calibration on a
+  fact set disjoint from the target, run before the target is scored — the same
+  unamendable-afterward ordering Phase 18 operated under
+- Do not let planning re-author the success criteria. (a)/(b)/(c), the verdict domain, and the
+  descriptive-only status of representational consistency come from `ERASURE_DECISION_RULE`; a plan
+  that converts ΔW cosine or Fisher overlap into pass/fail is violating the pre-registration
+- Reuse, do not rebuild: Phase 18's taught-frame span NLL is what keeps a zero-recall result out of
+  INCONCLUSIVE (`zero_results_have_nll`), and post-erasure recall must be scored by the same
+  adversary at the same budget
