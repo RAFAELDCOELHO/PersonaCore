@@ -79,7 +79,7 @@ ever controlled availability.
 
 - [x] **Phase 16: Weight-vs-Prompt Persistence Control** - Four arms on the binding 270-question fixture, instrument pairing defect fixed first, headline licensed by a blocking capability ladder (completed 2026-08-14)
 - [x] **Phase 17: Multi-Persona Isolation Matrix** - N=3 deliberately colliding personas scored as a cross-matrix with a base-prior column, an adapter-swap canary, and a cell-blind scorer (completed 2026-08-15)
-- [ ] **Phase 18: Black-Box Adversarial Extraction Audit** - Paraphrase / prefix-injection / role-play / repeated-sampling attacks, adapter-on vs adapter-off at equal budget, admissibility pre-registered one-directionally
+- [x] **Phase 18: Black-Box Adversarial Extraction Audit** - Paraphrase / prefix-injection / role-play / repeated-sampling attacks, adapter-on vs adapter-off at equal budget, admissibility pre-registered one-directionally (completed 2026-08-17)
 
 **Deferred — Phase 19+ Selective Erasure (not planned, deliberately).** ERASE-01 and ERASE-02 enter
 this roadmap **only** if `erasure_is_worth_attempting()` in `scripts/erasure_gate.py` returns True
@@ -452,8 +452,8 @@ Plans:
 - [x] 18-12-PLAN.md — SC5: D-23 demo copy plus dated additive continuations in README and docs/REPORT.md
 - [x] 18-13-PLAN.md — D-12 pre-flight smoke run, measured throughput, the K decision (checkpoint)
 - [x] 18-14-PLAN.md — corpus artifact committed and the byte-equality guard activated
-- [ ] 18-15-PLAN.md — the two-arm scored run and the positive-control confirmation (checkpoint)
-- [ ] 18-16-PLAN.md — report, recorded verdict, REPORT.md continuation, requirement marking (checkpoint)
+- [x] 18-15-PLAN.md — the two-arm scored run and the positive-control confirmation (checkpoint)
+- [x] 18-16-PLAN.md — report, recorded verdict, REPORT.md continuation, requirement marking (checkpoint)
 **Research flag**: plan with `/gsd-plan-phase --research-phase`. The attack taxonomy and the
 denominator discipline are where a wrong prior costs the most, ARCHITECTURE.md states honestly that
 it did not verify its external grounding, and the research must land **before** this phase's
@@ -486,6 +486,6 @@ slot-swap arms make it ~2-3× Phase 14's scored run. 17 and 18 both inherit 16's
 | 15. Figures & Writeup | v2.0 | 8/8 | Complete | 2026-08-02 |
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
-| 18. Black-Box Adversarial Extraction Audit | v3.0 | 14/16 | In Progress|  |
+| 18. Black-Box Adversarial Extraction Audit | v3.0 | 16/16 | Complete   | 2026-08-17 |
 
 **Totals:** 15 phases complete, 68 plans, 2 milestones shipped; 3 phases planned for v3.0.
