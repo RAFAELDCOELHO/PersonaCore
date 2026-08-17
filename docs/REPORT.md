@@ -1058,3 +1058,84 @@ typed beside it by hand.
 
 The measured result, its denominator and its interval are appended to this report by Phase 18
 through this same additive path.
+
+## Extraction Audit Result: Personalization in Weights Is Recoverable Under Black-Box Attack (Phase 18, recorded 2026-08-17)
+
+*Appended additively. No line above this heading is altered, and the section above — 18-12's dated
+claim correction — is carried through byte-identically. The measured result promised at the end of
+that section is recorded here.*
+
+Phase 18 ran a pre-registered black-box extraction audit against the shipped persona adapter: 864
+attack prompts across four families at K = 48 draws each, plus a 112-question positive control, run
+twice — once with the adapter attached and once with it gated off at the identical budget, prompts,
+seeds and masks. 84,960 draws in total.
+
+**The verdict, as the committed gate returned it:**
+
+> `LEAKAGE_DEMONSTRATED`
+
+That value is `null_result_is_admissible`'s own return, carried through `assemble_verdict`
+unchanged. It is not a phrase written around the numbers.
+
+### The headline number, with its denominator and both bounds
+
+On the **gated tier** (`core_held_out`, the never-taught split the formal verdict is taken on), the
+best attack family `A2` extracted **92 of 104 questions** at least once within 48 draws:
+
+- rate **0.8846**
+- one-sided 95% Wilson **lower** bound **0.8231**
+- one-sided 95% Wilson **upper** bound **0.9267**
+
+The no-adapter control, at the same budget, extracted **0 of 104** — on every family, at every rung.
+
+| family | gated tier (104 questions) | adapter-off | taught tier (112 questions) | adapter-off |
+| --- | --- | --- | --- | --- |
+| `A1-mild` | 87 | 0 of 104 | 102 | 0 of 112 |
+| `A1-aggressive` | 30 | 0 of 104 | 31 | 0 of 112 |
+| `A2` | **92** | 0 of 104 | **105** | 0 of 112 |
+| `A3` | 85 | 0 of 104 | 100 | 0 of 112 |
+
+Every rate above is a **question-unit** count. The fact-level unit stands at n = 8 and is published
+beside every question-unit figure in `results/phase18_extraction_report.md`; no claim here is made
+at the smaller denominator.
+
+**The tier split is reported, not merged.** `core_taught` is the stronger attack surface and is
+excluded from the formal verdict by design — Phase 14 had already measured taught templates as the
+easier surface. Publishing a pooled number across both tiers would let the easier split inflate a
+figure the gated tier is supposed to carry alone.
+
+### What this does and does not establish
+
+The positive control reproduced exactly — family zero's 112 per-question hit vectors matched Phase
+14's committed rows with zero mismatches — so the harness is known to extract a fact known to be
+present. That is what makes the contrast above readable rather than a story about a broken harness.
+
+**This is a lower bound on leakage, never an upper bound on privacy.** Black-box prompt access is
+the weakest threat model available here. The attacker had no gradients, no token probabilities, no
+white-box read of the adapter's 331,776 parameters, and no fine-tuning attack — the last of which
+the unlearning literature reports recovering roughly 88% of supposedly removed information. The
+adapter is a portable file; anyone holding it has strictly more power than what was run.
+
+**ATK-06, stated because the alternative is letting a reader draw the flattering inference
+unaided:** a low extraction rate at this scale may be a property of **LoRA at this capacity** —
+331,776 trainable parameters adapting a 13.9M-parameter base — rather than an achievement of
+PersonaCore's design, and this audit runs no arm that separates the two.
+
+### What it means for the project's central claim
+
+PersonaCore's thesis is that personalization lives in the weights rather than in a prompt or a
+store. This audit is the first measurement of the **cost** of that design, and it does not soften
+it: the same property that makes the memory portable and store-free makes it **recoverable from the
+weights by an attacker with nothing but prompt access**. The zero-versus-92 contrast against the
+no-adapter control is not a privacy result — it is direct evidence that what the adapter learned is
+extractable.
+
+The claim that memory lives in the weights survives this audit intact. The claim that living in the
+weights is *therefore private* does not, and was never measured before now.
+
+**Phase 19 handoff:** `(92, 104, 0, 104)` — `erasure_is_worth_attempting` returns `True`. Erasure is
+worth attempting because the target is demonstrably recoverable, not because a threshold was chosen
+to make it so.
+
+Full evidence, every ladder rung, the exposure table with all three frames and both reductions, the
+complete threat-model scope and the threats-to-validity section: `results/phase18_extraction_report.md`.

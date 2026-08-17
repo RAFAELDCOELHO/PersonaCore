@@ -108,27 +108,39 @@ Applies to every phase. Listed first because getting these wrong invalidates eve
 
 ## Black-Box Adversarial Extraction Audit (Phase 18)
 
-- [ ] **ATK-01**: Attack families are constructed **programmatically from committed templates** —
+- [x] **ATK-01**: Attack families are constructed **programmatically from committed templates** —
   paraphrase, prefix injection, role-play framing, and repeated sampling — with no external API and
   no hosted model anywhere in the pipeline.
-- [ ] **ATK-02**: A **no-adapter negative control** runs at the *same attack budget*. Without it a
+- [x] **ATK-02**: A **no-adapter negative control** runs at the *same attack budget*. Without it a
   "successful extraction" is indistinguishable from the base guessing a common name.
-- [ ] **ATK-03**: A **positive control runs as attack family zero** — Phase 14's taught-template
+- [x] **ATK-03**: A **positive control runs as attack family zero** — Phase 14's taught-template
   direct question, a known-extractable target at 0.4921. If it does not reproduce, the harness is
   broken and no privacy statement is admissible. This converts "our attacks found nothing" from
   unfalsifiable into testable.
-- [ ] **ATK-04**: Every zero-extraction target records its **teacher-forced NLL**. Low NLL plus zero
+- [x] **ATK-04**: Every zero-extraction target records its **teacher-forced NLL**. Low NLL plus zero
   extraction means the attack was weak; high NLL means the fact is genuinely absent. Without it
   every zero is uninterpretable — especially given a tokenizer that forbids 7,645 of 8,192 ids at
   sampling and can silently depress an extraction rate for reasons unrelated to privacy.
-- [ ] **ATK-05**: **Admissibility is pre-registered one-directionally.** A committed
+- [x] **ATK-05**: **Admissibility is pre-registered one-directionally.** A committed
   `null_result_is_admissible()` forces `INCONCLUSIVE` unless the positive control passed, the
   budget was actually spent, the base arm was measured at the same budget, and every zero carries
   an NLL. All verdict templates are committed before the run, because "we found leakage" and "we
   found none" are both publishable but need different pre-commitments.
-- [ ] **ATK-06**: The demo's adapter toggle is documented as **availability, not authorization** —
+- [x] **ATK-06**: The demo's adapter toggle is documented as **availability, not authorization** —
   the honest reading of what that switch has always done — and the claim wording in README and
   `docs/REPORT.md` is corrected to match.
+
+**Evidence for ATK-01..ATK-06** (Phase 18, wave 12-13):
+
+| Req | Evidencing artifact |
+| --- | --- |
+| ATK-01 | `results/phase18_corpus.json` (864 prompts, sha256 `ff8e6e3c…`) + `tests/test_phase18_corpus.py::test_corpus_rederives_byte_identical` — the standing D-07 byte-equality guard |
+| ATK-02 | `results/phase18_arm_adapter-off.json` — 42,480 draws at the identical budget, paired to the on-arm on five recorded fields; extracted 0 of 104 on the gated tier |
+| ATK-03 | `family_zero_matches` returned `(True, [])` on `results/phase18_arm_adapter-on.json` — 0 of 112 per-question mismatches against `results/phase14_recall_report.md`, 496/1008 as a derived consequence |
+| ATK-04 | The `exposure` block in both arm records — 8 slots x 3 frames x 2 reductions = 48 finite NLL values, no `None`, no NaN, plus 8 exposure ranks |
+| ATK-05 | `null_result_is_admissible` returned `LEAKAGE_DEMONSTRATED`, recorded in `results/phase18_extraction_report.md`'s `## Verdict`. The requirement is discharged by the committed one-directional machinery RETURNING a verdict, not by which verdict it returned |
+| ATK-06 | The LoRA-capacity caveat published in `results/phase18_extraction_report.md` and in `docs/REPORT.md`'s 2026-08-17 continuation, beside 18-12's toggle claim correction in README and `docs/REPORT.md` |
+
 
 ## Pre-Registration (landed before this milestone's first run)
 
@@ -199,12 +211,12 @@ Deferred — revisited when the numbers that gate them exist.
 | ISO-05 | 17 | Complete |
 | ISO-06 | 17 | Complete |
 | ISO-07 | 17 | Complete |
-| ATK-01 | 18 | Pending |
-| ATK-02 | 18 | Pending |
-| ATK-03 | 18 | Pending |
-| ATK-04 | 18 | Pending |
-| ATK-05 | 18 | Pending |
-| ATK-06 | 18 | Pending |
+| ATK-01 | 18 | Complete |
+| ATK-02 | 18 | Complete |
+| ATK-03 | 18 | Complete |
+| ATK-04 | 18 | Complete |
+| ATK-05 | 18 | Complete |
+| ATK-06 | 18 | Complete |
 | PREREG-01 | (pre-milestone) | Complete — `23a830c`, 2026-08-12 |
 | PREREG-02 | 16 | Complete |
 | ERASE-01 | 19+ (deferred) | Deferred — enters the roadmap only if `erasure_is_worth_attempting()` returns True on Phase 18's numbers |
