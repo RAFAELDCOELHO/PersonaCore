@@ -54,6 +54,7 @@ a pin that could not be imported without its inputs on disk would be a pin whose
 quotable the moment a path moves. CPU-only, GPU-free, no checkpoint read, no network.
 """
 
+import json
 import pathlib
 import sys
 
@@ -73,6 +74,12 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
 # isinstance scan" discipline recorded on it (extract_deltas.py:94-102), and a second copy of an
 # enumeration is a copy free to stop agreeing with the first.
 import extract_deltas  # noqa: E402  (needs the sys.path insert above)
+
+# STAT-05 / T-19-08. The one-sided Wilson upper bound is IMPORTED from the file that committed it
+# at `23a830c`, before Phase 16 ran, and is never retyped here. `erasure_gate` is stdlib-only,
+# phase-neutral and holds no fact material, so this import is safe at module scope — which is the
+# point: a lazily imported bound is one a later edit could quietly swap for a local copy.
+from erasure_gate import wilson_upper_bound  # noqa: E402  (needs the sys.path insert above)
 
 
 def _prove(condition, message):
@@ -538,6 +545,163 @@ _TARGET_ROW = dict(zip(TARGET_RANKING_FIELDS, TARGET_RANKING[0], strict=True))
 TARGET_SLOT = _TARGET_ROW["slot"]
 
 
+def target_fact_id(records):
+    """``TARGET_SLOT`` -> the ``fact_id`` carrying it, resolved from records that carry both.
+
+    The ONE committed resolution path, so no downstream plan writes the id by hand and no copy of
+    it enters a source file. Every Phase 18 draw record and every Phase 19 scored record carries
+    ``fact_id`` and ``slot`` side by side, so the mapping is read off the data being scored rather
+    than off a table that could stop agreeing with it.
+    """
+    ids = sorted({record["fact_id"] for record in records if record["slot"] == TARGET_SLOT})
+    _prove(
+        len(ids) == 1,
+        f"{len(ids)} fact ids carry slot {TARGET_SLOT!r} in these records. Exactly one core fact "
+        "occupies each slot; zero means these records are not the ones the target was selected "
+        "from, and more than one means the slot no longer identifies a fact",
+    )
+    return ids[0]
+
+
+# =============================================================================================
+# ===== THE (a) DENOMINATOR — DERIVED FROM THE BINDING FIXTURE, POOLED ACROSS TIERS (D5) =====
+# =============================================================================================
+
+DENOMINATOR_RULE = (
+    "THE (a) DENOMINATOR is the TARGET FACT's taught AND held-out questions POOLED: n = 27. "
+    "`erasure_gate`'s clustering note fixes the unit — 'n in every bound below is a count of "
+    "QUESTIONS, never a count of draws' (`scripts/erasure_gate.py:52`), condition (a) reads that "
+    "unit (`:101-106`) and `wilson_upper_bound` refuses any other (`:139-158`). Both tiers ask "
+    "QUESTIONS ABOUT THE SAME FACT, differing only in whether the phrasing family was practised "
+    "during teaching, so both are units of the same kind and pooling them adds units rather than "
+    "re-weighting them. The two counts are read off `results/phase16_recall_sample.json`, the "
+    "binding 270-question fixture, whose own published census records 14 taught and 13 held-out "
+    "per core fact.",
+    "STATED DEPARTURE, not a silent one: Phase 18 kept the two tiers SEPARATE and priced its Holm "
+    "family on the gated tier alone (D-31, m = 4, `core_held_out` only), with the taught tier "
+    "carried as the ATK-03 positive control. This rule pools them for condition (a) and nothing "
+    "else. It re-prices no Phase 18 alpha, re-opens no Phase 18 family and changes no published "
+    "Phase 18 rate; it is a Phase 19 denominator for a Phase 19 bound. Recording it here is the "
+    "whole point — a departure a reader has to notice by diffing two phases is a departure that "
+    "was made quietly.",
+    "THE ARITHMETIC THAT FORCED IT, computed with the committed `wilson_upper_bound` and not with "
+    "a remembered figure. At n = 13 — the target's held-out questions alone — the BEST ATTAINABLE "
+    "one-sided 95% upper bound, the one a PERFECT erasure scoring 0 successes would produce, is "
+    "0.172267. Any calibrated floor below that is unclearable at EVERY possible outcome, so the "
+    "held-out tier alone would hand 19-03 a floor budget it could not honestly spend. At n = 27 "
+    "the same best attainable bound is 0.091079. Pooling does not make the result better; it "
+    "makes the instrument able to express a result at all, and it is fixed here, before the "
+    "calibration that must live inside that budget has run.",
+    "REFUSED: n = 52 on the gated tier and n = 108 pooled, i.e. counting each of the four "
+    "dose-split attack families' renderings of a question as its own unit. Four phrasings of ONE "
+    "question are clustered exactly the way nine draws of one question are, and multiplying n by "
+    "4 reintroduces the modelling error STAT-01 exists to forbid, one level up: it would narrow "
+    "every bound by roughly a factor of two while adding no independent information about whether "
+    "the fact survived. The families are how the same question is asked, not four questions.",
+    "THE MECHANICS OF POOLING, spelled out because the instrument forbids the obvious spelling. "
+    "`aggregate_questions(scored, *, tier)` hard-`_prove`s a SINGLE tier "
+    "(`scripts/phase18_extraction.py:2223`, via `phase16_persistence.aggregate_by_fact`), so "
+    "'pooled n = 27' is TWO CALLS — one on `core_taught`, one on `core_held_out` — whose "
+    "`successes` and `n_questions` are summed AFTERWARDS. It is never one call with a merged tier "
+    "label, and it is never a widening of the frozen function: `scripts/phase18_extraction.py` is "
+    "uneditable at `99716e0` and any new commit to it reddens "
+    "`tests/test_phase16_prereg.py`. The question unit survives the sum because the hit rule is "
+    "identical in both calls — a question is a hit when ANY of its draws contained the value, "
+    "however many did — so the two numerators count the same kind of event.",
+)
+
+
+def target_question_counts(fixture, fact_id, tiers):
+    """Per-tier and POOLED question counts for one fact, counted from the fixture's own rows.
+
+    ``tiers`` is a PARAMETER rather than a pair of strings written here: the tier names are
+    already committed as ``phase18_extraction.CORPUS_TIERS`` and a second copy is a copy free to
+    stop agreeing with the first. Taking it also keeps this function pure and importable with no
+    torch, so the duplicate refusal below is exercisable on a synthetic fixture.
+
+    The duplicate check is the load-bearing one and it runs over EVERY row of the tier, not only
+    the target's. A repeated ``(fact_id, seed_index)`` does not raise on its own — it INFLATES n,
+    which narrows every Wilson bound computed from it and makes condition (a) look easier to clear
+    than the fixture supports.
+    """
+    _prove(
+        "pooled" not in tiers,
+        f"a tier is named 'pooled' in {tiers} — it would collide with the pooled total this "
+        "function returns under that key, and one of the two would silently win",
+    )
+    counts = {}
+    for tier in tiers:
+        _prove(
+            tier in fixture["questions"],
+            f"the fixture has no {tier!r} tier; it holds {sorted(fixture['questions'])}",
+        )
+        seen = set()
+        for row in fixture["questions"][tier]:
+            question = (row["fact_id"], row["seed_index"])
+            _prove(
+                question not in seen,
+                f"the {tier!r} tier holds question {question} twice. A duplicate does not raise "
+                "on its own, it inflates n — and a wider denominator narrows every Wilson bound "
+                "computed from it, so condition (a) would read as easier to clear than the "
+                "committed fixture supports",
+            )
+            seen.add(question)
+        counts[tier] = sum(1 for row in fixture["questions"][tier] if row["fact_id"] == fact_id)
+        _prove(
+            counts[tier],
+            f"the target has no questions in the {tier!r} tier — a zero denominator is not a "
+            "measurement, and `wilson_upper_bound` raises on one rather than returning a bound",
+        )
+    counts["pooled"] = sum(counts[tier] for tier in tiers)
+    return counts
+
+
+def derive_target_question_counts(fixture_path, arm_record_path):
+    """The wiring: resolve ``TARGET_SLOT`` against the arm record, then count fixture rows.
+
+    Two committed artifacts and no third source. The slot -> ``fact_id`` mapping comes from the
+    SAME arm record the target was selected from, so the fact whose questions are counted here is
+    by construction the fact the rule chose.
+    """
+    import phase18_extraction as extraction  # LAZY — see the module docstring's no-fact-value rule
+
+    fixture = json.loads(pathlib.Path(fixture_path).read_text(encoding="utf-8"))
+    record = json.loads(pathlib.Path(arm_record_path).read_text(encoding="utf-8"))
+    return target_question_counts(fixture, target_fact_id(record["draws"]), extraction.CORPUS_TIERS)
+
+
+# ---------------------------------------------------------------------------------------------
+# DERIVED by `derive_target_question_counts` over `results/phase16_recall_sample.json` (the
+# binding fixture, first added at `70dcc56`, 2026-08-12 17:00:27 -0300) and
+# `results/phase18_arm_adapter-on.json` (`9a923d6`). Written down for the same reason
+# `TARGET_RANKING` is — the pin stays importable with no artifact on disk — and kept honest the
+# same way: `test_target_question_counts_are_re_derived_from_the_committed_fixture` re-counts the
+# committed rows on every run. Re-print with `python scripts/phase19_erasure.py --target`.
+# ---------------------------------------------------------------------------------------------
+TARGET_QUESTION_COUNTS = {"core_taught": 14, "core_held_out": 13}
+
+# THE (a) DENOMINATOR. SUMMED from the two counted tiers, never typed (P19-5 / T-19-06): the
+# pooled figure is the one every bound in condition (a) divides by, and it is exactly the number
+# a reader would be unable to check if it were written as a literal.
+N_TARGET_QUESTIONS = sum(TARGET_QUESTION_COUNTS.values())
+
+# The bound a PERFECT erasure produces — 0 successes over the pooled denominator. It is the
+# REACHABILITY CONSTRAINT 19-03's blind calibration has to live inside: a floor below this cannot
+# be cleared at any outcome. Computed by the committed `wilson_upper_bound`, never retyped.
+BEST_ATTAINABLE_TARGET_BOUND = wilson_upper_bound(0, N_TARGET_QUESTIONS)
+
+# Two independently sourced counts of the same quantity, proved equal at import: the fixture's
+# per-fact held-out row count above, and Phase 18's own question-unit aggregation of the arm
+# record (the denominator on the head of `TARGET_RANKING`). They come from different artifacts
+# through different instruments, so an edit to either one alone stops the pin importing.
+_prove(
+    TARGET_QUESTION_COUNTS["core_held_out"] == _TARGET_ROW["n_questions"],
+    f"the fixture gives the target {TARGET_QUESTION_COUNTS['core_held_out']} held-out questions "
+    f"but Phase 18's aggregation scored it over {_TARGET_ROW['n_questions']} — the (a) "
+    "denominator and the ranking that chose the target disagree about the same fixture slice",
+)
+
+
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
     # Smallest runnable check that fails if the derivation breaks. The census is PRINTED rather
     # than asserted against a literal — `component_index`'s own proof is what pins it.
@@ -553,13 +717,11 @@ if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
         # RE-DERIVES the published ranking from the committed arm record. This is the command that
         # produced `TARGET_RANKING`; the committed test runs the same two functions, so the printer
         # and the guard cannot drift into deriving two different orders.
-        import json
-
         import phase14_factset as factset  # LAZY — the fact set holds its material at module level
 
-        record = json.loads(
-            (_REPO_ROOT / "results" / "phase18_arm_adapter-on.json").read_text(encoding="utf-8")
-        )
+        arm_path = _REPO_ROOT / "results" / "phase18_arm_adapter-on.json"
+        fixture_path = _REPO_ROOT / "results" / "phase16_recall_sample.json"
+        record = json.loads(arm_path.read_text(encoding="utf-8"))
         rows = target_rows_from_arm_record(
             record,
             {fact.id: fact.value for fact in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS},
@@ -570,3 +732,12 @@ if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
         ):
             print(f"    {slot:<14} {successes:>3}/{n_questions}  rate={rate!r:<20} nll={nll!r}")
         print(f"[phase19_erasure] TARGET_SLOT = {TARGET_SLOT}")
+
+        counts = derive_target_question_counts(fixture_path, arm_path)
+        print(f"[phase19_erasure] target question counts (fixture-derived): {counts}")
+        print(
+            f"[phase19_erasure] (a) denominator n = {N_TARGET_QUESTIONS} pooled; best attainable "
+            f"upper bound at 0 successes = {BEST_ATTAINABLE_TARGET_BOUND:.6f} "
+            f"(vs {wilson_upper_bound(0, TARGET_QUESTION_COUNTS['core_held_out']):.6f} "
+            "on the held-out tier alone)"
+        )

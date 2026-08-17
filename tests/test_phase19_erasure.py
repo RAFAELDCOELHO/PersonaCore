@@ -23,6 +23,7 @@ pre-ablation inequality is asserted before the post-ablation equality in the bit
 without that pair the strongest-looking assertion in this file would be measuring the identity gate.
 """
 
+import ast
 import dataclasses
 import importlib.util
 import json
@@ -622,3 +623,171 @@ def test_target_selection_rule_states_its_tie_breaks_and_the_forbidden_move(arm_
         f"scripts/phase19_erasure.py embeds fact value(s) {hits} — every core fact_id ends in "
         "its own value, so a fact-id-keyed constant puts the answers into the pin (T-19-07)"
     )
+
+
+# =============================================================================================
+# ===== PLAN 19-02 / TASK 2 — THE (a) DENOMINATOR, DERIVED FROM THE BINDING FIXTURE (D5) =====
+# =============================================================================================
+
+_FIXTURE = _ROOT / "results" / "phase16_recall_sample.json"
+_PIN_SOURCE = (_ROOT / "scripts" / "phase19_erasure.py").read_text(encoding="utf-8")
+
+
+def test_target_question_counts_are_re_derived_from_the_committed_fixture(arm_record):
+    """n = 27 is what the binding 270-question fixture holds for the target, not what was typed.
+
+    Two independent artifacts have to agree for this to pass: the fixture supplies both per-tier
+    counts, and Phase 18's own aggregation of the arm record supplies the held-out one a second
+    time (the head of ``TARGET_RANKING``). The pin cross-checks those two at import.
+    """
+    extraction = _load("phase18_extraction", "scripts/phase18_extraction.py")
+    counts = erasure.derive_target_question_counts(_FIXTURE, _ARM_RECORD)
+
+    assert counts == {**erasure.TARGET_QUESTION_COUNTS, "pooled": erasure.N_TARGET_QUESTIONS}
+    assert erasure.N_TARGET_QUESTIONS == 27
+    assert erasure.N_TARGET_QUESTIONS == sum(erasure.TARGET_QUESTION_COUNTS.values())
+    assert set(erasure.TARGET_QUESTION_COUNTS) == set(extraction.CORPUS_TIERS)
+
+    # The fixture's own published per-core-fact census, read off the artifact rather than retyped.
+    fixture = json.loads(_FIXTURE.read_text(encoding="utf-8"))
+    per_core = fixture["counts"]["per_core_fact"]
+    assert erasure.TARGET_QUESTION_COUNTS["core_taught"] == per_core["taught"]
+    assert erasure.TARGET_QUESTION_COUNTS["core_held_out"] == per_core["held_out"]
+
+    # And the target this counted is the one the ranking selected — not some other fact.
+    fact_id = erasure.target_fact_id(arm_record["draws"])
+    assert (
+        erasure.select_target_fact(
+            erasure.target_rows_from_arm_record(arm_record, _committed_values()),
+            arm_record["exposure"],
+        )
+        == fact_id
+    )
+
+
+def test_target_fact_id_resolves_the_pinned_slot_and_refuses_an_ambiguous_record():
+    """The ONE committed slot -> fact_id path, so no downstream plan writes the id by hand."""
+    records = [
+        {"fact_id": "alpha", "slot": erasure.TARGET_SLOT},
+        {"fact_id": "alpha", "slot": erasure.TARGET_SLOT},
+        {"fact_id": "beta", "slot": "hometown"},
+    ]
+    assert erasure.target_fact_id(records) == "alpha"
+
+    with pytest.raises(SystemExit, match="carry slot"):
+        erasure.target_fact_id(records + [{"fact_id": "gamma", "slot": erasure.TARGET_SLOT}])
+    with pytest.raises(SystemExit, match="carry slot"):
+        erasure.target_fact_id([{"fact_id": "beta", "slot": "hometown"}])
+
+
+def test_target_question_counts_refuses_a_duplicated_question():
+    """A repeated ``(fact_id, seed_index)`` INFLATES n rather than raising, unless it is caught.
+
+    That is the ugly direction: a silently doubled denominator makes every Wilson bound narrower,
+    so the (a) condition would look easier to clear than the fixture supports.
+    """
+    tiers = ("t_taught", "t_held_out")
+    clean = {
+        "questions": {
+            "t_taught": [{"fact_id": "target", "seed_index": i} for i in range(3)]
+            + [{"fact_id": "other", "seed_index": 0}],
+            "t_held_out": [{"fact_id": "target", "seed_index": i} for i in range(2)],
+        }
+    }
+    assert erasure.target_question_counts(clean, "target", tiers) == {
+        "t_taught": 3,
+        "t_held_out": 2,
+        "pooled": 5,
+    }
+
+    duplicated = {"questions": {k: list(v) for k, v in clean["questions"].items()}}
+    duplicated["questions"]["t_taught"].append({"fact_id": "target", "seed_index": 0})
+    with pytest.raises(SystemExit, match="twice"):
+        erasure.target_question_counts(duplicated, "target", tiers)
+
+    with pytest.raises(SystemExit, match="no questions"):
+        erasure.target_question_counts(clean, "a_fact_the_fixture_does_not_hold", tiers)
+
+    with pytest.raises(SystemExit, match="no 'not_a_tier' tier"):
+        erasure.target_question_counts(clean, "target", ("not_a_tier",))
+
+    with pytest.raises(SystemExit, match="pooled"):
+        erasure.target_question_counts(clean, "target", ("t_taught", "pooled"))
+
+
+def test_the_pooled_denominator_is_never_typed_anywhere_in_the_pin():
+    """P19-5 / T-19-06: 27 is COMPUTED from two counted quantities, never written down.
+
+    An AST walk rather than ``grep -n "27"``: a grep cannot tell an integer literal from the two
+    digits inside a float, and the pin publishes eight exposure NLLs.
+    """
+    literals = [
+        node.value
+        for node in ast.walk(ast.parse(_PIN_SOURCE))
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, int)
+        and not isinstance(node.value, bool)
+        and node.value == erasure.N_TARGET_QUESTIONS
+    ]
+    assert literals == [], (
+        f"the pin types the pooled denominator {erasure.N_TARGET_QUESTIONS} as an integer literal "
+        f"{len(literals)} time(s) — it must be summed from the two counted tiers"
+    )
+
+
+def test_the_wilson_bound_is_the_committed_one_and_is_never_re_derived():
+    """STAT-05 / T-19-08: imported from ``erasure_gate`` by IDENTITY, not by matching values."""
+    import erasure_gate
+
+    assert erasure.wilson_upper_bound is erasure_gate.wilson_upper_bound
+
+    tree = ast.parse(_PIN_SOURCE)
+    defined = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    assert "wilson_upper_bound" not in defined
+    imported = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    assert "math" not in imported, (
+        "the pin imports math — a second Wilson interval needs a sqrt, and the point of importing "
+        "the committed one is that there is no second implementation to disagree with it"
+    )
+
+    # And it is Wilson, not Wald: Wald degenerates to exactly 0 at zero successes, which is the
+    # case the (a) condition cares about most (erasure_gate.py:144-149).
+    assert erasure.BEST_ATTAINABLE_TARGET_BOUND > 0.0
+    assert erasure.BEST_ATTAINABLE_TARGET_BOUND == erasure_gate.wilson_upper_bound(
+        0, erasure.N_TARGET_QUESTIONS
+    )
+    # Pooling is what buys the reachability: the held-out tier alone cannot clear as low a floor.
+    assert erasure.BEST_ATTAINABLE_TARGET_BOUND < erasure_gate.wilson_upper_bound(
+        0, erasure.TARGET_QUESTION_COUNTS["core_held_out"]
+    )
+
+
+def test_denominator_rule_records_the_departure_the_refusal_and_the_real_arithmetic():
+    """Every number the rule quotes is a computed one, and D5's declarations are all made."""
+    extraction = _load("phase18_extraction", "scripts/phase18_extraction.py")
+    import erasure_gate
+
+    text = " ".join(erasure.DENOMINATOR_RULE)
+    lowered = text.lower()
+
+    held_out = erasure.TARGET_QUESTION_COUNTS["core_held_out"]
+    assert f"n = {erasure.N_TARGET_QUESTIONS}" in text
+    assert f"{erasure_gate.wilson_upper_bound(0, held_out):.6f}" in text
+    assert f"{erasure.BEST_ATTAINABLE_TARGET_BOUND:.6f}" in text
+
+    # The REFUSED inflation is (attack families) x (questions) — 4 is derived, not asserted.
+    families = len(extraction.ATTACK_FAMILIES)
+    assert families == 4
+    assert f"n = {families * held_out}" in text
+    assert f"n = {families * erasure.N_TARGET_QUESTIONS}" in text
+
+    # The three declarations D5 required be stated rather than implied.
+    assert "departure" in lowered, "the tier pooling is not declared as a departure from Phase 18"
+    assert "refused" in lowered
+    assert "two calls" in lowered, "the mechanics of pooling under a single-tier _prove are missing"
+    assert "aggregate_questions" in text and "2223" in text
