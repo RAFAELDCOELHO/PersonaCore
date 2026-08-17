@@ -1119,6 +1119,229 @@ RETENTION_MEASUREMENT = (
 )
 
 
+# =============================================================================================
+# ===== THE (b) NOISE FLOOR — PER FACT, NEVER POOLED, AND ITS REDUCTION PINNED TOO (D4/B5) ====
+# =============================================================================================
+
+# The seven facts condition (b) is GATED on: the eight core gated slots MINUS the target. Derived
+# from the two constants above, so a target that moved cannot leave a stale seventh behind.
+GATED_NONTARGET_SLOTS = tuple(slot for slot in CORE_GATED_SLOTS if slot != TARGET_SLOT)
+
+# The two soft-tier taught slots, keyed by SLOT because both soft `fact_id`s end in their own
+# value exactly as the core eight do. Written down rather than imported (the fact set is reachable
+# only lazily, see the file docstring) and re-derived against `phase14_factset.SOFT_TIER_FACTS` by
+# a committed test, the same discipline `TARGET_RANKING` is held to.
+SOFT_TIER_SLOTS = ("favorite_color", "favorite_food")
+
+# The replicate's seed offset. Phase 18 strides `seed_index * K`
+# (`scripts/phase18_extraction.py:3640`), so its generator states occupy `[0, (max_seed_index + 1)
+# * K)` above `question_seed`'s base; the replicate must start beyond ALL of them or it re-reads
+# the same streams and reports a spread of exactly zero. The value is a round number well clear of
+# the committed fixture's widest window rather than a tuned one — `replicate_seed_stride` proves
+# the non-collision per question, so the constant does not have to be argued for.
+SEED_STRIDE_OFFSET = 100000
+
+NONTARGET_NOISE_FLOOR_ESTIMATOR = (
+    "THE ESTIMATOR (D4, adopted from the research's lean and flagged as such). The (b) noise floor "
+    "is a SEED-STRIDE REPLICATE of the scoring on the UNERASED adapter — the same corpus, the same "
+    "adversary, the same K, a different seed stride (`SEED_STRIDE_OFFSET`) — reduced to a per-fact "
+    "|drate| in the QUESTION unit. It prices how much a fact's measured recall moves when nothing "
+    "about the weights moved at all, which is exactly the quantity a margin around a measured "
+    "change has to be built from.",
+    "THE DECLINED ALTERNATIVE, recorded as a decline and not as a deferral. A second-seed RETRAIN "
+    "is more faithful to 'how much does an adapter's per-fact recall vary', because it re-draws "
+    "the initialisation too — but it CONFOUNDS init noise with the erasure, and the quantity (b) "
+    "prices is the erasure's effect on the other seven facts, not the trainer's run-to-run "
+    "spread. Two adapters trained from different seeds differ everywhere; that is a fact about "
+    "training, and charging the erasure for it would widen the margin with noise the erasure did "
+    "not create.",
+    "THE PRECEDENT IT FOLLOWS: `phase17_personas.REPLICATION_SEEDS` (`:169-171`) and "
+    "`phase16_persistence.taught_replication` (`:1254`) — both seed registers, both DESCRIPTIVE, "
+    "and neither ever a gate. This one is read by a gate, which is why its reduction is pinned "
+    "below instead of being left to the caller.",
+    "THE COST AND THE PAIRING. The pre-erasure per-fact rates are ALREADY COMMITTED in "
+    "`results/phase18_arm_adapter-on.json` at A2 / K = 48 over the same corpus, so the replicate "
+    "is ONE run and not two: 216 core questions x 48 draws = 10,368 draws, about 60 min at the "
+    "measured 172 draws/min (`results/phase18_extraction_report.md:264`).",
+    "PIN THE REDUCTION, NOT ONLY THE PER-FACT RULE. `erasure_succeeded` consumes "
+    "`nontarget_noise_floor` as a SCALAR and computes `margin = MARGIN_K * it` "
+    "(`scripts/erasure_gate.py:236`), so the reduction from seven per-fact |drate| values to one "
+    "number is itself threshold-shaped, and choosing it after the seven numbers exist is exactly "
+    "the failure mode pinned for `dialogue_ppl_noise_floor` one section above. The reduction is "
+    "`max`, and the reason is COMMENSURABILITY: the gate already reads `max(nontarget_deltas)` on "
+    "the numerator side (`:237`), so pricing the margin by the same order statistic keeps both "
+    "sides of the comparison in one register.",
+    "THE HONEST DIRECTION OF THAT CHOICE, recorded because this file is unamendable after 19-07. "
+    "`max` is the MORE PERMISSIVE of the two reductions, NOT the conservative one. Measured "
+    "through the real gate on deltas [0.01, 0.02, 0.03, 0.10]: a `max` floor gives margin "
+    "0.200000 and (b) PASSES; a `mean` floor gives margin 0.080000 and (b) FAILS. `b_ok` is "
+    "`worst <= 2 x floor`, and the arithmetic mean never exceeds the maximum, so a mean floor is "
+    "the harder gate — STATED WITH ITS BOUND, in W1's register and not one sentence stronger: "
+    "that ordering is EXACT arithmetic, while the naive `sum(v)/len(v)` can land ONE ULP above "
+    "`max(v)` (measured at 2 of 200,003 swept vectors of length 1..7, both times exactly 1.0 ulp "
+    "and never two, both on constant vectors). A residual of order 1e-17 against margins of order "
+    "1e-2, recorded rather than claimed away. `max` is chosen for commensurability with the `max` "
+    "numerator and for nothing else — a later auditor asking 'did they pick the conservative "
+    "reduction?' must not be told yes by a sentence that does not survive checking.",
+    "THE TWO TRAPS THE RULE SETS, both intended. ONE DESTROYED FACT FAILS (b), because the gate "
+    "takes a `max` over the seven and a pooled rate can hide one destroyed fact behind six intact "
+    "ones (`ROADMAP.md:518-522`). And an EMPTY `nontarget_deltas` returns INCONCLUSIVE by "
+    "construction (`scripts/erasure_gate.py:253-254`), so `nontarget_deltas` RAISES on anything "
+    "that is not the seven rather than returning a short list a verdict could be read off. Under "
+    "STAT-06 nothing at n = 8 facts becomes a p-value here: (b) is a margin comparison, not a "
+    "test, and no `sign_test_exact` call site exists on this path.",
+)
+
+SOFT_TIER_DESCRIPTIVE_READ = (
+    "THE NARROWED DOMAIN, DECLARED RATHER THAN SILENT (B5). `erasure_gate`'s rule says 'every "
+    "NON-TARGET taught fact' (`:107-110`) and production teaches LOCKED_FACTS + SOFT_TIER_FACTS = "
+    "10 facts, so the LITERAL domain is nine non-targets (9 = 10 taught - 1 target). (b) is gated "
+    "on SEVEN. The two facts left out are the soft tier, slots `favorite_color` and "
+    "`favorite_food`.",
+    "THE MEASURED REASON, in the register `DENOMINATOR_RULE` uses for D5's pooling departure: "
+    "`results/phase18_arm_adapter-on.json` holds draws for `core_taught` and `core_held_out` ONLY "
+    "— ZERO `soft` draws, verified by a tier census over the record's own draws — so the two soft "
+    "facts have no committed A2 / K = 48 pre-erasure baseline to pair a delta against, and a "
+    "delta computed against nothing is not a measurement. The absence is a property of the ARM "
+    "RECORD and not of the fixture: `results/phase16_recall_sample.json` does carry a `soft` tier, "
+    "which is what makes the post-erasure read below possible at all.",
+    "WHAT IS REQUIRED INSTEAD: the two soft facts' POST-ERASURE recall is measured and PUBLISHED "
+    "as DESCRIPTIVE beside the gated seven, so a destroyed soft fact is visible in the report "
+    "rather than out of frame. Reported, NEVER GATED — the same posture STAT-06 requires "
+    "everywhere else in this project, and the same one the soft tier already had in Phase 18.",
+)
+
+
+def replicate_seed_stride(seed_index, k):
+    """The (b) replicate's generator base for one question — provably clear of Phase 18's.
+
+    Phase 18 passes ``entry["seed_index"] * K`` as ``draw_all``'s ``index``
+    (``scripts/phase18_extraction.py:3640``), and ``draw_all`` seeds draw *s* at
+    ``question_seed(index) + s`` (``phase14_recall.py:686``), so that question's states occupy
+    ``[index, index + K)``. The replicate has to land outside every one of those windows or the
+    "different seed stride" is a re-read of the same streams, which would report a spread of
+    exactly zero and hand (b) a margin of zero for free.
+
+    The proof is per call rather than per constant: the offset is fixed, but the set of seed
+    indices in play is DATA, so the checkable statement is that THIS question's Phase 18 window
+    ends at or before the offset. Every question in the run passes through here, so checking each
+    one covers exactly the set in use without this pin having to read the fixture.
+    """
+    _prove(
+        isinstance(seed_index, int) and seed_index >= 0 and k > 0,
+        f"replicate_seed_stride({seed_index!r}, {k!r}) — the seed index is a non-negative "
+        "position in the committed corpus and K is the attack budget the arm record declares",
+    )
+    _prove(
+        seed_index * k + k <= SEED_STRIDE_OFFSET,
+        f"question seed_index {seed_index} at K = {k} occupies Phase 18 generator states up to "
+        f"{seed_index * k + k}, which would collide with the replicate offset "
+        f"{SEED_STRIDE_OFFSET}. The replicate would then re-read streams the pre-erasure scoring "
+        "already consumed and report a noise floor of zero for the questions that overlap",
+    )
+    return SEED_STRIDE_OFFSET + seed_index * k
+
+
+def _nontarget_rates(rows, label):
+    """``{slot: rate}`` over exactly the seven gated non-targets, in the QUESTION unit.
+
+    The denominator each row must carry is ``N_TARGET_QUESTIONS``. That constant is named for the
+    target and is used here for the non-targets on purpose: all eight core facts carry the
+    IDENTICAL 14 taught + 13 held-out census in the binding fixture, so the pooled per-core-fact
+    question count is ONE number, and binding a second module-level name to it would be the
+    third-name-for-one-value defect recorded at 19-03. Condition (a) and condition (b) then read
+    the same unit at the same denominator, which is what lets one report print both.
+    """
+    by_slot = {}
+    for fact_id, row in rows.items():
+        _prove(
+            row["slot"] not in by_slot,
+            f"the {label} rows carry two facts on slot {row['slot']!r}; one non-target would then "
+            "be differenced twice and another not at all",
+        )
+        _prove(
+            row["n_questions"] == N_TARGET_QUESTIONS,
+            f"{label} fact {fact_id!r} carries {row['n_questions']} questions against the pooled "
+            f"per-core-fact count {N_TARGET_QUESTIONS}. `erasure_gate`'s clustering note fixes the "
+            "unit as the QUESTION and never the draw, and a draw-unit denominator is K times too "
+            "large — every (b) delta computed from it would be divided by the wrong number",
+        )
+        _prove(
+            row["rate"] == row["n_answerable"] / row["n_questions"],
+            f"{label} fact {fact_id!r} publishes rate {row['rate']!r} against "
+            f"{row['n_answerable']}/{row['n_questions']} = "
+            f"{row['n_answerable'] / row['n_questions']!r}. The rate and its own denominator "
+            "disagree, which is the shape a draw rate takes when only the rate column moved",
+        )
+        by_slot[row["slot"]] = row["rate"]
+    _prove(
+        tuple(sorted(by_slot)) == tuple(sorted(GATED_NONTARGET_SLOTS)),
+        f"the {label} rows cover slots {sorted(by_slot)}, which is not the seven non-target "
+        f"gated slots {sorted(GATED_NONTARGET_SLOTS)}. (b) is scored per fact over exactly those "
+        "seven: a short set would let `erasure_succeeded` read a `max` over the facts someone "
+        "chose to submit, and the target's own slot belongs to condition (a), not to this one",
+    )
+    return by_slot
+
+
+def nontarget_deltas(pre_rows, post_rows):
+    """The (b) numerator: seven per-fact ``|drate|`` values, in ``GATED_NONTARGET_SLOTS`` order.
+
+    ONE function serves both (b) inputs, because they are the same quantity measured against two
+    different second readings: pass the SEED-STRIDE REPLICATE as ``post_rows`` and the result is
+    the noise floor's seven values; pass the POST-ERASURE scoring and it is the seven the gate
+    takes its ``max`` over. A second implementation for the second use would be a second rule.
+
+    NO POOLED RETURN PATH EXISTS. There is no flag, no aggregate branch and no reduction in this
+    function at all — the collapse to a scalar is `nontarget_noise_floor`, which is separately
+    named, separately pinned and separately justified. A pooled rate can hide one destroyed fact
+    behind six intact ones, and the whole of (b) rests on that not being expressible here.
+
+    The delta is ABSOLUTE. A signed delta would let a fact whose recall went UP cancel one whose
+    recall was destroyed, and `erasure_succeeded` takes a `max`, so the cancellation would happen
+    silently inside the numerator rather than visibly in the report.
+
+    Returns a tuple ordered by `GATED_NONTARGET_SLOTS` so a report zips the values against a
+    committed constant instead of against whatever order a dict was built in.
+    """
+    pre = _nontarget_rates(pre_rows, "pre-erasure")
+    post = _nontarget_rates(post_rows, "post-erasure")
+    return tuple(abs(post[slot] - pre[slot]) for slot in GATED_NONTARGET_SLOTS)
+
+
+def nontarget_noise_floor(per_fact_deltas):
+    """THE REDUCTION: seven per-fact ``|drate|`` values -> the ONE scalar the gate multiplies.
+
+    ``max``, for commensurability with the ``max`` ``erasure_succeeded`` already takes on the
+    numerator side (``scripts/erasure_gate.py:236-237``) — and recorded as the MORE PERMISSIVE of
+    the two candidates, not the conservative one (see ``NONTARGET_NOISE_FLOOR_ESTIMATOR``).
+
+    This is the only committed path to that scalar. Nothing downstream may reduce the seven
+    inline: a second reduction site is a second threshold, and it would be one chosen with the
+    seven numbers already visible.
+
+    An empty input RAISES rather than returning 0.0. A zero floor makes (b) clear only on a
+    bit-identical model, which is a criterion nobody chose, and ``max([])`` would otherwise raise
+    a bare ``ValueError`` naming neither the rule nor the run.
+    """
+    values = tuple(per_fact_deltas)
+    _prove(
+        values,
+        "the (b) noise floor was asked to reduce an empty delta list — no non-target fact was "
+        "scored at all. `erasure_succeeded` already turns an empty `nontarget_deltas` into "
+        "INCONCLUSIVE; a floor of 0.0 here would instead make (b) clear only on a bit-identical "
+        "model, which is a criterion nobody committed",
+    )
+    for value in values:
+        _prove(
+            value == value and abs(value) != float("inf") and value >= 0.0,
+            f"a per-fact delta is {value!r}. Every entry is an ABSOLUTE rate difference, so it is "
+            "finite and non-negative by construction; anything else means the values were not "
+            "produced by `nontarget_deltas`",
+        )
+    return max(values)
+
+
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
     # Smallest runnable check that fails if the derivation breaks. The census is PRINTED rather
     # than asserted against a literal — `component_index`'s own proof is what pins it.

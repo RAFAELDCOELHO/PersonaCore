@@ -1572,14 +1572,28 @@ def test_the_nontarget_reduction_is_max_and_swapping_in_mean_changes_the_scalar(
     assert _verdict(erasure.nontarget_noise_floor(spread)) == "SUCCESS"
     assert _verdict(sum(spread) / len(spread)) == "FAILURE"
 
-    # And the direction generalises rather than holding on one spread: mean <= max always, so the
-    # mean margin is never the looser one.
-    for values in ([0.5], [0.0, 1.0], [0.2, 0.2, 0.2], spread):
-        assert sum(values) / len(values) <= erasure.nontarget_noise_floor(values)
+    # The direction generalises — WITH ITS BOUND. `mean <= max` is exact arithmetic, but the naive
+    # `sum(v)/len(v)` re-rounds and can land ONE ULP above `max(v)`. Measured over 200,003 vectors
+    # of length 1..7 (200,000 random plus 3 hand cases): 2 exceed, both by exactly 1.0 ulp, both
+    # constant vectors. The bound is asserted; the unqualified claim is NOT, because it is false.
+    exceeded = []
+    for values in ([0.5], [0.0, 1.0], [0.2, 0.2, 0.2], [0.1, 0.1, 0.1], [0.2] * 7, spread):
+        naive_mean = sum(values) / len(values)
+        top = erasure.nontarget_noise_floor(values)
+        assert naive_mean <= top + math.ulp(top)
+        if naive_mean > top:
+            exceeded.append((values, (naive_mean - top) / math.ulp(top)))
+    assert [ulps for _values, ulps in exceeded] == [1.0, 1.0], (
+        f"the one-ulp residual the rule records moved: {exceeded}"
+    )
 
     text = " ".join(erasure.NONTARGET_NOISE_FLOOR_ESTIMATOR)
-    assert "more permissive" in text.lower()
-    assert "commensurab" in text.lower()
+    lowered = text.lower()
+    assert "more permissive" in lowered
+    assert "commensurab" in lowered
+    # The FALSE, stronger sentence must be absent — it would be unamendable after 19-07.
+    assert "mean <= max always" not in lowered
+    assert "one ulp" in lowered, "the rule states the ordering without its measured residual"
     assert f"{erasure_gate.MARGIN_K * max(spread):.6f}" in text
     assert f"{erasure_gate.MARGIN_K * (sum(spread) / len(spread)):.6f}" in text
 
