@@ -28,14 +28,23 @@ afterwards is a DATED CONTINUATION published beside the original text (``scripts
 decision D3), never an edit and never a ``--force`` flag. Editing a recorded rule after its number
 exists destroys the only thing that made the rule worth recording.
 
-WHAT THIS FILE HOLDS AT PLAN 19-03, AND WHAT IT DELIBERATELY DOES NOT
+WHAT THIS FILE HOLDS AT PLAN 19-04, AND WHAT IT DELIBERATELY DOES NOT
 --------------------------------------------------------------------
 Holds: the ordering contract above, the mechanism identity and its rule, the DERIVED component
 index, the ablation operator (19-01), the target-selection rule with its two tie-breaks, the
-published eight-fact ranking and the derived (a) denominator (19-02), and the (a) floor-DERIVATION
-rule with its mirrored operator and its import-time reachability proof (19-03). The noise-floor
-estimators, the arm runners and the report text are plans 19-04..19-06, and writing any of them
-here early would mean fixing them before the plan that reasons about them.
+published eight-fact ranking and the derived (a) denominator (19-02), the (a) floor-DERIVATION
+rule with its mirrored operator and its import-time reachability proof (19-03), and the two
+NOISE-FLOOR ESTIMATORS plus the retention measurement spec and the arm-record schema (19-04). The
+arm runners and the report text are plans 19-05..19-06, and writing either here early would mean
+fixing it before the plan that reasons about it.
+
+EVERY KEYWORD-ONLY ARGUMENT OF ``erasure_succeeded`` NOW HAS A NAMED PRODUCER IN THIS FILE.
+``target_successes`` / ``target_questions`` (19-02), ``target_floor`` (19-03),
+``nontarget_deltas`` + ``nontarget_noise_floor`` (19-04 task 2), ``dialogue_ppl`` +
+``dialogue_ppl_noise_floor`` + ``retention_ppl`` (19-04 task 1) and ``zero_results_have_nll``
+(19-04 task 3). Three of them had NO committed default at all, and the one nobody notices is
+``dialogue_ppl_noise_floor`` (``scripts/erasure_gate.py:208``): it is threshold-shaped, so a value
+picked once the cap is visible is a value picked to be cleared.
 
 The (a) floor CONSTANT is not here and cannot be: it does not exist until a blind calibration has
 run, which is the whole content of ``scripts/erasure_gate.py:104-106``. What is committed here is
@@ -73,6 +82,7 @@ import json
 import pathlib
 import sys
 
+from personacore.config import ModelConfig
 from personacore.lora import LoRAConfig
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -90,11 +100,19 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
 # enumeration is a copy free to stop agreeing with the first.
 import extract_deltas  # noqa: E402  (needs the sys.path insert above)
 
-# STAT-05 / T-19-08. The one-sided Wilson upper bound is IMPORTED from the file that committed it
-# at `23a830c`, before Phase 16 ran, and is never retyped here. `erasure_gate` is stdlib-only,
-# phase-neutral and holds no fact material, so this import is safe at module scope — which is the
-# point: a lazily imported bound is one a later edit could quietly swap for a local copy.
-from erasure_gate import wilson_upper_bound  # noqa: E402  (needs the sys.path insert above)
+# STAT-05 / T-19-08. The one-sided Wilson upper bound, the margin discipline and the three v2.0
+# baselines are IMPORTED from the file that committed them at `23a830c`, before Phase 16 ran, and
+# are never retyped here. `erasure_gate` is stdlib-only, phase-neutral and holds no fact material,
+# so this import is safe at module scope — which is the point: a lazily imported bound is one a
+# later edit could quietly swap for a local copy, and a retyped `MARGIN_K` or baseline PPL is a
+# second copy of a number the gate reads, free to stop agreeing with it.
+from erasure_gate import (  # noqa: E402  (needs the sys.path insert above)
+    MARGIN_K,
+    V20_EWC_RETENTION_PPL,
+    V20_MASKED_DIALOGUE_VAL_PPL,
+    V20_RETENTION_NOISE_FLOOR,
+    wilson_upper_bound,
+)
 
 
 def _prove(condition, message):
@@ -947,6 +965,158 @@ def assert_erasure_floor_reachable(n_questions, floor_fn):
 # and `BEST_ATTAINABLE_TARGET_BOUND` (19-02) is its measurement-side twin. Callers that want the
 # number the phase was priced at call this and print what it returns.
 assert_erasure_floor_reachable(N_TARGET_QUESTIONS, lock_erasure_floor)
+
+
+# =============================================================================================
+# ===== THE (c) DIALOGUE NOISE FLOOR AND THE RETENTION MEASUREMENT, PINNED BEFORE EITHER RUNS ==
+# =============================================================================================
+
+# Phase 12's dialogue-PPL seed-to-seed spread — the ONLY dialogue noise floor this repository has
+# ever measured (`results/finetune_smoke_report.md:49-57`, seed pair (1337, 2024), masked arm,
+# LR 9e-05, 1250 steps, a FULL-FINE-TUNE regime). The RETENTION half of that same table is what
+# `scripts/erasure_gate.py:77` adopts as `V20_RETENTION_NOISE_FLOOR`, which is the whole reason
+# this constant is quoted rather than ignored: the gate already reads one column of that table.
+V20_DIALOGUE_NOISE_FLOOR_FULL_FT = 0.001704
+
+# The taught adapter's masked dialogue-val PPL, adapter ON, from the collateral-collapse control
+# (`results/phase14_recall_report.md:462`, +27.16% over 270,203 scored targets, against the
+# adapter-OFF 4.5733 the gate carries as `V20_MASKED_DIALOGUE_VAL_PPL`). This is the PRE-ERASURE
+# reading and it is committed here so the (c) arithmetic below is on the record before any
+# erasure runs.
+V20_TAUGHT_ADAPTER_DIALOGUE_PPL = 5.8154
+
+# THE SEED PAIR, pinned here and nowhere else. The head is `teach_persona.SEED` — the production
+# teaching seed (`scripts/teach_persona.py:99`), written down rather than imported because
+# `teach_persona` holds the fact set at module level and this pin may not reach it (see the file
+# docstring); a committed test re-derives it against the live constant on every run. The tail is
+# Phase 12's own second seed, REUSED rather than minted: taking the same pair that produced
+# `V20_RETENTION_NOISE_FLOOR` makes the symmetry argument in clause 3 below exact instead of
+# analogical, and a freshly invented second seed would have been a free choice nobody could check.
+DIALOGUE_NOISE_FLOOR_SEEDS = (1337, 2024)
+
+DIALOGUE_NOISE_FLOOR_ESTIMATOR = (
+    "THE ESTIMATOR (Q4 option 2, as D3 selected it). The adapter-regime dialogue-PPL noise floor "
+    "is |dPPL| between TWO INDEPENDENTLY SEEDED RE-TEACHINGS of the SAME fact set under the SAME "
+    "recipe, each scored by `masked_perplexity` through `run_collapse_control`'s adapter-ON arm "
+    "(`scripts/phase14_recall.py:1383`). `masked_perplexity` is THE frozen dialogue-val gate "
+    "metric (Phase 12 TUNE-01) and the training loop's 20-random-batch estimator is DISALLOWED "
+    "for gates, so this measures the same quantity the (c) cap caps. The seed pair is "
+    "(1337, 2024) and is pinned in `DIALOGUE_NOISE_FLOOR_SEEDS` before either PPL exists. Cost: "
+    "~3 min, i.e. 2 x the 81 s adapter retrain measured three ways "
+    "(`results/phase17_training_run.log:19,39,58`).",
+    "THE RECIPE IS PINNED WITH THE SEEDS, in the same commit, because a spread measured across "
+    "two seeds AND a changed recipe measures the recipe. Unchanged from the production teaching "
+    "run: LR 3e-4, weight_decay 0.0, batch 8, 200 steps, warmup 20, REAL_RUN_SECOND_PERSON False, "
+    "REAL_RUN_REPLAY_RATIO 1.0 (`scripts/teach_persona.py:508-526,151-161`). Each of those seven "
+    "is checked against its live committed value by test, so a recipe that has quietly drifted "
+    "away from the one this estimator names goes red rather than silently re-scoping the floor.",
+    "MEASURING THE SPREAD WITH THE ADAPTER OFF IS REFUSED. Inside `adapter_disabled` the "
+    "wrapper's forward is literally `self.base(x)`, and the control measured that against the "
+    "un-adapted base at a max abs diff of exactly 0.0 on the real weights — so an adapter-OFF "
+    "dialogue PPL is the base's number, identical across seeds by construction. It would produce "
+    "a floor of ~0 while measuring nothing about the adapter, which is the green-and-blind shape "
+    "this project names as its recurring defect. The estimator reads the ON arm.",
+    "THE SYMMETRY ARGUMENT, AND WHY THIS ESTIMATOR HAS TO EXIST. 0.001704 is the only dialogue "
+    "noise floor ever measured here (`results/finetune_smoke_report.md:49-57`); the retention "
+    "half of that same table, 0.068930, is what the gate already reads as its retention noise "
+    "floor. Taking the dialogue half the same way is the symmetric move — but that table came off "
+    "a FULL FINE-TUNE at 1250 steps and the erased model is a 331,776-parameter adapter, so the "
+    "number is NOT transferable and only its METHOD is. This estimator is that method, re-run in "
+    "the regime the gate will actually judge.",
+    "THE PRE-ERASURE (c) EXCESS, ON THE RECORD BEFORE THE ERASURE AND NOT DISCOVERED AFTER IT. At "
+    "the full-fine-tune floor the cap is 4.576708. The taught adapter's masked dialogue-val PPL "
+    "is 5.8154 (`results/phase14_recall_report.md:462`), an excess of +1.2387 BEFORE ANY ERASURE "
+    "HAPPENS. Admitting that reading would require a noise floor of 0.62105, i.e. roughly 364x "
+    "the only floor ever measured. Whether a same-recipe seed spread reaches that is UNVERIFIED, "
+    "and this "
+    "estimator is how it becomes verified rather than assumed in either direction.",
+    "IT PUBLISHES WHICHEVER WAY IT LANDS. The estimator is committed before its number exists, "
+    "and the PRE-erasure dialogue PPL is published BESIDE the post-erasure one in every table — "
+    "because a (c) failure that predates the erasure and a (c) failure caused by it are different "
+    "findings, and the only thing that separates them is printing both numbers. A floor large "
+    "enough to admit the pre-erasure reading is not a better result; it is a wider ruler, and the "
+    "report says so wherever it prints one.",
+)
+
+
+def dialogue_noise_floor(ppl_seed_a, ppl_seed_b):
+    """``|dPPL|`` over the pinned seed pair — the (c) dialogue noise floor, as one number.
+
+    Both arguments are masked dialogue-val PERPLEXITIES from the adapter-ON arm, one per seed.
+    The order does not matter and must not: an absolute difference is what a noise floor is, and
+    a signed one would let the sign of an ordering decide how wide the (c) margin came out.
+
+    ``math`` is unavailable in this pin (T-19-08), so non-finiteness is detected with ``x != x``
+    for NaN and a comparison against ``float("inf")`` for the infinities — the same substitution
+    discipline ``_discounted_floor`` records for ``int()`` over ``math.floor``.
+
+    The lower guard is ``>= 1.0`` rather than ``>= 0.0``. A masked CE is a sum of NON-NEGATIVE
+    terms, so ``exp(mean CE) >= 1`` is arithmetic and not convention, and the realistic mistake
+    this function invites is being handed a DELTA where a PPL belongs — 0.001704 passes a
+    non-negativity check happily and would yield a noise floor computed from a noise floor.
+    """
+    for label, value in (("a", ppl_seed_a), ("b", ppl_seed_b)):
+        _prove(
+            value == value and abs(value) != float("inf"),
+            f"seed-{label} dialogue PPL is {value!r}, which is not finite. A non-finite "
+            "perplexity is a failed measurement, and differencing one would produce a noise "
+            "floor that silently admits any (c) reading whatsoever",
+        )
+        _prove(
+            value >= 1.0,
+            f"seed-{label} dialogue PPL is {value!r}, below 1.0. `masked_perplexity` returns "
+            "exp(mean CE) over non-negative cross-entropies, so a value under 1.0 is "
+            "arithmetically impossible for the instrument this estimator names — the likely input "
+            "is a DELTA or a loss, and a floor differenced from those is a floor of a floor",
+        )
+    return abs(ppl_seed_a - ppl_seed_b)
+
+
+def dialogue_cap(noise_floor):
+    """The (c) dialogue cap, computed with the GATE's own constants — never retyped (STAT-05).
+
+    ``V20_MASKED_DIALOGUE_VAL_PPL + MARGIN_K * noise_floor`` is the expression
+    ``erasure_succeeded`` evaluates in a local at ``scripts/erasure_gate.py:245``. Both operands
+    are IMPORTED from that module, so this cannot be a second cap that agrees today and drifts
+    tomorrow; a committed test sweeps 101 noise floors and reads the gate's own cap back out of
+    its ``(c)`` reason string, then checks the ``<=`` boundary at full precision.
+
+    Exists so the report, the pre-run pricing above and the gate all quote ONE cap. The gate never
+    returns the number it used, so without this the only way to publish it would be to write the
+    expression down a second time.
+    """
+    return V20_MASKED_DIALOGUE_VAL_PPL + MARGIN_K * noise_floor
+
+
+RETENTION_MEASUREMENT = (
+    # The block size and both cap operands are RENDERED from the committed constants rather than
+    # typed: this spec quotes four numbers that already exist elsewhere in the repository, and a
+    # quoted number that can go stale is the failure mode the whole pin is built against. The
+    # figures the estimator above quotes are typed instead, because they come from published
+    # REPORTS rather than from importable constants and a test is what ties them to their source.
+    "THE CALL, pinned exactly: `retention_perplexity(model, RETENTION_BIN, "
+    f"{ModelConfig.block_size}, device, tok)` over "
+    "`data/retention_val.bin` (2,000,572 B = 1,000,286 uint16 tokens on disk), block size "
+    f"{ModelConfig.block_size} = "
+    "`ModelConfig.block_size`. The policy is FROZEN (DEBT-02, `perplexity.py:148`): the dead-id "
+    "mask the generation path applies is applied here too, and the unmasked v1.0 `perplexity` is "
+    "not a substitute. Taken PRE-erasure and POST-erasure on the ADAPTED model, in the SAME "
+    "PROCESS and under the same gate state as the draws — a second load would make the pair a "
+    "comparison of two sessions rather than of one model before and after surgery.",
+    "THIS IS A NEW CALL SITE WITH NO ADAPTED PRECEDENT, and the census is measured rather than "
+    "asserted: `retention_perplexity` has 6 call sites across 4 modules (`finetune_smoke`, "
+    "`finetune_dialog`, `finetune_ab`, `build_retention_bin`) and NONE of those four so much as "
+    "imports `inject_lora` or `load_adapter`, so retention PPL has never once been measured on a "
+    "LoRA-adapted model in this repository. The committed test re-runs that census by AST walk on "
+    "every run, so the claim cannot go stale the first time someone adds a fifth caller.",
+    "THE RETENTION HALF OF (c) IS FULLY DETERMINED AND NOTHING ABOUT IT IS OPEN. "
+    f"`retention_cap = {V20_EWC_RETENTION_PPL:.6f} + {MARGIN_K} x "
+    f"{V20_RETENTION_NOISE_FLOOR:.6f} = "
+    f"{V20_EWC_RETENTION_PPL + MARGIN_K * V20_RETENTION_NOISE_FLOOR:.6f}`, straight out of "
+    "`scripts/erasure_gate.py:246` with both operands already committed constants — unlike the "
+    "dialogue half, whose noise floor this plan has to estimate. The only open question on the "
+    "retention side is the MEASUREMENT, which is why this spec pins the call and not a threshold.",
+)
 
 
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite

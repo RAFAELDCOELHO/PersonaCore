@@ -1242,7 +1242,7 @@ def test_the_dialogue_noise_floor_estimator_pins_its_seed_pair_and_its_arm_confi
     assert erasure.DIALOGUE_NOISE_FLOOR_SEEDS[0] == tp.SEED
     assert len(erasure.DIALOGUE_NOISE_FLOOR_SEEDS) == 2
     assert len(set(erasure.DIALOGUE_NOISE_FLOOR_SEEDS)) == 2, "a 'seed pair' of one seed"
-    assert str(erasure.DIALOGUE_NOISE_FLOOR_SEEDS) in text.replace(" ", "")
+    assert str(erasure.DIALOGUE_NOISE_FLOOR_SEEDS).replace(" ", "") in text.replace(" ", "")
 
     # The estimator names its instrument and the arm it reads, not merely "dialogue PPL".
     assert "masked_perplexity" in text
@@ -1260,7 +1260,11 @@ def test_the_dialogue_noise_floor_estimator_pins_its_seed_pair_and_its_arm_confi
         ("False", tp.REAL_RUN_SECOND_PERSON),
         ("1.0", tp.REAL_RUN_REPLAY_RATIO),
     ):
-        assert float(rendered) == float(live), f"the pinned recipe renders {rendered} for {live}"
+        # `or` short-circuits, so the boolean never reaches `float()`; the LR is the one knob
+        # whose committed repr (0.0003) differs from the rendering the recipe is quoted in.
+        assert rendered == str(live) or float(rendered) == float(live), (
+            f"the pinned recipe renders {rendered} where the committed value is {live}"
+        )
         assert rendered in text, f"the estimator does not pin the recipe constant {rendered}"
     assert "REAL_RUN_SECOND_PERSON" in text and "REAL_RUN_REPLAY_RATIO" in text
 
@@ -1341,7 +1345,7 @@ def test_the_pre_erasure_dialogue_excess_is_on_the_record_before_the_erasure():
     assert "finetune_smoke_report.md" in text and "phase14_recall_report.md" in text
     # The seed pair that produced it is the SAME pair the retention half of that table used, and
     # that retention half is what the gate already reads as its noise floor.
-    assert "(1337, 2024)" in text.replace(" ", "").replace("(1337,2024)", "(1337, 2024)")
+    assert "(1337,2024)" in text.replace(" ", "")
     assert f"{erasure.V20_RETENTION_NOISE_FLOOR:.6f}" in text
 
     cap_at_full_ft = erasure.dialogue_cap(erasure.V20_DIALOGUE_NOISE_FLOOR_FULL_FT)
@@ -1352,6 +1356,7 @@ def test_the_pre_erasure_dialogue_excess_is_on_the_record_before_the_erasure():
     assert f"{cap_at_full_ft:.6f}" in text
     assert f"{excess:+.4f}" in text
     assert f"{required:.5f}" in text
+    assert f"{required / erasure.V20_DIALOGUE_NOISE_FLOOR_FULL_FT:.0f}x" in text
     assert excess > 0.0, "the pre-erasure excess is the whole reason this clause exists"
     # The claim about it is UNVERIFIED and says so — the estimator is how it becomes verified.
     assert "unverified" in text.lower()
