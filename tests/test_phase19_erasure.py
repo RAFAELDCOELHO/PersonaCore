@@ -1183,3 +1183,215 @@ def test_the_module_docstring_records_the_severity_the_floor_clamp_buys():
         f"wilson_upper_bound(0, {erasure.N_TARGET_QUESTIONS}) = "
         f"{erasure.ERASURE_FLOOR_MIN:.6f}" in erasure.assert_erasure_floor_reachable.__doc__
     )
+
+
+# =============================================================================================
+# ===== PLAN 19-04 / TASK 1 — THE (c) DIALOGUE NOISE FLOOR AND THE RETENTION MEASUREMENT =====
+# =============================================================================================
+#
+# `erasure_succeeded` is keyword-only and three of its arguments have NO committed default. This
+# section covers the two on the (c) side. `dialogue_ppl_noise_floor` (`erasure_gate.py:208`) is
+# the one nobody notices is missing: it is threshold-shaped, the only value this repo has ever
+# measured for it came off a FULL-FINE-TUNE regime, and a noise floor chosen after seeing whether
+# it clears the cap is precisely the failure mode `23a830c` exists to prevent. `retention_ppl` has
+# never been measured on an ADAPTED model at all. Both are pinned as estimators, with their seed
+# pair and their arm config, BEFORE either number exists.
+
+
+def _teach_persona():
+    """The committed teaching recipe. Loaded HERE and never in the pin, which holds no fact set."""
+    return _load("teach_persona", "scripts/teach_persona.py")
+
+
+def _gate_reason_cap(noise_floor):
+    """The dialogue cap as `erasure_succeeded` ITSELF computes it, read out of its own reason.
+
+    The gate computes the cap in a local (`erasure_gate.py:245`) and never returns it, so its
+    arithmetic is observable only through the `(c)` reason string. Parsing that string is what
+    makes the comparison a check against the gate rather than against a second copy of the
+    expression written in the test.
+    """
+    import erasure_gate
+
+    _verdict, reasons = erasure_gate.erasure_succeeded(
+        target_successes=0,
+        target_questions=erasure.N_TARGET_QUESTIONS,
+        target_floor=erasure.ERASURE_FLOOR_MIN,
+        nontarget_deltas=[0.0],
+        nontarget_noise_floor=0.01,
+        dialogue_ppl=1.0,
+        dialogue_ppl_noise_floor=noise_floor,
+        retention_ppl=1.0,
+        zero_results_have_nll=True,
+    )
+    (line,) = [r for r in reasons if r.startswith("(c)")]
+    return line.split("vs cap ")[1].split(";")[0]
+
+
+def test_the_dialogue_noise_floor_estimator_pins_its_seed_pair_and_its_arm_config():
+    """T-19-13: the estimator, the seeds and every recipe constant, committed before the number.
+
+    A spread measured across two seeds AND a changed recipe measures the recipe. The estimator is
+    therefore only meaningful if the seven other knobs are pinned in the same commit as the seeds.
+    """
+    tp = _teach_persona()
+    text = " ".join(erasure.DIALOGUE_NOISE_FLOOR_ESTIMATOR)
+    lowered = text.lower()
+
+    # The seed pair, PINNED — and its head is the production seed, re-derived rather than trusted.
+    assert erasure.DIALOGUE_NOISE_FLOOR_SEEDS[0] == tp.SEED
+    assert len(erasure.DIALOGUE_NOISE_FLOOR_SEEDS) == 2
+    assert len(set(erasure.DIALOGUE_NOISE_FLOOR_SEEDS)) == 2, "a 'seed pair' of one seed"
+    assert str(erasure.DIALOGUE_NOISE_FLOOR_SEEDS) in text.replace(" ", "")
+
+    # The estimator names its instrument and the arm it reads, not merely "dialogue PPL".
+    assert "masked_perplexity" in text
+    assert "run_collapse_control" in text
+    assert "adapter-on" in lowered or "adapter on" in lowered
+
+    # Every recipe constant is named, and each one is checked against the live committed value —
+    # a pinned recipe that has quietly stopped matching `teach_persona` pins nothing.
+    for rendered, live in (
+        ("3e-4", tp.LR),
+        ("0.0", tp.WEIGHT_DECAY),
+        ("8", tp.BATCH_SIZE),
+        ("200", tp.MAX_STEPS),
+        ("20", tp.WARMUP_STEPS),
+        ("False", tp.REAL_RUN_SECOND_PERSON),
+        ("1.0", tp.REAL_RUN_REPLAY_RATIO),
+    ):
+        assert float(rendered) == float(live), f"the pinned recipe renders {rendered} for {live}"
+        assert rendered in text, f"the estimator does not pin the recipe constant {rendered}"
+    assert "REAL_RUN_SECOND_PERSON" in text and "REAL_RUN_REPLAY_RATIO" in text
+
+    # The adapter-OFF arm is REFUSED, with the measurement that makes it vacuous.
+    assert "refus" in lowered
+    assert "adapter_disabled" in text or "adapter-off" in lowered
+    assert "0.0" in text  # the bit-identity max abs diff — a trivially passing, blind measurement
+
+
+def test_dialogue_noise_floor_is_an_absolute_difference_and_refuses_a_non_measurement():
+    """|ΔPPL| over a seed pair — symmetric, and closed to anything that is not a perplexity.
+
+    `math` is unavailable in the pin (T-19-08), so non-finiteness is detected with `x != x` and a
+    comparison against `float("inf")`. The lower guard is `>= 1.0` and not `>= 0.0`: a masked CE is
+    a sum of non-negative terms, so `exp(mean CE) >= 1` is arithmetic rather than convention, and
+    the realistic mistake this function invites is being handed a DELTA where a PPL belongs.
+    """
+    assert erasure.dialogue_noise_floor(4.470551, 4.472255) == abs(4.470551 - 4.472255)
+    assert erasure.dialogue_noise_floor(4.472255, 4.470551) == erasure.dialogue_noise_floor(
+        4.470551, 4.472255
+    )
+    assert erasure.dialogue_noise_floor(4.5, 4.5) == 0.0
+
+    for bad in (float("nan"), float("inf"), -float("inf"), -1.0, 0.0, 0.001704):
+        with pytest.raises(SystemExit, match="perplexity|finite"):
+            erasure.dialogue_noise_floor(4.5, bad)
+        with pytest.raises(SystemExit, match="perplexity|finite"):
+            erasure.dialogue_noise_floor(bad, 4.5)
+
+
+def test_dialogue_cap_reproduces_the_gates_own_arithmetic_across_a_swept_range():
+    """STAT-05: the cap is the GATE's, imported and never retyped — proved over a swept range."""
+    import erasure_gate
+
+    assert erasure.V20_MASKED_DIALOGUE_VAL_PPL is erasure_gate.V20_MASKED_DIALOGUE_VAL_PPL
+    assert erasure.MARGIN_K is erasure_gate.MARGIN_K
+
+    sweep = [x / 100 for x in range(0, 101)]
+    for noise_floor in sweep:
+        assert f"{erasure.dialogue_cap(noise_floor):.4f}" == _gate_reason_cap(noise_floor)
+
+    # And at full precision, behaviourally: the gate's `<=` passes AT the cap and fails one ulp
+    # above it. A 4-decimal string agreement would survive a cap that was wrong in the 5th.
+    def _verdict(dialogue_ppl, noise_floor):
+        return erasure_gate.erasure_succeeded(
+            target_successes=0,
+            target_questions=erasure.N_TARGET_QUESTIONS,
+            target_floor=erasure.ERASURE_FLOOR_MIN,
+            nontarget_deltas=[0.0],
+            nontarget_noise_floor=0.01,
+            dialogue_ppl=dialogue_ppl,
+            dialogue_ppl_noise_floor=noise_floor,
+            retention_ppl=erasure_gate.V20_EWC_RETENTION_PPL
+            + erasure_gate.MARGIN_K * erasure_gate.V20_RETENTION_NOISE_FLOOR,
+            zero_results_have_nll=True,
+        )[0]
+
+    for noise_floor in (0.0, erasure.V20_DIALOGUE_NOISE_FLOOR_FULL_FT, 0.5, 1.0):
+        cap = erasure.dialogue_cap(noise_floor)
+        assert _verdict(cap, noise_floor) == "SUCCESS"
+        assert _verdict(math.nextafter(cap, math.inf), noise_floor) == "FAILURE"
+
+
+def test_the_pre_erasure_dialogue_excess_is_on_the_record_before_the_erasure():
+    """The (c) gap that PREDATES the erasure, pinned with both its published sources.
+
+    A (c) failure that was already there and a (c) failure the erasure caused are different
+    findings, and the only thing that separates them is having both numbers on the record before
+    the run. Every derived figure here is computed from the imported constants, never typed.
+    """
+    text = " ".join(erasure.DIALOGUE_NOISE_FLOOR_ESTIMATOR)
+
+    # Both published inputs trace to the reports the estimator cites, checked against the files.
+    smoke = (_ROOT / "results" / "finetune_smoke_report.md").read_text(encoding="utf-8")
+    recall = (_ROOT / "results" / "phase14_recall_report.md").read_text(encoding="utf-8")
+    assert f"{erasure.V20_DIALOGUE_NOISE_FLOOR_FULL_FT:.6f}" in smoke
+    assert f"{erasure.V20_TAUGHT_ADAPTER_DIALOGUE_PPL:.4f}" in recall
+    assert "finetune_smoke_report.md" in text and "phase14_recall_report.md" in text
+    # The seed pair that produced it is the SAME pair the retention half of that table used, and
+    # that retention half is what the gate already reads as its noise floor.
+    assert "(1337, 2024)" in text.replace(" ", "").replace("(1337,2024)", "(1337, 2024)")
+    assert f"{erasure.V20_RETENTION_NOISE_FLOOR:.6f}" in text
+
+    cap_at_full_ft = erasure.dialogue_cap(erasure.V20_DIALOGUE_NOISE_FLOOR_FULL_FT)
+    excess = erasure.V20_TAUGHT_ADAPTER_DIALOGUE_PPL - cap_at_full_ft
+    required = (
+        erasure.V20_TAUGHT_ADAPTER_DIALOGUE_PPL - erasure.V20_MASKED_DIALOGUE_VAL_PPL
+    ) / erasure.MARGIN_K
+    assert f"{cap_at_full_ft:.6f}" in text
+    assert f"{excess:+.4f}" in text
+    assert f"{required:.5f}" in text
+    assert excess > 0.0, "the pre-erasure excess is the whole reason this clause exists"
+    # The claim about it is UNVERIFIED and says so — the estimator is how it becomes verified.
+    assert "unverified" in text.lower()
+    assert "publishes" in text.lower() or "published" in text.lower()
+
+
+def test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent():
+    """Q4: `retention_perplexity` has never been called on a LoRA-adapted model. Measured here."""
+    from personacore.config import ModelConfig
+
+    text = " ".join(erasure.RETENTION_MEASUREMENT)
+
+    assert "retention_perplexity" in text
+    assert "data/retention_val.bin" in text
+    assert f"{ModelConfig.block_size}" in text
+    assert "pre" in text.lower() and "post" in text.lower()
+    assert "same process" in text.lower()
+
+    # The census, MEASURED rather than quoted: every call site, and the fact that none of the
+    # modules holding one so much as imports the injection path.
+    call_sites = []
+    for path in sorted(_ROOT.glob("scripts/*.py")) + sorted((_ROOT / "src").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", None) == (
+                "retention_perplexity"
+            ):
+                call_sites.append(path)
+    modules = sorted({path.name for path in call_sites})
+    assert len(call_sites) == 6 and len(modules) == 4, (
+        f"the retention call-site census moved: {len(call_sites)} calls in {modules}"
+    )
+    for name in modules:
+        source = next(p for p in call_sites if p.name == name).read_text(encoding="utf-8")
+        assert "inject_lora" not in source and "load_adapter" not in source, (
+            f"{name} reaches the injection path — the 'no adapted precedent' claim is stale"
+        )
+    assert f"{len(call_sites)} call sites" in text and f"{len(modules)} modules" in text
+
+    # (c)'s retention half is FULLY determined; nothing about it is open. Computed, not typed.
+    cap = erasure.V20_EWC_RETENTION_PPL + erasure.MARGIN_K * erasure.V20_RETENTION_NOISE_FLOOR
+    assert f"{cap:.6f}" in text
+    assert f"{erasure.V20_EWC_RETENTION_PPL:.6f}" in text
