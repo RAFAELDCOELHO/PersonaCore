@@ -25,6 +25,7 @@ without that pair the strongest-looking assertion in this file would be measurin
 
 import dataclasses
 import importlib.util
+import json
 import pathlib
 
 import pytest
@@ -355,3 +356,269 @@ def test_ablate_components_refuses_addresses_it_cannot_honour():
 
     with pytest.raises(SystemExit, match="export_adapter-shaped"):
         erasure.ablate_components({"adapter": art["adapter"]}, [address])
+
+
+# =============================================================================================
+# ===== PLAN 19-02 / TASK 1 — THE TARGET FACT, ITS RULE AND ITS TIE-BREAKS (D7) =====
+# =============================================================================================
+#
+# The pin publishes `TARGET_RANKING` as a written constant, exactly as `phase14_recall`'s
+# `CALIBRATION_SHA` block publishes its calibrated thresholds. What makes that honest rather than
+# a transcription is the first test below: it re-runs the committed rule over the committed arm
+# record on EVERY run, so a hand-edited constant goes red. The constants are value-free — keyed by
+# SLOT, never by `fact_id` — because every core `fact_id` ends in its own locked value
+# (`scripts/phase17_personas.py:61`, `scripts/phase17_isolation.py:128`), so a fact-id-keyed
+# ranking would embed all eight of them in the pre-registration's source (T-19-07).
+
+_ARM_RECORD = _ROOT / "results" / "phase18_arm_adapter-on.json"
+
+
+def _committed_values():
+    """``{fact_id: value}`` for ``score_records`` — a PARAMETER, never an import (T-19-07)."""
+    facts = _load("phase14_factset", "scripts/phase14_factset.py")
+    return {fact.id: fact.value for fact in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS}
+
+
+@pytest.fixture(scope="module")
+def arm_record():
+    return json.loads(_ARM_RECORD.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def derived_rows(arm_record):
+    return erasure.target_rows_from_arm_record(arm_record, _committed_values())
+
+
+def _synthetic(entries):
+    """``(per_fact_rows, exposure)`` over the eight pinned slots with controlled rate and NLL.
+
+    ``entries`` is ``{slot: (fact_id, successes, rate, nll)}`` and must cover every pinned slot —
+    the rule refuses anything else, which is itself one of the behaviours under test.
+    """
+    rows = {
+        fact_id: {"slot": slot, "n_answerable": successes, "n_questions": 13, "rate": rate}
+        for slot, (fact_id, successes, rate, _nll) in entries.items()
+    }
+    exposure = [
+        {"slot": slot, "admissible": ["ans1", "mean"], "nll": {"ans1": {"mean": nll}}}
+        for slot, (_fact_id, _successes, _rate, nll) in entries.items()
+    ]
+    return rows, exposure
+
+
+def _flat(rates_and_nlls):
+    """Every pinned slot at rate 0.0 / NLL 9.0 except the ones named, which are handed to it."""
+    entries = {
+        slot: (f"synthetic_{slot}", 0, 0.0, 9.0) for slot in sorted(erasure.CORE_GATED_SLOTS)
+    }
+    entries.update(rates_and_nlls)
+    return _synthetic(entries)
+
+
+def test_target_ranking_is_re_derived_from_the_committed_arm_record(derived_rows, arm_record):
+    """The published ranking IS what the committed rule returns on the committed artifact.
+
+    A hand-edited `TARGET_RANKING` — one rate nudged, one row reordered, the head swapped — fails
+    here. That is the whole of T-19-05: the constant carries no authority of its own, it is a
+    cached result of a function this test re-runs.
+    """
+    ranked = erasure.rank_target_candidates(derived_rows, arm_record["exposure"])
+
+    assert ranked == erasure.TARGET_RANKING, (
+        "the committed TARGET_RANKING is not what the committed rule returns on "
+        f"{_ARM_RECORD.name} — re-derived {ranked}"
+    )
+    assert erasure.TARGET_SLOT == ranked[0][0]
+
+    fact_id = erasure.select_target_fact(derived_rows, arm_record["exposure"])
+    assert derived_rows[fact_id]["slot"] == erasure.TARGET_SLOT, (
+        "select_target_fact and rank_target_candidates disagree about the head of the same order"
+    )
+    # And the selector's return is a real fact of the record, not a fabricated id.
+    assert fact_id in derived_rows
+
+
+def test_the_tie_break_is_load_bearing_on_the_real_record(derived_rows, arm_record):
+    """MEASURED, not assumed: the primary criterion does NOT decide this target on its own.
+
+    Several core slots sit at the ceiling on the gated tier, so the highest-rate criterion returns
+    a SET and tie-break 1 is what picks the target out of it. Recorded as a checked fact because it
+    is the reason D7 required the tie-break in the same commit as the rule: had the tie-break been
+    written afterwards, the actual choice would have been made after the ranking was visible.
+    """
+    ranked = erasure.rank_target_candidates(derived_rows, arm_record["exposure"])
+    top_rate = ranked[0][erasure.TARGET_RANKING_FIELDS.index("rate")]
+    tied = [row for row in ranked if row[erasure.TARGET_RANKING_FIELDS.index("rate")] == top_rate]
+
+    assert len(tied) > 1, (
+        "only one slot holds the top rate, so this run's target was decided by the primary "
+        "criterion alone — the claim in the SUMMARY that the tie-break was load-bearing is stale"
+    )
+    nll_at = erasure.TARGET_RANKING_FIELDS.index("exposure_ans1_mean_nll")
+    assert ranked[0][nll_at] == min(row[nll_at] for row in tied), (
+        "the head of the ranking is not the lowest-NLL member of the tied set — tie-break 1 says "
+        "MOST EXPOSED WINS, and a higher NLL is less exposed"
+    )
+
+
+def test_target_ranking_covers_the_eight_core_gated_slots(derived_rows, arm_record):
+    """Eight rows, the canonical slot set, one shared denominator, proved against the draw count."""
+    extraction = _load("phase18_extraction", "scripts/phase18_extraction.py")
+
+    assert {row[0] for row in erasure.TARGET_RANKING} == set(extraction.CORE_SLOTS)
+    assert len(erasure.TARGET_RANKING) == len(extraction.CORE_SLOTS) == 8
+    assert set(erasure.CORE_GATED_SLOTS) == set(extraction.CORE_SLOTS)
+    assert erasure.TARGET_RANKING_FIELDS == (
+        "slot",
+        "successes",
+        "n_questions",
+        "rate",
+        "exposure_ans1_mean_nll",
+    )
+
+    # The denominator is DERIVED from the record, never typed: the cell holds exactly one draw
+    # record per question, so the questions must sum to the number of records.
+    tier, family = extraction.GATED_TIER, "A2"
+    cell = [d for d in arm_record["draws"] if d["family"] == family and d["tier"] == tier]
+    denominators = {row[2] for row in erasure.TARGET_RANKING}
+    assert len(denominators) == 1, f"the eight facts do not share one denominator: {denominators}"
+    assert sum(row[2] for row in erasure.TARGET_RANKING) == len(cell)
+
+    for slot, successes, n_questions, rate, _nll in erasure.TARGET_RANKING:
+        assert 0 <= successes <= n_questions
+        assert rate == successes / n_questions, f"{slot}: the published rate is not successes/n"
+
+    # And every published row agrees with the live aggregation, field for field.
+    by_slot = {row["slot"]: row for row in derived_rows.values()}
+    for slot, successes, n_questions, rate, _nll in erasure.TARGET_RANKING:
+        assert by_slot[slot]["n_answerable"] == successes
+        assert by_slot[slot]["n_questions"] == n_questions
+        assert by_slot[slot]["rate"] == rate
+
+
+def test_rate_ties_resolve_by_the_exposure_tie_break_in_both_directions():
+    """Tie-break 1 decides a two-way rate tie, and it decides it by DIRECTION, not by position.
+
+    Running it twice with the two NLLs swapped is what separates "the tie-break fired" from "the
+    first-listed slot happened to win" — an implementation that ignored exposure entirely would
+    pass the first assertion alone.
+    """
+    rows, exposure = _flat(
+        {
+            "hometown": ("synthetic_hometown", 13, 1.0, 0.5),
+            "street": ("synthetic_street", 13, 1.0, 0.25),
+        }
+    )
+    assert rows[erasure.select_target_fact(rows, exposure)]["slot"] == "street"
+
+    rows, exposure = _flat(
+        {
+            "hometown": ("synthetic_hometown", 13, 1.0, 0.25),
+            "street": ("synthetic_street", 13, 1.0, 0.5),
+        }
+    )
+    assert rows[erasure.select_target_fact(rows, exposure)]["slot"] == "hometown"
+
+
+def test_a_tie_on_rate_AND_exposure_resolves_lexicographically_by_fact_id():
+    """Tie-break 2. The ids are chosen so the lexical answer is NOT the insertion-order answer."""
+    rows, exposure = _flat(
+        {
+            "hometown": ("zzz_second_alphabetically", 13, 1.0, 0.25),
+            "street": ("aaa_first_alphabetically", 13, 1.0, 0.25),
+        }
+    )
+    assert erasure.select_target_fact(rows, exposure) == "aaa_first_alphabetically"
+
+    # Same input, reversed insertion order — a dict-iteration-order dependence would flip here.
+    reversed_rows = dict(reversed(list(rows.items())))
+    assert erasure.select_target_fact(reversed_rows, exposure) == "aaa_first_alphabetically"
+
+
+def test_a_three_way_tie_is_still_deterministic():
+    """Three slots identical on BOTH criteria — the rule still returns one answer, always."""
+    tied = {
+        "hometown": ("tie_c", 13, 1.0, 0.25),
+        "street": ("tie_a", 13, 1.0, 0.25),
+        "cat_name": ("tie_b", 13, 1.0, 0.25),
+    }
+    rows, exposure = _flat(tied)
+    assert erasure.select_target_fact(rows, exposure) == "tie_a"
+
+    ranked = erasure.rank_target_candidates(rows, exposure)
+    assert [row[0] for row in ranked[:3]] == ["street", "cat_name", "hometown"]
+    for _ in range(3):
+        assert erasure.rank_target_candidates(dict(rows), exposure) == ranked
+
+
+def test_select_target_fact_refuses_a_row_set_that_is_not_the_eight_core_gated_facts():
+    """Every refusal bites — an untested refusal is a refusal nobody has watched."""
+    rows, exposure = _flat({})
+
+    short = dict(list(rows.items())[:-1])
+    with pytest.raises(SystemExit, match="eight core gated"):
+        erasure.select_target_fact(short, exposure)
+
+    extra = dict(rows)
+    extra["synthetic_ninth"] = {
+        "slot": "not_a_core_slot",
+        "n_answerable": 0,
+        "n_questions": 13,
+        "rate": 0.0,
+    }
+    with pytest.raises(SystemExit, match="eight core gated"):
+        erasure.select_target_fact(extra, exposure)
+
+    renamed = {k: dict(v) for k, v in rows.items()}
+    renamed["synthetic_hometown"]["slot"] = "not_a_core_slot"
+    with pytest.raises(SystemExit, match="core gated slot set"):
+        erasure.select_target_fact(renamed, exposure)
+
+    two_facts_one_slot = {k: dict(v) for k, v in rows.items()}
+    two_facts_one_slot["synthetic_hometown"]["slot"] = "street"
+    with pytest.raises(SystemExit, match="both claim slot"):
+        erasure.select_target_fact(two_facts_one_slot, exposure)
+
+    with pytest.raises(SystemExit, match="no exposure entry"):
+        erasure.select_target_fact(rows, exposure[:-1])
+
+
+def test_the_exposure_reduction_is_read_from_the_record_never_chosen_here():
+    """``ans1``/``mean`` is the arm record's OWN ``admissible`` pair, not a second choice.
+
+    D-29 published six frame x reduction NLLs and marked exactly one admissible. Re-picking one
+    here would be a second selection rule for the same quantity, free to stop agreeing with the
+    one Phase 18 committed — so the pin reads the record's declaration and refuses a record that
+    declares something else.
+    """
+    rows, exposure = _flat({})
+    relabelled = [dict(entry, admissible=["f3_bare", "sum"]) for entry in exposure]
+    with pytest.raises(SystemExit, match="admissible"):
+        erasure.select_target_fact(rows, relabelled)
+
+
+def test_target_selection_rule_states_its_tie_breaks_and_the_forbidden_move(arm_record):
+    """D7: the rule and BOTH tie-breaks land in the same commit, and say what is forbidden."""
+    text = " ".join(erasure.TARGET_SELECTION_RULE)
+    lowered = text.lower()
+
+    assert "tie-break 1" in lowered and "tie-break 2" in lowered
+    assert "lexicographically" in lowered
+    assert "most exposed wins" in lowered
+    assert "forbidden" in lowered
+    assert "9a923d6" in text, "the rule does not name the arm record's first-add commit"
+    # The budget the rule names is the one the record declares — prose that stops being true is
+    # the failure mode a pre-registration cannot survive.
+    assert f"K = {arm_record['config']['k']}" in text
+    assert erasure.MECHANISM_ID not in text  # the mechanism rule and this one stay separate
+
+    # No fact value may reach the pin's source, and the rule is the longest prose in it.
+    facts = _load("phase14_factset", "scripts/phase14_factset.py")
+    forbidden = [f.value.lower() for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS]
+    assert len(forbidden) == 10
+    source = (_ROOT / "scripts" / "phase19_erasure.py").read_text(encoding="utf-8").lower()
+    hits = [value for value in forbidden if value in source]
+    assert hits == [], (
+        f"scripts/phase19_erasure.py embeds fact value(s) {hits} — every core fact_id ends in "
+        "its own value, so a fact-id-keyed constant puts the answers into the pin (T-19-07)"
+    )
