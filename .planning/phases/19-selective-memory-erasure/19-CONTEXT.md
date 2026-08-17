@@ -119,6 +119,47 @@ Retrain the calibration adapter (81 s) rather than reusing
 `phase14_cal_first_person_replay_adapter.pt`. Costs 81 seconds and removes an argument about
 instrument and recipe provenance. *Flagged: research lean, adopted by default.*
 
+### B4 — Calibration-fact selection rule, and FLOOR_CEILING (LOCKED 2026-08-17)
+
+Surfaced by the plan-checker after D1–D8 were taken; confirmed by the user unchanged.
+
+**The rule stays as specified** (`19-06-PLAN.md:254-259`): the calibration fact that gets erased is
+the **first eligible member of `phase14_factset.CALIBRATION_POOL` in its committed order**
+(`:102-113`), eligible = survives `build_calibration_corpus`' self-naming filter with ≥1 taught and
+≥1 held-out question; tie-break = lexicographically smallest `fact_id`, stated although unreachable
+since the order is total. Blind in the strong sense: reads **no** Phase 18 per-fact recall and
+**no** Phase 19 result — its own number is what the floor derives from, so choosing the fact after
+seeing candidate rates is the manoeuvre `23a830c` exists to forbid. Pool disjointness from
+`CANDIDATE_POOL` is by construction (`:98-101`), so the target can never be selected here.
+`CALIBRATION_POOL`'s order was first committed `5ff5c0d` (2026-08-02), ten days before the v3.0
+pre-registration `23a830c` (2026-08-12) — the order is genuinely prior to this phase.
+
+**RECORDED EXPLICITLY, not left implicit — the determinism is conditional.** The rule is
+deterministic **given the pin**, NOT given today's repo. "First eligible" depends on
+`build_calibration_corpus`' question-family set, and that builder is Phase 19 code that does not
+exist until wave 6. The *filter* is mechanical and already committed (`contains_value`, the same
+rule Phase 14 used at `teach_persona.py:1031`), so no judgment enters — but the identity of the
+selected fact is not derivable from the committed repo alone until the family set is pinned in the
+same commit as the rule. Anyone auditing this later must be able to read that qualification here
+rather than reconstruct it: an unqualified "deterministic" would be a sentence that does not
+survive checking, in a file that is unamendable after 19-07.
+
+**`FLOOR_CEILING` stays 0.20, inherited from Phase 14's `THRESHOLD_FLOOR`, not reconsidered.**
+Recorded with its known consequence: `lock_erasure_floor` saturates at the ceiling for every
+`cal_rate ≥ 0.3333`, so above that point the blind calibration stops discriminating and every rate
+yields the identical floor. Phase 14's calibration arm measured 0.4143 taught / 0.2506 held-out
+(`results/phase14_recall_report.md:20-21`), so **if Phase 19's single calibration fact scores
+anywhere near that, the floor lands at 0.20 — the more permissive end of the 0.091079–0.20 range
+(2.196×).** That is accepted, deliberately, and noted before the number exists so it cannot be
+presented afterwards as either a surprise or a design win. The Phase 14 figure is a *prior*, not a
+prediction: it is a ten-fact pool aggregate scored by `score_items`, whereas Phase 19 feeds one
+fact's rate at n≈16–27 scored by the Phase 18 adversary.
+
+**Wave-7 verification is positive, not presence-only** — confirmed by reading
+`19-07-PLAN.md:80-82` (automated audit item 7: "a positive check that the rule reads NO Phase 18
+recall and NO Phase 19 result") and `:123-126` (human checklist: "chosen blind, from the committed
+pool order alone, and that the pool is disjoint from the target's").
+
 ### Claude's Discretion
 
 - Plan/task decomposition, wave structure, and file layout for the Phase 19 driver.
