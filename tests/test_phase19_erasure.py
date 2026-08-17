@@ -1400,3 +1400,252 @@ def test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent():
     cap = erasure.V20_EWC_RETENTION_PPL + erasure.MARGIN_K * erasure.V20_RETENTION_NOISE_FLOOR
     assert f"{cap:.6f}" in text
     assert f"{erasure.V20_EWC_RETENTION_PPL:.6f}" in text
+
+
+# =============================================================================================
+# ===== PLAN 19-04 / TASK 2 — THE (b) NOISE FLOOR, PER FACT, NEVER POOLED (D4/B5) =====
+# =============================================================================================
+#
+# `erasure_succeeded` reads TWO things on the (b) side: a sequence it takes `max` of, and a scalar
+# it multiplies by `MARGIN_K` (`erasure_gate.py:236-237`). The scalar is therefore threshold-shaped
+# in exactly the way `dialogue_ppl_noise_floor` is, and the REDUCTION that produces it from seven
+# per-fact numbers is a choice that has to be made before the seven numbers exist.
+
+
+def _rows(**by_slot):
+    """`{fact_id: row}` in `target_rows_from_arm_record`'s shape, over the seven non-targets.
+
+    `by_slot` is `{slot: successes}`; every unnamed non-target slot scores 0. Denominators are the
+    pooled per-fact question count, which is what the (b) contract requires each row to carry.
+    """
+    n = erasure.N_TARGET_QUESTIONS
+    return {
+        f"synthetic_{slot}": {
+            "slot": slot,
+            "n_answerable": by_slot.get(slot, 0),
+            "n_questions": n,
+            "rate": by_slot.get(slot, 0) / n,
+        }
+        for slot in erasure.GATED_NONTARGET_SLOTS
+    }
+
+
+def test_the_nontarget_estimator_pins_the_replicate_its_declined_alternative_and_its_precedent():
+    """D4: what the (b) floor is, why the retrain was declined, and what precedent it follows."""
+    text = " ".join(erasure.NONTARGET_NOISE_FLOOR_ESTIMATOR)
+    lowered = text.lower()
+
+    # The estimator itself: a seed-stride replicate on the UNERASED adapter, same everything else.
+    assert "seed-stride" in lowered or "seed stride" in lowered
+    assert "unerased" in lowered
+    assert "replicate" in lowered
+
+    # The DECLINED alternative, with its reason — a decline recorded as a decline (19-01's D1).
+    assert "retrain" in lowered
+    assert "declined" in lowered or "decline" in lowered
+    assert "confound" in lowered
+
+    # The precedent it follows: two committed descriptive-never-gated seed registers.
+    assert "REPLICATION_SEEDS" in text
+    assert "taught_replication" in text
+
+    # The cost and the pairing — the pre-erasure rates are already committed, so it is ONE run.
+    assert "phase18_arm_adapter-on.json" in text
+    assert "10,368" in text or "10368" in text
+    assert "172" in text
+
+    # The two traps the rule sets, both of them intended.
+    assert "one destroyed fact" in lowered
+    assert "inconclusive" in lowered
+    assert "stat-06" in lowered or "STAT-06" in text
+
+
+def test_nontarget_deltas_is_per_fact_over_exactly_the_seven_and_has_no_pooled_path():
+    """T-19-14: seven per-fact values with their own denominators, and no way to return one."""
+    import inspect
+
+    pre = _rows()
+    post = _rows(**{erasure.GATED_NONTARGET_SLOTS[0]: 3})
+
+    deltas = erasure.nontarget_deltas(pre, post)
+    assert len(deltas) == len(erasure.GATED_NONTARGET_SLOTS) == 7
+    assert deltas[0] == 3 / erasure.N_TARGET_QUESTIONS
+    assert list(deltas[1:]) == [0.0] * 6
+    # Order is the committed slot order, so a report zips the values against a pinned constant
+    # rather than against whatever order a dict happened to be built in.
+    assert erasure.nontarget_deltas(post, pre) == deltas, "the delta is ABSOLUTE, not signed"
+
+    # The seven are the eight core gated slots MINUS the target, derived and not enumerated.
+    assert erasure.TARGET_SLOT not in erasure.GATED_NONTARGET_SLOTS
+    assert set(erasure.GATED_NONTARGET_SLOTS) | {erasure.TARGET_SLOT} == set(
+        erasure.CORE_GATED_SLOTS
+    )
+
+    # NO POOLED RETURN PATH EXISTS. Two parameters, one return, and nothing that could collapse
+    # seven numbers into one — the collapse is a separate, named, pinned function.
+    assert list(inspect.signature(erasure.nontarget_deltas).parameters) == ["pre_rows", "post_rows"]
+    (fn,) = [
+        node
+        for node in ast.walk(ast.parse(_PIN_SOURCE))
+        if isinstance(node, ast.FunctionDef) and node.name == "nontarget_deltas"
+    ]
+    assert len([n for n in ast.walk(fn) if isinstance(n, ast.Return)]) == 1
+    for banned in ("sum", "mean", "max", "min"):
+        assert banned not in {
+            n.func.id
+            for n in ast.walk(fn)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        }, f"nontarget_deltas reduces with {banned}() — the reduction is a separate pinned function"
+
+    # An EMPTY result is impossible by construction: `erasure_succeeded` turns an empty sequence
+    # into INCONCLUSIVE (`erasure_gate.py:253-254`), so the refusal has to happen here.
+    with pytest.raises(SystemExit, match="seven|non-target"):
+        erasure.nontarget_deltas({}, {})
+    with pytest.raises(SystemExit, match="seven|non-target"):
+        erasure.nontarget_deltas(
+            {
+                **pre,
+                "the_target": {
+                    "slot": erasure.TARGET_SLOT,
+                    "n_answerable": 0,
+                    "n_questions": erasure.N_TARGET_QUESTIONS,
+                    "rate": 0.0,
+                },
+            },
+            post,
+        )
+
+
+def test_nontarget_deltas_refuses_a_draw_rate_and_a_mismatched_denominator():
+    """The QUESTION unit, enforced twice — by the denominator and by the rate's own identity."""
+    pre, post = _rows(), _rows()
+
+    # A draw-rate row: the same numerator over K x the questions. `erasure_gate`'s clustering note
+    # rules that unit out, so it is refused rather than silently narrowing every (b) comparison.
+    draw_rate = {k: dict(v) for k, v in post.items()}
+    first = erasure.GATED_NONTARGET_SLOTS[0]
+    draw_rate[f"synthetic_{first}"]["n_questions"] = erasure.N_TARGET_QUESTIONS * 48
+    with pytest.raises(SystemExit, match="question"):
+        erasure.nontarget_deltas(pre, draw_rate)
+
+    # A rate that does not equal its own successes/questions — the shape a draw rate takes when
+    # the denominator column was left alone and only the rate moved.
+    inconsistent = {k: dict(v) for k, v in post.items()}
+    inconsistent[f"synthetic_{first}"]["rate"] = 0.5
+    with pytest.raises(SystemExit, match="rate"):
+        erasure.nontarget_deltas(pre, inconsistent)
+
+    # Pre and post must cover the same facts: a delta against a fact that is not in both is a
+    # delta against nothing.
+    with pytest.raises(SystemExit, match="seven|non-target|same"):
+        erasure.nontarget_deltas(pre, {k: v for k, v in post.items() if k != f"synthetic_{first}"})
+
+
+def test_the_nontarget_reduction_is_max_and_swapping_in_mean_changes_the_scalar():
+    """The reduction is a COMMITTED choice, and its honest direction is recorded with it.
+
+    `max` is the MORE PERMISSIVE of the two, not the conservative one: `mean <= max` and `b_ok` is
+    `worst <= 2 x floor`, so a mean floor is strictly the harder gate. It is chosen for
+    commensurability with the `max` the gate already takes on the numerator side, and the pin says
+    so — a later auditor asking "did they pick the conservative reduction?" must not be told yes
+    by a sentence that does not survive checking.
+    """
+    import erasure_gate
+
+    spread = [0.01, 0.02, 0.03, 0.10]
+    assert erasure.nontarget_noise_floor(spread) == max(spread)
+    assert erasure.nontarget_noise_floor(spread) != sum(spread) / len(spread)
+
+    def _verdict(floor):
+        return erasure_gate.erasure_succeeded(
+            target_successes=0,
+            target_questions=erasure.N_TARGET_QUESTIONS,
+            target_floor=erasure.ERASURE_FLOOR_MIN,
+            nontarget_deltas=spread,
+            nontarget_noise_floor=floor,
+            dialogue_ppl=1.0,
+            dialogue_ppl_noise_floor=0.0,
+            retention_ppl=1.0,
+            zero_results_have_nll=True,
+        )[0]
+
+    assert _verdict(erasure.nontarget_noise_floor(spread)) == "SUCCESS"
+    assert _verdict(sum(spread) / len(spread)) == "FAILURE"
+
+    # And the direction generalises rather than holding on one spread: mean <= max always, so the
+    # mean margin is never the looser one.
+    for values in ([0.5], [0.0, 1.0], [0.2, 0.2, 0.2], spread):
+        assert sum(values) / len(values) <= erasure.nontarget_noise_floor(values)
+
+    text = " ".join(erasure.NONTARGET_NOISE_FLOOR_ESTIMATOR)
+    assert "more permissive" in text.lower()
+    assert "commensurab" in text.lower()
+    assert f"{erasure_gate.MARGIN_K * max(spread):.6f}" in text
+    assert f"{erasure_gate.MARGIN_K * (sum(spread) / len(spread)):.6f}" in text
+
+    # A degenerate input is refused rather than reduced: `max([])` raises a bare ValueError and
+    # a floor of 0.0 would make (b) pass only on a bit-identical model.
+    with pytest.raises(SystemExit, match="empty|no non-target"):
+        erasure.nontarget_noise_floor([])
+
+
+def test_the_seed_stride_offset_cannot_collide_with_phase_18s_windows():
+    """A replicate that re-reads the same generator states is a re-read, not a replicate."""
+    extraction = _load("phase18_extraction", "scripts/phase18_extraction.py")
+    record = json.loads(_ARM_RECORD.read_text(encoding="utf-8"))
+    k = record["config"]["k"]
+
+    # Phase 18's stride, quoted from the record it produced rather than from the source.
+    assert "seed_index" in record["config"]["seed_stride"]
+    assert erasure.SEED_STRIDE_OFFSET > 0
+
+    # The widest window Phase 18 could have consumed on the committed fixture.
+    fixture = json.loads(_FIXTURE.read_text(encoding="utf-8"))
+    highest = max(
+        row["seed_index"] for tier in extraction.CORPUS_TIERS for row in fixture["questions"][tier]
+    )
+    assert erasure.SEED_STRIDE_OFFSET >= (highest + 1) * k
+
+    # Every replicate window starts strictly above every Phase 18 window on this fixture.
+    for seed_index in (0, 1, highest):
+        assert erasure.replicate_seed_stride(seed_index, k) >= (highest + 1) * k
+        assert erasure.replicate_seed_stride(seed_index, k) != seed_index * k
+
+    # And the guard BITES: an offset that a question's own Phase 18 window would reach into is
+    # refused rather than silently producing a replicate of the same draws.
+    with pytest.raises(SystemExit, match="collide|stride|overlap"):
+        erasure.replicate_seed_stride(erasure.SEED_STRIDE_OFFSET, k)
+
+
+def test_the_soft_tier_narrowing_is_declared_with_its_measured_reason(arm_record):
+    """B5: (b) is gated on SEVEN, the literal rule says nine, and the gap is declared not silent."""
+    facts = _load("phase14_factset", "scripts/phase14_factset.py")
+    text = " ".join(erasure.SOFT_TIER_DESCRIPTIVE_READ)
+
+    # The two soft slots are named — by SLOT, because every soft fact_id ends in its own value.
+    assert erasure.SOFT_TIER_SLOTS == tuple(f.slot for f in facts.SOFT_TIER_FACTS)
+    for slot in erasure.SOFT_TIER_SLOTS:
+        assert slot in text
+    # The literal domain the gate's own rule states is NINE, and the pin says that out loud.
+    taught = len(facts.LOCKED_FACTS) + len(facts.SOFT_TIER_FACTS)
+    assert taught == 10
+    assert f"{taught - 1}" in text and "nine" in text.lower()
+    assert f"{len(erasure.GATED_NONTARGET_SLOTS)}" in text or "seven" in text.lower()
+
+    # THE MEASURED REASON: the committed arm record holds no `soft` draws at all, so the two soft
+    # facts have no A2/K=48 pre-erasure baseline to pair a delta against.
+    tiers = {draw["tier"] for draw in arm_record["draws"]}
+    assert tiers == set(_load("phase18_extraction", "scripts/phase18_extraction.py").CORPUS_TIERS)
+    assert not any(draw["tier"] == "soft" for draw in arm_record["draws"])
+    # And the absence is a property of the ARM RECORD, not of the fixture — the fixture does hold
+    # soft questions, which is what makes the post-erasure descriptive read possible at all.
+    fixture = json.loads(_FIXTURE.read_text(encoding="utf-8"))
+    assert len(fixture["questions"]["soft"]) == len(facts.SOFT_TIER_FACTS) * (
+        erasure.N_TARGET_QUESTIONS
+    )
+    assert "soft" in text and "descriptive" in text.lower()
+    assert "never gated" in text.lower() or "not gated" in text.lower()
+
+    # Still no fact value anywhere in the pin — the slots carry the narrowing, the ids do not.
+    forbidden = [f.value.lower() for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS]
+    assert [v for v in forbidden if v in _PIN_SOURCE.lower()] == []
