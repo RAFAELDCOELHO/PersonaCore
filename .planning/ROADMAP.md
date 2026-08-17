@@ -543,14 +543,33 @@ re-authored here; the verdict is returned by the committed `erasure_succeeded()`
      ~81 s/adapter call on this M3 (~90 s measured). It is a genuine option here rather than an
      aspiration, and the plan must either run it or state in writing why it did not.
 
-**Plans**: not yet planned — run `/gsd-plan-phase 19`
+**Plans**: 16 plans across 14 waves. The wave order IS the scientific guarantee: waves 1-6 build
+the unamendable pin and commit ZERO `results/phase19_*` artifacts, wave 7 gates it with a human
+read, waves 8-10 run the blind calibration and the noise floors and lock the three measured
+constants, waves 11-14 erase the target, run the ERASE-02 reference arm, and publish the verdict
+with its dated (c) diagnosis beside it
 **Research flag**: plan with `/gsd-plan-phase --research-phase`. The mechanism is genuinely open
 (the pre-registration commits the bar and deliberately not the design), and the blind-calibration
 procedure for (a)'s floor has to be pinned **before** the target is ever scored — the same
 unamendable-afterward ordering Phase 18 operated under.
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 19 to break down)
+- [ ] 19-01-PLAN.md — open the pin, arm its ancestry guard, prove rank-1 ablation is representable (A5)
+- [ ] 19-02-PLAN.md — the target fact by deterministic rule + tie-break (D7); n=27 derived (D5)
+- [ ] 19-03-PLAN.md — the mirrored floor operator (D2) and the module-scope reachability proof
+- [ ] 19-04-PLAN.md — `dialogue_ppl_noise_floor` (D3), the (b) estimator (D4), retention spec, `zero_results_have_nll`
+- [ ] 19-05-PLAN.md — descriptive-not-gated AST guard, single verdict path, Phase 18 parity, report text + marker pair
+- [ ] 19-06-PLAN.md — the arm runner, the M1 stopping rule, the M2 retrain arm (ERASE-02), the calibration corpus builder
+- [ ] 19-07-PLAN.md — CHECKPOINT: approve the pin before it becomes unamendable
+- [ ] 19-08-PLAN.md — calibration corpus + calibration adapter retrain (D6, 81 s); first `results/phase19_*` artifact
+- [ ] 19-09-PLAN.md — CHECKPOINT: the blind calibration erasure and its scored run; the floor is NOT locked here
+- [ ] 19-10-PLAN.md — the dialogue seed-pair floor, the (b) seed-stride replicate, and retention PPL on an adapted model
+- [ ] 19-11-PLAN.md — CHECKPOINT: lock `scripts/phase19_floor.py` and re-prove reachability against the measured floor
+- [ ] 19-12-PLAN.md — CHECKPOINT: erase the target by M1, record the collateral curve, score at A2/K=48
+- [ ] 19-13-PLAN.md — ERASE-02: the retrain-without reference arm, run rather than explained
+- [ ] 19-14-PLAN.md — the DESCRIPTIVE representational read, with the not-gated guard re-run against it
+- [ ] 19-15-PLAN.md — the single `erasure_succeeded()` call and the report; (c) runs literally
+- [ ] 19-16-PLAN.md — CHECKPOINT: the dated (c) diagnosis beside the verdict, the ship decision, phase close
 
 ## Progress
 
