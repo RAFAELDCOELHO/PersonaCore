@@ -303,3 +303,36 @@ persona's adapter.
 **Scope.** The +27.16% comparison is against Phase 14's `real` arm specifically. The three
 percentages are Phase 17's own, at its three pre-registered seeds; they are not a claim about LoRA
 personalization in general.
+
+## Dated continuation — 2026-08-17: the ship decision, recorded
+
+**Phase 18 ship decision (recorded 2026-08-17, after independent
+verification): SHIP AS-IS.**
+
+The result stands as measured: LEAKAGE_DEMONSTRATED, best family A2
+at 92/104 (rate 0.8846, Wilson 95% lower bound 0.8231) against a
+0/104 no-adapter control at identical budget. This is not a decision
+about whether the finding is comfortable — it is a decision about
+whether the evidence chain supporting it is sound, and it is: the
+positive control reproduced exactly (D-01, 496/1008, zero
+mismatches), both arms are paired on all five required fields
+including an undocumented git_sha match held by discipline, and the
+decode-crash root cause found mid-run was fixed and re-verified
+against the same reproduced control before either arm re-launched.
+
+Two corrections are recorded in this same dated continuation, not
+smoothed into the original text: (1) the ship-decision placeholder
+had been silently overwritten by the D-21 addendum's unconditional
+substitution, with no ship decision ever having been recorded — the
+guard now refuses at found==0 specifically to prevent this from
+recurring; (2) commit 13666c4's own docstring falsely claimed
+licensed_conclusion() and render_report() were pinned in that
+revision — they were not (0 occurrences, 272-line file, verified by
+git show) — only the ordering property (12/12 merge-base ancestry)
+that the next sentence actually depends on was true.
+
+Phase 19's erasure_is_worth_attempting() gate already returned True
+against these measured numbers, pre-registered at 23a830c before
+Phase 16 ran. This ship decision does not re-open or qualify that
+gate — it closes Phase 18's own evidentiary record as sound and
+ready to be cited.
