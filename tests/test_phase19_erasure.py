@@ -27,6 +27,7 @@ import ast
 import dataclasses
 import importlib.util
 import json
+import math
 import pathlib
 
 import pytest
@@ -791,3 +792,229 @@ def test_denominator_rule_records_the_departure_the_refusal_and_the_real_arithme
     assert "refused" in lowered
     assert "two calls" in lowered, "the mechanics of pooling under a single-tier _prove are missing"
     assert "aggregate_questions" in text and "2223" in text
+
+
+# =============================================================================================
+# ===== PLAN 19-03 / TASK 1 — THE (a) FLOOR-DERIVATION RULE, MIRRORED AND BOUNDED (D2/W1) =====
+# =============================================================================================
+#
+# ``math`` is imported HERE and never in the pin: `test_the_wilson_bound_is_the_committed_one`
+# forbids it there so no sqrt is available to re-derive a second Wilson interval (T-19-08). The
+# tests are not the pre-registration, so a `math.floor` ORACLE for the pin's `int()` truncation is
+# exactly what belongs on this side of the line.
+
+
+def _floor_rows():
+    """``(cal_rate, mirrored floor, literal Phase 14 floor, branch)`` over the whole domain."""
+    return tuple(
+        (
+            x,
+            erasure.lock_erasure_floor(x),
+            erasure.literal_phase14_floor(x),
+            erasure.floor_branch(x),
+        )
+        for x in erasure.floor_sweep()
+    )
+
+
+def _grid_oracle(x):
+    """The discount branch computed INDEPENDENTLY of the pin, with the stdlib `math.floor`.
+
+    The pin cannot import ``math``, so it truncates with ``int()``. On the non-negative domain the
+    two are the same function and this oracle is what proves it rather than asserting it.
+    """
+    return math.floor(x * erasure.FLOOR_DISCOUNT * erasure.FLOOR_GRID) / erasure.FLOOR_GRID
+
+
+def test_the_floor_mirror_is_never_looser_than_the_literal_phase14_operator():
+    """T-19-10 / D2: the mirror makes (a) HARDER at every rate, and both directions are visible.
+
+    Phase 14 clamped with ``max(FLOOR, ...)`` against a ``>=`` gate — that RAISES the bar. Erasure's
+    floor is an upper cap against a ``<=`` gate, so the identical literal operator would RAISE the
+    cap and make (a) EASIER. A "mirror" that quietly loosened anywhere on the domain reddens here
+    rather than passing review.
+    """
+    looser = [(x, mirror, literal) for x, mirror, literal, _b in _floor_rows() if mirror > literal]
+    assert looser == [], (
+        f"the mirrored floor is LOOSER than Phase 14's literal operator at {len(looser)} of "
+        f"{len(erasure.floor_sweep())} rates (first: {looser[:3]}) — D2 requires the adjustment "
+        "make (a) harder, never easier"
+    )
+
+    # BOTH DIRECTIONS' VALUES, side by side at the domain endpoints. D2 asks that a reader SEE the
+    # choice rather than infer it, so the gap is asserted here and printed by `--floor`.
+    assert erasure.lock_erasure_floor(0.0) == erasure.ERASURE_FLOOR_MIN
+    assert erasure.literal_phase14_floor(0.0) == erasure.FLOOR_CEILING
+    assert erasure.lock_erasure_floor(1.0) == erasure.FLOOR_CEILING
+    assert erasure.literal_phase14_floor(1.0) == round(1.0 * erasure.FLOOR_DISCOUNT, 4)
+    # At a perfect calibration rate the literal operator hands (a) a cap three times the mirror's.
+    assert erasure.literal_phase14_floor(1.0) > 3 * erasure.lock_erasure_floor(1.0) - 1e-12
+
+
+def test_the_floor_clamp_is_a_min_not_a_max():
+    """The ceiling CAPS. Swapped for a `max` it would admit the rate instead of refusing it."""
+    rows = _floor_rows()
+    over = [(x, mirror) for x, mirror, _l, _b in rows if mirror > erasure.FLOOR_CEILING]
+    assert over == [], f"the floor exceeds FLOOR_CEILING at {len(over)} rates — the clamp is not a min"
+
+    def _swapped(x):
+        """The same expression with the inner clamp mirrored back the wrong way."""
+        return max(erasure.ERASURE_FLOOR_MIN, max(erasure.FLOOR_CEILING, _grid_oracle(x)))
+
+    assert _swapped(1.0) == round(1.0 * erasure.FLOOR_DISCOUNT, 4)
+    assert erasure.lock_erasure_floor(1.0) == erasure.FLOOR_CEILING
+    assert _swapped(1.0) > erasure.lock_erasure_floor(1.0), (
+        "a `max` clamp does not cap a large calibration rate, it ADMITS it — the returned cap "
+        "would rise with the calibration fact's own recall, which is the direction D2 forbids"
+    )
+
+
+def test_the_floor_never_returns_below_the_reachability_minimum_and_reports_its_branch():
+    """Every returned floor is inside ``[ERASURE_FLOOR_MIN, FLOOR_CEILING]`` and names its bound.
+
+    The branch reporter is not decoration: when the reachability clamp binds, (a) clears ONLY on a
+    perfect erasure, and a report that printed the floor without which bound produced it would
+    leave the reader to re-derive the severity of the criterion they are being shown.
+    """
+    census = {}
+    for x, mirror, _literal, branch in _floor_rows():
+        assert erasure.ERASURE_FLOOR_MIN <= mirror <= erasure.FLOOR_CEILING, (x, mirror)
+        expected = {
+            "reachability-min": erasure.ERASURE_FLOOR_MIN,
+            "discount": _grid_oracle(x),
+            "ceiling": erasure.FLOOR_CEILING,
+        }[branch]
+        assert mirror == expected, (
+            f"floor_branch({x!r}) reports {branch!r} but the returned floor {mirror!r} is not the "
+            f"value that branch produces ({expected!r})"
+        )
+        census[branch] = census.get(branch, 0) + 1
+
+    # All three branches are REACHED on the domain — a branch reporter with a dead arm is a
+    # reporter whose dead arm has never been checked against anything.
+    assert census == {"reachability-min": 152, "discount": 182, "ceiling": 667}, census
+    assert sum(census.values()) == len(erasure.floor_sweep())
+
+
+def test_the_floor_is_exact_before_the_division_scoped_to_the_branch_it_describes():
+    """``floor(v * 10000) <= v * 10000`` — integer vs float, no tolerance, on the discount branch.
+
+    The UNSCOPED form ``lock(x) <= x * FLOOR_DISCOUNT`` is DELIBERATELY NOT asserted. It is red at
+    161 of these 1001 rates for a CORRECT implementation, because below the crossover the
+    reachability clamp binds by design. Measured here instead of denied: every violation is on the
+    ``reachability-min`` branch and nowhere else, which is the whole content of the claim.
+    """
+    rows = _floor_rows()
+    scale = erasure.FLOOR_DISCOUNT * erasure.FLOOR_GRID
+    violations = [
+        x for x, _m, _l, branch in rows if branch == "discount" and not math.floor(x * scale) <= x * scale
+    ]
+    assert violations == [], violations
+    assert sum(1 for _x, _m, _l, b in rows if b == "discount") == 182
+
+    unscoped = [x for x, mirror, _l, _b in rows if not mirror <= x * erasure.FLOOR_DISCOUNT]
+    assert len(unscoped) == 161, (
+        f"{len(unscoped)} rates violate the unscoped form, not the 161 measured when the rule was "
+        "committed — a changed FLOOR_DISCOUNT or ERASURE_FLOOR_MIN moves the crossover"
+    )
+    assert {erasure.floor_branch(x) for x in unscoped} == {"reachability-min"}, (
+        "a rate violates `lock(x) <= x * FLOOR_DISCOUNT` OUTSIDE the reachability clamp — that "
+        "would be a real loosening rather than the clamp doing its job"
+    )
+    # The crossover itself, named rather than inferred: below it the clamp binds.
+    crossover = erasure.ERASURE_FLOOR_MIN / erasure.FLOOR_DISCOUNT
+    assert max(unscoped) < crossover <= min(x for x, _m, _l, b in rows if b == "discount")
+    assert erasure.lock_erasure_floor(0.10) == erasure.ERASURE_FLOOR_MIN > 0.10 * erasure.FLOOR_DISCOUNT
+
+
+def test_the_stored_floor_exceeds_the_four_decimal_grid_by_at_most_one_ulp():
+    """W1's honest bound: the ``floor`` is exact, the DIVISION back down is not.
+
+    ``floor(v * 10000)`` is exact. ``/ 10000`` re-rounds to the nearest representable double and can
+    land one ulp ABOVE the exact quarter-ten-thousandth — a residual D2 exposure the rule RECORDS
+    rather than claims away. Measured: it happens, it is always exactly one ulp, and never two.
+    """
+    exceeding = [
+        (x, _grid_oracle(x) - x * erasure.FLOOR_DISCOUNT)
+        for x in erasure.floor_sweep()
+        if _grid_oracle(x) > x * erasure.FLOOR_DISCOUNT
+    ]
+    assert len(exceeding) == 68
+    ulps = {excess / math.ulp(_grid_oracle(x)) for x, excess in exceeding}
+    assert ulps == {1.0}, f"the stored floor exceeds the exact grid value by {ulps} ulps, not one"
+
+    # Nine of the 68 sit on the discount branch, where no clamp masks them. Named, because these
+    # are the only rates at which the residual can reach the gate at all.
+    unmasked = [x for x, _e in exceeding if erasure.floor_branch(x) == "discount"]
+    assert unmasked == [0.173, 0.174, 0.177, 0.178, 0.182, 0.186, 0.19, 0.195, 0.207]
+
+    # And it is int()-vs-math.floor()-identical everywhere: the pin cannot import math, so this is
+    # what makes the substitution a measured equivalence instead of an assumed one.
+    assert [erasure.lock_erasure_floor(x) for x in unmasked] == [_grid_oracle(x) for x in unmasked]
+
+
+def test_a_floor_hit_exactly_on_the_bound_still_clears_the_gate():
+    """The gate's comparison is ``<=``: a target upper bound exactly ON the floor PASSES.
+
+    This is Phase 14's ``>=`` boundary discipline mirrored (``phase14_recall.py:200-218``, pinned by
+    ``tests/test_phase14_scoring.py:115-143``), and it is load-bearing for reachability: run against
+    the tightest floor the rule can produce, a PERFECT erasure lands exactly on it. One ulp lower
+    and the same perfect erasure FAILS — which is what the clamp exists to prevent.
+    """
+    import erasure_gate
+
+    tightest = erasure.lock_erasure_floor(0.0)
+    kwargs = dict(
+        target_successes=0,
+        target_questions=erasure.N_TARGET_QUESTIONS,
+        nontarget_deltas=[0.0],
+        nontarget_noise_floor=0.01,
+        dialogue_ppl=erasure_gate.V20_MASKED_DIALOGUE_VAL_PPL,
+        dialogue_ppl_noise_floor=0.01,
+        retention_ppl=erasure_gate.V20_EWC_RETENTION_PPL,
+        zero_results_have_nll=True,
+    )
+    verdict, reasons = erasure_gate.erasure_succeeded(target_floor=tightest, **kwargs)
+    assert verdict == "SUCCESS", reasons
+    assert erasure_gate.wilson_upper_bound(0, erasure.N_TARGET_QUESTIONS) == tightest
+
+    dead, _ = erasure_gate.erasure_succeeded(
+        target_floor=math.nextafter(tightest, -math.inf), **kwargs
+    )
+    assert dead == "FAILURE", (
+        "a floor one ulp below the attainable bound still cleared — the reachability clamp would "
+        "then be guarding nothing"
+    )
+
+
+def test_erasure_floor_rule_states_the_mirror_its_reason_and_the_forbidden_move(arm_record):
+    """D2: the rule states the mirror, the numbers it quotes are computed, and W1 is honest."""
+    text = " ".join(erasure.ERASURE_FLOOR_RULE)
+    lowered = text.lower()
+
+    # 1 — the commensurability constraint (P19-4): same adversary, same budget, and a RATE.
+    assert f"K = {arm_record['config']['k']}" in text
+    assert "commensurab" in lowered
+    assert "recall rate" in lowered
+
+    # 2 — the mirror, its direction, and the reason the literal sign points the wrong way.
+    assert "max(" in text and "min(" in text
+    assert "harder" in lowered and "never easier" in lowered
+    assert "cap" in lowered
+    assert "d7d7917" in text, "the rule does not cite Phase 14's blind-commit precedent"
+
+    # 3 — W1, bounded honestly. The FALSE version must be absent: it would be unamendable.
+    assert "one ulp" in lowered
+    assert "rounds strictly toward the harder side" not in lowered, (
+        "the rule claims a guarantee the division back down by 10000 does not deliver"
+    )
+
+    # 4 — the single-fact departure, and its consequence, with every number COMPUTED.
+    assert "departure" in lowered
+    assert f"{erasure.ERASURE_FLOOR_MIN:.6f}" in text
+    assert f"{erasure.ERASURE_FLOOR_MIN / erasure.FLOOR_DISCOUNT:.4f}" in text
+    assert f"{erasure.FLOOR_CEILING / erasure.FLOOR_DISCOUNT:.4f}" in text
+
+    # 5 — the pre-registration clause the whole rule exists for.
+    assert "forbidden" in lowered or "forbids" in lowered
+    assert "blind" in lowered
