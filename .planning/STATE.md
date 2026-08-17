@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-08-17T22:59:36.509Z"
-last_activity: 2026-08-17 -- 19-02 executed (target pinned at `b64cfc5`, denominator at `970028d`)
+stopped_at: Completed 19-03-PLAN.md
+last_updated: "2026-08-17T23:33:51.801Z"
+last_activity: 2026-08-17 -- 19-03 executed (floor rule at `6969e47`, reachability proof at `48f8ce1`)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 40
-  percent: 74
+  completed_plans: 41
+  percent: 75
 ---
 
 # Project State
@@ -26,15 +26,17 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 3 of 16
-Status: Executing Phase 19 — 19-02 complete: the target is pinned (`TARGET_SLOT = pet_name`, chosen
-by a tie-break that was LOAD-BEARING — four of eight slots tie at the ceiling 13/13) and the (a)
-denominator is pinned at n = 27, summed from the fixture's 14 taught + 13 held-out.
+Plan: 4 of 16
+Status: Executing Phase 19 — 19-03 complete: the (a) floor-DERIVATION rule is pinned blind with
+D2's mirror (`min`, not Phase 14's literal `max`) and both directions publishable side by side
+(0.20 vs 0.60 at `cal_rate = 1.0`), and the floor it can produce is PROVED clearable at n = 27 by
+a module-scope sweep against a perfect erasure. The floor budget is `[0.091079, 0.20]`; the
+constant itself does not exist until the blind calibration runs at 19-06.
 `git ls-files 'results/phase19_*'` is still EMPTY and must stay empty through 19-07.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
 post-hoc decision.
-Last activity: 2026-08-17 -- 19-02 executed (target pinned at `b64cfc5`, denominator at `970028d`)
+Last activity: 2026-08-17 -- 19-03 executed (floor rule at `6969e47`, reachability proof at `48f8ce1`)
 
 ## Performance Metrics
 
@@ -96,6 +98,7 @@ Last activity: 2026-08-17 -- 19-02 executed (target pinned at `b64cfc5`, denomin
 | Phase 17 P10 | 40min | 3 tasks | 15 files |
 | Phase 19 P01 | 55min | 2 tasks | 3 files |
 | Phase 19 P02 | 42min | 2 tasks | 2 files |
+| Phase 19 P03 | 30min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -255,6 +258,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-02: N_TARGET_QUESTIONS = 27 is SUMMED from TARGET_QUESTION_COUNTS' two counted tiers (14 taught + 13 held-out) with zero integer literals equal to it anywhere in the pin (AST-checked, not grepped — a grep cannot tell a literal from two digits inside one of the eight published NLL floats). TARGET_QUESTION_COUNTS is a written constant re-counted from the fixture by test rather than derived at import: phase18_extraction's own guard records that a pinned driver does NO file I/O at module scope, and a pin unimportable without its inputs on disk is a pin whose rules stop being quotable when a path moves. A module-scope _prove ties the held-out count to TARGET_RANKING's head denominator — two artifacts, two instruments, one number
 - [Phase 19]: 19-02: pooling the tiers is DECLARED as a departure from Phase 18's separate-tier Holm pricing, and the arithmetic that forced it is computed not remembered — at n=13 the best attainable Wilson upper bound (0 successes, a perfect erasure) is 0.172267, so any floor below that is unclearable at EVERY outcome; at n=27 it is 0.091079. BEST_ATTAINABLE_TARGET_BOUND is exposed as a constant and is 19-03's hard floor-reachability ceiling. n=52/108 REFUSED: four dose-split renderings of one question are clustered the way nine draws are. wilson_upper_bound is imported from erasure_gate and pinned by OBJECT IDENTITY; the pin defines no such function and imports no math, so no sqrt is available to re-derive one
 - [Phase 19]: 19-02: the rule's own PROSE numbers are asserted against the committed function that computes them (f'{wilson_upper_bound(0, n):.6f}' in text) — measured consequence: mutating the taught count to 15 reddens TWO tests, the fixture re-count AND the prose check, so a denominator edit cannot leave a stale 0.091079 sitting in the pre-registration. Four deliberate mutations watched RED (swapped ranking head, TARGET_FACT_ID literal, typed 27, inflated taught count), all restored byte-identically
+- [Phase 19]: 19-03: the plan's prescribed math.floor was REFUSED and int() substituted — 19-02 committed a guard forbidding an 'import math' in the pin (T-19-08: no sqrt available to re-derive a second Wilson interval), verified green at HEAD before any code was written. On the _prove'd non-negative domain int() and math.floor() are the same function; off it they diverge (truncate-toward-zero vs floor), which is exactly what the domain proof forecloses and why it is load-bearing rather than defensive. The equivalence is PROVED not assumed: the test file imports math (tests are not the pre-registration) and compares against a real math.floor oracle at all 1001 swept rates, 0 disagreements. Amending a committed guard to fit new code is the manoeuvre this phase exists to forbid
+- [Phase 19]: 19-03: the rule records 'the discount branch floors at the four-decimal grid and NEVER ROUNDS UP BY MORE THAN ONE ULP' and deliberately NOT 'rounds strictly toward the harder side', which is FALSE and would be unamendable after 19-07 — the floor is exact but the division back down by 10000 re-rounds and lands one ulp high at 68 of 1001 swept rates (measured: exactly 1.0 ulp at every one of the 68, max and min both 1.0, never two), nine of them on the discount branch where no clamp masks them. A committed test asserts the false sentence is ABSENT. One ulp against round()'s measured 4.78e-05 on attainable k/n rates (n=16..27), where round loosens 84 of 217 by up to a full 1.0e-04 grid step — the direction D2 forbids
+- [Phase 19]: 19-03: the unscoped inequality lock(x) <= x*FLOOR_DISCOUNT is DELIBERATELY NOT asserted — it is red at 161 of 1001 rates for a CORRECT implementation, and a test that fails on correct code is a test that gets deleted. Measured and decomposed instead: 152 rates where the reachability clamp binds by design + 9 where the one-ulp division residual shows, 0 on the ceiling branch, jointly exhaustive. My own first version of that test asserted all 161 were clamp-bound and was falsified by measurement before it could be committed green
+- [Phase 19]: 19-03: the crossover prose was corrected from an implied iff to a stated sufficient condition — 0.1518 is the CONTINUOUS crossover ERASURE_FLOOR_MIN/FLOOR_DISCOUNT, but because the discount snaps DOWN to the four-decimal grid the clamp still binds beyond it (floor_branch(0.1518) is measurably still 'reachability-min'). Found by RUNNING the --floor printer, not by review. Both the rule clause and the module docstring now say sufficient-not-iff and point at floor_branch as the committed way to read the boundary — the same standard CONTEXT B4 applied to itself when it refused an unqualified 'deterministic' in a file that is unamendable after 19-07
+- [Phase 19]: 19-03: reachability is proved by a pure function CALLED AT MODULE SCOPE (assert_holm_family_reachable's register, phase18_extraction.py:289), so a dead gate fails at import rather than after the compute it would waste. Watched RED twice and restored byte-identically (sha256 e7a56624 both times, git diff empty): ERASURE_FLOOR_MIN=0.0 raises at import naming cal_rate 0.0, and a ONE-ULP downward move stops the suite COLLECTING at all (pytest INTERNALERROR, 'no tests ran') — which is the difference between an import-time proof and a test someone remembers to write. The comparison is NON-STRICT, matching erasure_succeeded's own upper <= target_floor, so a bound exactly on the floor passes both and the proof cannot refuse a floor the gate would accept
+- [Phase 19]: 19-03: the floor budget is [0.091079, 0.20] and the branch is REPORTABLE — below cal_rate 0.1518 the clamp binds and (a) clears ONLY on a PERFECT ERASURE (0 successes over 27); at or above 0.3333 the ceiling saturates and the blind calibration stops discriminating (667 of 1001 swept rates land there, so if the calibration fact scores near Phase 14's arm of 0.4143/0.2506 the floor is 0.20, the permissive end at 2.196x the minimum). Recorded before the number exists per B4 so it cannot later read as either a surprise or a design win. floor_branch() exists so 19-06's report names which clamp bound instead of leaving a reader to re-derive how hard the criterion actually was
 
 ### Roadmap Evolution
 
@@ -319,17 +328,28 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-17T22:59:36.509Z
-Stopped at: Completed 19-02-PLAN.md
-Resume file: .planning/phases/19-selective-memory-erasure/19-03-PLAN.md
+Last session: 2026-08-17T23:31:46.546Z
+Stopped at: Completed 19-03-PLAN.md
+Resume file: .planning/phases/19-selective-memory-erasure/19-04-PLAN.md
 
 ## Operator Next Steps
 
-- Execute 19-03: the BLIND calibration floor. It has a hard ceiling the pin now states as a
-  constant — `BEST_ATTAINABLE_TARGET_BOUND = 0.091079` is the Wilson upper bound a PERFECT erasure
-  (0 successes over n = 27) produces, so a calibrated floor below it cannot be cleared at any
-  outcome. The calibration must land inside that budget or the phase is arithmetically dead before
-  it runs, exactly as Phase 18's D-31 m=6 analysis was
+- ~~Execute 19-03: the BLIND calibration floor rule.~~ **DONE 2026-08-17** (`6969e47`, `48f8ce1`).
+  The floor-DERIVATION rule is pinned, not the constant — the constant cannot exist until the blind
+  calibration runs at 19-06. The budget it must land inside is `[0.091079, 0.20]`, and reachability
+  is now PROVED at import rather than inferred from two numbers: `assert_erasure_floor_reachable`
+  sweeps the closed unit interval on every import, so an unclearable (a) fails in milliseconds
+  instead of after the calibration adapter, the calibration erasure, the noise-floor runs and the
+  target erasure have all spent their compute
+
+- The floor rule's severity is BRANCH-DEPENDENT and 19-06's report must print the branch beside the
+  number: below `cal_rate = 0.1518` the reachability clamp binds and (a) clears ONLY on a perfect
+  erasure (0 of 27); at or above 0.3333 the ceiling saturates at 0.20 and the blind calibration
+  stops discriminating entirely (667 of 1001 swept rates). `floor_branch()` is the committed reporter
+
+- Do NOT write `import math` into `scripts/phase19_erasure.py`. It is guarded (T-19-08) and the
+  guard's reason is still live; `int()` on a `_prove`d non-negative domain is the committed
+  substitute, with its equivalence measured against a `math.floor` oracle in the test
 
 - The target is pinned as `TARGET_SLOT` and there is deliberately NO `TARGET_FACT_ID` constant —
   resolve it at runtime with `target_fact_id(records)`. Writing the id into a source file reddens
