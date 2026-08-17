@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: in_progress
-stopped_at: Phase 19 planned — 16 plans in 14 waves, verified by plan-checker, not yet executed
-last_updated: "2026-08-17T18:20:00.000Z"
+status: executing
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-08-17T22:23:33.961Z"
 last_activity: 2026-08-17
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 38
-  completed_plans: 38
-  percent: 75
+  total_plans: 54
+  completed_plans: 39
+  percent: 72
 ---
 
 # Project State
@@ -21,17 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** Phase 19 — selective-memory-erasure (scoped, not yet planned)
+**Current focus:** Phase 19 — selective-memory-erasure
 
 ## Current Position
 
-Phase: 19 — PLANNED (not executed)
-Plan: 0 of 16 — run `/gsd-execute-phase 19`
-Status: v3.0 reopened at Phases 16-19. Phase 18 shipped complete (16/16, SHIP AS-IS at `4f9e330`);
+Phase: 19 (selective-memory-erasure) — EXECUTING
+Plan: 2 of 16
+Status: Executing Phase 19 — 19-01 complete: the pin is open, its ancestry guard is armed, and A5
+is settled. `git ls-files 'results/phase19_*'` is still EMPTY and must stay empty through 19-07.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
 post-hoc decision.
-Last activity: 2026-08-17
+Last activity: 2026-08-17 -- 19-01 executed (pin armed at `6fd1755`, A5 proved at `a04067a`)
 
 ## Performance Metrics
 
@@ -91,6 +92,7 @@ Last activity: 2026-08-17
 | Phase 17 P09 | 70min | 3 tasks | 9 files |
 | Phase 17 P11 | 25min | 2 tasks | 2 files |
 | Phase 17 P10 | 40min | 3 tasks | 15 files |
+| Phase 19 P01 | 55min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -239,6 +241,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 17]: 17-10: the isolation report was EXTENDED, never edited — 62 insertions / 1 deletion against 9fcfc50, and that one deletion is the placeholder line becoming a pointer at the appended section. The 15,306 bytes above it are byte-identical, the recorded verdict reads back unchanged at 1,402 chars, and the dated 9fcfc50 D-13 supersession addendum is still present exactly once. test_report_addendum_is_additive pins that on the REAL artifact (17-11's synthetic twin proves only the writer); both probes watched failing
 - [Phase 17]: 17-10: the four replicate adapters inherit 17-09's replay_ratio=0.0 collateral collapse and are equally NOT shippable demo substrate. Six lora_B digests are pairwise distinct with 0 of 36 identical tensors across all 15 pairs — that proves the seed reached the init draw, and proves nothing about conversational retention
 - [Phase 17]: 17-10: STAT-05 checked = 21 (1 prereg commit d549e0b x 21 tracked results/phase17_* paths), 0 untracked — was 11 at 17-09/17-11; scripts/phase17_personas.py is still at d549e0b and still uneditable
+- [Phase 19]: 19-01: the Phase 19 ancestry guard is ARMED IN THE FIRST PLAN, before any results/phase19_* artifact exists — checked = 0 against tracked_artifacts = [] is a recorded state stated in the twin's own docstring, and bool(checked) == bool(tracked_artifacts) is what stops it surviving the first artifact. Its assert prereg_commits branch was watched RED for free, before the Task 1 commit made the pin exist
+- [Phase 19]: 19-01: the plan's prescribed deliberate-RED was FALSIFIED by measurement — zeroing only lora_B[:, j] does NOT redden the dW==0 assertion, because scale * outer(0, A[j,:]) is exactly zero whichever factor was cleared. Under the mutation the dW==0 test, the bit-identity control and the artifact round-trip all stayed GREEN (2 failed / 6 passed); the two that bit are a both-factors test added for exactly this reason and the all-zeros tail of the no-mutation test. It is a fact about the mechanism, not the suite: 19-06's one-at-a-time selection sweep would score a half-ablation identically to a full one while lora_A[j,:] still carried live values. The pin was restored byte-identically (sha256 9c49247b..., git diff empty)
+- [Phase 19]: 19-01: ablate_components takes and returns the export_adapter-shaped ARTIFACT, not the bare lora_ tensor dict — load_adapter_weights' scale audit reads artifact['lora_config'] (inject.py:119-129), so a tensor-only operator could not be round-tripped through the audit it must survive, and 19-06's 288-step sweep can write load_adapter_weights(model, ablate_components(art, [addr])) with every application re-passing the scale audit for free. 288 is DERIVED (len(extract_deltas.KEYS) x LoRAConfig().r) and never typed; the proof fires at import
+- [Phase 19]: 19-01: the Phase 19 pin is ONE file (Phase 18's shape), not Phase 17's two — Phase 19 has no ADAPT branch, so no sanctioned outcome replaces a rule after a number exists and there is no legitimate unpinned sibling to move a rule into. Every later Phase 19 rule (floor, target, denominator, estimators, report text) goes into scripts/phase19_erasure.py and is watched by the armed guard
+- [Phase 19]: 19-01: ERASE-01 deliberately NOT marked complete — 15 of the 16 Phase 19 plans claim it, and the requirement is 'selective erasure of a taught fact from the weights', which no plan before the verdict at 19-13 can discharge. STAT-05 was already complete at 16/17/18 and its traceability row gains Phase 19 when the pin closes at 19-07, not here. Sixth application of 17-01's recorded over-claim-avoidance pattern
 
 ### Roadmap Evolution
 
@@ -255,6 +262,7 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
   *Future Requirements* to Phase 19 (28/28 mapped, 0 orphans). Success criteria are inherited
   verbatim from `ERASURE_DECISION_RULE` rather than re-authored; **no mechanism, schedule, or
   design is committed** — the pre-registration fixed the bar and deliberately not the design.
+
 - Had the gate returned MOOT, v3.0 would have shipped at Phase 18 as-is. The SHIP AS-IS decision
   recorded at `4f9e330` remains valid for 18; it is not withdrawn by this reopening.
 
@@ -302,20 +310,22 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-17T18:20:00.000Z
-Stopped at: Phase 19 scoped into v3.0 by the pre-registered gate — not yet planned
-Resume file: .planning/ROADMAP.md (Phase 19 detail block) — entry evidence in
-.planning/phases/18-black-box-adversarial-extraction-audit/18-VERIFICATION.md
+Last session: 2026-08-17T22:22:59.161Z
+Stopped at: Completed 19-01-PLAN.md
+Resume file: .planning/phases/19-selective-memory-erasure/19-02-PLAN.md
 
 ## Operator Next Steps
 
-- Plan Phase 19 with `/gsd-plan-phase 19 --research-phase`
-- Research must land before anything is pinned: the (a) floor requires a **blind** calibration on a
-  fact set disjoint from the target, run before the target is scored — the same
-  unamendable-afterward ordering Phase 18 operated under
+- Execute 19-02: pin the target fact (D7, deterministic rule + tie-break in the same commit) and
+  derive n=27 from the committed fixture (D5). Both go into `scripts/phase19_erasure.py`, which is
+  now watched by `test_phase19_prereg_is_frozen_before_every_phase19_result`
+- NO `results/phase19_*` artifact may be committed by 19-02..19-07. That ordering is the scientific
+  guarantee of this phase, and the guard is already armed to catch a violation
+
 - Do not let planning re-author the success criteria. (a)/(b)/(c), the verdict domain, and the
   descriptive-only status of representational consistency come from `ERASURE_DECISION_RULE`; a plan
   that converts ΔW cosine or Fisher overlap into pass/fail is violating the pre-registration
+
 - Reuse, do not rebuild: Phase 18's taught-frame span NLL is what keeps a zero-recall result out of
   INCONCLUSIVE (`zero_results_have_nll`), and post-erasure recall must be scored by the same
   adversary at the same budget
