@@ -82,7 +82,7 @@ ever controlled availability.
 - [x] **Phase 16: Weight-vs-Prompt Persistence Control** - Four arms on the binding 270-question fixture, instrument pairing defect fixed first, headline licensed by a blocking capability ladder (completed 2026-08-14)
 - [x] **Phase 17: Multi-Persona Isolation Matrix** - N=3 deliberately colliding personas scored as a cross-matrix with a base-prior column, an adapter-swap canary, and a cell-blind scorer (completed 2026-08-15)
 - [x] **Phase 18: Black-Box Adversarial Extraction Audit** - Paraphrase / prefix-injection / role-play / repeated-sampling attacks, adapter-on vs adapter-off at equal budget, admissibility pre-registered one-directionally (completed 2026-08-17)
-- [ ] **Phase 19: Selective Memory Erasure** - Erase one taught fact from the weights under the rule committed at `23a830c`; blind-calibrated target floor, per-fact non-target preservation, capability caps, representational consistency descriptive-only (scoped 2026-08-17, not yet planned)
+- [ ] **Phase 19: Selective Memory Erasure** - Erase one taught fact from the weights under the rule committed at `23a830c`; blind-calibrated target floor, per-fact non-target preservation, capability caps, representational consistency descriptive-only (planned 2026-08-17 — 16 plans in 14 waves, not yet executed)
 
 **Phase 19 entered by gate, not by choice — the formal entry record.** ERASE-01 and ERASE-02 were
 admissible **only** if `erasure_is_worth_attempting()` in `scripts/erasure_gate.py` returned True on
@@ -601,6 +601,6 @@ gate returned MOOT the milestone would have shipped at 18.)
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 16/16 | Complete   | 2026-08-17 |
-| 19. Selective Memory Erasure | v3.0 | 0/? | Scoped — not planned | - |
+| 19. Selective Memory Erasure | v3.0 | 0/16 | Planned — not executed | - |
 
 **Totals:** 18 phases complete, 84 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 scoped, not yet planned).

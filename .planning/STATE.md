@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: in_progress
-stopped_at: Phase 19 scoped into v3.0 by the pre-registered gate — not yet planned
+stopped_at: Phase 19 planned — 16 plans in 14 waves, verified by plan-checker, not yet executed
 last_updated: "2026-08-17T18:20:00.000Z"
 last_activity: 2026-08-17
 progress:
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 
 ## Current Position
 
-Phase: 19 — SCOPED (not planned)
-Plan: 0 of ? — run `/gsd-plan-phase 19 --research-phase`
+Phase: 19 — PLANNED (not executed)
+Plan: 0 of 16 — run `/gsd-execute-phase 19`
 Status: v3.0 reopened at Phases 16-19. Phase 18 shipped complete (16/16, SHIP AS-IS at `4f9e330`);
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
