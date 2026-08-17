@@ -1041,3 +1041,131 @@ def test_erasure_floor_rule_states_the_mirror_its_reason_and_the_forbidden_move(
     # 5 — the pre-registration clause the whole rule exists for.
     assert "forbidden" in lowered or "forbids" in lowered
     assert "blind" in lowered
+
+
+# =============================================================================================
+# ===== PLAN 19-03 / TASK 2 — REACHABILITY, PROVED AT IMPORT AGAINST THE COMPUTED BOUND =====
+# =============================================================================================
+
+
+def test_the_floor_minimum_is_computed_by_the_committed_wilson_bound_and_never_typed():
+    """T-19-12: a retyped 0.0911 is the spoof this guards. The clamp is CALLED, not remembered."""
+    import erasure_gate
+
+    assert erasure.ERASURE_FLOOR_MIN == erasure_gate.wilson_upper_bound(
+        0, erasure.N_TARGET_QUESTIONS
+    )
+    # The 19-02 constant and the 19-03 clamp are the same number by construction, not by luck.
+    assert erasure.ERASURE_FLOOR_MIN == erasure.BEST_ATTAINABLE_TARGET_BOUND
+
+    near = [
+        node.value
+        for node in ast.walk(ast.parse(_PIN_SOURCE))
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, float)
+        and abs(node.value - erasure.ERASURE_FLOOR_MIN) < 1e-4
+    ]
+    assert near == [], (
+        f"the pin carries float literal(s) {near} within 1e-4 of the reachability clamp — it must "
+        "be produced by the committed estimator, never typed at any precision"
+    )
+    # It is the UNROUNDED double: 4-decimal rounding moves it in BOTH directions (see below).
+    assert erasure.ERASURE_FLOOR_MIN != round(erasure.ERASURE_FLOOR_MIN, 4)
+
+
+def test_the_reachability_proof_runs_at_module_scope_and_returns_the_bound_it_proved():
+    """``assert_holm_family_reachable``'s register (``phase18_extraction.py:288``).
+
+    A pure function CALLED at module scope, so importing this pin at all — in the suite, in a
+    smoke, in the run itself — is what runs the proof. A proof reachable only by calling it is a
+    proof that runs when someone remembers to.
+    """
+    calls = [
+        node.value.func.id
+        for node in ast.parse(_PIN_SOURCE).body
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+    ]
+    assert calls.count("assert_erasure_floor_reachable") == 1, (
+        f"the reachability proof is not called exactly once at MODULE SCOPE (module-scope calls "
+        f"found: {calls})"
+    )
+
+    returned = erasure.assert_erasure_floor_reachable(
+        erasure.N_TARGET_QUESTIONS, erasure.lock_erasure_floor
+    )
+    assert returned == erasure.ERASURE_FLOOR_MIN
+    # The attainable outcome the proof is named against: 0 successes over the pooled denominator.
+    assert returned == erasure.wilson_upper_bound(0, erasure.N_TARGET_QUESTIONS)
+
+    # The sweep it proves over covers the whole domain, endpoints included.
+    sweep = erasure.floor_sweep()
+    assert sweep[0] == 0.0 and sweep[-1] == 1.0
+    assert len(sweep) == erasure.FLOOR_SWEEP_STEPS + 1 == len(set(sweep))
+
+
+def test_the_reachability_proof_goes_red_one_ulp_below_the_attainable_bound():
+    """T-19-11: the proof BITES. A floor a single ulp too low is an unclearable gate.
+
+    The mutation is applied to the ``floor_fn`` PARAMETER rather than to the module, so the guard
+    is exercised on every run instead of only in the session that hand-edited the constant.
+    """
+    one_ulp_low = math.nextafter(erasure.ERASURE_FLOOR_MIN, -math.inf)
+
+    def _mutated(cal_rate):
+        return max(one_ulp_low, min(erasure.FLOOR_CEILING, erasure.lock_erasure_floor(cal_rate)))
+
+    with pytest.raises(SystemExit, match="unclearable|no outcome|perfect"):
+        erasure.assert_erasure_floor_reachable(erasure.N_TARGET_QUESTIONS, _mutated)
+
+    # And the failure names what the proof buys out, in assert_holm_family_reachable's register.
+    with pytest.raises(SystemExit) as excinfo:
+        erasure.assert_erasure_floor_reachable(erasure.N_TARGET_QUESTIONS, lambda _rate: 0.0)
+    assert "compute" in str(excinfo.value).lower()
+
+    # A floor at or above the bound is accepted — the proof discriminates rather than always
+    # failing, which is the half a one-sided guard most often gets wrong.
+    assert (
+        erasure.assert_erasure_floor_reachable(
+            erasure.N_TARGET_QUESTIONS, lambda _rate: erasure.ERASURE_FLOOR_MIN
+        )
+        == erasure.ERASURE_FLOOR_MIN
+    )
+
+
+def test_rounding_the_floor_minimum_to_four_decimals_breaks_it_in_both_directions():
+    """The rounding trap, examined rather than avoided by habit.
+
+    Round-to-NEAREST lands ABOVE the bound: still reachable, but a silent LOOSENING of the cap,
+    the one direction D2 forbids. Round-DOWN lands below it: a perfect erasure then fails on the
+    gate's ``<=``. Only the unrounded double is simultaneously the tightest and exactly attainable.
+    """
+    nearest = round(erasure.ERASURE_FLOOR_MIN, 4)
+    down = math.floor(erasure.ERASURE_FLOOR_MIN * erasure.FLOOR_GRID) / erasure.FLOOR_GRID
+    assert nearest > erasure.ERASURE_FLOOR_MIN > down
+
+    # Round-down: unclearable at EVERY outcome, including a perfect erasure.
+    with pytest.raises(SystemExit):
+        erasure.assert_erasure_floor_reachable(erasure.N_TARGET_QUESTIONS, lambda _rate: down)
+
+    # Round-to-nearest: reachable, but looser than what the rule stores.
+    assert (
+        erasure.assert_erasure_floor_reachable(erasure.N_TARGET_QUESTIONS, lambda _rate: nearest)
+        == erasure.ERASURE_FLOOR_MIN
+    )
+    assert erasure.lock_erasure_floor(0.0) < nearest
+
+    # STAT-02: the 3/n bound is reported beside a zero result and is never what the gate reads.
+    import erasure_gate
+
+    assert erasure_gate.rule_of_three(erasure.N_TARGET_QUESTIONS) > erasure.ERASURE_FLOOR_MIN
+
+
+def test_the_module_docstring_records_the_severity_the_floor_clamp_buys():
+    """When the clamp binds, (a) clears ONLY on a perfect erasure — recorded, not hidden."""
+    doc = erasure.__doc__.lower()
+    assert "perfect erasure" in doc
+    assert "19-03" in erasure.__doc__
+    # The import-time surface is declared honestly: the reachability proof is now part of it.
+    assert "reachab" in doc
