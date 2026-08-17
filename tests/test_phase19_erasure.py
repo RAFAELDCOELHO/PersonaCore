@@ -855,7 +855,9 @@ def test_the_floor_clamp_is_a_min_not_a_max():
     """The ceiling CAPS. Swapped for a `max` it would admit the rate instead of refusing it."""
     rows = _floor_rows()
     over = [(x, mirror) for x, mirror, _l, _b in rows if mirror > erasure.FLOOR_CEILING]
-    assert over == [], f"the floor exceeds FLOOR_CEILING at {len(over)} rates — the clamp is not a min"
+    assert over == [], (
+        f"the floor exceeds FLOOR_CEILING at {len(over)} rates — the clamp is not a min"
+    )
 
     def _swapped(x):
         """The same expression with the inner clamp mirrored back the wrong way."""
@@ -907,7 +909,9 @@ def test_the_floor_is_exact_before_the_division_scoped_to_the_branch_it_describe
     rows = _floor_rows()
     scale = erasure.FLOOR_DISCOUNT * erasure.FLOOR_GRID
     violations = [
-        x for x, _m, _l, branch in rows if branch == "discount" and not math.floor(x * scale) <= x * scale
+        x
+        for x, _m, _l, branch in rows
+        if branch == "discount" and not math.floor(x * scale) <= x * scale
     ]
     assert violations == [], violations
     assert sum(1 for _x, _m, _l, b in rows if b == "discount") == 182
@@ -917,14 +921,33 @@ def test_the_floor_is_exact_before_the_division_scoped_to_the_branch_it_describe
         f"{len(unscoped)} rates violate the unscoped form, not the 161 measured when the rule was "
         "committed — a changed FLOOR_DISCOUNT or ERASURE_FLOOR_MIN moves the crossover"
     )
-    assert {erasure.floor_branch(x) for x in unscoped} == {"reachability-min"}, (
-        "a rate violates `lock(x) <= x * FLOOR_DISCOUNT` OUTSIDE the reachability clamp — that "
-        "would be a real loosening rather than the clamp doing its job"
-    )
+    # The 161 decompose EXACTLY, and into the two effects this plan already characterised
+    # separately — there is no third, unexplained way for the unscoped form to go red.
+    by_branch = {branch: 0 for branch in ("reachability-min", "discount", "ceiling")}
+    for x in unscoped:
+        by_branch[erasure.floor_branch(x)] += 1
+    assert by_branch == {"reachability-min": 152, "discount": 9, "ceiling": 0}, by_branch
+
+    # 152: the clamp binding, by design. EVERY rate on that branch violates, none is a near miss.
+    clamped = [x for x, _m, _l, b in rows if b == "reachability-min"]
+    assert len(clamped) == 152
+    assert all(x in unscoped for x in clamped)
+    # 9: the one-ulp division residual of the NEXT test, not a second phenomenon.
+    residual = [x for x in unscoped if erasure.floor_branch(x) == "discount"]
+    assert {
+        (erasure.lock_erasure_floor(x) - x * erasure.FLOOR_DISCOUNT)
+        / math.ulp(erasure.lock_erasure_floor(x))
+        for x in residual
+    } == {1.0}
+
     # The crossover itself, named rather than inferred: below it the clamp binds.
     crossover = erasure.ERASURE_FLOOR_MIN / erasure.FLOOR_DISCOUNT
-    assert max(unscoped) < crossover <= min(x for x, _m, _l, b in rows if b == "discount")
-    assert erasure.lock_erasure_floor(0.10) == erasure.ERASURE_FLOOR_MIN > 0.10 * erasure.FLOOR_DISCOUNT
+    assert max(clamped) < crossover <= min(x for x, _m, _l, b in rows if b == "discount")
+    assert (
+        erasure.lock_erasure_floor(0.10)
+        == erasure.ERASURE_FLOOR_MIN
+        > 0.10 * erasure.FLOOR_DISCOUNT
+    )
 
 
 def test_the_stored_floor_exceeds_the_four_decimal_grid_by_at_most_one_ulp():

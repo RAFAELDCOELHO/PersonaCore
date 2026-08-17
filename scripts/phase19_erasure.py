@@ -702,6 +702,181 @@ _prove(
 )
 
 
+# =============================================================================================
+# ===== THE (a) FLOOR — ITS DERIVATION RULE, COMMITTED BLIND BEFORE ANY CALIBRATION (D2) =====
+# =============================================================================================
+
+# Phase 14's two calibration constants, REUSED rather than re-derived: `THRESHOLD_DISCOUNT = 0.60`
+# and `THRESHOLD_FLOOR = 0.20` (`scripts/teach_persona.py:771-780`), committed at `d7d7917`
+# (2026-08-02 01:52:08) — 1h45m before the calibration produced a number at `0425fdc`. Same
+# register as `scripts/erasure_gate.py:83-86` reusing the Phase 13 `MARGIN_K`: the erasure floor is
+# calibrated the same way every other gate in this project has been, so the only thing this phase
+# has to defend is the MIRROR, not the discount.
+FLOOR_DISCOUNT = 0.60
+
+# Phase 14's `THRESHOLD_FLOOR` value in its MIRRORED role. There it was a LOWER clamp under a `>=`
+# gate; here it is the UPPER cap under a `<=` gate. B4 (LOCKED 2026-08-17) kept the number rather
+# than reconsidering it, with the saturation consequence recorded in the rule below before any
+# calibration number existed.
+FLOOR_CEILING = 0.20
+
+# The four-decimal grid the discount branch snaps DOWN to. Phase 14 wrote `round(rate, 4)`; W1
+# replaces round-to-nearest with a floor to the same grid, for the reason in the rule's clause 3.
+FLOOR_GRID = 10000
+
+# The number of intervals in the `cal_rate` grid every floor proof sweeps. A grid, not a symbolic
+# argument, because `floor_fn` is a PARAMETER of the reachability proof below: proving a property
+# of an arbitrary callable by sweeping its domain is the honest form when the callable is not
+# assumed monotone.
+FLOOR_SWEEP_STEPS = 1000
+
+# THE REACHABILITY CLAMP. At 0 successes over the pooled denominator the Wilson upper bound IS the
+# smallest value the gate's own estimator can return, so a floor below it is not conservative but
+# UNCLEARABLE — no outcome whatsoever, including a perfect erasure, could satisfy (a).
+# `erasure_succeeded`'s comparison is `upper <= target_floor` (`scripts/erasure_gate.py:230`), so
+# equality PASSES and this is the hardest criterion that remains reachable. Assigned from the
+# committed function and UNROUNDED: `round(x, 4)` here would give 0.0911, a hair ABOVE this value
+# and therefore a silent loosening, while a floor rounded DOWN to 0.0910 would make a perfect
+# erasure fail on the `<=`. Only the unrounded double is both tightest and exactly attainable.
+# `rule_of_three(27) = 0.111111` is REPORTED alongside whenever successes are zero and is never
+# what the gate reads (`erasure_gate.py:161-170`, STAT-02).
+ERASURE_FLOOR_MIN = wilson_upper_bound(0, N_TARGET_QUESTIONS)
+
+ERASURE_FLOOR_RULE = (
+    "THE INPUT is the post-erasure question-unit RECALL RATE of ONE calibration fact, measured by "
+    "THE SAME ADVERSARY AT THE SAME BUDGET that will score the target — the best Phase 18 attack "
+    "family on the record's own declared budget (A2 at K = 48 on the committed run). This is the "
+    "hard COMMENSURABILITY constraint (P19-4): the floor caps a number the A2 adversary produces, "
+    "so a floor derived from a 9-draw direct-question sweep (`score_items`, "
+    "`teach_persona.py:1050`) would not be capping the same quantity and the gate would mean "
+    "nothing. The input is a RATE and not an upper bound, so the calibration fact's own "
+    "denominator need not equal the target's.",
+    "THE OPERATOR, and D2's MIRROR stated rather than left to be inferred. Phase 14 clamped with "
+    "`max(THRESHOLD_FLOOR, ...)` against a `>=` gate: that clamp RAISES the bar and makes the gate "
+    "HARDER. Erasure's floor is an upper CAP against a `<=` gate, so the identical literal `max` "
+    "would RAISE the cap and make (a) EASIER — the arithmetic sign points the wrong way when the "
+    "same procedure is applied to a cap instead of a threshold. Intent wins over sign: the "
+    "adjustment must make (a) harder, NEVER EASIER. The clamp is therefore `min(FLOOR_CEILING, "
+    "...)`, and the discount x0.60 is preserved UNCHANGED because multiplying a cap down also "
+    "makes (a) harder. Both halves push the same direction. `literal_phase14_floor` computes the "
+    "unmirrored operator so the report can print both directions' values side by side and a reader "
+    "can SEE the choice — publishing both is what Phase 14 itself did when it corrected its own "
+    "arm (`scripts/phase14_recall.py:178-183`).",
+    "THE ROUNDING DIRECTION, DECLARED RATHER THAN INHERITED, AND BOUNDED HONESTLY (W1). "
+    "`round(x, 4)` rounds to NEAREST, so it can round a discounted rate UP by as much as 5e-05 — "
+    "loosening the cap, the one direction D2 forbids. The discount branch therefore FLOORS to the "
+    "four-decimal grid instead. The guarantee this delivers is stated as it is and not as it "
+    "looks: the floor itself is EXACT, but the division back down by 10000 re-rounds to the "
+    "nearest representable double and can land ONE ULP above the exact quarter-ten-thousandth "
+    "(measured: it does, at 68 of 1001 swept rates, always by exactly one ulp and never two). So "
+    "the recorded guarantee is that THE DISCOUNT BRANCH FLOORS AT THE FOUR-DECIMAL GRID AND NEVER "
+    "ROUNDS UP BY MORE THAN ONE ULP — a residual D2 exposure of order 1e-17 against `round`'s "
+    "5e-05, accepted and recorded rather than claimed away. The deviation from Phase 14's literal "
+    "`round` is deliberate and is the SAME mirror as the clamp: there `round` sat against a `>=` "
+    "gate where rounding up was the harder direction, and against a `<=` cap it is the easier one.",
+    "A SINGLE FACT'S RATE, DECLARED AS A DEPARTURE. Phase 14's `lock_thresholds` consumes the "
+    "calibration ARM's aggregate rate over ten facts (`teach_persona.py:1644`). Phase 19 feeds ONE "
+    "calibration fact's rate, because the mechanism is applied to one fact and the floor caps one "
+    "fact's post-erasure recall. Declared here in the same register `DENOMINATOR_RULE` uses for "
+    "the pooling departure, together with its two consequences, both computed and both recorded "
+    "before any calibration number exists. BELOW cal_rate = 0.1518 the discounted value falls "
+    "under the reachability clamp, so the floor is exactly 0.091079 and (a) then clears ONLY on a "
+    "PERFECT ERASURE. ABOVE cal_rate = 0.3333 the discounted value exceeds the ceiling, so the "
+    "floor saturates at 0.20 and the blind calibration stops discriminating — every rate above "
+    "that point yields the identical floor, the more permissive end of the range (B4). Phase 14's "
+    "calibration arm measured 0.4143 taught / 0.2506 held-out, which is a PRIOR and not a "
+    "prediction: it is a ten-fact aggregate scored by a different instrument.",
+    "FORBIDDEN, and this clause is why the rule is committed in a file whose every commit must be "
+    "an ancestor of every Phase 19 artifact: changing the operator, the discount, the ceiling or "
+    "the clamp after seeing a calibration rate. The rule was committed BLIND — before the "
+    "calibration adapter existed, before any fact had been erased, and while "
+    "`git ls-files 'results/phase19_*'` was still empty. It is the direct analogue of Phase 14's "
+    "`d7d7917`, which committed `CALIBRATION_DECISION_RULE` and `lock_thresholds` 1h45m before the "
+    "calibration produced a number at `0425fdc`, and it is held to a strictly stronger standard: "
+    "Phase 14's ordering is legible from commit timestamps, while this file's is enforced by "
+    "`tests/test_phase16_prereg.py` against git's object graph on EVERY commit. That is the whole "
+    "of what "
+    "`scripts/erasure_gate.py:104-106` demands when it fixes the PROCEDURE and the ESTIMATOR and "
+    "leaves the constant to be produced by that procedure, blind; a floor rule edited once its own "
+    "number is visible is a value chosen to be cleared wearing a rule's clothes.",
+)
+
+
+def floor_sweep():
+    """The ``cal_rate`` grid every floor proof runs over — ENDPOINTS INCLUDED.
+
+    ``[0, 1]`` is the whole domain of a rate. The endpoints are the two that matter: 0.0 is where
+    the reachability clamp binds hardest and is the only rate at which an unclamped rule would
+    return a floor of zero, and 1.0 is where the ceiling clamp has to refuse the largest possible
+    calibration rate. A grid that opened either end would skip exactly the two cases the proof
+    exists for.
+    """
+    return tuple(i / FLOOR_SWEEP_STEPS for i in range(FLOOR_SWEEP_STEPS + 1))
+
+
+def _discounted_floor(cal_rate):
+    """``cal_rate x FLOOR_DISCOUNT`` snapped DOWN to the four-decimal grid — the discount branch.
+
+    ``int()`` and not ``math.floor()``: this pin may not import ``math``
+    (``tests/test_phase19_erasure.py::test_the_wilson_bound_is_the_committed_one_and_is_never_re_derived``
+    forbids it so no ``sqrt`` is available to re-derive a second Wilson interval, T-19-08). On a
+    NON-NEGATIVE argument the two are the same function, which is why the domain proof below is
+    load-bearing rather than defensive — and the equivalence is measured against a ``math.floor``
+    oracle across the whole sweep rather than assumed.
+    """
+    _prove(
+        0.0 <= cal_rate <= 1.0,
+        f"cal_rate {cal_rate!r} is outside [0, 1] — it is a recall RATE. Off the non-negative "
+        "domain `int()` truncates toward zero rather than flooring, so the rounding direction W1 "
+        "committed would silently reverse",
+    )
+    return int(cal_rate * FLOOR_DISCOUNT * FLOOR_GRID) / FLOOR_GRID
+
+
+def lock_erasure_floor(cal_rate):
+    """``ERASURE_FLOOR_RULE`` as arithmetic: one blind calibration rate -> the (a) floor.
+
+    ``max(ERASURE_FLOOR_MIN, min(FLOOR_CEILING, floor(cal_rate x 0.60)))``. The inner ``min`` is
+    D2's mirror of Phase 14's ``max`` and is the direction the whole rule turns on. The outer
+    ``max`` is the reachability clamp: it is the ONE place this rule may loosen, it loosens only to
+    the arithmetic minimum a perfect erasure can attain, and ``assert_erasure_floor_reachable``
+    below is what proves that minimum is exactly what it loosens to.
+    """
+    return max(ERASURE_FLOOR_MIN, min(FLOOR_CEILING, _discounted_floor(cal_rate)))
+
+
+def literal_phase14_floor(cal_rate):
+    """Phase 14's operator applied LITERALLY — no mirror, no floor-rounding. Never read by a gate.
+
+    ``max(FLOOR_CEILING, round(cal_rate x 0.60, 4))``, i.e. ``lock_thresholds``' expression with
+    this phase's two constants substituted (``teach_persona.py:828-831``). It exists so the report
+    prints both directions and a reader sees the choice rather than inferring it, which is what D2
+    requires. Deliberately UNGUARDED on its domain: a guard Phase 14 does not have would make this
+    something other than the literal operator it is here to display.
+    """
+    return max(FLOOR_CEILING, round(cal_rate * FLOOR_DISCOUNT, 4))
+
+
+def floor_branch(cal_rate):
+    """Which of ``("reachability-min", "discount", "ceiling")`` produced the returned floor.
+
+    So the report STATES the branch instead of leaving a reader to re-derive it — and the
+    ``reachability-min`` branch is the one that has to be visible, because when it binds the floor
+    equals the perfect-erasure bound and (a) clears ONLY on a perfect erasure.
+
+    A clamp that changes nothing is not reported as having bound: at exactly ``FLOOR_CEILING`` or
+    exactly ``ERASURE_FLOOR_MIN`` the discounted value IS the answer, so the branch is
+    ``"discount"``. That tie order makes the reporter equivalent to a value comparison rather than
+    a second, subtly different, rendering of the same expression.
+    """
+    discounted = _discounted_floor(cal_rate)
+    if discounted > FLOOR_CEILING:
+        return "ceiling"
+    if discounted < ERASURE_FLOOR_MIN:
+        return "reachability-min"
+    return "discount"
+
+
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
     # Smallest runnable check that fails if the derivation breaks. The census is PRINTED rather
     # than asserted against a literal — `component_index`'s own proof is what pins it.
