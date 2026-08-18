@@ -32,6 +32,7 @@ import json
 import math
 import pathlib
 import re
+import subprocess
 
 import pytest
 import torch
@@ -3656,3 +3657,239 @@ def test_the_report_subcommand_runs_end_to_end_on_committed_shaped_records(tmp_p
     for slot in erasure.GATED_NONTARGET_SLOTS:
         assert f"`{slot}`" in text
     assert f"| `{erasure.TARGET_SLOT}` " not in text
+
+
+# =============================================================================================
+# ===== 19-11: THE THREE MEASURED CONSTANTS, AND THE FILE THEY ARE LOCKED IN =====
+# =============================================================================================
+
+FLOOR_LOCK_REL = "scripts/phase19_floor.py"
+FLOOR_LOCK_PATH = _ROOT / FLOOR_LOCK_REL
+NOISE_FLOORS_REL = "results/phase19_noise_floors.json"
+
+# The three names 19-15's report reads, and the ONLY three this file exists to hold.
+LOCKED_CONSTANTS = ("TARGET_FLOOR", "NONTARGET_NOISE_FLOOR", "DIALOGUE_PPL_NOISE_FLOOR")
+
+
+def _floor_lock():
+    """The locked constants, loaded the way the TRIPWIRE loads them — a BARE namespace.
+
+    ``tests/test_phase19_correction.py::test_a_locked_floor_must_be_the_corrected_one`` does
+    exactly this ``exec(compile(...), {})``, with no ``__file__``, no package and no ``sys.path``
+    entry. Loading it the same way here is what stops the two guards disagreeing about what "the
+    file loads" means: a floor file that imports anything, or reads ``__file__``, would satisfy a
+    normal import and still redden the tripwire with a ``NameError`` a reader would have to
+    debug from the wrong end.
+    """
+    assert FLOOR_LOCK_PATH.exists(), (
+        f"{FLOOR_LOCK_REL} does not exist. 19-11 Task 1 locks the three measured constants there, "
+        "and it is deliberately NOT the pin: the (a) floor cannot exist until a Phase 19 artifact "
+        "does, so writing it into scripts/phase19_erasure.py would make that file a non-ancestor "
+        "of the artifact it is derived from"
+    )
+    namespace = {}
+    source = FLOOR_LOCK_PATH.read_text(encoding="utf-8")
+    exec(compile(source, str(FLOOR_LOCK_PATH), "exec"), namespace)
+    return namespace
+
+
+def _floor_git(*args):
+    """git inside the repository, stdout stripped, raising on a non-zero exit."""
+    return subprocess.run(
+        ("git", *args), cwd=_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def _measured_cal_rate():
+    """The blind calibration's pooled rate, through the ONE committed re-derivation.
+
+    ``tests/test_phase19_correction.py::_measured_calibration_rate`` drives the pin's own
+    ``per_fact_rows`` ONCE PER TIER over the committed draws of
+    ``results/phase19_arm_cal-erased.json``. It is imported rather than re-implemented because a
+    second copy of a re-derivation is a second copy free to disagree — the same refusal 19-09
+    applied to the floor itself. It is also NOT ``_calibration_rate()``: that reads Phase 18's
+    candidate rows (defect B) and prices the floor at 0.2.
+    """
+    correction = _load("phase19_correction_helpers", "tests/test_phase19_correction.py")
+    successes, questions, per_tier = correction._measured_calibration_rate()
+    return successes / questions, successes, questions, per_tier
+
+
+def test_floor_lock_re_derives_all_three_constants_from_their_evidence_artifacts():
+    """T-19-47: every locked constant is the PINNED rule applied to a COMMITTED artifact.
+
+    A hand-edited constant goes red here, which is the whole reason the file is allowed to exist
+    outside the pin. Each of the three is re-derived through the pin's own function — never read
+    back out of the artifact as a pre-reduced scalar, because a reduction chosen in the artifact
+    writer is a reduction chosen with the numbers already visible.
+    """
+    locked = _floor_lock()
+    for name in LOCKED_CONSTANTS:
+        assert name in locked, f"{FLOOR_LOCK_REL} defines no {name}"
+
+    # (a) — the blind calibration's OWN draws, per tier, through the pin's own committed rule.
+    rate, successes, questions, _per_tier = _measured_cal_rate()
+    assert locked["TARGET_FLOOR"] == erasure.lock_erasure_floor(rate), (
+        f"{FLOOR_LOCK_REL} locks TARGET_FLOOR = {locked['TARGET_FLOOR']!r}, but "
+        f"lock_erasure_floor({rate!r}) — the pin's committed rule on the {successes}/{questions} "
+        f"the blind calibration measured — returns {erasure.lock_erasure_floor(rate)!r}"
+    )
+
+    floors = json.loads((_ROOT / NOISE_FLOORS_REL).read_text(encoding="utf-8"))
+
+    # (b) — the SEVEN per-fact deltas through the pinned `max`, never the artifact's own scalar.
+    deltas = floors["nontarget_noise_floor"]["deltas_in_slot_order"]
+    assert len(deltas) == len(erasure.GATED_NONTARGET_SLOTS), (
+        f"the (b) block publishes {len(deltas)} deltas against "
+        f"{len(erasure.GATED_NONTARGET_SLOTS)} gated non-target slots — the reduction would be "
+        "over a different fact set than the gate reads"
+    )
+    assert locked["NONTARGET_NOISE_FLOOR"] == erasure.nontarget_noise_floor(deltas), (
+        f"{FLOOR_LOCK_REL} locks NONTARGET_NOISE_FLOOR = "
+        f"{locked['NONTARGET_NOISE_FLOOR']!r}, but the pinned reduction over the seven committed "
+        f"deltas {deltas} returns {erasure.nontarget_noise_floor(deltas)!r}"
+    )
+
+    # (c) — the seed pair's two adapter-ON perplexities through the pinned estimator.
+    block = floors["dialogue_ppl_noise_floor"]
+    seed_pair = (block["seed_a"]["adapter_on"], block["seed_b"]["adapter_on"])
+    assert locked["DIALOGUE_PPL_NOISE_FLOOR"] == erasure.dialogue_noise_floor(*seed_pair), (
+        f"{FLOOR_LOCK_REL} locks DIALOGUE_PPL_NOISE_FLOOR = "
+        f"{locked['DIALOGUE_PPL_NOISE_FLOOR']!r}, but dialogue_noise_floor{seed_pair} returns "
+        f"{erasure.dialogue_noise_floor(*seed_pair)!r}"
+    )
+    assert tuple(block["seeds"]) == erasure.DIALOGUE_NOISE_FLOOR_SEEDS, (
+        "the (c) floor was measured over a seed pair the pin does not name"
+    )
+
+
+def test_floor_lock_records_the_branch_and_both_floor_directions():
+    """D2: BOTH directions committed, and the mirrored one is the HARDER of the two.
+
+    Phase 14 clamped with ``max`` against a ``>=`` gate. Erasure's floor is an upper CAP against a
+    ``<=`` gate, so the identical literal operator would LOOSEN it. ``literal_phase14_floor`` is
+    kept beside the mirrored value so a reader SEES the choice instead of inferring it — publishing
+    both is what Phase 14 itself did when it corrected its own arm.
+    """
+    locked = _floor_lock()
+    rate, _successes, _questions, _per_tier = _measured_cal_rate()
+
+    assert locked["FLOOR_BRANCH"] == erasure.floor_branch(rate), (
+        f"{FLOOR_LOCK_REL} records FLOOR_BRANCH = {locked['FLOOR_BRANCH']!r} but floor_branch("
+        f"{rate!r}) reports {erasure.floor_branch(rate)!r} — the recorded branch and the rule "
+        "disagree about which clamp actually bound"
+    )
+    assert locked["LITERAL_PHASE14_FLOOR"] == erasure.literal_phase14_floor(rate), (
+        f"{FLOOR_LOCK_REL} records LITERAL_PHASE14_FLOOR = "
+        f"{locked['LITERAL_PHASE14_FLOOR']!r} but the unmirrored operator returns "
+        f"{erasure.literal_phase14_floor(rate)!r}"
+    )
+    # `erasure_succeeded` compares `upper <= target_floor`, so the SMALLER floor is the HARDER one.
+    assert locked["TARGET_FLOOR"] <= locked["LITERAL_PHASE14_FLOOR"], (
+        f"the mirrored operator produced {locked['TARGET_FLOOR']!r} and the literal Phase 14 one "
+        f"{locked['LITERAL_PHASE14_FLOOR']!r}. Against a `<=` cap the smaller value is the harder "
+        "criterion, so the mirror made (a) EASIER — the one direction D2 forbids"
+    )
+
+
+def test_floor_lock_evidence_shas_are_real_commits_that_touched_their_artifacts():
+    """The ``CALIBRATION_SHA`` register: each constant points at the EVIDENCE, and it resolves.
+
+    Without this an evidence pin degrades into decoration — a typo, or a SHA naming an unrelated
+    commit, reads exactly like a correct one. Checked three ways, the way
+    ``test_prereg_commit_exists_and_touches_the_erasure_gate`` checks its own pin: the SHA must be
+    the full 40 characters and resolve to itself, the commit it names must actually touch the
+    artifact, and the artifact must be tracked.
+    """
+    locked = _floor_lock()
+    artifacts = locked["EVIDENCE_ARTIFACT"]
+    assert set(artifacts) == set(LOCKED_CONSTANTS), (
+        f"EVIDENCE_ARTIFACT names {sorted(artifacts)} but the locked constants are "
+        f"{sorted(LOCKED_CONSTANTS)} — a constant with no evidence is a number with no provenance"
+    )
+
+    for name, artifact in sorted(artifacts.items()):
+        sha = locked[f"{name}_EVIDENCE_SHA"]
+        assert len(sha) == 40 and set(sha) <= set("0123456789abcdef"), (
+            f"{name}_EVIDENCE_SHA is {sha!r} — an abbreviated SHA is a prefix query against a "
+            "growing object store and this pin must outlive the repository"
+        )
+        resolved = _floor_git("log", "-1", "--format=%H", sha)
+        assert resolved == sha, f"{name}_EVIDENCE_SHA resolved to {resolved!r}, not itself"
+        touched = _floor_git("show", "--stat", "--format=", sha)
+        assert artifact in touched, (
+            f"{name}_EVIDENCE_SHA {sha} does not touch {artifact}; it is not the commit that "
+            f"published the evidence this constant is derived from. Files it does touch:\n"
+            f"{touched}"
+        )
+        assert _floor_git("ls-files", artifact) == artifact, (
+            f"{artifact} is not tracked, so {name} is derived from something a reader cannot "
+            "fetch and re-run"
+        )
+
+
+def test_floor_lock_holds_only_literal_constants_and_nothing_else():
+    """The two-file split's OTHER half: the pin holds the rule, this file holds only numbers.
+
+    Every statement is a literal assignment. No import, no function, no class, no expression —
+    which keeps three separate promises at once. The rule and the estimators stay in the CLOSED
+    pin where the ancestry guard watches them, so a sanctioned post-artifact write cannot smuggle
+    a rule change in beside a constant. The bare-namespace ``exec`` both guards use keeps working,
+    because there is nothing here that needs ``__file__`` or a ``sys.path`` entry. And a reader
+    auditing the numbers reads a page of assignments rather than a module.
+    """
+    source = FLOOR_LOCK_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    head, *rest = tree.body
+    assert isinstance(head, ast.Expr) and isinstance(head.value, ast.Constant), (
+        f"{FLOOR_LOCK_REL} opens with something other than its module docstring — the docstring is "
+        "where the two-file split is justified and it may not be displaced"
+    )
+    for node in rest:
+        assert isinstance(node, ast.Assign), (
+            f"{FLOOR_LOCK_REL} carries a {type(node).__name__} at line {node.lineno}. This file "
+            "holds measured constants and nothing else: the rule, the estimators and the report "
+            "text live in the CLOSED pin and moving any of them here would put them outside the "
+            "ancestry guard that watches them"
+        )
+        ast.literal_eval(node.value)  # raises on anything that is not a literal
+
+    for node in ast.walk(tree):
+        assert not isinstance(node, (ast.Import, ast.ImportFrom)), (
+            f"{FLOOR_LOCK_REL} imports at line {node.lineno}. The tripwire and the guard above "
+            "both load this file with `exec(compile(...), {})`, where an import is the one thing "
+            "that can fail for a reason unrelated to the constants"
+        )
+    assert "__file__" not in source, (
+        f"{FLOOR_LOCK_REL} reads __file__, which is absent from the bare namespace both guards "
+        "exec it in"
+    )
+
+
+def test_measured_floor_is_reachable():
+    """19-03 proved the RULE could never produce an unclearable floor. This proves the ONE it did.
+
+    ``assert_erasure_floor_reachable`` sweeps 1001 hypothetical calibration rates at import time
+    and is the stronger statement in every respect but one: it is about a rule, and what the phase
+    is judged on is the single number that rule actually returned. If the sweep and the locked
+    constant ever disagree, one of them is wrong, and this is where that has to surface — BEFORE
+    the target is touched, not after a target erasure has spent its compute against a floor no
+    outcome could clear.
+
+    The named attainable outcome is a PERFECT ERASURE: 0 successes over every scored target
+    question. The comparison is NON-STRICT because ``erasure_succeeded`` compares
+    ``upper <= target_floor`` (``scripts/erasure_gate.py:230``) — a bound landing exactly on the
+    floor PASSES there, and a proof that refused it would refuse a floor the gate itself accepts.
+    """
+    locked = _floor_lock()
+    best_attainable = erasure.wilson_upper_bound(0, erasure.N_TARGET_QUESTIONS)
+    assert best_attainable <= locked["TARGET_FLOOR"], (
+        f"the LOCKED (a) floor is {locked['TARGET_FLOOR']!r} ({locked['FLOOR_BRANCH']}), but the "
+        f"best attainable upper bound over {erasure.N_TARGET_QUESTIONS} pooled target questions — "
+        f"0 successes, a PERFECT ERASURE, the smallest value the gate's own estimator can return "
+        f"at that denominator — is {best_attainable!r}. No outcome whatsoever could clear that "
+        "floor, so condition (a) is dead arithmetically rather than merely strict. The rule-level "
+        "sweep in assert_erasure_floor_reachable is green, so a failure here means the locked "
+        "constant is not what the rule returned"
+    )
