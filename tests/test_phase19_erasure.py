@@ -1910,3 +1910,333 @@ def test_zero_results_have_nll_records_the_q75_masking_concern_as_a_measured_col
     assert "stronger" in lowered
     assert "rank" in lowered and "nll" in lowered
     assert "decoding artifact" in lowered or "decoding-artifact" in lowered
+
+
+# =============================================================================================
+# ===== PLAN 19-05 / TASK 1 — THE DESCRIPTIVE READ MAY NOT BECOME A GATE; ONE VERDICT PATH ====
+# =============================================================================================
+#
+# `scripts/erasure_gate.py:118-122` makes representational consistency DESCRIPTIVE and EXPLICITLY
+# NOT GATED, and `ROADMAP.md:530-534` treats a plan that converts one of these into pass/fail as a
+# violation of the pre-registration. This project enforces that STRUCTURALLY rather than by
+# convention: `tests/test_phase16_stats.py:798-823` landed its sweep guard BEFORE the code it
+# constrains, and Phase 17's D-21 scan catches a second `sign_test_exact` call site as a second
+# hypothesis family. The two scans below are Phase 19's, in the same commit as the read they guard.
+#
+# Both are written as PURE FUNCTIONS OVER A SOURCE STRING and then driven twice — once on the real
+# pin (must be clean) and once on a synthetic mutant (must be dirty). A structural guard nobody has
+# watched fail is a guard nobody has verified (`STATE.md`, 15-03), and driving the mutant here makes
+# that verification a committed property instead of a claim in a summary.
+
+_ORDERING_OPS = (ast.Lt, ast.LtE, ast.Gt, ast.GtE)
+
+# The three ways a number becomes a verdict in this repository. `wilson_upper_bound` is on the list
+# with the two inferential calls because it is the estimator condition (a) is gated through
+# (`erasure_gate.py:229-230`) — a representational read that computed one would be manufacturing the
+# bound half of a pass/fail even without writing the comparison down.
+_ERASURE_GATED_CALLEES = ("sign_test_exact", "holm", "wilson_upper_bound")
+
+
+def _callee_name(call):
+    return getattr(call.func, "id", None) or getattr(call.func, "attr", None)
+
+
+def _module_functions(source=_PIN_SOURCE):
+    """``name -> FunctionDef`` for every function defined at MODULE scope."""
+    return {node.name: node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef)}
+
+
+def _call_sites(callee, source=_PIN_SOURCE):
+    """``(enclosing module-level function name, Call)`` for every call to ``callee``.
+
+    A call that escaped every function body is reported under ``None`` rather than dropped: the pin
+    runs proofs at module scope, and a verdict call hiding among them is exactly the second path
+    this scan exists to refuse.
+    """
+    tree = ast.parse(source)
+    sites, seen = [], set()
+    for function in (node for node in tree.body if isinstance(node, ast.FunctionDef)):
+        for node in ast.walk(function):
+            if isinstance(node, ast.Call) and _callee_name(node) == callee:
+                sites.append((function.name, node))
+                seen.add(id(node))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and _callee_name(node) == callee and id(node) not in seen:
+            sites.append((None, node))
+    return sites
+
+
+def _pin_numeric_names():
+    """Every module-level name in the pin bound to a NUMBER — assigned here or imported.
+
+    Derived from the live module rather than from assignment targets, so an imported threshold
+    (`MARGIN_K`, the three v2.0 baselines) is covered by the same set as a locally assigned one.
+    """
+    return {
+        name
+        for name, value in vars(erasure).items()
+        if not name.startswith("__")
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+    }
+
+
+def _gating_offenders(source, names):
+    """Every way a function in ``names`` reaches for a pass/fail. Empty means descriptive."""
+    functions = _module_functions(source)
+    thresholds = _pin_numeric_names()
+    offenders = []
+    for name in names:
+        node = functions.get(name)
+        if node is None:
+            offenders.append(f"{name}: not defined at module scope")
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Call) and _callee_name(inner) in _ERASURE_GATED_CALLEES:
+                offenders.append(f"{name}: calls {_callee_name(inner)}")
+            if isinstance(inner, ast.Compare):
+                ordering = [type(op).__name__ for op in inner.ops if isinstance(op, _ORDERING_OPS)]
+                if ordering:
+                    offenders.append(f"{name}: ordering comparison {ordering}")
+            if isinstance(inner, ast.Name) and inner.id in thresholds:
+                offenders.append(f"{name}: reads the module-level number {inner.id}")
+    return offenders
+
+
+def test_representational_read_is_not_gated():
+    """T-19-18 — the read NAMES what it scanned, so a rename cannot silently escape the scan."""
+    names = erasure.DESCRIPTIVE_ONLY_FUNCTIONS
+    assert names, "DESCRIPTIVE_ONLY_FUNCTIONS is empty — a scan over nothing is green and blind"
+
+    # A DANGLING entry must FAIL rather than quietly excuse a missing scan target — the discipline
+    # `tests/test_phase14_scoring.py:576-582` already uses for `DRAW_ALL_ASSERTED_BY`.
+    functions = _module_functions()
+    for name in names:
+        assert name in functions, (
+            f"DESCRIPTIVE_ONLY_FUNCTIONS names {name!r}, which is not a function defined in the "
+            "pin. A dangling entry excuses a missing scan target instead of failing on it, and a "
+            "renamed function would then escape the scan while the tuple still looked complete"
+        )
+        assert callable(getattr(erasure, name, None)), f"{name} is not callable on the module"
+
+    assert _gating_offenders(_PIN_SOURCE, names) == [], (
+        "a function on the representational path reaches for a pass/fail. "
+        "`scripts/erasure_gate.py:118-122` makes this read DESCRIPTIVE and EXPLICITLY NOT GATED: "
+        "at n=8 facts and n=3 personas the sample cannot support a threshold, and gating what the "
+        "sample cannot support is treated as a DEFECT in this project, not as extra rigour"
+    )
+
+    # NON-VACUITY, driven rather than asserted. The mutant is the plan's own prescribed RED.
+    mutant = (
+        "def delta_w_cosine(cells_a, cells_b):\n"
+        "    out = {}\n"
+        "    for key in cells_a:\n"
+        "        cosine = 0.0\n"
+        "        if cosine > 0.5:\n"
+        "            out[key] = cosine\n"
+        "    return out\n"
+    )
+    assert _gating_offenders(mutant, ("delta_w_cosine",)), (
+        "the scan cannot see a bare threshold comparison — it would be green against the exact "
+        "mutation it exists to catch"
+    )
+    inferential = (
+        "def fisher_overlap(fisher_cells, ablated_addresses):\n"
+        "    return sign_test_exact(tuple(fisher_cells))\n"
+    )
+    assert _gating_offenders(inferential, ("fisher_overlap",)), (
+        "the scan cannot see a second inferential call site — a second `sign_test_exact` IS a "
+        "second hypothesis family and would reprice Holm to carry a descriptive statistic"
+    )
+    assert _gating_offenders("x = 1\n", ("delta_w_cells",)), (
+        "a MISSING scan target reads as clean — a renamed function would escape the scan"
+    )
+
+
+def _verdict_offenders(source):
+    """Every way the pin could hold a SECOND verdict. Empty means exactly one path exists."""
+    import erasure_gate
+
+    tree = ast.parse(source)
+    offenders = []
+
+    imported = {
+        (node.module, alias.name)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    if ("erasure_gate", "erasure_succeeded") not in imported:
+        offenders.append("erasure_succeeded is not imported from erasure_gate")
+    if "erasure_succeeded" in {
+        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+    }:
+        offenders.append("erasure_succeeded is DEFINED here — the committed rule was re-written")
+
+    sites = [holder for holder, _call in _call_sites("erasure_succeeded", source)]
+    if len(sites) > 1:
+        offenders.append(f"erasure_succeeded is called {len(sites)} times: {sites}")
+
+    # The four v2.0 baselines the gate's own (a)/(c) arithmetic reads. Any of them retyped as a
+    # numeric literal here is a second copy of a number the gate owns, free to stop agreeing.
+    for name in (
+        "V20_MASKED_DIALOGUE_VAL_PPL",
+        "V20_EWC_RETENTION_PPL",
+        "V20_RETENTION_NOISE_FLOOR",
+        "MARGIN_K",
+    ):
+        value = getattr(erasure_gate, name)
+        hits = [
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, (int, float))
+            and not isinstance(node.value, bool)
+            and node.value == value
+        ]
+        if hits:
+            offenders.append(f"{name} ({value!r}) is typed as a literal at lines {hits}")
+    return offenders
+
+
+def test_verdict_is_called_never_reimplemented():
+    """T-19-19 / STAT-05 — one verdict path, importing the committed rule instead of retyping it."""
+    import erasure_gate
+
+    assert erasure.erasure_succeeded is erasure_gate.erasure_succeeded, (
+        "the pin's `erasure_succeeded` is not the object `scripts/erasure_gate.py` committed at "
+        "`23a830c` — a value-matching copy is a copy free to stop matching"
+    )
+    assert _verdict_offenders(_PIN_SOURCE) == [], (
+        "the pin holds a second way to reach an (a)/(b)/(c) verdict. The whole phase is worthless "
+        "if a second evaluation exists anywhere to disagree with the committed one"
+    )
+
+    # It is CALLED — exactly once — and the caller is named, so the single path is a located path.
+    sites = [holder for holder, _call in _call_sites("erasure_succeeded")]
+    assert sites == ["render_verdict"], (
+        f"erasure_succeeded is called from {sites}, not from exactly `render_verdict`. A rule that "
+        "is imported and never called is a rule the report is free to paraphrase instead"
+    )
+
+    # NON-VACUITY: the same scan on a mutant with a second call site, and on one that retypes a
+    # baseline the gate owns.
+    doubled = (
+        "from erasure_gate import erasure_succeeded\n"
+        "def render_verdict(**kw):\n"
+        "    return erasure_succeeded(**kw)\n"
+        "def second_opinion(**kw):\n"
+        "    return erasure_succeeded(**kw)\n"
+    )
+    assert _verdict_offenders(doubled), "a second erasure_succeeded call site reads as clean"
+    retyped = (
+        "from erasure_gate import erasure_succeeded\n"
+        "def render_verdict(ppl):\n"
+        "    return erasure_succeeded, 4.5733 + 2 * ppl\n"
+    )
+    assert _verdict_offenders(retyped), "a retyped v2.0 baseline reads as clean"
+
+
+def _fisher_cell_fixture():
+    """A per-cell Fisher dict in `extract_deltas.fisher_cells`' exact shape (:199), 36 entries."""
+    return {
+        (layer, projection): 1.0 + layer + len(projection) / 10.0
+        for layer, projection, _key in extract_deltas.KEYS
+    }
+
+
+def test_delta_w_cells_carries_the_committed_magnitude_read_and_its_own_direction():
+    """The ratio is DELEGATED to `extract_deltas.adapter_cells`; the direction is cross-checked.
+
+    `adapter_cells` returns a per-cell Frobenius-norm RATIO — a scalar — so a cosine cannot be
+    taken over its output at all. The direction is therefore built here from the SAME identity the
+    pin already committed (`MECHANISM_RULE`: ``dW = scale * (B @ A)``), and the two are tied
+    together by this test: ``||delta||_F / ||W0||_F`` must equal the ratio `adapter_cells` returned
+    for that cell, so the duplication cannot drift into two different deltas.
+    """
+    base, adapted, lora_cfg = _build_pair()
+    artifact = _artifact(adapted, lora_cfg)
+    w0_state = base.state_dict()
+
+    cells = erasure.delta_w_cells(artifact, w0_state)
+    assert set(cells) == {(layer, projection) for layer, projection, _k in extract_deltas.KEYS}
+
+    scale = lora_cfg.alpha / lora_cfg.r  # alpha/r READ FROM THE ARTIFACT (extract_deltas.py:295)
+    ratios = extract_deltas.adapter_cells(artifact["adapter"], scale, w0_state)
+    for layer, projection, key in extract_deltas.KEYS:
+        cell = cells[(layer, projection)]
+        assert cell["ratio"] == ratios[(layer, projection)], (
+            "the magnitude read is not the committed one — it must be delegated, never recomputed"
+        )
+        assert cell["delta"].dtype == torch.float64, "the statistics domain is fp64"
+        rebuilt = float(
+            torch.linalg.norm(cell["delta"]) / torch.linalg.norm(w0_state[key].to(torch.float64))
+        )
+        assert rebuilt == pytest.approx(cell["ratio"], rel=1e-12, abs=0.0), (
+            f"cell {(layer, projection)}: the direction and the ratio came from DIFFERENT deltas "
+            f"({rebuilt} vs {cell['ratio']}) — the cosine would then describe a delta whose "
+            "magnitude the report publishes from somewhere else"
+        )
+
+    # Non-vacuity: an un-nudged adapter has lora_B == 0 (the identity gate, layer.py:30), so every
+    # assertion above would also hold against a function that returned zeros.
+    assert any(cell["ratio"] != 0.0 for cell in cells.values()), (
+        "every delta is zero — the fixture is measuring the LoRA identity gate, not the operator"
+    )
+
+
+def test_delta_w_cosine_is_per_cell_and_never_calls_a_zero_delta_orthogonal():
+    """A dict keyed by ``(layer, projection)``, never a scalar; an ablated cell is None, not 0.0."""
+    base, adapted, lora_cfg = _build_pair()
+    artifact = _artifact(adapted, lora_cfg)
+    w0_state = base.state_dict()
+    cells = erasure.delta_w_cells(artifact, w0_state)
+
+    same = erasure.delta_w_cosine(cells, cells)
+    assert set(same) == set(cells), "the read returns one entry per cell, never a pooled summary"
+    for key, cosine in same.items():
+        assert cosine == pytest.approx(1.0, abs=1e-12), f"{key} is not aligned with itself"
+
+    # A FULLY ablated adapter has dW == 0 in every cell, so its direction is UNDEFINED. Reporting
+    # 0.0 there would read as "orthogonal", which is a claim the arithmetic does not make.
+    erased = erasure.ablate_components(artifact, erasure.component_index())
+    zeroed = erasure.delta_w_cells(erased, w0_state)
+    undefined = erasure.delta_w_cosine(cells, zeroed)
+    assert set(undefined) == set(cells)
+    assert all(value is None for value in undefined.values()), (
+        "a zero delta was assigned a cosine — `None` and `0.0` are different findings, exactly as "
+        "`_verdict.recorded_verdict` distinguishes no-section from an empty body"
+    )
+
+    with pytest.raises(SystemExit):
+        erasure.delta_w_cosine(cells, {key: cells[key] for key in list(cells)[:5]})
+
+
+def test_fisher_overlap_partitions_by_cell_and_publishes_both_denominators():
+    """Mass in the ablated addresses AGAINST mass in the rest — both sides, both denominators."""
+    fisher = _fisher_cell_fixture()
+    ablated = [(0, "q_proj", 0), (0, "q_proj", 3), (2, "fc_in", 7)]
+
+    overlap = erasure.fisher_overlap(fisher, ablated)
+    assert overlap["ablated_cells"] == ((0, "q_proj"), (2, "fc_in"))
+    assert overlap["n_ablated_cells"] == 2
+    assert overlap["n_preserved_cells"] == len(extract_deltas.KEYS) - 2
+    assert overlap["ablated_mean"] == pytest.approx(
+        (fisher[(0, "q_proj")] + fisher[(2, "fc_in")]) / 2
+    )
+    preserved = [v for k, v in fisher.items() if k not in {(0, "q_proj"), (2, "fc_in")}]
+    assert overlap["preserved_mean"] == pytest.approx(sum(preserved) / len(preserved))
+    assert overlap["reduction"] == extract_deltas.FISHER_AGGREGATE
+
+    # It carries its own label and its own limitation, so neither can be lost between here and a
+    # caption: the Fisher cache has no rank-1 resolution, so this read is CELL-granular.
+    assert "DESCRIPTIVE" in overlap["label"]
+    assert "cell" in overlap["granularity"].lower()
+
+    # Both degenerate partitions RAISE rather than returning a number over an empty denominator.
+    with pytest.raises(SystemExit):
+        erasure.fisher_overlap(fisher, [])
+    with pytest.raises(SystemExit):
+        erasure.fisher_overlap(fisher, erasure.component_index())
+    with pytest.raises(SystemExit):
+        erasure.fisher_overlap(fisher, [(0, "q_proj", 0), (99, "q_proj", 0)])
