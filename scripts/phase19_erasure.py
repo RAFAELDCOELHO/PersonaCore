@@ -1385,10 +1385,20 @@ FORBID_IDS_SHA256 = "79b55770f4dcfa943d7528cb04829e8d2e7dd8823b9b5450da418b4fcf3
 # (`git_sha`, `device`, `pid`, `torch`, ...) and a hard equality here would forbid recording them.
 # `k` and not `K`: Phase 18's committed config spells it lowercase and `target_rows_from_arm_record`
 # already reads `arm_record["config"]["k"]`, so two spellings of the budget would be two readers.
+#
+# 19-05 EXTENDED this with the four sampling columns Phase 18 never recorded (`asr_rungs`,
+# `stop_ids`, `sample_temperature`, `sample_top_p`). Phase 18 chose none of them — it inherits them
+# by calling `phase14_recall`'s sampler — so they had to be RECONSTRUCTED from their owning modules
+# to check parity at all. Requiring them here means a Phase 19 reader never has to reconstruct
+# anything: `PARITY_KEYS` is a subset of this tuple, asserted by test.
 ARM_CONFIG_KEYS = (
     "corpus_sha256",
     "forbid_ids_sha256",
     "k",
+    "asr_rungs",
+    "stop_ids",
+    "sample_temperature",
+    "sample_top_p",
     "seed_stride",
     "mechanism",
     "ablated_components",
@@ -1565,6 +1575,152 @@ def zero_results_have_nll(arm_record):
     produces nothing.
     """
     return not zero_result_exposure_gaps(arm_record)
+
+
+# =============================================================================================
+# ===== COMPARABILITY WITH PHASE 18 — asserted against Phase 18's own values (Q7.8/T-19-20) ====
+# =============================================================================================
+
+# The committed Phase 18 artifacts the parity check reads. The Phase 19 target arms REUSE
+# `results/phase18_corpus.json` VERBATIM rather than rebuilding it — that is what makes the
+# post-erasure numbers directly comparable to the committed `adapter-on` per-fact rates, and it
+# removes the whole class of drift Q7.8 describes at the source instead of detecting it afterwards.
+PHASE18_CORPUS_PATH = _REPO_ROOT / "results" / "phase18_corpus.json"
+PHASE18_ARM_RECORD_PATH = _REPO_ROOT / "results" / "phase18_arm_adapter-on.json"
+
+# The eight parameters that decide whether a Phase 19 rate may be compared with Phase 18's 92/104.
+# ORDERED, and `assert_phase18_parity` raises on the FIRST offender in this order, so the abort
+# names one key rather than a set a reader has to diff.
+PARITY_KEYS = (
+    "corpus_sha256",
+    "forbid_ids_sha256",
+    "k",
+    "asr_rungs",
+    "stop_ids",
+    "sample_temperature",
+    "sample_top_p",
+    "seed_stride",
+)
+
+# MEASURED, not assumed: Phase 18's own committed config carries FOUR of the eight
+# (`results/phase18_arm_adapter-on.json`). The other four are absent because Phase 18 never chose
+# them — it reaches the sampler through `phase14_recall.draw_all` / `complete_question`, which read
+# `SAMPLE_TEMPERATURE`, `SAMPLE_TOP_P` and `STOP_IDS` as module constants, and no Phase 18 call site
+# overrides any of them (AST census, `tests/test_phase19_erasure.py`). A Phase 19 arm RECORDS all
+# eight — `ARM_CONFIG_KEYS` requires them — precisely so this reconstruction is never needed twice.
+PHASE18_RECORDED_PARITY_KEYS = ("corpus_sha256", "forbid_ids_sha256", "k", "seed_stride")
+PHASE18_INHERITED_PARITY_KEYS = ("asr_rungs", "stop_ids", "sample_temperature", "sample_top_p")
+
+
+def phase18_parity_values():
+    """The eight expected values, each IMPORTED from its owning module or RECOMPUTED.
+
+    Never retyped here. A constant that moves upstream turns this red instead of diverging
+    silently, which is the whole difference between a parity check and a second set of numbers.
+
+    ``corpus_sha256`` is recomputed from ``results/phase18_corpus.json`` through the committed
+    ``canonical_json`` + ``corpus_sha256`` pair (``phase18_extraction.py:746,758``), never compared
+    against a pasted hex string. ``seed_stride`` is read from Phase 18's OWN committed record: the
+    string lives inside a dict literal in a function there (``:3714``) and is not importable, and
+    the authority for "the stride Phase 18 actually ran" is Phase 18's artifact rather than a
+    sentence retyped here.
+    """
+    import phase14_recall as recall  # LAZY — see the module docstring's no-fact-value rule
+    import phase18_extraction as extraction  # LAZY — same rule
+
+    corpus = json.loads(PHASE18_CORPUS_PATH.read_text(encoding="utf-8"))
+    record = json.loads(PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    return {
+        "corpus_sha256": extraction.corpus_sha256(corpus),
+        "forbid_ids_sha256": FORBID_IDS_SHA256,
+        "k": extraction.K,
+        "asr_rungs": extraction.ASR_RUNGS,
+        "stop_ids": recall.STOP_IDS,
+        "sample_temperature": recall.SAMPLE_TEMPERATURE,
+        "sample_top_p": recall.SAMPLE_TOP_P,
+        "seed_stride": record["config"]["seed_stride"],
+    }
+
+
+def phase18_parity_config(arm_record):
+    """Phase 18's own eight-key comparability block: four RECORDED, four INHERITED BY CALL.
+
+    Exists because Phase 18 evidences its pairing by DIGEST and by two distinct pids rather than by
+    assertion (``results/phase18_extraction_report.md:260-265``), and its config therefore records
+    only the four parameters it explicitly chose. The four it never chose are reconstructed from the
+    modules that own them, and the reconstruction is only honest because a committed AST census
+    proves no Phase 18 sampler call site overrides them.
+
+    The four RECORDED values are read out of the passed record, so a record that ran at a different
+    budget or under a different mask cannot be completed into a config that passes.
+
+    Phase 19 records the same evidence and then some: all eight columns in every arm config
+    (``ARM_CONFIG_KEYS``), with the digest and the pid carried on top as provenance, so the pairing
+    is auditable from the artifact alone AND asserted by ``assert_phase18_parity`` before the run.
+    """
+    config = arm_record["config"]
+    missing = [key for key in PHASE18_RECORDED_PARITY_KEYS if key not in config]
+    _prove(
+        not missing,
+        f"the Phase 18 arm record is missing {missing} from its own config. Those are the four "
+        "comparability parameters Phase 18 DID record; without them there is nothing to "
+        "reconstruct the pairing from and the comparison against 92/104 has no basis",
+    )
+    inherited = phase18_parity_values()
+    completed = {key: config[key] for key in PHASE18_RECORDED_PARITY_KEYS}
+    completed.update({key: inherited[key] for key in PHASE18_INHERITED_PARITY_KEYS})
+    return {key: completed[key] for key in PARITY_KEYS}
+
+
+def _parity_equal(want, got):
+    """Compare by the EXPECTED value's own semantics, and never raise while doing it.
+
+    A JSON round trip turns a tuple and a frozenset into lists, and the configs this is asserted
+    against are read back out of artifacts. So a set is compared AS A SET (order carries no
+    meaning for ``stop_ids``) and a tuple AS AN ORDERED TUPLE (``asr_rungs`` is a ladder, and a
+    reordered ladder is a different ladder). A wrong TYPE returns False rather than raising, so the
+    abort below names the key instead of surfacing a ``TypeError`` from inside a comparison.
+    """
+    if isinstance(want, (set, frozenset)):
+        return isinstance(got, (list, tuple, set, frozenset)) and set(got) == set(want)
+    if isinstance(want, tuple):
+        return isinstance(got, (list, tuple)) and tuple(got) == want
+    return got == want
+
+
+def assert_phase18_parity(config):
+    """Every comparability parameter equals Phase 18's own value, or ``SystemExit`` naming the key.
+
+    A MISSING key raises. An absent parameter must not read as agreement — that is how a run ends
+    up compared against a baseline it never shared, and it is the failure mode Q7.8 names.
+
+    Assert this on the arms whose rates are compared with Phase 18's committed per-fact rates. It
+    is deliberately NOT for the (b) noise-floor REPLICATE, whose stride is offset ON PURPOSE so its
+    seed windows cannot collide with Phase 18's (``replicate_seed_stride``, ``SEED_STRIDE_OFFSET``);
+    that arm is compared against the pre-erasure reading in its own run, not against Phase 18. Its
+    config still RECORDS all eight columns, because recording which stride an arm ran under and
+    asserting it matches another phase's are different acts, and Phase 18 did neither.
+
+    Returns the config it accepted, so a caller can write the audited block straight into the
+    record instead of assembling a second copy beside it.
+    """
+    expected = phase18_parity_values()
+    for key in PARITY_KEYS:
+        _prove(
+            key in config,
+            f"the arm config does not record {key!r}. Every one of {PARITY_KEYS} decides whether "
+            "this run's rate may be compared with Phase 18's committed 92/104, and an ABSENT key "
+            "must not read as agreement — silence is the one answer a parity check may not accept",
+        )
+        _prove(
+            _parity_equal(expected[key], config[key]),
+            f"parity key {key!r}: this arm ran under {config[key]!r}, Phase 18 under "
+            f"{expected[key]!r}. A different corpus, mask, budget, ladder, stop set, sampling "
+            "parameter or seed stride makes the post-erasure number incomparable with the "
+            "pre-erasure rate it is supposed to be a movement from, and the comparison is then "
+            "void rather than merely noisy",
+        )
+    return config
 
 
 # =============================================================================================

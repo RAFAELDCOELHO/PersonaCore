@@ -1726,9 +1726,16 @@ def _erasure_arm(zero_slots=(), exposure=None, pre_exposure=None, **overrides):
     block = {
         "arm": "erased",
         "config": {
+            # All eight comparability columns, because 19-05 made them REQUIRED: Phase 18 recorded
+            # only four and the other four had to be reconstructed from their owning modules to
+            # check parity at all. This arm carries the deliberately OFFSET replicate stride, which
+            # is exactly the case `assert_phase18_parity` is not for.
+            **{
+                key: erasure.phase18_parity_values()[key]
+                for key in erasure.PARITY_KEYS
+                if key not in ("corpus_sha256", "seed_stride")
+            },
             "corpus_sha256": "0" * 64,
-            "forbid_ids_sha256": erasure.FORBID_IDS_SHA256,
-            "k": 48,
             "seed_stride": f"SEED_STRIDE_OFFSET + seed_index * K ({erasure.SEED_STRIDE_OFFSET})",
             "mechanism": erasure.MECHANISM_ID,
             "ablated_components": [],
