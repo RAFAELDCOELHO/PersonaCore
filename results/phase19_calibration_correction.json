@@ -1,0 +1,40 @@
+{
+  "calibration_per_tier": {
+    "core_held_out": {
+      "n_answerable": 0,
+      "n_questions": 9
+    },
+    "core_taught": {
+      "n_answerable": 0,
+      "n_questions": 14
+    }
+  },
+  "calibration_questions": 23,
+  "calibration_rate": 0.0,
+  "calibration_successes": 0,
+  "continuation": "results/phase19_calibration_correction.md",
+  "corrected_floor_branch": "reachability-min",
+  "corrected_target_floor": 0.09107873950450847,
+  "defects": {
+    "A": "zero_result_exposure_gaps compares tuple(entry) != EXPOSURE_RECORD_KEYS while run_erasure_arm serialises with sort_keys=True \u2014 same key SET, different ORDER. zero_results_have_nll is therefore False on a record whose every NLL is present and finite, and erasure_gate short-circuits to INCONCLUSIVE on exactly the zero a successful erasure produces.",
+    "B": "_calibration_rate reads record['pre_erasure']['per_fact'], which run_erasure_arm fills from the PHASE 18 record for every arm. It returns Phase 18's candidate recall, not the calibration arm's own rate \u2014 which is why the pin's internal floor is the ceiling branch instead of the reachability clamp.",
+    "C": "per_fact is fact_id-keyed and rows.update(...) lets core_taught (14) overwrite core_held_out (9), so the committed record publishes n_questions 14 where CALIBRATION_COMMENSURABILITY clause 3 requires 23. The numerator is 0 in both tiers, so the rate and the floor branch are unaffected."
+  },
+  "evidence": {
+    "K": 48,
+    "arm_record": "results/phase19_arm_cal-erased.json",
+    "arm_record_first_add": "14ab93df61a9399fb815918753b85af27e660447",
+    "corpus": "results/phase19_calibration_corpus.json",
+    "corpus_n_questions": 23,
+    "family": "A2",
+    "n_draws": 1104,
+    "re_derivation": "phase19_erasure.per_fact_rows(record['draws'], {fact.id: fact.value}, family='A2', tier=tier) once PER TIER, then lock_erasure_floor(successes / questions)",
+    "record_published_n_questions": 14
+  },
+  "governs": "corrected_target_floor",
+  "pin_internal_calibration_rate": 0.8846153846153846,
+  "pin_internal_floor_branch": "ceiling",
+  "pin_internal_is_superseded": true,
+  "pin_internal_target_floor": 0.2,
+  "proof": "tests/test_phase19_correction.py"
+}
