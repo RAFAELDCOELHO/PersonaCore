@@ -25,7 +25,9 @@ without that pair the strongest-looking assertion in this file would be measurin
 
 import ast
 import dataclasses
+import functools
 import importlib.util
+import inspect
 import json
 import math
 import pathlib
@@ -3506,3 +3508,124 @@ def test_the_cli_names_every_subcommand_the_phase_will_ever_call():
 
     # And the two committed self-check modes still resolve, so no published pointer went stale.
     assert "target" in erasure.SUBCOMMANDS and "floor" in erasure.SUBCOMMANDS
+
+    # 19-07's audit: the published set and the docstring's enumeration are ONE set. `dialogue-floor`
+    # is what makes `DIALOGUE_NOISE_FLOOR_SEEDS` reachable at all — before it, no subcommand trained
+    # a second-seeded adapter and the pinned estimator had no producer.
+    assert "dialogue-floor" in erasure.SUBCOMMANDS
+    for name in erasure.SUBCOMMANDS:
+        assert f"``{name}``" in doc, f"the docstring's rule 2b does not enumerate {name!r}"
+
+
+def _dialogue_floor_record(**overrides):
+    """The `dialogue-floor` record's shape — two adapter-ON PPLs, one per PINNED seed."""
+    record = {
+        "seeds": list(erasure.DIALOGUE_NOISE_FLOOR_SEEDS),
+        "dialogue_ppl": {
+            str(seed): {"adapter_on": ppl, "adapter_off": 4.5733, "n_targets": 270203}
+            for seed, ppl in zip(erasure.DIALOGUE_NOISE_FLOOR_SEEDS, (5.8154, 5.8329), strict=True)
+        },
+    }
+    record.update(overrides)
+    return record
+
+
+def test_the_c_noise_floor_is_the_seed_pair_spread_and_never_one_arms_own_harm(
+    tmp_path, monkeypatch
+):
+    """19-07 blocker 1. The pinned estimator had no producer; `_cmd_report` differenced ONE arm.
+
+    `DIALOGUE_NOISE_FLOOR_ESTIMATOR` names |dPPL| between TWO INDEPENDENTLY SEEDED RE-TEACHINGS.
+    What the report actually computed was `dialogue_noise_floor(post, pre)` off a single arm — the
+    ERASURE'S OWN EFFECT SIZE, published under the seed pair's name. That makes the (c) criterion
+    NON-MONOTONE IN HARM: the cap widens in exact proportion to the damage, so a catastrophic
+    erasure clears (c) and a mild one does not.
+    """
+    path = tmp_path / "phase19_dialogue_floor.json"
+    monkeypatch.setattr(erasure, "DIALOGUE_FLOOR_RECORD_PATH", path)
+
+    # ABSENT -> an abort that NAMES the subcommand. Never a fallback: a fallback is a second
+    # estimator, selected by which files happened to exist the day the report was rendered.
+    with pytest.raises(SystemExit) as excinfo:
+        erasure.dialogue_floor_from_record()
+    assert "dialogue-floor" in str(excinfo.value)
+
+    path.write_text(json.dumps(_dialogue_floor_record()), encoding="utf-8")
+    assert erasure.dialogue_floor_from_record() == pytest.approx(abs(5.8154 - 5.8329))
+
+    # A record produced under a DIFFERENT pair measures a different quantity, and the report
+    # captions the number with `DIALOGUE_NOISE_FLOOR_SEEDS` regardless — so it is refused here.
+    path.write_text(json.dumps(_dialogue_floor_record(seeds=[1337, 999])), encoding="utf-8")
+    with pytest.raises(SystemExit):
+        erasure.dialogue_floor_from_record()
+
+    # STRUCTURAL, so the regression cannot return quietly: `_cmd_report` must not reach for a
+    # dialogue PPL out of an arm record to build the floor from.
+    report_src = inspect.getsource(erasure._cmd_report)
+    assert "dialogue_floor_from_record()" in report_src
+    assert "dialogue_noise_floor(" not in report_src, (
+        "the (c) floor is being computed inside `_cmd_report` again, which is how a pre/post "
+        "difference gets published under the pinned seed pair's name"
+    )
+
+
+def test_the_report_subcommand_runs_end_to_end_on_committed_shaped_records(tmp_path, monkeypatch):
+    """19-07 blockers 2-5. `report` is the subcommand the phase's VERDICT comes out of.
+
+    Reading it could not answer "does it run", and it did not: it crashed four different ways on
+    records in the exact shape its own writers produce. Driving it is the only check that catches
+    the class, so this test drives it rather than inspecting it.
+    """
+    slots = erasure.CORE_GATED_SLOTS
+    draws = [{"fact_id": f"synthetic_{slot}", "slot": slot} for slot in slots]
+    monkeypatch.setattr(erasure, "ARM_RECORD_DIR", tmp_path)
+    for arm in ("erased", "replicate", "cal-erased"):
+        record = _erasure_arm(draws=draws)
+        # `stop_ids` is a frozenset in `phase18_parity_values`; `run_erasure_arm` writes
+        # `sorted(recall.STOP_IDS)` because a record is JSON. Match the writer, not the constant.
+        record["config"] = {
+            **record["config"],
+            "stop_ids": sorted(record["config"]["stop_ids"]),
+            "git_sha": "0" * 40,
+            "device": "cpu",
+        }
+        (tmp_path / f"phase19_arm_{arm}.json").write_text(json.dumps(record), encoding="utf-8")
+
+    floor_path = tmp_path / "phase19_dialogue_floor.json"
+    floor_path.write_text(json.dumps(_dialogue_floor_record()), encoding="utf-8")
+    monkeypatch.setattr(erasure, "DIALOGUE_FLOOR_RECORD_PATH", floor_path)
+
+    rep_path = tmp_path / "phase19_representational.json"
+    monkeypatch.setattr(erasure, "REPRESENTATIONAL_RECORD_PATH", rep_path)
+
+    # `render_report`'s `path` default is bound at def time, so the CALL is redirected. Without
+    # this the test writes a real `results/phase19_erasure_report.md` — a `results/phase19_*`
+    # artifact, which is the one thing the ordering contract forbids appearing from a test run.
+    monkeypatch.setattr(
+        erasure, "render_report", functools.partial(erasure.render_report, path=tmp_path / "r.md")
+    )
+
+    # The descriptive record is REQUIRED, not defaulted: the placeholder `{"cosine": {}, "fisher":
+    # {}}` `_cmd_report` used to pass raised `KeyError: 'reduction'` inside `render_report`.
+    with pytest.raises(SystemExit) as excinfo:
+        erasure._cmd_report()
+    assert "representational" in str(excinfo.value)
+
+    # Written the way `_cmd_representational` writes it — `fisher_overlap`'s OWN return value,
+    # through JSON, so the round trip is what is proved rather than a hand-typed shape.
+    fisher = erasure.fisher_overlap(_fisher_cell_fixture(), [(0, "q_proj", 0)])
+    rep_path.write_text(
+        json.dumps({"cosine": {"(0, 'q_proj')": 0.87, "(1, 'fc_in')": None}, "fisher": fisher}),
+        encoding="utf-8",
+    )
+    erasure._cmd_report()
+
+    text = (tmp_path / "r.md").read_text(encoding="utf-8")
+    # The (c) caption's provenance claim is now TRUE — the number beside "seeds (1337, 2024)" is
+    # the spread over those seeds, not the erasure's own pre/post difference.
+    assert f"{abs(5.8154 - 5.8329):.6f}" in text
+    assert str(erasure.DIALOGUE_NOISE_FLOOR_SEEDS) in text
+    # Seven (b) rows, never eight: the target's slot belongs to condition (a).
+    for slot in erasure.GATED_NONTARGET_SLOTS:
+        assert f"`{slot}`" in text
+    assert f"| `{erasure.TARGET_SLOT}` " not in text
