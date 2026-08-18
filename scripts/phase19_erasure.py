@@ -1342,6 +1342,205 @@ def nontarget_noise_floor(per_fact_deltas):
     return max(values)
 
 
+# =============================================================================================
+# ===== THE ARM RECORD, AND THE ZERO THAT MAY NOT REACH THE VERDICT WITHOUT ITS NLL =====
+# =============================================================================================
+
+# The `forbid_ids` mask sha256 every v3.0 measurement was taken under — 7,645 of 8,192 ids masked
+# on the frozen tokenizer, leaving 547 live (`results/phase16_persistence_report.md:125`,
+# `results/phase18_extraction_report.md:264`). Pinned as a VALUE because it is a property of the
+# frozen tokenizer and is therefore knowable now; `corpus_sha256` is a REQUIRED FIELD with no
+# pinned value, because the Phase 19 corpus is built by 19-05 and inventing its digest here would
+# be exactly the "produce the constant early" move this pin refuses everywhere else.
+FORBID_IDS_SHA256 = "79b55770f4dcfa943d7528cb04829e8d2e7dd8823b9b5450da418b4fcf3cfc28"
+
+# The config columns that make a Phase 19 arm comparable with Phase 18's (T-19-16). REQUIRED, not
+# exhaustive: `phase18_arm_adapter-on.json`'s own config carries a dozen provenance fields
+# (`git_sha`, `device`, `pid`, `torch`, ...) and a hard equality here would forbid recording them.
+# `k` and not `K`: Phase 18's committed config spells it lowercase and `target_rows_from_arm_record`
+# already reads `arm_record["config"]["k"]`, so two spellings of the budget would be two readers.
+ARM_CONFIG_KEYS = (
+    "corpus_sha256",
+    "forbid_ids_sha256",
+    "k",
+    "seed_stride",
+    "mechanism",
+    "ablated_components",
+)
+
+# The dialogue PPL is the ON/OFF PAIR plus its denominator, never a single number:
+# `run_collapse_control` proves the two arms scored the same `n_targets`
+# (`phase14_recall.py:1442-1446`), and that proof is the evidence the delta measures the adapter
+# rather than the corpus. A record carrying only the ON reading cannot carry it.
+DIALOGUE_PPL_KEYS = ("adapter_on", "adapter_off", "n_targets")
+
+# The paired baseline. Every gated quantity has its PRE-erasure twin in the same record, so the
+# published movement is a delta against a measured baseline instead of an absolute number read
+# against nothing — and so a (c) failure that predates the erasure stays distinguishable from one
+# the erasure caused (`DIALOGUE_NOISE_FLOOR_ESTIMATOR`'s last clause).
+PRE_ERASURE_KEYS = ("per_fact", "exposure", "dialogue_ppl", "retention_ppl")
+
+# The Phase 19 arm record. Phase 18's five keys (`arm`, `config`, `draw_record_keys`, `draws`,
+# `exposure`) EXTENDED — same names, same meanings — by the three quantities the gate reads and
+# Phase 18 never had to record, plus `per_fact`. `per_fact` carries the question-unit rows in
+# `target_rows_from_arm_record`'s shape, which is what `nontarget_deltas` already consumes and
+# what makes `zero_results_have_nll(arm_record)` answerable from the artifact ALONE: a reader
+# holding the JSON can recheck the flag without re-scoring anything.
+ARM_RECORD_KEYS = (
+    "arm",
+    "config",
+    "draw_record_keys",
+    "draws",
+    "exposure",
+    "dialogue_ppl",
+    "retention_ppl",
+    "pre_erasure",
+    "per_fact",
+)
+
+
+def _arm_record(**fields):
+    """One Phase 19 arm record, proved against ``ARM_RECORD_KEYS`` as an ORDERED hard equality.
+
+    The same mechanism and the same reason as ``phase18_extraction._exposure_record``
+    (``:1344-1358``): keyword order is what the proof reads, so a field added, dropped or reordered
+    is red on the commit that writes it rather than a ``KeyError`` in a renderer after the run has
+    been spent. A Phase 19 run costs an erasure sweep plus ~60 min of draws; discovering that the
+    retention reading was never recorded is not a debugging session, it is the run again.
+    """
+    _prove(
+        tuple(fields) == ARM_RECORD_KEYS,
+        f"an arm record was built with keys {tuple(fields)}, but the committed schema is "
+        f"{ARM_RECORD_KEYS}. Every one of them is read by the verdict or by the report: a missing "
+        "field silently converts a real result into INCONCLUSIVE, or publishes a movement with no "
+        "baseline to have moved from",
+    )
+    missing = [key for key in ARM_CONFIG_KEYS if key not in fields["config"]]
+    _prove(
+        not missing,
+        f"the arm config is missing {missing}. Those columns are what make this record comparable "
+        f"with Phase 18's; provenance columns on top are welcome, absences are not",
+    )
+    _prove(
+        fields["config"]["forbid_ids_sha256"] == FORBID_IDS_SHA256,
+        f"the arm ran under forbid mask {fields['config']['forbid_ids_sha256']!r}, not the "
+        f"{FORBID_IDS_SHA256!r} every v3.0 measurement was taken under. A different mask changes "
+        "which ids the attacker can spend a draw on, so the post-erasure number would not be "
+        "comparable with the Phase 18 rate it is supposed to be a movement from",
+    )
+    _prove(
+        tuple(fields["pre_erasure"]) == PRE_ERASURE_KEYS,
+        f"the pre-erasure block carries {tuple(fields['pre_erasure'])}, not {PRE_ERASURE_KEYS}. "
+        "It is the paired baseline: without it every published post-erasure number is an absolute "
+        "reading with nothing to be read against",
+    )
+    _prove(
+        tuple(fields["dialogue_ppl"]) == DIALOGUE_PPL_KEYS
+        and tuple(fields["pre_erasure"]["dialogue_ppl"]) == DIALOGUE_PPL_KEYS,
+        f"a dialogue PPL block is {tuple(fields['dialogue_ppl'])}, not {DIALOGUE_PPL_KEYS} — the "
+        "ON/OFF pair and the shared denominator are what make the reading evidence rather than a "
+        "number",
+    )
+    return dict(fields)
+
+
+def zero_result_exposure_gaps(arm_record):
+    """Every reason ``zero_results_have_nll`` would return False, each naming its ``fact_id``.
+
+    Separate from the flag ON PURPOSE. The gate reads a BOOLEAN (``erasure_gate.py:223``), and a
+    ``(False, reason)`` return would be TRUTHY — ``not (False, "...")`` is ``False`` — so a caller
+    passing the pair straight through would silently disarm the INCONCLUSIVE branch on exactly the
+    run that needed it. The reasons live here; the flag stays a ``bool``.
+
+    Returns an empty tuple when nothing is wrong, so the flag below is one negation and no
+    interpretation.
+    """
+    import phase18_extraction as extraction  # LAZY — see the module docstring's no-fact-value rule
+
+    frames = extraction.NLL_FRAMES
+    reductions = extraction.NLL_REDUCTIONS
+    gaps = []
+
+    for label, exposure in (
+        ("post-erasure", arm_record["exposure"]),
+        ("pre-erasure", arm_record["pre_erasure"]["exposure"]),
+    ):
+        by_slot = {entry["slot"]: entry for entry in exposure}
+        absent = [slot for slot in CORE_GATED_SLOTS if slot not in by_slot]
+        if absent:
+            gaps.append(
+                f"the {label} exposure block covers {len(by_slot)} of the eight core slots; "
+                f"{sorted(absent)} carry none. Exposure is required for ALL EIGHT so the target's "
+                "movement off rank 1 is read against seven slots that did not move"
+            )
+        for fact_id, row in sorted(arm_record["per_fact"].items()):
+            if row["n_answerable"] != 0:
+                continue
+            entry = by_slot.get(row["slot"])
+            if entry is None:
+                gaps.append(
+                    f"{fact_id} scored 0 of {row['n_questions']} questions and its {label} "
+                    "exposure record is missing — a zero with no teacher-forced NLL cannot "
+                    "separate 'the fact is absent' from 'the probe was too weak'"
+                )
+                continue
+            if tuple(entry) != extraction.EXPOSURE_RECORD_KEYS:
+                gaps.append(
+                    f"{fact_id}'s {label} exposure record carries keys {tuple(entry)}, not the "
+                    f"committed {extraction.EXPOSURE_RECORD_KEYS}"
+                )
+            for frame in frames:
+                if frame not in entry["nll"]:
+                    gaps.append(
+                        f"{fact_id}'s {label} exposure record has no {frame!r} NLL. All "
+                        f"{len(frames) * len(reductions)} frame x reduction values are REQUIRED "
+                        "columns even though the gate reads one pair — six published and one read "
+                        "is what makes a post-null switch visible instead of convenient"
+                    )
+                    continue
+                for reduction in reductions:
+                    value = entry["nll"][frame].get(reduction)
+                    if value is None or value != value or abs(value) == float("inf"):
+                        gaps.append(
+                            f"{fact_id}'s {label} {frame}/{reduction} NLL is {value!r}, which is "
+                            "not finite. Phase 18's bar is 48 finite NLLs per arm "
+                            "(18-VERIFICATION.md:60) and a null beside a zero recall IS the "
+                            "unmeasured case this clause exists to refuse"
+                        )
+    return tuple(gaps)
+
+
+def zero_results_have_nll(arm_record):
+    """``erasure_gate.py:223-227``'s clause, made structural. Returns a plain ``bool``.
+
+    ITS WHOLE PURPOSE is to separate "the fact is absent" from "the probe was too weak" — and A
+    SUCCESSFUL ERASURE PRODUCES EXACTLY THE ZERO THAT TRIGGERS IT. The gate short-circuits to
+    INCONCLUSIVE when ``target_successes == 0`` and this flag is False, so on the phase's success
+    path this one boolean is the difference between a publishable result and no result at all.
+    That is why it is computed from the record rather than set by whoever ran the arm.
+
+    MEASURED IN THE SAME PASS AND UNDER THE SAME GATE STATE AS THE DRAWS. Phase 18 takes exposure
+    inside the generation context manager (``scripts/phase18_extraction.py:3696-3702``) for the
+    reason this flag depends on: measured in a second process, "absent" and "weak" become
+    separable only across two loads of two models, and the pairing that makes the NLL interpretable
+    is gone. The pre-erasure block is required in the same schema for the same reason — an
+    exposure rank published with no baseline is a number with nothing to have moved from.
+
+    THE Q7.5 RESIDUAL, RECORDED AS A MEASURED COLUMN RATHER THAN AN ASSUMPTION. The tokenizer
+    forbids 7,645 of 8,192 ids at sampling, so the model's generative surface is only 547 live ids,
+    and a post-erasure zero could in principle be a DECODING ARTIFACT rather than an erasure. Phase
+    18 measured that mask's SIGN and published it: masking dead ids makes the attacker STRONGER,
+    because ``tok.decode([dead_id])`` raises and the mask removes unusable draws rather than usable
+    ones (``results/phase18_extraction_report.md:244``; ``scripts/demo_app.py:86``,
+    ``scripts/evaluate.py:116``). So the mask cannot manufacture a false (a) pass by suppressing
+    the target string. What remains is the decoding-artifact reading, and it is answered by THE
+    SAME INSTRUMENT this flag requires: the exposure rank and the six teacher-forced NLLs are
+    computed by forced scoring, not by decoding, so they are measurable exactly where generation
+    produces nothing.
+    """
+    return not zero_result_exposure_gaps(arm_record)
+
+
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
     # Smallest runnable check that fails if the derivation breaks. The census is PRINTED rather
     # than asserted against a literal — `component_index`'s own proof is what pins it.

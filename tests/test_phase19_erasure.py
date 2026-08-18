@@ -1679,13 +1679,15 @@ def _extraction():
     return _load("phase18_extraction", "scripts/phase18_extraction.py")
 
 
-def _exposure_record(slot, nll=0.5, drop_frame=None, value=None):
+_UNSET = object()  # a distinct sentinel: `None` is one of the values under test, not an absence
+
+
+def _exposure_record(slot, drop_frame=None, value=_UNSET):
     """One `EXPOSURE_RECORD_KEYS`-shaped record, in the committed key ORDER."""
     extraction = _extraction()
+    nll = 0.5 if value is _UNSET else value
     frames = {
-        frame: {
-            reduction: (nll if value is None else value) for reduction in extraction.NLL_REDUCTIONS
-        }
+        frame: {reduction: nll for reduction in extraction.NLL_REDUCTIONS}
         for frame in extraction.NLL_FRAMES
         if frame != drop_frame
     }
@@ -1828,8 +1830,15 @@ def test_zero_results_have_nll_names_the_offending_fact_and_returns_a_real_bool(
         ],
     )
     assert erasure.zero_results_have_nll(missing) is False
-    (gap,) = erasure.zero_result_exposure_gaps(missing)
-    assert f"synthetic_{erasure.TARGET_SLOT}" in gap
+    gaps = erasure.zero_result_exposure_gaps(missing)
+    assert f"synthetic_{erasure.TARGET_SLOT}" in " ".join(gaps)
+    # TWO independent gaps, both true and both reported: the eight-slot requirement and the named
+    # zero-success fact. Only the post-erasure block was broken here, so the pre-erasure block —
+    # which is checked by the same loop — contributes none.
+    assert len(gaps) == 2, gaps
+    assert [g for g in gaps if g.startswith("the post-erasure")] and not [
+        g for g in gaps if "pre-erasure" in g
+    ]
 
     # A fact that scored is not required to carry one — the clause is about zeros, and requiring
     # exposure everywhere would make the flag stop discriminating.
