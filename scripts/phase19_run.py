@@ -37,8 +37,32 @@ Nothing here re-implements a pin rule. `select_ablation_prefix`, `ablate_compone
 `run_erasure_arm`, `reference_set_for_calibration`, `select_calibration_fact` and
 `dialogue_ppl_pair` are all called, never copied.
 
-    python scripts/phase19_run.py cal-ablate    # curve + erased adapter  (task 1)
-    python scripts/phase19_run.py cal-score     # the A2/K=48 arm record  (task 2)
+    python scripts/phase19_run.py cal-ablate    # curve + erased adapter  (19-09 task 1)
+    python scripts/phase19_run.py cal-score     # the A2/K=48 arm record  (19-09 task 2)
+
+19-10 added three more, for two further things the pin cannot express:
+
+4. THE PIN WRITES NO `results/phase19_noise_floors.json`. `dialogue-floor` writes the two PPL
+   READINGS and `noise-floors` writes an arm record; the floors themselves are DERIVED at report
+   time by `dialogue_floor_from_record` and `nontarget_noise_floor`, and 19-15's report is the only
+   pinned consumer. 19-10 has to publish all three quantities NOW, before 19-11 locks anything, so
+   `dialogue-block` / `nontarget-block` / `retention` each derive their block THROUGH the pinned
+   functions and merge it into one artifact.
+
+5. THE PINNED (b) PATH CANNOT RUN AS WRITTEN — measured, not inferred. `_nontarget_rates` proves
+   `row["n_questions"] == N_TARGET_QUESTIONS` (27, D5's pooled denominator), and BOTH of its
+   producers in the pin deliver something else: `target_rows_from_arm_record` scores
+   `extraction.GATED_TIER` alone (13 questions/fact) and `run_erasure_arm`'s
+   `rows.update(per_fact_rows(...))` loop lets `core_taught` (14) overwrite `core_held_out` (13),
+   which is 19-09's published defect C in the (b) position. So `nontarget_deltas` raises SystemExit
+   on both sides. `_pooled_rows` below is the recovery 19-09 already used for the calibration rate:
+   drive the pin's own `per_fact_rows` ONCE PER TIER and sum, which reconstitutes exactly the
+   27 = 14 + 13 the pin demands. The reduction to the gate's scalar is still the pinned
+   `nontarget_noise_floor`, never a `max` typed here.
+
+    python scripts/phase19_run.py dialogue-block   # the (c) dialogue floor block  (19-10 task 1)
+    python scripts/phase19_run.py nontarget-block  # the (b) per-fact floor block  (19-10 task 2)
+    python scripts/phase19_run.py retention        # retention PPL on/off          (19-10 task 3)
 """
 
 import hashlib
@@ -62,9 +86,37 @@ CURVE_PATH = _REPO_ROOT / "results" / "phase19_calibration_curve.json"
 ERASED_ADAPTER_PATH = _REPO_ROOT / "checkpoints" / "phase19_cal_erased_adapter.pt"
 SIBLINGS_PATH = _REPO_ROOT / "results" / "phase19_calibration_curve_siblings.json"
 
+# 19-10's one artifact, written in three merges (one per task) so each block is committed beside
+# the run that measured it. The pin names no such path — see reason 4 in the module docstring.
+NOISE_FLOORS_PATH = _REPO_ROOT / "results" / "phase19_noise_floors.json"
+
 
 def _sha256(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+
+def _merge_block(name, block):
+    """Merge ONE block into `results/phase19_noise_floors.json`. An existing block is not replaced.
+
+    The refusal is per BLOCK rather than per file, because the three blocks are measured by three
+    separate runs an hour apart and the file has to be appendable across them — but a block that
+    already exists is recorded evidence with no force flag, exactly like an arm record.
+    """
+    doc = (
+        json.loads(NOISE_FLOORS_PATH.read_text(encoding="utf-8"))
+        if NOISE_FLOORS_PATH.exists()
+        else {}
+    )
+    if name in doc:
+        raise SystemExit(
+            f"[phase19_run] {NOISE_FLOORS_PATH} already carries {name!r} — it is recorded evidence "
+            "and there is no force flag. Delete the block in a reviewed commit to re-measure it."
+        )
+    doc[name] = block
+    NOISE_FLOORS_PATH.write_text(
+        json.dumps(doc, indent=pin.JSON_INDENT, sort_keys=True), encoding="utf-8"
+    )
+    print(f"[phase19_run] merged {name!r} into {NOISE_FLOORS_PATH}")
 
 
 def _refuse(path):
@@ -334,7 +386,343 @@ def cal_siblings():
     print(f"[phase19_run] wrote {SIBLINGS_PATH}")
 
 
-_TABLE = {"cal-ablate": cal_ablate, "cal-score": cal_score, "cal-siblings": cal_siblings}
+def dialogue_block():
+    """19-10 task 1 — the (c) dialogue noise floor, DERIVED by the pin from its own record."""
+    from personacore.provenance import git_sha
+
+    record = json.loads(pin.DIALOGUE_FLOOR_RECORD_PATH.read_text(encoding="utf-8"))
+    # The ONE committed path from that record to the number. It re-proves the pinned seed pair and
+    # reads the ON arm, so the floor cannot quietly become an OFF-arm spread (identical across
+    # seeds by construction) or one arm's own pre/post difference (the erasure's effect size).
+    floor = pin.dialogue_floor_from_record()
+    cap = pin.dialogue_cap(floor)
+    seed_a, seed_b = pin.DIALOGUE_NOISE_FLOOR_SEEDS
+    a = dict(record["dialogue_ppl"][str(seed_a)], seed=seed_a)
+    b = dict(record["dialogue_ppl"][str(seed_b)], seed=seed_b)
+
+    # The MASKED published reading — `masked_perplexity` WITH `forbid_ids`, which is what
+    # `dialogue_ppl_pair` calls. The teaching log's 5.8176 / 4.5737 pair is the UNMASKED twin
+    # (`results/phase14_recall_report.md:465-475`, correction WR-01), quoted here as the second
+    # comparison rather than as the target, because `train_arm` has since been aligned to pass
+    # `forbid_ids` and this re-teach therefore reports the masked instrument.
+    published_on, published_off = (
+        pin.V20_TAUGHT_ADAPTER_DIALOGUE_PPL,
+        pin.V20_MASKED_DIALOGUE_VAL_PPL,
+    )
+    twin_on, twin_off = 5.8176, 4.5737
+    rel = lambda got, want: abs(got - want) / want * 100.0  # noqa: E731 — one expression, four uses
+
+    block = {
+        "estimator": "phase19_erasure.DIALOGUE_NOISE_FLOOR_ESTIMATOR (Q4 option 2, D3)",
+        "reduction": "phase19_erasure.dialogue_noise_floor(|dPPL|) via dialogue_floor_from_record",
+        "seeds": list(pin.DIALOGUE_NOISE_FLOOR_SEEDS),
+        "value": floor,
+        "cap": cap,
+        "seed_a": a,
+        "seed_b": b,
+        "adapter_off_identical_across_seeds": a["adapter_off"] == b["adapter_off"],
+        "n_targets": a["n_targets"],
+        "pre_erasure": {
+            "dialogue_ppl_adapter_on": published_on,
+            "source": "results/phase14_recall_report.md:462",
+            "excess_over_measured_cap": published_on - cap,
+            "admitted_by_measured_cap": published_on <= cap,
+            "floor_required_to_admit": (published_on - published_off) / pin.MARGIN_K,
+        },
+        "seed_a_remeasured_vs_published": {
+            "measured_adapter_on": a["adapter_on"],
+            "published_masked_adapter_on": published_on,
+            "abs_delta": abs(a["adapter_on"] - published_on),
+            "rel_pct": rel(a["adapter_on"], published_on),
+            "measured_adapter_off": a["adapter_off"],
+            "published_masked_adapter_off": published_off,
+            "adapter_off_abs_delta": abs(a["adapter_off"] - published_off),
+            "adapter_off_rel_pct": rel(a["adapter_off"], published_off),
+            "wr01_unmasked_twin_adapter_on": twin_on,
+            "wr01_unmasked_twin_adapter_off": twin_off,
+            "wr01_documented_divergence_on_pct": rel(twin_on, published_on),
+            "wr01_documented_divergence_off_pct": rel(twin_off, published_off),
+            "plan_tolerance_pct": 0.008,
+            "within_plan_tolerance": rel(a["adapter_on"], published_on) <= 0.008,
+        },
+        "delta_dialog_reference": {
+            "value": pin.V20_DIALOGUE_NOISE_FLOOR_FULL_FT,
+            "cap": pin.dialogue_cap(pin.V20_DIALOGUE_NOISE_FLOOR_FULL_FT),
+            "regime": "FULL FINE-TUNE, Phase 12, LR 9e-05, 1250 steps, seed pair (1337, 2024)",
+            "source": "results/finetune_smoke_report.md:49-57",
+            "admits_pre_erasure_reading": published_on
+            <= pin.dialogue_cap(pin.V20_DIALOGUE_NOISE_FLOOR_FULL_FT),
+        },
+        "governs": (
+            "the MEASURED adapter-regime floor above is what `erasure_succeeded` reads: "
+            "`_cmd_report` passes `dialogue_floor_from_record()` as `dialogue_ppl_noise_floor` "
+            "(`phase19_erasure.py:3810`). 0.001704 is the full-fine-tune reading published beside "
+            "it for the method it supplied, and it does NOT govern any Phase 19 verdict."
+        ),
+        "record": pin.DIALOGUE_FLOOR_RECORD_PATH.name,
+        "record_sha256": _sha256(pin.DIALOGUE_FLOOR_RECORD_PATH),
+        "recipe": record["recipe"],
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py dialogue-block (UNPINNED)",
+    }
+    for key in ("value", "cap"):
+        print(f"[phase19_run] dialogue {key} = {block[key]!r}")
+    print(f"[phase19_run] seed {seed_a} -> {a}\n[phase19_run] seed {seed_b} -> {b}")
+    _merge_block("dialogue_ppl_noise_floor", block)
+
+
+def _pooled_rows(draws, values, family, tiers):
+    """Per-fact rows POOLED over both tiers — the 27 = 14 + 13 the pin's own (b) guard demands.
+
+    Reason 5 in the module docstring: `_nontarget_rates` requires `N_TARGET_QUESTIONS`, and neither
+    pin producer supplies it. The recovery drives the pin's own `per_fact_rows` once per tier and
+    sums, which is 19-09's recovery from defect C applied in the (b) position — the scoring rule
+    (`score_records` -> `aggregate_questions`) is still Phase 18's and is never reimplemented here.
+    """
+    rows = {}
+    for tier in tiers:
+        for fact_id, row in pin.per_fact_rows(draws, values, family=family, tier=tier).items():
+            acc = rows.setdefault(
+                fact_id, {"slot": row["slot"], "n_answerable": 0, "n_questions": 0, "per_tier": {}}
+            )
+            if acc["slot"] != row["slot"] or tier in acc["per_tier"]:
+                raise SystemExit(
+                    f"[phase19_run] fact {fact_id!r} appears under two slots or twice in tier "
+                    f"{tier!r} — the pooled denominator would double-count a question"
+                )
+            acc["n_answerable"] += row["n_answerable"]
+            acc["n_questions"] += row["n_questions"]
+            acc["per_tier"][tier] = {
+                "n_answerable": row["n_answerable"],
+                "n_questions": row["n_questions"],
+                "rate": row["rate"],
+            }
+    for row in rows.values():
+        row["rate"] = row["n_answerable"] / row["n_questions"]
+    return rows
+
+
+def nontarget_block():
+    """19-10 task 2 — the (b) per-fact noise floor from the committed replicate arm record."""
+    import collections
+
+    import phase14_factset as factset
+
+    from personacore.provenance import git_sha
+
+    replicate = pin._load_arm("replicate")
+    phase18 = json.loads(pin.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    values = {f.id: f.value for f in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS}
+    family, budget = replicate["config"]["attack_family"], replicate["config"]["k"]
+    tiers = tuple(sorted({d["tier"] for d in replicate["draws"] if d["family"] == family}))
+
+    pre = _pooled_rows(phase18["draws"], values, family, tiers)
+    post = _pooled_rows(replicate["draws"], values, family, tiers)
+    # The pinned pair, on rows that finally satisfy its own denominator guard. `nontarget_rows`
+    # drops the target's row (condition (a)'s numerator); `nontarget_deltas` returns a tuple in
+    # `GATED_NONTARGET_SLOTS` order; `nontarget_noise_floor` is the ONLY reduction to the scalar.
+    deltas = pin.nontarget_deltas(pin.nontarget_rows(pre), pin.nontarget_rows(post))
+    floor = pin.nontarget_noise_floor(deltas)
+    by_slot = dict(zip(pin.GATED_NONTARGET_SLOTS, deltas, strict=True))
+
+    per_fact = {}
+    for fact_id, row in sorted(pin.nontarget_rows(post).items()):
+        per_fact[fact_id] = {
+            "slot": row["slot"],
+            "delta": by_slot[row["slot"]],
+            "n_questions": row["n_questions"],
+            "pre_answerable": pre[fact_id]["n_answerable"],
+            "pre_rate": pre[fact_id]["rate"],
+            "pre_per_tier": pre[fact_id]["per_tier"],
+            "post_answerable": row["n_answerable"],
+            "post_rate": row["rate"],
+            "post_per_tier": row["per_tier"],
+            "n_draws": row["n_questions"] * budget,
+        }
+
+    # THE NON-COLLISION, re-proved over exactly the seed indices this run used rather than argued
+    # from the constant. Every question passes through `replicate_seed_stride`, which raises if its
+    # Phase 18 window `[i*K, i*K+K)` reaches the offset; a collision would re-read consumed streams
+    # and report a floor of exactly zero, so a measured zero and a bug have to be separable.
+    indices = sorted({d["seed_index"] for d in replicate["draws"]})
+    strides = {i: pin.replicate_seed_stride(i, budget) for i in indices}
+    soft_ids = [f.id for f in factset.SOFT_TIER_FACTS]
+    census = collections.Counter(d["tier"] for d in replicate["draws"])
+
+    block = {
+        "estimator": "phase19_erasure.NONTARGET_NOISE_FLOOR_ESTIMATOR (D4, seed-stride replicate)",
+        "reduction": "phase19_erasure.nontarget_noise_floor = max, called (never inlined)",
+        "value": floor,
+        "margin_at_gate": pin.MARGIN_K * floor,
+        "per_fact": per_fact,
+        "slot_order": list(pin.GATED_NONTARGET_SLOTS),
+        "deltas_in_slot_order": list(deltas),
+        "target_slot_excluded": pin.TARGET_SLOT,
+        "unit": "question, never the draw",
+        "pooled_denominator": pin.N_TARGET_QUESTIONS,
+        "tiers_pooled": list(tiers),
+        "adapter": "checkpoints/persona_adapter.pt (UNERASED taught adapter)",
+        "arm_record": pin.arm_record_path("replicate").name,
+        "arm_record_sha256": _sha256(pin.arm_record_path("replicate")),
+        "phase18_baseline": pin.PHASE18_ARM_RECORD_PATH.name,
+        "attack_family": family,
+        "k": budget,
+        "n_draws": sum(row["n_draws"] for row in per_fact.values()),
+        "seed_stride": {
+            "offset": pin.SEED_STRIDE_OFFSET,
+            "n_seed_indices": len(indices),
+            "max_seed_index": max(indices),
+            "phase18_window_end_max": max(indices) * budget + budget,
+            "replicate_base_min": min(strides.values()),
+            "replicate_base_max": max(strides.values()),
+            "collision_free": max(indices) * budget + budget <= pin.SEED_STRIDE_OFFSET,
+            "proved_by": "phase19_erasure.replicate_seed_stride, called on every seed index in use",
+        },
+        "soft_descriptive": {
+            "measured": False,
+            "slots": list(pin.SOFT_TIER_SLOTS),
+            "fact_ids": soft_ids,
+            "soft_draws_in_replicate_record": census.get("soft", 0),
+            "soft_entries_in_phase18_corpus": 0,
+            "tier_census_of_this_arm": dict(census),
+            "reason": (
+                "results/phase18_corpus.json holds core_taught and core_held_out ONLY — no soft "
+                "entry exists for any attack family, so this arm drew no soft question and a soft "
+                "rate here would have no draws behind it. SOFT_TIER_DESCRIPTIVE_READ's clause 3 "
+                "asks for the POST-erasure soft recall, which is 19-12's arm and not this "
+                "pre-erasure replicate; and the substitute read (an exposure rank) is refused by "
+                "phase18_extraction.reference_set_for, which _proves the slot is one of the eight "
+                "core gated slots. The narrowing is declared here with its census rather than "
+                "reported as a measurement that was not taken."
+            ),
+        },
+        "denominator_recovery": (
+            "the pinned (b) path raises as written: `_nontarget_rates` demands n_questions == "
+            f"{pin.N_TARGET_QUESTIONS} while `target_rows_from_arm_record` delivers 13 (the gated "
+            "tier alone) and `run_erasure_arm`'s `rows.update` loop delivers 14 (core_taught "
+            "overwriting core_held_out — 19-09's defect C in the (b) position). Both sides above "
+            "are pooled from the pin's own `per_fact_rows`, once per tier, which reconstitutes the "
+            f"{pin.N_TARGET_QUESTIONS} = 14 + 13 D5 denominator the guard was written for."
+        ),
+        "parity": {
+            "asserted": False,
+            "why": (
+                "assert_phase18_parity is deliberately NOT for this arm — its own docstring says "
+                "so, PARITY_ASSERTED_ARMS is ('erased', 'retrain'), and _cmd_noise_floors' "
+                "docstring reads 'the arm parity is NOT asserted'. The stride is offset ON "
+                "PURPOSE, so a parity assertion over PARITY_KEYS fails on seed_stride by design."
+            ),
+            "keys_matching_phase18": [],
+            "keys_deliberately_differing": [],
+        },
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py nontarget-block (UNPINNED)",
+    }
+    expected = pin.phase18_parity_values()
+    for key in pin.PARITY_KEYS:
+        side = (
+            "keys_matching_phase18"
+            if pin._parity_equal(expected[key], replicate["config"][key])
+            else "keys_deliberately_differing"
+        )
+        block["parity"][side].append(key)
+
+    print("[phase19_run] (b) per-fact |drate|, question unit, own denominator, never pooled:")
+    for fact_id, row in per_fact.items():
+        print(
+            f"    {fact_id:<24} {row['slot']:<14} "
+            f"{row['pre_answerable']:>2}/{row['n_questions']} -> "
+            f"{row['post_answerable']:>2}/{row['n_questions']}   |d| = {row['delta']!r}"
+        )
+    print(f"    nontarget_noise_floor(max) = {floor!r}; margin at gate = {pin.MARGIN_K * floor!r}")
+    _merge_block("nontarget_noise_floor", block)
+
+
+def retention():
+    """19-10 task 3 — retention PPL on a LoRA-ADAPTED model, ON and OFF, in ONE process."""
+    import numpy as np
+    import phase14_recall as recall
+    import phase16_persistence as persistence
+    import torch
+
+    from personacore.evaluation.perplexity import retention_perplexity
+    from personacore.generation.text import undecodable_ids_mask
+    from personacore.lora import adapter_disabled
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+
+    device = preflight_device(strict=True)["device"]
+    # `adapter_path=None` is the PRODUCTION taught adapter (`phase14_recall.ADAPTER_PATH`) — the
+    # pre-erasure state every Phase 19 comparison is a movement from.
+    model, cfg, tok, _forbid, _artifact = recall.load_adapted_model(device, None)
+    block_size = pin.ModelConfig.block_size
+
+    on_ppl, on_tokens = retention_perplexity(model, pin.RETENTION_BIN, block_size, device, tok)
+    with adapter_disabled(model):
+        off_ppl, off_tokens = retention_perplexity(
+            model, pin.RETENTION_BIN, block_size, device, tok
+        )
+    if on_tokens != off_tokens:
+        raise SystemExit(f"[phase19_run] on/off denominators differ ({on_tokens} vs {off_tokens})")
+
+    n_corpus = len(np.memmap(pin.RETENTION_BIN, dtype=np.uint16, mode="r"))
+    n_windows = len(range(0, n_corpus - 1, block_size))
+    if n_corpus - n_windows != on_tokens:
+        raise SystemExit(
+            f"[phase19_run] window accounting disagrees: {n_corpus} - {n_windows} != {on_tokens}"
+        )
+    mask = undecodable_ids_mask(tok, cfg.vocab_size)
+    cap = pin.V20_EWC_RETENTION_PPL + pin.MARGIN_K * pin.V20_RETENTION_NOISE_FLOOR
+
+    block = {
+        "call": f"retention_perplexity(model, RETENTION_BIN, {block_size}, device, tok)",
+        "policy": "FROZEN (DEBT-02) — the dead-id mask the generation path applies; the unmasked "
+        "v1.0 `perplexity` is not a substitute",
+        "adapter": "checkpoints/persona_adapter.pt (UNERASED taught adapter)",
+        "adapter_on": on_ppl,
+        "adapter_off": off_ppl,
+        "delta_on_minus_off": on_ppl - off_ppl,
+        "cap": cap,
+        "cap_derivation": f"{pin.V20_EWC_RETENTION_PPL} + {pin.MARGIN_K} x "
+        f"{pin.V20_RETENTION_NOISE_FLOOR} (scripts/erasure_gate.py:246)",
+        "adapter_on_above_cap": on_ppl > cap,
+        "adapter_on_headroom": cap - on_ppl,
+        "adapter_off_above_cap": off_ppl > cap,
+        "bin": str(pin.RETENTION_BIN.relative_to(_REPO_ROOT)),
+        "bin_bytes": pin.RETENTION_BIN.stat().st_size,
+        "corpus_tokens": n_corpus,
+        "n_windows": n_windows,
+        "n_scored_tokens": on_tokens,
+        "block_size": block_size,
+        "dead_id_mask_sha256": persistence.forbid_digest(mask),
+        "dead_id_mask_matches_pinned_forbid_ids": persistence.forbid_digest(mask)
+        == pin.FORBID_IDS_SHA256,
+        "dead_ids_masked": int(mask.sum()),
+        "live_ids": int(mask.numel() - mask.sum()),
+        "vocab_size": cfg.vocab_size,
+        "first_adapted_call_site": (
+            "RETENTION_MEASUREMENT clause 2 — `retention_perplexity` had 6 call sites across 4 "
+            "modules and none of the four imports `inject_lora` or `load_adapter`, so this is the "
+            "first retention PPL ever measured on a LoRA-adapted model in this repository."
+        ),
+        "device": str(device),
+        "torch": torch.__version__,
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py retention (UNPINNED)",
+    }
+    for key in ("adapter_on", "adapter_off", "cap", "n_windows", "n_scored_tokens"):
+        print(f"[phase19_run] retention {key} = {block[key]!r}")
+    _merge_block("retention_ppl_pre_erasure", block)
+
+
+_TABLE = {
+    "cal-ablate": cal_ablate,
+    "cal-score": cal_score,
+    "cal-siblings": cal_siblings,
+    "dialogue-block": dialogue_block,
+    "nontarget-block": nontarget_block,
+    "retention": retention,
+}
 
 
 if __name__ == "__main__":

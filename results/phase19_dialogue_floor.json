@@ -1,0 +1,34 @@
+{
+  "config": {
+    "device": "mps",
+    "git_sha": "5efb01c8c0c99d160a225e49ee317aaf39e00385",
+    "torch": "2.7.1"
+  },
+  "dialogue_ppl": {
+    "1337": {
+      "adapter_off": 4.573349214207799,
+      "adapter_on": 5.815445876712191,
+      "n_targets": 270203
+    },
+    "2024": {
+      "adapter_off": 4.573349214207799,
+      "adapter_on": 5.810231428543841,
+      "n_targets": 270203
+    }
+  },
+  "recipe": {
+    "arm_spec": "real",
+    "arms": [
+      "erase_dialogue_floor_seed1337",
+      "erase_dialogue_floor_seed2024"
+    ],
+    "n_facts": 10,
+    "prefix": "phase19",
+    "replay_ratio": 1.0,
+    "second_person": false
+  },
+  "seeds": [
+    1337,
+    2024
+  ]
+}

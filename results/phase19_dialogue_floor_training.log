@@ -1,0 +1,36 @@
+[phase19_erasure] mechanism M1-rank1-component-ablation, 5 rule clauses committed
+[phase19_erasure] component index: 36 wrapped projections x rank 8 = 288 addressable rank-1 components
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'erase_dialogue_floor_seed1337'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 10 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3810 / min 0.1884 / max 0.6000
+[teach_persona] erase_dialogue_floor_seed1337: 220 episodes, 20,036 tokens (10,018 teaching + 10,018 replay), episode length mean 45.5 [24, 84]
+[teach_persona] bins provenance: seed=1337 git_sha=5efb01c8c0c99d160a225e49ee317aaf39e00385 pid=53620 torch=2.7.1 arm=erase_dialogue_floor_seed1337 second_person=False replay_ratio=1.0 mask_fraction=0.4025 wall=0.3s utc=2026-08-18T14:10:33Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/data/persona_erase_dialogue_floor_seed1337_train.bin + /Users/juliorcoelho/PersonaCore/data/persona_erase_dialogue_floor_seed1337_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_dialogue_floor_seed1337_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5733 / ON 5.8154 (+27.16% over 270,203 scored targets)
+[teach_persona] run provenance: arm=erase_dialogue_floor_seed1337 seed=1337 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=5efb01c8c0c99d160a225e49ee317aaf39e00385 pid=53620 device=mps torch=2.7.1 second_person=False replay_ratio=1.0 mask_fraction=0.4025 final_train_loss=0.6205 utc=2026-08-18T14:11:54Z
+[phase19_erasure] seed 1337 -> {'adapter_on': 5.815445876712191, 'adapter_off': 4.573349214207799, 'n_targets': 270203}
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'erase_dialogue_floor_seed2024'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 10 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3810 / min 0.1884 / max 0.6000
+[teach_persona] erase_dialogue_floor_seed2024: 220 episodes, 20,036 tokens (10,018 teaching + 10,018 replay), episode length mean 45.5 [24, 84]
+[teach_persona] bins provenance: seed=2024 git_sha=5efb01c8c0c99d160a225e49ee317aaf39e00385 pid=53620 torch=2.7.1 arm=erase_dialogue_floor_seed2024 second_person=False replay_ratio=1.0 mask_fraction=0.4025 wall=0.3s utc=2026-08-18T14:12:38Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/data/persona_erase_dialogue_floor_seed2024_train.bin + /Users/juliorcoelho/PersonaCore/data/persona_erase_dialogue_floor_seed2024_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_dialogue_floor_seed2024_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5733 / ON 5.8102 (+27.05% over 270,203 scored targets)
+[teach_persona] run provenance: arm=erase_dialogue_floor_seed2024 seed=2024 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=5efb01c8c0c99d160a225e49ee317aaf39e00385 pid=53620 device=mps torch=2.7.1 second_person=False replay_ratio=1.0 mask_fraction=0.4025 final_train_loss=0.4262 utc=2026-08-18T14:13:58Z
+[phase19_erasure] seed 2024 -> {'adapter_on': 5.810231428543841, 'adapter_off': 4.573349214207799, 'n_targets': 270203}
+[phase19_erasure] wrote /Users/juliorcoelho/PersonaCore/results/phase19_dialogue_floor.json; dialogue noise floor = 0.005214448168350039, (c) cap = 4.5837288963367
