@@ -1378,14 +1378,31 @@ def test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent():
 
     # The census, MEASURED rather than quoted: every call site, and the fact that none of the
     # modules holding one so much as imports the injection path.
-    call_sites = []
+    all_sites = []
     for path in sorted(_ROOT.glob("scripts/*.py")) + sorted((_ROOT / "src").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and getattr(node.func, "id", None) == (
                 "retention_perplexity"
             ):
-                call_sites.append(path)
+                all_sites.append(path)
+
+    # The PIN's own call site is 19-06's, and it IS the new one — the census this claim is about
+    # is the PRECEDENT, i.e. everything that existed before it. Scoped by EXCLUDING the pin rather
+    # than by lowering the count, and the positive half is asserted too: the pin must be a caller
+    # AND must reach the injection path, which is precisely what makes it the first adapted one.
+    pin = _ROOT / "scripts" / "phase19_erasure.py"
+    assert pin in all_sites, (
+        "the pin no longer calls retention_perplexity — RETENTION_MEASUREMENT pins that call, and "
+        "the retention half of (c) would go unmeasured"
+    )
+    pin_source = pin.read_text(encoding="utf-8")
+    assert "load_adapter_weights" in pin_source or "load_adapted_model" in pin_source, (
+        "the pin measures retention without ever reaching an adapter — then it is not the adapted "
+        "call site this spec claims, and the 'no adapted precedent' framing has no successor"
+    )
+
+    call_sites = [path for path in all_sites if path != pin]
     modules = sorted({path.name for path in call_sites})
     assert len(call_sites) == 6 and len(modules) == 4, (
         f"the retention call-site census moved: {len(call_sites)} calls in {modules}"
@@ -2726,6 +2743,13 @@ def _scored_by_address(model, tok, device, artifact, addresses, *, slot, value):
     return out
 
 
+# Every member encodes to the IDENTICAL id list under `_ToyTok` (`7 + ord(c) % 11`, so `a` and
+# `l` collide), so all six NLLs are equal at every prefix and `exposure_rank`'s tie-break on the
+# candidate string keeps the lexicographically smallest — the target — at rank 1 forever. That is
+# what makes the cap branch reachable in a test without a GPU or a real reference set.
+_TIED_REFERENCES = ("aaa", "aal", "ala", "all", "laa", "lal")
+
+
 class _ToyTok:
     """A character-level stand-in: encode/decode over the toy vocab, no artifacts on disk."""
 
@@ -2797,7 +2821,10 @@ def test_select_ablation_prefix_is_deterministic_and_orders_by_measured_contribu
     committed function and this test are not reading each other's output.
     """
     _base, adapted, lora_cfg = _build_pair(seed=99)
-    artifact = _artifact(adapted, lora_cfg)
+    # DETACHED, because `_artifact` is built from `lora_state_dict`, whose tensors share storage
+    # with the live parameters — see the aliasing test below. The independent re-derivation at the
+    # bottom of this test writes to the model, so a non-snapshot reference would corrupt itself.
+    artifact = erasure.ablate_components(_artifact(adapted, lora_cfg), [])
     tok, device = _ToyTok(), torch.device("cpu")
     slot, value = "person_name", "aaa"
     references = ("aaa", "bbb", "ccc", "ddd", "eee", "fff")
@@ -2854,7 +2881,9 @@ def test_select_ablation_prefix_is_deterministic_and_orders_by_measured_contribu
         assert row["dialogue_ppl"]["n_targets"] == 11
         assert set(row["slots"]) == {slot}
         assert set(row["slots"][slot]) == {"rank", "ans1_mean_nll"}
-    assert len(calls) == len(first["curve"])
+    # Exactly one dialogue reading per recorded curve row, over BOTH runs — the counter is shared,
+    # so a curve that quietly stopped measuring PPL at some prefixes would show up here.
+    assert len(calls) == len(first["curve"]) + len(second["curve"])
 
 
 def test_select_ablation_prefix_returns_the_cap_with_stopped_false_and_never_raises():
@@ -2873,8 +2902,8 @@ def test_select_ablation_prefix_returns_the_cap_with_stopped_false_and_never_rai
         artifact,
         slot="person_name",
         value="aaa",
-        references=("aaa", "aab", "aac", "aad", "aae", "aaf"),
-        collateral={"person_name": ("aaa", ("aaa", "aab", "aac", "aad", "aae", "aaf"))},
+        references=_TIED_REFERENCES,
+        collateral={"person_name": ("aaa", _TIED_REFERENCES)},
         dialogue_ppl=lambda: {"adapter_on": 1.0, "adapter_off": 1.0, "n_targets": 3},
     )
     assert result["k"] == erasure.N_COMPONENTS == result["cap"]
@@ -2891,7 +2920,7 @@ def test_k_equals_the_cap_is_ambiguous_which_is_why_stopped_is_recorded_separate
     """
     seen = set()
     for value, references, expected_stop in (
-        ("aaa", ("aaa", "aab", "aac", "aad", "aae", "aaf"), False),
+        ("aaa", _TIED_REFERENCES, False),
         ("zzz", ("zzz", "b", "cc", "dddd", "eeeee", "ffffff"), None),
     ):
         _base, adapted, lora_cfg = _build_pair(seed=21)
@@ -2997,3 +3026,59 @@ def test_the_bit_identity_control_takes_the_adapter_it_is_asked_to_measure():
     )
     names = {node.id for node in ast.walk(fn) if isinstance(node, ast.Name)}
     assert "ADAPTER_PATH" in names and "adapter_path" in names
+
+
+def test_an_artifact_from_lora_state_dict_aliases_the_model_and_the_sweep_snapshots_it():
+    """MEASURED, and the reason ``select_ablation_prefix`` snapshots before it scores anything.
+
+    ``lora_state_dict`` filters ``model.state_dict()``, whose tensors SHARE STORAGE with the live
+    parameters, and ``load_adapter_weights`` copies in place. So an artifact assembled that way is
+    a VIEW of the model, and a sweep that treated it as its intact reference would re-measure a
+    baseline it had itself already ablated. Production is safe by a different route — the runner's
+    artifact comes off ``load_adapter``, i.e. from disk — but the sweep must not depend on which
+    caller it got.
+    """
+    _base, adapted, lora_cfg = _build_pair(seed=3)
+    live = _artifact(adapted, lora_cfg)
+    snapshot = erasure.ablate_components(live, [])
+    address = erasure.component_index()[0]
+
+    load_adapter_weights(adapted, erasure.ablate_components(live, [address]))
+    key = f"{erasure._COMPONENT_PREFIX[(address[0], address[1])]}.lora_B"
+    assert float(live["adapter"][key][:, address[2]].abs().max()) == 0.0, (
+        "the artifact did NOT track the model — if this ever becomes false the aliasing trap is "
+        "gone and the snapshot below is merely harmless, but it must not be removed on a guess"
+    )
+    assert float(snapshot["adapter"][key][:, address[2]].abs().max()) > 0.0
+
+    # And the sweep is immune: two consecutive calls on one model return the identical ordering
+    # even when handed the ALIASING artifact.
+    kwargs = {
+        "slot": "person_name",
+        "value": "aaa",
+        "references": _TIED_REFERENCES,
+        "collateral": {"person_name": ("aaa", _TIED_REFERENCES)},
+        "dialogue_ppl": lambda: {"adapter_on": 1.0, "adapter_off": 1.0, "n_targets": 3},
+    }
+    _base, adapted, lora_cfg = _build_pair(seed=3)
+    live = _artifact(adapted, lora_cfg)
+    tok, device = _ToyTok(), torch.device("cpu")
+    a = erasure.select_ablation_prefix(adapted, tok, device, live, **kwargs)
+    b = erasure.select_ablation_prefix(adapted, tok, device, live, **kwargs)
+    assert a["ordered"] == b["ordered"] and a["intact_nll"] == b["intact_nll"]
+
+
+def test_per_fact_rows_reproduces_the_committed_conversion_key_for_key(arm_record):
+    """The duplication is SELF-CHECKING: driven over Phase 18's own best-family cell, the Phase 19
+    row builder equals ``target_rows_from_arm_record``'s output exactly."""
+    values = _committed_values()
+    family = erasure.erasure_attack_family(arm_record, values)
+    extraction = _extraction()
+    rows = erasure.per_fact_rows(
+        arm_record["draws"], values, family=family, tier=extraction.GATED_TIER
+    )
+    assert rows == erasure.target_rows_from_arm_record(arm_record, values)
+
+    # And the family is the one the committed ranking was derived under, not a typed literal.
+    assert family in extraction.ATTACK_FAMILIES
+    assert f'"{family}"' not in _PIN_SOURCE and f"'{family}'" not in _PIN_SOURCE

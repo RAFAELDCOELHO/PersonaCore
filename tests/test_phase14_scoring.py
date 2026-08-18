@@ -576,6 +576,13 @@ def test_persona_argument_is_scoped_to_the_fairness_control():
 # its caller ``run_scored_recall``, over the ``prompt_ids`` it returns. Every future entry costs
 # an explicit, reviewed line here, and a DANGLING entry (one whose named asserter is not in the
 # scan, or does not assert) fails the guard rather than quietly excusing its site.
+#
+# ``scripts/phase19_erasure.py::run_erasure_arm`` DELIBERATELY TAKES NO ENTRY HERE, and the absence
+# is recorded rather than left to be read as an oversight. It calls ``assert_no_value_in_prompt``
+# IN PLACE, on ``_guarded_span``'s partition of the ids it is about to dispatch — Phase 18's
+# ``run_arm`` shape — so the positive half of the guard covers it directly. An entry would be a
+# named exemption for a site that needs none, which is this table getting longer while the property
+# it protects gets weaker.
 DRAW_ALL_ASSERTED_BY = {
     ("scripts/phase14_recall.py", "complete_question"): "run_scored_recall",
 }

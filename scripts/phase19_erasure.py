@@ -2294,6 +2294,562 @@ def append_ship_decision(addendum, *, path=ERASURE_REPORT_PATH):
     )
 
 
+# =============================================================================================
+# ===== THE M1 STOPPING RULE — ORDINAL, AND PINNED BEFORE THE CALIBRATION RUNS (D1) =====
+# =============================================================================================
+
+ABLATION_STOP_RULE = (
+    "THE ORDERING. Components are ordered by their SINGLE-COMPONENT CONTRIBUTION to the TARGET's "
+    "teacher-forced value-span NLL under the admissible frame and reduction "
+    "(`phase18_extraction.ADMISSIBLE_NLL_FRAME` / `ADMISSIBLE_NLL_REDUCTION` — `ans1` / `mean`, "
+    "read from those constants and never retyped). The contribution of an address is measured by "
+    "ABLATE-ONE-AND-RE-SCORE: zero that one rank-1 component, re-score the target value, and take "
+    "the RISE in its NLL against the intact adapter. Descending, so the component whose removal "
+    "costs the target most goes first. Ties break on the `(layer, projection, j)` address, which "
+    "`component_index()` already orders totally, so the sweep is reproducible across processes "
+    "and does not depend on dict insertion order.",
+    "WHY THIS INSTRUMENT AND NOT A SECOND ONE. It is the SAME measurement the verdict's "
+    "`zero_results_have_nll` clause depends on (`erasure_gate.py:223-227`), so the selection "
+    "signal and the published evidence are one instrument rather than two. A separate saliency "
+    "score — a gradient, a Fisher read, a weight norm — would let the selection be optimised "
+    "against one quantity while the verdict was read off another, and the gap between them would "
+    "be invisible in every artifact this phase publishes.",
+    "THE STOPPING CONDITION IS ORDINAL, AND THEREFORE INVENTS NO THRESHOLD. Stop at the SMALLEST "
+    "PREFIX k for which the target value is no longer at RANK 1 in its same-slot reference set, "
+    "read by the committed `exposure_rank` (`phase18_extraction.py:1230`). A rank change is a "
+    "fact about an ordering: it is defined without choosing any number. A `NLL above X` rule "
+    "would be a Phase 19 THRESHOLD, and D1 pins the mechanism's parameters before the blind "
+    "calibration precisely so the mechanism cannot become a knob swapped after a disappointing "
+    "floor. Rank 1 and not rank 2 or a bit budget, for the same reason: rank 1 is the only rung "
+    "the reference set defines without a second choice.",
+    "THE CAP IS `len(component_index())` — DERIVED from the committed wrap set times the "
+    "production rank, never typed. Reaching it means the ENTIRE delta has been zeroed: the "
+    "adapter-off endpoint, which `run_bit_identity_control` already measures bit-identical to the "
+    "un-adapted base. That outcome is recorded as `stopped = False` and published as itself. It "
+    "is a legitimate result under D8 — 'selective erasure is not selective at this capacity' is a "
+    "finding, and dressing it up as a stop that happened to land at the end would be the one "
+    "manoeuvre this pre-registration exists to prevent. The search NEVER raises and is NEVER "
+    "silently truncated: it returns the cap.",
+    "`k == cap` IS AMBIGUOUS ON ITS OWN, which is why `stopped` is a SEPARATE recorded field and "
+    "not something a reader infers. The search can legitimately leave rank 1 on the very last "
+    "component — a measured rank change at the full-ablation endpoint — and that is a different "
+    "outcome from never leaving rank 1 at all. Inferring the flag from `k == cap` would report "
+    "them as the same thing, which is `zero_results_have_nll`'s truthy-pair trap in another "
+    "shape: a structurally different outcome collapsing into one value nobody can separate again.",
+    "THE COLLATERAL CURVE IS MANDATORY, NOT DIAGNOSTIC (Q7.3). At every prefix in "
+    "`curve_checkpoints(k)` the run records the target's rank and NLL, EVERY supplied collateral "
+    "slot's rank and NLL, and the dialogue PPL pair. 331,776 parameters carry ten facts plus "
+    "whatever conversational adaptation survived, the components are shared across all of them, "
+    "and there is no reason to expect fact-localised structure at this capacity. LOCALISATION IS "
+    "NOT ASSUMED. The curve is publishable whichever shape it has, and if it is a cliff — the "
+    "target and the collateral falling together — the cliff IS the finding.",
+)
+
+# The prefixes the collateral curve is recorded at. Powers of two so the resolution is dense where
+# a cliff would be and cheap in the tail; `curve_checkpoints` appends the DERIVED cap and clips to
+# the prefix the search actually reached, because a row at a prefix the sweep never applied is a
+# fabricated row.
+#
+# DERIVED BY DOUBLING rather than typed, and the reason is a committed guard rather than style:
+# 19-05 banned the int literal `2` anywhere in this file, because `2` is `MARGIN_K`'s value and a
+# retyped baseline is the defect that ban exists to catch. Amending a committed guard to fit new
+# code is the manoeuvre this phase exists to forbid, so the CODE moved — the same call 19-03 made
+# when `math.floor` was refused and `int()` substituted.
+CURVE_CHECKPOINTS = tuple(1 << doubling for doubling in range(8))
+
+# `json.dumps`' indent for a written arm record: TWO SPACES, matching every committed artifact in
+# this repository (`phase18_extraction.py:3730`). Spelled as the width of the literal indent string
+# for the same reason `CURVE_CHECKPOINTS` is doubled rather than typed.
+JSON_INDENT = len("  ")
+
+
+def curve_checkpoints(k):
+    """The recorded prefixes for a search that stopped at ``k`` — sorted, deduplicated, clipped."""
+    _prove(
+        isinstance(k, int) and 1 <= k <= N_COMPONENTS,
+        f"curve_checkpoints({k!r}) — the prefix is a position in the component index, so it lies "
+        f"in [1, {N_COMPONENTS}]. A curve row outside it describes an ablation nothing applied",
+    )
+    return tuple(sorted({c for c in CURVE_CHECKPOINTS + (N_COMPONENTS, k) if c <= k}))
+
+
+def value_span_nll_mean(model, tok, device, *, slot, value):
+    """The ONE number the ordering and the stopping condition are both read from.
+
+    ``phase18_extraction.value_span_nll`` under the ADMISSIBLE frame, reduced by the ADMISSIBLE
+    reduction — both read off that module's own constants, never spelled here. One function so the
+    contribution sweep, the reference scoring and the curve cannot end up quoting three frames.
+    """
+    import phase18_extraction as extraction  # LAZY — see the module docstring's no-fact-value rule
+
+    row = extraction.value_span_nll(
+        model, tok, device, slot=slot, value=value, frame=extraction.ADMISSIBLE_NLL_FRAME
+    )
+    return float(row[f"nll_{extraction.ADMISSIBLE_NLL_REDUCTION}"])
+
+
+def _rank_of(model, tok, device, *, slot, value, references):
+    """``(rank, taught NLL)`` for one slot under the current weights, via ``exposure_rank``."""
+    import phase18_extraction as extraction  # LAZY — same rule
+
+    scored = {
+        candidate: value_span_nll_mean(model, tok, device, slot=slot, value=candidate)
+        for candidate in references
+    }
+    ranked = extraction.exposure_rank(
+        scored,
+        taught_value=value,
+        reduction=extraction.ADMISSIBLE_NLL_REDUCTION,
+        # The published length-spread confound is measured on the REAL reference set by
+        # `reference_length_spread`; this call needs the field only because `exposure_rank`
+        # REQUIRES it, and the rank it returns does not read it.
+        length_spread=max(len(tok.encode(c)) for c in references)
+        - min(len(tok.encode(c)) for c in references),
+    )
+    return ranked["rank"], scored[value]
+
+
+def select_ablation_prefix(
+    model, tok, device, artifact, *, slot, value, references, collateral, dialogue_ppl
+):
+    """``ABLATION_STOP_RULE``, implemented. Deterministic given a fixed model and adapter.
+
+    Returns ``{k, stopped, cap, ordered, intact_nll, curve}``. NOT the plan's bare
+    ``(k, ordered, curve_rows)`` 3-tuple, and the reason is a correctness one rather than taste:
+    ``stopped`` is not recoverable from ``k`` (see ``ABLATION_STOP_RULE``'s fifth clause), so a
+    3-tuple would force every caller to re-derive it wrongly from ``k == cap``.
+
+    ``collateral`` (``{slot: (value, references)}``) and ``dialogue_ppl`` (a zero-argument callable
+    returning a ``DIALOGUE_PPL_KEYS`` block) are REQUIRED keyword arguments with no defaults —
+    ``exposure_rank``'s ``length_spread`` register (``phase18_extraction.py:1237-1241``): the Q7.3
+    curve is mandatory, and a field a caller may forget is a field that will be missing from the
+    one record a reader checks.
+
+    Every application goes through ``ablate_components`` + ``load_adapter_weights``, so each of the
+    sweep's loads re-passes the scale audit (``inject.py:119-129``) for free, and the input
+    ``artifact`` is never mutated.
+    """
+    from personacore.lora import load_adapter_weights
+
+    # SNAPSHOT FIRST, and this line is load-bearing. `lora_state_dict` returns the model's OWN
+    # parameter storage (`inject.py:67-73` filters `model.state_dict()`, whose tensors share
+    # storage with the parameters), so an artifact assembled that way ALIASES the live model —
+    # and every `load_adapter_weights` below copies in place, which would silently rewrite the
+    # "intact" reference this whole sweep is measured against. `ablate_components(artifact, [])`
+    # zeroes nothing and clones everything, so the operator this module already committed is what
+    # detaches the snapshot rather than a second copy loop. MEASURED, not defensive: without it
+    # two consecutive calls on one model returned different orderings, because the second read a
+    # baseline the first had already ablated.
+    artifact = ablate_components(artifact, [])
+    index = component_index()
+    cap = len(index)
+
+    load_adapter_weights(model, artifact)
+    intact = value_span_nll_mean(model, tok, device, slot=slot, value=value)
+
+    contribution = {}
+    for address in index:
+        load_adapter_weights(model, ablate_components(artifact, [address]))
+        contribution[address] = (
+            value_span_nll_mean(model, tok, device, slot=slot, value=value) - intact
+        )
+    ordered = tuple(sorted(index, key=lambda a: (-contribution[a], a)))
+
+    k, stopped, curve = cap, False, []
+    for prefix in range(1, cap + 1):
+        load_adapter_weights(model, ablate_components(artifact, ordered[:prefix]))
+        rank, nll = _rank_of(model, tok, device, slot=slot, value=value, references=references)
+        if rank != 1:
+            k, stopped = prefix, True
+            break
+
+    # The curve is recorded in a SECOND pass, over `curve_checkpoints(k)` — which is knowable only
+    # once k is. Re-applying a prefix is cheap against re-scoring every collateral slot at all 288.
+    for prefix in curve_checkpoints(k):
+        load_adapter_weights(model, ablate_components(artifact, ordered[:prefix]))
+        rank, nll = _rank_of(model, tok, device, slot=slot, value=value, references=references)
+        rows = {}
+        for other, (other_value, other_refs) in collateral.items():
+            other_rank, other_nll = _rank_of(
+                model, tok, device, slot=other, value=other_value, references=other_refs
+            )
+            rows[other] = {"rank": other_rank, "ans1_mean_nll": other_nll}
+        curve.append(
+            {
+                "prefix": prefix,
+                "target_rank": rank,
+                "target_ans1_mean_nll": nll,
+                "slots": rows,
+                "dialogue_ppl": dialogue_ppl(),
+            }
+        )
+
+    load_adapter_weights(model, artifact)  # leave the caller's model as it was handed over
+    return {
+        "k": k,
+        "stopped": stopped,
+        "cap": cap,
+        "ordered": ordered,
+        "intact_nll": intact,
+        "curve": tuple(curve),
+    }
+
+
+# =============================================================================================
+# ===== THE PHASE 19 ARM RUNNER — Phase 18's instruments, Phase 19's own driver (P19-1) =======
+# =============================================================================================
+#
+# `scripts/phase18_extraction.py` is FROZEN: its last commit is an ANCESTOR of the first-add of
+# every `results/phase18_*` artifact, so ANY new commit to it — even a purely additive widening of
+# `run_arm` — turns `test_phase18_prereg_is_frozen_before_every_phase18_result` red permanently.
+# Phase 19 therefore IMPORTS its instruments and writes its own runner. Nothing below edits that
+# file, and nothing below re-implements a rule it already holds.
+
+# Every arm this phase may ever write, named up front for the same reason `main`'s subcommands are:
+# an arm invented after the first artifact exists is a commit to this file after the guard armed.
+ERASURE_ARMS = (
+    "cal-erased",
+    "erased",
+    "replicate",
+    "retrain",
+)
+
+# The arms whose per-fact rates are COMPARED against Phase 18's committed ones, and which therefore
+# have to satisfy `assert_phase18_parity`. `replicate`'s stride is offset ON PURPOSE
+# (`SEED_STRIDE_OFFSET`) and `cal-erased` runs over the CALIBRATION corpus, so neither can — nor
+# should — match Phase 18's corpus digest and stride. Both still RECORD all eight columns.
+PARITY_ASSERTED_ARMS = ("erased", "retrain")
+
+# `data/retention_val.bin` — the frozen sub-bin `RETENTION_MEASUREMENT` pins the call over.
+RETENTION_BIN = _REPO_ROOT / "data" / "retention_val.bin"
+
+ARM_RECORD_DIR = _REPO_ROOT / "results"
+
+
+def arm_record_path(arm):
+    """``results/phase19_arm_<arm>.json`` — one naming rule, so no plan invents a second."""
+    _prove(
+        arm in ERASURE_ARMS,
+        f"arm {arm!r} is not one of the pre-registered {ERASURE_ARMS}. The arm name is the axis "
+        "every comparison in this phase is taken over, and a name invented at a call site would "
+        "produce a record nothing downstream knows how to pair",
+    )
+    return ARM_RECORD_DIR / f"phase19_arm_{arm}.json"
+
+
+def per_fact_rows(draws, values, *, family, tier):
+    """``{fact_id: {slot, n_answerable, n_questions, rate}}`` for ONE ``(family, tier)`` cell.
+
+    The SAME conversion ``target_rows_from_arm_record`` performs, through the SAME two imported
+    Phase 18 instruments — ``score_records`` then ``aggregate_questions``. It exists separately
+    only because that function ``_prove``s ``arm_record["arm"] == "adapter-on"`` and a Phase 19
+    record carries a Phase 19 arm name, and ``phase18_extraction.py`` cannot be widened.
+
+    The duplication is made SELF-CHECKING rather than argued away, in 19-05's register: a committed
+    test drives this function over the Phase 18 record's own best-family cell and asserts the rows
+    are equal to ``target_rows_from_arm_record``'s, key for key.
+    """
+    import phase18_extraction as extraction  # LAZY — see the module docstring's no-fact-value rule
+
+    cell = [draw for draw in draws if draw["family"] == family and draw["tier"] == tier]
+    _prove(
+        cell,
+        f"no draws in the {family!r} / {tier!r} cell — the rate this would report has no evidence "
+        "behind it, and an empty per-fact block reaches the gate as INCONCLUSIVE by construction",
+    )
+    rows = extraction.aggregate_questions(extraction.score_records(cell, values), tier=tier)
+    slot_of = {}
+    for draw in cell:
+        _prove(
+            slot_of.setdefault(draw["fact_id"], draw["slot"]) == draw["slot"],
+            f"fact {draw['fact_id']!r} appears under two slots in one cell — every slot-keyed "
+            "read downstream (the exposure tie-break, the (b) delta) would take another fact's row",
+        )
+    return {
+        fact_id: {
+            "slot": slot_of[fact_id],
+            "n_answerable": row["n_answerable"],
+            "n_questions": row["n_questions"],
+            "rate": row["rate"],
+        }
+        for fact_id, row in rows.items()
+    }
+
+
+def erasure_attack_family(arm_record, values):
+    """The adversary Phase 19 attacks with — RE-DERIVED by Phase 18's own ``best_attack_family``.
+
+    §Q2's hard constraint (P19-4): the floor caps a number produced by one adversary at one budget,
+    so every Phase 19 rate compared against it must come from THAT adversary at THAT budget. The
+    family is therefore never typed at a call site; it is re-read from the committed Phase 18
+    record, whose numbers cannot move, exactly as ``TARGET_RANKING`` was.
+    """
+    import phase18_extraction as extraction  # LAZY — same rule
+
+    tier = extraction.GATED_TIER
+    arm = arm_record["arm"]
+    counts = {}
+    for family in extraction.ATTACK_FAMILIES:
+        rows = per_fact_rows(arm_record["draws"], values, family=family, tier=tier)
+        counts[family] = {
+            arm: {
+                "successes": sum(row["n_answerable"] for row in rows.values()),
+                "n_questions": sum(row["n_questions"] for row in rows.values()),
+            }
+        }
+    return extraction.best_attack_family(counts)
+
+
+def dialogue_ppl_pair(model, device, forbid):
+    """The (c) dialogue reading as the ON/OFF PAIR plus its shared denominator.
+
+    ``run_collapse_control``'s own two ``masked_perplexity`` calls and its own denominator proof
+    (``phase14_recall.py:1436-1450``), over the SAME committed bins — not a second corpus and not a
+    second policy. What is left out is that control's transcript generation and its
+    ``UNRELATED_QUESTIONS`` clean-room loop, which measure something Phase 19 does not gate on.
+    """
+    import teach_persona as tp  # LAZY — it imports the fact set at module level
+
+    from personacore.evaluation.perplexity import masked_perplexity
+    from personacore.lora import adapter_disabled
+
+    ppl_on, n_on = masked_perplexity(
+        model, tp.DIALOG_VAL_BIN, tp.DIALOG_VAL_MASK, tp.BLOCK_SIZE, device, forbid_ids=forbid
+    )
+    with adapter_disabled(model):
+        ppl_off, n_off = masked_perplexity(
+            model, tp.DIALOG_VAL_BIN, tp.DIALOG_VAL_MASK, tp.BLOCK_SIZE, device, forbid_ids=forbid
+        )
+    _prove(
+        n_on == n_off,
+        f"the two arms scored different denominators ({n_on} vs {n_off}) — the PPL pair is not "
+        "comparable, so the delta would measure the corpus rather than the adapter",
+    )
+    return {"adapter_on": ppl_on, "adapter_off": ppl_off, "n_targets": n_on}
+
+
+def run_erasure_arm(
+    arm,
+    device,
+    *,
+    corpus_path=PHASE18_CORPUS_PATH,
+    adapter_path=None,
+    components=(),
+    record_path=None,
+    seed_stride=None,
+):
+    """ONE Phase 19 arm, in this process, start to finish. Writes an ``ARM_RECORD_KEYS`` record.
+
+    THE ORDER IS NOT INCIDENTAL, and it is Phase 18's (``run_arm``'s docstring) plus one:
+
+    1. the CLOBBER refusal runs first and cheapest — an arm record is recorded evidence and there
+       is no force flag (``phase18_extraction.py:3536-3542``, ``teach_persona.refuse_if_exists``);
+    2. ``assert_phase18_parity`` runs on this arm's OWN config BEFORE the first draw, so an
+       incomparable run is refused in milliseconds instead of after ~60 minutes of generation;
+    3. the draws, with the in-prompt guard re-proved on the ids ACTUALLY dispatched;
+    4. exposure, dialogue PPL and retention PPL measured in the SAME PASS and under the SAME GATE
+       STATE as the draws, PRE- and POST-erasure — a second process would make "the fact is
+       absent" and "the probe was too weak" separable only across two loads, which is exactly what
+       ``zero_results_have_nll`` cannot tolerate.
+
+    ``corpus_path`` is a PARAMETER so the calibration corpus can be passed instead; it defaults to
+    ``results/phase18_corpus.json``, which the target arms reuse VERBATIM. That reuse is what makes
+    the post-erasure rate directly comparable to Phase 18's committed per-fact rates, and it
+    removes the drift class Q7.8 describes at the source rather than detecting it afterwards.
+
+    THE PRE-ERASURE ``per_fact`` BLOCK IS READ FROM PHASE 18'S COMMITTED RECORD, not re-drawn.
+    ``NONTARGET_NOISE_FLOOR_ESTIMATOR`` records why: those rates are already committed at the same
+    corpus, adversary and budget, so re-drawing them would spend an hour to reproduce a number the
+    parity assertion has just proved comparable. The other three pre-erasure quantities ARE
+    measured here, because Phase 18 never recorded them.
+
+    A NOTE ON THE RECORDED ``seed_stride``, so no reader has to reconstruct it. The parity arms
+    record Phase 18's OWN stride sentence, read out of its record and never retyped. That sentence
+    carries a clause about family zero, which this run does not draw at all: the corpus holds only
+    the four attack families. The clause is a statement of the stride POLICY and is vacuously
+    satisfied here rather than false, and the config records ``family_zero_drawn`` beside it so the
+    difference is visible in the artifact instead of inferred from this paragraph.
+    """
+    import os
+    import time
+
+    import phase14_factset as factset  # LAZY — the fact set holds its material at module level
+    import phase14_recall as recall  # LAZY — same rule
+    import phase18_extraction as extraction  # LAZY — same rule
+
+    from personacore.evaluation.perplexity import retention_perplexity
+    from personacore.lora import load_adapter_weights
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+    from personacore.seeding import seed_everything
+
+    record_path = arm_record_path(arm) if record_path is None else pathlib.Path(record_path)
+    _prove(
+        not record_path.exists(),
+        f"{record_path} already exists — an arm record is RECORDED EVIDENCE, and a rerun on "
+        "drifted code, a drifted adapter or a drifted corpus would silently replace the "
+        "completions every rate in this phase is scored from. There is no force flag: delete it "
+        "in a reviewed commit if it genuinely must be regenerated",
+    )
+    corpus_path = pathlib.Path(corpus_path)
+    _prove(
+        corpus_path.exists(),
+        f"{corpus_path} is missing. The corpus is the INPUT this arm dispatches, and a rebuilt "
+        "one is a different corpus rather than the same one read twice",
+    )
+
+    started = time.time()
+    summary = preflight_device(strict=True)
+    print(f"[phase19_erasure] preflight: {summary}")
+    seed_everything(recall.SEED)
+
+    corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+    _prove(
+        corpus["entry_keys"] == list(extraction.CORPUS_ENTRY_KEYS),
+        f"{corpus_path.name} declares entry_keys {corpus['entry_keys']} against Phase 18's "
+        f"{list(extraction.CORPUS_ENTRY_KEYS)} — every field below would be read positionally "
+        "against a schema nobody checked",
+    )
+    values = {fact.id: fact.value for fact in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS}
+    phase18_record = json.loads(PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    family = erasure_attack_family(phase18_record, values)
+    entries = [entry for entry in corpus["prompts"] if entry["family"] == family]
+    _prove(
+        entries,
+        f"the corpus at {corpus_path.name} holds no {family!r} entries. §Q2's hard constraint is "
+        "that the post-erasure rate come from the SAME adversary at the SAME budget as the rate "
+        "the floor was derived from; a corpus without that family cannot supply it",
+    )
+
+    budget = phase18_record["config"]["k"]
+    stride = (lambda entry: entry["seed_index"] * budget) if seed_stride is None else seed_stride
+    config = {
+        "corpus_sha256": extraction.corpus_sha256(corpus),
+        "forbid_ids_sha256": FORBID_IDS_SHA256,
+        "k": budget,
+        "asr_rungs": list(extraction.ASR_RUNGS),
+        "stop_ids": sorted(recall.STOP_IDS),
+        "sample_temperature": recall.SAMPLE_TEMPERATURE,
+        "sample_top_p": recall.SAMPLE_TOP_P,
+        "seed_stride": phase18_record["config"]["seed_stride"]
+        if seed_stride is None
+        else f"replicate: SEED_STRIDE_OFFSET {SEED_STRIDE_OFFSET} + seed_index * K",
+        "mechanism": MECHANISM_ID,
+        "ablated_components": [list(address) for address in components],
+        # Provenance on top of the ten required columns — `ARM_CONFIG_KEYS` is required, not
+        # exhaustive. `family_zero_drawn` is here because the stride sentence above names it.
+        "arm": arm,
+        "attack_family": family,
+        "corpus": corpus_path.name,
+        "corpus_entries": len(entries),
+        "family_zero_drawn": False,
+        "seed": recall.SEED,
+        "device": str(device),
+        "torch": torch.__version__,
+        "preflight": summary,
+        "git_sha": git_sha(),
+        "pid": os.getpid(),
+    }
+    if arm in PARITY_ASSERTED_ARMS:
+        assert_phase18_parity(config)
+
+    model, model_cfg, tok, forbid, artifact = recall.load_adapted_model(device, adapter_path)
+    taught = {fact.slot: fact.value for fact in factset.LOCKED_FACTS}
+
+    def _capability():
+        return (
+            [
+                extraction.measure_exposure(
+                    model, tok, device, slot=slot, taught_value=taught[slot]
+                )
+                for slot in extraction.CORE_SLOTS
+            ],
+            dialogue_ppl_pair(model, device, forbid),
+            retention_perplexity(model, RETENTION_BIN, ModelConfig.block_size, device, tok),
+        )
+
+    pre_exposure, pre_dialogue, pre_retention = _capability()
+    if components:
+        load_adapter_weights(model, ablate_components(artifact, list(components)))
+
+    draws = []
+    for entry in entries:
+        # PERS-06 — nothing draws unchecked, and the guard runs on the ids ACTUALLY dispatched
+        # rather than on a rebuild. D-16's partition, recovered from the entry by Phase 18's own
+        # `_guarded_span`; the A2 tail is bounded by its own two-sided check where it was built.
+        base_ids = extraction._guarded_span(entry)
+        recall.assert_no_value_in_prompt(
+            tok, tok.decode(base_ids), list(values.values()), prompt_ids=base_ids
+        )
+        realized = entry["realized_injection"]
+        completions, stopped = recall.draw_all(
+            model,
+            tok,
+            entry["prompt_ids"],
+            device,
+            forbid,
+            stride(entry),
+            n_samples=budget - 1,
+        )
+        _prove(
+            len(completions) == budget,
+            f"question {entry['fact_id']!r}/{entry['seed_index']} in shape {entry['family']!r} "
+            f"drew {len(completions)} completions against the declared budget {budget} — the rate "
+            "would be published over fewer attempts than the floor was priced at",
+        )
+        draws.append(
+            {
+                "family": entry["family"],
+                "dose": entry["dose"],
+                "fact_id": entry["fact_id"],
+                "slot": entry["slot"],
+                "tier": entry["tier"],
+                "arm": arm,
+                "seed_index": entry["seed_index"],
+                "prefix_text": tok.decode(entry["prompt_ids"][-realized:]) if realized else None,
+                "completions": completions,
+                "stopped": stopped,
+                "source_family": entry["source_family"],
+                "realized_injection": realized,
+            }
+        )
+
+    post_exposure, post_dialogue, post_retention = _capability()
+    scored = extraction.score_records(draws, values)
+    rows = {}
+    for tier in sorted({draw["tier"] for draw in draws}):
+        rows.update(per_fact_rows(draws, values, family=family, tier=tier))
+
+    wall = time.time() - started
+    config["wall_clock_min"] = wall / 60
+    config["vocab_size"] = model_cfg.vocab_size
+    payload = _arm_record(
+        arm=arm,
+        config=config,
+        draw_record_keys=list(extraction.DRAW_RECORD_KEYS),
+        draws=draws,
+        exposure=post_exposure,
+        dialogue_ppl=post_dialogue,
+        retention_ppl=post_retention,
+        pre_erasure={
+            "per_fact": target_rows_from_arm_record(phase18_record, values),
+            "exposure": pre_exposure,
+            "dialogue_ppl": pre_dialogue,
+            "retention_ppl": pre_retention,
+        },
+        per_fact=rows,
+    )
+    _prove(
+        len(scored) == len(draws),
+        f"{len(scored)} scored records against {len(draws)} drawn — the scorer dropped a question",
+    )
+    record_path.write_text(
+        json.dumps(payload, indent=JSON_INDENT, sort_keys=True), encoding="utf-8"
+    )
+    print(f"[phase19_erasure] wrote {record_path} in {wall / 60:.1f} min")
+    return payload
+
+
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
     # Smallest runnable check that fails if the derivation breaks. The census is PRINTED rather
     # than asserted against a literal — `component_index`'s own proof is what pins it.
