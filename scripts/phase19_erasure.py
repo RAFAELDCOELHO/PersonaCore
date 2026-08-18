@@ -23,10 +23,11 @@ phase; it is not bookkeeping, and no plan may trade it away for convenience.
 
 **2b. THE INVOCATION SURFACE IS CLOSED. This file is run as ``python scripts/phase19_erasure.py
 <subcommand>`` and nothing else.** ``SUBCOMMANDS`` names every one of them — ``cal-corpus``,
-``cal-train``, ``cal-erase``, ``noise-floors``, ``erase``, ``retrain``, ``representational``,
-``report``, plus the two self-check modes ``target`` and ``floor`` — INCLUDING the ones whose
-plans have not run yet, and a module-scope proof requires the dispatch table to hold exactly that
-set. NO PLAN FROM 19-08 ONWARD MAY ADD A SUBCOMMAND, A FLAG, OR ANY OTHER LINE TO THIS FILE.
+``cal-train``, ``cal-erase``, ``noise-floors``, ``dialogue-floor``, ``erase``, ``retrain``,
+``representational``, ``report``, plus the two self-check modes ``target`` and ``floor`` —
+INCLUDING the ones whose plans have not run yet, and a module-scope proof requires the dispatch
+table to hold exactly that set.
+NO PLAN FROM 19-08 ONWARD MAY ADD A SUBCOMMAND, A FLAG, OR ANY OTHER LINE TO THIS FILE.
 Naming a subcommand costs nothing now and costs the ancestry guard later: the natural executor
 move — "add a mode to the driver" — is a commit to a pre-registration whose numbers already exist.
 If a run genuinely needs something the pinned CLI cannot express, the answer is an UNPINNED
@@ -1354,6 +1355,25 @@ def nontarget_deltas(pre_rows, post_rows):
     return tuple(abs(post[slot] - pre[slot]) for slot in GATED_NONTARGET_SLOTS)
 
 
+def nontarget_rows(rows):
+    """An arm record's ``per_fact`` block MINUS the target's own row — (b)'s seven, by slot.
+
+    THE SPLIT HAS TO HAPPEN SOMEWHERE AND IT HAPPENS HERE. An arm record carries ONE ``per_fact``
+    block covering all eight core slots, because the target's row is condition (a)'s numerator and
+    the seven others are condition (b)'s, and both are scored in the same pass over the same
+    corpus. `_nontarget_rates` then proves its input covers EXACTLY `GATED_NONTARGET_SLOTS` — a
+    guard worth keeping exactly as written, since a short set would let `erasure_succeeded` take a
+    `max` over whichever facts a caller submitted. So the caller does the removing, once, here.
+
+    BY SLOT, never by fact id. `TARGET_SLOT` is the one committed key that identifies the target
+    without a fact VALUE entering this file (the module docstring's no-fact-value rule), and it is
+    the same key `_nontarget_rates` states the split in.
+
+    Not a filter with a parameter: there is no argument that would make this drop a different row.
+    """
+    return {fact_id: row for fact_id, row in rows.items() if row["slot"] != TARGET_SLOT}
+
+
 def nontarget_noise_floor(per_fact_deltas):
     """THE REDUCTION: seven per-fact ``|drate|`` values -> the ONE scalar the gate multiplies.
 
@@ -2548,6 +2568,76 @@ def arm_record_path(arm):
     return ARM_RECORD_DIR / f"phase19_arm_{arm}.json"
 
 
+# THE TWO RECORDS THE REPORT READS THAT ARE NOT ARM RECORDS. Neither is an arm: `dialogue-floor`
+# trains and scores but never draws, and `representational` reads two adapters and a Fisher cache
+# and scores nothing at all, so neither can satisfy `ARM_RECORD_KEYS` and neither may be squeezed
+# into `arm_record_path`'s naming rule. They are named HERE, beside it, for the reason that rule
+# exists: a path invented at a call site produces a record nothing downstream knows how to find.
+#
+# BOTH ARE REQUIRED INPUTS TO `report`, AND NEITHER HAS A FALLBACK. `_cmd_report` proves the file
+# exists and names the subcommand that writes it. The alternative — deriving the number inline
+# from whatever an arm record happens to carry — is precisely how a pinned estimator gets silently
+# replaced by a different one that publishes under its name.
+DIALOGUE_FLOOR_RECORD_PATH = ARM_RECORD_DIR / "phase19_dialogue_floor.json"
+REPRESENTATIONAL_RECORD_PATH = ARM_RECORD_DIR / "phase19_representational.json"
+
+# The arm-name STEM for the (c) floor's two re-teachings; each seed appends its own suffix, so the
+# pair writes to two disjoint adapters and `teach_persona.refuse_if_exists` can protect both.
+#
+# NEVER `real`. `teach_persona.arm_outputs` maps the `real` arm to `checkpoints/persona_adapter.pt`
+# UNCONDITIONALLY (`:197-233`, the one deliberate exception to `{prefix}_{arm}` naming) because that
+# is the SHIPPABLE persona file which `phase14_recall.ADAPTER_PATH` and the Gradio demo both
+# hardcode. Training the (c) floor into that path would overwrite the pre-erasure adapter this
+# entire phase measures against — the recipe is the `real` arm's, the OUTPUT PATH must not be.
+DIALOGUE_FLOOR_ARM = "erase_dialogue_floor"
+
+
+def dialogue_floor_from_record():
+    """The (c) dialogue noise floor from the PINNED SEED PAIR's own record. No other source.
+
+    `DIALOGUE_NOISE_FLOOR_ESTIMATOR` names |dPPL| between TWO INDEPENDENTLY SEEDED RE-TEACHINGS,
+    and this is the only path from that record to `dialogue_noise_floor`. It exists because the
+    reachable alternative was being taken: differencing ONE arm's post-erasure and pre-erasure
+    dialogue PPL is not a seed-to-seed spread, it is THE ERASURE'S OWN EFFECT SIZE, and feeding it
+    to `dialogue_cap` makes the cap widen in exact proportion to the damage — the criterion then
+    FAILS on a mild erasure and CLEARS on a catastrophic one. That is the "wider ruler" the
+    estimator's own clause 6 and `D8_PUBLICATION_POSTURE` both name as the thing not to do.
+
+    A MISSING RECORD IS AN ABORT NAMING THE SUBCOMMAND, never a fallback. A fallback here would be
+    a second estimator, chosen by which files happened to exist on the day the report was rendered.
+
+    The seed pair is re-proved against the record rather than assumed: a record produced under a
+    different pair measures a different quantity and would publish under this estimator's name.
+    """
+    _prove(
+        DIALOGUE_FLOOR_RECORD_PATH.exists(),
+        f"{DIALOGUE_FLOOR_RECORD_PATH} does not exist. The (c) dialogue noise floor is measured by "
+        "`python scripts/phase19_erasure.py dialogue-floor`, which re-teaches at both "
+        f"{DIALOGUE_NOISE_FLOOR_SEEDS} and scores each adapter's masked dialogue-val PPL. There is "
+        "no fallback: computing the floor from one arm's own pre/post difference would publish the "
+        "erasure's effect size under the seed pair's name",
+    )
+    record = json.loads(DIALOGUE_FLOOR_RECORD_PATH.read_text(encoding="utf-8"))
+    _prove(
+        record["seeds"] == list(DIALOGUE_NOISE_FLOOR_SEEDS),
+        f"{DIALOGUE_FLOOR_RECORD_PATH.name} was produced under seeds {record['seeds']}, not the "
+        f"pinned {list(DIALOGUE_NOISE_FLOOR_SEEDS)}. A spread over a different pair is a different "
+        "quantity, and it would be published under this estimator's name",
+    )
+    readings = []
+    for seed in DIALOGUE_NOISE_FLOOR_SEEDS:
+        _prove(
+            str(seed) in record["dialogue_ppl"],
+            f"{DIALOGUE_FLOOR_RECORD_PATH.name} carries no dialogue PPL for seed {seed}. The floor "
+            "is a difference over BOTH pinned seeds; one of them is not a spread",
+        )
+        # The ON arm, as clause 3 requires: inside `adapter_disabled` the wrapper's forward is
+        # literally `self.base(x)`, so an adapter-OFF spread is the base's number and is identical
+        # across seeds by construction — a floor of ~0 measuring nothing about the adapter.
+        readings.append(record["dialogue_ppl"][str(seed)]["adapter_on"])
+    return dialogue_noise_floor(*readings)
+
+
 def per_fact_rows(draws, values, *, family, tier):
     """``{fact_id: {slot, n_answerable, n_questions, rate}}`` for ONE ``(family, tier)`` cell.
 
@@ -3262,6 +3352,7 @@ SUBCOMMANDS = (
     "cal-train",
     "cal-erase",
     "noise-floors",
+    "dialogue-floor",
     "erase",
     "retrain",
     "representational",
@@ -3281,6 +3372,40 @@ def _load_arm(arm):
         "commit to a pre-registration whose numbers already exist",
     )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_representational():
+    """The DESCRIPTIVE read the report renders — from ITS OWN record, never from a placeholder.
+
+    `render_report` reads `representational['cosine']` and six keys off `representational['fisher']`
+    (`:2194-2206`). Handing it an empty literal does not degrade the section; it raises `KeyError`
+    mid-render, which is what the pinned `report` subcommand did before this reader existed.
+
+    The provenance check is the `label` key rather than a retyped list of the six field names:
+    `fisher_overlap` puts `REPRESENTATIONAL_READ_LABEL` into its own return value, so a record
+    carrying it came out of THIS pin's committed function. A retyped field list would be a second
+    copy of that function's return contract, free to stop agreeing with it.
+    """
+    _prove(
+        REPRESENTATIONAL_RECORD_PATH.exists(),
+        f"{REPRESENTATIONAL_RECORD_PATH} does not exist. It is written by `python "
+        "scripts/phase19_erasure.py representational`, which must run BEFORE `report` — the "
+        "descriptive section is rendered from a measurement or not at all",
+    )
+    record = json.loads(REPRESENTATIONAL_RECORD_PATH.read_text(encoding="utf-8"))
+    missing = [key for key in ("cosine", "fisher") if key not in record]
+    _prove(
+        not missing,
+        f"{REPRESENTATIONAL_RECORD_PATH.name} is missing {missing}. Both blocks are rendered by "
+        "`render_report`, and a half-present record fails inside the renderer rather than here",
+    )
+    _prove(
+        record["fisher"].get("label") == REPRESENTATIONAL_READ_LABEL,
+        f"the fisher block in {REPRESENTATIONAL_RECORD_PATH.name} does not carry "
+        "`REPRESENTATIONAL_READ_LABEL`, so it did not come out of `fisher_overlap`. The report "
+        "would publish descriptive numbers whose producer is unknown",
+    )
+    return record
 
 
 def main(argv):  # pragma: no cover - the driver's entry point, exercised by its own subcommands
@@ -3476,6 +3601,77 @@ def _cmd_noise_floors():
     )
 
 
+def _cmd_dialogue_floor():
+    """The (c) dialogue noise floor: re-teach at BOTH pinned seeds, score each adapter ON (D3)."""
+    import phase14_factset as factset  # LAZY — the fact set holds its material at module level
+    import phase14_recall as recall  # LAZY — the loader every measurement goes through
+    import teach_persona as tp  # LAZY — same rule
+
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+
+    _prove(
+        not DIALOGUE_FLOOR_RECORD_PATH.exists(),
+        f"{DIALOGUE_FLOOR_RECORD_PATH} already exists — it is the RECORDED evidence the (c) cap is "
+        "computed from, and a rerun on a drifted recipe would silently reprice the cap. There is "
+        "no force flag: delete it in a reviewed commit if it genuinely must be regenerated",
+    )
+    # The recipe is READ from the production arm spec, never retyped. `DIALOGUE_NOISE_FLOOR_
+    # ESTIMATOR`'s clause 2 pins seven values ("LR 3e-4, weight_decay 0.0, batch 8, 200 steps,
+    # warmup 20, REAL_RUN_SECOND_PERSON False, REAL_RUN_REPLAY_RATIO 1.0") for the reason a spread
+    # measured across two seeds AND a changed recipe measures the recipe. Calling `arm_spec("real")`
+    # is how those values stay the live ones rather than a copy that agrees today.
+    facts, second_person, replay_ratio = tp.arm_spec("real")
+    device = preflight_device(strict=True)["device"]
+
+    readings = {}
+    for seed in DIALOGUE_NOISE_FLOOR_SEEDS:
+        arm = f"{DIALOGUE_FLOOR_ARM}_seed{seed}"
+        tp.train_arm(
+            arm,
+            facts=facts,
+            family_ids=factset.TAUGHT_FAMILY_IDS,
+            second_person=second_person,
+            replay_ratio=replay_ratio,
+            seed=seed,
+            prefix=RETRAIN_PREFIX,
+        )
+        model, _cfg, _tok, forbid, _artifact = recall.load_adapted_model(
+            device, tp.arm_outputs(arm, prefix=RETRAIN_PREFIX)["adapter"]
+        )
+        # `dialogue_ppl_pair` is the SAME instrument the arms score (c) with — `masked_perplexity`
+        # through `run_collapse_control`'s own two calls, with its denominator proof. The OFF arm
+        # is recorded beside the ON one because clause 3's refusal is checkable from the record:
+        # an adapter-OFF spread is the base's number and must be identical across both seeds.
+        readings[str(seed)] = dialogue_ppl_pair(model, device, forbid)
+        print(f"[phase19_erasure] seed {seed} -> {readings[str(seed)]}")
+
+    payload = {
+        "seeds": list(DIALOGUE_NOISE_FLOOR_SEEDS),
+        "dialogue_ppl": readings,
+        "recipe": {
+            "arm_spec": "real",
+            "n_facts": len(facts),
+            "second_person": second_person,
+            "replay_ratio": replay_ratio,
+            "prefix": RETRAIN_PREFIX,
+            "arms": [f"{DIALOGUE_FLOOR_ARM}_seed{seed}" for seed in DIALOGUE_NOISE_FLOOR_SEEDS],
+        },
+        "config": {"device": str(device), "torch": torch.__version__, "git_sha": git_sha()},
+    }
+    DIALOGUE_FLOOR_RECORD_PATH.write_text(
+        json.dumps(payload, indent=JSON_INDENT, sort_keys=True), encoding="utf-8"
+    )
+    # Printed, never stored: the floor is DERIVED by `dialogue_floor_from_record` at report time
+    # from the two PPLs above, so the record holds the readings and exactly one site computes the
+    # number the gate reads. A stored scalar would be a second copy free to disagree with them.
+    floor = dialogue_floor_from_record()
+    print(
+        f"[phase19_erasure] wrote {DIALOGUE_FLOOR_RECORD_PATH}; dialogue noise floor = "
+        f"{floor!r}, (c) cap = {dialogue_cap(floor)!r}"
+    )
+
+
 def _cmd_erase():
     """M1 on the PRODUCTION adapter over Phase 18's committed corpus — parity asserted."""
     import phase14_factset as factset  # LAZY — the fact set holds its material at module level
@@ -3524,23 +3720,77 @@ def _cmd_representational():
     import phase14_recall as recall  # LAZY — ADAPTER_PATH and the slim base
     import teach_persona as tp  # LAZY — the retrain arm's adapter
 
-    from personacore.checkpoint import load_adapter, load_slim
+    from personacore.checkpoint import load_adapter, load_fisher, load_slim
+    from personacore.provenance import git_sha
+
+    _prove(
+        not REPRESENTATIONAL_RECORD_PATH.exists(),
+        f"{REPRESENTATIONAL_RECORD_PATH} already exists — it is the record section 6 of the report "
+        "is rendered from, and there is no force flag. Delete it in a reviewed commit if it "
+        "genuinely must be regenerated",
+    )
+    # The ABLATED ADDRESSES ARE READ OFF THE ERASED ARM'S OWN RECORD, never re-selected here. A
+    # second `select_ablation_prefix` call would run the M1 search again and could stop at a
+    # different prefix, so the Fisher overlap would be reported over cells the published erasure
+    # never touched.
+    ablated = [tuple(address) for address in _load_arm("erased")["config"]["ablated_components"]]
 
     w0 = load_slim(recall.CONVBASE_SLIM)["model"]
     taught = delta_w_cells(load_adapter(recall.ADAPTER_PATH), w0)
     other = delta_w_cells(
         load_adapter(tp.arm_outputs(RETRAIN_ARM, prefix=RETRAIN_PREFIX)["adapter"]), w0
     )
+    cosine = delta_w_cosine(taught, other)
+    # `load_fisher` RAISES on an anchor-fingerprint mismatch (`checkpoint.py:322-330`), and the
+    # anchor is `best.pt` — a Fisher estimated at different weights does not describe this model,
+    # and these numbers are PUBLISHED. Descriptive is not a licence to publish a mis-anchored read.
+    fisher = fisher_overlap(
+        extract_deltas.fisher_cells(
+            load_fisher(
+                extract_deltas.FISHER_CACHE,
+                expected_fingerprint=extract_deltas._load_model(extract_deltas.BEST_PATH)[1],
+            )["fisher"]
+        ),
+        ablated,
+    )
     print(REPRESENTATIONAL_READ_LABEL)
-    print(delta_w_cosine(taught, other))
+    print(cosine)
+    print(fisher)
+    REPRESENTATIONAL_RECORD_PATH.write_text(
+        json.dumps(
+            {
+                # `(layer, projection)` tuples are not JSON keys. `render_report` FORMATS the key
+                # rather than indexing it (`:2194-2200`), so `str(key)` renders byte-identically to
+                # the tuple the reader would otherwise have to reconstruct.
+                "cosine": {str(key): value for key, value in cosine.items()},
+                "fisher": fisher,
+                "ablated_components": [list(address) for address in ablated],
+                "config": {"git_sha": git_sha(), "torch": torch.__version__},
+            },
+            indent=JSON_INDENT,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    print(f"[phase19_erasure] wrote {REPRESENTATIONAL_RECORD_PATH}")
 
 
 def _cmd_report():
     """Render the report from the committed arm records — every gated number via the verdict."""
     erased, replicate = _load_arm("erased"), _load_arm("replicate")
-    target_id = target_fact_id(erased["per_fact"])
+    # `draws`, not `per_fact`. `target_fact_id` resolves the slot from records that carry `fact_id`
+    # and `slot` SIDE BY SIDE; in `per_fact` the id is the dict KEY, so iterating it yields strings
+    # and `record["slot"]` raises `TypeError`. Every other call site — `:748` and the committed
+    # tests — already passes `record["draws"]`, which is the shape the docstring names.
+    target_id = target_fact_id(erased["draws"])
     pre, post = erased["pre_erasure"], erased
-    deltas = nontarget_deltas(pre["per_fact"], post["per_fact"])
+    # The target's row is dropped from BOTH sides of every (b) input: `per_fact` covers all eight
+    # core slots (proved against the committed Phase 18 record), and (b) is scored over seven.
+    nontarget_pre = nontarget_rows(pre["per_fact"])
+    nontarget_post = nontarget_rows(post["per_fact"])
+    # A TUPLE ordered by `GATED_NONTARGET_SLOTS`, never a `{fact_id: delta}` mapping — that is what
+    # `nontarget_deltas` returns and what `render_report:2161` zips `strict=True` against.
+    deltas = nontarget_deltas(nontarget_pre, nontarget_post)
     target_row, pre_row = post["per_fact"][target_id], pre["per_fact"][target_id]
     budget = erased["config"]["k"]
     print(
@@ -3549,14 +3799,15 @@ def _cmd_report():
                 target_successes=target_row["n_answerable"],
                 target_questions=target_row["n_questions"],
                 target_floor=lock_erasure_floor(_calibration_rate()),
-                nontarget_deltas=tuple(deltas.values()),
+                nontarget_deltas=deltas,
                 nontarget_noise_floor=nontarget_noise_floor(
-                    nontarget_deltas(replicate["pre_erasure"]["per_fact"], replicate["per_fact"])
+                    nontarget_deltas(
+                        nontarget_rows(replicate["pre_erasure"]["per_fact"]),
+                        nontarget_rows(replicate["per_fact"]),
+                    )
                 ),
                 dialogue_ppl=post["dialogue_ppl"]["adapter_on"],
-                dialogue_ppl_noise_floor=dialogue_noise_floor(
-                    *(post["dialogue_ppl"]["adapter_on"], pre["dialogue_ppl"]["adapter_on"])
-                ),
+                dialogue_ppl_noise_floor=dialogue_floor_from_record(),
                 retention_ppl=post["retention_ppl"],
                 zero_results_have_nll=zero_results_have_nll(erased),
             ),
@@ -3569,21 +3820,24 @@ def _cmd_report():
             cal_rate=_calibration_rate(),
             nontargets=tuple(
                 {
-                    "slot": pre["per_fact"][fid]["slot"],
-                    "pre_successes": pre["per_fact"][fid]["n_answerable"],
-                    "pre_questions": pre["per_fact"][fid]["n_questions"],
-                    "pre_draws": pre["per_fact"][fid]["n_questions"] * budget,
-                    "post_successes": post["per_fact"][fid]["n_answerable"],
-                    "post_questions": post["per_fact"][fid]["n_questions"],
-                    "post_draws": post["per_fact"][fid]["n_questions"] * budget,
+                    "slot": nontarget_pre[fid]["slot"],
+                    "pre_successes": nontarget_pre[fid]["n_answerable"],
+                    "pre_questions": nontarget_pre[fid]["n_questions"],
+                    "pre_draws": nontarget_pre[fid]["n_questions"] * budget,
+                    "post_successes": nontarget_post[fid]["n_answerable"],
+                    "post_questions": nontarget_post[fid]["n_questions"],
+                    "post_draws": nontarget_post[fid]["n_questions"] * budget,
                 }
-                for fid in sorted(deltas)
+                # The seven NON-TARGET fact ids. `render_report` looks each row's delta up by SLOT
+                # off the `GATED_NONTARGET_SLOTS`-keyed dict, so row order is presentational — but
+                # the target's row must not appear here at all: it is condition (a)'s numerator.
+                for fid in sorted(nontarget_pre)
             ),
             capability={
                 "dialogue_ppl": pre["dialogue_ppl"]["adapter_on"],
                 "retention_ppl": pre["retention_ppl"],
             },
-            representational={"cosine": {}, "fisher": {}},
+            representational=_load_representational(),
             provenance={
                 "git_sha": erased["config"]["git_sha"],
                 "device": erased["config"]["device"],
@@ -3612,6 +3866,7 @@ _SUBCOMMAND_TABLE = {
     "cal-train": _cmd_cal_train,
     "cal-erase": _cmd_cal_erase,
     "noise-floors": _cmd_noise_floors,
+    "dialogue-floor": _cmd_dialogue_floor,
     "erase": _cmd_erase,
     "retrain": _cmd_retrain,
     "representational": _cmd_representational,
