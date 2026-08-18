@@ -665,11 +665,18 @@ def retention():
     if on_tokens != off_tokens:
         raise SystemExit(f"[phase19_run] on/off denominators differ ({on_tokens} vs {off_tokens})")
 
+    # THE WINDOW ACCOUNTING, checked rather than quoted. `perplexity` slices `data[i : i+block+1]`,
+    # so consecutive windows SHARE their boundary token — it is window k's last target and window
+    # k+1's context — and every target 1..n-1 is scored exactly once. The denominator is therefore
+    # `n - 1`, not the `corpus_len - n_windows` the module docstring's invariant describes (that
+    # form assumes disjoint slices). Verified against the committed `results/phase19_arm_cal-erased
+    # .json`, whose own retention reading is 1,000,285 = 1,000,286 - 1.
     n_corpus = len(np.memmap(pin.RETENTION_BIN, dtype=np.uint16, mode="r"))
     n_windows = len(range(0, n_corpus - 1, block_size))
-    if n_corpus - n_windows != on_tokens:
+    if n_corpus - 1 != on_tokens:
         raise SystemExit(
-            f"[phase19_run] window accounting disagrees: {n_corpus} - {n_windows} != {on_tokens}"
+            f"[phase19_run] window accounting disagrees: {n_corpus} - 1 != {on_tokens} over "
+            f"{n_windows} windows at block {block_size}"
         )
     mask = undecodable_ids_mask(tok, cfg.vocab_size)
     cap = pin.V20_EWC_RETENTION_PPL + pin.MARGIN_K * pin.V20_RETENTION_NOISE_FLOOR
@@ -700,10 +707,23 @@ def retention():
         "dead_ids_masked": int(mask.sum()),
         "live_ids": int(mask.numel() - mask.sum()),
         "vocab_size": cfg.vocab_size,
-        "first_adapted_call_site": (
-            "RETENTION_MEASUREMENT clause 2 — `retention_perplexity` had 6 call sites across 4 "
-            "modules and none of the four imports `inject_lora` or `load_adapter`, so this is the "
-            "first retention PPL ever measured on a LoRA-adapted model in this repository."
+        "adapted_precedent": (
+            "RETENTION_MEASUREMENT clause 2's PRECEDENT census still holds exactly: "
+            "`retention_perplexity` has 6 call sites across 4 modules (finetune_smoke, "
+            "finetune_dialog, finetune_ab, build_retention_bin) and none of the four so much as "
+            "imports `inject_lora` or `load_adapter`. But clause 2's stronger sentence — 'retention "
+            "PPL has never once been measured on a LoRA-adapted model in this repository' — was "
+            "true when the pin closed and is NO LONGER TRUE, and the caller that falsified it is "
+            "the PIN ITSELF: `run_erasure_arm`'s `_capability()` (phase19_erasure.py:2869) runs on "
+            "`load_adapted_model`, so 19-09's calibration arm already recorded "
+            "retention_ppl = 3.7583892242829355 over the same 1,000,285 tokens in "
+            "results/phase19_arm_cal-erased.json. THE ACCURATE CLAIM FOR THIS BLOCK is therefore "
+            "narrower and is stated instead of the stale one: this is the first retention PPL "
+            "measured on the PRODUCTION TAUGHT adapter (checkpoints/persona_adapter.pt), and the "
+            "first measured ON and OFF in one process and published as a standalone reading with "
+            "its own denominator, cap and dead-id mask digest. The pin's prose is CLOSED and was "
+            "not edited; the census guard in tests/test_phase19_erasure.py caught the fifth caller "
+            "exactly as clause 2 promised it would."
         ),
         "device": str(device),
         "torch": torch.__version__,

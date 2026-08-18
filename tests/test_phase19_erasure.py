@@ -1393,18 +1393,30 @@ def test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent():
     # is the PRECEDENT, i.e. everything that existed before it. Scoped by EXCLUDING the pin rather
     # than by lowering the count, and the positive half is asserted too: the pin must be a caller
     # AND must reach the injection path, which is precisely what makes it the first adapted one.
+    #
+    # 19-10 ADDED THE SECOND SUCCESSOR AND THIS GUARD CAUGHT IT, which is what clause 2 promised
+    # ("the claim cannot go stale the first time someone adds a fifth caller"). `phase19_run.py`
+    # is the UNPINNED THROWAWAY the pin's own `main` docstring names, and it calls
+    # `retention_perplexity` ON and OFF to publish the adapted reading the pin measures but never
+    # writes to a file. It is a SUCCESSOR, not a precedent, so it is excluded on the same grounds
+    # as the pin and under the same positive obligation: every excluded caller must actually reach
+    # the injection path. Excluding by NAME rather than lowering the count is what keeps the guard
+    # non-vacuous — a genuinely new unadapted caller anywhere else still reddens it.
     pin = _ROOT / "scripts" / "phase19_erasure.py"
+    driver = _ROOT / "scripts" / "phase19_run.py"
     assert pin in all_sites, (
         "the pin no longer calls retention_perplexity — RETENTION_MEASUREMENT pins that call, and "
         "the retention half of (c) would go unmeasured"
     )
-    pin_source = pin.read_text(encoding="utf-8")
-    assert "load_adapter_weights" in pin_source or "load_adapted_model" in pin_source, (
-        "the pin measures retention without ever reaching an adapter — then it is not the adapted "
-        "call site this spec claims, and the 'no adapted precedent' framing has no successor"
-    )
+    for successor in (pin, driver):
+        source = successor.read_text(encoding="utf-8")
+        assert "load_adapter_weights" in source or "load_adapted_model" in source, (
+            f"{successor.name} measures retention without ever reaching an adapter — then it is "
+            "not an adapted call site, and excluding it from the precedent census would be "
+            "lowering the count rather than scoping it"
+        )
 
-    call_sites = [path for path in all_sites if path != pin]
+    call_sites = [path for path in all_sites if path not in (pin, driver)]
     modules = sorted({path.name for path in call_sites})
     assert len(call_sites) == 6 and len(modules) == 4, (
         f"the retention call-site census moved: {len(call_sites)} calls in {modules}"
