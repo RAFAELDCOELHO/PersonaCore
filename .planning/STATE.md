@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: executing
-stopped_at: Completed 19-09-PLAN.md
-last_updated: "2026-08-18T13:58:27.615Z"
-last_activity: 2026-08-18 -- 19-09 executed (measured 0/23; corrected (a) floor 0.09107873950450847 published against the pin's internal 0.2; three pin defects published as a D3 continuation, not edited; pin still 15 commits)
+status: completed
+stopped_at: Completed 19-08-PLAN.md
+last_updated: "2026-08-18T15:32:49.717Z"
+last_activity: 2026-08-18 -- 19-10 executed (b floor 0.148148, c dialogue floor 0.005214, retention
 progress:
   total_phases: 4
   completed_phases: 3
@@ -26,62 +26,95 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 10 of 16
-Status: Ready to execute — 19-09 complete: **THE BLIND CALIBRATION MEASURED 0/23, AND THE (a)
-FLOOR IT PRICES IS `0.09107873950450847` (branch `reachability-min`) — NOT the `0.2` the closed pin
-computes internally.** 0/14 `core_taught` + 0/9 `core_held_out`, 1,104 draws at A2/K=48;
-`wilson_upper_bound(0, 23) = 0.10525136178999417`, `rule_of_three(23) = 0.13043478260869565`.
-The corrected floor equals `ERASURE_FLOOR_MIN = wilson_upper_bound(0, 27)` exactly, so the
-reachability clamp binds and **(a) clears only on a perfect erasure** — zero successes over all 27
-target questions.
-**THREE DEFECTS in the CLOSED pin, published as a D3 dated continuation, never as an edit**
-(`results/phase19_calibration_correction.md` + `.json`, appended through `scripts/_addendum.py`):
-**A** `run_erasure_arm` writes with `sort_keys=True` (`:2948`) while `zero_result_exposure_gaps`
-compares an ORDERED tuple (`:1562`) — same key SET, different order, so `zero_results_have_nll` is
-False on a record whose 6 NLLs per block are all finite. `erasure_gate` short-circuits to
-INCONCLUSIVE when successes are 0 and that flag is False — **which is exactly what a successful
-erasure produces, so 19-10's target arm will hit this.**
-**B** `_calibration_rate()` (`:3850-3855`) reads `pre_erasure.per_fact`, which `run_erasure_arm`
-fills from the PHASE 18 record for every arm — it returns 0.8846153846153846 (92/104, the `cand_*`
-rows), which is what makes the pin's internal floor 0.2.
-**C** `per_fact` is `fact_id`-keyed and `rows.update(...)` lets `core_taught` (14) overwrite
-`core_held_out` (9), publishing n=14 where `CALIBRATION_COMMENSURABILITY` clause 3 requires 23.
-Numerator is 0 in both tiers, so rate and branch are unaffected.
-**The correction is TRIPWIRED, not a note.** `results/phase19_calibration_correction.json` carries
-`governs: corrected_target_floor`, and
-`tests/test_phase19_correction.py::test_a_locked_floor_must_be_the_corrected_one` reddens the suite
-the moment `scripts/phase19_floor.py` locks anything but `0.09107873950450847` — proved by
-tripping it at 0.2 and passing at the corrected floor. 19-11's plan names
-`results/phase19_calibration_arm.json`, which does not exist: the record is
-`results/phase19_arm_cal-erased.json`, and the rate must be re-derived PER TIER (see
-`_measured_calibration_rate`), never from `_calibration_rate()` (B) or `per_fact` (C).
-**M1 did NOT localise.** `k = 187` of 288 (`stopped = True`) — 64.9% of ΔW zeroed to move ONE fact
-off rank 1; three of nine non-erased pool members lose rank 1 and dialogue PPL walks 5.9147 →
-4.8181 against an OFF baseline of 4.5733, destroying 81.8% of the adaptation. Q7.3's failure mode
-measured, and it ships unsoftened under D8.
+Plan: 11 of 16
+Status: Ready to execute — 19-10 complete: **BOTH NOISE FLOORS `erasure_succeeded` REQUIRES NOW
+EXIST, AND BOTH HALVES OF CONDITION (c) ALREADY FAIL ON THE UNTOUCHED TAUGHT ADAPTER.**
+All three quantities are in `results/phase19_noise_floors.json`, each derived through a pinned
+function and each guarded by `tests/test_phase19_noise_floors.py` (4 tests) with no number typed
+as a literal in the test that guards it.
+
+**(b) `nontarget_noise_floor` = `0.14814814814814814`** — margin at the gate `0.2962962962962963`.
+D4 seed-stride replicate on the UNERASED taught adapter over Phase 18's own corpus, A2/K=48,
+10,368 draws in 45.3 min. Per fact, question unit, own denominator of 27, never pooled:
+`cat_name` 27/27→27/27 `0.0`; `street` 27/27→27/27 `0.0`; `sibling_name` 27/27→27/27 `0.0`;
+`person_name` 26/27→26/27 `0.0`; `house_number` 24/27→23/27 `0.037037…`;
+`birth_year` 18/27→15/27 `0.111111…`; `hometown` 21/27→17/27 **`0.148148…`** (the max).
+**FOUR OF THE SEVEN CANNOT CONTRIBUTE TO THE FLOOR** — they sit at 27/27 or 26/27 in BOTH
+readings, so their zero delta is a ceiling artefact, not measured sampling noise. The published
+floor is the noise of the three facts that can move, reduced by the pinned `max` over a set where
+four are pinned. It is permissive: `0.2963 × 27 = 8.0`, so a non-target may lose EIGHT of its
+twenty-seven questions post-erasure and still clear (b).
+Stride non-collision proved PER QUESTION over all 112 seed indices — max Phase 18 window end
+**5,376** against `SEED_STRIDE_OFFSET` **100,000**, replicate bases 100,000..105,328 — so the four
+measured zeros are separable from a collision zero.
+
+**(c) `dialogue_ppl_noise_floor` = `0.005214448168350039`**, cap **4.5837288963367** (19-10 task 1,
+committed `c9f5f97`). The taught adapter's dialogue PPL is **5.8154 — +1.2317 OVER that cap before
+anything is erased**; admitting it needs a floor of 0.62105, 119x the measured one.
+**`retention_ppl` on the taught adapter = `4.219759892336485` — +0.1908 OVER the fully determined
+cap 4.029000**, adapter OFF `3.891139975617828`. The OFF reading reproduces the cap's own operand
+`V20_EWC_RETENTION_PPL` = 3.891140 to **2.4e-08**, so the excess is the adaptation's cost and not
+an instrument mismatch; the ON−OFF gap 0.3286 is **4.77x** the committed retention noise floor, and
+admitting the pre-erasure model would need `MARGIN_K` = 4.767 rather than 2.
+**CONDITION (c) IS RED ON BOTH LEGS BEFORE THE ERASURE EXISTS**, so it cannot attribute anything to
+an erasure that has not happened. §Q4 named this in advance; it ships unsoftened under D8, and
+19-15 must publish the pre-erasure standing beside any post-erasure reading.
+
+**THREE OF THE PLAN'S OWN INSTRUCTIONS WERE FALSIFIED BY THE PIN AND RECORDED, NOT FORCED THROUGH.**
+(1) "Call `assert_phase18_parity`" — the pin refuses: `PARITY_ASSERTED_ARMS` is
+`('erased', 'retrain')` and `_cmd_noise_floors`' docstring says the parity is NOT asserted, because
+`seed_stride` is a `PARITY_KEY` and is offset ON PURPOSE. The block publishes the per-key
+comparison instead: **7 of 8 keys match Phase 18 exactly**, only `seed_stride` differs.
+(2) "Score the two SOFT-tier facts" — nothing to score: `results/phase18_corpus.json` is
+core-only, this arm's tier census is `{core_held_out: 104, core_taught: 112}` and soft = **0**.
+Declared as a narrowing with its census under `soft_descriptive.measured = false`.
+(3) The frontmatter's `checkpoints/phase19_noise_seed_b_adapter.pt` **never existed** — the pin
+writes through `tp.arm_outputs`, giving `phase19_erase_dialogue_floor_seed{1337,2024}_adapter.pt`.
+Third time this phase that plan frontmatter has named an artifact the pin does not use: **read the
+constant, never the plan's spelling.**
+
+**THE PIN'S OWN CENSUS GUARD FIRED AND WAS RIGHT TO.** `RETENTION_MEASUREMENT` clause 2 promised
+the claim "cannot go stale the first time someone adds a fifth caller";
+`test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent` went RED at
+`8 == 6` on `scripts/phase19_run.py`. Scoped to the PRECEDENT — the driver excluded on the same
+grounds the pin already was, under the same positive obligation that every excluded caller reach
+the injection path — never by lowering the count. **And clause 2's stronger sentence is itself now
+false:** the caller that falsified it is the PIN ITSELF (`run_erasure_arm._capability()`,
+`:2869`), so 19-09's `results/phase19_arm_cal-erased.json` already holds
+`retention_ppl = 3.7583892242829355` on the CALIBRATION adapter. The artifact's
+`adapted_precedent` field states the narrower true claim; the CLOSED prose was not edited.
+
+**The (b) path could not run as written** — `_nontarget_rates` demands `n_questions == 27` and both
+pin producers deliver 13 or 14 (19-09's defect C in the (b) position). Recovered exactly as 19-09
+recovered the calibration rate: drive the pin's own `per_fact_rows` ONCE PER TIER and sum,
+reconstituting 27 = 14 + 13. The reduction to the scalar is still the pinned `max`, never inlined.
+
 **The pin is byte-identical and still 15 commits** (sha256
 `c407246de3c470094ab0bdd868961b7b1c22529c5e00522fec67c3852cb6e303`);
 `scripts/phase18_extraction.py` is still **26**. The ancestry guard is non-vacuous at
-**checked = 120** = 15 x 8 tracked artifacts.
-Editing the pin was refused on measurement, not preference: eight `results/phase19_*` artifacts now
-exist, so an edit reddens the guard permanently, and delete-and-re-add cannot launder it because
-the guard takes `adds[-1]`, the EARLIEST add (`tests/test_phase16_prereg.py:117-124`); its
-docstring names the continuation path at `:342-346`.
-The (a) floor constant still does not exist — `scripts/phase19_floor.py` is absent and 19-11 locks
-it. The target fact and taught adapter were not touched.
-Adapters on disk, gitignored: `checkpoints/phase19_cal_erased_adapter.pt` (1,351,445 B, sha256
-`e3cb42b8…`) and `checkpoints/phase19_erase_calibration_adapter.pt` (1,351,991 B, sha256
-`bc616c36…`). Never delete or move either.
-Carried forward: the (c) dialogue half is ALREADY over its cap by **+1.2387** at the only dialogue
-noise floor ever measured — 4.576708 cap vs the taught adapter's 5.8154 — and `render_report`
-prints pre- and post-erasure dialogue PPL side by side by construction.
-**19-14 must run BEFORE 19-15:** `report` aborts naming the `representational` subcommand if its
-record is absent, and that record's ablated addresses are read off the ERASED arm, so 19-11
-precedes it too.
+**checked = 225** = 15 x 15 tracked artifacts. The (a) floor constant still does not exist —
+`scripts/phase19_floor.py` is absent and **19-11 locks it to `0.09107873950450847`**, which
+`tests/test_phase19_correction.py::test_a_locked_floor_must_be_the_corrected_one` enforces.
+The target fact has NOT been erased — that is 19-12 — and no target erasure number exists yet.
+
+Adapters on disk, gitignored, never delete or move: `checkpoints/persona_adapter.pt` (1,350,523 B,
+`226f2ae5…`, the PRODUCTION taught adapter 19-12/19-13 consume);
+`checkpoints/phase19_erase_dialogue_floor_seed1337_adapter.pt` (1,352,991 B, `f12ab4c3…`) and
+`…seed2024_adapter.pt` (1,352,991 B, `3fd5aba4…`) from task 1;
+`checkpoints/phase19_cal_erased_adapter.pt` (`e3cb42b8…`) and
+`checkpoints/phase19_erase_calibration_adapter.pt` (`bc616c36…`), both unchanged.
+
+Carried forward: **defect A still bites 19-12's target arm** — a clean erasure produces 0 successes
+and `zero_results_have_nll` reads False on key ORDER alone, so `erasure_gate` short-circuits to
+INCONCLUSIVE; whoever renders the verdict must read the flag against an order-normalised copy and
+say so. **19-14 must run BEFORE 19-15.** `src/personacore/evaluation/perplexity.py:11-13` states a
+stale denominator invariant (`corpus_len - n_windows`; the true value is `corpus_len - 1` = 1,000,285
+because the `[i : i+block+1]` slices share boundary tokens) — prose only, no measured number is
+wrong, logged in `.planning/phases/19-selective-memory-erasure/deferred-items.md`.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
-`erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
-post-hoc decision.
-Last activity: 2026-08-18 -- 19-09 executed (M1 `69fc671`, arm `14ab93d`, correction base `06dd3a3`, D3 continuation `dcb1b7c`; measured 0/23, corrected floor 0.09107873950450847 vs the pin's internal 0.2, three pin defects published not edited, pin still 15 commits)
+`erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase.
+Last activity: 2026-08-18 -- 19-10 executed (b floor 0.148148, c dialogue floor 0.005214, retention
+4.2198 vs cap 4.029; BOTH (c) legs fail pre-erasure; pin still 15 commits, guard checked = 225)
 
 ## Performance Metrics
 
@@ -150,6 +183,7 @@ Last activity: 2026-08-18 -- 19-09 executed (M1 `69fc671`, arm `14ab93d`, correc
 | Phase 19 P07 | 95min | 2 tasks | 2 files |
 | Phase 19 P08 | 38min | 2 tasks | 4 files |
 | Phase 19 P09 | 51min | 3 tasks | 7 files |
+| Phase 19 P10 | 108min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -345,6 +379,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-07: the audit ITSELF nearly closed the pin it was auditing. Driving `_cmd_report` wrote a real `results/phase19_erasure_report.md`, because `render_report`'s `path` default is bound at def time and rebinding `ERASURE_REPORT_PATH` does not move it. The file was untracked, `git ls-files 'results/phase19_*'` never left 0, and it was deleted immediately — but the committed test would have written one on EVERY CI run. Both the harness and the test now redirect the `render_report` CALL into a tempdir, and the invariant is checked after every run rather than at the end
 - [Phase 19]: 19-08: the closed pin's artifact paths win over the plan's names — results/phase19_calibration_corpus.json and checkpoints/phase19_erase_calibration_adapter.pt — renaming either would have meant a 16th commit to a file closed at 15, reddening the ancestry guard at the moment it becomes load-bearing
 - [Phase 19]: 19-08: QA-02 measured rather than quoted — export_adapter writes no driver git_sha into the adapter .pt — the run sha lives in the gitignored resume checkpoint and in the committed results/phase19_cal_training.log, which is why committing that log is load-bearing
+- [Phase 19]: 19-10: (b) noise floor = 0.14814814814814814 (max over seven per-fact |drate|); four of seven facts are saturated at 27/27 or 26/27 and cannot contribute, so the floor is the noise of the three that can move
+- [Phase 19]: 19-10: BOTH halves of (c) fail on the untouched taught adapter: dialogue 5.8154 vs cap 4.5837, retention 4.2198 vs cap 4.029 — (c) cannot attribute anything to an erasure that has not happened
+- [Phase 19]: 19-10: the pinned (b) path cannot run as written (producers deliver 13 or 14 against the required 27); recovered by driving the pin's own per_fact_rows once per tier and summing, never by relaxing the guard
 
 ### Roadmap Evolution
 
@@ -409,7 +446,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-18T13:58:27.607Z
+Last session: 2026-08-18T15:32:40.158Z
 Stopped at: Completed 19-08-PLAN.md
 Resume file: None
 

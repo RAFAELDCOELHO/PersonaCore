@@ -563,7 +563,7 @@ Plans:
 - [x] 19-07-PLAN.md — CHECKPOINT: approve the pin before it becomes unamendable
 - [x] 19-08-PLAN.md — calibration corpus + calibration adapter retrain (D6, ~80-82 s measured); first `results/phase19_*` artifact
 - [x] 19-09-PLAN.md — CHECKPOINT: the blind calibration erasure and its scored run; the floor is NOT locked here
-- [ ] 19-10-PLAN.md — the dialogue seed-pair floor, the (b) seed-stride replicate, and retention PPL on an adapted model
+- [x] 19-10-PLAN.md — the dialogue seed-pair floor, the (b) seed-stride replicate, and retention PPL on an adapted model
 - [ ] 19-11-PLAN.md — CHECKPOINT: lock `scripts/phase19_floor.py` and re-prove reachability against the measured floor
 - [ ] 19-12-PLAN.md — CHECKPOINT: erase the target by M1, record the collateral curve, score at A2/K=48
 - [ ] 19-13-PLAN.md — ERASE-02: the retrain-without reference arm, run rather than explained
@@ -601,6 +601,6 @@ gate returned MOOT the milestone would have shipped at 18.)
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 16/16 | Complete   | 2026-08-17 |
-| 19. Selective Memory Erasure | v3.0 | 9/16 | In Progress|  |
+| 19. Selective Memory Erasure | v3.0 | 10/16 | In Progress|  |
 
 **Totals:** 18 phases complete, 87 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 9 of 16 plans; the pre-registration is complete, human-reviewed and CLOSED at 19-07; at 19-08 the ordering stopped being a claim, and at 19-09 the ancestry guard checks 15 pin commits against 8 tracked `results/phase19_*` artifacts — checked = 120, non-vacuous and green. **The blind calibration measured 0/23 and the (a) floor it prices is `0.09107873950450847`, not the `0.2` the closed pin computes internally; three pin defects were published as a D3 dated continuation rather than edited, and the corrected floor is tripwired so 19-11 cannot lock the wrong one.**).
