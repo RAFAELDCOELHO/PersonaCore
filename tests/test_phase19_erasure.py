@@ -2705,3 +2705,295 @@ def test_d8_publication_posture_is_pinned_before_the_number_exists():
     path = pathlib.Path(tempfile.mkdtemp()) / "phase19_erasure_report.md"
     rendered = erasure.render_report(path=path, **_report_kwargs())
     assert "not selective at 331,776 parameters" in rendered
+
+
+# =============================================================================================
+# ===== PLAN 19-06 / TASK 1 — THE ARM RUNNER AND THE ORDINAL M1 STOPPING RULE =====
+# =============================================================================================
+#
+# D1 requires the mechanism's PARAMETERS pinned before the calibration runs, "so the mechanism
+# cannot become a knob swapped after a disappointing floor". The stopping condition is therefore
+# ORDINAL — a rank change is a fact about an ordering, and a "NLL above X" rule would be a Phase 19
+# threshold the pre-registration forbids.
+
+
+def _scored_by_address(model, tok, device, artifact, addresses, *, slot, value):
+    """The pin's own scoring loop, re-driven here so the ordering can be checked independently."""
+    out = {}
+    for address in addresses:
+        load_adapter_weights(model, erasure.ablate_components(artifact, [address]))
+        out[address] = erasure.value_span_nll_mean(model, tok, device, slot=slot, value=value)
+    return out
+
+
+class _ToyTok:
+    """A character-level stand-in: encode/decode over the toy vocab, no artifacts on disk."""
+
+    def encode(self, text):
+        return [7 + (ord(c) % 11) for c in text]
+
+    def decode(self, ids):
+        return " ".join(str(i) for i in ids)
+
+
+def test_ablation_stop_rule_is_ordinal_and_names_the_threshold_it_refuses():
+    """The rule invents no threshold, and says so in the text that outlives this session."""
+    rule = erasure.ABLATION_STOP_RULE
+    assert isinstance(rule, tuple) and len(rule) >= 3
+    text = " ".join(rule).lower()
+
+    # ORDINAL, by the committed instrument, on the committed frame/reduction.
+    assert "rank 1" in text
+    assert "exposure_rank" in text
+    assert "ans1" in text and "mean" in text
+    assert "ordinal" in text
+
+    # It NAMES the move it refuses, in the register 19-03/19-04 established.
+    assert "threshold" in text
+    # The cap is DERIVED and its endpoint is published as a legitimate outcome, not dressed up.
+    assert "component_index" in text
+    assert "stopped" in text and "false" in text
+    assert "adapter-off" in text
+
+    # No fact value, and no typed component count.
+    facts = _load("phase14_factset", "scripts/phase14_factset.py")
+    forbidden = [f.value.lower() for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS]
+    assert [v for v in forbidden if v in text] == []
+    assert str(erasure.N_COMPONENTS) not in text
+
+
+def test_the_ablation_cap_and_the_curve_checkpoints_are_derived_never_typed():
+    """``N_COMPONENTS`` is the cap; the curve's last checkpoint IS it, computed not written."""
+    checkpoints = erasure.curve_checkpoints(erasure.N_COMPONENTS)
+    assert checkpoints[-1] == erasure.N_COMPONENTS
+    assert list(checkpoints) == sorted(set(checkpoints))
+    assert checkpoints[0] == 1
+
+    # Clipped to [1, k] — a curve row at a prefix longer than the search ran is a fabricated row.
+    assert erasure.curve_checkpoints(5) == (1, 2, 4, 5)
+    assert erasure.curve_checkpoints(1) == (1,)
+
+    # The cap is never a literal in the pin. `N_COMPONENTS` is a module-level derivation.
+    tree = ast.parse(_PIN_SOURCE)
+    typed = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, int)
+        and not isinstance(node.value, bool)
+        and node.value == erasure.N_COMPONENTS
+    ]
+    assert typed == [], (
+        f"the component cap {erasure.N_COMPONENTS} is typed as an int literal at lines {typed} — "
+        "it is the product of the committed wrap set and the production rank, and a stale copy "
+        "would keep the sweep scanning a surface the artifact no longer has"
+    )
+
+
+def test_select_ablation_prefix_is_deterministic_and_orders_by_measured_contribution():
+    """Two runs on the SAME toy model and artifact return the identical order and the identical k.
+
+    The ordering is checked against an INDEPENDENTLY re-driven single-component sweep, so the
+    committed function and this test are not reading each other's output.
+    """
+    _base, adapted, lora_cfg = _build_pair(seed=99)
+    artifact = _artifact(adapted, lora_cfg)
+    tok, device = _ToyTok(), torch.device("cpu")
+    slot, value = "person_name", "aaa"
+    references = ("aaa", "bbb", "ccc", "ddd", "eee", "fff")
+    calls = []
+
+    def _dialogue_ppl():
+        calls.append(1)
+        return {"adapter_on": 5.0, "adapter_off": 4.0, "n_targets": 11}
+
+    first = erasure.select_ablation_prefix(
+        adapted,
+        tok,
+        device,
+        artifact,
+        slot=slot,
+        value=value,
+        references=references,
+        collateral={slot: (value, references)},
+        dialogue_ppl=_dialogue_ppl,
+    )
+    second = erasure.select_ablation_prefix(
+        adapted,
+        tok,
+        device,
+        artifact,
+        slot=slot,
+        value=value,
+        references=references,
+        collateral={slot: (value, references)},
+        dialogue_ppl=_dialogue_ppl,
+    )
+    assert first["ordered"] == second["ordered"]
+    assert first["k"] == second["k"]
+    assert first["stopped"] == second["stopped"]
+    assert len(first["ordered"]) == erasure.N_COMPONENTS
+    assert set(first["ordered"]) == set(erasure.component_index())
+
+    # The order is DESCENDING by measured single-component contribution, ties on the address.
+    load_adapter_weights(adapted, artifact)
+    scores = _scored_by_address(
+        adapted, tok, device, artifact, erasure.component_index(), slot=slot, value=value
+    )
+    load_adapter_weights(adapted, artifact)
+    intact = erasure.value_span_nll_mean(adapted, tok, device, slot=slot, value=value)
+    expected = sorted(scores, key=lambda a: (-(scores[a] - intact), a))
+    assert list(first["ordered"]) == expected
+
+    # And the curve rows carry the mandatory Q7.3 columns at every recorded prefix.
+    assert first["curve"], "no curve rows recorded"
+    assert [row["prefix"] for row in first["curve"]] == list(erasure.curve_checkpoints(first["k"]))
+    for row in first["curve"]:
+        assert row["target_rank"] >= 1
+        assert isinstance(row["target_ans1_mean_nll"], float)
+        assert row["dialogue_ppl"]["n_targets"] == 11
+        assert set(row["slots"]) == {slot}
+        assert set(row["slots"][slot]) == {"rank", "ans1_mean_nll"}
+    assert len(calls) == len(first["curve"])
+
+
+def test_select_ablation_prefix_returns_the_cap_with_stopped_false_and_never_raises():
+    """Rank 1 that never moves returns the cap, ``stopped = False``, and no exception.
+
+    Driven with a reference set the target CANNOT lose: every other candidate encodes to the same
+    ids as the target, and `exposure_rank`'s tie-break is the candidate string, so the target
+    sorts first at every prefix including the fully-zeroed one.
+    """
+    _base, adapted, lora_cfg = _build_pair(seed=7)
+    artifact = _artifact(adapted, lora_cfg)
+    result = erasure.select_ablation_prefix(
+        adapted,
+        _ToyTok(),
+        torch.device("cpu"),
+        artifact,
+        slot="person_name",
+        value="aaa",
+        references=("aaa", "aab", "aac", "aad", "aae", "aaf"),
+        collateral={"person_name": ("aaa", ("aaa", "aab", "aac", "aad", "aae", "aaf"))},
+        dialogue_ppl=lambda: {"adapter_on": 1.0, "adapter_off": 1.0, "n_targets": 3},
+    )
+    assert result["k"] == erasure.N_COMPONENTS == result["cap"]
+    assert result["stopped"] is False
+
+
+def test_k_equals_the_cap_is_ambiguous_which_is_why_stopped_is_recorded_separately():
+    """``k == cap`` cannot distinguish 'stopped on the last component' from 'never stopped'.
+
+    This is why the return carries an explicit ``stopped`` rather than the plan's bare 3-tuple:
+    the caller would otherwise have to infer the flag from ``k == cap``, and the two situations
+    are genuinely different outcomes — one is a measured rank change, the other is the adapter-off
+    endpoint. Both are constructed here.
+    """
+    seen = set()
+    for value, references, expected_stop in (
+        ("aaa", ("aaa", "aab", "aac", "aad", "aae", "aaf"), False),
+        ("zzz", ("zzz", "b", "cc", "dddd", "eeeee", "ffffff"), None),
+    ):
+        _base, adapted, lora_cfg = _build_pair(seed=21)
+        artifact = _artifact(adapted, lora_cfg)
+        result = erasure.select_ablation_prefix(
+            adapted,
+            _ToyTok(),
+            torch.device("cpu"),
+            artifact,
+            slot="person_name",
+            value=value,
+            references=references,
+            collateral={"person_name": (value, references)},
+            dialogue_ppl=lambda: {"adapter_on": 1.0, "adapter_off": 1.0, "n_targets": 3},
+        )
+        seen.add(result["stopped"])
+        if expected_stop is False:
+            assert result["stopped"] is False and result["k"] == result["cap"]
+        # A stop is only claimed when the rank ACTUALLY left 1 at that prefix.
+        assert (result["curve"][-1]["target_rank"] != 1) == result["stopped"]
+    assert False in seen
+
+
+def test_run_erasure_arm_refuses_to_clobber_before_it_loads_anything():
+    """The refusal is the FIRST statement — an arm record is recorded evidence, and there is no
+    force flag. Checked by CALLING it against an existing path with no checkpoint on the device
+    it names: reaching a torch load would be a different exception."""
+    path = erasure.arm_record_path(erasure.ERASURE_ARMS[0])
+    assert not path.exists(), f"{path} exists — no results/phase19_* artifact may exist yet"
+
+    import tempfile
+
+    tmp = pathlib.Path(tempfile.mkdtemp()) / "phase19_arm_probe.json"
+    tmp.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit) as excinfo:
+        erasure.run_erasure_arm(
+            erasure.ERASURE_ARMS[0], "cpu", record_path=tmp, adapter_path="/nonexistent.pt"
+        )
+    assert "already exists" in str(excinfo.value)
+    assert "reviewed commit" in str(excinfo.value)
+
+
+def test_run_erasure_arm_asserts_parity_before_it_draws_and_asserts_in_prompt_in_place():
+    """Structural, by AST: the parity call LEXICALLY PRECEDES the first draw, and the runner is
+    its own in-prompt asserter so the draw-site guard needs no ``DRAW_ALL_ASSERTED_BY`` entry."""
+    tree = ast.parse(_PIN_SOURCE)
+    runner = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "run_erasure_arm"
+    )
+    called = {
+        (getattr(call.func, "id", None) or getattr(call.func, "attr", None)): call.lineno
+        for call in ast.walk(runner)
+        if isinstance(call, ast.Call)
+    }
+    assert "draw_all" in called, "the runner does not draw"
+    assert "assert_phase18_parity" in called
+    assert called["assert_phase18_parity"] < called["draw_all"], (
+        "parity is asserted AFTER the first draw — a run already spent is a run whose "
+        "incomparability was discovered too late to prevent"
+    )
+    assert "assert_no_value_in_prompt" in called, (
+        "the runner draws without asserting in place; PERS-06 requires either an in-place "
+        "assertion or a NAMED DRAW_ALL_ASSERTED_BY indirection"
+    )
+    assert called["assert_no_value_in_prompt"] < called["draw_all"]
+
+    # And the arms it may ever write are named up front, disjoint, and none has an artifact yet.
+    assert len(set(erasure.ERASURE_ARMS)) == len(erasure.ERASURE_ARMS)
+    assert set(erasure.PARITY_ASSERTED_ARMS) <= set(erasure.ERASURE_ARMS)
+    for arm in erasure.ERASURE_ARMS:
+        assert not erasure.arm_record_path(arm).exists()
+
+
+def test_the_bit_identity_control_takes_the_adapter_it_is_asked_to_measure():
+    """B2 — ``run_bit_identity_control`` must be able to measure the ERASED adapter.
+
+    Called as committed it loads the hard-coded production ``ADAPTER_PATH`` and would return max
+    abs diff 0.0 whatever M1 did to the erased artifact: the control passing while measuring the
+    wrong object, on the one measurement the demo's whole ON/OFF claim rests on.
+    """
+    import inspect
+
+    recall = _load("phase14_recall", "scripts/phase14_recall.py")
+    params = inspect.signature(recall.run_bit_identity_control).parameters
+    assert "adapter_path" in params, (
+        "run_bit_identity_control cannot be pointed at the erased adapter, so at 19-12 it would "
+        "compare the PRODUCTION adapter against the base and pass while measuring nothing"
+    )
+    assert params["adapter_path"].default is None, (
+        "the default must keep every existing call site byte-identical in behaviour"
+    )
+    # The widening is signature-symmetric with `load_adapted_model`'s own register.
+    assert "adapter_path" in inspect.signature(recall.load_adapted_model).parameters
+
+    # The default really is ADAPTER_PATH, read off the AST rather than by running a GPU load.
+    source = (_ROOT / "scripts" / "phase14_recall.py").read_text(encoding="utf-8")
+    fn = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == "run_bit_identity_control"
+    )
+    names = {node.id for node in ast.walk(fn) if isinstance(node, ast.Name)}
+    assert "ADAPTER_PATH" in names and "adapter_path" in names
