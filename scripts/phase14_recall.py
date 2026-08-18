@@ -1477,8 +1477,16 @@ def run_collapse_control(model, tok, device, forbid, values):
     }
 
 
-def run_bit_identity_control(tok, questions):
+def run_bit_identity_control(tok, questions, adapter_path=None):
     """D-11.3 — adapter-off logits are BIT-IDENTICAL to the un-adapted base, on REAL weights.
+
+    ``adapter_path`` defaults to ``ADAPTER_PATH`` — ``load_adapted_model``'s own register
+    (``:513``), already parameterised for exactly this reason — so every existing call site is
+    byte-identical in behaviour. It is a parameter because Phase 19 must be able to run this
+    control on the ERASED adapter: with the production path hard-coded, the control would compare
+    ``checkpoints/persona_adapter.pt`` against the base and return max abs diff 0.0 whatever the
+    ablation did to the erased artifact — passing while measuring the wrong object, on the one
+    measurement the demo's whole memory-ON/OFF claim rests on.
 
     The ambiguity this closes: whether "memory OFF" in the demo is really the un-adapted base,
     or a model that still carries some of the adapter. With the adapter disabled the wrapper's
@@ -1498,6 +1506,7 @@ def run_bit_identity_control(tok, questions):
     ``torch.equal`` and the max absolute difference is recorded alongside the boolean, so the
     report can state a measured NUMBER (0.0) rather than only "the assertion held".
     """
+    adapter_path = ADAPTER_PATH if adapter_path is None else pathlib.Path(adapter_path)
     device = RuntimeConfig(device="cpu").device
     ckpt = load_slim(CONVBASE_SLIM)  # weights_only=True — restricted unpickler (T-14-22).
     model_cfg = ModelConfig(**ckpt["model_config"])
@@ -1515,7 +1524,7 @@ def run_bit_identity_control(tok, questions):
     # W1: the artifact's OWN rank/alpha, never LoRAConfig() defaults — see load_adapted_model.
     # Bit identity holds under any scale (the disabled branch never executes), but injecting a
     # config that is not the artifact's own would make this control prove it for the wrong model.
-    art = load_adapter(ADAPTER_PATH)
+    art = load_adapter(adapter_path)
     inject_lora(gated, LoRAConfig(**art["lora_config"]))
     load_adapter_weights(gated, art)
     set_adapter_enabled(gated, False)
@@ -1545,6 +1554,11 @@ def run_bit_identity_control(tok, questions):
         "max_abs_diff": max_abs_diff,
         "bit_identical": True,  # `_prove` above exits non-zero before this can be reached False
         "vocab_size": model_cfg.vocab_size,
+        # WHICH adapter this 0.0 is about. Additive, and required by the widening above: once the
+        # path is a parameter, a recorded max abs diff with no adapter name is unattributable —
+        # the erased artifact and the production one would publish the same number under the same
+        # label. `.name` and not the full path: nothing here may carry an absolute filesystem path.
+        "adapter": adapter_path.name,
     }
 
 
