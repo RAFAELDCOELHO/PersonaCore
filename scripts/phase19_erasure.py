@@ -102,6 +102,7 @@ path moves. CPU-only, GPU-free, no checkpoint read, no network.
 
 import json
 import pathlib
+import re
 import sys
 
 import torch
@@ -122,6 +123,12 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
 # already a committed explicit product over `TARGET_PROJECTIONS` x `N_LAYER` with the "never an
 # isinstance scan" discipline recorded on it (extract_deltas.py:94-102), and a second copy of an
 # enumeration is a copy free to stop agreeing with the first.
+# The ONE anchored `## Verdict` section read (CR-02's single shared copy) and the ONE append-only
+# continuation writer with its marker PAIR as required keywords. Both are phase-neutral, stdlib-only
+# and hold no fact material, so they are safe at module scope — and importing them rather than
+# re-deriving either is what keeps this phase's clobber guard the same guard as every other one.
+import _addendum  # noqa: E402  (needs the sys.path insert above)
+import _verdict  # noqa: E402  (needs the sys.path insert above)
 import extract_deltas  # noqa: E402  (needs the sys.path insert above)
 
 # STAT-05 / T-19-08. The one-sided Wilson upper bound, the margin discipline and the three v2.0
@@ -137,6 +144,7 @@ from erasure_gate import (  # noqa: E402  (needs the sys.path insert above)
     V20_RETENTION_NOISE_FLOOR,
     VERDICTS,
     erasure_succeeded,
+    rule_of_three,
     wilson_upper_bound,
 )
 
@@ -1926,6 +1934,364 @@ def render_verdict(**gate_inputs):
         "outcome in that domain and a fourth value would be a verdict nobody pre-registered",
     )
     return {"verdict": verdict, "reasons": tuple(reasons), "inputs": dict(gate_inputs)}
+
+
+# =============================================================================================
+# ===== THE REPORT TEXT, THE SHIP-DECISION MARKER PAIR AND THE CLOBBER GUARD (D8/T-19-21/22) ==
+# =============================================================================================
+
+ERASURE_REPORT_PATH = _REPO_ROOT / "results" / "phase19_erasure_report.md"
+
+# The marker PAIR. BOTH halves name Phase 19, and a committed test asserts neither mentions Phase
+# 18 — the entire reason `scripts/_addendum.py` makes them required keywords is that Phase 18's twin
+# let one half travel with the caller and hard-coded the other, so appending through it wrote a
+# Phase 18 provenance sentence into a document that was not Phase 18's
+# (`scripts/_addendum.py:13-27`).
+#
+# Deliberately OUTSIDE the `## Verdict` section, for `phase18_extraction.py:3790-3794`'s reason:
+# PENDING token inside that section would be part of the recorded verdict forever.
+ERASURE_SHIP_PENDING_LINE = "**Phase 19 ship decision: not yet recorded.**"
+
+ERASURE_SHIP_RECORDED_LINE = (
+    "**Phase 19 ship decision: recorded in the dated continuation at the end of this file.**"
+)
+
+# The closed decision set and the line shape a continuation must carry for the marker to flip.
+# A substring check for "ship" would NOT have caught Phase 18's W2: the grep that found the defect
+# reports that ship/no-ship language appeared in the report already — as the section heading and
+# the pointer line — while no decision had been written (`18-VERIFICATION.md:226-250`). So the
+# decision is a pinned LINE from a closed set, not a word.
+ERASURE_SHIP_DECISIONS = ("SHIP", "DO NOT SHIP")
+ERASURE_SHIP_DECISION_PREFIX = "Phase 19 ship decision: "
+
+_DATED_CONTINUATION = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+_BARE_ZERO_PERCENT = re.compile(r"\b0(\.0+)?%")
+
+D8_PUBLICATION_POSTURE = (
+    "D8, LOCKED BEFORE THE NUMBER EXISTS. If ablating enough to erase the target also destroys "
+    'non-targets, the finding is "selective erasure is not selective at 331,776 parameters" and '
+    "it SHIPS UNSOFTENED, in the register Phase 18 shipped `LEAKAGE_DEMONSTRATED`. The collateral "
+    "curve is publishable whichever shape it has, and if it is a cliff, the cliff IS the finding — "
+    "the same register Phase 13 used for its 79/70 role-token leakage and Phase 16 for its "
+    "capability-deficit branch. Decided now so the framing cannot be written after the number.",
+    "Q7.4, THE OTHER BRANCH, FRAMED HERE TOO. If the fact falls out on the FIRST ablation, that is "
+    "a MEASUREMENT and not an absence, and the phase does not read as a non-result. What makes "
+    '"trivial" a result is the PAIRED INSTRUMENTS: the target\'s exposure rank moves from rank 1 '
+    "to rank k while the non-targets stay at rank 1 and capability is unchanged. A single easy "
+    "number with no paired instrument beside it would be an absence; three instruments moving in "
+    "three different directions is a measurement. Written before the answer is known, for the same "
+    "reason `licensed_headline` was written before Phase 16's comparisons were scored.",
+    "NEITHER BRANCH MAY BE SOFTENED IN THE RENDERING. The verdict published is the one the "
+    "committed `erasure_succeeded` returned; the reasons published are the ones it returned with "
+    "it; and the pre-erasure readings are printed BESIDE the post-erasure ones in every table so a "
+    "(c) failure that predates the erasure stays distinguishable from one the erasure caused.",
+)
+
+
+def assert_erasure_report_not_clobbered(path=ERASURE_REPORT_PATH):
+    """A recorded verdict is committed evidence. Refuse to overwrite it — FIRST, and cheapest.
+
+    Anchored on the SECTION through ``_verdict.recorded_verdict``, the ONE shared copy, and never
+    on a split of the heading literal taking the last element — the 15-04 CR-02 defect, which read
+    a prose mention of the heading as a recorded verdict and made ``--force`` the only way through.
+    The forbidden call is deliberately not spelled anywhere in this file so a ``grep`` for it stays
+    a usable guard rather than matching the paragraph that rejects it.
+
+    THERE IS NO OVERRIDE FLAG. A flag that disables this becomes routine, and an operator who
+    passes it routinely passes it after a verdict HAS been recorded — at which point the guard
+    destroys exactly the evidence it exists to protect. If the report genuinely must be
+    regenerated, the honest path is DELETING it in a reviewed commit, so the removal is visible in
+    the diff.
+
+    Three refusals with three different messages, because they are three different situations:
+
+    * no ``## Verdict`` section at all (``recorded_verdict`` returns ``None``) — this is not this
+      writer's output, and blindly overwriting a file it did not produce is its own defect;
+    * an EMPTY body — an interrupted render, recoverable only by the same reviewed deletion;
+    * a body — a verdict is recorded, and a re-render would take it and every hand-appended
+      continuation beside it (19-16's D3 diagnosis lands there).
+
+    Returns ``None`` when there is nothing to clobber, so the FIRST render is not refused.
+    """
+    path = pathlib.Path(path)
+    if not path.exists():
+        return None
+
+    body = _verdict.recorded_verdict(path.read_text(encoding="utf-8"))
+    _prove(
+        body is not None,
+        f"{path} exists but carries no `## Verdict` section, so it is not this writer's output. "
+        "Refusing rather than overwriting: a file this renderer did not produce is somebody "
+        "else's document, and there is no force flag — delete it in a reviewed commit if it "
+        "genuinely must go",
+    )
+    _prove(
+        not body.strip(),
+        f"{path} already carries a RECORDED `## Verdict`. Re-rendering rewrites the whole file and "
+        "would destroy it along with every dated continuation appended beside it — including the "
+        "D3 condition-(c) diagnosis. There is no force flag; the recovery is deleting the file in "
+        "a reviewed commit so the removal is visible in the diff",
+    )
+    raise SystemExit(
+        f"[phase19_erasure] PROOF FAILED: {path} carries a `## Verdict` section with an EMPTY "
+        "body — an INTERRUPTED render, not a finished one and not another writer's file. That is "
+        "still not a licence to overwrite: delete it in a reviewed commit and re-drive, so the "
+        "half-written artifact is visible in the diff rather than silently replaced"
+    )
+
+
+def _rate_row(successes, n_questions, n_draws):
+    """STAT-02's single reporting shape — IMPORTED from Phase 16, never re-derived here.
+
+    Carries the rate over QUESTIONS with both denominators, the Wilson upper bound labelled as the
+    independence-assuming width, and — only at zero successes — the ``3/n`` ceiling beside it. A
+    bare zero percentage is impossible by construction, which is why every rate this report prints
+    goes through it.
+    """
+    import phase16_persistence as persistence  # LAZY — see the module docstring's rule
+
+    return persistence.report_proportion(successes, n_questions, n_draws)["formatted"]
+
+
+def render_report(
+    *,
+    verdict,
+    target,
+    cal_rate,
+    nontargets,
+    capability,
+    representational,
+    provenance,
+    path=ERASURE_REPORT_PATH,
+):
+    """Write ``results/phase19_erasure_report.md`` and return its text.
+
+    ``verdict`` is ``render_verdict``'s record, so every gated number below is READ OUT OF THE
+    INPUTS THE GATE ACTUALLY SAW rather than passed in a second time beside it. The floor's two
+    directions and its branch are DERIVED here from ``cal_rate`` for the same reason. The only
+    quantities that arrive independently are the ones the gate never sees: the raw draw
+    denominators, the per-fact non-target rows, the PRE-erasure capability pair and the
+    representational read.
+
+    Two proofs run over the RENDERED TEXT before a byte is written, because a source-level scan
+    structurally cannot see a number a format string produced — which is exactly how a bare ``0%``
+    reaches a published report (``phase18_extraction.py:4276-4285``).
+
+    ``path`` is a parameter so the renderer is exercisable against a temporary file; the clobber
+    refusal runs on whichever path is actually being written, as this function's FIRST statement
+    rather than as a step an operator has to remember.
+    """
+    assert_erasure_report_not_clobbered(path)
+
+    inputs = verdict["inputs"]
+    n_questions = inputs["target_questions"]
+    floor = lock_erasure_floor(cal_rate)
+    upper = wilson_upper_bound(inputs["target_successes"], n_questions)
+    cap = dialogue_cap(inputs["dialogue_ppl_noise_floor"])
+    retention_cap = V20_EWC_RETENTION_PPL + MARGIN_K * V20_RETENTION_NOISE_FLOOR
+
+    lines = [
+        "# Phase 19 — Selective Memory Erasure",
+        "",
+        f"Mechanism `{MECHANISM_ID}` over {N_COMPONENTS} addressable rank-1 components. Success "
+        "criteria are INHERITED from `scripts/erasure_gate.py`, committed `23a830c` on 2026-08-12, "
+        "before Phase 16 ran; this report re-authors none of them.",
+        "",
+        "## Verdict",
+        "",
+        "### 1. The verdict",
+        "",
+        f"**{verdict['verdict']}** — returned by the committed `erasure_succeeded`, with its own "
+        "reasons, neither recomputed nor paraphrased here:",
+        "",
+    ]
+    lines += [f"- {reason}" for reason in verdict["reasons"]]
+    lines += [
+        "",
+        "### 2. Condition (a) — target forgotten",
+        "",
+        f"- post-erasure: {_rate_row(inputs['target_successes'], n_questions, target['n_draws'])}",
+        f"- pre-erasure:  "
+        f"{_rate_row(target['pre_successes'], target['pre_questions'], target['pre_draws'])}",
+        f"- the gate reads the WILSON upper bound: {upper:.6f} against the calibrated floor "
+        f"{inputs['target_floor']:.6f} over {n_questions} questions.",
+        f"- rule-of-three ceiling at this denominator: "
+        f"{rule_of_three(n_questions):.6f}. Published BESIDE the Wilson bound, never instead of "
+        "it, so the quieter of the two cannot be chosen after the fact.",
+        "",
+        "### 3. Condition (b) — non-targets preserved",
+        "",
+        "Per fact, with each fact's own denominator. NEVER pooled: a single rate can hide one "
+        "destroyed fact behind six intact ones, which is the whole reason (b) is written per fact.",
+        "",
+        "| slot | pre-erasure | post-erasure | \\|Δrate\\| |",
+        "| --- | --- | --- | --- |",
+    ]
+    deltas = dict(zip(GATED_NONTARGET_SLOTS, inputs["nontarget_deltas"], strict=True))
+    for row in nontargets:
+        slot = row["slot"]
+        lines.append(
+            f"| `{slot}` "
+            f"| {_rate_row(row['pre_successes'], row['pre_questions'], row['pre_draws'])} "
+            f"| {_rate_row(row['post_successes'], row['post_questions'], row['post_draws'])} "
+            f"| {deltas[slot]:.6f} |"
+        )
+    lines += [
+        "",
+        f"Reduced to the one scalar the gate multiplies by `max` (`nontarget_noise_floor`): "
+        f"{inputs['nontarget_noise_floor']:.6f}, against the margin k={MARGIN_K} the whole project "
+        "calibrates every gate with.",
+        "",
+        "### 4. Condition (c) — capability preserved",
+        "",
+        "| reading | pre-erasure | post-erasure | cap |",
+        "| --- | --- | --- | --- |",
+        f"| masked dialogue val PPL | {capability['dialogue_ppl']:.4f} | "
+        f"{inputs['dialogue_ppl']:.4f} | {cap:.6f} |",
+        f"| retention PPL | {capability['retention_ppl']:.6f} | "
+        f"{inputs['retention_ppl']:.6f} | {retention_cap:.6f} |",
+        "",
+        f"The dialogue cap is `V20_MASKED_DIALOGUE_VAL_PPL + k x noise floor` at a MEASURED "
+        f"noise floor of {inputs['dialogue_ppl_noise_floor']:.6f} "
+        f"(`DIALOGUE_NOISE_FLOOR_ESTIMATOR`, seeds {DIALOGUE_NOISE_FLOOR_SEEDS}). Pre- and "
+        "post-erasure are printed side by side because a (c) failure that PREDATES the erasure and "
+        "one the erasure CAUSED are different findings, and printing both numbers is the only "
+        "thing that separates them. A floor large enough to admit the pre-erasure reading is not a "
+        "better result; it is a wider ruler.",
+        "",
+        "### 5. The (a) floor — both directions and the branch that bound",
+        "",
+        f"- blind calibration rate: {cal_rate!r}",
+        f"- mirrored floor, the one the gate read (`lock_erasure_floor`): {floor:.6f}",
+        f"- Phase 14's operator applied literally (`literal_phase14_floor`, never read by a gate): "
+        f"{literal_phase14_floor(cal_rate)!r}",
+        f"- branch that produced it (`floor_branch`): **{floor_branch(cal_rate)}**",
+        "",
+        f"Both directions are printed so a reader sees the CHOICE rather than inferring it (D2). "
+        f"When the branch is `reachability-min` the floor equals the best bound a PERFECT ERASURE "
+        f"can attain over {n_questions} questions "
+        f"({BEST_ATTAINABLE_TARGET_BOUND:.6f}), and (a) then clears ONLY on a perfect erasure — "
+        "that is the intended severity, named here rather than left to be re-derived.",
+        "",
+        "### 6. Representational consistency",
+        "",
+        REPRESENTATIONAL_READ_LABEL,
+        "",
+        "| (layer, projection) | ΔW cosine |",
+        "| --- | --- |",
+    ]
+    for key, cosine in representational["cosine"].items():
+        rendered = (
+            "undefined (zero ΔW in this cell — NOT orthogonal)"
+            if cosine is None
+            else (f"{cosine:.6f}")
+        )
+        lines.append(f"| {key} | {rendered} |")
+    fisher = representational["fisher"]
+    lines += [
+        "",
+        f"Fisher mass, {fisher['reduction']}-reduced per cell, {fisher['granularity']}: "
+        f"{fisher['ablated_mean']:.6f} over {fisher['n_ablated_cells']} ablated cell(s) against "
+        f"{fisher['preserved_mean']:.6f} over {fisher['n_preserved_cells']} preserved. Both sides "
+        "with their own denominators; no ratio is published.",
+        "",
+        "## Publication posture",
+        "",
+    ]
+    lines += [f"{clause}\n" for clause in D8_PUBLICATION_POSTURE]
+    lines += [
+        "## Comparability with Phase 18",
+        "",
+        "| parameter | value |",
+        "| --- | --- |",
+    ]
+    lines += [
+        f"| `{key}` | `{provenance['parity'][key]}` |"
+        for key in PARITY_KEYS
+        if key in provenance["parity"]
+    ]
+    lines += [
+        "",
+        f"Asserted by `assert_phase18_parity` against Phase 18's own committed values, not "
+        f"compared by eye. Run provenance: git `{provenance['git_sha']}`, device "
+        f"`{provenance['device']}`.",
+        "",
+        "## Ship Decision",
+        "",
+        ERASURE_SHIP_PENDING_LINE,
+        "",
+    ]
+
+    text = "\n".join(lines)
+    _prove(
+        len(_verdict.VERDICT_SECTION.findall(text)) == 1,
+        "the rendered report does not carry EXACTLY one `## Verdict` section. At zero the clobber "
+        "guard has nothing to anchor on and a later run overwrites this evidence in silence; at "
+        "more than one the guard reads the first and a second could disagree with it",
+    )
+    _prove(
+        text.count(ERASURE_SHIP_PENDING_LINE) == 1,
+        f"the rendered report carries {text.count(ERASURE_SHIP_PENDING_LINE)} ship-decision "
+        "placeholders. `append_addendum` replaces EXACTLY one, so the renderer must make that "
+        "satisfiable BY CONSTRUCTION — zero and two both leave the continuation writer with no "
+        "unambiguous line and turn an append into a choice",
+    )
+    _prove(
+        _BARE_ZERO_PERCENT.search(text) is None,
+        "the rendered report contains a bare zero percentage — STAT-02 forbids it in any committed "
+        "report or figure, because a bare zero states a certainty the sample does not have. This "
+        "proof runs on the PRODUCED BYTES because a source scan cannot see a number a format "
+        "string produced, which is exactly how one gets published",
+    )
+    path = pathlib.Path(path)
+    path.write_text(text, encoding="utf-8")
+    print(f"[phase19_erasure] wrote {path}")
+    return text
+
+
+def append_ship_decision(addendum, *, path=ERASURE_REPORT_PATH):
+    """Append a DATED continuation and flip the marker — but only if it records a real decision.
+
+    THE CONDITIONALITY IS THE POINT. Phase 18's twin built ``before + RECORDED + after``
+    UNCONDITIONALLY, whatever the addendum contained, so appending the D-21 quantification silently
+    converted "not yet recorded" into "recorded in the dated continuation" with no decision ever
+    written (``18-VERIFICATION.md:226-250``). The published report then advertised a ship decision
+    that did not exist, and the plan's own self-check read "pending absent, recorded present once"
+    as a PASS.
+
+    A substring check for "ship" would NOT have caught it: the grep that found the defect reports
+    ship/no-ship language already present in the report, as the section heading and the pointer
+    line. So the addendum must carry a DECISION LINE from the closed ``ERASURE_SHIP_DECISIONS`` set,
+    and it must be DATED, because the line it unlocks promises a dated continuation.
+
+    ``scripts/_addendum.py`` does the writing — both marker halves passed as the required keywords
+    it exists to demand. It is textual and surgical, never a re-render.
+    """
+    decisions = [
+        decision
+        for decision in ERASURE_SHIP_DECISIONS
+        if f"{ERASURE_SHIP_DECISION_PREFIX}{decision}" in addendum
+    ]
+    _prove(
+        len(decisions) == 1,
+        f"the addendum records {len(decisions)} ship decisions {decisions}. It must carry exactly "
+        f"one line of the form {ERASURE_SHIP_DECISION_PREFIX!r} + one of {ERASURE_SHIP_DECISIONS}. "
+        "Phase 18 flipped this marker on a continuation that recorded no decision at all, and the "
+        "report then advertised one that had never been written — the rewrite is conditional here "
+        "precisely so that cannot recur",
+    )
+    _prove(
+        _DATED_CONTINUATION.search(addendum) is not None,
+        "the addendum carries no YYYY-MM-DD date. The line this unlocks says the decision is "
+        "'recorded in the DATED continuation at the end of this file', and an undated section "
+        "makes that pointer false in the one respect a reader would use to find it",
+    )
+    return _addendum.append_addendum(
+        path,
+        addendum,
+        pending=ERASURE_SHIP_PENDING_LINE,
+        recorded=ERASURE_SHIP_RECORDED_LINE,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite

@@ -2564,7 +2564,12 @@ def test_render_report_emits_one_verdict_section_one_pending_line_and_no_bare_ze
         recorded=erasure.ERASURE_SHIP_RECORDED_LINE,
     )
     assert erasure.ERASURE_SHIP_RECORDED_LINE in updated
-    assert "Phase 18" not in updated
+    # NOT `"Phase 18" not in updated`: the report legitimately CITES Phase 18 (the D8 posture names
+    # the register it shipped `LEAKAGE_DEMONSTRATED` in, and the parity table is titled after it).
+    # The defect is a Phase 18 SHIP-DECISION LINE arriving as this document's own provenance.
+    extraction = _load("phase18_extraction", "scripts/phase18_extraction.py")
+    assert extraction.EXTRACTION_SHIP_RECORDED_LINE not in updated
+    assert extraction.EXTRACTION_SHIP_PENDING_LINE not in updated
 
     # ...and refuses a DOUBLED placeholder, because choosing is how an append becomes a rewrite.
     doubled = tmp_path / "doubled.md"
@@ -2580,11 +2585,27 @@ def test_render_report_emits_one_verdict_section_one_pending_line_and_no_bare_ze
 
 def test_the_clobber_guard_refuses_a_re_render_and_separates_none_from_an_empty_body(tmp_path):
     """T-19-21 / CR-02 — anchored on the SECTION, and there is no `--force`."""
-    source = (_ROOT / "scripts" / "phase19_erasure.py").read_text(encoding="utf-8")
-    assert "force" not in source.lower().replace("enforce", "").replace("forced", ""), (
-        "the pin grew a force flag. An operator who learns one is always required passes it after "
-        "a verdict HAS been recorded, at which point the guard destroys the evidence it protects"
-    )
+    # Structural, not a substring scan: the pin's own docstring REJECTS `--force` in prose, and a
+    # text scan would read the refusal as the defect. What must not exist is a PARAMETER named
+    # force and a `--force` branch off sys.argv.
+    tree = ast.parse(_PIN_SOURCE)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            args = node.args
+            names = [a.arg for a in (args.posonlyargs + args.args + args.kwonlyargs)] + [
+                a.arg for a in (args.vararg, args.kwarg) if a is not None
+            ]
+            assert not [name for name in names if "force" in name.lower()], (
+                f"{node.name} takes a force argument. An operator who learns one is always "
+                "required passes it after a verdict HAS been recorded, at which point the guard "
+                "destroys exactly the evidence it exists to protect"
+            )
+    literals = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert "--force" not in literals, "the pin reads a --force flag off the command line"
 
     path = tmp_path / "phase19_erasure_report.md"
     assert erasure.assert_erasure_report_not_clobbered(path) is None, (
@@ -2656,7 +2677,8 @@ def test_the_placeholder_rewrite_is_conditional_on_a_real_ship_decision(tmp_path
     )
     assert updated.count(erasure.ERASURE_SHIP_RECORDED_LINE) == 1
     assert erasure.ERASURE_SHIP_PENDING_LINE not in updated
-    assert "Phase 18" not in updated
+    extraction = _load("phase18_extraction", "scripts/phase18_extraction.py")
+    assert extraction.EXTRACTION_SHIP_RECORDED_LINE not in updated
 
     # Both halves of the closed decision set are accepted, and nothing else is.
     assert erasure.ERASURE_SHIP_DECISIONS == ("SHIP", "DO NOT SHIP")
