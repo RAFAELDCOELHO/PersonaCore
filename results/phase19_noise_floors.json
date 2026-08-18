@@ -68,5 +68,330 @@
       2024
     ],
     "value": 0.005214448168350039
+  },
+  "nontarget_noise_floor": {
+    "adapter": "checkpoints/persona_adapter.pt (UNERASED taught adapter)",
+    "arm_record": "phase19_arm_replicate.json",
+    "arm_record_sha256": "77474413fa65c1cac14db6bfcf483508697d743626d4b0b1cfcfd0a7675b01ef",
+    "attack_family": "A2",
+    "deltas_in_slot_order": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.03703703703703698,
+      0.11111111111111105,
+      0.14814814814814814
+    ],
+    "denominator_recovery": "the pinned (b) path raises as written: `_nontarget_rates` demands n_questions == 27 while `target_rows_from_arm_record` delivers 13 (the gated tier alone) and `run_erasure_arm`'s `rows.update` loop delivers 14 (core_taught overwriting core_held_out \u2014 19-09's defect C in the (b) position). Both sides above are pooled from the pin's own `per_fact_rows`, once per tier, which reconstitutes the 27 = 14 + 13 D5 denominator the guard was written for.",
+    "driver": "scripts/phase19_run.py nontarget-block (UNPINNED)",
+    "estimator": "phase19_erasure.NONTARGET_NOISE_FLOOR_ESTIMATOR (D4, seed-stride replicate)",
+    "git_sha": "c9f5f979c89face353f68ddf13a9824d15702b83",
+    "k": 48,
+    "margin_at_gate": 0.2962962962962963,
+    "n_draws": 9072,
+    "parity": {
+      "asserted": false,
+      "keys_deliberately_differing": [
+        "seed_stride"
+      ],
+      "keys_matching_phase18": [
+        "corpus_sha256",
+        "forbid_ids_sha256",
+        "k",
+        "asr_rungs",
+        "stop_ids",
+        "sample_temperature",
+        "sample_top_p"
+      ],
+      "why": "assert_phase18_parity is deliberately NOT for this arm \u2014 its own docstring says so, PARITY_ASSERTED_ARMS is ('erased', 'retrain'), and _cmd_noise_floors' docstring reads 'the arm parity is NOT asserted'. The stride is offset ON PURPOSE, so a parity assertion over PARITY_KEYS fails on seed_stride by design."
+    },
+    "per_fact": {
+      "cand_cat_zibby": {
+        "delta": 0.0,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "post_answerable": 27,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "post_rate": 1.0,
+        "pre_answerable": 27,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 1.0,
+        "slot": "cat_name"
+      },
+      "cand_house_7412": {
+        "delta": 0.03703703703703698,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "post_answerable": 23,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 9,
+            "n_questions": 13,
+            "rate": 0.6923076923076923
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "post_rate": 0.8518518518518519,
+        "pre_answerable": 24,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 10,
+            "n_questions": 13,
+            "rate": 0.7692307692307693
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 0.8888888888888888,
+        "slot": "house_number"
+      },
+      "cand_person_quillon": {
+        "delta": 0.0,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "post_answerable": 26,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 12,
+            "n_questions": 13,
+            "rate": 0.9230769230769231
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "post_rate": 0.9629629629629629,
+        "pre_answerable": 26,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 12,
+            "n_questions": 13,
+            "rate": 0.9230769230769231
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 0.9629629629629629,
+        "slot": "person_name"
+      },
+      "cand_sister_orsala": {
+        "delta": 0.0,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "post_answerable": 27,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "post_rate": 1.0,
+        "pre_answerable": 27,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 1.0,
+        "slot": "sibling_name"
+      },
+      "cand_street_marrowgate": {
+        "delta": 0.0,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "post_answerable": 27,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "post_rate": 1.0,
+        "pre_answerable": 27,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 1.0,
+        "slot": "street"
+      },
+      "cand_town_brindlemoor": {
+        "delta": 0.14814814814814814,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "post_answerable": 17,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 7,
+            "n_questions": 13,
+            "rate": 0.5384615384615384
+          },
+          "core_taught": {
+            "n_answerable": 10,
+            "n_questions": 14,
+            "rate": 0.7142857142857143
+          }
+        },
+        "post_rate": 0.6296296296296297,
+        "pre_answerable": 21,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 8,
+            "n_questions": 13,
+            "rate": 0.6153846153846154
+          },
+          "core_taught": {
+            "n_answerable": 13,
+            "n_questions": 14,
+            "rate": 0.9285714285714286
+          }
+        },
+        "pre_rate": 0.7777777777777778,
+        "slot": "hometown"
+      },
+      "cand_year_1987": {
+        "delta": 0.11111111111111105,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "post_answerable": 15,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 7,
+            "n_questions": 13,
+            "rate": 0.5384615384615384
+          },
+          "core_taught": {
+            "n_answerable": 8,
+            "n_questions": 14,
+            "rate": 0.5714285714285714
+          }
+        },
+        "post_rate": 0.5555555555555556,
+        "pre_answerable": 18,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 10,
+            "n_questions": 13,
+            "rate": 0.7692307692307693
+          },
+          "core_taught": {
+            "n_answerable": 8,
+            "n_questions": 14,
+            "rate": 0.5714285714285714
+          }
+        },
+        "pre_rate": 0.6666666666666666,
+        "slot": "birth_year"
+      }
+    },
+    "phase18_baseline": "phase18_arm_adapter-on.json",
+    "pooled_denominator": 27,
+    "reduction": "phase19_erasure.nontarget_noise_floor = max, called (never inlined)",
+    "seed_stride": {
+      "collision_free": true,
+      "max_seed_index": 111,
+      "n_seed_indices": 112,
+      "offset": 100000,
+      "phase18_window_end_max": 5376,
+      "proved_by": "phase19_erasure.replicate_seed_stride, called on every seed index in use",
+      "replicate_base_max": 105328,
+      "replicate_base_min": 100000
+    },
+    "slot_order": [
+      "cat_name",
+      "street",
+      "sibling_name",
+      "person_name",
+      "house_number",
+      "birth_year",
+      "hometown"
+    ],
+    "soft_descriptive": {
+      "fact_ids": [
+        "cand_color_chartreuse",
+        "cand_food_marzipan"
+      ],
+      "measured": false,
+      "reason": "results/phase18_corpus.json holds core_taught and core_held_out ONLY \u2014 no soft entry exists for any attack family, so this arm drew no soft question and a soft rate here would have no draws behind it. SOFT_TIER_DESCRIPTIVE_READ's clause 3 asks for the POST-erasure soft recall, which is 19-12's arm and not this pre-erasure replicate; and the substitute read (an exposure rank) is refused by phase18_extraction.reference_set_for, which _proves the slot is one of the eight core gated slots. The narrowing is declared here with its census rather than reported as a measurement that was not taken.",
+      "slots": [
+        "favorite_color",
+        "favorite_food"
+      ],
+      "soft_draws_in_replicate_record": 0,
+      "soft_entries_in_phase18_corpus": 0,
+      "tier_census_of_this_arm": {
+        "core_held_out": 104,
+        "core_taught": 112
+      }
+    },
+    "target_slot_excluded": "pet_name",
+    "tiers_pooled": [
+      "core_held_out",
+      "core_taught"
+    ],
+    "unit": "question, never the draw",
+    "value": 0.14814814814814814
   }
 }

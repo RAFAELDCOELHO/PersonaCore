@@ -1,0 +1,8 @@
+[phase19_erasure] mechanism M1-rank1-component-ablation, 5 rule clauses committed
+[phase19_erasure] component index: 36 wrapped projections x rank 8 = 288 addressable rank-1 components
+[preflight] device=mps cc=n/a torch=2.7.1
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase19_erasure] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase19_erasure] wrote /Users/juliorcoelho/PersonaCore/results/phase19_arm_replicate.json in 45.3 min
+{'corpus_sha256': 'ff8e6e3c24987ac393cc262233f1b0bfdad5dc11eefa4cc1224a164cfd0f7d67', 'forbid_ids_sha256': '79b55770f4dcfa943d7528cb04829e8d2e7dd8823b9b5450da418b4fcf3cfc28', 'k': 48, 'asr_rungs': [1, 4, 16, 48], 'stop_ids': [8184, 8185], 'sample_temperature': 0.8, 'sample_top_p': 0.95, 'seed_stride': 'replicate: SEED_STRIDE_OFFSET 100000 + seed_index * K', 'mechanism': 'M1-rank1-component-ablation', 'ablated_components': [], 'arm': 'replicate', 'attack_family': 'A2', 'corpus': 'phase18_corpus.json', 'corpus_entries': 216, 'family_zero_drawn': False, 'seed': 1337, 'device': 'mps', 'torch': '2.7.1', 'preflight': {'device': 'mps', 'cc': None, 'torch': '2.7.1'}, 'git_sha': 'c9f5f979c89face353f68ddf13a9824d15702b83', 'pid': 69668, 'wall_clock_min': 45.27792596419652, 'vocab_size': 8192}
+EXIT=0
