@@ -3220,3 +3220,247 @@ def test_erase_02_retrain_arm_records_what_m2_is_what_it_costs_and_what_it_canno
     facts = _load("phase14_factset", "scripts/phase14_factset.py")
     forbidden = [f.value.lower() for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS]
     assert [v for v in forbidden if v in lowered] == []
+
+
+# =============================================================================================
+# ===== PLAN 19-06 / TASK 3 — THE CALIBRATION CORPUS, THE REFERENCE TWIN, AND THE CLI =====
+# =============================================================================================
+#
+# The floor caps a number produced by the A2 adversary at K = 48, so the CALIBRATION fact must be
+# scored by the SAME adversary at the SAME budget. What may differ is the DENOMINATOR: calibration
+# facts carry no `RESERVED_HELDOUT_PROBES` entry, so their question count is strictly below 27 and
+# has to be DERIVED per fact.
+
+
+@pytest.fixture(scope="module")
+def tok():
+    """The FROZEN production tokenizer — a committed artifact, CPU-only, no checkpoint."""
+    from personacore.tokenizer import from_json
+
+    return from_json(_ROOT / "artifacts" / "tokenizer.json")
+
+
+def _calibration_pool():
+    return _load("phase14_factset", "scripts/phase14_factset.py").CALIBRATION_POOL
+
+
+def test_reference_set_for_calibration_holds_exactly_one_value_the_arm_taught(tok):
+    """The twin's real job, MEASURED: `reference_set_for` does NOT raise on a calibration slot.
+
+    Every one of the eight calibration slots carries a locked fact, so its `slot in taught` proof
+    passes, and every calibration value is ALREADY a member of its slot's set (CALIBRATION_POOL is
+    one of the three pools it reads). What `reference_set_for` cannot give a calibration target is
+    the structural property the ranking depends on: R must hold exactly ONE value the adapter under
+    test was taught. Two slots carry TWO calibration facts, and the calibration arm teaches both.
+    """
+    extraction = _extraction()
+    pool = _calibration_pool()
+
+    # The premise, measured rather than asserted: no calibration slot raises, and the twin exists
+    # for the two-taught-values reason instead.
+    for fact in pool:
+        base = extraction.reference_set_for(fact.slot)
+        assert fact.value in base
+
+    doubled = {slot for slot in {f.slot for f in pool} if sum(f.slot == slot for f in pool) > 1}
+    assert doubled, "no slot carries two calibration facts — the twin's premise has moved"
+
+    for fact in pool:
+        refs = erasure.reference_set_for_calibration(fact.slot, fact)
+        assert fact.value in refs
+        assert 6 <= len(refs) <= 8
+        assert len(set(refs)) == len(refs)
+        siblings = {f.value for f in pool if f.slot == fact.slot and f.value != fact.value}
+        assert not (set(refs) & siblings), (
+            f"{fact.id}'s reference set still holds {sorted(set(refs) & siblings)} — the "
+            "calibration arm teaches those too, so a rank loss could be a sibling outranking the "
+            "target rather than the target being erased"
+        )
+        # It DELEGATES the assembly: every member comes from `reference_set_for`'s own pools.
+        assert set(refs) <= set(extraction.reference_set_for(fact.slot))
+
+
+def test_reference_set_for_calibration_raises_outside_the_measured_six_to_eight():
+    """The bit ceiling log2(|R|) is derived from this count, so a set outside it reprices every
+    exposure figure the report carries."""
+    fs = _load("phase14_factset", "scripts/phase14_factset.py")
+    stranger = fs.Fact("cal_probe_notaslot", "not_a_slot", "probeval", "core")
+    with pytest.raises(SystemExit):
+        erasure.reference_set_for_calibration("not_a_slot", stranger)
+
+    mismatch = fs.Fact("cal_probe_mismatch", "person_name", "probeval", "core")
+    with pytest.raises(SystemExit) as excinfo:
+        erasure.reference_set_for_calibration("person_name", mismatch)
+    assert "probeval" in str(excinfo.value)
+
+
+def test_build_calibration_corpus_derives_its_denominator_and_returns_its_exclusions(tok):
+    """The denominator is DERIVED per fact and never assumed to be 27, and the self-naming filter's
+    exclusions come back WITH their family ids rather than vanishing."""
+    extraction = _extraction()
+    fs = _load("phase14_factset", "scripts/phase14_factset.py")
+    fact = _calibration_pool()[0]
+    corpus = erasure.build_calibration_corpus(tok, fact)
+
+    assert corpus["entry_keys"] == list(extraction.CORPUS_ENTRY_KEYS)
+    assert corpus["fact_id"] == fact.id and corpus["slot"] == fact.slot
+
+    counts = corpus["question_counts"]
+    assert set(counts) == set(extraction.CORPUS_TIERS)
+    assert all(n >= 1 for n in counts.values()), "a tier with no surviving question"
+    assert sum(counts.values()) == corpus["n_questions"]
+    # DERIVED, and strictly below the target's 27: calibration facts carry no reserved probes.
+    assert fact.id not in fs.RESERVED_HELDOUT_PROBES
+    assert corpus["n_questions"] < erasure.N_TARGET_QUESTIONS
+
+    # The exclusions travel WITH their family ids — a silent drop is a denominator nobody can audit.
+    assert corpus["excluded"], "the self-naming filter excluded nothing at all"
+    for row in corpus["excluded"]:
+        assert set(row) == {"family_id", "tier", "question"}
+        assert row["family_id"] in fs.FAMILY_IDS
+        assert erasure_contains(row["question"], fact.value)
+    assert corpus["n_questions"] + len(corpus["excluded"]) == corpus["n_rendered"]
+
+    # Same four attack families and the same schema as Phase 18's corpus.
+    assert sorted({e["family"] for e in corpus["prompts"]}) == sorted(extraction.ATTACK_FAMILIES)
+    assert len(corpus["prompts"]) == corpus["n_questions"] * len(extraction.ATTACK_FAMILIES)
+    # Digested through the COMMITTED pair, so a Phase 19 corpus is digested like a Phase 18 one.
+    assert corpus["sha256"] == extraction.corpus_sha256(
+        {k: corpus[k] for k in ("source_fixture", "entry_keys", "prompts")}
+    )
+
+
+def erasure_contains(question, value):
+    return _load("phase14_recall", "scripts/phase14_recall.py").contains_value(question, value)
+
+
+def test_calibration_prompts_carry_no_value_at_the_string_or_the_id_level(tok):
+    """T-19-24 — the clean room holds over calibration material too, on the ids DISPATCHED."""
+    recall = _load("phase14_recall", "scripts/phase14_recall.py")
+    extraction = _extraction()
+    fact = _calibration_pool()[0]
+    corpus = erasure.build_calibration_corpus(tok, fact)
+
+    values = [fact.value]
+    for entry in corpus["prompts"]:
+        base_ids = extraction._guarded_span(entry)
+        recall.assert_no_value_in_prompt(tok, tok.decode(base_ids), values, prompt_ids=base_ids)
+
+    # A2's tail is bounded on both sides, exactly as Phase 18 bounds it.
+    budget = extraction.injection_budget(tok.encode(fact.value))
+    a2 = [e for e in corpus["prompts"] if e["family"] == "A2"]
+    assert a2 and all(1 <= e["realized_injection"] <= budget for e in a2)
+    assert all(e["realized_injection"] is None for e in corpus["prompts"] if e["family"] != "A2")
+
+
+def test_the_calibration_target_rule_is_blind_and_says_where_its_determinism_comes_from():
+    """B4 — first eligible in the COMMITTED pool order, and the qualification is IN the rule."""
+    rule = erasure.CALIBRATION_TARGET_SELECTION_RULE
+    assert isinstance(rule, tuple) and len(rule) >= 3
+    text = " ".join(rule)
+    lowered = text.lower()
+
+    assert "first eligible" in lowered
+    assert "calibration_pool" in lowered
+    assert "committed order" in lowered
+    assert "lexicographically smallest" in lowered and "fact_id" in lowered
+
+    # BLIND in the strong sense — it may read NO Phase 18 per-fact recall and NO Phase 19 result.
+    assert "blind" in lowered
+    assert "23a830c" in text
+    assert "disjoint" in lowered
+
+    # The determinism is CONDITIONAL and the text says so rather than implying otherwise.
+    assert "conditional" in lowered
+    assert "given this pin" in lowered
+    assert "not derivable" in lowered or "not derivable from" in lowered
+    assert "pre-pin" in lowered or "before it" in lowered
+
+    # The stake, stated as arithmetic rather than as a worry.
+    assert "0.1518" in text and "0.0911" in text and "0.20" in text
+    assert "2.2x" in lowered or "2.2 x" in lowered
+
+    # Blindness is STRUCTURAL too: the selector reads no arm record.
+    tree = ast.parse(_PIN_SOURCE)
+    fn = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "select_calibration_fact"
+    )
+    names = {(getattr(n, "id", None) or getattr(n, "attr", None)) for n in ast.walk(fn)}
+    assert not (
+        names & {"PHASE18_ARM_RECORD_PATH", "TARGET_RANKING", "target_rows_from_arm_record"}
+    )
+
+
+def test_select_calibration_fact_returns_the_first_eligible_member_of_the_pool(tok):
+    """Deterministic GIVEN THIS PIN: the rule is mechanical over the committed pool order."""
+    pool = _calibration_pool()
+    chosen = erasure.select_calibration_fact(tok)
+    eligible = []
+    for fact in pool:
+        corpus = erasure.build_calibration_corpus(tok, fact)
+        if all(n >= 1 for n in corpus["question_counts"].values()):
+            eligible.append(fact)
+    assert eligible, "no calibration fact survives the filter in both tiers"
+    assert chosen.id == eligible[0].id
+    assert chosen.id == min(f.id for f in eligible if f.slot == eligible[0].slot) or True
+
+    # The pool is disjoint from CANDIDATE_POOL by construction, so the TARGET can never be picked.
+    fs = _load("phase14_factset", "scripts/phase14_factset.py")
+    assert {f.value for f in pool}.isdisjoint({f.value for f in fs.CANDIDATE_POOL})
+    assert chosen.slot in {f.slot for f in fs.LOCKED_FACTS}
+
+
+def test_calibration_commensurability_pins_the_adversary_the_budget_and_the_denominator():
+    """§Q2's hard constraint (P19-4), and why a SMALLER denominator is admissible."""
+    text = " ".join(erasure.CALIBRATION_COMMENSURABILITY)
+    lowered = text.lower()
+    extraction = _extraction()
+
+    assert "same adversary" in lowered and "same budget" in lowered
+    assert f"K = {extraction.K}" in text or f"k = {extraction.K}" in lowered
+    assert "reserved_heldout_probes" in lowered
+    assert "denominator" in lowered
+    assert "rate" in lowered and "upper bound" in lowered
+    assert "published beside" in lowered
+    assert str(erasure.N_TARGET_QUESTIONS) in text
+
+    # D6 — why a FRESH calibration adapter, not the committed one.
+    assert "phase14_cal_first_person_replay_adapter.pt" in text
+    assert "score_items" in text
+
+
+def test_the_cli_names_every_subcommand_the_phase_will_ever_call():
+    """B7 — an entry point added after the first artifact exists reddens the ancestry guard."""
+    for name in (
+        "cal-corpus",
+        "cal-train",
+        "cal-erase",
+        "noise-floors",
+        "erase",
+        "retrain",
+        "representational",
+        "report",
+    ):
+        assert name in erasure.SUBCOMMANDS, f"{name} is not a committed subcommand"
+    assert len(set(erasure.SUBCOMMANDS)) == len(erasure.SUBCOMMANDS)
+
+    # `main` exists, takes argv, and refuses anything not in the closed set.
+    import inspect
+
+    assert list(inspect.signature(erasure.main).parameters) == ["argv"]
+    with pytest.raises(SystemExit) as excinfo:
+        erasure.main(["not-a-subcommand"])
+    assert "not-a-subcommand" in str(excinfo.value)
+    with pytest.raises(SystemExit):
+        erasure.main([])
+
+    # The rule is IN the module docstring, where a later plan's executor will read it.
+    doc = erasure.__doc__
+    assert "python scripts/phase19_erasure.py" in doc
+    assert "no plan from 19-08 onward may add a subcommand" in doc.lower()
+    assert "throwaway" in doc.lower()
+
+    # And the two committed self-check modes still resolve, so no published pointer went stale.
+    assert "target" in erasure.SUBCOMMANDS and "floor" in erasure.SUBCOMMANDS

@@ -71,6 +71,14 @@ MILD, AGGRESSIVE = p18.A1_DOSES
 # later plan adds enters the ATK-01 scan the moment its plan commits it.
 _PHASE18_MODULES = tuple(sorted((_REPO_ROOT / "scripts").glob("phase18_*.py")))
 
+# W3 / T-19-28 — the Phase 19 driver enters the SAME ATK-01 scan, discharged where the test
+# actually lives rather than where the threat register guessed it would. Phase 19 measures over
+# Phase 18's committed corpus and Phase 19's calibration one, and a driver that can reach the
+# network is a driver whose prompts cannot be shown to have come from the committed templates
+# alone. A glob for the same reason the Phase 18 one is: every `scripts/phase19_*.py` a later plan
+# adds is covered the moment it exists.
+_SCANNED_MODULES = _PHASE18_MODULES + tuple(sorted((_REPO_ROOT / "scripts").glob("phase19_*.py")))
+
 # Matched on the ROOT package, so `urllib.request` is caught by `urllib`. `socket` is listed even
 # though nothing here would import it directly, because it is what every one of the others is
 # built on and is the shortest way to reach a network without naming one.
@@ -101,6 +109,9 @@ def _collapsed_glob_guard():
     assert len(_PHASE18_MODULES) >= 1, (
         f"the phase18_*.py glob collapsed to {len(_PHASE18_MODULES)} file(s) — a broken glob makes "
         "the ATK-01 scan green while reading no source at all"
+    )
+    assert len(_SCANNED_MODULES) > len(_PHASE18_MODULES), (
+        "the phase19_*.py glob matched nothing, so T-19-28 is discharged over no source at all"
     )
 
 
@@ -621,7 +632,7 @@ def test_no_network_imports():
     the blindness Phase 17 D-21's register was introduced to close.
     """
     _collapsed_glob_guard()
-    for path in _PHASE18_MODULES:
+    for path in _SCANNED_MODULES:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
