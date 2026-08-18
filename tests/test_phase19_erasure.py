@@ -3082,3 +3082,141 @@ def test_per_fact_rows_reproduces_the_committed_conversion_key_for_key(arm_recor
     # And the family is the one the committed ranking was derived under, not a typed literal.
     assert family in extraction.ATTACK_FAMILIES
     assert f'"{family}"' not in _PIN_SOURCE and f"'{family}'" not in _PIN_SOURCE
+
+
+# =============================================================================================
+# ===== PLAN 19-06 / TASK 2 — THE M2 RETRAIN ARM (ERASE-02) AND ITS CAVEAT =====
+# =============================================================================================
+#
+# M2 is the reference point that operationalises "what would the model look like if it had never
+# learned this fact". It is DESCRIPTIVE — reporting the surgical result as *indistinguishable from*
+# it would adopt the framing `scripts/erasure_gate.py:33-36` explicitly refuses — and it is
+# simultaneously a legitimate MECHANISM under ERASE-02, because it costs about a minute.
+
+# The recipe `teach_persona` owns. None of these may be re-declared in the pin: a second copy is a
+# second recipe free to stop agreeing, and then the M2 comparison measures the recipe rather than
+# the omission.
+_RECIPE_NAMES = (
+    "LR",
+    "WEIGHT_DECAY",
+    "BATCH_SIZE",
+    "MAX_STEPS",
+    "WARMUP_STEPS",
+    "EVAL_INTERVAL",
+    "CHECKPOINT_INTERVAL",
+    "LORA_CFG",
+    "SEED",
+    "CONVBASE_BEST",
+    "TOKENIZER_PATH",
+)
+
+
+def test_retrain_arm_spec_drops_exactly_one_fact_and_changes_nothing_else():
+    """ERASE-02's arm: ``arm_spec("real")`` minus the target, byte-for-byte on the other two."""
+    tp = _teach_persona()
+    real_facts, real_second_person, real_replay = tp.arm_spec("real")
+    target = erasure.TARGET_SLOT
+
+    fact_id = next(fact.id for fact in real_facts if fact.slot == target)
+    facts, second_person, replay = erasure.retrain_arm_spec(fact_id)
+
+    assert len(facts) == len(real_facts) - 1
+    assert [f.id for f in facts] == [f.id for f in real_facts if f.id != fact_id]
+    assert fact_id not in {f.id for f in facts}
+    # The two settings the `real` arm's calibration DERIVED, unchanged and identical in type.
+    assert second_person is real_second_person
+    assert replay == real_replay and type(replay) is type(real_replay)
+
+    # Every OTHER taught fact survives, soft tier included — M2 drops one fact, not a tier.
+    assert {f.slot for f in facts} == {f.slot for f in real_facts} - {target}
+
+
+def test_retrain_arm_spec_raises_on_a_fact_id_the_real_arm_does_not_teach():
+    """Returning the full set unchanged would silently make M2 a duplicate of the taught adapter."""
+    with pytest.raises(SystemExit) as excinfo:
+        erasure.retrain_arm_spec("cal_person_not_a_taught_fact")
+    assert "cal_person_not_a_taught_fact" in str(excinfo.value)
+
+    # And the arm has its own write scope, so its bins cannot collide with the production ones.
+    tp = _teach_persona()
+    production = tp.arm_outputs("real")
+    reference = tp.arm_outputs(erasure.RETRAIN_ARM, prefix=erasure.RETRAIN_PREFIX)
+    assert set(production.values()).isdisjoint(set(reference.values()))
+    assert reference["adapter"] != production["adapter"]
+
+
+def test_no_recipe_constant_is_redeclared_by_the_retrain_driver():
+    """The pin holds the OMISSION and nothing else about the recipe — checked structurally."""
+    tree = ast.parse(_PIN_SOURCE)
+    bound = {
+        node.id
+        for stmt in ast.walk(tree)
+        if isinstance(stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign))
+        for node in ast.walk(stmt.targets[0] if isinstance(stmt, ast.Assign) else stmt.target)
+        if isinstance(node, ast.Name)
+    }
+    assert bound.isdisjoint(_RECIPE_NAMES), (
+        f"the pin re-declares {sorted(bound & set(_RECIPE_NAMES))} — a second copy of a recipe "
+        "constant makes the M2 comparison a measurement of the recipe rather than of the omission"
+    )
+
+    tp = _teach_persona()
+    literals = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float, str))
+    ]
+    assert tp.LR not in literals, f"the learning rate {tp.LR} is typed into the pin"
+    assert [s for s in literals if isinstance(s, str) and "convbase" in s.lower()] == [], (
+        "the base checkpoint path is typed into the pin — it is `teach_persona`'s to name, and a "
+        "second spelling is a second base free to stop being the one the adapter was trained on"
+    )
+
+    # And the spec DELEGATES: it reaches `arm_spec`, rather than assembling a fact tuple by hand.
+    fn = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "retrain_arm_spec"
+    )
+    called = {
+        getattr(call.func, "id", None) or getattr(call.func, "attr", None)
+        for call in ast.walk(fn)
+        if isinstance(call, ast.Call)
+    }
+    assert "arm_spec" in called
+
+
+def test_erase_02_retrain_arm_records_what_m2_is_what_it_costs_and_what_it_cannot_do():
+    """All three clauses, and the third is the one that is easy to leave out."""
+    arm = erasure.ERASE_02_REFERENCE_ARM
+    assert isinstance(arm, tuple) and len(arm) >= 3
+    text = " ".join(arm)
+    lowered = text.lower()
+
+    # 1 — DESCRIPTIVE, and the refused framing named as refused.
+    assert "descriptive" in lowered
+    assert "indistinguishable" in lowered
+    assert "erasure_gate.py:33-36" in text
+    # The four reference points, all named.
+    assert "0/104" in text
+    assert "persona_adapter.pt" in text
+    assert lowered.count("reference point") >= 1
+
+    # 2 — a legitimate MECHANISM, with its measured cost. NOT a single number: the four
+    # measurements are 82 / 80 / 80 s and an 81 s window, so a bare "81 s" is not what was read.
+    assert "80" in text and "82" in text
+    assert "phase17_training_run.log" in text
+    assert "phase14_teaching_run.log" in text
+    assert "upper bound" in lowered
+
+    # 3 — the weakness, CARRIED rather than buried.
+    assert "different adapter" in lowered
+    assert "seed_everything" in text
+    assert "data order" in lowered or "data-order" in lowered
+    assert "two adapters" in lowered and "two seeds" in lowered
+    assert "noise floor" in lowered
+
+    # No fact value, and no recipe number.
+    facts = _load("phase14_factset", "scripts/phase14_factset.py")
+    forbidden = [f.value.lower() for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS]
+    assert [v for v in forbidden if v in lowered] == []
