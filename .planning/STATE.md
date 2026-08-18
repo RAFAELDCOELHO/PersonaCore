@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 19-08-PLAN.md
-last_updated: "2026-08-18T12:41:15.208Z"
-last_activity: 2026-08-18 -- 19-08 executed (corpus `7293ec9`, adapter+log `0ee9b32`; the ancestry guard is NON-VACUOUS at checked=45, the pin is still 15 commits)
+stopped_at: Completed 19-09-PLAN.md
+last_updated: "2026-08-18T13:58:27.615Z"
+last_activity: 2026-08-18 -- 19-09 executed (measured 0/23; corrected (a) floor 0.09107873950450847 published against the pin's internal 0.2; three pin defects published as a D3 continuation, not edited; pin still 15 commits)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 46
+  completed_plans: 47
   percent: 75
 ---
 
@@ -26,46 +26,62 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 9 of 16
-Status: Ready to execute — 19-08 complete: **THE ANCESTRY GUARD IS NON-VACUOUS AND GREEN.**
-`checked = 45` = 15 pin commits x 3 tracked `results/phase19_*` artifacts, every pin commit an
-ancestor of every artifact's first-add. `scripts/phase19_erasure.py` is **still at 15 commits** —
-not one line was added to it; both artifacts were produced by driving the closed CLI's own
-`cal-corpus` and `cal-train`.
-**The plan named both artifacts wrongly and the pin won.** `CALIBRATION_CORPUS_PATH` is
-`results/phase19_calibration_corpus.json` (`:3093`) and the adapter resolves through
-`arm_outputs('erase_calibration', prefix='phase19')` to
-`checkpoints/phase19_erase_calibration_adapter.pt` — **not** the plan's `phase19_cal_*` names.
-Renaming either would have been a 16th commit to a file closed at 15. Downstream plans must type
-the pin's paths, not the plan's.
-**19-06's pinned denominator was right, and is now measured:** `cal_person_varek` (slot
-`person_name`, index 0 of `CALIBRATION_POOL`'s committed order, disjoint from `CANDIDATE_POOL`,
-different slot from `TARGET_SLOT='pet_name'`), n = **23** = 14 taught + 9 held-out, 8 of 31
-rendered dropped by the self-naming filter (F4 x4, F5 x4, every one listed with its family id),
-92 prompts over the same four attack families, corpus sha256 `0534536c…`.
-**The adapter is on disk and gitignored:** `checkpoints/phase19_erase_calibration_adapter.pt`,
-1,351,991 bytes, sha256 `bc616c36…`, 331,776 params over 36 wrapped projections, canary passed,
-`refuse_if_exists` proved by tripping it (rc=1, nothing clobbered). **80 s** — the fourth
-independent measurement of ERASE-02's ~81 s. Never delete or move it; 19-09/19-10 consume it.
-**QA-02 corrected against the code:** `export_adapter` writes no driver `git_sha` into the adapter
-`.pt` (its `base_fingerprint.git_sha` is the BASE's `04e724c6`). The run's sha lives in the
-gitignored resume checkpoint and in the committed `results/phase19_cal_training.log` — which is why
-committing that log is load-bearing rather than decorative.
-`scripts/phase18_extraction.py` still has **26 commits**.
-The (a) floor constant still does not exist — **nothing was erased and nothing was scored.** With
-n = 23 measured, `lock_erasure_floor` discriminates only at 4..7 successes: 0..3/23 pin the floor
-at `ERASURE_FLOOR_MIN` 0.091079 and >=8/23 saturate it at `FLOOR_CEILING` 0.20 (B4's recorded
-consequence, now with the real denominator under it).
+Plan: 10 of 16
+Status: Ready to execute — 19-09 complete: **THE BLIND CALIBRATION MEASURED 0/23, AND THE (a)
+FLOOR IT PRICES IS `0.09107873950450847` (branch `reachability-min`) — NOT the `0.2` the closed pin
+computes internally.** 0/14 `core_taught` + 0/9 `core_held_out`, 1,104 draws at A2/K=48;
+`wilson_upper_bound(0, 23) = 0.10525136178999417`, `rule_of_three(23) = 0.13043478260869565`.
+The corrected floor equals `ERASURE_FLOOR_MIN = wilson_upper_bound(0, 27)` exactly, so the
+reachability clamp binds and **(a) clears only on a perfect erasure** — zero successes over all 27
+target questions.
+**THREE DEFECTS in the CLOSED pin, published as a D3 dated continuation, never as an edit**
+(`results/phase19_calibration_correction.md` + `.json`, appended through `scripts/_addendum.py`):
+**A** `run_erasure_arm` writes with `sort_keys=True` (`:2948`) while `zero_result_exposure_gaps`
+compares an ORDERED tuple (`:1562`) — same key SET, different order, so `zero_results_have_nll` is
+False on a record whose 6 NLLs per block are all finite. `erasure_gate` short-circuits to
+INCONCLUSIVE when successes are 0 and that flag is False — **which is exactly what a successful
+erasure produces, so 19-10's target arm will hit this.**
+**B** `_calibration_rate()` (`:3850-3855`) reads `pre_erasure.per_fact`, which `run_erasure_arm`
+fills from the PHASE 18 record for every arm — it returns 0.8846153846153846 (92/104, the `cand_*`
+rows), which is what makes the pin's internal floor 0.2.
+**C** `per_fact` is `fact_id`-keyed and `rows.update(...)` lets `core_taught` (14) overwrite
+`core_held_out` (9), publishing n=14 where `CALIBRATION_COMMENSURABILITY` clause 3 requires 23.
+Numerator is 0 in both tiers, so rate and branch are unaffected.
+**The correction is TRIPWIRED, not a note.** `results/phase19_calibration_correction.json` carries
+`governs: corrected_target_floor`, and
+`tests/test_phase19_correction.py::test_a_locked_floor_must_be_the_corrected_one` reddens the suite
+the moment `scripts/phase19_floor.py` locks anything but `0.09107873950450847` — proved by
+tripping it at 0.2 and passing at the corrected floor. 19-11's plan names
+`results/phase19_calibration_arm.json`, which does not exist: the record is
+`results/phase19_arm_cal-erased.json`, and the rate must be re-derived PER TIER (see
+`_measured_calibration_rate`), never from `_calibration_rate()` (B) or `per_fact` (C).
+**M1 did NOT localise.** `k = 187` of 288 (`stopped = True`) — 64.9% of ΔW zeroed to move ONE fact
+off rank 1; three of nine non-erased pool members lose rank 1 and dialogue PPL walks 5.9147 →
+4.8181 against an OFF baseline of 4.5733, destroying 81.8% of the adaptation. Q7.3's failure mode
+measured, and it ships unsoftened under D8.
+**The pin is byte-identical and still 15 commits** (sha256
+`c407246de3c470094ab0bdd868961b7b1c22529c5e00522fec67c3852cb6e303`);
+`scripts/phase18_extraction.py` is still **26**. The ancestry guard is non-vacuous at
+**checked = 120** = 15 x 8 tracked artifacts.
+Editing the pin was refused on measurement, not preference: eight `results/phase19_*` artifacts now
+exist, so an edit reddens the guard permanently, and delete-and-re-add cannot launder it because
+the guard takes `adds[-1]`, the EARLIEST add (`tests/test_phase16_prereg.py:117-124`); its
+docstring names the continuation path at `:342-346`.
+The (a) floor constant still does not exist — `scripts/phase19_floor.py` is absent and 19-11 locks
+it. The target fact and taught adapter were not touched.
+Adapters on disk, gitignored: `checkpoints/phase19_cal_erased_adapter.pt` (1,351,445 B, sha256
+`e3cb42b8…`) and `checkpoints/phase19_erase_calibration_adapter.pt` (1,351,991 B, sha256
+`bc616c36…`). Never delete or move either.
 Carried forward: the (c) dialogue half is ALREADY over its cap by **+1.2387** at the only dialogue
 noise floor ever measured — 4.576708 cap vs the taught adapter's 5.8154 — and `render_report`
 prints pre- and post-erasure dialogue PPL side by side by construction.
-**19-14 must now run BEFORE 19-15:** `report` aborts naming the `representational` subcommand if
-its record is absent, and that record's ablated addresses are read off the ERASED arm, so 19-11
+**19-14 must run BEFORE 19-15:** `report` aborts naming the `representational` subcommand if its
+record is absent, and that record's ablated addresses are read off the ERASED arm, so 19-11
 precedes it too.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
 post-hoc decision.
-Last activity: 2026-08-18 -- 19-08 executed (corpus `7293ec9`, adapter+log `0ee9b32`; the ancestry guard is NON-VACUOUS at checked=45, the pin is still 15 commits)
+Last activity: 2026-08-18 -- 19-09 executed (M1 `69fc671`, arm `14ab93d`, correction base `06dd3a3`, D3 continuation `dcb1b7c`; measured 0/23, corrected floor 0.09107873950450847 vs the pin's internal 0.2, three pin defects published not edited, pin still 15 commits)
 
 ## Performance Metrics
 
@@ -133,6 +149,7 @@ Last activity: 2026-08-18 -- 19-08 executed (corpus `7293ec9`, adapter+log `0ee9
 | Phase 19 P06 | 105min | 3 tasks | 5 files |
 | Phase 19 P07 | 95min | 2 tasks | 2 files |
 | Phase 19 P08 | 38min | 2 tasks | 4 files |
+| Phase 19 P09 | 51min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -392,7 +409,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-18T12:41:15.201Z
+Last session: 2026-08-18T13:58:27.607Z
 Stopped at: Completed 19-08-PLAN.md
 Resume file: None
 
