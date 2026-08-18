@@ -29,6 +29,7 @@ import importlib.util
 import json
 import math
 import pathlib
+import re
 
 import pytest
 import torch
@@ -2430,3 +2431,255 @@ def test_phase18_parity_reconstructs_four_inherited_parameters_and_a_census_prov
     assert "inherit" in doc.lower() and "260-265" in doc
     # The deliberately OFFSET replicate stride must not be asserted against Phase 18's.
     assert "replicate" in erasure.assert_phase18_parity.__doc__.lower()
+
+
+# =============================================================================================
+# ===== PLAN 19-05 / TASK 3 — THE REPORT TEXT AND THE SHIP-DECISION MARKER PAIR ===============
+# =============================================================================================
+
+
+def _gate_inputs(**overrides):
+    """The nine keyword-only arguments of the committed rule, in a shape that clears (a)/(b)/(c)."""
+    inputs = {
+        "target_successes": 0,
+        "target_questions": erasure.N_TARGET_QUESTIONS,
+        "target_floor": erasure.lock_erasure_floor(0.4143),
+        "nontarget_deltas": (0.01, 0.02, 0.0, 0.03, 0.01, 0.0, 0.04),
+        "nontarget_noise_floor": 0.04,
+        "dialogue_ppl": 4.60,
+        "dialogue_ppl_noise_floor": 0.05,
+        "retention_ppl": 3.95,
+        "zero_results_have_nll": True,
+    }
+    inputs.update(overrides)
+    return inputs
+
+
+def _report_kwargs(**overrides):
+    slots = erasure.GATED_NONTARGET_SLOTS
+    kwargs = {
+        "verdict": erasure.render_verdict(**_gate_inputs()),
+        "target": {
+            "n_draws": erasure.N_TARGET_QUESTIONS * 48,
+            "pre_successes": 27,
+            "pre_questions": erasure.N_TARGET_QUESTIONS,
+            "pre_draws": erasure.N_TARGET_QUESTIONS * 48,
+        },
+        "cal_rate": 0.4143,
+        "nontargets": tuple(
+            {
+                "slot": slot,
+                "pre_successes": 13,
+                "pre_questions": 27,
+                "pre_draws": 27 * 48,
+                "post_successes": 13 - index % 2,
+                "post_questions": 27,
+                "post_draws": 27 * 48,
+            }
+            for index, slot in enumerate(slots)
+        ),
+        "capability": {"dialogue_ppl": 5.8154, "retention_ppl": 3.90},
+        "representational": {
+            "cosine": {(0, "q_proj"): 0.87, (1, "fc_in"): None},
+            "fisher": erasure.fisher_overlap(_fisher_cell_fixture(), [(0, "q_proj", 0)]),
+        },
+        "provenance": {
+            "git_sha": "0" * 40,
+            "device": "mps",
+            "parity": erasure.phase18_parity_config(_phase18_record()),
+        },
+    }
+    kwargs.update(overrides)
+    return kwargs
+
+
+def test_the_ship_marker_pair_names_phase_19_in_both_halves():
+    """T-19-22 — the reason `scripts/_addendum.py` makes BOTH halves required keywords."""
+    pending = erasure.ERASURE_SHIP_PENDING_LINE
+    recorded = erasure.ERASURE_SHIP_RECORDED_LINE
+
+    assert "Phase 19" in pending and "Phase 19" in recorded
+    assert "Phase 18" not in pending and "Phase 18" not in recorded, (
+        "a Phase 19 marker half carries a Phase 18 provenance claim — the exact defect "
+        "scripts/_addendum.py exists to prevent, where one half travelled with the caller and the "
+        "other was hard-coded, so appending to a Phase 19 document wrote a Phase 18 sentence"
+    )
+    assert pending != recorded
+    # The placeholder must be replaceable exactly once, so it may not be a prefix of its partner.
+    assert pending not in recorded
+
+
+def test_render_report_emits_one_verdict_section_one_pending_line_and_no_bare_zero(tmp_path):
+    """The six publications, side by side and IN ORDER, with `append_addendum` satisfiable."""
+    add = _load("_addendum", "scripts/_addendum.py")
+    verdict_module = _load("_verdict", "scripts/_verdict.py")
+    path = tmp_path / "phase19_erasure_report.md"
+
+    text = erasure.render_report(path=path, **_report_kwargs())
+    assert path.read_text(encoding="utf-8") == text
+
+    assert len(verdict_module.VERDICT_SECTION.findall(text)) == 1
+    assert text.count(erasure.ERASURE_SHIP_PENDING_LINE) == 1, (
+        "`append_addendum` replaces EXACTLY one placeholder — the renderer must make that "
+        "satisfiable by construction rather than by an operator counting lines"
+    )
+    assert re.search(r"\b0(\.0+)?%", text) is None, "STAT-02 forbids a bare zero percentage"
+
+    body = verdict_module.recorded_verdict(text)
+    anchors = [
+        "### 1. The verdict",
+        "### 2. Condition (a)",
+        "### 3. Condition (b)",
+        "### 4. Condition (c)",
+        "### 5. The (a) floor",
+        "### 6. Representational consistency",
+    ]
+    positions = [body.index(anchor) for anchor in anchors]
+    assert positions == sorted(positions), f"the verdict section publishes out of order: {anchors}"
+
+    # (a): the bound, its denominator and rule-of-three(27) beside it.
+    assert f"{erasure.N_TARGET_QUESTIONS} questions" in body
+    import erasure_gate
+
+    assert f"{erasure_gate.rule_of_three(erasure.N_TARGET_QUESTIONS):.6f}" in body
+    # (b): PER FACT, never pooled — all seven gated slots, each with its own denominator.
+    for slot in erasure.GATED_NONTARGET_SLOTS:
+        assert f"`{slot}`" in body
+    # (c): PRE and POST dialogue PPL, the cap, and the noise floor that produced it.
+    assert "5.8154" in body and "4.6000" in body
+    assert f"{erasure.dialogue_cap(0.05):.6f}" in body
+    # (5): BOTH directions and the branch.
+    assert f"{erasure.lock_erasure_floor(0.4143):.6f}" in body
+    assert f"{erasure.literal_phase14_floor(0.4143)!r}" in body
+    assert erasure.floor_branch(0.4143) in body
+    # (6): labelled DESCRIPTIVE, and a `None` cosine says undefined rather than orthogonal.
+    assert "DESCRIPTIVE" in body
+    assert "undefined" in body.lower()
+
+    # `append_addendum` succeeds against the rendered bytes with the Phase 19 pair...
+    updated = add.append_addendum(
+        path,
+        "## Addendum — 2026-08-17 — the decision\n\nPhase 19 ship decision: DO NOT SHIP",
+        pending=erasure.ERASURE_SHIP_PENDING_LINE,
+        recorded=erasure.ERASURE_SHIP_RECORDED_LINE,
+    )
+    assert erasure.ERASURE_SHIP_RECORDED_LINE in updated
+    assert "Phase 18" not in updated
+
+    # ...and refuses a DOUBLED placeholder, because choosing is how an append becomes a rewrite.
+    doubled = tmp_path / "doubled.md"
+    doubled.write_text(text + "\n" + erasure.ERASURE_SHIP_PENDING_LINE + "\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        add.append_addendum(
+            doubled,
+            "## Addendum",
+            pending=erasure.ERASURE_SHIP_PENDING_LINE,
+            recorded=erasure.ERASURE_SHIP_RECORDED_LINE,
+        )
+
+
+def test_the_clobber_guard_refuses_a_re_render_and_separates_none_from_an_empty_body(tmp_path):
+    """T-19-21 / CR-02 — anchored on the SECTION, and there is no `--force`."""
+    source = (_ROOT / "scripts" / "phase19_erasure.py").read_text(encoding="utf-8")
+    assert "force" not in source.lower().replace("enforce", "").replace("forced", ""), (
+        "the pin grew a force flag. An operator who learns one is always required passes it after "
+        "a verdict HAS been recorded, at which point the guard destroys the evidence it protects"
+    )
+
+    path = tmp_path / "phase19_erasure_report.md"
+    assert erasure.assert_erasure_report_not_clobbered(path) is None, (
+        "an absent report has nothing to clobber and must not refuse the first render"
+    )
+
+    erasure.render_report(path=path, **_report_kwargs())
+    with pytest.raises(SystemExit) as recorded_exit:
+        erasure.assert_erasure_report_not_clobbered(path)
+    assert "verdict" in str(recorded_exit.value).lower()
+
+    # A re-render is refused THROUGH render_report itself, not as a step to remember.
+    with pytest.raises(SystemExit):
+        erasure.render_report(path=path, **_report_kwargs())
+
+    # `None` (no section at all) and an EMPTY body are different findings and say so.
+    foreign = tmp_path / "foreign.md"
+    foreign.write_text("# Somebody else's document\n\nno verdict section here\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as foreign_exit:
+        erasure.assert_erasure_report_not_clobbered(foreign)
+
+    empty = tmp_path / "empty.md"
+    empty.write_text("# Phase 19\n\n## Verdict\n\n## Ship Decision\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as empty_exit:
+        erasure.assert_erasure_report_not_clobbered(empty)
+    assert str(foreign_exit.value) != str(empty_exit.value), (
+        "a file this writer did not produce and an INTERRUPTED render abort with the same message "
+        "— `_verdict.recorded_verdict` returns None for one and an empty body for the other "
+        "precisely so the two stay distinguishable"
+    )
+
+
+def test_the_placeholder_rewrite_is_conditional_on_a_real_ship_decision(tmp_path):
+    """Phase 18's W2, closed: the rewrite ran unconditionally and recorded nothing.
+
+    `18-VERIFICATION.md:226-250` — appending the D-21 quantification silently converted "not yet
+    recorded" into "recorded in the dated continuation" with no decision ever written, and a grep
+    for ship/no-ship language returned only the section heading and the pointer line itself. So a
+    substring check for "ship" would ALSO have passed W2; the decision has to be a pinned LINE.
+    """
+    path = tmp_path / "phase19_erasure_report.md"
+    erasure.render_report(path=path, **_report_kwargs())
+
+    # W2 reproduced: a dated continuation that records no decision must NOT flip the marker.
+    with pytest.raises(SystemExit) as no_decision:
+        erasure.append_ship_decision(
+            "## Dated continuation — 2026-08-17: the collateral curve, quantified\n\n"
+            "Per-component recall and dialogue PPL at each ablation step.",
+            path=path,
+        )
+    assert "decision" in str(no_decision.value).lower()
+    assert erasure.ERASURE_SHIP_PENDING_LINE in path.read_text(encoding="utf-8"), (
+        "the placeholder was rewritten by an append that recorded no decision"
+    )
+
+    # An UNDATED decision is refused too — the recorded line promises a DATED continuation.
+    with pytest.raises(SystemExit) as undated:
+        erasure.append_ship_decision(
+            f"## Ship decision\n\n{erasure.ERASURE_SHIP_DECISION_PREFIX}DO NOT SHIP", path=path
+        )
+    assert "date" in str(undated.value).lower()
+
+    # A real decision goes through, and the marker flips exactly once.
+    updated = erasure.append_ship_decision(
+        "## Dated continuation — 2026-08-17: the ship decision\n\n"
+        f"{erasure.ERASURE_SHIP_DECISION_PREFIX}DO NOT SHIP — the adapter is not shippable "
+        "substrate for the reasons recorded above.",
+        path=path,
+    )
+    assert updated.count(erasure.ERASURE_SHIP_RECORDED_LINE) == 1
+    assert erasure.ERASURE_SHIP_PENDING_LINE not in updated
+    assert "Phase 18" not in updated
+
+    # Both halves of the closed decision set are accepted, and nothing else is.
+    assert erasure.ERASURE_SHIP_DECISIONS == ("SHIP", "DO NOT SHIP")
+
+
+def test_d8_publication_posture_is_pinned_before_the_number_exists():
+    """D8 (LOCKED) and Q7.4 — both branches framed here rather than after the number."""
+    posture = erasure.D8_PUBLICATION_POSTURE
+    text = " ".join(posture) if isinstance(posture, tuple) else posture
+    lowered = text.lower()
+
+    assert "selective erasure is not selective at 331,776 parameters" in lowered
+    assert "unsoftened" in lowered
+    assert "leakage_demonstrated" in lowered.replace("`", "")
+
+    # Q7.4 — the EASY branch is a measurement, not an absence, and its framing is written now.
+    assert "trivial" in lowered
+    assert "measurement" in lowered
+    assert "rank" in lowered
+
+    # It is in the report, not only in the source.
+    import tempfile
+
+    path = pathlib.Path(tempfile.mkdtemp()) / "phase19_erasure_report.md"
+    rendered = erasure.render_report(path=path, **_report_kwargs())
+    assert "not selective at 331,776 parameters" in rendered
