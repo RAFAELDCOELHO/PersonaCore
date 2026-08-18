@@ -3079,9 +3079,33 @@ def test_per_fact_rows_reproduces_the_committed_conversion_key_for_key(arm_recor
     )
     assert rows == erasure.target_rows_from_arm_record(arm_record, values)
 
-    # And the family is the one the committed ranking was derived under, not a typed literal.
+    # And the family is the one the committed ranking was derived under, RE-DERIVED rather than
+    # typed. Scoped to the RUNNER, not to the whole pin: `build_calibration_corpus` types the
+    # family names as corpus ENTRY LABELS exactly as `phase18_extraction.build_corpus` does, and a
+    # file-wide ban would be red against correct code — the same shape as 19-05's two replaced
+    # assertions. What matters is that the ADVERSARY is chosen by measurement, not spelled.
     assert family in extraction.ATTACK_FAMILIES
-    assert f'"{family}"' not in _PIN_SOURCE and f"'{family}'" not in _PIN_SOURCE
+    runner = next(
+        node
+        for node in ast.walk(ast.parse(_PIN_SOURCE))
+        if isinstance(node, ast.FunctionDef) and node.name == "run_erasure_arm"
+    )
+    literals = {
+        node.value
+        for node in ast.walk(runner)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert literals.isdisjoint(extraction.ATTACK_FAMILIES), (
+        f"the runner types an attack family {sorted(literals & set(extraction.ATTACK_FAMILIES))} "
+        "— §Q2 requires the post-erasure rate to come from the adversary the floor was priced on, "
+        "and a typed family is a family that can stop being that one"
+    )
+    called = {
+        getattr(call.func, "id", None) or getattr(call.func, "attr", None)
+        for call in ast.walk(runner)
+        if isinstance(call, ast.Call)
+    }
+    assert "erasure_attack_family" in called
 
 
 # =============================================================================================
@@ -3393,18 +3417,36 @@ def test_the_calibration_target_rule_is_blind_and_says_where_its_determinism_com
     )
 
 
-def test_select_calibration_fact_returns_the_first_eligible_member_of_the_pool(tok):
-    """Deterministic GIVEN THIS PIN: the rule is mechanical over the committed pool order."""
+def test_select_calibration_fact_returns_the_first_eligible_member_of_the_pool():
+    """Deterministic GIVEN THIS PIN, and TOKENIZER-FREE: eligibility is a string-level filter.
+
+    The selector takes no tokenizer because `calibration_questions` needs none — a selector that
+    had to build a prompt could not evaluate eligibility for every pool member in a CPU-only test,
+    and `build_calibration_corpus` RAISES on an ineligible fact by design.
+    """
+    extraction = _extraction()
     pool = _calibration_pool()
-    chosen = erasure.select_calibration_fact(tok)
-    eligible = []
-    for fact in pool:
-        corpus = erasure.build_calibration_corpus(tok, fact)
-        if all(n >= 1 for n in corpus["question_counts"].values()):
-            eligible.append(fact)
+    chosen = erasure.select_calibration_fact()
+    eligible = [
+        fact
+        for fact in pool
+        if all(
+            erasure.calibration_questions(fact)["kept"][tier] for tier in extraction.CORPUS_TIERS
+        )
+    ]
     assert eligible, "no calibration fact survives the filter in both tiers"
     assert chosen.id == eligible[0].id
-    assert chosen.id == min(f.id for f in eligible if f.slot == eligible[0].slot) or True
+
+    # THE TIE-BREAK IS UNREACHABLE, and asserting that it PICKS something is the wrong test — it
+    # fails on correct code. On `person_name` the pool holds two calibration facts, and the
+    # lexicographically smallest id there is NOT the first in the committed order; if the
+    # tie-break decided anything, the two halves of the rule would disagree about the fact whose
+    # rate sets the floor. The real property is that a tie cannot arise: the order is total and
+    # every id is distinct.
+    assert len({f.id for f in pool}) == len(pool)
+    doubled = [f for f in eligible if f.slot == eligible[0].slot]
+    assert len(doubled) > 1, "the doubled slot is gone — the disagreement above is no longer live"
+    assert min(f.id for f in doubled) != eligible[0].id
 
     # The pool is disjoint from CANDIDATE_POOL by construction, so the TARGET can never be picked.
     fs = _load("phase14_factset", "scripts/phase14_factset.py")

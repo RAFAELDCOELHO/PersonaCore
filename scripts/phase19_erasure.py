@@ -21,6 +21,17 @@ report text — and 19-07 audits the finished article. A Phase 19 number committ
 number whose own rule was still being written. That ordering IS the scientific guarantee of this
 phase; it is not bookkeeping, and no plan may trade it away for convenience.
 
+**2b. THE INVOCATION SURFACE IS CLOSED. This file is run as ``python scripts/phase19_erasure.py
+<subcommand>`` and nothing else.** ``SUBCOMMANDS`` names every one of them — ``cal-corpus``,
+``cal-train``, ``cal-erase``, ``noise-floors``, ``erase``, ``retrain``, ``representational``,
+``report``, plus the two self-check modes ``target`` and ``floor`` — INCLUDING the ones whose
+plans have not run yet, and a module-scope proof requires the dispatch table to hold exactly that
+set. NO PLAN FROM 19-08 ONWARD MAY ADD A SUBCOMMAND, A FLAG, OR ANY OTHER LINE TO THIS FILE.
+Naming a subcommand costs nothing now and costs the ancestry guard later: the natural executor
+move — "add a mode to the driver" — is a commit to a pre-registration whose numbers already exist.
+If a run genuinely needs something the pinned CLI cannot express, the answer is an UNPINNED
+THROWAWAY (``python -c ...``, or a new ``scripts/phase19_run.py``), never a commit here.
+
 **3. After 19-07 this file is permanently uneditable.** ``scripts/phase17_personas.py`` reached that
 state at ``d549e0b`` and ``scripts/phase18_extraction.py`` at ``99716e0`` — in both cases the moment
 the phase's first result artifact was committed. The recovery path for a genuine defect discovered
@@ -2921,9 +2932,365 @@ def retrain_arm_spec(target_fact_id):
     return kept, second_person, replay_ratio
 
 
-if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
-    # Smallest runnable check that fails if the derivation breaks. The census is PRINTED rather
-    # than asserted against a literal — `component_index`'s own proof is what pins it.
+# =============================================================================================
+# ===== THE BLIND CALIBRATION — ITS CORPUS, ITS REFERENCE TWIN AND ITS TARGET RULE (B4) =======
+# =============================================================================================
+
+CALIBRATION_COMMENSURABILITY = (
+    "THE HARD CONSTRAINT (§Q2, P19-4). The (a) floor CAPS a number produced by the A2 adversary "
+    "at the committed budget, so the CALIBRATION fact must be scored by the SAME ADVERSARY at the "
+    "SAME BUDGET — the family re-derived through `erasure_attack_family` and the budget read off "
+    "the committed arm record's own `config['k']` (K = 48 on that run). Neither is typed at a "
+    "call site. A calibration rate produced by a weaker probe would set a floor the target's own "
+    "adversary could clear for free, which is the whole quantity the blind calibration exists to "
+    "price.",
+    "WHAT MAY DIFFER: THE DENOMINATOR, and it must. Calibration facts carry NO "
+    "`RESERVED_HELDOUT_PROBES` entry — that dict is keyed by the core `cand_*` ids only "
+    "(verified) — so a calibration fact's question count is STRICTLY BELOW the target's 27 and "
+    "has to be DERIVED per fact by `calibration_questions`, never assumed. The self-naming filter "
+    "(`phase14_recall.contains_value`, applied at `phase14_recall.py:858-861`) drops more, and "
+    "its exclusions are RETURNED with their family ids rather than dropped silently.",
+    "WHY A SMALLER DENOMINATOR IS ADMISSIBLE, stated as arithmetic and not as reassurance. "
+    "`lock_erasure_floor` consumes a RATE, not an upper bound (19-03), so the calibration "
+    "denominator enters the floor only through `successes / questions`. It never enters the "
+    "Wilson interval the gate compares against, which is computed on the TARGET's own n. The "
+    "calibration denominator is therefore PUBLISHED BESIDE the rate in every table, because a "
+    "rate whose denominator is not shown is a rate a reader cannot price.",
+    "WHY A FRESH CALIBRATION ADAPTER IS RETRAINED (D6, adopted from the research's lean). "
+    "`checkpoints/phase14_cal_first_person_replay_adapter.pt` is committed and would be free, but "
+    "it was trained under the `real` arm's replay configuration and its recall was measured by "
+    "`score_items` — not by the Phase 18 adversary this floor is priced on. Reusing it costs an "
+    "argument about instrument and recipe provenance that would sit underneath the phase's "
+    "headline number; a fresh retrain costs about 80-82 seconds (P19-9, and see "
+    "`ERASE_02_REFERENCE_ARM` for the four measurements).",
+)
+
+CALIBRATION_TARGET_SELECTION_RULE = (
+    "THE RULE. The calibration fact that gets erased is the FIRST ELIGIBLE member of "
+    "`phase14_factset.CALIBRATION_POOL` in its COMMITTED ORDER (`:102-113`), where ELIGIBLE means "
+    "the fact survives `calibration_questions`' self-naming filter with at least one taught and "
+    "one held-out question remaining. The tie-break — impossible by construction, since a tuple's "
+    "order is total — is the LEXICOGRAPHICALLY SMALLEST `fact_id`, stated in this same commit "
+    "anyway so the rule is complete on its face rather than complete in practice.",
+    "IT IS BLIND IN THE STRONG SENSE: it may read NO Phase 18 per-fact recall and NO Phase 19 "
+    "calibration result. D7's principle is the register — a rule uses the KNOWN PAST, never a "
+    "result still to come — and here the known past is the committed pool ORDER itself, fixed "
+    "since Phase 14. The TARGET's own rule (19-02) reads committed Phase 18 numbers because those "
+    "cannot move; this one cannot read anything at all, because the calibration fact's own number "
+    "is precisely what the floor is derived FROM, and choosing the fact after seeing candidate "
+    "rates is the manoeuvre `23a830c` exists to forbid. `CALIBRATION_POOL` is DISJOINT from "
+    "`CANDIDATE_POOL` by construction (`phase14_factset.py:98-101`), so the target can never be "
+    "selected here.",
+    "THE DETERMINISM IS CONDITIONAL, and this clause says so rather than implying otherwise. The "
+    "rule is deterministic GIVEN THIS PIN — not given the repository as it stood before it. "
+    "'First eligible' depends on `calibration_questions`' question-family set, which is committed "
+    "in THIS file and did not exist beforehand. The filter itself is mechanical and long-committed "
+    "(`contains_value`, `teach_persona.py:1031`), so NO JUDGMENT enters and nothing about the "
+    "selection is discretionary; but the selected fact's identity is NOT DERIVABLE from the "
+    "pre-pin repository alone. An unqualified 'deterministic' is a sentence that does not survive "
+    "checking, and after 19-07 it cannot be corrected — the failure mode W1 and W-new-2 were both "
+    "caught for. User decision, 2026-08-17; see `19-CONTEXT.md` § B4.",
+    "THE STAKE, AS ARITHMETIC. `lock_erasure_floor` exceeds `ERASURE_FLOOR_MIN` only when "
+    "`cal_rate > 0.1518`, so an unpinned choice among ten facts swings (a)'s bar between 0.0911 "
+    "and 0.20 — a 2.2x move in the criterion, selectable after the fact. That is why the rule is "
+    "pinned here rather than left to the run that needs it.",
+)
+
+# The calibration arm's own name and corpus path. A DISTINCT arm name so its bins cannot collide
+# with `cal_first_person_replay`'s (D6 retrains fresh rather than reusing that adapter), and the
+# corpus lands under `results/` like Phase 18's — written by `cal-corpus` at 19-08, never before.
+CALIBRATION_ARM = "erase_calibration"
+CALIBRATION_CORPUS_PATH = _REPO_ROOT / "results" / "phase19_calibration_corpus.json"
+
+
+def reference_set_for_calibration(slot, fact):
+    """The same-slot reference set for a CALIBRATION target — ``reference_set_for``, minus siblings.
+
+    WHY A TWIN AT ALL, measured rather than inherited from the plan's premise. The plan's stated
+    reason was that ``reference_set_for`` RAISES on a slot carrying no taught fact. It does not
+    raise on ANY calibration slot: all eight carry a locked fact, so its ``slot in taught`` proof
+    passes, and every calibration value is ALREADY a member of its slot's set because
+    ``CALIBRATION_POOL`` is one of the three pools it reads.
+
+    The real reason is structural and it is the one the ranking depends on: R MUST HOLD EXACTLY
+    ONE VALUE THE ADAPTER UNDER TEST WAS TAUGHT. ``reference_set_for`` guarantees that for the
+    production adapter by construction — one locked fact per slot. It does NOT for a calibration
+    target, because the calibration arm teaches all ten pool members and TWO SLOTS CARRY TWO of
+    them. On those slots a rank-1 loss could mean 'the sibling calibration fact outranked it'
+    rather than 'the target was erased', and the M1 stopping rule would be reading a different
+    event on the calibration arm than on the target arm.
+
+    So the twin DELEGATES the assembly to ``reference_set_for`` — same pools, same Phase 17 minted
+    values, same locked value (untaught on this arm, and therefore a legitimate reference) — and
+    removes only the target's calibration SIBLINGS. Measured: |R| lands in [6, 8] for all ten pool
+    members (8->7 on the two doubled slots, unchanged on the other six).
+    """
+    import phase14_factset as factset  # LAZY — see the module docstring's no-fact-value rule
+    import phase18_extraction as extraction  # LAZY — same rule
+
+    _prove(
+        fact.slot == slot,
+        f"fact {fact.id!r} is in slot {fact.slot!r} but the reference set was asked for {slot!r} "
+        "— a cross-slot reference hands the target a rank it earned from slot-type plausibility",
+    )
+    base = extraction.reference_set_for(slot)
+    siblings = {
+        other.value
+        for other in factset.CALIBRATION_POOL
+        if other.slot == slot and other.value != fact.value
+    }
+    values = tuple(value for value in base if value not in siblings)
+    _prove(
+        fact.value in values,
+        f"the calibration value {fact.value!r} is not among its own {len(values)} references, so "
+        "it has no rank. Exposure is a rank statistic; one computed against a set that excludes "
+        "its target reports a fact about the references alone",
+    )
+    _prove(
+        6 <= len(values) <= 8,
+        f"slot {slot!r} assembled |R| = {len(values)} for {fact.id!r}, outside the MEASURED 6-8 "
+        f"that `reference_set_for` publishes ({extraction.reference_set_for.__module__}). The bit "
+        "ceiling log2(|R|) is derived from this count, so a set outside the range reprices every "
+        "exposure figure this phase carries",
+    )
+    return values
+
+
+def calibration_questions(fact):
+    """``{kept, excluded, n_rendered}`` for one calibration fact — PURE, and no tokenizer.
+
+    The denominator is DERIVED here and nowhere else. Calibration facts carry no reserved probes,
+    so 27 is not merely unavailable, it is WRONG: the count depends on which of this fact's own
+    rendered questions name their own value, and that is a property of the value's spelling.
+
+    Pure and tokenizer-free on purpose — ``select_calibration_fact`` has to be able to evaluate
+    eligibility for every pool member without building a single prompt, and a selector that needed
+    a tokenizer would be a selector that could not run in a CPU-only test.
+    """
+    import phase14_factset as factset  # LAZY — see the module docstring's no-fact-value rule
+    import phase14_recall as recall  # LAZY — same rule
+    import phase18_extraction as extraction  # LAZY — same rule
+
+    tiers = (
+        (extraction.REPORTED_TIER, factset.TAUGHT_FAMILY_IDS),
+        (extraction.GATED_TIER, factset.HELDOUT_FAMILY_IDS),
+    )
+    kept, excluded, rendered = {}, [], 0
+    for tier, family_ids in tiers:
+        rows = []
+        for family_id in sorted(family_ids):
+            for question, _answer in factset.render_family(family_id, fact):
+                rendered += 1
+                if recall.contains_value(question, fact.value):
+                    # RETURNED, never dropped: an exclusion with no family id is a denominator
+                    # nobody can audit, and the filter's bite is a property of this fact's value.
+                    excluded.append({"family_id": family_id, "tier": tier, "question": question})
+                    continue
+                rows.append((family_id, question))
+        kept[tier] = tuple(rows)
+    return {"kept": kept, "excluded": tuple(excluded), "n_rendered": rendered}
+
+
+def select_calibration_fact():
+    """``CALIBRATION_TARGET_SELECTION_RULE``, implemented. Reads no result, of any phase.
+
+    Deterministic GIVEN THIS PIN — see that rule's third clause. The eligibility test is
+    ``calibration_questions``, which is mechanical; the ORDER is ``CALIBRATION_POOL``'s own,
+    committed since Phase 14.
+    """
+    import phase14_factset as factset  # LAZY — see the module docstring's no-fact-value rule
+    import phase18_extraction as extraction  # LAZY — same rule
+
+    eligible = [
+        fact
+        for fact in factset.CALIBRATION_POOL
+        if all(calibration_questions(fact)["kept"][tier] for tier in extraction.CORPUS_TIERS)
+    ]
+    _prove(
+        eligible,
+        "no member of CALIBRATION_POOL survives the self-naming filter with a question in BOTH "
+        "tiers. The blind calibration cannot run, and the (a) floor has no rate to be derived "
+        "from — this is a stop, not a fallback",
+    )
+    # THE TIE-BREAK IS UNREACHABLE, and writing code that pretends to apply it would be worse than
+    # not writing it. A tie needs two facts at the same position in a total order, which a tuple
+    # cannot produce; what CAN make the rule ambiguous is two pool members sharing a `fact_id`, so
+    # THAT is what is proved here. My first version dressed the tie-break up as a `min` over the
+    # same-slot members — a spelling that reads as though the lexicographic clause decides
+    # something, when on the two doubled slots it would select a DIFFERENT fact than "first in the
+    # committed order" does. The rule's own text says the tie-break cannot bite; the code says so
+    # too, by returning the first eligible member and proving the premise that keeps it unique.
+    ids = [fact.id for fact in factset.CALIBRATION_POOL]
+    _prove(
+        len(set(ids)) == len(ids),
+        f"CALIBRATION_POOL holds {len(ids)} facts with only {len(set(ids))} distinct ids — the "
+        "committed order would no longer identify one member, and the lexicographic tie-break "
+        "this rule declares unreachable would suddenly decide the phase's floor",
+    )
+    return eligible[0]
+
+
+def build_calibration_corpus(tok, fact):
+    """A Phase 18-shaped attack corpus over ONE calibration fact. Returns a dict, writes nothing.
+
+    Same four families, same ``CORPUS_ENTRY_KEYS`` schema, same two-sided A2 budget check and the
+    same D-16 partition as ``phase18_extraction.build_corpus`` — because a calibration rate scored
+    against a differently built corpus would not be commensurable with the target's, which is what
+    ``CALIBRATION_COMMENSURABILITY`` forbids.
+
+    ``tok`` is the first argument rather than absent: the plan's ``build_calibration_corpus(fact)``
+    cannot build a prompt, and every id in the returned entries is encoded by the FROZEN production
+    tokenizer — ``build_corpus(tok)``'s own signature.
+
+    ``source_fixture`` names the RENDERER, not a file. Phase 18 read its questions from the binding
+    fixture; these are generated by ``render_family`` over the committed family allocation, and
+    recording a fixture name here would claim a provenance this corpus does not have.
+    """
+    import phase14_recall as recall  # LAZY — see the module docstring's no-fact-value rule
+    import phase18_extraction as extraction  # LAZY — same rule
+
+    counted = calibration_questions(fact)
+    counts = {tier: len(rows) for tier, rows in counted["kept"].items()}
+    _prove(
+        all(count >= 1 for count in counts.values()),
+        f"{fact.id!r} has no scorable question left in tier(s) "
+        f"{sorted(tier for tier, count in counts.items() if count < 1)} after the self-naming "
+        "filter. A tier with a zero denominator produces a rate that is a division by nothing, "
+        "and the floor would be derived from it",
+    )
+
+    values = [fact.value]
+    prefix_ids = extraction.split_value_ids(tok, fact.value)[0]
+    budget = extraction.injection_budget(tok.encode(fact.value))
+    prompts, seed_index = [], 0
+    for tier in extraction.CORPUS_TIERS:
+        for family_id, question in counted["kept"][tier]:
+            shared = {
+                "fact_id": fact.id,
+                "slot": fact.slot,
+                "tier": tier,
+                "seed_index": seed_index,
+                "source_family": family_id,
+            }
+            seed_index += 1
+
+            for dose in extraction.A1_DOSES:
+                attacked = extraction.apply_a1(question, dose=dose)
+                a1_ids = recall.build_recall_prompt(tok, attacked)
+                recall.assert_no_value_in_prompt(tok, attacked, values, prompt_ids=list(a1_ids))
+                prompts.append(
+                    extraction._corpus_entry(
+                        family=f"A1-{dose}",
+                        dose=dose,
+                        **shared,
+                        realized_injection=None,
+                        prompt_ids=list(a1_ids),
+                    )
+                )
+
+            base_ids = recall.build_recall_prompt(tok, question)
+            recall.assert_no_value_in_prompt(tok, question, values, prompt_ids=list(base_ids))
+            a2_ids = extraction.build_a2_prompt(tok, question, prefix_ids)
+            realized = extraction.realized_injection(a2_ids, len(base_ids), prefix_ids)
+            _prove(
+                1 <= realized <= budget,
+                f"A2 realized {realized} injected ids on {fact.id!r} against a declared budget of "
+                f"{budget} for question {question!r}. TWO-SIDED on purpose: zero makes A2 an "
+                "unlabelled duplicate of the bare prompt while still being reported as an attack, "
+                "and more than the budget hands the model more than D-13 pre-registered",
+            )
+            prompts.append(
+                extraction._corpus_entry(
+                    family="A2",
+                    dose=None,
+                    **shared,
+                    realized_injection=realized,
+                    prompt_ids=list(a2_ids),
+                )
+            )
+
+            a3_ids = extraction.build_a3_prompt(tok, question)
+            recall.assert_no_value_in_prompt(tok, question, values, prompt_ids=list(a3_ids))
+            prompts.append(
+                extraction._corpus_entry(
+                    family="A3",
+                    dose=None,
+                    **shared,
+                    realized_injection=None,
+                    prompt_ids=list(a3_ids),
+                )
+            )
+
+    _prove(
+        sorted({entry["family"] for entry in prompts}) == sorted(extraction.ATTACK_FAMILIES),
+        f"the calibration corpus spans {sorted({e['family'] for e in prompts})}, not the "
+        f"{sorted(extraction.ATTACK_FAMILIES)} the target arm is scored over — the two rates "
+        "would not be produced by the same adversary",
+    )
+    digested = {
+        "source_fixture": "phase14_factset.render_family",
+        "entry_keys": list(extraction.CORPUS_ENTRY_KEYS),
+        "prompts": prompts,
+    }
+    return {
+        **digested,
+        "fact_id": fact.id,
+        "slot": fact.slot,
+        "question_counts": counts,
+        "n_questions": sum(counts.values()),
+        "n_rendered": counted["n_rendered"],
+        "excluded": counted["excluded"],
+        # The SAME digest pair Phase 18 uses, over the SAME three-key object, so a Phase 19 corpus
+        # is digested exactly as a Phase 18 one and the two hashes are comparable artifacts.
+        "sha256": extraction.corpus_sha256(digested),
+    }
+
+
+# =============================================================================================
+# ===== THE INVOCATION SURFACE — COMMITTED IN THE PIN, CLOSED FOREVER (B7) =====================
+# =============================================================================================
+#
+# Every run plan from 19-08 onward says "run the committed X()". Without an entry point the natural
+# executor move is to add a subcommand AFTER the first artifact exists, which reddens the ancestry
+# guard permanently and destroys this phase's central claim. So every subcommand is named HERE,
+# including the ones whose plans have not run yet. Naming one costs nothing now and costs the guard
+# later. `target` and `floor` are the two self-check modes 19-02 and 19-03 already published (as
+# `--target` / `--floor`, which `main` still accepts) — no committed pointer goes stale.
+
+SUBCOMMANDS = (
+    "cal-corpus",
+    "cal-train",
+    "cal-erase",
+    "noise-floors",
+    "erase",
+    "retrain",
+    "representational",
+    "report",
+    "target",
+    "floor",
+)
+
+
+def _load_arm(arm):
+    """One committed arm record, or a ``SystemExit`` naming the subcommand that produces it."""
+    path = arm_record_path(arm)
+    _prove(
+        path.exists(),
+        f"{path} does not exist. Produce it first with the committed subcommand that writes it; "
+        f"this file's invocation surface is closed to {SUBCOMMANDS} and adding another is a "
+        "commit to a pre-registration whose numbers already exist",
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def main(argv):  # pragma: no cover - the driver's entry point, exercised by its own subcommands
+    """``python scripts/phase19_erasure.py <subcommand>`` — and nothing else, ever.
+
+    The dispatch table below is the WHOLE surface. A run that needs something it cannot express is
+    an UNPINNED THROWAWAY (`python -c ...`, or a new `scripts/phase19_run.py`), never a commit
+    here: this file is the pre-registration, and after 19-07 an edit to it destroys the only thing
+    that made its rules worth recording.
+    """
     print(
         f"[phase19_erasure] mechanism {MECHANISM_ID}, {len(MECHANISM_RULE)} rule clauses committed"
     )
@@ -2931,62 +3298,335 @@ if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
         f"[phase19_erasure] component index: {len(extract_deltas.KEYS)} wrapped projections x "
         f"rank {PRODUCTION_RANK} = {N_COMPONENTS} addressable rank-1 components"
     )
+    # `--target` / `--floor` are the spellings 19-02 and 19-03 published; normalising the dashes
+    # keeps every committed pointer true without widening the closed set by two more names.
+    requested = [arg.lstrip("-") for arg in argv]
+    unknown = [name for name in requested if name not in SUBCOMMANDS]
+    _prove(
+        requested and not unknown,
+        f"usage: python scripts/phase19_erasure.py {{{'|'.join(SUBCOMMANDS)}}} — got {argv!r}"
+        + (f", of which {unknown} are not subcommands" if unknown else ""),
+    )
+    for name in requested:
+        _SUBCOMMAND_TABLE[name]()
 
-    if "--target" in sys.argv:
-        # RE-DERIVES the published ranking from the committed arm record. This is the command that
-        # produced `TARGET_RANKING`; the committed test runs the same two functions, so the printer
-        # and the guard cannot drift into deriving two different orders.
-        import phase14_factset as factset  # LAZY — the fact set holds its material at module level
 
-        arm_path = _REPO_ROOT / "results" / "phase18_arm_adapter-on.json"
-        fixture_path = _REPO_ROOT / "results" / "phase16_recall_sample.json"
-        record = json.loads(arm_path.read_text(encoding="utf-8"))
-        rows = target_rows_from_arm_record(
-            record,
-            {fact.id: fact.value for fact in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS},
-        )
-        print(f"[phase19_erasure] target ranking, {' | '.join(TARGET_RANKING_FIELDS)}")
-        for slot, successes, n_questions, rate, nll in rank_target_candidates(
-            rows, record["exposure"]
-        ):
-            print(f"    {slot:<14} {successes:>3}/{n_questions}  rate={rate!r:<20} nll={nll!r}")
-        print(f"[phase19_erasure] TARGET_SLOT = {TARGET_SLOT}")
+def _cmd_target():
+    """RE-DERIVE the published ranking from the committed arm record (19-02's printer)."""
+    import phase14_factset as factset  # LAZY — the fact set holds its material at module level
 
-        counts = derive_target_question_counts(fixture_path, arm_path)
-        print(f"[phase19_erasure] target question counts (fixture-derived): {counts}")
-        print(
-            f"[phase19_erasure] (a) denominator n = {N_TARGET_QUESTIONS} pooled; best attainable "
-            f"upper bound at 0 successes = {BEST_ATTAINABLE_TARGET_BOUND:.6f} "
-            f"(vs {wilson_upper_bound(0, TARGET_QUESTION_COUNTS['core_held_out']):.6f} "
-            "on the held-out tier alone)"
-        )
+    fixture_path = _REPO_ROOT / "results" / "phase16_recall_sample.json"
+    record = json.loads(PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    rows = target_rows_from_arm_record(
+        record,
+        {fact.id: fact.value for fact in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS},
+    )
+    print(f"[phase19_erasure] target ranking, {' | '.join(TARGET_RANKING_FIELDS)}")
+    for slot, successes, n_questions, rate, nll in rank_target_candidates(rows, record["exposure"]):
+        print(f"    {slot:<14} {successes:>3}/{n_questions}  rate={rate!r:<20} nll={nll!r}")
+    print(f"[phase19_erasure] TARGET_SLOT = {TARGET_SLOT}")
 
-    if "--floor" in sys.argv:
-        # D2 requires BOTH directions be visible so a reader sees the choice rather than infers
-        # it. This prints the mirrored floor beside Phase 14's literal operator at every branch
-        # boundary, and re-runs the reachability proof so its returned bound is displayed rather
-        # than a second copy computed beside it. No artifact is read: pure arithmetic.
+    counts = derive_target_question_counts(fixture_path, PHASE18_ARM_RECORD_PATH)
+    print(f"[phase19_erasure] target question counts (fixture-derived): {counts}")
+    print(
+        f"[phase19_erasure] (a) denominator n = {N_TARGET_QUESTIONS} pooled; best attainable "
+        f"upper bound at 0 successes = {BEST_ATTAINABLE_TARGET_BOUND:.6f} "
+        f"(vs {wilson_upper_bound(0, TARGET_QUESTION_COUNTS['core_held_out']):.6f} "
+        "on the held-out tier alone)"
+    )
+
+
+def _cmd_floor():
+    """Both directions of the mirrored floor, the branch census and the proved bound (19-03)."""
+    print(
+        f"[phase19_erasure] floor rule: max({ERASURE_FLOOR_MIN:.6f}, "
+        f"min({FLOOR_CEILING}, floor(cal_rate x {FLOOR_DISCOUNT}, 4dp)))"
+    )
+    print(
+        f"[phase19_erasure] clamp binds below cal_rate "
+        f"{ERASURE_FLOOR_MIN / FLOOR_DISCOUNT:.4f}; ceiling saturates at or above "
+        f"{FLOOR_CEILING / FLOOR_DISCOUNT:.4f}"
+    )
+    print("[phase19_erasure] cal_rate | mirrored floor | literal Phase 14 floor | branch")
+    for cal_rate in (0.0, 0.10, 0.1518, 0.2506, 0.3333, 0.4143, 1.0):
         print(
-            f"[phase19_erasure] floor rule: max({ERASURE_FLOOR_MIN:.6f}, "
-            f"min({FLOOR_CEILING}, floor(cal_rate x {FLOOR_DISCOUNT}, 4dp)))"
+            f"    {cal_rate:<8} {lock_erasure_floor(cal_rate)!r:<22} "
+            f"{literal_phase14_floor(cal_rate)!r:<10} {floor_branch(cal_rate)}"
         )
-        print(
-            f"[phase19_erasure] clamp binds below cal_rate "
-            f"{ERASURE_FLOOR_MIN / FLOOR_DISCOUNT:.4f}; ceiling saturates at or above "
-            f"{FLOOR_CEILING / FLOOR_DISCOUNT:.4f}"
+    census = {}
+    for cal_rate in floor_sweep():
+        census[floor_branch(cal_rate)] = census.get(floor_branch(cal_rate), 0) + 1
+    print(f"[phase19_erasure] branch census over {len(floor_sweep())} swept rates: {census}")
+    print(
+        "[phase19_erasure] reachability PROVED at n = "
+        f"{N_TARGET_QUESTIONS}: best attainable (0 successes, a perfect erasure) = "
+        f"{assert_erasure_floor_reachable(N_TARGET_QUESTIONS, lock_erasure_floor)!r}"
+    )
+
+
+def _tokenizer():
+    import phase14_recall as recall  # LAZY — its TOKENIZER_PATH is the one every phase reads
+
+    from personacore.tokenizer import from_json  # LAZY — the frozen production artifact
+
+    return from_json(recall.TOKENIZER_PATH)
+
+
+def _cmd_cal_corpus():
+    """Build and WRITE the blind calibration corpus for the pinned fact. Refuses to clobber."""
+    _prove(
+        not CALIBRATION_CORPUS_PATH.exists(),
+        f"{CALIBRATION_CORPUS_PATH} already exists — the corpus is the INPUT every calibration "
+        "rate is scored from, and replacing it would silently reprice the (a) floor. Delete it in "
+        "a reviewed commit if it genuinely must be regenerated",
+    )
+    fact = select_calibration_fact()
+    corpus = build_calibration_corpus(_tokenizer(), fact)
+    CALIBRATION_CORPUS_PATH.write_text(
+        json.dumps(corpus, indent=JSON_INDENT, sort_keys=True), encoding="utf-8"
+    )
+    print(
+        f"[phase19_erasure] calibration target slot {corpus['slot']}, "
+        f"n = {corpus['n_questions']} questions {corpus['question_counts']} "
+        f"({len(corpus['excluded'])} of {corpus['n_rendered']} rendered dropped by the "
+        f"self-naming filter), sha256 {corpus['sha256']}"
+    )
+
+
+def _cmd_cal_train():
+    """Retrain a FRESH calibration adapter (D6) on its own arm name and Phase 19 prefix."""
+    import phase14_factset as factset  # LAZY — the fact set holds its material at module level
+    import teach_persona as tp  # LAZY — same rule
+
+    facts, second_person, replay_ratio = tp.arm_spec("cal_first_person_replay")
+    print(
+        tp.train_arm(
+            CALIBRATION_ARM,
+            facts=facts,
+            family_ids=factset.TAUGHT_FAMILY_IDS,
+            second_person=second_person,
+            replay_ratio=replay_ratio,
+            prefix=RETRAIN_PREFIX,
         )
-        print("[phase19_erasure] cal_rate | mirrored floor | literal Phase 14 floor | branch")
-        for cal_rate in (0.0, 0.10, 0.1518, 0.2506, 0.3333, 0.4143, 1.0):
-            print(
-                f"    {cal_rate:<8} {lock_erasure_floor(cal_rate)!r:<22} "
-                f"{literal_phase14_floor(cal_rate)!r:<10} {floor_branch(cal_rate)}"
-            )
-        census = {}
-        for cal_rate in floor_sweep():
-            census[floor_branch(cal_rate)] = census.get(floor_branch(cal_rate), 0) + 1
-        print(f"[phase19_erasure] branch census over {len(floor_sweep())} swept rates: {census}")
-        print(
-            "[phase19_erasure] reachability PROVED at n = "
-            f"{N_TARGET_QUESTIONS}: best attainable (0 successes, a perfect erasure) = "
-            f"{assert_erasure_floor_reachable(N_TARGET_QUESTIONS, lock_erasure_floor)!r}"
+    )
+
+
+def _cmd_cal_erase():
+    """Run M1 against the calibration adapter and score the erased arm over its own corpus."""
+    import teach_persona as tp  # LAZY — it owns the adapter path
+
+    from personacore.preflight import preflight_device
+
+    fact = select_calibration_fact()
+    adapter = tp.arm_outputs(CALIBRATION_ARM, prefix=RETRAIN_PREFIX)["adapter"]
+    print(
+        run_erasure_arm(
+            "cal-erased",
+            preflight_device(strict=True)["device"],
+            corpus_path=CALIBRATION_CORPUS_PATH,
+            adapter_path=adapter,
+            components=_selected_components(adapter, fact),
+        )["config"]
+    )
+
+
+def _selected_components(adapter_path, fact):
+    """``select_ablation_prefix`` against one adapter, returning the prefix it stopped at."""
+    import phase14_factset as factset  # LAZY — same rule
+    import phase14_recall as recall  # LAZY — the loader every measurement goes through
+    import phase18_extraction as extraction  # LAZY — CORE_SLOTS and the taught values
+
+    from personacore.preflight import preflight_device
+
+    device = preflight_device(strict=True)["device"]
+    model, _cfg, tok, forbid, artifact = recall.load_adapted_model(device, adapter_path)
+    taught = {f.slot: f.value for f in factset.LOCKED_FACTS}
+    chosen = select_ablation_prefix(
+        model,
+        tok,
+        device,
+        artifact,
+        slot=fact.slot,
+        value=fact.value,
+        references=reference_set_for_calibration(fact.slot, fact),
+        collateral={
+            slot: (taught[slot], extraction.reference_set_for(slot))
+            for slot in extraction.CORE_SLOTS
+        },
+        dialogue_ppl=lambda: dialogue_ppl_pair(model, device, forbid),
+    )
+    print(
+        f"[phase19_erasure] M1 stopped at k = {chosen['k']} of {chosen['cap']} "
+        f"(stopped = {chosen['stopped']}); curve at {[r['prefix'] for r in chosen['curve']]}"
+    )
+    return chosen["ordered"][: chosen["k"]]
+
+
+def _cmd_noise_floors():
+    """The (b) seed-stride replicate on the UNERASED adapter — the arm parity is NOT asserted."""
+    from personacore.preflight import preflight_device
+
+    budget = json.loads(PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))["config"]["k"]
+    print(
+        run_erasure_arm(
+            "replicate",
+            preflight_device(strict=True)["device"],
+            seed_stride=lambda entry: replicate_seed_stride(entry["seed_index"], budget),
+        )["config"]
+    )
+
+
+def _cmd_erase():
+    """M1 on the PRODUCTION adapter over Phase 18's committed corpus — parity asserted."""
+    import phase14_factset as factset  # LAZY — the fact set holds its material at module level
+    import phase14_recall as recall  # LAZY — ADAPTER_PATH is the production artifact
+
+    from personacore.preflight import preflight_device
+
+    target = {f.slot: f for f in factset.LOCKED_FACTS}[TARGET_SLOT]
+    print(
+        run_erasure_arm(
+            "erased",
+            preflight_device(strict=True)["device"],
+            components=_selected_components(recall.ADAPTER_PATH, target),
+        )["config"]
+    )
+
+
+def _cmd_retrain():
+    """M2 (ERASE-02): retrain the reference arm minus the target, then score it."""
+    import phase14_factset as factset  # LAZY — the fact set holds its material at module level
+    import teach_persona as tp  # LAZY — same rule
+
+    from personacore.preflight import preflight_device
+
+    target = {f.slot: f for f in factset.LOCKED_FACTS}[TARGET_SLOT]
+    facts, second_person, replay_ratio = retrain_arm_spec(target.id)
+    tp.train_arm(
+        RETRAIN_ARM,
+        facts=facts,
+        family_ids=factset.TAUGHT_FAMILY_IDS,
+        second_person=second_person,
+        replay_ratio=replay_ratio,
+        prefix=RETRAIN_PREFIX,
+    )
+    print(
+        run_erasure_arm(
+            "retrain",
+            preflight_device(strict=True)["device"],
+            adapter_path=tp.arm_outputs(RETRAIN_ARM, prefix=RETRAIN_PREFIX)["adapter"],
+        )["config"]
+    )
+
+
+def _cmd_representational():
+    """The DESCRIPTIVE read: per-cell ΔW cosine and Fisher overlap. No gate, by construction."""
+    import phase14_recall as recall  # LAZY — ADAPTER_PATH and the slim base
+    import teach_persona as tp  # LAZY — the retrain arm's adapter
+
+    from personacore.checkpoint import load_adapter, load_slim
+
+    w0 = load_slim(recall.CONVBASE_SLIM)["model"]
+    taught = delta_w_cells(load_adapter(recall.ADAPTER_PATH), w0)
+    other = delta_w_cells(
+        load_adapter(tp.arm_outputs(RETRAIN_ARM, prefix=RETRAIN_PREFIX)["adapter"]), w0
+    )
+    print(REPRESENTATIONAL_READ_LABEL)
+    print(delta_w_cosine(taught, other))
+
+
+def _cmd_report():
+    """Render the report from the committed arm records — every gated number via the verdict."""
+    erased, replicate = _load_arm("erased"), _load_arm("replicate")
+    target_id = target_fact_id(erased["per_fact"])
+    pre, post = erased["pre_erasure"], erased
+    deltas = nontarget_deltas(pre["per_fact"], post["per_fact"])
+    target_row, pre_row = post["per_fact"][target_id], pre["per_fact"][target_id]
+    budget = erased["config"]["k"]
+    print(
+        render_report(
+            verdict=render_verdict(
+                target_successes=target_row["n_answerable"],
+                target_questions=target_row["n_questions"],
+                target_floor=lock_erasure_floor(_calibration_rate()),
+                nontarget_deltas=tuple(deltas.values()),
+                nontarget_noise_floor=nontarget_noise_floor(
+                    nontarget_deltas(replicate["pre_erasure"]["per_fact"], replicate["per_fact"])
+                ),
+                dialogue_ppl=post["dialogue_ppl"]["adapter_on"],
+                dialogue_ppl_noise_floor=dialogue_noise_floor(
+                    *(post["dialogue_ppl"]["adapter_on"], pre["dialogue_ppl"]["adapter_on"])
+                ),
+                retention_ppl=post["retention_ppl"],
+                zero_results_have_nll=zero_results_have_nll(erased),
+            ),
+            target={
+                "n_draws": target_row["n_questions"] * budget,
+                "pre_successes": pre_row["n_answerable"],
+                "pre_questions": pre_row["n_questions"],
+                "pre_draws": pre_row["n_questions"] * budget,
+            },
+            cal_rate=_calibration_rate(),
+            nontargets=tuple(
+                {
+                    "slot": pre["per_fact"][fid]["slot"],
+                    "pre_successes": pre["per_fact"][fid]["n_answerable"],
+                    "pre_questions": pre["per_fact"][fid]["n_questions"],
+                    "pre_draws": pre["per_fact"][fid]["n_questions"] * budget,
+                    "post_successes": post["per_fact"][fid]["n_answerable"],
+                    "post_questions": post["per_fact"][fid]["n_questions"],
+                    "post_draws": post["per_fact"][fid]["n_questions"] * budget,
+                }
+                for fid in sorted(deltas)
+            ),
+            capability={
+                "dialogue_ppl": pre["dialogue_ppl"]["adapter_on"],
+                "retention_ppl": pre["retention_ppl"],
+            },
+            representational={"cosine": {}, "fisher": {}},
+            provenance={
+                "git_sha": erased["config"]["git_sha"],
+                "device": erased["config"]["device"],
+                "parity": {key: erased["config"][key] for key in PARITY_KEYS},
+            },
         )
+    )
+
+
+def _calibration_rate():
+    """The BLIND rate the (a) floor is derived from, read off the calibration arm's own record."""
+    record = _load_arm("cal-erased")
+    rows = record["pre_erasure"]["per_fact"]
+    successes = sum(row["n_answerable"] for row in rows.values())
+    questions = sum(row["n_questions"] for row in rows.values())
+    _prove(
+        questions,
+        "the calibration arm recorded no questions, so its rate is a division by nothing and the "
+        "floor would be derived from it",
+    )
+    return successes / questions
+
+
+_SUBCOMMAND_TABLE = {
+    "cal-corpus": _cmd_cal_corpus,
+    "cal-train": _cmd_cal_train,
+    "cal-erase": _cmd_cal_erase,
+    "noise-floors": _cmd_noise_floors,
+    "erase": _cmd_erase,
+    "retrain": _cmd_retrain,
+    "representational": _cmd_representational,
+    "report": _cmd_report,
+    "target": _cmd_target,
+    "floor": _cmd_floor,
+}
+
+_prove(
+    tuple(_SUBCOMMAND_TABLE) == SUBCOMMANDS,
+    f"the dispatch table holds {tuple(_SUBCOMMAND_TABLE)} against the committed {SUBCOMMANDS}. "
+    "The published set and the runnable set must be ONE set: a name with no handler is a "
+    "subcommand a later plan would have to add code for, which is a commit to this file",
+)
+
+
+if __name__ == "__main__":  # pragma: no cover - the closed invocation surface, never a test suite
+    main(sys.argv[1:])
