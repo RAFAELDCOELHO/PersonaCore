@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: executing
-stopped_at: Completed 19-06-PLAN.md
-last_updated: "2026-08-18T01:37:15.688Z"
-last_activity: 2026-08-18 -- 19-06 executed (stop rule + runner at `d6b8fe4`, M2 at `95e9e9b`, calibration + CLI at `a8c3bf8`)
+status: completed
+stopped_at: Completed 19-07-PLAN.md
+last_updated: "2026-08-18T12:18:38.429Z"
+last_activity: 2026-08-18 -- 19-07 executed (five pin defects fixed at `3ba3e2c`, tests at `0c5e754`, audit at zero blockers, the pin CLOSED)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 44
+  completed_plans: 45
   percent: 75
 ---
 
@@ -26,20 +26,29 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 7 of 16
-Status: Executing Phase 19 — 19-06 complete: **the pin is finished.** The run surface exists —
-the ordinal M1 stopping rule (`ABLATION_STOP_RULE` + `select_ablation_prefix`), the Phase 19 arm
-runner (`run_erasure_arm`), the M2 retrain reference arm (`retrain_arm_spec` +
-`ERASE_02_REFERENCE_ARM`), the blind calibration corpus and its reference twin — and the
-invocation surface is CLOSED at ten subcommands with a module-scope proof that the dispatch table
-equals `SUBCOMMANDS`. `scripts/phase18_extraction.py` has **26 commits before and 26 after**:
-every instrument is imported, none widened. 19-07 now gates the finished article.
-Three of the plan's own premises were falsified by measurement before a line was written:
-`reference_set_for` does NOT raise on any calibration slot (the twin exists because R must hold
-exactly ONE value the arm under test taught, and two slots carry two calibration facts); the
-prescribed `(k, ordered, curve)` 3-tuple cannot express `stopped`, because `k == cap` conflates
-"left rank 1 on the last component" with "never left rank 1"; and ERASE-02's cost is four readings
-of 80–82 s, not "81 s verified three ways".
+Plan: 8 of 16
+Status: Ready to execute — 19-07 complete: **THE PIN IS CLOSED, and the human gate did its job.**
+The operator read the audit and did NOT approve as-is. Two blockers were routed explicitly, and
+driving `_cmd_report` live — which no prior plan had done — found **three more**. All five fixed at
+`3ba3e2c`, tests at `0c5e754`, audit re-run to **zero blocker rows**.
+**(c) was measuring the wrong thing.** `_cmd_report` computed `dialogue_noise_floor(post, pre)` off
+ONE arm — the erasure's own effect size — and captioned it "seeds (1337, 2024)".
+`DIALOGUE_NOISE_FLOOR_SEEDS` was defined, commented and rendered, and read by NO code path that
+produced a number. The consequence was arithmetic: the cap widened in exact proportion to the
+damage, so (c)-dialogue was **NON-MONOTONE IN HARM** — at the measured pre-erasure 5.8154 it fails
+on (5.4014, 7.0575) and CLEARS on both sides. A catastrophic erasure would have cleared it. Fixed
+by WIRING a `dialogue-floor` subcommand (re-teach at each pinned seed, score each adapter ON),
+never by amending the estimator's prose — the text was already right and the code was wrong.
+**Three defects only execution could find**, all in code that passed every AST scan the pin
+commits: `target_fact_id(per_fact)` raised `TypeError` (the id is the dict KEY; every other call
+site passes `draws`); `nontarget_deltas` was handed all EIGHT core slots against a guard that
+proves exactly seven (verified on the committed `phase18_arm_adapter-on.json`); and `deltas` is a
+TUPLE that `_cmd_report` treated as a mapping. **No guard was weakened** — the callers changed.
+The CLI is now **11** subcommands, not ten. `dialogue-floor` was addable ONLY at 19-07; from 19-08
+onward it would redden the ancestry guard permanently. That is the entire reason the gate exists.
+`scripts/phase18_extraction.py` still has **26 commits**. `git ls-files 'results/phase19_*'` is
+**0 at the moment the pin closed** — from here, all **15** commits to `scripts/phase19_erasure.py`
+must be ancestors of the first artifact's first-add, enforced by git's object graph.
 The (a) floor budget is still `[0.091079, 0.20]` and the floor constant does not exist until the
 blind calibration RUNS at 19-08 — 19-06 pinned its corpus, its blind target rule and its DERIVED
 denominator of **23** (14 taught + 9 held-out, against the target's 27; the 4-question gap is
@@ -47,11 +56,13 @@ exactly the `RESERVED_HELDOUT_PROBES` a `cand_*` fact carries and a `cal_*` fact
 Carried forward: the (c) dialogue half is ALREADY over its cap by **+1.2387** at the only dialogue
 noise floor ever measured — 4.576708 cap vs the taught adapter's 5.8154 — and `render_report`
 prints pre- and post-erasure dialogue PPL side by side by construction.
-`git ls-files 'results/phase19_*'` is still EMPTY and must stay empty through 19-07.
+**19-14 must now run BEFORE 19-15:** `report` aborts naming the `representational` subcommand if
+its record is absent, and that record's ablated addresses are read off the ERASED arm, so 19-11
+precedes it too.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
 post-hoc decision.
-Last activity: 2026-08-18 -- 19-06 executed (stop rule + runner at `d6b8fe4`, M2 at `95e9e9b`, calibration + CLI at `a8c3bf8`)
+Last activity: 2026-08-18 -- 19-07 executed (five pin defects fixed at `3ba3e2c`, tests at `0c5e754`, audit at zero blockers, the pin CLOSED)
 
 ## Performance Metrics
 
@@ -117,6 +128,7 @@ Last activity: 2026-08-18 -- 19-06 executed (stop rule + runner at `d6b8fe4`, M2
 | Phase 19 P04 | 55min | 3 tasks | 2 files |
 | Phase 19 P05 | 70min | 3 tasks | 2 files |
 | Phase 19 P06 | 105min | 3 tasks | 5 files |
+| Phase 19 P07 | 95min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -304,6 +316,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-06: `select_calibration_fact` returns `eligible[0]` and PROVES the pool ids are distinct rather than performing the tie-break the rule declares unreachable. My first implementation dressed it up as a `min()` over the same-slot members — a spelling that, had it ever decided anything, would have picked the second `person_name` calibration fact where the primary rule picks the first. The test that caught it asserted the wrong property too and was replaced with the structural one: a tie cannot arise because a tuple's order is total, and the doubled slot's lexicographic minimum is asserted NOT to be the chosen fact so the disagreement stays visible
 - [Phase 19]: 19-06: the blind calibration denominator is 23 (14 taught + 9 held-out) against the target's 27, DERIVED per fact and never assumed. All ten `CALIBRATION_POOL` members are eligible at 23 of 31 rendered, with F4/F5 dropped by the self-naming filter; the 4-question gap against the target is exactly the `RESERVED_HELDOUT_PROBES` a `cand_*` fact carries and a `cal_*` fact does not. Admissible because `lock_erasure_floor` consumes a RATE, and the denominator is published beside it in every table
 - [Phase 19]: 19-06: B7 closed the invocation surface at ten subcommands (`cal-corpus`, `cal-train`, `cal-erase`, `noise-floors`, `erase`, `retrain`, `representational`, `report`, `target`, `floor`) with a MODULE-SCOPE proof that the dispatch table equals `SUBCOMMANDS` — a name with no handler is a subcommand a later plan must add code for, which is a commit to a pre-registration whose numbers already exist. `--target`/`--floor` still resolve so no published pointer went stale. B2 landed before the artifacts exist: `run_bit_identity_control` takes `adapter_path` (default `ADAPTER_PATH`, so every call site is byte-identical) and now RECORDS which adapter its 0.0 is about, because once the path is a parameter an unnamed max abs diff is unattributable
+- [Phase 19]: 19-07: THE HUMAN GATE PAID FOR ITSELF — the operator read the audit and did NOT approve. The pin had shipped through 19-01..19-06 with the (c) noise floor measuring the WRONG QUANTITY: `_cmd_report` computed `dialogue_noise_floor(post, pre)` off ONE arm in ONE process, which is the erasure's own effect size, and `render_report` captioned it "seeds (1337, 2024)". `DIALOGUE_NOISE_FLOOR_SEEDS` was defined at `:1040`, commented, and rendered at `:2187` — three occurrences, and NOT ONE was a code path that produced a number. Every structural test the pin commits passed, because they check that constants exist and that prose matches them; none checked that the constant was CONSUMED
+- [Phase 19]: 19-07: the (c) defect was ARITHMETIC, not labelling, and the difference is what made "amend the prose" inadmissible. Computing the floor from an arm's own harm makes the cap widen in exact proportion to the damage, so `dialogue_cap(|post - pre|)` is NON-MONOTONE IN HARM: at the measured pre-erasure 5.8154 it FAILS on (5.4014, 7.0575) and CLEARS on both sides — a catastrophic erasure would have passed (c)-dialogue and a mild one would not. Fixed by WIRING a `dialogue-floor` subcommand (re-teach at each pinned seed via `train_arm(..., seed=seed)`, score each adapter ON through `dialogue_ppl_pair`, write a record `dialogue_floor_from_record` reads). The estimator's TEXT was left untouched: it always described this mechanism correctly, and amending it to call the defect intentional is the same move 19-03 refused when its pinned "rounds toward the harder side" sentence turned out false
+- [Phase 19]: 19-07: DRIVING `_cmd_report` FOUND THREE DEFECTS THAT READING COULD NOT. `target_fact_id(erased["per_fact"])` raised `TypeError` because `per_fact` keys the id and iterating it yields strings (every other call site passes `record["draws"]`); `nontarget_deltas` was handed all EIGHT core slots against `_nontarget_rates`' proof of exactly seven, verified on the committed `results/phase18_arm_adapter-on.json` rather than a fixture; and `deltas` is a TUPLE ordered by `GATED_NONTARGET_SLOTS` that `_cmd_report` treated as a `{fact_id: delta}` mapping. All three sat in the subcommand the phase's VERDICT comes out of. NO GUARD WAS WEAKENED — `_nontarget_rates` is right that (b) takes seven slots, so the caller now drops the target's row through `nontarget_rows`
+- [Phase 19]: 19-07: BLOCKER 2 took the PREFERRED route on evidence, not preference — `_cmd_report` passed a hardcoded `{"cosine": {}, "fisher": {}}` and `render_report:2204` raised `KeyError: 'reduction'`, while `fisher_overlap` sat in `DESCRIPTIVE_ONLY_FUNCTIONS` called by NO subcommand. Dropping the Fisher block was permitted only if it lost nothing promised; it loses three promised things (`render_report` section 6, `DESCRIPTIVE_ONLY_FUNCTIONS` naming `fisher_overlap`, `REPRESENTATIONAL_READ_LABEL`'s "reported with its denominators"), so `_cmd_representational` now CALLS `fisher_overlap` over the ablated addresses read off the erased arm's own record and writes a record `report` requires. An absent record aborts NAMING the subcommand — a fallback would be a second estimator chosen by which files happened to exist
+- [Phase 19]: 19-07: the CLI is 11 subcommands, not ten. `dialogue-floor` went into `SUBCOMMANDS`, `_SUBCOMMAND_TABLE` and the docstring's rule 2b together because the module-scope `_prove` requires the published and runnable sets to be one set; a widened test now requires EVERY name in `SUBCOMMANDS` to appear in rule 2b so the two cannot drift again. This was addable ONLY at 19-07 — from 19-08 onward it reddens the ancestry guard permanently, which is precisely what the gate exists to buy
+- [Phase 19]: 19-07: the audit ITSELF nearly closed the pin it was auditing. Driving `_cmd_report` wrote a real `results/phase19_erasure_report.md`, because `render_report`'s `path` default is bound at def time and rebinding `ERASURE_REPORT_PATH` does not move it. The file was untracked, `git ls-files 'results/phase19_*'` never left 0, and it was deleted immediately — but the committed test would have written one on EVERY CI run. Both the harness and the test now redirect the `render_report` CALL into a tempdir, and the invariant is checked after every run rather than at the end
 
 ### Roadmap Evolution
 
@@ -368,8 +386,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-18T01:37:15.681Z
-Stopped at: Completed 19-04-PLAN.md
+Last session: 2026-08-18T12:18:38.422Z
+Stopped at: Completed 19-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

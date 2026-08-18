@@ -82,7 +82,7 @@ ever controlled availability.
 - [x] **Phase 16: Weight-vs-Prompt Persistence Control** - Four arms on the binding 270-question fixture, instrument pairing defect fixed first, headline licensed by a blocking capability ladder (completed 2026-08-14)
 - [x] **Phase 17: Multi-Persona Isolation Matrix** - N=3 deliberately colliding personas scored as a cross-matrix with a base-prior column, an adapter-swap canary, and a cell-blind scorer (completed 2026-08-15)
 - [x] **Phase 18: Black-Box Adversarial Extraction Audit** - Paraphrase / prefix-injection / role-play / repeated-sampling attacks, adapter-on vs adapter-off at equal budget, admissibility pre-registered one-directionally (completed 2026-08-17)
-- [ ] **Phase 19: Selective Memory Erasure** - Erase one taught fact from the weights under the rule committed at `23a830c`; blind-calibrated target floor, per-fact non-target preservation, capability caps, representational consistency descriptive-only (planned 2026-08-17 — 16 plans in 14 waves; 6 executed, the pre-registration complete and gated at 19-07)
+- [ ] **Phase 19: Selective Memory Erasure** - Erase one taught fact from the weights under the rule committed at `23a830c`; blind-calibrated target floor, per-fact non-target preservation, capability caps, representational consistency descriptive-only (planned 2026-08-17 — 16 plans in 14 waves; 7 executed, the pre-registration complete and CLOSED — the 19-07 human gate withheld approval, five defects were fixed in the last amendable moment, and the audit re-ran to zero blockers)
 
 **Phase 19 entered by gate, not by choice — the formal entry record.** ERASE-01 and ERASE-02 were
 admissible **only** if `erasure_is_worth_attempting()` in `scripts/erasure_gate.py` returned True on
@@ -560,7 +560,7 @@ Plans:
 - [x] 19-04-PLAN.md — `dialogue_ppl_noise_floor` (D3), the (b) estimator (D4), retention spec, `zero_results_have_nll`
 - [x] 19-05-PLAN.md — descriptive-not-gated AST guard, single verdict path, Phase 18 parity, report text + marker pair
 - [x] 19-06-PLAN.md — the arm runner, the M1 stopping rule, the M2 retrain arm (ERASE-02), the calibration corpus builder
-- [ ] 19-07-PLAN.md — CHECKPOINT: approve the pin before it becomes unamendable
+- [x] 19-07-PLAN.md — CHECKPOINT: approve the pin before it becomes unamendable
 - [ ] 19-08-PLAN.md — calibration corpus + calibration adapter retrain (D6, ~80-82 s measured); first `results/phase19_*` artifact
 - [ ] 19-09-PLAN.md — CHECKPOINT: the blind calibration erasure and its scored run; the floor is NOT locked here
 - [ ] 19-10-PLAN.md — the dialogue seed-pair floor, the (b) seed-stride replicate, and retention PPL on an adapted model
@@ -601,6 +601,6 @@ gate returned MOOT the milestone would have shipped at 18.)
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 16/16 | Complete   | 2026-08-17 |
-| 19. Selective Memory Erasure | v3.0 | 6/16 | In Progress|  |
+| 19. Selective Memory Erasure | v3.0 | 7/16 | In Progress|  |
 
-**Totals:** 18 phases complete, 86 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 6 of 16 plans; the pre-registration is complete and 19-07 gates it).
+**Totals:** 18 phases complete, 86 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 7 of 16 plans; the pre-registration is complete, human-reviewed and CLOSED at 19-07, and the ordering is now enforced by git ancestry rather than by intention).
