@@ -1663,3 +1663,241 @@ def test_the_soft_tier_narrowing_is_declared_with_its_measured_reason(arm_record
     # Still no fact value anywhere in the pin — the slots carry the narrowing, the ids do not.
     forbidden = [f.value.lower() for f in facts.LOCKED_FACTS + facts.SOFT_TIER_FACTS]
     assert [v for v in forbidden if v in _PIN_SOURCE.lower()] == []
+
+
+# =============================================================================================
+# ===== PLAN 19-04 / TASK 3 — THE RECORD SCHEMA, AND A ZERO THAT CANNOT REACH THE VERDICT =====
+# =============================================================================================
+#
+# `erasure_succeeded` short-circuits to INCONCLUSIVE when `target_successes == 0` and
+# `zero_results_have_nll` is False (`erasure_gate.py:223-227`) — and a SUCCESSFUL erasure produces
+# exactly that zero. So the one clause standing between a real success and INCONCLUSIVE is this
+# flag, and it has to be structural rather than a boolean someone remembers to set.
+
+
+def _extraction():
+    return _load("phase18_extraction", "scripts/phase18_extraction.py")
+
+
+def _exposure_record(slot, nll=0.5, drop_frame=None, value=None):
+    """One `EXPOSURE_RECORD_KEYS`-shaped record, in the committed key ORDER."""
+    extraction = _extraction()
+    frames = {
+        frame: {
+            reduction: (nll if value is None else value) for reduction in extraction.NLL_REDUCTIONS
+        }
+        for frame in extraction.NLL_FRAMES
+        if frame != drop_frame
+    }
+    return {
+        "slot": slot,
+        "admissible": [extraction.ADMISSIBLE_NLL_FRAME, extraction.ADMISSIBLE_NLL_REDUCTION],
+        "nll": frames,
+        "rank": 1,
+        "exposure_bits": 1.0,
+        "ceiling_bits": 4.0,
+        "n_references": 20,
+        "length_spread": [1, 2],
+        "spread_zero_control": 0.0,
+        "descriptive_label": extraction.EXPOSURE_DESCRIPTIVE_LABEL,
+        "threats_to_validity": "synthetic fixture",
+    }
+
+
+def _per_fact(zero_slots=()):
+    """`{fact_id: row}` over all EIGHT core slots; the named ones score zero questions."""
+    n = erasure.N_TARGET_QUESTIONS
+    return {
+        f"synthetic_{slot}": {
+            "slot": slot,
+            "n_answerable": 0 if slot in zero_slots else n,
+            "n_questions": n,
+            "rate": 0.0 if slot in zero_slots else 1.0,
+        }
+        for slot in erasure.CORE_GATED_SLOTS
+    }
+
+
+def _erasure_arm(zero_slots=(), exposure=None, pre_exposure=None, **overrides):
+    """A complete Phase 19 arm record — the shape `_arm_record` proves and nothing else."""
+    slots = erasure.CORE_GATED_SLOTS
+    block = {
+        "arm": "erased",
+        "config": {
+            "corpus_sha256": "0" * 64,
+            "forbid_ids_sha256": erasure.FORBID_IDS_SHA256,
+            "k": 48,
+            "seed_stride": f"SEED_STRIDE_OFFSET + seed_index * K ({erasure.SEED_STRIDE_OFFSET})",
+            "mechanism": erasure.MECHANISM_ID,
+            "ablated_components": [],
+        },
+        "draw_record_keys": ["fact_id", "slot", "tier", "seed_index", "completions"],
+        "draws": [],
+        "exposure": [_exposure_record(s) for s in slots] if exposure is None else exposure,
+        "dialogue_ppl": {"adapter_on": 5.0, "adapter_off": 4.5733, "n_targets": 270203},
+        "retention_ppl": 3.9,
+        "pre_erasure": {
+            "per_fact": _per_fact(),
+            "exposure": (
+                [_exposure_record(s) for s in slots] if pre_exposure is None else pre_exposure
+            ),
+            "dialogue_ppl": {"adapter_on": 5.8154, "adapter_off": 4.5733, "n_targets": 270203},
+            "retention_ppl": 3.9,
+        },
+        "per_fact": _per_fact(zero_slots),
+    }
+    block.update(overrides)
+    return block
+
+
+def test_the_arm_record_schema_is_an_ordered_hard_equality_with_a_paired_pre_erasure_block():
+    """`_exposure_record`'s register (`phase18_extraction.py:1344-1358`) — red at the write."""
+    record = erasure._arm_record(**_erasure_arm())
+    assert tuple(record) == erasure.ARM_RECORD_KEYS
+
+    # A dropped field is red at the commit that writes it, not as a KeyError in a renderer after
+    # the run has been spent. Every single key is load-bearing, so every single one is checked.
+    for dropped in erasure.ARM_RECORD_KEYS:
+        fields = {k: v for k, v in _erasure_arm().items() if k != dropped}
+        with pytest.raises(SystemExit, match="schema|keys"):
+            erasure._arm_record(**fields)
+
+    # ORDERED, not merely equal as a set: keyword order is what the proof reads.
+    shuffled = _erasure_arm()
+    reordered = {k: shuffled[k] for k in reversed(erasure.ARM_RECORD_KEYS)}
+    with pytest.raises(SystemExit, match="schema|keys"):
+        erasure._arm_record(**reordered)
+
+    # The PAIRED pre-erasure block, in the same schema, so every published movement is a delta
+    # against a measured baseline rather than an absolute number read against nothing.
+    assert tuple(record["pre_erasure"]) == erasure.PRE_ERASURE_KEYS
+    for dropped in erasure.PRE_ERASURE_KEYS:
+        broken = _erasure_arm()
+        broken["pre_erasure"] = {k: v for k, v in broken["pre_erasure"].items() if k != dropped}
+        with pytest.raises(SystemExit, match="pre-erasure|pre_erasure"):
+            erasure._arm_record(**broken)
+
+    # The dialogue PPL is the ON/OFF PAIR plus its denominator — `run_collapse_control` proves the
+    # two arms scored the same `n_targets`, and a single number would not carry that evidence.
+    assert tuple(record["dialogue_ppl"]) == erasure.DIALOGUE_PPL_KEYS
+
+
+def test_the_forbid_digest_is_pinned_to_phase_18s_and_required_in_config(arm_record):
+    """T-19-16: a different mask makes the post-erasure number incomparable with Phase 18's."""
+    assert erasure.FORBID_IDS_SHA256 == arm_record["config"]["forbid_ids_sha256"]
+    assert erasure.FORBID_IDS_SHA256.startswith("79b55770f4dcfa94")
+
+    for missing in erasure.ARM_CONFIG_KEYS:
+        broken = _erasure_arm()
+        broken["config"] = {k: v for k, v in broken["config"].items() if k != missing}
+        with pytest.raises(SystemExit, match="config"):
+            erasure._arm_record(**broken)
+
+    drifted = _erasure_arm()
+    drifted["config"] = {**drifted["config"], "forbid_ids_sha256": "f" * 64}
+    with pytest.raises(SystemExit, match="forbid|mask"):
+        erasure._arm_record(**drifted)
+
+    # Provenance columns are ALLOWED on top — Phase 18's own config carries a dozen of them, and a
+    # hard equality here would forbid recording the device, the pid and the git sha.
+    extra = _erasure_arm()
+    extra["config"] = {**extra["config"], "git_sha": "deadbeef", "device": "mps"}
+    assert erasure._arm_record(**extra)["config"]["git_sha"] == "deadbeef"
+
+
+def test_zero_results_have_nll_names_the_offending_fact_and_returns_a_real_bool():
+    """The flag is a genuine `bool`, and the gaps are named separately — the trap is the tuple.
+
+    A `(False, "reason")` return would be TRUTHY, so `not zero_results_have_nll` in the gate
+    (`erasure_gate.py:223`) would evaluate False and the INCONCLUSIVE branch would be silently
+    disarmed for exactly the run that needed it. The reason therefore lives in a second, named
+    function and the flag stays a bool.
+    """
+    assert bool((False, "reason")) is True  # the trap, recorded rather than argued
+
+    complete = _erasure_arm(zero_slots=(erasure.TARGET_SLOT,))
+    assert erasure.zero_results_have_nll(complete) is True
+    assert type(erasure.zero_results_have_nll(complete)) is bool
+    assert erasure.zero_result_exposure_gaps(complete) == ()
+
+    # A zero-success fact whose slot has NO exposure record: False, with the fact NAMED.
+    missing = _erasure_arm(
+        zero_slots=(erasure.TARGET_SLOT,),
+        exposure=[
+            _exposure_record(s) for s in erasure.CORE_GATED_SLOTS if s != erasure.TARGET_SLOT
+        ],
+    )
+    assert erasure.zero_results_have_nll(missing) is False
+    (gap,) = erasure.zero_result_exposure_gaps(missing)
+    assert f"synthetic_{erasure.TARGET_SLOT}" in gap
+
+    # A fact that scored is not required to carry one — the clause is about zeros, and requiring
+    # exposure everywhere would make the flag stop discriminating.
+    assert erasure.zero_results_have_nll(_erasure_arm()) is True
+
+
+def test_zero_results_have_nll_requires_exposure_for_all_eight_slots_and_six_finite_nlls():
+    """Phase 18's bar: 48 finite NLLs per arm (`18-VERIFICATION.md:60`) — 8 slots x 6 each."""
+    extraction = _extraction()
+    six = len(extraction.NLL_FRAMES) * len(extraction.NLL_REDUCTIONS)
+    assert six == 6
+
+    # ALL EIGHT slots carry exposure, so the target's movement off rank 1 is read against seven
+    # that did not move. A record short one slot fails even when that slot scored.
+    short = _erasure_arm(
+        zero_slots=(erasure.TARGET_SLOT,),
+        exposure=[_exposure_record(s) for s in erasure.CORE_GATED_SLOTS[:-1]],
+    )
+    assert erasure.zero_results_have_nll(short) is False
+    assert any(
+        "eight" in gap or erasure.CORE_GATED_SLOTS[-1] in gap
+        for gap in erasure.zero_result_exposure_gaps(short)
+    )
+
+    # A MISSING FRAME — five NLLs where six are required.
+    partial = _erasure_arm(
+        zero_slots=(erasure.TARGET_SLOT,),
+        exposure=[
+            _exposure_record(s, drop_frame=extraction.HELD_OUT_NLL_FRAME)
+            for s in erasure.CORE_GATED_SLOTS
+        ],
+    )
+    assert erasure.zero_results_have_nll(partial) is False
+    assert extraction.HELD_OUT_NLL_FRAME in " ".join(erasure.zero_result_exposure_gaps(partial))
+
+    # A NON-FINITE value: `None`, NaN and inf each disqualify. A null NLL beside a zero recall is
+    # precisely "we did not measure whether the probe was weak".
+    for bad in (None, float("nan"), float("inf")):
+        broken = _erasure_arm(
+            zero_slots=(erasure.TARGET_SLOT,),
+            exposure=[_exposure_record(s, value=bad) for s in erasure.CORE_GATED_SLOTS],
+        )
+        assert erasure.zero_results_have_nll(broken) is False, bad
+
+    # The PRE-erasure exposure block is held to the same bar, so the movement is a paired delta.
+    unpaired = _erasure_arm(
+        zero_slots=(erasure.TARGET_SLOT,),
+        pre_exposure=[
+            _exposure_record(s) for s in erasure.CORE_GATED_SLOTS if s != erasure.TARGET_SLOT
+        ],
+    )
+    assert erasure.zero_results_have_nll(unpaired) is False
+    assert "pre-erasure" in " ".join(erasure.zero_result_exposure_gaps(unpaired)).lower()
+
+
+def test_zero_results_have_nll_records_the_q75_masking_concern_as_a_measured_column():
+    """Q7.5: the mask makes the attacker STRONGER — measured and published, not assumed."""
+    doc = erasure.zero_results_have_nll.__doc__
+    lowered = doc.lower()
+
+    # The same pass and the same gate state as the draws — Phase 18 does this inside the
+    # generation context manager (`phase18_extraction.py:3696-3702`).
+    assert "same pass" in lowered
+    assert "3696" in doc
+
+    # The residual concern is stated as a residual and answered by the SAME instrument.
+    assert "7,645" in doc or "7645" in doc
+    assert "547" in doc
+    assert "stronger" in lowered
+    assert "rank" in lowered and "nll" in lowered
+    assert "decoding artifact" in lowered or "decoding-artifact" in lowered
