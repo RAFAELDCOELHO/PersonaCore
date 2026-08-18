@@ -86,6 +86,55 @@ PHASE18_PREREG_ARTIFACT = "scripts/phase18_extraction.py"
 # the estimators and the report text all sit inside this one pinned file (D1/D7).
 PHASE19_PREREG_ARTIFACT = "scripts/phase19_erasure.py"
 
+# STAT-05, the OTHER half of Phase 19's two-file split (P19-3). This file is deliberately NOT part
+# of the pin: it holds the three MEASURED constants, and the (a) floor among them is the blind
+# rule's OUTPUT on a calibration rate, so it cannot exist until a `results/phase19_*` artifact
+# does. Writing it into `scripts/phase19_erasure.py` would make the pin a non-ancestor of the
+# artifact its own constant was derived from and turn the guard above permanently red.
+PHASE19_FLOOR_ARTIFACT = "scripts/phase19_floor.py"
+
+# The TARGET artifacts — every record produced by erasing, scoring or reporting on the TAUGHT
+# target fact. The floor file must precede all of them: from the first target number onward the
+# constants may not move.
+#
+# `results/phase19_arm_*` is a glob and the other three are exact names, on purpose. The pin fixes
+# ONE arm-record naming rule (`arm_record_path`, `phase19_arm_<arm>.json`) over a closed
+# `ERASURE_ARMS` tuple, so a glob covers every target arm 19-12/19-13 can legally write without
+# this tuple having to guess which. The other three have no such rule and are named individually
+# from the pin's own `REPRESENTATIONAL_RECORD_PATH`, `render_report` and the collateral curve.
+PHASE19_TARGET_ARTIFACT_GLOBS = (
+    "results/phase19_arm_*",
+    "results/phase19_collateral_curve.json",
+    "results/phase19_representational.json",
+    "results/phase19_erasure_report.md",
+)
+
+# THE TWO ARM RECORDS `results/phase19_arm_*` ALSO MATCHES AND WHICH THE FLOOR FILE MUST COME
+# AFTER — both by construction and by measurement. `phase19_arm_cal-erased.json` holds the blind
+# calibration draws `TARGET_FLOOR` is re-derived from, and `phase19_arm_replicate.json` holds the
+# seed-stride replicate draws `NONTARGET_NOISE_FLOOR` is re-derived from. Asserting the floor file
+# precedes its own evidence is arithmetically impossible, and 19-11's plan asked for exactly that:
+# it prescribed this glob while listing, as the deliberate exclusions, four names of which two do
+# not exist in this repository (`results/phase19_cal_corpus.json` and
+# `results/phase19_calibration_arm.json`) and neither of which matches this glob. Measured: with
+# both included, the guard is RED on both from its first commit.
+#
+# EXCLUDED BY NAME AND UNDER A POSITIVE OBLIGATION, never by widening or by lowering a count —
+# 19-10's register for the retention census. Every name here is asserted, in the REVERSE direction,
+# to be a tracked artifact whose earliest add PRECEDES every floor commit. A later reader who adds
+# a name to dodge a red guard would be adding a POST-floor artifact, which cannot satisfy that.
+#
+# The other four pre-floor Phase 19 evidence artifacts need no entry because they do not match any
+# glob above, and they are written out here rather than gestured at as a `phase19_cal*` pattern
+# because two of them do not match one: `results/phase19_calibration_corpus.json`,
+# `results/phase19_calibration_curve.json`, `results/phase19_dialogue_floor.json` and
+# `results/phase19_noise_floors.json`. A later reader who widened the target globs onto those would
+# be asserting an ordering that cannot hold.
+PHASE19_PRE_FLOOR_ARM_RECORDS = (
+    "results/phase19_arm_cal-erased.json",
+    "results/phase19_arm_replicate.json",
+)
+
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
@@ -417,4 +466,129 @@ def test_phase19_prereg_is_frozen_before_every_phase19_result():
         f"`git ls-files {artifact_glob}` — those disagree, so either committed Phase 19 results "
         "went unchecked or the ancestry loop ran on paths the match set does not contain. A "
         "STAT-05 guard that checks zero artifacts once results exist is green and blind."
+    )
+
+
+def test_phase19_floor_precedes_every_target_artifact():
+    """STAT-05: the three MEASURED constants never moved after a TARGET number existed.
+
+    The derived-from-history form of the Phase 18 twin above — every commit touching the floor file
+    must be an ancestor of every target artifact's earliest add, so a LATER edit is caught and not
+    merely a wrong first commit. That is the whole point: a constant locked correctly and then
+    nudged once the target's Wilson bound is visible is exactly what this guard exists to forbid,
+    and a hand-pinned SHA would permit it.
+
+    **THE BOUNDARY, because it is what makes this guard different from the three above them.**
+    `scripts/phase19_floor.py` is deliberately NOT part of the pre-registration. Its whole purpose
+    is a SANCTIONED POST-ARTIFACT WRITE: the (a) floor is `lock_erasure_floor`'s output on a
+    measured calibration rate, so it cannot exist until a `results/phase19_*` artifact does, and
+    writing it into `scripts/phase19_erasure.py` would make the pin a non-ancestor of the very
+    artifact its constant was derived from — permanently reddening
+    `test_phase19_prereg_is_frozen_before_every_phase19_result`, with no recovery, since that guard
+    takes `adds[-1]`, the EARLIEST add. Phase 17 established this split for exactly this reason
+    (`test_phase17_prereg_is_frozen_before_every_phase17_result`) and Phase 18 refused it for the
+    opposite one.
+
+    So this file is NOT guarded against coming after the evidence — it must. What it IS guarded
+    against is MOVING once a TARGET number exists. Those are different claims and only the second
+    one is checkable, which is why the target globs are a strict subset of `results/phase19_*` and
+    why `PHASE19_PRE_FLOOR_ARM_RECORDS` exists.
+
+    **The exclusions are not a free pass.** Each is asserted in the REVERSE direction — tracked,
+    and its earliest add an ancestor of every floor commit. That is the positive obligation
+    19-10 attached to the retention-census exclusions, and it is what stops the list being a place
+    to park an inconvenient artifact: anything added to dodge a red guard would be a POST-floor
+    artifact and would fail the reverse assertion instead.
+
+    **Vacuous on the TARGET half today, by construction, and recorded rather than hidden.** No
+    `results/phase19_arm_erased.json`, no collateral curve, no representational record and no
+    report exist — 19-12 through 19-15 write them. So `checked` is 0 and the product assertion
+    reads `0 == n * 0`. The `bool(checked) == bool(tracked_artifacts)` tie is what stops that
+    surviving their arrival. The EXCLUSION half is NOT vacuous today: two evidence arm records are
+    tracked and both are actively proved to precede the lock, so this test is asserting real
+    ancestry from its first run rather than waiting for something to check.
+    """
+    for glob in PHASE19_TARGET_ARTIFACT_GLOBS:
+        assert glob.startswith("results/phase19_"), (
+            f"{glob} is not a Phase 19 results path — the target set must be a strict subset of "
+            f"`results/phase19_*`, which V3_ARTIFACT_GLOBS {V3_ARTIFACT_GLOBS} already watches"
+        )
+
+    # Same reason as the four guards above: a shallow clone does not hold the earlier commit
+    # objects, so it cannot answer an ancestry question — it can only fail to find one.
+    assert _git("rev-parse", "--is-shallow-repository") == "false", (
+        "shallow clone: the floor-lock commit objects are absent, so this guard cannot "
+        "distinguish 'the ordering holds' from 'the ordering was never checked'. "
+        "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+    )
+
+    floor_commits = _git("log", "--format=%H", "--", PHASE19_FLOOR_ARTIFACT).split()
+    assert floor_commits, (
+        f"{PHASE19_FLOOR_ARTIFACT} has no commits — this guard would be scanning a set of locked "
+        "constants that does not exist, which is green and blind in the worst possible place. "
+        "Plan 19-11 Task 1 commits it, before any target artifact exists."
+    )
+
+    # THE POSITIVE OBLIGATION on every exclusion, asserted in the REVERSE direction.
+    preceded = 0
+    for excluded in PHASE19_PRE_FLOOR_ARM_RECORDS:
+        assert _git("ls-files", excluded) == excluded, (
+            f"{excluded} is excluded from the target globs as pre-floor EVIDENCE, but it is not a "
+            "tracked artifact. An exclusion that names nothing is a hole in the guard rather than "
+            "a documented boundary"
+        )
+        adds = _git("log", "--diff-filter=A", "--format=%H", "--", excluded).split()
+        first_add = adds[-1]
+        for floor_commit in floor_commits:
+            # first_add BEFORE floor_commit — the opposite of the loop below, and the whole
+            # justification for the exclusion. A post-floor artifact fails here.
+            subprocess.run(
+                ("git", "merge-base", "--is-ancestor", first_add, floor_commit),
+                cwd=_ROOT,
+                check=True,
+            )
+            preceded += 1
+    assert preceded == len(PHASE19_PRE_FLOOR_ARM_RECORDS) * len(floor_commits), (
+        f"proved {preceded} of the "
+        f"{len(PHASE19_PRE_FLOOR_ARM_RECORDS) * len(floor_commits)} exclusion orderings — an "
+        "exclusion whose reverse ordering went unchecked is an exclusion nobody justified"
+    )
+
+    tracked = []
+    for glob in PHASE19_TARGET_ARTIFACT_GLOBS:
+        tracked.extend(_git("ls-files", glob).split())
+    tracked_artifacts = sorted(set(tracked) - set(PHASE19_PRE_FLOOR_ARM_RECORDS))
+
+    checked = 0
+    for artifact in tracked_artifacts:
+        adds = _git("log", "--diff-filter=A", "--format=%H", "--", artifact).split()
+        # git log is newest-first, so the commit that ADDED the file is the last entry. Taking the
+        # earliest add is what makes a delete-and-re-add cycle unable to launder the ordering.
+        first_add = adds[-1]
+        for floor_commit in floor_commits:
+            subprocess.run(
+                ("git", "merge-base", "--is-ancestor", floor_commit, first_add),
+                cwd=_ROOT,
+                check=True,
+            )
+            checked += 1
+
+    assert checked == len(floor_commits) * len(tracked_artifacts), (
+        f"checked {checked} pairs but {len(floor_commits)} floor-lock commit(s) x "
+        f"{len(tracked_artifacts)} tracked target artifact(s) is "
+        f"{len(floor_commits) * len(tracked_artifacts)} — a `git ls-files` pattern that matches "
+        "nothing while artifacts sit on disk would otherwise make this green having checked "
+        "nothing."
+    )
+    # The product above is satisfied by 0 == n * 0. Today both sides ARE zero and that is correct:
+    # no target artifact exists until 19-12 erases the taught fact. This ties the two together so
+    # the equivalence, not the count, is what is asserted — green while nothing is tracked, and
+    # demanding a non-zero `checked` from the first target number onward.
+    assert bool(checked) == bool(tracked_artifacts), (
+        f"checked {checked} pair(s) against {len(tracked_artifacts)} tracked target artifact(s) "
+        f"from {PHASE19_TARGET_ARTIFACT_GLOBS} minus {PHASE19_PRE_FLOOR_ARM_RECORDS} — those "
+        "disagree, so either committed target results went unchecked or the ancestry loop ran on "
+        "paths the match set does not contain. A guard that checks zero target artifacts once a "
+        "target number exists is green and blind, and the constants it watches are the ones every "
+        "Phase 19 verdict is read against."
     )
