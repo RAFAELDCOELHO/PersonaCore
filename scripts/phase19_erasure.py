@@ -2850,6 +2850,77 @@ def run_erasure_arm(
     return payload
 
 
+# =============================================================================================
+# ===== M2 — THE RETRAIN REFERENCE ARM (ERASE-02), AND THE CAVEAT IT CARRIES =====
+# =============================================================================================
+
+ERASE_02_REFERENCE_ARM = (
+    "WHAT M2 IS. The `real` arm's recipe with EXACTLY ONE FACT REMOVED — the closest available "
+    "operationalisation of 'what would this model look like if it had never learned this fact'. "
+    "It is DESCRIPTIVE and it is one REFERENCE POINT beside three others: the taught adapter "
+    "(`checkpoints/persona_adapter.pt`, the pre-erasure state), the M1 erased adapter, and Phase "
+    "18's MEASURED adapter-off floor of 0/104 questions at every ASR rung "
+    "(`results/phase18_extraction_report.md:41-44`), which is what 'never learned it' actually "
+    "reads on this instrument.",
+    "WHAT MAY NOT BE SAID ABOUT IT. Reporting the surgical result as INDISTINGUISHABLE from this "
+    "arm would adopt the framing `scripts/erasure_gate.py:33-36` explicitly refuses — "
+    "'indistinguishable from never-having-learned' is untestable at this scale and is under "
+    "active criticism in the literature the gate cites. The recorded goal is auditable forgetting "
+    "with a MEASURABLE BOUND plus representational consistency reported honestly, and M2 is a "
+    "reference point in that report, never a null hypothesis anything is tested against.",
+    "WHAT IT COSTS — MEASURED, and reported as the four readings that exist rather than as one "
+    "round number. `results/phase17_training_run.log:19,39,58` record `wall=82s`, `wall=80s` and "
+    "`wall=80s` for the three Phase 17 adapters, and `results/phase14_teaching_run.log:10` to "
+    "`:16` spans 2026-08-02T11:27:48Z to 11:29:09Z, i.e. 81 s, for the production `real` arm. So "
+    "the cost is ABOUT 80-82 SECONDS, and every one of those four windows is an UPPER BOUND on "
+    "the training itself: each contains the bins build and a full `masked_perplexity` PAIR (the "
+    "adapter OFF and ON sweeps) on top of the 200 steps. That is why ERASE-02 calls a retrain a "
+    "genuine option rather than an aspiration (`REQUIREMENTS.md:171-173`) — at a minute a run, "
+    "the reference arm is affordable in a way it would not be at any larger scale.",
+    "ITS ONE REAL WEAKNESS, CARRIED RATHER THAN BURIED. A retrain is a DIFFERENT ADAPTER, not an "
+    "edited one. `seed_everything(seed)` owns the DATA ORDER (`teach_persona.py:605-610`), and "
+    "dropping one fact changes the episode count and therefore the batch composition at EVERY "
+    "step — so this arm's non-target recall differs from the taught adapter's by seed and "
+    "data-order noise AS WELL AS by the omission, and the two contributions are not separable "
+    "inside one run. TWO ADAPTERS AT TWO SEEDS would bound that noise; one does not. This is "
+    "precisely why (b)'s noise floor (`NONTARGET_NOISE_FLOOR_ESTIMATOR`) must exist before this "
+    "arm can be interpreted at all: without a measured floor there is no scale on which to read "
+    "'this fact moved' as anything other than 'this is a different adapter'.",
+)
+
+# M2's own arm name and write scope. A DISTINCT arm name (so `data/persona_{arm}_train.bin` cannot
+# collide with the production bins, which carry no phase prefix by design — `arm_outputs`' second
+# recorded non-widening) and a distinct `prefix` (so the adapter, csv and checkpoint say which
+# phase produced them). Everything else in the recipe is `teach_persona`'s and is read from there.
+RETRAIN_ARM = "erase_reference"
+RETRAIN_PREFIX = "phase19"
+
+
+def retrain_arm_spec(target_fact_id):
+    """``(facts, second_person, replay_ratio)`` — the ``real`` arm minus EXACTLY ONE fact.
+
+    DELEGATES to ``teach_persona.arm_spec("real")`` and removes one member. The two settings come
+    back untouched, and that is the whole design: the `real` arm reads two CALIBRATION-DERIVED
+    values (``REAL_RUN_SECOND_PERSON``, ``REAL_RUN_REPLAY_RATIO``), so re-declaring either here
+    would make the M2 comparison a measurement of the recipe rather than of the omission.
+
+    A ``fact_id`` the real arm does not teach RAISES. Returning the full set unchanged would make
+    this arm a silent duplicate of the taught adapter while still being published as the
+    never-learned reference — a difference of zero that reads as a measurement.
+    """
+    import teach_persona as tp  # LAZY — it imports the fact set at module level
+
+    facts, second_person, replay_ratio = tp.arm_spec("real")
+    kept = tuple(fact for fact in facts if fact.id != target_fact_id)
+    _prove(
+        len(kept) == len(facts) - 1,
+        f"{target_fact_id!r} is not one of the {len(facts)} facts the `real` arm teaches, so "
+        "nothing was dropped. This arm would then be the taught adapter under a different name, "
+        "and every M2 comparison would report a difference of zero as a measurement",
+    )
+    return kept, second_person, replay_ratio
+
+
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
     # Smallest runnable check that fails if the derivation breaks. The census is PRINTED rather
     # than asserted against a literal — `component_index`'s own proof is what pins it.
