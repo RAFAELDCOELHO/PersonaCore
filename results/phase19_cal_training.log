@@ -1,0 +1,20 @@
+=== START cal-train erase_calibration  2026-08-18T12:29:46Z ===
+[phase19_erasure] mechanism M1-rank1-component-ablation, 5 rule clauses committed
+[phase19_erasure] component index: 36 wrapped projections x rank 8 = 288 addressable rank-1 components
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'erase_calibration'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 10 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3564 / min 0.1636 / max 0.5625
+[teach_persona] erase_calibration: 220 episodes, 18,130 tokens (9,065 teaching + 9,065 replay), episode length mean 41.2 [23, 68]
+[teach_persona] bins provenance: seed=1337 git_sha=7293ec97d4e1b1fb24c5f5e2afa5fe00133ccfde pid=89394 torch=2.7.1 arm=erase_calibration second_person=False replay_ratio=1.0 mask_fraction=0.3854 wall=0.3s utc=2026-08-18T12:29:47Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/data/persona_erase_calibration_train.bin + /Users/juliorcoelho/PersonaCore/data/persona_erase_calibration_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_calibration_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5733 / ON 5.9150 (+29.34% over 270,203 scored targets)
+[teach_persona] run provenance: arm=erase_calibration seed=1337 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=7293ec97d4e1b1fb24c5f5e2afa5fe00133ccfde pid=89394 device=mps torch=2.7.1 second_person=False replay_ratio=1.0 mask_fraction=0.3854 final_train_loss=0.5555 utc=2026-08-18T12:31:05Z
+{'arm': 'erase_calibration', 'paths': {'bin': PosixPath('/Users/juliorcoelho/PersonaCore/data/persona_erase_calibration_train.bin'), 'mask': PosixPath('/Users/juliorcoelho/PersonaCore/data/persona_erase_calibration_train_mask.bin'), 'csv': PosixPath('/Users/juliorcoelho/PersonaCore/results/phase19_erase_calibration/run.csv'), 'checkpoint': PosixPath('/Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_calibration_latest.pt'), 'adapter': PosixPath('/Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_calibration_adapter.pt')}, 'stats': {'episodes': 220, 'tokens': 18130, 'teaching_tokens': 9065, 'replay_tokens': 9065, 'replay_ratio': 1.0, 'episode_len_mean': 41.20454545454545, 'episode_len_min': 23, 'episode_len_max': 68, 'mask_fraction': 0.385438499724214, 'mask_fraction_mean': 0.35639012630756955, 'mask_fraction_min': 0.16363636363636364, 'mask_fraction_max': 0.5625}, 'final_train_loss': 0.5555069446563721, 'ppl_adapter_on': 5.915005920585256, 'ppl_adapter_off': 4.573349214207799, 'scored_targets': 270203}
+=== END cal-train erase_calibration rc=0 wall=80s  2026-08-18T12:31:06Z ===
