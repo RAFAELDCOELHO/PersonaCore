@@ -28,15 +28,37 @@ afterwards is a DATED CONTINUATION published beside the original text (``scripts
 decision D3), never an edit and never a ``--force`` flag. Editing a recorded rule after its number
 exists destroys the only thing that made the rule worth recording.
 
-WHAT THIS FILE HOLDS AT PLAN 19-04, AND WHAT IT DELIBERATELY DOES NOT
+WHAT THIS FILE HOLDS AT PLAN 19-05, AND WHAT IT DELIBERATELY DOES NOT
 --------------------------------------------------------------------
 Holds: the ordering contract above, the mechanism identity and its rule, the DERIVED component
 index, the ablation operator (19-01), the target-selection rule with its two tie-breaks, the
 published eight-fact ranking and the derived (a) denominator (19-02), the (a) floor-DERIVATION
-rule with its mirrored operator and its import-time reachability proof (19-03), and the two
-NOISE-FLOOR ESTIMATORS plus the retention measurement spec and the arm-record schema (19-04). The
-arm runners and the report text are plans 19-05..19-06, and writing either here early would mean
-fixing it before the plan that reasons about it.
+rule with its mirrored operator and its import-time reachability proof (19-03), the two
+NOISE-FLOOR ESTIMATORS plus the retention measurement spec and the arm-record schema (19-04), and
+the representational read, the Phase 18 parity assertions and the report text with its
+ship-decision marker pair (19-05). The arm runners are plan 19-06, and writing them here early
+would mean fixing them before the plan that reasons about them.
+
+WHY THE REPRESENTATIONAL READ IS STRUCTURAL AND NOT A CONVENTION
+---------------------------------------------------------------
+``scripts/erasure_gate.py:118-122`` makes representational consistency DESCRIPTIVE and EXPLICITLY
+NOT GATED: at n=8 facts and n=3 personas the sample cannot support a threshold, and gating what the
+sample cannot support is treated as a DEFECT in this project rather than as extra rigour. A second
+``sign_test_exact`` call site IS a second hypothesis family, and would reprice Holm so that a
+DESCRIPTIVE statistic paid for part of the alpha the real comparisons need.
+
+So ``DESCRIPTIVE_ONLY_FUNCTIONS`` names the three functions on that path and a committed AST scan
+refuses, inside any of them, a call to ``sign_test_exact`` / ``holm`` / ``wilson_upper_bound``, an
+ordering comparison of any kind, and a read of ANY module-level number. A DANGLING entry in that
+tuple fails the scan rather than quietly excusing a missing target, so a rename cannot escape it.
+This is the same discipline that landed ``test_context_pressure_sweep_is_not_gated`` BEFORE the
+sweep it constrains (``scripts/phase16_persistence.py:1289-1293``) — the guard ships in the same
+commit as the read, not after it.
+
+The verdict has exactly ONE path (``render_verdict``), it CALLS the rule committed at ``23a830c``
+rather than re-implementing it, and the four v2.0 baselines that rule reads
+(``V20_MASKED_DIALOGUE_VAL_PPL``, ``V20_EWC_RETENTION_PPL``, ``V20_RETENTION_NOISE_FLOOR``,
+``MARGIN_K``) may not appear as numeric literals anywhere in this file.
 
 EVERY KEYWORD-ONLY ARGUMENT OF ``erasure_succeeded`` NOW HAS A NAMED PRODUCER IN THIS FILE.
 ``target_successes`` / ``target_questions`` (19-02), ``target_floor`` (19-03),
@@ -82,6 +104,8 @@ import json
 import pathlib
 import sys
 
+import torch
+
 from personacore.config import ModelConfig
 from personacore.lora import LoRAConfig
 
@@ -111,6 +135,8 @@ from erasure_gate import (  # noqa: E402  (needs the sys.path insert above)
     V20_EWC_RETENTION_PPL,
     V20_MASKED_DIALOGUE_VAL_PPL,
     V20_RETENTION_NOISE_FLOOR,
+    VERDICTS,
+    erasure_succeeded,
     wilson_upper_bound,
 )
 
@@ -1539,6 +1565,211 @@ def zero_results_have_nll(arm_record):
     produces nothing.
     """
     return not zero_result_exposure_gaps(arm_record)
+
+
+# =============================================================================================
+# ===== THE REPRESENTATIONAL READ — DESCRIPTIVE, AND STRUCTURALLY UNABLE TO BECOME A GATE =====
+# =============================================================================================
+
+REPRESENTATIONAL_READ_LABEL = (
+    "DESCRIPTIVE, EXPLICITLY NOT GATED (`scripts/erasure_gate.py:118-122`). Reported with its "
+    "denominators and never converted into a pass/fail. At n=8 facts and n=3 personas the sample "
+    "cannot support a threshold, and gating what the sample cannot support is treated as a DEFECT "
+    "in this project, not as extra rigour. A second `sign_test_exact` call site IS a second "
+    "hypothesis family and would reprice Holm to carry a descriptive statistic — which is why "
+    "`tests/test_phase19_erasure.py::test_representational_read_is_not_gated` scans these three "
+    "functions by AST rather than trusting this sentence."
+)
+
+# The functions the guard scans, NAMED so a rename cannot silently escape it. A dangling entry
+# FAILS the guard rather than quietly excusing a missing scan target — `DRAW_ALL_ASSERTED_BY`'s
+# discipline (`tests/test_phase14_scoring.py:576-582`).
+#
+# They are defined HERE, inside the pin, and not at 19-14 where they are first CALLED. Adding them
+# later would be a commit to this file after `results/phase19_cal_corpus.json` exists, which turns
+# the ancestry guard permanently red — the manoeuvre this whole phase is built to make impossible.
+# All three are thin and take their inputs as PARAMETERS, so no adapter path, no fact material and
+# no checkpoint load reaches this pin's import surface.
+DESCRIPTIVE_ONLY_FUNCTIONS = ("delta_w_cells", "delta_w_cosine", "fisher_overlap")
+
+
+def delta_w_cells(adapter, w0_state):
+    """Per-cell ``dW`` — the committed MAGNITUDE read and the DIRECTION a cosine needs.
+
+    ``extract_deltas.adapter_cells`` (``:174``) returns a per-cell Frobenius-norm RATIO, i.e. a
+    SCALAR, so a per-cell cosine cannot be taken over its output at all. The ratio is therefore
+    DELEGATED to it — never recomputed — while the direction is built from the identity this pin
+    already committed in ``MECHANISM_RULE``: ``dW = scale * (B @ A)``, the same expression
+    ``ablate_components`` operates on. The two are tied together by test:
+    ``||delta||_F / ||W0||_F`` must equal the ratio ``adapter_cells`` returned for that cell, so the
+    duplication cannot drift into describing two different deltas.
+
+    ``scale`` is ``alpha / r`` READ FROM THE ARTIFACT and never recomputed from a live module —
+    ``lora/layer.py:27`` names ``LoRALinear.scale`` the single source of truth and PITFALLS P3
+    forbids recomputing it; ``extract_deltas.py:295`` reads it the same way, and
+    ``load_adapter_weights`` audits a loaded adapter against exactly these two fields
+    (``inject.py:119-129``).
+
+    Takes the ``export_adapter``-shaped ARTIFACT, the same object ``ablate_components`` takes and
+    returns, so an erased adapter can be passed straight in without unwrapping.
+
+    ponytail: the returned deltas are dense fp64 (~85 MB for the production adapter). 19-14 is the
+    only caller and reads two adapters at once; if that ever needs to be three, stream per cell
+    instead of materialising the dict.
+    """
+    lora_config = adapter["lora_config"]
+    scale = lora_config["alpha"] / lora_config["r"]
+    tensors = adapter["adapter"]
+    ratios = extract_deltas.adapter_cells(tensors, scale, w0_state)
+
+    cells = {}
+    for layer, projection, key in extract_deltas.KEYS:
+        prefix = key[: -len(".weight")]
+        a = tensors[f"{prefix}.lora_A"].to(torch.float64)  # (r, in)
+        b = tensors[f"{prefix}.lora_B"].to(torch.float64)  # (out, r)
+        cells[(layer, projection)] = {
+            "ratio": ratios[(layer, projection)],
+            "delta": (scale * (b @ a)).reshape(-1),
+        }
+    return cells
+
+
+def delta_w_cosine(cells_a, cells_b):
+    """Per-cell cosine between two adapters' ``dW``, in fp64 — a DICT, never a scalar summary.
+
+    Keyed by ``(layer, projection)``, one entry per cell, because a mean over 36 cells is exactly
+    the figure a caption reaches for and it would hide the cell where the two adapters diverged.
+    The ``continual/fisher.py`` statistics discipline: fp64 throughout.
+
+    ``None`` where either side's delta is exactly zero. A fully ablated cell has NO direction, and
+    writing ``0.0`` there would publish it as ORTHOGONAL — a claim the arithmetic does not make.
+    ``None`` and a number are deliberately different in the same way ``_verdict.recorded_verdict``
+    keeps ``None`` and an empty body different.
+
+    See ``REPRESENTATIONAL_READ_LABEL``: this is reported, never gated.
+    """
+    _prove(
+        set(cells_a) == set(cells_b),
+        f"the two cell sets differ: {sorted(set(cells_a) ^ set(cells_b))}. A cosine is only "
+        "defined cell-for-cell, and silently intersecting them would publish a read over whichever "
+        "cells the two adapters happened to share",
+    )
+    cosines = {}
+    for key in cells_a:
+        a = cells_a[key]["delta"]
+        b = cells_b[key]["delta"]
+        norms = float(torch.linalg.norm(a)) * float(torch.linalg.norm(b))
+        cosines[key] = None if norms == 0.0 else float(torch.dot(a, b)) / norms
+    return cosines
+
+
+def fisher_overlap(fisher_cells, ablated_addresses):
+    """Fisher mass in the ABLATED addresses against mass in the rest. Both sides, both denominators.
+
+    ``fisher_cells`` is the ALREADY-REDUCED per-cell dict from ``extract_deltas.fisher_cells``
+    (``:199``), whose reduction is a per-cell MEAN (``FISHER_AGGREGATE``, ``:104-109``): the cache
+    is mean-normalized, so a per-cell mean reads directly as "x the importance of an average
+    parameter" and a SUM would confound importance with tensor size.
+
+    ``ablated_addresses`` are ``component_index()``-shaped ``(layer, projection, j)`` triples.
+
+    GRANULARITY, stated rather than left to be inferred: the Fisher cache is per PARAMETER and
+    reduces to per CELL, so it carries no rank-1 resolution at all. A cell counts as ablated when
+    ANY of its ``PRODUCTION_RANK`` components was zeroed, and this read therefore cannot attribute
+    mass to a component. That is a property of the cache, not of the ablation, and it travels
+    inside the returned dict so no renderer can publish the numbers without it.
+
+    No ratio is returned. "Mass in the ablated addresses against mass in the rest" is both sides
+    side by side; dividing two means-of-means is the single scalar a caption would quote, and it
+    would silently weight a 384x384 attention cell equally with a 1536x384 MLP cell.
+
+    See ``REPRESENTATIONAL_READ_LABEL``: this is reported, never gated.
+    """
+    known = {(layer, projection) for layer, projection, _key in extract_deltas.KEYS}
+    _prove(
+        set(fisher_cells) == known,
+        f"the Fisher cell dict covers {len(fisher_cells)} cells, not the committed "
+        f"{len(known)}-cell enumeration. `extract_deltas.fisher_cells` returns exactly those keys, "
+        "so a different set means the input was reduced somewhere else",
+    )
+    ablated = []
+    for address in ablated_addresses:
+        layer, projection, _j = address
+        _prove(
+            (layer, projection) in known,
+            f"ablated address {address!r} names a projection outside the committed wrap set. The "
+            "overlap would then be taken over a surface the adapter does not have",
+        )
+        if (layer, projection) not in ablated:
+            ablated.append((layer, projection))
+
+    ablated = tuple(sorted(ablated))
+    preserved = tuple(sorted(known - set(ablated)))
+    _prove(
+        ablated and preserved,
+        f"degenerate partition: {len(ablated)} ablated cells and {len(preserved)} preserved. An "
+        "overlap needs both sides to have a denominator — with one side empty there is nothing to "
+        "report the other side AGAINST, and a mean over zero cells is not a small number",
+    )
+    return {
+        "ablated_cells": ablated,
+        "preserved_cells": preserved,
+        "n_ablated_cells": len(ablated),
+        "n_preserved_cells": len(preserved),
+        "ablated_mean": sum(fisher_cells[key] for key in ablated) / len(ablated),
+        "preserved_mean": sum(fisher_cells[key] for key in preserved) / len(preserved),
+        "reduction": extract_deltas.FISHER_AGGREGATE,
+        # `PRODUCTION_RANK` is deliberately NOT interpolated here. The guard over
+        # `DESCRIPTIVE_ONLY_FUNCTIONS` forbids these functions reading ANY module-level number, and
+        # that scan is worth more than the digit: `component_index` already derives the rank and
+        # `N_COMPONENTS` already publishes the product.
+        "granularity": (
+            "per CELL, not per component: the Fisher cache reduces to (layer, projection) and "
+            "carries no rank-1 resolution, so a cell counts as ablated when ANY of its rank-1 "
+            "components was zeroed"
+        ),
+        "label": REPRESENTATIONAL_READ_LABEL,
+    }
+
+
+# =============================================================================================
+# ===== THE ONE VERDICT PATH — the committed rule is CALLED, never re-implemented (STAT-05) ====
+# =============================================================================================
+
+
+def render_verdict(**gate_inputs):
+    """THE single (a)/(b)/(c) evaluation in Phase 19. Calls ``erasure_succeeded`` and nothing else.
+
+    The whole phase is worthless if a second evaluation exists anywhere to disagree with the
+    committed one, so this is the only call site and
+    ``tests/test_phase19_erasure.py::test_verdict_is_called_never_reimplemented`` is what keeps it
+    the only one: a second call, a local re-definition, or any of the four v2.0 baselines retyped
+    as a numeric literal in this file all turn that scan red.
+
+    The required argument names are READ OFF THE GATE rather than written down here, so this driver
+    does not hold its own copy of the rule's signature. A missing or misspelled input is named
+    BEFORE the call instead of surfacing as a ``TypeError`` at the end of a spent run.
+
+    Returns the verdict, its reasons and the inputs it was computed from, so a report publishes the
+    number the gate actually read instead of a second copy assembled beside it.
+    """
+    import inspect  # stdlib, and needed only here — the rule's own signature is the schema
+
+    required = tuple(inspect.getfullargspec(erasure_succeeded).kwonlyargs)
+    _prove(
+        tuple(sorted(gate_inputs)) == tuple(sorted(required)),
+        f"the verdict was asked for with {tuple(sorted(gate_inputs))}, but the committed rule "
+        f"takes {required}. Every one of those is keyword-only precisely so a caller cannot "
+        "transpose two counts, and a missing one would abort after the erasure sweep and the "
+        "draws had already been spent",
+    )
+    verdict, reasons = erasure_succeeded(**gate_inputs)
+    _prove(
+        verdict in VERDICTS,
+        f"the gate returned {verdict!r}, which is not one of {VERDICTS}. INCONCLUSIVE is a real "
+        "outcome in that domain and a fourth value would be a verdict nobody pre-registered",
+    )
+    return {"verdict": verdict, "reasons": tuple(reasons), "inputs": dict(gate_inputs)}
 
 
 if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
