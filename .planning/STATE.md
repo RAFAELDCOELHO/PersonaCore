@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 19-04-PLAN.md
-last_updated: "2026-08-18T00:11:54.463Z"
-last_activity: 2026-08-18 -- 19-04 executed (estimators at `32de94f`/`3a13a8f`, schema at `8ebd241`)
+stopped_at: Completed 19-05-PLAN.md
+last_updated: "2026-08-18T00:47:11.160Z"
+last_activity: 2026-08-18 -- 19-05 executed (guards at `99ed828`, parity at `c695cef`, report at `c8772ef`)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 42
+  completed_plans: 43
   percent: 75
 ---
 
@@ -26,20 +26,26 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 5 of 16
-Status: Executing Phase 19 — 19-04 complete: ALL NINE keyword-only arguments of
-`erasure_succeeded` now have a named producer in the pin (verified by introspection, 0 unmapped).
-The two (c) estimators, the (b) estimator AND its `max` reduction, and the arm-record schema are
-pinned before any number exists. The (a) floor budget is still `[0.091079, 0.20]` and the floor
-constant does not exist until the blind calibration runs at 19-06.
-Recorded before the run: the (c) dialogue half is ALREADY over its cap by **+1.2387** at the only
-dialogue noise floor ever measured — 4.576708 cap vs the taught adapter's 5.8154 — so 19-05/19-06
-must publish pre- and post-erasure dialogue PPL side by side.
+Plan: 6 of 16
+Status: Executing Phase 19 — 19-05 complete: the three structural failure modes are closed BEFORE
+any number can exploit them. Representational consistency cannot become a gate (AST scan over
+`DESCRIPTIVE_ONLY_FUNCTIONS`, watched RED three times), exactly ONE verdict path exists
+(`render_verdict`, sole `erasure_succeeded` call site, four v2.0 baselines measured absent as
+literals), and every comparability parameter is asserted against Phase 18's own value.
+Measured correction on the record: Phase 18's committed arm config records only **4 of the 8**
+comparability parameters — `asr_rungs`, `stop_ids`, `sample_temperature` and `sample_top_p` are
+ABSENT, inherited by call through `phase14_recall`'s sampler rather than chosen. `ARM_CONFIG_KEYS`
+was extended so every Phase 19 arm records all eight.
+The (a) floor budget is still `[0.091079, 0.20]` and the floor constant does not exist until the
+blind calibration runs at 19-06.
+Carried forward: the (c) dialogue half is ALREADY over its cap by **+1.2387** at the only dialogue
+noise floor ever measured — 4.576708 cap vs the taught adapter's 5.8154 — and `render_report` now
+prints pre- and post-erasure dialogue PPL side by side by construction.
 `git ls-files 'results/phase19_*'` is still EMPTY and must stay empty through 19-07.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
 post-hoc decision.
-Last activity: 2026-08-18 -- 19-04 executed (estimators at `32de94f`/`3a13a8f`, schema at `8ebd241`)
+Last activity: 2026-08-18 -- 19-05 executed (guards at `99ed828`, parity at `c695cef`, report at `c8772ef`)
 
 ## Performance Metrics
 
@@ -103,6 +109,7 @@ Last activity: 2026-08-18 -- 19-04 executed (estimators at `32de94f`/`3a13a8f`, 
 | Phase 19 P02 | 42min | 2 tasks | 2 files |
 | Phase 19 P03 | 30min | 2 tasks | 2 files |
 | Phase 19 P04 | 55min | 3 tasks | 2 files |
+| Phase 19 P05 | 70min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -274,6 +281,14 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-04: zero_results_have_nll returns a plain bool and zero_result_exposure_gaps carries the reasons, because a (False, reason) return is TRUTHY — 'not (False, x)' is False — so a caller passing the pair into the gate would silently disarm the INCONCLUSIVE branch on exactly the run that needed it, and a SUCCESSFUL erasure produces precisely the zero that triggers that branch (erasure_gate.py:223-227). The trap is recorded in the test rather than argued
 - [Phase 19]: 19-04: the (c) dialogue half is ALREADY over its cap before any erasure runs — at the only dialogue noise floor this repo has ever measured (0.001704, a full-fine-tune regime) the cap is 4.576708 and the taught adapter reads 5.8154, an excess of +1.2387; admitting it would need a floor of 0.62105, roughly 364x. Recorded in the pin BEFORE the estimator runs, with the requirement that pre- and post-erasure dialogue PPL are published side by side in every table, because a (c) failure that predates the erasure and one it caused are different findings
 - [Phase 19]: 19-04: retention PPL has never been measured on an adapted model — measured by AST census, 6 retention_perplexity call sites across 4 modules (the plan said 4 call sites; that is the module count) and NONE of those modules so much as imports inject_lora or load_adapter. RETENTION_MEASUREMENT pins the call pre- AND post-erasure in the same process as the draws; the retention half of (c) is otherwise fully determined at cap 4.029000
+- [Phase 19]: 19-05: extract_deltas.adapter_cells returns a per-cell Frobenius-norm RATIO (a scalar), so the plan's prescribed delta_w_cosine over its output is UNDEFINED — measured before writing any code. delta_w_cells DELEGATES the magnitude read to adapter_cells (never recomputed) and builds the direction from MECHANISM_RULE's own dW = scale * (B @ A), with scale read from the artifact per PITFALLS P3. The duplication is made self-checking rather than argued away: a committed test asserts ||delta||_F / ||W0||_F == the delegated ratio at rel=1e-12 for all 36 cells, plus a non-vacuity check that the fixture's deltas are non-zero (lora_B starts at zero, so every assertion would otherwise hold against a function returning nothing)
+- [Phase 19]: 19-05: the not-gated AST scan forbids ANY ordering comparison and ANY module-level number inside a DESCRIPTIVE_ONLY_FUNCTIONS member — strictly stronger than the plan's Compare-scoped wording, and it had to be, because the plan's OWN prescribed RED mutation is `if cosine > 0.5`, a comparison against a bare literal the plan's scoping would have missed. Equality comparisons stay legal, which keeps the rule satisfiable (the zero-norm domain guard is `norms == 0.0`). It bit on its first run against fisher_overlap interpolating PRODUCTION_RANK into prose; the digit left the string rather than the guard being weakened. Both scans are also driven against synthetic mutants IN the committed tests, so their non-vacuity does not depend on anyone having watched a session
+- [Phase 19]: 19-05: Phase 18's committed arm config records FOUR of the eight comparability parameters, not eight — corpus_sha256, forbid_ids_sha256, k and seed_stride are recorded; asr_rungs, stop_ids, sample_temperature and sample_top_p are ABSENT. The plan's <done> ('passes on the committed Phase 18 arm record's own config block') is therefore false as written, and assert_phase18_parity(phase18_config) correctly RAISES naming asr_rungs. The missing-key-raises half was kept because it is the load-bearing one — an absent parameter must not read as agreement — and phase18_parity_config completes the block from four values read OUT OF the record plus four reconstructed from their owning modules
+- [Phase 19]: 19-05: the reconstruction of Phase 18's four unrecorded sampling parameters is evidenced by AST census, not assumed — phase18_extraction reaches the sampler at exactly three call sites (recall.draw_all x2 with keywords ['n_samples'], recall.complete_question with ['index']) and overrides no sampling parameter at any of them, while phase14_recall.draw_all reads SAMPLE_TEMPERATURE/SAMPLE_TOP_P and _complete reads STOP_IDS as module constants. Phase 18 never CHOSE them, so there was nothing for it to record
+- [Phase 19]: 19-05: ARM_CONFIG_KEYS extended from six to ten so PARITY_KEYS is a subset of it — having just had to reconstruct four of Phase 18's parameters from source, requiring a Phase 19 arm to record all eight is what stops the same reconstruction being needed again. assert_phase18_parity is scoped to the arms COMPARED against Phase 18 and explicitly NOT to the (b) noise-floor replicate, whose seed_stride is offset on purpose (SEED_STRIDE_OFFSET); recording which stride an arm ran under and asserting it matches another phase's are different acts, and Phase 18 did neither
+- [Phase 19]: 19-05: the ship-decision placeholder rewrite is CONDITIONAL on a pinned decision line from a closed set, not on the word 'ship' — Phase 18's W2 grep found ship/no-ship language already in the report (the section heading and the pointer line) while no decision had been written, so a substring check would have passed the very defect it exists to catch. append_ship_decision requires 'Phase 19 ship decision: SHIP|DO NOT SHIP' plus a YYYY-MM-DD date before _addendum.append_addendum is called with both marker halves. The marker-pair fix alone would NOT have caught W2
+- [Phase 19]: 19-05: exactly ONE verdict path exists — erasure_succeeded is imported by OBJECT IDENTITY, never re-defined, and called from exactly ['render_verdict'], which reads the rule's required argument names off inspect.getfullargspec rather than holding a copy of the signature. The four v2.0 baselines (4.5733, 3.891140, 0.068930, and the int 2) were MEASURED absent as numeric literals in the pin before the ban was written — the MARGIN_K = 2 row is the one that mattered, since a stray int 2 would have made the plan's ban unsatisfiable
+- [Phase 19]: 19-05: two of my own committed assertions failed on CORRECT code and were replaced structurally rather than accommodated — '"Phase 18" not in report' is red because the report legitimately cites Phase 18 in D8_PUBLICATION_POSTURE and the parity section (the real property is that no Phase 18 SHIP LINE arrives as this document's provenance), and '"force" not in source' is red because the pin's own ordering contract rejects --force in prose (the real property is that no function takes a force parameter and no '--force' string literal exists). 19-03 already committed the lesson that a test failing on correct code is a test that gets deleted
 
 ### Roadmap Evolution
 
