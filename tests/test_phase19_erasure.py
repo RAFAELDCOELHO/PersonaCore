@@ -2240,3 +2240,186 @@ def test_fisher_overlap_partitions_by_cell_and_publishes_both_denominators():
         erasure.fisher_overlap(fisher, erasure.component_index())
     with pytest.raises(SystemExit):
         erasure.fisher_overlap(fisher, [(0, "q_proj", 0), (99, "q_proj", 0)])
+
+
+# =============================================================================================
+# ===== PLAN 19-05 / TASK 2 — THE PHASE 18 PARITY ASSERTIONS (Q7.8 / T-19-20) =================
+# =============================================================================================
+#
+# If the post-erasure run uses a different corpus, mask, `stop_ids`, K, temperature or seed stride,
+# the comparison against Phase 18's committed 92/104 is void. Phase 18 evidences its own pairing by
+# DIGEST and by two distinct pids rather than by assertion
+# (`results/phase18_extraction_report.md:260-265`); Phase 19 records the same, and asserts it too.
+
+
+def _phase18_record():
+    path = _ROOT / "results" / "phase18_arm_adapter-on.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_parity_keys_cover_the_eight_and_every_arm_must_RECORD_them():
+    """`PARITY_KEYS` is ordered, and no Phase 19 arm may omit a comparability column."""
+    assert erasure.PARITY_KEYS == (
+        "corpus_sha256",
+        "forbid_ids_sha256",
+        "k",
+        "asr_rungs",
+        "stop_ids",
+        "sample_temperature",
+        "sample_top_p",
+        "seed_stride",
+    )
+    missing = [key for key in erasure.PARITY_KEYS if key not in erasure.ARM_CONFIG_KEYS]
+    assert missing == [], (
+        f"the arm-record schema does not require {missing}. Phase 18 ASSERTED none of its "
+        "comparability parameters and RECORDED only four of the eight, which is precisely why the "
+        "other four had to be reconstructed here from their owning modules — a Phase 19 arm must "
+        "carry all eight in its own config so a reader can see which one it ran under"
+    )
+
+
+def test_assert_phase18_parity_passes_on_phase18s_own_committed_parameters():
+    """The plan's `<done>`, corrected by measurement: Phase 18 RECORDS four of the eight keys."""
+    record = _phase18_record()
+    committed = record["config"]
+
+    # MEASURED, not assumed. Four of the eight parity keys are absent from Phase 18's own config.
+    recorded = [key for key in erasure.PARITY_KEYS if key in committed]
+    absent = [key for key in erasure.PARITY_KEYS if key not in committed]
+    assert recorded == ["corpus_sha256", "forbid_ids_sha256", "k", "seed_stride"]
+    assert absent == ["asr_rungs", "stop_ids", "sample_temperature", "sample_top_p"]
+
+    # So the committed config ALONE raises — an absent key must not read as agreement.
+    with pytest.raises(SystemExit) as absent_exit:
+        erasure.assert_phase18_parity(committed)
+    assert "asr_rungs" in str(absent_exit.value)
+
+    # Completed with the four Phase 18 INHERITED BY CALL, it passes.
+    parity = erasure.phase18_parity_config(record)
+    assert tuple(parity) == erasure.PARITY_KEYS
+    assert erasure.assert_phase18_parity(parity) == parity
+
+    # NON-VACUITY on the four Phase 18 really did record: they are read OUT OF THE FILE, so a
+    # record that ran at a different budget cannot be completed into a passing config.
+    drifted = json.loads(json.dumps(record))
+    drifted["config"]["k"] = 47
+    with pytest.raises(SystemExit) as drift_exit:
+        erasure.assert_phase18_parity(erasure.phase18_parity_config(drifted))
+    assert "k" in str(drift_exit.value)
+
+
+def test_every_parity_key_individually_mutated_or_dropped_raises_naming_itself():
+    """Eight keys, sixteen refusals — and each names the key it refused, never just 'mismatch'."""
+    base = erasure.phase18_parity_config(_phase18_record())
+    sentinel = {
+        "corpus_sha256": "0" * 64,
+        "forbid_ids_sha256": "f" * 64,
+        "k": 47,
+        "asr_rungs": (1, 4, 16, 47),
+        "stop_ids": frozenset({8184}),
+        "sample_temperature": 0.7,
+        "sample_top_p": 0.9,
+        "seed_stride": "unstrided",
+    }
+    for key in erasure.PARITY_KEYS:
+        mutated = dict(base)
+        mutated[key] = sentinel[key]
+        with pytest.raises(SystemExit) as mutated_exit:
+            erasure.assert_phase18_parity(mutated)
+        assert key in str(mutated_exit.value), f"a mutated {key} raised without naming itself"
+
+        dropped = {name: value for name, value in base.items() if name != key}
+        with pytest.raises(SystemExit) as dropped_exit:
+            erasure.assert_phase18_parity(dropped)
+        assert key in str(dropped_exit.value), f"a dropped {key} raised without naming itself"
+
+    # A JSON round trip turns the tuple and the frozenset into lists. That must still PASS — the
+    # config this is asserted against is read back out of an artifact, not held in memory.
+    assert erasure.assert_phase18_parity(json.loads(json.dumps(base, default=sorted)))
+
+
+def test_parity_recomputes_the_corpus_digest_and_never_pastes_it():
+    """Q7.8 — the Phase 19 target arms REUSE `results/phase18_corpus.json` verbatim."""
+    extraction = _load("phase18_extraction", "scripts/phase18_extraction.py")
+    corpus = json.loads((_ROOT / "results" / "phase18_corpus.json").read_text(encoding="utf-8"))
+    expected = erasure.phase18_parity_values()
+
+    assert expected["corpus_sha256"] == extraction.corpus_sha256(corpus)
+    assert expected["corpus_sha256"] == _phase18_record()["config"]["corpus_sha256"]
+    assert expected["corpus_sha256"] not in _PIN_SOURCE, (
+        "the corpus digest is pasted into the pin as a hex string — it must be RECOMPUTED through "
+        "the committed `canonical_json` + `corpus_sha256` pair, so a corpus that changed under it "
+        "goes red instead of matching a literal nobody re-derived"
+    )
+
+    # Every other expected value is the OWNING module's object, not a copy that matches today.
+    recall = _load("phase14_recall", "scripts/phase14_recall.py")
+    assert expected["k"] == extraction.K
+    assert expected["asr_rungs"] == extraction.ASR_RUNGS
+    assert expected["stop_ids"] == recall.STOP_IDS
+    assert expected["sample_temperature"] == recall.SAMPLE_TEMPERATURE
+    assert expected["sample_top_p"] == recall.SAMPLE_TOP_P
+    assert expected["forbid_ids_sha256"] == erasure.FORBID_IDS_SHA256
+
+
+def test_phase18_parity_reconstructs_four_inherited_parameters_and_a_census_proves_it():
+    """The reconstruction is only honest if Phase 18 really ran under these — measured by AST.
+
+    Phase 18 records no sampling column because it never chooses one: it reaches the sampler through
+    `phase14_recall.draw_all` / `complete_question`, which read `SAMPLE_TEMPERATURE`, `SAMPLE_TOP_P`
+    and `STOP_IDS` as module constants. So the claim to verify is that NO Phase 18 call site
+    overrides them — an override would make the reconstructed value a fiction.
+    """
+    src = (_ROOT / "scripts" / "phase18_extraction.py").read_text(encoding="utf-8")
+    sites = [
+        (node.lineno, sorted(kw.arg for kw in node.keywords))
+        for node in ast.walk(ast.parse(src))
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "attr", None) in ("draw_all", "complete_question")
+    ]
+    assert sites, "no sampler call site found in phase18_extraction.py — the census is blind"
+    for lineno, keywords in sites:
+        overrides = [
+            kw
+            for kw in keywords
+            if kw in ("temperature", "top_p", "stop_ids", "sample_temperature")
+        ]
+        assert overrides == [], (
+            f"phase18_extraction.py:{lineno} overrides {overrides} at a sampler call site, so the "
+            "reconstructed sampling parameters are not the ones Phase 18 ran under"
+        )
+
+    # And the constants really are read INSIDE the sampler, not passed down from somewhere else.
+    recall_src = (_ROOT / "scripts" / "phase14_recall.py").read_text(encoding="utf-8")
+    readers = {
+        node.name: sorted(
+            {
+                inner.id
+                for inner in ast.walk(node)
+                if isinstance(inner, ast.Name)
+                and inner.id in ("SAMPLE_TEMPERATURE", "SAMPLE_TOP_P", "STOP_IDS")
+            }
+        )
+        for node in ast.parse(recall_src).body
+        if isinstance(node, ast.FunctionDef)
+    }
+    assert readers["draw_all"] == ["SAMPLE_TEMPERATURE", "SAMPLE_TOP_P"]
+    assert readers["_complete"] == ["STOP_IDS"]
+
+    # The pin records the gap rather than papering over it.
+    assert erasure.PHASE18_RECORDED_PARITY_KEYS == (
+        "corpus_sha256",
+        "forbid_ids_sha256",
+        "k",
+        "seed_stride",
+    )
+    assert erasure.PHASE18_INHERITED_PARITY_KEYS == (
+        "asr_rungs",
+        "stop_ids",
+        "sample_temperature",
+        "sample_top_p",
+    )
+    doc = erasure.phase18_parity_config.__doc__
+    assert "inherit" in doc.lower() and "260-265" in doc
+    # The deliberately OFFSET replicate stride must not be asserted against Phase 18's.
+    assert "replicate" in erasure.assert_phase18_parity.__doc__.lower()
