@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 19-03-PLAN.md
-last_updated: "2026-08-17T23:33:51.801Z"
-last_activity: 2026-08-17 -- 19-03 executed (floor rule at `6969e47`, reachability proof at `48f8ce1`)
+stopped_at: Completed 19-04-PLAN.md
+last_updated: "2026-08-18T00:11:54.463Z"
+last_activity: 2026-08-18 -- 19-04 executed (estimators at `32de94f`/`3a13a8f`, schema at `8ebd241`)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 41
+  completed_plans: 42
   percent: 75
 ---
 
@@ -26,17 +26,20 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 4 of 16
-Status: Executing Phase 19 — 19-03 complete: the (a) floor-DERIVATION rule is pinned blind with
-D2's mirror (`min`, not Phase 14's literal `max`) and both directions publishable side by side
-(0.20 vs 0.60 at `cal_rate = 1.0`), and the floor it can produce is PROVED clearable at n = 27 by
-a module-scope sweep against a perfect erasure. The floor budget is `[0.091079, 0.20]`; the
-constant itself does not exist until the blind calibration runs at 19-06.
+Plan: 5 of 16
+Status: Executing Phase 19 — 19-04 complete: ALL NINE keyword-only arguments of
+`erasure_succeeded` now have a named producer in the pin (verified by introspection, 0 unmapped).
+The two (c) estimators, the (b) estimator AND its `max` reduction, and the arm-record schema are
+pinned before any number exists. The (a) floor budget is still `[0.091079, 0.20]` and the floor
+constant does not exist until the blind calibration runs at 19-06.
+Recorded before the run: the (c) dialogue half is ALREADY over its cap by **+1.2387** at the only
+dialogue noise floor ever measured — 4.576708 cap vs the taught adapter's 5.8154 — so 19-05/19-06
+must publish pre- and post-erasure dialogue PPL side by side.
 `git ls-files 'results/phase19_*'` is still EMPTY and must stay empty through 19-07.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
 post-hoc decision.
-Last activity: 2026-08-17 -- 19-03 executed (floor rule at `6969e47`, reachability proof at `48f8ce1`)
+Last activity: 2026-08-18 -- 19-04 executed (estimators at `32de94f`/`3a13a8f`, schema at `8ebd241`)
 
 ## Performance Metrics
 
@@ -99,6 +102,7 @@ Last activity: 2026-08-17 -- 19-03 executed (floor rule at `6969e47`, reachabili
 | Phase 19 P01 | 55min | 2 tasks | 3 files |
 | Phase 19 P02 | 42min | 2 tasks | 2 files |
 | Phase 19 P03 | 30min | 2 tasks | 2 files |
+| Phase 19 P04 | 55min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -264,6 +268,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-03: the crossover prose was corrected from an implied iff to a stated sufficient condition — 0.1518 is the CONTINUOUS crossover ERASURE_FLOOR_MIN/FLOOR_DISCOUNT, but because the discount snaps DOWN to the four-decimal grid the clamp still binds beyond it (floor_branch(0.1518) is measurably still 'reachability-min'). Found by RUNNING the --floor printer, not by review. Both the rule clause and the module docstring now say sufficient-not-iff and point at floor_branch as the committed way to read the boundary — the same standard CONTEXT B4 applied to itself when it refused an unqualified 'deterministic' in a file that is unamendable after 19-07
 - [Phase 19]: 19-03: reachability is proved by a pure function CALLED AT MODULE SCOPE (assert_holm_family_reachable's register, phase18_extraction.py:289), so a dead gate fails at import rather than after the compute it would waste. Watched RED twice and restored byte-identically (sha256 e7a56624 both times, git diff empty): ERASURE_FLOOR_MIN=0.0 raises at import naming cal_rate 0.0, and a ONE-ULP downward move stops the suite COLLECTING at all (pytest INTERNALERROR, 'no tests ran') — which is the difference between an import-time proof and a test someone remembers to write. The comparison is NON-STRICT, matching erasure_succeeded's own upper <= target_floor, so a bound exactly on the floor passes both and the proof cannot refuse a floor the gate would accept
 - [Phase 19]: 19-03: the floor budget is [0.091079, 0.20] and the branch is REPORTABLE — below cal_rate 0.1518 the clamp binds and (a) clears ONLY on a PERFECT ERASURE (0 successes over 27); at or above 0.3333 the ceiling saturates and the blind calibration stops discriminating (667 of 1001 swept rates land there, so if the calibration fact scores near Phase 14's arm of 0.4143/0.2506 the floor is 0.20, the permissive end at 2.196x the minimum). Recorded before the number exists per B4 so it cannot later read as either a surprise or a design win. floor_branch() exists so 19-06's report names which clamp bound instead of leaving a reader to re-derive how hard the criterion actually was
+- [Phase 19]: 19-04: SOFT_TIER_SLOTS names the two soft facts by SLOT, not by the fact_ids the plan's action text prescribed — both soft ids end in their own locked value and 19-02's source scan over all ten values is armed. Watched RED against the prescribed spelling (hits ['chartreuse', 'marzipan'], 2 tests failing) and restored byte-identically, sha256 1a3aabf1. Fourth application of the phase17_personas.py:61 / SYNTHETIC_FACT_ORDER precedent and the second time in Phase 19 that a plan's prescribed literal would have written fact material into the pre-registration
+- [Phase 19]: 19-04: the (b) REDUCTION from seven per-fact |drate| values to the one scalar erasure_succeeded multiplies is itself threshold-shaped and is pinned in the same commit as the per-fact rule — max, for commensurability with the max the gate already takes on the numerator side (erasure_gate.py:236-237). Recorded as the MORE PERMISSIVE of the two and NOT the conservative one: measured through the real gate on deltas [0.01, 0.02, 0.03, 0.10], a max floor gives margin 0.200000 and (b) PASSES while a mean floor gives 0.080000 and (b) FAILS. Watched RED by mutating the reduction to mean
+- [Phase 19]: 19-04: the rule records mean <= max as EXACT arithmetic with a measured one-ulp floating-point residual, NOT as an unqualified 'always' — the naive sum(v)/len(v) exceeds max(v) at 2 of 200,003 swept vectors of length 1..7, both by exactly 1.0 ulp, both constant vectors, while at [0.2]*7 (the length the gate actually sees) it does not. A committed test asserts the false stronger sentence is ABSENT and that 'one ulp' is present. Same register and same reason as 19-03's W1 clause: the file is unamendable after 19-07
+- [Phase 19]: 19-04: zero_results_have_nll returns a plain bool and zero_result_exposure_gaps carries the reasons, because a (False, reason) return is TRUTHY — 'not (False, x)' is False — so a caller passing the pair into the gate would silently disarm the INCONCLUSIVE branch on exactly the run that needed it, and a SUCCESSFUL erasure produces precisely the zero that triggers that branch (erasure_gate.py:223-227). The trap is recorded in the test rather than argued
+- [Phase 19]: 19-04: the (c) dialogue half is ALREADY over its cap before any erasure runs — at the only dialogue noise floor this repo has ever measured (0.001704, a full-fine-tune regime) the cap is 4.576708 and the taught adapter reads 5.8154, an excess of +1.2387; admitting it would need a floor of 0.62105, roughly 364x. Recorded in the pin BEFORE the estimator runs, with the requirement that pre- and post-erasure dialogue PPL are published side by side in every table, because a (c) failure that predates the erasure and one it caused are different findings
+- [Phase 19]: 19-04: retention PPL has never been measured on an adapted model — measured by AST census, 6 retention_perplexity call sites across 4 modules (the plan said 4 call sites; that is the module count) and NONE of those modules so much as imports inject_lora or load_adapter. RETENTION_MEASUREMENT pins the call pre- AND post-erasure in the same process as the draws; the retention half of (c) is otherwise fully determined at cap 4.029000
 
 ### Roadmap Evolution
 
@@ -328,9 +338,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-17T23:31:46.546Z
-Stopped at: Completed 19-03-PLAN.md
-Resume file: .planning/phases/19-selective-memory-erasure/19-04-PLAN.md
+Last session: 2026-08-18T00:11:54.456Z
+Stopped at: Completed 19-04-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
