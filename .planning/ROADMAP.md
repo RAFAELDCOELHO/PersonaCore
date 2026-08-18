@@ -561,7 +561,7 @@ Plans:
 - [x] 19-05-PLAN.md — descriptive-not-gated AST guard, single verdict path, Phase 18 parity, report text + marker pair
 - [x] 19-06-PLAN.md — the arm runner, the M1 stopping rule, the M2 retrain arm (ERASE-02), the calibration corpus builder
 - [x] 19-07-PLAN.md — CHECKPOINT: approve the pin before it becomes unamendable
-- [ ] 19-08-PLAN.md — calibration corpus + calibration adapter retrain (D6, ~80-82 s measured); first `results/phase19_*` artifact
+- [x] 19-08-PLAN.md — calibration corpus + calibration adapter retrain (D6, ~80-82 s measured); first `results/phase19_*` artifact
 - [ ] 19-09-PLAN.md — CHECKPOINT: the blind calibration erasure and its scored run; the floor is NOT locked here
 - [ ] 19-10-PLAN.md — the dialogue seed-pair floor, the (b) seed-stride replicate, and retention PPL on an adapted model
 - [ ] 19-11-PLAN.md — CHECKPOINT: lock `scripts/phase19_floor.py` and re-prove reachability against the measured floor
@@ -601,6 +601,6 @@ gate returned MOOT the milestone would have shipped at 18.)
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 16/16 | Complete   | 2026-08-17 |
-| 19. Selective Memory Erasure | v3.0 | 7/16 | In Progress|  |
+| 19. Selective Memory Erasure | v3.0 | 8/16 | In Progress|  |
 
-**Totals:** 18 phases complete, 86 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 7 of 16 plans; the pre-registration is complete, human-reviewed and CLOSED at 19-07, and the ordering is now enforced by git ancestry rather than by intention).
+**Totals:** 18 phases complete, 86 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 8 of 16 plans; the pre-registration is complete, human-reviewed and CLOSED at 19-07, and at 19-08 the ordering stopped being a claim: the ancestry guard now checks 15 pin commits against 3 tracked `results/phase19_*` artifacts and is green).
