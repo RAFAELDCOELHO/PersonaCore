@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 19-05-PLAN.md
-last_updated: "2026-08-18T00:47:11.160Z"
-last_activity: 2026-08-18 -- 19-05 executed (guards at `99ed828`, parity at `c695cef`, report at `c8772ef`)
+stopped_at: Completed 19-06-PLAN.md
+last_updated: "2026-08-18T01:37:15.688Z"
+last_activity: 2026-08-18 -- 19-06 executed (stop rule + runner at `d6b8fe4`, M2 at `95e9e9b`, calibration + CLI at `a8c3bf8`)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 43
+  completed_plans: 44
   percent: 75
 ---
 
@@ -26,26 +26,32 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 6 of 16
-Status: Executing Phase 19 — 19-05 complete: the three structural failure modes are closed BEFORE
-any number can exploit them. Representational consistency cannot become a gate (AST scan over
-`DESCRIPTIVE_ONLY_FUNCTIONS`, watched RED three times), exactly ONE verdict path exists
-(`render_verdict`, sole `erasure_succeeded` call site, four v2.0 baselines measured absent as
-literals), and every comparability parameter is asserted against Phase 18's own value.
-Measured correction on the record: Phase 18's committed arm config records only **4 of the 8**
-comparability parameters — `asr_rungs`, `stop_ids`, `sample_temperature` and `sample_top_p` are
-ABSENT, inherited by call through `phase14_recall`'s sampler rather than chosen. `ARM_CONFIG_KEYS`
-was extended so every Phase 19 arm records all eight.
+Plan: 7 of 16
+Status: Executing Phase 19 — 19-06 complete: **the pin is finished.** The run surface exists —
+the ordinal M1 stopping rule (`ABLATION_STOP_RULE` + `select_ablation_prefix`), the Phase 19 arm
+runner (`run_erasure_arm`), the M2 retrain reference arm (`retrain_arm_spec` +
+`ERASE_02_REFERENCE_ARM`), the blind calibration corpus and its reference twin — and the
+invocation surface is CLOSED at ten subcommands with a module-scope proof that the dispatch table
+equals `SUBCOMMANDS`. `scripts/phase18_extraction.py` has **26 commits before and 26 after**:
+every instrument is imported, none widened. 19-07 now gates the finished article.
+Three of the plan's own premises were falsified by measurement before a line was written:
+`reference_set_for` does NOT raise on any calibration slot (the twin exists because R must hold
+exactly ONE value the arm under test taught, and two slots carry two calibration facts); the
+prescribed `(k, ordered, curve)` 3-tuple cannot express `stopped`, because `k == cap` conflates
+"left rank 1 on the last component" with "never left rank 1"; and ERASE-02's cost is four readings
+of 80–82 s, not "81 s verified three ways".
 The (a) floor budget is still `[0.091079, 0.20]` and the floor constant does not exist until the
-blind calibration runs at 19-06.
+blind calibration RUNS at 19-08 — 19-06 pinned its corpus, its blind target rule and its DERIVED
+denominator of **23** (14 taught + 9 held-out, against the target's 27; the 4-question gap is
+exactly the `RESERVED_HELDOUT_PROBES` a `cand_*` fact carries and a `cal_*` fact does not).
 Carried forward: the (c) dialogue half is ALREADY over its cap by **+1.2387** at the only dialogue
-noise floor ever measured — 4.576708 cap vs the taught adapter's 5.8154 — and `render_report` now
+noise floor ever measured — 4.576708 cap vs the taught adapter's 5.8154 — and `render_report`
 prints pre- and post-erasure dialogue PPL side by side by construction.
 `git ls-files 'results/phase19_*'` is still EMPTY and must stay empty through 19-07.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase, not a
 post-hoc decision.
-Last activity: 2026-08-18 -- 19-05 executed (guards at `99ed828`, parity at `c695cef`, report at `c8772ef`)
+Last activity: 2026-08-18 -- 19-06 executed (stop rule + runner at `d6b8fe4`, M2 at `95e9e9b`, calibration + CLI at `a8c3bf8`)
 
 ## Performance Metrics
 
@@ -110,6 +116,7 @@ Last activity: 2026-08-18 -- 19-05 executed (guards at `99ed828`, parity at `c69
 | Phase 19 P03 | 30min | 2 tasks | 2 files |
 | Phase 19 P04 | 55min | 3 tasks | 2 files |
 | Phase 19 P05 | 70min | 3 tasks | 2 files |
+| Phase 19 P06 | 105min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -289,6 +296,14 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-05: the ship-decision placeholder rewrite is CONDITIONAL on a pinned decision line from a closed set, not on the word 'ship' — Phase 18's W2 grep found ship/no-ship language already in the report (the section heading and the pointer line) while no decision had been written, so a substring check would have passed the very defect it exists to catch. append_ship_decision requires 'Phase 19 ship decision: SHIP|DO NOT SHIP' plus a YYYY-MM-DD date before _addendum.append_addendum is called with both marker halves. The marker-pair fix alone would NOT have caught W2
 - [Phase 19]: 19-05: exactly ONE verdict path exists — erasure_succeeded is imported by OBJECT IDENTITY, never re-defined, and called from exactly ['render_verdict'], which reads the rule's required argument names off inspect.getfullargspec rather than holding a copy of the signature. The four v2.0 baselines (4.5733, 3.891140, 0.068930, and the int 2) were MEASURED absent as numeric literals in the pin before the ban was written — the MARGIN_K = 2 row is the one that mattered, since a stray int 2 would have made the plan's ban unsatisfiable
 - [Phase 19]: 19-05: two of my own committed assertions failed on CORRECT code and were replaced structurally rather than accommodated — '"Phase 18" not in report' is red because the report legitimately cites Phase 18 in D8_PUBLICATION_POSTURE and the parity section (the real property is that no Phase 18 SHIP LINE arrives as this document's provenance), and '"force" not in source' is red because the pin's own ordering contract rejects --force in prose (the real property is that no function takes a force parameter and no '--force' string literal exists). 19-03 already committed the lesson that a test failing on correct code is a test that gets deleted
+- [Phase 19]: 19-06: the plan's premise that `reference_set_for` RAISES on a calibration slot is FALSE — measured on all ten `CALIBRATION_POOL` members before writing a line, ZERO raises. All eight calibration slots carry a locked fact so the `slot in taught` proof passes, and every calibration value is ALREADY a member because `CALIBRATION_POOL` is one of the three pools it reads. The twin is still needed for a stronger, structural reason: R must hold EXACTLY ONE value the adapter under test taught, and `person_name`/`pet_name` each carry TWO calibration facts the calibration arm teaches — so on those slots a rank-1 loss could be a sibling outranking the target rather than an erasure, and the M1 stopping rule would read a different event on the two arms. `reference_set_for_calibration` DELEGATES assembly to `reference_set_for` and removes only the siblings; |R| 8->7 on the two doubled slots, unchanged on the other six, all ten inside the measured 6-8
+- [Phase 19]: 19-06: `select_ablation_prefix` returns a DICT with an explicit `stopped`, not the plan's bare `(k, ordered, curve)` 3-tuple — `k == cap` cannot distinguish 'left rank 1 on the very last component' from 'never left rank 1', and both are constructible. Inferring the flag from `k == cap` is `zero_results_have_nll`'s truthy-pair trap in another shape: two structurally different outcomes collapsing into one value nobody can separate again. A committed test builds BOTH on a toy model and asserts `(curve[-1]['target_rank'] != 1) == stopped`
+- [Phase 19]: 19-06: the ablation sweep must SNAPSHOT its artifact — a real bug caught by the determinism test, not a defensive line. `lora_state_dict` filters `model.state_dict()`, whose tensors SHARE STORAGE with the live parameters, and `load_adapter_weights` copies in place, so an artifact built that way is a VIEW of the model and the sweep's intact baseline was being rewritten by its own ablations (two consecutive calls returned different orderings, the second with every contribution tied at 0). Fixed with `ablate_components(artifact, [])` — zeroes nothing, clones everything, uses the committed operator rather than a second copy loop. Production reaches its artifact through `load_adapter` from disk and was never exposed; a committed test pins the aliasing itself so the snapshot is never removed on a guess
+- [Phase 19]: 19-06: ERASE-02's cost is 80-82 s across FOUR readings, not the plan's '81 s verified three ways' — `results/phase17_training_run.log:19,39,58` read `wall=82s`/`80s`/`80s` (three different numbers, none of them 81) and the `phase14_teaching_run.log` window `:10`->`:16` is 11:27:48Z->11:29:09Z = 81 s, a fourth measurement rather than a confirmation. Every one of the four windows is an UPPER BOUND on the training itself: each contains the bins build and a full `masked_perplexity` pair on top of the 200 steps. `ERASE_02_REFERENCE_ARM` publishes all four and a committed test asserts both 80 and 82 appear alongside 'upper bound'
+- [Phase 19]: 19-06: 19-05's ban on the int literal `2` in the pin HELD and the CODE moved — `CURVE_CHECKPOINTS` is `tuple(1 << doubling for doubling in range(8))` and `JSON_INDENT` is `len('  ')`, because 2 is `MARGIN_K`'s value and amending a committed guard to fit new code is the manoeuvre this phase exists to forbid. Same call 19-03 made refusing `math.floor` for `int()`. The retention call-site census (19-04) went red on correct code when the pin became the 7th caller; scoped by EXCLUDING the pin rather than lowering the count, and the positive half was ADDED (the pin must call `retention_perplexity` AND reach an adapter), so strictly more is asserted than before
+- [Phase 19]: 19-06: `select_calibration_fact` returns `eligible[0]` and PROVES the pool ids are distinct rather than performing the tie-break the rule declares unreachable. My first implementation dressed it up as a `min()` over the same-slot members — a spelling that, had it ever decided anything, would have picked the second `person_name` calibration fact where the primary rule picks the first. The test that caught it asserted the wrong property too and was replaced with the structural one: a tie cannot arise because a tuple's order is total, and the doubled slot's lexicographic minimum is asserted NOT to be the chosen fact so the disagreement stays visible
+- [Phase 19]: 19-06: the blind calibration denominator is 23 (14 taught + 9 held-out) against the target's 27, DERIVED per fact and never assumed. All ten `CALIBRATION_POOL` members are eligible at 23 of 31 rendered, with F4/F5 dropped by the self-naming filter; the 4-question gap against the target is exactly the `RESERVED_HELDOUT_PROBES` a `cand_*` fact carries and a `cal_*` fact does not. Admissible because `lock_erasure_floor` consumes a RATE, and the denominator is published beside it in every table
+- [Phase 19]: 19-06: B7 closed the invocation surface at ten subcommands (`cal-corpus`, `cal-train`, `cal-erase`, `noise-floors`, `erase`, `retrain`, `representational`, `report`, `target`, `floor`) with a MODULE-SCOPE proof that the dispatch table equals `SUBCOMMANDS` — a name with no handler is a subcommand a later plan must add code for, which is a commit to a pre-registration whose numbers already exist. `--target`/`--floor` still resolve so no published pointer went stale. B2 landed before the artifacts exist: `run_bit_identity_control` takes `adapter_path` (default `ADAPTER_PATH`, so every call site is byte-identical) and now RECORDS which adapter its 0.0 is about, because once the path is a parameter an unnamed max abs diff is unattributable
 
 ### Roadmap Evolution
 
@@ -353,7 +368,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-18T00:11:54.456Z
+Last session: 2026-08-18T01:37:15.681Z
 Stopped at: Completed 19-04-PLAN.md
 Resume file: None
 

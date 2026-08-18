@@ -464,6 +464,20 @@ all reached lazily inside function bodies). `scripts/phase19_erasure.py` is now 
 - [x] Every `erasure_succeeded` keyword has a committed producer, and the pin is closed: the
       invocation surface is a ten-name set proved equal to its dispatch table at import.
 
+## Requirements Deliberately NOT Marked Complete
+
+Seventh application of 17-01's recorded over-claim-avoidance pattern. The plan claims
+`[ERASE-01, ERASE-02, STAT-01, STAT-05]`; none is marked here.
+
+- **ERASE-01** — "selective erasure of a taught fact from the weights". This plan pins the
+  mechanism and builds the runner; it erases nothing. No plan before the verdict at 19-13 can
+  discharge it (19-01's recorded decision).
+- **ERASE-02** — the retrain reference arm is now a committed *spec* with its caveat. The arm has
+  never been trained, and ERASE-02 is discharged by the arm existing as evidence, not as code.
+- **STAT-01 / STAT-05** — already Complete for phases 16/17/18. STAT-05's traceability row gains
+  Phase 19 **when the pin is approved at 19-07**, which 19-01 recorded explicitly. The pin's
+  *content* is complete today; its *gate* is 19-07's.
+
 ## Defects Encountered
 
 - **A `git commit --amend` was DENIED by the permission system** (twice) when correcting the Task 3
