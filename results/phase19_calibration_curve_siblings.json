@@ -1,0 +1,536 @@
+{
+  "adapter_in": "/Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_calibration_adapter.pt",
+  "adapter_in_sha256": "bc616c3667719e677532a5e56c7b8de8e2dc79e15af85ccc14bc1dcce66856da",
+  "cap": 288,
+  "checkpoints": [
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 4.627740859985352,
+          "rank": 4,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 1.6298425197601318,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 4.596747398376465,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 1.4284799098968506,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 4.549674987792969,
+          "rank": 2,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 0.24834445118904114,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 3.1856510639190674,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 2.8643112182617188,
+          "rank": 1,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 2.475026845932007,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 1.1495381593704224,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 1
+    },
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 4.656434059143066,
+          "rank": 4,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 1.6522067785263062,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 4.718380928039551,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 1.437032699584961,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 4.37318229675293,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 0.3427651524543762,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 3.1378676891326904,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 2.884843587875366,
+          "rank": 1,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 2.4850287437438965,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 1.193979263305664,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 2
+    },
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 4.661962032318115,
+          "rank": 4,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 1.6355602741241455,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 4.714694976806641,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 1.4640048742294312,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 4.473784446716309,
+          "rank": 2,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 0.5929723381996155,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 3.1748452186584473,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 2.8872673511505127,
+          "rank": 1,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 2.614070177078247,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 1.2190134525299072,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 4
+    },
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 4.57586145401001,
+          "rank": 4,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 1.7032420635223389,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 4.931196689605713,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 1.5212416648864746,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 4.353966236114502,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 0.9737794399261475,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 3.431506395339966,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 3.0386810302734375,
+          "rank": 1,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 2.5811283588409424,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 1.271115779876709,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 8
+    },
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 4.59644889831543,
+          "rank": 4,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 1.8369287252426147,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 5.317947864532471,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 1.578433871269226,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 4.377655506134033,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 1.7831376791000366,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 3.7501754760742188,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 3.1882541179656982,
+          "rank": 1,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 2.8574612140655518,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 1.3078510761260986,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 16
+    },
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 4.7370171546936035,
+          "rank": 4,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 2.1145660877227783,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 5.453665733337402,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 1.7903945446014404,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 4.810334205627441,
+          "rank": 2,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 2.9635629653930664,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 4.071938514709473,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 3.4377212524414062,
+          "rank": 1,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 3.3538625240325928,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 1.4468955993652344,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 32
+    },
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 5.305853366851807,
+          "rank": 4,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 2.0654807090759277,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 5.804140567779541,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 2.131681442260742,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 5.031569480895996,
+          "rank": 3,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 3.9314002990722656,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 4.390912055969238,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 3.7284326553344727,
+          "rank": 1,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 3.8661580085754395,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 1.6687465906143188,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 64
+    },
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 5.747206211090088,
+          "rank": 5,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 2.7371573448181152,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 5.69472599029541,
+          "rank": 3,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 2.5500376224517822,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 5.751708030700684,
+          "rank": 4,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 4.432498455047607,
+          "rank": 1,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 4.491705894470215,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 4.162490367889404,
+          "rank": 2,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 4.438604831695557,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 2.096759080886841,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 128
+    },
+    {
+      "facts": {
+        "cal_cat_glimm": {
+          "ans1_mean_nll": 5.721213340759277,
+          "rank": 5,
+          "slot": "cat_name"
+        },
+        "cal_dog_nubbin": {
+          "ans1_mean_nll": 3.0603256225585938,
+          "rank": 1,
+          "slot": "pet_name"
+        },
+        "cal_dog_torvo": {
+          "ans1_mean_nll": 6.05298376083374,
+          "rank": 3,
+          "slot": "pet_name"
+        },
+        "cal_house_8351": {
+          "ans1_mean_nll": 3.1748850345611572,
+          "rank": 1,
+          "slot": "house_number"
+        },
+        "cal_person_sedrin": {
+          "ans1_mean_nll": 5.750131607055664,
+          "rank": 5,
+          "slot": "person_name"
+        },
+        "cal_person_varek": {
+          "ans1_mean_nll": 4.7764410972595215,
+          "rank": 2,
+          "slot": "person_name"
+        },
+        "cal_sister_tolma": {
+          "ans1_mean_nll": 4.89408540725708,
+          "rank": 1,
+          "slot": "sibling_name"
+        },
+        "cal_street_dunwold": {
+          "ans1_mean_nll": 4.445774078369141,
+          "rank": 2,
+          "slot": "street"
+        },
+        "cal_town_ashenvale": {
+          "ans1_mean_nll": 4.7533063888549805,
+          "rank": 1,
+          "slot": "hometown"
+        },
+        "cal_year_1974": {
+          "ans1_mean_nll": 2.5019354820251465,
+          "rank": 1,
+          "slot": "birth_year"
+        }
+      },
+      "prefix": 187
+    }
+  ],
+  "curve_companion_to": "phase19_calibration_curve.json",
+  "device": "mps",
+  "driver": "scripts/phase19_run.py cal-siblings (UNPINNED)",
+  "erased_fact_id": "cal_person_varek",
+  "erased_slot": "person_name",
+  "git_sha": "6d1d7999f0af42917ffbac2900b0b6583d201349",
+  "k": 187,
+  "pool_order": [
+    "cal_person_varek",
+    "cal_person_sedrin",
+    "cal_dog_nubbin",
+    "cal_dog_torvo",
+    "cal_cat_glimm",
+    "cal_sister_tolma",
+    "cal_town_ashenvale",
+    "cal_street_dunwold",
+    "cal_year_1974",
+    "cal_house_8351"
+  ],
+  "reference_set_sizes": {
+    "cal_cat_glimm": 7,
+    "cal_dog_nubbin": 7,
+    "cal_dog_torvo": 7,
+    "cal_house_8351": 6,
+    "cal_person_sedrin": 7,
+    "cal_person_varek": 7,
+    "cal_sister_tolma": 7,
+    "cal_street_dunwold": 6,
+    "cal_town_ashenvale": 7,
+    "cal_year_1974": 7
+  },
+  "stopped": true,
+  "torch": "2.7.1",
+  "wall_clock_min": 0.10836421648661296
+}

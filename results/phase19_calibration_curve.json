@@ -1,0 +1,1382 @@
+{
+  "adapter_in": "/Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_calibration_adapter.pt",
+  "adapter_in_sha256": "bc616c3667719e677532a5e56c7b8de8e2dc79e15af85ccc14bc1dcce66856da",
+  "adapter_out": "/Users/juliorcoelho/PersonaCore/checkpoints/phase19_cal_erased_adapter.pt",
+  "adapter_out_sha256": "e3cb42b867ba1b751523985b92adb386619723f4974faeb007dcb2142b3e1842",
+  "cap": 288,
+  "checkpoints": [
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.90370534909552,
+        "n_targets": 270203
+      },
+      "prefix": 1,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 1.7533613443374634,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 4.15151834487915,
+          "rank": 1
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.652557849884033,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 2.864449977874756,
+          "rank": 2
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.307469367980957,
+          "rank": 5
+        },
+        "pet_name": {
+          "ans1_mean_nll": 5.716595649719238,
+          "rank": 4
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 5.913003444671631,
+          "rank": 5
+        },
+        "street": {
+          "ans1_mean_nll": 5.391046047210693,
+          "rank": 3
+        }
+      },
+      "target_ans1_mean_nll": 0.24834445118904114,
+      "target_rank": 1
+    },
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.846854517059266,
+        "n_targets": 270203
+      },
+      "prefix": 2,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 1.7701520919799805,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 4.1434149742126465,
+          "rank": 1
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.70775032043457,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 2.9932243824005127,
+          "rank": 2
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.323208808898926,
+          "rank": 5
+        },
+        "pet_name": {
+          "ans1_mean_nll": 5.733977317810059,
+          "rank": 4
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 5.946451663970947,
+          "rank": 6
+        },
+        "street": {
+          "ans1_mean_nll": 5.4540510177612305,
+          "rank": 3
+        }
+      },
+      "target_ans1_mean_nll": 0.3427651524543762,
+      "target_rank": 1
+    },
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.794575105553976,
+        "n_targets": 270203
+      },
+      "prefix": 4,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 1.7877817153930664,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 4.077808856964111,
+          "rank": 1
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.727099418640137,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 2.955854654312134,
+          "rank": 2
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.309452056884766,
+          "rank": 5
+        },
+        "pet_name": {
+          "ans1_mean_nll": 5.708489418029785,
+          "rank": 4
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 5.9467034339904785,
+          "rank": 6
+        },
+        "street": {
+          "ans1_mean_nll": 5.435525894165039,
+          "rank": 3
+        }
+      },
+      "target_ans1_mean_nll": 0.5929723381996155,
+      "target_rank": 1
+    },
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.708505996335075,
+        "n_targets": 270203
+      },
+      "prefix": 8,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 1.7813663482666016,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 4.359902381896973,
+          "rank": 3
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.7775678634643555,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 2.885622024536133,
+          "rank": 2
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.104939937591553,
+          "rank": 4
+        },
+        "pet_name": {
+          "ans1_mean_nll": 5.847696781158447,
+          "rank": 5
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 5.818065166473389,
+          "rank": 6
+        },
+        "street": {
+          "ans1_mean_nll": 5.381069660186768,
+          "rank": 3
+        }
+      },
+      "target_ans1_mean_nll": 0.9737794399261475,
+      "target_rank": 1
+    },
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.553089833257527,
+        "n_targets": 270203
+      },
+      "prefix": 16,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 1.8075766563415527,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 4.3113532066345215,
+          "rank": 2
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.734193801879883,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 2.9020094871520996,
+          "rank": 3
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.358295440673828,
+          "rank": 5
+        },
+        "pet_name": {
+          "ans1_mean_nll": 6.340887546539307,
+          "rank": 6
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 6.182015895843506,
+          "rank": 6
+        },
+        "street": {
+          "ans1_mean_nll": 5.302493095397949,
+          "rank": 3
+        }
+      },
+      "target_ans1_mean_nll": 1.7831376791000366,
+      "target_rank": 1
+    },
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.3587707756256115,
+        "n_targets": 270203
+      },
+      "prefix": 32,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 1.9024677276611328,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 4.533931255340576,
+          "rank": 3
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.690644264221191,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 2.9670629501342773,
+          "rank": 4
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.523604869842529,
+          "rank": 5
+        },
+        "pet_name": {
+          "ans1_mean_nll": 6.521369934082031,
+          "rank": 6
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 6.644285202026367,
+          "rank": 6
+        },
+        "street": {
+          "ans1_mean_nll": 5.138946533203125,
+          "rank": 3
+        }
+      },
+      "target_ans1_mean_nll": 2.9635629653930664,
+      "target_rank": 1
+    },
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.0665989245746745,
+        "n_targets": 270203
+      },
+      "prefix": 64,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 2.0590436458587646,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 4.21074104309082,
+          "rank": 3
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.285202980041504,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 3.0539357662200928,
+          "rank": 6
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.5916337966918945,
+          "rank": 5
+        },
+        "pet_name": {
+          "ans1_mean_nll": 6.520604133605957,
+          "rank": 5
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 7.086171627044678,
+          "rank": 6
+        },
+        "street": {
+          "ans1_mean_nll": 4.905529022216797,
+          "rank": 3
+        }
+      },
+      "target_ans1_mean_nll": 3.9314002990722656,
+      "target_rank": 1
+    },
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 4.910973501768934,
+        "n_targets": 270203
+      },
+      "prefix": 128,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 2.3902783393859863,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 3.9723777770996094,
+          "rank": 3
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.309480667114258,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 3.206576347351074,
+          "rank": 6
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.232855796813965,
+          "rank": 4
+        },
+        "pet_name": {
+          "ans1_mean_nll": 5.990758419036865,
+          "rank": 5
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 6.791049957275391,
+          "rank": 5
+        },
+        "street": {
+          "ans1_mean_nll": 4.897249221801758,
+          "rank": 3
+        }
+      },
+      "target_ans1_mean_nll": 4.432498455047607,
+      "target_rank": 1
+    },
+    {
+      "dialogue_ppl": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 4.81813782734073,
+        "n_targets": 270203
+      },
+      "prefix": 187,
+      "slots": {
+        "birth_year": {
+          "ans1_mean_nll": 2.714315176010132,
+          "rank": 3
+        },
+        "cat_name": {
+          "ans1_mean_nll": 4.054319858551025,
+          "rank": 3
+        },
+        "hometown": {
+          "ans1_mean_nll": 7.274773597717285,
+          "rank": 5
+        },
+        "house_number": {
+          "ans1_mean_nll": 3.493671178817749,
+          "rank": 6
+        },
+        "person_name": {
+          "ans1_mean_nll": 5.234408378601074,
+          "rank": 4
+        },
+        "pet_name": {
+          "ans1_mean_nll": 6.1391401290893555,
+          "rank": 5
+        },
+        "sibling_name": {
+          "ans1_mean_nll": 6.466728687286377,
+          "rank": 5
+        },
+        "street": {
+          "ans1_mean_nll": 5.031142234802246,
+          "rank": 4
+        }
+      },
+      "target_ans1_mean_nll": 4.7764410972595215,
+      "target_rank": 2
+    }
+  ],
+  "collateral_slots": [
+    "birth_year",
+    "cat_name",
+    "hometown",
+    "house_number",
+    "person_name",
+    "pet_name",
+    "sibling_name",
+    "street"
+  ],
+  "device": "mps",
+  "driver": "scripts/phase19_run.py cal-ablate (UNPINNED)",
+  "fact_id": "cal_person_varek",
+  "git_sha": "6d1d7999f0af42917ffbac2900b0b6583d201349",
+  "intact_nll": 0.16733184456825256,
+  "k": 187,
+  "mechanism": "M1-rank1-component-ablation",
+  "ordered_prefix": [
+    [
+      4,
+      "fc_in",
+      0
+    ],
+    [
+      4,
+      "fc_in",
+      4
+    ],
+    [
+      4,
+      "fc_out",
+      4
+    ],
+    [
+      2,
+      "fc_in",
+      3
+    ],
+    [
+      3,
+      "fc_in",
+      1
+    ],
+    [
+      3,
+      "fc_in",
+      3
+    ],
+    [
+      4,
+      "fc_out",
+      6
+    ],
+    [
+      2,
+      "fc_out",
+      1
+    ],
+    [
+      3,
+      "fc_out",
+      6
+    ],
+    [
+      5,
+      "fc_in",
+      1
+    ],
+    [
+      3,
+      "fc_in",
+      0
+    ],
+    [
+      5,
+      "fc_in",
+      7
+    ],
+    [
+      2,
+      "fc_out",
+      5
+    ],
+    [
+      4,
+      "fc_in",
+      7
+    ],
+    [
+      3,
+      "fc_out",
+      0
+    ],
+    [
+      1,
+      "fc_out",
+      2
+    ],
+    [
+      2,
+      "fc_in",
+      7
+    ],
+    [
+      5,
+      "fc_in",
+      4
+    ],
+    [
+      1,
+      "c_proj",
+      2
+    ],
+    [
+      2,
+      "fc_in",
+      6
+    ],
+    [
+      3,
+      "fc_out",
+      5
+    ],
+    [
+      4,
+      "fc_in",
+      3
+    ],
+    [
+      4,
+      "fc_out",
+      5
+    ],
+    [
+      5,
+      "fc_in",
+      5
+    ],
+    [
+      2,
+      "fc_out",
+      7
+    ],
+    [
+      2,
+      "fc_in",
+      5
+    ],
+    [
+      2,
+      "v_proj",
+      2
+    ],
+    [
+      2,
+      "fc_in",
+      0
+    ],
+    [
+      3,
+      "fc_in",
+      6
+    ],
+    [
+      2,
+      "fc_in",
+      4
+    ],
+    [
+      4,
+      "fc_out",
+      1
+    ],
+    [
+      1,
+      "c_proj",
+      1
+    ],
+    [
+      3,
+      "fc_out",
+      7
+    ],
+    [
+      3,
+      "c_proj",
+      2
+    ],
+    [
+      1,
+      "fc_in",
+      6
+    ],
+    [
+      2,
+      "fc_out",
+      4
+    ],
+    [
+      2,
+      "v_proj",
+      0
+    ],
+    [
+      2,
+      "fc_out",
+      3
+    ],
+    [
+      4,
+      "v_proj",
+      3
+    ],
+    [
+      5,
+      "fc_out",
+      7
+    ],
+    [
+      1,
+      "fc_in",
+      7
+    ],
+    [
+      0,
+      "fc_in",
+      7
+    ],
+    [
+      0,
+      "fc_in",
+      5
+    ],
+    [
+      1,
+      "fc_out",
+      5
+    ],
+    [
+      1,
+      "c_proj",
+      0
+    ],
+    [
+      1,
+      "fc_out",
+      7
+    ],
+    [
+      0,
+      "fc_in",
+      1
+    ],
+    [
+      5,
+      "fc_out",
+      1
+    ],
+    [
+      0,
+      "v_proj",
+      4
+    ],
+    [
+      2,
+      "v_proj",
+      1
+    ],
+    [
+      2,
+      "v_proj",
+      7
+    ],
+    [
+      2,
+      "fc_out",
+      0
+    ],
+    [
+      2,
+      "fc_out",
+      6
+    ],
+    [
+      0,
+      "c_proj",
+      3
+    ],
+    [
+      0,
+      "fc_in",
+      6
+    ],
+    [
+      0,
+      "fc_out",
+      6
+    ],
+    [
+      0,
+      "v_proj",
+      6
+    ],
+    [
+      2,
+      "k_proj",
+      5
+    ],
+    [
+      1,
+      "c_proj",
+      4
+    ],
+    [
+      5,
+      "fc_out",
+      0
+    ],
+    [
+      0,
+      "fc_in",
+      0
+    ],
+    [
+      1,
+      "fc_out",
+      6
+    ],
+    [
+      1,
+      "fc_out",
+      1
+    ],
+    [
+      2,
+      "c_proj",
+      3
+    ],
+    [
+      4,
+      "fc_in",
+      1
+    ],
+    [
+      2,
+      "c_proj",
+      4
+    ],
+    [
+      4,
+      "c_proj",
+      3
+    ],
+    [
+      0,
+      "fc_out",
+      2
+    ],
+    [
+      4,
+      "c_proj",
+      6
+    ],
+    [
+      3,
+      "v_proj",
+      3
+    ],
+    [
+      3,
+      "fc_in",
+      5
+    ],
+    [
+      2,
+      "fc_out",
+      2
+    ],
+    [
+      5,
+      "fc_out",
+      2
+    ],
+    [
+      2,
+      "c_proj",
+      1
+    ],
+    [
+      0,
+      "k_proj",
+      6
+    ],
+    [
+      4,
+      "c_proj",
+      2
+    ],
+    [
+      0,
+      "fc_out",
+      1
+    ],
+    [
+      3,
+      "q_proj",
+      3
+    ],
+    [
+      2,
+      "c_proj",
+      0
+    ],
+    [
+      1,
+      "fc_out",
+      4
+    ],
+    [
+      1,
+      "fc_in",
+      4
+    ],
+    [
+      2,
+      "v_proj",
+      5
+    ],
+    [
+      4,
+      "c_proj",
+      5
+    ],
+    [
+      0,
+      "c_proj",
+      5
+    ],
+    [
+      0,
+      "fc_out",
+      4
+    ],
+    [
+      4,
+      "v_proj",
+      0
+    ],
+    [
+      2,
+      "k_proj",
+      7
+    ],
+    [
+      2,
+      "k_proj",
+      0
+    ],
+    [
+      1,
+      "v_proj",
+      7
+    ],
+    [
+      1,
+      "q_proj",
+      4
+    ],
+    [
+      1,
+      "v_proj",
+      1
+    ],
+    [
+      4,
+      "fc_out",
+      2
+    ],
+    [
+      2,
+      "c_proj",
+      6
+    ],
+    [
+      4,
+      "k_proj",
+      2
+    ],
+    [
+      5,
+      "fc_out",
+      4
+    ],
+    [
+      2,
+      "k_proj",
+      6
+    ],
+    [
+      1,
+      "fc_in",
+      5
+    ],
+    [
+      2,
+      "c_proj",
+      5
+    ],
+    [
+      4,
+      "c_proj",
+      7
+    ],
+    [
+      4,
+      "v_proj",
+      4
+    ],
+    [
+      1,
+      "q_proj",
+      5
+    ],
+    [
+      3,
+      "c_proj",
+      3
+    ],
+    [
+      0,
+      "q_proj",
+      2
+    ],
+    [
+      4,
+      "fc_out",
+      3
+    ],
+    [
+      0,
+      "q_proj",
+      4
+    ],
+    [
+      3,
+      "q_proj",
+      0
+    ],
+    [
+      0,
+      "c_proj",
+      4
+    ],
+    [
+      0,
+      "k_proj",
+      1
+    ],
+    [
+      3,
+      "c_proj",
+      6
+    ],
+    [
+      1,
+      "k_proj",
+      1
+    ],
+    [
+      4,
+      "v_proj",
+      2
+    ],
+    [
+      5,
+      "c_proj",
+      7
+    ],
+    [
+      0,
+      "k_proj",
+      3
+    ],
+    [
+      1,
+      "fc_out",
+      3
+    ],
+    [
+      0,
+      "v_proj",
+      2
+    ],
+    [
+      3,
+      "fc_out",
+      2
+    ],
+    [
+      3,
+      "v_proj",
+      6
+    ],
+    [
+      5,
+      "k_proj",
+      2
+    ],
+    [
+      1,
+      "v_proj",
+      5
+    ],
+    [
+      3,
+      "c_proj",
+      5
+    ],
+    [
+      1,
+      "k_proj",
+      6
+    ],
+    [
+      1,
+      "k_proj",
+      0
+    ],
+    [
+      0,
+      "q_proj",
+      5
+    ],
+    [
+      0,
+      "c_proj",
+      2
+    ],
+    [
+      2,
+      "k_proj",
+      3
+    ],
+    [
+      1,
+      "c_proj",
+      5
+    ],
+    [
+      5,
+      "k_proj",
+      4
+    ],
+    [
+      5,
+      "k_proj",
+      6
+    ],
+    [
+      1,
+      "k_proj",
+      3
+    ],
+    [
+      2,
+      "q_proj",
+      2
+    ],
+    [
+      0,
+      "fc_in",
+      3
+    ],
+    [
+      1,
+      "k_proj",
+      7
+    ],
+    [
+      4,
+      "q_proj",
+      5
+    ],
+    [
+      0,
+      "k_proj",
+      2
+    ],
+    [
+      5,
+      "k_proj",
+      3
+    ],
+    [
+      3,
+      "v_proj",
+      4
+    ],
+    [
+      0,
+      "c_proj",
+      7
+    ],
+    [
+      2,
+      "fc_in",
+      1
+    ],
+    [
+      5,
+      "q_proj",
+      4
+    ],
+    [
+      5,
+      "k_proj",
+      5
+    ],
+    [
+      5,
+      "q_proj",
+      7
+    ],
+    [
+      5,
+      "q_proj",
+      6
+    ],
+    [
+      1,
+      "q_proj",
+      6
+    ],
+    [
+      5,
+      "q_proj",
+      0
+    ],
+    [
+      5,
+      "v_proj",
+      7
+    ],
+    [
+      5,
+      "q_proj",
+      1
+    ],
+    [
+      5,
+      "fc_out",
+      3
+    ],
+    [
+      0,
+      "fc_in",
+      4
+    ],
+    [
+      5,
+      "q_proj",
+      3
+    ],
+    [
+      4,
+      "k_proj",
+      7
+    ],
+    [
+      1,
+      "q_proj",
+      7
+    ],
+    [
+      5,
+      "fc_in",
+      2
+    ],
+    [
+      1,
+      "v_proj",
+      0
+    ],
+    [
+      1,
+      "k_proj",
+      5
+    ],
+    [
+      4,
+      "q_proj",
+      6
+    ],
+    [
+      0,
+      "k_proj",
+      0
+    ],
+    [
+      4,
+      "k_proj",
+      4
+    ],
+    [
+      4,
+      "q_proj",
+      7
+    ],
+    [
+      1,
+      "q_proj",
+      0
+    ],
+    [
+      4,
+      "k_proj",
+      6
+    ],
+    [
+      4,
+      "c_proj",
+      0
+    ],
+    [
+      5,
+      "v_proj",
+      4
+    ],
+    [
+      5,
+      "fc_out",
+      5
+    ],
+    [
+      4,
+      "k_proj",
+      0
+    ],
+    [
+      1,
+      "q_proj",
+      1
+    ],
+    [
+      4,
+      "q_proj",
+      4
+    ],
+    [
+      3,
+      "c_proj",
+      4
+    ],
+    [
+      4,
+      "q_proj",
+      2
+    ],
+    [
+      0,
+      "fc_out",
+      7
+    ],
+    [
+      4,
+      "q_proj",
+      3
+    ],
+    [
+      5,
+      "q_proj",
+      5
+    ],
+    [
+      3,
+      "q_proj",
+      2
+    ],
+    [
+      5,
+      "k_proj",
+      7
+    ],
+    [
+      5,
+      "c_proj",
+      3
+    ],
+    [
+      5,
+      "v_proj",
+      1
+    ],
+    [
+      2,
+      "q_proj",
+      6
+    ],
+    [
+      2,
+      "q_proj",
+      7
+    ],
+    [
+      5,
+      "q_proj",
+      2
+    ],
+    [
+      0,
+      "k_proj",
+      5
+    ],
+    [
+      4,
+      "k_proj",
+      5
+    ],
+    [
+      4,
+      "q_proj",
+      0
+    ],
+    [
+      4,
+      "v_proj",
+      7
+    ],
+    [
+      2,
+      "q_proj",
+      5
+    ],
+    [
+      0,
+      "q_proj",
+      0
+    ],
+    [
+      5,
+      "fc_out",
+      6
+    ],
+    [
+      3,
+      "fc_in",
+      7
+    ],
+    [
+      0,
+      "c_proj",
+      6
+    ]
+  ],
+  "references": [
+    "davrin",
+    "varek",
+    "mirek",
+    "thessaly",
+    "drovik",
+    "kessendra",
+    "quillon"
+  ],
+  "round_trip_audits": {
+    "ablated_components_checked": 187,
+    "ablated_components_zero_on_disk": true,
+    "base_fingerprint_equal": true,
+    "keys_equal": true,
+    "lora_config_equal": true,
+    "n_params": 331776,
+    "n_tensors": 72,
+    "tensors_bit_identical": true
+  },
+  "slot": "person_name",
+  "stopped": true,
+  "torch": "2.7.1",
+  "wall_clock_min": 7.0145487507184345
+}
