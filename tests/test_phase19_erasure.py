@@ -2949,10 +2949,17 @@ def test_k_equals_the_cap_is_ambiguous_which_is_why_stopped_is_recorded_separate
 def test_run_erasure_arm_refuses_to_clobber_before_it_loads_anything():
     """The refusal is the FIRST statement — an arm record is recorded evidence, and there is no
     force flag. Checked by CALLING it against an existing path with no checkpoint on the device
-    it names: reaching a torch load would be a different exception."""
-    path = erasure.arm_record_path(erasure.ERASURE_ARMS[0])
-    assert not path.exists(), f"{path} exists — no results/phase19_* artifact may exist yet"
+    it names: reaching a torch load would be a different exception.
 
+    This USED to open with `assert not arm_record_path(ERASURE_ARMS[0]).exists()`. That was a
+    PHASE-ORDERING precondition with an expiry date, and 19-09 is the plan that expires it: the
+    blind calibration's whole output is `results/phase19_arm_cal-erased.json`, so the assertion
+    turned red on the first arm record this phase was built to produce. It was also never load-
+    bearing HERE — the refusal below is proved against a fresh `tmp` path, which is independent of
+    `arm_record_path`. The ordering guarantee it looked like it was providing is the one
+    `tests/test_phase16_prereg.py::test_phase19_prereg_is_frozen_before_every_phase19_result`
+    actually provides, by ancestry, over every `results/phase19_*` file at once.
+    """
     import tempfile
 
     tmp = pathlib.Path(tempfile.mkdtemp()) / "phase19_arm_probe.json"
@@ -2991,11 +2998,19 @@ def test_run_erasure_arm_asserts_parity_before_it_draws_and_asserts_in_prompt_in
     )
     assert called["assert_no_value_in_prompt"] < called["draw_all"]
 
-    # And the arms it may ever write are named up front, disjoint, and none has an artifact yet.
+    # And the arms it may ever write are named up front and disjoint.
     assert len(set(erasure.ERASURE_ARMS)) == len(erasure.ERASURE_ARMS)
     assert set(erasure.PARITY_ASSERTED_ARMS) <= set(erasure.ERASURE_ARMS)
-    for arm in erasure.ERASURE_ARMS:
-        assert not erasure.arm_record_path(arm).exists()
+
+    # This USED to close with `for arm in ERASURE_ARMS: assert not arm_record_path(arm).exists()`
+    # — "none has an artifact yet", true only until the phase produced one, which 19-09 did. The
+    # DURABLE property it was standing in for is the one `arm_record_path`'s own docstring names
+    # ("one naming rule, so no plan invents a second"), and that one does not expire: every arm
+    # record on disk must sit at the path the rule computes. A record written to an invented name
+    # is a record `_load_arm` — and therefore `report` — can never find.
+    legal = {erasure.arm_record_path(arm) for arm in erasure.ERASURE_ARMS}
+    found = set(erasure.ARM_RECORD_DIR.glob("phase19_arm_*.json"))
+    assert found <= legal, f"arm records at non-computed paths: {sorted(found - legal)}"
 
 
 def test_the_bit_identity_control_takes_the_adapter_it_is_asked_to_measure():
