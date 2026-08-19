@@ -124,11 +124,32 @@ them:
     python scripts/phase19_run.py retrain-train    # the M2 adapter, ~81 s        (19-13 task 1)
     python scripts/phase19_run.py retrain-score    # the A2/K=48 arm + comparison (19-13 task 2)
     python scripts/phase19_run.py retrain-soft     # the soft DESCRIPTIVE read    (19-13 task 2)
+
+19-14 — THE DESCRIPTIVE REPRESENTATIONAL READ — adds ONE, for one further thing the pin's writer
+has no room for. The pinned `representational` subcommand OWNS the read and runs FIRST; this
+subcommand adds only what that writer structurally cannot carry:
+
+10. `_cmd_representational` WRITES EXACTLY FOUR KEYS AND HAS NO EXTENSION POINT — measured, not
+    inferred. It emits `{"cosine", "fisher", "ablated_components", "config"}` and then
+    `_prove`s the path did not already exist, with no force flag, so a second pinned run is
+    refused. Three things `ERASURE_DECISION_RULE`'s fourth clause and 19-14's must_haves require
+    therefore have nowhere to live inside it: (i) the CROSS-PERSONA ΔW cosine the clause names
+    explicitly, at its stated n=3; (ii) a taught-vs-M1 cosine — the pin's cosine is taught vs the
+    M2 RETRAIN, so the pinned record contains no read of the surgically edited adapter at all, and
+    the ablated-vs-preserved partition it publishes is a Fisher partition, never a ΔW one; and
+    (iii) the Fisher read's honest limits AS FIELDS rather than as report prose. The companion
+    below recomputes NOTHING the pin already wrote — it reads the pin's record back, proves its own
+    taught-vs-M2 cosine reproduces it cell for cell, and adds the three reads beside it through the
+    SAME pinned `delta_w_cells` / `delta_w_cosine` functions the guard scans.
+
+    python scripts/phase19_run.py representational-reads   # the DESCRIPTIVE companion (19-14 t1)
 """
 
 import hashlib
+import itertools
 import json
 import pathlib
+import statistics
 import sys
 import time
 
@@ -176,6 +197,19 @@ RESWEEP_PATH = _REPO_ROOT / "results" / "phase19_reference_set_resweep.json"
 # SCORES record is unaddressed by any constant, and it takes the arm's own name so it cannot be
 # mistaken for `phase19_target_scores.json`, which holds the M1 read.
 RETRAIN_SCORES_PATH = _REPO_ROOT / "results" / "phase19_retrain_scores.json"
+
+# 19-14's ONE new name. `results/phase19_representational.json` is NOT named here: it is
+# `pin.REPRESENTATIONAL_RECORD_PATH`, written by the pinned `representational` subcommand and read
+# back by `pin._load_representational`, so a second spelling would orphan the record from its only
+# consumer. This companion takes that name plus `_reads` so the pair reads as one object, and it is
+# added to `PHASE19_TARGET_ARTIFACT_GLOBS` by name for the reason that tuple's own docstring gives:
+# a target number a reader can find in a file no guard watches is the gap the guard exists to close.
+REPRESENTATIONAL_READS_PATH = _REPO_ROOT / "results" / "phase19_representational_reads.json"
+
+# The three Phase 17 persona adapters `ERASURE_DECISION_RULE`'s fourth clause means by "n=3
+# personas". Named here because no Phase 19 constant addresses them and `teach_persona.arm_outputs`
+# would need each arm name typed anyway; the names are the committed on-disk ones.
+PERSONA_ADAPTERS = ("phase17_persona_a", "phase17_persona_b", "phase17_persona_c")
 
 
 def _sha256(path):
@@ -1906,12 +1940,285 @@ def retrain_soft():
     _merge_block(RETRAIN_SCORES_PATH, "soft_descriptive", block)
 
 
+def _cosine_read(cosines, *, unit, **denominators):
+    """One cosine dict with its BOUNDS and its n. DESCRIPTIVE — nothing here is compared.
+
+    ``min`` / ``median`` / ``max`` are the bounds `ERASURE_DECISION_RULE`'s fourth clause requires
+    reported beside the numbers. They are reductions, not thresholds: none of them is compared
+    against anything, no value in this file is, and
+    `tests/test_phase19_erasure.py::test_no_consumer_branch_reads_the_representational_numbers`
+    scans both this driver and the pin by AST to keep it that way.
+
+    ``None`` cosines are COUNTED and excluded from the bounds rather than coerced to ``0.0``, for
+    `delta_w_cosine`'s own reason: a fully ablated cell has no direction, and writing ``0.0`` there
+    would publish it as ORTHOGONAL — a claim the arithmetic does not make.
+    """
+    defined = [value for value in cosines.values() if value is not None]
+    return {
+        "cells": {str(key): value for key, value in cosines.items()},
+        "n": len(cosines),
+        "n_unit": unit,
+        "n_defined": len(defined),
+        "n_undefined": len(cosines) - len(defined),
+        "min": min(defined) if defined else None,
+        "median": statistics.median(defined) if defined else None,
+        "max": max(defined) if defined else None,
+        **denominators,
+    }
+
+
+def representational_reads():
+    """19-14 task 1 — the DESCRIPTIVE companion to the pinned representational record.
+
+    Runs AFTER `python scripts/phase19_erasure.py representational`, never instead of it. The pin
+    owns the read; this adds the three things its four-key writer has no room for (module docstring,
+    reason 10) and RECOMPUTES NOTHING it already wrote: the pinned taught-vs-M2 cosine is read back
+    and reproduced here cell for cell as a round-trip proof, so the companion is provably describing
+    the same object rather than a second measurement beside it.
+    """
+    import inspect
+
+    import extract_deltas
+    import phase14_recall as recall
+    import teach_persona as tp
+
+    from personacore.checkpoint import load_adapter, load_fisher, load_slim
+    from personacore.continual.fisher import estimate_fisher
+    from personacore.provenance import git_sha
+
+    _refuse(REPRESENTATIONAL_READS_PATH)
+    if not pin.REPRESENTATIONAL_RECORD_PATH.exists():
+        raise SystemExit(
+            f"[phase19_run] {pin.REPRESENTATIONAL_RECORD_PATH} does not exist. The PINNED "
+            "`python scripts/phase19_erasure.py representational` owns this read and must run "
+            "first; this companion only adds what its writer cannot carry."
+        )
+    pinned = json.loads(pin.REPRESENTATIONAL_RECORD_PATH.read_text(encoding="utf-8"))
+
+    # Every path resolved from a constant, never from a plan's spelling — six naming failures this
+    # phase. M2 comes out of `arm_outputs(RETRAIN_ARM, prefix=RETRAIN_PREFIX)`, the same expression
+    # `_cmd_representational` uses, so the two records cannot describe two different adapters.
+    paths = {
+        "taught": recall.ADAPTER_PATH,
+        "m1_erased": TARGET_ERASED_ADAPTER,
+        "m2_retrain": tp.arm_outputs(pin.RETRAIN_ARM, prefix=pin.RETRAIN_PREFIX)["adapter"],
+        **{name: _REPO_ROOT / "checkpoints" / f"{name}_adapter.pt" for name in PERSONA_ADAPTERS},
+    }
+    artifacts = {name: load_adapter(path) for name, path in paths.items()}
+    fingerprints = {name: art["base_fingerprint"] for name, art in artifacts.items()}
+    distinct_bases = {json.dumps(fp, sort_keys=True) for fp in fingerprints.values()}
+
+    w0 = load_slim(recall.CONVBASE_SLIM)["model"]
+    cells = {
+        name: pin.delta_w_cells(artifacts[name], w0)
+        for name in ("taught", "m1_erased", "m2_retrain")
+    }
+
+    # THE ROUND TRIP. If this differs the companion is describing a different object from the
+    # pinned record, and both would ship under the same name.
+    taught_vs_m2 = pin.delta_w_cosine(cells["taught"], cells["m2_retrain"])
+    rendered = {str(key): value for key, value in taught_vs_m2.items()}
+    if rendered != pinned["cosine"]:
+        raise SystemExit(
+            "[phase19_run] the taught-vs-M2 cosine recomputed here does not reproduce "
+            f"{pin.REPRESENTATIONAL_RECORD_PATH.name}'s cell for cell. The companion would publish "
+            "a second reading of the same quantity under the same name."
+        )
+    taught_vs_m1 = pin.delta_w_cosine(cells["taught"], cells["m1_erased"])
+    m1_vs_m2 = pin.delta_w_cosine(cells["m1_erased"], cells["m2_retrain"])
+    del cells
+
+    # The ablated/preserved partition is the PIN'S OWN, read off its record. Re-deriving it would
+    # mean re-selecting the prefix, and a second `select_ablation_prefix` sweep could stop somewhere
+    # the published erasure never did — `_cmd_representational`'s own reason for reading it back.
+    fisher = pinned["fisher"]
+    regions = {
+        "ablated": {tuple(cell) for cell in fisher["ablated_cells"]},
+        "preserved": {tuple(cell) for cell in fisher["preserved_cells"]},
+    }
+    by_region = {
+        region: {key: value for key, value in taught_vs_m1.items() if key in members}
+        for region, members in regions.items()
+    }
+
+    persona_cells = {name: pin.delta_w_cells(artifacts[name], w0) for name in PERSONA_ADAPTERS}
+    persona_pairs = {
+        f"{a} vs {b}": pin.delta_w_cosine(persona_cells[a], persona_cells[b])
+        for a, b in itertools.combinations(PERSONA_ADAPTERS, 2)
+    }
+    persona_pooled = [
+        value for pair in persona_pairs.values() for value in pair.values() if value is not None
+    ]
+    del persona_cells
+
+    # THE FISHER LIMITS, MEASURED OFF THE CACHE THE PIN ACTUALLY LOADS. `_cmd_representational`
+    # reads `extract_deltas.FISHER_CACHE` anchored to `extract_deltas.BEST_PATH`; it does NOT
+    # estimate a Fisher over the persona bin, so the limits that travel with these numbers are the
+    # ones this cache has, not the ones an unrun estimation would have had.
+    best_fingerprint = extract_deltas._load_model(extract_deltas.BEST_PATH)[1]
+    meta = load_fisher(extract_deltas.FISHER_CACHE, expected_fingerprint=best_fingerprint)[
+        "fisher_meta"
+    ]
+    corpus = pathlib.Path(meta["bin_path"])
+    corpus_tokens = corpus.stat().st_size // 2  # uint16 memmap, the committed corpus format
+    sampled_tokens = meta["n_examples"] * meta["block_size"]
+
+    fisher_limits = [
+        {
+            "limit": "the Fisher is estimated over the PRETRAINING corpus, not over the persona "
+            "teaching data, so it scores importance for the TinyStories LM task and not for the "
+            "taught facts",
+            "measured": {
+                "bin_path": corpus.relative_to(_REPO_ROOT).as_posix(),
+                "corpus_tokens_uint16": corpus_tokens,
+                "n_examples": meta["n_examples"],
+                "block_size": meta["block_size"],
+                "sampled_tokens": sampled_tokens,
+                "seed": meta["seed"],
+                "variant": meta["variant"],
+            },
+        },
+        {
+            "limit": "the Fisher is ANCHORED AT A DIFFERENT SET OF WEIGHTS from the ones the "
+            "ablation was performed on: the cache's anchor is `checkpoints/best.pt` while all six "
+            "adapters read here carry the conversational base's fingerprint",
+            "measured": {
+                "fisher_anchor": best_fingerprint,
+                "adapter_base": fingerprints["taught"],
+                "n_distinct_adapter_bases": len(distinct_bases),
+            },
+        },
+        {
+            "limit": "`estimate_fisher` has NO mask support — its signature takes no mask, and "
+            "every token of every sampled window is scored",
+            "measured": {
+                "estimate_fisher_kwonly": list(inspect.getfullargspec(estimate_fisher).kwonlyargs)
+            },
+        },
+        {
+            "limit": "the read carries NO rank-1 resolution — restated from the pinned record's "
+            "own `granularity` field rather than paraphrased",
+            "measured": {
+                "granularity": fisher["granularity"],
+                "n_ablated_components": len(pinned["ablated_components"]),
+                "n_ablated_cells": fisher["n_ablated_cells"],
+                "n_preserved_cells": fisher["n_preserved_cells"],
+            },
+        },
+    ]
+
+    # The plan's own two named limits, recorded as FALSIFIED so a later reader cannot import them.
+    # A limitation that does not describe the measurement is worse than no limitation: it invites
+    # a discount that the number does not actually carry.
+    plan_named_limits_falsified = [
+        {
+            "plan_named": "no mask support, so USER TURNS are scored",
+            "falsified": "the no-mask half holds structurally and is recorded above, but its named "
+            "consequence does not apply: this cache is estimated over the TinyStories pretraining "
+            "corpus, which has no user turns to score",
+        },
+        {
+            "plan_named": "heavy window overlap on a 20,036-token bin "
+            "(`data/persona_real_train.bin`)",
+            "falsified": "no Fisher over that bin is estimated on the pinned path. The cache the "
+            f"pin loads samples {sampled_tokens} tokens from "
+            f"{corpus.relative_to(_REPO_ROOT).as_posix()}'s {corpus_tokens}, so window overlap is "
+            "negligible rather than heavy",
+        },
+    ]
+
+    record = {
+        "status": "DESCRIPTIVE",
+        "label": pin.REPRESENTATIONAL_READ_LABEL,
+        "not_gated": "no value in this record is compared against anything, here or downstream. "
+        "`DESCRIPTIVE_ONLY_FUNCTIONS` is scanned by AST over the pin, and the companion scan "
+        "covers this driver; `erasure_succeeded` never sees any of these numbers.",
+        "pinned_record": {
+            "path": pin.REPRESENTATIONAL_RECORD_PATH.relative_to(_REPO_ROOT).as_posix(),
+            "sha256": _sha256(pin.REPRESENTATIONAL_RECORD_PATH),
+            "taught_vs_m2_round_trip_reproduced": True,
+        },
+        "reads": {
+            "taught_vs_m2_retrain": _cosine_read(
+                taught_vs_m2,
+                unit="(layer, projection) cells",
+                note="the PINNED record's cosine, reproduced here cell for cell. The pin's own "
+                "read is against the RETRAIN, so it contains no reading of the surgically edited "
+                "adapter.",
+            ),
+            "taught_vs_m1_erased": _cosine_read(
+                taught_vs_m1,
+                unit="(layer, projection) cells",
+                note="the read the pinned record does not contain: the taught adapter against the "
+                "M1 surgical edit.",
+                by_region={
+                    region: _cosine_read(
+                        values, unit="(layer, projection) cells", region_source="pinned `fisher`"
+                    )
+                    for region, values in by_region.items()
+                },
+            ),
+            "m1_erased_vs_m2_retrain": _cosine_read(
+                m1_vs_m2,
+                unit="(layer, projection) cells",
+                note="the two mechanisms against each other. Reported as the numbers they are; "
+                "`ERASURE_GOAL_FRAMING` forbids any statement of indistinguishability being built "
+                "on them.",
+            ),
+            "cross_persona": {
+                "pairs": {
+                    name: _cosine_read(pair, unit="(layer, projection) cells")
+                    for name, pair in persona_pairs.items()
+                },
+                "n": len(persona_pooled),
+                "n_unit": "cosines pooled over the persona pairs",
+                "n_personas": len(PERSONA_ADAPTERS),
+                "n_pairs": len(persona_pairs),
+                "n_cells_per_pair": len(extract_deltas.KEYS),
+                "min": min(persona_pooled),
+                "median": statistics.median(persona_pooled),
+                "max": max(persona_pooled),
+                "note": "n=3 personas is the exact n `ERASURE_DECISION_RULE`'s fourth clause names "
+                "as unable to support a threshold. Stated beside the numbers, not inferred.",
+            },
+            "fisher_overlap": {
+                **{key: value for key, value in fisher.items() if key != "label"},
+                "n": fisher["n_ablated_cells"] + fisher["n_preserved_cells"],
+                "n_unit": "(layer, projection) cells partitioned by the pinned ablation",
+                "source": "the pinned record's own `fisher_overlap` return value, restated with "
+                "its denominators. Not recomputed.",
+            },
+        },
+        "fisher_limits": fisher_limits,
+        "plan_named_limits_falsified": plan_named_limits_falsified,
+        "config": {
+            "git_sha": git_sha(),
+            "torch": pin.torch.__version__,
+            "adapters": {
+                name: {"path": path.relative_to(_REPO_ROOT).as_posix(), "sha256": _sha256(path)}
+                for name, path in paths.items()
+            },
+            "w0": {
+                "path": recall.CONVBASE_SLIM.relative_to(_REPO_ROOT).as_posix(),
+                "sha256": _sha256(recall.CONVBASE_SLIM),
+            },
+        },
+    }
+    REPRESENTATIONAL_READS_PATH.write_text(
+        json.dumps(record, indent=pin.JSON_INDENT, sort_keys=True), encoding="utf-8"
+    )
+    print(f"[phase19_run] wrote {REPRESENTATIONAL_READS_PATH}")
+    for name, read in record["reads"].items():
+        print(f"    {name:<26} n={read['n']:<4} {read.get('n_unit', '')}")
+
+
 _TABLE = {
     "cal-ablate": cal_ablate,
     "cal-score": cal_score,
     "cal-siblings": cal_siblings,
     "dialogue-block": dialogue_block,
     "nontarget-block": nontarget_block,
+    "representational-reads": representational_reads,
     "retention": retention,
     "retrain-score": retrain_score,
     "retrain-soft": retrain_soft,

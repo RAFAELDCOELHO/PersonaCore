@@ -1,0 +1,626 @@
+{
+  "config": {
+    "adapters": {
+      "m1_erased": {
+        "path": "checkpoints/phase19_m1_erased_adapter.pt",
+        "sha256": "13f593013746f24288febd3dc080894811c1c42c793f0a727e0ca21c1c55c6fc"
+      },
+      "m2_retrain": {
+        "path": "checkpoints/phase19_erase_reference_adapter.pt",
+        "sha256": "22e66552e92ec7d5f853a6b8d15f350cfc0f127f20ee85aaec1967147c375b57"
+      },
+      "phase17_persona_a": {
+        "path": "checkpoints/phase17_persona_a_adapter.pt",
+        "sha256": "b420c22ac0d576a15d55cb2f666558e27e3f4c421801e688e207dc328fdab7f6"
+      },
+      "phase17_persona_b": {
+        "path": "checkpoints/phase17_persona_b_adapter.pt",
+        "sha256": "7d6dde9eef0bbbc6946b653b05a71d5c7469dc2c44ee9f7b6188edc4d1a05ad4"
+      },
+      "phase17_persona_c": {
+        "path": "checkpoints/phase17_persona_c_adapter.pt",
+        "sha256": "0842b617bb163f144382c59c3fcfbabe0b8eb8fbb27237e91922e9d790ccf174"
+      },
+      "taught": {
+        "path": "checkpoints/persona_adapter.pt",
+        "sha256": "226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb"
+      }
+    },
+    "git_sha": "73d25711743d851282b8eb852b58421c3acce29c",
+    "torch": "2.7.1",
+    "w0": {
+      "path": "checkpoints/convbase_slim.pt",
+      "sha256": "550bb8b08f65cbb8442fa2c44b1e905aeb51ae7afc39b012c35b957459e1f056"
+    }
+  },
+  "fisher_limits": [
+    {
+      "limit": "the Fisher is estimated over the PRETRAINING corpus, not over the persona teaching data, so it scores importance for the TinyStories LM task and not for the taught facts",
+      "measured": {
+        "bin_path": "data/train.bin",
+        "block_size": 256,
+        "corpus_tokens_uint16": 1251956121,
+        "n_examples": 2000,
+        "sampled_tokens": 512000,
+        "seed": 1234,
+        "variant": "empirical_diag_fisher/groundtruth_targets/mean_normalized"
+      }
+    },
+    {
+      "limit": "the Fisher is ANCHORED AT A DIFFERENT SET OF WEIGHTS from the ones the ablation was performed on: the cache's anchor is `checkpoints/best.pt` while all six adapters read here carry the conversational base's fingerprint",
+      "measured": {
+        "adapter_base": {
+          "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+          "step": 4000,
+          "val_loss": 1.5235939979553224
+        },
+        "fisher_anchor": {
+          "git_sha": "3a46815da96f06d3c6196bb0949a1479884b3bce",
+          "step": 49000,
+          "val_loss": 0.7378001868724823
+        },
+        "n_distinct_adapter_bases": 1
+      }
+    },
+    {
+      "limit": "`estimate_fisher` has NO mask support \u2014 its signature takes no mask, and every token of every sampled window is scored",
+      "measured": {
+        "estimate_fisher_kwonly": [
+          "n_examples",
+          "block_size",
+          "device",
+          "seed",
+          "normalize"
+        ]
+      }
+    },
+    {
+      "limit": "the read carries NO rank-1 resolution \u2014 restated from the pinned record's own `granularity` field rather than paraphrased",
+      "measured": {
+        "granularity": "per CELL, not per component: the Fisher cache reduces to (layer, projection) and carries no rank-1 resolution, so a cell counts as ablated when ANY of its rank-1 components was zeroed",
+        "n_ablated_cells": 22,
+        "n_ablated_components": 78,
+        "n_preserved_cells": 14
+      }
+    }
+  ],
+  "label": "DESCRIPTIVE, EXPLICITLY NOT GATED (`scripts/erasure_gate.py:118-122`). Reported with its denominators and never converted into a pass/fail. At n=8 facts and n=3 personas the sample cannot support a threshold, and gating what the sample cannot support is treated as a DEFECT in this project, not as extra rigour. A second `sign_test_exact` call site IS a second hypothesis family and would reprice Holm to carry a descriptive statistic \u2014 which is why `tests/test_phase19_erasure.py::test_representational_read_is_not_gated` scans these three functions by AST rather than trusting this sentence.",
+  "not_gated": "no value in this record is compared against anything, here or downstream. `DESCRIPTIVE_ONLY_FUNCTIONS` is scanned by AST over the pin, and the companion scan covers this driver; `erasure_succeeded` never sees any of these numbers.",
+  "pinned_record": {
+    "path": "results/phase19_representational.json",
+    "sha256": "fa123c90edf14e6c0f74f178cc21d5a0c7ea40e51aac13124af90f9485f7eb02",
+    "taught_vs_m2_round_trip_reproduced": true
+  },
+  "plan_named_limits_falsified": [
+    {
+      "falsified": "the no-mask half holds structurally and is recorded above, but its named consequence does not apply: this cache is estimated over the TinyStories pretraining corpus, which has no user turns to score",
+      "plan_named": "no mask support, so USER TURNS are scored"
+    },
+    {
+      "falsified": "no Fisher over that bin is estimated on the pinned path. The cache the pin loads samples 512000 tokens from data/train.bin's 1251956121, so window overlap is negligible rather than heavy",
+      "plan_named": "heavy window overlap on a 20,036-token bin (`data/persona_real_train.bin`)"
+    }
+  ],
+  "reads": {
+    "cross_persona": {
+      "max": 0.3368681508113163,
+      "median": 0.12534931989724518,
+      "min": 0.05118319098287871,
+      "n": 108,
+      "n_cells_per_pair": 36,
+      "n_pairs": 3,
+      "n_personas": 3,
+      "n_unit": "cosines pooled over the persona pairs",
+      "note": "n=3 personas is the exact n `ERASURE_DECISION_RULE`'s fourth clause names as unable to support a threshold. Stated beside the numbers, not inferred.",
+      "pairs": {
+        "phase17_persona_a vs phase17_persona_b": {
+          "cells": {
+            "(0, 'c_proj')": 0.06178642918147675,
+            "(0, 'fc_in')": 0.1865133288700693,
+            "(0, 'fc_out')": 0.10252597476240842,
+            "(0, 'k_proj')": 0.14528148788340725,
+            "(0, 'q_proj')": 0.15141828722711867,
+            "(0, 'v_proj')": 0.086287200051642,
+            "(1, 'c_proj')": 0.06926202900663352,
+            "(1, 'fc_in')": 0.20623018011180264,
+            "(1, 'fc_out')": 0.07346178759417396,
+            "(1, 'k_proj')": 0.07689018645465909,
+            "(1, 'q_proj')": 0.06643805783881832,
+            "(1, 'v_proj')": 0.07248927074542513,
+            "(2, 'c_proj')": 0.06725472563148317,
+            "(2, 'fc_in')": 0.16798852961262387,
+            "(2, 'fc_out')": 0.05983301059397933,
+            "(2, 'k_proj')": 0.11918034502881887,
+            "(2, 'q_proj')": 0.1817823806939114,
+            "(2, 'v_proj')": 0.07690032584134807,
+            "(3, 'c_proj')": 0.06109247809301528,
+            "(3, 'fc_in')": 0.17074835080029746,
+            "(3, 'fc_out')": 0.06846366003174947,
+            "(3, 'k_proj')": 0.09291819029731581,
+            "(3, 'q_proj')": 0.20320380903260352,
+            "(3, 'v_proj')": 0.09290259610215364,
+            "(4, 'c_proj')": 0.10381915523371761,
+            "(4, 'fc_in')": 0.1819200943507076,
+            "(4, 'fc_out')": 0.08382061339906685,
+            "(4, 'k_proj')": 0.151345184426664,
+            "(4, 'q_proj')": 0.26796178926356734,
+            "(4, 'v_proj')": 0.11756927767802798,
+            "(5, 'c_proj')": 0.1591239537374669,
+            "(5, 'fc_in')": 0.257340030298862,
+            "(5, 'fc_out')": 0.12351772209512767,
+            "(5, 'k_proj')": 0.22477251355230546,
+            "(5, 'q_proj')": 0.18690546665109012,
+            "(5, 'v_proj')": 0.216187053769211
+          },
+          "max": 0.26796178926356734,
+          "median": 0.11837481135342343,
+          "min": 0.05983301059397933,
+          "n": 36,
+          "n_defined": 36,
+          "n_undefined": 0,
+          "n_unit": "(layer, projection) cells"
+        },
+        "phase17_persona_a vs phase17_persona_c": {
+          "cells": {
+            "(0, 'c_proj')": 0.058083883754389866,
+            "(0, 'fc_in')": 0.21983425757129904,
+            "(0, 'fc_out')": 0.10306935266044283,
+            "(0, 'k_proj')": 0.17525803848877375,
+            "(0, 'q_proj')": 0.12017146956631282,
+            "(0, 'v_proj')": 0.16438213130058132,
+            "(1, 'c_proj')": 0.07168419895355388,
+            "(1, 'fc_in')": 0.21054160398330946,
+            "(1, 'fc_out')": 0.08265906862461089,
+            "(1, 'k_proj')": 0.12691304245266966,
+            "(1, 'q_proj')": 0.08292779613492937,
+            "(1, 'v_proj')": 0.05476620714549494,
+            "(2, 'c_proj')": 0.05680438253426553,
+            "(2, 'fc_in')": 0.16818230436237938,
+            "(2, 'fc_out')": 0.08851007501131095,
+            "(2, 'k_proj')": 0.12270522980839081,
+            "(2, 'q_proj')": 0.19362534863814992,
+            "(2, 'v_proj')": 0.09956667562813076,
+            "(3, 'c_proj')": 0.05118319098287871,
+            "(3, 'fc_in')": 0.20293034434652346,
+            "(3, 'fc_out')": 0.06798907440121367,
+            "(3, 'k_proj')": 0.10585924699288775,
+            "(3, 'q_proj')": 0.18122825428960948,
+            "(3, 'v_proj')": 0.11002674261022388,
+            "(4, 'c_proj')": 0.1027830437851738,
+            "(4, 'fc_in')": 0.19270585107593027,
+            "(4, 'fc_out')": 0.07552751634566979,
+            "(4, 'k_proj')": 0.2380473946766481,
+            "(4, 'q_proj')": 0.268711893102058,
+            "(4, 'v_proj')": 0.1662937693539841,
+            "(5, 'c_proj')": 0.16440597453991823,
+            "(5, 'fc_in')": 0.22009597945631404,
+            "(5, 'fc_out')": 0.22014824443898803,
+            "(5, 'k_proj')": 0.3368681508113163,
+            "(5, 'q_proj')": 0.21240516804459875,
+            "(5, 'v_proj')": 0.1905016297126314
+          },
+          "max": 0.3368681508113163,
+          "median": 0.1456475868766255,
+          "min": 0.05118319098287871,
+          "n": 36,
+          "n_defined": 36,
+          "n_undefined": 0,
+          "n_unit": "(layer, projection) cells"
+        },
+        "phase17_persona_b vs phase17_persona_c": {
+          "cells": {
+            "(0, 'c_proj')": 0.06495703885957534,
+            "(0, 'fc_in')": 0.20870044548399339,
+            "(0, 'fc_out')": 0.1010074452668356,
+            "(0, 'k_proj')": 0.2958014595090707,
+            "(0, 'q_proj')": 0.17512981604320857,
+            "(0, 'v_proj')": 0.15008608985633173,
+            "(1, 'c_proj')": 0.08092552769893765,
+            "(1, 'fc_in')": 0.2665901114682537,
+            "(1, 'fc_out')": 0.06689675233906903,
+            "(1, 'k_proj')": 0.09294881491805458,
+            "(1, 'q_proj')": 0.10463131901237954,
+            "(1, 'v_proj')": 0.10576715358484026,
+            "(2, 'c_proj')": 0.08779303836112017,
+            "(2, 'fc_in')": 0.18148703620443912,
+            "(2, 'fc_out')": 0.059770679394254456,
+            "(2, 'k_proj')": 0.10508944217619345,
+            "(2, 'q_proj')": 0.21382297390528174,
+            "(2, 'v_proj')": 0.11872486147499,
+            "(3, 'c_proj')": 0.09107431967317364,
+            "(3, 'fc_in')": 0.20085134102135546,
+            "(3, 'fc_out')": 0.07300096118993066,
+            "(3, 'k_proj')": 0.10211960409626747,
+            "(3, 'q_proj')": 0.17802906824083828,
+            "(3, 'v_proj')": 0.1284846789837593,
+            "(4, 'c_proj')": 0.12378559734182072,
+            "(4, 'fc_in')": 0.17401237551317372,
+            "(4, 'fc_out')": 0.08051849291300821,
+            "(4, 'k_proj')": 0.16923542892379695,
+            "(4, 'q_proj')": 0.22818281973374094,
+            "(4, 'v_proj')": 0.10762034169507217,
+            "(5, 'c_proj')": 0.18059304584643293,
+            "(5, 'fc_in')": 0.24709564494276834,
+            "(5, 'fc_out')": 0.18846109510426404,
+            "(5, 'k_proj')": 0.2568019321544427,
+            "(5, 'q_proj')": 0.24293939221827657,
+            "(5, 'v_proj')": 0.2170614918805784
+          },
+          "max": 0.2958014595090707,
+          "median": 0.1392853844200455,
+          "min": 0.059770679394254456,
+          "n": 36,
+          "n_defined": 36,
+          "n_undefined": 0,
+          "n_unit": "(layer, projection) cells"
+        }
+      }
+    },
+    "fisher_overlap": {
+      "ablated_cells": [
+        [
+          0,
+          "c_proj"
+        ],
+        [
+          0,
+          "fc_in"
+        ],
+        [
+          0,
+          "fc_out"
+        ],
+        [
+          0,
+          "k_proj"
+        ],
+        [
+          0,
+          "v_proj"
+        ],
+        [
+          1,
+          "c_proj"
+        ],
+        [
+          1,
+          "fc_in"
+        ],
+        [
+          1,
+          "fc_out"
+        ],
+        [
+          2,
+          "c_proj"
+        ],
+        [
+          2,
+          "fc_in"
+        ],
+        [
+          2,
+          "fc_out"
+        ],
+        [
+          2,
+          "v_proj"
+        ],
+        [
+          3,
+          "c_proj"
+        ],
+        [
+          3,
+          "fc_in"
+        ],
+        [
+          3,
+          "fc_out"
+        ],
+        [
+          3,
+          "q_proj"
+        ],
+        [
+          3,
+          "v_proj"
+        ],
+        [
+          4,
+          "c_proj"
+        ],
+        [
+          4,
+          "fc_in"
+        ],
+        [
+          4,
+          "fc_out"
+        ],
+        [
+          5,
+          "fc_in"
+        ],
+        [
+          5,
+          "fc_out"
+        ]
+      ],
+      "ablated_mean": 1.6354876707549402,
+      "granularity": "per CELL, not per component: the Fisher cache reduces to (layer, projection) and carries no rank-1 resolution, so a cell counts as ablated when ANY of its rank-1 components was zeroed",
+      "n": 36,
+      "n_ablated_cells": 22,
+      "n_preserved_cells": 14,
+      "n_unit": "(layer, projection) cells partitioned by the pinned ablation",
+      "preserved_cells": [
+        [
+          0,
+          "q_proj"
+        ],
+        [
+          1,
+          "k_proj"
+        ],
+        [
+          1,
+          "q_proj"
+        ],
+        [
+          1,
+          "v_proj"
+        ],
+        [
+          2,
+          "k_proj"
+        ],
+        [
+          2,
+          "q_proj"
+        ],
+        [
+          3,
+          "k_proj"
+        ],
+        [
+          4,
+          "k_proj"
+        ],
+        [
+          4,
+          "q_proj"
+        ],
+        [
+          4,
+          "v_proj"
+        ],
+        [
+          5,
+          "c_proj"
+        ],
+        [
+          5,
+          "k_proj"
+        ],
+        [
+          5,
+          "q_proj"
+        ],
+        [
+          5,
+          "v_proj"
+        ]
+      ],
+      "preserved_mean": 0.51367324964733,
+      "reduction": "mean",
+      "source": "the pinned record's own `fisher_overlap` return value, restated with its denominators. Not recomputed."
+    },
+    "m1_erased_vs_m2_retrain": {
+      "cells": {
+        "(0, 'c_proj')": 0.7904149279886445,
+        "(0, 'fc_in')": 0.4532760063337228,
+        "(0, 'fc_out')": 0.5126816497086005,
+        "(0, 'k_proj')": 0.7369603655673883,
+        "(0, 'q_proj')": 0.8960200671669776,
+        "(0, 'v_proj')": 0.8247023061943846,
+        "(1, 'c_proj')": 0.8886205162921161,
+        "(1, 'fc_in')": 0.4691096240068091,
+        "(1, 'fc_out')": 0.6377847559624679,
+        "(1, 'k_proj')": 0.9283726805559543,
+        "(1, 'q_proj')": 0.9254031586862201,
+        "(1, 'v_proj')": 0.9358917639957307,
+        "(2, 'c_proj')": 0.7984522203310765,
+        "(2, 'fc_in')": 0.7268388944571856,
+        "(2, 'fc_out')": 0.8192281348489125,
+        "(2, 'k_proj')": 0.9343752857623628,
+        "(2, 'q_proj')": 0.9393553899677344,
+        "(2, 'v_proj')": 0.7349632954438434,
+        "(3, 'c_proj')": 0.6880287045405035,
+        "(3, 'fc_in')": 0.7433087117267949,
+        "(3, 'fc_out')": 0.7348766139789921,
+        "(3, 'k_proj')": 0.9274606329819317,
+        "(3, 'q_proj')": 0.8520670635646069,
+        "(3, 'v_proj')": 0.5552474709284887,
+        "(4, 'c_proj')": 0.7813109054660753,
+        "(4, 'fc_in')": 0.6311827034610797,
+        "(4, 'fc_out')": 0.840118957873893,
+        "(4, 'k_proj')": 0.9418137218709087,
+        "(4, 'q_proj')": 0.941197587826566,
+        "(4, 'v_proj')": 0.9387378333848874,
+        "(5, 'c_proj')": 0.9546943300632824,
+        "(5, 'fc_in')": null,
+        "(5, 'fc_out')": 0.8846465235464617,
+        "(5, 'k_proj')": 0.9591437386500667,
+        "(5, 'q_proj')": 0.9481137924778797,
+        "(5, 'v_proj')": 0.9622065663322942
+      },
+      "max": 0.9622065663322942,
+      "median": 0.840118957873893,
+      "min": 0.4532760063337228,
+      "n": 36,
+      "n_defined": 35,
+      "n_undefined": 1,
+      "n_unit": "(layer, projection) cells",
+      "note": "the two mechanisms against each other. Reported as the numbers they are; `ERASURE_GOAL_FRAMING` forbids any statement of indistinguishability being built on them."
+    },
+    "taught_vs_m1_erased": {
+      "by_region": {
+        "ablated": {
+          "cells": {
+            "(0, 'c_proj')": 0.851929580479837,
+            "(0, 'fc_in')": 0.47639907415543037,
+            "(0, 'fc_out')": 0.6572062413969334,
+            "(0, 'k_proj')": 0.8488628658689261,
+            "(0, 'v_proj')": 0.8745869393364739,
+            "(1, 'c_proj')": 0.9530314871639681,
+            "(1, 'fc_in')": 0.49171580478157145,
+            "(1, 'fc_out')": 0.6614341556465002,
+            "(2, 'c_proj')": 0.8522759407896114,
+            "(2, 'fc_in')": 0.8136595663240188,
+            "(2, 'fc_out')": 0.8863320227695015,
+            "(2, 'v_proj')": 0.7905307707691142,
+            "(3, 'c_proj')": 0.733294751863513,
+            "(3, 'fc_in')": 0.785254365846873,
+            "(3, 'fc_out')": 0.763863343983479,
+            "(3, 'q_proj')": 0.9590456893929075,
+            "(3, 'v_proj')": 0.6079816827494126,
+            "(4, 'c_proj')": 0.8123793589594848,
+            "(4, 'fc_in')": 0.6746643187102502,
+            "(4, 'fc_out')": 0.8791826480720152,
+            "(5, 'fc_in')": null,
+            "(5, 'fc_out')": 0.9188111836947392
+          },
+          "max": 0.9590456893929075,
+          "median": 0.8123793589594848,
+          "min": 0.47639907415543037,
+          "n": 22,
+          "n_defined": 21,
+          "n_undefined": 1,
+          "n_unit": "(layer, projection) cells",
+          "region_source": "pinned `fisher`"
+        },
+        "preserved": {
+          "cells": {
+            "(0, 'q_proj')": 1.0000000000000027,
+            "(1, 'k_proj')": 1.000000000000013,
+            "(1, 'q_proj')": 1.0000000000000053,
+            "(1, 'v_proj')": 1.0000000000000007,
+            "(2, 'k_proj')": 0.9999999999999954,
+            "(2, 'q_proj')": 1.0000000000000169,
+            "(3, 'k_proj')": 0.9999999999999886,
+            "(4, 'k_proj')": 1.0,
+            "(4, 'q_proj')": 0.9999999999999939,
+            "(4, 'v_proj')": 0.999999999999999,
+            "(5, 'c_proj')": 0.9999999999999918,
+            "(5, 'k_proj')": 0.9999999999999998,
+            "(5, 'q_proj')": 0.999999999999996,
+            "(5, 'v_proj')": 1.0000000000000078
+          },
+          "max": 1.0000000000000169,
+          "median": 0.9999999999999999,
+          "min": 0.9999999999999886,
+          "n": 14,
+          "n_defined": 14,
+          "n_undefined": 0,
+          "n_unit": "(layer, projection) cells",
+          "region_source": "pinned `fisher`"
+        }
+      },
+      "cells": {
+        "(0, 'c_proj')": 0.851929580479837,
+        "(0, 'fc_in')": 0.47639907415543037,
+        "(0, 'fc_out')": 0.6572062413969334,
+        "(0, 'k_proj')": 0.8488628658689261,
+        "(0, 'q_proj')": 1.0000000000000027,
+        "(0, 'v_proj')": 0.8745869393364739,
+        "(1, 'c_proj')": 0.9530314871639681,
+        "(1, 'fc_in')": 0.49171580478157145,
+        "(1, 'fc_out')": 0.6614341556465002,
+        "(1, 'k_proj')": 1.000000000000013,
+        "(1, 'q_proj')": 1.0000000000000053,
+        "(1, 'v_proj')": 1.0000000000000007,
+        "(2, 'c_proj')": 0.8522759407896114,
+        "(2, 'fc_in')": 0.8136595663240188,
+        "(2, 'fc_out')": 0.8863320227695015,
+        "(2, 'k_proj')": 0.9999999999999954,
+        "(2, 'q_proj')": 1.0000000000000169,
+        "(2, 'v_proj')": 0.7905307707691142,
+        "(3, 'c_proj')": 0.733294751863513,
+        "(3, 'fc_in')": 0.785254365846873,
+        "(3, 'fc_out')": 0.763863343983479,
+        "(3, 'k_proj')": 0.9999999999999886,
+        "(3, 'q_proj')": 0.9590456893929075,
+        "(3, 'v_proj')": 0.6079816827494126,
+        "(4, 'c_proj')": 0.8123793589594848,
+        "(4, 'fc_in')": 0.6746643187102502,
+        "(4, 'fc_out')": 0.8791826480720152,
+        "(4, 'k_proj')": 1.0,
+        "(4, 'q_proj')": 0.9999999999999939,
+        "(4, 'v_proj')": 0.999999999999999,
+        "(5, 'c_proj')": 0.9999999999999918,
+        "(5, 'fc_in')": null,
+        "(5, 'fc_out')": 0.9188111836947392,
+        "(5, 'k_proj')": 0.9999999999999998,
+        "(5, 'q_proj')": 0.999999999999996,
+        "(5, 'v_proj')": 1.0000000000000078
+      },
+      "max": 1.0000000000000169,
+      "median": 0.8863320227695015,
+      "min": 0.47639907415543037,
+      "n": 36,
+      "n_defined": 35,
+      "n_undefined": 1,
+      "n_unit": "(layer, projection) cells",
+      "note": "the read the pinned record does not contain: the taught adapter against the M1 surgical edit."
+    },
+    "taught_vs_m2_retrain": {
+      "cells": {
+        "(0, 'c_proj')": 0.9251951174011177,
+        "(0, 'fc_in')": 0.9350913082240071,
+        "(0, 'fc_out')": 0.8872937913000718,
+        "(0, 'k_proj')": 0.8868463602142158,
+        "(0, 'q_proj')": 0.8960200671669776,
+        "(0, 'v_proj')": 0.9367548319564503,
+        "(1, 'c_proj')": 0.9276913813268358,
+        "(1, 'fc_in')": 0.9362537569845693,
+        "(1, 'fc_out')": 0.9161699385367833,
+        "(1, 'k_proj')": 0.9283726805559543,
+        "(1, 'q_proj')": 0.9254031586862201,
+        "(1, 'v_proj')": 0.9358917639957307,
+        "(2, 'c_proj')": 0.9341184899864815,
+        "(2, 'fc_in')": 0.914062507306831,
+        "(2, 'fc_out')": 0.9310182213944351,
+        "(2, 'k_proj')": 0.9343752857623628,
+        "(2, 'q_proj')": 0.9393553899677344,
+        "(2, 'v_proj')": 0.9316731344037517,
+        "(3, 'c_proj')": 0.9196363000909915,
+        "(3, 'fc_in')": 0.9408883244755679,
+        "(3, 'fc_out')": 0.9358120951975188,
+        "(3, 'k_proj')": 0.9274606329819317,
+        "(3, 'q_proj')": 0.89460752784347,
+        "(3, 'v_proj')": 0.9217142224387629,
+        "(4, 'c_proj')": 0.9351398293108761,
+        "(4, 'fc_in')": 0.9358191071586178,
+        "(4, 'fc_out')": 0.9462048201626104,
+        "(4, 'k_proj')": 0.9418137218709087,
+        "(4, 'q_proj')": 0.941197587826566,
+        "(4, 'v_proj')": 0.9387378333848874,
+        "(5, 'c_proj')": 0.9546943300632824,
+        "(5, 'fc_in')": 0.9409494820520043,
+        "(5, 'fc_out')": 0.927038092132702,
+        "(5, 'k_proj')": 0.9591437386500667,
+        "(5, 'q_proj')": 0.9481137924778797,
+        "(5, 'v_proj')": 0.9622065663322942
+      },
+      "max": 0.9622065663322942,
+      "median": 0.934733296993185,
+      "min": 0.8868463602142158,
+      "n": 36,
+      "n_defined": 36,
+      "n_undefined": 0,
+      "n_unit": "(layer, projection) cells",
+      "note": "the PINNED record's cosine, reproduced here cell for cell. The pin's own read is against the RETRAIN, so it contains no reading of the surgically edited adapter."
+    }
+  },
+  "status": "DESCRIPTIVE"
+}
