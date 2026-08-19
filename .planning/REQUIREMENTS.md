@@ -209,12 +209,12 @@ of record — like every other requirement's — is the Traceability table below
 
 | ID | Phase | Status |
 |----|-------|--------|
-| STAT-01 | 16, 17, 18 | Complete |
-| STAT-02 | 16, 17, 18 | Complete |
+| STAT-01 | 16, 17, 18, 19 | Complete |
+| STAT-02 | 16, 17, 18, 19 | Complete |
 | STAT-03 | 17 | Complete |
 | STAT-04 | 16, 17, 18 | Complete |
-| STAT-05 | 16, 17, 18 | Complete |
-| STAT-06 | 16, 17, 18 | Complete |
+| STAT-05 | 16, 17, 18, 19 | Complete |
+| STAT-06 | 16, 17, 18, 19 | Complete |
 | PERS-01 | 16 | Complete |
 | PERS-02 | 16 | Complete |
 | PERS-03 | 16 | Complete |
@@ -250,4 +250,10 @@ pre-milestone (`23a830c`). ERASE-01/02 were deliberately unmapped until the pre-
 is the mechanism working as designed: the phase was authored by the rule, not by planning.
 STAT-01..06 are cross-cutting by construction and are therefore satisfied *per phase* rather than
 in exactly one; the phase column above is the authoritative allocation and `ROADMAP.md` reproduces
-it unchanged.
+it unchanged. **STAT-01/02/05/06 gained Phase 19 on 2026-08-19**, correcting a stale allocation:
+15 of Phase 19's 16 plans declare at least one of the four, and `19-VERIFICATION.md` verified all
+four substantively against the phase's artifacts — question-as-unit on every published rate, a
+Wilson bound and a denominator beside every proportion, the gate a module-level literal in
+`erasure_gate.py` at one commit predating the phase, and the representational read DESCRIPTIVE-only
+under an AST guard. STAT-04 is deliberately **not** extended: exactly one Phase 19 plan declares it,
+which is too thin to carry an allocation row.

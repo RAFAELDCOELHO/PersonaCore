@@ -501,7 +501,7 @@ recall is measured by the *same* adversary at the *same* budget. Phase 16 — th
 (`item.seed_index` pairing, `cluster_bootstrap`, `sign_test_exact`, `holm`/`HOLM_ALPHA`) and the
 binding 270-question fixture. Phase 17 — only if the erasure target is scoped to one persona, for
 the cross-persona representational read, which is descriptive and cannot block.
-**Requirements**: ERASE-01, ERASE-02
+**Requirements**: STAT-01, STAT-02, STAT-05, STAT-06, ERASE-01, ERASE-02
 **Success Criteria** (what must be TRUE — inherited verbatim from `ERASURE_DECISION_RULE`, not
 re-authored here; the verdict is returned by the committed `erasure_succeeded()`):
 
