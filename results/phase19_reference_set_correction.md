@@ -36,7 +36,7 @@ If the committed sweep had been read on six members, then `k = 78`, the erased a
 collateral curve, the (a)/(b)/(c) readings and the exposure table would all be downstream of a
 superseded selection and would have to be retracted in place before any further work.
 
-**Phase 19 reference-set re-measurement: recorded in the dated continuation at the end of this file.**
+**Phase 19 reference-set re-measurement: recorded in the TWO dated continuations at the end of this file.**
 
 ## Addendum — 2026-08-19 — the sweep was already read on eight, and k does not move
 
@@ -151,3 +151,65 @@ not modified.
 `checkpoints/persona_adapter.pt` is byte-identical after the run
 (`226f2ae5...`, 1,350,523 bytes), proved before and after — 19-13 consumes
 it intact.
+
+## Addendum — 2026-08-19 — the defect is CORRECTABLE, and the tripwire is RED at 6 / GREEN at 8
+
+This **EXTENDS the continuation above rather than opening a second record** — there is exactly one
+reference-set document in this phase, and this is it. The section above established which path
+produced `k` = 78 and that nothing is retracted. It did not record what the
+CORRECTION is, and it exercised the tripwire in a commit message rather than in the document. Both
+are here.
+
+### The defect, located to the line
+
+`scripts/phase19_erasure.py:3576` — inside `_selected_components`, the pin's own `erase`
+subcommand:
+
+```python
+references=reference_set_for_calibration(fact.slot, fact),
+```
+
+Two lines below, the SAME call assembles its collateral map from
+`extraction.reference_set_for(slot)` (`:3578`). So one invocation reads the TARGET's
+stopping rule on 6 members while reading every BYSTANDER on 8. The
+inconsistency is internal to a single function and needs no second measurement to see.
+
+**It was never invoked by 19-12.** `scripts/phase19_run.py target-ablate` was written to route
+around this subcommand (module docstring, reason 6), and the re-sweep above reproduces `k` =
+78 address-for-address under `reference_set_for`. The defective path exists; it did
+not run.
+
+### The correction
+
+`reference_set_for_calibration` is CORRECT for a calibration target and wrong for a taught one, and
+its own docstring says why (`:3105`): the twin exists so that R holds exactly one value
+the adapter under test was taught, which it secures by stripping the target's calibration SIBLINGS.
+On the production adapter `reference_set_for` already guarantees that by construction — one locked
+fact per slot — so there are no siblings to strip and the twin only SHRINKS the competitor set. The
+correction is therefore a dispatch on which arm the fact belongs to, not a replacement of the twin
+(`:3096` stays as it is): a TAUGHT target takes `extraction.reference_set_for(fact.slot)`
+— the same set the collateral map two lines below already takes — and a CALIBRATION target keeps the
+twin.
+
+**It cannot land in the pin.** `scripts/phase19_erasure.py` is CLOSED at 15 commits
+(sha256 `c407246de3c470094ab0bdd868961b7b1c22529c5e00522fec67c3852cb6e303`) and STAT-05's ancestry guard requires every commit touching it to be an ancestor
+of the first add of every committed `results/phase19_*` artifact — 20 are now tracked. A
+corrective commit on the pin reddens `tests/test_phase16_prereg.py` with no recovery, and
+delete-and-re-add cannot launder it because the guard takes `adds[-1]`, the EARLIEST add. So the
+correction is RECORDED here and left for a successor that owns the `erase` path. That is the same
+D3 discipline defects A, B and C took, and the reason this document exists at all.
+
+### The tripwire, exercised at BOTH reference sizes in one run
+
+`tests/test_phase19_erasure.py::test_the_committed_target_sweep_was_read_on_the_phase18_reference_set`
+
+| `reference_set_size` fed to the guard | outcome |
+|---|---|
+| 6 — the calibration twin's size | **RED** |
+| 8 — `phase18_extraction.reference_set_for`, and the committed curve's value | **GREEN** |
+
+RED-then-GREEN, so the guard is proved to discriminate rather than to pass on anything handed to it.
+The RED leg ran against a COPY of the curve in a scratch tree with `scripts/` symlinked in and the
+test module's `_ROOT` repointed at it. `results/phase19_collateral_curve.json` was read and never
+written: byte-identical before and after, re-checked in the same process
+(`True`).
