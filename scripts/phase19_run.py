@@ -63,6 +63,50 @@ Nothing here re-implements a pin rule. `select_ablation_prefix`, `ablate_compone
     python scripts/phase19_run.py dialogue-block   # the (c) dialogue floor block  (19-10 task 1)
     python scripts/phase19_run.py nontarget-block  # the (b) per-fact floor block  (19-10 task 2)
     python scripts/phase19_run.py retention        # retention PPL on/off          (19-10 task 3)
+
+19-12 — THE TARGET ERASURE — adds three more, for three further things the pin cannot express.
+Reasons 1 and 2 above apply again unchanged (`_cmd_erase` routes through the SAME
+`_selected_components`, so it discards the curve and exports no adapter), and three more join them:
+
+6. THE PIN'S OWN `erase` SUBCOMMAND SWEEPS AGAINST THE WRONG REFERENCE SET — measured, not
+   inferred. `_selected_components` passes `reference_set_for_calibration(fact.slot, fact)` for
+   EVERY fact, including the TARGET. On the target slot that twin strips the two `CALIBRATION_POOL`
+   siblings and returns |R| = 6, while `phase18_extraction.reference_set_for(TARGET_SLOT)` — the set
+   `measure_exposure` uses, and therefore the set EVERY exposure rank in the paired Phase 18
+   baseline was computed over — returns |R| = 8. `ABLATION_STOP_RULE`'s stopping condition is "no
+   longer at RANK 1 in its same-slot reference set"; read on 6 members it is a different event from
+   the one the arm record's exposure block publishes on 8. So `k` would be the prefix at which the
+   target lost rank 1 among a DIFFERENT set of competitors than the one every table pairs it
+   against. The twin's own docstring says why it exists — a calibration target can have a taught
+   sibling inside R — and that reason does not apply to the target: `reference_set_for` already
+   guarantees exactly one taught value per slot on the production adapter. 19-12's plan says to use
+   `reference_set_for`, and the measurement above is why that instruction is right.
+
+7. THE ARM RECORD CANNOT CARRY THE POOLED SCORING, and this is structural rather than stylistic.
+   `_arm_record` proves `tuple(fields) == ARM_RECORD_KEYS` as an ORDERED HARD EQUALITY, so a
+   `target` / `nontarget` / `soft_descriptive` block cannot be added to it at all. Its own
+   `per_fact` block is 19-09's defect C — `rows.update` lets `core_taught` (14) overwrite
+   `core_held_out` (13) — which `_nontarget_rates` refuses for demanding `N_TARGET_QUESTIONS`.
+   `results/phase19_target_scores.json` is therefore the companion artifact, DERIVED from the arm
+   record's own committed draws through `_pooled_rows` (reason 5's recovery, in the target
+   position). It introduces no new evidence: every number in it is a reduction of draws that live
+   in `results/phase19_arm_erased.json`, which the ancestry guards already watch.
+
+8. NO SOFT DRAW EXISTS AT A2, AND NONE CAN BE MANUFACTURED HERE. `SOFT_TIER_DESCRIPTIVE_READ`
+   clause 3 requires the two soft facts' POST-ERASURE recall to be published as descriptive, but
+   `results/phase18_corpus.json` holds `core_taught` and `core_held_out` only and
+   `phase18_extraction.build_corpus` reads `LOCKED_FACTS` over `CORPUS_TIERS`, so it cannot emit a
+   soft entry — and `scripts/phase18_extraction.py` is FROZEN at 26 commits. Re-implementing its A2
+   path here would publish a hand-rolled adversary under the name "A2". So the descriptive read runs
+   the COMMITTED direct-recall instrument instead — `phase14_recall.run_scored_recall`, greedy plus
+   `N_SEEDED_SAMPLES` draws, the same one Phase 14 already scores the soft tier with — on BOTH
+   adapters in ONE process, and is labelled with that instrument and its budget rather than
+   published as an A2/K=48 rate it is not. Measured on both arms because a post-only absolute has
+   nothing to have moved from, which is the exact refusal `_arm_record` encodes for `pre_erasure`.
+
+    python scripts/phase19_run.py target-ablate    # M1 + curve + erased adapter   (19-12 task 1)
+    python scripts/phase19_run.py target-score     # the A2/K=48 arm + pooled read (19-12 task 2)
+    python scripts/phase19_run.py target-soft      # the soft DESCRIPTIVE pair     (19-12 task 2)
 """
 
 import hashlib
@@ -90,33 +134,37 @@ SIBLINGS_PATH = _REPO_ROOT / "results" / "phase19_calibration_curve_siblings.jso
 # the run that measured it. The pin names no such path — see reason 4 in the module docstring.
 NOISE_FLOORS_PATH = _REPO_ROOT / "results" / "phase19_noise_floors.json"
 
+# 19-12's three. The curve's name is the one `tests/test_phase16_prereg.py`'s
+# `PHASE19_TARGET_ARTIFACT_GLOBS` already watches BY EXACT NAME, so it is read off that guard
+# rather than off the plan; the erased adapter is gitignored and unaddressed by any constant, so
+# the plan's own name is used unchanged; and the ARM RECORD is again NOT named here, because it
+# goes wherever `pin.arm_record_path("erased")` says. The plan's `results/phase19_arm_m1.json`
+# would be a name `arm_record_path` refuses — "erased" is the committed `ERASURE_ARMS` member.
+TARGET_CURVE_PATH = _REPO_ROOT / "results" / "phase19_collateral_curve.json"
+TARGET_ERASED_ADAPTER = _REPO_ROOT / "checkpoints" / "phase19_m1_erased_adapter.pt"
+TARGET_SCORES_PATH = _REPO_ROOT / "results" / "phase19_target_scores.json"
+
 
 def _sha256(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 
 
-def _merge_block(name, block):
-    """Merge ONE block into `results/phase19_noise_floors.json`. An existing block is not replaced.
+def _merge_block(path, name, block):
+    """Merge ONE block into ``path``. An existing block is not replaced.
 
-    The refusal is per BLOCK rather than per file, because the three blocks are measured by three
-    separate runs an hour apart and the file has to be appendable across them — but a block that
-    already exists is recorded evidence with no force flag, exactly like an arm record.
+    The refusal is per BLOCK rather than per file, because the blocks are measured by separate runs
+    an hour apart and the file has to be appendable across them — but a block that already exists
+    is recorded evidence with no force flag, exactly like an arm record.
     """
-    doc = (
-        json.loads(NOISE_FLOORS_PATH.read_text(encoding="utf-8"))
-        if NOISE_FLOORS_PATH.exists()
-        else {}
-    )
+    doc = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     if name in doc:
         raise SystemExit(
-            f"[phase19_run] {NOISE_FLOORS_PATH} already carries {name!r} — it is recorded evidence "
+            f"[phase19_run] {path} already carries {name!r} — it is recorded evidence "
             "and there is no force flag. Delete the block in a reviewed commit to re-measure it."
         )
     doc[name] = block
-    NOISE_FLOORS_PATH.write_text(
-        json.dumps(doc, indent=pin.JSON_INDENT, sort_keys=True), encoding="utf-8"
-    )
-    print(f"[phase19_run] merged {name!r} into {NOISE_FLOORS_PATH}")
+    path.write_text(json.dumps(doc, indent=pin.JSON_INDENT, sort_keys=True), encoding="utf-8")
+    print(f"[phase19_run] merged {name!r} into {path}")
 
 
 def _refuse(path):
@@ -468,7 +516,7 @@ def dialogue_block():
     for key in ("value", "cap"):
         print(f"[phase19_run] dialogue {key} = {block[key]!r}")
     print(f"[phase19_run] seed {seed_a} -> {a}\n[phase19_run] seed {seed_b} -> {b}")
-    _merge_block("dialogue_ppl_noise_floor", block)
+    _merge_block(NOISE_FLOORS_PATH, "dialogue_ppl_noise_floor", block)
 
 
 def _pooled_rows(draws, values, family, tiers):
@@ -635,7 +683,7 @@ def nontarget_block():
             f"{row['post_answerable']:>2}/{row['n_questions']}   |d| = {row['delta']!r}"
         )
     print(f"    nontarget_noise_floor(max) = {floor!r}; margin at gate = {pin.MARGIN_K * floor!r}")
-    _merge_block("nontarget_noise_floor", block)
+    _merge_block(NOISE_FLOORS_PATH, "nontarget_noise_floor", block)
 
 
 def retention():
@@ -733,7 +781,491 @@ def retention():
     }
     for key in ("adapter_on", "adapter_off", "cap", "n_windows", "n_scored_tokens"):
         print(f"[phase19_run] retention {key} = {block[key]!r}")
-    _merge_block("retention_ppl_pre_erasure", block)
+    _merge_block(NOISE_FLOORS_PATH, "retention_ppl_pre_erasure", block)
+
+
+def target_ablate():
+    """19-12 task 1 — M1 against the PRODUCTION TAUGHT adapter: the curve, and the erased artifact.
+
+    `cal_ablate`'s shape, with three deliberate differences, each of them the reason this cannot be
+    `python scripts/phase19_erasure.py erase`:
+
+    * the reference set is `phase18_extraction.reference_set_for(TARGET_SLOT)` and NOT the
+      calibration twin the pin's `_selected_components` would pass — module docstring, reason 6;
+    * the input adapter is `phase14_recall.ADAPTER_PATH`, opened READ-ONLY and proved
+      byte-identical afterwards, because 19-13 needs it intact;
+    * the bit-identity control is run BY PATH against the erased artifact, and the path it actually
+      measured is asserted and then recorded beside the number.
+    """
+    import phase14_factset as factset
+    import phase14_recall as recall
+    import phase16_persistence as persistence
+    import phase18_extraction as extraction
+    import torch
+
+    from personacore.checkpoint import export_adapter, load_adapter
+    from personacore.lora import load_adapter_weights
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+
+    _refuse(TARGET_CURVE_PATH)
+    _refuse(TARGET_ERASED_ADAPTER)
+
+    target = {f.slot: f for f in factset.LOCKED_FACTS}[pin.TARGET_SLOT]
+    adapter_path = recall.ADAPTER_PATH
+    adapter_in_sha = _sha256(adapter_path)
+    device = preflight_device(strict=True)["device"]
+    model, _cfg, tok, forbid, artifact = recall.load_adapted_model(device, adapter_path)
+
+    taught = {f.slot: f.value for f in factset.LOCKED_FACTS}
+    references = extraction.reference_set_for(pin.TARGET_SLOT)
+    twin = pin.reference_set_for_calibration(pin.TARGET_SLOT, target)
+    print(
+        f"[phase19_run] reference set for {pin.TARGET_SLOT!r}: |R| = {len(references)} "
+        f"(reference_set_for); the pin's `erase` path would have used the calibration twin's "
+        f"|R| = {len(twin)} — see the module docstring, reason 6"
+    )
+    collateral = {
+        slot: (taught[slot], extraction.reference_set_for(slot)) for slot in extraction.CORE_SLOTS
+    }
+
+    started = time.time()
+    chosen = pin.select_ablation_prefix(
+        model,
+        tok,
+        device,
+        artifact,
+        slot=target.slot,
+        value=target.value,
+        references=references,
+        collateral=collateral,
+        dialogue_ppl=lambda: pin.dialogue_ppl_pair(model, device, forbid),
+    )
+    wall = time.time() - started
+    print(
+        f"[phase19_run] M1 stopped at k = {chosen['k']} of {chosen['cap']} "
+        f"(stopped = {chosen['stopped']}); curve at {[r['prefix'] for r in chosen['curve']]}"
+    )
+    for row in chosen["curve"]:
+        cells = " ".join(
+            f"{slot}={cell['rank']}/{cell['ans1_mean_nll']:.4f}"
+            for slot, cell in sorted(row["slots"].items())
+        )
+        print(
+            f"[phase19_run] prefix {row['prefix']:>3}: target={row['target_rank']}/"
+            f"{row['target_ans1_mean_nll']:.4f} dlgON={row['dialogue_ppl']['adapter_on']:.4f} "
+            f"dlgOFF={row['dialogue_ppl']['adapter_off']:.4f} | {cells}"
+        )
+
+    selected = list(chosen["ordered"][: chosen["k"]])
+    erased = pin.ablate_components(artifact, selected)
+    export_adapter(
+        TARGET_ERASED_ADAPTER,
+        adapter=erased["adapter"],
+        lora_config=erased["lora_config"],
+        base_fingerprint=erased["base_fingerprint"],
+    )
+
+    # T-19-39, exactly as `cal_ablate` proves it: the round trip goes through `load_adapter`
+    # (weights_only=True) and then `load_adapter_weights`, where the key, shape/dtype and SCALE
+    # audits live, and the ablation is re-read OFF DISK rather than off the dict that wrote it.
+    round_tripped = load_adapter(TARGET_ERASED_ADAPTER)
+    load_adapter_weights(model, round_tripped)
+    audits = {
+        "keys_equal": sorted(round_tripped["adapter"]) == sorted(erased["adapter"]),
+        "lora_config_equal": round_tripped["lora_config"] == erased["lora_config"],
+        "base_fingerprint_equal": round_tripped["base_fingerprint"] == erased["base_fingerprint"],
+        "tensors_bit_identical": all(
+            torch.equal(round_tripped["adapter"][k].cpu(), v.cpu())
+            for k, v in erased["adapter"].items()
+        ),
+        "n_tensors": len(round_tripped["adapter"]),
+        "n_params": sum(int(v.numel()) for v in round_tripped["adapter"].values()),
+    }
+    zeroed = []
+    for layer, projection, j in selected:
+        prefix = pin._COMPONENT_PREFIX[(layer, projection)]
+        a = round_tripped["adapter"][f"{prefix}.lora_A"][j, :]
+        b = round_tripped["adapter"][f"{prefix}.lora_B"][:, j]
+        zeroed.append(bool(torch.all(a == 0)) and bool(torch.all(b == 0)))
+    audits["ablated_components_zero_on_disk"] = all(zeroed)
+    audits["ablated_components_checked"] = len(zeroed)
+    for name, value in audits.items():
+        print(f"[phase19_run] audit {name}: {value}")
+    if not all(audits[k] for k in audits if isinstance(audits[k], bool)):
+        raise SystemExit("[phase19_run] the erased adapter failed its round-trip audits — BLOCKER")
+
+    load_adapter_weights(model, artifact)  # leave the model as it was handed over
+
+    # THE CONTROL, BY PATH. 19-06 widened `run_bit_identity_control` for exactly this call: left to
+    # its default it loads `phase14_recall.ADAPTER_PATH` and returns 0.0 whatever M1 did to the
+    # erased artifact — passing while measuring the wrong object. The questions are the committed
+    # call site's own set (`phase14_recall.py:1241-1242`): the empty startup scaffold plus four
+    # held-out questions, so no new editorial choice enters here.
+    control_questions = ("",) + tuple(
+        item.question for item in persistence.load_fixture_items()["core_held_out"][:4]
+    )
+    control = recall.run_bit_identity_control(
+        tok, control_questions, adapter_path=TARGET_ERASED_ADAPTER
+    )
+    if control["adapter"] != TARGET_ERASED_ADAPTER.name:
+        raise SystemExit(
+            f"[phase19_run] the bit-identity control measured {control['adapter']!r}, not "
+            f"{TARGET_ERASED_ADAPTER.name!r} — the number would be about the wrong adapter"
+        )
+    if control["max_abs_diff"] != 0.0:
+        raise SystemExit(
+            f"[phase19_run] bit identity max abs diff = {control['max_abs_diff']!r} on "
+            f"{control['adapter']} — the artifact left the rank-8 decomposition. BLOCKER, and not "
+            "a tolerance to widen: the demo's whole memory-ON/OFF claim rests on this being 0.0"
+        )
+    print(
+        f"[phase19_run] bit identity: max abs diff {control['max_abs_diff']!r} on "
+        f"{control['adapter']} over {control['n_prompts']} prompts ({control['device']})"
+    )
+
+    adapter_out_sha = _sha256(TARGET_ERASED_ADAPTER)
+    adapter_in_sha_after = _sha256(adapter_path)
+    if adapter_in_sha_after != adapter_in_sha:
+        raise SystemExit(
+            f"[phase19_run] {adapter_path} changed during this run ({adapter_in_sha} -> "
+            f"{adapter_in_sha_after}). It is the PRODUCTION taught adapter and 19-13 consumes it"
+        )
+    if adapter_out_sha == adapter_in_sha:
+        raise SystemExit(
+            "[phase19_run] the erased adapter is byte-identical to the taught one — nothing "
+            "was ablated, and every post-erasure number would be a pre-erasure number"
+        )
+
+    record = {
+        "fact_id": target.id,
+        "slot": target.slot,
+        "k": chosen["k"],
+        "stopped": chosen["stopped"],
+        "cap": chosen["cap"],
+        "intact_nll": chosen["intact_nll"],
+        "checkpoints": list(chosen["curve"]),
+        "ordered_prefix": [list(address) for address in selected],
+        "reference_set_size": len(references),
+        "reference_set_source": "phase18_extraction.reference_set_for (NOT the calibration twin)",
+        "calibration_twin_reference_set_size": len(twin),
+        "collateral_slots": sorted(collateral),
+        "mechanism": pin.MECHANISM_ID,
+        "adapter_in": str(adapter_path),
+        "adapter_in_sha256": adapter_in_sha,
+        "adapter_in_unchanged_after_run": True,
+        "adapter_out": str(TARGET_ERASED_ADAPTER),
+        "adapter_out_sha256": adapter_out_sha,
+        "round_trip_audits": audits,
+        "bit_identity_max_abs_diff": control["max_abs_diff"],
+        "bit_identity_adapter_path": str(TARGET_ERASED_ADAPTER),
+        "bit_identity_adapter_measured": control["adapter"],
+        "bit_identity_n_prompts": control["n_prompts"],
+        "bit_identity_device": str(control["device"]),
+        "wall_clock_min": wall / 60,
+        "device": str(device),
+        "torch": torch.__version__,
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py target-ablate (UNPINNED)",
+    }
+    TARGET_CURVE_PATH.write_text(
+        json.dumps(record, indent=pin.JSON_INDENT, sort_keys=True), encoding="utf-8"
+    )
+    print(f"[phase19_run] wrote {TARGET_CURVE_PATH} in {wall / 60:.1f} min")
+
+
+def _order_normalised(arm_record):
+    """A copy of ``arm_record`` whose exposure entries are in ``EXPOSURE_RECORD_KEYS`` ORDER.
+
+    19-09's published defect A, worked around at the ONE place it bites and nowhere else.
+    `run_erasure_arm` serialises with `sort_keys=True` (`phase19_erasure.py:2948`) while
+    `zero_result_exposure_gaps` compares `tuple(entry) != EXPOSURE_RECORD_KEYS` (`:1562`), an
+    ORDERED tuple — so a record read back off disk reports gaps on key ORDER alone even when every
+    NLL is present and finite. The values are untouched here; only the insertion order changes, and
+    both flags are published side by side so nobody has to take this function's word for it.
+    """
+    import copy
+
+    import phase18_extraction as extraction
+
+    out = copy.deepcopy(arm_record)
+    for block in (out["exposure"], out["pre_erasure"]["exposure"]):
+        for i, entry in enumerate(block):
+            block[i] = {key: entry[key] for key in extraction.EXPOSURE_RECORD_KEYS}
+    return out
+
+
+def target_score():
+    """19-12 task 2 — the A2/K=48 post-erasure arm, plus the pooled read the record cannot hold."""
+    import phase14_factset as factset
+    import phase14_recall as recall
+    import phase18_extraction as extraction
+    import phase19_floor as floor
+
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+
+    curve = json.loads(TARGET_CURVE_PATH.read_text(encoding="utf-8"))
+    if curve["slot"] != pin.TARGET_SLOT:
+        raise SystemExit(
+            f"[phase19_run] the curve was swept for slot {curve['slot']!r} but the pin's target is "
+            f"{pin.TARGET_SLOT!r} — the ablation and the scoring would be about different facts"
+        )
+    if _sha256(recall.ADAPTER_PATH) != curve["adapter_in_sha256"]:
+        raise SystemExit(
+            f"[phase19_run] {recall.ADAPTER_PATH} is not the file the curve was swept on"
+        )
+    components = [tuple(address) for address in curve["ordered_prefix"]]
+
+    # `adapter_path=None` is the PRODUCTION taught adapter, and it MUST be: `run_erasure_arm`
+    # measures the whole `pre_erasure` capability block BEFORE it applies `components`, so handing
+    # it the already-erased artifact would make the paired baseline a second post-erasure reading.
+    record = pin.run_erasure_arm(
+        "erased", preflight_device(strict=True)["device"], components=components
+    )
+    del record  # every number below is read BACK OFF DISK, which is where defect A bites
+
+    on_disk = json.loads(pin.arm_record_path("erased").read_text(encoding="utf-8"))
+    values = {f.id: f.value for f in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS}
+    family, budget = on_disk["config"]["attack_family"], on_disk["config"]["k"]
+    tiers = tuple(sorted({d["tier"] for d in on_disk["draws"] if d["family"] == family}))
+    phase18 = json.loads(pin.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+
+    pre = _pooled_rows(phase18["draws"], values, family, tiers)
+    post = _pooled_rows(on_disk["draws"], values, family, tiers)
+    target_id = pin.target_fact_id(on_disk["draws"])
+    row = post[target_id]
+    successes, questions = row["n_answerable"], row["n_questions"]
+    upper = pin.wilson_upper_bound(successes, questions)
+
+    deltas = pin.nontarget_deltas(pin.nontarget_rows(pre), pin.nontarget_rows(post))
+    by_slot = dict(zip(pin.GATED_NONTARGET_SLOTS, deltas, strict=True))
+    exposure = {entry["slot"]: entry for entry in on_disk["exposure"]}
+    pre_exposure = {entry["slot"]: entry for entry in on_disk["pre_erasure"]["exposure"]}
+
+    block = {
+        "arm_record": pin.arm_record_path("erased").name,
+        "arm_record_sha256": _sha256(pin.arm_record_path("erased")),
+        "curve": TARGET_CURVE_PATH.name,
+        "attack_family": family,
+        "k": budget,
+        "tiers_pooled": list(tiers),
+        "unit": "question, never the draw",
+        # ===== (a) =====
+        "target": {
+            "fact_id": target_id,
+            "slot": pin.TARGET_SLOT,
+            "successes": successes,
+            "n_questions": questions,
+            "rate": row["rate"],
+            "per_tier": row["per_tier"],
+            "n_draws": questions * budget,
+            "wilson_upper_bound": upper,
+            "rule_of_three": pin.rule_of_three(questions) if successes == 0 else None,
+            "target_floor": floor.TARGET_FLOOR,
+            "floor_branch": floor.FLOOR_BRANCH,
+            # NOT THE VERDICT. `erasure_succeeded` is called exactly once in this phase, at 19-15,
+            # and the 19-05 AST guard enforces that. This is condition (a)'s own comparison
+            # (`scripts/erasure_gate.py:230`) recorded so the checkpoint can be read without
+            # recomputing it — no gate, no rendering, no `erasure_succeeded` call anywhere here.
+            "upper_le_floor": upper <= floor.TARGET_FLOOR,
+            "headroom": floor.TARGET_FLOOR - upper,
+            "pre_erasure_rank": pre_exposure[pin.TARGET_SLOT]["rank"],
+            "post_erasure_rank": exposure[pin.TARGET_SLOT]["rank"],
+        },
+        # ===== (b) — SEVEN PER-FACT ROWS, EACH OVER ITS OWN 27. NEVER POOLED =====
+        "nontarget": {
+            fact_id: {
+                "slot": r["slot"],
+                "delta": by_slot[r["slot"]],
+                "n_questions": r["n_questions"],
+                "n_draws": r["n_questions"] * budget,
+                "pre_answerable": pre[fact_id]["n_answerable"],
+                "pre_rate": pre[fact_id]["rate"],
+                "pre_per_tier": pre[fact_id]["per_tier"],
+                "post_answerable": r["n_answerable"],
+                "post_rate": r["rate"],
+                "post_per_tier": r["per_tier"],
+                "pre_erasure_rank": pre_exposure[r["slot"]]["rank"],
+                "post_erasure_rank": exposure[r["slot"]]["rank"],
+                "over_margin": by_slot[r["slot"]] > pin.MARGIN_K * floor.NONTARGET_NOISE_FLOOR,
+            }
+            for fact_id, r in sorted(pin.nontarget_rows(post).items())
+        },
+        "nontarget_slot_order": list(pin.GATED_NONTARGET_SLOTS),
+        "nontarget_deltas_in_slot_order": list(deltas),
+        "nontarget_noise_floor": floor.NONTARGET_NOISE_FLOOR,
+        "nontarget_margin_at_gate": pin.MARGIN_K * floor.NONTARGET_NOISE_FLOOR,
+        # ===== (c) — PRE AND POST, EACH AGAINST ITS OWN CAP =====
+        "capability": {
+            "dialogue_ppl_pre": on_disk["pre_erasure"]["dialogue_ppl"],
+            "dialogue_ppl_post": on_disk["dialogue_ppl"],
+            "dialogue_cap": pin.dialogue_cap(pin.dialogue_floor_from_record()),
+            "dialogue_noise_floor": floor.DIALOGUE_PPL_NOISE_FLOOR,
+            "retention_ppl_pre": on_disk["pre_erasure"]["retention_ppl"],
+            "retention_ppl_post": on_disk["retention_ppl"],
+            "retention_cap": pin.V20_EWC_RETENTION_PPL
+            + pin.MARGIN_K * pin.V20_RETENTION_NOISE_FLOOR,
+            "note": (
+                "BOTH LEGS OF (c) WERE ALREADY RED ON THE UNTOUCHED ADAPTER, measured at 19-10 and "
+                "approved for publication at 19-11: dialogue 5.815445876712191 against the "
+                "4.5837288963367 cap and retention 4.219759892336485 against 4.029. A (c) failure "
+                "that PREDATES the erasure is a different finding from one CAUSED by it, which is "
+                "why the pre column is recorded here beside the post one."
+            ),
+        },
+        # ===== DEFECT A, MEASURED ON THIS RECORD RATHER THAN QUOTED FROM 19-09 =====
+        "zero_results_have_nll": pin.zero_results_have_nll(on_disk),
+        "zero_results_have_nll_order_normalised": pin.zero_results_have_nll(
+            _order_normalised(on_disk)
+        ),
+        "zero_result_exposure_gaps": list(pin.zero_result_exposure_gaps(on_disk)),
+        "zero_result_exposure_gaps_order_normalised": list(
+            pin.zero_result_exposure_gaps(_order_normalised(on_disk))
+        ),
+        "exposure_record_keys": list(extraction.EXPOSURE_RECORD_KEYS),
+        "exposure_keys_on_disk": sorted(on_disk["exposure"][0]),
+        "defect_a": (
+            "19-09's published defect A. `run_erasure_arm` writes with sort_keys=True "
+            "(phase19_erasure.py:2948) and `zero_result_exposure_gaps` compares an ORDERED tuple "
+            "(:1562), so the on-disk flag can read False on key ORDER alone while every NLL is "
+            "present and finite. `erasure_gate` short-circuits to INCONCLUSIVE when "
+            "target_successes == 0 AND the flag is False — i.e. a PERFECT erasure, the only "
+            "outcome that clears (a), is exactly the outcome the defect misreports. Both readings "
+            "are published above; the pin was not edited, per D3."
+        ),
+        "denominator_recovery": (
+            "the arm record's own `per_fact` block is defect C's 14-question rows (core_taught "
+            "overwriting core_held_out), which `_nontarget_rates` refuses. Both sides above are "
+            f"pooled from the pin's own `per_fact_rows`, once per tier, reconstituting the "
+            f"{pin.N_TARGET_QUESTIONS} = 14 + 13 D5 denominator."
+        ),
+        "verdict": (
+            "NOT COMPUTED HERE. `erasure_succeeded` is called exactly once in this phase, at "
+            "19-15, and the AST guard committed at 19-05 fails if a second call appears."
+        ),
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py target-score (UNPINNED)",
+    }
+
+    print()
+    print("[phase19_run] (a) TARGET, question unit, pooled over both tiers:")
+    for tier, cell in sorted(row["per_tier"].items()):
+        print(f"    {tier:<16} {cell['n_answerable']:>2}/{cell['n_questions']}")
+    print(f"    POOLED           {successes:>2}/{questions}  over {questions * budget} draws")
+    print(f"    wilson_upper_bound({successes}, {questions}) = {upper!r}")
+    if successes == 0:
+        print(f"    rule_of_three({questions}) = {pin.rule_of_three(questions)!r}")
+    print(
+        f"    TARGET_FLOOR = {floor.TARGET_FLOOR!r}   upper <= floor: {upper <= floor.TARGET_FLOOR}"
+    )
+    print("[phase19_run] (b) SEVEN non-targets, each over its own denominator, never pooled:")
+    for fact_id, r in block["nontarget"].items():
+        print(
+            f"    {fact_id:<24} {r['slot']:<14} {r['pre_answerable']:>2}/{r['n_questions']} -> "
+            f"{r['post_answerable']:>2}/{r['n_questions']}   |d| = {r['delta']!r}   "
+            f"rank {r['pre_erasure_rank']} -> {r['post_erasure_rank']}"
+        )
+    print(f"    margin at gate = {pin.MARGIN_K * floor.NONTARGET_NOISE_FLOOR!r}")
+    print(f"[phase19_run] zero_results_have_nll on disk = {block['zero_results_have_nll']}")
+    print(
+        "[phase19_run] zero_results_have_nll order-normalised = "
+        f"{block['zero_results_have_nll_order_normalised']}"
+    )
+    _merge_block(TARGET_SCORES_PATH, "target_scores", block)
+
+
+def _phase18_budget():
+    """Phase 18's committed K, read off its own arm record. Never typed."""
+    return json.loads(pin.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))["config"]["k"]
+
+
+def _soft_rows(scored):
+    """``run_scored_recall``'s record -> per-fact QUESTION-unit rows, draw unit beside them."""
+    rows = {}
+    for question in scored["questions"]:
+        acc = rows.setdefault(
+            question["fact_id"],
+            {"slot": question["slot"], "n_answerable": 0, "n_questions": 0, "k": 0, "n": 0},
+        )
+        acc["n_questions"] += 1
+        acc["n_answerable"] += int(any(question["hits"]))
+        acc["k"] += question["k"]
+        acc["n"] += question["n"]
+    for row in rows.values():
+        row["rate"] = row["n_answerable"] / row["n_questions"]
+        row["draw_rate"] = row["k"] / row["n"]
+    return rows
+
+
+def target_soft():
+    """19-12 task 2b — the two SOFT-tier facts, PRE and POST, on the committed direct-recall probe.
+
+    DESCRIPTIVE and NEVER GATED (`SOFT_TIER_DESCRIPTIVE_READ`, and STAT-06 everywhere else). The
+    instrument is named in the artifact rather than implied: this is NOT the A2/K=48 adversary the
+    gated seven are scored by, because no soft A2 draw exists and none can be built without
+    re-implementing a frozen builder — module docstring, reason 8.
+    """
+    import phase14_recall as recall
+    import phase16_persistence as persistence
+    import torch
+
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+
+    items = persistence.load_fixture_items()["soft"]
+    device = preflight_device(strict=True)["device"]
+    readings, totals = {}, {}
+    for label, adapter_path in (
+        ("pre_erasure", recall.ADAPTER_PATH),
+        ("post_erasure", TARGET_ERASED_ADAPTER),
+    ):
+        model, _cfg, tok, forbid, _artifact = recall.load_adapted_model(device, adapter_path)
+        scored = recall.run_scored_recall(
+            model, tok, device, forbid, items, tier_label=f"soft/{label}"
+        )
+        readings[label] = _soft_rows(scored)
+        totals[label] = {"k": scored["k"], "n": scored["n"], "rate": scored["rate"]}
+        del model
+
+    block = {
+        "label": "DESCRIPTIVE — reported, NEVER gated (SOFT_TIER_DESCRIPTIVE_READ clause 3)",
+        "instrument": (
+            "phase14_recall.run_scored_recall — greedy + N_SEEDED_SAMPLES seeded draws, the "
+            "committed direct-recall probe Phase 14 already scores the soft tier with. NOT the "
+            f"A2 / K={_phase18_budget()} "
+            "adversary the gated seven are scored by: results/phase18_corpus.json holds "
+            "core_taught and core_held_out ONLY, phase18_extraction.build_corpus reads "
+            "LOCKED_FACTS over CORPUS_TIERS so it cannot emit a soft entry, and that file is "
+            "FROZEN at 26 commits. A hand-rolled A2 path here would publish a different adversary "
+            "under the same name."
+        ),
+        "n_draws_per_question": 1 + recall.N_SEEDED_SAMPLES,
+        "unit": "question (any draw containing the value); the draw unit is recorded beside it",
+        "source": "results/phase16_recall_sample.json, tier `soft` (54 questions, 27 per fact)",
+        "pre_erasure": readings["pre_erasure"],
+        "post_erasure": readings["post_erasure"],
+        "totals": totals,
+        "pre_erasure_adapter": str(recall.ADAPTER_PATH),
+        "pre_erasure_adapter_sha256": _sha256(recall.ADAPTER_PATH),
+        "post_erasure_adapter": str(TARGET_ERASED_ADAPTER),
+        "post_erasure_adapter_sha256": _sha256(TARGET_ERASED_ADAPTER),
+        "paired": "both arms measured in ONE process on the identical 54 questions and seeds",
+        "device": str(device),
+        "torch": torch.__version__,
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py target-soft (UNPINNED)",
+    }
+    print()
+    print("[phase19_run] SOFT TIER, DESCRIPTIVE, question unit, pre -> post:")
+    for fact_id in sorted(readings["pre_erasure"]):
+        a, b = readings["pre_erasure"][fact_id], readings["post_erasure"][fact_id]
+        print(
+            f"    {fact_id:<24} {a['slot']:<14} {a['n_answerable']:>2}/{a['n_questions']} -> "
+            f"{b['n_answerable']:>2}/{b['n_questions']}   draws "
+            f"{a['k']}/{a['n']} -> {b['k']}/{b['n']}"
+        )
+    _merge_block(TARGET_SCORES_PATH, "soft_descriptive", block)
 
 
 _TABLE = {
@@ -743,6 +1275,9 @@ _TABLE = {
     "dialogue-block": dialogue_block,
     "nontarget-block": nontarget_block,
     "retention": retention,
+    "target-ablate": target_ablate,
+    "target-score": target_score,
+    "target-soft": target_soft,
 }
 
 
