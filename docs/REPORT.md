@@ -1139,3 +1139,98 @@ to make it so.
 
 Full evidence, every ladder rung, the exposure table with all three frames and both reductions, the
 complete threat-model scope and the threats-to-validity section: `results/phase18_extraction_report.md`.
+
+## Selective Erasure Result: Erasure Is Not Selective at 331,776 Parameters, and Two Instruments Disagree (Phase 19, recorded 2026-08-19)
+
+*Appended additively. No line above this heading is altered, and the section above — Phase 18's
+extraction audit result — is carried through byte-identically.*
+
+Phase 18 handed Phase 19 `(92, 104, 0, 104)`, on which `erasure_is_worth_attempting` returned
+`True`. Phase 19 attempted it: selective erasure of ONE taught fact from the shipped persona
+adapter by rank-1 component ablation, judged against criteria committed as executable code in
+`scripts/erasure_gate.py` on 2026-08-12 — **one commit, `23a830c`, unamended** — before Phase 16 ran
+and before any v3.0 number existed.
+
+**The verdict, as the committed gate returned it:**
+
+> `FAILURE`
+>
+> - (a) target upper bound 0.0911 over 27 questions <= calibrated floor 0.0911
+> - (b) worst non-target degradation 1.000000 > k=2 x 0.148148 = 0.296296
+> - (c) dialogue PPL 4.8511 vs cap 4.5837; retention PPL 3.670918 vs cap 4.029000
+
+`erasure_succeeded` was called exactly once, on the measured record. The three reasons above are its
+own return value, not a paraphrase written around the numbers.
+
+### The Target Was Erased. Everything Around It Went With It.
+
+The fact itself came out: **0 of 27 questions** post-erasure over 1,296 draws, down from 27 of 27,
+and condition (a) cleared exactly on its boundary — its 95% Wilson upper bound 0.091079 is the best
+bound a perfect erasure can attain at that denominator. Removing it took **78 of 288** rank-1
+components, dispersed across all six layers (18/12/12/17/10/9) and all six projections (fc_in 35,
+fc_out 17, c_proj 13, v_proj 10, k_proj 2, q_proj 1). There is no fact-localised structure at this
+capacity to confine an ablation to, and the collateral is what that costs: **all seven gated
+non-target facts exceeded the (b) margin, four stopped producing their taught value at all, and
+77.6370113463966% of the dialogue adaptation is gone.**
+
+**Selective erasure is not selective at 331,776 parameters.** That sentence is
+`D8_PUBLICATION_POSTURE`, committed before the number existed, and it ships as written.
+
+### The Rank Instrument and the Generation Instrument Disagree — A Co-Headline, Not a Caveat
+
+Read through exposure rank, the same weights look like a textbook selective erasure: only the target
+moves off rank 1, and all seven gated non-targets hold rank 1 with their exposure bits at ceiling.
+Read through generation on the same rows, four of those seven produce nothing at all.
+
+The hardest form of the evidence: **the rank instrument returns bit-identical readings for the
+ablated adapter (M1) and a retrain-without-the-fact reference (M2) across all eight slots** —
+identical rank AND identical exposure bits, the target at (2, 2.0) in both — while on those same two
+adapters `sibling_name` and `street` generate 0/27 under M1 and 27/27 under M2, and `person_name`
+0/27 under M1 and 26/27 under M2. One instrument cannot tell the two adapters apart. The other
+separates them completely.
+
+**Retroactive weight on Phase 18, stated rather than implied, and with its scope limit.** Any Phase
+18 reading whose weight rests on exposure rank or exposure bits **alone** must be re-read in this
+light: that instrument can report undisturbed while generation collapses underneath it. **Phase 18
+readings paired with a generation number are unaffected — including the section immediately above,
+whose headline is a generation count (92 of 104 extracted at least once within 48 draws).** The
+pairing is what makes them safe, and this result is the argument for why the pairing was never
+optional.
+
+### Condition (c) Could Not Have Discriminated an Erasure Either
+
+Published as a dated continuation beside the verdict rather than as an amendment to it. Condition
+(c) anchors its dialogue leg on `V20_MASKED_DIALOGUE_VAL_PPL = 4.5733`, the **adapter-OFF** baseline,
+while the model an erasure is asked to preserve is the **adapter-present** one Phase 14 had already
+measured and published as a named limitation (5.8154, **+27.16%** over 270,203 scored targets,
+`COLLAPSE_PPL_TRIGGER` tripped, descriptive, no gate). Run through the committed gate, a perfect
+erasure — 0 successes, zero non-target degradation, retention clearing with 0.358082 of headroom —
+still returns FAILURE on (c) alone: the conversational cost was paid at **teaching** time, an entire
+phase before any component was ablated.
+
+Re-anchoring does not rescue it. The leg is a one-sided upper cap, so post-erasure perplexity falls
+toward the adapter-off baseline in proportion to how much adaptation the ablation destroyed —
+against the adapter-present anchor M1 "clears" by 0.974710, and that headroom **is** the destroyed
+adaptation. Anchored either way, a one-sided perplexity cap cannot separate "capability preserved"
+from "adaptation removed". **`23a830c` is not amended.** A criterion rewritten after seeing the
+number it failed on is worth nothing, and the ordering that makes every figure in this milestone
+credible is enforced against git's object graph rather than promised.
+
+### What This Means for the Project's Central Claim
+
+PersonaCore's thesis is that personalization lives in the weights rather than in a prompt or a
+store. Three phases have now measured what that costs, and none of them is softened here: the memory
+is **real** (Phase 14), it is **extractable by an attacker holding nothing but prompt access** (Phase
+18), and at this capacity it **cannot be selectively removed** (Phase 19). A store-based design
+deletes one row. This design has no row to delete — the fact is smeared across 78 of 288 rank-1
+components spanning every layer and every projection, and reaching it means reaching them.
+
+That is a negative result, published in the register this project has published every other one in:
+the gate was written first, it returned FAILURE, and the FAILURE is what ships. What it establishes
+is bounded — one fact, one mechanism, one adapter at 331,776 parameters over a 13.9M-parameter base,
+no relearning attack run, and a retrain reference that is a different adapter rather than an edited
+one.
+
+Full evidence — the verdict with all six pinned readings, the collateral curve at eight checkpoints,
+the canary-exposure table, the M2 reference arm, eight threats to validity, and the dated
+condition-(c) diagnosis: `results/phase19_erasure_report.md`.

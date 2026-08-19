@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: executing
-stopped_at: Completed 19-15-PLAN.md
-last_updated: "2026-08-19T20:14:53.495Z"
-last_activity: "2026-08-19 -- 19-15 executed (the ONE verdict call: FAILURE, published unsoftened)"
+stopped_at: Blocked at 19-16-PLAN.md Task 3 — the ship-decision checkpoint, awaiting a human
+last_updated: "2026-08-19T20:34:41.946Z"
+last_activity: "2026-08-19 -- 19-16 tasks 1-2 executed (the (c) diagnosis published BESIDE the verdict, ship marker still PENDING); BLOCKED at the ship-decision checkpoint"
 progress:
   total_phases: 4
   completed_phases: 3
@@ -27,8 +27,13 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
 Plan: 16 of 16
-Status: 19-15 COMPLETE. **THE PHASE HAS ITS VERDICT: `FAILURE`.** Next: **19-16, the dated (c)
-diagnosis beside it, the ship decision, and phase close.**
+Status: 19-16 IN PROGRESS, tasks 1-2 landed, **BLOCKED at Task 3 — the ship-decision checkpoint.**
+**THE PHASE HAS ITS VERDICT: `FAILURE`**, and now has its D3 condition-(c) diagnosis published
+BESIDE it. The phase is **NOT closed**: `ERASURE_SHIP_PENDING_LINE` still occurs exactly once, and
+`append_ship_decision` refuses to flip it without a DATED continuation carrying a line from the
+closed `ERASURE_SHIP_DECISIONS` = ("SHIP", "DO NOT SHIP"). Recording "closed" before a human writes
+one would be Phase 18's W2 — a report advertising a decision that does not exist. Next: **a human
+records the ship decision at the 19-16 Task 3 checkpoint.**
 
 **THE COMMITTED `erasure_succeeded` WAS CALLED EXACTLY ONCE AND RETURNED `FAILURE`.** Read against
 the CORRECTED floor `0.09107873950450847` — not the pin's internal defect-B `0.2` — with the
@@ -219,7 +224,21 @@ states a stale denominator invariant (`corpus_len - n_windows`; the true value i
 is wrong, logged in `.planning/phases/19-selective-memory-erasure/deferred-items.md`.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase.
-Last activity: 2026-08-19 -- 19-15 executed (THE VERDICT: `erasure_succeeded` called EXACTLY ONCE,
+Last activity: 2026-08-19 -- 19-16 tasks 1-2 executed and BLOCKED at the ship-decision checkpoint
+(the D3 condition-(c) diagnosis published BESIDE the verdict, appended through the existing
+`_addendum.append_addendum` with the Phase 19 marker pair passed as an IDENTITY replacement so the
+ship marker stays PENDING for a human — Phase 18's W2 was an unconditional flip. Report 353 -> 466
+lines, `21624251…` -> `3818ab53…`, 113 insertions and ZERO deletions, verdict body byte-identical.
+Both (c) readings side by side with the gate's row labelled, and the diagnostic row stated as NOT a
+pass because its 0.974710 of headroom IS the destroyed adaptation. `docs/REPORT.md` carries both
+headlines and the Phase 18 scope limit; ERASE-01 and ERASE-02 marked against RUNS. NINTH naming
+failure — the plan names `results/phase19_arm_m2.json` and `results/phase19_m2_training.log`, both
+ABSENT; the real ones are `phase19_arm_retrain.json` / `phase19_retrain_training.log`. `gsd-sdk query
+state.update` CORRUPTED this file and was reverted by hand: it mirrored `stopped_at` from the stale
+`Stopped at:` line below, flipped `status` to `completed`, and replaced only the FIRST line of this
+multi-line paragraph)
+
+Prior activity: 2026-08-19 -- 19-15 executed (THE VERDICT: `erasure_succeeded` called EXACTLY ONCE,
 returned **FAILURE**, read against the CORRECTED floor 0.09107873950450847 with the ORDER-NORMALISED
 `zero_results_have_nll`. (a) clears exactly on its boundary at 0/27 pooled; (b) fails all seven;
 (c) fails on dialogue. `results/phase19_erasure_report.md` rendered by driving the pinned
@@ -230,7 +249,7 @@ gate compares a scalar. Eighth plan-instruction failure — the Task-2 verify gr
 which matches neither the pin's `Ship Decision` heading nor its lowercase pending line. 845 passed /
 1 skipped, lint clean, pin byte-identical at 15 commits, `23a830c` unamended at one)
 
-Prior activity: 2026-08-19 -- 19-13 executed (ERASE-02 discharged by a RUN: M2 retrained without the
+Earlier activity: 2026-08-19 -- 19-13 executed (ERASE-02 discharged by a RUN: M2 retrained without the
 target in `wall=81s`, the fourth measurement of that figure, and scored at A2/K=48 over 10,368 draws
 with parity ENFORCED. Omitted fact 0/27 — falsification condition did NOT fire. Five of seven
 bystanders at delta exactly 0.0, the two movers both below the margin. Soft 53/54 against M1's 1/54.
@@ -520,6 +539,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-13: M2 PRESERVES WHAT M1 DESTROYED. Five of seven bystanders move by exactly 0.0 from taught; the two that move (house_number 24/27 to 17/27, hometown 21/27 to 18/27) are both below the 0.2963 margin and are two of the three facts 19-11 named as the only ones with room to move. Soft tier taught 54/54 questions to M1 1/54 to M2 53/54. Capability lands on the TAUGHT adapter: dialogue 6.0079 FAILS +1.4242, retention 4.2172 FAILS +0.1882 — direct evidence that M1's retention clearing was the personalization being gone
 - [Phase 19]: 19-13: SIXTH NAMING FAILURE. All three plan-named artifacts refused by the pin. BOTH plan verify commands also fail as written: Task 1's reads the census off the checkpoint's top-level keys and raises AttributeError even at the correct path; Task 2's asserts 'caveat' and 'framing' on the ARM RECORD, which _arm_record forbids by ordered hard equality over nine ARM_RECORD_KEYS. Both required fields live in results/phase19_retrain_scores.json instead — the schema was not widened and the pin was not edited
 - [Phase 19]: 19-15: the committed erasure_succeeded returned FAILURE against the corrected floor 0.09107873950450847 — (a) clears exactly on its boundary at 0/27 pooled, (b) fails all seven non-targets, (c) fails on dialogue; published unsoftened, ship decision left PENDING for 19-16
+- [Phase 19]: 19-16: CONDITION (c) CANNOT DISCRIMINATE AN ERASURE AT THIS CAPACITY, AND RE-ANCHORING DOES NOT FIX IT. The literal cap 4.583729 anchors on the adapter-OFF baseline 4.5733 (this run measured its own adapter-off at 4.573349214207799, so the constant is correct, just about the wrong model) and sits 0.010380 above it — the taught adapter already failed it by +1.231717 an entire phase before any ablation. But the leg is a ONE-SIDED UPPER cap, so against the adapter-PRESENT anchor 5.825829 M1 'clears' by 0.974710 and that headroom IS the 77.6370113463966% of destroyed dialogue adaptation. Anchored either way, a one-sided perplexity cap cannot separate 'capability preserved' from 'adaptation removed'. 23a830c NOT amended
+- [Phase 19]: 19-16: A PERFECT ERASURE STILL RETURNS FAILURE ON (c) ALONE — measured, not argued. This run's (a) and (c) with the seven (b) deltas replaced by zeros returns FAILURE from the committed gate, with (a) clearing, (b) clearing and retention clearing by 0.358082. Labelled in the report as a COUNTERFACTUAL on fabricated (b) inputs, so it cannot be read as a second opinion on the measurement
+- [Phase 19]: 19-16: THE SHIP MARKER IS FLIPPED ONLY BY A HUMAN'S DECISION. The (c) diagnosis was appended through _addendum.append_addendum with the Phase 19 pending/recorded pair passed as an IDENTITY replacement, so ERASURE_SHIP_PENDING_LINE survives the append at exactly one occurrence. Phase 18's W2 was a placeholder rewrite that ran unconditionally and advertised a decision nobody had written
+- [Phase 19]: 19-16: gsd-sdk query state.update CORRUPTS .planning/STATE.md. It mirrors frontmatter stopped_at from the LAST body 'Stopped at:' line (which read a stale 19-08), derives status from a body 'Status:' line containing the word COMPLETE, and replaces only the FIRST line of a multi-line 'Last activity:' paragraph — orphaning the rest as a half-stale sentence. Reverted and repaired by hand; the stale body anchor was fixed so the next call cannot repeat it
 
 ### Roadmap Evolution
 
@@ -584,9 +607,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-19T20:14:46.835Z
-Stopped at: Completed 19-08-PLAN.md
-Resume file: None
+Last session: 2026-08-19T20:34:41.946Z
+Stopped at: Blocked at 19-16-PLAN.md Task 3 — the ship-decision checkpoint, awaiting a human
+Resume file: .planning/phases/19-selective-memory-erasure/19-16-PLAN.md
 
 ## Operator Next Steps
 

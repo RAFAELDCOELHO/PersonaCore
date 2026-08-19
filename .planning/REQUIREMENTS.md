@@ -162,6 +162,20 @@ returned True on 2026-08-17 (`erasure_is_worth_attempting(92, 104, 0, 104)`), an
 mapped to **Phase 19** in the table above. The original deferral text is kept verbatim below as the
 record of what was committed before the numbers existed; it is history, not current status.
 
+**Both are DISCHARGED as of 2026-08-19, by RUNS and a pre-registered verdict rather than by
+explanation.** ERASE-01: the M1 rank-1 ablation ran and the committed `erasure_succeeded` was called
+exactly once, returning **`FAILURE`**. A requirement to attempt an erasure under a rule committed
+before the data existed is discharged by the MEASUREMENT, not by the rule returning SUCCESS —
+`ERASURE_GOAL_FRAMING` fixes the goal as *auditable forgetting with a measurable bound plus
+representational consistency reported honestly*, and all three were produced and published.
+ERASE-02: the retrain-without-the-forget-fact reference arm ran; the ROADMAP permitted discharging
+it by a written explanation instead, and that alternative was not used.
+
+**ERASE-01 is a scoped bullet here rather than a checkbox, and it stays one.** `requirements
+mark-complete ERASE-01` returns `not_found` because there is no `- [ ]` to tick; converting the
+bullet into a checkbox purely to have a box available would be manufacturing a checkmark. Its status
+of record — like every other requirement's — is the Traceability table below.
+
 - **ERASE-01**: Selective erasure of a taught fact from the weights (Phase 19+). Enters the roadmap
   **only** if `erasure_is_worth_attempting()` returns True on Phase 18's measured numbers. Goal
   framing is fixed already: *auditable forgetting with a measurable bound plus representational
@@ -222,12 +236,16 @@ record of what was committed before the numbers existed; it is history, not curr
 | ATK-06 | 18 | Complete |
 | PREREG-01 | (pre-milestone) | Complete — `23a830c`, 2026-08-12 |
 | PREREG-02 | 16 | Complete |
-| ERASE-01 | 19 | Admitted 2026-08-17 — gate returned True on `(92, 104, 0, 104)`; scoped, not yet planned |
-| ERASE-02 | 19 | Complete — 19-13, 2026-08-19. Discharged by a RUN, not an explanation: `retrain_arm_spec` dropped exactly one fact (10 → 9), trained in `wall=81s`, scored at A2/K=48 over 10,368 draws with `assert_phase18_parity` enforced. The omitted fact reads 0/27; five of seven bystanders move by exactly 0.0. `results/phase19_arm_retrain.json` + `results/phase19_retrain_scores.json` |
+| ERASE-01 | 19 | **Complete — 19-12 … 19-16, 2026-08-19. Discharged by the RUN and its pre-registered verdict, which is `FAILURE`.** M1 rank-1 component ablation zeroed 78 of 288 components and took the target to 0/27 questions over 1,296 draws (95% Wilson upper bound 0.091079, from 27/27 pre-erasure), so (a) cleared exactly on its boundary; (b) failed on all seven gated non-targets and (c) on the dialogue leg. `erasure_succeeded` was called exactly once, against `23a830c` — one commit, unamended. `ERASURE_GOAL_FRAMING`'s three deliverables were all produced: a measurable bound with its denominators, representational consistency reported DESCRIPTIVELY and never gated, and no "indistinguishable from never-having-learned" claim. `results/phase19_arm_erased.json` + `results/phase19_collateral_curve.json` + `results/phase19_target_scores.json` + `results/phase19_representational_reads.json` + `results/phase19_erasure_report.md` |
+| ERASE-02 | 19 | Complete — 19-13, 2026-08-19. Discharged by a RUN, not by the written explanation the ROADMAP allowed as the alternative: `retrain_arm_spec` dropped exactly one fact (10 → 9), trained in `wall=81s`, scored at A2/K=48 over 10,368 draws with `assert_phase18_parity` enforced. The omitted fact reads 0/27; five of seven bystanders move by exactly 0.0. `results/phase19_arm_retrain.json` + `results/phase19_retrain_scores.json` + `results/phase19_retrain_training.log` |
 
-**Coverage (roadmapped 2026-08-12; ERASE-01/02 admitted 2026-08-17):** 28/28 in-scope v3.0
-requirements are mapped to Phases 16-19; 0 orphans. PREREG-01 is complete pre-milestone
-(`23a830c`). ERASE-01/02 were deliberately unmapped until the pre-registered gate created Phase 19
+**Coverage (roadmapped 2026-08-12; ERASE-01/02 admitted 2026-08-17; CLOSED 2026-08-19):** 28/28
+in-scope v3.0 requirements are mapped to Phases 16-19; 0 orphans. **All 29 rows above read Complete,
+and the last one closed on a `FAILURE` verdict** — which is the pre-registration discipline working
+rather than failing: the rule was committed on 2026-08-12, it returned FAILURE on 2026-08-19, and
+the FAILURE is what ships. A requirement is discharged by a measurement taken under a rule that
+could have gone either way, never by the measurement coming out well. PREREG-01 is complete
+pre-milestone (`23a830c`). ERASE-01/02 were deliberately unmapped until the pre-registered gate created Phase 19
 — `erasure_is_worth_attempting(92, 104, 0, 104)` → True, verified in `18-VERIFICATION.md` — which
 is the mechanism working as designed: the phase was authored by the rule, not by planning.
 STAT-01..06 are cross-cutting by construction and are therefore satisfied *per phase* rather than
