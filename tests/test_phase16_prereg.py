@@ -113,6 +113,13 @@ PHASE19_FLOOR_ARTIFACT = "scripts/phase19_floor.py"
 # rather than left out on that reasoning: this tuple's own docstring says "every record produced
 # by erasing, scoring or reporting on the TAUGHT target fact", and a target rate a reader can find
 # in a file no guard watches is exactly the gap the ancestry guard exists to close.
+# `results/phase19_representational_reads.json` is listed on the same reasoning, and added at 19-14
+# in the same commit as the guards over it. `_cmd_representational` writes exactly four keys and
+# has no extension point, so the CROSS-PERSONA cosine `ERASURE_DECISION_RULE`'s fourth clause names
+# by name, the taught-vs-M1 cosine (the pinned record's cosine is against the M2 RETRAIN), and the
+# Fisher read's limits AS FIELDS all have to live in a companion. They are descriptive and reach no
+# gate — but they are readings ON the taught target's erasure, and this tuple's own docstring says
+# a target number a reader can find in a file no guard watches is the gap the guard exists to close.
 # `results/phase19_reference_set_resweep.json` is listed on the same reasoning as
 # `results/phase19_target_scores.json` above. It introduces no new evidence — it re-runs the pinned
 # `select_ablation_prefix` on the same production adapter — but it publishes a TARGET `k` (78 on
@@ -126,6 +133,7 @@ PHASE19_TARGET_ARTIFACT_GLOBS = (
     "results/phase19_target_scores.json",
     "results/phase19_reference_set_resweep.json",
     "results/phase19_representational.json",
+    "results/phase19_representational_reads.json",
     "results/phase19_erasure_report.md",
 )
 

@@ -26,6 +26,7 @@ without that pair the strongest-looking assertion in this file would be measurin
 import ast
 import dataclasses
 import functools
+import hashlib
 import importlib.util
 import inspect
 import json
@@ -3945,4 +3946,345 @@ def test_the_committed_target_sweep_was_read_on_the_phase18_reference_set():
     assert len(curve["ordered_prefix"]) == curve["k"], (
         f"the curve records k = {curve['k']} but carries {len(curve['ordered_prefix'])} addresses "
         "— k is the claim about how much of dW was zeroed and the address list is what was zeroed"
+    )
+
+
+# =============================================================================================
+# ===== 19-14: THE 19-05 GUARDS, RE-RUN AGAINST THE READ THAT NOW EXISTS =======================
+# =============================================================================================
+#
+# `test_representational_read_is_not_gated` above landed at 19-05, in the same commit as the three
+# functions it scans and NINE WAVES before anything called them. This block is where it earns its
+# keep: the read has now RUN, two records are on disk, and the guard has to hold against a concrete
+# implementation rather than against three uncalled functions.
+#
+# Three things the 19-05 scan structurally could not cover, added here:
+#
+#   1. THE ARTIFACTS. A source scan sees no JSON. Both committed records are checked for the
+#      DESCRIPTIVE label and for any key NAMED like a verdict — the shape a gate takes when it
+#      reaches the artifact instead of the code.
+#   2. THE CONSUMERS. The 19-05 scan covers `DESCRIPTIVE_ONLY_FUNCTIONS` — the three PRODUCERS. A
+#      threshold added by a READER of the record would be invisible to it, which is Phase 18's
+#      "no branch anywhere reads these bounds — `rejected` comes from `holm` alone"
+#      (`results/phase18_extraction_report.md:170`) stated for this path and enforced over BOTH the
+#      pin and the unpinned driver.
+#   3. THE RED WATCH ON THE REAL FUNCTION. The 19-05 non-vacuity drives a HAND-TYPED mutant, which
+#      is free to stop resembling the function it stands in for. Below, the REAL `delta_w_cosine`'s
+#      REAL source is mutated in memory and the scan must fire on it — and the pin's bytes are
+#      asserted unchanged in the same test, because the file is CLOSED at 15 commits and the RED
+#      may not be bought by editing it.
+
+# Every way a key could name a pass/fail. Matched against the record's key NAMES, not its values:
+# a `"verdict"` or `"threshold"` key is how a gate reaches an artifact when the code stays clean.
+_VERDICT_SHAPED_KEY = re.compile(
+    r"verdict|passed|failed|pass_fail|succeed|success|threshold|gate|"
+    r"exceeds|above|below|significant|reject",
+    re.IGNORECASE,
+)
+
+# The two committed records. The pinned one is named from the pin's own constant; the companion is
+# named here because it is the driver's, and both are read as BYTES-ON-DISK rather than rebuilt.
+_REPRESENTATIONAL_RECORDS = (
+    "results/phase19_representational.json",
+    "results/phase19_representational_reads.json",
+)
+
+
+def _record_key_offenders(node, trail=()):
+    """Every key ANYWHERE in a decoded record whose NAME is shaped like a pass/fail."""
+    offenders = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(key, str) and _VERDICT_SHAPED_KEY.search(key):
+                offenders.append(".".join((*trail, key)))
+            offenders += _record_key_offenders(value, (*trail, str(key)))
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            offenders += _record_key_offenders(value, (*trail, str(index)))
+    return offenders
+
+
+def test_the_committed_representational_records_carry_no_verdict_shaped_key():
+    """19-14 — the read reached an artifact, and a source scan cannot see an artifact."""
+    for relative in _REPRESENTATIONAL_RECORDS:
+        path = _ROOT / relative
+        assert path.exists(), (
+            f"{relative} does not exist. The pinned `representational` subcommand writes the "
+            "first and `python scripts/phase19_run.py representational-reads` the second; a guard "
+            "over a missing file is green and blind"
+        )
+        record = json.loads(path.read_text(encoding="utf-8"))
+        assert "DESCRIPTIVE" in json.dumps(record), (
+            f"{relative} does not carry the word DESCRIPTIVE anywhere. "
+            "`scripts/erasure_gate.py:118-122` makes this read descriptive and EXPLICITLY NOT "
+            "GATED, and the label travelling INSIDE the artifact is what stops a later reader "
+            "picking the numbers up without it"
+        )
+        assert _record_key_offenders(record) == [], (
+            f"{relative} carries a key named like a pass/fail: {_record_key_offenders(record)}. "
+            "`ROADMAP.md:530-534` treats converting one of these reads into pass/fail as a "
+            "violation of the pre-registration, and a verdict-shaped KEY is how that arrives when "
+            "the code itself stays clean"
+        )
+
+    # The pinned record's provenance is the `label` `fisher_overlap` puts in its own return value —
+    # the same check `_load_representational` makes, asserted here against the bytes on disk.
+    pinned = json.loads((_ROOT / _REPRESENTATIONAL_RECORDS[0]).read_text(encoding="utf-8"))
+    assert pinned["fisher"]["label"] == erasure.REPRESENTATIONAL_READ_LABEL
+    companion = json.loads((_ROOT / _REPRESENTATIONAL_RECORDS[1]).read_text(encoding="utf-8"))
+    assert companion["status"] == "DESCRIPTIVE"
+    assert companion["fisher_limits"], "the Fisher limits are a REQUIRED field, not report prose"
+    assert all("n" in read for read in companion["reads"].values()), (
+        "a read carries no `n`. Every number in this record is descriptive, and a descriptive "
+        "number without its denominator is the thing STAT-02 exists to refuse"
+    )
+
+    # NON-VACUITY, driven rather than asserted — the same discipline the 19-05 scan uses.
+    assert _record_key_offenders({"reads": {"cosine": {"threshold_exceeded": True}}}) == [
+        "reads.cosine.threshold_exceeded"
+    ]
+    assert _record_key_offenders({"limits": [{"verdict": "SUCCESS"}]}) == ["limits.0.verdict"]
+    assert _record_key_offenders({"cosine": {"(0, 'q_proj')": 0.9}}) == []
+
+
+# The two sources a consumer could live in. The pin is closed; the driver is not, and an unpinned
+# file is exactly where a threshold would be cheapest to add — so it is scanned by the same rule.
+_DRIVER_REL = "scripts/phase19_run.py"
+_DRIVER_SOURCE = (_ROOT / _DRIVER_REL).read_text(encoding="utf-8")
+
+# What a reference to the read LOOKS like in source. Names, not string literals: the record is
+# reached through these three, and a fourth spelling would have to be added here to be reachable.
+_REPRESENTATIONAL_NAMES = (
+    "REPRESENTATIONAL_RECORD_PATH",
+    "REPRESENTATIONAL_READS_PATH",
+    "_load_representational",
+)
+
+
+def _representational_consumers(source):
+    """``name -> FunctionDef`` for every module-level function that touches the read."""
+    return {
+        name: node
+        for name, node in _module_functions(source).items()
+        if any(
+            isinstance(inner, ast.Name) and inner.id in _REPRESENTATIONAL_NAMES
+            for inner in ast.walk(node)
+        )
+        or any(
+            isinstance(inner, ast.Attribute) and inner.attr in _REPRESENTATIONAL_NAMES
+            for inner in ast.walk(node)
+        )
+    }
+
+
+def _consumer_branch_offenders(source):
+    """Every ordering comparison and every gated callee inside a consumer of the read."""
+    offenders = []
+    for name, node in _representational_consumers(source).items():
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Call) and _callee_name(inner) in _ERASURE_GATED_CALLEES:
+                offenders.append(f"{name}: calls {_callee_name(inner)}")
+            if isinstance(inner, ast.Compare):
+                ordering = [type(op).__name__ for op in inner.ops if isinstance(op, _ORDERING_OPS)]
+                if ordering:
+                    offenders.append(f"{name}: ordering comparison {ordering}")
+    return offenders
+
+
+def test_no_consumer_branch_reads_the_representational_numbers():
+    """19-14 — Phase 18's "no branch anywhere reads these bounds", stated for this path.
+
+    The 19-05 scan covers the three PRODUCERS. This one covers everything that reads what they
+    produced, in both the closed pin and the unpinned driver, because a threshold added by a READER
+    is invisible to a scan over `DESCRIPTIVE_ONLY_FUNCTIONS`.
+    """
+    for label, source in (("the pin", _PIN_SOURCE), ("the driver", _DRIVER_SOURCE)):
+        consumers = _representational_consumers(source)
+        assert consumers, (
+            f"{label} holds no function that references the representational read, so this scan "
+            f"is green over nothing. The names it looks for are {_REPRESENTATIONAL_NAMES}"
+        )
+        assert _consumer_branch_offenders(source) == [], (
+            f"a consumer in {label} branches on the representational read: "
+            f"{_consumer_branch_offenders(source)}. These numbers are DESCRIPTIVE — the verdict "
+            "comes from `erasure_succeeded` alone, and nothing downstream of this read may compare "
+            "one of its values against anything"
+        )
+
+    # The pin's ONLY reader hands the record to the renderer and to nothing else.
+    assert [enclosing for enclosing, _call in _call_sites("_load_representational")] == [
+        "_cmd_report"
+    ], (
+        "`_load_representational` is called from somewhere other than `_cmd_report`. The read has "
+        "exactly one consumer and it is the report renderer"
+    )
+
+    # NON-VACUITY, driven twice: a comparison and an inferential call, both inside a real consumer.
+    branching = (
+        "def _cmd_report():\n"
+        "    record = _load_representational()\n"
+        "    if record['fisher']['ablated_mean'] > record['fisher']['preserved_mean']:\n"
+        "        return 'SUCCESS'\n"
+        "    return 'FAILURE'\n"
+    )
+    assert _consumer_branch_offenders(branching), (
+        "the scan cannot see a consumer comparing two of the read's own numbers — it would be "
+        "green against the exact mutation it exists to catch"
+    )
+    inferential = "def _cmd_report():\n    return holm(_load_representational()['cosine'])\n"
+    assert _consumer_branch_offenders(inferential), (
+        "the scan cannot see a consumer running the read through an inferential call — a second "
+        "`holm` family priced to carry a descriptive statistic"
+    )
+    assert _consumer_branch_offenders("def f():\n    return 1 > 0\n") == [], (
+        "the scan fires on a function that does not touch the read at all, so it is not measuring "
+        "consumers — it is measuring every comparison in the file"
+    )
+
+
+def test_the_descriptive_scan_is_red_on_the_real_delta_w_cosine_carrying_a_threshold():
+    """19-14 — the plan's prescribed RED, watched on the REAL function, with the pin untouched.
+
+    The 19-05 non-vacuity drives a hand-typed stub named `delta_w_cosine`. A stub is free to stop
+    resembling the function it stands in for, so the mutation here is applied to the REAL source of
+    the REAL function: `if cosine > 0.5:` inserted into its own body, in memory. The pin's bytes are
+    asserted unchanged in the same test — the file is CLOSED at 15 commits, and buying a RED by
+    editing it is the one way this check could be passed dishonestly.
+    """
+    pin_path = _ROOT / "scripts" / "phase19_erasure.py"
+    before = hashlib.sha256(pin_path.read_bytes()).hexdigest()
+
+    # GREEN on the real pin, first — a RED that was never green proves nothing.
+    assert _gating_offenders(_PIN_SOURCE, ("delta_w_cosine",)) == []
+
+    real = inspect.getsource(erasure.delta_w_cosine)
+    anchor = "    cosines = {}\n"
+    assert anchor in real, (
+        "`delta_w_cosine`'s body no longer contains the line this mutation is anchored on, so the "
+        "RED below would be inserted somewhere that does not represent the real path"
+    )
+    mutant = real.replace(anchor, anchor + "    if cosines > 0.5:\n        pass\n", 1)
+    assert mutant != real
+    offenders = _gating_offenders(mutant, ("delta_w_cosine",))
+    assert offenders, (
+        "the scan is GREEN on the real `delta_w_cosine` carrying a threshold comparison. It would "
+        "not catch the exact mutation `ERASURE_DECISION_RULE`'s fourth clause forbids"
+    )
+    assert any("ordering comparison" in offender for offender in offenders), offenders
+
+    # RESTORED BYTE-IDENTICALLY, because it was never written: the mutation lived in a string.
+    assert hashlib.sha256(pin_path.read_bytes()).hexdigest() == before, (
+        "the pin's bytes changed while watching the guard go RED. The file is CLOSED at 15 "
+        "commits and STAT-05's ancestry guard reddens permanently on any commit to it"
+    )
+
+
+def _report_arms_at(directory):
+    """Three arm records in the shape `_arm_record` proves, written where `_load_arm` reads them."""
+    draws = [{"fact_id": f"synthetic_{slot}", "slot": slot} for slot in erasure.CORE_GATED_SLOTS]
+    for arm in ("erased", "replicate", "cal-erased"):
+        record = _erasure_arm(draws=draws)
+        record["config"] = {
+            **record["config"],
+            "stop_ids": sorted(record["config"]["stop_ids"]),
+            "git_sha": "0" * 40,
+            "device": "cpu",
+        }
+        (directory / f"phase19_arm_{arm}.json").write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_report_renders_section_6_from_the_committed_representational_record(tmp_path, monkeypatch):
+    """19-14 — the pinned `report` DRIVEN with the REAL representational record on its input.
+
+    19-07's lesson was that `report` passed every static scan for six plans and had never once been
+    executed; it then crashed four different ways on records in the exact shape its own writers
+    produce. `test_the_report_subcommand_runs_end_to_end_on_committed_shaped_records` proved it
+    RUNS — but with a hand-built representational record in a `tmp_path`. Nothing had ever driven it
+    with the file the pinned `representational` subcommand actually writes, which is the one input
+    `render_report` reads seven separate keys off.
+
+    The ARM records are synthetic here on purpose: they are not what this plan produced, and the
+    committed ones cannot reach this path at all — the test directly below is what pins that.
+
+    `render_report`'s `path` default binds at def time, so the CALL is redirected, and the test
+    asserts `results/phase19_erasure_report.md` is still absent afterwards. That file is 19-15's
+    deliverable and `assert_erasure_report_not_clobbered` has NO force flag: a test that wrote it
+    would leave 19-15 unable to render without deleting evidence in a reviewed commit.
+    """
+    report_path = _ROOT / "results" / "phase19_erasure_report.md"
+    existed = report_path.exists()
+
+    monkeypatch.setattr(erasure, "ARM_RECORD_DIR", tmp_path)
+    _report_arms_at(tmp_path)
+    floor_path = tmp_path / "phase19_dialogue_floor.json"
+    floor_path.write_text(json.dumps(_dialogue_floor_record()), encoding="utf-8")
+    monkeypatch.setattr(erasure, "DIALOGUE_FLOOR_RECORD_PATH", floor_path)
+    monkeypatch.setattr(
+        erasure, "render_report", functools.partial(erasure.render_report, path=tmp_path / "r.md")
+    )
+
+    # `REPRESENTATIONAL_RECORD_PATH` is deliberately NOT redirected — the committed record IS the
+    # object under test, and pointing it at a fixture would check the fixture.
+    assert erasure.REPRESENTATIONAL_RECORD_PATH == _ROOT / _REPRESENTATIONAL_RECORDS[0]
+    erasure._cmd_report()
+
+    assert report_path.exists() == existed, (
+        f"{report_path} appeared from a test run. It is a `results/phase19_*` artifact and 19-15's "
+        "deliverable, and the clobber guard has no force flag"
+    )
+
+    text = (tmp_path / "r.md").read_text(encoding="utf-8")
+    record = json.loads(erasure.REPRESENTATIONAL_RECORD_PATH.read_text(encoding="utf-8"))
+    assert "### 6. Representational consistency" in text
+    assert erasure.REPRESENTATIONAL_READ_LABEL in text
+
+    # Section 6 renders EVERY cell of the committed cosine, and the Fisher line with both of its
+    # denominators — the six keys `_load_representational`'s docstring names the renderer reading.
+    for key in record["cosine"]:
+        assert f"| {key} |" in text, f"section 6 dropped the cosine cell {key}"
+    fisher = record["fisher"]
+    assert (
+        f"{fisher['ablated_mean']:.6f} over {fisher['n_ablated_cells']} ablated cell(s) against "
+        f"{fisher['preserved_mean']:.6f} over {fisher['n_preserved_cells']} preserved"
+    ) in text
+    assert fisher["granularity"] in text and fisher["reduction"] in text
+
+
+def test_the_pinned_report_subcommand_cannot_reach_the_committed_arm_records(tmp_path, monkeypatch):
+    """19-14 — MEASURED, and it is a live blocker for 19-15 rather than a property to preserve.
+
+    The ordering contract said to drive `report` end to end after writing the representational
+    record. Driven against the ACTUAL `results/` directory it does not complete: `_cmd_report`
+    hands `post["per_fact"]` to `nontarget_deltas`, and `_nontarget_rates` proves every row carries
+    `N_TARGET_QUESTIONS` = 27 — D5's pooled denominator — while the committed rows carry ONE TIER's
+    count. That is 19-09's published defect C in the (b) position, which
+    `scripts/phase19_run.py`'s module docstring (reason 5) already records as making the pinned (b)
+    path unrunnable, and which `_pooled_rows` recovers from by driving the pin's own
+    `per_fact_rows` once per tier and summing.
+
+    Pinned here as a TEST so 19-15 inherits it as a known blocker instead of rediscovering it as a
+    seventh surprise: the report cannot be rendered through `_cmd_report`, and the recovery is to
+    assemble the pooled rows and call `render_report` directly. The pin is CLOSED at 15 commits, so
+    the fix cannot land in `_cmd_report`.
+    """
+    report_path = _ROOT / "results" / "phase19_erasure_report.md"
+    existed = report_path.exists()
+    monkeypatch.setattr(
+        erasure, "render_report", functools.partial(erasure.render_report, path=tmp_path / "r.md")
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        erasure._cmd_report()
+
+    message = str(excinfo.value)
+    assert f"pooled per-core-fact count {erasure.N_TARGET_QUESTIONS}" in message, message
+    assert report_path.exists() == existed, "the crashing path still wrote 19-15's deliverable"
+
+    # The rows the pin refuses, and the tier split that explains why — measured off the record.
+    record = json.loads(erasure.arm_record_path("erased").read_text(encoding="utf-8"))
+    counts = {row["n_questions"] for row in record["per_fact"].values()}
+    assert erasure.N_TARGET_QUESTIONS not in counts, (
+        f"the committed per_fact rows now carry {counts}, which includes the pooled "
+        f"{erasure.N_TARGET_QUESTIONS}. Defect C would be gone and this guard needs rewriting "
+        "rather than deleting — it exists to keep 19-15 from walking into the crash"
     )

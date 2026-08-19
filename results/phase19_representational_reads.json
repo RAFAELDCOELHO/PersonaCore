@@ -26,13 +26,14 @@
         "sha256": "226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb"
       }
     },
-    "git_sha": "73d25711743d851282b8eb852b58421c3acce29c",
+    "git_sha": "3032f6cf9668cdba3651a2f7ef66030f1c0592c0",
     "torch": "2.7.1",
     "w0": {
       "path": "checkpoints/convbase_slim.pt",
       "sha256": "550bb8b08f65cbb8442fa2c44b1e905aeb51ae7afc39b012c35b957459e1f056"
     }
   },
+  "descriptive_only": "no value in this record is compared against anything, here or downstream. `DESCRIPTIVE_ONLY_FUNCTIONS` is scanned by AST over the pin, and the companion scan covers this driver; `erasure_succeeded` never sees any of these numbers.",
   "fisher_limits": [
     {
       "limit": "the Fisher is estimated over the PRETRAINING corpus, not over the persona teaching data, so it scores importance for the TinyStories LM task and not for the taught facts",
@@ -85,7 +86,6 @@
     }
   ],
   "label": "DESCRIPTIVE, EXPLICITLY NOT GATED (`scripts/erasure_gate.py:118-122`). Reported with its denominators and never converted into a pass/fail. At n=8 facts and n=3 personas the sample cannot support a threshold, and gating what the sample cannot support is treated as a DEFECT in this project, not as extra rigour. A second `sign_test_exact` call site IS a second hypothesis family and would reprice Holm to carry a descriptive statistic \u2014 which is why `tests/test_phase19_erasure.py::test_representational_read_is_not_gated` scans these three functions by AST rather than trusting this sentence.",
-  "not_gated": "no value in this record is compared against anything, here or downstream. `DESCRIPTIVE_ONLY_FUNCTIONS` is scanned by AST over the pin, and the companion scan covers this driver; `erasure_succeeded` never sees any of these numbers.",
   "pinned_record": {
     "path": "results/phase19_representational.json",
     "sha256": "fa123c90edf14e6c0f74f178cc21d5a0c7ea40e51aac13124af90f9485f7eb02",
