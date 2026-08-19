@@ -81,6 +81,21 @@ formally only once the numbers from 16, 17 and 18 exist, because those numbers d
 erasure is worth attempting and what it would have to beat. Per the v2.0 pre-registration
 discipline, the criteria for that decision are written down before the data can influence them.
 
+**Phase 19 admitted and executed (completed 2026-08-19).** The gate authored the decision, not a
+judgement made after seeing the result: `erasure_is_worth_attempting(92, 104, 0, 104)` returned True
+on Phase 18's measured numbers under a rule committed at `23a830c` on 2026-08-12, *before Phase 16
+ran*. 16 plans across 14 waves. **The committed `erasure_succeeded` returned `FAILURE`** — (a) clears
+perfectly at 0/27, exactly on a blind-calibrated floor of `0.09107873950450847`; (b) fails all seven
+gated non-targets, four at total generation loss; (c) fails on dialogue, both legs having been red
+before any erasure ran. Erasing one taught fact took k = 78 of 288 rank-1 components spread across
+all six layers and all six projections, destroying 77.6% of the dialogue adaptation.
+**D8 branch = the cliff: selective erasure is not selective at 331,776 parameters** — published
+unsoftened, with the rank-vs-NLL instrument disagreement as co-headline (the rank instrument returns
+bit-identical readings for M1 and M2 across all eight slots while one arm's bystanders generate 0/27
+and the other's generate 27/27). **Ship decision: `DO NOT SHIP`**, withholding exactly one claim —
+that the verdict is mechanically reproducible by the pinned CLI alone — and withdrawing no
+measurement. Milestone close remains a separate act.
+
 **Explicitly out of scope for v3.0:** the frozen tokenizer / retrain question. It needs its own
 conversation given the cost of invalidating every published checkpoint and number, and bundling it
 into a privacy milestone would confound both.
@@ -198,4 +213,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-12 — v2.0 "Weight-Based Memory" completed, v3.0 "Adversarial Privacy Audit and Selective Memory Erasure" opened*
+*Last updated: 2026-08-19 — Phase 19 "Selective Memory Erasure" completed: verdict `FAILURE`, ship decision `DO NOT SHIP`. All four v3.0 phases (16-19) are complete; milestone close is a separate act.*
