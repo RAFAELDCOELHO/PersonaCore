@@ -107,6 +107,23 @@ Reasons 1 and 2 above apply again unchanged (`_cmd_erase` routes through the SAM
     python scripts/phase19_run.py target-ablate    # M1 + curve + erased adapter   (19-12 task 1)
     python scripts/phase19_run.py target-score     # the A2/K=48 arm + pooled read (19-12 task 2)
     python scripts/phase19_run.py target-soft      # the soft DESCRIPTIVE pair     (19-12 task 2)
+
+19-13 — M2, THE ERASE-02 RETRAIN REFERENCE — adds three more. Reasons 7 and 8 apply again unchanged
+(the arm record still cannot hold a scores block, and no soft A2 draw exists), and one more joins
+them:
+
+9. THE PIN'S `retrain` SUBCOMMAND FUSES A ~81 s TRAINING HALF TO A ~69 min SCORING HALF.
+   `_cmd_retrain` calls `tp.train_arm(...)` and then `run_erasure_arm("retrain", ...)` in one
+   process. A death anywhere in the 10,368 draws leaves the adapter written, and `train_arm`'s
+   `refuse_if_exists` then refuses the whole fused subcommand on a re-run — so the run would be
+   unrecoverable without deleting recorded evidence. `retrain_train` and `retrain_score` below are
+   the SAME two halves, split at the seam, re-declaring nothing: the fact list comes from
+   `retrain_arm_spec`, the two settings come back OUT of it, the arm name and prefix are
+   `RETRAIN_ARM` / `RETRAIN_PREFIX`, and the recipe constants are read from `teach_persona`.
+
+    python scripts/phase19_run.py retrain-train    # the M2 adapter, ~81 s        (19-13 task 1)
+    python scripts/phase19_run.py retrain-score    # the A2/K=48 arm + comparison (19-13 task 2)
+    python scripts/phase19_run.py retrain-soft     # the soft DESCRIPTIVE read    (19-13 task 2)
 """
 
 import hashlib
@@ -148,6 +165,17 @@ TARGET_SCORES_PATH = _REPO_ROOT / "results" / "phase19_target_scores.json"
 # rewrite of the curve above: the committed artifact is evidence, and a re-measurement that
 # overwrites the thing it is checking cannot be checked against it afterwards.
 RESWEEP_PATH = _REPO_ROOT / "results" / "phase19_reference_set_resweep.json"
+
+# 19-13's ONE new name. The M2 ARM RECORD is again NOT named here — it goes wherever
+# `pin.arm_record_path("retrain")` says, which is `results/phase19_arm_retrain.json`; the plan's
+# `results/phase19_arm_m2.json` is a name `arm_record_path` REFUSES with a `SystemExit`, exactly as
+# it refused 19-12's `phase19_arm_m1.json`. The M2 ADAPTER is not named here either: it comes out of
+# `teach_persona.arm_outputs(pin.RETRAIN_ARM, prefix=pin.RETRAIN_PREFIX)`, i.e.
+# `checkpoints/phase19_erase_reference_adapter.pt`, and the plan's
+# `checkpoints/phase19_m2_retrain_adapter.pt` is a third name for the same file. Only the companion
+# SCORES record is unaddressed by any constant, and it takes the arm's own name so it cannot be
+# mistaken for `phase19_target_scores.json`, which holds the M1 read.
+RETRAIN_SCORES_PATH = _REPO_ROOT / "results" / "phase19_retrain_scores.json"
 
 
 def _sha256(path):
@@ -1488,6 +1516,396 @@ def target_soft():
     _merge_block(TARGET_SCORES_PATH, "soft_descriptive", block)
 
 
+def retrain_train():
+    """19-13 task 1 — M2 (ERASE-02): the `real` recipe minus EXACTLY ONE fact, trained.
+
+    The pin's `_cmd_retrain` FUSES training and scoring into one call, and the two halves cost
+    ~81 s and ~69 min respectively. A death anywhere in the 10,368 draws would leave the adapter
+    written, and `refuse_if_exists` would then refuse the whole fused subcommand on a re-run — so
+    the halves are driven separately here. Nothing is re-declared: `RETRAIN_ARM`, `RETRAIN_PREFIX`,
+    `retrain_arm_spec` and `TAUGHT_FAMILY_IDS` are the pin's and `phase14_factset`'s own, and
+    `second_person` / `replay_ratio` come back OUT of the spec rather than being typed here.
+    `retrain_arm_spec`'s docstring is explicit about why: the `real` arm reads two
+    calibration-derived values, so re-declaring either would make M2 a measurement of the RECIPE
+    rather than of the omission.
+
+    The PRODUCTION taught adapter is read-only here and is proved byte-identical before and after:
+    `arm_outputs(RETRAIN_ARM, prefix=RETRAIN_PREFIX)` cannot resolve to it (the `real` exception is
+    the only path to that name), but the phase measures against it and a proof is cheaper than an
+    argument.
+    """
+    import phase14_factset as factset
+    import phase14_recall as recall
+    import teach_persona as tp
+
+    from personacore.checkpoint import load_adapter
+    from personacore.provenance import git_sha
+
+    target = {f.slot: f for f in factset.LOCKED_FACTS}[pin.TARGET_SLOT]
+    real_facts, real_second_person, real_replay = tp.arm_spec("real")
+    facts, second_person, replay_ratio = pin.retrain_arm_spec(target.id)
+
+    # THE ARM DIFFERS FROM `real` BY EXACTLY ONE FACT AND BY NOTHING ELSE — proved, not asserted in
+    # prose. `retrain_arm_spec` already raises when nothing was dropped; this additionally names
+    # WHICH member left and re-proves the two settings survived the delegation untouched.
+    dropped = sorted({f.id for f in real_facts} - {f.id for f in facts})
+    if dropped != [target.id] or len(facts) != len(real_facts) - 1:
+        raise SystemExit(
+            f"[phase19_run] the retrain spec dropped {dropped} against the target {target.id!r} "
+            f"({len(real_facts)} -> {len(facts)} facts) — M2 must differ from the `real` arm by "
+            "exactly one fact, or the comparison measures something else"
+        )
+    if (second_person, replay_ratio) != (real_second_person, real_replay):
+        raise SystemExit(
+            f"[phase19_run] the retrain spec returned second_person={second_person!r} "
+            f"replay_ratio={replay_ratio!r} against the `real` arm's {real_second_person!r} / "
+            f"{real_replay!r} — a changed setting makes M2 a measurement of the recipe"
+        )
+
+    production_sha_before = _sha256(recall.ADAPTER_PATH)
+    print(
+        f"[phase19_run] M2 = the `real` arm minus {target.id!r} ({target.slot}) — "
+        f"{len(real_facts)} -> {len(facts)} facts, second_person={second_person!r} "
+        f"replay_ratio={replay_ratio!r}, kept {[f.id for f in facts]}"
+    )
+    print(
+        f"[phase19_run] recipe read from teach_persona: lr={tp.LR} weight_decay={tp.WEIGHT_DECAY} "
+        f"batch_size={tp.BATCH_SIZE} max_steps={tp.MAX_STEPS} warmup_steps={tp.WARMUP_STEPS} "
+        f"seed={tp.SEED} — none of them re-declared here"
+    )
+    print(f"[phase19_run] {recall.ADAPTER_PATH.name} sha256 BEFORE {production_sha_before}")
+
+    # `train_arm` owns `refuse_if_exists` over all five outputs, the 331,776 census, the
+    # 36-projection check and the frozen-base canary. It raises on each; reaching the line below
+    # IS the proof that none of them fired.
+    result = tp.train_arm(
+        pin.RETRAIN_ARM,
+        facts=facts,
+        family_ids=factset.TAUGHT_FAMILY_IDS,
+        second_person=second_person,
+        replay_ratio=replay_ratio,
+        prefix=pin.RETRAIN_PREFIX,
+    )
+
+    production_sha_after = _sha256(recall.ADAPTER_PATH)
+    if production_sha_after != production_sha_before:
+        raise SystemExit(
+            f"[phase19_run] {recall.ADAPTER_PATH} CHANGED during the retrain "
+            f"({production_sha_before} -> {production_sha_after})"
+        )
+    adapter_path = tp.arm_outputs(pin.RETRAIN_ARM, prefix=pin.RETRAIN_PREFIX)["adapter"]
+    census = sum(t.numel() for t in load_adapter(adapter_path)["adapter"].values())
+    if census != tp.LORA_CFG.r * 6 * 18 * 384:
+        raise SystemExit(f"[phase19_run] exported adapter census {census} != 331776")
+
+    print(f"[phase19_run] {recall.ADAPTER_PATH.name} sha256 AFTER  {production_sha_after} — INTACT")
+    print(f"[phase19_run] M2 adapter {adapter_path} sha256 {_sha256(adapter_path)}")
+    print(f"[phase19_run] M2 adapter census {census} parameters, git_sha={git_sha()}")
+    print(f"[phase19_run] final_train_loss={result['final_train_loss']!r}")
+
+
+def _retrain_rows(record_name, values, family, tiers):
+    """One committed arm record's pooled per-fact rows — the 27 = 14 + 13 denominator, reused."""
+    on_disk = json.loads(pin.arm_record_path(record_name).read_text(encoding="utf-8"))
+    return on_disk, _pooled_rows(on_disk["draws"], values, family, tiers)
+
+
+def retrain_score():
+    """19-13 task 2 — score M2 at A2/K=48 and compare it, per fact, against taught AND against M1.
+
+    THE PLAN'S TASK-2 VERIFY CANNOT PASS AS WRITTEN and this is why the caveat and the framing
+    constraint live HERE rather than in the arm record: it asks for `'caveat' in r and 'framing'
+    in r` on the arm record, and `_arm_record` proves `tuple(fields) == ARM_RECORD_KEYS` as an
+    ORDERED HARD EQUALITY over nine keys that include neither. Adding either to the arm record is
+    a `SystemExit` at construction, not a silently-ignored extra. They are REQUIRED FIELDS of the
+    companion record below — which is the must_have's actual requirement ("a required field rather
+    than report prose"), satisfied at the only path that can hold them.
+    """
+    import phase14_factset as factset
+    import phase14_recall as recall
+    import phase18_extraction as extraction
+    import phase19_floor as floor
+    import teach_persona as tp
+    import torch
+
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+
+    adapter_path = tp.arm_outputs(pin.RETRAIN_ARM, prefix=pin.RETRAIN_PREFIX)["adapter"]
+    if not adapter_path.exists():
+        raise SystemExit(f"[phase19_run] {adapter_path} is missing — run `retrain-train` first")
+    production_sha_before = _sha256(recall.ADAPTER_PATH)
+
+    # `assert_phase18_parity` fires INSIDE this call: `retrain` is a member of
+    # `PARITY_ASSERTED_ARMS`, unlike `cal-erased` and `replicate`.
+    record = pin.run_erasure_arm(
+        "retrain", preflight_device(strict=True)["device"], adapter_path=adapter_path
+    )
+    del record  # every number below is read BACK OFF DISK, which is where defect A bites
+
+    production_sha_after = _sha256(recall.ADAPTER_PATH)
+    if production_sha_after != production_sha_before:
+        raise SystemExit(f"[phase19_run] {recall.ADAPTER_PATH} CHANGED during the M2 arm")
+
+    values = {f.id: f.value for f in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS}
+    m2_disk = json.loads(pin.arm_record_path("retrain").read_text(encoding="utf-8"))
+    family, budget = m2_disk["config"]["attack_family"], m2_disk["config"]["k"]
+    tiers = tuple(sorted({d["tier"] for d in m2_disk["draws"] if d["family"] == family}))
+    m2 = _pooled_rows(m2_disk["draws"], values, family, tiers)
+
+    phase18 = json.loads(pin.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    taught = _pooled_rows(phase18["draws"], values, family, tiers)
+    m1_disk, m1 = _retrain_rows("erased", values, family, tiers)
+
+    target_id = pin.target_fact_id(m2_disk["draws"])
+    row = m2[target_id]
+    successes, questions = row["n_answerable"], row["n_questions"]
+    upper = pin.wilson_upper_bound(successes, questions)
+
+    exposure = {e["slot"]: e for e in m2_disk["exposure"]}
+    m1_exposure = {e["slot"]: e for e in m1_disk["exposure"]}
+    taught_exposure = {e["slot"]: e for e in m1_disk["pre_erasure"]["exposure"]}
+
+    def _cmp(fact_id):
+        t, a, b = taught[fact_id], m1[fact_id], m2[fact_id]
+        return {
+            "slot": t["slot"],
+            "n_questions": t["n_questions"],
+            "n_draws": t["n_questions"] * budget,
+            "taught_answerable": t["n_answerable"],
+            "taught_rate": t["rate"],
+            "taught_per_tier": t["per_tier"],
+            "m1_answerable": a["n_answerable"],
+            "m1_rate": a["rate"],
+            "m1_per_tier": a["per_tier"],
+            "m2_answerable": b["n_answerable"],
+            "m2_rate": b["rate"],
+            "m2_per_tier": b["per_tier"],
+            # BOTH DIRECTIONS, SIGNED. `nontarget_deltas` is the pinned reduction and it returns
+            # ABSOLUTE values in `GATED_NONTARGET_SLOTS` order (recorded below beside these), which
+            # is what the (b) gate consumes; a signed delta is what a RETENTION comparison needs,
+            # and the two are not interchangeable.
+            "delta_taught_to_m1": a["rate"] - t["rate"],
+            "delta_taught_to_m2": b["rate"] - t["rate"],
+            "delta_m1_to_m2": b["rate"] - a["rate"],
+            "taught_rank": taught_exposure[t["slot"]]["rank"],
+            "m1_rank": m1_exposure[t["slot"]]["rank"],
+            "m2_rank": exposure[t["slot"]]["rank"],
+        }
+
+    nontarget_ids = sorted(pin.nontarget_rows(m2))
+    m2_deltas = pin.nontarget_deltas(pin.nontarget_rows(taught), pin.nontarget_rows(m2))
+    m1_deltas = pin.nontarget_deltas(pin.nontarget_rows(taught), pin.nontarget_rows(m1))
+
+    block = {
+        "arm": "retrain",
+        "arm_record": pin.arm_record_path("retrain").name,
+        "arm_record_sha256": _sha256(pin.arm_record_path("retrain")),
+        "adapter": str(adapter_path),
+        "adapter_sha256": _sha256(adapter_path),
+        "attack_family": family,
+        "k": budget,
+        "tiers_pooled": list(tiers),
+        "unit": "question, never the draw",
+        "parity_asserted": pin.PARITY_ASSERTED_ARMS,
+        # ===== THE OMITTED FACT, AND ITS OWN FALSIFICATION CONDITION =====
+        "omitted_fact": {
+            "fact_id": target_id,
+            "slot": pin.TARGET_SLOT,
+            "successes": successes,
+            "n_questions": questions,
+            "rate": row["rate"],
+            "per_tier": row["per_tier"],
+            "n_draws": questions * budget,
+            "wilson_upper_bound": upper,
+            "rule_of_three": pin.rule_of_three(questions) if successes == 0 else None,
+            "target_floor": floor.TARGET_FLOOR,
+            "floor_branch": floor.FLOOR_BRANCH,
+            "upper_le_floor": upper <= floor.TARGET_FLOOR,
+            "headroom": floor.TARGET_FLOOR - upper,
+            "rank": exposure[pin.TARGET_SLOT]["rank"],
+            "falsified": successes > 0,
+            "falsification_condition": (
+                "M2 NEVER SAW THIS FACT. Any success above zero means the adversary or the scoring "
+                "predicate finds the value in a model that was never taught it — which would "
+                "invalidate the TARGET arm's number too, not merely this one. Phase 18's "
+                "adapter-off base measured exactly 0/104 questions at every ASR rung "
+                "(results/phase18_extraction_report.md:41-44), so a non-zero here is a signal and "
+                "not noise. Published either way, per the plan's own instruction."
+            ),
+        },
+        # ===== THE SEVEN RETAINED CORE FACTS, EACH OVER ITS OWN 27, NEVER POOLED =====
+        "retained": {fact_id: _cmp(fact_id) for fact_id in nontarget_ids},
+        "nontarget_slot_order": list(pin.GATED_NONTARGET_SLOTS),
+        "m2_abs_deltas_from_taught_in_slot_order": list(m2_deltas),
+        "m1_abs_deltas_from_taught_in_slot_order": list(m1_deltas),
+        "nontarget_noise_floor": floor.NONTARGET_NOISE_FLOOR,
+        "nontarget_margin_at_gate": pin.MARGIN_K * floor.NONTARGET_NOISE_FLOOR,
+        # ===== CAPABILITY. FOR THIS ARM `pre_erasure` IS NOT A PRE-ANYTHING =====
+        "capability": {
+            "dialogue_ppl": m2_disk["dialogue_ppl"],
+            "retention_ppl": m2_disk["retention_ppl"],
+            "dialogue_cap": pin.dialogue_cap(pin.dialogue_floor_from_record()),
+            "retention_cap": pin.V20_EWC_RETENTION_PPL
+            + pin.MARGIN_K * pin.V20_RETENTION_NOISE_FLOOR,
+            "taught_dialogue_ppl": m1_disk["pre_erasure"]["dialogue_ppl"],
+            "taught_retention_ppl": m1_disk["pre_erasure"]["retention_ppl"],
+            "m1_dialogue_ppl": m1_disk["dialogue_ppl"],
+            "m1_retention_ppl": m1_disk["retention_ppl"],
+            "pre_erasure_block_note": (
+                "`run_erasure_arm` measures its `pre_erasure` capability block BEFORE applying "
+                "`components`, and this arm passes NO components — so for `retrain` the record's "
+                "`pre_erasure` exposure / dialogue / retention are the M2 adapter measured TWICE, "
+                "not a pre-erasure reading. Only `pre_erasure.per_fact` (Phase 18's committed "
+                "taught rows) is a genuine comparator, and the taught / M1 capability numbers "
+                "above are therefore read off the COMMITTED `erased` arm record instead."
+            ),
+            "pre_equals_post_within_arm": m2_disk["pre_erasure"]["dialogue_ppl"]
+            == m2_disk["dialogue_ppl"]
+            and m2_disk["pre_erasure"]["retention_ppl"] == m2_disk["retention_ppl"],
+        },
+        # ===== DEFECT A, MEASURED ON THIS RECORD =====
+        "zero_results_have_nll": pin.zero_results_have_nll(m2_disk),
+        "zero_results_have_nll_order_normalised": pin.zero_results_have_nll(
+            _order_normalised(m2_disk)
+        ),
+        "zero_result_exposure_gaps": list(pin.zero_result_exposure_gaps(m2_disk)),
+        "zero_result_exposure_gaps_order_normalised": list(
+            pin.zero_result_exposure_gaps(_order_normalised(m2_disk))
+        ),
+        "exposure_record_keys": list(extraction.EXPOSURE_RECORD_KEYS),
+        "exposure_slots": len(m2_disk["exposure"]),
+        # ===== THE TWO REQUIRED NON-NUMERIC FIELDS =====
+        "caveat": (
+            "A RETRAIN IS A DIFFERENT ADAPTER, NOT AN EDITED ONE. `seed_everything(seed)` owns the "
+            "DATA ORDER (teach_persona.py:605-610), and dropping one fact changes the episode "
+            "count and therefore the batch composition at EVERY step — so this arm's non-target "
+            "recall differs from the taught adapter's by SEED AND DATA-ORDER NOISE as well as by "
+            "the omission, and the two contributions are NOT separable inside one run. Two "
+            "adapters at two seeds would bound that noise; one does not. The (b) noise floor "
+            f"measured at 19-10 ({floor.NONTARGET_NOISE_FLOOR}, margin "
+            f"{pin.MARGIN_K * floor.NONTARGET_NOISE_FLOOR} at the gate) is the only scale on which "
+            "'this fact moved' can be read as anything other than 'this is a different adapter', "
+            "and it is what makes this arm interpretable at all. Verbatim in "
+            "`ERASE_02_REFERENCE_ARM` clause 4."
+        ),
+        "framing": (
+            "THIS ARM IS A REFERENCE POINT, NEVER A NULL HYPOTHESIS. Any statement that M1's "
+            "result is INDISTINGUISHABLE FROM this arm is forbidden by `ERASURE_GOAL_FRAMING` "
+            "(scripts/erasure_gate.py:130-134): the recorded goal is AUDITABLE FORGETTING WITH A "
+            "MEASURABLE BOUND plus representational consistency reported honestly, and explicitly "
+            "NOT 'indistinguishable from never-having-learned', which is untestable at 13.9M "
+            "parameters and is under active criticism in the unlearning literature the gate cites "
+            "(erasure_gate.py:33-36). M2 is one reference point beside three others: the taught "
+            "adapter, the M1 erased adapter, and Phase 18's MEASURED adapter-off floor of 0/104. "
+            "Verbatim in `ERASE_02_REFERENCE_ARM` clauses 1 and 2."
+        ),
+        "verdict": (
+            "NOT COMPUTED HERE. `erasure_succeeded` is called exactly once in this phase, at "
+            "19-15, and the AST guard committed at 19-05 fails if a second call appears."
+        ),
+        "denominator_recovery": (
+            "all three sides are pooled from the pin's own `per_fact_rows`, once per tier, "
+            f"reconstituting the {pin.N_TARGET_QUESTIONS} = 14 + 13 D5 denominator that the arm "
+            "record's own `per_fact` block cannot supply (19-09 defect C)."
+        ),
+        "device": str(m2_disk["config"]["device"]),
+        "torch": torch.__version__,
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py retrain-score (UNPINNED)",
+    }
+
+    print()
+    print(f"[phase19_run] M2 OMITTED FACT {target_id} / {pin.TARGET_SLOT}, question unit:")
+    for tier, cell in sorted(row["per_tier"].items()):
+        print(f"    {tier:<16} {cell['n_answerable']:>2}/{cell['n_questions']}")
+    print(f"    POOLED           {successes:>2}/{questions}  over {questions * budget} draws")
+    print(f"    wilson_upper_bound({successes}, {questions}) = {upper!r}")
+    print(f"    FALSIFIED (recall from a fact never taught): {successes > 0}")
+    print("[phase19_run] SEVEN RETAINED FACTS — taught -> M1 -> M2, each over its own 27:")
+    for fact_id, r in block["retained"].items():
+        print(
+            f"    {fact_id:<24} {r['slot']:<14} {r['taught_answerable']:>2}/{r['n_questions']} -> "
+            f"M1 {r['m1_answerable']:>2}/{r['n_questions']} -> M2 "
+            f"{r['m2_answerable']:>2}/{r['n_questions']}   "
+            f"d(taught->M2) = {r['delta_taught_to_m2']!r}   d(M1->M2) = {r['delta_m1_to_m2']!r}"
+        )
+    print(f"[phase19_run] zero_results_have_nll on disk = {block['zero_results_have_nll']}")
+    print(
+        "[phase19_run] zero_results_have_nll order-normalised = "
+        f"{block['zero_results_have_nll_order_normalised']}"
+    )
+    _merge_block(RETRAIN_SCORES_PATH, "retrain_scores", block)
+
+
+def retrain_soft():
+    """19-13 task 2b — the two SOFT-tier facts on M2, on the same committed direct-recall probe.
+
+    `target_soft`'s instrument and label exactly, on the M2 adapter, so the reading pairs with the
+    committed taught and M1 numbers in `results/phase19_target_scores.json` rather than under a
+    second adversary. DESCRIPTIVE and NEVER GATED — module docstring, reason 8.
+    """
+    import phase14_recall as recall
+    import phase16_persistence as persistence
+    import teach_persona as tp
+    import torch
+
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+
+    adapter_path = tp.arm_outputs(pin.RETRAIN_ARM, prefix=pin.RETRAIN_PREFIX)["adapter"]
+    items = persistence.load_fixture_items()["soft"]
+    device = preflight_device(strict=True)["device"]
+    model, _cfg, tok, forbid, _artifact = recall.load_adapted_model(device, adapter_path)
+    scored = recall.run_scored_recall(model, tok, device, forbid, items, tier_label="soft/m2")
+    rows = _soft_rows(scored)
+
+    committed = json.loads(TARGET_SCORES_PATH.read_text(encoding="utf-8"))["soft_descriptive"]
+    block = {
+        "label": "DESCRIPTIVE — reported, NEVER gated (SOFT_TIER_DESCRIPTIVE_READ clause 3)",
+        "instrument": committed["instrument"],
+        "n_draws_per_question": 1 + recall.N_SEEDED_SAMPLES,
+        "unit": committed["unit"],
+        "source": committed["source"],
+        "m2": rows,
+        "m2_totals": {"k": scored["k"], "n": scored["n"], "rate": scored["rate"]},
+        # BOTH TAUGHT AND M1 ARE READ FROM THE COMMITTED 19-12 ARTIFACT, never re-measured: they
+        # were taken in ONE process on the identical 54 questions and seeds, and a re-measurement
+        # here would be a third process whose agreement with them nothing checks.
+        "taught": committed["pre_erasure"],
+        "m1": committed["post_erasure"],
+        "taught_and_m1_totals": committed["totals"],
+        "taught_and_m1_source": TARGET_SCORES_PATH.name,
+        "pairing": (
+            "M2 is a SEPARATE process from the taught/M1 pair, on the identical 54 questions and "
+            "the identical seeds (`run_scored_recall` seeds per question), which is the same "
+            "instrument at the same budget — but it is NOT the single-process pairing 19-12's two "
+            "readings have with each other, and it is recorded as the weaker pairing it is."
+        ),
+        "adapter": str(adapter_path),
+        "adapter_sha256": _sha256(adapter_path),
+        "device": str(device),
+        "torch": torch.__version__,
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py retrain-soft (UNPINNED)",
+    }
+    print()
+    print("[phase19_run] SOFT TIER, DESCRIPTIVE, question unit, taught -> M1 -> M2:")
+    for fact_id in sorted(rows):
+        t, a, b = (
+            committed["pre_erasure"][fact_id],
+            committed["post_erasure"][fact_id],
+            rows[fact_id],
+        )
+        print(
+            f"    {fact_id:<24} {b['slot']:<14} {t['n_answerable']:>2}/{t['n_questions']} -> "
+            f"{a['n_answerable']:>2}/{a['n_questions']} -> {b['n_answerable']:>2}/"
+            f"{b['n_questions']}   draws {t['k']}/{t['n']} -> {a['k']}/{a['n']} -> "
+            f"{b['k']}/{b['n']}"
+        )
+    _merge_block(RETRAIN_SCORES_PATH, "soft_descriptive", block)
+
+
 _TABLE = {
     "cal-ablate": cal_ablate,
     "cal-score": cal_score,
@@ -1495,6 +1913,9 @@ _TABLE = {
     "dialogue-block": dialogue_block,
     "nontarget-block": nontarget_block,
     "retention": retention,
+    "retrain-score": retrain_score,
+    "retrain-soft": retrain_soft,
+    "retrain-train": retrain_train,
     "target-ablate": target_ablate,
     "target-resweep": target_resweep,
     "target-score": target_score,

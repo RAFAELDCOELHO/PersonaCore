@@ -1,0 +1,24 @@
+=== START retrain-train erase_reference  2026-08-19T18:05:27Z ===
+[phase19_run] M2 = the `real` arm minus 'cand_dog_zorp' (pet_name) — 10 -> 9 facts, second_person=False replay_ratio=1.0, kept ['cand_person_quillon', 'cand_cat_zibby', 'cand_sister_orsala', 'cand_town_brindlemoor', 'cand_street_marrowgate', 'cand_year_1987', 'cand_house_7412', 'cand_color_chartreuse', 'cand_food_marzipan']
+[phase19_run] recipe read from teach_persona: lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 seed=1337 — none of them re-declared here
+[phase19_run] persona_adapter.pt sha256 BEFORE 226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'erase_reference'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 9 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.3850 / min 0.1884 / max 0.6000
+[teach_persona] erase_reference: 198 episodes, 18,302 tokens (9,151 teaching + 9,151 replay), episode length mean 46.2 [26, 84]
+[teach_persona] bins provenance: seed=1337 git_sha=97caeb46c7e47d72ee7b265534e563ee17fbcaa3 pid=72050 torch=2.7.1 arm=erase_reference second_person=False replay_ratio=1.0 mask_fraction=0.4015 wall=0.3s utc=2026-08-19T18:05:27Z
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/data/persona_erase_reference_train.bin + /Users/juliorcoelho/PersonaCore/data/persona_erase_reference_train_mask.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_reference_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5733 / ON 6.0079 (+31.37% over 270,203 scored targets)
+[teach_persona] run provenance: arm=erase_reference seed=1337 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=97caeb46c7e47d72ee7b265534e563ee17fbcaa3 pid=72050 device=mps torch=2.7.1 second_person=False replay_ratio=1.0 mask_fraction=0.4015 final_train_loss=0.3703 utc=2026-08-19T18:06:48Z
+[phase19_run] persona_adapter.pt sha256 AFTER  226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb — INTACT
+[phase19_run] M2 adapter /Users/juliorcoelho/PersonaCore/checkpoints/phase19_erase_reference_adapter.pt sha256 22e66552e92ec7d5f853a6b8d15f350cfc0f127f20ee85aaec1967147c375b57
+[phase19_run] M2 adapter census 331776 parameters, git_sha=97caeb46c7e47d72ee7b265534e563ee17fbcaa3
+[phase19_run] final_train_loss=0.3702627718448639
+=== END retrain-train erase_reference rc=0 wall=81s  2026-08-19T18:06:48Z ===
