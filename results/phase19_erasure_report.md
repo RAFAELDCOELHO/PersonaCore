@@ -351,3 +351,116 @@ Distinct pids and a shared corpus digest are what EVIDENCE the pairing rather th
 The taught adapter was verified UNCHANGED after the sweep (`adapter_in_unchanged_after_run = True`). The ablation sweep took 6.9594 min on `mps` at git `09285cbacf4140691ed214e8e20991800b02d1de`.
 
 Rendered by `scripts/phase19_run.py report (UNPINNED)` through the pinned `render_report`, with the 10 sections above APPENDED because the closed renderer has no slot for them. The spine — everything from the title through `## Ship Decision` — is byte-identical to what `render_report` produced, and everything after it is a continuation BESIDE the recorded verdict rather than an edit over it.
+
+## Condition (c) — the root cause, diagnosed BESIDE the verdict and never over it (dated continuation, 2026-08-19)
+
+*Appended through `scripts/_addendum.py` with the Phase 19 marker pair, textually and surgically,
+after 19-15's closing provenance note. Every line above this heading is byte-identical to what it
+was before this section existed — including the `## Verdict` section and the ship-decision marker.
+`scripts/erasure_gate.py` is **NOT amended**: it is still exactly one commit, `23a830c`, committed
+2026-08-12 before Phase 16 ran. D3's rule is that a correction is a DATED CONTINUATION BESIDE the
+original, never an edit over it, and `19-CONTEXT.md`'s Deferred Ideas puts an amendment permanently
+out of scope.*
+
+**THIS SECTION CHANGES NOTHING ABOUT THE VERDICT.** The verdict is `FAILURE`. Condition (b) failed
+on all seven gated non-targets — the smallest delta on the board, 0.37037037037037035, is 1.25x the
+margin 0.2962962962962963, and four of the seven are at total generation loss. (b) alone returns
+FAILURE under every reading of (c) below. What follows explains why (c) additionally cannot
+discriminate an erasure at this capacity. It is an explanation, not a mitigation.
+
+### What (c) compares against
+
+`scripts/erasure_gate.py:75` anchors the dialogue leg on `V20_MASKED_DIALOGUE_VAL_PPL = 4.5733` —
+the Phase 12 production fine-tune's masked dialogue-val perplexity with **the adapter OFF**
+(`results/finetune_prod.csv`, final row, step 4000). The cap the gate applied is that constant plus
+`MARGIN_K x DIALOGUE_PPL_NOISE_FLOOR`:
+
+    4.5733 + 2 x 0.005214448168350039 = 4.5837288963367
+
+**That constant is not stale.** This run measured its own adapter-off dialogue-val PPL at
+4.573349214207799 over the identical sweep (`results/phase19_arm_erased.json`,
+`dialogue_ppl.adapter_off`), agreeing with the published 4.5733 to 4.9e-05. The cap is a CORRECT
+number about the model **without** the persona adapter. That is the whole problem: it is not the
+model an erasure is asked to preserve.
+
+### What the comparison for post-erasure capability preservation would have to be
+
+The object an erasure must preserve is the model that existed **before** it — the taught adapter,
+adapter PRESENT. Phase 14 already measured that baseline, and already published it as a limitation:
+
+> masked dialogue-val PPL 4.5733 (off) -> 5.8154 (on), **+27.16%** over 270,203 scored targets
+> (`results/phase14_recall_report.md:462`)
+
+`COLLAPSE_PPL_TRIGGER` = 0.1 tripped `True` there and was recorded as **descriptive, no gate**; the
+operator recorded it a second time as named qualification (1) of the 14-11 GO
+(`results/phase14_recall_report.md:585`). So the conversational cost the dialogue leg measures was
+paid at **TEACHING** time, an entire phase before any component was ablated, and it was published
+rather than hidden.
+
+### The arithmetic, run through the committed gate rather than argued
+
+Hold this run's measured (a) and (c) readings and replace only the seven (b) deltas with zeros — a
+**perfect** erasure on the non-target condition. `erasure_succeeded` returns, literally:
+
+```
+FAILURE
+    (a) target upper bound 0.0911 over 27 questions <= calibrated floor 0.0911
+    (b) worst non-target degradation 0.000000 <= k=2 x 0.148148 = 0.296296
+    (c) dialogue PPL 4.8511 vs cap 4.5837; retention PPL 3.670918 vs cap 4.029000
+```
+
+**COUNTERFACTUAL, ON FABRICATED (b) INPUTS.** It is not a second reading of this experiment and not
+a second opinion: the verdict of record is section 1 above, taken by the same committed rule on the
+MEASURED deltas. The seven zeros are the only hypothetical input. (a) clears, (b) clears, retention
+clears with 0.358082 of headroom — and the return is still FAILURE, on the dialogue leg of (c)
+alone, for a reason that predates the erasure by an entire phase.
+
+### Both readings of (c), side by side
+
+| reading | anchor | cap | pre-erasure dialogue PPL (taught) | post-erasure dialogue PPL (M1) | read by the committed gate? |
+| --- | --- | --- | --- | --- | --- |
+| **literal (c)** | `V20_MASKED_DIALOGUE_VAL_PPL` 4.5733 — adapter **OFF** | 4.583729 | 5.815446 (**+1.231717** — FAILS) | 4.851119 (**+0.267390** — FAILS) | **YES — THIS IS THE VERDICT'S READING** |
+| diagnostic (c) | Phase 14's published adapter-**PRESENT** baseline 5.8154 | 5.825829 | 5.815446 (-0.010383 — clears) | 4.851119 (-0.974710 — clears) | no |
+
+Both caps use the same measured `DIALOGUE_PPL_NOISE_FLOOR` 0.005214448168350039 at the same k=2.
+Neither row replaces the other.
+
+### The diagnostic row does NOT rescue (c), and reading it as a pass would be the softening
+
+The dialogue leg is a **one-sided UPPER cap**, and post-erasure dialogue PPL falls toward the
+adapter-off baseline exactly in proportion to how much of the adaptation the ablation destroyed.
+Measured on this run: the ON-OFF gap went 1.2420966625043919 -> 0.2777699357026435, i.e.
+**77.6370113463966% of the dialogue adaptation is gone.** M1's 0.974710 of headroom under the
+diagnostic cap IS that destruction — the identical shape as the retention leg, which clears its own
+cap at -0.358082 while the personalization it measures is being removed.
+
+So the two anchorings fail in OPPOSITE directions, and neither discriminates an erasure at 331,776
+parameters:
+
+- against the **adapter-OFF** anchor, the cap sits 0.010380 above the adapter-off value itself, so
+  on this leg only a near-total destruction of the adapter can clear it — M1 destroyed
+  77.6370113463966% of the dialogue adaptation and still missed by 0.267390;
+- against the **adapter-PRESENT** anchor, a one-sided upper cap is CLEARED BY destroying the
+  adaptation, so it would score the collapse it exists to detect as a pass.
+
+**That is the finding about (c):** at this capacity a one-sided upper cap on dialogue perplexity,
+anchored either way, cannot separate "capability preserved" from "adaptation removed", because both
+move the number in the same direction. It is a real result about the criterion and about LoRA at
+331,776 trainable parameters over a 13.9M-parameter base. It is not an embarrassment, and it is not
+a defect in the erasure — the erasure's own failure is (b): measured, all seven, published above.
+
+### What is explicitly NOT being claimed
+
+1. **NOT that `23a830c` was wrong to be written that way, and NOT that it should be amended.** It
+   was committed 2026-08-12, before Phase 16 ran and before any v3.0 number existed; that ordering
+   is enforced against git's object graph by `tests/test_phase16_prereg.py`, and it is the entire
+   reason any number in this milestone is worth anything. Amending it now to a cap the data would
+   have cleared is the one move that would void the milestone.
+2. **NOT that the erasure partly worked.** (b) failed on all seven gated non-targets, and (a)
+   cleared only by attaining, exactly on its boundary, the best bound a perfect erasure can reach
+   over 27 questions. There is no reading of these numbers under which selective erasure succeeded.
+3. **NOT that the gate was unfair or the floor too tight.** A floor wide enough to admit the
+   PRE-erasure model on the dialogue leg would have to be roughly 119x the measured one — a wider
+   ruler, not a better result.
+4. **NOT a re-scoring.** The verdict of record is `FAILURE`, section 1, returned by the committed
+   rule on the measured inputs, and it is what this report ships.
