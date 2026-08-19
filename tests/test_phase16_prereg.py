@@ -97,14 +97,26 @@ PHASE19_FLOOR_ARTIFACT = "scripts/phase19_floor.py"
 # target fact. The floor file must precede all of them: from the first target number onward the
 # constants may not move.
 #
-# `results/phase19_arm_*` is a glob and the other three are exact names, on purpose. The pin fixes
+# `results/phase19_arm_*` is a glob and the others are exact names, on purpose. The pin fixes
 # ONE arm-record naming rule (`arm_record_path`, `phase19_arm_<arm>.json`) over a closed
 # `ERASURE_ARMS` tuple, so a glob covers every target arm 19-12/19-13 can legally write without
-# this tuple having to guess which. The other three have no such rule and are named individually
+# this tuple having to guess which. The others have no such rule and are named individually
 # from the pin's own `REPRESENTATIONAL_RECORD_PATH`, `render_report` and the collateral curve.
+#
+# `results/phase19_target_scores.json` was added at 19-12 and is the ONE entry here the pin does
+# not name at all. It has to exist because `_arm_record` proves `tuple(fields) ==
+# ARM_RECORD_KEYS` as an ORDERED HARD EQUALITY (`phase19_erasure.py:1486-1492`), so the pooled
+# 27-question target rate, the seven per-fact (b) rows and the soft descriptive read CANNOT be
+# carried inside the arm record — and the arm record's own `per_fact` block is 19-09's defect C,
+# which `_nontarget_rates` refuses. It is therefore a companion artifact of DERIVED reductions
+# over draws that live in the guarded `results/phase19_arm_erased.json`. It is listed here anyway
+# rather than left out on that reasoning: this tuple's own docstring says "every record produced
+# by erasing, scoring or reporting on the TAUGHT target fact", and a target rate a reader can find
+# in a file no guard watches is exactly the gap the ancestry guard exists to close.
 PHASE19_TARGET_ARTIFACT_GLOBS = (
     "results/phase19_arm_*",
     "results/phase19_collateral_curve.json",
+    "results/phase19_target_scores.json",
     "results/phase19_representational.json",
     "results/phase19_erasure_report.md",
 )

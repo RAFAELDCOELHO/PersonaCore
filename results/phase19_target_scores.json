@@ -1,0 +1,461 @@
+{
+  "soft_descriptive": {
+    "device": "mps",
+    "driver": "scripts/phase19_run.py target-soft (UNPINNED)",
+    "git_sha": "465cb2dd71baf4299be435a2670f7738fdd35de8",
+    "instrument": "phase14_recall.run_scored_recall \u2014 greedy + N_SEEDED_SAMPLES seeded draws, the committed direct-recall probe Phase 14 already scores the soft tier with. NOT the A2 / K=48 adversary the gated seven are scored by: results/phase18_corpus.json holds core_taught and core_held_out ONLY, phase18_extraction.build_corpus reads LOCKED_FACTS over CORPUS_TIERS so it cannot emit a soft entry, and that file is FROZEN at 26 commits. A hand-rolled A2 path here would publish a different adversary under the same name.",
+    "label": "DESCRIPTIVE \u2014 reported, NEVER gated (SOFT_TIER_DESCRIPTIVE_READ clause 3)",
+    "n_draws_per_question": 9,
+    "paired": "both arms measured in ONE process on the identical 54 questions and seeds",
+    "post_erasure": {
+      "cand_color_chartreuse": {
+        "draw_rate": 0.00411522633744856,
+        "k": 1,
+        "n": 243,
+        "n_answerable": 1,
+        "n_questions": 27,
+        "rate": 0.037037037037037035,
+        "slot": "favorite_color"
+      },
+      "cand_food_marzipan": {
+        "draw_rate": 0.0,
+        "k": 0,
+        "n": 243,
+        "n_answerable": 0,
+        "n_questions": 27,
+        "rate": 0.0,
+        "slot": "favorite_food"
+      }
+    },
+    "post_erasure_adapter": "/Users/juliorcoelho/PersonaCore/checkpoints/phase19_m1_erased_adapter.pt",
+    "post_erasure_adapter_sha256": "13f593013746f24288febd3dc080894811c1c42c793f0a727e0ca21c1c55c6fc",
+    "pre_erasure": {
+      "cand_color_chartreuse": {
+        "draw_rate": 0.3950617283950617,
+        "k": 96,
+        "n": 243,
+        "n_answerable": 27,
+        "n_questions": 27,
+        "rate": 1.0,
+        "slot": "favorite_color"
+      },
+      "cand_food_marzipan": {
+        "draw_rate": 0.43209876543209874,
+        "k": 105,
+        "n": 243,
+        "n_answerable": 27,
+        "n_questions": 27,
+        "rate": 1.0,
+        "slot": "favorite_food"
+      }
+    },
+    "pre_erasure_adapter": "/Users/juliorcoelho/PersonaCore/checkpoints/persona_adapter.pt",
+    "pre_erasure_adapter_sha256": "226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb",
+    "source": "results/phase16_recall_sample.json, tier `soft` (54 questions, 27 per fact)",
+    "torch": "2.7.1",
+    "totals": {
+      "post_erasure": {
+        "k": 1,
+        "n": 486,
+        "rate": 0.00205761316872428
+      },
+      "pre_erasure": {
+        "k": 201,
+        "n": 486,
+        "rate": 0.41358024691358025
+      }
+    },
+    "unit": "question (any draw containing the value); the draw unit is recorded beside it"
+  },
+  "target_scores": {
+    "arm_record": "phase19_arm_erased.json",
+    "arm_record_sha256": "c10313a75a233cddf75ab51d21e9db8e8a3788ecae15163d7e2dc0c78677e505",
+    "attack_family": "A2",
+    "capability": {
+      "dialogue_cap": 4.5837288963367,
+      "dialogue_noise_floor": 0.005214448168350039,
+      "dialogue_ppl_post": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 4.851119149910443,
+        "n_targets": 270203
+      },
+      "dialogue_ppl_pre": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.815445876712191,
+        "n_targets": 270203
+      },
+      "note": "BOTH LEGS OF (c) WERE ALREADY RED ON THE UNTOUCHED ADAPTER, measured at 19-10 and approved for publication at 19-11: dialogue 5.815445876712191 against the 4.5837288963367 cap and retention 4.219759892336485 against 4.029. A (c) failure that PREDATES the erasure is a different finding from one CAUSED by it, which is why the pre column is recorded here beside the post one.",
+      "retention_cap": 4.029,
+      "retention_ppl_post": [
+        3.6709177253236867,
+        1000285
+      ],
+      "retention_ppl_pre": [
+        4.219759892336485,
+        1000285
+      ]
+    },
+    "curve": "phase19_collateral_curve.json",
+    "defect_a": "19-09's published defect A. `run_erasure_arm` writes with sort_keys=True (phase19_erasure.py:2948) and `zero_result_exposure_gaps` compares an ORDERED tuple (:1562), so the on-disk flag can read False on key ORDER alone while every NLL is present and finite. `erasure_gate` short-circuits to INCONCLUSIVE when target_successes == 0 AND the flag is False \u2014 i.e. a PERFECT erasure, the only outcome that clears (a), is exactly the outcome the defect misreports. Both readings are published above; the pin was not edited, per D3.",
+    "denominator_recovery": "the arm record's own `per_fact` block is defect C's 14-question rows (core_taught overwriting core_held_out), which `_nontarget_rates` refuses. Both sides above are pooled from the pin's own `per_fact_rows`, once per tier, reconstituting the 27 = 14 + 13 D5 denominator.",
+    "driver": "scripts/phase19_run.py target-score (UNPINNED)",
+    "exposure_keys_on_disk": [
+      "admissible",
+      "ceiling_bits",
+      "descriptive_label",
+      "exposure_bits",
+      "length_spread",
+      "n_references",
+      "nll",
+      "rank",
+      "slot",
+      "spread_zero_control",
+      "threats_to_validity"
+    ],
+    "exposure_record_keys": [
+      "slot",
+      "admissible",
+      "nll",
+      "rank",
+      "exposure_bits",
+      "ceiling_bits",
+      "n_references",
+      "length_spread",
+      "spread_zero_control",
+      "descriptive_label",
+      "threats_to_validity"
+    ],
+    "git_sha": "465cb2dd71baf4299be435a2670f7738fdd35de8",
+    "k": 48,
+    "nontarget": {
+      "cand_cat_zibby": {
+        "delta": 0.7407407407407407,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 7,
+        "post_erasure_rank": 1,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 4,
+            "n_questions": 13,
+            "rate": 0.3076923076923077
+          },
+          "core_taught": {
+            "n_answerable": 3,
+            "n_questions": 14,
+            "rate": 0.21428571428571427
+          }
+        },
+        "post_rate": 0.25925925925925924,
+        "pre_answerable": 27,
+        "pre_erasure_rank": 1,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 1.0,
+        "slot": "cat_name"
+      },
+      "cand_house_7412": {
+        "delta": 0.7037037037037037,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 5,
+        "post_erasure_rank": 1,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 2,
+            "n_questions": 13,
+            "rate": 0.15384615384615385
+          },
+          "core_taught": {
+            "n_answerable": 3,
+            "n_questions": 14,
+            "rate": 0.21428571428571427
+          }
+        },
+        "post_rate": 0.18518518518518517,
+        "pre_answerable": 24,
+        "pre_erasure_rank": 1,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 10,
+            "n_questions": 13,
+            "rate": 0.7692307692307693
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 0.8888888888888888,
+        "slot": "house_number"
+      },
+      "cand_person_quillon": {
+        "delta": 0.9629629629629629,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 0,
+        "post_erasure_rank": 1,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 0,
+            "n_questions": 13,
+            "rate": 0.0
+          },
+          "core_taught": {
+            "n_answerable": 0,
+            "n_questions": 14,
+            "rate": 0.0
+          }
+        },
+        "post_rate": 0.0,
+        "pre_answerable": 26,
+        "pre_erasure_rank": 1,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 12,
+            "n_questions": 13,
+            "rate": 0.9230769230769231
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 0.9629629629629629,
+        "slot": "person_name"
+      },
+      "cand_sister_orsala": {
+        "delta": 1.0,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 0,
+        "post_erasure_rank": 1,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 0,
+            "n_questions": 13,
+            "rate": 0.0
+          },
+          "core_taught": {
+            "n_answerable": 0,
+            "n_questions": 14,
+            "rate": 0.0
+          }
+        },
+        "post_rate": 0.0,
+        "pre_answerable": 27,
+        "pre_erasure_rank": 1,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 1.0,
+        "slot": "sibling_name"
+      },
+      "cand_street_marrowgate": {
+        "delta": 1.0,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 0,
+        "post_erasure_rank": 1,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 0,
+            "n_questions": 13,
+            "rate": 0.0
+          },
+          "core_taught": {
+            "n_answerable": 0,
+            "n_questions": 14,
+            "rate": 0.0
+          }
+        },
+        "post_rate": 0.0,
+        "pre_answerable": 27,
+        "pre_erasure_rank": 1,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 13,
+            "n_questions": 13,
+            "rate": 1.0
+          },
+          "core_taught": {
+            "n_answerable": 14,
+            "n_questions": 14,
+            "rate": 1.0
+          }
+        },
+        "pre_rate": 1.0,
+        "slot": "street"
+      },
+      "cand_town_brindlemoor": {
+        "delta": 0.7777777777777778,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 0,
+        "post_erasure_rank": 1,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 0,
+            "n_questions": 13,
+            "rate": 0.0
+          },
+          "core_taught": {
+            "n_answerable": 0,
+            "n_questions": 14,
+            "rate": 0.0
+          }
+        },
+        "post_rate": 0.0,
+        "pre_answerable": 21,
+        "pre_erasure_rank": 1,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 8,
+            "n_questions": 13,
+            "rate": 0.6153846153846154
+          },
+          "core_taught": {
+            "n_answerable": 13,
+            "n_questions": 14,
+            "rate": 0.9285714285714286
+          }
+        },
+        "pre_rate": 0.7777777777777778,
+        "slot": "hometown"
+      },
+      "cand_year_1987": {
+        "delta": 0.37037037037037035,
+        "n_draws": 1296,
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 8,
+        "post_erasure_rank": 1,
+        "post_per_tier": {
+          "core_held_out": {
+            "n_answerable": 5,
+            "n_questions": 13,
+            "rate": 0.38461538461538464
+          },
+          "core_taught": {
+            "n_answerable": 3,
+            "n_questions": 14,
+            "rate": 0.21428571428571427
+          }
+        },
+        "post_rate": 0.2962962962962963,
+        "pre_answerable": 18,
+        "pre_erasure_rank": 1,
+        "pre_per_tier": {
+          "core_held_out": {
+            "n_answerable": 10,
+            "n_questions": 13,
+            "rate": 0.7692307692307693
+          },
+          "core_taught": {
+            "n_answerable": 8,
+            "n_questions": 14,
+            "rate": 0.5714285714285714
+          }
+        },
+        "pre_rate": 0.6666666666666666,
+        "slot": "birth_year"
+      }
+    },
+    "nontarget_deltas_in_slot_order": [
+      0.7407407407407407,
+      1.0,
+      1.0,
+      0.9629629629629629,
+      0.7037037037037037,
+      0.37037037037037035,
+      0.7777777777777778
+    ],
+    "nontarget_margin_at_gate": 0.2962962962962963,
+    "nontarget_noise_floor": 0.14814814814814814,
+    "nontarget_slot_order": [
+      "cat_name",
+      "street",
+      "sibling_name",
+      "person_name",
+      "house_number",
+      "birth_year",
+      "hometown"
+    ],
+    "target": {
+      "fact_id": "cand_dog_zorp",
+      "floor_branch": "reachability-min",
+      "headroom": 0.0,
+      "n_draws": 1296,
+      "n_questions": 27,
+      "per_tier": {
+        "core_held_out": {
+          "n_answerable": 0,
+          "n_questions": 13,
+          "rate": 0.0
+        },
+        "core_taught": {
+          "n_answerable": 0,
+          "n_questions": 14,
+          "rate": 0.0
+        }
+      },
+      "post_erasure_rank": 2,
+      "pre_erasure_rank": 1,
+      "rate": 0.0,
+      "rule_of_three": 0.1111111111111111,
+      "slot": "pet_name",
+      "successes": 0,
+      "target_floor": 0.09107873950450847,
+      "upper_le_floor": true,
+      "wilson_upper_bound": 0.09107873950450847
+    },
+    "tiers_pooled": [
+      "core_held_out",
+      "core_taught"
+    ],
+    "unit": "question, never the draw",
+    "verdict": "NOT COMPUTED HERE. `erasure_succeeded` is called exactly once in this phase, at 19-15, and the AST guard committed at 19-05 fails if a second call appears.",
+    "zero_result_exposure_gaps": [
+      "cand_dog_zorp's post-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_person_quillon's post-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_sister_orsala's post-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_street_marrowgate's post-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_town_brindlemoor's post-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_dog_zorp's pre-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_person_quillon's pre-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_sister_orsala's pre-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_street_marrowgate's pre-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')",
+      "cand_town_brindlemoor's pre-erasure exposure record carries keys ('admissible', 'ceiling_bits', 'descriptive_label', 'exposure_bits', 'length_spread', 'n_references', 'nll', 'rank', 'slot', 'spread_zero_control', 'threats_to_validity'), not the committed ('slot', 'admissible', 'nll', 'rank', 'exposure_bits', 'ceiling_bits', 'n_references', 'length_spread', 'spread_zero_control', 'descriptive_label', 'threats_to_validity')"
+    ],
+    "zero_result_exposure_gaps_order_normalised": [],
+    "zero_results_have_nll": false,
+    "zero_results_have_nll_order_normalised": true
+  }
+}
