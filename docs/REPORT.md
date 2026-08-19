@@ -1265,3 +1265,50 @@ repairing the pin to recover that claim would cost the milestone all of them.
 Full evidence — the verdict with all six pinned readings, the collateral curve at eight checkpoints,
 the canary-exposure table, the M2 reference arm, eight threats to validity, and the dated
 condition-(c) diagnosis: `results/phase19_erasure_report.md`.
+
+## Deep-Link Correction: The Phase 18 Exposure Table Is a Rank-Only Reading, Now Scope-Limited (recorded 2026-08-19)
+
+*Appended additively. No line above this heading is altered, and every section above — Phase 18's
+extraction audit result and Phase 19's selective erasure result among them — is carried through
+byte-identically.*
+
+**The deep link this corrects.** Phase 18's extraction-audit section above closes by sending the
+reader out of this document for "the exposure table with all three frames and both reductions", to
+`results/phase18_extraction_report.md`. That table is at
+`results/phase18_extraction_report.md:145-154`. It sits **190 lines above** the dated continuation
+that scopes it, and it carries no forward pointer to that continuation — so a reader who follows the
+link lands on the table with no reason to keep scrolling, and reads it unscoped.
+
+**What that table is.** Every one of its eight slots reads **rank 1**. It is a rank-and-exposure
+reading throughout — rank, exposure bits, the ceiling, |R|, the token-length spread and the three
+reductions — with no generation number standing beside any of it. That is exactly the class of
+reading Phase 19's retroactive scope limit reaches.
+
+**Where the limit is, by line.** The dated continuation at
+`results/phase18_extraction_report.md:340-405` — *"Phase 19's retroactive scope limit on the rank
+and exposure readings"* — records that any Phase 18 reading whose weight rests on rank or exposure
+bits ALONE must be re-read against what Phase 19 measured about the instrument: the rank instrument
+returned bit-identical readings for the erased adapter and for a clean retrain of the identical
+recipe with the target fact removed, across all eight slots, while generation on those same rows
+separated the two completely. The same continuation names the **73 measured zero-cells** behind
+admissibility item (4), published at `results/phase18_extraction_report.md:236`, as sitting **INSIDE
+that limit rather than in its exemption** — their generation number is zero by construction, so the
+exposure rank standing beside each one is doing the whole job alone.
+
+**Why the pointer above was not edited in place.** The pointer at `docs/REPORT.md:1140-1141` sits
+two lines above the heading at `:1143` and four lines above the sentence at `:1145`, which asserts
+that no line above that heading is altered and that the section above it — Phase 18's extraction
+audit result — is carried through byte-identically. The pointer is inside the very section that
+sentence names. Editing it to mention the continuation would therefore falsify a published claim
+sitting two lines below it. The redirect is published HERE instead, additively and dated, and
+`docs/REPORT.md:1140-1141` is left byte-intact deliberately rather than by oversight.
+
+**What is NOT affected, named explicitly so this cannot be read as a retraction.** Every Phase 18
+reading that rests on **GENERATION** — the attacker submitting a prompt and reading the decoded
+reply — stands exactly as published: the ASR ladder, on both tiers, at every rung, in both arms; the
+headline **92 of 104 `core_held_out` questions** extracted at least once by `A2` on the adapter-on
+arm, with its rate and its one-sided 95% Wilson lower bound; the adapter-off control arm at exactly
+**0/104** questions at identical budget; the ATK-03 positive control; the **`LEAKAGE_DEMONSTRATED`**
+verdict itself; and the `(92, 104, 0, 104)` Phase 19 handoff computed from those four question-unit
+counts. Nothing above is withdrawn, qualified or narrowed. What this section adds is a pointer the
+outbound link could not carry.
