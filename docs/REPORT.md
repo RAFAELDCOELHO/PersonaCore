@@ -1227,9 +1227,40 @@ components spanning every layer and every projection, and reaching it means reac
 
 That is a negative result, published in the register this project has published every other one in:
 the gate was written first, it returned FAILURE, and the FAILURE is what ships. What it establishes
-is bounded — one fact, one mechanism, one adapter at 331,776 parameters over a 13.9M-parameter base,
-no relearning attack run, and a retrain reference that is a different adapter rather than an edited
-one.
+is bounded, on six counts: **(1)** one fact; **(2)** one mechanism; **(3)** one adapter at 331,776
+parameters over a 13.9M-parameter base; **(4)** no relearning attack run; **(5)** a retrain reference
+that is a different adapter rather than an edited one; and **(6)** a verdict that is **not
+mechanically reproducible by the pinned CLI alone** — it was reached along a hand-driven path, and
+the sixth bound is the subject of the ship decision below.
+
+### Ship Decision — DO NOT SHIP
+
+**Phase 19's ship decision is `DO NOT SHIP`, and it withdraws no measurement above.** Every number,
+table and finding in this section stands exactly as published — the FAILURE verdict with the
+committed rule's own three reasons, k = 78 of 288, the 77.6% destroyed dialogue adaptation, the
+rank-vs-generation co-headline and its retroactive scope limit on Phase 18's rank-only readings.
+
+**The single claim withheld is that this verdict is mechanically reproducible by the pin alone.** It
+is not, and that is the exact and only reason for the decision. The verdict was reached along a
+hand-driven path through the unpinned `scripts/phase19_run.py`, which routes around defects in the
+CLOSED `scripts/phase19_erasure.py`. Run against these same committed artifacts, the pin's own
+`_cmd_report` cannot produce this verdict, in four independent ways: the per-fact tier collapse makes
+the pinned `report` subcommand **SystemExit**; `_cmd_report` hands `retention_perplexity`'s
+`[ppl, n]` pair to the gate's scalar `retention_ppl=` and raises **`TypeError`**; a key-ordering bug
+in `zero_results_have_nll` short-circuits the gate to **`INCONCLUSIVE`** on exactly the perfect-(a)
+outcome that was measured; and `_calibration_rate()` reads Phase 18's candidate recall, so the pin's
+internal floor is the superseded 0.2 rather than the governing 0.09107873950450847 the verdict was
+read against. So a reader cannot check out this repository, run the pinned CLI over the committed
+artifacts, and watch this verdict come back. Each routing is disclosed and every governing number was
+re-derived through a pinned function before the gate was called — but **disclosure is not mechanical
+reproducibility, and this project does not ship the weaker claim under the stronger word.**
+
+**This is a final verdict on reproducibility, not a pause.** It is not a blocker, not a TODO, and not
+a gap left for a successor to close. Nobody should repair the pin in order to flip it:
+`scripts/phase19_erasure.py` is closed at 15 commits, and editing a closed pin after the numbers
+exist is precisely the move that would void the pre-registration ordering enforced against git's
+object graph — and with it every figure above. Withholding one claim costs this phase a claim;
+repairing the pin to recover that claim would cost the milestone all of them.
 
 Full evidence — the verdict with all six pinned readings, the collateral curve at eight checkpoints,
 the canary-exposure table, the M2 reference arm, eight threats to validity, and the dated
