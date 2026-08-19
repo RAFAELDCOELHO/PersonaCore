@@ -2130,8 +2130,9 @@ def representational_reads():
     record = {
         "status": "DESCRIPTIVE",
         "label": pin.REPRESENTATIONAL_READ_LABEL,
-        "descriptive_only": "no value in this record is compared against anything, here or downstream. "
-        "`DESCRIPTIVE_ONLY_FUNCTIONS` is scanned by AST over the pin, and the companion scan "
+        "descriptive_only": "no value in this record is compared against anything, here or "
+        "downstream. `DESCRIPTIVE_ONLY_FUNCTIONS` is scanned by AST over the pin, and the "
+        "companion scan "
         "covers this driver; `erasure_succeeded` never sees any of these numbers.",
         "pinned_record": {
             "path": pin.REPRESENTATIONAL_RECORD_PATH.relative_to(_REPO_ROOT).as_posix(),

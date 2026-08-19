@@ -26,7 +26,7 @@
         "sha256": "226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb"
       }
     },
-    "git_sha": "3032f6cf9668cdba3651a2f7ef66030f1c0592c0",
+    "git_sha": "a823353344b06ed2f3f25c9c61239b8f1a692d19",
     "torch": "2.7.1",
     "w0": {
       "path": "checkpoints/convbase_slim.pt",
