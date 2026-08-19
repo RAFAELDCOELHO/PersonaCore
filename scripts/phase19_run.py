@@ -143,6 +143,27 @@ subcommand adds only what that writer structurally cannot carry:
     SAME pinned `delta_w_cells` / `delta_w_cosine` functions the guard scans.
 
     python scripts/phase19_run.py representational-reads   # the DESCRIPTIVE companion (19-14 t1)
+
+19-15 — THE VERDICT AND THE REPORT — adds ONE, and it is the reason 19-14 pinned a crash as a test:
+
+11. THE PINNED `report` SUBCOMMAND CANNOT REACH THE COMMITTED ARM RECORDS. `_cmd_report` hands
+    `post["per_fact"]` to `nontarget_deltas`, and `_nontarget_rates` proves every row carries
+    `N_TARGET_QUESTIONS` = 27 while the committed rows carry ONE tier's count — reason 7 above, in
+    the (b) position. 19-14 drove it and pinned the `SystemExit` as
+    `test_the_pinned_report_subcommand_cannot_reach_the_committed_arm_records`. Two more defects
+    sit on the same path and neither is fixed in the CLOSED pin: `_calibration_rate` returns Phase
+    18's candidate recall rather than the calibration arm's own rate (defect B, so the pin's
+    internal floor is 0.2 on the `ceiling` branch instead of the governing 0.09107873950450847),
+    and `zero_results_have_nll` reads False on KEY ORDER alone (defect A, which turns a PERFECT
+    erasure into INCONCLUSIVE). A fourth was found by driving rather than inspecting: the gate is
+    handed `retention_perplexity`'s `[ppl, n]` pair where it compares a scalar. `report` below
+    routes around all four — pooled rows through the pin's own `per_fact_rows`, the corrected blind
+    rate off the correction record, the order-normalised flag, the scalar PPL — calls the pin's
+    `render_verdict` ONCE and then the pin's `render_report` directly. It re-implements no rule:
+    `erasure_succeeded` is never called here, and the AST guard committed at 19-05 is what keeps
+    `render_verdict` the phase's only call site.
+
+    python scripts/phase19_run.py report                    # the verdict + the report (19-15)
 """
 
 import hashlib
@@ -155,6 +176,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import _verdict  # noqa: E402  — the ONE anchored `## Verdict` read, shared with the clobber guard
 import phase19_erasure as pin  # noqa: E402  — after the path insert, like every phase19 driver
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -205,6 +227,15 @@ RETRAIN_SCORES_PATH = _REPO_ROOT / "results" / "phase19_retrain_scores.json"
 # added to `PHASE19_TARGET_ARTIFACT_GLOBS` by name for the reason that tuple's own docstring gives:
 # a target number a reader can find in a file no guard watches is the gap the guard exists to close.
 REPRESENTATIONAL_READS_PATH = _REPO_ROOT / "results" / "phase19_representational_reads.json"
+
+# 19-15's ONE new name, and the REPORT is not it: the report goes to `pin.ERASURE_REPORT_PATH`
+# (`results/phase19_erasure_report.md`), which is the path `assert_erasure_report_not_clobbered`
+# guards and the one `PHASE19_TARGET_ARTIFACT_GLOBS` already watches BY EXACT NAME — a second
+# spelling would orphan the artifact from its own clobber guard. What IS named here is the
+# CALIBRATION CORRECTION, because the pin cannot reach it: `_calibration_rate` is published defect
+# B and reads Phase 18's candidate rows, so the corrected blind rate and the `governs` field that
+# says which floor governs both live in this record and nowhere the pin can see.
+CALIBRATION_CORRECTION_PATH = _REPO_ROOT / "results" / "phase19_calibration_correction.json"
 
 # The three Phase 17 persona adapters `ERASURE_DECISION_RULE`'s fourth clause means by "n=3
 # personas". Named here because no Phase 19 constant addresses them and `teach_persona.arm_outputs`
@@ -2213,12 +2244,780 @@ def representational_reads():
         print(f"    {name:<26} n={read['n']:<4} {read.get('n_unit', '')}")
 
 
+def _slot_rows(rows):
+    """``{slot: row}`` from a ``{fact_id: row}`` mapping — the (b) tables are keyed by SLOT."""
+    return {row["slot"]: row for row in rows.values()}
+
+
+def _commit_count(path):
+    """How many commits touch ``path`` — MEASURED, so "CLOSED at 15" cannot go stale in prose."""
+    import subprocess
+
+    out = subprocess.run(
+        ["git", "log", "--format=%H", "--", str(path)],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=_REPO_ROOT,
+    )
+    return len(out.stdout.split())
+
+
+def _report_continuations(ctx):
+    """The six sections `render_report` has no slot for, as APPENDED text.
+
+    The pinned renderer emits a fixed spine — title, `## Verdict` (its own six numbered
+    subsections), `## Publication posture`, `## Comparability with Phase 18`, `## Ship Decision` —
+    and it is CLOSED, so the pre-registration chain, the collateral curve, the canary-exposure
+    table, the M2 reference arm, the threats to validity and the run provenance cannot be rendered
+    INSIDE it. They are appended after it rather than spliced into it: splicing would rewrite a
+    file that now carries a recorded verdict, which is the "rewrite under cover of an append"
+    `scripts/_addendum.py` exists to refuse. Every number below is read off a committed artifact.
+    """
+    erased, curve = ctx["erased"], ctx["curve"]
+    m2, soft, floor = ctx["m2"], ctx["soft"], ctx["floor"]
+    exposure = {entry["slot"]: entry for entry in erased["exposure"]}
+    pre_exposure = {entry["slot"]: entry for entry in erased["pre_erasure"]["exposure"]}
+    m2_exposure = {entry["slot"]: entry for entry in ctx["retrain"]["exposure"]}
+    census = _census([tuple(a) for a in curve["ordered_prefix"]])
+
+    lines = [
+        "## The two headlines, at equal weight",
+        "",
+        "Both were decided BEFORE the numbers existed — the first by `D8_PUBLICATION_POSTURE` at "
+        "19-05, the second by the operator at the 19-12 checkpoint — and both ship unsoftened.",
+        "",
+        "### Headline 1 — selective erasure is NOT selective at 331,776 parameters",
+        "",
+        f"`select_ablation_prefix` stopped at **k = {curve['k']} of {curve['cap']}** rank-1 "
+        f"components (`stopped = {curve['stopped']}`: the target left rank 1, so ΔW was not zeroed "
+        "entirely). Those addresses are dispersed across EVERY layer and EVERY projection in the "
+        "adapter — there is no fact-localised structure at this capacity, and the erasure could "
+        "not be confined to one:",
+        "",
+        "| layer | " + " | ".join(census["by_layer"]) + " |",
+        "| --- | " + " | ".join("---" for _ in census["by_layer"]) + " |",
+        "| components ablated | " + " | ".join(str(v) for v in census["by_layer"].values()) + " |",
+        "",
+        "| projection | " + " | ".join(census["by_projection"]) + " |",
+        "| --- | " + " | ".join("---" for _ in census["by_projection"]) + " |",
+        "| components ablated | "
+        + " | ".join(str(v) for v in census["by_projection"].values())
+        + " |",
+        "",
+        f"{len(census['by_layer'])} of 6 layers and {len(census['by_projection'])} of 6 "
+        f"projections. Largest single-layer share {census['max_layer_share']!r}; largest "
+        f"single-projection share {census['max_projection_share']!r}.",
+        "",
+        "The consequence is MEASURED, not inferred: all seven gated non-targets exceed the (b) "
+        f"margin of {ctx['margin']!r}, four of them at total generation loss, and "
+        f"**{ctx['adaptation_destroyed_pct']!r}% of the dialogue adaptation is gone** (ON−OFF gap "
+        f"{ctx['gap_pre']!r} → {ctx['gap_post']!r}).",
+        "",
+        "### Headline 2 — the rank instrument and the generation instrument DISAGREE",
+        "",
+        "**This is a CO-HEADLINE, not a caveat on the first.** On the same weights, read through "
+        "exposure rank, this is a textbook selective erasure: only `pet_name` moves off rank 1, "
+        "and it does so at all eight curve checkpoints while all seven gated non-targets hold "
+        "rank 1 with their exposure bits AT CEILING. Read through teacher-forced NLL and through "
+        "generation on the same rows, every bystander degrades from the first checkpoint and four "
+        "of them stop producing the taught value at all.",
+        "",
+        "The hardest single piece of evidence is the M2 comparison below: **the rank instrument "
+        "returns bit-identical readings for M1 and M2 across all eight slots** — identical `rank` "
+        "AND identical `exposure_bits`, the target at (2, 2.0) in both — while on the SAME two "
+        "adapters `sibling_name` and `street` generate 0/27 under M1 and 27/27 under M2, and "
+        "`person_name` generates 0/27 under M1 and 26/27 under M2. One instrument cannot tell the "
+        "two adapters apart; the other separates them completely.",
+        "",
+        "**RETROACTIVE WEIGHT ON PHASE 18'S RANK-BASED READINGS, stated rather than implied.** "
+        "Phase 18's exposure and rank conclusions were taken on this instrument, and this phase is "
+        "direct evidence that it can report undisturbed while generation collapses underneath it. "
+        "Any Phase 18 reading whose weight rests on rank or exposure bits ALONE must be re-read "
+        "with that in view. **SCOPE LIMIT, and it is a real limit rather than a softening:** Phase "
+        "18 readings that are PAIRED WITH A GENERATION NUMBER are unaffected — the pairing is what "
+        "makes them safe, and this result is the argument for why the pairing was never optional.",
+        "",
+        "## Pre-registration — the commit chain, so a reader can re-derive rather than trust",
+        "",
+        "| what | file | state |",
+        "| --- | --- | --- |",
+        "| the decision rule — (a), (b), (c), the verdict domain | `scripts/erasure_gate.py` | "
+        "committed `23a830c` on 2026-08-12, before Phase 16 ran. **ONE commit, UNAMENDED.** |",
+        "| the mechanism, the estimators, the report machinery | `scripts/phase19_erasure.py` | "
+        f"**CLOSED at {ctx['pin_commits']} commits**, sha256 `{ctx['pin_sha256']}` |",
+        "| the three measured constants | `scripts/phase19_floor.py` | literal assignments and "
+        "nothing else; every one re-derives through a PINNED function on every suite run |",
+        f"| (a) floor evidence | `{floor.EVIDENCE_ARTIFACT['TARGET_FLOOR']}` | first add "
+        f"`{floor.TARGET_FLOOR_EVIDENCE_SHA}` |",
+        f"| (b) floor evidence | `{floor.EVIDENCE_ARTIFACT['NONTARGET_NOISE_FLOOR']}` | "
+        f"`{floor.NONTARGET_NOISE_FLOOR_EVIDENCE_SHA}` |",
+        f"| (c) floor evidence | `{floor.EVIDENCE_ARTIFACT['DIALOGUE_PPL_NOISE_FLOOR']}` | "
+        f"`{floor.DIALOGUE_PPL_NOISE_FLOOR_EVIDENCE_SHA}` |",
+        "",
+        "**The ordering is what makes the calibration blind, and it is enforced against git's "
+        "object graph rather than promised.** `tests/test_phase16_prereg.py` asserts that every "
+        "commit touching the pin, and every commit touching the floor file, is an ANCESTOR of the "
+        "earliest add of every committed target artifact — and it takes `adds[-1]`, the EARLIEST "
+        "add, so a delete-and-re-add cycle cannot launder the ordering. The (a) floor is the "
+        "rule's OUTPUT on a measured rate, so it could not exist until a Phase 19 artifact did; "
+        "that is why it lives in `phase19_floor.py` and not in the pin.",
+        "",
+        "## The (a) floor — THREE numbers, and two of them are 0.2 by unrelated routes",
+        "",
+        "Naming all three explicitly, because two share a value and a reader who conflates them "
+        "would read one as corroborating the other:",
+        "",
+        "| number | value | how it was produced | does a gate read it? |",
+        "| --- | --- | --- | --- |",
+        f"| **`TARGET_FLOOR`** | **{floor.TARGET_FLOOR!r}** | `lock_erasure_floor` of the BLIND "
+        f"calibration rate {ctx['cal_rate']!r} (0 successes over "
+        f"{ctx['cal_questions']} questions, {ctx['cal_draws']} draws, A2 at K = "
+        f"{erased['config']['k']}), branch **`{floor.FLOOR_BRANCH}`** | **YES — this is the "
+        "governing floor, and the verdict above was read against it** |",
+        f"| `LITERAL_PHASE14_FLOOR` | {floor.LITERAL_PHASE14_FLOOR!r} | D2's OTHER direction: "
+        "Phase 14's operator applied literally, `literal_phase14_floor` of the same blind rate | "
+        "no — published so a reader SEES the choice instead of inferring it |",
+        f"| the PIN-INTERNAL floor | {ctx['pin_internal_floor']!r} | `lock_erasure_floor` of "
+        f"`_calibration_rate()` = {ctx['pin_internal_rate']!r}, branch "
+        f"`{ctx['pin_internal_branch']}` | **NO — SUPERSEDED. This is published defect B** |",
+        "",
+        "**Against erasure's `<=` cap the SMALLER floor is the HARDER one**, so the mirrored "
+        f"direction produced the harder criterion ({floor.TARGET_FLOOR:.6f} < "
+        f'{floor.LITERAL_PHASE14_FLOOR}) and D2\'s "harder, never easier" holds by measurement '
+        "rather than by argument. The two 0.2 values above are a COINCIDENCE of unrelated "
+        "derivations — one is Phase 14's operator on a rate of zero, the other is the `ceiling` "
+        "branch saturating on a rate of 0.8846. Neither corroborates the other.",
+        "",
+        "## The three published defects this render routed around",
+        "",
+        "None is fixed in the pin, because the pin is CLOSED and D3 fixes the correction path as a "
+        "DATED CONTINUATION BESIDE the original, never an edit over it. All three sit on this "
+        "plan's exact path, so the routing is recorded here rather than left for a reader to "
+        "reconstruct.",
+        "",
+        "| defect | what it does | how this render routed around it |",
+        "| --- | --- | --- |",
+        "| **A** — `zero_results_have_nll` (`:1562` vs `:2948`) | compares an ORDERED tuple "
+        "against records serialised with `sort_keys=True`, so it reads False on KEY ORDER ALONE "
+        f"while every NLL is present. On disk: **{ctx['flag_on_disk']}**; order-normalised: "
+        f"**{ctx['flag_normalised']}**. Gap strings {ctx['gaps_on_disk']} on disk, "
+        f"{ctx['gaps_normalised']} order-normalised; {ctx['n_nlls']} NLLs across "
+        f"{ctx['n_slots']} slots, all present and finite | **the ORDER-NORMALISED reading was "
+        "passed.** `erasure_succeeded` short-circuits to INCONCLUSIVE when `target_successes == 0` "
+        "AND the flag is False — i.e. a PERFECT erasure, the only outcome that can clear (a) under "
+        "this floor, is exactly the outcome the defect misreports. Passing the on-disk reading "
+        "would have published INCONCLUSIVE for a reason that is a key-ordering bug |",
+        '| **B** — `_calibration_rate()` (`:3850-3855`) | reads `record["pre_erasure"]'
+        '["per_fact"]`, which `run_erasure_arm` fills from the PHASE 18 record for every arm, '
+        f"so it returns Phase 18's candidate recall {ctx['pin_internal_rate']!r} instead of the "
+        f"calibration arm's own rate | **the CORRECTED blind rate {ctx['cal_rate']!r} was read "
+        "off `results/phase19_calibration_correction.json` (field `governs`) and asserted to "
+        "reproduce `TARGET_FLOOR` through the PINNED `lock_erasure_floor` before the gate was "
+        "called.** Both floors are named in the table above |",
+        "| **C** — `rows.update(per_fact_rows(...))` in the (b) position | lets one tier overwrite "
+        f"the other, so the committed `per_fact` rows carry ONE tier's count "
+        f"({ctx['committed_per_fact_counts']}) rather than D5's pooled "
+        f"{pin.N_TARGET_QUESTIONS}. `_nontarget_rates` refuses them and the pinned `report` "
+        "subcommand SystemExits | **the pooled rows were assembled through the pin's own "
+        "`per_fact_rows`, once per tier, and `render_report` was called directly.** 19-14 pinned "
+        "the crash as a committed test; this plan pins the RECOVERY beside it |",
+        "",
+        "A FOURTH, found by driving the path rather than by inspecting it: `_cmd_report` passes "
+        '`post["retention_ppl"]` — which `retention_perplexity` returns as `[ppl, n]` — straight '
+        "into the gate's `retention_ppl=`, where `retention_ppl <= retention_cap` raises "
+        "`TypeError`. The scalar `[0]` is passed here; the count travels beside it as the "
+        "denominator.",
+        "",
+        "## The collateral curve — gradient or cliff, answered off the artifact",
+        "",
+        f"Q7.3's mandatory measurement: {len(curve['checkpoints'])} checkpoints x "
+        f"{len(curve['collateral_slots'])} slots plus the masked dialogue-val PPL pair. "
+        f"`adapter_off` is constant at {curve['checkpoints'][0]['dialogue_ppl']['adapter_off']!r} "
+        f"by construction over "
+        f"{curve['checkpoints'][0]['dialogue_ppl']['n_targets']:,} scored targets.",
+        "",
+        "| prefix | target rank | target `ans1`/mean | dialogue ON | non-target ranks |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for cp in curve["checkpoints"]:
+        ranks = {cell["rank"] for slot, cell in cp["slots"].items() if slot != curve["slot"]}
+        lines.append(
+            f"| {cp['prefix']} | {cp['target_rank']} | {cp['target_ans1_mean_nll']:.6f} "
+            f"| {cp['dialogue_ppl']['adapter_on']:.6f} "
+            f"| {'all ' + str(sorted(ranks)[0]) if len(ranks) == 1 else sorted(ranks)} |"
+        )
+    lines += [
+        "",
+        "**IT IS A CLIFF ON ONE INSTRUMENT AND A GRADIENT ON THE OTHER, and that is the finding "
+        'rather than an ambiguity.** Read on RANK the answer is "no collateral at all": no '
+        "non-target rank moves off 1 at any k on this curve. Read on the SAME ROWS' `ans1`/mean "
+        "every bystander degrades monotonically from the first checkpoint:",
+        "",
+        f"| slot | `ans1`/mean at prefix 1 | at prefix {curve['checkpoints'][-1]['prefix']} |",
+        "| --- | --- | --- |",
+    ]
+    first, last = curve["checkpoints"][0], curve["checkpoints"][-1]
+    for slot in sorted(first["slots"]):
+        if slot == curve["slot"]:
+            continue
+        lines.append(
+            f"| `{slot}` | {first['slots'][slot]['ans1_mean_nll']:.6f} "
+            f"| {last['slots'][slot]['ans1_mean_nll']:.6f} |"
+        )
+    lines += [
+        "",
+        f"Round-trip audits clean: `intact_nll` {curve['intact_nll']!r}, and "
+        f"`bit_identity_max_abs_diff` = {curve['bit_identity_max_abs_diff']!r} measured over "
+        f"{curve['bit_identity_n_prompts']} prompts on `{curve['bit_identity_device']}` **against "
+        f"`{curve['bit_identity_adapter_measured']}` BY PATH** — the path is recorded in the "
+        "artifact beside the number, so the control cannot have passed while reading the "
+        f"production adapter. The sweep read its reference set on |R| = "
+        f"{curve['reference_set_size']} via `{curve['reference_set_source']}`, re-measured "
+        "address-for-address at 19-12 after the operator held the checkpoint on the premise that "
+        f"the calibration twin's |R| = {curve['calibration_twin_reference_set_size']} had "
+        "contaminated k. It had not: the committed sweep was already read on eight.",
+        "",
+        "## Canary exposure — eight slots, pre and post, against Phase 18's committed rank-1 "
+        "baseline",
+        "",
+        "Phase 18's `adapter-on` arm published all eight core slots at **rank 1 with exposure bits "
+        "at ceiling** (`results/phase18_extraction_report.md:145-153`). The pre-erasure column "
+        "below is the paired baseline measured inside this run, and it reproduces that. **The M2 "
+        "column is why this table cannot be read alone** — see the co-headline above.",
+        "",
+        "| slot | pre rank / bits | M1 post rank / bits | M2 rank / bits | ceiling | M1 "
+        "generation, question unit |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    nontarget_post_rows = _slot_rows(pin.nontarget_rows(ctx["post"]))
+    for entry in erased["exposure"]:
+        slot = entry["slot"]
+        if slot == curve["slot"]:
+            generated = (
+                f"{ctx['target_row']['n_answerable']}/{ctx['target_row']['n_questions']} "
+                "**(the TARGET)**"
+            )
+        else:
+            row = nontarget_post_rows[slot]
+            generated = f"{row['n_answerable']}/{row['n_questions']}"
+        lines.append(
+            f"| `{slot}` | {pre_exposure[slot]['rank']} / "
+            f"{pre_exposure[slot]['exposure_bits']:.6f} "
+            f"| {entry['rank']} / {entry['exposure_bits']:.6f} "
+            f"| {m2_exposure[slot]['rank']} / {m2_exposure[slot]['exposure_bits']:.6f} "
+            f"| {entry['ceiling_bits']:.6f} | {generated} |"
+        )
+    lines += [
+        "",
+        "Exposure is DESCRIPTIVE (STAT-06) and feeds no branch of the verdict; it is what "
+        'separates "the attack was weak" from "the fact is absent". The last column is the '
+        "generation number this report requires beside every rank, for the reason the co-headline "
+        "gives.",
+        "",
+        "### The soft tier, DESCRIPTIVE and never gated",
+        "",
+        "`results/phase18_corpus.json` is core-only and Phase 18 committed no `soft` draws to pair "
+        "an A2 delta against, so these two facts are outside (b) by a DECLARED narrowing rather "
+        "than by omission — and they are printed here so a destroyed soft fact is visible in the "
+        f"report rather than out of frame. Instrument: {soft['instrument']} — "
+        f"{soft['n_draws_per_question']} draws per question, both adapters in ONE process on the "
+        "identical 54 questions and seeds.",
+        "",
+        "| fact | pre-erasure | post-erasure |",
+        "| --- | --- | --- |",
+    ]
+    for fact_id in sorted(soft["pre_erasure"]):
+        pre_cell, post_cell = soft["pre_erasure"][fact_id], soft["post_erasure"][fact_id]
+        lines.append(
+            f"| `{fact_id}` "
+            f"| {pre_cell['n_answerable']}/{pre_cell['n_questions']} questions "
+            f"({pre_cell['k']}/{pre_cell['n']} draws) "
+            f"| {post_cell['n_answerable']}/{post_cell['n_questions']} questions "
+            f"({post_cell['k']}/{post_cell['n']} draws) |"
+        )
+    lines += [
+        f"| **pooled draws** | **{soft['totals']['pre_erasure']['k']}/"
+        f"{soft['totals']['pre_erasure']['n']}** | **{soft['totals']['post_erasure']['k']}/"
+        f"{soft['totals']['post_erasure']['n']}** |",
+        "",
+        "**Production teaches ten facts, so nine are non-targets and (b) gates seven.** The two "
+        "above are the other two. Their collapse is not in the verdict and is not being claimed "
+        "as if it were — it is reported because leaving it out would flatter the result.",
+        "",
+        "## ERASE-02 — the M2 retrain-without reference arm",
+        "",
+        "An adapter retrained on the IDENTICAL recipe with the target fact removed: 9 facts "
+        "against 10, same seed, same 200 steps, scored at the same A2/K = "
+        f"{erased['config']['k']} over the same corpus with `assert_phase18_parity` asserted "
+        "inside the run.",
+        "",
+        "| slot | taught | **M1 erased** | **M2 retrain** | \\|Δ\\| taught→M1 "
+        "| \\|Δ\\| taught→M2 |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    m1_by_slot = dict(zip(pin.GATED_NONTARGET_SLOTS, m2["m1_abs_deltas_from_taught_in_slot_order"]))
+    m2_by_slot = dict(zip(pin.GATED_NONTARGET_SLOTS, m2["m2_abs_deltas_from_taught_in_slot_order"]))
+    for fact_id, row in sorted(m2["retained"].items(), key=lambda kv: kv[1]["slot"]):
+        slot = row["slot"]
+        lines.append(
+            f"| `{slot}` | {row['taught_answerable']}/{row['n_questions']} "
+            f"| {row['m1_answerable']}/{row['n_questions']} "
+            f"| **{row['m2_answerable']}/{row['n_questions']}** "
+            f"| {m1_by_slot[slot]!r} | **{m2_by_slot[slot]!r}** |"
+        )
+    lines += [
+        "",
+        f"**Five of seven M2 deltas are exactly 0.0**, and the two that move — `house_number` "
+        f"{m2_by_slot['house_number']!r} and `hometown` {m2_by_slot['hometown']!r} — are both "
+        f"BELOW the {ctx['margin']!r} gate margin and are both among the three facts 19-11 "
+        "recorded as the only ones with room to move at all. All seven M1 deltas are above it.",
+        "",
+        "**The omitted fact did not leak, and that VALIDATES the target arm rather than the "
+        f"erasure.** M2 was never taught `{m2['omitted_fact']['fact_id']}` and recalls it "
+        f"{m2['omitted_fact']['successes']}/{m2['omitted_fact']['n_questions']} pooled over "
+        f"{m2['omitted_fact']['n_draws']} draws — `falsified = "
+        f"{m2['omitted_fact']['falsified']}`. Any success above zero would have meant the "
+        "adversary or the scoring predicate finds the value in a model that never saw it, voiding "
+        "condition (a)'s number too.",
+        "",
+        "**M2's capability legs land on the TAUGHT adapter, not on M1**, which is the direct "
+        "evidence for why M1's retention leg clearing is not the erasure succeeding:",
+        "",
+        "| leg | taught | M1 | M2 | cap |",
+        "| --- | --- | --- | --- | --- |",
+        f"| dialogue ON | {m2['capability']['taught_dialogue_ppl']['adapter_on']:.6f} "
+        f"| {m2['capability']['m1_dialogue_ppl']['adapter_on']:.6f} "
+        f"| {m2['capability']['dialogue_ppl']['adapter_on']:.6f} "
+        f"| {m2['capability']['dialogue_cap']!r} |",
+        f"| retention | {m2['capability']['taught_retention_ppl'][0]:.6f} "
+        f"| {m2['capability']['m1_retention_ppl'][0]:.6f} "
+        f"| {m2['capability']['retention_ppl'][0]:.6f} "
+        f"| {m2['capability']['retention_cap']!r} |",
+        "",
+        "**THE CAVEAT, read out of the record's own field rather than restated:**",
+        "",
+        f"> {m2['caveat']}",
+        "",
+        "**THE FRAMING CONSTRAINT, likewise:**",
+        "",
+        f"> {m2['framing']}",
+        "",
+        "## The representational read on M1 — the third instrument, DESCRIPTIVE",
+        "",
+        "Section 6 above is the PINNED read, and the pin's cosine is taught-vs-**M2**, so it "
+        "contains no reading of the surgically edited adapter at all. The companion "
+        "`results/phase19_representational_reads.json` supplies that one through the SAME pinned "
+        "`delta_w_cells` / `delta_w_cosine` functions, partitioned by the pin's OWN "
+        "ablated/preserved cell sets rather than by a second sweep.",
+        "",
+        "| read | n cells | defined | undefined | min | median | max |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    m1_read = ctx["reads"]["taught_vs_m1_erased"]
+    m2_read = ctx["reads"]["taught_vs_m2_retrain"]
+    for label, read in (
+        ("taught vs **M1 erased**", m1_read),
+        ("— its **ablated** region", m1_read["by_region"]["ablated"]),
+        ("— its **preserved** region", m1_read["by_region"]["preserved"]),
+        ("taught vs **M2 retrain** *(the pinned read)*", m2_read),
+        ("**M1 vs M2**", ctx["reads"]["m1_erased_vs_m2_retrain"]),
+        ("cross-persona, **n=3 personas**", ctx["reads"]["cross_persona"]),
+    ):
+        lines.append(
+            f"| {label} | {read['n']} | {read.get('n_defined', read['n'])} "
+            f"| {read.get('n_undefined', 0)} | {read['min']!r} | {read['median']!r} "
+            f"| {read['max']!r} |"
+        )
+    lines += [
+        "",
+        "**The ΔW read separates the two regions exactly, per cell.** All "
+        f"{m1_read['by_region']['preserved']['n']} preserved cells read cosine 1.0 to fp64 "
+        f"round-off ({m1_read['by_region']['preserved']['min']!r} … "
+        f"{m1_read['by_region']['preserved']['max']!r}); the "
+        f"{m1_read['by_region']['ablated']['n']} ablated cells span "
+        f"{m1_read['by_region']['ablated']['min']!r} … "
+        f"{m1_read['by_region']['ablated']['max']!r}. The single undefined cosine is an internal "
+        "consistency check that passed: `(5, 'fc_in')` is the ONE cell whose all 8 rank-1 "
+        "components were ablated, so its ΔW is exactly zero and has no direction — "
+        "`delta_w_cosine` returns `None` there rather than `0.0`, because writing `0.0` would "
+        "publish the cell as ORTHOGONAL, a claim the arithmetic does not make.",
+        "",
+        "**This read distinguishes M1 from M2 where the rank instrument returned bit-identical "
+        "readings** — two entirely different shapes on the same pair of adapters the exposure "
+        "instrument reported as equal in every rank and every `exposure_bits` value across all "
+        "eight slots. **It is DESCRIPTIVE and it adjudicates nothing**: it is not evidence that "
+        "either mechanism is better, no threshold separates the two shapes, and no branch anywhere "
+        "reads any of these numbers. Three committed scans enforce that structurally — over the "
+        "producers by AST, over the consumers in both the pin and the driver by AST, and over the "
+        "committed record KEYS, which a source scan cannot reach.",
+        "",
+        "## Threats to validity",
+        "",
+        "1. **The `forbid_ids` mask does NOT manufacture a false (a) pass.** The mask leaves 547 "
+        "live generative ids of 8,192 (7,645 masked), and Phase 18 recorded the direction "
+        "explicitly: it removes undecodable ids, so it makes the attacker **STRONGER** by "
+        "spending every draw on text (`results/phase18_extraction_report.md:244`). The same mask "
+        f"digest `{erased['config']['forbid_ids_sha256']}` was used here, asserted by "
+        "`assert_phase18_parity` rather than compared by eye.",
+        '2. **"We could not extract it" is not "it is gone."** Condition (a) is a one-sided '
+        "UPPER BOUND on recall, never a point estimate and never an equivalence claim; the bound "
+        "is published with its denominator. `ERASURE_GOAL_FRAMING` fixes the goal as auditable "
+        'forgetting with a measurable bound and explicitly NOT "indistinguishable from '
+        'never-having-learned", which is untestable at 13.9M parameters.',
+        "3. **The relearning attack is ABSENT, and it is the obvious follow-up.** A few "
+        "fine-tuning samples can recover supposedly-erased knowledge (Hu et al., "
+        "arXiv:2406.13356); Phase 18 records the same class of attack as documented to recover "
+        "~88% of removed information and as NOT RUN. This phase's claim is bounded accordingly.",
+        "4. **A retrain is a DIFFERENT adapter, not an edited one.** M2 is a reference point "
+        "beside three others — the taught adapter, M1, and Phase 18's measured adapter-off 0/104 "
+        "— and never a null hypothesis. Its non-target recall differs from the taught adapter's "
+        "by seed and data-order noise AS WELL AS by the omission, and one run cannot separate "
+        "them.",
+        "5. **The residual decoding-artifact reading is what `zero_results_have_nll` and the "
+        "exposure rank exist to separate**, and both are reported: the target's teacher-forced "
+        f"`ans1`/mean rose to {curve['checkpoints'][-1]['target_ans1_mean_nll']!r} and its rank "
+        f"moved {pre_exposure[curve['slot']]['rank']} → {exposure[curve['slot']]['rank']}, so the "
+        "zero is accompanied by an instrument reading rather than standing alone.",
+        "6. **The (b) noise floor is SOFT, and the softness is recorded where the number is.** "
+        "Four of the seven inputs to its `max` cannot contribute to it — they read at or within "
+        "one question of ceiling in BOTH replicate readings, so their zero deltas are ceiling "
+        "artefacts rather than measurements of sampling noise. The published floor is the noise of "
+        "the three facts that CAN move. It is also threshold-shaped and permissive: at "
+        f"{ctx['margin']!r} x {pin.N_TARGET_QUESTIONS} a non-target fact may lose EIGHT of its "
+        "twenty-seven questions post-erasure and still clear (b). All seven exceeded it anyway.",
+        "7. **Condition (c) was ALREADY RED on the untouched adapter**, measured at 19-10 and "
+        "approved for literal publication at 19-11. Both legs are printed pre beside post in "
+        "section 4 above for exactly this reason. Admitting the pre-erasure model on the dialogue "
+        "leg would have needed a floor roughly 119x the one measured — a wider ruler, not a better "
+        "result. The diagnosis of the root cause is 19-16's dated continuation, published BESIDE "
+        "this verdict and never in place of it.",
+        "8. **The representational read (section 6) is DESCRIPTIVE and reaches no gate.** That is "
+        "enforced by three committed AST/artifact scans over the producers, the consumers in both "
+        "files, and the record keys — not promised in prose. At n=8 facts and n=3 personas the "
+        "sample cannot support a threshold, and gating what the sample cannot support is treated "
+        "as a defect in this project rather than as extra rigour.",
+        "",
+        "## Provenance",
+        "",
+        "| parameter | value |",
+        "| --- | --- |",
+    ]
+    for key in (
+        "arm",
+        "mechanism",
+        "corpus",
+        "corpus_entries",
+        "corpus_sha256",
+        "forbid_ids_sha256",
+        "k",
+        "asr_rungs",
+        "stop_ids",
+        "sample_temperature",
+        "sample_top_p",
+        "seed",
+        "seed_stride",
+        "device",
+        "torch",
+        "git_sha",
+        "pid",
+        "wall_clock_min",
+        "vocab_size",
+    ):
+        lines.append(f"| `{key}` | `{erased['config'][key]}` |")
+    lines += [
+        f"| ablated components | `{len(erased['config']['ablated_components'])}` of "
+        f"`{pin.N_COMPONENTS}` |",
+        "",
+        "| arm | record | sha256 | pid | wall clock (min) |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for arm in ("erased", "replicate", "retrain"):
+        record = ctx["arms"][arm]
+        lines.append(
+            f"| `{arm}` | `{pin.arm_record_path(arm).name}` "
+            f"| `{_sha256(pin.arm_record_path(arm))}` | {record['config']['pid']} "
+            f"| {record['config']['wall_clock_min']:.4f} |"
+        )
+    lines += [
+        "",
+        "Distinct pids and a shared corpus digest are what EVIDENCE the pairing rather than assert "
+        "it — Phase 18's standard (`results/phase18_extraction_report.md:260-265`). Adapters, by "
+        "sha256:",
+        "",
+        "| adapter | sha256 |",
+        "| --- | --- |",
+        f"| taught production (`{pathlib.Path(curve['adapter_in']).name}`) "
+        f"| `{curve['adapter_in_sha256']}` |",
+        f"| M1 erased (`{pathlib.Path(curve['adapter_out']).name}`) "
+        f"| `{curve['adapter_out_sha256']}` |",
+        f"| M2 retrain (`{pathlib.Path(m2['adapter']).name}`) | `{m2['adapter_sha256']}` |",
+        "",
+        f"The taught adapter was verified UNCHANGED after the sweep "
+        f"(`adapter_in_unchanged_after_run = {curve['adapter_in_unchanged_after_run']}`). The "
+        f"ablation sweep took {curve['wall_clock_min']:.4f} min on `{curve['device']}` at git "
+        f"`{curve['git_sha']}`.",
+        "",
+        f"Rendered by `{ctx['driver']}` through the pinned `render_report`, with the "
+        "{n_appended} sections above APPENDED because the closed renderer has no slot for them. "
+        "The spine — everything from the title through `## Ship Decision` — is byte-identical to "
+        "what `render_report` produced, and everything after it is a continuation BESIDE the "
+        "recorded verdict rather than an edit over it.",
+    ]
+    text = "\n".join(lines) + "\n"
+    return text.replace("{n_appended}", str(sum(line.startswith("## ") for line in lines)))
+
+
+def report():
+    """19-15 — the ONE verdict call in the phase, and the rendered report.
+
+    Reason 11 in the module docstring. Three published defects sit on this exact path and none is
+    fixed in the CLOSED pin, so all three are routed around HERE and named in the rendered report:
+
+    * **B, the floor.** `_calibration_rate()` returns Phase 18's candidate recall, not the
+      calibration arm's own rate, so the pin's internal floor is the `ceiling` branch rather than
+      the reachability clamp. The CORRECTED blind rate is read off
+      `results/phase19_calibration_correction.json` — whose `governs` field names
+      `corrected_target_floor` — and is asserted to reproduce `phase19_floor.TARGET_FLOOR` through
+      the PINNED `lock_erasure_floor` before the gate sees it. `render_report` then derives both
+      floor directions from that same rate through the pin's own functions, so the report cannot
+      print a floor the gate did not read.
+    * **A, the success path.** `zero_result_exposure_gaps` compares key ORDER against records
+      written with `sort_keys=True`, and `erasure_succeeded` short-circuits to INCONCLUSIVE when
+      `target_successes == 0` AND the flag is False — so a PERFECT erasure, the only outcome that
+      can clear (a) under this floor, is exactly the outcome the defect misreports. The
+      ORDER-NORMALISED reading is passed and BOTH readings are printed.
+    * **C, in the (b) position.** The committed `per_fact` rows carry one tier's count, which
+      `_nontarget_rates` refuses, so `_cmd_report` SystemExits on the real records (19-14 pinned
+      that as a test). The pooled rows are assembled through the pin's own `per_fact_rows`, once
+      per tier, and `render_report` is called DIRECTLY.
+
+    A fourth was found by driving it: `_cmd_report` hands `retention_perplexity`'s `[ppl, n]` pair
+    straight to the gate's `retention_ppl=`, where the `<=` raises `TypeError`. The scalar is
+    passed here and the count travels beside it.
+
+    `erasure_succeeded` is NOT called here. `pin.render_verdict` is the phase's ONE call site and
+    the 19-05 AST guard is what keeps it the only one.
+    """
+    import phase14_factset as factset
+    import phase19_floor as floor
+
+    arms = {
+        arm: json.loads(pin.arm_record_path(arm).read_text(encoding="utf-8"))
+        for arm in ("erased", "replicate", "retrain")
+    }
+    erased, replicate = arms["erased"], arms["replicate"]
+    phase18 = json.loads(pin.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    curve = json.loads(TARGET_CURVE_PATH.read_text(encoding="utf-8"))
+    target_scores = json.loads(TARGET_SCORES_PATH.read_text(encoding="utf-8"))
+    m2 = json.loads(RETRAIN_SCORES_PATH.read_text(encoding="utf-8"))["retrain_scores"]
+    reads = json.loads(REPRESENTATIONAL_READS_PATH.read_text(encoding="utf-8"))["reads"]
+    correction = json.loads(CALIBRATION_CORRECTION_PATH.read_text(encoding="utf-8"))
+
+    values = {f.id: f.value for f in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS}
+    family, budget = erased["config"]["attack_family"], erased["config"]["k"]
+    tiers = tuple(sorted({d["tier"] for d in erased["draws"] if d["family"] == family}))
+
+    # DEFECT C, routed around: the committed `per_fact` block carries one tier's count, so both
+    # sides are rebuilt through the pin's own `per_fact_rows` once per tier.
+    pre = _pooled_rows(phase18["draws"], values, family, tiers)
+    post = _pooled_rows(erased["draws"], values, family, tiers)
+    target_id = pin.target_fact_id(erased["draws"])
+    target_row, pre_target = post[target_id], pre[target_id]
+    deltas = pin.nontarget_deltas(pin.nontarget_rows(pre), pin.nontarget_rows(post))
+
+    # The (b) scalar RE-DERIVED from the replicate arm through the pinned reduction, then checked
+    # against the locked constant — never read out of the constant alone.
+    rep_family = replicate["config"]["attack_family"]
+    rep_tiers = tuple(sorted({d["tier"] for d in replicate["draws"] if d["family"] == rep_family}))
+    noise_floor = pin.nontarget_noise_floor(
+        pin.nontarget_deltas(
+            pin.nontarget_rows(_pooled_rows(phase18["draws"], values, rep_family, rep_tiers)),
+            pin.nontarget_rows(_pooled_rows(replicate["draws"], values, rep_family, rep_tiers)),
+        )
+    )
+    dialogue_floor = pin.dialogue_floor_from_record()
+
+    # DEFECT B, routed around: the CORRECTED blind rate, off the record whose `governs` field says
+    # which floor governs — and proved to reproduce the locked constant through the PINNED rule.
+    cal_rate = correction["calibration_rate"]
+    for condition, message in (
+        (
+            correction["governs"] == "corrected_target_floor",
+            f"the correction record's `governs` field says {correction['governs']!r}, not "
+            "'corrected_target_floor' — the floor this render reads the verdict against would not "
+            "be the one the evidence names as governing",
+        ),
+        (
+            pin.lock_erasure_floor(cal_rate) == floor.TARGET_FLOOR,
+            f"lock_erasure_floor({cal_rate!r}) = {pin.lock_erasure_floor(cal_rate)!r} but "
+            f"TARGET_FLOOR is {floor.TARGET_FLOOR!r}. The gate and the report's own section 5 "
+            "would then print two different floors",
+        ),
+        (
+            noise_floor == floor.NONTARGET_NOISE_FLOOR,
+            f"the replicate arm re-derives a (b) floor of {noise_floor!r} against the locked "
+            f"{floor.NONTARGET_NOISE_FLOOR!r}",
+        ),
+        (
+            dialogue_floor == floor.DIALOGUE_PPL_NOISE_FLOOR,
+            f"the dialogue record re-derives {dialogue_floor!r} against the locked "
+            f"{floor.DIALOGUE_PPL_NOISE_FLOOR!r}",
+        ),
+    ):
+        if not condition:
+            raise SystemExit(f"[phase19_run] {message}")
+
+    # DEFECT A, routed around: BOTH readings measured, the ORDER-NORMALISED one passed to the gate.
+    flag_on_disk = pin.zero_results_have_nll(erased)
+    normalised = _order_normalised(erased)
+    flag_normalised = pin.zero_results_have_nll(normalised)
+
+    # THE ONE VERDICT CALL IN THE PHASE. `render_verdict` is the pin's single `erasure_succeeded`
+    # call site; nothing here recomputes any of (a), (b) or (c) beside it.
+    verdict = pin.render_verdict(
+        target_successes=target_row["n_answerable"],
+        target_questions=target_row["n_questions"],
+        target_floor=floor.TARGET_FLOOR,
+        nontarget_deltas=deltas,
+        nontarget_noise_floor=floor.NONTARGET_NOISE_FLOOR,
+        dialogue_ppl=erased["dialogue_ppl"]["adapter_on"],
+        dialogue_ppl_noise_floor=dialogue_floor,
+        # `retention_perplexity` returns `(ppl, n)`; the gate compares a SCALAR.
+        retention_ppl=erased["retention_ppl"][0],
+        zero_results_have_nll=flag_normalised,
+    )
+    print(f"[phase19_run] VERDICT = {verdict['verdict']}")
+    for reason in verdict["reasons"]:
+        print(f"    {reason}")
+
+    nontarget_pre, nontarget_post = pin.nontarget_rows(pre), pin.nontarget_rows(post)
+    text = pin.render_report(
+        verdict=verdict,
+        target={
+            "n_draws": target_row["n_questions"] * budget,
+            "pre_successes": pre_target["n_answerable"],
+            "pre_questions": pre_target["n_questions"],
+            "pre_draws": pre_target["n_questions"] * budget,
+        },
+        cal_rate=cal_rate,
+        nontargets=tuple(
+            {
+                "slot": nontarget_pre[fid]["slot"],
+                "pre_successes": nontarget_pre[fid]["n_answerable"],
+                "pre_questions": nontarget_pre[fid]["n_questions"],
+                "pre_draws": nontarget_pre[fid]["n_questions"] * budget,
+                "post_successes": nontarget_post[fid]["n_answerable"],
+                "post_questions": nontarget_post[fid]["n_questions"],
+                "post_draws": nontarget_post[fid]["n_questions"] * budget,
+            }
+            for fid in sorted(nontarget_pre)
+        ),
+        capability={
+            "dialogue_ppl": erased["pre_erasure"]["dialogue_ppl"]["adapter_on"],
+            "retention_ppl": erased["pre_erasure"]["retention_ppl"][0],
+        },
+        representational=pin._load_representational(),
+        provenance={
+            "git_sha": erased["config"]["git_sha"],
+            "device": erased["config"]["device"],
+            "parity": {key: erased["config"][key] for key in pin.PARITY_KEYS},
+        },
+    )
+
+    pin_internal_rate = pin._calibration_rate()
+    gap_pre = (
+        erased["pre_erasure"]["dialogue_ppl"]["adapter_on"]
+        - erased["pre_erasure"]["dialogue_ppl"]["adapter_off"]
+    )
+    gap_post = erased["dialogue_ppl"]["adapter_on"] - erased["dialogue_ppl"]["adapter_off"]
+    continuations = _report_continuations(
+        {
+            "arms": arms,
+            "erased": erased,
+            "retrain": arms["retrain"],
+            "curve": curve,
+            "soft": target_scores["soft_descriptive"],
+            "m2": m2,
+            "reads": reads,
+            "floor": floor,
+            "post": post,
+            "target_row": target_row,
+            "cal_rate": cal_rate,
+            "cal_questions": correction["calibration_questions"],
+            "cal_draws": correction["evidence"]["n_draws"],
+            # DEFECT B, MEASURED rather than quoted: the pin's own internal floor is recomputed
+            # here through the pin's own functions, so the report prints what it actually returns.
+            "pin_internal_rate": pin_internal_rate,
+            "pin_internal_floor": pin.lock_erasure_floor(pin_internal_rate),
+            "pin_internal_branch": pin.floor_branch(pin_internal_rate),
+            "pin_sha256": _sha256(pathlib.Path(pin.__file__)),
+            "pin_commits": _commit_count(pathlib.Path(pin.__file__)),
+            "margin": pin.MARGIN_K * floor.NONTARGET_NOISE_FLOOR,
+            "gap_pre": gap_pre,
+            "gap_post": gap_post,
+            "adaptation_destroyed_pct": 100.0 * (gap_pre - gap_post) / gap_pre,
+            "flag_on_disk": flag_on_disk,
+            "flag_normalised": flag_normalised,
+            "gaps_on_disk": len(tuple(pin.zero_result_exposure_gaps(erased))),
+            "gaps_normalised": len(tuple(pin.zero_result_exposure_gaps(normalised))),
+            # LEAF values — 3 frames x 2 reductions per slot. `len(e["nll"])` counts the frames.
+            "n_nlls": sum(
+                len(reductions) for e in erased["exposure"] for reductions in e["nll"].values()
+            ),
+            "n_slots": len(erased["exposure"]),
+            "committed_per_fact_counts": sorted(
+                {row["n_questions"] for row in erased["per_fact"].values()}
+            ),
+            "driver": "scripts/phase19_run.py report (UNPINNED)",
+        }
+    )
+
+    full = text.rstrip("\n") + "\n\n" + continuations
+    # The same three proofs `scripts/_addendum.py` runs, on the PRODUCED BYTES: the recorded
+    # verdict is untouched, the append-only property holds, and the ship-decision marker stays
+    # unambiguous for 19-16. The bare-zero-percent regex is the PIN's, not a second copy.
+    for condition, message in (
+        (
+            _verdict.recorded_verdict(full) == _verdict.recorded_verdict(text),
+            "appending changed the recorded `## Verdict` section — the verdict is committed "
+            "evidence and a continuation may only be ADDED beside it",
+        ),
+        (
+            full.startswith(text.rstrip("\n")),
+            "the appended report does not carry the rendered spine byte-identically, so this is a "
+            "rewrite rather than an append",
+        ),
+        (
+            full.count(pin.ERASURE_SHIP_PENDING_LINE) == 1,
+            f"the appended report carries {full.count(pin.ERASURE_SHIP_PENDING_LINE)} "
+            "ship-decision placeholders; `append_addendum` replaces EXACTLY one, so 19-16 would "
+            "have no unambiguous line",
+        ),
+        (
+            pin._BARE_ZERO_PERCENT.search(full) is None,
+            "the appended sections contain a bare zero percentage — STAT-02 forbids it, and this "
+            "proof runs on the produced bytes because a source scan cannot see a number a format "
+            "string produced",
+        ),
+    ):
+        if not condition:
+            raise SystemExit(f"[phase19_run] {message}")
+
+    pin.ERASURE_REPORT_PATH.write_text(full, encoding="utf-8")
+    print(
+        f"[phase19_run] appended {len(continuations.splitlines())} lines to "
+        f"{pin.ERASURE_REPORT_PATH}"
+    )
+
+
 _TABLE = {
     "cal-ablate": cal_ablate,
     "cal-score": cal_score,
     "cal-siblings": cal_siblings,
     "dialogue-block": dialogue_block,
     "nontarget-block": nontarget_block,
+    "report": report,
     "representational-reads": representational_reads,
     "retention": retention,
     "retrain-score": retrain_score,
