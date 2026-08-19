@@ -223,7 +223,7 @@ record of what was committed before the numbers existed; it is history, not curr
 | PREREG-01 | (pre-milestone) | Complete — `23a830c`, 2026-08-12 |
 | PREREG-02 | 16 | Complete |
 | ERASE-01 | 19 | Admitted 2026-08-17 — gate returned True on `(92, 104, 0, 104)`; scoped, not yet planned |
-| ERASE-02 | 19 | Admitted 2026-08-17 — same gate; ~90 s retrain reference is affordable on this M3 |
+| ERASE-02 | 19 | Complete — 19-13, 2026-08-19. Discharged by a RUN, not an explanation: `retrain_arm_spec` dropped exactly one fact (10 → 9), trained in `wall=81s`, scored at A2/K=48 over 10,368 draws with `assert_phase18_parity` enforced. The omitted fact reads 0/27; five of seven bystanders move by exactly 0.0. `results/phase19_arm_retrain.json` + `results/phase19_retrain_scores.json` |
 
 **Coverage (roadmapped 2026-08-12; ERASE-01/02 admitted 2026-08-17):** 28/28 in-scope v3.0
 requirements are mapped to Phases 16-19; 0 orphans. PREREG-01 is complete pre-milestone

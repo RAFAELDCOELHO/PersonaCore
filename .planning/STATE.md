@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: executing
-stopped_at: Completed 19-12-PLAN.md
-last_updated: "2026-08-19T17:52:56.958Z"
-last_activity: 2026-08-19 -- 19-12 executed and CLOSED at its checkpoint (D8 = the cliff, with rank-vs-NLL as CO-HEADLINE)
+status: completed
+stopped_at: Completed 19-08-PLAN.md
+last_updated: "2026-08-19T19:08:21.909Z"
+last_activity: "2026-08-19 -- 19-13 executed (ERASE-02 discharged by a RUN: M2 retrained without the"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 50
+  completed_plans: 51
   percent: 75
 ---
 
@@ -26,10 +26,30 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 13 of 16
-Status: 19-12 COMPLETE and CLOSED AT ITS CHECKPOINT. **The target fact has been erased.** The
-human took **D8 branch = CLAUSE 1 (the cliff), with the rank-vs-NLL disagreement elevated to
-CO-HEADLINE.** Next: 19-13, the M2 retrain reference arm.
+Plan: 14 of 16
+Status: 19-13 COMPLETE. **ERASE-02 is discharged by a run.** The M2 retrain-without arm trained in
+`wall=81s` and scored at A2/K=48 over 10,368 draws with `assert_phase18_parity` ENFORCED (`retrain`
+is in `PARITY_ASSERTED_ARMS`). Next: **19-14, which must run BEFORE 19-15.**
+
+**M2's RESULT — the reference M1 is read against, numbers only.** The omitted fact `cand_dog_zorp`
+reads **0/27** pooled (0/13 held-out, 0/14 taught) over 1,296 draws, so its falsification condition
+did NOT fire and 19-12's target number survives. **Five of seven bystanders move by exactly 0.0**
+from the taught adapter (cat_name 27/27, person_name 26/27, sibling_name 27/27, street 27/27,
+birth_year 18/27); the two that move — house_number −0.2593, hometown −0.1111 — are both BELOW the
+0.2963 margin and are two of the three facts 19-11 named as the only ones with room to move. M1's
+seven all exceed the margin and four are at total loss. Soft tier: taught 54/54 questions → M1 1/54
+→ **M2 53/54**. Capability lands on the TAUGHT adapter, not M1: dialogue 6.0079 (FAILS +1.4242),
+retention 4.2172 (FAILS +0.1882) — which is the direct evidence that M1's retention leg clearing
+was the personalization being gone, not the erasure succeeding.
+
+**HEADLINE 2 IS NOW STRONGER, NOT MERELY REPEATED.** The rank instrument reports **M1 and M2 as
+BIT-IDENTICAL across all eight slots** — every rank and every `exposure_bits` value equal. It
+therefore cannot distinguish an adapter whose bystanders generate 0/27 from one whose same
+bystanders generate 27/27. Any 19-15 row taken on rank or exposure alone reports the two as the
+same object; every one of them needs its generation number beside it.
+
+**Prior D8 decision, unchanged.** The human took **D8 branch = CLAUSE 1 (the cliff), with the
+rank-vs-NLL disagreement elevated to CO-HEADLINE.**
 
 **HEADLINE 1 — SELECTIVE ERASURE IS NOT SELECTIVE AT 331,776 PARAMETERS.** Ships unsoftened, per the
 posture committed at 19-05 before the number existed. M1 stopped at **k = 78 of 288**,
@@ -130,7 +150,16 @@ states a stale denominator invariant (`corpus_len - n_windows`; the true value i
 is wrong, logged in `.planning/phases/19-selective-memory-erasure/deferred-items.md`.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase.
-Last activity: 2026-08-19 -- 19-12 executed and CLOSED at its checkpoint (target ERASED at k=78 of
+Last activity: 2026-08-19 -- 19-13 executed (ERASE-02 discharged by a RUN: M2 retrained without the
+target in `wall=81s`, the fourth measurement of that figure, and scored at A2/K=48 over 10,368 draws
+with parity ENFORCED. Omitted fact 0/27 — falsification condition did NOT fire. Five of seven
+bystanders at delta exactly 0.0, the two movers both below the margin. Soft 53/54 against M1's 1/54.
+Capability lands on the taught adapter, both legs still red. THE RANK INSTRUMENT READS M1 AND M2 AS
+BIT-IDENTICAL ACROSS ALL EIGHT SLOTS. Defect A fired again, 2 gaps on disk vs 0 normalised, 48/48
+NLLs finite. Sixth naming failure — all three plan-named artifacts refused by the pin; both plan
+verify commands fail as written. Pin still 15 commits byte-identical, 837 passed / 1 skipped)
+
+Prior activity: 2026-08-19 -- 19-12 executed and CLOSED at its checkpoint (target ERASED at k=78 of
 288; D8 = the cliff with rank-vs-NLL as CO-HEADLINE and explicit retroactive weight on Phase 18's
 rank-based readings; (a) perfect at 0/27 exactly on the floor; (b) fails on all seven, four at total
 loss; (c) dialogue still fails, retention clears only because the personalization is gone; defect A
@@ -206,6 +235,7 @@ fired on the success path; re-sweep retracted nothing; pin still 15 commits, 837
 | Phase 19 P10 | 108min | 3 tasks | 5 files |
 | Phase 19 P11 | 21min | 3 tasks | 3 files |
 | Phase 19 P12 | 159min | 3 tasks | 5 files |
+| Phase 19 P13 | 48min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -404,6 +434,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-10: (b) noise floor = 0.14814814814814814 (max over seven per-fact |drate|); four of seven facts are saturated at 27/27 or 26/27 and cannot contribute, so the floor is the noise of the three that can move
 - [Phase 19]: 19-10: BOTH halves of (c) fail on the untouched taught adapter: dialogue 5.8154 vs cap 4.5837, retention 4.2198 vs cap 4.029 — (c) cannot attribute anything to an erasure that has not happened
 - [Phase 19]: 19-10: the pinned (b) path cannot run as written (producers deliver 13 or 14 against the required 27); recovered by driving the pin's own per_fact_rows once per tier and summing, never by relaxing the guard
+- [Phase 19]: 19-13: ERASE-02 DISCHARGED BY A RUN. M2 retrained without the target in wall=81s (fourth measurement of that figure) and scored at A2/K=48 over 10,368 draws with assert_phase18_parity ENFORCED — 'retrain' is in PARITY_ASSERTED_ARMS. Omitted fact cand_dog_zorp reads 0/27 pooled (0/13 held-out, 0/14 taught) over 1,296 draws, so its falsification condition did NOT fire and 19-12's target number survives
+- [Phase 19]: 19-13: THE RANK INSTRUMENT REPORTS M1 AND M2 AS BIT-IDENTICAL ACROSS ALL EIGHT SLOTS — every rank and every exposure_bits value equal. It cannot distinguish an adapter whose bystanders generate 0/27 (M1) from one whose same bystanders generate 27/27 (M2). 19-12's rank-vs-NLL co-headline, second and harder data point; every 19-15 row taken on rank or exposure alone needs its generation number beside it
+- [Phase 19]: 19-13: M2 PRESERVES WHAT M1 DESTROYED. Five of seven bystanders move by exactly 0.0 from taught; the two that move (house_number 24/27 to 17/27, hometown 21/27 to 18/27) are both below the 0.2963 margin and are two of the three facts 19-11 named as the only ones with room to move. Soft tier taught 54/54 questions to M1 1/54 to M2 53/54. Capability lands on the TAUGHT adapter: dialogue 6.0079 FAILS +1.4242, retention 4.2172 FAILS +0.1882 — direct evidence that M1's retention clearing was the personalization being gone
+- [Phase 19]: 19-13: SIXTH NAMING FAILURE. All three plan-named artifacts refused by the pin. BOTH plan verify commands also fail as written: Task 1's reads the census off the checkpoint's top-level keys and raises AttributeError even at the correct path; Task 2's asserts 'caveat' and 'framing' on the ARM RECORD, which _arm_record forbids by ordered hard equality over nine ARM_RECORD_KEYS. Both required fields live in results/phase19_retrain_scores.json instead — the schema was not widened and the pin was not edited
 
 ### Roadmap Evolution
 
@@ -468,7 +502,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-18T15:32:40.158Z
+Last session: 2026-08-19T19:06:50.529Z
 Stopped at: Completed 19-08-PLAN.md
 Resume file: None
 
