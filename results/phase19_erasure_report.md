@@ -547,3 +547,55 @@ returned, is precisely the move that would void the pre-registration ordering
 `tests/test_phase16_prereg.py` enforces against git's object graph — and with it every number in
 section 1. Withholding one claim costs this phase a claim. Repairing the pin to recover that claim
 would cost the milestone all of them.
+
+## Defect numbering — the canonical labels (dated continuation, 2026-08-19)
+
+*Appended beside the recorded `## Verdict` and the recorded ship decision, changing no byte above
+this heading. This is a LABELLING correction and it retracts nothing: no defect is added, none is
+withdrawn, no measurement moves, the verdict of record stays `FAILURE` and the ship decision of
+record stays `DO NOT SHIP`.*
+
+Two different pin defects were each published as "the fourth". THIS report calls the `retention_ppl`
+`[ppl, n]` defect **"A FOURTH"** (section *The three published defects this render routed around*),
+while `results/phase19_reference_set_correction.md` calls the |R| = 6 defect **"the FOURTH pin defect
+this phase"**. Each sentence is correct about its own document and they are wrong together: a reader
+reconciling the two miscounts, and there is no ordinal that identifies either defect unambiguously.
+
+**Five distinct pin defects are published in this phase. The canonical labels are LETTERS** — they
+extend the `A`/`B`/`C` that `results/phase19_calibration_correction.json` already carries as record
+keys, and letters cannot collide the way two "fourths" did:
+
+| label | defect | line in the CLOSED pin | first published in |
+| --- | --- | --- | --- |
+| **A** | `zero_results_have_nll` compares an ORDERED tuple against records serialised with `sort_keys=True`, so it reads False on KEY ORDER ALONE while every NLL is present | `:1562` vs `:2948` | `results/phase19_calibration_correction.json` `defects.A` |
+| **B** | `_calibration_rate()` reads `record["pre_erasure"]["per_fact"]`, i.e. Phase 18's candidate recall 0.8846153846153846, not the calibration arm's own rate | `:3850-3855` | `results/phase19_calibration_correction.json` `defects.B` |
+| **C** | `rows.update(per_fact_rows(...))` lets one (b) tier overwrite the other, and the pinned `report` subcommand SystemExits on the resulting rows | `:2922` | `results/phase19_calibration_correction.json` `defects.C` |
+| **D** | `_cmd_report` passes `retention_perplexity`'s `[ppl, n]` pair straight into the gate's scalar `retention_ppl=`, where `retention_ppl <= retention_cap` raises `TypeError` | `:3811` | `results/phase19_erasure_report.md` — the paragraph it calls **"A FOURTH"** |
+| **E** | `_selected_components` reads the TARGET's stopping rule on the calibration twin's 6 members while reading every BYSTANDER on 8, inside one call | `:3576` | `results/phase19_reference_set_correction.md` — the sentence it calls **"the FOURTH pin defect this phase"** |
+
+**Read every ordinal in THIS document as D.** The paragraph beginning *"A FOURTH, found by driving
+the path rather than by inspecting it"* publishes **D**. The ship decision's section 1 phrase
+*"all four published defects — **A**, **B**, **C** and the fourth"* means **A, B, C and D**, and that
+phrase UNDERCOUNTS the phase: those four are the four that block the pin's own `_cmd_report`, which
+is what section 2 enumerates, but the phase publishes **five**. The fifth is **E**, published in
+`results/phase19_reference_set_correction.md`, and it is absent from that enumeration because it
+sits in the `erase` subcommand — a path this render never called and which therefore cannot be one
+of the four ways the pinned report path fails.
+
+**Nothing in the ship decision changes.** The four independent ways the pin cannot reproduce this
+verdict are C, D, A and B, exactly as section 2 lists them and in that order; the single withheld
+claim is still that the verdict is mechanically reproducible by the pin alone; and the decision is
+still `DO NOT SHIP`, still final rather than a pause.
+
+**Why this is a continuation and not an in-place renumber.** Both "fourth" labels are PUBLISHED
+text, and one of them — section 1's enumeration — sits inside a continuation recorded by the operator
+and dated 2026-08-19. D3 fixes the correction path as a dated continuation BESIDE the original rather
+than an edit over it, which is the discipline every other correction in this phase took, and
+`assert_erasure_report_not_clobbered` refuses a re-render of a report carrying a recorded verdict
+with no force flag. Editing the bytes would also erase the evidence that the miscount ever existed,
+which is the record a future audit needs. `scripts/_addendum.append_addendum` could not do the
+writing here — it replaces EXACTLY ONE pending marker and this report's marker pair is already
+RECORDED x1 / PENDING x0, so it SystemExits by design. The append was therefore made directly and
+the three properties that helper proves were checked on the produced bytes instead: the prefix is
+byte-identical, `_verdict.recorded_verdict` is unchanged, and the marker pair is still
+RECORDED x1 / PENDING x0.

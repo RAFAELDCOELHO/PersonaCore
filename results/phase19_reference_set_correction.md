@@ -213,3 +213,54 @@ The RED leg ran against a COPY of the curve in a scratch tree with `scripts/` sy
 test module's `_ROOT` repointed at it. `results/phase19_collateral_curve.json` was read and never
 written: byte-identical before and after, re-checked in the same process
 (`True`).
+
+## Defect numbering — the canonical labels (dated continuation, 2026-08-19)
+
+This **EXTENDS the two continuations above rather than opening a third record** — there is still
+exactly one reference-set document in this phase, and this is it. It is a LABELLING correction and it
+retracts nothing: the |R| = 6 defect stands exactly as published, `k` = 78 stands, and every row of
+the retraction-status table above is unchanged.
+
+This document calls the |R| = 6 defect **"the FOURTH pin defect this phase"** (line 22, and again as
+"the fourth" in the retraction-status table and the paragraph below it).
+`results/phase19_erasure_report.md` independently calls the `retention_ppl` `[ppl, n]` defect
+**"A FOURTH"**. Each sentence is correct about its own document and they are wrong together: a reader
+reconciling the two miscounts, and no ordinal identifies either defect unambiguously.
+
+**Five distinct pin defects are published in this phase. The canonical labels are LETTERS** — they
+extend the `A`/`B`/`C` that `results/phase19_calibration_correction.json` already carries as record
+keys, and letters cannot collide the way two "fourths" did:
+
+| label | defect | line in the CLOSED pin | first published in |
+| --- | --- | --- | --- |
+| **A** | `zero_results_have_nll` compares an ORDERED tuple against records serialised with `sort_keys=True`, so it reads False on KEY ORDER ALONE while every NLL is present | `:1562` vs `:2948` | `results/phase19_calibration_correction.json` `defects.A` |
+| **B** | `_calibration_rate()` reads `record["pre_erasure"]["per_fact"]`, i.e. Phase 18's candidate recall 0.8846153846153846, not the calibration arm's own rate | `:3850-3855` | `results/phase19_calibration_correction.json` `defects.B` |
+| **C** | `rows.update(per_fact_rows(...))` lets one (b) tier overwrite the other, and the pinned `report` subcommand SystemExits on the resulting rows | `:2922` | `results/phase19_calibration_correction.json` `defects.C` |
+| **D** | `_cmd_report` passes `retention_perplexity`'s `[ppl, n]` pair straight into the gate's scalar `retention_ppl=`, where `retention_ppl <= retention_cap` raises `TypeError` | `:3811` | `results/phase19_erasure_report.md` — the paragraph it calls **"A FOURTH"** |
+| **E** | `_selected_components` reads the TARGET's stopping rule on the calibration twin's 6 members while reading every BYSTANDER on 8, inside one call | `:3576` | `results/phase19_reference_set_correction.md` — the sentence it calls **"the FOURTH pin defect this phase"** |
+
+**Read every ordinal in THIS document as E.** "This is the FOURTH pin defect this phase" publishes
+**E**; the retraction-status row "the fourth pin defect, as a defect in `_selected_components`" is
+**E**, still STANDS, still published and unfixed, still quantified at `k` 78 against 120; and "the
+checkpoint report presented the fourth defect without separating the pin's `erase` path from
+`target_ablate`" is **E** as well. The one claim withdrawn above — that the defective path
+contaminated the committed `k` — is unaffected by the relabelling, and nothing further is withdrawn
+here.
+
+**E is the phase's fifth defect and it is NOT one of the four that block the pinned report path.**
+`results/phase19_erasure_report.md`'s ship decision enumerates C, D, A and B as the four independent
+ways the pin's own `_cmd_report` cannot reproduce the verdict. E is absent from that list because it
+sits in `_selected_components`, the pin's `erase` subcommand, which neither 19-12 nor the render
+ever called. That enumeration is unchanged, the single withheld claim is unchanged, and the ship
+decision is still `DO NOT SHIP`.
+
+**Why this is a continuation and not an in-place renumber.** The labels being corrected are published
+text, and two of the three occurrences sit inside a dated addendum. D3 fixes the correction path as a
+dated continuation BESIDE the original rather than an edit over it — the same reason the |R| = 6
+defect itself was published rather than repaired, and the reason this document exists at all. Editing
+the bytes would also erase the evidence that the miscount ever existed, which is the record a future
+audit needs. The identical table is appended to `results/phase19_erasure_report.md`, so either
+document disambiguates all five defects on its own.
+
+`scripts/phase19_erasure.py` is untouched: sha256
+`c407246de3c470094ab0bdd868961b7b1c22529c5e00522fec67c3852cb6e303`, 15 commits.
