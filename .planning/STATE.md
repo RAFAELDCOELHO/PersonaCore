@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: complete
-stopped_at: Phase 19 CLOSED at 19-16 — the ship decision is recorded, DO NOT SHIP
-last_updated: "2026-08-19T21:42:00.000Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 19 was final phase)
+last_updated: 2026-08-19T21:44:20.874Z
 last_activity: "2026-08-19 -- 19-16 complete: the ship decision RECORDED (DO NOT SHIP) and Phase 19 CLOSED. Every measurement stands; the one withheld claim is mechanical reproducibility by the pin alone"
 progress:
   total_phases: 4
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-12)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** Phase 19 — selective-memory-erasure
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 19 (selective-memory-erasure) — COMPLETE
-Plan: 16 of 16
-Status: Phase 19 CLOSED — all 16 plans executed; the ship decision is recorded.
+Phase: 19
+Plan: Not started
+Status: Milestone complete
 
 **THE PHASE HAS ITS VERDICT: `FAILURE`**, its D3 condition-(c) diagnosis published BESIDE it, and
 its ship decision RECORDED by the operator on 2026-08-19: **DO NOT SHIP**.
@@ -250,7 +250,7 @@ states a stale denominator invariant (`corpus_len - n_windows`; the true value i
 is wrong, logged in `.planning/phases/19-selective-memory-erasure/deferred-items.md`.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase.
-Last activity: 2026-08-19 -- **19-16 COMPLETE AND PHASE 19 CLOSED. THE SHIP DECISION IS RECORDED:
+Last activity: 2026-08-19
 DO NOT SHIP.** (Appended a dated 2026-08-19 continuation through `append_ship_decision`, which
 flipped `ERASURE_SHIP_PENDING_LINE` -> `ERASURE_SHIP_RECORDED_LINE` only because the section carries
 a decision line from the closed set AND a date — measured after: PENDING x0, RECORDED x1. Report
@@ -329,6 +329,7 @@ fired on the success path; re-sweep retracted nothing; pin still 15 commits, 837
 | 13 | 4 | - | - |
 | 16 | 11 | - | - |
 | 17 | 11 | - | - |
+| 19 | 16 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 | Phase 12 P01 | 14min | 3 tasks | 3 files |
