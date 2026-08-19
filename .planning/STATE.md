@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: executing
-stopped_at: Blocked at 19-16-PLAN.md Task 3 — the ship-decision checkpoint, awaiting a human
-last_updated: "2026-08-19T20:34:41.946Z"
-last_activity: "2026-08-19 -- 19-16 tasks 1-2 executed (the (c) diagnosis published BESIDE the verdict, ship marker still PENDING); BLOCKED at the ship-decision checkpoint"
+status: complete
+stopped_at: Phase 19 CLOSED at 19-16 — the ship decision is recorded, DO NOT SHIP
+last_updated: "2026-08-19T21:42:00.000Z"
+last_activity: "2026-08-19 -- 19-16 complete: the ship decision RECORDED (DO NOT SHIP) and Phase 19 CLOSED. Every measurement stands; the one withheld claim is mechanical reproducibility by the pin alone"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 54
-  completed_plans: 53
-  percent: 75
+  completed_plans: 54
+  percent: 100
 ---
 
 # Project State
@@ -25,15 +25,38 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 
 ## Current Position
 
-Phase: 19 (selective-memory-erasure) — EXECUTING
+Phase: 19 (selective-memory-erasure) — COMPLETE
 Plan: 16 of 16
-Status: 19-16 IN PROGRESS, tasks 1-2 landed, **BLOCKED at Task 3 — the ship-decision checkpoint.**
-**THE PHASE HAS ITS VERDICT: `FAILURE`**, and now has its D3 condition-(c) diagnosis published
-BESIDE it. The phase is **NOT closed**: `ERASURE_SHIP_PENDING_LINE` still occurs exactly once, and
-`append_ship_decision` refuses to flip it without a DATED continuation carrying a line from the
-closed `ERASURE_SHIP_DECISIONS` = ("SHIP", "DO NOT SHIP"). Recording "closed" before a human writes
-one would be Phase 18's W2 — a report advertising a decision that does not exist. Next: **a human
-records the ship decision at the 19-16 Task 3 checkpoint.**
+Status: Phase 19 CLOSED — all 16 plans executed; the ship decision is recorded.
+
+**THE PHASE HAS ITS VERDICT: `FAILURE`**, its D3 condition-(c) diagnosis published BESIDE it, and
+its ship decision RECORDED by the operator on 2026-08-19: **DO NOT SHIP**.
+`ERASURE_SHIP_PENDING_LINE` now occurs **ZERO** times and `ERASURE_SHIP_RECORDED_LINE` exactly once
+— flipped by `append_ship_decision` only because a DATED continuation carrying a line from the
+closed `ERASURE_SHIP_DECISIONS` = ("SHIP", "DO NOT SHIP") was actually written, which is Phase 18's
+W2 closed rather than repeated.
+
+**THE PHASE IS CLOSED AND HONEST — NOT BLOCKED.** DO NOT SHIP is a **FINAL VERDICT on mechanical
+reproducibility**, not a pause awaiting further work, not a TODO, and not a gap for anyone to close
+later. **DO NOT REPAIR THE PIN TO FLIP IT.** The pin is CLOSED at 15 commits and D3 fixes the
+correction path as a dated continuation BESIDE the original; editing it after the numbers exist so
+the pinned path would return the verdict the hand-driven path already returned is precisely the move
+that would void the pre-registration ordering `tests/test_phase16_prereg.py` enforces against git's
+object graph — and with it every number in the report.
+
+**WHAT DO NOT SHIP WITHHOLDS — EXACTLY ONE CLAIM, AND IT IS THE SOLE REASON:** that this verdict is
+**MECHANICALLY REPRODUCIBLE BY THE PIN ALONE**. It is not. The verdict was reached on a HAND-DRIVEN
+path through the UNPINNED `scripts/phase19_run.py`, routing around the four published defects in
+`scripts/phase19_erasure.py`; the pin's own `_cmd_report` cannot produce it in four independent ways
+— **C** SystemExits on the committed rows, **the fourth** raises `TypeError` on
+`retention_perplexity`'s `[ppl, n]` pair, **A** short-circuits to INCONCLUSIVE on the order-only flag
+read, and **B** reads the superseded 0.2 floor instead of the governing `TARGET_FLOOR`.
+
+**NOTHING IS WITHDRAWN.** The `FAILURE` verdict, k = 78 of 288, the 77.6370113463966% destruction of
+the dialogue adaptation, the rank-vs-NLL **CO-HEADLINE** with its retroactive Phase 18 scope limit
+(readings paired with a generation number are unaffected), the M1/M2 bit-identical-rank comparison,
+and all four defects with their dated corrections **ALL STAND EXACTLY AS PUBLISHED**. The science
+shipped; the reproducibility claim did not.
 
 **THE COMMITTED `erasure_succeeded` WAS CALLED EXACTLY ONCE AND RETURNED `FAILURE`.** Read against
 the CORRECTED floor `0.09107873950450847` — not the pin's internal defect-B `0.2` — with the
@@ -45,10 +68,14 @@ Its three reasons, verbatim: **(a)** target upper bound 0.0911 over 27 questions
 adapter, so every capability table prints pre beside post. Published UNSOFTENED per
 `D8_PUBLICATION_POSTURE`, in the register Phase 18 shipped `LEAKAGE_DEMONSTRATED`.
 
-**`results/phase19_erasure_report.md`** — 353 lines, sha256 `21624251…`, one `## Verdict` section,
-ship-decision marker **PENDING** for 19-16. The pinned spine came out of `render_report` driven end
+**`results/phase19_erasure_report.md`** — **549 lines, sha256 `0f30b573…`**, one `## Verdict`
+section, ship-decision marker **RECORDED**. The pinned spine came out of `render_report` driven end
 to end on the REAL records; ten continuation sections are APPENDED after it because the closed
-renderer has no slot for them, under the same three produced-bytes proofs `_addendum.py` runs.
+renderer has no slot for them, under the same three produced-bytes proofs `_addendum.py` runs, and
+19-16 appended two more BESIDE the verdict: the dated (c) diagnosis (353 → 466 lines,
+`21624251…` → `3818ab53…`, 113 insertions and ZERO deletions) and the dated ship decision
+(466 → 549, `3818ab53…` → `0f30b573…`, 84 insertions and exactly ONE deletion — the replaced pending
+marker line, which is the append-only property proved on the diff rather than asserted).
 
 **ALL THREE FLOOR VALUES ARE NAMED IN THE REPORT so none is confused:** `TARGET_FLOOR`
 0.09107873950450847 (branch `reachability-min`, GOVERNS); `LITERAL_PHASE14_FLOOR` 0.2 (D2's other
@@ -212,19 +239,39 @@ read**); `checkpoints/phase19_erase_dialogue_floor_seed1337_adapter.pt` (1,352,9
 `checkpoints/phase19_cal_erased_adapter.pt` (`e3cb42b8…`) and
 `checkpoints/phase19_erase_calibration_adapter.pt` (`bc616c36…`), all unchanged.
 
-Carried forward to 19-16: the report must be **EXTENDED, never re-rendered** —
-`assert_erasure_report_not_clobbered` now has a recorded verdict to anchor on and there is no force
-flag, so the only recovery is deleting the file in a reviewed commit. `append_ship_decision` needs a
-DATED continuation carrying a line from `ERASURE_SHIP_DECISIONS` = `("SHIP", "DO NOT SHIP")`; a
-substring containing "ship" will not flip the marker. The (c) diagnosis is a dated continuation
-BESIDE the verdict and never in place of it — `23a830c` stays unamended.
+Carried forward to 19-16 and now DISCHARGED: the report was **EXTENDED, never re-rendered** — both
+19-16 continuations went through `_addendum.append_addendum`, insertions only apart from the one
+replaced marker line, with the `## Verdict` body byte-identical across each append.
+`append_ship_decision` got its DATED continuation carrying a line from `ERASURE_SHIP_DECISIONS`, so
+the marker flipped on a decision that actually exists. `23a830c` stays unamended at one commit.
 `src/personacore/evaluation/perplexity.py:11-13`
 states a stale denominator invariant (`corpus_len - n_windows`; the true value is `corpus_len - 1` =
 1,000,285 because the `[i : i+block+1]` slices share boundary tokens) — prose only, no measured number
 is wrong, logged in `.planning/phases/19-selective-memory-erasure/deferred-items.md`.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase.
-Last activity: 2026-08-19 -- 19-16 tasks 1-2 executed and BLOCKED at the ship-decision checkpoint
+Last activity: 2026-08-19 -- **19-16 COMPLETE AND PHASE 19 CLOSED. THE SHIP DECISION IS RECORDED:
+DO NOT SHIP.** (Appended a dated 2026-08-19 continuation through `append_ship_decision`, which
+flipped `ERASURE_SHIP_PENDING_LINE` -> `ERASURE_SHIP_RECORDED_LINE` only because the section carries
+a decision line from the closed set AND a date — measured after: PENDING x0, RECORDED x1. Report
+466 -> 549 lines, `3818ab53…` -> `0f30b573…`, **84 insertions and exactly ONE deletion, that deletion
+being the replaced marker line** — append-only proved on the diff. Verdict body byte-identical,
+`FAILURE` unsoftened. **THE WITHHELD CLAIM IS NAMED AS THE SOLE REASON:** the verdict is not
+MECHANICALLY REPRODUCIBLE BY THE PIN ALONE — reached on a hand-driven path through the UNPINNED
+`phase19_run.py`, and the pin's own `_cmd_report` cannot produce it four independent ways (C
+SystemExits, the fourth raises `TypeError`, A short-circuits to INCONCLUSIVE, B reads the superseded
+0.2 floor). **NOTHING WITHDRAWN** — FAILURE, k=78 of 288, 77.6370113463966% destroyed, the
+rank-vs-NLL CO-HEADLINE with its Phase 18 scope limit, the M1/M2 comparison and all four dated defect
+corrections STAND. This is a FINAL verdict, not a pause: nobody should repair the pin to flip it,
+because editing a CLOSED pin after the numbers exist voids the pre-registration ordering and every
+number with it. ERASE-01 discharged by artifact reference — it is a scoped BULLET at
+`REQUIREMENTS.md:165`, not a checkbox, and no checkbox was manufactured to tick. Fresh verification:
+845 passed / 1 skipped, ruff check + format clean over 170 files, `erasure_gate.py` still ONE commit
+`23a830c`, pin still 15 commits byte-identical at `c407246d…`. `gsd-sdk query state.update` was NOT
+used on this file — it corrupted it twice this phase on the same multi-line-field assumption, so
+these edits were made by hand.)
+
+Prior activity: 2026-08-19 -- 19-16 tasks 1-2 executed
 (the D3 condition-(c) diagnosis published BESIDE the verdict, appended through the existing
 `_addendum.append_addendum` with the Phase 19 marker pair passed as an IDENTITY replacement so the
 ship marker stays PENDING for a human — Phase 18's W2 was an unconditional flip. Report 353 -> 466
@@ -565,9 +612,15 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 
 ### Pending Todos
 
-- Phase 19 needs `/gsd-plan-phase 19 --research-phase`. Two ordering constraints carry real risk:
-  (a)'s target floor comes from a **blind calibration on a fact set disjoint from the target** and
-  must be pinned **before** the target is ever scored, and the mechanism is genuinely unchosen.
+- ~~Phase 19 needs `/gsd-plan-phase 19 --research-phase`.~~ **DONE** — planned 2026-08-17 (16 plans,
+  14 waves) and fully executed 2026-08-19. Both ordering constraints held: the target floor was
+  pinned from a blind calibration on a disjoint fact set BEFORE the target was scored, and the
+  mechanism was chosen inside the phase rather than assumed by the pre-registration.
+
+- **None open. All four v3.0 phases are complete.** Phase 19 closed 2026-08-19 with its verdict
+  (`FAILURE`) published and its ship decision recorded (**DO NOT SHIP**, on mechanical
+  reproducibility only). Whether to close the v3.0 MILESTONE is a separate act and is deliberately
+  left to a milestone-close workflow — this executor closed a phase, not a milestone.
 
 ### Blockers/Concerns
 
@@ -607,9 +660,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-19T20:34:41.946Z
-Stopped at: Blocked at 19-16-PLAN.md Task 3 — the ship-decision checkpoint, awaiting a human
-Resume file: .planning/phases/19-selective-memory-erasure/19-16-PLAN.md
+Last session: 2026-08-19T21:42:00.000Z
+Stopped at: Phase 19 CLOSED — 19-16 complete, the ship decision recorded (DO NOT SHIP). Nothing blocked.
+Resume file: None
 
 ## Operator Next Steps
 
