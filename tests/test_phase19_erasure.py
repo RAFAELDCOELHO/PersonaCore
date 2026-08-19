@@ -3893,3 +3893,56 @@ def test_measured_floor_is_reachable():
         "sweep in assert_erasure_floor_reachable is green, so a failure here means the locked "
         "constant is not what the rule returned"
     )
+
+
+def test_the_committed_target_sweep_was_read_on_the_phase18_reference_set():
+    """The TRIPWIRE for the fourth pin defect — published at 19-12, corrected at 19-12b.
+
+    ``_selected_components`` passes ``reference_set_for_calibration`` for EVERY fact including the
+    taught target, which on ``pet_name`` strips the two ``CALIBRATION_POOL`` siblings and hands the
+    stopping rule a SIX-member set where ``measure_exposure`` and the whole Phase 18 baseline use
+    EIGHT. ``ABLATION_STOP_RULE`` stops at "no longer at RANK 1 in its same-slot reference set", so
+    the two sets stop at different prefixes and MEASURABLY do: 78 on eight members, 120 on six
+    (``results/phase19_reference_set_resweep.json``, both sweeps run through the pinned
+    ``select_ablation_prefix`` on the same adapter in one process).
+
+    The committed curve was produced on eight, and this asserts that rather than trusting the
+    artifact's own ``reference_set_source`` string — the size is re-derived from
+    ``phase18_extraction.reference_set_for`` on every run, so a later driver that reverts to the
+    pin's `erase` path, or a re-measurement quietly taken on the twin, reddens here instead of
+    silently repricing every downstream 19-12 number against a different competitor set.
+
+    NON-VACUOUS by construction: the two sets are asserted to be different sizes first, so this
+    cannot pass by the twin and the reference set having converged.
+    """
+    extraction = _load("phase18_extraction", "scripts/phase18_extraction.py")
+    facts = _load("phase14_factset", "scripts/phase14_factset.py")
+    curve = json.loads(
+        (_ROOT / "results" / "phase19_collateral_curve.json").read_text(encoding="utf-8")
+    )
+    target = {fact.slot: fact for fact in facts.LOCKED_FACTS}[erasure.TARGET_SLOT]
+    published = extraction.reference_set_for(erasure.TARGET_SLOT)
+    twin = erasure.reference_set_for_calibration(erasure.TARGET_SLOT, target)
+
+    assert len(published) != len(twin), (
+        f"reference_set_for and its calibration twin both assemble {len(published)} members on "
+        f"{erasure.TARGET_SLOT!r}, so this guard cannot tell the two sweeps apart and would pass "
+        "on either. The defect it watches is that they DIFFER — if they no longer do, this test "
+        "needs rewriting rather than deleting"
+    )
+    assert curve["reference_set_size"] == len(published), (
+        f"the committed collateral curve was swept against a {curve['reference_set_size']}-member "
+        f"reference set, but phase18_extraction.reference_set_for({erasure.TARGET_SLOT!r}) — the "
+        f"set measure_exposure and every paired Phase 18 exposure rank use — has {len(published)}. "
+        f"The calibration twin has {len(twin)} and stops at k = 120 instead of k = 78, so a curve "
+        "read on it is a different event from the one the arm record's exposure block publishes"
+    )
+    assert curve["calibration_twin_reference_set_size"] == len(twin), (
+        f"the curve records the twin at {curve['calibration_twin_reference_set_size']} members but "
+        f"it assembles {len(twin)} — the recorded counterfactual no longer describes the code, and "
+        "the published defect would be documenting a path that does not exist"
+    )
+    assert len(curve["ordered_prefix"]) == curve["k"], (
+        f"the curve records k = {curve['k']} but carries {len(curve['ordered_prefix'])} addresses "
+        "— k is the claim about how much of dW was zeroed and the address list is what was zeroed"
+    )

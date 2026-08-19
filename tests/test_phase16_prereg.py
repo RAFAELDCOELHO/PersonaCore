@@ -113,10 +113,18 @@ PHASE19_FLOOR_ARTIFACT = "scripts/phase19_floor.py"
 # rather than left out on that reasoning: this tuple's own docstring says "every record produced
 # by erasing, scoring or reporting on the TAUGHT target fact", and a target rate a reader can find
 # in a file no guard watches is exactly the gap the ancestry guard exists to close.
+# `results/phase19_reference_set_resweep.json` is listed on the same reasoning as
+# `results/phase19_target_scores.json` above. It introduces no new evidence — it re-runs the pinned
+# `select_ablation_prefix` on the same production adapter — but it publishes a TARGET `k` (78 on
+# `reference_set_for`, 120 on the calibration twin), and a target number a reader can find in a
+# file no guard watches is the gap this guard exists to close. Its earliest add is POST-floor, as
+# every target artifact's must be, so it satisfies the ancestry direction below rather than the
+# reversed one the pre-floor exclusions carry.
 PHASE19_TARGET_ARTIFACT_GLOBS = (
     "results/phase19_arm_*",
     "results/phase19_collateral_curve.json",
     "results/phase19_target_scores.json",
+    "results/phase19_reference_set_resweep.json",
     "results/phase19_representational.json",
     "results/phase19_erasure_report.md",
 )

@@ -144,6 +144,11 @@ TARGET_CURVE_PATH = _REPO_ROOT / "results" / "phase19_collateral_curve.json"
 TARGET_ERASED_ADAPTER = _REPO_ROOT / "checkpoints" / "phase19_m1_erased_adapter.pt"
 TARGET_SCORES_PATH = _REPO_ROOT / "results" / "phase19_target_scores.json"
 
+# The reference-set re-measurement asked for at the 19-12 checkpoint. A NEW name rather than a
+# rewrite of the curve above: the committed artifact is evidence, and a re-measurement that
+# overwrites the thing it is checking cannot be checked against it afterwards.
+RESWEEP_PATH = _REPO_ROOT / "results" / "phase19_reference_set_resweep.json"
+
 
 def _sha256(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
@@ -974,6 +979,221 @@ def target_ablate():
     print(f"[phase19_run] wrote {TARGET_CURVE_PATH} in {wall / 60:.1f} min")
 
 
+def _census(addresses):
+    """Per-layer and per-projection counts of an ablation prefix — the DISPERSION read.
+
+    The one number the collateral curve does not carry in reduced form, and the one the
+    reference-set question turns on: two sweeps that stop at different ``k`` can still be the same
+    mechanism if their prefixes disperse the same way, and a prefix that CONCENTRATES on one layer
+    or one projection is a structurally different finding from one that does not.
+    """
+    import collections
+
+    layers = collections.Counter(layer for layer, _projection, _j in addresses)
+    projections = collections.Counter(projection for _layer, projection, _j in addresses)
+    return {
+        "n": len(addresses),
+        "by_layer": {str(layer): layers[layer] for layer in sorted(layers)},
+        "by_layer_ordered": [layers[layer] for layer in sorted(layers)],
+        "by_projection": dict(projections.most_common()),
+        "max_layer_share": max(layers.values()) / len(addresses),
+        "max_projection_share": max(projections.values()) / len(addresses),
+    }
+
+
+def target_resweep():
+    """THE REFERENCE-SET RE-MEASUREMENT — ``select_ablation_prefix`` run TWICE, one set each.
+
+    Called after the 19-12 checkpoint, where the operator asked whether ``k = 78`` had been swept
+    against ``reference_set_for_calibration`` (|R| = 6) rather than ``reference_set_for`` (|R| = 8),
+    which would have made every downstream 19-12 number rest on a contaminated selection. That
+    question is answered here by MEASUREMENT rather than by reading the committed artifact's own
+    self-report: both sweeps are run, both ``k`` are published, and the R8 sweep's prefix is
+    compared address-for-address against the committed ``results/phase19_collateral_curve.json``.
+
+    Structural fact this run also proves rather than argues, and it bounds what the answer CAN be:
+    ``select_ablation_prefix`` builds ``ordered`` from ``value_span_nll_mean`` on the TARGET's own
+    value alone (``phase19_erasure.py:2482-2487``) and never reads ``references`` in that loop.
+    ``references`` enters at ``_rank_of`` — the stopping condition and the curve rows — and nowhere
+    else. So the reference set can move ``k`` but CANNOT move the ordering, and the dispersion of a
+    prefix is therefore a function of ``k`` alone. Asserted below across the two calls.
+
+    Exports NO adapter and runs NO bit-identity control ON PURPOSE. The operator asked for the
+    SELECTION first, before any re-scoring spend, and ``checkpoints/phase19_m1_erased_adapter.pt``
+    is committed evidence that must not be overwritten to find out whether it needs regenerating.
+    """
+    import phase14_factset as factset
+    import phase14_recall as recall
+    import phase18_extraction as extraction
+    import torch
+
+    from personacore.preflight import preflight_device
+    from personacore.provenance import git_sha
+
+    _refuse(RESWEEP_PATH)
+
+    target = {f.slot: f for f in factset.LOCKED_FACTS}[pin.TARGET_SLOT]
+    adapter_path = recall.ADAPTER_PATH
+    adapter_in_sha = _sha256(adapter_path)
+    device = preflight_device(strict=True)["device"]
+    model, _cfg, tok, forbid, artifact = recall.load_adapted_model(device, adapter_path)
+
+    taught = {f.slot: f.value for f in factset.LOCKED_FACTS}
+    collateral = {
+        slot: (taught[slot], extraction.reference_set_for(slot)) for slot in extraction.CORE_SLOTS
+    }
+    sets = {
+        "reference_set_for": extraction.reference_set_for(pin.TARGET_SLOT),
+        "reference_set_for_calibration": pin.reference_set_for_calibration(pin.TARGET_SLOT, target),
+    }
+    for name, references in sets.items():
+        print(
+            f"[phase19_run] {name}({pin.TARGET_SLOT!r}): |R| = {len(references)} {list(references)}"
+        )
+
+    runs = {}
+    started = time.time()
+    for name, references in sets.items():
+        print(f"\n[phase19_run] ===== sweeping against {name} (|R| = {len(references)}) =====")
+        began = time.time()
+        chosen = pin.select_ablation_prefix(
+            model,
+            tok,
+            device,
+            artifact,
+            slot=target.slot,
+            value=target.value,
+            references=references,
+            collateral=collateral,
+            dialogue_ppl=lambda: pin.dialogue_ppl_pair(model, device, forbid),
+        )
+        selected = list(chosen["ordered"][: chosen["k"]])
+        print(
+            f"[phase19_run] {name}: k = {chosen['k']} of {chosen['cap']} "
+            f"(stopped = {chosen['stopped']}), intact_nll = {chosen['intact_nll']!r}"
+        )
+        for row in chosen["curve"]:
+            cells = " ".join(
+                f"{slot}={cell['rank']}/{cell['ans1_mean_nll']:.4f}"
+                for slot, cell in sorted(row["slots"].items())
+            )
+            print(
+                f"[phase19_run] prefix {row['prefix']:>3}: target={row['target_rank']}/"
+                f"{row['target_ans1_mean_nll']:.4f} dlgON={row['dialogue_ppl']['adapter_on']:.4f} "
+                f"dlgOFF={row['dialogue_ppl']['adapter_off']:.4f} | {cells}"
+            )
+        runs[name] = {
+            "reference_set": list(references),
+            "reference_set_size": len(references),
+            "k": chosen["k"],
+            "stopped": chosen["stopped"],
+            "cap": chosen["cap"],
+            "intact_nll": chosen["intact_nll"],
+            "checkpoints": list(chosen["curve"]),
+            "ordered_prefix": [list(address) for address in selected],
+            "full_ordering": [list(address) for address in chosen["ordered"]],
+            "census": _census(selected),
+            "wall_clock_min": (time.time() - began) / 60,
+        }
+
+    # THE ORDERING INVARIANT, proved on the two runs rather than read off the source. If this ever
+    # failed, `k` and the dispersion would be independently variable and the comparison below would
+    # be between two different mechanisms rather than two stopping points on one.
+    orderings = {name: run["full_ordering"] for name, run in runs.items()}
+    a, b = orderings.values()
+    if a != b:
+        raise SystemExit(
+            "[phase19_run] the two sweeps produced DIFFERENT component orderings. "
+            "`select_ablation_prefix` builds `ordered` from the target's own value NLL and never "
+            "reads `references` in that loop, so this cannot happen unless the model drifted "
+            "between calls — every number below would be uninterpretable. BLOCKER"
+        )
+
+    # THE REPLICATION, against the committed artifact the operator put under suspicion.
+    committed = json.loads(TARGET_CURVE_PATH.read_text(encoding="utf-8"))
+    r8 = runs["reference_set_for"]
+    r6 = runs["reference_set_for_calibration"]
+    replication = {
+        "committed_artifact": TARGET_CURVE_PATH.name,
+        "committed_artifact_sha256": _sha256(TARGET_CURVE_PATH),
+        "committed_k": committed["k"],
+        "committed_reference_set_size_self_reported": committed.get("reference_set_size"),
+        "committed_stopped": committed["stopped"],
+        "committed_intact_nll": committed["intact_nll"],
+        "remeasured_k_under_reference_set_for": r8["k"],
+        "remeasured_k_under_calibration_twin": r6["k"],
+        "k_unchanged_under_reference_set_for": r8["k"] == committed["k"],
+        "prefix_identical_to_committed": r8["ordered_prefix"] == committed["ordered_prefix"],
+        "intact_nll_identical_to_committed": r8["intact_nll"] == committed["intact_nll"],
+        "census_identical_to_committed": r8["census"]
+        == _census([tuple(address) for address in committed["ordered_prefix"]]),
+        "committed_census": _census([tuple(a) for a in committed["ordered_prefix"]]),
+        "twin_would_have_given_k": r6["k"],
+        "k_delta_twin_minus_reference": r6["k"] - r8["k"],
+        "twin_prefix_is_a_prefix_of_reference_ordering": (
+            r6["ordered_prefix"] == r8["full_ordering"][: r6["k"]]
+        ),
+    }
+
+    adapter_in_sha_after = _sha256(adapter_path)
+    if adapter_in_sha_after != adapter_in_sha:
+        raise SystemExit(
+            f"[phase19_run] {adapter_path} changed during this run ({adapter_in_sha} -> "
+            f"{adapter_in_sha_after}). It is the PRODUCTION taught adapter and 19-13 consumes it"
+        )
+
+    record = {
+        "question": (
+            "was the committed k = 78 selection swept against reference_set_for (|R| = 8), the set "
+            "measure_exposure and the whole Phase 18 baseline use, or against "
+            "reference_set_for_calibration (|R| = 6)? Both are run here and both are published."
+        ),
+        "fact_id": target.id,
+        "slot": target.slot,
+        "runs": runs,
+        "replication": replication,
+        "ordering_is_reference_set_invariant": True,
+        "ordering_invariance_reason": (
+            "select_ablation_prefix builds `ordered` from value_span_nll_mean on the target's own "
+            "value (phase19_erasure.py:2482-2487) and never reads `references` there; `references` "
+            "enters only at _rank_of, i.e. the stopping condition and the curve rows. Proved above "
+            "by comparing the two runs' full 288-address orderings, not asserted from the source."
+        ),
+        "exports_no_adapter": (
+            "deliberate — the operator asked for the SELECTION before any re-scoring spend, and "
+            "checkpoints/phase19_m1_erased_adapter.pt is committed evidence that is not "
+            "overwritten to discover whether it needs regenerating"
+        ),
+        "mechanism": pin.MECHANISM_ID,
+        "adapter_in": str(adapter_path),
+        "adapter_in_sha256": adapter_in_sha,
+        "adapter_in_unchanged_after_run": True,
+        "wall_clock_min": (time.time() - started) / 60,
+        "device": str(device),
+        "torch": torch.__version__,
+        "git_sha": git_sha(),
+        "driver": "scripts/phase19_run.py target-resweep (UNPINNED)",
+    }
+    RESWEEP_PATH.write_text(
+        json.dumps(record, indent=pin.JSON_INDENT, sort_keys=True), encoding="utf-8"
+    )
+
+    print()
+    print("[phase19_run] ===== THE ANSWER =====")
+    print(f"    committed k                          = {committed['k']}")
+    print(f"    k under reference_set_for   (|R|= 8) = {r8['k']}")
+    print(f"    k under calibration twin    (|R|= 6) = {r6['k']}")
+    print(
+        f"    prefix identical to committed        = {replication['prefix_identical_to_committed']}"
+    )
+    for name, run in runs.items():
+        c = run["census"]
+        print(f"    {name} (|R|={run['reference_set_size']}) k={run['k']}")
+        print(f"        by layer      {c['by_layer']}")
+        print(f"        by projection {c['by_projection']}")
+    print(f"[phase19_run] wrote {RESWEEP_PATH}")
+
+
 def _order_normalised(arm_record):
     """A copy of ``arm_record`` whose exposure entries are in ``EXPOSURE_RECORD_KEYS`` ORDER.
 
@@ -1276,6 +1496,7 @@ _TABLE = {
     "nontarget-block": nontarget_block,
     "retention": retention,
     "target-ablate": target_ablate,
+    "target-resweep": target_resweep,
     "target-score": target_score,
     "target-soft": target_soft,
 }

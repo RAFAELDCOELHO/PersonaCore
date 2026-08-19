@@ -1,0 +1,4743 @@
+{
+  "adapter_in": "/Users/juliorcoelho/PersonaCore/checkpoints/persona_adapter.pt",
+  "adapter_in_sha256": "226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb",
+  "adapter_in_unchanged_after_run": true,
+  "device": "mps",
+  "driver": "scripts/phase19_run.py target-resweep (UNPINNED)",
+  "exports_no_adapter": "deliberate \u2014 the operator asked for the SELECTION before any re-scoring spend, and checkpoints/phase19_m1_erased_adapter.pt is committed evidence that is not overwritten to discover whether it needs regenerating",
+  "fact_id": "cand_dog_zorp",
+  "git_sha": "1b8e50bb3fc4ebfa18b8881a8bcab451ae521193",
+  "mechanism": "M1-rank1-component-ablation",
+  "ordering_invariance_reason": "select_ablation_prefix builds `ordered` from value_span_nll_mean on the target's own value (phase19_erasure.py:2482-2487) and never reads `references` there; `references` enters only at _rank_of, i.e. the stopping condition and the curve rows. Proved above by comparing the two runs' full 288-address orderings, not asserted from the source.",
+  "ordering_is_reference_set_invariant": true,
+  "question": "was the committed k = 78 selection swept against reference_set_for (|R| = 8), the set measure_exposure and the whole Phase 18 baseline use, or against reference_set_for_calibration (|R| = 6)? Both are run here and both are published.",
+  "replication": {
+    "census_identical_to_committed": true,
+    "committed_artifact": "phase19_collateral_curve.json",
+    "committed_artifact_sha256": "e27d64efd005b206dbea805fc6c6623a1398af985370ece7286a4fd2caac0ea7",
+    "committed_census": {
+      "by_layer": {
+        "0": 18,
+        "1": 12,
+        "2": 12,
+        "3": 17,
+        "4": 10,
+        "5": 9
+      },
+      "by_layer_ordered": [
+        18,
+        12,
+        12,
+        17,
+        10,
+        9
+      ],
+      "by_projection": {
+        "c_proj": 13,
+        "fc_in": 35,
+        "fc_out": 17,
+        "k_proj": 2,
+        "q_proj": 1,
+        "v_proj": 10
+      },
+      "max_layer_share": 0.23076923076923078,
+      "max_projection_share": 0.44871794871794873,
+      "n": 78
+    },
+    "committed_intact_nll": 0.13365373015403748,
+    "committed_k": 78,
+    "committed_reference_set_size_self_reported": 8,
+    "committed_stopped": true,
+    "intact_nll_identical_to_committed": true,
+    "k_delta_twin_minus_reference": 42,
+    "k_unchanged_under_reference_set_for": true,
+    "prefix_identical_to_committed": true,
+    "remeasured_k_under_calibration_twin": 120,
+    "remeasured_k_under_reference_set_for": 78,
+    "twin_prefix_is_a_prefix_of_reference_ordering": true,
+    "twin_would_have_given_k": 120
+  },
+  "runs": {
+    "reference_set_for": {
+      "cap": 288,
+      "census": {
+        "by_layer": {
+          "0": 18,
+          "1": 12,
+          "2": 12,
+          "3": 17,
+          "4": 10,
+          "5": 9
+        },
+        "by_layer_ordered": [
+          18,
+          12,
+          12,
+          17,
+          10,
+          9
+        ],
+        "by_projection": {
+          "c_proj": 13,
+          "fc_in": 35,
+          "fc_out": 17,
+          "k_proj": 2,
+          "q_proj": 1,
+          "v_proj": 10
+        },
+        "max_layer_share": 0.23076923076923078,
+        "max_projection_share": 0.44871794871794873,
+        "n": 78
+      },
+      "checkpoints": [
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.805430270942154,
+            "n_targets": 270203
+          },
+          "prefix": 1,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.297670602798462,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.22570690512657166,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 3.1692564487457275,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.1505073308944702,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 0.43705955147743225,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 0.16574928164482117,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 2.4606475830078125,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.2608422338962555,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 0.16574928164482117,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.745837352665804,
+            "n_targets": 270203
+          },
+          "prefix": 2,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.314290165901184,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.21041469275951385,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 3.2387537956237793,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.1706087589263916,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 0.4324869215488434,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 0.20035606622695923,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 2.5287609100341797,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.26417726278305054,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 0.20035606622695923,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.6466841957957215,
+            "n_targets": 270203
+          },
+          "prefix": 4,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.3602930307388306,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.2349104881286621,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 3.47086501121521,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.1926816701889038,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 0.5286043882369995,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 0.30370134115219116,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 2.5481178760528564,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.27817803621292114,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 0.30370134115219116,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.51838442952216,
+            "n_targets": 270203
+          },
+          "prefix": 8,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.4283742904663086,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.2840718626976013,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 3.707454204559326,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.257467269897461,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 0.780152440071106,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 0.4921519160270691,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 2.9647789001464844,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.35777321457862854,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 0.4921519160270691,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.307120271856316,
+            "n_targets": 270203
+          },
+          "prefix": 16,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.5613740682601929,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.4658830761909485,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 4.095652103424072,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.4082632064819336,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 1.1123952865600586,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 1.135831356048584,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 3.3190841674804688,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.6098215579986572,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 1.135831356048584,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.09176831898318,
+            "n_targets": 270203
+          },
+          "prefix": 32,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.7050918340682983,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.7392634153366089,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 4.489480972290039,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.6820329427719116,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 1.7987492084503174,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 2.2271080017089844,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 3.8008155822753906,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 1.1693369150161743,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 2.2271080017089844,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 4.920568428792842,
+            "n_targets": 270203
+          },
+          "prefix": 64,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.9145342111587524,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 1.6505779027938843,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 4.980170726776123,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.9029037952423096,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 2.873643398284912,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 3.652377128601074,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 4.4556708335876465,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 1.8354833126068115,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 3.652377128601074,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 4.851119149910443,
+            "n_targets": 270203
+          },
+          "prefix": 78,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 2.0874438285827637,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 1.9792289733886719,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 5.124383449554443,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 2.0123889446258545,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 3.417057514190674,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 4.109549522399902,
+              "rank": 2
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 4.726539611816406,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 1.9356025457382202,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 4.109549522399902,
+          "target_rank": 2
+        }
+      ],
+      "full_ordering": [
+        [
+          3,
+          "fc_in",
+          1
+        ],
+        [
+          1,
+          "fc_in",
+          7
+        ],
+        [
+          1,
+          "fc_in",
+          6
+        ],
+        [
+          4,
+          "fc_in",
+          4
+        ],
+        [
+          1,
+          "fc_in",
+          2
+        ],
+        [
+          0,
+          "fc_in",
+          6
+        ],
+        [
+          4,
+          "fc_in",
+          7
+        ],
+        [
+          0,
+          "fc_in",
+          2
+        ],
+        [
+          0,
+          "c_proj",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          7
+        ],
+        [
+          2,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_in",
+          2
+        ],
+        [
+          1,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          7
+        ],
+        [
+          1,
+          "fc_in",
+          1
+        ],
+        [
+          0,
+          "fc_in",
+          0
+        ],
+        [
+          4,
+          "fc_out",
+          5
+        ],
+        [
+          1,
+          "fc_out",
+          6
+        ],
+        [
+          3,
+          "v_proj",
+          7
+        ],
+        [
+          0,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          7
+        ],
+        [
+          3,
+          "v_proj",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          4
+        ],
+        [
+          4,
+          "fc_in",
+          6
+        ],
+        [
+          5,
+          "fc_out",
+          5
+        ],
+        [
+          3,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          4
+        ],
+        [
+          3,
+          "fc_in",
+          3
+        ],
+        [
+          3,
+          "v_proj",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          1
+        ],
+        [
+          1,
+          "fc_in",
+          4
+        ],
+        [
+          5,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "v_proj",
+          7
+        ],
+        [
+          0,
+          "fc_out",
+          7
+        ],
+        [
+          0,
+          "fc_in",
+          3
+        ],
+        [
+          0,
+          "fc_in",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          1
+        ],
+        [
+          0,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_in",
+          0
+        ],
+        [
+          2,
+          "v_proj",
+          6
+        ],
+        [
+          3,
+          "v_proj",
+          2
+        ],
+        [
+          2,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "c_proj",
+          5
+        ],
+        [
+          4,
+          "c_proj",
+          1
+        ],
+        [
+          3,
+          "c_proj",
+          5
+        ],
+        [
+          2,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          2
+        ],
+        [
+          4,
+          "fc_in",
+          2
+        ],
+        [
+          3,
+          "q_proj",
+          2
+        ],
+        [
+          2,
+          "c_proj",
+          0
+        ],
+        [
+          1,
+          "c_proj",
+          6
+        ],
+        [
+          0,
+          "fc_out",
+          5
+        ],
+        [
+          2,
+          "fc_out",
+          7
+        ],
+        [
+          4,
+          "c_proj",
+          0
+        ],
+        [
+          2,
+          "v_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_out",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          3
+        ],
+        [
+          4,
+          "c_proj",
+          6
+        ],
+        [
+          2,
+          "fc_out",
+          5
+        ],
+        [
+          2,
+          "c_proj",
+          3
+        ],
+        [
+          3,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          6
+        ],
+        [
+          0,
+          "fc_out",
+          1
+        ],
+        [
+          3,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          5
+        ],
+        [
+          0,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          7
+        ],
+        [
+          0,
+          "k_proj",
+          5
+        ],
+        [
+          0,
+          "k_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          0
+        ],
+        [
+          0,
+          "k_proj",
+          4
+        ],
+        [
+          0,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "v_proj",
+          1
+        ],
+        [
+          1,
+          "q_proj",
+          2
+        ],
+        [
+          2,
+          "fc_in",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          6
+        ],
+        [
+          3,
+          "q_proj",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          5
+        ],
+        [
+          1,
+          "c_proj",
+          7
+        ],
+        [
+          4,
+          "fc_out",
+          6
+        ],
+        [
+          1,
+          "fc_out",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          4
+        ],
+        [
+          1,
+          "v_proj",
+          7
+        ],
+        [
+          3,
+          "c_proj",
+          3
+        ],
+        [
+          1,
+          "c_proj",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          4
+        ],
+        [
+          0,
+          "fc_out",
+          0
+        ],
+        [
+          0,
+          "c_proj",
+          6
+        ],
+        [
+          1,
+          "fc_out",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          7
+        ],
+        [
+          3,
+          "v_proj",
+          5
+        ],
+        [
+          1,
+          "v_proj",
+          6
+        ],
+        [
+          1,
+          "c_proj",
+          2
+        ],
+        [
+          4,
+          "c_proj",
+          5
+        ],
+        [
+          0,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "k_proj",
+          6
+        ],
+        [
+          1,
+          "q_proj",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          6
+        ],
+        [
+          1,
+          "q_proj",
+          1
+        ],
+        [
+          1,
+          "v_proj",
+          1
+        ],
+        [
+          2,
+          "v_proj",
+          4
+        ],
+        [
+          1,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "c_proj",
+          1
+        ],
+        [
+          1,
+          "q_proj",
+          6
+        ],
+        [
+          3,
+          "k_proj",
+          5
+        ],
+        [
+          1,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          6
+        ],
+        [
+          4,
+          "q_proj",
+          3
+        ],
+        [
+          1,
+          "q_proj",
+          4
+        ],
+        [
+          2,
+          "v_proj",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "v_proj",
+          0
+        ],
+        [
+          2,
+          "k_proj",
+          0
+        ],
+        [
+          0,
+          "k_proj",
+          0
+        ],
+        [
+          1,
+          "q_proj",
+          3
+        ],
+        [
+          1,
+          "k_proj",
+          0
+        ],
+        [
+          3,
+          "c_proj",
+          1
+        ],
+        [
+          4,
+          "q_proj",
+          5
+        ],
+        [
+          2,
+          "fc_out",
+          0
+        ],
+        [
+          5,
+          "k_proj",
+          4
+        ],
+        [
+          3,
+          "fc_out",
+          0
+        ],
+        [
+          3,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          1
+        ],
+        [
+          0,
+          "q_proj",
+          2
+        ],
+        [
+          1,
+          "c_proj",
+          5
+        ],
+        [
+          0,
+          "k_proj",
+          7
+        ],
+        [
+          3,
+          "k_proj",
+          4
+        ],
+        [
+          5,
+          "q_proj",
+          2
+        ],
+        [
+          5,
+          "k_proj",
+          5
+        ],
+        [
+          0,
+          "k_proj",
+          6
+        ],
+        [
+          0,
+          "c_proj",
+          2
+        ],
+        [
+          1,
+          "v_proj",
+          3
+        ],
+        [
+          3,
+          "v_proj",
+          4
+        ],
+        [
+          2,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "fc_out",
+          1
+        ],
+        [
+          0,
+          "v_proj",
+          1
+        ],
+        [
+          5,
+          "v_proj",
+          7
+        ],
+        [
+          2,
+          "k_proj",
+          2
+        ],
+        [
+          2,
+          "v_proj",
+          5
+        ],
+        [
+          3,
+          "q_proj",
+          7
+        ],
+        [
+          4,
+          "k_proj",
+          0
+        ],
+        [
+          0,
+          "q_proj",
+          3
+        ],
+        [
+          1,
+          "q_proj",
+          0
+        ],
+        [
+          3,
+          "k_proj",
+          0
+        ],
+        [
+          5,
+          "q_proj",
+          3
+        ],
+        [
+          5,
+          "q_proj",
+          4
+        ],
+        [
+          4,
+          "q_proj",
+          7
+        ],
+        [
+          3,
+          "fc_in",
+          4
+        ],
+        [
+          5,
+          "q_proj",
+          7
+        ],
+        [
+          5,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "q_proj",
+          0
+        ],
+        [
+          2,
+          "q_proj",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          2
+        ],
+        [
+          0,
+          "q_proj",
+          7
+        ],
+        [
+          3,
+          "k_proj",
+          3
+        ],
+        [
+          5,
+          "k_proj",
+          1
+        ],
+        [
+          1,
+          "k_proj",
+          1
+        ],
+        [
+          3,
+          "k_proj",
+          1
+        ],
+        [
+          1,
+          "k_proj",
+          7
+        ],
+        [
+          5,
+          "k_proj",
+          2
+        ],
+        [
+          4,
+          "q_proj",
+          2
+        ],
+        [
+          5,
+          "k_proj",
+          7
+        ],
+        [
+          2,
+          "k_proj",
+          1
+        ],
+        [
+          2,
+          "q_proj",
+          3
+        ],
+        [
+          5,
+          "q_proj",
+          1
+        ],
+        [
+          1,
+          "k_proj",
+          2
+        ],
+        [
+          5,
+          "q_proj",
+          0
+        ],
+        [
+          5,
+          "q_proj",
+          6
+        ],
+        [
+          4,
+          "v_proj",
+          5
+        ],
+        [
+          1,
+          "k_proj",
+          4
+        ],
+        [
+          2,
+          "c_proj",
+          2
+        ],
+        [
+          2,
+          "k_proj",
+          6
+        ],
+        [
+          3,
+          "q_proj",
+          0
+        ],
+        [
+          4,
+          "k_proj",
+          3
+        ],
+        [
+          1,
+          "q_proj",
+          5
+        ],
+        [
+          0,
+          "q_proj",
+          0
+        ],
+        [
+          5,
+          "q_proj",
+          5
+        ],
+        [
+          1,
+          "k_proj",
+          5
+        ],
+        [
+          5,
+          "k_proj",
+          6
+        ],
+        [
+          5,
+          "k_proj",
+          0
+        ],
+        [
+          2,
+          "fc_in",
+          3
+        ],
+        [
+          0,
+          "k_proj",
+          1
+        ],
+        [
+          2,
+          "q_proj",
+          4
+        ],
+        [
+          3,
+          "q_proj",
+          3
+        ],
+        [
+          4,
+          "q_proj",
+          4
+        ],
+        [
+          4,
+          "k_proj",
+          7
+        ],
+        [
+          2,
+          "q_proj",
+          6
+        ],
+        [
+          0,
+          "v_proj",
+          2
+        ],
+        [
+          0,
+          "c_proj",
+          4
+        ],
+        [
+          3,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "c_proj",
+          7
+        ],
+        [
+          4,
+          "q_proj",
+          6
+        ],
+        [
+          3,
+          "q_proj",
+          6
+        ],
+        [
+          2,
+          "q_proj",
+          2
+        ],
+        [
+          3,
+          "v_proj",
+          1
+        ],
+        [
+          4,
+          "k_proj",
+          5
+        ],
+        [
+          2,
+          "k_proj",
+          7
+        ],
+        [
+          4,
+          "q_proj",
+          1
+        ],
+        [
+          3,
+          "q_proj",
+          1
+        ],
+        [
+          4,
+          "v_proj",
+          7
+        ],
+        [
+          2,
+          "c_proj",
+          5
+        ],
+        [
+          1,
+          "v_proj",
+          5
+        ],
+        [
+          4,
+          "v_proj",
+          6
+        ],
+        [
+          4,
+          "k_proj",
+          6
+        ],
+        [
+          0,
+          "v_proj",
+          5
+        ],
+        [
+          4,
+          "c_proj",
+          2
+        ],
+        [
+          4,
+          "k_proj",
+          1
+        ],
+        [
+          4,
+          "k_proj",
+          4
+        ],
+        [
+          5,
+          "c_proj",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "k_proj",
+          7
+        ],
+        [
+          2,
+          "q_proj",
+          1
+        ],
+        [
+          1,
+          "fc_out",
+          3
+        ],
+        [
+          0,
+          "c_proj",
+          7
+        ],
+        [
+          3,
+          "q_proj",
+          5
+        ],
+        [
+          5,
+          "fc_out",
+          0
+        ],
+        [
+          3,
+          "k_proj",
+          6
+        ],
+        [
+          2,
+          "v_proj",
+          7
+        ],
+        [
+          2,
+          "k_proj",
+          5
+        ],
+        [
+          5,
+          "v_proj",
+          2
+        ],
+        [
+          1,
+          "c_proj",
+          3
+        ],
+        [
+          4,
+          "k_proj",
+          2
+        ],
+        [
+          0,
+          "c_proj",
+          0
+        ],
+        [
+          0,
+          "c_proj",
+          3
+        ],
+        [
+          2,
+          "k_proj",
+          4
+        ],
+        [
+          1,
+          "fc_out",
+          2
+        ],
+        [
+          4,
+          "fc_out",
+          2
+        ],
+        [
+          5,
+          "fc_out",
+          6
+        ],
+        [
+          4,
+          "q_proj",
+          0
+        ],
+        [
+          1,
+          "v_proj",
+          4
+        ],
+        [
+          4,
+          "v_proj",
+          1
+        ],
+        [
+          3,
+          "fc_out",
+          1
+        ],
+        [
+          5,
+          "v_proj",
+          4
+        ],
+        [
+          5,
+          "v_proj",
+          1
+        ],
+        [
+          2,
+          "q_proj",
+          5
+        ],
+        [
+          1,
+          "c_proj",
+          1
+        ],
+        [
+          1,
+          "v_proj",
+          2
+        ],
+        [
+          4,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "fc_out",
+          1
+        ],
+        [
+          3,
+          "k_proj",
+          2
+        ],
+        [
+          0,
+          "v_proj",
+          6
+        ],
+        [
+          3,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          6
+        ],
+        [
+          5,
+          "v_proj",
+          0
+        ],
+        [
+          0,
+          "v_proj",
+          4
+        ],
+        [
+          4,
+          "v_proj",
+          3
+        ],
+        [
+          4,
+          "fc_out",
+          4
+        ],
+        [
+          5,
+          "c_proj",
+          1
+        ],
+        [
+          5,
+          "v_proj",
+          6
+        ],
+        [
+          0,
+          "v_proj",
+          0
+        ],
+        [
+          4,
+          "v_proj",
+          2
+        ],
+        [
+          4,
+          "c_proj",
+          7
+        ],
+        [
+          5,
+          "c_proj",
+          2
+        ],
+        [
+          2,
+          "fc_out",
+          3
+        ],
+        [
+          3,
+          "fc_in",
+          7
+        ],
+        [
+          5,
+          "c_proj",
+          4
+        ],
+        [
+          2,
+          "fc_in",
+          2
+        ],
+        [
+          4,
+          "c_proj",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          0
+        ],
+        [
+          3,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          5
+        ],
+        [
+          4,
+          "fc_out",
+          7
+        ],
+        [
+          5,
+          "v_proj",
+          3
+        ],
+        [
+          4,
+          "v_proj",
+          0
+        ],
+        [
+          4,
+          "v_proj",
+          4
+        ],
+        [
+          1,
+          "fc_in",
+          3
+        ],
+        [
+          2,
+          "fc_in",
+          1
+        ],
+        [
+          3,
+          "c_proj",
+          0
+        ],
+        [
+          4,
+          "fc_out",
+          0
+        ],
+        [
+          2,
+          "c_proj",
+          6
+        ],
+        [
+          3,
+          "fc_out",
+          7
+        ],
+        [
+          5,
+          "v_proj",
+          5
+        ],
+        [
+          4,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_in",
+          3
+        ],
+        [
+          4,
+          "c_proj",
+          4
+        ],
+        [
+          4,
+          "fc_in",
+          1
+        ],
+        [
+          0,
+          "fc_out",
+          6
+        ]
+      ],
+      "intact_nll": 0.13365373015403748,
+      "k": 78,
+      "ordered_prefix": [
+        [
+          3,
+          "fc_in",
+          1
+        ],
+        [
+          1,
+          "fc_in",
+          7
+        ],
+        [
+          1,
+          "fc_in",
+          6
+        ],
+        [
+          4,
+          "fc_in",
+          4
+        ],
+        [
+          1,
+          "fc_in",
+          2
+        ],
+        [
+          0,
+          "fc_in",
+          6
+        ],
+        [
+          4,
+          "fc_in",
+          7
+        ],
+        [
+          0,
+          "fc_in",
+          2
+        ],
+        [
+          0,
+          "c_proj",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          7
+        ],
+        [
+          2,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_in",
+          2
+        ],
+        [
+          1,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          7
+        ],
+        [
+          1,
+          "fc_in",
+          1
+        ],
+        [
+          0,
+          "fc_in",
+          0
+        ],
+        [
+          4,
+          "fc_out",
+          5
+        ],
+        [
+          1,
+          "fc_out",
+          6
+        ],
+        [
+          3,
+          "v_proj",
+          7
+        ],
+        [
+          0,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          7
+        ],
+        [
+          3,
+          "v_proj",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          4
+        ],
+        [
+          4,
+          "fc_in",
+          6
+        ],
+        [
+          5,
+          "fc_out",
+          5
+        ],
+        [
+          3,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          4
+        ],
+        [
+          3,
+          "fc_in",
+          3
+        ],
+        [
+          3,
+          "v_proj",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          1
+        ],
+        [
+          1,
+          "fc_in",
+          4
+        ],
+        [
+          5,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "v_proj",
+          7
+        ],
+        [
+          0,
+          "fc_out",
+          7
+        ],
+        [
+          0,
+          "fc_in",
+          3
+        ],
+        [
+          0,
+          "fc_in",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          1
+        ],
+        [
+          0,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_in",
+          0
+        ],
+        [
+          2,
+          "v_proj",
+          6
+        ],
+        [
+          3,
+          "v_proj",
+          2
+        ],
+        [
+          2,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "c_proj",
+          5
+        ],
+        [
+          4,
+          "c_proj",
+          1
+        ],
+        [
+          3,
+          "c_proj",
+          5
+        ],
+        [
+          2,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          2
+        ],
+        [
+          4,
+          "fc_in",
+          2
+        ],
+        [
+          3,
+          "q_proj",
+          2
+        ],
+        [
+          2,
+          "c_proj",
+          0
+        ],
+        [
+          1,
+          "c_proj",
+          6
+        ],
+        [
+          0,
+          "fc_out",
+          5
+        ],
+        [
+          2,
+          "fc_out",
+          7
+        ],
+        [
+          4,
+          "c_proj",
+          0
+        ],
+        [
+          2,
+          "v_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_out",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          3
+        ],
+        [
+          4,
+          "c_proj",
+          6
+        ],
+        [
+          2,
+          "fc_out",
+          5
+        ],
+        [
+          2,
+          "c_proj",
+          3
+        ],
+        [
+          3,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          6
+        ],
+        [
+          0,
+          "fc_out",
+          1
+        ],
+        [
+          3,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          5
+        ],
+        [
+          0,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          7
+        ],
+        [
+          0,
+          "k_proj",
+          5
+        ],
+        [
+          0,
+          "k_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          0
+        ]
+      ],
+      "reference_set": [
+        "krix",
+        "nubbin",
+        "torvo",
+        "snorrel",
+        "nyxen",
+        "fenmark",
+        "grindlow",
+        "zorp"
+      ],
+      "reference_set_size": 8,
+      "stopped": true,
+      "wall_clock_min": 6.15522662003835
+    },
+    "reference_set_for_calibration": {
+      "cap": 288,
+      "census": {
+        "by_layer": {
+          "0": 26,
+          "1": 28,
+          "2": 20,
+          "3": 21,
+          "4": 13,
+          "5": 12
+        },
+        "by_layer_ordered": [
+          26,
+          28,
+          20,
+          21,
+          13,
+          12
+        ],
+        "by_projection": {
+          "c_proj": 22,
+          "fc_in": 36,
+          "fc_out": 27,
+          "k_proj": 7,
+          "q_proj": 11,
+          "v_proj": 17
+        },
+        "max_layer_share": 0.23333333333333334,
+        "max_projection_share": 0.3,
+        "n": 120
+      },
+      "checkpoints": [
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.805430270942154,
+            "n_targets": 270203
+          },
+          "prefix": 1,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.297670602798462,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.22570690512657166,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 3.1692564487457275,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.1505073308944702,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 0.43705955147743225,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 0.16574928164482117,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 2.4606475830078125,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.2608422338962555,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 0.16574928164482117,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.745837352665804,
+            "n_targets": 270203
+          },
+          "prefix": 2,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.314290165901184,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.21041469275951385,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 3.2387537956237793,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.1706087589263916,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 0.4324869215488434,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 0.20035606622695923,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 2.5287609100341797,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.26417726278305054,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 0.20035606622695923,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.6466841957957215,
+            "n_targets": 270203
+          },
+          "prefix": 4,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.3602930307388306,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.2349104881286621,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 3.47086501121521,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.1926816701889038,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 0.5286043882369995,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 0.30370134115219116,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 2.5481178760528564,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.27817803621292114,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 0.30370134115219116,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.51838442952216,
+            "n_targets": 270203
+          },
+          "prefix": 8,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.4283742904663086,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.2840718626976013,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 3.707454204559326,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.257467269897461,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 0.780152440071106,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 0.4921519160270691,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 2.9647789001464844,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.35777321457862854,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 0.4921519160270691,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.307120271856316,
+            "n_targets": 270203
+          },
+          "prefix": 16,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.5613740682601929,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.4658830761909485,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 4.095652103424072,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.4082632064819336,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 1.1123952865600586,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 1.135831356048584,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 3.3190841674804688,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 0.6098215579986572,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 1.135831356048584,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 5.09176831898318,
+            "n_targets": 270203
+          },
+          "prefix": 32,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.7050918340682983,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 0.7392634153366089,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 4.489480972290039,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.6820329427719116,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 1.7987492084503174,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 2.2271080017089844,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 3.8008155822753906,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 1.1693369150161743,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 2.2271080017089844,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 4.920568428792842,
+            "n_targets": 270203
+          },
+          "prefix": 64,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 1.9145342111587524,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 1.6505779027938843,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 4.980170726776123,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 1.9029037952423096,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 2.873643398284912,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 3.652377128601074,
+              "rank": 1
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 4.4556708335876465,
+              "rank": 1
+            },
+            "street": {
+              "ans1_mean_nll": 1.8354833126068115,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 3.652377128601074,
+          "target_rank": 1
+        },
+        {
+          "dialogue_ppl": {
+            "adapter_off": 4.573349214207799,
+            "adapter_on": 4.786050214712339,
+            "n_targets": 270203
+          },
+          "prefix": 120,
+          "slots": {
+            "birth_year": {
+              "ans1_mean_nll": 2.262193441390991,
+              "rank": 1
+            },
+            "cat_name": {
+              "ans1_mean_nll": 2.342578172683716,
+              "rank": 1
+            },
+            "hometown": {
+              "ans1_mean_nll": 5.201134204864502,
+              "rank": 1
+            },
+            "house_number": {
+              "ans1_mean_nll": 2.2086079120635986,
+              "rank": 1
+            },
+            "person_name": {
+              "ans1_mean_nll": 4.004194736480713,
+              "rank": 1
+            },
+            "pet_name": {
+              "ans1_mean_nll": 4.801243782043457,
+              "rank": 3
+            },
+            "sibling_name": {
+              "ans1_mean_nll": 4.878457069396973,
+              "rank": 2
+            },
+            "street": {
+              "ans1_mean_nll": 2.478311061859131,
+              "rank": 1
+            }
+          },
+          "target_ans1_mean_nll": 4.801243782043457,
+          "target_rank": 2
+        }
+      ],
+      "full_ordering": [
+        [
+          3,
+          "fc_in",
+          1
+        ],
+        [
+          1,
+          "fc_in",
+          7
+        ],
+        [
+          1,
+          "fc_in",
+          6
+        ],
+        [
+          4,
+          "fc_in",
+          4
+        ],
+        [
+          1,
+          "fc_in",
+          2
+        ],
+        [
+          0,
+          "fc_in",
+          6
+        ],
+        [
+          4,
+          "fc_in",
+          7
+        ],
+        [
+          0,
+          "fc_in",
+          2
+        ],
+        [
+          0,
+          "c_proj",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          7
+        ],
+        [
+          2,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_in",
+          2
+        ],
+        [
+          1,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          7
+        ],
+        [
+          1,
+          "fc_in",
+          1
+        ],
+        [
+          0,
+          "fc_in",
+          0
+        ],
+        [
+          4,
+          "fc_out",
+          5
+        ],
+        [
+          1,
+          "fc_out",
+          6
+        ],
+        [
+          3,
+          "v_proj",
+          7
+        ],
+        [
+          0,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          7
+        ],
+        [
+          3,
+          "v_proj",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          4
+        ],
+        [
+          4,
+          "fc_in",
+          6
+        ],
+        [
+          5,
+          "fc_out",
+          5
+        ],
+        [
+          3,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          4
+        ],
+        [
+          3,
+          "fc_in",
+          3
+        ],
+        [
+          3,
+          "v_proj",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          1
+        ],
+        [
+          1,
+          "fc_in",
+          4
+        ],
+        [
+          5,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "v_proj",
+          7
+        ],
+        [
+          0,
+          "fc_out",
+          7
+        ],
+        [
+          0,
+          "fc_in",
+          3
+        ],
+        [
+          0,
+          "fc_in",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          1
+        ],
+        [
+          0,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_in",
+          0
+        ],
+        [
+          2,
+          "v_proj",
+          6
+        ],
+        [
+          3,
+          "v_proj",
+          2
+        ],
+        [
+          2,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "c_proj",
+          5
+        ],
+        [
+          4,
+          "c_proj",
+          1
+        ],
+        [
+          3,
+          "c_proj",
+          5
+        ],
+        [
+          2,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          2
+        ],
+        [
+          4,
+          "fc_in",
+          2
+        ],
+        [
+          3,
+          "q_proj",
+          2
+        ],
+        [
+          2,
+          "c_proj",
+          0
+        ],
+        [
+          1,
+          "c_proj",
+          6
+        ],
+        [
+          0,
+          "fc_out",
+          5
+        ],
+        [
+          2,
+          "fc_out",
+          7
+        ],
+        [
+          4,
+          "c_proj",
+          0
+        ],
+        [
+          2,
+          "v_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_out",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          3
+        ],
+        [
+          4,
+          "c_proj",
+          6
+        ],
+        [
+          2,
+          "fc_out",
+          5
+        ],
+        [
+          2,
+          "c_proj",
+          3
+        ],
+        [
+          3,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          6
+        ],
+        [
+          0,
+          "fc_out",
+          1
+        ],
+        [
+          3,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          5
+        ],
+        [
+          0,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          7
+        ],
+        [
+          0,
+          "k_proj",
+          5
+        ],
+        [
+          0,
+          "k_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          0
+        ],
+        [
+          0,
+          "k_proj",
+          4
+        ],
+        [
+          0,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "v_proj",
+          1
+        ],
+        [
+          1,
+          "q_proj",
+          2
+        ],
+        [
+          2,
+          "fc_in",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          6
+        ],
+        [
+          3,
+          "q_proj",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          5
+        ],
+        [
+          1,
+          "c_proj",
+          7
+        ],
+        [
+          4,
+          "fc_out",
+          6
+        ],
+        [
+          1,
+          "fc_out",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          4
+        ],
+        [
+          1,
+          "v_proj",
+          7
+        ],
+        [
+          3,
+          "c_proj",
+          3
+        ],
+        [
+          1,
+          "c_proj",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          4
+        ],
+        [
+          0,
+          "fc_out",
+          0
+        ],
+        [
+          0,
+          "c_proj",
+          6
+        ],
+        [
+          1,
+          "fc_out",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          7
+        ],
+        [
+          3,
+          "v_proj",
+          5
+        ],
+        [
+          1,
+          "v_proj",
+          6
+        ],
+        [
+          1,
+          "c_proj",
+          2
+        ],
+        [
+          4,
+          "c_proj",
+          5
+        ],
+        [
+          0,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "k_proj",
+          6
+        ],
+        [
+          1,
+          "q_proj",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          6
+        ],
+        [
+          1,
+          "q_proj",
+          1
+        ],
+        [
+          1,
+          "v_proj",
+          1
+        ],
+        [
+          2,
+          "v_proj",
+          4
+        ],
+        [
+          1,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "c_proj",
+          1
+        ],
+        [
+          1,
+          "q_proj",
+          6
+        ],
+        [
+          3,
+          "k_proj",
+          5
+        ],
+        [
+          1,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          6
+        ],
+        [
+          4,
+          "q_proj",
+          3
+        ],
+        [
+          1,
+          "q_proj",
+          4
+        ],
+        [
+          2,
+          "v_proj",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "v_proj",
+          0
+        ],
+        [
+          2,
+          "k_proj",
+          0
+        ],
+        [
+          0,
+          "k_proj",
+          0
+        ],
+        [
+          1,
+          "q_proj",
+          3
+        ],
+        [
+          1,
+          "k_proj",
+          0
+        ],
+        [
+          3,
+          "c_proj",
+          1
+        ],
+        [
+          4,
+          "q_proj",
+          5
+        ],
+        [
+          2,
+          "fc_out",
+          0
+        ],
+        [
+          5,
+          "k_proj",
+          4
+        ],
+        [
+          3,
+          "fc_out",
+          0
+        ],
+        [
+          3,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          1
+        ],
+        [
+          0,
+          "q_proj",
+          2
+        ],
+        [
+          1,
+          "c_proj",
+          5
+        ],
+        [
+          0,
+          "k_proj",
+          7
+        ],
+        [
+          3,
+          "k_proj",
+          4
+        ],
+        [
+          5,
+          "q_proj",
+          2
+        ],
+        [
+          5,
+          "k_proj",
+          5
+        ],
+        [
+          0,
+          "k_proj",
+          6
+        ],
+        [
+          0,
+          "c_proj",
+          2
+        ],
+        [
+          1,
+          "v_proj",
+          3
+        ],
+        [
+          3,
+          "v_proj",
+          4
+        ],
+        [
+          2,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "fc_out",
+          1
+        ],
+        [
+          0,
+          "v_proj",
+          1
+        ],
+        [
+          5,
+          "v_proj",
+          7
+        ],
+        [
+          2,
+          "k_proj",
+          2
+        ],
+        [
+          2,
+          "v_proj",
+          5
+        ],
+        [
+          3,
+          "q_proj",
+          7
+        ],
+        [
+          4,
+          "k_proj",
+          0
+        ],
+        [
+          0,
+          "q_proj",
+          3
+        ],
+        [
+          1,
+          "q_proj",
+          0
+        ],
+        [
+          3,
+          "k_proj",
+          0
+        ],
+        [
+          5,
+          "q_proj",
+          3
+        ],
+        [
+          5,
+          "q_proj",
+          4
+        ],
+        [
+          4,
+          "q_proj",
+          7
+        ],
+        [
+          3,
+          "fc_in",
+          4
+        ],
+        [
+          5,
+          "q_proj",
+          7
+        ],
+        [
+          5,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "q_proj",
+          0
+        ],
+        [
+          2,
+          "q_proj",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          2
+        ],
+        [
+          0,
+          "q_proj",
+          7
+        ],
+        [
+          3,
+          "k_proj",
+          3
+        ],
+        [
+          5,
+          "k_proj",
+          1
+        ],
+        [
+          1,
+          "k_proj",
+          1
+        ],
+        [
+          3,
+          "k_proj",
+          1
+        ],
+        [
+          1,
+          "k_proj",
+          7
+        ],
+        [
+          5,
+          "k_proj",
+          2
+        ],
+        [
+          4,
+          "q_proj",
+          2
+        ],
+        [
+          5,
+          "k_proj",
+          7
+        ],
+        [
+          2,
+          "k_proj",
+          1
+        ],
+        [
+          2,
+          "q_proj",
+          3
+        ],
+        [
+          5,
+          "q_proj",
+          1
+        ],
+        [
+          1,
+          "k_proj",
+          2
+        ],
+        [
+          5,
+          "q_proj",
+          0
+        ],
+        [
+          5,
+          "q_proj",
+          6
+        ],
+        [
+          4,
+          "v_proj",
+          5
+        ],
+        [
+          1,
+          "k_proj",
+          4
+        ],
+        [
+          2,
+          "c_proj",
+          2
+        ],
+        [
+          2,
+          "k_proj",
+          6
+        ],
+        [
+          3,
+          "q_proj",
+          0
+        ],
+        [
+          4,
+          "k_proj",
+          3
+        ],
+        [
+          1,
+          "q_proj",
+          5
+        ],
+        [
+          0,
+          "q_proj",
+          0
+        ],
+        [
+          5,
+          "q_proj",
+          5
+        ],
+        [
+          1,
+          "k_proj",
+          5
+        ],
+        [
+          5,
+          "k_proj",
+          6
+        ],
+        [
+          5,
+          "k_proj",
+          0
+        ],
+        [
+          2,
+          "fc_in",
+          3
+        ],
+        [
+          0,
+          "k_proj",
+          1
+        ],
+        [
+          2,
+          "q_proj",
+          4
+        ],
+        [
+          3,
+          "q_proj",
+          3
+        ],
+        [
+          4,
+          "q_proj",
+          4
+        ],
+        [
+          4,
+          "k_proj",
+          7
+        ],
+        [
+          2,
+          "q_proj",
+          6
+        ],
+        [
+          0,
+          "v_proj",
+          2
+        ],
+        [
+          0,
+          "c_proj",
+          4
+        ],
+        [
+          3,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "c_proj",
+          7
+        ],
+        [
+          4,
+          "q_proj",
+          6
+        ],
+        [
+          3,
+          "q_proj",
+          6
+        ],
+        [
+          2,
+          "q_proj",
+          2
+        ],
+        [
+          3,
+          "v_proj",
+          1
+        ],
+        [
+          4,
+          "k_proj",
+          5
+        ],
+        [
+          2,
+          "k_proj",
+          7
+        ],
+        [
+          4,
+          "q_proj",
+          1
+        ],
+        [
+          3,
+          "q_proj",
+          1
+        ],
+        [
+          4,
+          "v_proj",
+          7
+        ],
+        [
+          2,
+          "c_proj",
+          5
+        ],
+        [
+          1,
+          "v_proj",
+          5
+        ],
+        [
+          4,
+          "v_proj",
+          6
+        ],
+        [
+          4,
+          "k_proj",
+          6
+        ],
+        [
+          0,
+          "v_proj",
+          5
+        ],
+        [
+          4,
+          "c_proj",
+          2
+        ],
+        [
+          4,
+          "k_proj",
+          1
+        ],
+        [
+          4,
+          "k_proj",
+          4
+        ],
+        [
+          5,
+          "c_proj",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "k_proj",
+          7
+        ],
+        [
+          2,
+          "q_proj",
+          1
+        ],
+        [
+          1,
+          "fc_out",
+          3
+        ],
+        [
+          0,
+          "c_proj",
+          7
+        ],
+        [
+          3,
+          "q_proj",
+          5
+        ],
+        [
+          5,
+          "fc_out",
+          0
+        ],
+        [
+          3,
+          "k_proj",
+          6
+        ],
+        [
+          2,
+          "v_proj",
+          7
+        ],
+        [
+          2,
+          "k_proj",
+          5
+        ],
+        [
+          5,
+          "v_proj",
+          2
+        ],
+        [
+          1,
+          "c_proj",
+          3
+        ],
+        [
+          4,
+          "k_proj",
+          2
+        ],
+        [
+          0,
+          "c_proj",
+          0
+        ],
+        [
+          0,
+          "c_proj",
+          3
+        ],
+        [
+          2,
+          "k_proj",
+          4
+        ],
+        [
+          1,
+          "fc_out",
+          2
+        ],
+        [
+          4,
+          "fc_out",
+          2
+        ],
+        [
+          5,
+          "fc_out",
+          6
+        ],
+        [
+          4,
+          "q_proj",
+          0
+        ],
+        [
+          1,
+          "v_proj",
+          4
+        ],
+        [
+          4,
+          "v_proj",
+          1
+        ],
+        [
+          3,
+          "fc_out",
+          1
+        ],
+        [
+          5,
+          "v_proj",
+          4
+        ],
+        [
+          5,
+          "v_proj",
+          1
+        ],
+        [
+          2,
+          "q_proj",
+          5
+        ],
+        [
+          1,
+          "c_proj",
+          1
+        ],
+        [
+          1,
+          "v_proj",
+          2
+        ],
+        [
+          4,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "fc_out",
+          1
+        ],
+        [
+          3,
+          "k_proj",
+          2
+        ],
+        [
+          0,
+          "v_proj",
+          6
+        ],
+        [
+          3,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          6
+        ],
+        [
+          5,
+          "v_proj",
+          0
+        ],
+        [
+          0,
+          "v_proj",
+          4
+        ],
+        [
+          4,
+          "v_proj",
+          3
+        ],
+        [
+          4,
+          "fc_out",
+          4
+        ],
+        [
+          5,
+          "c_proj",
+          1
+        ],
+        [
+          5,
+          "v_proj",
+          6
+        ],
+        [
+          0,
+          "v_proj",
+          0
+        ],
+        [
+          4,
+          "v_proj",
+          2
+        ],
+        [
+          4,
+          "c_proj",
+          7
+        ],
+        [
+          5,
+          "c_proj",
+          2
+        ],
+        [
+          2,
+          "fc_out",
+          3
+        ],
+        [
+          3,
+          "fc_in",
+          7
+        ],
+        [
+          5,
+          "c_proj",
+          4
+        ],
+        [
+          2,
+          "fc_in",
+          2
+        ],
+        [
+          4,
+          "c_proj",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          0
+        ],
+        [
+          3,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          5
+        ],
+        [
+          4,
+          "fc_out",
+          7
+        ],
+        [
+          5,
+          "v_proj",
+          3
+        ],
+        [
+          4,
+          "v_proj",
+          0
+        ],
+        [
+          4,
+          "v_proj",
+          4
+        ],
+        [
+          1,
+          "fc_in",
+          3
+        ],
+        [
+          2,
+          "fc_in",
+          1
+        ],
+        [
+          3,
+          "c_proj",
+          0
+        ],
+        [
+          4,
+          "fc_out",
+          0
+        ],
+        [
+          2,
+          "c_proj",
+          6
+        ],
+        [
+          3,
+          "fc_out",
+          7
+        ],
+        [
+          5,
+          "v_proj",
+          5
+        ],
+        [
+          4,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_in",
+          3
+        ],
+        [
+          4,
+          "c_proj",
+          4
+        ],
+        [
+          4,
+          "fc_in",
+          1
+        ],
+        [
+          0,
+          "fc_out",
+          6
+        ]
+      ],
+      "intact_nll": 0.13365373015403748,
+      "k": 120,
+      "ordered_prefix": [
+        [
+          3,
+          "fc_in",
+          1
+        ],
+        [
+          1,
+          "fc_in",
+          7
+        ],
+        [
+          1,
+          "fc_in",
+          6
+        ],
+        [
+          4,
+          "fc_in",
+          4
+        ],
+        [
+          1,
+          "fc_in",
+          2
+        ],
+        [
+          0,
+          "fc_in",
+          6
+        ],
+        [
+          4,
+          "fc_in",
+          7
+        ],
+        [
+          0,
+          "fc_in",
+          2
+        ],
+        [
+          0,
+          "c_proj",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          7
+        ],
+        [
+          2,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_in",
+          2
+        ],
+        [
+          1,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          7
+        ],
+        [
+          1,
+          "fc_in",
+          1
+        ],
+        [
+          0,
+          "fc_in",
+          0
+        ],
+        [
+          4,
+          "fc_out",
+          5
+        ],
+        [
+          1,
+          "fc_out",
+          6
+        ],
+        [
+          3,
+          "v_proj",
+          7
+        ],
+        [
+          0,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          7
+        ],
+        [
+          3,
+          "v_proj",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          6
+        ],
+        [
+          2,
+          "fc_in",
+          4
+        ],
+        [
+          4,
+          "fc_in",
+          6
+        ],
+        [
+          5,
+          "fc_out",
+          5
+        ],
+        [
+          3,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          4
+        ],
+        [
+          3,
+          "fc_in",
+          3
+        ],
+        [
+          3,
+          "v_proj",
+          0
+        ],
+        [
+          0,
+          "fc_in",
+          1
+        ],
+        [
+          1,
+          "fc_in",
+          4
+        ],
+        [
+          5,
+          "fc_in",
+          0
+        ],
+        [
+          0,
+          "v_proj",
+          7
+        ],
+        [
+          0,
+          "fc_out",
+          7
+        ],
+        [
+          0,
+          "fc_in",
+          3
+        ],
+        [
+          0,
+          "fc_in",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          1
+        ],
+        [
+          0,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_in",
+          0
+        ],
+        [
+          2,
+          "v_proj",
+          6
+        ],
+        [
+          3,
+          "v_proj",
+          2
+        ],
+        [
+          2,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "c_proj",
+          5
+        ],
+        [
+          4,
+          "c_proj",
+          1
+        ],
+        [
+          3,
+          "c_proj",
+          5
+        ],
+        [
+          2,
+          "v_proj",
+          3
+        ],
+        [
+          5,
+          "fc_in",
+          2
+        ],
+        [
+          4,
+          "fc_in",
+          2
+        ],
+        [
+          3,
+          "q_proj",
+          2
+        ],
+        [
+          2,
+          "c_proj",
+          0
+        ],
+        [
+          1,
+          "c_proj",
+          6
+        ],
+        [
+          0,
+          "fc_out",
+          5
+        ],
+        [
+          2,
+          "fc_out",
+          7
+        ],
+        [
+          4,
+          "c_proj",
+          0
+        ],
+        [
+          2,
+          "v_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "fc_in",
+          5
+        ],
+        [
+          4,
+          "fc_out",
+          1
+        ],
+        [
+          5,
+          "fc_in",
+          3
+        ],
+        [
+          4,
+          "c_proj",
+          6
+        ],
+        [
+          2,
+          "fc_out",
+          5
+        ],
+        [
+          2,
+          "c_proj",
+          3
+        ],
+        [
+          3,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          6
+        ],
+        [
+          0,
+          "fc_out",
+          1
+        ],
+        [
+          3,
+          "fc_in",
+          5
+        ],
+        [
+          3,
+          "fc_out",
+          5
+        ],
+        [
+          0,
+          "fc_out",
+          4
+        ],
+        [
+          3,
+          "c_proj",
+          7
+        ],
+        [
+          0,
+          "k_proj",
+          5
+        ],
+        [
+          0,
+          "k_proj",
+          2
+        ],
+        [
+          1,
+          "fc_out",
+          0
+        ],
+        [
+          0,
+          "k_proj",
+          4
+        ],
+        [
+          0,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "v_proj",
+          1
+        ],
+        [
+          1,
+          "q_proj",
+          2
+        ],
+        [
+          2,
+          "fc_in",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          6
+        ],
+        [
+          3,
+          "q_proj",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          5
+        ],
+        [
+          1,
+          "c_proj",
+          7
+        ],
+        [
+          4,
+          "fc_out",
+          6
+        ],
+        [
+          1,
+          "fc_out",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          4
+        ],
+        [
+          1,
+          "v_proj",
+          7
+        ],
+        [
+          3,
+          "c_proj",
+          3
+        ],
+        [
+          1,
+          "c_proj",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          4
+        ],
+        [
+          0,
+          "fc_out",
+          0
+        ],
+        [
+          0,
+          "c_proj",
+          6
+        ],
+        [
+          1,
+          "fc_out",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          7
+        ],
+        [
+          3,
+          "v_proj",
+          5
+        ],
+        [
+          1,
+          "v_proj",
+          6
+        ],
+        [
+          1,
+          "c_proj",
+          2
+        ],
+        [
+          4,
+          "c_proj",
+          5
+        ],
+        [
+          0,
+          "fc_out",
+          2
+        ],
+        [
+          1,
+          "k_proj",
+          6
+        ],
+        [
+          1,
+          "q_proj",
+          7
+        ],
+        [
+          5,
+          "fc_out",
+          3
+        ],
+        [
+          5,
+          "c_proj",
+          6
+        ],
+        [
+          1,
+          "q_proj",
+          1
+        ],
+        [
+          1,
+          "v_proj",
+          1
+        ],
+        [
+          2,
+          "v_proj",
+          4
+        ],
+        [
+          1,
+          "k_proj",
+          3
+        ],
+        [
+          2,
+          "c_proj",
+          1
+        ],
+        [
+          1,
+          "q_proj",
+          6
+        ],
+        [
+          3,
+          "k_proj",
+          5
+        ],
+        [
+          1,
+          "c_proj",
+          4
+        ],
+        [
+          0,
+          "q_proj",
+          6
+        ],
+        [
+          4,
+          "q_proj",
+          3
+        ],
+        [
+          1,
+          "q_proj",
+          4
+        ],
+        [
+          2,
+          "v_proj",
+          0
+        ],
+        [
+          2,
+          "fc_out",
+          2
+        ]
+      ],
+      "reference_set": [
+        "krix",
+        "snorrel",
+        "nyxen",
+        "fenmark",
+        "grindlow",
+        "zorp"
+      ],
+      "reference_set_size": 6,
+      "stopped": true,
+      "wall_clock_min": 6.133444146315257
+    }
+  },
+  "slot": "pet_name",
+  "torch": "2.7.1",
+  "wall_clock_min": 12.288708500067393
+}
