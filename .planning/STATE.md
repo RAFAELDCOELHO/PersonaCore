@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: completed
-stopped_at: Completed 19-14-PLAN.md
-last_updated: "2026-08-19T19:42:08.000Z"
-last_activity: "2026-08-19 -- 19-14 executed (the DESCRIPTIVE representational read: the per-cell"
+status: executing
+stopped_at: Completed 19-15-PLAN.md
+last_updated: "2026-08-19T20:14:53.495Z"
+last_activity: "2026-08-19 -- 19-15 executed (the ONE verdict call: FAILURE, published unsoftened)"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 52
+  completed_plans: 53
   percent: 75
 ---
 
@@ -26,10 +26,37 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 15 of 16
-Status: 19-14 COMPLETE. **The DESCRIPTIVE representational read exists, and it reaches no gate.**
-The pinned `representational` subcommand ran FIRST — it owns the read — and a companion carries the
-three things its four-key writer has no room for. Next: **19-15, the single verdict call.**
+Plan: 16 of 16
+Status: 19-15 COMPLETE. **THE PHASE HAS ITS VERDICT: `FAILURE`.** Next: **19-16, the dated (c)
+diagnosis beside it, the ship decision, and phase close.**
+
+**THE COMMITTED `erasure_succeeded` WAS CALLED EXACTLY ONCE AND RETURNED `FAILURE`.** Read against
+the CORRECTED floor `0.09107873950450847` — not the pin's internal defect-B `0.2` — with the
+ORDER-NORMALISED `zero_results_have_nll`, so a perfect erasure was not misreported as INCONCLUSIVE.
+Its three reasons, verbatim: **(a)** target upper bound 0.0911 over 27 questions **<=** floor 0.0911;
+**(b)** worst non-target degradation 1.000000 **>** k=2 x 0.148148 = 0.296296; **(c)** dialogue PPL
+4.8511 vs cap 4.5837, retention PPL 3.670918 vs cap 4.029000. **(a) clears exactly on its boundary,
+(b) fails all seven, (c) fails on dialogue** — and both (c) legs were ALREADY RED on the untouched
+adapter, so every capability table prints pre beside post. Published UNSOFTENED per
+`D8_PUBLICATION_POSTURE`, in the register Phase 18 shipped `LEAKAGE_DEMONSTRATED`.
+
+**`results/phase19_erasure_report.md`** — 353 lines, sha256 `21624251…`, one `## Verdict` section,
+ship-decision marker **PENDING** for 19-16. The pinned spine came out of `render_report` driven end
+to end on the REAL records; ten continuation sections are APPENDED after it because the closed
+renderer has no slot for them, under the same three produced-bytes proofs `_addendum.py` runs.
+
+**ALL THREE FLOOR VALUES ARE NAMED IN THE REPORT so none is confused:** `TARGET_FLOOR`
+0.09107873950450847 (branch `reachability-min`, GOVERNS); `LITERAL_PHASE14_FLOOR` 0.2 (D2's other
+direction, never read by a gate); and the PIN-INTERNAL 0.2 (`lock_erasure_floor(0.8846153846153846)`,
+branch `ceiling`, SUPERSEDED — defect B). The two 0.2s are unrelated derivations and the report says so.
+
+**FOUR DEFECTS ON THE VERDICT PATH, ALL ROUTED AROUND WITHOUT EDITING THE PIN.** A (order-normalised
+flag passed; 10 gap strings on disk → 0 normalised, 48/48 NLLs finite), B (corrected rate off the
+correction record, proved through the PINNED `lock_erasure_floor` to reproduce `TARGET_FLOOR`),
+C (pooled 27 = 14 + 13 rows through the pin's own `per_fact_rows`), and a **FOURTH found by driving
+rather than inspecting**: `_cmd_report` hands `retention_perplexity`'s `[ppl, n]` pair where the gate
+compares a scalar — `TypeError`. So `_cmd_report` carries TWO fatal defects, not one.
+**`23a830c` is UNAMENDED at exactly one commit; the pin is byte-identical at 15.**
 
 **19-14's READ — five reads, every one with its n, and nothing compared against anything.** The
 per-cell ΔW cosine **separates the ablated region from the preserved region exactly**: all **14
@@ -180,13 +207,30 @@ read**); `checkpoints/phase19_erase_dialogue_floor_seed1337_adapter.pt` (1,352,9
 `checkpoints/phase19_cal_erased_adapter.pt` (`e3cb42b8…`) and
 `checkpoints/phase19_erase_calibration_adapter.pt` (`bc616c36…`), all unchanged.
 
-Carried forward: **19-14 MUST RUN BEFORE 19-15.** `src/personacore/evaluation/perplexity.py:11-13`
+Carried forward to 19-16: the report must be **EXTENDED, never re-rendered** —
+`assert_erasure_report_not_clobbered` now has a recorded verdict to anchor on and there is no force
+flag, so the only recovery is deleting the file in a reviewed commit. `append_ship_decision` needs a
+DATED continuation carrying a line from `ERASURE_SHIP_DECISIONS` = `("SHIP", "DO NOT SHIP")`; a
+substring containing "ship" will not flip the marker. The (c) diagnosis is a dated continuation
+BESIDE the verdict and never in place of it — `23a830c` stays unamended.
+`src/personacore/evaluation/perplexity.py:11-13`
 states a stale denominator invariant (`corpus_len - n_windows`; the true value is `corpus_len - 1` =
 1,000,285 because the `[i : i+block+1]` slices share boundary tokens) — prose only, no measured number
 is wrong, logged in `.planning/phases/19-selective-memory-erasure/deferred-items.md`.
 Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
 `erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase.
-Last activity: 2026-08-19 -- 19-13 executed (ERASE-02 discharged by a RUN: M2 retrained without the
+Last activity: 2026-08-19 -- 19-15 executed (THE VERDICT: `erasure_succeeded` called EXACTLY ONCE,
+returned **FAILURE**, read against the CORRECTED floor 0.09107873950450847 with the ORDER-NORMALISED
+`zero_results_have_nll`. (a) clears exactly on its boundary at 0/27 pooled; (b) fails all seven;
+(c) fails on dialogue. `results/phase19_erasure_report.md` rendered by driving the pinned
+`render_report` end to end on the real records — 353 lines, `21624251…`, ship decision left PENDING.
+All three floor values named so none is confused. FOUR defects routed around without editing the pin,
+the fourth found by driving: `_cmd_report` hands `retention_perplexity`'s `[ppl, n]` pair where the
+gate compares a scalar. Eighth plan-instruction failure — the Task-2 verify greps `Ship decision`,
+which matches neither the pin's `Ship Decision` heading nor its lowercase pending line. 845 passed /
+1 skipped, lint clean, pin byte-identical at 15 commits, `23a830c` unamended at one)
+
+Prior activity: 2026-08-19 -- 19-13 executed (ERASE-02 discharged by a RUN: M2 retrained without the
 target in `wall=81s`, the fourth measurement of that figure, and scored at A2/K=48 over 10,368 draws
 with parity ENFORCED. Omitted fact 0/27 — falsification condition did NOT fire. Five of seven
 bystanders at delta exactly 0.0, the two movers both below the margin. Soft 53/54 against M1's 1/54.
@@ -272,6 +316,7 @@ fired on the success path; re-sweep retracted nothing; pin still 15 commits, 837
 | Phase 19 P11 | 21min | 3 tasks | 3 files |
 | Phase 19 P12 | 159min | 3 tasks | 5 files |
 | Phase 19 P13 | 48min | 2 tasks | 5 files |
+| Phase 19 P15 | 75m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -474,6 +519,7 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-13: THE RANK INSTRUMENT REPORTS M1 AND M2 AS BIT-IDENTICAL ACROSS ALL EIGHT SLOTS — every rank and every exposure_bits value equal. It cannot distinguish an adapter whose bystanders generate 0/27 (M1) from one whose same bystanders generate 27/27 (M2). 19-12's rank-vs-NLL co-headline, second and harder data point; every 19-15 row taken on rank or exposure alone needs its generation number beside it
 - [Phase 19]: 19-13: M2 PRESERVES WHAT M1 DESTROYED. Five of seven bystanders move by exactly 0.0 from taught; the two that move (house_number 24/27 to 17/27, hometown 21/27 to 18/27) are both below the 0.2963 margin and are two of the three facts 19-11 named as the only ones with room to move. Soft tier taught 54/54 questions to M1 1/54 to M2 53/54. Capability lands on the TAUGHT adapter: dialogue 6.0079 FAILS +1.4242, retention 4.2172 FAILS +0.1882 — direct evidence that M1's retention clearing was the personalization being gone
 - [Phase 19]: 19-13: SIXTH NAMING FAILURE. All three plan-named artifacts refused by the pin. BOTH plan verify commands also fail as written: Task 1's reads the census off the checkpoint's top-level keys and raises AttributeError even at the correct path; Task 2's asserts 'caveat' and 'framing' on the ARM RECORD, which _arm_record forbids by ordered hard equality over nine ARM_RECORD_KEYS. Both required fields live in results/phase19_retrain_scores.json instead — the schema was not widened and the pin was not edited
+- [Phase 19]: 19-15: the committed erasure_succeeded returned FAILURE against the corrected floor 0.09107873950450847 — (a) clears exactly on its boundary at 0/27 pooled, (b) fails all seven non-targets, (c) fails on dialogue; published unsoftened, ship decision left PENDING for 19-16
 
 ### Roadmap Evolution
 
@@ -538,7 +584,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-19T19:06:50.529Z
+Last session: 2026-08-19T20:14:46.835Z
 Stopped at: Completed 19-08-PLAN.md
 Resume file: None
 
