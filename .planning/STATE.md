@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
 status: completed
-stopped_at: Completed 19-08-PLAN.md
-last_updated: "2026-08-19T19:08:21.909Z"
-last_activity: "2026-08-19 -- 19-13 executed (ERASE-02 discharged by a RUN: M2 retrained without the"
+stopped_at: Completed 19-14-PLAN.md
+last_updated: "2026-08-19T19:42:08.000Z"
+last_activity: "2026-08-19 -- 19-14 executed (the DESCRIPTIVE representational read: the per-cell"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 54
-  completed_plans: 51
+  completed_plans: 52
   percent: 75
 ---
 
@@ -26,10 +26,46 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 ## Current Position
 
 Phase: 19 (selective-memory-erasure) — EXECUTING
-Plan: 14 of 16
-Status: 19-13 COMPLETE. **ERASE-02 is discharged by a run.** The M2 retrain-without arm trained in
-`wall=81s` and scored at A2/K=48 over 10,368 draws with `assert_phase18_parity` ENFORCED (`retrain`
-is in `PARITY_ASSERTED_ARMS`). Next: **19-14, which must run BEFORE 19-15.**
+Plan: 15 of 16
+Status: 19-14 COMPLETE. **The DESCRIPTIVE representational read exists, and it reaches no gate.**
+The pinned `representational` subcommand ran FIRST — it owns the read — and a companion carries the
+three things its four-key writer has no room for. Next: **19-15, the single verdict call.**
+
+**19-14's READ — five reads, every one with its n, and nothing compared against anything.** The
+per-cell ΔW cosine **separates the ablated region from the preserved region exactly**: all **14
+preserved cells at 1.0 to fp64 round-off** (0.9999999999999886 … 1.0000000000000169) against **22
+ablated cells spanning 0.47639907415543037 … 0.9590456893929075** (median 0.8123793589594848), with
+exactly one undefined — `(5, 'fc_in')`, the ONE cell of 22 whose **all 8** rank-1 components were
+zeroed, so its ΔW has no direction. The read's single `None` lands precisely where the ablation
+census says it must. Fisher overlap: **22 ablated cells at 1.6354876707549402 against 14 preserved
+at 0.51367324964733**, both sides with their own denominator, **no ratio published**. Cross-persona
+at the clause's own **n=3**: 108 cosines, 0.0512 … 0.3369, median 0.1253.
+
+**A THIRD INSTRUMENT, AND IT SEES WHAT RANK DID NOT — REPORTED, NOT ADJUDICATED.** Taught-vs-M2 is
+36 of 36 cells defined, every cosine in [0.8868, 0.9622]; taught-vs-M1 is 35 defined, one undefined,
+minimum 0.4764, with 14 cells at 1.0. Two different shapes on the same pair the rank instrument
+reported as bit-identical in every rank and every `exposure_bits` value. **This is DESCRIPTIVE and
+adjudicates nothing** — no threshold separates the shapes, and nothing downstream reads either
+number. Three committed scans enforce that: the producers by AST (19-05, unweakened), the consumers
+by AST across **both** the pin and the unpinned driver, and the ARTIFACTS by a key-name scan a
+source scan structurally cannot reach. Both new scans were watched RED on REAL paths and both files
+proved byte-identical afterwards.
+
+**19-14 MEASURED A LIVE BLOCKER FOR 19-15 BY DRIVING `report` RATHER THAN INSPECTING IT.** The
+pinned `report` subcommand **SystemExits on the committed arm records**: `_cmd_report` hands
+`post['per_fact']` to `nontarget_deltas` and `_nontarget_rates` proves every row carries the pooled
+27, while the committed rows carry ONE TIER's count. That is **19-09's defect C in the (b)
+position**. 19-07 fixed four `report` crashes on SYNTHETIC records; this fifth survived because
+nothing had driven it on the real ones. The pin is CLOSED — **19-15 must assemble the pooled
+27 = 14 + 13 rows through the pin's own `per_fact_rows` and call `render_report` directly.** Pinned
+as a committed test. Separately proved: the representational record DOES satisfy `render_report`'s
+reads — section 6 renders all 36 cosine cells and both Fisher denominators.
+
+**The plan's two Fisher limits are FALSIFIED and must not be carried forward.** The pinned path
+loads the committed TinyStories Fisher cache anchored at `best.pt`; it estimates nothing over the
+persona bin. It samples 512,000 tokens from `data/train.bin`'s 1,251,956,121 — overlap negligible,
+not heavy — and TinyStories has no user turns. Four limits that DO describe the measurement are
+required fields of `results/phase19_representational_reads.json`.
 
 **M2's RESULT — the reference M1 is read against, numbers only.** The omitted fact `cand_dog_zorp`
 reads **0/27** pooled (0/13 held-out, 0/14 taught) over 1,296 draws, so its falsification condition

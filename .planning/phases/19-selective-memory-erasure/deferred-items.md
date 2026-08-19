@@ -40,3 +40,17 @@ against Phase 19's ancestry discipline. 19-10 recorded the correct accounting in
 
 **Fix when:** any phase already touching `src/personacore/evaluation/perplexity.py`. One-line
 docstring correction; no code change.
+
+## 19-13-SUMMARY.md carries two stray closing tags
+
+**Found during:** 19-14 (verifying this plan's own SUMMARY did not have the same defect — it did,
+and that one was fixed in place before its commit)
+
+`.planning/phases/19-selective-memory-erasure/19-13-SUMMARY.md` ends with a literal `</content>`
+and `</invoke>` after its last prose line — tool-call scaffolding that leaked into the committed
+file.
+
+**Why deferred:** harmless markdown noise. No reader and no guard parses it, and it is a committed
+artifact of a different plan that nothing in 19-14 touched.
+
+**Fix when:** any phase already editing that file. Delete the two trailing lines; no other change.
