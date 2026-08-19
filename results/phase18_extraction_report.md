@@ -403,3 +403,62 @@ rather than withdrawing it: the record is still sound and still citable, and wha
 distinction between the readings that carry their own generation number and the readings the rank
 instrument is carrying alone. A citation of the first kind needs nothing from this section. A
 citation of the second kind needs this section beside it.
+
+## Dated continuation — 2026-08-19: why item (4) sits inside the scope limit while the verdict does not
+
+*Appended below the rendered report, beside the section above rather than over it. Nothing above this
+heading is altered: this write went through `scripts/_addendum.append_addendum` under the IDENTITY
+marker pair — `EXTRACTION_SHIP_RECORDED_LINE` passed as BOTH `pending` and `recorded`, so the
+replacement is a provable no-op and the write is a pure append — and that helper proves the
+byte-identical prefix and the unchanged recorded `## Verdict` on the bytes it produced rather than on
+the construction that made them. CI re-checks the same two properties in
+`tests/test_phase18_docs.py::test_extraction_report_addendum_is_additive`, which derives the
+pre-append revision from git rather than pinning a hash.*
+
+**What this resolves.** The continuation above states two things at once (`:374-381`): that the 73
+measured zero-cells behind admissibility item (4), published at `:236`, sit **INSIDE** Phase 19's
+retroactive scope limit, and that the **`LEAKAGE_DEMONSTRATED`** verdict sits in that limit's
+exemption. It names this as "the one place in this report where the exemption below could be read as
+covering something it does not cover" — and then leaves the tension standing. A skeptic's objection
+follows immediately: item (4) is an admissibility condition, admissibility gates the verdict, so how
+can the gated thing be exempt when one of the things gating it is not? That objection is answered
+here, from the code, rather than by assertion.
+
+**The mechanism, with both lines cited.**
+
+- `scripts/phase18_extraction.py:1636` — the item-(4) condition is
+  `zero_cells[key]["successes"] == 0 and zero_cells[key]["exposure_rank"] is None`. Exposure enters
+  as a **PRESENCE check and nothing else**: item (4) asserts that every measured-zero cell CARRIES a
+  rank, and never reads what that rank says. A wrong rank VALUE cannot move this condition, because
+  no branch reads the value — inside the whole of `null_result_is_admissible` the identifier
+  `exposure_rank` occurs exactly twice, once in the docstring at `:1567` and once at `:1636`, where
+  the only operator applied to it is `is None`.
+- `scripts/phase18_extraction.py:1657` — the terminal ternary is
+  `return (LEAKAGE_DEMONSTRATED if attack_successes > 0 else NULL_ADMISSIBLE), reasons`. The verdict
+  is chosen by a **GENERATION count**. Every path to `INCONCLUSIVE` has already returned above it, so
+  once the four conditions hold there is exactly one quantity left to decide on and it is a count of
+  successful extractions.
+
+**Both statements are true at once, and the split above is what makes them consistent rather than
+contradictory.** Item (4) is INSIDE the limit **as a published READING**: `:236` publishes "all 144
+pre-registered cells covered; 73 measured zero and every one carries its exposure rank", and for
+those 73 cells the accompanying generation number is zero BY CONSTRUCTION, so the rank standing
+beside each one is the only discriminating evidence there is — precisely the shape Phase 19's limit
+reaches. And the VERDICT that item (4) gates is nonetheless EXEMPT, because the gate consumes item
+(4) as a **completeness precondition** — does a rank exist for every zero cell — rather than as
+evidence, and the value the gate returns is decided by generation. A reading can be rank-only while
+the gate that merely requires it to EXIST is not, and that is the whole reconciliation: presence on
+one side, generation on the other, with the rank's VALUE consumed by neither.
+
+**What a missing rank WOULD do, stated so the exemption cannot read as unfalsifiable.** Exactly one
+thing: `:1638-1646` appends the item-(4) failure reason and returns **`INCONCLUSIVE`**. It cannot
+produce a different admissible verdict, because the only two admissible verdicts are chosen at
+`:1657` on `attack_successes`, which a missing rank does not touch. The failure mode of item (4) is
+therefore a refusal to publish at all, never a different published verdict — which is also why a
+rank whose VALUE is untrustworthy leaves the verdict exactly where it was.
+
+**Nothing is withdrawn.** The recorded `## Verdict` above still reads **`LEAKAGE_DEMONSTRATED`**,
+returned by `null_result_is_admissible` and carried through `assemble_verdict` unchanged. The
+2026-08-17 ship decision still stands as SHIP AS-IS. The 2026-08-19 scope limit above stands exactly
+as written, and the 73 cells still sit inside it. What this section adds is the mechanism that
+continuation was missing; no number in this report moves.
