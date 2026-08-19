@@ -564,7 +564,7 @@ Plans:
 - [x] 19-08-PLAN.md — calibration corpus + calibration adapter retrain (D6, ~80-82 s measured); first `results/phase19_*` artifact
 - [x] 19-09-PLAN.md — CHECKPOINT: the blind calibration erasure and its scored run; the floor is NOT locked here
 - [x] 19-10-PLAN.md — the dialogue seed-pair floor, the (b) seed-stride replicate, and retention PPL on an adapted model
-- [ ] 19-11-PLAN.md — CHECKPOINT: lock `scripts/phase19_floor.py` and re-prove reachability against the measured floor
+- [x] 19-11-PLAN.md — CHECKPOINT: lock `scripts/phase19_floor.py` and re-prove reachability against the measured floor — **APPROVED**; `TARGET_FLOOR` = `0.09107873950450847`, branch `reachability-min` = perfect-erasure-only
 - [ ] 19-12-PLAN.md — CHECKPOINT: erase the target by M1, record the collateral curve, score at A2/K=48
 - [ ] 19-13-PLAN.md — ERASE-02: the retrain-without reference arm, run rather than explained
 - [ ] 19-14-PLAN.md — the DESCRIPTIVE representational read, with the not-gated guard re-run against it
@@ -601,6 +601,6 @@ gate returned MOOT the milestone would have shipped at 18.)
 | 16. Weight-vs-Prompt Persistence Control | v3.0 | 11/11 | Complete    | 2026-08-14 |
 | 17. Multi-Persona Isolation Matrix | v3.0 | 11/11 | Complete    | 2026-08-15 |
 | 18. Black-Box Adversarial Extraction Audit | v3.0 | 16/16 | Complete   | 2026-08-17 |
-| 19. Selective Memory Erasure | v3.0 | 10/16 | In Progress|  |
+| 19. Selective Memory Erasure | v3.0 | 11/16 | In Progress|  |
 
-**Totals:** 18 phases complete, 87 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 9 of 16 plans; the pre-registration is complete, human-reviewed and CLOSED at 19-07; at 19-08 the ordering stopped being a claim, and at 19-09 the ancestry guard checks 15 pin commits against 8 tracked `results/phase19_*` artifacts — checked = 120, non-vacuous and green. **The blind calibration measured 0/23 and the (a) floor it prices is `0.09107873950450847`, not the `0.2` the closed pin computes internally; three pin defects were published as a D3 dated continuation rather than edited, and the corrected floor is tripwired so 19-11 cannot lock the wrong one.**).
+**Totals:** 18 phases complete, 87 plans, 2 milestones shipped; 4 phases in v3.0 (3 complete, Phase 19 executing — 11 of 16 plans; the pre-registration is complete, human-reviewed and CLOSED at 19-07; at 19-08 the ordering stopped being a claim, and at 19-09 the ancestry guard checks 15 pin commits against 15 tracked `results/phase19_*` artifacts — checked = 225, non-vacuous and green. **At 19-11 the three measured constants were LOCKED in `scripts/phase19_floor.py` and a human APPROVED all three severities knowingly: `TARGET_FLOOR` = `0.09107873950450847` IS `wilson_upper_bound(0, 27)` exactly, so (a) clears ONLY on a perfect erasure — zero successes over all 27 target questions; (c) ships its literal PRE-EXISTING failure (dialogue +1.2317, retention +0.1908, both on the untouched adapter) with its dated diagnosis beside it; (b)'s margin ships with its softness named (8.0 of 27 questions, four of seven inputs saturated ceiling artefacts). The approved posture for 19-12/19-13: every number as measured, no softening. `0.2` appears twice by unrelated routes — the un-mirrored D2 direction at rate 0.0 and the pin's defect-B path at rate 0.8846 — and neither corroborates the other.**).
