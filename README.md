@@ -255,3 +255,50 @@ withdrawn** — the verdict, every measurement behind it and all four defects wi
 corrections stand exactly as published, in
 [results/phase19_erasure_report.md](results/phase19_erasure_report.md) and
 [docs/REPORT.md](docs/REPORT.md).
+
+## Pin defect labels — the phase publishes five, A through E (recorded 2026-08-19)
+
+**Appended, not edited.** Everything above stands as written, including the Phase 19 paragraph that
+closes the section above this line. Recorded text in this project is corrected by dated note rather
+than in place, so no sentence above was changed to make this section true. This is a **labelling**
+correction and it retracts nothing: no defect is added, none is withdrawn, no measurement moves.
+
+**Phase 19 publishes five distinct defects in the closed pin `scripts/phase19_erasure.py`, and the
+canonical labels are LETTERS.** They are fixed in
+[results/phase19_erasure_report.md](results/phase19_erasure_report.md), section *Defect numbering —
+the canonical labels*, which moved to letters because two different defects had each been published
+as "the fourth" and no ordinal identified either one unambiguously.
+
+| label | defect | line in the closed pin |
+| --- | --- | --- |
+| **A** | `zero_results_have_nll` compares an ORDERED tuple against records serialised with `sort_keys=True`, so it reads False on KEY ORDER ALONE while every NLL is present | `:1562` vs `:2948` |
+| **B** | `_calibration_rate()` reads `record["pre_erasure"]["per_fact"]` — Phase 18's candidate recall — rather than the calibration arm's own rate | `:3850-3855` |
+| **C** | `rows.update(per_fact_rows(...))` lets one (b) tier overwrite the other, and the pinned `report` subcommand SystemExits on the resulting rows | `:2922` |
+| **D** | `_cmd_report` passes `retention_perplexity`'s `[ppl, n]` pair straight into the gate's scalar `retention_ppl=`, where the comparison raises `TypeError` | `:3811` |
+| **E** | `_selected_components` reads the TARGET's stopping rule on the calibration twin's 6 members while reading every BYSTANDER on 8, inside one call | `:3576` |
+
+**A**, **B** and **C** are published in
+[results/phase19_calibration_correction.json](results/phase19_calibration_correction.json) as the
+record keys `defects.A`, `defects.B` and `defects.C`; **D** in
+[results/phase19_erasure_report.md](results/phase19_erasure_report.md); **E** in
+[results/phase19_reference_set_correction.md](results/phase19_reference_set_correction.md).
+
+**Four versus five — the distinction, stated rather than left to a reader.** **A**, **B**, **C** and
+**D** are the four independent ways the pin's own `_cmd_report` cannot reproduce the `FAILURE`
+verdict, and those four are what the ship decision enumerates. **E** sits in the `erase` subcommand
+— a path that the render never called — so it cannot be one of the four ways the pinned report path
+fails, and the phase nonetheless publishes five. Both counts are correct about different things,
+which is exactly why the letters exist.
+
+**What that makes of the phrasing above.** The section above records that the verdict "was reached
+on a hand-driven path around four published defects in that pin", and that "all four defects with
+their dated corrections stand exactly as published". Both sentences are correct about the four
+`_cmd_report` failures — **A**, **B**, **C** and **D** — and both UNDERCOUNT the phase when read as
+a complete enumeration of the defects it published, which is how they read here: unlike the erasure
+report, README grants itself no in-file exemption. The earlier phrasing is left standing rather than
+edited, per this project's dated-continuation discipline — an in-place correction would also erase
+the evidence that the miscount was ever published.
+
+**Nothing moves.** The verdict of record is still `FAILURE`, the ship decision of record is still
+**DO NOT SHIP** and still withholds exactly one claim, no defect is added or withdrawn, and no
+number above changes.
