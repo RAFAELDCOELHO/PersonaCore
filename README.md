@@ -216,3 +216,42 @@ rate may be a property of LoRA at this capacity — 331,776 trainable parameters
 arm separating the two. The pinned wording is `LORA_PROPERTY_CAVEAT` in
 `scripts/phase18_extraction.py`; the measured result and its interval are appended to
 [docs/REPORT.md](docs/REPORT.md) through the same additive path when the run completes.
+
+## v3.0 audit results (recorded 2026-08-19)
+
+**Appended, not edited.** Everything above stands as written, including the anticipatory paragraph
+that closes the section above this line. Recorded text in this project is corrected by dated note
+rather than in place, so no sentence above was changed to make this section true.
+
+**The audit ran, and it measured the opposite of a low rate.** The paragraph above anticipates a low
+extraction rate and records its caveat before the numbers existed. The numbers now exist: across the
+best attack family (`A2`) on the adapter-on arm, **92 of 104 `core_held_out` questions were
+extracted at least once — 88.5%** (rate 0.884615), with a one-sided **95% Wilson lower bound of
+0.8231**, against an adapter-off control arm — the same weights with the adapter switched off — at
+exactly **0/104** questions at identical budget. The unit is the **question**: a question counts once
+if any of its 48 draws contained the full value. The verdict is **`LEAKAGE_DEMONSTRATED`**, returned
+by the pre-registered gate and published as such in
+[results/phase18_extraction_report.md](results/phase18_extraction_report.md).
+
+Black-box prompt access is the weakest threat model available here, so that number is a **floor on
+leakage, never a ceiling on privacy**: anyone holding the 1.35 MB adapter file has white-box access —
+gradients, per-token probabilities, direct parameter inspection — which is strictly more powerful
+than anything the audit ran.
+
+**The LoRA-capacity caveat still stands, re-scoped.** `LORA_PROPERTY_CAVEAT` is not withdrawn: this
+audit still runs no arm separating a capacity property of LoRA from an achievement of PersonaCore's
+design, and that gap is real. What the caveat no longer does is explain a low number, because there
+was never a low number to explain. It was recorded to stop a comfortable result from reading as an
+achievement; the result was not comfortable.
+
+**Phase 19 — selective erasure attempted, verdict `FAILURE`, ship decision DO NOT SHIP.** Phase 19
+tried to erase exactly one taught fact from the adapter and leave the rest intact. It could not: the
+erasure was not localised to the fact, all seven non-target facts degraded past the pre-registered
+margin, and 77.6370113463966% of the dialogue adaptation was destroyed. The phase is **closed and
+honest, not blocked**. **DO NOT SHIP withholds exactly one claim, and it is the sole reason** — that
+the `FAILURE` verdict is mechanically reproducible by the pinned script alone. It is not: the verdict
+was reached on a hand-driven path around four published defects in that pin. **Nothing is
+withdrawn** — the verdict, every measurement behind it and all four defects with their dated
+corrections stand exactly as published, in
+[results/phase19_erasure_report.md](results/phase19_erasure_report.md) and
+[docs/REPORT.md](docs/REPORT.md).
