@@ -123,7 +123,7 @@ Asserted by `assert_phase18_parity` against Phase 18's own committed values, not
 
 ## Ship Decision
 
-**Phase 19 ship decision: not yet recorded.**
+**Phase 19 ship decision: recorded in the dated continuation at the end of this file.**
 
 ## The two headlines, at equal weight
 
@@ -464,3 +464,86 @@ a defect in the erasure — the erasure's own failure is (b): measured, all seve
    ruler, not a better result.
 4. **NOT a re-scoring.** The verdict of record is `FAILURE`, section 1, returned by the committed
    rule on the measured inputs, and it is what this report ships.
+
+## Ship decision — DO NOT SHIP (dated continuation, 2026-08-19)
+
+*Appended through `scripts/phase19_erasure.append_ship_decision`, which flips the marker in
+`## Ship Decision` above from pending to recorded ONLY because this section carries a decision line
+from the closed `ERASURE_SHIP_DECISIONS` set and a date — Phase 18's W2 was a rewrite that ran
+unconditionally and advertised a decision nobody had written. Every line above this heading is
+byte-identical to what it was before this section existed, including the `## Verdict` section and
+the condition (c) continuation dated the same day.*
+
+Recorded by the operator on 2026-08-19:
+
+Phase 19 ship decision: DO NOT SHIP
+
+### 1. What this does NOT withdraw — every measurement above stands, in full
+
+**DO NOT SHIP retracts no number, no table and no finding in this report.** The scientific result
+remains published exactly as rendered, and none of it is contingent on the decision recorded here:
+
+- the verdict **FAILURE**, with the committed rule's own three reasons, neither softened nor
+  re-scored (section 1);
+- **k = 78 of 288** rank-1 components, dispersed across every layer and every projection, and the
+  headline that licenses — *selective erasure is not selective at 331,776 parameters* (Headline 1);
+- the rank instrument and the generation instrument DISAGREEING, published at **equal weight as a
+  CO-HEADLINE and never as a caveat** (Headline 2), together with its retroactive scope limit on
+  Phase 18's rank-only readings and the explicit exemption of every Phase 18 reading that is paired
+  with a generation number;
+- the M1/M2 comparison behind that co-headline: the rank instrument returning **bit-identical**
+  readings for the two adapters across all eight slots while generation separates them completely;
+- **77.6370113463966%** of the dialogue adaptation destroyed, and the condition (c) diagnosis of
+  2026-08-19 — that a one-sided upper cap, anchored either way, cannot discriminate an erasure at
+  this capacity;
+- all four published defects — **A**, **B**, **C** and the fourth — each named in full with its
+  dated correction, rather than summarised away.
+
+That evidence was measured, it is published, and it stays. A reader who takes only the numbers from
+this report takes them undiminished by what follows.
+
+### 2. What this withholds — one claim, and it is the exact and only reason for the decision
+
+**The single claim withheld is that this verdict is MECHANICALLY REPRODUCIBLE BY THE PIN ALONE.**
+It is not. That, and nothing else, is why the decision is DO NOT SHIP.
+
+The verdict was reached along a **hand-driven path through the UNPINNED
+`scripts/phase19_run.py`**, which routes around the four defects published above in the CLOSED
+`scripts/phase19_erasure.py`. Run against these same committed artifacts, the pin's own
+`_cmd_report` **cannot produce this verdict** — in four independent ways, each already documented:
+
+- **C** — `rows.update(per_fact_rows(...))` collapses one (b) tier over the other, `_nontarget_rates`
+  refuses the resulting rows, and the pinned `report` subcommand **SystemExits**. 19-14 pinned that
+  crash as a committed test.
+- **the fourth** — `_cmd_report` hands `retention_perplexity`'s `[ppl, n]` pair straight to the
+  gate's scalar `retention_ppl=`, where `retention_ppl <= retention_cap` raises **`TypeError`**.
+- **A** — `zero_results_have_nll` reads `False` on key order alone, and `erasure_succeeded`
+  short-circuits to **INCONCLUSIVE** when `target_successes == 0` and that flag is `False`. The
+  pin's unaided reading of a perfect (a) is therefore not FAILURE at all.
+- **B** — `_calibration_rate()` returns Phase 18's candidate recall 0.8846153846153846 instead of
+  the calibration arm's own rate, so the pin's internal floor is the superseded 0.2 rather than the
+  governing `TARGET_FLOOR` 0.09107873950450847 the verdict was read against.
+
+So a reader cannot check out this repository, run the pinned CLI over the committed artifacts, and
+watch this verdict come back. Each routing is disclosed above, and every governing number was
+re-derived through a PINNED function before the gate was called — but disclosure is not mechanical
+reproducibility, and this project does not ship the weaker claim under the stronger word. The
+measurements are reproducible by hand along the path this report documents; **the verdict is not
+reproducible by the pin, and that is what is being withheld.**
+
+### 3. This is a final verdict, not a pause
+
+**DO NOT SHIP is the phase's closing verdict on mechanical reproducibility. It is not a blocker, not
+a TODO, and not a gap left for someone to close later.** Phase 19 is CLOSED, and closed honestly:
+the science shipped, the reproducibility claim did not.
+
+Nobody should return to repair the pin in order to flip this decision. `scripts/phase19_erasure.py`
+is CLOSED at 15 commits, sha256
+`c407246de3c470094ab0bdd868961b7b1c22529c5e00522fec67c3852cb6e303`, and D3 fixes the correction path
+as a dated continuation BESIDE the original rather than an edit over it — the same discipline that
+keeps `scripts/erasure_gate.py` at exactly one commit, `23a830c`, unamended. Editing the pin after
+the numbers exist, so that the pinned path would return the verdict the hand-driven path already
+returned, is precisely the move that would void the pre-registration ordering
+`tests/test_phase16_prereg.py` enforces against git's object graph — and with it every number in
+section 1. Withholding one claim costs this phase a claim. Repairing the pin to recover that claim
+would cost the milestone all of them.
