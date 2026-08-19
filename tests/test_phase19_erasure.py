@@ -4288,3 +4288,129 @@ def test_the_pinned_report_subcommand_cannot_reach_the_committed_arm_records(tmp
         f"{erasure.N_TARGET_QUESTIONS}. Defect C would be gone and this guard needs rewriting "
         "rather than deleting — it exists to keep 19-15 from walking into the crash"
     )
+
+
+def _pooled_committed_rows(arm):
+    """The driver's recovery from defect C, driven on a committed arm record.
+
+    ``_pooled_rows`` calls the PIN's own ``per_fact_rows`` once per tier and sums, so the scoring
+    rule is still Phase 18's ``score_records`` -> ``aggregate_questions`` and nothing is
+    reimplemented here. Loaded through the driver rather than copied, for the same reason.
+    """
+    import phase14_factset as factset
+
+    driver = _load("phase19_run", _DRIVER_REL)
+    record = json.loads(erasure.arm_record_path(arm).read_text(encoding="utf-8"))
+    phase18 = json.loads(erasure.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    values = {f.id: f.value for f in factset.LOCKED_FACTS + factset.SOFT_TIER_FACTS}
+    family = record["config"]["attack_family"]
+    tiers = tuple(sorted({d["tier"] for d in record["draws"] if d["family"] == family}))
+    return (
+        driver,
+        driver._pooled_rows(phase18["draws"], values, family, tiers),
+        driver._pooled_rows(record["draws"], values, family, tiers),
+    )
+
+
+def test_the_pooled_rows_recovery_reconstitutes_the_denominator_the_pin_demands():
+    """19-15 — the RECOVERY, pinned beside 19-14's crash so neither has to be rediscovered.
+
+    The guard above proves `_cmd_report` cannot reach the committed records; this one proves the
+    documented way through actually works, on the same records, through the same pinned functions.
+    Both halves are needed: a guard that only records a blocker leaves the next reader to invent
+    the fix, and a fix with no guard over its input drifts the first time the tier split changes.
+
+    The three assertions are the three things the recovery has to deliver, in order: every pooled
+    row carries `N_TARGET_QUESTIONS`; the pooled count is exactly the sum of the per-tier counts
+    the committed rows carry ONE of; and `nontarget_deltas` — the call that SystemExits on the
+    committed `per_fact` block — ACCEPTS them.
+    """
+    _driver, pre, post = _pooled_committed_rows("erased")
+
+    for label, rows in (("pre-erasure", pre), ("post-erasure", post)):
+        counts = {row["n_questions"] for row in rows.values()}
+        assert counts == {erasure.N_TARGET_QUESTIONS}, (
+            f"the {label} pooled rows carry {counts}, not the pooled "
+            f"{erasure.N_TARGET_QUESTIONS} `_nontarget_rates` demands — the recovery would leave "
+            "every (b) delta divided by the wrong denominator"
+        )
+
+    target_id = erasure.target_fact_id(
+        json.loads(erasure.arm_record_path("erased").read_text(encoding="utf-8"))["draws"]
+    )
+    per_tier = post[target_id]["per_tier"]
+    assert sum(cell["n_questions"] for cell in per_tier.values()) == erasure.N_TARGET_QUESTIONS, (
+        f"the pooled denominator is not the sum of its tiers {per_tier} — the pooling would be "
+        "double-counting or dropping a tier rather than reconstituting D5's 27 = 14 + 13"
+    )
+
+    # The call that SystemExits on the committed `per_fact` block, run on the recovered rows.
+    deltas = erasure.nontarget_deltas(erasure.nontarget_rows(pre), erasure.nontarget_rows(post))
+    assert len(deltas) == len(erasure.GATED_NONTARGET_SLOTS), deltas
+
+
+def test_the_report_renders_end_to_end_on_the_committed_records(tmp_path, monkeypatch):
+    """19-15 — `render_report` DRIVEN to completion on the real records, not inspected.
+
+    19-14's ordering contract, discharged in the position it was written for: the renderer is run
+    against the ACTUAL committed arm records, curve, scores and representational read, and shown to
+    produce a document carrying exactly one `## Verdict` section and exactly one ship-decision
+    placeholder. `render_report`'s `path` is bound at def time, so the CALL is redirected with a
+    partial; the real `results/phase19_erasure_report.md` is asserted untouched afterwards, because
+    a test that wrote it would leave the deliverable unrenderable without deleting evidence.
+    """
+    driver = _load("phase19_run", _DRIVER_REL)
+    _verdict = _load("_verdict", "scripts/_verdict.py")
+    report_path = _ROOT / "results" / "phase19_erasure_report.md"
+    before = report_path.read_bytes() if report_path.exists() else None
+
+    target = tmp_path / "rendered.md"
+    monkeypatch.setattr(
+        driver.pin, "render_report", functools.partial(erasure.render_report, path=target)
+    )
+    monkeypatch.setattr(driver.pin, "ERASURE_REPORT_PATH", target)
+    driver.report()
+
+    text = target.read_text(encoding="utf-8")
+    assert len(_verdict.VERDICT_SECTION.findall(text)) == 1, "not exactly one `## Verdict` section"
+    body = _verdict.recorded_verdict(text)
+    assert any(v in body for v in erasure.VERDICTS), body
+    assert text.count(erasure.ERASURE_SHIP_PENDING_LINE) == 1, (
+        "19-16's `append_addendum` replaces EXACTLY one placeholder"
+    )
+    assert erasure._BARE_ZERO_PERCENT.search(text) is None, "STAT-02: a bare zero percentage"
+
+    after = report_path.read_bytes() if report_path.exists() else None
+    assert after == before, "the render test touched 19-15's committed deliverable"
+
+
+def test_the_verdict_is_reached_through_the_pin_and_never_reimplemented_in_the_driver():
+    """STAT-05 in the DRIVER, where the one verdict call is actually made from.
+
+    `test_verdict_is_called_never_reimplemented` scans the PIN and proves `render_verdict` is the
+    only `erasure_succeeded` call site there. That scan structurally cannot see the unpinned driver,
+    and the driver is what 19-15 renders the report from — so a second verdict assembled beside the
+    pinned one would be invisible to it. This is the same scan pointed at the other file.
+    """
+    tree = ast.parse(_DRIVER_SOURCE)
+    assert _call_sites("erasure_succeeded", _DRIVER_SOURCE) == [], (
+        "the unpinned driver calls `erasure_succeeded` directly. The phase's ONE verdict path is "
+        "`phase19_erasure.render_verdict`, and a second call site here would be a second "
+        "evaluation free to disagree with the committed one"
+    )
+    assert "erasure_succeeded" not in {
+        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+    }, "the driver DEFINES `erasure_succeeded` — the committed rule was re-written"
+
+    sites = [holder for holder, _call in _call_sites("render_verdict", _DRIVER_SOURCE)]
+    assert sites == ["report"], (
+        f"`render_verdict` is called from {sites} in the driver, not from exactly `report`. The "
+        "verdict is called ONCE in this phase and the caller is named so the path is a located one"
+    )
+
+    # NON-VACUITY: the same scan on a mutant that reaches the gate directly.
+    assert _call_sites(
+        "erasure_succeeded",
+        "from erasure_gate import erasure_succeeded\ndef report():\n"
+        "    return erasure_succeeded(target_successes=0)\n",
+    ), "a direct gate call in a driver reads as clean"
