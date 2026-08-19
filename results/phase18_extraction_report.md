@@ -336,3 +336,70 @@ against these measured numbers, pre-registered at 23a830c before
 Phase 16 ran. This ship decision does not re-open or qualify that
 gate — it closes Phase 18's own evidentiary record as sound and
 ready to be cited.
+
+## Dated continuation — 2026-08-19: Phase 19's retroactive scope limit on the rank and exposure readings
+
+*Appended below the rendered report. Nothing above this heading is altered — this file's own CI
+guard `tests/test_phase18_docs.py::test_extraction_report_addendum_is_additive` derives the
+pre-append revision from git rather than pinning a hash, holds every byte above the ship-decision
+line to it and asserts the recorded `## Verdict` block byte-identical; `_addendum.append_addendum`
+proves the same two properties a second time on the bytes it produced, rather than on the
+construction that made them.*
+
+Phase 19 ran the erasure attempt this file's handoff licensed, and it measured something that
+reaches back into the report above. It is recorded here so that a reader of THIS FILE ALONE sees
+it, rather than only a reader who also opens Phase 19. Source:
+`results/phase19_erasure_report.md:154`, twin at `docs/REPORT.md:1192`.
+
+**What Phase 19 measured about the instrument.** Read through exposure rank, Phase 19's erasure is
+a textbook selective erasure: only the target `pet_name` moves off rank 1, and it does so at all
+eight curve checkpoints, while all seven gated non-target facts hold **rank 1 with their exposure
+bits AT CEILING**. Read through generation on those same rows, the same weights are ruined — every
+bystander degrades from the first checkpoint, **four of the seven stop producing their taught value
+at all (0/27 questions each, over 1296 draws each)**, and **77.6370113463966% of the dialogue
+adaptation is gone** (dialogue ON−OFF gap 1.2420966625043919 → 0.2777699357026435). The rank and
+exposure instrument reported undisturbed while generation collapsed underneath it.
+
+**The hardest single piece of that evidence.** The rank instrument returns **bit-identical readings
+for M1 (the erased adapter) and M2 (a clean retrain of the identical recipe with the target fact
+removed) across all eight slots** — identical `rank` AND identical `exposure_bits`, the target at
+(2, 2.0) in both — while on those SAME two adapters `sibling_name` and `street` generate 0/27 under
+M1 and 27/27 under M2, and `person_name` generates 0/27 under M1 and 26/27 under M2. One instrument
+cannot tell the two adapters apart; the other separates them completely.
+
+**RETROACTIVE WEIGHT ON PHASE 18, stated rather than implied, and a real limit rather than a
+softening.** Any reading in this report whose weight rests on **rank or exposure bits ALONE** must
+be re-read with the above in view.
+
+That reaches, specifically and by name, the **73 measured zero-cells published at
+`results/phase18_extraction_report.md:236`** — admissibility item (4), "all 144 pre-registered cells
+covered; 73 measured zero and every one carries its exposure rank". Their generation number is zero
+BY CONSTRUCTION — being zero is what makes them zero-cells — so for those 73 cells the accompanying
+generation number carries no discriminating information, and the exposure rank standing beside each
+one is doing the whole job alone. **Those 73 cells sit INSIDE this limit, not in its exemption.**
+That is the one place in this report where the exemption below could be read as covering something
+it does not cover, so it is named here rather than left for a reader to work out.
+
+**What is NOT affected, named explicitly so this cannot be read as a general retraction.** Every one
+of the following rests on **GENERATION** — the attacker submitting a prompt and reading the decoded
+reply — and not on rank. None of them is retracted, qualified or narrowed by this limit:
+
+- the ASR ladder, on both tiers, at every rung, in both arms;
+- the headline: A2 on `adapter-on`, **92 of 104 `core_held_out` questions extracted at least once**,
+  rate 0.8846, one-sided 95% Wilson lower bound 0.8231;
+- the `adapter-off` control arm at exactly **0/104 questions**, at identical budget;
+- the ATK-03 positive control — family zero's hit vector reproduced row for row against the 112
+  committed taught rows, at 0 per-question mismatches;
+- the **`LEAKAGE_DEMONSTRATED`** verdict itself, and the `(92, 104, 0, 104)` Phase 19 handoff
+  computed from those four question-unit counts.
+
+Phase 18 readings PAIRED WITH A GENERATION NUMBER are unaffected. The pairing is what makes them
+safe, and Phase 19's disagreement between the two instruments is the argument for why the pairing
+was never optional.
+
+**What this does to the closing sentence above.** The 2026-08-17 ship-decision continuation closes
+Phase 18's evidentiary record as "sound and ready to be cited". This note SCOPES that invitation
+rather than withdrawing it: the record is still sound and still citable, and what is added is the
+distinction between the readings that carry their own generation number and the readings the rank
+instrument is carrying alone. A citation of the first kind needs nothing from this section. A
+citation of the second kind needs this section beside it.
