@@ -161,22 +161,48 @@ reverted.
 **Target features:**
 
 - **DP-SGD from scratch, cost-measured before its budget is pre-registered.** Per-example gradient
-  clipping + Gaussian noise on the LoRA gradients with (ε, δ) accounting. A calibration step
-  measures real M3 wall-clock — naive batch-1 accumulation (~B×, the shape `estimate_fisher`
-  already exhibits at N=2000) versus closed-form per-example norms over the adapter's
-  pure-`nn.Linear` surface — and the sweep budget is set from that measurement rather than assumed.
-  Hand-rolling DP-SGD is itself a deliverable; it is the only arm that makes a formal claim.
+  clipping + Gaussian noise on the LoRA gradients with (ε, δ) accounting. Hand-rolling DP-SGD is
+  itself a deliverable; it is the only arm that makes a formal claim.
+
+  *Cost measured at v4.0 research (2026-08-20), correcting two assumptions in this section as first
+  written.* On the real `GPT(ModelConfig())` + `inject_lora` (72 tensors, 331,776 params, MPS fp32,
+  sync-fenced): `torch.func.vmap(grad(functional_call))` costs **1.07× at B=8 and 1.02× at B=64**
+  over a batched step, and is exact (per-example norm rel err 6.5e-08 against batch-1 truth). Naive
+  batch-1 accumulation costs **~3×** (3.31× / 2.97×) — **not ~B×**, which this section asserted by
+  wrongly extrapolating from `estimate_fisher`. Ghost clipping is rejected on arithmetic: at r=8,
+  T=256 the crossover is T < 7.8 tokens, so it costs ~33× *more* than direct materialization.
+  Also corrected: the adapter surface is **not** pure `nn.Linear` — `lora_A`/`lora_B` are bare
+  `nn.Parameter`s in an inline matmul (`lora/layer.py:41`), so module hooks do not reach them and
+  restructuring would rename state-dict keys and invalidate `persona_adapter.pt` and every v3.0
+  checkpoint. Tensor hooks and `vmap` both work; the closed-form-over-`nn.Linear` route does not
+  apply here.
+
+  **The binding constraint moved.** Training is ~17 s per arm, so DP-SGD cost does not gate the
+  sweep. Evaluation likely does — the Phase 18 precedent is 42,480 draws per arm. Research flagged
+  evaluation wall-clock as **unmeasured** (its generation probe failed and it asserts no number), so
+  the calibration must measure **both legs** and set Z from whichever binds.
 - **Adversarial extraction-aware training.** The adapter trained against the Phase 18 attack suite
   (paraphrase / prefix injection / role-play / repeated attempts), with attack intensity as the
   sweep axis. No formal guarantee; generalization to unseen attacks is the declared open question.
 - **Retrained unmitigated control arm** at identical budget and seed protocol. v2.0's published
   0.4921 / 0.3483 belong to a different training run and cannot serve as this milestone's baseline
   without confounding the comparison with run-to-run variance.
-- **Privacy/utility frontier with an existence gate.** Full curve for both arms — ε for DP-SGD,
-  intensity for adversarial. X (extraction ceiling) and Y (taught-recall floor) locked in committed
-  code before any curve point is measured; gate = ∃ at least one point with extraction ≤ X **and**
-  recall ≥ Y. This is the direct answer to Phase 19's failure mode, where the mechanism "worked" by
-  destroying the model.
+- **Privacy/utility frontier with an existence gate — THREE conditions, not two.** Full curve for
+  both arms — ε for DP-SGD, intensity for adversarial. Thresholds locked in committed code before
+  any curve point is measured; gate = ∃ at least one point satisfying **all three** of:
+  (a) extraction ≤ X, (b) taught-fact recall ≥ Y, (c) **general capability ≥ C**.
+
+  *Corrected at v4.0 research (2026-08-20).* This section as first written specified only (a) and
+  (b) and claimed that answered Phase 19's failure mode. It does not. `erasure_gate.py` carried
+  three conditions and states in its own text that its third exists "because (a) and (b) can BOTH be
+  satisfied by a model degraded into uselessness" — and Phase 19 proved the point, destroying
+  **77.6% of the dialogue adaptation** while its target condition cleared at 0/27 with zero
+  headroom. Taught-fact recall covers only the 8 `LOCKED_FACTS`; a defense can zero leakage, hold
+  those 8, and have ruined the model at everything else, and a two-condition gate cannot see it.
+  Condition (c) is measured on capability the taught facts do not touch — the existing masked
+  dialogue val PPL (4.5733) and the frozen retention sub-bin anchors (2.1076 / 3.891140) are the
+  candidate instruments, since both already exist and both already have published values to floor
+  against.
 - **Relearning attack, two instruments.** Absolute recovery ceiling as the binary pre-registered
   gate (recovered recall ≤ X within fixed budget Z), plus a cost-to-recovery curve (steps/examples
   to restore leakage) measured against a never-taught fresh adapter at identical budget and seed
@@ -241,7 +267,8 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [ ] DP-SGD from scratch on the LoRA gradients (per-example clipping + Gaussian noise, (ε, δ) accounting), with its per-example wall-clock overhead **measured on the M3 before the sweep budget is pre-registered** (Phase 20+)
 - [ ] Adversarial extraction-aware training against the Phase 18 attack suite, attack intensity as the sweep axis (Phase 20+)
 - [ ] Retrained unmitigated control arm at identical budget and seed protocol — the baseline the frontier is read against, since v2.0's published recall belongs to a different run (Phase 20+)
-- [ ] Privacy/utility frontier for both arms with a pre-registered existence gate: ∃ a curve point with extraction ≤ X **and** taught-recall ≥ Y, X and Y committed before any point is measured (Phase 20+)
+- [ ] Define the **privacy unit** before any accountant is written — a fact is carried by 22 rendered rows (measured), and `get_batch_memmap_masked` draws overlapping windows with replacement over a flat concatenated bin, so an example-level ε bounds nothing about a fact. This is the milestone's longest dependency chain and it is design work, not code (Phase 20+)
+- [ ] Privacy/utility frontier for both arms with a pre-registered **three-condition** existence gate: ∃ a curve point with extraction ≤ X **and** taught-fact recall ≥ Y **and** general capability ≥ C, all three committed before any point is measured (Phase 20+)
 - [ ] Relearning attack as adversarial validation — absolute recovery ceiling as the binary gate (recall ≤ X within fixed budget Z), plus cost-to-recovery curve against a never-taught fresh adapter at identical budget and seed (Phase 20+)
 
 ### Out of Scope
@@ -297,7 +324,7 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 | Honest negatives are never edited in place; continuations are separate and dated after (v2.0) | The value of a recorded negative is that it was recorded before anyone knew if it would be convenient. Editing it later destroys exactly that, and invisibly | ✓ Good — the λ-sweep verdict, the recall ADAPT qualifications, and the free-running story-mode failure all still read as originally written. The report carries text now known to be wrong, corrected by dated note rather than by edit |
 | Structural enforcement replaces declared invariants (v2.0) | A docstring asserting a property is true the day it is written and silently false after the next refactor; nothing notices. A checked mechanism fails loudly on every suite run | ✓ Good — named by the milestone's own learnings as its most recurring failure mode, then converted three times: demo mask comparison, prompt token-id check, and the plotting module's no-checkpoint guard (AST walk + fresh-interpreter probe, watched failing before being trusted) |
 | Extract once from checkpoints, then plot only from a committed artifact (v2.0 Phase 15) | A committed PNG whose inputs are gitignored is an assertion, not evidence — nobody with a fresh clone can regenerate or audit it | ✓ Good — `results/phase15_norms.json` feeds the figures, the report's per-layer disclosure, and the correlation statistic. One source of truth, and the plotting half runs in the CPU-only suite |
-| A resource budget may be measured before pre-registration; an outcome threshold may not (v4.0 kickoff, 2026-08-20) | X (extraction ceiling) and Y (recall floor) are what the gate judges, so they must be locked before any curve point exists. Z (sweep width, step budget) is what the gate is *evaluated over* — guessing it wrong silently truncates the curve and can manufacture a failure that is really a budget artifact. DP-SGD per-example clipping can cost ~B×, not 2×, so Z cannot be assumed | ⏳ Pending — the distinction is stated in the milestone scope so a reader cannot mistake the cost calibration for a threshold peek |
+| A resource budget may be measured before pre-registration; an outcome threshold may not (v4.0 kickoff, 2026-08-20) | X, Y and C are what the gate judges, so they must be locked before any curve point exists. Z (sweep width, step budget) is what the gate is *evaluated over* — guessing it wrong silently truncates the curve and can manufacture a failure that is really a budget artifact | ✓ Vindicated immediately, and not in the predicted direction. The rule forced a measurement instead of an assumption, and the measurement overturned the assumption twice: per-example cost is ~3× (naive) / **1.07× (vmap)**, not the ~B× this table first asserted, and training at ~17 s/arm is not what binds Z at all — evaluation or corpus size is. An assumed "2×" or "B×" would have sized the sweep against the wrong constraint entirely |
 | Two mitigation arms (DP-SGD + adversarial training) as a frontier comparison, not one arm (v4.0 kickoff, 2026-08-20) | DP-SGD is the only arm that makes a formal (ε, δ) claim, but at 331,776 params it may destroy recall outright — which would repeat Phase 19's "it worked by breaking the model" without a second reading to interpret it against. The adversarial arm has no guarantee but bounds the empirical question directly | ⏳ Pending — cost is N training runs × sweep width × 2 arms on the M3; the DP-SGD cost measurement gates whether the planned sweep width is affordable |
 
 ## Evolution
