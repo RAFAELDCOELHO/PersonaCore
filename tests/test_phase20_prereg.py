@@ -32,6 +32,7 @@ CPU-only, GPU-free, no torch, no network.
 
 import ast
 import fnmatch
+import json
 import pathlib
 import subprocess
 import sys
@@ -56,9 +57,8 @@ _PROSE_PATH = _ROOT / "scripts" / "_prose.py"
 # `tests/test_phase17_stats.py:62`) over `phaseNN_*.py`, and its stated purpose is that "every
 # driver a later plan adds enters these scans the moment it exists". But the pin
 # `scripts/mitigation_gate.py` matches NO `phase20_*.py` glob — it is named for its subject rather
-# than for its phase — so the
-# established form alone would scan nothing here and `_collapsed_glob_guard()` would go red over a
-# register that is simply looking in the wrong place.
+# than for its phase — so the established form alone would scan nothing here and
+# `_collapsed_glob_guard()` would go red over a register that is simply looking in the wrong place.
 #
 # The other established form is a hand-listed tuple (`tests/test_phase16_stats.py:747`), and that is
 # exactly the F-08 blindness the glob register was introduced to CLOSE: Phase 23's
@@ -639,3 +639,379 @@ def test_prose_helper_is_outside_every_pin_glob():
         f"{_PROSE_PATH} entered _GATE_MODULES {[p.name for p in _GATE_MODULES]} — the register "
         "that governs this phase's pin must not govern the phase-neutral helper beside it"
     )
+
+
+# The published Phase 19 M1 readings the D-30 fixture reuses. Parsed, never transcribed.
+_PHASE19_ARM_ERASED = _ROOT / "results" / "phase19_arm_erased.json"
+
+
+def _module_scope_floats(tree):
+    """Float constants inside MODULE-SCOPE ``ast.Assign`` nodes, excluding ``FIXTURE_*`` targets.
+
+    Module scope is where a chosen constant would live, and ``_enclosing_functions`` records it as
+    ``None`` rather than dropping it precisely because it is the most dangerous placement there is.
+    Note that an assignment inside ``if __name__ == "__main__":`` is STILL module scope under that
+    definition — the pin's self-check was deliberately written with zero float literals so this
+    audit reads the same set either way.
+
+    WHY ``FIXTURE_*`` IS EXCLUDED, AND EXACTLY HOW BIG THE RESULTING HOLE IS. The three fixture
+    dicts hold roughly forty numbers between them, and they are INPUTS to a demonstration rather
+    than criteria. FOUR fields, and only four, are proved against a published source by
+    ``test_destroyed_model_fixture_matches_the_published_phase19_readings`` below:
+    ``point_dialogue_ppl_on``, ``point_dialogue_ppl_off``, ``point_retention_ppl`` and
+    ``control_gap``, each asserted equal to a value parsed from
+    ``results/phase19_arm_erased.json``. EVERY OTHER FLOAT inside a ``FIXTURE_*`` dict is a
+    DELIBERATELY FABRICATED value with no external source to check it against — no v4.0 arm exists
+    (D-13), so there is nothing for them to be equal to.
+
+    THE RESIDUAL HOLE, STATED IN WORDS RATHER THAN GLOSSED: a third chosen constant could hide
+    inside a ``FIXTURE_*`` dict and THIS AUDIT WOULD NOT SEE IT. That risk is ACCEPTED. The
+    alternative — asserting fabricated fixture inputs against a source that does not exist — is
+    exactly the kind of unprovable assertion this phase exists to refuse, and buying a tighter
+    number by making a claim nobody can check would be the defect, not the fix. What the hole IS
+    narrowed by is a name allow-list: the module-scope ``FIXTURE_*`` names are asserted to be
+    exactly the three that exist, so the cheapest evasion — a FOURTH fixture dict added to carry
+    constants past this scan — is caught even though a constant buried in one of the three is not.
+    """
+    owner = _enclosing_functions(tree)
+    floats = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or owner.get(node) is not None:
+            continue
+        if any(
+            isinstance(target, ast.Name) and target.id.startswith("FIXTURE_")
+            for target in node.targets
+        ):
+            continue
+        floats.update(
+            child.value
+            for child in ast.walk(node)
+            if isinstance(child, ast.Constant) and isinstance(child.value, float)
+        )
+    return floats
+
+
+def _module_scope_fixture_names(tree):
+    """The module-scope names beginning ``FIXTURE_`` — the allow-list narrowing the hole above."""
+    owner = _enclosing_functions(tree)
+    return {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign) and owner.get(node) is None
+        for target in node.targets
+        if isinstance(target, ast.Name) and target.id.startswith("FIXTURE_")
+    }
+
+
+def _numeric_constants_outside_fixtures(tree):
+    """Every numeric constant in the pin except those inside a ``FIXTURE_*`` assignment.
+
+    Booleans are excluded explicitly: ``isinstance(True, int)`` is ``True`` in Python, so a naive
+    numeric filter would collect ``True``/``False`` as ``1``/``0`` and make ``1 in numbers``
+    meaningless.
+    """
+    numbers = set()
+    for top in tree.body:
+        if isinstance(top, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id.startswith("FIXTURE_")
+            for target in top.targets
+        ):
+            continue
+        numbers.update(
+            node.value
+            for node in ast.walk(top)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, (int, float))
+            and not isinstance(node.value, bool)
+        )
+    return numbers
+
+
+def test_exactly_two_chosen_constants():
+    """D-18: a reviewer auditing this pin finds EXACTLY TWO numbers to argue with.
+
+    Everything else in the module is measured, imported or computed. The audit is run three ways
+    against each other so no single one of them can be satisfied alone: the SOURCE's module-scope
+    floats, the RUNTIME values of `CHOSEN_CONSTANTS`, and its KEY SET. A constant added to the
+    source but left out of `CHOSEN_CONSTANTS` fails the first-vs-second comparison; one added to
+    `CHOSEN_CONSTANTS` under a different name fails the third.
+    """
+    _collapsed_glob_guard()
+    tree = _tree(_MITIGATION_GATE_PATH)
+
+    floats = _module_scope_floats(tree)
+    assert floats == {0.7, 0.5}, (
+        f"the pin's module-scope float literals outside FIXTURE_* assignments are "
+        f"{sorted(floats)}, not {{0.5, 0.7}}. D-18 fixes the count at TWO — `F_Y` and `F_C`, "
+        "both labelled in the "
+        "source as milestone PREFERENCE rather than derivation — because a reviewer auditing a "
+        "pre-registration should find exactly two numbers to argue with and be able to check that "
+        "every other one was measured, imported or computed"
+    )
+    assert floats == set(mitigation_gate.CHOSEN_CONSTANTS.values()), (
+        f"the source holds {sorted(floats)} while CHOSEN_CONSTANTS holds "
+        f"{sorted(mitigation_gate.CHOSEN_CONSTANTS.values())}. CHOSEN_CONSTANTS is the audit "
+        "surface kept AS DATA so a reviewer needs no second hand-maintained list; the moment it "
+        "disagrees with the source it is a second list, and the wrong one is the one being read"
+    )
+    assert set(mitigation_gate.CHOSEN_CONSTANTS) == {"F_Y", "F_C"}, (
+        f"CHOSEN_CONSTANTS is keyed {sorted(mitigation_gate.CHOSEN_CONSTANTS)}. The two chosen "
+        "constants are `F_Y` (the utility target, D-15/D-16) and `F_C` (the catastrophe detector, "
+        "D-17), and they are SEPARATE because binding them to one number would assert a coupling "
+        "Phases 13 and 19 both measured to be absent"
+    )
+
+    # THE HOLE, NARROWED AS FAR AS IT HONESTLY CAN BE. The float audit above skips FIXTURE_*
+    # assignments, so a constant hidden INSIDE one of them is not caught — see
+    # `_module_scope_floats`'s docstring for why that risk is accepted. What IS caught is the
+    # cheapest evasion: a FOURTH fixture dict added to carry constants past the scan.
+    assert _module_scope_fixture_names(tree) == {
+        "FIXTURE_CLEARING_POINT",
+        "FIXTURE_DESTROYED_MODEL",
+        "FIXTURE_TRUNCATED_SWEEP",
+    }, (
+        f"the pin's module-scope FIXTURE_* names are {sorted(_module_scope_fixture_names(tree))}. "
+        "Three fixtures are committed and the float audit's exclusion is scoped to exactly those "
+        "three; a fourth would widen an accepted hole into an unbounded one"
+    )
+
+
+def test_no_imported_baseline_is_retyped():
+    """GATE-02 and GATE-04: nothing measured elsewhere is retyped as a literal in the pin.
+
+    Six values, each forbidden for its own reason and each absent from the pin's numeric constants:
+
+      * `4.5733` / `3.891140` — the v2.0 baselines. They are IMPORTED
+        (`V20_MASKED_DIALOGUE_VAL_PPL`, `V20_EWC_RETENTION_PPL`), and the difference is decided at
+        the eighth decimal: the retention cap computed from the imported 3.891140 is
+        3.9085032379884783, while the measured 3.891139975617828 would give 3.9085032136063065.
+        "Import, never retype" is an arithmetic fact here, not a style preference.
+      * `0.068930` — a Phase 12 FULL-FINE-TUNE retention floor. D-06 supersedes it for v4.0, so it
+        is neither imported nor retyped: the adapter-regime floor arrives as a required kwarg.
+      * `0.005214448168350039` — the committed dialogue noise floor. A required kwarg (D-07), never
+        a literal.
+      * `0.4921` / `0.3483` — v2.0's published recall pair. GATE-04 forbids DERIVING Y from them;
+        each Y leg is `F_Y` times its OWN v4.0 retrained-control value (D-16), which reproduces the
+        generalization ratio for free with no borrowed run-to-run variance.
+
+    AN AST SCAN, NEVER A SUBSTRING SCAN, AND THE DIFFERENCE IS LOAD-BEARING HERE. `0.4921` DOES
+    appear in this pin's source — inside the `F_Y` provenance comment that says the pair must never
+    be used — and `0.005214448168350039` appears inside `dialogue_gap_band.__doc__`, which is where
+    D-04's bit-identity proof is recorded. A substring check would report both as violations and
+    would be demanding the removal of the very prose that explains the rule. Prose ABOUT a number
+    is not the number; only an AST walk over `ast.Constant` can tell them apart.
+    """
+    _collapsed_glob_guard()
+    tree = _tree(_MITIGATION_GATE_PATH)
+    numbers = _numeric_constants_outside_fixtures(tree)
+
+    for banned, why in (
+        (4.5733, "the v2.0 masked dialogue baseline — IMPORTED as V20_MASKED_DIALOGUE_VAL_PPL"),
+        (3.891140, "the v2.0 EWC retention baseline — IMPORTED as V20_EWC_RETENTION_PPL"),
+        (0.068930, "the Phase 12 FULL-FINE-TUNE retention floor — SUPERSEDED for v4.0 by D-06"),
+        (0.005214448168350039, "the committed dialogue noise floor — a required kwarg (D-07)"),
+        (0.4921, "v2.0's published taught recall — GATE-04 forbids deriving Y from it"),
+        (0.3483, "v2.0's published held-out recall — GATE-04 forbids deriving Y from it"),
+    ):
+        assert banned not in numbers, (
+            f"{banned} appears as a NUMERIC CONSTANT in {_MITIGATION_GATE_PATH.name}: {why}. "
+            "GATE-02's discipline is imported-never-retyped and GATE-04's is that Y is a fraction "
+            "of the v4.0 retrained control, never of v2.0's published pair. A retyped baseline is "
+            "a second copy of a number, free to stop matching the one it was copied from"
+        )
+
+    # The SUPERSEDED GATE-02 dialogue cap, forbidden BOTH ways. Absent as a numeric constant AND
+    # as a source substring — the one value in this file for which the stricter check is correct,
+    # because MITIGATION_DECISION_RULE and `dialogue_gap_band.__doc__` both discuss the superseded
+    # criterion at length and both were written to name it BY ITS COMPUTATION rather than by its
+    # value. A pin whose whole discipline is "computed from imported constants, never retyped"
+    # must not retype the one number it supersedes, in prose any more than in code.
+    superseded = 4.5837288963367
+    assert superseded not in numbers, (
+        f"{superseded} — GATE-02's original one-sided dialogue cap — appears as a numeric constant "
+        "in the pin. It is named by its COMPUTATION, `superseded_dialogue_cap(gap_noise_floor=...)`"
+    )
+    assert str(superseded) not in _MITIGATION_GATE_PATH.read_text(encoding="utf-8"), (
+        f"{superseded} appears as a SOURCE SUBSTRING in the pin. The superseded criterion is named "
+        "by its computation everywhere it is discussed, prose included, so that the supersession "
+        "is something this module PERFORMS rather than a literal a reader has to trust"
+    )
+
+    # And the k=2 discipline itself is IMPORTED rather than retyped as the integer 2.
+    from_erasure_gate = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "erasure_gate"
+        for alias in node.names
+    }
+    assert "MARGIN_K" in from_erasure_gate, (
+        f"MARGIN_K is not in the pin's erasure_gate import list {sorted(from_erasure_gate)}. The "
+        "k=2 margin is a project-wide discipline (Phase 13's MARGIN, erasure_gate's caps, Phase "
+        "19's condition (b)) and it is IMPORTED, never retyped as a bare 2 — a local 2 is a "
+        "margin that can be changed here without changing it anywhere the discipline is stated"
+    )
+
+    # THE SUPERSESSION IS A COMPUTATION, NOT A CLAIM (ROADMAP SC1). This is the one place the two
+    # forbidden literals above are allowed to appear together: a test file is not the pin and is
+    # not audited by the constant scans. `==`, never a tolerance — the point is BIT-EXACT
+    # reproduction of the v3.0 cap from two imported constants.
+    assert (
+        mitigation_gate.superseded_dialogue_cap(gap_noise_floor=0.005214448168350039)
+        == 4.5837288963367
+    ), (
+        "superseded_dialogue_cap did not reproduce GATE-02's cap exactly. Asserted with `==` and "
+        "no tolerance deliberately: 'GATE-02's dialogue cap, computed from two imported constants "
+        "rather than retyped' is only a fact if the computation lands on the same double"
+    )
+
+
+def test_destroyed_model_fixture_matches_the_published_phase19_readings():
+    """D-30: the fixture's four published fields are PROVED equal to their source, not transcribed.
+
+    A catastrophe that actually happened is not hypothetical, which is why the destroyed-model
+    fixture reuses Phase 19's real M1 readings rather than fabricating a plausible disaster. But
+    reusing a published number and TRANSCRIBING one are different acts, and only the first survives
+    someone fat-fingering a digit — so every field that claims a published source is asserted equal
+    to the parsed artifact here. The remaining fields are fabricated and say so inline; they have no
+    source to be checked against (see `_module_scope_floats`).
+
+    `control_gap` is in this list because it is the field most likely to be retyped and the float
+    audit's `FIXTURE_*` exclusion would let a wrong value straight through: its true double is
+    1.2420966625043919 and the plausible-looking short form 1.242096662504392 is a DIFFERENT float.
+    So it is asserted as the SUBTRACTION rather than against a typed decimal, which is also how the
+    fixture itself writes it.
+    """
+    artifact = json.loads(_PHASE19_ARM_ERASED.read_text(encoding="utf-8"))
+    fixture = mitigation_gate.FIXTURE_DESTROYED_MODEL
+
+    assert fixture["point_dialogue_ppl_on"] == artifact["dialogue_ppl"]["adapter_on"]
+    assert fixture["point_dialogue_ppl_off"] == artifact["dialogue_ppl"]["adapter_off"]
+
+    # INDEXED, not `.get()`: `retention_ppl` is a LIST `[ppl, n_targets]` in this artifact while
+    # `dialogue_ppl` is a dict. Calling `.get("adapter_on")` on the list would raise, and reading
+    # index [0] on the dict would raise too — the two readings genuinely have different shapes.
+    assert fixture["point_retention_ppl"] == artifact["retention_ppl"][0], (
+        f"the fixture's retention reading {fixture['point_retention_ppl']} is not "
+        f"{artifact['retention_ppl'][0]} from {_PHASE19_ARM_ERASED.name}"
+    )
+
+    assert (
+        fixture["control_gap"]
+        == artifact["pre_erasure"]["dialogue_ppl"]["adapter_on"]
+        - artifact["dialogue_ppl"]["adapter_off"]
+    ), (
+        f"the fixture's control_gap {fixture['control_gap']!r} is not the untouched taught "
+        "adapter's own gap, `pre_erasure.dialogue_ppl.adapter_on - dialogue_ppl.adapter_off`. "
+        "Asserted as the SUBTRACTION rather than against a decimal because the true double is "
+        "1.2420966625043919 and the short form one ULP away is a different number entirely"
+    )
+
+
+def test_verdict_domain_stays_exactly_three():
+    """GATE-01 / D-29 / D-31: three verdicts, and no fourth wearing a flag.
+
+    `_prove_verdict_domain()` makes the relabelling claims at IMPORT, which is the right place for
+    them — a dead gate should fail before the compute it would waste. They are restated here so a
+    CI run proves them even if the module arrived from a `sys.modules` cache rather than being
+    executed, which is exactly what happens once any other test in the session has imported it.
+
+    D-29's `provisional` check is an AST WALK over identifiers and string constants, plus a
+    normalised source read that extends the claim to comments. Not a bare `grep`: this phase has
+    already had three acceptance criteria come out unsatisfiable because a naive substring scan
+    conflated prose ABOUT code with the code itself, and the instrument that closes that class is
+    the one being committed here.
+    """
+    assert mitigation_gate.V4_VERDICTS == ("PASS", "FAIL", "INCONCLUSIVE")
+    assert len(mitigation_gate.V4_VERDICTS) == 3
+
+    # (1) THE AST HALF — every identifier and every string constant, docstrings included.
+    tree = _tree(_MITIGATION_GATE_PATH)
+    surface = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            surface.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            surface.add(node.attr)
+        elif isinstance(node, ast.arg):
+            surface.add(node.arg)
+        elif isinstance(node, ast.keyword) and node.arg:
+            surface.add(node.arg)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            surface.add(node.name)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            surface.add(node.value)
+    offenders = sorted(item for item in surface if "provisional" in item.lower())
+    assert offenders == [], (
+        f"`provisional` reached the pin's identifiers or strings: {offenders}. A PASS carrying "
+        "`provisional=True` was EXPLICITLY REJECTED (D-29): it would collapse the three-verdict "
+        "domain into four disguised states and reintroduce the misreading risk "
+        "`zero_results_have_nll` was built to eliminate — a truthy-pair return silently disarming "
+        "the branch that needed to fire. A point clearing all three conditions without a "
+        "second-seed replication returns INCONCLUSIVE, and the return carries no flag slot"
+    )
+
+    # (2) THE COMMENT HALF, routed through `_prose.normalized` — the one textual surface an AST
+    # walk cannot see, since comments are discarded by the parser.
+    assert (
+        "provisional"
+        not in _prose.normalized(_MITIGATION_GATE_PATH.read_text(encoding="utf-8")).lower()
+    ), (
+        "`provisional` appears in a comment in the pin. The verdict domain is exactly three names "
+        "and the rejected fourth state is not discussed by name anywhere in the file"
+    )
+
+    # (3) THE RELABEL MAP, positional and with INCONCLUSIVE fixed — `_prove_verdict_domain`'s three
+    # claims, restated so CI proves them rather than trusting that import-time ran.
+    assert len(mitigation_gate.V4_VERDICTS) == len(erasure_gate.VERDICTS)
+    for index, v3_name in enumerate(erasure_gate.VERDICTS):
+        assert mitigation_gate._VERDICT_RELABEL[v3_name] == mitigation_gate.V4_VERDICTS[index], (
+            f"position {index}: erasure_gate.VERDICTS[{index}] is {v3_name!r} but the relabel map "
+            f"does not send it to V4_VERDICTS[{index}] = "
+            f"{mitigation_gate.V4_VERDICTS[index]!r}. V4_VERDICTS must be a RELABELLING of the "
+            "v3.0 domain, not a second vocabulary that happens to be three names long"
+        )
+    assert erasure_gate.VERDICTS.index("INCONCLUSIVE") == mitigation_gate.V4_VERDICTS.index(
+        "INCONCLUSIVE"
+    ), (
+        "INCONCLUSIVE must sit at the same index in both vocabularies. It is the verdict this "
+        "project's honest-negatives discipline exists to keep distinct from FAIL, so a silent "
+        "respelling or reordering of it is the most damaging drift available"
+    )
+
+
+def test_every_gate_function_is_keyword_only_with_no_defaults():
+    """GATE-01 over ALL public functions in the pin, not just the verdict function.
+
+    A transposable positional argument is how two counts get swapped — `wilson_upper_bound(104, 1)`
+    reads as fluently as `wilson_upper_bound(1, 104)` and means something else entirely — and a
+    default is how a required anchor gets silently omitted. This pin has functions taking two,
+    four, eight and twenty-one arguments; the twenty-one-argument one is where the risk is obvious
+    and the two-argument ones are where it would actually happen.
+    """
+    tree = _tree(_MITIGATION_GATE_PATH)
+    public = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+    ]
+    assert public, (
+        f"no public function was found in {_MITIGATION_GATE_PATH.name} — this scan would be green "
+        "having checked nothing"
+    )
+    for node in public:
+        args = node.args
+        assert args.posonlyargs == [], f"{node.name} takes positional-only arguments"
+        assert args.args == [], (
+            f"{node.name} takes {[a.arg for a in args.args]} positionally. Every argument in this "
+            "pin is keyword-only — a bare `*,` first — so a caller cannot transpose two counts, "
+            "which is the failure mode a decision rule reading twenty-one measured anchors is one "
+            "slip away from"
+        )
+        assert args.defaults == [], f"{node.name} carries positional defaults"
+        assert args.kw_defaults == [None] * len(args.kwonlyargs), (
+            f"{node.name} carries a keyword default. GATE-01 fixes 'no defaults' because every "
+            "anchor this gate reads is a MEASURED value arriving from the caller: a default would "
+            "let one be silently omitted and still produce a verdict, which is precisely the "
+            "protection the long argument list is being paid for"
+        )
