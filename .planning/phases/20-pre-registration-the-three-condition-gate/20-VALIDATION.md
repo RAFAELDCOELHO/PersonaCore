@@ -27,8 +27,8 @@ surface stayed **empty**. A gate nobody has watched fail is a gate nobody has ve
 | **Config file** | `pyproject.toml` |
 | **Quick run command** | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` |
 | **Full suite command** | `make test` (equivalently `.venv/bin/python -m pytest -q`) |
-| **Full-suite runtime** | **MEASURED pre-phase, 2026-08-20: `845 passed, 1 skipped, 0 failed` in `201.99s`.** This is the baseline BEFORE any Phase 20 test exists. Plan **20-06 Task 3** must re-measure it with this phase's tests present and overwrite this row with the new number and the new pass/skip counts. Time it; do not estimate it. |
-| **Quick-run runtime** | UNMEASURED — `tests/test_phase20_prereg.py` does not exist until plan 20-01 Task 3. Plan 20-06 Task 3 records it beside the full-suite number. It is the latency that actually governs this phase. |
+| **Full-suite runtime** | **RE-MEASURED with this phase's tests present, plan 20-06 Task 3, 2026-08-20: `863 passed, 1 skipped, 0 failed` in `188.55s`** (wall `189.72s`). Timed, not estimated. Supersedes the pre-phase baseline `845 passed, 1 skipped` in `201.99s`, which was measured before any Phase 20 code existed. **The 18 tests Phase 20 adds cost `~1.6s`; the `13.44s` drop against the old row is MACHINE VARIANCE, not a speedup** — an unreplicated single-run difference on a laptop, stated as such rather than claimed as an improvement. |
+| **Quick-run runtime** | **MEASURED, plan 20-06 Task 3, 2026-08-20: `18 passed` in `0.79–0.81s`** across three consecutive runs (wall `0.95–0.97s` including interpreter startup). This is the latency that actually governs this phase, and it is `~235x` cheaper than the full suite. |
 | **Environment** | Python 3.11 venv, `pip install -e ".[cpu,dev,demo]"`. The `demo` extra is **required for collection**, not just for running the demo. |
 
 **Exception, stated explicitly:** the D-32 retention-floor driver is the one artifact in this phase
@@ -48,9 +48,12 @@ that **first consumes it**, never earlier. The IMPORT ACCUMULATION LEDGER in `20
 - **After every task commit:** `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py`
 - **After every plan wave:** `make test` (the full suite, at the plan's `<verification>` block)
 - **Before `/gsd:verify-work`:** full suite green
-- **Max feedback latency:** the per-task gate, once measured at plan 20-06 Task 3. Its ceiling is the
-  full-suite baseline of **201.99 s**, which is precisely the cost the per-task/per-wave split exists
-  to avoid paying eighteen times.
+- **Max feedback latency: `0.81 s`** — the per-task gate, MEASURED at plan 20-06 Task 3 (`18 passed`,
+  three runs, `0.79–0.81s`). Its ceiling is the full suite at **`188.55 s`**, which is precisely the
+  cost the per-task/per-wave split exists to avoid paying eighteen times. Over the **14 non-exempt
+  tasks** — the four exemptions below pay it deliberately — the split saves
+  `14 x (188.55 - 0.81) = 2628 s`, about **44 minutes** of serial waiting. The naive "18 x" figure
+  would read 56 minutes and would be wrong, because four of the eighteen run the full suite anyway.
 
 **Four tasks are exempt and run the FULL suite by design**, each for a stated reason:
 `20-06-03` must measure the full-suite runtime; `20-07-01` is the blocking human checkpoint that
@@ -207,8 +210,10 @@ An unowned checkbox is an unproven assertion.
       exemptions each carry a stated reason
 - [x] No watch-mode flags
 - [x] Full-suite runtime measured and recorded (not estimated) — pre-phase baseline
-- [ ] Full-suite runtime **re-measured with this phase's tests** — plan `20-06` Task 3
-- [ ] Quick-run (`tests/test_phase20_prereg.py`) runtime measured — plan `20-06` Task 3
+- [x] Full-suite runtime **re-measured with this phase's tests** — plan `20-06` Task 3:
+      `863 passed, 1 skipped` in `188.55s`
+- [x] Quick-run (`tests/test_phase20_prereg.py`) runtime measured — plan `20-06` Task 3:
+      `18 passed` in `0.79–0.81s`, three runs
 - [ ] `nyquist_compliant: true` set in frontmatter — plan `20-07` Task 3
 - [ ] `wave_0_complete: true` set in frontmatter — plan `20-07` Task 3
 

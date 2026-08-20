@@ -1015,3 +1015,354 @@ def test_every_gate_function_is_keyword_only_with_no_defaults():
             "let one be silently omitted and still produce a verdict, which is precisely the "
             "protection the long argument list is being paid for"
         )
+
+
+def test_gate_self_check_runs_clean_in_a_fresh_interpreter():
+    """GATE-09: the `__main__` self-check, run where CI can see it fail.
+
+    `if __name__ == "__main__":` is NOT collected by pytest, so a self-check nobody runs is not a
+    guard — it is a guard-shaped comment. This runs the module as a subprocess so the six outcomes
+    it prints are re-observed on every CI run rather than on the days somebody remembers.
+
+    A FRESH INTERPRETER IS THE POINT, not an implementation detail. `_prove_verdict_domain()` and
+    the `ARM_CLAIMS` proof run at IMPORT, and every other test in this file has already imported
+    `mitigation_gate` — so in-process they would be `sys.modules` cache hits and would re-prove
+    nothing. A subprocess executes them again from source.
+
+    argv tuple, never `shell=True`, and `sys.executable` rather than a bare "python" so the run
+    lands in the same 3.11 venv as the suite.
+    """
+    completed = subprocess.run(
+        (sys.executable, "scripts/mitigation_gate.py"),
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    for verdict in mitigation_gate.V4_VERDICTS:
+        assert verdict in completed.stdout, (
+            f"the self-check's stdout never names {verdict!r}:\n{completed.stdout}\nAll three "
+            "verdicts are supposed to be observed firing, and a run that prints only some of them "
+            "is a run in which some branch stopped being reachable"
+        )
+
+
+def test_every_verdict_branch_fires():
+    """GATE-05…GATE-09: all six outcomes, re-asserted in CI against the SAME module-scope fixtures.
+
+    Every fixture is IMPORTED from `mitigation_gate`, never re-transcribed: a second transcription
+    is a second fixture free to stop matching, and the two would then be proving different things
+    under one name.
+
+    THE THREE PRECEDENCE CLAIMS ARE DIFFERENTIAL, AND EACH NAMES THE VERDICT IT ACTUALLY OVERRIDES.
+    An INCONCLUSIVE observed on its own proves only that the branch exists; an INCONCLUSIVE that
+    overrides a PASS proves nothing about precedence over FAIL. So each of the three asserts BOTH
+    arms — the base verdict AND the overridden one — from otherwise-identical kwargs.
+    """
+    # 1 — PASS.
+    v1, r1, arm1 = mitigation_gate.mitigation_point_verdict(
+        **mitigation_gate.FIXTURE_CLEARING_POINT
+    )
+    assert v1 == "PASS", (v1, r1)
+
+    # 2 — FAIL, from D-30's real published M1 readings. (a) and (b) both CLEAR here: condition (c)
+    # is the only thing between a model whose dialogue adaptation was 77.637% destroyed and a PASS.
+    v2, r2, arm2 = mitigation_gate.mitigation_point_verdict(
+        **mitigation_gate.FIXTURE_DESTROYED_MODEL
+    )
+    assert v2 == "FAIL", (v2, r2)
+
+    # 3 — GATE-05, DIFFERENTIAL AGAINST FAIL. Same fixture, extraction zeroed with no corroborating
+    # teacher-forced NLL. An EARLY return, before any reason is appended, so the caller gets a
+    # ONE-element list. The differential is against FAIL and not PASS deliberately: an INCONCLUSIVE
+    # that only overrode a PASS would prove nothing about precedence over FAIL, and FAIL is the
+    # verdict this branch has to be able to override.
+    v3, r3, _arm3 = mitigation_gate.mitigation_point_verdict(
+        **{
+            **mitigation_gate.FIXTURE_DESTROYED_MODEL,
+            "point_extraction_successes": 0,
+            "zero_extraction_has_nll": False,
+        }
+    )
+    assert v2 == "FAIL", v2
+    assert v3 == "INCONCLUSIVE", (v3, r3)
+    assert len(r3) == 1, r3
+
+    # 4 — GATE-06, DIFFERENTIAL AGAINST FAIL. A LATE return, so every per-condition reason survives
+    # it: the reader keeps the detail even though the verdict is "we could not tell".
+    v4, r4, _arm4 = mitigation_gate.mitigation_point_verdict(
+        **mitigation_gate.FIXTURE_TRUNCATED_SWEEP
+    )
+    assert v2 == "FAIL", v2
+    assert v4 == "INCONCLUSIVE", (v4, r4)
+    assert len(r4) > 1, r4
+
+    # 5 — GATE-08 / D-29, DIFFERENTIAL AGAINST PASS — the OPPOSITE direction from the two above.
+    out5 = mitigation_gate.mitigation_point_verdict(
+        **{**mitigation_gate.FIXTURE_CLEARING_POINT, "replicated_at_second_seed": False}
+    )
+    assert v1 == "PASS", v1
+    assert len(out5) == 3, out5
+    assert out5[0] == "INCONCLUSIVE", out5
+    assert out5[1][-1].startswith(mitigation_gate.REPLICATION_PENDING_MARKER), out5[1][-1]
+
+    # 6 — GATE-07 / D-28. Arm identity travels ON the verdict, and the union CANNOT BE FORMED.
+    assert arm1 == mitigation_gate.FIXTURE_CLEARING_POINT["arm"]
+    assert arm2 == mitigation_gate.FIXTURE_DESTROYED_MODEL["arm"]
+    assert out5[2] == mitigation_gate.FIXTURE_CLEARING_POINT["arm"]
+    found, claim = mitigation_gate.exists_clearing_point(
+        points=[(v1, r1, arm1), (v2, r2, arm2)], arm=arm1
+    )
+    assert found is True, (found, claim)
+    assert claim == mitigation_gate.ARM_CLAIMS[arm1]
+    with pytest.raises(SystemExit) as mixed_arm:
+        mitigation_gate.exists_clearing_point(
+            points=[(v1, r1, arm1), (v2, r2, "adversarial")], arm=arm1
+        )
+    assert "adversarial" in str(mixed_arm.value), (
+        "a mixed-arm point list was refused without naming the arms it mixed. A DP clear carries a "
+        "FORMAL (epsilon, delta) guarantee and an adversarial clear carries evidence about the "
+        "attacks that were actually run — unioning them publishes the stronger claim on the weaker "
+        "evidence, and the refusal has to say which two claims were about to be merged"
+    )
+
+    # An INCONCLUSIVE never satisfies the existential (D-29): letting it would republish "we could
+    # not tell" as "it worked", silently undoing GATE-08 in the very next function that reads it.
+    inconclusive_only = [out5]
+    no_clear, no_claim = mitigation_gate.exists_clearing_point(
+        points=inconclusive_only, arm=out5[2]
+    )
+    assert no_clear is False, (no_clear, no_claim)
+    assert f"0 of {len(inconclusive_only)} point(s)" in no_claim, (
+        f"the not-cleared claim {no_claim!r} does not carry its denominator. An existential's "
+        "strength is the size of the set it searched, and 'no point cleared' without a count is "
+        "indistinguishable from 'no point was scored' — a missing measurement reported as a "
+        "negative result"
+    )
+
+
+def test_promotion_rule_and_ratchet():
+    """CAL-04 / D-19 / D-20: the closed menu, the ratchet, and the rule that reaches it.
+
+    The ratchet is what structurally eliminates the post-null K reduction
+    `scripts/phase18_extraction.py:84-93` records as the ATK-03 / P18-4 weakening: fewer draws is
+    less power to observe extraction, i.e. an EASIER NULL, so a reduction taken after a null buys
+    the very result it is reacting to.
+
+    `promote_to_full_fidelity` CALLS `ratchet_k` rather than re-implementing it, and the last
+    assertion here is what proves that: a `full_k` below `curve_k` aborts through the promotion
+    rule, which it could only do by reaching the same single implementation. Two ratchets would be
+    two ratchets free to stop agreeing, and the second would be the one nobody watched fire.
+    """
+    assert mitigation_gate.K_RUNGS == (48, 24, 16, 8)
+
+    # Rungs are INDEXED off the committed menu, never retyped — a second 48 is a second number free
+    # to stop agreeing with the menu it is supposed to have come from.
+    low, high = mitigation_gate.K_RUNGS[-1], mitigation_gate.K_RUNGS[0]
+    assert mitigation_gate.ratchet_k(fixed_k=low, proposed_k=high) == high
+
+    with pytest.raises(SystemExit) as decrease:
+        mitigation_gate.ratchet_k(fixed_k=high, proposed_k=low)
+    assert "ATK-03" in str(decrease.value), (
+        "the ratchet refused a decrease without citing the record it exists because of. "
+        "`scripts/phase18_extraction.py:84-93` is the precedent and ATK-03 / P18-4 is the "
+        "weakening; a refusal that does not name them sends its reader nowhere"
+    )
+
+    off_menu = max(mitigation_gate.K_RUNGS) + 1
+    with pytest.raises(SystemExit):
+        mitigation_gate.ratchet_k(fixed_k=low, proposed_k=off_menu)
+
+    pass_promoted, pass_why = mitigation_gate.promote_to_full_fidelity(
+        verdict="PASS", reasons=[], curve_k=low, full_k=high
+    )
+    assert pass_promoted is True, pass_why
+
+    # The GATE-CANDIDATE INCONCLUSIVE is fed the GATE'S OWN output, so the marker the promotion
+    # rule matches is the one the gate actually wrote — never a hand-built reason list carrying a
+    # second spelling of the same sentence.
+    candidate = mitigation_gate.mitigation_point_verdict(
+        **{**mitigation_gate.FIXTURE_CLEARING_POINT, "replicated_at_second_seed": False}
+    )
+    candidate_promoted, candidate_why = mitigation_gate.promote_to_full_fidelity(
+        verdict=candidate[0], reasons=candidate[1], curve_k=low, full_k=high
+    )
+    assert candidate_promoted is True, candidate_why
+
+    fail_promoted, fail_why = mitigation_gate.promote_to_full_fidelity(
+        verdict="FAIL", reasons=[], curve_k=low, full_k=high
+    )
+    assert fail_promoted is False, fail_why
+
+    truncated = mitigation_gate.mitigation_point_verdict(**mitigation_gate.FIXTURE_TRUNCATED_SWEEP)
+    truncated_promoted, truncated_why = mitigation_gate.promote_to_full_fidelity(
+        verdict=truncated[0], reasons=truncated[1], curve_k=low, full_k=high
+    )
+    assert truncated_promoted is False, truncated_why
+
+    # THE RATCHET IS REACHED THROUGH ONE IMPLEMENTATION. A full-fidelity K below the curve K aborts
+    # from inside the promotion rule, which is only possible if it calls `ratchet_k`.
+    with pytest.raises(SystemExit) as through_promotion:
+        mitigation_gate.promote_to_full_fidelity(
+            verdict="PASS", reasons=[], curve_k=high, full_k=low
+        )
+    assert "ATK-03" in str(through_promotion.value), (
+        "promote_to_full_fidelity refused a K decrease with a message that is not the ratchet's — "
+        "so it is refusing through a SECOND implementation, and the two are free to stop agreeing"
+    )
+
+
+def test_capacity_rule_commits_both_branches_and_refuses_the_unset_fallback():
+    """GATE-10 / D-25, D-26, D-27: both branches committed before either capacity runs.
+
+    All four `(small_cleared, large_cleared)` combinations are driven at IDENTICAL mechanisms, so
+    the dispatch is observed TOTAL rather than asserted to be. A missing key would be a
+    fall-through, and a fall-through in a decision function is where an investigate-the-instrument
+    escape hatch gets added once the data is in.
+    """
+    mechanism = dict.fromkeys(mitigation_gate.MECHANISM_KEYS, 1)
+    observed = {}
+    for small_cleared in (False, True):
+        for large_cleared in (False, True):
+            branch, reasons = mitigation_gate.capacity_comparison(
+                small_capacity=8,
+                large_capacity=64,
+                small_cleared=small_cleared,
+                large_cleared=large_cleared,
+                small_mechanism=mechanism,
+                large_mechanism=dict(mechanism),
+                epsilon_independent_of_n=True,
+                fallback_epsilon_tolerance=None,
+            )
+            assert branch in mitigation_gate.CAPACITY_BRANCHES, (branch, reasons)
+            observed[(small_cleared, large_cleared)] = branch
+    assert observed == {
+        (False, True): "capacity-recovers",
+        (False, False): "null-at-both-capacities",
+        (True, False): "capacity-destroys",
+        (True, True): "recovery-at-both-capacities",
+    }, observed
+
+    # THE DISPATCH'S BRANCH SET IS A SUBSET OF THE CLOSED TUPLE, so a future branch name cannot be
+    # added without entering `CAPACITY_BRANCHES` — where a reader looking for the publishable
+    # outcomes will actually find it.
+    assert set(mitigation_gate._CAPACITY_DISPATCH.values()) <= set(
+        mitigation_gate.CAPACITY_BRANCHES
+    )
+
+    # D-25 — ZERO TOLERANCE on the structural route. ONE differing mechanism key is enough.
+    differing = dict(mechanism)
+    differing["sigma"] = 2
+    not_comparable, why = mitigation_gate.capacity_comparison(
+        small_capacity=8,
+        large_capacity=64,
+        small_cleared=False,
+        large_cleared=True,
+        small_mechanism=mechanism,
+        large_mechanism=differing,
+        epsilon_independent_of_n=True,
+        fallback_epsilon_tolerance=None,
+    )
+    assert not_comparable == "not-comparable", (not_comparable, why)
+    assert any("sigma" in reason for reason in why), why
+
+    # D-26 — THE THIRD CHOSEN CONSTANT, DELIBERATELY UNSET. Taking the fallback route without it
+    # RAISES rather than defaulting: the constant is FLAGGED rather than smuggled, on exactly the
+    # standard applied to `F_C`. It must be decided and named before Phase 21's CAL-03 runs.
+    with pytest.raises(SystemExit) as unset_fallback:
+        mitigation_gate.capacity_comparison(
+            small_capacity=8,
+            large_capacity=64,
+            small_cleared=False,
+            large_cleared=True,
+            small_mechanism=mechanism,
+            large_mechanism=dict(mechanism),
+            epsilon_independent_of_n=False,
+            fallback_epsilon_tolerance=None,
+        )
+    assert "D-26" in str(unset_fallback.value), (
+        "the fallback route refused an unset tolerance without naming D-26 — the decision that "
+        "deliberately left it unset — so a reader hitting this abort cannot find out why the "
+        "number is missing or who owes it"
+    )
+
+
+def test_extraction_floor_tripwire_is_the_only_route_to_a_verdict():
+    """D-14(a) as a REACHABILITY claim, not a unit test of `extraction_ceiling` alone.
+
+    The obligation Phase 23 owes — an extraction noise floor measured on the never-taught arm
+    across two seeds — travels as CODE rather than as prose, because a prose note gets missed. What
+    makes it unavoidable is not that `extraction_ceiling` checks provenance, but that
+    `mitigation_point_verdict` CALLS `extraction_ceiling`: there is no path to a verdict that
+    computes X from an unlabelled floor, and the check sits at ONE choke point rather than at each
+    call site where a later caller could forget it.
+
+    So the tripwire is driven THROUGH the verdict function, from a fixture that otherwise PASSES.
+    A test that called `extraction_ceiling` directly would prove the check exists; this proves
+    there is no way around it.
+    """
+    single_seed = {
+        **mitigation_gate.FIXTURE_CLEARING_POINT,
+        "extraction_floor_provenance": {
+            "arm": mitigation_gate.NEVER_TAUGHT_ARM,
+            "seeds": (1337,),
+        },
+    }
+    with pytest.raises(SystemExit) as one_seed:
+        mitigation_gate.mitigation_point_verdict(**single_seed)
+    assert "1 distinct" in str(one_seed.value), (
+        f"the single-seed refusal does not report the count it counted: {one_seed.value}. A "
+        "single-seed floor is not a noise floor, it is ONE DRAW — there is no second reading for "
+        "it to vary against — and the refusal has to say so with its number"
+    )
+
+    borrowed_arm = {
+        **mitigation_gate.FIXTURE_CLEARING_POINT,
+        "extraction_floor_provenance": {"arm": "erase-dialogue-floor", "seeds": (1337, 2024)},
+    }
+    with pytest.raises(SystemExit):
+        mitigation_gate.mitigation_point_verdict(**borrowed_arm)
+
+    # And the fixture that differs from those two in ONLY the provenance still PASSES, which is
+    # what makes the two aborts above attributable to the tripwire rather than to anything else.
+    verdict, _reasons, _arm = mitigation_gate.mitigation_point_verdict(
+        **mitigation_gate.FIXTURE_CLEARING_POINT
+    )
+    assert verdict == "PASS", verdict
+
+
+def test_condition_a_reason_carries_its_tolerance_sentence():
+    """D-14(b): no verdict is published without the reader learning how strong the criterion was.
+
+    `scripts/erasure_gate.py:245-247` computes both of its caps into LOCALS and never returns them
+    — they reach the caller only through a reason string — which is exactly what makes criterion
+    strength invisible in the report it governs. `tolerance_report` is the committed surface that
+    closes it, and this asserts its sentence is rendered INTO condition (a)'s reason rather than
+    merely being computable by someone who thought to ask.
+
+    The expected sentence is RECOMPUTED here from the same fixture through the same two committed
+    functions, never transcribed: a hand-typed expectation would be a second copy of the sentence,
+    and the day the format string changed it is the test that would be wrong.
+    """
+    fixture = mitigation_gate.FIXTURE_CLEARING_POINT
+    _verdict, reasons, _arm = mitigation_gate.mitigation_point_verdict(**fixture)
+
+    ceiling = mitigation_gate.extraction_ceiling(
+        nontarget_successes=fixture["control_extraction_successes"],
+        nontarget_questions=fixture["control_extraction_questions"],
+        extraction_noise_floor=fixture["extraction_noise_floor"],
+        extraction_floor_provenance=fixture["extraction_floor_provenance"],
+    )
+    _tolerated, _fraction, sentence = mitigation_gate.tolerance_report(
+        ceiling=ceiling, n_questions=fixture["point_extraction_questions"]
+    )
+
+    condition_a = [reason for reason in reasons if reason.startswith("(a)")]
+    assert len(condition_a) == 1, reasons
+    assert sentence in condition_a[0], (
+        f"condition (a)'s reason {condition_a[0]!r} does not carry the tolerance sentence "
+        f"{sentence!r}. A criterion whose strength is invisible in its own report is the "
+        "`erasure_gate.py:245-247` defect, and D-14(b) exists so the Phase 23 report can never "
+        "omit how strong or weak the accepted criterion actually was"
+    )
