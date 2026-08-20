@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 executing — plan 5 of 7 complete, wave 4 done, the pin is CLOSED
-last_updated: "2026-08-20T20:48:36.644Z"
+stopped_at: Phase 20 executing — plan 6 of 7 complete, wave 5 done, the closed pin is under CI audit
+last_updated: "2026-08-20T21:09:25.626Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 6
+  percent: 86
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — EXECUTING
-Plan: 6 of 7 (wave 4 complete — 20-05 done)
+Plan: 7 of 7 (wave 5 complete — 20-06 done)
 Status: Executing Phase 20
-Last activity: 2026-08-20 — 20-05 complete: **the pin is CLOSED.** `scripts/mitigation_gate.py` now carries the per-arm existential, K's ratchet and promotion rule, GATE-10's capacity comparison with both branches and the D-26 fallback committed, three module-scope fixtures and a six-outcome `__main__` whose every branch was watched firing. sha256 `86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14` — the last permitted change to that file
+Last activity: 2026-08-20 — 20-06 complete: **the closed pin is under fourteen CI guards.** `tests/test_phase20_prereg.py` (4 → 18 tests) now proves the import graph is stdlib-plus-`erasure_gate` by a SUBSET assertion, the `from erasure_gate` list is EXACTLY five names, the chosen constants are exactly `{F_Y, F_C}` three ways over, six baselines are absent as numeric constants, the D-30 fixture equals the parsed `results/phase19_arm_erased.json`, and all six verdict outcomes re-run in CI against the same module-scope fixtures the `__main__` uses. Five mutations watched RED and each reverted byte-identically; `scripts/mitigation_gate.py` is still sha256 `86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14` and appears in none of this plan's commits
 
 ## Performance Metrics
 
@@ -108,6 +108,7 @@ Last activity: 2026-08-20 — 20-05 complete: **the pin is CLOSED.** `scripts/mi
 | Phase 20 P03 | 13min | 2 tasks | 2 files |
 | Phase 20 P04 | 18min | 2 tasks | 1 files |
 | Phase 20 P05 | 18min | 3 tasks | 1 files |
+| Phase 20 P06 | 16min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -344,6 +345,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 20]: 20-05: the __main__ block carries ZERO float literals, DELIBERATELY — 20-06 Task 2's _module_scope_floats collects floats inside module-scope ast.Assign nodes excluding FIXTURE_*, and an assignment inside `if __name__ == "__main__":` IS module scope under _enclosing_functions (which records module scope as None rather than dropping it). So D-12's counterfactual X is DERIVED as wilson_upper_bound(0, 104) + MARGIN_K * (4 / 27) — 4/27 is the published (b) floor's own derivation, phase19_floor.py:106-113, hometown 21/27 -> 17/27 — reproducing 0.3216515249612375 bit-exactly and tolerating 25/104, and the mechanism mapping is dict.fromkeys(MECHANISM_KEYS, 1). Deliberately NOT routed through extraction_ceiling: its provenance tripwire would correctly refuse a non-target-recall floor, and labelling it never-taught to get through would be a lie inside the fixture
 - [Phase 20]: 20-05: the module's numeric surface, as the stated expectation 20-06 asserts against — module-scope ASSIGNED floats outside FIXTURE_* are exactly {0.5, 0.7}; CHOSEN_CONSTANTS is 2 entries; the FIXTURE_* name set is exactly {FIXTURE_CLEARING_POINT, FIXTURE_DESTROYED_MODEL, FIXTURE_TRUNCATED_SWEEP}; every one of the 18 other float constants in the file lives inside a FIXTURE_* assignment; the five-name from-import list did NOT grow; `grep -ci provisional` is 0; 0.005214448168350039 is still present ONCE as a docstring substring and absent as a numeric constant. FIXTURE_DESTROYED_MODEL's four published fields were asserted equal to the parsed results/phase19_arm_erased.json, with retention_ppl INDEXED as a LIST and control_gap written AS THE SUBTRACTION (the true double is 1.2420966625043919; the short form 1.242096662504392 is a different float and appears nowhere)
 - [Phase 20]: 20-05: NO requirement marked complete — GATE-07/08/09/10 and CAL-04 are all implemented here, but the CI guards that turn this session's one-shot observations into standing facts are 20-06's. Eleventh application of 17-01's recorded over-claim-avoidance pattern. ALSO: gsd-sdk state handlers misbehaved a FIFTH time — state.advance-plan overwrote frontmatter stopped_at with the stale "Completed 20-04-PLAN.md" and set percent: 0; state.update-progress returned "Progress field not found in STATE.md" AND re-corrupted the same two fields while mirroring body prose into last_activity; state.record-metric and state.add-decision both rejected their own documented positional argv ("phase, plan, and duration required" / "summary required"). All repaired by hand; the metric row and these decision entries were written by hand
+- [Phase 20]: 20-06: EVERY audit committed over the closed pin is an AST walk or goes through `_prose.normalized` — zero `grep -c` and zero `in src` instruments. This session found a FOURTH substring-shaped criterion in this phase that would have misfired: `0.4921` and `0.3483` ARE present as source substrings in `scripts/mitigation_gate.py:200`, inside the `F_Y` provenance comment that says the pair must never be used, and `0.005214448168350039` is present at `:568` inside `dialogue_gap_band.__doc__` (20-04's D-04 proof). An `in src` audit on any of the three would have reported a violation and demanded deletion of the very prose that STATES the rule. Prose about a number is not the number; only an `ast.Constant` walk tells them apart
+- [Phase 20]: 20-06: the register is a HYBRID — an explicit `_MITIGATION_GATE_PATH` constant PLUS a `scripts/mitigation_*.py` glob, tied by a membership assertion. Neither form alone works: the pin matches no `phase20_*.py` glob (it is named for its subject, not its phase) so Form A would scan nothing and `_collapsed_glob_guard()` would go red over a register looking in the wrong place, while Form B (a hand-listed tuple) reintroduces the F-08 blindness for Phase 23's `scripts/mitigation_budget.py` — the one file the D-20 guard exists to keep out of the import graph
+- [Phase 20]: 20-06: a watched-RED whose red arrives at the WRONG STAGE is not a verified guard, and both attempts are recorded rather than only the one that worked. Mutation (a) placed `import mitigation_budget` inside `_prove`, which `_prove_verdict_domain()` calls AT IMPORT, so the test module died at collection with `ModuleNotFoundError` and the D-20 assertion never ran. Re-driven inside `capacity_comparison` (never called at import): the module loads and the STATIC scan fires, reporting `imports: ['erasure_gate', 'mitigation_budget', 'pathlib', 'sys']`. The relocation is also the stronger observation — it proves the `ast.walk` finds an import at ANY depth, where a top-level-only scan would have missed it
+- [Phase 20]: 20-06: the `FIXTURE_*` exclusion's residual hole is ACCEPTED and stated in words, not closed. Exactly FOUR fixture fields are proved against `results/phase19_arm_erased.json`; every other float in the three dicts is deliberately fabricated with no source to check it against (no v4.0 arm exists, D-13), so a third chosen constant hidden inside one WOULD NOT be caught. Asserting fabricated inputs against a source that does not exist is exactly the unprovable assertion this phase exists to refuse. The hole is narrowed instead by a name allow-list: the module-scope `FIXTURE_*` names are asserted to be exactly three, so a fourth dict is caught
+- [Phase 20]: 20-06: full-suite runtime RE-MEASURED at 863 passed, 1 skipped in 188.55s with this phase's tests present; per-task gate 18 passed in 0.79-0.81s over three runs. The 13.44s drop against 20-VALIDATION.md's pre-phase 201.99s row is MACHINE VARIANCE and is written down as such — a suite that gained 18 tests cannot have got 13s faster because of them; against 20-05's 186.74s one wave earlier the honest figure is +1.81s for 14 new tests
 
 ### Roadmap Evolution
 
@@ -476,8 +482,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-20T20:48:36.637Z
-Stopped at: Completed 20-05-PLAN.md — the pin is CLOSED
+Last session: 2026-08-20T21:09:25.626Z
+Stopped at: Completed 20-06-PLAN.md — the closed pin is under fourteen CI guards
 Resume file: None
 
 ## Operator Next Steps
