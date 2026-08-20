@@ -130,6 +130,99 @@ toggle; Phase 15 shipped the signature figures and the v2.0 writeup.
 
 ---
 
+## Milestone: v3.0 — Adversarial Privacy Audit and Selective Memory Erasure
+
+**Shipped:** 2026-08-19
+**Phases:** 4 (16-19) | **Plans:** 54 | **Tasks:** 113 | **Commits:** 350 over 8 days
+
+### What Was Built
+
+A measurement apparatus turned on the project's own central claim, and the results published
+whichever way they came out. Phase 16 fixed the shared instrument (the `item.seed_index` pairing
+defect, the widened `persona=` AST guard and its `assert_value_in_prompt` twin) and ran a four-arm
+persistence control on one binding 270-question fixture in four fresh processes. Phase 17 built the
+adversarial persona generator and scored a 3x3 isolation matrix under deliberate slot collision.
+Phase 18 attacked the adapter black-box at 42,480 draws per arm against a no-adapter control at
+identical budget. Phase 19 attempted selective erasure under a rule committed before any v3.0 number
+existed.
+
+### What Worked
+
+- **Pre-registration stopped being a discipline and became a mechanism.** `erasure_gate.py` was
+  committed at `23a830c` *before Phase 16 ran*, and Phase 19 entered the roadmap only because
+  `erasure_is_worth_attempting(92, 104, 0, 104)` returned True on measured numbers. The gate
+  authored the phase. Had it returned MOOT the milestone would have shipped at 18. Nothing else in
+  three milestones has produced that property.
+- **Publishing against yourself is survivable and is the point.** Phase 18 returned
+  `LEAKAGE_DEMONSTRATED` against the project's own privacy claim; Phase 19 returned `FAILURE`. Both
+  shipped unsoftened, and the milestone is stronger for it than a green one would have been.
+- **Re-derivation over reading.** Phase 16's report and Phase 18's entire 48,511-byte body both
+  re-render **byte-identically** from committed raw records through committed code. That is the
+  strongest available proof a report was generated rather than authored, and it caught nothing —
+  which is exactly what it is for.
+- **One definition per statistic.** `cluster_bootstrap`, `sign_test_exact`, `holm` and
+  `wilson_upper_bound` have exactly one definition each across `scripts/`, `src/` and `tests/`, so
+  drift between phases was structurally impossible rather than merely unobserved.
+
+### What Was Inefficient
+
+- **Remediation introduced defects at nearly the rate it closed them — three rounds running.**
+  Closing B1/W1 introduced W2 (README republished a four-defect count its own source had corrected
+  74 minutes earlier). Closing W2/B1-b introduced N1 ("the three reductions"; there are two,
+  contradicted by its own quotation eight lines above) and N2 (an unanchored "190 lines"). Each
+  round appended ~150 lines of dense correction prose about counts and line numbers, which is
+  precisely the material that generates miscounts. **The fix that finally worked changed two figures
+  and added no argument.**
+- **The audit propagated its own unverified figure into a published document.** N2's "190 lines"
+  originated in the milestone audit's own warning text; the remediation copied it faithfully into
+  `docs/REPORT.md`. An audit artifact is not exempt from the evidence discipline it enforces.
+- **A single-line `grep -c` reported a real defect as absent.** "three reductions" is line-wrapped in
+  the source, so `grep -c "three reductions"` returns **0** on a file that contains it. The
+  pre-correction sweep had to be whitespace-normalised to see it.
+- **Plans kept naming APIs and paths the code refuses.** `18-VERIFICATION.md` prescribed
+  `append_addendum(..., placeholder=...)`; the live signature is
+  `append_addendum(path, addendum, *, pending, recorded)` with both halves required. Every
+  remediation had to resolve the real signature from the module before planning, not after.
+
+### Patterns Established
+
+- **The identity marker pair.** When an append-only writer requires its placeholder to occur exactly
+  once and the placeholder has already been consumed, `pending=recorded=<the consumed line>` is a
+  provable no-op replacement that still appends. Used three times, zero deletions each.
+- **Dated continuation over in-place edit, enforced by the documents themselves.**
+  `docs/REPORT.md:1145` asserts "No line above this heading is altered" — which made an in-place
+  pointer fix *impossible without falsifying a published claim*, and forced the additive form. The
+  discipline stopped needing to be remembered.
+- **Discharge beside the verdict, never over it.** Three phases closed `human_needed` and none was
+  re-stamped, deliberately: `17-VERIFICATION.md` records that its discharge "stands as what the
+  verifier found." The cost is that `audit-open` counts them as gaps forever.
+- **Retroactive scope limits are a deliverable.** Phase 19's finding that the rank instrument reads
+  undisturbed while generation collapses was propagated *backward* into Phase 18's published
+  artifact, because that is where the readings it limits are published.
+
+### Key Lessons
+
+1. **Every remediation is new work and needs the same verification as new work.** Three consecutive
+   correction rounds each shipped a fresh defect. Correction text is not inherently safer than the
+   text it corrects — it is denser in exactly the facts that are easy to get wrong.
+2. **Prefer deleting a false precision to replacing it.** "190 lines" became "far above", not "186
+   lines". Substituting one unverified number for another is what created the defect.
+3. **Verify the absence, not just the presence — and normalise whitespace when you do.** A grep that
+   returns 0 has two readings: the defect is absent, or your pattern cannot see it.
+4. **A gate that can only author phases you like is not a gate.** The value of `erasure_gate.py` is
+   that it was falsifiable — `(0, 104, 0, 104)` and `(92, 104, 92, 104)` both return MOOT — and that
+   it returned `FAILURE` when the numbers arrived.
+5. **`passed` is a claim about tech debt too, not only about requirements.** v3.0 held at
+   `tech_debt` across three audit runs with 29/29 requirements and 16/16 integration, because 16
+   debt items is not "minimal". The verdict stayed honest by refusing to round up.
+
+### Cost Observations
+
+- Model mix: Opus throughout (orchestration, planning, execution, integration checks).
+- Sessions: this milestone's close ran audit → remediate → re-audit three times in one session.
+- Notable: the third remediation round cost more in review than the two-word diff it produced —
+  correct, but it argues for catching count-defects at authoring time rather than at audit time.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -138,6 +231,7 @@ toggle; Phase 15 shipped the signature figures and the v2.0 writeup.
 |-----------|--------|-------|------------|
 | v1.0 | 8 | 29 | Established Wave-0 RED scaffolds, gap-closure re-verification loops, and M2-seam-as-acceptance-criteria |
 | v2.0 | 7 | 39 | Pre-registration in committed code before any number exists; gate-only-what-n-supports; structural enforcement replacing declared invariants; honest negatives appended-to rather than edited |
+| v3.0 | 4 | 54 | Pre-registration became the AUTHOR of a phase, not a constraint on it; results published against the project's own claim (`LEAKAGE_DEMONSTRATED`, `FAILURE`, `DO NOT SHIP`); dated continuations enforced by the documents themselves; retroactive scope limits propagated backward into an earlier phase's artifact |
 
 ### Cumulative Quality
 
@@ -145,6 +239,7 @@ toggle; Phase 15 shipped the signature figures and the v2.0 writeup.
 |-----------|-------|--------------|--------------------|
 | v1.0 | 137 (+1 CUDA skip) | green, CPU-only | numpy, regex, torch[cpu extra], gradio[demo extra] |
 | v2.0 | 408 (+1 CUDA skip) | green, CPU-only | none — v2.0 added three hand-rolled subsystems (`lora/`, `continual/`, `dialogue/`) and zero runtime dependencies |
+| v3.0 | 845 (+1 CUDA skip) | green, CPU-only | none — `pyproject.toml` byte-identical at close, sha256-enforced (STAT-04) |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -152,10 +247,15 @@ toggle; Phase 15 shipped the signature figures and the v2.0 writeup.
    audit's `evaluate.py` warm-sampling warning was carried into the v2.0 audit and still not fixed —
    it took a milestone-close audit two milestones later to close a one-line change. A warning with
    no owner and no phase does not get done.
-2. **Verifier-before-celebration.** *Predicted after v1.0, confirmed by v2.0.* Phase 14 recorded
-   `gaps_found` and Phase 15 recorded `human_needed`; both were genuinely closed in code well before
-   their artifacts said so, and neither was re-stamped. The verifier is only load-bearing if its
-   verdict is refreshed when reality changes.
+2. **Verifier-before-celebration.** *Predicted after v1.0, confirmed by v2.0, **refined by v3.0**.*
+   Phase 14 recorded `gaps_found` and Phase 15 recorded `human_needed`; both were genuinely closed
+   in code well before their artifacts said so, and neither was re-stamped. **v3.0 shows the rule
+   was half-right.** Three phases again closed `human_needed` unrefreshed — but this time
+   deliberately, because `17-VERIFICATION.md` states its discharge "stands as what the verifier
+   found," and re-stamping would erase the finding to satisfy a counter. The correct rule is not
+   "refresh the verdict" but **"the discharge must be as discoverable as the verdict."** v3.0 paid
+   for that by having `audit-open` report three permanent false gaps; the fix is tooling that reads
+   discharge records, not verdicts that get overwritten.
 3. **Fix all consumers, not the one that reported it.** *Predicted after v1.0, confirmed by v2.0.*
    The dead-id mask was fixed for the demo in v1.0 and left unfixed in `evaluate.py` — same
    mechanism, same failure mode, different caller. When v2.0 finally closed it, the mask went into
