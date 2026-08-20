@@ -52,7 +52,7 @@ that **first consumes it**, never earlier. The IMPORT ACCUMULATION LEDGER in `20
   full-suite baseline of **201.99 s**, which is precisely the cost the per-task/per-wave split exists
   to avoid paying eighteen times.
 
-**Three tasks are exempt and run the FULL suite by design**, each for a stated reason:
+**Four tasks are exempt and run the FULL suite by design**, each for a stated reason:
 `20-06-03` must measure the full-suite runtime; `20-07-01` is the blocking human checkpoint that
 declares the pin final and must see the whole repo green; `20-07-02` introduces a new `scripts/*.py`
 file, which enters repo-wide AST scans that glob `scripts/*.py` (for example
@@ -152,11 +152,15 @@ point (the guard must exist before there is anything to miss).
 - [x] Full-suite baseline measured and recorded above — `845 passed, 1 skipped` in `201.99s`,
       2026-08-20, **before** any Phase 20 code exists. Re-measured with this phase's tests at
       plan `20-06` Task 3.
-- [ ] `tests/test_phase20_prereg.py` created — plan `20-01` Task 3. Coverage for GATE-01…GATE-10,
-      CAL-04 and RPT-02 accumulates across waves 1→5 per the map above; there are no stubs, because a
-      stub for a rule that does not exist yet is an unproven assertion.
-- [ ] Confirm `pytest` collects cleanly on a fresh venv with `[cpu,dev,demo]` — the `demo` extra is a
-      hard **collection** requirement, not a skip.
+- [ ] `tests/test_phase20_prereg.py` created — plan `20-01` Task 3, ticked by plan `20-07` Task 3's
+      sweep. This box is what `wave_0_complete: true` asserts. Coverage for GATE-01…GATE-10, CAL-04
+      and RPT-02 accumulates across waves 1→5 per the map above; there are no stubs, because a stub
+      for a rule that does not exist yet is an unproven assertion.
+
+The fresh-venv `[cpu,dev,demo]` collection check is deliberately NOT a box here: no task in this
+phase owns it, and the packaging surface it guards is asserted byte-unchanged
+(`git status --porcelain pyproject.toml` prints nothing) in all seven plans' `<verification>` blocks.
+An unowned checkbox is an unproven assertion.
 
 ---
 
@@ -199,7 +203,7 @@ point (the guard must exist before there is anything to miss).
 
 - [x] All tasks have an `<automated>` verify — 18 of 18 rows above, no task without one
 - [x] Sampling continuity: no 3 consecutive tasks without automated verify
-- [x] Per-task gate is the phase test file, not the 202 s full suite; the three full-suite
+- [x] Per-task gate is the phase test file, not the 202 s full suite; the four full-suite
       exemptions each carry a stated reason
 - [x] No watch-mode flags
 - [x] Full-suite runtime measured and recorded (not estimated) — pre-phase baseline

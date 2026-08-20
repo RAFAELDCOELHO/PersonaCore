@@ -1135,7 +1135,7 @@ containing a shell metacharacter an injection point.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where does the D-06 floor driver live, and is it in scope for Phase 20?**
    - Known: the artifact is required (D-08); its inputs are not persisted (§1g); the pin cannot own
@@ -1145,18 +1145,27 @@ containing a shell metacharacter an injection point.
      escalates to the user. **Do not let a plan assume the JSON can be hand-written from CONTEXT.md**:
      that would publish a number with no re-runnable provenance, which is the exact discipline
      `20-CONTEXT.md:422-424` demands be carried into this phase.
+   - **RESOLVED:** plan `20-07` Task 2 adds the fifth deliverable — the UNPINNED
+     `scripts/phase20_run.py` — and Task 3 runs it to produce the artifact. Nothing is hand-written
+     from CONTEXT.md.
 
 2. **Does `V4_ARTIFACT_GLOBS` pre-declare all v4.0 prefixes, or only `phase20_*`?**
    - Known: D-22 mandates `phase20_*`. The `V3_ARTIFACT_GLOBS` comment argues for pre-declaring.
    - Unclear: whether a later v4.0 phase needs a `phase19_floor.py`-style sanctioned pre-artifact write.
    - **Recommendation:** start with `phase20_*` (the locked decision) and record the widening question
      as a decision for Phase 21's planning.
+   - **RESOLVED:** `phase20_*` only, per D-33. The accepted cost — an `assert` catches an empty match
+     set, never an incomplete one — is recorded both beside the tuple (`20-01` Task 3) and inside
+     `MITIGATION_DECISION_RULE` (`20-01` Task 2). Widening stays Phase 21's decision.
 
 3. **Does the D-14 tolerance reporter need a committed test fixture with a real X?**
    - Known: X is not computable in Phase 20 (D-13); `floor_branch()` (`phase19_erasure.py:944-961`)
      is the precedent and is a pure function of its input.
    - **Recommendation:** test the reporter on the D-12 counterfactual (`X = 0.3216515249612375 →
      "tolerated 25/104"`) **explicitly labelled a counterfactual**, on the 19-16 precedent D-30 cites.
+   - **RESOLVED:** no committed fixture with a real X. Plan `20-02` Task 2 drives the reporter on
+     that D-12 counterfactual, `X = 0.3216515249612375 → 25/104`, explicitly labelled a
+     counterfactual.
 
 ---
 
