@@ -815,3 +815,77 @@ def mitigation_point_verdict(
         return "INCONCLUSIVE", reasons, arm
 
     return ("PASS" if (a_ok and b_ok and c_ok) else "FAIL"), reasons, arm
+
+
+# ---------------------------------------------------------------------------------------------
+# GATE-07 / D-28 — THE EXISTENTIAL, COMPUTED PER ARM. "There exists a clearing point" taken over
+# the UNION of the two arms conflates a formal guarantee with an empirical one, so the union is not
+# merely discouraged here: it is UNFORMABLE, because a mixed-arm point list aborts before anything
+# is computed.
+# ---------------------------------------------------------------------------------------------
+
+
+def exists_clearing_point(*, points, arm):
+    """Did ANY point in ``arm`` clear the gate? Returns ``(exists, claim)``.
+
+    ``points`` is a sequence of the 3-tuples ``mitigation_point_verdict`` returns —
+    ``(verdict, reasons, point_arm)`` — and every one of them must name ``arm``.
+
+    GATE-07 / D-28 — THE EXISTENTIAL IS PER ARM, AND THE REFUSAL IS WHAT MAKES THAT STRUCTURAL
+    RATHER THAN CONVENTIONAL. ``.planning/REQUIREMENTS.md:46-47`` states the hazard: a DP point
+    clearing carries a FORMAL claim — an (epsilon, delta) property of the mechanism, which bounds
+    what ANY adversary can learn — while an adversarial point clearing carries an explicitly
+    non-formal one, evidence about the specific attacks that were actually run at the budget they
+    were run at. "There exists a clearing point" over the union of the two arms publishes the
+    stronger claim on the weaker evidence. A convention ("remember to filter by arm first") would be
+    forgotten exactly once, and the forgetting would be invisible in the output; this function
+    instead ABORTS on a mixed-arm list, so the union cannot be formed at all. The claim string is
+    looked up from ``ARM_CLAIMS`` — the table proved equal to ``ARMS`` at import — and never written
+    at the call site, so the two arms cannot drift into two hand-typed claims.
+
+    ONLY ``PASS`` COUNTS (D-29). An ``INCONCLUSIVE`` is BY CONSTRUCTION not a clear: it is the
+    verdict for a point whose conditions could not be read, or that cleared all three WITHOUT a
+    second-seed replication. Letting it satisfy an existential would republish "we could not tell"
+    as "it worked" — the exact collapse this project's honest-negatives discipline exists to forbid
+    — and it would silently undo the GATE-08 branch, whose entire job is to return INCONCLUSIVE over
+    a would-be PASS, in the very next function that reads the result.
+
+    AN EMPTY POINT LIST RAISES, rather than returning ``(False, ...)``. An existential over an empty
+    set is vacuously false, and publishing that as "no point cleared" would report a MISSING
+    MEASUREMENT as a NEGATIVE RESULT. Those are different findings, and the denominator is what
+    separates them — which is why the not-cleared claim below carries its point count.
+    """
+    _prove(
+        arm in ARMS,
+        f"arm {arm!r} is not in the closed set {ARMS}. The existential is computed PER ARM and its "
+        "claim string comes from ARM_CLAIMS, so an unknown arm has no claim to publish: it is a "
+        "name a later plan would have to add code for, and once any `results/phase20_*` artifact "
+        "exists such a commit turns the ancestry guard permanently red",
+    )
+
+    if not points:
+        raise ValueError(
+            f"no points were supplied for arm {arm!r}. An existential over an empty set is not a "
+            "finding, it is a missing measurement: 'no point cleared' and 'no point was scored' "
+            "are different claims, and only one of them has a denominator"
+        )
+
+    present = tuple(sorted({point_arm for _verdict, _reasons, point_arm in points}))
+    _prove(
+        present == (arm,),
+        f"the point list names arm(s) {present} while the existential was asked for {arm!r}. A "
+        "mixed-arm point list cannot form 'there exists a clearing point': a DP clear carries a "
+        "FORMAL (epsilon, delta) guarantee and an adversarial clear carries evidence about the "
+        "attacks that were actually run, so unioning them publishes the stronger claim on the "
+        "weaker evidence. Filter by arm and ask once per arm (GATE-07 / D-28)",
+    )
+
+    exists = any(verdict == "PASS" for verdict, _reasons, _arm in points)
+    if exists:
+        return True, ARM_CLAIMS[arm]
+    return False, (
+        f"NO CLEARING POINT IN THE {arm!r} ARM: 0 of {len(points)} point(s) examined returned "
+        "PASS. Reported with its denominator rather than as a bare 'no', because an existential's "
+        "strength is the size of the set it searched. Any INCONCLUSIVE among those points is NOT a "
+        "clear and was not counted as one (D-29)"
+    )
