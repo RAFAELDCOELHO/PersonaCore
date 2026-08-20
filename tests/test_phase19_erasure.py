@@ -1404,13 +1404,23 @@ def test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent():
     # as the pin and under the same positive obligation: every excluded caller must actually reach
     # the injection path. Excluding by NAME rather than lowering the count is what keeps the guard
     # non-vacuous — a genuinely new unadapted caller anywhere else still reddens it.
+    #
+    # 20-07 ADDED THE THIRD SUCCESSOR AND THIS GUARD CAUGHT IT AGAIN, on the same terms.
+    # `phase20_run.py` is the UNPINNED Phase 20 driver: it re-reads the two committed
+    # `phase19_erase_dialogue_floor_seed*` adapters through `load_adapted_model`, ON and OFF in one
+    # process, to measure the ADAPTER-REGIME retention noise floor (D-06) that
+    # `scripts/mitigation_gate.py::retention_cap` consumes. It is a SUCCESSOR for the same reason
+    # `phase19_run.py` is — it postdates the pin and reaches the injection path — so it is excluded
+    # BY NAME and carries the same positive obligation asserted in the loop below. The census
+    # numbers are UNCHANGED at 6 calls in 4 modules: nothing was lowered to accommodate it.
     pin = _ROOT / "scripts" / "phase19_erasure.py"
     driver = _ROOT / "scripts" / "phase19_run.py"
+    v4_driver = _ROOT / "scripts" / "phase20_run.py"
     assert pin in all_sites, (
         "the pin no longer calls retention_perplexity — RETENTION_MEASUREMENT pins that call, and "
         "the retention half of (c) would go unmeasured"
     )
-    for successor in (pin, driver):
+    for successor in (pin, driver, v4_driver):
         source = successor.read_text(encoding="utf-8")
         assert "load_adapter_weights" in source or "load_adapted_model" in source, (
             f"{successor.name} measures retention without ever reaching an adapter — then it is "
@@ -1418,7 +1428,7 @@ def test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent():
             "lowering the count rather than scoping it"
         )
 
-    call_sites = [path for path in all_sites if path not in (pin, driver)]
+    call_sites = [path for path in all_sites if path not in (pin, driver, v4_driver)]
     modules = sorted({path.name for path in call_sites})
     assert len(call_sites) == 6 and len(modules) == 4, (
         f"the retention call-site census moved: {len(call_sites)} calls in {modules}"
