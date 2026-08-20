@@ -185,7 +185,16 @@ kind exists — including before the cost calibration
      `scripts/_prose.py::normalized` exists and finds a line-wrapped phrase that `grep -c` reports as
      absent — v3.0's recorded lesson converted into a mechanism. (CAL-04, RPT-02)
 
-**Plans**: TBD
+**Plans**: 7 plans across 6 waves
+
+Plans:
+- [ ] 20-01-PLAN.md — Arm the pin's spine (verdict domain D-31, arms D-28, the two chosen constants, K_RUNGS, the decision-rule prose) and arm the Phase 18/19 ancestry guard in the same plan
+- [ ] 20-02-PLAN.md — X's formula, unit and estimator, the armed D-14 provenance tripwire, and the committed tolerance reporter
+- [ ] 20-03-PLAN.md — `scripts/_prose.py::normalized` (RPT-02) with its differential proof, and the D-22 throwaway-repo RED-then-GREEN four-state fixture
+- [ ] 20-04-PLAN.md — Condition (c)'s corrected asymmetric legs and the 21-kwarg three-condition verdict with INCONCLUSIVE ahead of FAIL
+- [ ] 20-05-PLAN.md — Per-arm existence, the K ratchet and promotion rule, the GATE-10 capacity rule with both branches, and the six-outcome `__main__`. The pin closes here
+- [ ] 20-06-PLAN.md — The hybrid AST register, the import-graph and constant audits, and the behavioural twin that re-runs every branch in CI
+- [ ] 20-07-PLAN.md — Blocking push checkpoint, the unpinned MPS retention-floor driver, and `results/phase20_retention_floor.json` committed strictly after the pin
 
 ### Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus
 
