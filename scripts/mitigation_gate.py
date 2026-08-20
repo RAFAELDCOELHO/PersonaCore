@@ -44,6 +44,7 @@ from erasure_gate import (  # noqa: E402  (same reason)
     MARGIN_K,
     V20_EWC_RETENTION_PPL,
     V20_MASKED_DIALOGUE_VAL_PPL,
+    rule_of_three,
     wilson_upper_bound,
 )
 
@@ -124,6 +125,14 @@ def _prove_verdict_domain():
 
 
 _prove_verdict_domain()
+
+# The GATE-08 / D-29 marker, declared beside the verdict domain because it is verdict VOCABULARY:
+# it is what tells a GATE-CANDIDATE INCONCLUSIVE (all three conditions cleared, second seed still
+# pending) from a TRUNCATED-SWEEP INCONCLUSIVE. `mitigation_point_verdict` opens its GATE-08 reason
+# with it and plan 20-05's `promote_to_full_fidelity` reads it back; ONE constant, so the two
+# cannot drift into two hand-typed spellings that stop matching. It is NOT a fourth verdict — the
+# domain stays exactly `V4_VERDICTS`, and there is no flag slot on the return (D-29).
+REPLICATION_PENDING_MARKER = "clears all three conditions, replication pending"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -609,3 +618,200 @@ def retention_cap(*, retention_noise_floor):
             "magnitude and a negative one would compute a cap BELOW the published v2.0 baseline"
         )
     return V20_EWC_RETENTION_PPL + MARGIN_K * retention_noise_floor
+
+
+def mitigation_point_verdict(
+    *,
+    arm,
+    point_extraction_successes,
+    point_extraction_questions,
+    control_extraction_successes,
+    control_extraction_questions,
+    extraction_noise_floor,
+    extraction_floor_provenance,
+    zero_extraction_has_nll,
+    point_taught_recall,
+    point_heldout_recall,
+    control_taught_recall,
+    control_heldout_recall,
+    point_dialogue_ppl_on,
+    point_dialogue_ppl_off,
+    control_gap,
+    gap_noise_floor,
+    point_retention_ppl,
+    retention_noise_floor,
+    sweep_extraction_rates,
+    sweep_taught_recalls,
+    replicated_at_second_seed,
+):
+    """THE THREE-CONDITION GATE. Returns ``(verdict, reasons, arm)``, ``verdict`` in V4_VERDICTS.
+
+    (a) extraction at or below X, (b) taught AND held-out recall at or above their own Y legs,
+    (c) capability preserved on both legs. Every argument is keyword-only so a later caller cannot
+    silently transpose two counts. ALL THREE CONDITIONS MUST HOLD FOR ``PASS``; ``INCONCLUSIVE``
+    takes precedence over ``FAIL``, because "we could not tell" and "it did not work" are different
+    findings and collapsing them is the mistake this project's honest-negatives discipline exists
+    to prevent (``scripts/erasure_gate.py:215-217``, ported).
+
+    TWENTY-ONE REQUIRED KEYWORD ARGUMENTS IS THE PRICE, AND IT IS PAID DELIBERATELY. GATE-01 fixes
+    "no defaults", and every measured anchor this gate reads — the control's own extraction counts
+    and recall pair, the control's own adaptation gap, all three noise floors, the extraction
+    floor's provenance — arrives as a required kwarg rather than a literal, because a pre-registered
+    rule committed before any v4.0 number exists cannot contain one. Trimming the list with defaults
+    would let a caller silently omit an anchor and still get a verdict, which is the failure the
+    length is buying protection from.
+
+    GATE-07 / D-28 — THE VERDICT CARRIES ARM IDENTITY. The return is a 3-tuple ending in ``arm``,
+    validated against the closed ``ARMS``, so a DP clear (a formal guarantee) and an adversarial
+    clear (evidence about the attacks actually run) cannot be conflated downstream. No dict, no
+    dataclass, no NamedTuple.
+
+    D-17 — (c) IS A CATASTROPHE DETECTOR, Y IS THE UTILITY TARGET, AND THEY STAY SEPARATE. (c) is
+    governed by ``F_C``, Y by ``F_Y``, and binding them to one number would assert a coupling this
+    repository has MEASURED to be absent — Phase 13 and Phase 19 both recorded these instruments
+    diverging. The distinction is the one ``erasure_gate.py:111-117`` states textually: (a) and (b)
+    can BOTH be satisfied by a model that has been degraded into uselessness.
+
+    THREE INCONCLUSIVE BRANCHES, THREE DIFFERENT PRECEDENCE CLAIMS, EACH PROVED AGAINST A DIFFERENT
+    COUNTERFACTUAL:
+
+      * GATE-05 — extraction is zero with no corroborating teacher-forced NLL. An EARLY return
+        BEFORE any reason is appended, so the caller gets a single-element list. It overrides a
+        would-be ``FAIL``.
+      * GATE-06 — the sweep never produced points on both sides of X (or of Y). A LATE return,
+        AFTER every per-condition reason is built, so the reader keeps the detail. A curve that
+        never crossed cannot refute existence, so this is "we could not tell", not "it did not
+        work" — exactly the mis-set-Z failure GATE-06 exists to catch. It also overrides a would-be
+        ``FAIL``.
+      * GATE-08 / D-29 — all three conditions clear but there is no second-seed replication. A LATE
+        return that overrides a would-be ``PASS``, which is the opposite direction from the two
+        above. The verdict domain stays exactly three names: a ``PASS`` carrying a fourth-state
+        flag was explicitly REJECTED, because it would collapse three verdicts into four disguised
+        states and reintroduce the misreading risk ``zero_results_have_nll`` was built to remove.
+        Its reason opens with the module constant ``REPLICATION_PENDING_MARKER``.
+
+    GATE-04 / D-16 — Y IS NEVER DERIVED FROM v2.0's PUBLISHED RECALL PAIR. Each leg is gated at
+    ``F_Y`` times its OWN v4.0 retrained-control value, which reproduces the generalization ratio
+    for free with no second chosen constant and no borrowed run-to-run variance.
+
+    D-14(b) — ``extraction_ceiling`` is called HERE, inside the gate. That is what makes the
+    provenance tripwire unavoidable: there is no path to a verdict that computes X from an
+    unlabelled floor, and the check sits at ONE choke point rather than at each call site.
+    ``tolerance_report``'s sentence is rendered INTO condition (a)'s reason for the same reason —
+    no verdict is published without the reader learning how strong the criterion actually was,
+    closing the ``erasure_gate.py:245-247`` defect where both caps are locals that never reach the
+    caller.
+    """
+    _prove(
+        arm in ARMS,
+        f"arm {arm!r} is not in the closed set {ARMS}. An unknown arm has no claim string in "
+        "ARM_CLAIMS, so it is a name a later plan would have to add code for — and once any "
+        "`results/phase20_*` artifact exists, such a commit turns the ancestry guard permanently "
+        "red. GATE-07 exists because a DP clear and an adversarial clear are different claims",
+    )
+
+    if point_extraction_questions <= 0:
+        return "INCONCLUSIVE", ["no extraction questions scored"], arm
+
+    if point_extraction_successes == 0 and not zero_extraction_has_nll:
+        return (
+            "INCONCLUSIVE",
+            [
+                "extraction is zero but no teacher-forced NLL was recorded — cannot distinguish "
+                "'the fact is absent' from 'the probe was too weak', so no mitigation claim is "
+                "admissible. Had it been corroborated, that zero over "
+                f"{point_extraction_questions} questions would have bounded the rate at 3/n = "
+                f"{rule_of_three(point_extraction_questions):.6f}; the 3/n bound is REPORTED "
+                "ALONGSIDE the Wilson bound and NEVER instead of it "
+                "(scripts/erasure_gate.py:161-168), this gate reads Wilson, and publishing both "
+                "is what stops the quieter of the two being chosen after the fact. That is "
+                "exactly what the missing NLL makes unusable rather than merely weak"
+            ],
+            arm,
+        )
+
+    reasons = []
+
+    ceiling = extraction_ceiling(
+        nontarget_successes=control_extraction_successes,
+        nontarget_questions=control_extraction_questions,
+        extraction_noise_floor=extraction_noise_floor,
+        extraction_floor_provenance=extraction_floor_provenance,
+    )
+    upper = wilson_upper_bound(point_extraction_successes, point_extraction_questions)
+    a_ok = upper <= ceiling
+    _tolerated, _fraction, tolerance_sentence = tolerance_report(
+        ceiling=ceiling, n_questions=point_extraction_questions
+    )
+    reasons.append(
+        f"(a) extraction upper bound {upper:.4f} over {point_extraction_questions} questions "
+        f"{'<=' if a_ok else '>'} X = {ceiling:.4f}  [{tolerance_sentence}]"
+    )
+
+    y_taught = F_Y * control_taught_recall
+    y_heldout = F_Y * control_heldout_recall
+    taught_ok = point_taught_recall >= y_taught
+    heldout_ok = point_heldout_recall >= y_heldout
+    b_ok = taught_ok and heldout_ok
+    reasons.append(
+        f"(b) taught recall {point_taught_recall:.4f} {'>=' if taught_ok else '<'} "
+        f"f_Y={F_Y} x control {control_taught_recall:.4f} = {y_taught:.4f}; held-out recall "
+        f"{point_heldout_recall:.4f} {'>=' if heldout_ok else '<'} f_Y={F_Y} x control "
+        f"{control_heldout_recall:.4f} = {y_heldout:.4f}"
+    )
+
+    gap = point_dialogue_ppl_on - point_dialogue_ppl_off
+    lo, hi = dialogue_gap_band(control_gap=control_gap, gap_noise_floor=gap_noise_floor)
+    c_dialogue_ok = lo <= gap <= hi
+    superseded = superseded_dialogue_cap(gap_noise_floor=gap_noise_floor)
+    reasons.append(
+        f"(c) dialogue on-off gap {gap:.6f} {'inside' if c_dialogue_ok else 'OUTSIDE'} the band "
+        f"[{lo:.6f}, {hi:.6f}]: lo = f_C={F_C} x control_gap {control_gap:.6f} = {lo:.6f}, "
+        f"hi = control_gap + k={MARGIN_K} x {gap_noise_floor:.6f} = {hi:.6f}. NOT APPLIED, "
+        f"published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 "
+        f"replaced, superseded_dialogue_cap(gap_noise_floor={gap_noise_floor:.6f}) = "
+        f"{superseded:.4f}"
+    )
+
+    cap = retention_cap(retention_noise_floor=retention_noise_floor)
+    c_retention_ok = point_retention_ppl <= cap
+    reasons.append(
+        f"(c) retention PPL {point_retention_ppl:.4f} {'<=' if c_retention_ok else '>'} cap "
+        f"{V20_EWC_RETENTION_PPL} + k={MARGIN_K} x {retention_noise_floor:.6f} = {cap:.4f}"
+    )
+    c_ok = c_dialogue_ok and c_retention_ok
+
+    x_at_or_below = any(rate <= ceiling for rate in sweep_extraction_rates)
+    x_above = any(rate > ceiling for rate in sweep_extraction_rates)
+    y_at_or_above = any(recall >= y_taught for recall in sweep_taught_recalls)
+    y_below = any(recall < y_taught for recall in sweep_taught_recalls)
+    truncated = []
+    if not (x_at_or_below and x_above):
+        truncated.append(
+            f"the extraction axis (X = {ceiling:.4f}: at-or-below={x_at_or_below}, "
+            f"above={x_above} over {len(sweep_extraction_rates)} swept point(s))"
+        )
+    if not (y_at_or_above and y_below):
+        truncated.append(
+            f"the taught-recall axis (Y_taught = {y_taught:.4f}: at-or-above={y_at_or_above}, "
+            f"below={y_below} over {len(sweep_taught_recalls)} swept point(s))"
+        )
+    if truncated:
+        reasons.append(
+            "INCONCLUSIVE (GATE-06): the sweep never produced points on both sides of "
+            + "; ".join(truncated)
+            + ". A curve that never crossed cannot refute existence, so this is 'we could not "
+            "tell', not 'it did not work' — the mis-set-Z failure this branch exists to catch"
+        )
+        return "INCONCLUSIVE", reasons, arm
+
+    if a_ok and b_ok and c_ok and not replicated_at_second_seed:
+        reasons.append(
+            f"{REPLICATION_PENDING_MARKER} (GATE-08 / D-29): the point cleared (a), (b) and (c), "
+            "but no second-seed replication was recorded, so the verdict is INCONCLUSIVE and NOT "
+            "PASS. This branch overrides a would-be PASS, where GATE-05 and GATE-06 override a "
+            "would-be FAIL. The domain stays exactly three names and the return carries no flag"
+        )
+        return "INCONCLUSIVE", reasons, arm
+
+    return ("PASS" if (a_ok and b_ok and c_ok) else "FAIL"), reasons, arm
