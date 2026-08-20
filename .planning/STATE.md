@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 executing — plan 3 of 7 complete, wave 2 done
-last_updated: "2026-08-20T20:07:00.000Z"
+stopped_at: Phase 20 executing — plan 4 of 7 complete, wave 3 done
+last_updated: "2026-08-20T20:22:00.000Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 7
-  completed_plans: 3
-  percent: 43
+  completed_plans: 4
+  percent: 57
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — EXECUTING
-Plan: 4 of 7 (wave 2 complete — 20-02 and 20-03 both done)
+Plan: 5 of 7 (wave 3 complete — 20-04 done)
 Status: Executing Phase 20
-Last activity: 2026-08-20 — 20-03 complete: scripts/_prose.py::normalized shipped with its differential RPT-02 proof, and V4_ARTIFACT_GLOBS watched RED-then-GREEN across five states in a throwaway repo
+Last activity: 2026-08-20 — 20-04 complete: condition (c)'s two legs exist in their corrected asymmetric form (dialogue_gap_band, retention_cap) and mitigation_point_verdict returns (verdict, reasons, arm) over 21 required keyword-only arguments with three differentially-proved INCONCLUSIVE branches
 
 ## Performance Metrics
 
@@ -106,6 +106,7 @@ Last activity: 2026-08-20 — 20-03 complete: scripts/_prose.py::normalized ship
 | Phase 20 P01 | 22min | 3 tasks | 2 files |
 | Phase 20 P02 | 18min | 2 tasks | 1 files |
 | Phase 20 P03 | 13min | 2 tasks | 2 files |
+| Phase 20 P04 | 18min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -329,6 +330,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 20]: 20-03: RPT-02's proof is DIFFERENTIAL and the negative control is what carries it — WRAPPED_INCIDENT_TEXT.count(WRAPPED_INCIDENT_PHRASE) == 0 on the same bytes where normalized(phrase) in normalized(text) is True. Without it the test stays green against a normalized() that returns its argument unchanged. Fixture is the REAL v3.0 incident (the three\nreductions, RETROSPECTIVE.md:179-181 / v3.0-MILESTONE-AUDIT.md:104-111), never synthetic (D-30). scripts/_prose.py imports NOTHING (AST-verified) and exports exactly one name; no search() wrapper, no case-fold flag, no count() helper until a second call site needs one
 - [Phase 20]: 20-03: RPT-02 NOT marked complete — PITFALLS.md:1048's instruction is "route every doc-consistency test through it", and no test outside 20-03 does yet; that routing is P25's. Ninth application of 17-01's over-claim-avoidance pattern. ALSO: 20-03 Task 2's acceptance criterion `grep -c "shell=True" == 0` is unsatisfiable and was already so when written — tests/test_phase20_prereg.py:89 is 20-01's OWN _git docstring saying shell=True is never used. Verified by AST instead (zero Call nodes with a shell= kwarg, zero non-docstring literals containing "rm -rf"); the docstrings were NOT reworded to satisfy a broken measurement. This is the RPT-02 defect class inverted — a single-line grep conflating prose ABOUT code with the code. Phase 20 doc-consistency checks must be AST or _prose.normalized, never grep -c
 - [Phase 20]: 20-03: SUMMARY wall-clock figures must be derived from `git log --format=%cI`, not estimated — 20-03's first draft claimed ~27min against a git-measured ~13min, and 20-02-SUMMARY.md's 20:02Z-20:20Z block does not match its real commits (3796069 at 19:42:38Z, c856064 at 19:44:25Z). Treat prior Performance blocks in this phase as estimates
+- [Phase 20]: 20-04: condition (c)'s dialogue leg is a BAND ON THE ON-OFF ADAPTATION GAP and the supersession is written INTO the pin, not just decided — dialogue_gap_band(*, control_gap, gap_noise_floor) returns (F_C * control_gap, control_gap + MARGIN_K * gap_noise_floor). Its docstring carries the measured justification against superseded_dialogue_cap (untouched taught adapter 5.815445876712191 fails by +1.231717 BEFORE any mitigation; M1, which destroyed 77.637% of the adaptation, fails by only +0.267390 — so the one-sided cap SELECTS FOR DESTRUCTION), the RESEARCH L6 boundary (NOT a claim that 23a830c was wrong, NOT a licence to amend it, supersedes REQUIREMENTS.md:31 / ROADMAP.md:163-167 for v4.0 verdicts ONLY), and D-04's zero-new-constants proof. Without that paragraph a plan-checker reading REQUIREMENTS.md alone flags D-01 as a deviation
+- [Phase 20]: 20-04: the two (c) legs are ASYMMETRIC BY DESIGN and the reason is in the source — dialogue is a band, retention a one-sided upper cap, because the retention gap CHANGES SIGN inside the already-measured range (taught +0.3286199167186572, M1 -0.22022225029414155) while the dialogue gap is sign-stable. retention_cap(*, retention_noise_floor) = V20_EWC_RETENTION_PPL + MARGIN_K * floor reproduces v3.0's 4.029 from the v3.0 floor and D-06's TIGHTER 3.9085032379884783 from the adapter-regime floor 0.008681618994239138 — one formula, the change is in the INPUT. Anchored on the IMPORTED 3.891140, not the measured 3.891139975617828, which would give 3.9085032136063065; the precision anchor is stated in the docstring
+- [Phase 20]: 20-04: mitigation_point_verdict has 21 required keyword-only arguments with zero defaults and returns the 3-tuple (verdict, reasons, arm) — no dict, no dataclass, no fourth-state flag (D-29, `grep -c provisional` = 0). It calls extraction_ceiling ITSELF, so D-14(a)'s provenance tripwire is unavoidable at one choke point, and tolerance_report's sentence plus the COMPUTED superseded GATE-02 cap are rendered into the reason strings so neither the criterion's strength nor the supersession is taken on trust (D-14b). Y's two legs are F_Y times their OWN control kwarg; V20_TAUGHT_RECALL / V20_HELDOUT_RECALL appear nowhere (GATE-04)
+- [Phase 20]: 20-04: all three INCONCLUSIVE branches were proved DIFFERENTIALLY against the verdict they override, not merely observed returning INCONCLUSIVE — GATE-05 (early return, before any reason, 1-element list) and GATE-06 (late return, 5 reasons, per-condition detail preserved) each flip a kwargs set that returns FAIL; GATE-08 flips a kwargs set that returns PASS, appending a reason opening with the module constant REPLICATION_PENDING_MARKER = "clears all three conditions, replication pending" so plan 20-05's promote_to_full_fidelity can tell a gate-candidate INCONCLUSIVE from a truncated-sweep one without a second hand-typed spelling
+- [Phase 20]: 20-04: plan 20-04 Task 1's acceptance criterion `'V20_RETENTION_NOISE_FLOOR' in src` is False is UNSATISFIABLE and was already so when written — scripts/mitigation_gate.py:25 is 20-01's OWN module docstring explaining why that name is never imported, and the same task's action text requires the name's substance in retention_cap.__doc__. The INTENT was verified instead: the name is absent from the from-import list (AST) and 0.068930 appears as no numeric constant. Second unsatisfiable substring-scan criterion in this phase after 20-03's `grep -c "shell=True"`; the same lesson applies — audit by AST, never by substring
+- [Phase 20]: 20-04: NO requirement marked complete — GATE-01/02/03/04/05/06/08 are all touched here but GATE-07's per-arm existential, GATE-09's six-outcome __main__ and CAL-04's promotion rule are 20-05's, and 20-06 owns the audits that prove the keyword-only/no-retyped-baseline properties in CI. Tenth application of 17-01's recorded over-claim-avoidance pattern
 
 ### Roadmap Evolution
 
@@ -461,8 +468,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-20T20:06:37.201Z
-Stopped at: Completed 20-02-PLAN.md
+Last session: 2026-08-20T20:22:00.000Z
+Stopped at: Completed 20-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

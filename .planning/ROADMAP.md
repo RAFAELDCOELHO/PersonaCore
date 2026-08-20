@@ -199,7 +199,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 20-04-PLAN.md — Condition (c)'s corrected asymmetric legs and the 21-kwarg three-condition verdict with INCONCLUSIVE ahead of FAIL
+- [x] 20-04-PLAN.md — Condition (c)'s corrected asymmetric legs and the 21-kwarg three-condition verdict with INCONCLUSIVE ahead of FAIL
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -474,7 +474,7 @@ capacities — with every number in prose generated from a committed record rath
 | 1-8 | v1.0 | 29/29 | Complete | 2026-06-10 |
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
-| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 3/7 | In Progress | - |
+| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 4/7 | In Progress | - |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 0/TBD | Not started | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
