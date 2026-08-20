@@ -18,10 +18,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-12)
+See: .planning/PROJECT.md (updated 2026-08-19)
 
-**Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates.
-**Current focus:** Milestone complete
+**Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
+**Current focus:** Planning next milestone — run `/gsd:new-milestone`. The three candidates v3.0's own results argue for are scoped in PROJECT.md `## Next Milestone Goals`; the first is that **88.5% recovery under prompt-only attack was measured and no mitigation arm was run**, so any privacy claim now rests on addressing that or abandoning it explicitly.
 
 ## Current Position
 
