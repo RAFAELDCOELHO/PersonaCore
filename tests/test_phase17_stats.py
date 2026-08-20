@@ -52,7 +52,12 @@ if _SCRIPTS not in sys.path:
 _PERSONAS_PATH = _REPO_ROOT / "scripts" / "phase17_personas.py"
 _ISOLATION_PATH = _REPO_ROOT / "scripts" / "phase17_isolation.py"
 _CONTEXT_PATH = (
-    _REPO_ROOT / ".planning" / "phases" / "17-multi-persona-isolation-matrix" / "17-CONTEXT.md"
+    _REPO_ROOT
+    / ".planning"
+    / "milestones"
+    / "v3.0-phases"
+    / "17-multi-persona-isolation-matrix"
+    / "17-CONTEXT.md"
 )
 
 # DERIVED from a glob, never a hand-listed tuple (D-21). `scripts/phase17_persona_facts.py` (17-03),

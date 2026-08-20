@@ -39,7 +39,8 @@ _LADDER_PATH = _REPO_ROOT / "scripts" / "phase16_ladder.py"
 _CONTEXT_PATH = (
     _REPO_ROOT
     / ".planning"
-    / "phases"
+    / "milestones"
+    / "v3.0-phases"
     / "16-weight-vs-prompt-persistence-control"
     / "16-CONTEXT.md"
 )

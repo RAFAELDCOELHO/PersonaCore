@@ -2025,7 +2025,8 @@ _LADDER_VERDICT_RE = re.compile(r"\*\*Branch: `([a-z0-9_]+)`\*\* — highest pas
 _CONTEXT_PATH = (
     _REPO_ROOT
     / ".planning"
-    / "phases"
+    / "milestones"
+    / "v3.0-phases"
     / "16-weight-vs-prompt-persistence-control"
     / "16-CONTEXT.md"
 )

@@ -1090,7 +1090,8 @@ def test_proxy_validity_rule_is_committed_not_derived():
 _CONTEXT_PATH = (
     _REPO_ROOT
     / ".planning"
-    / "phases"
+    / "milestones"
+    / "v3.0-phases"
     / "16-weight-vs-prompt-persistence-control"
     / "16-CONTEXT.md"
 )
