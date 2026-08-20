@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 executing — plan 1 of 7 complete, wave 1 done
-last_updated: "2026-08-20T19:45:00.000Z"
+stopped_at: Phase 20 executing — plan 2 of 7 complete, wave 2 done
+last_updated: "2026-08-20T20:20:00.000Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
-  percent: 14
+  completed_plans: 2
+  percent: 29
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — EXECUTING
-Plan: 2 of 7 (wave 1 complete)
+Plan: 3 of 7 (wave 2 complete)
 Status: Executing Phase 20
-Last activity: 2026-08-20 — 20-01 complete: the v4.0 pin's spine committed and the ancestry guard armed in the same plan
+Last activity: 2026-08-20 — 20-02 complete: condition (a)'s extraction ceiling, its armed provenance tripwire and the tolerance reporter appended to the pin
 
 ## Performance Metrics
 
@@ -104,6 +104,7 @@ Last activity: 2026-08-20 — 20-01 complete: the v4.0 pin's spine committed and
 | Phase 19 P13 | 48min | 2 tasks | 5 files |
 | Phase 19 P15 | 75m | 2 tasks | 3 files |
 | Phase 20 P01 | 22min | 3 tasks | 2 files |
+| Phase 20 P02 | 18min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -316,6 +317,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 20]: 20-01: the number D-01 supersedes is one NOBODY TYPED into the v4.0 pin — superseded_dialogue_cap(*, gap_noise_floor) returns V20_MASKED_DIALOGUE_VAL_PPL + MARGIN_K * gap_noise_floor from two terms imported by OBJECT IDENTITY, reproducing the GATE-02 cap exactly at the committed dialogue_ppl_noise_floor while the literal appears nowhere in scripts/mitigation_gate.py (AST-verified: the module's only float literals are [0.5, 0.7]). MITIGATION_DECISION_RULE names the superseded criterion by its COMPUTATION, never by its value. tests/test_phase20_prereg.py (plan 20-06) is the ONLY file permitted to carry both literals
 - [Phase 20]: 20-01: IMPORT ACCUMULATION is a hard constraint, not a style note — pyproject.toml:44 selects F, so an erasure_gate name imported ahead of its consumer is an F401 and every Phase 20 task gates on `ruff check .` exiting 0. The from-import list is exactly ['MARGIN_K', 'V20_MASKED_DIALOGUE_VAL_PPL'] after 20-01; 20-02 adds wilson_upper_bound, 20-04 adds V20_EWC_RETENTION_PPL and rule_of_three. V20_RETENTION_NOISE_FLOOR is NEVER imported (D-06 supersedes it for v4.0 — a Phase 12 full-fine-tune seed pair governing an adapter-regime verdict) and neither is VERDICTS
 - [Phase 20]: 20-01: NO requirement marked complete — GATE-01, GATE-02, GATE-07 and CAL-04 are each claimed by more than one Phase 20 plan and none can be discharged by a spine with no verdict function. Seventh application of 17-01's recorded over-claim-avoidance pattern
+- [Phase 20]: 20-02: X is a FORMULA over imported symbols with ZERO chosen constants — extraction_ceiling(*, nontarget_successes, nontarget_questions, extraction_noise_floor, extraction_floor_provenance) returns wilson_upper_bound(s, n) + MARGIN_K * floor, both symbols imported from erasure_gate by OBJECT IDENTITY (mitigation_gate.wilson_upper_bound is erasure_gate.wilson_upper_bound is True) and neither redefined anywhere in the module. The unit is QUESTIONS, never draws, and both domain-guard messages say so. CHOSEN_CONSTANTS is still exactly two entries and the module's float literals are still exactly [0.5, 0.7] — every number this plan records lives in a docstring or a refusal message
+- [Phase 20]: 20-02: the D-14(a) Phase 23 obligation travels as CODE at ONE choke point, and all three branches were OBSERVED firing — three separate _prove calls (SystemExit, unstrippable under -O) refuse a provenance mapping missing 'arm'/'seeds', a floor off any arm but 'never-taught', and fewer than EXTRACTION_FLOOR_MIN_SEEDS = 2 distinct seeds. The arm message names D-12's refusal by its literal: the Phase 19 (b) non-target floor 0.14814814814814814 measures non-target recall variance under ablation — wrong quantity, wrong regime — and would set X to 0.321652, tolerating 25 of 104 questions, the identical error D-06 corrects for the retention floor. "25x" is written NOWHERE: 20-RESEARCH §6 could not reproduce that ratio under any reading
+- [Phase 20]: 20-02: tolerance_report REFUSES an unreachable ceiling instead of reporting tolerated = 0 (Rule 2 deviation, the plan's only one) — when wilson_upper_bound(0, n) > ceiling nothing clears the criterion, and emitting "clears ONLY on a perfect erasure" for a criterion a perfect erasure does not clear would publish a false gate strength from the very function D-14(b) commits to stop gate strength being invisible. ValueError names both regimes and says explicitly this is NOT the zero-tolerance regime. The reporter reproduces D-12's counterfactual exactly (X = 0.321652 -> tolerated 25/104 questions (24.0385%)), labelled a COUNTERFACTUAL in its own docstring because no v4.0 extraction floor exists until Phase 23
+- [Phase 20]: 20-02: both new domain guards compare against INT literals (`not 0 <= ceiling <= 1`, the erasure_gate.py:150-153 register), never 0.0/1.0 — writing them as floats would add two entries to the module's assigned float set and turn plan 20-06's two-chosen-constants audit into a judgement call about which floats count. Related: the seeds check counts distinct values only for list/tuple/set/frozenset, so seeds=1337 fires the tripwire instead of raising TypeError and seeds="1337" fires instead of PASSING on three distinct characters
+- [Phase 20]: 20-02: the from-import statement is now the WRAPPED multi-line form — adding wilson_upper_bound put the single-line version at 111 chars against the 100 limit, so 20-04's V20_EWC_RETENTION_PPL and rule_of_three are two inserted lines in sorted position, not a re-wrap. ruff's isort orders constants before lowercase functions, so the final five-name list will read MARGIN_K, V20_EWC_RETENTION_PPL, V20_MASKED_DIALOGUE_VAL_PPL, rule_of_three, wilson_upper_bound
 - [Phase 20]: 20-01: gsd-sdk state handlers misbehaved again as MEMORY records — state.update-progress returned 'Progress field not found in STATE.md' against a frontmatter that plainly has one, state.record-metric rejected its own documented positional argv, and state.advance-plan overwrote frontmatter stopped_at with the stale body prose 'Phase 20 context gathered' plus flattened the body Status/Last-activity lines. All repaired by hand; the metric row was added by hand. Do not trust these handlers without `git diff .planning/STATE.md`
 
 ### Roadmap Evolution
@@ -449,9 +455,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-20T16:34:43.654Z
-Stopped at: Phase 20 context gathered
-Resume file: .planning/phases/20-pre-registration-the-three-condition-gate/20-CONTEXT.md
+Last session: 2026-08-20T20:20:00.000Z
+Stopped at: Completed 20-02-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
