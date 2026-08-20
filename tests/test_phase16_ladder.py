@@ -27,6 +27,7 @@ import functools
 import hashlib
 import importlib.util
 import json
+import math
 import pathlib
 import re
 import sys
@@ -207,7 +208,11 @@ def test_pass_k_is_insensitive_to_family_size():
     """
     z_six = NormalDist().inv_cdf(1 - 0.05 / 6)
     z_seven = NormalDist().inv_cdf(1 - 0.05 / 7)
-    assert ladder.LADDER_CELL_Z == z_six, "the committed z IS the one-sided 1 - 0.05/6 quantile"
+    assert math.isclose(ladder.LADDER_CELL_Z, z_six, rel_tol=1e-9), (
+        "the committed z IS the one-sided 1 - 0.05/6 quantile (platform-dependent "
+        "last-digit tolerance: NormalDist().inv_cdf is not bit-reproducible across "
+        "libm implementations — arm64 Darwin vs x86_64 Linux CI)"
+    )
     assert _derived_pass_k(z_seven) == ladder.LADDER_CELL_PASS_K
     assert z_seven > z_six  # the 7-rung pricing is the stricter one, and still lands on the same k
 
