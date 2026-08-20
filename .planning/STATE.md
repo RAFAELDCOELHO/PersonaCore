@@ -3,7 +3,8 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: planning
-last_updated: "2026-08-20T12:20:00.000Z"
+stopped_at: Phase 20 context gathered
+last_updated: "2026-08-20T16:34:43.661Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
@@ -24,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 20 — Pre-Registration: The Three-Condition Gate (not started)
+Phase: 20 — Pre-Registration: The Three-Condition Gate (context gathered)
 Plan: —
-Status: Roadmap created, awaiting `/gsd:plan-phase 20`
-Last activity: 2026-08-20 — v4.0 roadmap written: 9 phases (20-28), 48/48 REQ-IDs mapped
+Status: Context gathered, awaiting `/gsd-plan-phase 20`
+Last activity: 2026-08-20
 
 ## Performance Metrics
 
@@ -441,9 +442,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-20T12:20:00.000Z
-Stopped at: v4.0 ROADMAP CREATED — 9 phases (20-28), 48/48 requirements mapped, 0 orphans. Nothing executed; no v4.0 number exists yet, which is the precondition Phase 20 depends on.
-Resume file: None
+Last session: 2026-08-20T16:34:43.654Z
+Stopped at: Phase 20 context gathered
+Resume file: .planning/phases/20-pre-registration-the-three-condition-gate/20-CONTEXT.md
 
 ## Operator Next Steps
 
@@ -451,6 +452,7 @@ Resume file: None
   evidentiary value is ordering: `erasure_gate.py` was committed at `23a830c` before Phase 16 ran,
   and the v4.0 gate must be committed before *any* v4.0 number exists — before the cost calibration
   (Phase 23), not merely before the sweep (Phase 25).
+
 - Research flags carried into planning: **Phase 21** NEEDS DESIGN (the privacy unit has no in-repo
   prior; the filler-facts construction and the replay-in-lot question both change the ε);
   **Phase 23** NEEDS MEASUREMENT (the training leg on the DP path and throughput on a *noised*
