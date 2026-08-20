@@ -166,7 +166,7 @@ are here.
 subcommand:
 
 ```python
-references=reference_set_for_calibration(fact.slot, fact),
+references = (reference_set_for_calibration(fact.slot, fact),)
 ```
 
 Two lines below, the SAME call assembles its collateral map from
