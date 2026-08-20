@@ -151,22 +151,55 @@ All six v2.0 target features shipped. Full detail: `milestones/v2.0-ROADMAP.md`,
 
 </details>
 
-## Next Milestone Goals (v4.0 — not yet defined)
+## Current Milestone: v4.0 Leakage Mitigation and Relearning Validation
 
-Not scoped. Run `/gsd:new-milestone` to define it. Three candidates surfaced by v3.0's own results,
-in the order its evidence argues for:
+**Goal:** v3.0 measured that weight-based memory leaks 88.5% under prompt-only attack and ran no
+mitigation arm. v4.0 builds training-time mitigation, maps the privacy/utility frontier for two
+mechanisms, and proves adversarially — by relearning attack — that what survives cannot be cheaply
+reverted.
 
-1. **Answer the leakage finding.** v3.0 measured 88.5% recovery under prompt-only attack and did
-   *not* run a mitigation arm. Any privacy claim in the README rests on that being addressed or
-   explicitly abandoned. The relearning attack Phase 18 named as absent (documented in the
-   unlearning literature to recover ~88% of supposedly removed information) is the obvious first
-   probe.
-2. **Erasure at a capacity where it could work.** The `FAILURE` was bounded to one mechanism, one
-   fact, one adapter at 331,776 parameters. Whether selectivity is recoverable at higher adapter
-   rank, or with a mechanism other than rank-1 ablation, is untested — and the co-headline says the
-   rank instrument alone cannot be trusted to report it.
-3. **The frozen tokenizer / retrain question**, held out of v3.0 deliberately. It needs its own
-   conversation given the cost of invalidating every published checkpoint and number.
+**Target features:**
+
+- **DP-SGD from scratch, cost-measured before its budget is pre-registered.** Per-example gradient
+  clipping + Gaussian noise on the LoRA gradients with (ε, δ) accounting. A calibration step
+  measures real M3 wall-clock — naive batch-1 accumulation (~B×, the shape `estimate_fisher`
+  already exhibits at N=2000) versus closed-form per-example norms over the adapter's
+  pure-`nn.Linear` surface — and the sweep budget is set from that measurement rather than assumed.
+  Hand-rolling DP-SGD is itself a deliverable; it is the only arm that makes a formal claim.
+- **Adversarial extraction-aware training.** The adapter trained against the Phase 18 attack suite
+  (paraphrase / prefix injection / role-play / repeated attempts), with attack intensity as the
+  sweep axis. No formal guarantee; generalization to unseen attacks is the declared open question.
+- **Retrained unmitigated control arm** at identical budget and seed protocol. v2.0's published
+  0.4921 / 0.3483 belong to a different training run and cannot serve as this milestone's baseline
+  without confounding the comparison with run-to-run variance.
+- **Privacy/utility frontier with an existence gate.** Full curve for both arms — ε for DP-SGD,
+  intensity for adversarial. X (extraction ceiling) and Y (taught-recall floor) locked in committed
+  code before any curve point is measured; gate = ∃ at least one point with extraction ≤ X **and**
+  recall ≥ Y. This is the direct answer to Phase 19's failure mode, where the mechanism "worked" by
+  destroying the model.
+- **Relearning attack, two instruments.** Absolute recovery ceiling as the binary pre-registered
+  gate (recovered recall ≤ X within fixed budget Z), plus a cost-to-recovery curve (steps/examples
+  to restore leakage) measured against a never-taught fresh adapter at identical budget and seed
+  protocol. Mitigated ≈ fresh on the cost curve means the information was removed rather than
+  suppressed; divergence enters as a finding qualifying the PASS/FAIL verdict, not as a second gate
+  — the same "instrument qualifies a gate's reading, it does not replace it" pattern v3.0 used.
+
+**Pre-registration boundary (stated up front so it cannot be misread):** a *resource* budget measured
+beforehand is not an *outcome* threshold measured beforehand. X and Y are outcome thresholds and stay
+locked in a committed constant before any point on either curve exists. Z (sweep width, step budget)
+is a resource parameter set *from* the DP-SGD cost measurement, because a budget guessed wrong
+silently truncates the very curve the gate is evaluated over.
+
+**Explicitly deferred — recorded, not forgotten** (the D-16 discipline: a negative decision carries a
+positive's weight): erasure at higher adapter rank or via a non-ablation mechanism (v3.0 candidate
+2), and the frozen tokenizer / retrain question (v3.0 candidate 3, held out of v3.0 for the same
+reason — it invalidates every published checkpoint and number, and needs its own conversation).
+
+**Key context:** phase numbering continues, so v4.0 opens at **Phase 20**. The measurement apparatus
+is inherited rather than rebuilt — the 270-question binding fixture, the cell-blind scorer, the
+adapter-off control protocol and the 42,480-draw budget precedent all come from Phases 16-18. Compute
+is N adapter training runs on the M3 (v2.0 precedent: ~38 min per 4000-step arm) times sweep width
+across two arms, which is why the DP-SGD cost number gates the sweep design rather than following it.
 
 ## Core Value
 
@@ -196,14 +229,20 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [x] No-forgetting (EWC A/B vs naive fine-tuning) demo — _Validated in Phase 13 (DEMO-04, EWC-03). Two 4000-step arms identical but for the penalty: naive retention PPL **8.524171** vs EWC **3.891140** from a shared 2.1076 anchor, gate cleared by **33.61×** its pre-registered margin (2 × 0.068930). Acquisition reported descriptively with no gate. The phase's own negative leads its threats register: free-running story mode survives in neither arm (79 naive vs 69 EWC role-token leaks), so the claim is scoped to teacher-forced retention PPL — see 13-VERIFICATION.md_
 - [x] Weight-delta heatmaps and forgetting-curve visualizations — _Validated in Phase 13+15 (VIZ-01..04). Figures are drawn **only** from the committed `results/phase15_norms.json`, by a module structurally forbidden from opening a checkpoint (AST walk over imports + fresh-interpreter probe that fails if `torch` lands in `sys.modules`). Fisher/Δ correlation Spearman **ρ = 0.801544**, CI [0.597984, 0.920291], gate passes on sign with magnitude explicitly descriptive at n=36 — see 15-VERIFICATION.md (51/51)_
 
+- [x] Weight-vs-prompt measured control — quantify what memory-in-weights buys over prompt-stuffing — _Validated in Phase 16. Four arms on one binding 270-question fixture in four fresh processes, licensed by a capability ladder that ran and was committed **before** anything was scored. The adapter arm reached 90/104 where the prompt arm sat at the floor; the weight arm's invariance is a `run_bit_identity_control` **proof** (max |diff| 0.0), not a statistic. Also fixed the shared instrument every later phase depends on (the `item.seed_index` pairing defect, the widened `persona=` AST guard, `assert_value_in_prompt`) — v3.0_
+- [x] Multi-persona isolation matrix M_ij under adversarial collision — _Validated in Phase 17. Three adversarial personas with contradictory values in the **same** slots, scored N sweeps N ways by a cell-blind scorer with an adapter-off base column and a swap canary. All six off-diagonals `0/104`; all six Holm comparisons rejected at p = 0.0078125; worst pair replicated at k=3 seeds, descriptive-only — v3.0_
+- [x] Black-box adversarial extraction audit — _Validated in Phase 18, **and it falsified the project's privacy claim.** Programmatic attacks at 42,480 draws per arm against an adapter-off control at identical budget returned `LEAKAGE_DEMONSTRATED` — 92/104 = 88.5%, 95% lower bound 0.8231, against a base arm at exactly `0/104`. The demo toggle was corrected in README, `docs/REPORT.md` and the UI to read **availability, not authorization**. Carries a retroactive scope limit from Phase 19 on any conclusion resting on rank alone — v3.0_
+- [x] Selective erasure of a taught fact from the weights — _Attempted in Phase 19 under a gate committed at `23a830c` before Phase 16 ran; the committed `erasure_succeeded` was called once and returned **`FAILURE`**. M1 rank-1 ablation zeroed 78 of 288 components: condition (a) cleared exactly on its blind-calibrated floor with zero headroom (0/27 questions, 1,296 draws), **all seven gated non-targets failed** (four at total generation loss), and 77.6% of the dialogue adaptation was destroyed. Published unsoftened: **selective erasure is not selective at 331,776 parameters.** Co-headline: the rank/exposure instrument read rank 1 at ceiling on all seven ruined facts while generation collapsed underneath it. Ship decision `DO NOT SHIP` — withholds one claim, withdraws no measurement — v3.0_
+
 ### Active
 
-<!-- Milestone v3.0: Adversarial Privacy Audit and Selective Memory Erasure — REQ-IDs land in REQUIREMENTS.md. -->
+<!-- Milestone v4.0: Leakage Mitigation and Relearning Validation — REQ-IDs land in REQUIREMENTS.md. -->
 
-- [ ] Weight-vs-prompt measured control — quantify what memory-in-weights buys over prompt-stuffing, same questions, both conditions (Phase 16)
-- [ ] Multi-persona isolation matrix M_ij under adversarial collision — colliding names, contradictory same-slot values, cross-adapter querying, seed-replicated worst pair (Phase 17)
-- [ ] Black-box adversarial extraction audit — no-adapter negative control vs adapter-active attacker across paraphrase / prefix / role-play / repeated attempts (Phase 18)
-- [ ] *(Deferred, gated on 16-18)* Selective erasure of a taught fact from the weights (Phase 19+)
+- [ ] DP-SGD from scratch on the LoRA gradients (per-example clipping + Gaussian noise, (ε, δ) accounting), with its per-example wall-clock overhead **measured on the M3 before the sweep budget is pre-registered** (Phase 20+)
+- [ ] Adversarial extraction-aware training against the Phase 18 attack suite, attack intensity as the sweep axis (Phase 20+)
+- [ ] Retrained unmitigated control arm at identical budget and seed protocol — the baseline the frontier is read against, since v2.0's published recall belongs to a different run (Phase 20+)
+- [ ] Privacy/utility frontier for both arms with a pre-registered existence gate: ∃ a curve point with extraction ≤ X **and** taught-recall ≥ Y, X and Y committed before any point is measured (Phase 20+)
+- [ ] Relearning attack as adversarial validation — absolute recovery ceiling as the binary gate (recall ≤ X within fixed budget Z), plus cost-to-recovery curve against a never-taught fresh adapter at identical budget and seed (Phase 20+)
 
 ### Out of Scope
 
@@ -258,6 +297,8 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 | Honest negatives are never edited in place; continuations are separate and dated after (v2.0) | The value of a recorded negative is that it was recorded before anyone knew if it would be convenient. Editing it later destroys exactly that, and invisibly | ✓ Good — the λ-sweep verdict, the recall ADAPT qualifications, and the free-running story-mode failure all still read as originally written. The report carries text now known to be wrong, corrected by dated note rather than by edit |
 | Structural enforcement replaces declared invariants (v2.0) | A docstring asserting a property is true the day it is written and silently false after the next refactor; nothing notices. A checked mechanism fails loudly on every suite run | ✓ Good — named by the milestone's own learnings as its most recurring failure mode, then converted three times: demo mask comparison, prompt token-id check, and the plotting module's no-checkpoint guard (AST walk + fresh-interpreter probe, watched failing before being trusted) |
 | Extract once from checkpoints, then plot only from a committed artifact (v2.0 Phase 15) | A committed PNG whose inputs are gitignored is an assertion, not evidence — nobody with a fresh clone can regenerate or audit it | ✓ Good — `results/phase15_norms.json` feeds the figures, the report's per-layer disclosure, and the correlation statistic. One source of truth, and the plotting half runs in the CPU-only suite |
+| A resource budget may be measured before pre-registration; an outcome threshold may not (v4.0 kickoff, 2026-08-20) | X (extraction ceiling) and Y (recall floor) are what the gate judges, so they must be locked before any curve point exists. Z (sweep width, step budget) is what the gate is *evaluated over* — guessing it wrong silently truncates the curve and can manufacture a failure that is really a budget artifact. DP-SGD per-example clipping can cost ~B×, not 2×, so Z cannot be assumed | ⏳ Pending — the distinction is stated in the milestone scope so a reader cannot mistake the cost calibration for a threshold peek |
+| Two mitigation arms (DP-SGD + adversarial training) as a frontier comparison, not one arm (v4.0 kickoff, 2026-08-20) | DP-SGD is the only arm that makes a formal (ε, δ) claim, but at 331,776 params it may destroy recall outright — which would repeat Phase 19's "it worked by breaking the model" without a second reading to interpret it against. The adversarial arm has no guarantee but bounds the empirical question directly | ⏳ Pending — cost is N training runs × sweep width × 2 arms on the M3; the DP-SGD cost measurement gates whether the planned sweep width is affordable |
 
 ## Evolution
 
@@ -277,4 +318,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-19 after the v3.0 milestone close. Shipped: the privacy audit that returned `LEAKAGE_DEMONSTRATED` against its own claim, and the selective-erasure attempt whose pre-registered gate returned `FAILURE` — both published unsoftened, ship decision `DO NOT SHIP` withholding one claim and withdrawing no measurement.*
+*Last updated: 2026-08-20 at v4.0 kickoff. Milestone v4.0 "Leakage Mitigation and Relearning Validation" scoped: answer the 88.5% leakage finding v3.0 measured and left unanswered, with two training-time mitigation arms swept into a privacy/utility frontier under an existence gate, and a relearning attack as the adversarial proof the mitigation cannot be cheaply reverted. The four v3.0 requirements moved from Active to Validated. Erasure at higher rank and the frozen-tokenizer retrain are explicitly deferred, not dropped.*
