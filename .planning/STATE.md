@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: planning
-stopped_at: Phase 20 context gathered
-last_updated: "2026-08-20T16:34:43.661Z"
+status: executing
+stopped_at: Phase 20 planned — 7 plans, 6 waves, ready to execute
+last_updated: "2026-08-20T19:15:06.841Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
   completed_phases: 0
-  total_plans: 0
+  total_plans: 7
   completed_plans: 0
   percent: 0
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
-**Current focus:** v4.0 roadmapped — 9 phases (20-28), 48/48 requirements mapped, 0 orphans. The milestone answers the finding v3.0 measured and left open: **88.5% recovery under prompt-only attack, with no mitigation arm run.** Next: `/gsd:plan-phase 20` — the three-condition pre-registration gate, which must be committed and pushed before Phase 23 measures a single wall-clock number, not merely before the sweep.
+**Current focus:** v4.0 Phase 20 **planned** — 7 plans across 6 waves, 0 blockers at plan-check. The milestone answers the finding v3.0 measured and left open: **88.5% recovery under prompt-only attack, with no mitigation arm run.** Next: `/gsd:execute-phase 20` — the three-condition pre-registration gate, which must be committed and pushed before Phase 23 measures a single wall-clock number, not merely before the sweep.
 
 ## Current Position
 
-Phase: 20 — Pre-Registration: The Three-Condition Gate (context gathered)
-Plan: —
-Status: Context gathered, awaiting `/gsd-plan-phase 20`
-Last activity: 2026-08-20
+Phase: 20 — Pre-Registration: The Three-Condition Gate (planned)
+Plan: 7 plans across 6 waves
+Status: Ready to execute
+Last activity: 2026-08-20 — Phase 20 planning complete (7 plans, 0 blockers)
 
 ## Performance Metrics
 

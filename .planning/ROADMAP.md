@@ -188,12 +188,29 @@ kind exists — including before the cost calibration
 **Plans**: 7 plans across 6 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 20-01-PLAN.md — Arm the pin's spine (verdict domain D-31, arms D-28, the two chosen constants, K_RUNGS, the decision-rule prose) and arm the Phase 18/19 ancestry guard in the same plan
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 20-02-PLAN.md — X's formula, unit and estimator, the armed D-14 provenance tripwire, and the committed tolerance reporter
 - [ ] 20-03-PLAN.md — `scripts/_prose.py::normalized` (RPT-02) with its differential proof, and the D-22 throwaway-repo RED-then-GREEN four-state fixture
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 20-04-PLAN.md — Condition (c)'s corrected asymmetric legs and the 21-kwarg three-condition verdict with INCONCLUSIVE ahead of FAIL
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 20-05-PLAN.md — Per-arm existence, the K ratchet and promotion rule, the GATE-10 capacity rule with both branches, and the six-outcome `__main__`. The pin closes here
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 20-06-PLAN.md — The hybrid AST register, the import-graph and constant audits, and the behavioural twin that re-runs every branch in CI
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 20-07-PLAN.md — Blocking push checkpoint, the unpinned MPS retention-floor driver, and `results/phase20_retention_floor.json` committed strictly after the pin
 
 ### Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus
