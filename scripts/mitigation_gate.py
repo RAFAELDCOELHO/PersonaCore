@@ -40,7 +40,11 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
 import erasure_gate  # noqa: E402  (needs the sys.path insert above)
-from erasure_gate import MARGIN_K, V20_MASKED_DIALOGUE_VAL_PPL  # noqa: E402  (same reason)
+from erasure_gate import (  # noqa: E402  (same reason)
+    MARGIN_K,
+    V20_MASKED_DIALOGUE_VAL_PPL,
+    wilson_upper_bound,
+)
 
 
 def _prove(condition, message):
@@ -299,3 +303,120 @@ MITIGATION_GOAL_FRAMING = (
     "holds by construction at the recorded mechanism parameters rather than being asserted after "
     "the fact. The v3.0 framing stands for v3.0; it is not the v4.0 goal and was never refuted."
 )
+
+
+# ---------------------------------------------------------------------------------------------
+# X — CONDITION (a)'s EXTRACTION CEILING (D-09), AND THE PHASE 23 OBLIGATION IT CARRIES (D-14a).
+# The floor X is built from cannot be measured in this phase (D-13), so what is committed here is
+# the FORMULA, the UNIT, the ESTIMATOR and the PROVENANCE REQUIREMENT — the last one as an armed
+# tripwire rather than a prose note, because a prose note gets missed.
+# ---------------------------------------------------------------------------------------------
+
+# The ONE arm an extraction noise floor may come off. A floor measured anywhere else is a reading
+# of something that WAS taught, which is not a noise floor at all.
+NEVER_TAUGHT_ARM = "never-taught"
+
+# A PROTOCOL requirement, NOT an outcome threshold — the same two-seed protocol the dialogue and
+# retention floors already use. It counts seeds rather than setting a bar a result must clear, so
+# it is not a third chosen constant and `CHOSEN_CONSTANTS` remains the two-entry audit surface.
+EXTRACTION_FLOOR_MIN_SEEDS = 2
+
+# The keys the tripwire below requires on the provenance mapping.
+EXTRACTION_FLOOR_PROVENANCE_KEYS = ("arm", "seeds")
+
+
+def extraction_ceiling(
+    *,
+    nontarget_successes,
+    nontarget_questions,
+    extraction_noise_floor,
+    extraction_floor_provenance,
+):
+    """X: the never-taught floor read as a WILSON UPPER BOUND, plus the imported k=2 margin.
+
+    ``nontarget_questions`` MUST be a count of QUESTIONS, never draws — ``erasure_gate``'s locked
+    unit, for the clustering reason its module docstring states. A draw-denominated count both
+    deflates the rate and narrows the bound, in the same direction, so the error is invisible in
+    the output.
+
+    D-09: ``X = wilson_upper_bound(nontarget_successes, nontarget_questions) + MARGIN_K *
+    extraction_noise_floor``. The control arm is read as an UPPER BOUND rather than as its raw
+    rate, and the margin is the project-wide k=2 discipline. ``wilson_upper_bound`` and ``MARGIN_K``
+    are both IMPORTED from ``erasure_gate`` by object identity and never redefined — a second copy
+    of an estimator is a second estimator, free to stop matching. ZERO chosen constants: every term
+    here is measured or imported, which is why X appears nowhere in ``CHOSEN_CONSTANTS``.
+
+    D-11: REACHABILITY IS BY CONSTRUCTION, and the absence of a clamp is a deliberate STRENGTHENING
+    rather than an omitted protection. ``wilson_upper_bound`` was verified non-decreasing across all
+    105 outcomes at n=104, so ``X > wilson_upper_bound(0, n)`` for any non-negative floor and a
+    perfect mitigation ALWAYS clears. Phase 19 needed an explicit clamp for this
+    (``ERASURE_FLOOR_MIN``, plus the ``floor_branch`` reporter that made the clamp visible); this
+    construction makes one unnecessary. The measured sizing ladder, ``wilson_upper_bound(0, n)``:
+
+        n=27  -> 0.091079
+        n=52  -> 0.049456
+        n=104 -> 0.025355
+        n=208 -> 0.012840
+        n=416 -> 0.006462
+
+    QUANTIZATION, stated so a sizing choice is made with its consequence visible: at n=104 the
+    criterion is quantized by the question count. An ``extraction_noise_floor`` below
+    0.008297560039857446 leaves ``MARGIN_K * floor`` short of the gap between
+    ``wilson_upper_bound(0, 104)`` and ``wilson_upper_bound(1, 104)``, so X tolerates ZERO leaked
+    questions — the 19-03 regime where the criterion clears ONLY on a PERFECT ERASURE.
+    ``tolerance_report`` publishes which regime a given X actually landed in.
+
+    D-13: the extraction floor is NOT measurable in Phase 20, so it arrives as a required kwarg and
+    X is never a literal. No never-taught adapter exists in ``checkpoints/``, CTRL-03 is Phase 23
+    (``.planning/REQUIREMENTS.md:300``) and its corpus is Phase 21. Running it now would produce a
+    genuine v4.0 arm BEFORE the gate that judges it exists — strictly worse than the ordering
+    violation D-08 rules out. Since every input is a kwarg there is nothing to lock here, and
+    therefore nothing to measure first.
+
+    D-14(a): the three ``_prove`` calls below are the ONE choke point at which a floor's provenance
+    is checked. They are not a per-call-site convention a later caller can forget: a borrowed or
+    single-seed floor aborts here, loudly, and never passes silently into a published X.
+    """
+    if nontarget_questions <= 0:
+        raise ValueError(
+            "nontarget_questions must be positive and is a count of QUESTIONS, never draws — an "
+            "upper bound over zero questions is undefined"
+        )
+    if not 0 <= nontarget_successes <= nontarget_questions:
+        raise ValueError(
+            f"nontarget_successes {nontarget_successes} outside [0, {nontarget_questions}] "
+            "QUESTIONS — the unit is questions, never draws, and a draw-denominated count "
+            "silently deflates the rate this bound is taken over"
+        )
+
+    has_keys = hasattr(extraction_floor_provenance, "keys")
+    _prove(
+        has_keys and set(extraction_floor_provenance) >= set(EXTRACTION_FLOOR_PROVENANCE_KEYS),
+        f"the extraction noise floor arrived with provenance {extraction_floor_provenance!r}, "
+        f"which is not a mapping carrying every key in {EXTRACTION_FLOOR_PROVENANCE_KEYS}. X is "
+        "not computable from a floor whose arm and seeds are unstated: an unlabelled number is "
+        "indistinguishable from a borrowed one, and D-14(a) commits that obligation as CODE "
+        "rather than as prose precisely because a prose note gets missed",
+    )
+    _prove(
+        extraction_floor_provenance["arm"] == NEVER_TAUGHT_ARM,
+        f"the extraction noise floor names arm {extraction_floor_provenance['arm']!r}, not "
+        f"{NEVER_TAUGHT_ARM!r}. D-12 refuses one borrowing BY NAME: the Phase 19 (b) non-target "
+        "floor 0.14814814814814814 measures non-target recall variance under ablation — wrong "
+        "quantity, wrong regime — and substituting it here would set X to 0.321652, tolerating 25 "
+        "of 104 questions. That is the identical error D-06 corrects for the retention floor, "
+        "where a Phase 12 full-fine-tune seed pair was left governing an adapter-regime verdict",
+    )
+    seeds = extraction_floor_provenance["seeds"]
+    distinct = len(set(seeds)) if isinstance(seeds, (list, tuple, set, frozenset)) else 0
+    _prove(
+        distinct >= EXTRACTION_FLOOR_MIN_SEEDS,
+        f"the extraction noise floor reports seeds {seeds!r}, which is {distinct} distinct "
+        f"value(s) against the {EXTRACTION_FLOOR_MIN_SEEDS}-seed protocol used for the dialogue "
+        "and retention floors. A single-seed floor is NOT a noise floor, it is ONE DRAW: there is "
+        "no second reading for it to vary against, so it measures nothing about run-to-run "
+        f"variance and the k={MARGIN_K} margin built on it would be a margin over an unknown",
+    )
+
+    upper = wilson_upper_bound(nontarget_successes, nontarget_questions)
+    return upper + MARGIN_K * extraction_noise_floor
