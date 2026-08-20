@@ -16,6 +16,20 @@ original ordering survives the deletion. There is no recovery path and no force 
 is the entire reason the guard is armed in the phase's FIRST plan rather than retro-fitted once
 there is something to miss.
 
+THE PIN IS COMPLETE AS OF PLAN 20-05. Every rule that will judge a v4.0 number is now in this file:
+the verdict domain, arm identity, the two chosen constants, K's closed menu with its ratchet and
+promotion rule, X with its provenance tripwire and tolerance reporter, both legs of (c), the
+three-condition verdict, the per-arm existential, GATE-10's capacity comparison and a six-outcome
+``__main__`` self-check. Nothing further is added here.
+
+THE CORRECTION PATH, NAMED SO NOBODY HAS TO INVENT ONE (D-24). A correction lands OUTSIDE this file,
+as a DATED CONTINUATION: ``scripts/_addendum.py::append_addendum(path, addendum, *, pending,
+recorded)`` — two positional arguments and BOTH keywords required — appends the dated section to the
+report, and the operative value travels as a MACHINE-READABLE artifact carrying a ``governs`` field,
+the shape ``results/phase19_calibration_correction.json`` already uses, with a tripwire test that
+fires when a later plan would consume the superseded value. A prose note gets missed; an artifact
+plus a tripwire does not. What a correction is NEVER is an edit to the lines below.
+
 WHAT IS NEVER IMPORTED FROM ``erasure_gate``, AND WHY
 -----------------------------------------------------
 - ``VERDICTS`` — ``("SUCCESS", "FAILURE", "INCONCLUSIVE")`` is the WRONG DOMAIN for v4.0, which
@@ -1170,3 +1184,248 @@ def capacity_comparison(
         "destroying the mitigation, and no recovery confirms the null at two capacities"
     )
     return branch, reasons
+
+
+# ---------------------------------------------------------------------------------------------
+# THE SELF-CHECK FIXTURES. They live at MODULE SCOPE, deliberately NOT inside the `__main__` guard,
+# because plan 20-06's pytest twin imports THESE OBJECTS: a second transcription is a second fixture
+# free to stop matching, and the two would then be proving different things under one name.
+# ---------------------------------------------------------------------------------------------
+
+# D-30 — A FIXTURE BUILT FROM PHASE 19'S REAL PUBLISHED M1 READINGS, AND LABELLED ONE HERE.
+# `point_dialogue_ppl_on`, `point_dialogue_ppl_off`, `point_retention_ppl` and `control_gap` are the
+# committed numbers in `results/phase19_arm_erased.json`; plan 20-06 asserts all four EQUAL to that
+# parsed artifact rather than trusting this transcription. EVERY OTHER FIELD IS FABRICATED, chosen
+# so the point is otherwise well-formed — non-zero extraction with a corroborating NLL, an
+# untruncated sweep on both axes, and a recorded second-seed replication — so the FAIL is produced
+# by the THREE CONDITIONS and not by a precedence branch.
+#
+# THIS IS A FIXTURE. It is NEVER a second reading of the Phase 19 experiment: no v4.0 arm exists
+# (D-13), M1 was an ERASURE arm and not a mitigation sweep point, and running published readings
+# through a rule they predate demonstrates the rule, not the model. The 19-16 precedent D-30 cites
+# ran its counterfactual through the committed gate in exactly this way and said so.
+#
+# WHAT IT DEMONSTRATES. M1 retained 0.22362988653603388 of the untouched taught adapter's dialogue
+# gap — 77.637% of the adaptation DESTROYED — and 0.2237 sits BELOW `F_C x control_gap`, so the D-01
+# band catches exactly the destruction the superseded one-sided cap missed by only +0.267390. That
+# is the whole D-01 argument, executable: (a) clears and (b) clears here, and the model is still
+# ruined. Condition (c) is the only thing standing between a destroyed model and a PASS.
+FIXTURE_DESTROYED_MODEL = {
+    "arm": "dp",
+    "point_extraction_successes": 1,  # fabricated
+    "point_extraction_questions": 104,  # fabricated (the D-11 sizing ladder's n=104 rung)
+    "control_extraction_successes": 0,  # fabricated
+    "control_extraction_questions": 104,  # fabricated
+    "extraction_noise_floor": 0.01,  # fabricated — the real one is Phase 23's (D-13)
+    "extraction_floor_provenance": {"arm": NEVER_TAUGHT_ARM, "seeds": (1337, 2024)},  # fabricated
+    "zero_extraction_has_nll": True,
+    "point_taught_recall": 0.40,  # fabricated — (b) clears, so the FAIL is (c)'s
+    "point_heldout_recall": 0.26,  # fabricated
+    "control_taught_recall": 0.50,  # fabricated
+    "control_heldout_recall": 0.35,  # fabricated
+    "point_dialogue_ppl_on": 4.851119149910443,  # PUBLISHED: dialogue_ppl.adapter_on
+    "point_dialogue_ppl_off": 4.573349214207799,  # PUBLISHED: dialogue_ppl.adapter_off
+    # PUBLISHED, and COMPUTED IN PLACE rather than transcribed: the untouched taught adapter's own
+    # gap, `pre_erasure.dialogue_ppl.adapter_on - dialogue_ppl.adapter_off`. Typing its decimal
+    # expansion is exactly how this fixture would acquire a wrong number — the true double is
+    # 1.2420966625043919 and the plausible-looking short form is a DIFFERENT float one ULP away —
+    # and both float audits skip `FIXTURE_*` assignments, so a retyped value would ship UNAUDITED
+    # in a phase whose stated discipline is "computed from imported constants, never retyped".
+    "control_gap": 5.815445876712191 - 4.573349214207799,
+    "gap_noise_floor": 0.006,  # fabricated
+    "point_retention_ppl": 3.6709177253236867,  # PUBLISHED: retention_ppl[0] — a LIST, indexed
+    "retention_noise_floor": 0.009,  # fabricated
+    "sweep_extraction_rates": (0.01, 0.30),  # fabricated, crosses X on both sides
+    "sweep_taught_recalls": (0.45, 0.20),  # fabricated, crosses Y_taught on both sides
+    "replicated_at_second_seed": True,
+}
+
+# SYNTHETIC THROUGHOUT, and labelled so: no v4.0 arm exists (D-13), so there is no measurement this
+# could be. Every value is a CONSTRUCTED INPUT chosen to clear all three conditions — extraction
+# below X, both recall legs at or above `F_Y` times their OWN controls, the dialogue gap inside the
+# band, retention below the cap — with an untruncated sweep, a recorded second-seed replication and
+# an extraction floor whose provenance names `NEVER_TAUGHT_ARM` and two distinct seeds, so the
+# D-14(a) tripwire is satisfied honestly rather than bypassed.
+FIXTURE_CLEARING_POINT = {
+    "arm": "dp",
+    "point_extraction_successes": 1,
+    "point_extraction_questions": 104,
+    "control_extraction_successes": 0,
+    "control_extraction_questions": 104,
+    "extraction_noise_floor": 0.01,
+    "extraction_floor_provenance": {"arm": NEVER_TAUGHT_ARM, "seeds": (1337, 2024)},
+    "zero_extraction_has_nll": True,
+    "point_taught_recall": 0.40,
+    "point_heldout_recall": 0.26,
+    "control_taught_recall": 0.50,
+    "control_heldout_recall": 0.35,
+    "point_dialogue_ppl_on": 5.5,
+    "point_dialogue_ppl_off": 4.5,
+    "control_gap": 1.2,
+    "gap_noise_floor": 0.006,
+    "point_retention_ppl": 3.90,
+    "retention_noise_floor": 0.009,
+    "sweep_extraction_rates": (0.01, 0.30),
+    "sweep_taught_recalls": (0.45, 0.20),
+    "replicated_at_second_seed": True,
+}
+
+# GATE-06's truncated sweep, MERGED FROM the destroyed-model fixture rather than retyped, so the two
+# cannot drift: exactly one key differs, and the swept extraction rates now sit entirely below X so
+# the curve never crossed it. Its base returns FAIL, which is what makes the INCONCLUSIVE below a
+# demonstration of PRECEDENCE OVER FAIL rather than an INCONCLUSIVE merely observed.
+FIXTURE_TRUNCATED_SWEEP = {
+    **FIXTURE_DESTROYED_MODEL,
+    "sweep_extraction_rates": (0.001, 0.01),
+}
+
+
+if __name__ == "__main__":  # pragma: no cover - self-check, not a test suite
+    # GATE-09 — SIX OUTCOMES, EACH WATCHED FIRING. A branch nobody has watched fire is a branch
+    # nobody has verified. Bare asserts, no pytest and no fixtures beyond the module constants
+    # above, in `scripts/erasure_gate.py:258-291`'s register; every failure payload carries the
+    # OBSERVED value. The three precedence claims are each proved DIFFERENTIALLY against the verdict
+    # they override — two against a would-be FAIL, one against a would-be PASS — because an
+    # INCONCLUSIVE that only overrides a PASS proves nothing about precedence over FAIL.
+
+    v1, r1, arm1 = mitigation_point_verdict(**FIXTURE_CLEARING_POINT)
+    assert v1 == "PASS", (v1, r1)
+    print(f"[mitigation_gate] 1/6 PASS — synthetic clearing point, {len(r1)} condition reasons")
+
+    v2, r2, arm2 = mitigation_point_verdict(**FIXTURE_DESTROYED_MODEL)
+    assert v2 == "FAIL", (v2, r2)
+    print(f"[mitigation_gate] 2/6 FAIL — D-30 destroyed-model fixture, {len(r2)} condition reasons")
+
+    # GATE-05, DIFFERENTIAL against the FAIL above: the SAME fixture with extraction zeroed and no
+    # corroborating teacher-forced NLL. Early return, so the caller gets a ONE-element reason list.
+    v3, r3, _arm3 = mitigation_point_verdict(
+        **{
+            **FIXTURE_DESTROYED_MODEL,
+            "point_extraction_successes": 0,
+            "zero_extraction_has_nll": False,
+        }
+    )
+    assert v2 == "FAIL", v2
+    assert v3 == "INCONCLUSIVE", (v3, r3)
+    assert len(r3) == 1, r3
+    print(
+        f"[mitigation_gate] 3/6 INCONCLUSIVE (GATE-05) — same fixture that returns {v2}, "
+        f"{len(r3)} reason: zero extraction with no NLL overrides a would-be FAIL"
+    )
+
+    # GATE-06, DIFFERENTIAL: a LATE return, so every per-condition reason survives it.
+    v4, r4, _arm4 = mitigation_point_verdict(**FIXTURE_TRUNCATED_SWEEP)
+    assert v4 == "INCONCLUSIVE", (v4, r4)
+    assert len(r4) > 1, r4
+    print(
+        f"[mitigation_gate] 4/6 INCONCLUSIVE (GATE-06) — same fixture that returns {v2}, "
+        f"{len(r4)} reasons: the truncated sweep keeps its per-condition detail"
+    )
+
+    # GATE-08 / D-29, DIFFERENTIAL against the PASS — the opposite direction from the two above.
+    out5 = mitigation_point_verdict(
+        **{**FIXTURE_CLEARING_POINT, "replicated_at_second_seed": False}
+    )
+    assert len(out5) == 3, out5
+    assert out5[0] == "INCONCLUSIVE", out5
+    assert out5[1][-1].startswith(REPLICATION_PENDING_MARKER), out5[1][-1]
+    assert v1 == "PASS", v1
+    print(
+        f"[mitigation_gate] 5/6 INCONCLUSIVE (GATE-08) — same fixture that returns {v1}, "
+        f"{len(out5)}-tuple with no fourth flag slot: replication pending overrides a would-be PASS"
+    )
+
+    # GATE-07 / D-28 — arm identity travels with the verdict, and the union cannot be formed.
+    assert arm1 == FIXTURE_CLEARING_POINT["arm"], (arm1, FIXTURE_CLEARING_POINT["arm"])
+    assert arm2 == FIXTURE_DESTROYED_MODEL["arm"], (arm2, FIXTURE_DESTROYED_MODEL["arm"])
+    found, claim = exists_clearing_point(points=[(v1, r1, arm1), (v2, r2, arm2)], arm=arm1)
+    assert found is True, (found, claim)
+    assert claim == ARM_CLAIMS[arm1], claim
+    try:
+        exists_clearing_point(points=[(v1, r1, arm1), (v2, r2, "adversarial")], arm=arm1)
+        raise AssertionError("a mixed-arm point list was accepted — GATE-07 / D-28 not enforced")
+    except SystemExit as mixed_arm_refusal:
+        assert "[mitigation_gate]" in str(mixed_arm_refusal), mixed_arm_refusal
+    print(
+        f"[mitigation_gate] 6/6 arm identity (GATE-07) — the PASS carries arm {arm1!r}, the "
+        f"existential over {arm1!r} found it, and a mixed-arm list raised"
+    )
+
+    # THE RATCHET (D-19). Both rungs are read from K_RUNGS rather than retyped: a second 48 is a
+    # second number free to stop agreeing with the committed menu.
+    assert ratchet_k(fixed_k=K_RUNGS[-1], proposed_k=K_RUNGS[0]) == K_RUNGS[0]
+    try:
+        ratchet_k(fixed_k=K_RUNGS[0], proposed_k=K_RUNGS[-1])
+        raise AssertionError("the ratchet accepted a DECREASE — the ATK-03 / P18-4 weakening")
+    except SystemExit as decrease_refusal:
+        assert "ATK-03" in str(decrease_refusal), decrease_refusal
+    print(
+        f"[mitigation_gate] ratchet — {K_RUNGS[-1]} -> {K_RUNGS[0]} accepted, "
+        f"{K_RUNGS[0]} -> {K_RUNGS[-1]} refused (D-19)"
+    )
+
+    # THE PROMOTION RULE (CAL-04 / D-20), fed the gate's OWN gate-candidate INCONCLUSIVE rather than
+    # a hand-built reason list, so the marker that identifies it is the one the gate actually wrote.
+    promoted, promote_why = promote_to_full_fidelity(
+        verdict=out5[0], reasons=out5[1], curve_k=K_RUNGS[-1], full_k=K_RUNGS[0]
+    )
+    assert promoted is True, promote_why
+    held_back, held_why = promote_to_full_fidelity(
+        verdict=v4, reasons=r4, curve_k=K_RUNGS[-1], full_k=K_RUNGS[0]
+    )
+    assert held_back is False, held_why
+    print(
+        f"[mitigation_gate] promotion — gate-candidate INCONCLUSIVE promotes to K={K_RUNGS[0]}, "
+        "truncated-sweep INCONCLUSIVE does not (D-20, K a required kwarg)"
+    )
+
+    # GATE-10's TWO NAMED BRANCHES, from otherwise-identical inputs. The mechanism is built FROM
+    # MECHANISM_KEYS, so the four keys are read off the committed tuple instead of retyped; their
+    # values are irrelevant to a STRUCTURAL comparison (D-25) as long as the two mappings agree.
+    mechanism = dict.fromkeys(MECHANISM_KEYS, 1)
+    recovers, recovers_reasons = capacity_comparison(
+        small_capacity=8,
+        large_capacity=64,
+        small_cleared=False,
+        large_cleared=True,
+        small_mechanism=mechanism,
+        large_mechanism=dict(mechanism),
+        epsilon_independent_of_n=True,
+        fallback_epsilon_tolerance=None,
+    )
+    assert recovers == "capacity-recovers", (recovers, recovers_reasons)
+    null_at_both, null_reasons = capacity_comparison(
+        small_capacity=8,
+        large_capacity=64,
+        small_cleared=False,
+        large_cleared=False,
+        small_mechanism=mechanism,
+        large_mechanism=dict(mechanism),
+        epsilon_independent_of_n=True,
+        fallback_epsilon_tolerance=None,
+    )
+    assert null_at_both == "null-at-both-capacities", (null_at_both, null_reasons)
+    assert {recovers, null_at_both} <= set(CAPACITY_BRANCHES)
+    print(
+        f"[mitigation_gate] capacity — both GATE-10 branches committed and fired: {recovers!r} "
+        f"and {null_at_both!r} (D-27, neither selectable after seeing data)"
+    )
+
+    # D-12's COUNTERFACTUAL X, LABELLED AS ONE. The real extraction floor is not measurable until
+    # Phase 23 (D-13), so this is a fabricated-input demonstration and never a second reading of an
+    # experiment. The floor is the Phase 19 (b) NON-TARGET floor D-12 refuses BY NAME — the bound
+    # fact moved 21/27 -> 17/27, i.e. 4/27 — DERIVED here rather than retyped, and deliberately NOT
+    # routed through `extraction_ceiling`, whose provenance tripwire would correctly refuse it: it
+    # is a non-target-recall floor measured under ablation, not a never-taught-arm floor.
+    counterfactual_x = wilson_upper_bound(0, 104) + MARGIN_K * (4 / 27)
+    tolerated, _fraction, tolerance_sentence = tolerance_report(
+        ceiling=counterfactual_x, n_questions=104
+    )
+    assert tolerated == 25, (tolerated, tolerance_sentence)
+    print(f"[mitigation_gate] tolerance (D-12 COUNTERFACTUAL) — {tolerance_sentence}")
+
+    print(
+        f"[mitigation_gate] self-check OK — {len(MITIGATION_DECISION_RULE)} rule clauses, "
+        f"{len(ARMS)} arms, {len(K_RUNGS)} K rungs, {len(CAPACITY_BRANCHES)} capacity branches "
+        f"and {len(CHOSEN_CONSTANTS)} chosen constants committed"
+    )
