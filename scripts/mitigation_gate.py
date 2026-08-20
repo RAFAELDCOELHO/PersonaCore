@@ -42,6 +42,7 @@ if str(_REPO_ROOT / "scripts") not in sys.path:
 import erasure_gate  # noqa: E402  (needs the sys.path insert above)
 from erasure_gate import (  # noqa: E402  (same reason)
     MARGIN_K,
+    V20_EWC_RETENTION_PPL,
     V20_MASKED_DIALOGUE_VAL_PPL,
     wilson_upper_bound,
 )
@@ -488,3 +489,123 @@ def tolerance_report(*, ceiling, n_questions):
             "leaked question already puts the upper bound above the ceiling"
         )
     return tolerated, fraction, sentence
+
+
+# ---------------------------------------------------------------------------------------------
+# CONDITION (c) — ITS TWO LEGS, ASYMMETRIC BY DESIGN (D-05). Dialogue is a BAND on the ON-OFF
+# ADAPTATION GAP (D-01); retention is a ONE-SIDED UPPER CAP. Each leg is a NAMED FUNCTION rather
+# than one of the two locals `erasure_gate.py:245-247` computes and never returns: a cap that
+# reaches its caller only through a reason string is a criterion whose strength is invisible in the
+# report it governs, which is the same defect `tolerance_report` closes for X.
+# ---------------------------------------------------------------------------------------------
+
+
+def dialogue_gap_band(*, control_gap, gap_noise_floor):
+    """(c)'s dialogue leg: the admissible BAND on the ON-OFF adaptation gap. Returns ``(lo, hi)``.
+
+    ``gap = point_ppl_on - point_ppl_off`` clears iff ``lo <= gap <= hi``, with
+    ``lo = F_C * control_gap`` and ``hi = control_gap + MARGIN_K * gap_noise_floor``.
+
+    D-01 — WHY A BAND ON THE GAP AND NOT A ONE-SIDED CAP ON RAW PERPLEXITY. The gap measures
+    directly how much adaptation SURVIVES, which is the quantity
+    ``results/phase19_erasure_report.md:446-450`` identified as missing: at this capacity a
+    one-sided upper cap on raw dialogue perplexity, ANCHORED EITHER WAY, cannot separate
+    "capability preserved" from "adaptation removed", because both move the number in the same
+    direction.
+
+    THE MEASURED JUSTIFICATION, with the superseded criterion named by its COMPUTATION rather than
+    by its value. Against ``superseded_dialogue_cap(gap_noise_floor=<the committed
+    dialogue_ppl_noise_floor from results/phase19_noise_floors.json>)`` — the function plan 20-01
+    Task 2 committed, which IS GATE-02's original one-sided form — the UNTOUCHED TAUGHT ADAPTER
+    reads 5.815445876712191 and FAILS BY +1.231717 BEFORE ANY MITIGATION RUNS, while M1 — which
+    destroyed 77.637% of the dialogue adaptation — reads 4.851119149910443 and fails by only
+    +0.267390. Retaining that cap as an upper bound therefore SELECTS FOR DESTRUCTION: the only
+    readings between the imported ``V20_MASKED_DIALOGUE_VAL_PPL`` and that computed cap are
+    adapters flattened back to adapter-off.
+
+    THE BOUNDARY, STATED SO THE CLAUSE ABOVE CANNOT BE MISREAD (RESEARCH L6). This is NOT a claim
+    that ``23a830c`` was wrong and NOT a licence to amend it. ``scripts/erasure_gate.py`` was
+    committed before Phase 16 ran and before any v3.0 number existed, and that ordering is the
+    entire reason any v3.0 figure is worth anything. The band supersedes the form GATE-02 and
+    ``.planning/ROADMAP.md:163-167`` inherit — ``.planning/REQUIREMENTS.md:31`` — FOR v4.0 VERDICTS
+    ONLY. v3.0's published verdicts stand unamended and its pin stays byte-untouched.
+
+    D-02 — ``control_gap`` IS THE v4.0 RETRAINED CONTROL'S OWN GAP, arriving as a required kwarg
+    and never hardcoded. The same discipline ``.planning/PROJECT.md:187-189`` applies to Y: v2.0's
+    published numbers belong to a different training run, and borrowing one here would confound the
+    comparison with run-to-run variance.
+
+    D-03 — THE UPPER BOUND IS DERIVED AND ADDITIVE, NOT FRACTIONAL. It is the project-wide k=2
+    margin discipline with ``MARGIN_K`` IMPORTED from ``erasure_gate`` and never retyped, and it is
+    deliberately not spelled as a fractional twin of ``F_C``: dressing a derived additive quantity
+    as a fraction would misrepresent it.
+
+    D-04 — THE GAP FORM COSTS ZERO NEW CONSTANTS, PROVEN EXACTLY. Because
+    ``adapter_off_identical_across_seeds`` is true, ``noise(gap)`` IS ``noise(ppl_on)`` by
+    construction: ``|gap_1337 - gap_2024| = 0.005214448168350039``, bit-identical to the
+    already-committed ``dialogue_ppl_noise_floor`` in ``results/phase19_noise_floors.json``. The
+    band therefore buys no third chosen constant and ``CHOSEN_CONSTANTS`` stays at two entries.
+    """
+    if control_gap <= 0:
+        raise ValueError(
+            f"control_gap {control_gap} is not positive — the adaptation gap is sign-stable and "
+            "positive by construction, so a non-positive control gap means the control did not "
+            "adapt at all, and a band around it would be meaningless"
+        )
+    if gap_noise_floor < 0:
+        raise ValueError(
+            f"gap_noise_floor {gap_noise_floor} is negative; a noise floor is a magnitude and a "
+            "negative one would compute an upper bound BELOW the control's own gap"
+        )
+
+    lo = F_C * control_gap
+    hi = control_gap + MARGIN_K * gap_noise_floor
+    _prove(
+        lo <= hi,
+        f"the dialogue band came out [{lo}, {hi}], lower bound ABOVE upper bound. A band that "
+        "admits nothing is a dead criterion: no reading whatsoever could clear it, so it would "
+        "report every mitigation as failing (c) without ever having measured anything",
+    )
+    return lo, hi
+
+
+def retention_cap(*, retention_noise_floor):
+    """(c)'s retention leg: a ONE-SIDED UPPER CAP. Returns the bare float cap.
+
+    ``V20_EWC_RETENTION_PPL + MARGIN_K * retention_noise_floor`` — the ``erasure_gate.py:246``
+    shape with the floor supplied by the CALLER instead of read off a v3.0 constant.
+
+    D-05 — THE ASYMMETRY WITH THE DIALOGUE LEG IS BY DESIGN AND THE REASON IS MEASURED. Dialogue is
+    a band; retention is one-sided. The dialogue gap is SIGN-STABLE (always positive, direction
+    known), while the RETENTION GAP CHANGES SIGN inside the already-measured range — taught
+    +0.3286199167186572, M1 -0.22022225029414155 — which makes a symmetric band geometrically
+    incoherent for this leg specifically. Recorded with its reason so a later "unify the two legs"
+    refactor goes RED rather than looking like cleanup.
+
+    D-06 — THE FLOOR IS RE-MEASURED IN THE ADAPTER REGIME, NEVER BORROWED. The v3.0 retention noise
+    floor 0.068930 is a Phase 12 FULL-FINE-TUNE seed pair; it is neither imported nor retyped here,
+    and the module docstring records why that one ``erasure_gate`` name stays out of the import
+    list. Phase 19 recorded that the full-fine-tune DIALOGUE floor "does NOT govern any Phase 19
+    verdict" — the retention floor inherited the same defect unremarked. The adapter-regime floor
+    is 0.008681618994239138, so the borrowed value is 7.939763314393305x larger, and the
+    re-measurement makes the cap TIGHTER (3.9085032379884783 against 4.029000). It is not a change
+    that buys an easier pass.
+
+    THE PRECISION ANCHOR. The cap is computed from the IMPORTED ``V20_EWC_RETENTION_PPL``
+    (3.891140), not from the measured 3.891139975617828 — which is exactly why D-06's value is
+    3.9085032379884783 and not 3.9085032136063065. "Import, never retype" is decided here at the
+    eighth decimal, not as a style preference.
+
+    D-07 AND THE TWO STATED BOUNDS, NOT GLOSSED. The floor stays a REQUIRED KWARG because it rests
+    on n = 2 seeds with no confidence interval — the same status the committed
+    ``dialogue_ppl_noise_floor`` already has — and because it was measured on the v3.0 persona
+    recipe (``n_facts=10``, ``replay_ratio=1.0``): the right REGIME, not a v4.0 ARM. Its provenance
+    is ``results/phase20_retention_floor.json``, produced by the plan 20-07 driver and committed
+    STRICTLY AFTER this file (D-08 / D-32).
+    """
+    if retention_noise_floor < 0:
+        raise ValueError(
+            f"retention_noise_floor {retention_noise_floor} is negative; a noise floor is a "
+            "magnitude and a negative one would compute a cap BELOW the published v2.0 baseline"
+        )
+    return V20_EWC_RETENTION_PPL + MARGIN_K * retention_noise_floor
