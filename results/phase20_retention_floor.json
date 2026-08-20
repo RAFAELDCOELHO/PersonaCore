@@ -1,0 +1,76 @@
+{
+  "adapter_off_identical_across_seeds": true,
+  "bin": "data/retention_val.bin",
+  "bin_bytes": 2000572,
+  "block_size": 256,
+  "borrowed_cap": 4.029,
+  "borrowed_floor": 0.06893,
+  "borrowed_floor_ratio": 7.939763314393305,
+  "bounds": "TWO BOUNDS, STATED NOT GLOSSED. (1) n = 2 seeds. The floor above is ONE DIFFERENCE BETWEEN TWO DRAWS and carries NO confidence interval \u2014 exactly the status the committed `dialogue_ppl_noise_floor` (0.005214448168350039, also n = 2) already has, stated here rather than inherited silently. (2) It is measured on the V3.0 PERSONA RECIPE (`recipe` above: n_facts = 10, replay_ratio = 1.0, arm_spec 'real', second_person false), which is the right REGIME \u2014 LoRA adapters over the same base, same corpus, same instrument \u2014 but NOT a v4.0 ARM. A v4.0 mitigation arm may differ in facts, replay or steps, and this floor is not evidence about that. Both bounds are why D-07 keeps the floor a REQUIRED KEYWORD ARGUMENT of `scripts/mitigation_gate.py::retention_cap` instead of a literal inside it: a caller must state which floor it is asserting, and a better-bounded measurement can replace this one without editing the closed pin.",
+  "call": "retention_perplexity(model, RETENTION_BIN, 256, device, tok)",
+  "cap": 3.9085032379884783,
+  "cap_derivation": "3.89114 + 2 x 0.008681618994239138 (scripts/erasure_gate.py:246)",
+  "corpus_tokens": 1000286,
+  "device": "mps",
+  "driver": "scripts/phase20_run.py retention-floor (UNPINNED)",
+  "git_sha": "669d082d1a7015f1bdbe31019e04b5a7f7e87c79",
+  "governs": "the MEASURED adapter-regime floor above is what the v4.0 gate reads: it is the `retention_noise_floor` keyword argument of `scripts/mitigation_gate.py::retention_cap`, which has NO default and therefore cannot silently fall back to anything. `V20_RETENTION_NOISE_FLOOR = 0.068930` is the PHASE 12 FULL-FINE-TUNE reading published beside it for the method it supplied, and it does NOT govern any v4.0 verdict. This mirrors the statement `results/phase19_noise_floors.json` already makes about the full-fine-tune DIALOGUE floor 0.001704. NOTE, and it is not a contradiction: `scripts/erasure_gate.py`'s own `retention_cap` (`:246`) still computes with 0.068930, and that is CORRECT and DELIBERATE \u2014 it is the Phase 19 gate, its verdicts are already published, and this artifact is NOT a correction to commit 23a830c. That commit must not be amended. Phase 19 read a full-fine-tune floor; v4.0 reads the measured adapter-regime one.",
+  "n_scored_tokens": 1000285,
+  "n_windows": 3908,
+  "recipe": {
+    "arm_spec": "real",
+    "arms": [
+      "erase_dialogue_floor_seed1337",
+      "erase_dialogue_floor_seed2024"
+    ],
+    "n_facts": 10,
+    "prefix": "phase19",
+    "replay_ratio": 1.0,
+    "second_person": false
+  },
+  "recipe_source": "results/phase19_dialogue_floor.json (proved equal at run time)",
+  "retention_ppl": {
+    "1337": {
+      "adapter": "checkpoints/phase19_erase_dialogue_floor_seed1337_adapter.pt",
+      "adapter_off": 3.891139975617828,
+      "adapter_on": 4.219759892336485,
+      "adapter_sha256": "f12ab4c3db4126b5399f46cd2b674d7ae5fdae83f7aff27fdffe9bb65ee64974",
+      "delta_on_minus_off": 0.3286199167186572,
+      "n_scored_tokens": 1000285,
+      "n_windows": 3908,
+      "seed": 1337
+    },
+    "2024": {
+      "adapter": "checkpoints/phase19_erase_dialogue_floor_seed2024_adapter.pt",
+      "adapter_off": 3.891139975617828,
+      "adapter_on": 4.2284415113307245,
+      "adapter_sha256": "3fd5aba43e25c43a957d3e6901c398c20a8f3b308f9f04facaa80c23c444f74f",
+      "delta_on_minus_off": 0.33730153571289634,
+      "n_scored_tokens": 1000285,
+      "n_windows": 3908,
+      "seed": 2024
+    }
+  },
+  "retention_ppl_noise_floor": 0.008681618994239138,
+  "seed_1337_remeasured_vs_published": {
+    "abs_delta": 0.0,
+    "adapter_off_abs_delta": 0.0,
+    "bit_identical": true,
+    "control_is_across_two_distinct_files": true,
+    "measured_adapter_off": 3.891139975617828,
+    "measured_adapter_on": 4.219759892336485,
+    "measured_n_scored_tokens": 1000285,
+    "published_adapter": "checkpoints/persona_adapter.pt",
+    "published_adapter_off": 3.891139975617828,
+    "published_adapter_on": 4.219759892336485,
+    "published_adapter_sha256": "226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb",
+    "published_n_scored_tokens": 1000285,
+    "source": "results/phase19_noise_floors.json retention_ppl_pre_erasure",
+    "tolerance": "NONE \u2014 exact `==` on all three values, enforced by SystemExit before seed 2024 was measured at all. The published block was measured on checkpoints/persona_adapter.pt, a different file from the seed-1337 arm adapter scored here (both digests above), so agreement is a control over the instrument rather than a re-read of the same bytes."
+  },
+  "seeds": [
+    1337,
+    2024
+  ],
+  "torch": "2.7.1"
+}
