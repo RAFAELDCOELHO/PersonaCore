@@ -889,3 +889,284 @@ def exists_clearing_point(*, points, arm):
         "strength is the size of the set it searched. Any INCONCLUSIVE among those points is NOT a "
         "clear and was not counted as one (D-29)"
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# CAL-04 / D-19 / D-20 — THE K RATCHET AND THE PROMOTION RULE. `K_RUNGS` above is the closed MENU;
+# these two govern movement WITHIN it, and both are committed before any v4.0 artifact exists.
+# Neither reads a resource parameter from anywhere: K arrives as a REQUIRED KWARG (D-20), which is
+# what lets an outcome rule live in the gate while `scripts/mitigation_gate.py` never imports
+# `scripts/mitigation_budget.py` and the AST guard forbidding that import stays intact.
+# ---------------------------------------------------------------------------------------------
+
+
+def ratchet_k(*, fixed_k, proposed_k):
+    """THE RATCHET: once a K is fixed it may only INCREASE. Returns the accepted ``proposed_k``.
+
+    Both values must be members of the closed menu ``K_RUNGS`` (D-19), so a K nobody costed cannot
+    enter through this door — the rung set was committed with its measured cost table
+    (``.planning/REQUIREMENTS.md:118-124``) and an off-menu value has no h/point beside it.
+
+    D-19 — WHY THE RATCHET IS STRUCTURAL RATHER THAN A CONVENTION. ``scripts/phase18_extraction.py``
+    at ``:84-93`` records its own K reduction, 64 -> 48, and states exactly why it was admissible
+    and exactly when it stops being: the reduction was PRE-NULL, taken on pre-flight throughput
+    evidence before any arm had been drawn, and *"reducing K AFTER seeing a null is the weakening
+    ATK-03 and P18-4 exist to prevent; this is the one moment the pin leaves open for it"*. Fewer
+    draws is less power to observe extraction, which is an EASIER NULL — a reduction taken after a
+    null therefore buys the very result it is reacting to. For v4.0 that window is closed by
+    construction: Phase 23 SELECTS the rung by measured throughput (CAL-05), and from that selection
+    onward this function refuses every decrease. The reduction Phase 18 could argue for, v4.0 cannot
+    perform at all.
+
+    An INCREASE is always accepted and never argued with. More draws is more power, which can only
+    make the null harder to reach; there is no version of that move that flatters the result.
+    """
+    _prove(
+        fixed_k in K_RUNGS,
+        f"fixed_k {fixed_k!r} is not a member of the closed menu K_RUNGS {K_RUNGS}. The menu was "
+        "committed with its measured cost table (.planning/REQUIREMENTS.md:118-124), so an "
+        "off-menu K is a draw budget with no h/point beside it and no rung to ratchet from",
+    )
+    _prove(
+        proposed_k in K_RUNGS,
+        f"proposed_k {proposed_k!r} is not a member of the closed menu K_RUNGS {K_RUNGS}. A K "
+        "chosen outside the committed menu is a budget selected after the menu was written, which "
+        "is the CAL-04 ordering this ratchet exists to hold",
+    )
+    _prove(
+        proposed_k >= fixed_k,
+        f"K would move {fixed_k} -> {proposed_k}, a DECREASE, and the ratchet refuses it. "
+        "`scripts/phase18_extraction.py:84-93` records the reasoning: reducing K AFTER seeing a "
+        "null is the weakening ATK-03 and P18-4 exist to prevent, because fewer draws is less "
+        "power to observe extraction, i.e. an EASIER NULL — a reduction taken after a null buys "
+        "the very result it reacts to. Pre-flight was 'the one moment the pin leaves open for it' "
+        "in Phase 18; for v4.0 that moment is Phase 23's rung SELECTION, and after it a K may only "
+        "increase (D-19)",
+    )
+    return proposed_k
+
+
+def promote_to_full_fidelity(*, verdict, reasons, curve_k, full_k):
+    """CAL-04's promotion rule: is this point re-drawn at full fidelity? ``(promote, reason)``.
+
+    CAL-04 requires three things committed before the first point is drawn — the CURVE K, the
+    FULL-FIDELITY K reserved for gate-candidate points, and the RULE that promotes a point from the
+    first to the second. This is the third. The first two arrive as required kwargs, which is the
+    whole of D-20: the promotion rule decides whether a point COUNTS, so it is an outcome rule and
+    belongs in the gate — but ``.planning/ROADMAP.md:139-144`` requires the gate/budget separation
+    to be a fact about the IMPORT GRAPH rather than a paragraph, because *a resource budget measured
+    beforehand is not an outcome threshold measured beforehand* and a reader must not be able to
+    mistake one for the other. Taking K as a kwarg satisfies both: the rule lives here and
+    ``scripts/mitigation_budget.py`` is never imported.
+
+    ``ratchet_k`` is CALLED, not re-implemented — so a full-fidelity K below the curve K aborts
+    through the SAME implementation D-19 committed. Two ratchets would be two ratchets free to stop
+    agreeing, and the second one would be the one nobody watched fire.
+
+    TWO PROMOTABLE OUTCOMES, AND THE SECOND IS READ FROM A CONSTANT. A ``PASS`` promotes. So does
+    the GATE-CANDIDATE ``INCONCLUSIVE`` — a point that cleared all three conditions with no
+    second-seed replication (GATE-08 / D-29) — and it is told apart from the truncated-sweep
+    ``INCONCLUSIVE`` by ``REPLICATION_PENDING_MARKER``, the module constant its reason opens with,
+    never by a second hand-typed spelling of the same sentence. A ``FAIL`` and a truncated-sweep
+    ``INCONCLUSIVE`` do not promote: the first was decided, and the second's curve never crossed, so
+    re-drawing that point at higher fidelity would spend the budget on the wrong axis.
+    """
+    ratchet_k(fixed_k=curve_k, proposed_k=full_k)
+    _prove(
+        verdict in V4_VERDICTS,
+        f"verdict {verdict!r} is not in the closed domain {V4_VERDICTS}. An unrecognised verdict "
+        "would fall through to 'not promoted', which is a quiet wrong answer in a rule whose only "
+        "job is to decide what gets re-drawn — the failure `_prove` exists to make loud",
+    )
+
+    if verdict == "PASS":
+        return True, (
+            f"PROMOTE: verdict PASS at curve K={curve_k} — re-draw at full-fidelity K={full_k}. A "
+            "gate-candidate point is measured at the fidelity its claim will be published at"
+        )
+    if verdict == "INCONCLUSIVE" and reasons and reasons[-1].startswith(REPLICATION_PENDING_MARKER):
+        return True, (
+            f"PROMOTE: GATE-CANDIDATE INCONCLUSIVE at curve K={curve_k} — the point cleared all "
+            f"three conditions with replication pending, so it is re-drawn at full-fidelity "
+            f"K={full_k}. Identified by REPLICATION_PENDING_MARKER, the constant the GATE-08 "
+            "reason opens with, so this rule and that branch cannot drift into two spellings"
+        )
+    return False, (
+        f"NO PROMOTION: verdict {verdict!r} at curve K={curve_k} is not a gate candidate. A FAIL "
+        "was decided at the curve fidelity, and a truncated-sweep INCONCLUSIVE means the curve "
+        "never crossed — re-drawing that point at full fidelity spends the budget on the wrong axis"
+    )
+
+
+# ---------------------------------------------------------------------------------------------
+# GATE-10 / D-25, D-26, D-27 — THE CAPACITY COMPARISON. BOTH named branches and the fallback route
+# are committed HERE, before either the n=8 or the n=64 run, so neither is selectable after seeing
+# data. The dispatch below is TOTAL over all four (small_cleared, large_cleared) combinations, with
+# no fall-through and no investigate-the-instrument escape hatch — the Phase 16 `licensed_headline`
+# lesson, where the outcome the evidence predicted (no rung passed) is a FIRST-CLASS branch rather
+# than an error path.
+# ---------------------------------------------------------------------------------------------
+
+# The mechanism parameters epsilon is a deterministic function of. Agreement on ALL FOUR is what
+# D-25 means by structural equivalence — there is no fifth key and no tolerance constant.
+MECHANISM_KEYS = ("sigma", "steps", "delta", "q")
+
+CAPACITY_BRANCHES = (
+    "not-comparable",
+    "capacity-recovers",
+    "capacity-destroys",
+    "recovery-at-both-capacities",
+    "null-at-both-capacities",
+)
+
+# The TOTAL dispatch, keyed by `(small_cleared, large_cleared)`. Held as DATA rather than as an
+# if/elif chain so its totality is a property a module-scope proof can check, in the
+# `phase19_erasure.py:3878-3883` register.
+_CAPACITY_DISPATCH = {
+    (False, True): "capacity-recovers",
+    (False, False): "null-at-both-capacities",
+    (True, False): "capacity-destroys",
+    (True, True): "recovery-at-both-capacities",
+}
+
+_prove(
+    set(_CAPACITY_DISPATCH) == {(a, b) for a in (False, True) for b in (False, True)}
+    and set(_CAPACITY_DISPATCH.values()) <= set(CAPACITY_BRANCHES),
+    f"the capacity dispatch holds keys {sorted(_CAPACITY_DISPATCH)} and branches "
+    f"{sorted(set(_CAPACITY_DISPATCH.values()))} against the committed {CAPACITY_BRANCHES}. It "
+    "must be TOTAL over all four cleared-flag combinations and name only committed branches: a "
+    "missing key is a fall-through, and a fall-through in a decision function is where an "
+    "investigate-the-instrument escape hatch gets added after the data is in. Phase 16's "
+    "`licensed_headline` makes the outcome its evidence predicted a FIRST-CLASS branch for exactly "
+    "this reason, and a branch name outside the closed tuple is a name a later plan would have to "
+    "add code for — which, once any `results/phase20_*` artifact exists, turns the ancestry guard "
+    "permanently red",
+)
+
+
+def capacity_comparison(
+    *,
+    small_capacity,
+    large_capacity,
+    small_cleared,
+    large_cleared,
+    small_mechanism,
+    large_mechanism,
+    epsilon_independent_of_n,
+    fallback_epsilon_tolerance,
+):
+    """GATE-10: n=8 against n=64 at equivalent epsilon_fact. Returns ``(branch, reasons)``.
+
+    ``branch`` is a member of ``CAPACITY_BRANCHES``; ``reasons`` is a list of strings in the
+    ``erasure_gate`` register, each carrying its own derivation.
+
+    D-25 — EQUIVALENCE IS STRUCTURAL, AND ITS TOLERANCE CONSTANT IS ZERO. The primary route requires
+    the two mechanisms to agree EXACTLY on every key in ``MECHANISM_KEYS``. epsilon is a
+    DETERMINISTIC FUNCTION of those parameters, so comparing at identical mechanism parameters IS
+    comparing at equivalent epsilon_fact: a zero tolerance constant, because there is nothing
+    left to approximate and a tolerance would be a third chosen constant bought for nothing. This is
+    what preserves capacity N as the only genuinely free variable between the two compared points;
+    any other difference would make the comparison a reading of the mechanism, not of capacity.
+
+    D-26 — THE FALLBACK IS COMMITTED NOW AND ITS CONSTANT IS DELIBERATELY UNSET. "epsilon is
+    independent of N at q=1" is the premise the entire n=64 phase rests on, and research marks it
+    ``[INFERENCE]``, not measured; CAL-03 is the calibration that confirms or falsifies it. If it is
+    falsified the rule falls back to matched-epsilon within a tolerance — and THAT TOLERANCE IS A
+    THIRD CHOSEN CONSTANT, which this pin does not set. Taking the fallback route with it unset
+    raises rather than defaulting, so the constant is FLAGGED rather than smuggled, on exactly the
+    standard applied to ``F_C``. It must be decided and named before Phase 21's CAL-03 runs.
+
+    D-27 — BOTH NAMED BRANCHES ARE PUBLISHABLE AND NEITHER MAY BE CHOSEN AFTER SEEING DATA. Recovery
+    at n=64 that n=8 did not achieve at equivalent epsilon_fact is a finding about WHERE CAPACITY
+    STOPS DESTROYING THE MITIGATION; no recovery CONFIRMS THE NULL AT TWO CAPACITIES. Both are real
+    results, which is why the whole rule — including the two branches nobody expects to hit and the
+    fallback route — is committed here, before either run, rather than written once the numbers make
+    one of them more attractive than the other.
+    """
+    if small_capacity >= large_capacity:
+        raise ValueError(
+            f"small_capacity {small_capacity} is not below large_capacity {large_capacity}. The "
+            "comparison is directional — n=8 against n=64 — and a transposed pair would report "
+            "'capacity recovers' for a result that says the opposite"
+        )
+
+    reasons = []
+
+    if epsilon_independent_of_n:
+        missing = tuple(
+            key
+            for key in MECHANISM_KEYS
+            if key not in small_mechanism or key not in large_mechanism
+        )
+        _prove(
+            not missing,
+            f"the mechanism mappings are missing {missing} of the required {MECHANISM_KEYS}. "
+            "D-25's equivalence is agreement on ALL FOUR parameters epsilon is a function of, so a "
+            "missing key is not a comparison with one fewer check — it is an unchecked parameter "
+            "free to differ, which would silently turn a capacity reading into a mechanism reading",
+        )
+        differing = tuple(
+            f"{key}={small_mechanism[key]!r} vs {large_mechanism[key]!r}"
+            for key in MECHANISM_KEYS
+            if small_mechanism[key] != large_mechanism[key]
+        )
+        if differing:
+            reasons.append(
+                "NOT COMPARABLE (D-25): the two points differ on "
+                + "; ".join(differing)
+                + ". Equivalence here is STRUCTURAL with ZERO tolerance constant — epsilon is a "
+                "deterministic function of these parameters, so any disagreement means capacity is "
+                "not the only free variable and the comparison would read the mechanism instead"
+            )
+            return "not-comparable", reasons
+        reasons.append(
+            f"comparability: STRUCTURAL (D-25) — both points agree exactly on all "
+            f"{len(MECHANISM_KEYS)} of {MECHANISM_KEYS}, so they are compared at equivalent "
+            "epsilon_fact with ZERO tolerance constant, leaving capacity N the only free variable"
+        )
+    else:
+        _prove(
+            fallback_epsilon_tolerance is not None,
+            "the D-26 FALLBACK route was taken (epsilon_independent_of_n=False, i.e. CAL-03 "
+            "falsified the premise research marks [INFERENCE] rather than measured) with "
+            "fallback_epsilon_tolerance unset. That tolerance is a THIRD CHOSEN CONSTANT and Phase "
+            "20 DELIBERATELY DID NOT SET IT: it must be decided and named explicitly before Phase "
+            "21's CAL-03 runs, on the same standard applied to F_C. Defaulting it here would "
+            "smuggle in the one number this pin refused to choose (D-26)",
+        )
+        missing = tuple(
+            name
+            for name, mechanism in (("small", small_mechanism), ("large", large_mechanism))
+            if "epsilon" not in mechanism
+        )
+        _prove(
+            not missing,
+            f"the D-26 fallback compares recorded epsilon values and the {missing} mechanism "
+            "mapping(s) carry no 'epsilon' key. On this route epsilon is the compared quantity, so "
+            "its absence is a missing measurement rather than a comparison with one fewer check",
+        )
+        epsilon_gap = abs(small_mechanism["epsilon"] - large_mechanism["epsilon"])
+        if epsilon_gap > fallback_epsilon_tolerance:
+            reasons.append(
+                f"NOT COMPARABLE (D-26 fallback): |epsilon {small_mechanism['epsilon']} - "
+                f"{large_mechanism['epsilon']}| = {epsilon_gap} > the supplied tolerance "
+                f"{fallback_epsilon_tolerance}"
+            )
+            return "not-comparable", reasons
+        reasons.append(
+            f"comparability: D-26 FALLBACK — matched epsilon, |{small_mechanism['epsilon']} - "
+            f"{large_mechanism['epsilon']}| = {epsilon_gap} <= tolerance "
+            f"{fallback_epsilon_tolerance}. That tolerance is the THIRD CHOSEN CONSTANT D-26 left "
+            "unset in Phase 20; it arrived from the caller and must be named as a chosen constant "
+            "wherever this verdict is published"
+        )
+
+    branch = _CAPACITY_DISPATCH[(bool(small_cleared), bool(large_cleared))]
+    reasons.append(
+        f"n={small_capacity} cleared={bool(small_cleared)}, n={large_capacity} "
+        f"cleared={bool(large_cleared)} -> {branch!r}. Both of GATE-10's named branches are "
+        "publishable and NEITHER was selectable after seeing data (D-27): recovery at the larger "
+        "capacity that the smaller did not achieve is a finding about where capacity stops "
+        "destroying the mitigation, and no recovery confirms the null at two capacities"
+    )
+    return branch, reasons
