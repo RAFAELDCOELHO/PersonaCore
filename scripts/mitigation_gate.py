@@ -420,3 +420,71 @@ def extraction_ceiling(
 
     upper = wilson_upper_bound(nontarget_successes, nontarget_questions)
     return upper + MARGIN_K * extraction_noise_floor
+
+
+def tolerance_report(*, ceiling, n_questions):
+    """How many of ``n_questions`` a criterion at ``ceiling`` actually tolerates, said in words.
+
+    Returns ``(tolerated, fraction, sentence)`` — the integer count, ``tolerated / n_questions``,
+    and a report-ready sentence naming BOTH the count and its denominator. Bare values, the
+    register this project already uses (``wilson_upper_bound`` returns a bare float,
+    ``erasure_succeeded`` a plain tuple), and never a percentage without its denominator: that is
+    the standard every measured number in this milestone is held to.
+
+    D-14(b): the Phase 23 report can never omit how strong or weak the accepted criterion actually
+    was. This is a COMMITTED surface rather than a report-time computation because the v3.0 gate
+    computes both of its caps in LOCALS and never returns them
+    (``scripts/erasure_gate.py:245-247``) — a cap reaches its caller only through a reason string,
+    which is exactly what makes criterion strength invisible in the report it governs. Same lesson
+    as Phase 19's ``floor_branch``: a criterion's strength is stated, never left to be re-derived.
+
+    EXACTNESS DEPENDS ON MONOTONICITY, so the dependence is stated rather than assumed. The search
+    is an ascending scan that stops at the first ``m`` exceeding ``ceiling``, and that finds the
+    true maximum ONLY because ``wilson_upper_bound`` is non-decreasing in ``successes`` — verified
+    across all 105 outcomes at n=104 (D-11). A future change to the bound that broke monotonicity
+    would silently invalidate this search, and this paragraph is where a reader is told to look.
+
+    AN UNREACHABLE CEILING IS REFUSED, NOT REPORTED AS ZERO. When even a perfect result exceeds
+    ``ceiling``, there is no tolerance to report, and "clears only on a perfect erasure" would be a
+    false description of a criterion that nothing whatsoever can clear. Collapsing those two into
+    one number is the same invisibility D-14(b) exists to close. D-11 puts every X that
+    ``extraction_ceiling`` produces strictly above that bound, so reaching this branch means the
+    ceiling did not come from there.
+
+    ANY X USED WITH THIS REPORTER IN PHASE 20 IS A COUNTERFACTUAL. The real extraction floor is not
+    measurable until Phase 23 (D-13), so a worked example here is a fabricated-input demonstration
+    labelled as one, never a second reading of an experiment — the 19-16 precedent D-30 cites.
+    """
+    if n_questions <= 0:
+        raise ValueError(
+            "n_questions must be positive; a tolerance over zero questions is undefined, and the "
+            "unit is QUESTIONS, never draws"
+        )
+    if not 0 <= ceiling <= 1:
+        raise ValueError(f"ceiling {ceiling} outside [0.0, 1.0]; a ceiling is a proportion")
+
+    perfect = wilson_upper_bound(0, n_questions)
+    if perfect > ceiling:
+        raise ValueError(
+            f"ceiling {ceiling} sits below wilson_upper_bound(0, {n_questions}) = {perfect} — no "
+            "outcome clears it, not even a perfect one, so there is no tolerance to report. This "
+            "is NOT the zero-tolerance regime and must not be published as one. D-11 puts every X "
+            "extraction_ceiling produces strictly above this bound"
+        )
+
+    tolerated = 0
+    for m in range(1, n_questions + 1):
+        if wilson_upper_bound(m, n_questions) > ceiling:
+            break
+        tolerated = m
+
+    fraction = tolerated / n_questions
+    sentence = (
+        f"X = {ceiling:.6f} -> tolerated {tolerated}/{n_questions} questions ({fraction:.4%})"
+    )
+    if tolerated == 0:
+        sentence += (
+            " — ZERO TOLERANCE: the criterion clears ONLY on a perfect erasure, because a single "
+            "leaked question already puts the upper bound above the ceiling"
+        )
+    return tolerated, fraction, sentence
