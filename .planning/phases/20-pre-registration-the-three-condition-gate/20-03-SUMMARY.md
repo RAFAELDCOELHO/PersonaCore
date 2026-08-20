@@ -44,7 +44,7 @@ patterns-established:
 requirements-completed: []
 
 # Metrics
-duration: 27min
+duration: 13min
 completed: 2026-08-20
 ---
 
@@ -54,10 +54,12 @@ completed: 2026-08-20
 
 ## Performance
 
-- **Duration:** ~27 min
-- **Started:** 2026-08-20T20:39Z (17:39 -0300)
-- **Completed:** 2026-08-20T21:06Z (18:06 -0300)
+- **Duration:** ~13 min (12m36s)
+- **Started:** 2026-08-20T19:51:11Z (16:51:11 -0300) — the prior plan's `docs(20-02)` commit `2c8eb24`
+- **Completed:** 2026-08-20T20:03:47Z (17:03:47 -0300) — this plan's `docs(20-03)` commit `0f1cded`
 - **Tasks:** 2 of 2
+
+*(Every timestamp above is read from `git log --format=%cI`, not estimated. **Note for the next executor:** `20-02-SUMMARY.md`'s Performance block reports 20:02Z–20:20Z, but that plan's real commits are `3796069` at **19:42:38Z** and `c856064` at **19:44:25Z** — its wall-clock figures are estimates, not measurements. This SUMMARY's first draft made the same mistake and claimed ~27 min; the git-derived figure is ~13. Derive durations from commit timestamps.)*
 - **Files created:** 1 (`scripts/_prose.py`, 48 lines) — **files modified:** 1 (`tests/test_phase20_prereg.py`, 163 → 349 lines)
 
 ## Accomplishments

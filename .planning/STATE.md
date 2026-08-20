@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 executing — plan 2 of 7 complete, wave 2 done
-last_updated: "2026-08-20T20:20:00.000Z"
+stopped_at: Phase 20 executing — plan 3 of 7 complete, wave 2 done
+last_updated: "2026-08-20T20:07:00.000Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 7
-  completed_plans: 2
-  percent: 29
+  completed_plans: 3
+  percent: 43
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — EXECUTING
-Plan: 3 of 7 (wave 2 complete)
+Plan: 4 of 7 (wave 2 complete — 20-02 and 20-03 both done)
 Status: Executing Phase 20
-Last activity: 2026-08-20 — 20-02 complete: condition (a)'s extraction ceiling, its armed provenance tripwire and the tolerance reporter appended to the pin
+Last activity: 2026-08-20 — 20-03 complete: scripts/_prose.py::normalized shipped with its differential RPT-02 proof, and V4_ARTIFACT_GLOBS watched RED-then-GREEN across five states in a throwaway repo
 
 ## Performance Metrics
 
@@ -105,6 +105,7 @@ Last activity: 2026-08-20 — 20-02 complete: condition (a)'s extraction ceiling
 | Phase 19 P15 | 75m | 2 tasks | 3 files |
 | Phase 20 P01 | 22min | 3 tasks | 2 files |
 | Phase 20 P02 | 18min | 2 tasks | 1 files |
+| Phase 20 P03 | 13min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -323,6 +324,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 20]: 20-02: both new domain guards compare against INT literals (`not 0 <= ceiling <= 1`, the erasure_gate.py:150-153 register), never 0.0/1.0 — writing them as floats would add two entries to the module's assigned float set and turn plan 20-06's two-chosen-constants audit into a judgement call about which floats count. Related: the seeds check counts distinct values only for list/tuple/set/frozenset, so seeds=1337 fires the tripwire instead of raising TypeError and seeds="1337" fires instead of PASSING on three distinct characters
 - [Phase 20]: 20-02: the from-import statement is now the WRAPPED multi-line form — adding wilson_upper_bound put the single-line version at 111 chars against the 100 limit, so 20-04's V20_EWC_RETENTION_PPL and rule_of_three are two inserted lines in sorted position, not a re-wrap. ruff's isort orders constants before lowercase functions, so the final five-name list will read MARGIN_K, V20_EWC_RETENTION_PPL, V20_MASKED_DIALOGUE_VAL_PPL, rule_of_three, wilson_upper_bound
 - [Phase 20]: 20-01: gsd-sdk state handlers misbehaved again as MEMORY records — state.update-progress returned 'Progress field not found in STATE.md' against a frontmatter that plainly has one, state.record-metric rejected its own documented positional argv, and state.advance-plan overwrote frontmatter stopped_at with the stale body prose 'Phase 20 context gathered' plus flattened the body Status/Last-activity lines. All repaired by hand; the metric row was added by hand. Do not trust these handlers without `git diff .planning/STATE.md`
+- [Phase 20]: 20-03: V4_ARTIFACT_GLOBS is now PROVEN to see the phase20_ prefix, not assumed — five states driven in a pytest tmp_path throwaway repo against the SAME _assert_ordering_holds the live guard calls (root= parameterized, never a lookalike): probe-before-pin RED via AssertionError naming the pin, pin-second RED via CalledProcessError with a NON-EMPTY git ls-files asserted first (that assertion IS the prefix proof), git rm GREEN at tracked=0, re-add RED again with adds[-1] byte-identical to state 1 (laundering impossible), and a fifth GREEN state with a real-shaped artifact after the pin. Re-executed every CI run. The real repository's `git log --diff-filter=A -- 'results/phase20_*'` verified EMPTY before and after
+- [Phase 20]: 20-03: the D-22 fixture sets the throwaway repo's identity via LOCAL git config inside tmp_path, not GIT_AUTHOR_*/GIT_COMMITTER_* env vars — _git(*args, cwd=_ROOT) has no env= parameter, so the env route needed a widening of 20-01's shared helper, and widening the helper is the one change that would stop the fixture exercising the code CI actually runs. Related: states 2 and 4 assert the failing argv is ('git','merge-base','--is-ancestor'), because subprocess.run(check=True) fails with NO message (20-RESEARCH L8) so a bare raises(CalledProcessError) would be satisfied by any git failure, including a fixture that broke during setup
+- [Phase 20]: 20-03: RPT-02's proof is DIFFERENTIAL and the negative control is what carries it — WRAPPED_INCIDENT_TEXT.count(WRAPPED_INCIDENT_PHRASE) == 0 on the same bytes where normalized(phrase) in normalized(text) is True. Without it the test stays green against a normalized() that returns its argument unchanged. Fixture is the REAL v3.0 incident (the three\nreductions, RETROSPECTIVE.md:179-181 / v3.0-MILESTONE-AUDIT.md:104-111), never synthetic (D-30). scripts/_prose.py imports NOTHING (AST-verified) and exports exactly one name; no search() wrapper, no case-fold flag, no count() helper until a second call site needs one
+- [Phase 20]: 20-03: RPT-02 NOT marked complete — PITFALLS.md:1048's instruction is "route every doc-consistency test through it", and no test outside 20-03 does yet; that routing is P25's. Ninth application of 17-01's over-claim-avoidance pattern. ALSO: 20-03 Task 2's acceptance criterion `grep -c "shell=True" == 0` is unsatisfiable and was already so when written — tests/test_phase20_prereg.py:89 is 20-01's OWN _git docstring saying shell=True is never used. Verified by AST instead (zero Call nodes with a shell= kwarg, zero non-docstring literals containing "rm -rf"); the docstrings were NOT reworded to satisfy a broken measurement. This is the RPT-02 defect class inverted — a single-line grep conflating prose ABOUT code with the code. Phase 20 doc-consistency checks must be AST or _prose.normalized, never grep -c
+- [Phase 20]: 20-03: SUMMARY wall-clock figures must be derived from `git log --format=%cI`, not estimated — 20-03's first draft claimed ~27min against a git-measured ~13min, and 20-02-SUMMARY.md's 20:02Z-20:20Z block does not match its real commits (3796069 at 19:42:38Z, c856064 at 19:44:25Z). Treat prior Performance blocks in this phase as estimates
 
 ### Roadmap Evolution
 
@@ -455,7 +461,7 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-20T20:20:00.000Z
+Last session: 2026-08-20T20:06:37.201Z
 Stopped at: Completed 20-02-PLAN.md
 Resume file: None
 
