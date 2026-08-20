@@ -28,7 +28,7 @@ cost calibration, not merely before the sweep.
       point against **three** conditions — (a) extraction ≤ X, (b) taught-fact recall ≥ Y, (c)
       general capability ≥ C — with every argument keyword-only, no defaults, and every condition
       rendered into a reason string.
-- [ ] **GATE-02**: Condition (c) is computed from constants **imported** from `erasure_gate.py`
+- [x] **GATE-02**: Condition (c) is computed from constants **imported** from `erasure_gate.py`
       (`V20_MASKED_DIALOGUE_VAL_PPL` 4.5733, `V20_EWC_RETENTION_PPL` 3.891140,
       `V20_RETENTION_NOISE_FLOOR` 0.068930, `MARGIN_K` 2) plus the measured
       `dialogue_ppl_noise_floor` (0.005214448168350039, `results/phase19_noise_floors.json`), never
@@ -128,7 +128,7 @@ magnitude, and no sweep density may be chosen without it.
 - [ ] **CAL-02**: Z (sweep width, per-point draw budget K, step budget) is set **from** those
       measurements and committed in a module separate from the gate, with the separation structurally
       enforced so a reader cannot mistake a resource calibration for an outcome-threshold peek.
-- [ ] **CAL-04**: **Per-point K and the promotion rule are committed before any v4.0 artifact
+- [x] **CAL-04**: **Per-point K and the promotion rule are committed before any v4.0 artifact
       exists.** `phase18_extraction.py:88-92` records that reducing K *after* seeing a null is the
       weakening `ATK-03` and `P18-4` exist to prevent, and that pre-flight is "the one moment the pin
       leaves open for it." v4.0 is at that same moment. Pre-register: the curve K, the full-fidelity
@@ -269,7 +269,7 @@ Every REQ-ID maps to exactly one phase. **48/48 mapped, 0 orphans, 0 duplicates*
 | REQ-ID | Phase | Note |
 |--------|-------|------|
 | GATE-01 | Phase 20 | |
-| GATE-02 | Phase 20 | |
+| GATE-02 | Phase 20 | **The MECHANISM is discharged; the stated `retention_cap 4.029000` is SUPERSEDED by D-06.** `scripts/mitigation_gate.py::retention_cap` imports `V20_EWC_RETENTION_PPL` and `MARGIN_K` and retypes nothing, but it takes the retention floor as a REQUIRED keyword argument (D-07) and does NOT import `V20_RETENTION_NOISE_FLOOR = 0.068930` — that is a Phase 12 FULL-FINE-TUNE reading. The adapter-regime floor `0.008681618994239138` measured at plan `20-07` (`results/phase20_retention_floor.json`) is what governs v4.0, yielding `3.9085032379884783`. The requirement's `4.029000` is published beside it in the artifact as `borrowed_cap` so the supersession is visible rather than silent. `scripts/erasure_gate.py:246` still computes `4.029` for Phase 19 verdicts and is NOT corrected. |
 | GATE-03 | Phase 20 | |
 | GATE-04 | Phase 20 | |
 | GATE-05 | Phase 20 | |

@@ -1,9 +1,9 @@
 ---
 phase: 20
 slug: pre-registration-the-three-condition-gate
-status: active
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-08-20
 ---
 
@@ -70,24 +70,24 @@ file, which enters repo-wide AST scans that glob `scripts/*.py` (for example
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 20-01-01 | 01 | 1 | GATE-01 | T-20-03, T-20-04 | Verdict domain and arm set proved at MODULE SCOPE via `SystemExit`, not `assert` — unstrippable under `-O`. A dead gate fails at import, not after the compute it would waste. | unit | `.venv/bin/python -c "…import mitigation_gate…"` + `.venv/bin/ruff check scripts/mitigation_gate.py` | ⬜ created by this task | ⬜ pending |
-| 20-01-02 | 01 | 1 | GATE-02, CAL-04 | T-20-06 | Exactly two chosen constants; the superseded GATE-02 dialogue cap is COMPUTED from two imported terms, never retyped. Float audit prints exactly `[0.5, 0.7]`. | unit | `.venv/bin/python -c "…CHOSEN_CONSTANTS / superseded_dialogue_cap / float audit…"` + `.venv/bin/ruff check .` | ✅ | ⬜ pending |
-| 20-01-03 | 01 | 1 | CAL-04 | T-20-01, T-20-02, T-20-05 | Ancestry guard armed BEFORE any artifact, answered against git's object DAG and never against committer dates. `bool(checked) == bool(tracked_artifacts)`, never `assert checked`. | integration | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ⬜ created by this task | ⬜ pending |
-| 20-02-01 | 02 | 2 | GATE-01 | T-20-07, T-20-08, T-20-10 | Armed provenance tripwire at the ONE choke point: wrong arm, <2 distinct seeds, or missing key each abort with `SystemExit`. X is never a literal. | unit | `.venv/bin/python -c "…extraction_ceiling tripwire drive…"` + `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ⬜ pending |
-| 20-02-02 | 02 | 2 | GATE-01 | T-20-09 | Criterion strength is PUBLISHED, not computed into a local that never reaches the caller (`erasure_gate.py:245-247`'s defect). Every number carries its denominator. | unit | `.venv/bin/python -c "…tolerance_report 25/104 + zero-tolerance drive…"` | ✅ | ⬜ pending |
-| 20-03-01 | 03 | 2 | RPT-02 | T-20-15, T-20-16 | DIFFERENTIAL proof: the naive read returns 0 on the same bytes where `normalized` succeeds. Zero-import AST scan over `_prose.py`. | unit | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py -k "normalized or imports_nothing"` | ✅ | ⬜ pending |
-| 20-03-02 | 03 | 2 | RPT-02, CAL-04 | T-20-12, T-20-13, T-20-14, T-20-17 | Four-state RED-then-GREEN in a THROWAWAY repo against the real `_assert_ordering_holds`; `adds[-1]` proved unlaunderable; the real history verified untouched before and after. | integration | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ⬜ pending |
-| 20-04-01 | 04 | 3 | GATE-02, GATE-03 | T-20-18, T-20-19 | (c)'s two legs ASYMMETRIC by design, with the reason in the source so a "unify them" refactor goes red. `V20_RETENTION_NOISE_FLOOR` neither imported nor retyped. | unit | `.venv/bin/python -c "…dialogue_gap_band / retention_cap drive…"` | ✅ | ⬜ pending |
-| 20-04-02 | 04 | 3 | GATE-01, GATE-04, GATE-05, GATE-06, GATE-08 | T-20-20, T-20-21, T-20-22, T-20-23, T-20-24 | 21 keyword-only defaultless args; INCONCLUSIVE ahead of FAIL; no `provisional`; no `V20_TAUGHT_RECALL` / `V20_HELDOUT_RECALL`. | unit | `.venv/bin/python -c "…AST signature + forbidden-name scan…"` + `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ⬜ pending |
-| 20-05-01 | 05 | 4 | GATE-07 | T-20-29 | The existential is computed PER ARM and a mixed-arm point list is refused with `SystemExit`, so a DP clear and an adversarial clear cannot be unioned. INCONCLUSIVE never satisfies ∃. | unit | `.venv/bin/python -c "…exists_clearing_point drive…"` | ✅ | ⬜ pending |
-| 20-05-02 | 05 | 4 | GATE-10, CAL-04 | T-20-25, T-20-26, T-20-27, T-20-28 | K ratchet refuses any decrease (the ATK-03 / P18-4 weakening); capacity dispatch TOTAL over all four flag pairs; unset fallback tolerance raises naming D-26. | unit | `.venv/bin/python -c "…ratchet_k / promote_to_full_fidelity / capacity_comparison drive…"` | ✅ | ⬜ pending |
-| 20-05-03 | 05 | 4 | GATE-09 | T-20-30, T-20-31, T-20-32 | SIX outcomes watched firing; three precedence claims proved DIFFERENTIALLY against the verdict each overrides; fixtures proved equal to the published artifact, `control_gap` built as a subtraction. | integration | `.venv/bin/python scripts/mitigation_gate.py` + `.venv/bin/python -c "…fixture-vs-JSON identity…"` | ✅ | ⬜ pending |
-| 20-06-01 | 06 | 5 | GATE-02 | T-20-33, T-20-34, T-20-39 | Import graph proved stdlib + `erasure_gate` only, by SUBSET over an allow-set; the five-name `from erasure_gate` list proved COMPLETE by exact equality; bounds proved imported by `is`, never `==`. | unit | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ⬜ pending |
-| 20-06-02 | 06 | 5 | GATE-01, GATE-04 | T-20-35, T-20-36, T-20-37 | Exactly two chosen constants; six baselines proved absent; no fourth verdict state; the `FIXTURE_*` exclusion's residual hole stated in words and narrowed by a name allow-list. | unit | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ⬜ pending |
-| 20-06-03 | 06 | 5 | GATE-05, GATE-06, GATE-07, GATE-08, GATE-09, GATE-10 | T-20-38 | `__main__` is not collected by pytest, so every branch is re-run in CI against the SAME module-scope fixtures, plus the module run as a subprocess in a fresh interpreter. | integration | `.venv/bin/python -m pytest -q` **(FULL — this task measures its runtime)** | ✅ | ⬜ pending |
-| 20-07-01 | 07 | 6 | CAL-04 | T-20-40, T-20-41 | BLOCKING human gate: nine commands run and reported verbatim; `HEAD == @{u}` proves PUSHED, not merely committed; the last moment an edit is legal. | manual + automated | `.venv/bin/python -m pytest -q` **(FULL)** + `git fetch && rev-parse HEAD/@{u}` | ✅ | ⬜ pending |
-| 20-07-02 | 07 | 6 | GATE-02 | T-20-43 | The `forbid`-into-`batch_size` instrument trap closed by AST: two `retention_perplexity` call sites, five positional args, `tok` fifth, zero keywords; `forbid_ids` absent. | unit | AST call-site check + `.venv/bin/python -m pytest -q` **(FULL — new `scripts/*.py` enters repo-wide scans)** | ⬜ created by this task | ⬜ pending |
-| 20-07-03 | 07 | 6 | CAL-04 | T-20-42, T-20-44, T-20-45, T-20-46 | Seed-1337 bit-identity control (`==`, no tolerance) runs BEFORE seed 2024 is trusted; non-reproduction is a STOP, not a reconciliation; artifact lands in its OWN commit strictly after a pushed pin. | manual (MPS) + automated | `.venv/bin/python -c "…artifact JSON assertions…"` + `.venv/bin/python -m pytest -q` **(FULL)** + `git merge-base --is-ancestor` | ⬜ created by this task | ⬜ pending |
+| 20-01-01 | 01 | 1 | GATE-01 | T-20-03, T-20-04 | Verdict domain and arm set proved at MODULE SCOPE via `SystemExit`, not `assert` — unstrippable under `-O`. A dead gate fails at import, not after the compute it would waste. | unit | `.venv/bin/python -c "…import mitigation_gate…"` + `.venv/bin/ruff check scripts/mitigation_gate.py` | ✅ | ✅ done |
+| 20-01-02 | 01 | 1 | GATE-02, CAL-04 | T-20-06 | Exactly two chosen constants; the superseded GATE-02 dialogue cap is COMPUTED from two imported terms, never retyped. Float audit prints exactly `[0.5, 0.7]`. | unit | `.venv/bin/python -c "…CHOSEN_CONSTANTS / superseded_dialogue_cap / float audit…"` + `.venv/bin/ruff check .` | ✅ | ✅ done |
+| 20-01-03 | 01 | 1 | CAL-04 | T-20-01, T-20-02, T-20-05 | Ancestry guard armed BEFORE any artifact, answered against git's object DAG and never against committer dates. `bool(checked) == bool(tracked_artifacts)`, never `assert checked`. | integration | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ✅ done |
+| 20-02-01 | 02 | 2 | GATE-01 | T-20-07, T-20-08, T-20-10 | Armed provenance tripwire at the ONE choke point: wrong arm, <2 distinct seeds, or missing key each abort with `SystemExit`. X is never a literal. | unit | `.venv/bin/python -c "…extraction_ceiling tripwire drive…"` + `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ✅ done |
+| 20-02-02 | 02 | 2 | GATE-01 | T-20-09 | Criterion strength is PUBLISHED, not computed into a local that never reaches the caller (`erasure_gate.py:245-247`'s defect). Every number carries its denominator. | unit | `.venv/bin/python -c "…tolerance_report 25/104 + zero-tolerance drive…"` | ✅ | ✅ done |
+| 20-03-01 | 03 | 2 | RPT-02 | T-20-15, T-20-16 | DIFFERENTIAL proof: the naive read returns 0 on the same bytes where `normalized` succeeds. Zero-import AST scan over `_prose.py`. | unit | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py -k "normalized or imports_nothing"` | ✅ | ✅ done |
+| 20-03-02 | 03 | 2 | RPT-02, CAL-04 | T-20-12, T-20-13, T-20-14, T-20-17 | Four-state RED-then-GREEN in a THROWAWAY repo against the real `_assert_ordering_holds`; `adds[-1]` proved unlaunderable; the real history verified untouched before and after. | integration | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ✅ done |
+| 20-04-01 | 04 | 3 | GATE-02, GATE-03 | T-20-18, T-20-19 | (c)'s two legs ASYMMETRIC by design, with the reason in the source so a "unify them" refactor goes red. `V20_RETENTION_NOISE_FLOOR` neither imported nor retyped. | unit | `.venv/bin/python -c "…dialogue_gap_band / retention_cap drive…"` | ✅ | ✅ done |
+| 20-04-02 | 04 | 3 | GATE-01, GATE-04, GATE-05, GATE-06, GATE-08 | T-20-20, T-20-21, T-20-22, T-20-23, T-20-24 | 21 keyword-only defaultless args; INCONCLUSIVE ahead of FAIL; no `provisional`; no `V20_TAUGHT_RECALL` / `V20_HELDOUT_RECALL`. | unit | `.venv/bin/python -c "…AST signature + forbidden-name scan…"` + `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ✅ done |
+| 20-05-01 | 05 | 4 | GATE-07 | T-20-29 | The existential is computed PER ARM and a mixed-arm point list is refused with `SystemExit`, so a DP clear and an adversarial clear cannot be unioned. INCONCLUSIVE never satisfies ∃. | unit | `.venv/bin/python -c "…exists_clearing_point drive…"` | ✅ | ✅ done |
+| 20-05-02 | 05 | 4 | GATE-10, CAL-04 | T-20-25, T-20-26, T-20-27, T-20-28 | K ratchet refuses any decrease (the ATK-03 / P18-4 weakening); capacity dispatch TOTAL over all four flag pairs; unset fallback tolerance raises naming D-26. | unit | `.venv/bin/python -c "…ratchet_k / promote_to_full_fidelity / capacity_comparison drive…"` | ✅ | ✅ done |
+| 20-05-03 | 05 | 4 | GATE-09 | T-20-30, T-20-31, T-20-32 | SIX outcomes watched firing; three precedence claims proved DIFFERENTIALLY against the verdict each overrides; fixtures proved equal to the published artifact, `control_gap` built as a subtraction. | integration | `.venv/bin/python scripts/mitigation_gate.py` + `.venv/bin/python -c "…fixture-vs-JSON identity…"` | ✅ | ✅ done |
+| 20-06-01 | 06 | 5 | GATE-02 | T-20-33, T-20-34, T-20-39 | Import graph proved stdlib + `erasure_gate` only, by SUBSET over an allow-set; the five-name `from erasure_gate` list proved COMPLETE by exact equality; bounds proved imported by `is`, never `==`. | unit | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ✅ done |
+| 20-06-02 | 06 | 5 | GATE-01, GATE-04 | T-20-35, T-20-36, T-20-37 | Exactly two chosen constants; six baselines proved absent; no fourth verdict state; the `FIXTURE_*` exclusion's residual hole stated in words and narrowed by a name allow-list. | unit | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py` | ✅ | ✅ done |
+| 20-06-03 | 06 | 5 | GATE-05, GATE-06, GATE-07, GATE-08, GATE-09, GATE-10 | T-20-38 | `__main__` is not collected by pytest, so every branch is re-run in CI against the SAME module-scope fixtures, plus the module run as a subprocess in a fresh interpreter. | integration | `.venv/bin/python -m pytest -q` **(FULL — this task measures its runtime)** | ✅ | ✅ done |
+| 20-07-01 | 07 | 6 | CAL-04 | T-20-40, T-20-41 | BLOCKING human gate: nine commands run and reported verbatim; `HEAD == @{u}` proves PUSHED, not merely committed; the last moment an edit is legal. | manual + automated | `.venv/bin/python -m pytest -q` **(FULL)** + `git fetch && rev-parse HEAD/@{u}` | ✅ | ✅ done |
+| 20-07-02 | 07 | 6 | GATE-02 | T-20-43 | The `forbid`-into-`batch_size` instrument trap closed by AST: two `retention_perplexity` call sites, five positional args, `tok` fifth, zero keywords; `forbid_ids` absent. | unit | AST call-site check + `.venv/bin/python -m pytest -q` **(FULL — new `scripts/*.py` enters repo-wide scans)** | ✅ | ✅ done |
+| 20-07-03 | 07 | 6 | CAL-04 | T-20-42, T-20-44, T-20-45, T-20-46 | Seed-1337 bit-identity control (`==`, no tolerance) runs BEFORE seed 2024 is trusted; non-reproduction is a STOP, not a reconciliation; artifact lands in its OWN commit strictly after a pushed pin. | manual (MPS) + automated | `.venv/bin/python -c "…artifact JSON assertions…"` + `.venv/bin/python -m pytest -q` **(FULL)** + `git merge-base --is-ancestor` | ✅ | ✅ done |
 
 **Requirement coverage from this map:** GATE-01, GATE-02, GATE-03, GATE-04, GATE-05, GATE-06,
 GATE-07, GATE-08, GATE-09, GATE-10, CAL-04, RPT-02 — 12 of 12. RPT-03 (`pyproject.toml` untouched)
@@ -155,10 +155,15 @@ point (the guard must exist before there is anything to miss).
 - [x] Full-suite baseline measured and recorded above — `845 passed, 1 skipped` in `201.99s`,
       2026-08-20, **before** any Phase 20 code exists. Re-measured with this phase's tests at
       plan `20-06` Task 3.
-- [ ] `tests/test_phase20_prereg.py` created — plan `20-01` Task 3, ticked by plan `20-07` Task 3's
+- [x] `tests/test_phase20_prereg.py` created — plan `20-01` Task 3, ticked by plan `20-07` Task 3's
       sweep. This box is what `wave_0_complete: true` asserts. Coverage for GATE-01…GATE-10, CAL-04
       and RPT-02 accumulates across waves 1→5 per the map above; there are no stubs, because a stub
-      for a rule that does not exist yet is an unproven assertion.
+      for a rule that does not exist yet is an unproven assertion. **18 tests, green at `1.08s`.**
+      **The ancestry guard stopped being VACUOUS at plan `20-07` Task 3**: measured immediately after
+      the artifact commit, `tracked_artifacts` went `0 → 1` and `checked` went `0 → 9` (9 pre-reg
+      commits × 1 artifact), so `checked == len(prereg) × len(tracked)` and
+      `bool(checked) == bool(tracked_artifacts)` are now satisfied on the **demanding** side rather
+      than the trivial one. Every prior wave's green was `0 == n × 0`.
 
 The fresh-venv `[cpu,dev,demo]` collection check is deliberately NOT a box here: no task in this
 phase owns it, and the packaging surface it guards is asserted byte-unchanged
@@ -171,9 +176,9 @@ An unowned checkbox is an unproven assertion.
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| D-32 retention-floor driver run | D-06 / D-32 | Requires **MPS**; the suite is CPU-only by mandate. One run, no retraining. | Run the driver against `checkpoints/phase19_erase_dialogue_floor_seed{1337,2024}_*`. It must reproduce `seed_1337 = 4.219759892336485` and `seed_2024 = 4.2284415113307245`, then write `results/phase20_retention_floor.json`. **Commit strictly AFTER `scripts/mitigation_gate.py` (D-08).** |
-| Ordering discipline on commit sequence | CAL-04, D-08 | Git ordering is established by the human's commit sequence, not by a test that can enforce it prospectively. `git merge-base --is-ancestor` is **reflexive** — research confirmed same-commit passes — so D-08's "strictly after" is **discipline, not mechanism**. | Verify `scripts/mitigation_gate.py` is committed **and pushed** before any `results/phase20_*` file is added. |
-| Pin declared FINAL | CAL-04, D-24 | Task `20-07-01` is a blocking checkpoint. Only a human can judge "is this rule right?" while an edit is still legal and reversible. | Read `scripts/mitigation_gate.py` end to end. After the next commit, editing it turns the ancestry guard permanently red and `git rm` + re-add cannot undo it (`adds[-1]` is the EARLIEST add). |
+| D-32 retention-floor driver run | D-06 / D-32 | Requires **MPS**; the suite is CPU-only by mandate. One run, no retraining. | **DONE — plan `20-07` Task 3, 2026-08-20, `device=mps torch=2.7.1`, driver commit `669d082`.** `.venv/bin/python scripts/phase20_run.py retention-floor`, one run, no training of any kind. **The bit-identity control passed EXACTLY** (`abs_delta = 0.0` on both readings, exact `==`, no tolerance): seed 1337 `adapter_off = 3.891139975617828`, `adapter_on = 4.219759892336485`, `n_scored_tokens = 1000285`. Seed 2024 `adapter_on = 4.2284415113307245`, same `adapter_off`, same denominator. **Floor `0.008681618994239138`; cap `3.9085032379884783`** (vs the borrowed `4.029`, ratio `7.939763314393305x` — TIGHTER, not looser). Written to `results/phase20_retention_floor.json` and committed at `9bb34ad`, its own commit, one file. |
+| Ordering discipline on commit sequence | CAL-04, D-08 | Git ordering is established by the human's commit sequence, not by a test that can enforce it prospectively. `git merge-base --is-ancestor` is **reflexive** — research confirmed same-commit passes — so D-08's "strictly after" is **discipline, not mechanism**. | **DONE — verified mechanically at plan `20-07` Task 3.** Newest pin commit `abf9072` (2026-08-20, plan 20-05) ≠ artifact first add `9bb34ad`, and `git merge-base --is-ancestor abf9072 9bb34ad` exits 0. The pin was pushed (`HEAD == @{u}`) at the Task 1 checkpoint before the artifact existed. `git show --stat 9bb34ad` lists exactly one file. |
+| Pin declared FINAL | CAL-04, D-24 | Task `20-07-01` is a blocking checkpoint. Only a human can judge "is this rule right?" while an edit is still legal and reversible. | **DONE — human approved 2026-08-20, "pin is final and pushed."** `scripts/mitigation_gate.py` read end to end against the thirty discussion decisions; all nine checkpoint commands run and reported. The pin is byte-unchanged at sha256 `86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14` and appears in **neither** of plan `20-07`'s commits. **It is now PERMANENTLY UNEDITABLE**; every correction from here is a dated continuation via `scripts/_addendum.py::append_addendum(path, addendum, *, pending, recorded)` plus an armed tripwire test (D-24). |
 
 ---
 
@@ -214,10 +219,22 @@ An unowned checkbox is an unproven assertion.
       `863 passed, 1 skipped` in `188.55s`
 - [x] Quick-run (`tests/test_phase20_prereg.py`) runtime measured — plan `20-06` Task 3:
       `18 passed` in `0.79–0.81s`, three runs
-- [ ] `nyquist_compliant: true` set in frontmatter — plan `20-07` Task 3
-- [ ] `wave_0_complete: true` set in frontmatter — plan `20-07` Task 3
+- [x] `nyquist_compliant: true` set in frontmatter — plan `20-07` Task 3
+- [x] `wave_0_complete: true` set in frontmatter — plan `20-07` Task 3
 
 **Approval:** planner, 2026-08-20 — Per-Task Verification Map complete at 18/18 with 12/12
 requirement coverage; sampling rate split into per-task (phase file) and per-wave (full suite).
 Runtime re-measurement and the two frontmatter flags are owned by `20-06` Task 3 and `20-07` Task 3
 respectively and remain open until those tasks run.
+
+**Closed:** executor, 2026-08-20 (plan `20-07` Task 3) — all 18 map rows are `✅ done`, both
+frontmatter flags are set, and the three Manual-Only rows carry their measured outcomes rather than
+their instructions. **One deviation is recorded here rather than only in the SUMMARY**, because it is
+a change to a validation instrument: `tests/test_phase19_erasure.py`'s retention call-site census
+went RED on the new `scripts/phase20_run.py` (`8 calls in 5 modules` against the pinned
+`6 calls in 4 modules`) — it caught the third successor exactly as `RETENTION_MEASUREMENT` clause 2
+promised it would. `phase20_run.py` was excluded **BY NAME**, under the same positive obligation the
+existing two exclusions carry (it must reach the injection path — it calls `load_adapted_model`).
+**The census numbers were NOT lowered**: they remain `6` calls in `4` modules, so a genuinely new
+*unadapted* caller anywhere else still reddens the guard. `scripts/phase19_erasure.py` was not
+edited. Full suite after both commits: `863 passed, 1 skipped` — the plan-`20-06` baseline, unmoved.

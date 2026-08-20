@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 executing — plan 6 of 7 complete, wave 5 done, the closed pin is under CI audit
-last_updated: "2026-08-20T21:09:25.626Z"
+stopped_at: Phase 20 complete — plan 7 of 7 done, the first v4.0 artifact has landed and the pin is now permanently uneditable
+last_updated: "2026-08-20T22:40:00.000Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 6
-  percent: 86
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 20 (pre-registration-the-three-condition-gate) — EXECUTING
-Plan: 7 of 7 (wave 5 complete — 20-06 done)
-Status: Executing Phase 20
-Last activity: 2026-08-20 — 20-06 complete: **the closed pin is under fourteen CI guards.** `tests/test_phase20_prereg.py` (4 → 18 tests) now proves the import graph is stdlib-plus-`erasure_gate` by a SUBSET assertion, the `from erasure_gate` list is EXACTLY five names, the chosen constants are exactly `{F_Y, F_C}` three ways over, six baselines are absent as numeric constants, the D-30 fixture equals the parsed `results/phase19_arm_erased.json`, and all six verdict outcomes re-run in CI against the same module-scope fixtures the `__main__` uses. Five mutations watched RED and each reverted byte-identically; `scripts/mitigation_gate.py` is still sha256 `86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14` and appears in none of this plan's commits
+Phase: 20 (pre-registration-the-three-condition-gate) — COMPLETE
+Plan: 7 of 7 (wave 6 complete — 20-07 done)
+Status: Phase 20 complete — ready for `/gsd:verify-work`, then Phase 21
+Last activity: 2026-08-20 — 20-07 complete: **the first v4.0 artifact has landed and the ordering is now irreversible.** `scripts/phase20_run.py` (UNPINNED, committed `669d082` with NO results file) measured the adapter-regime retention noise floor on MPS; `results/phase20_retention_floor.json` followed in its OWN commit `9bb34ad`, strictly after a pushed and unmodified pin. **The seed-1337 bit-identity control passed EXACTLY** — `abs_delta = 0.0` on both readings against `results/phase19_noise_floors.json`'s published block, and against a DIFFERENT adapter file — so the instrument was verified before the seed-2024 reading was taken at all. Every D-06 expectation reproduced with zero disagreement: floor `0.008681618994239138`, cap `3.9085032379884783` (the borrowed Phase 12 full-fine-tune `0.068930` is `7.94x` larger and its cap `4.029` correspondingly looser — **the re-measurement is TIGHTER, not easier**). **The ancestry guard has stopped being VACUOUS**: `tracked_artifacts` `0 → 1`, `checked` `0 → 9`. `scripts/mitigation_gate.py` is still sha256 `86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14`, appears in neither of this plan's commits, and is now **PERMANENTLY UNEDITABLE** — every correction from here is a dated continuation via `scripts/_addendum.py` plus an armed tripwire (D-24)
 
 ## Performance Metrics
 
@@ -109,6 +109,7 @@ Last activity: 2026-08-20 — 20-06 complete: **the closed pin is under fourteen
 | Phase 20 P04 | 18min | 2 tasks | 1 files |
 | Phase 20 P05 | 18min | 3 tasks | 1 files |
 | Phase 20 P06 | 16min | 3 tasks | 2 files |
+| Phase 20 P07 | 26min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -482,16 +483,28 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-20T21:09:25.626Z
-Stopped at: Completed 20-06-PLAN.md — the closed pin is under fourteen CI guards
+Last session: 2026-08-20T22:40:00.000Z
+Stopped at: Completed 20-07-PLAN.md — the first v4.0 artifact has landed; the pin is permanently uneditable
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 20 with `/gsd-plan-phase 20`. **Nothing else may run first.** The gate's entire
-  evidentiary value is ordering: `erasure_gate.py` was committed at `23a830c` before Phase 16 ran,
-  and the v4.0 gate must be committed before *any* v4.0 number exists — before the cost calibration
-  (Phase 23), not merely before the sweep (Phase 25).
+- **Phase 20 is complete and its ordering guarantee is now IRREVERSIBLE.** `scripts/mitigation_gate.py`
+  was committed and pushed before `results/phase20_retention_floor.json`'s first add (`abf9072` is an
+  ancestor of `9bb34ad`, verified mechanically), and the ancestry guard is green with `checked = 9`
+  against `tracked_artifacts = 1` — no longer the vacuous `0 == n x 0` it read through waves 1-5.
+- **`scripts/mitigation_gate.py` MUST NOT BE EDITED AGAIN — ever.** The guard takes `adds[-1]`, the
+  EARLIEST add, so a `git rm` plus re-add cannot launder a post-artifact edit (measured across five
+  states in a throwaway repo, plan 20-03). The ONLY legal correction is a dated continuation via
+  `scripts/_addendum.py::append_addendum(path, addendum, *, pending, recorded)` — both keywords
+  required, and the module refuses a second append — plus an ARMED TRIPWIRE TEST that fires when a
+  later plan would consume the wrong value (D-24). A prose note gets missed.
+- **Carry this number forward to Phase 25:** the v4.0 retention cap is `3.9085032379884783`, from the
+  measured adapter-regime floor `0.008681618994239138`. It is NOT `4.029` — that cap comes from a
+  Phase 12 full-fine-tune floor and governs Phase 19 only. `retention_cap` has no default for the
+  floor, so a caller cannot fall back to the wrong one silently, but it also cannot be omitted.
+- Next: `/gsd-verify-work` on Phase 20, then plan Phase 21 (the privacy unit, the DP data path, and
+  the n=64 corpus).
 
 - Research flags carried into planning: **Phase 21** NEEDS DESIGN (the privacy unit has no in-repo
   prior; the filler-facts construction and the replay-in-lot question both change the ε);

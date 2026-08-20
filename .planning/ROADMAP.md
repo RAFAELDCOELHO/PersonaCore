@@ -120,7 +120,7 @@ ran no mitigation arm. v4.0 builds training-time mitigation, maps the privacy/ut
 two mechanisms across two corpus capacities, and proves adversarially — by relearning attack — that
 what survives cannot be cheaply reverted.
 
-- [ ] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists
+- [x] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (completed 2026-08-20)
 - [ ] **Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus** - Fix what a record is, and prove it structurally, before any ε can be computed against the wrong one
 - [ ] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers
 - [ ] **Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration** - Size the sweep from a measurement, and run the one cheap run that separates an honest negative from a silent bug
@@ -160,6 +160,17 @@ kind exists — including before the cost calibration
      every argument keyword-only, no defaults, and every condition rendered into a reason string;
      condition (c)'s caps (`dialogue_cap` 4.5837288963367, `retention_cap` 4.029000) are **computed
      from imported constants**, never retyped as literals. (GATE-01, GATE-02)
+
+     > **Amended by D-06 at plan `20-07`, and the amendment is TIGHTER.** The `retention_cap`
+     > `4.029000` above is derived from `V20_RETENTION_NOISE_FLOOR = 0.068930`, a **Phase 12
+     > FULL-FINE-TUNE** seed pair. `scripts/mitigation_gate.py::retention_cap` therefore takes the
+     > floor as a **required keyword argument** (D-07) instead of importing that constant, and the
+     > **adapter-regime** floor was measured at `20-07` — `0.008681618994239138`
+     > (`results/phase20_retention_floor.json`, two seeds, bit-identity control passed exactly).
+     > The governing v4.0 cap is **`3.9085032379884783`**; the borrowed `4.029` is `7.94x` looser and
+     > is published beside it in the artifact as `borrowed_cap`. `dialogue_cap` `4.5837288963367` is
+     > unchanged. `scripts/erasure_gate.py:246` still computes `4.029` for **Phase 19** verdicts and
+     > is deliberately NOT corrected.
 
   2. Y is a **pair** (`Y_taught`, `Y_heldout`) expressed as a locked fraction of the retrained
      control rather than derived from v2.0's published 0.4921 / 0.3483 — so the retrained control is
@@ -211,7 +222,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 20-07-PLAN.md — Blocking push checkpoint, the unpinned MPS retention-floor driver, and `results/phase20_retention_floor.json` committed strictly after the pin
+- [x] 20-07-PLAN.md — Blocking push checkpoint, the unpinned MPS retention-floor driver, and `results/phase20_retention_floor.json` committed strictly after the pin
 
 ### Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus
 
@@ -474,7 +485,7 @@ capacities — with every number in prose generated from a committed record rath
 | 1-8 | v1.0 | 29/29 | Complete | 2026-06-10 |
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
-| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 6/7 | In Progress | - |
+| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 7/7 | Complete   | 2026-08-20 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 0/TBD | Not started | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
