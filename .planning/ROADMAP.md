@@ -190,7 +190,7 @@ kind exists — including before the cost calibration
 Plans:
 **Wave 1**
 
-- [ ] 20-01-PLAN.md — Arm the pin's spine (verdict domain D-31, arms D-28, the two chosen constants, K_RUNGS, the decision-rule prose) and arm the Phase 18/19 ancestry guard in the same plan
+- [x] 20-01-PLAN.md — Arm the pin's spine (verdict domain D-31, arms D-28, the two chosen constants, K_RUNGS, the decision-rule prose) and arm the Phase 18/19 ancestry guard in the same plan
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -474,7 +474,7 @@ capacities — with every number in prose generated from a committed record rath
 | 1-8 | v1.0 | 29/29 | Complete | 2026-06-10 |
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
-| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 0/TBD | Not started | - |
+| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 1/7 | In Progress | - |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 0/TBD | Not started | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |

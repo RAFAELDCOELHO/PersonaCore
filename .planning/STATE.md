@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 planned — 7 plans, 6 waves, ready to execute
-last_updated: "2026-08-20T19:15:06.841Z"
+stopped_at: Phase 20 executing — plan 1 of 7 complete, wave 1 done
+last_updated: "2026-08-20T19:45:00.000Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 7
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 14
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
-**Current focus:** v4.0 Phase 20 **planned** — 7 plans across 6 waves, 0 blockers at plan-check. The milestone answers the finding v3.0 measured and left open: **88.5% recovery under prompt-only attack, with no mitigation arm run.** Next: `/gsd:execute-phase 20` — the three-condition pre-registration gate, which must be committed and pushed before Phase 23 measures a single wall-clock number, not merely before the sweep.
+**Current focus:** Phase 20 — pre-registration-the-three-condition-gate
 
 ## Current Position
 
-Phase: 20 — Pre-Registration: The Three-Condition Gate (planned)
-Plan: 7 plans across 6 waves
-Status: Ready to execute
-Last activity: 2026-08-20 — Phase 20 planning complete (7 plans, 0 blockers)
+Phase: 20 (pre-registration-the-three-condition-gate) — EXECUTING
+Plan: 2 of 7 (wave 1 complete)
+Status: Executing Phase 20
+Last activity: 2026-08-20 — 20-01 complete: the v4.0 pin's spine committed and the ancestry guard armed in the same plan
 
 ## Performance Metrics
 
@@ -103,6 +103,7 @@ Last activity: 2026-08-20 — Phase 20 planning complete (7 plans, 0 blockers)
 | Phase 19 P12 | 159min | 3 tasks | 5 files |
 | Phase 19 P13 | 48min | 2 tasks | 5 files |
 | Phase 19 P15 | 75m | 2 tasks | 3 files |
+| Phase 20 P01 | 22min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -310,6 +311,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 19]: 19-16: A PERFECT ERASURE STILL RETURNS FAILURE ON (c) ALONE — measured, not argued. This run's (a) and (c) with the seven (b) deltas replaced by zeros returns FAILURE from the committed gate, with (a) clearing, (b) clearing and retention clearing by 0.358082. Labelled in the report as a COUNTERFACTUAL on fabricated (b) inputs, so it cannot be read as a second opinion on the measurement
 - [Phase 19]: 19-16: THE SHIP MARKER IS FLIPPED ONLY BY A HUMAN'S DECISION. The (c) diagnosis was appended through _addendum.append_addendum with the Phase 19 pending/recorded pair passed as an IDENTITY replacement, so ERASURE_SHIP_PENDING_LINE survives the append at exactly one occurrence. Phase 18's W2 was a placeholder rewrite that ran unconditionally and advertised a decision nobody had written
 - [Phase 19]: 19-16: gsd-sdk query state.update CORRUPTS .planning/STATE.md. It mirrors frontmatter stopped_at from the LAST body 'Stopped at:' line (which read a stale 19-08), derives status from a body 'Status:' line containing the word COMPLETE, and replaces only the FIRST line of a multi-line 'Last activity:' paragraph — orphaning the rest as a half-stale sentence. Reverted and repaired by hand; the stale body anchor was fixed so the next call cannot repeat it
+- [Phase 20]: 20-01: the v4.0 ancestry guard is ARMED IN THE FIRST PLAN, in the same plan that makes the pin's first commit (95b3c8a), so every scripts/mitigation_gate.py commit from 20-01 onward is watched from the start rather than retro-fitted once there is something to miss. GREEN today at tracked_artifacts = 0, recorded as vacuous-by-construction in the test's own docstring, with bool(checked) == bool(tracked_artifacts) as what stops the vacuity surviving the first artifact. Phase 18/19 shape only — Phase 16's unconditional `assert checked` over a working-tree glob (:209) would be RED from the pin's first commit until an artifact lands, inverting the ordering this phase exists to establish (D-21). Its assert prereg_commits branch was watched RED at an uncommitted path (pytest exit 1) and restored byte-identically, sha256 7a683e76...c79bb both sides
+- [Phase 20]: 20-01: erasure_gate.VERDICTS is the ONE tuple this import-never-retype phase cannot import — it is the wrong domain (SUCCESS/FAILURE/INCONCLUSIVE vs GATE-01's PASS/FAIL/INCONCLUSIVE, with REQUIREMENTS.md:27 authoritative over ROADMAP.md:172's FAILURE slip). V4_VERDICTS is declared locally and the RELATIONSHIP is proved at module scope through the plain module handle via _VERDICT_RELABEL: equal length, positional correspondence, and INCONCLUSIVE at the same index in both. The discipline is kept by PROVING the relationship, not by asserting it in a comment a refactor can break (D-31). Watched RED by mapping FAILURE -> FAILURE (import exit 1), restored byte-identically, sha256 6a351b9b...5988 both sides. The third proof avoids tuple.index() on a possibly-absent name, which would abort with ValueError instead of this module's SystemExit and send its reader to the wrong file
+- [Phase 20]: 20-01: the number D-01 supersedes is one NOBODY TYPED into the v4.0 pin — superseded_dialogue_cap(*, gap_noise_floor) returns V20_MASKED_DIALOGUE_VAL_PPL + MARGIN_K * gap_noise_floor from two terms imported by OBJECT IDENTITY, reproducing the GATE-02 cap exactly at the committed dialogue_ppl_noise_floor while the literal appears nowhere in scripts/mitigation_gate.py (AST-verified: the module's only float literals are [0.5, 0.7]). MITIGATION_DECISION_RULE names the superseded criterion by its COMPUTATION, never by its value. tests/test_phase20_prereg.py (plan 20-06) is the ONLY file permitted to carry both literals
+- [Phase 20]: 20-01: IMPORT ACCUMULATION is a hard constraint, not a style note — pyproject.toml:44 selects F, so an erasure_gate name imported ahead of its consumer is an F401 and every Phase 20 task gates on `ruff check .` exiting 0. The from-import list is exactly ['MARGIN_K', 'V20_MASKED_DIALOGUE_VAL_PPL'] after 20-01; 20-02 adds wilson_upper_bound, 20-04 adds V20_EWC_RETENTION_PPL and rule_of_three. V20_RETENTION_NOISE_FLOOR is NEVER imported (D-06 supersedes it for v4.0 — a Phase 12 full-fine-tune seed pair governing an adapter-regime verdict) and neither is VERDICTS
+- [Phase 20]: 20-01: NO requirement marked complete — GATE-01, GATE-02, GATE-07 and CAL-04 are each claimed by more than one Phase 20 plan and none can be discharged by a spine with no verdict function. Seventh application of 17-01's recorded over-claim-avoidance pattern
+- [Phase 20]: 20-01: gsd-sdk state handlers misbehaved again as MEMORY records — state.update-progress returned 'Progress field not found in STATE.md' against a frontmatter that plainly has one, state.record-metric rejected its own documented positional argv, and state.advance-plan overwrote frontmatter stopped_at with the stale body prose 'Phase 20 context gathered' plus flattened the body Status/Last-activity lines. All repaired by hand; the metric row was added by hand. Do not trust these handlers without `git diff .planning/STATE.md`
 
 ### Roadmap Evolution
 
