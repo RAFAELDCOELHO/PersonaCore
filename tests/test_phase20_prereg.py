@@ -30,10 +30,33 @@ equivalence assertion is what stops that vacuity surviving the artifacts' arriva
 CPU-only, GPU-free, no torch, no network.
 """
 
+import ast
 import pathlib
 import subprocess
+import sys
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+_SCRIPTS = str(_ROOT / "scripts")
+if _SCRIPTS not in sys.path:
+    sys.path.insert(0, _SCRIPTS)
+
+import _prose  # noqa: E402  (needs the sys.path insert above)
+
+_PROSE_PATH = _ROOT / "scripts" / "_prose.py"
+
+# The REAL v3.0 incident, never a synthetic one — D-30's register, that a defect which actually
+# happened is not hypothetical. `.planning/RETROSPECTIVE.md:179-181` records that a single-line
+# `grep -c "three reductions"` returned 0 on a file that CONTAINED the phrase, and
+# `.planning/milestones/v3.0-MILESTONE-AUDIT.md:104-111` (defect W2, `resolved_by: 5703bbe`) gives
+# the concrete failing form — the source line-wraps it as "the three\nreductions", and the sweep
+# that finally saw it had to be whitespace-normalised. These two constants are those exact bytes:
+# the wrap sits BETWEEN "three" and "reductions", which is the whole reason the naive read misses.
+WRAPPED_INCIDENT_TEXT = (
+    "The table above is a rank-only reading, and the paragraph describing the three\n"
+    "reductions has no generation number beside it.\n"
+)
+WRAPPED_INCIDENT_PHRASE = "the three reductions"
 
 # STAT-05: Phase 20's OWN pre-registration, and it is ONE file. The correction path for a defect
 # found after an artifact lands is a DATED CONTINUATION beside the published text
@@ -160,4 +183,70 @@ def test_phase20_prereg_is_frozen_before_every_phase20_result():
         prereg_artifact=PHASE20_PREREG_ARTIFACT,
         artifact_glob="results/phase20_*",
         globs=V4_ARTIFACT_GLOBS,
+    )
+
+
+def test_normalized_finds_a_line_wrapped_phrase_grep_reports_absent():
+    """RPT-02 / ROADMAP SC5: the DIFFERENTIAL, not a bare containment check.
+
+    SC5 requires that `normalized` "finds a line-wrapped phrase that `grep -c` reports as absent",
+    and BOTH halves of that sentence are load-bearing. Assertion (1) is the NEGATIVE CONTROL — it
+    proves the naive single-line method returns 0 on the very bytes assertion (2) succeeds on.
+    Without it this test degrades into "a string containment check passes", which would stay green
+    against a `normalized` that returned its argument unchanged, and would therefore certify a
+    helper that closes nothing.
+
+    The fixture is the REAL v3.0 defect (see the constants above), on the D-30 register: a defect
+    that actually happened is not hypothetical.
+    """
+    # (1) THE NEGATIVE CONTROL. `str.count` is `grep -c`'s single-line semantics in Python: it
+    # cannot see across the newline the source wrapped the phrase on, so it reports a real
+    # occurrence as absent. That is the shipped v3.0 defect, reproduced.
+    assert WRAPPED_INCIDENT_TEXT.count(WRAPPED_INCIDENT_PHRASE) == 0, (
+        "the fixture no longer reproduces the v3.0 incident: the NAIVE single-line read already "
+        f"finds {WRAPPED_INCIDENT_PHRASE!r} in it, so the positive assertion below would prove "
+        "nothing about whitespace normalisation. The phrase must stay LINE-WRAPPED in the text."
+    )
+
+    # (2) The positive, on the SAME BYTES the naive read just failed on.
+    haystack = _prose.normalized(WRAPPED_INCIDENT_TEXT)
+    needle = _prose.normalized(WRAPPED_INCIDENT_PHRASE)
+    assert needle in haystack, (
+        f"normalized() failed to find {needle!r} in the normalised v3.0 incident text — the one "
+        "defect class RPT-02 exists to close is open again"
+    )
+
+    # (3) Idempotence: normalising an already-normalised string is a no-op, so a sweep that
+    # normalises twice (a caller normalising a value another caller already normalised) cannot
+    # drift from one that normalises once.
+    assert _prose.normalized(haystack) == haystack
+
+    # (4) NOT newline-specific. A helper that only collapsed "\n" would miss the tab- and
+    # double-space-wrapped forms that the same class of defect produces in tables and lists.
+    assert _prose.normalized("a\tb") == "a b"
+    assert _prose.normalized("a   b") == "a b"
+    assert _prose.normalized("a\r\nb") == "a b"
+    assert _prose.normalized("  a \t\n b  ") == "a b"
+
+
+def test_prose_module_imports_nothing():
+    """RPT-03's second layer, and the only one that can see INSIDE the helper.
+
+    `tests/test_package.py`'s `pyproject.toml` sha256 pin catches a DECLARED dependency — a name
+    added to the project's install surface. It cannot catch an import statement inside a file, and a
+    stdlib-adjacent one (`re` for a "just a small regex", `regex` for a "slightly better" one) is
+    exactly how a zero-dependency helper stops being one. Only an AST scan sees that.
+
+    `normalized` is `" ".join(text.split())`. It has no reason to import anything, ever.
+    """
+    tree = ast.parse(_PROSE_PATH.read_text())
+    imports = [
+        ast.unparse(node)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+    ]
+    assert imports == [], (
+        f"{_PROSE_PATH.name} imports {imports} — it is specified as a zero-import stdlib one-liner "
+        '(`" ".join(text.split())`), and D-23\'s phase-neutral, dependency-free guarantee is what '
+        "lets every driver and every CPU-only test take it without dragging anything in"
     )
