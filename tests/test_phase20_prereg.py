@@ -31,6 +31,7 @@ CPU-only, GPU-free, no torch, no network.
 """
 
 import ast
+import fnmatch
 import pathlib
 import subprocess
 import sys
@@ -44,8 +45,31 @@ if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
 import _prose  # noqa: E402  (needs the sys.path insert above)
+import erasure_gate  # noqa: E402  (same reason)
+import mitigation_gate  # noqa: E402  (same reason)
 
 _PROSE_PATH = _ROOT / "scripts" / "_prose.py"
+
+# THE HYBRID REGISTER (20-PATTERNS.md 3d). Both halves exist and neither is redundant.
+#
+# The repo's established register is a GLOB (`tests/test_phase18_prereg.py:59`,
+# `tests/test_phase17_stats.py:62`) over `phaseNN_*.py`, and its stated purpose is that "every
+# driver a later plan adds enters these scans the moment it exists". But the pin
+# `scripts/mitigation_gate.py` matches NO `phase20_*.py` glob — it is named for its subject rather
+# than for its phase — so the
+# established form alone would scan nothing here and `_collapsed_glob_guard()` would go red over a
+# register that is simply looking in the wrong place.
+#
+# The other established form is a hand-listed tuple (`tests/test_phase16_stats.py:747`), and that is
+# exactly the F-08 blindness the glob register was introduced to CLOSE: Phase 23's
+# `scripts/mitigation_budget.py` would sit silently uncovered until someone remembered to add it,
+# and the one guard that must never be forgotten is the one forbidding the gate from importing it.
+#
+# So: an explicit path constant for the file that exists today, PLUS a `mitigation_*.py` glob that
+# admits `mitigation_budget.py` the moment Phase 23 creates it, PLUS a membership assertion tying
+# the two together so they cannot drift into naming two different files.
+_MITIGATION_GATE_PATH = _ROOT / "scripts" / "mitigation_gate.py"
+_GATE_MODULES = tuple(sorted((_ROOT / "scripts").glob("mitigation_*.py")))
 
 # The REAL v3.0 incident, never a synthetic one — D-30's register, that a defect which actually
 # happened is not hypothetical. `.planning/RETROSPECTIVE.md:179-181` records that a single-line
@@ -413,4 +437,205 @@ def test_phase20_glob_sees_the_phase20_prefix_red_then_green(tmp_path):
         prereg_artifact=PHASE20_PREREG_ARTIFACT,
         artifact_glob="results/phase20_*",
         globs=V4_ARTIFACT_GLOBS,
+    )
+
+
+def _collapsed_glob_guard():
+    """A glob that stops matching makes every scan below green over nothing."""
+    assert len(_GATE_MODULES) >= 1, (
+        f"the mitigation_*.py glob collapsed to {len(_GATE_MODULES)} file(s) — a broken glob makes "
+        "every static guard in this module green while scanning no source at all"
+    )
+
+
+def _tree(path):
+    return ast.parse(path.read_text(encoding="utf-8"))
+
+
+def _enclosing_functions(tree):
+    """``node -> the innermost FunctionDef containing it``, or ``None`` for module scope.
+
+    Module scope is recorded as ``None`` rather than dropped, because module scope is the most
+    dangerous placement there is. Byte-for-byte the idiom
+    ``tests/test_phase18_prereg.py::_enclosing_functions`` uses.
+    """
+    owner = {}
+
+    def walk(node, current):
+        for child in ast.iter_child_nodes(node):
+            inner = child if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) else current
+            owner[child] = current if inner is child else inner
+            walk(child, inner)
+
+    walk(tree, None)
+    return owner
+
+
+def test_mitigation_gate_import_graph_is_stdlib_and_erasure_gate_only():
+    """RPT-03 / D-20 / GATE-02: the gate/budget split is a fact about the IMPORT GRAPH.
+
+    `tests/test_phase16_stats.py:387-412` is the template. Four claims, each failing for a
+    different reason so a reader debugging one does not have to guess which:
+
+      1. The gate never imports the budget (D-20). Both `import mitigation_budget` and
+         `from mitigation_budget import ...` feed the same `imported` set, so one assertion covers
+         both forms.
+      2. The import surface is a SUBSET of a named allow-set. A subset assertion is strictly
+         stronger than a list of forbidden names: it fails on the import nobody thought to forbid.
+      3. The `from erasure_gate import` list is EXACTLY five names — the accumulation proved
+         complete AND proved to have stopped growing.
+      4. No bound is re-implemented locally.
+    """
+    _collapsed_glob_guard()
+    assert _MITIGATION_GATE_PATH in _GATE_MODULES, (
+        f"the mitigation_*.py glob no longer matches {_MITIGATION_GATE_PATH.name} itself — every "
+        "scan in this file would then be checking siblings while the pin went unread"
+    )
+
+    imported = set()
+    from_erasure_gate = set()
+    defined = set()
+    for module in _GATE_MODULES:
+        tree = _tree(module)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                # The FLAT module name, matching `tests/test_phase16_stats.py:396`'s expectation
+                # and the gate's own `sys.path`-bootstrapped `from erasure_gate import ...`.
+                imported.add((node.module or "").split(".")[0])
+                if node.module == "erasure_gate":
+                    from_erasure_gate.update(alias.name for alias in node.names)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                defined.add(node.name)
+
+    assert "mitigation_budget" not in imported, (
+        f"a mitigation_*.py module imports mitigation_budget (imports: {sorted(imported)}). The "
+        "GATE holds OUTCOME thresholds and the BUDGET holds RESOURCE parameters, and "
+        "`.planning/ROADMAP.md:139-144` requires that separation to be structurally enforced: a "
+        "resource budget measured beforehand is NOT an outcome threshold measured beforehand, and "
+        "a reader must not be able to mistake one for the other. K reaches the gate as a REQUIRED "
+        "KWARG on promote_to_full_fidelity instead (D-20), which is what lets the promotion rule "
+        "live here while the import graph stays clean"
+    )
+
+    allowed = {"pathlib", "sys", "erasure_gate"}
+    assert imported <= allowed, (
+        f"the mitigation modules import {sorted(imported - allowed)} beyond the allow-set "
+        f"{sorted(allowed)}. This is asserted as a SUBSET rather than as a list of forbidden "
+        "names deliberately: a forbidden-name list only catches the import someone thought to "
+        "forbid, while a subset assertion catches the one nobody anticipated. RPT-03 keeps v4.0's "
+        "runtime dependency surface at zero, and this pin is stdlib plus the one v3.0 sibling it "
+        "imports its instruments from"
+    )
+    assert not ({"scipy", "numpy", "torch"} & imported), (
+        f"the classic offenders {sorted({'scipy', 'numpy', 'torch'} & imported)} reached a "
+        "mitigation module — named separately from the subset assertion above so the failure "
+        "message says which one, and so a reader sees the three this project has actually had to "
+        "keep out of a CPU-only decision rule"
+    )
+
+    assert from_erasure_gate == {
+        "MARGIN_K",
+        "V20_EWC_RETENTION_PPL",
+        "V20_MASKED_DIALOGUE_VAL_PPL",
+        "rule_of_three",
+        "wilson_upper_bound",
+    }, (
+        f"the `from erasure_gate import` list is {sorted(from_erasure_gate)}. EXACT equality, not "
+        "a subset: this list was accumulated ONE NAME PER CONSUMER across four tasks in three "
+        "plans (each name landing in the plan whose code first reads it, because an import ahead "
+        "of its consumer is an F401), so exact equality is what proves the accumulation landed "
+        "COMPLETE and then STOPPED. A subset assertion would be green on a truncated list, and a "
+        "superset one would be green on a name imported for a consumer that never arrived"
+    )
+    assert {"wilson_upper_bound", "rule_of_three"} <= from_erasure_gate, (
+        "GATE-02: the two bounds must be IMPORTED. Kept beside the exact-equality assertion above "
+        "because this is the one carrying the 'import the instrument' message, and both names now "
+        "have real consumers in the pin — `wilson_upper_bound` in `extraction_ceiling` and "
+        "`tolerance_report`, `rule_of_three` in the GATE-05 zero-extraction reason"
+    )
+
+    assert "VERDICTS" not in from_erasure_gate, (
+        "`erasure_gate.VERDICTS` is ('SUCCESS', 'FAILURE', 'INCONCLUSIVE') — the WRONG DOMAIN for "
+        "v4.0, which returns PASS / FAIL / INCONCLUSIVE (GATE-01). Importing it would put the "
+        "wrong three names in this module's namespace. D-31's resolution is to PROVE the "
+        "relationship through the module handle (`_prove_verdict_domain`), never to import the "
+        "tuple: this is the one tuple a phase whose discipline is 'import, never retype' cannot "
+        "import, and the discipline is kept by proving the relabelling instead"
+    )
+    assert "V20_RETENTION_NOISE_FLOOR" not in from_erasure_gate, (
+        "`erasure_gate.V20_RETENTION_NOISE_FLOOR` (0.068930) is a Phase 12 FULL-FINE-TUNE seed "
+        "pair, and importing it would leave it governing an ADAPTER-REGIME verdict — the exact "
+        "defect D-06 corrects for v4.0. The v4.0 retention floor arrives as a required kwarg "
+        "(D-07), measured in the regime it judges"
+    )
+
+    assert not ({"wilson_upper_bound", "rule_of_three"} & defined), (
+        "a bound was re-implemented in a mitigation module instead of imported from erasure_gate "
+        "— the rule is import the instrument, never copy it, or the two silently diverge. A "
+        "second copy of an estimator is a SECOND ESTIMATOR, and the day they stop agreeing is the "
+        "day a verdict depends on which one the caller happened to reach"
+    )
+
+
+def test_mitigation_gate_imports_bounds_by_object_identity():
+    """GATE-02 / D-09, the RUNTIME half — `is`, never `==`.
+
+    `tests/test_phase19_erasure.py:745-748` is the shape and `:2149` records the reason: a
+    value-matching copy is a copy FREE TO STOP MATCHING. The static scan above proves the name
+    appears in an import statement and nowhere in a local `def`; this proves the object the running
+    module actually holds is the same object `erasure_gate` holds. Both halves are needed — the
+    static one reads the source, this one reads the loaded namespace, and a module that passed the
+    first while failing the second would be one whose import had been shadowed after the fact.
+
+    HONEST CAVEAT ON `MARGIN_K`, stated rather than glossed. It is the int 2, and CPython caches
+    small ints, so a local `MARGIN_K = 2` would satisfy `is` here anyway. The identity assertion is
+    load-bearing for the three FLOATS and for the two FUNCTIONS; for `MARGIN_K` the assertion that
+    actually catches a retype is the static one above, which requires the name to be in the
+    `from erasure_gate import` list. It is asserted here regardless, because a `MARGIN_K` rebound to
+    a DIFFERENT int — a k=3 margin, say — is exactly the drift that would pass unnoticed otherwise.
+    """
+    assert mitigation_gate.wilson_upper_bound is erasure_gate.wilson_upper_bound
+    assert mitigation_gate.rule_of_three is erasure_gate.rule_of_three
+    assert mitigation_gate.MARGIN_K is erasure_gate.MARGIN_K
+    assert mitigation_gate.V20_EWC_RETENTION_PPL is erasure_gate.V20_EWC_RETENTION_PPL
+    assert mitigation_gate.V20_MASKED_DIALOGUE_VAL_PPL is erasure_gate.V20_MASKED_DIALOGUE_VAL_PPL
+
+
+def test_prose_helper_is_outside_every_pin_glob():
+    """D-23 stated as a CHECK rather than as a paragraph: the underscore is the mechanism.
+
+    `scripts/mitigation_gate.py` freezes at its first commit — once any `results/phase20_*`
+    artifact exists, every later commit touching the pin reddens the ancestry guard permanently.
+    A PHASE-NEUTRAL utility must not inherit an immutability that only makes sense for a judgment
+    rule: `_prose.normalized` has to keep serving Phases 21-28. What buys that exemption is the
+    LEADING UNDERSCORE, and it is an fnmatch fact rather than a convention — asserted here against
+    every pin glob this repository has used, plus this phase's own `mitigation_*.py` register.
+
+    THE HONEST CAVEAT THIS REPOSITORY ALREADY RECORDS: the precedent is STRUCTURAL, not HISTORICAL.
+    `scripts/_addendum.py`'s last commit predates the first `results/phase19_*` add, so NEITHER
+    `_addendum.py` NOR `_verdict.py` has actually been edited after an artifact existed. The
+    exemption is proved by the pattern, never by a survived edit, and this test proves exactly the
+    pattern and nothing more.
+    """
+    pin_globs = (
+        "phase16_*.py",
+        "phase17_*.py",
+        "phase18_*.py",
+        "phase19_*.py",
+        "phase20_*.py",
+        "mitigation_*.py",
+    )
+    matched = [glob for glob in pin_globs if fnmatch.fnmatch(_PROSE_PATH.name, glob)]
+    assert matched == [], (
+        f"{_PROSE_PATH.name} is matched by {matched} — it would enter that pin's scanned set and "
+        "inherit the immutability D-23 exempts it from. The leading underscore IS the mechanism; "
+        "a rename that drops it silently freezes a helper five later phases still need to change"
+    )
+
+    _collapsed_glob_guard()
+    assert _PROSE_PATH not in _GATE_MODULES, (
+        f"{_PROSE_PATH} entered _GATE_MODULES {[p.name for p in _GATE_MODULES]} — the register "
+        "that governs this phase's pin must not govern the phase-neutral helper beside it"
     )
