@@ -269,6 +269,46 @@ ROADMAP SC1 inherit the indicted form verbatim. This CONTEXT supersedes that for
   Recovery at n=64 that n=8 did not achieve at equivalent `ε_fact` is a finding about where capacity
   stops destroying the mitigation; no recovery confirms the null at two capacities.
 
+### Resolved during planning — conflicts surfaced by `20-RESEARCH.md`
+
+*Added 2026-08-20, after research verified CONTEXT's citations against the source. Each of these
+resolves a conflict the discussion did not see, and each is LOCKED on the same terms as D-01…D-30.*
+
+- **D-31 — the verdict domain is RELABELLED WITH A PROVED MAP, not silently retyped.**
+  `erasure_gate.py:136` defines `VERDICTS = ("SUCCESS", "FAILURE", "INCONCLUSIVE")`, while GATE-01
+  and ROADMAP SC1 both require `PASS` / `FAIL` / `INCONCLUSIVE`. This is the one tuple the phase
+  **cannot** import, inside a phase whose discipline is "import, never retype." Resolution:
+  `mitigation_gate.py` declares `V4_VERDICTS = ("PASS", "FAIL", "INCONCLUSIVE")` beside an explicit
+  `_VERDICT_RELABEL` mapping, and a module-scope **`_prove_verdict_domain()` runs at import** and
+  asserts three things: **equal length**, **correct positional correspondence** against
+  `erasure_gate.VERDICTS`, and **`INCONCLUSIVE` preserved identically in both vocabularies**.
+  Correct v4.0 names without a silent duplicate of the original tuple — the discipline is kept by
+  *proving the relationship*, not by asserting it in a comment a refactor can break.
+  *Precedent: the module-scope `_prove` pattern already used for dispatch tables and reachability.*
+
+- **D-32 — `results/phase20_retention_floor.json` is PRODUCED BY A COMMITTED DRIVER, not
+  transcribed.** D-06's second input — seed-2024 retention `4.2284415113307245` — was verified to
+  exist in **no committed artifact**, only in this CONTEXT. Transcribing it would publish a number
+  whose only provenance is a discussion transcript, which is precisely the standard `<specifics>`
+  forbids. Resolution: a **fifth deliverable** — an **unpinned driver**, same pattern as
+  `scripts/phase19_run.py` — re-reads the two already-committed-arm adapters
+  (`phase19_erase_dialogue_floor_seed{1337,2024}`, present locally, gitignored) with the retention
+  instrument, runs on **MPS**, and writes the artifact, **committed STRICTLY after the pin per
+  D-08**. It must reproduce `seed_1337 = 4.219759892336485` and `seed_2024 = 4.2284415113307245`
+  **from real code**, not from discussion text. **One MPS run, no retraining** — the same
+  "re-read existing v3.0 adapters with a second instrument" legitimacy D-13 already granted.
+  Unpinned because it is a measurement driver, not a judgment rule (the D-23 / `phase19_floor.py`
+  two-file split).
+
+- **D-33 — `V4_ARTIFACT_GLOBS` contains `phase20_*` ONLY.** Pre-declaring `phase21_*`…`phase28_*`
+  was considered and **rejected**: only `phase20_*` can be proven RED-then-GREEN by D-22's
+  throwaway-repo fixture, and an advance declaration without demonstration is exactly the kind of
+  unproven assertion this phase exists to refuse. Each future phase (21→28) **adds its own prefix at
+  the moment it first writes results**, following Phase 16's recorded lesson literally — real proof
+  per prefix. The cost is named, not hidden: an `assert` catches an empty match set, never an
+  incomplete one, so a future phase that forgets its prefix fails silently. That risk is accepted in
+  exchange for never asserting coverage this phase cannot demonstrate.
+
 ### Claude's Discretion
 
 Accepted as proposed, with the precedent cited for each so a reviewer can contest any of them
@@ -313,7 +353,17 @@ explicitly:
   (`V20_MASKED_DIALOGUE_VAL_PPL` 4.5733, `V20_EWC_RETENTION_PPL` 3.891140,
   `V20_RETENTION_NOISE_FLOOR` 0.068930, `MARGIN_K` 2), `wilson_upper_bound`, `rule_of_three`,
   the keyword-only signature shape, the 3-verdict domain and the INCONCLUSIVE-precedence rule.
-  Committed `23a830c` and **MUST NOT be amended** — `:454-458` says so in its own text.
+  Committed `23a830c` and **MUST NOT be amended**.
+  **Citation corrected 2026-08-20 by `20-RESEARCH.md`:** the `:454-458` cited above **does not
+  exist — the file is 291 lines.** The non-amendment is enforced by a **test**,
+  `tests/test_phase18_prereg.py:212` (which checks both `git log == [PREREG_COMMIT]` and
+  byte-identity against `git show`), **not** by self-statement. The nearest self-statement is
+  `scripts/erasure_gate.py:71-73`, and it is scoped to the baselines block only. Trust the test,
+  not the prose. Other corrected citations: `phase18_extraction.py:88-92` → **`:84-93`**;
+  `test_phase16_prereg.py:45-60` → **`:46-63`**; `:322-399` → **`:322-403`**; `_GATE_MODULES` is
+  **not** in `scripts/phase17_*.py` — it lives in `tests/` (`test_phase17_stats.py:62`,
+  `test_phase18_prereg.py:59`), which matters because `mitigation_gate.py` matches no `phase20_*.py`
+  glob, so D-20's AST guard needs an **explicit path constant**.
 - `scripts/erasure_gate.py:95-127` — `ERASURE_DECISION_RULE`, especially clause (a)'s
   procedure-vs-constant sentence and clause (c)'s "degraded into uselessness" rationale.
 - `scripts/erasure_gate.py:130-134` — `ERASURE_GOAL_FRAMING`, the claim D-10 explains does not
@@ -406,7 +456,11 @@ explicitly:
   line-wrapped phrase that `grep -c` reports as absent.
 - `tests/test_phase20_prereg.py` — **new**, CPU-only. Phase 18 shape (D-21) plus the throwaway-repo
   RED-then-GREEN fixture (D-22).
-- `results/phase20_retention_floor.json` — **new**, lands strictly after the pin (D-08).
+- `results/phase20_retention_floor.json` — **new**, lands strictly after the pin (D-08), **produced
+  by the D-32 driver**, never transcribed.
+- **The retention-floor driver** — **new, unpinned**, `scripts/phase19_run.py` pattern (D-32). The
+  fifth deliverable. Re-reads the two `phase19_erase_dialogue_floor_seed{1337,2024}` adapters with
+  the retention instrument on MPS; **no retraining**. Committed strictly after the pin.
 - `pyproject.toml` — **untouched**; RPT-03 keeps the sha256 pin carrying forward, making it four
   milestones. `tests/test_package.py` turns red on any new dependency.
 
