@@ -263,8 +263,56 @@ Deferred to a later milestone, recorded rather than dropped.
 
 ## Traceability
 
-Filled by the roadmap — every REQ-ID maps to exactly one phase.
+Every REQ-ID maps to exactly one phase. **48/48 mapped, 0 orphans, 0 duplicates**
+(verified 2026-08-20 at roadmap creation).
 
-| REQ-ID | Phase |
-|--------|-------|
-| _pending roadmap_ | |
+| REQ-ID | Phase | Note |
+|--------|-------|------|
+| GATE-01 | Phase 20 | |
+| GATE-02 | Phase 20 | |
+| GATE-03 | Phase 20 | |
+| GATE-04 | Phase 20 | |
+| GATE-05 | Phase 20 | |
+| GATE-06 | Phase 20 | |
+| GATE-07 | Phase 20 | |
+| GATE-08 | Phase 20 | |
+| GATE-09 | Phase 20 | |
+| GATE-10 | Phase 20 | |
+| CAL-04 | Phase 20 | phase-zero: K + promotion rule pre-committed |
+| RPT-02 | Phase 20 | `_prose.normalized`, needed from the first correction sweep |
+| UNIT-01 | Phase 21 | |
+| UNIT-02 | Phase 21 | |
+| UNIT-03 | Phase 21 | |
+| UNIT-04 | Phase 21 | |
+| UNIT-05 | Phase 21 | |
+| UNIT-06 | Phase 21 | |
+| DPSGD-01 | Phase 22 | |
+| DPSGD-02 | Phase 22 | |
+| DPSGD-03 | Phase 22 | |
+| DPSGD-04 | Phase 22 | |
+| DPSGD-05 | Phase 22 | |
+| DPSGD-07 | Phase 22 | |
+| CAL-01 | Phase 23 | |
+| CAL-02 | Phase 23 | |
+| CAL-03 | Phase 23 | |
+| CAL-05 | Phase 23 | |
+| DPSGD-06 | Phase 23 | sigma=0 is the DP arm's first executed run |
+| CTRL-03 | Phase 23 | never-taught fresh adapter; depends on nothing, scheduled once |
+| ADVT-01 | Phase 24 | |
+| ADVT-02 | Phase 24 | |
+| ADVT-03 | Phase 24 | |
+| CTRL-01 | Phase 25 | run first, as a sweep point |
+| CTRL-02 | Phase 25 | run first, as a sweep point |
+| FRONT-01 | Phase 25 | |
+| FRONT-02 | Phase 25 | |
+| FRONT-03 | Phase 25 | |
+| FRONT-04 | Phase 25 | |
+| CANARY-01 | Phase 26 | |
+| CANARY-02 | Phase 26 | |
+| RELRN-01 | Phase 27 | |
+| RELRN-02 | Phase 27 | |
+| RELRN-03 | Phase 27 | |
+| RELRN-04 | Phase 27 | |
+| RELRN-05 | Phase 27 | |
+| RPT-01 | Phase 28 | |
+| RPT-03 | Phase 28 | |

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: planning
-last_updated: "2026-08-20T11:49:12.298Z"
+last_updated: "2026-08-20T12:20:00.000Z"
 last_activity: 2026-08-20
 progress:
-  total_phases: 0
+  total_phases: 9
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
-**Current focus:** Planning next milestone — run `/gsd:new-milestone`. The three candidates v3.0's own results argue for are scoped in PROJECT.md `## Next Milestone Goals`; the first is that **88.5% recovery under prompt-only attack was measured and no mitigation arm was run**, so any privacy claim now rests on addressing that or abandoning it explicitly.
+**Current focus:** v4.0 roadmapped — 9 phases (20-28), 48/48 requirements mapped, 0 orphans. The milestone answers the finding v3.0 measured and left open: **88.5% recovery under prompt-only attack, with no mitigation arm run.** Next: `/gsd:plan-phase 20` — the three-condition pre-registration gate, which must be committed and pushed before Phase 23 measures a single wall-clock number, not merely before the sweep.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 20 — Pre-Registration: The Three-Condition Gate (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-08-20 — Milestone v4.0 started
+Status: Roadmap created, awaiting `/gsd:plan-phase 20`
+Last activity: 2026-08-20 — v4.0 roadmap written: 9 phases (20-28), 48/48 REQ-IDs mapped
 
 ## Performance Metrics
 
@@ -312,6 +312,44 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 
 ### Roadmap Evolution
 
+- **2026-08-20 — v4.0 roadmapped: 9 phases (20-28), 48/48 requirements mapped, 0 orphans.**
+  Phase numbering continues from v3.0, which ended at Phase 19. Structure is dependency-driven, not
+  imposed, and three measured constraints fixed the ordering. **(1) The gate is phase-zero.** Phase
+  20 must be committed before any v4.0 number of any kind — before the cost calibration, not merely
+  before the sweep — so all ten GATE-* requirements plus CAL-04 (per-point K and the promotion rule)
+  and RPT-02 land there. **(2) The privacy unit is the longest chain** and it is design work, not
+  code: UNIT blocks the DP data path, which blocks the DP arm, which blocks the frontier, so all six
+  UNIT-* requirements are Phase 21 and precede any accountant. **(3) Evaluation binds at ~1,010×
+  training** — 42,480 draws = 4.77 h per full-fidelity point against ~17 s of training, so a 16-point
+  K=48 sweep is 76.3 h of continuous M3 time. Phase 23 sizes Z from that measurement; CAL-05 records
+  4.77 h as a **floor for noised points, not a mean**, because the Phase-18 rate came from the
+  un-adapted base where most draws terminated on a stop id.
+
+- **Ordering decisions carried into the roadmap as constraints, not preferences.** DPSGD-05 (the MPS
+  RNG checkpoint slot) is in Phase 22, before any long run — five lines now, a full sweep re-run
+  later. DPSGD-06 (σ=0) is placed in Phase 23 as the DP arm's **first executed run**, because every
+  correctness bug in this class *improves* utility and it is the only cheap diagnostic separating the
+  milestone's most likely honest negative from its most likely silent bug. CTRL-03 (never-taught
+  fresh adapter) depends on nothing and serves both the frontier floor and the relearning reference,
+  so it is scheduled once in Phase 23 and consumed twice. CAL-03 gates the n=64 work: the inference
+  "ε is independent of N at q=1" is confirmed by a small n=8-vs-n=64 calibration at fixed σ **before**
+  the expensive n=64 run is committed — an explicit user condition. Phases 20, 21, 22 and 24 are
+  CPU-testable and all land before the first M3 second is spent (v2.0's lesson).
+
+- **The DP null is a first-class deliverable, not a risk to mitigate.** Research puts high prior
+  probability on the DP arm being a pre-registered null — fact-level noise-to-signal 72σ at L=8,
+  ε_fact ≤ 4 needs σ ≥ 15.3, Secret Sharer Table 3 as direct precedent. GATE-10 pre-commits both
+  branches of the n=8-vs-n=64 comparison before either run; FRONT-04 makes "no DP point clears Y at
+  either capacity" a *named* verdict rather than a failure to produce a result; RPT-01 gives the null
+  its own report surface in Phase 28. This project shipped `LEAKAGE_DEMONSTRATED` and `FAILURE` in
+  v3.0 and is stronger for it.
+
+- **The canary audit (P2) was admitted, not cut** — Phase 26, `CANARY-01`/`CANARY-02`. It is the only
+  mechanism in the research pass that tests the *guarantee* rather than the *code*, and it is the
+  answer to "how do you know your from-scratch DP-SGD is correct?". Placed after Phase 25 so it
+  audits a published ε, and depending on Phase 21 because the unscored filler-fact corpus **is** the
+  in/out canary population. Research noted the decision belonged at roadmap time; it was made here.
+
 - **2026-08-17 — Phase 19 added: Selective Memory Erasure.** v3.0 reopened from `Phases 16-18` to
   `Phases 16-19`, milestone status `completed` → `in_progress`. This was **not** a scope decision.
   `scripts/erasure_gate.py` was committed at `23a830c` (2026-08-12 16:27:43 -0300), before Phase 16
@@ -403,10 +441,20 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-19T21:42:00.000Z
-Stopped at: Phase 19 CLOSED — 19-16 complete, the ship decision recorded (DO NOT SHIP). Nothing blocked.
+Last session: 2026-08-20T12:20:00.000Z
+Stopped at: v4.0 ROADMAP CREATED — 9 phases (20-28), 48/48 requirements mapped, 0 orphans. Nothing executed; no v4.0 number exists yet, which is the precondition Phase 20 depends on.
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 20 with `/gsd-plan-phase 20`. **Nothing else may run first.** The gate's entire
+  evidentiary value is ordering: `erasure_gate.py` was committed at `23a830c` before Phase 16 ran,
+  and the v4.0 gate must be committed before *any* v4.0 number exists — before the cost calibration
+  (Phase 23), not merely before the sweep (Phase 25).
+- Research flags carried into planning: **Phase 21** NEEDS DESIGN (the privacy unit has no in-repo
+  prior; the filler-facts construction and the replay-in-lot question both change the ε);
+  **Phase 23** NEEDS MEASUREMENT (the training leg on the DP path and throughput on a *noised*
+  adapter are unmeasured — 4.77 h/point is a floor, not a mean); **Phase 27** NEEDS RESEARCH (the
+  syntax-vs-topic driver of relearning recovery is recent and effectively single-source, and it
+  determines the attacker-corpus ladder). Phases 20, 22, 24, 25, 28 are standard patterns — skip
+  `--research-phase`.
