@@ -4,6 +4,101 @@
 
 PersonaCore is a conversational AI assistant where **all** memory and personalization live in the model weights — no databases, no vector stores, no external files. The model learns who you are by updating its own parameters, making weight-based memory a privacy guarantee by design. The entire stack (GPT-style transformer decoder, BPE tokenizer, LoRA adapters, EWC continual learning) is built from scratch in PyTorch and runs fully on-device. It is an elite CS-undergraduate portfolio project intended to demonstrate deep ML fundamentals, a genuinely novel approach, and a working demo.
 
+## Current State (v3.0 shipped 2026-08-19)
+
+**What shipped:** the privacy audit v2.0's claim was waiting for — and the audit came back against
+the project, which is what makes it worth having run.
+
+- **Phase 18 measured that weight-based memory is NOT private under black-box attack.**
+  `LEAKAGE_DEMONSTRATED`: 92/104 questions = 88.5% (95% lower bound 0.8231) recovered by prompt-only
+  attack, against a no-adapter control at exactly `0/104`, at 42,480 draws per arm. The demo's
+  toggle was corrected everywhere it is published to read **availability, not authorization**.
+- **Phase 19 attempted selective erasure and the committed gate returned `FAILURE`.** Erasing one
+  taught fact took k = 78 of 288 rank-1 components dispersed across all six layers and all six
+  projections. (a) cleared *exactly* on its blind-calibrated floor with zero headroom (0/27
+  questions, 1,296 draws); **all seven gated non-targets failed**, four at total generation loss;
+  77.6% of the dialogue adaptation was destroyed. Headline, published unsoftened:
+  **selective erasure is not selective at 331,776 parameters.**
+- **Two instruments disagreed on the same weights** — the rank/exposure instrument read rank 1 at
+  ceiling on all seven ruined facts at every checkpoint while generation collapsed, and reported M1
+  and M2 as bit-identical. Shipped as a co-headline, carrying a retroactive scope limit onto any
+  Phase 18 conclusion resting on rank alone.
+- **Phases 16-17 fixed and proved the instrument** the other two depend on: four-arm persistence
+  control on one binding fixture (adapter 90/104 vs prompt at the floor; weight invariance a
+  bit-identity *proof*, max |diff| 0.0), and a 3x3 isolation matrix under deliberate slot collision
+  with all six off-diagonals `0/104` and six Holm comparisons rejected at p = 0.0078125.
+
+**Ship decision: `DO NOT SHIP`** — withholds exactly one claim (that the verdict is mechanically
+reproducible by the pinned CLI alone) and **withdraws no measurement.**
+
+**What v3.0 proved about the process, not just the model:** the pre-registration discipline held
+across four phases and 63 published artifacts, and it *authored* Phase 19 rather than being applied
+to it — `scripts/erasure_gate.py` was committed at `23a830c` before Phase 16 ran, and Phase 19
+entered the roadmap only because `erasure_is_worth_attempting(92, 104, 0, 104)` returned True on
+measured numbers. Zero new runtime dependencies across the whole milestone.
+
+**Audit:** `tech_debt` — 29/29 requirements, 4/4 phases, 16/16 integration, no blockers. 16 debt
+items and 6 deferred stale-stamp items carried forward. See
+[milestones/v3.0-MILESTONE-AUDIT.md](milestones/v3.0-MILESTONE-AUDIT.md).
+
+<details>
+<summary>v3.0 milestone plan as written at the start (archived)</summary>
+
+### Original goal and scope
+
+**Goal:** Stop asserting that weight-based memory is private and start measuring it — what weights
+actually buy over prompting, whether separately-taught personas stay isolated under adversarial
+collision, and whether an adversary can extract taught facts through a toggle that only ever
+controlled availability.
+
+**Target features:**
+- **Phase 16 — Weight-vs-Prompt Measured Control (DEMO-F2, formalized).** Same question set, two
+  conditions: the fact placed *in context* (prompt-stuffed) vs *adapter-only with an empty prompt*.
+  Reuses the already-trained `persona_adapter.pt` — no new infrastructure, the cheapest of the
+  three, and it answers the sharpest question first: what does memory-in-weights buy over
+  prompting, as a number rather than an intuition.
+- **Phase 17 — Multi-Persona Isolation Matrix (DEMO-F1, formalized as a matrix M_ij).** N=3-4
+  deliberately *adversarial* personas — colliding names, contradictory values in the same slot,
+  adapter A queried with B's prompt — scored as a full cross-matrix. The most collision-prone pair
+  is replicated across seeds. Builds the persona generator DEMO-F1 always needed and never had.
+- **Phase 18 — Black-Box Adversarial Extraction Audit.** An attacker with no adapter (the negative
+  control) and an attacker with the adapter *active*, attempting paraphrase, prefix injection,
+  role-play, and repeated attempts. Reframes the Phase-14 toggle as **availability, not
+  authorization** — the honest reading of what that switch has always done.
+
+**Deferred pending 16-18 results:** **Phase 19+ — Selective Erasure.** It enters the roadmap
+formally only once the numbers from 16, 17 and 18 exist, because those numbers determine whether
+erasure is worth attempting and what it would have to beat. Per the v2.0 pre-registration
+discipline, the criteria for that decision are written down before the data can influence them.
+
+**Phase 19 admitted and executed (completed 2026-08-19).** The gate authored the decision, not a
+judgement made after seeing the result: `erasure_is_worth_attempting(92, 104, 0, 104)` returned True
+on Phase 18's measured numbers under a rule committed at `23a830c` on 2026-08-12, *before Phase 16
+ran*. 16 plans across 14 waves. **The committed `erasure_succeeded` returned `FAILURE`** — (a) clears
+perfectly at 0/27, exactly on a blind-calibrated floor of `0.09107873950450847`; (b) fails all seven
+gated non-targets, four at total generation loss; (c) fails on dialogue, both legs having been red
+before any erasure ran. Erasing one taught fact took k = 78 of 288 rank-1 components spread across
+all six layers and all six projections, destroying 77.6% of the dialogue adaptation.
+**D8 branch = the cliff: selective erasure is not selective at 331,776 parameters** — published
+unsoftened, with the rank-vs-NLL instrument disagreement as co-headline (the rank instrument returns
+bit-identical readings for M1 and M2 across all eight slots while one arm's bystanders generate 0/27
+and the other's generate 27/27). **Ship decision: `DO NOT SHIP`**, withholding exactly one claim —
+that the verdict is mechanically reproducible by the pinned CLI alone — and withdrawing no
+measurement. Milestone close remains a separate act.
+
+**Explicitly out of scope for v3.0:** the frozen tokenizer / retrain question. It needs its own
+conversation given the cost of invalidating every published checkpoint and number, and bundling it
+into a privacy milestone would confound both.
+
+**Key context:** phase numbering continues from v2.0, so v3.0 opens at **Phase 16**. Ordering is
+cost-ascending and dependency-driven — 16 needs no new artifacts, 17 builds the persona generator,
+18 consumes both. Compute is minutes-to-hours on the M3, not a new pretraining run.
+
+</details>
+
+<details>
+<summary>v2.0 Weight-Based Memory — shipped 2026-08-12 (archived)</summary>
+
 ## Current State (v2.0 shipped 2026-08-12)
 
 **Milestone 2 "Weight-Based Memory" is shipped — the novel claim is demonstrated, not asserted.**
@@ -54,55 +149,24 @@ All six v2.0 target features shipped. Full detail: `milestones/v2.0-ROADMAP.md`,
 
 </details>
 
-## Current Milestone: v3.0 Adversarial Privacy Audit and Selective Memory Erasure
+</details>
 
-**Goal:** Stop asserting that weight-based memory is private and start measuring it — what weights
-actually buy over prompting, whether separately-taught personas stay isolated under adversarial
-collision, and whether an adversary can extract taught facts through a toggle that only ever
-controlled availability.
+## Next Milestone Goals (v4.0 — not yet defined)
 
-**Target features:**
-- **Phase 16 — Weight-vs-Prompt Measured Control (DEMO-F2, formalized).** Same question set, two
-  conditions: the fact placed *in context* (prompt-stuffed) vs *adapter-only with an empty prompt*.
-  Reuses the already-trained `persona_adapter.pt` — no new infrastructure, the cheapest of the
-  three, and it answers the sharpest question first: what does memory-in-weights buy over
-  prompting, as a number rather than an intuition.
-- **Phase 17 — Multi-Persona Isolation Matrix (DEMO-F1, formalized as a matrix M_ij).** N=3-4
-  deliberately *adversarial* personas — colliding names, contradictory values in the same slot,
-  adapter A queried with B's prompt — scored as a full cross-matrix. The most collision-prone pair
-  is replicated across seeds. Builds the persona generator DEMO-F1 always needed and never had.
-- **Phase 18 — Black-Box Adversarial Extraction Audit.** An attacker with no adapter (the negative
-  control) and an attacker with the adapter *active*, attempting paraphrase, prefix injection,
-  role-play, and repeated attempts. Reframes the Phase-14 toggle as **availability, not
-  authorization** — the honest reading of what that switch has always done.
+Not scoped. Run `/gsd:new-milestone` to define it. Three candidates surfaced by v3.0's own results,
+in the order its evidence argues for:
 
-**Deferred pending 16-18 results:** **Phase 19+ — Selective Erasure.** It enters the roadmap
-formally only once the numbers from 16, 17 and 18 exist, because those numbers determine whether
-erasure is worth attempting and what it would have to beat. Per the v2.0 pre-registration
-discipline, the criteria for that decision are written down before the data can influence them.
-
-**Phase 19 admitted and executed (completed 2026-08-19).** The gate authored the decision, not a
-judgement made after seeing the result: `erasure_is_worth_attempting(92, 104, 0, 104)` returned True
-on Phase 18's measured numbers under a rule committed at `23a830c` on 2026-08-12, *before Phase 16
-ran*. 16 plans across 14 waves. **The committed `erasure_succeeded` returned `FAILURE`** — (a) clears
-perfectly at 0/27, exactly on a blind-calibrated floor of `0.09107873950450847`; (b) fails all seven
-gated non-targets, four at total generation loss; (c) fails on dialogue, both legs having been red
-before any erasure ran. Erasing one taught fact took k = 78 of 288 rank-1 components spread across
-all six layers and all six projections, destroying 77.6% of the dialogue adaptation.
-**D8 branch = the cliff: selective erasure is not selective at 331,776 parameters** — published
-unsoftened, with the rank-vs-NLL instrument disagreement as co-headline (the rank instrument returns
-bit-identical readings for M1 and M2 across all eight slots while one arm's bystanders generate 0/27
-and the other's generate 27/27). **Ship decision: `DO NOT SHIP`**, withholding exactly one claim —
-that the verdict is mechanically reproducible by the pinned CLI alone — and withdrawing no
-measurement. Milestone close remains a separate act.
-
-**Explicitly out of scope for v3.0:** the frozen tokenizer / retrain question. It needs its own
-conversation given the cost of invalidating every published checkpoint and number, and bundling it
-into a privacy milestone would confound both.
-
-**Key context:** phase numbering continues from v2.0, so v3.0 opens at **Phase 16**. Ordering is
-cost-ascending and dependency-driven — 16 needs no new artifacts, 17 builds the persona generator,
-18 consumes both. Compute is minutes-to-hours on the M3, not a new pretraining run.
+1. **Answer the leakage finding.** v3.0 measured 88.5% recovery under prompt-only attack and did
+   *not* run a mitigation arm. Any privacy claim in the README rests on that being addressed or
+   explicitly abandoned. The relearning attack Phase 18 named as absent (documented in the
+   unlearning literature to recover ~88% of supposedly removed information) is the obvious first
+   probe.
+2. **Erasure at a capacity where it could work.** The `FAILURE` was bounded to one mechanism, one
+   fact, one adapter at 331,776 parameters. Whether selectivity is recoverable at higher adapter
+   rank, or with a mechanism other than rank-1 ablation, is untested — and the co-headline says the
+   rank instrument alone cannot be trusted to report it.
+3. **The frozen tokenizer / retrain question**, held out of v3.0 deliberately. It needs its own
+   conversation given the cost of invalidating every published checkpoint and number.
 
 ## Core Value
 
@@ -213,4 +277,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-19 — Phase 19 "Selective Memory Erasure" completed: verdict `FAILURE`, ship decision `DO NOT SHIP`. All four v3.0 phases (16-19) are complete; milestone close is a separate act.*
+*Last updated: 2026-08-19 after the v3.0 milestone close. Shipped: the privacy audit that returned `LEAKAGE_DEMONSTRATED` against its own claim, and the selective-erasure attempt whose pre-registered gate returned `FAILURE` — both published unsoftened, ship decision `DO NOT SHIP` withholding one claim and withdrawing no measurement.*

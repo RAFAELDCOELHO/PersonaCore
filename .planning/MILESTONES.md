@@ -1,5 +1,71 @@
 # Milestones
 
+## v3.0 Adversarial Privacy Audit and Selective Memory Erasure (Shipped: 2026-08-19)
+
+**Phases completed:** 4 phases (16-19), 54 plans, 113 tasks
+**Timeline:** 2026-08-12 -> 2026-08-19 (8 days, 350 commits)
+**Audit:** `tech_debt` — 29/29 requirements, 4/4 phases, 16/16 integration, 3/3 flows, no blockers
+
+**Delivered:** v2.0 asserted that weight-based memory is private; v3.0 stopped asserting and
+**measured** it — and published the measurement that went against the project.
+
+**Key accomplishments:**
+
+- **Weight-vs-prompt persistence, measured with a bound instead of claimed** (Phase 16). Four arms
+  on one binding 270-question fixture in four fresh processes, licensed by a capability ladder that
+  ran and was committed *before* anything was scored. The adapter arm reached 90/104 questions
+  where the prompt arm sat at the floor, and the weight arm's invariance is a `run_bit_identity_control`
+  **proof** (max |diff| 0.0), not a statistic.
+- **Persona isolation under deliberate collision** (Phase 17). Three adversarial personas with
+  contradictory values in the *same* slots, scored as N sweeps N ways by a cell-blind scorer with an
+  adapter-off base column and a swap canary. All six off-diagonals `0/104`; all six Holm comparisons
+  rejected at `p = 0.0078125`; the worst pair replicated at k=3 seeds, descriptive-only.
+- **The privacy claim was falsified by its own audit** (Phase 18). Programmatic attacks at 42,480
+  draws per arm against an adapter-off control at the identical budget returned
+  **`LEAKAGE_DEMONSTRATED`** — 92/104 = 88.5%, 95% lower bound 0.8231, against a base arm at exactly
+  `0/104`. The demo's toggle was corrected in README, `docs/REPORT.md` and the UI to read
+  **availability, not authorization**.
+- **Selective erasure was attempted and FAILED, and the failure is what shipped** (Phase 19). M1
+  rank-1 ablation zeroed 78 of 288 components: condition (a) cleared *exactly* on its boundary with
+  zero headroom (0/27 questions, 1,296 draws), while **all seven gated non-targets failed**, four at
+  total generation loss, and 77.6% of the dialogue adaptation was destroyed. Headline, unsoftened:
+  **selective erasure is not selective at 331,776 parameters.**
+- **Two instruments disagreed on the same weights, and that became a co-headline** — with
+  retroactive scope onto Phase 18. The rank/exposure instrument read rank 1 at ceiling exposure on
+  all seven ruined facts at every checkpoint while generation collapsed underneath it, and reported
+  M1 and M2 as bit-identical across all eight slots. Any Phase 18 conclusion resting on rank alone
+  now carries that limit, propagated into the Phase 18 artifact itself.
+- **The pre-registration discipline held for four phases and 63 artifacts, and authored Phase 19
+  rather than being applied to it.** `scripts/erasure_gate.py` was committed at `23a830c` *before
+  Phase 16 ran*; `erasure_is_worth_attempting(92, 104, 0, 104)` returned True on Phase 18's measured
+  numbers, which is what admitted Phase 19 into the roadmap. `erasure_succeeded` was called exactly
+  once and returned `FAILURE`. Ancestry verified over 63 artifacts, 0 violations; zero new runtime
+  dependencies (`pyproject.toml` byte-identical, sha256-pinned).
+
+**Ship decision — `DO NOT SHIP` (Phase 19):** withholds exactly ONE claim, that the verdict is
+mechanically reproducible by the pinned CLI alone, and **withdraws no measurement**. Every number,
+the verdict, and the co-headline stand. Five pin defects (A-E) are published rather than fixed —
+editing a closed pin after the numbers exist would void the pre-registration ordering and every
+number resting on it.
+
+### Known Gaps and Deferred Items
+
+**Known deferred items at close: 6** (see STATE.md `## Deferred Items`). All six are stale status
+stamps over completed work — one debug session whose fix is evidenced by two completed Phase 18 arms,
+two quick-task SUMMARYs missing only a `status:` field, and three `human_needed` verification verdicts
+whose human gates were discharged in records written *beside* them. They were acknowledged rather than
+resolved because re-stamping the three verdicts would erase what each verifier found.
+
+**Tech debt carried forward: 16 items** across the four phases plus cross-cutting (full list in
+`milestones/v3.0-MILESTONE-AUDIT.md`). All are prose, documentation or tooling; none touches a
+measured number, a gate, or a requirement's status. Also carried: three phases whose VALIDATION.md
+was never re-stamped after execution (17, 18, 19 read PARTIAL), and B1-a — a deep-link pointer that
+cannot reach its scope limit additively, because both surfaces are frozen above their continuation
+lines.
+
+**Not a gap:** the `FAILURE` verdict and `DO NOT SHIP`. The milestone contracted to run the erasure
+under a rule committed before any number existed and publish whatever came out. It did.
+
 ## v2.0 Weight-Based Memory (Shipped: 2026-08-12)
 
 **Delivered:** Personalization that lives in the weights — a from-scratch LoRA adapter teaches user-specific facts into 331,776 parameters on a frozen conversational base, and a fresh process recalls them from an empty prompt with the context provably wiped, while from-scratch EWC keeps the fine-tune from destroying the base model. Every headline number is gated by a rule committed to git before the number existed.

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Adversarial Privacy Audit and Selective Memory Erasure
-status: milestone_complete
-stopped_at: Milestone complete (Phase 19 was final phase)
-last_updated: 2026-08-19T21:44:20.874Z
-last_activity: "2026-08-19 -- quick 260819-sgh complete: the v3.0 re-audit's three remaining warnings CLOSED, all additive, zero deletions -- W2 (README now labels the five pin defects A-E and states the four-vs-five distinction), B1-a (deep-link redirect appended rather than editing a pointer whose own next section asserts no line above it is altered), B1-b (the Phase 18 continuation now SHOWS why item (4) sits inside the scope limit while LEAKAGE_DEMONSTRATED is exempt). Milestone audit stands at tech_debt pending a re-run"
+status: Awaiting next milestone
+stopped_at: Phase 19 CLOSED — 19-16 complete, the ship decision recorded (DO NOT SHIP). Nothing blocked.
+last_updated: "2026-08-20T00:59:32.389Z"
+last_activity: 2026-08-20 — Milestone v3.0 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -25,291 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-12)
 
 ## Current Position
 
-Phase: 19
-Plan: Not started
-Status: Milestone complete
-
-**THE PHASE HAS ITS VERDICT: `FAILURE`**, its D3 condition-(c) diagnosis published BESIDE it, and
-its ship decision RECORDED by the operator on 2026-08-19: **DO NOT SHIP**.
-`ERASURE_SHIP_PENDING_LINE` now occurs **ZERO** times and `ERASURE_SHIP_RECORDED_LINE` exactly once
-— flipped by `append_ship_decision` only because a DATED continuation carrying a line from the
-closed `ERASURE_SHIP_DECISIONS` = ("SHIP", "DO NOT SHIP") was actually written, which is Phase 18's
-W2 closed rather than repeated.
-
-**THE PHASE IS CLOSED AND HONEST — NOT BLOCKED.** DO NOT SHIP is a **FINAL VERDICT on mechanical
-reproducibility**, not a pause awaiting further work, not a TODO, and not a gap for anyone to close
-later. **DO NOT REPAIR THE PIN TO FLIP IT.** The pin is CLOSED at 15 commits and D3 fixes the
-correction path as a dated continuation BESIDE the original; editing it after the numbers exist so
-the pinned path would return the verdict the hand-driven path already returned is precisely the move
-that would void the pre-registration ordering `tests/test_phase16_prereg.py` enforces against git's
-object graph — and with it every number in the report.
-
-**WHAT DO NOT SHIP WITHHOLDS — EXACTLY ONE CLAIM, AND IT IS THE SOLE REASON:** that this verdict is
-**MECHANICALLY REPRODUCIBLE BY THE PIN ALONE**. It is not. The verdict was reached on a HAND-DRIVEN
-path through the UNPINNED `scripts/phase19_run.py`, routing around the four published defects in
-`scripts/phase19_erasure.py`; the pin's own `_cmd_report` cannot produce it in four independent ways
-— **C** SystemExits on the committed rows, **the fourth** raises `TypeError` on
-`retention_perplexity`'s `[ppl, n]` pair, **A** short-circuits to INCONCLUSIVE on the order-only flag
-read, and **B** reads the superseded 0.2 floor instead of the governing `TARGET_FLOOR`.
-
-**NOTHING IS WITHDRAWN.** The `FAILURE` verdict, k = 78 of 288, the 77.6370113463966% destruction of
-the dialogue adaptation, the rank-vs-NLL **CO-HEADLINE** with its retroactive Phase 18 scope limit
-(readings paired with a generation number are unaffected), the M1/M2 bit-identical-rank comparison,
-and all four defects with their dated corrections **ALL STAND EXACTLY AS PUBLISHED**. The science
-shipped; the reproducibility claim did not.
-
-**THE COMMITTED `erasure_succeeded` WAS CALLED EXACTLY ONCE AND RETURNED `FAILURE`.** Read against
-the CORRECTED floor `0.09107873950450847` — not the pin's internal defect-B `0.2` — with the
-ORDER-NORMALISED `zero_results_have_nll`, so a perfect erasure was not misreported as INCONCLUSIVE.
-Its three reasons, verbatim: **(a)** target upper bound 0.0911 over 27 questions **<=** floor 0.0911;
-**(b)** worst non-target degradation 1.000000 **>** k=2 x 0.148148 = 0.296296; **(c)** dialogue PPL
-4.8511 vs cap 4.5837, retention PPL 3.670918 vs cap 4.029000. **(a) clears exactly on its boundary,
-(b) fails all seven, (c) fails on dialogue** — and both (c) legs were ALREADY RED on the untouched
-adapter, so every capability table prints pre beside post. Published UNSOFTENED per
-`D8_PUBLICATION_POSTURE`, in the register Phase 18 shipped `LEAKAGE_DEMONSTRATED`.
-
-**`results/phase19_erasure_report.md`** — **549 lines, sha256 `0f30b573…`**, one `## Verdict`
-section, ship-decision marker **RECORDED**. The pinned spine came out of `render_report` driven end
-to end on the REAL records; ten continuation sections are APPENDED after it because the closed
-renderer has no slot for them, under the same three produced-bytes proofs `_addendum.py` runs, and
-19-16 appended two more BESIDE the verdict: the dated (c) diagnosis (353 → 466 lines,
-`21624251…` → `3818ab53…`, 113 insertions and ZERO deletions) and the dated ship decision
-(466 → 549, `3818ab53…` → `0f30b573…`, 84 insertions and exactly ONE deletion — the replaced pending
-marker line, which is the append-only property proved on the diff rather than asserted).
-
-**ALL THREE FLOOR VALUES ARE NAMED IN THE REPORT so none is confused:** `TARGET_FLOOR`
-0.09107873950450847 (branch `reachability-min`, GOVERNS); `LITERAL_PHASE14_FLOOR` 0.2 (D2's other
-direction, never read by a gate); and the PIN-INTERNAL 0.2 (`lock_erasure_floor(0.8846153846153846)`,
-branch `ceiling`, SUPERSEDED — defect B). The two 0.2s are unrelated derivations and the report says so.
-
-**FOUR DEFECTS ON THE VERDICT PATH, ALL ROUTED AROUND WITHOUT EDITING THE PIN.** A (order-normalised
-flag passed; 10 gap strings on disk → 0 normalised, 48/48 NLLs finite), B (corrected rate off the
-correction record, proved through the PINNED `lock_erasure_floor` to reproduce `TARGET_FLOOR`),
-C (pooled 27 = 14 + 13 rows through the pin's own `per_fact_rows`), and a **FOURTH found by driving
-rather than inspecting**: `_cmd_report` hands `retention_perplexity`'s `[ppl, n]` pair where the gate
-compares a scalar — `TypeError`. So `_cmd_report` carries TWO fatal defects, not one.
-**`23a830c` is UNAMENDED at exactly one commit; the pin is byte-identical at 15.**
-
-**19-14's READ — five reads, every one with its n, and nothing compared against anything.** The
-per-cell ΔW cosine **separates the ablated region from the preserved region exactly**: all **14
-preserved cells at 1.0 to fp64 round-off** (0.9999999999999886 … 1.0000000000000169) against **22
-ablated cells spanning 0.47639907415543037 … 0.9590456893929075** (median 0.8123793589594848), with
-exactly one undefined — `(5, 'fc_in')`, the ONE cell of 22 whose **all 8** rank-1 components were
-zeroed, so its ΔW has no direction. The read's single `None` lands precisely where the ablation
-census says it must. Fisher overlap: **22 ablated cells at 1.6354876707549402 against 14 preserved
-at 0.51367324964733**, both sides with their own denominator, **no ratio published**. Cross-persona
-at the clause's own **n=3**: 108 cosines, 0.0512 … 0.3369, median 0.1253.
-
-**A THIRD INSTRUMENT, AND IT SEES WHAT RANK DID NOT — REPORTED, NOT ADJUDICATED.** Taught-vs-M2 is
-36 of 36 cells defined, every cosine in [0.8868, 0.9622]; taught-vs-M1 is 35 defined, one undefined,
-minimum 0.4764, with 14 cells at 1.0. Two different shapes on the same pair the rank instrument
-reported as bit-identical in every rank and every `exposure_bits` value. **This is DESCRIPTIVE and
-adjudicates nothing** — no threshold separates the shapes, and nothing downstream reads either
-number. Three committed scans enforce that: the producers by AST (19-05, unweakened), the consumers
-by AST across **both** the pin and the unpinned driver, and the ARTIFACTS by a key-name scan a
-source scan structurally cannot reach. Both new scans were watched RED on REAL paths and both files
-proved byte-identical afterwards.
-
-**19-14 MEASURED A LIVE BLOCKER FOR 19-15 BY DRIVING `report` RATHER THAN INSPECTING IT.** The
-pinned `report` subcommand **SystemExits on the committed arm records**: `_cmd_report` hands
-`post['per_fact']` to `nontarget_deltas` and `_nontarget_rates` proves every row carries the pooled
-27, while the committed rows carry ONE TIER's count. That is **19-09's defect C in the (b)
-position**. 19-07 fixed four `report` crashes on SYNTHETIC records; this fifth survived because
-nothing had driven it on the real ones. The pin is CLOSED — **19-15 must assemble the pooled
-27 = 14 + 13 rows through the pin's own `per_fact_rows` and call `render_report` directly.** Pinned
-as a committed test. Separately proved: the representational record DOES satisfy `render_report`'s
-reads — section 6 renders all 36 cosine cells and both Fisher denominators.
-
-**The plan's two Fisher limits are FALSIFIED and must not be carried forward.** The pinned path
-loads the committed TinyStories Fisher cache anchored at `best.pt`; it estimates nothing over the
-persona bin. It samples 512,000 tokens from `data/train.bin`'s 1,251,956,121 — overlap negligible,
-not heavy — and TinyStories has no user turns. Four limits that DO describe the measurement are
-required fields of `results/phase19_representational_reads.json`.
-
-**M2's RESULT — the reference M1 is read against, numbers only.** The omitted fact `cand_dog_zorp`
-reads **0/27** pooled (0/13 held-out, 0/14 taught) over 1,296 draws, so its falsification condition
-did NOT fire and 19-12's target number survives. **Five of seven bystanders move by exactly 0.0**
-from the taught adapter (cat_name 27/27, person_name 26/27, sibling_name 27/27, street 27/27,
-birth_year 18/27); the two that move — house_number −0.2593, hometown −0.1111 — are both BELOW the
-0.2963 margin and are two of the three facts 19-11 named as the only ones with room to move. M1's
-seven all exceed the margin and four are at total loss. Soft tier: taught 54/54 questions → M1 1/54
-→ **M2 53/54**. Capability lands on the TAUGHT adapter, not M1: dialogue 6.0079 (FAILS +1.4242),
-retention 4.2172 (FAILS +0.1882) — which is the direct evidence that M1's retention leg clearing
-was the personalization being gone, not the erasure succeeding.
-
-**HEADLINE 2 IS NOW STRONGER, NOT MERELY REPEATED.** The rank instrument reports **M1 and M2 as
-BIT-IDENTICAL across all eight slots** — every rank and every `exposure_bits` value equal. It
-therefore cannot distinguish an adapter whose bystanders generate 0/27 from one whose same
-bystanders generate 27/27. Any 19-15 row taken on rank or exposure alone reports the two as the
-same object; every one of them needs its generation number beside it.
-
-**Prior D8 decision, unchanged.** The human took **D8 branch = CLAUSE 1 (the cliff), with the
-rank-vs-NLL disagreement elevated to CO-HEADLINE.**
-
-**HEADLINE 1 — SELECTIVE ERASURE IS NOT SELECTIVE AT 331,776 PARAMETERS.** Ships unsoftened, per the
-posture committed at 19-05 before the number existed. M1 stopped at **k = 78 of 288**,
-`stopped = True` (the target left rank 1; ΔW was NOT zeroed entirely). The 78 addresses disperse over
-**all six layers** (18/12/12/17/10/9) and **all six projections** (`fc_in` 35, `fc_out` 17, `c_proj`
-13, `v_proj` 10, `k_proj` 2, `q_proj` 1) — max layer share 0.2308, max projection share 0.4487. No
-fact-localised structure exists at this capacity, and the erasure could not be confined to one fact.
-
-**HEADLINE 2 — THE RANK AND GENERATION INSTRUMENTS DISAGREE ON THE SAME WEIGHTS. CO-HEADLINE, EQUAL
-WEIGHT, NOT A CAVEAT.** At k = 78 the **rank/exposure** instrument reports a textbook selective
-erasure: only `pet_name` off rank 1 (1→2, exposure 2.000000 vs ceiling 3.000000), all seven gated
-non-targets at **rank 1 with exposure bits AT CEILING**, and no non-target rank moves off 1 at **any**
-of the eight curve checkpoints. The **NLL/generation** instrument reports the opposite: every
-collateral slot's `ans1`/mean rose monotonically, four non-targets went to 0/27, and the dialogue
-ON/OFF gap fell **1.2420966625043919 → 0.2777699357026435 (77.63701134639661% of the adaptation
-destroyed)**.
-**RETROACTIVE WEIGHT ON PHASE 18'S RANK-BASED READINGS, REQUIRED BY THE DECISION:** the same
-instrument may be **BLIND to exactly the kind of damage the generation reading reveals.** Any Phase 18
-reading resting on rank or exposure bits ALONE must be re-read with that in view; readings paired with
-a generation number are unaffected — the pairing is what makes them safe.
-
-**(a) CLEARS PERFECTLY, AND EXACTLY ON THE BOUNDARY.** **0 successes over the pooled 27** (0/13
-held-out, 0/14 taught), **1,296 draws**. Wilson upper bound **0.09107873950450847** is **EXACTLY
-EQUAL** to `TARGET_FLOOR`, **headroom 0.0**, branch `reachability-min`; `rule_of_three(27)` =
-0.1111111111111111 beside it. Target exposure rank 1 → 2. No bare `0%` anywhere (STAT-02).
-
-**(b) FAILS ON ALL SEVEN GATED NON-TARGETS.** Margin 0.2962962962962963, question unit, own
-denominator of 27, never pooled, 1,296 draws each: `street` 27/27→**0/27** (1.0); `sibling_name`
-27/27→**0/27** (1.0); `person_name` 26/27→**0/27** (0.9630); `hometown` 21/27→**0/27** (0.7778);
-`cat_name` 27/27→7/27 (0.7407); `house_number` 24/27→5/27 (0.7037); `birth_year` 18/27→8/27 (0.3704).
-**Four at total generation loss**, smallest delta 2.5x the noise floor — and **every one still reads
-rank 1**. Soft tier (DESCRIPTIVE, never gated), paired in one process: **201/486 → 1/486**.
-
-**(c) — ONE LEG STILL FAILS, THE OTHER CLEARS FOR THE WRONG REASON.** Dialogue ON
-5.815445876712191 → **4.851119149910443** against cap 4.5837288963367 — **STILL FAILS,
-+0.26739025357374313**. Retention ON 4.219759892336485 → **3.6709177253236867** against cap 4.029 —
-clears at **−0.35808227467631326**. **THE RETENTION LEG CLEARING IS THE PERSONALIZATION BEING GONE,
-NOT THE ERASURE SUCCEEDING** — it is the same destruction (b) measures, read through a metric that
-rewards the base distribution. Both legs were ALREADY RED on the untouched adapter (19-10/19-11), so
-the pre column ships beside every post one.
-
-**`bit_identity_max_abs_diff` = 0.0**, measured over 5 prompts **BY PATH** against
-`checkpoints/phase19_m1_erased_adapter.pt` (the 19-06 widening) with the measured path recorded in the
-artifact — so the control cannot have passed while reading the production adapter. The ON/OFF demo
-claim survives the erasure. Round-trip audits clean: 78/78 ablated components zero on disk, 72 tensors
-bit-identical, 331,776 params. `assert_phase18_parity` PASSED — corpus `ff8e6e3c…` verbatim, 216
-entries, A2/K=48, **10,368 draws** in 68.6 min, seed 1337.
-
-**DEFECT A FIRED EXACTLY ON THE SUCCESS PATH, AS PREDICTED.** `zero_results_have_nll` reads **False
-on disk** and **True order-normalised**; 10 gap strings on disk, **0** order-normalised; **48/48 NLLs
-finite** across 8 slots. `run_erasure_arm` writes `sort_keys=True` while the check compares an ORDERED
-tuple, so the flag fails on **key order alone** — and `erasure_gate` short-circuits to INCONCLUSIVE
-when successes are 0 AND the flag is False, i.e. on the ONLY outcome that clears (a). Both readings
-are published; the pin was NOT edited (D3). **19-15 MUST read the order-normalised flag and say so.**
-
-**THE HUMAN-ORDERED RE-SWEEP RETRACTED NOTHING.** Run on the operator's premise that the |R|=6 defect
-had contaminated k. **The premise is false:** both sweeps through the pinned `select_ablation_prefix`,
-one process, same adapter — **k = 78 reproduced ADDRESS-FOR-ADDRESS on |R| = 8**; the twin measures
-**120** on |R| = 6 (and would have taken `sibling_name` to rank 2). The curve's self-reported
-`reference_set_size` = 8 is now confirmed by measurement, not trust. Curve, erased adapter, arm record
-and target scores all **STAND**. **WITHDRAWN:** the 19-12 checkpoint's framing of that defect as
-touching the committed number — the defective path was not the path that ran.
-
-**THE |R|=6 DEFECT IS RECORDED AS CORRECTABLE, BY EXTENDING THE EXISTING RECORD** — a SECOND dated
-continuation appended to `results/phase19_reference_set_correction.md` through `scripts/_addendum.py`,
-never a competing second document. It adds: the defect at `scripts/phase19_erasure.py:3576` (with
-`:3578` in the SAME call reading eight); the fix as a **dispatch** (a taught target takes
-`extraction.reference_set_for`, a calibration target keeps the twin at `:3096`); why it cannot land in
-the CLOSED pin (15 commits vs 20 tracked `results/phase19_*` artifacts, and `adds[-1]` is the EARLIEST
-add so delete-and-re-add cannot launder it); and the tripwire exercised **RED at 6 / GREEN at 8** in
-one run, with the committed curve read-only and byte-identical before and after.
-
-**TWO MORE PLAN INSTRUCTIONS FALSIFIED BY THE PIN.** (1) **`results/phase19_arm_m1.json` CANNOT
-EXIST** — `arm_record_path` proves `arm in ERASURE_ARMS` = `('cal-erased', 'erased', 'replicate',
-'retrain')` and refuses `'m1'`; the record is `results/phase19_arm_erased.json`. **FIFTH naming
-failure this phase — read the constant, never the plan's spelling.** (2) **The plan's Task-2 verify
-command cannot pass as written** — it reads `r['target']`, `r['nontarget']`, `r['soft_descriptive']`
-off the arm record, but `_arm_record` proves `tuple(fields) == ARM_RECORD_KEYS` as ORDERED HARD
-EQUALITY over nine keys containing none of them; the scores live in
-`results/phase19_target_scores.json`.
-
-**The pin is byte-identical and still 15 commits** (sha256
-`c407246de3c470094ab0bdd868961b7b1c22529c5e00522fec67c3852cb6e303`, re-measured this session);
-`scripts/phase18_extraction.py` still **26**. Full suite at close: **837 passed, 1 skipped**; ruff
-check + format clean over 170 files; `grep -rn '0%' results/phase19_*` returns nothing.
-
-Adapters on disk, gitignored, never delete or move: `checkpoints/persona_adapter.pt` (1,350,523 B,
-`226f2ae5…`, the PRODUCTION taught adapter — **INTACT, 19-13 consumes it**);
-`checkpoints/phase19_m1_erased_adapter.pt` (1,351,367 B, `13f59301…`, **the erased artifact 19-14/19-15
-read**); `checkpoints/phase19_erase_dialogue_floor_seed1337_adapter.pt` (1,352,991 B, `f12ab4c3…`) and
-`…seed2024_adapter.pt` (1,352,991 B, `3fd5aba4…`);
-`checkpoints/phase19_cal_erased_adapter.pt` (`e3cb42b8…`) and
-`checkpoints/phase19_erase_calibration_adapter.pt` (`bc616c36…`), all unchanged.
-
-Carried forward to 19-16 and now DISCHARGED: the report was **EXTENDED, never re-rendered** — both
-19-16 continuations went through `_addendum.append_addendum`, insertions only apart from the one
-replaced marker line, with the `## Verdict` body byte-identical across each append.
-`append_ship_decision` got its DATED continuation carrying a line from `ERASURE_SHIP_DECISIONS`, so
-the marker flipped on a decision that actually exists. `23a830c` stays unamended at one commit.
-`src/personacore/evaluation/perplexity.py:11-13`
-states a stale denominator invariant (`corpus_len - n_windows`; the true value is `corpus_len - 1` =
-1,000,285 because the `[i : i+block+1]` slices share boundary tokens) — prose only, no measured number
-is wrong, logged in `.planning/phases/19-selective-memory-erasure/deferred-items.md`.
-Phase 19 was admitted on 2026-08-17 by the rule committed at `23a830c` before Phase 16 ran —
-`erasure_is_worth_attempting(92, 104, 0, 104)` → True. The gate authored the phase.
-Last activity: 2026-08-19
-DO NOT SHIP.** (Appended a dated 2026-08-19 continuation through `append_ship_decision`, which
-flipped `ERASURE_SHIP_PENDING_LINE` -> `ERASURE_SHIP_RECORDED_LINE` only because the section carries
-a decision line from the closed set AND a date — measured after: PENDING x0, RECORDED x1. Report
-466 -> 549 lines, `3818ab53…` -> `0f30b573…`, **84 insertions and exactly ONE deletion, that deletion
-being the replaced marker line** — append-only proved on the diff. Verdict body byte-identical,
-`FAILURE` unsoftened. **THE WITHHELD CLAIM IS NAMED AS THE SOLE REASON:** the verdict is not
-MECHANICALLY REPRODUCIBLE BY THE PIN ALONE — reached on a hand-driven path through the UNPINNED
-`phase19_run.py`, and the pin's own `_cmd_report` cannot produce it four independent ways (C
-SystemExits, the fourth raises `TypeError`, A short-circuits to INCONCLUSIVE, B reads the superseded
-0.2 floor). **NOTHING WITHDRAWN** — FAILURE, k=78 of 288, 77.6370113463966% destroyed, the
-rank-vs-NLL CO-HEADLINE with its Phase 18 scope limit, the M1/M2 comparison and all four dated defect
-corrections STAND. This is a FINAL verdict, not a pause: nobody should repair the pin to flip it,
-because editing a CLOSED pin after the numbers exist voids the pre-registration ordering and every
-number with it. ERASE-01 discharged by artifact reference — it is a scoped BULLET at
-`REQUIREMENTS.md:165`, not a checkbox, and no checkbox was manufactured to tick. Fresh verification:
-845 passed / 1 skipped, ruff check + format clean over 170 files, `erasure_gate.py` still ONE commit
-`23a830c`, pin still 15 commits byte-identical at `c407246d…`. `gsd-sdk query state.update` was NOT
-used on this file — it corrupted it twice this phase on the same multi-line-field assumption, so
-these edits were made by hand.)
-
-Prior activity: 2026-08-19 -- 19-16 tasks 1-2 executed
-(the D3 condition-(c) diagnosis published BESIDE the verdict, appended through the existing
-`_addendum.append_addendum` with the Phase 19 marker pair passed as an IDENTITY replacement so the
-ship marker stays PENDING for a human — Phase 18's W2 was an unconditional flip. Report 353 -> 466
-lines, `21624251…` -> `3818ab53…`, 113 insertions and ZERO deletions, verdict body byte-identical.
-Both (c) readings side by side with the gate's row labelled, and the diagnostic row stated as NOT a
-pass because its 0.974710 of headroom IS the destroyed adaptation. `docs/REPORT.md` carries both
-headlines and the Phase 18 scope limit; ERASE-01 and ERASE-02 marked against RUNS. NINTH naming
-failure — the plan names `results/phase19_arm_m2.json` and `results/phase19_m2_training.log`, both
-ABSENT; the real ones are `phase19_arm_retrain.json` / `phase19_retrain_training.log`. `gsd-sdk query
-state.update` CORRUPTED this file and was reverted by hand: it mirrored `stopped_at` from the stale
-`Stopped at:` line below, flipped `status` to `completed`, and replaced only the FIRST line of this
-multi-line paragraph)
-
-Prior activity: 2026-08-19 -- 19-15 executed (THE VERDICT: `erasure_succeeded` called EXACTLY ONCE,
-returned **FAILURE**, read against the CORRECTED floor 0.09107873950450847 with the ORDER-NORMALISED
-`zero_results_have_nll`. (a) clears exactly on its boundary at 0/27 pooled; (b) fails all seven;
-(c) fails on dialogue. `results/phase19_erasure_report.md` rendered by driving the pinned
-`render_report` end to end on the real records — 353 lines, `21624251…`, ship decision left PENDING.
-All three floor values named so none is confused. FOUR defects routed around without editing the pin,
-the fourth found by driving: `_cmd_report` hands `retention_perplexity`'s `[ppl, n]` pair where the
-gate compares a scalar. Eighth plan-instruction failure — the Task-2 verify greps `Ship decision`,
-which matches neither the pin's `Ship Decision` heading nor its lowercase pending line. 845 passed /
-1 skipped, lint clean, pin byte-identical at 15 commits, `23a830c` unamended at one)
-
-Earlier activity: 2026-08-19 -- 19-13 executed (ERASE-02 discharged by a RUN: M2 retrained without the
-target in `wall=81s`, the fourth measurement of that figure, and scored at A2/K=48 over 10,368 draws
-with parity ENFORCED. Omitted fact 0/27 — falsification condition did NOT fire. Five of seven
-bystanders at delta exactly 0.0, the two movers both below the margin. Soft 53/54 against M1's 1/54.
-Capability lands on the taught adapter, both legs still red. THE RANK INSTRUMENT READS M1 AND M2 AS
-BIT-IDENTICAL ACROSS ALL EIGHT SLOTS. Defect A fired again, 2 gaps on disk vs 0 normalised, 48/48
-NLLs finite. Sixth naming failure — all three plan-named artifacts refused by the pin; both plan
-verify commands fail as written. Pin still 15 commits byte-identical, 837 passed / 1 skipped)
-
-Prior activity: 2026-08-19 -- 19-12 executed and CLOSED at its checkpoint (target ERASED at k=78 of
-288; D8 = the cliff with rank-vs-NLL as CO-HEADLINE and explicit retroactive weight on Phase 18's
-rank-based readings; (a) perfect at 0/27 exactly on the floor; (b) fails on all seven, four at total
-loss; (c) dialogue still fails, retention clears only because the personalization is gone; defect A
-fired on the success path; re-sweep retracted nothing; pin still 15 commits, 837 passed / 1 skipped)
+Phase: Milestone v3.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-20 — Milestone v3.0 completed and archived
 
 ## Performance Metrics
 
@@ -650,6 +369,28 @@ artifacts and all 3 were resolved rather than acknowledged — `15-VERIFICATION.
 `human_needed` → `passed` after its two human items passed, and two quick-task SUMMARYs renamed to
 the `SUMMARY.md` filename `audit-open.ts:84` actually reads. Final scan: 0 items.
 
+**At v3.0 close (2026-08-19): 6 items acknowledged and deferred.** Unlike v2.0, these were NOT
+resolved before close — because for three of them resolving would have destroyed evidence. All six
+were individually investigated and every one is a **stale status stamp over completed work**, not
+unfinished work. `gsd-sdk query audit-open` counts stamps; it cannot read the discharge records
+written beside them.
+
+| Category | Item | Evidence it is a stale stamp, not open work | Deferred At |
+|----------|------|--------------------------------------------|-------------|
+| debug | `draw-all-utf8-decode-crash` (`status: fixing`, updated 2026-08-16) | **The fix landed and the tree proves it.** The session was opened when `phase18_extraction.py --arm adapter-on` died 6m37s in (pid 30288) on `UnicodeDecodeError` at `bpe.py:209`. Both Phase 18 arms subsequently RAN TO COMPLETION at 42,480 draws each and are committed (`results/phase18_arm_adapter-on.json`, `…adapter-off.json`), and `results/phase18_extraction_report.md:320` records that the "decode-crash root cause found mid-run was fixed and re-verified against the same reproduced control before either arm re-launched." The session file was never re-stamped from `fixing` to resolved. | v3.0 close |
+| quick_task | `260819-r1u-close-b1-readme-v3-catchup` | SUMMARY.md exists and is complete (199 lines, all three gate tables populated). It carries **no `status:` frontmatter field**, which is the only thing `audit-open` reads. Work is committed at `7af6006`, `24d49ad`. | v3.0 close |
+| quick_task | `260819-sgh-close-w2-b1a-b1b` | Same defect class — SUMMARY.md complete, no `status:` field. Work committed at `4012a61`, `c90d0c8`, `98d0a60`. | v3.0 close |
+| verification_gap | `17-VERIFICATION.md` — `status: human_needed` | **Discharged 2026-08-15.** All four human items were decided and executed (`1383773`, `3c31648`, `a260d96`); item 4 exceeded its own scope — five malformed frontmatters found where two were reported, all five repaired. **NOT re-stamped, deliberately.** The file's own discharge section states it "records the discharge rather than editing the `human_needed` verdict above, **which stands as what the verifier found**." | v3.0 close |
+| verification_gap | `18-VERIFICATION.md` — `status: human_needed` | **Discharged.** W2 (ship decision) closed — `results/phase18_extraction_report.md:307` now carries `## Dated continuation — 2026-08-17: the ship decision, recorded`. W3 (stale ledger) closed — ROADMAP shows 18-15/18-16 checked, STATE.md reads 54/54. W1 closed for 2 of its 6 measured misattributions; the residual is logged as tech debt in the v3.0 audit. | v3.0 close |
+| verification_gap | `19-VERIFICATION.md` — `status: human_needed` | **Discharged.** W2 closed at `f98ea9f` — `docs/REPORT.md:1229-1234` now names six bounds including "not mechanically reproducible by the pinned CLI alone", with a full `### Ship Decision — DO NOT SHIP` section. W3 closed by the ordinal reconciliation at `results/phase19_reference_set_correction.md:224-243`. I1 closed at `acd26a0`. The one item no tool can discharge remains: that the five checkpoint decisions were made by the human at the times recorded — an operator attestation, not a code fact. | v3.0 close |
+
+**Why acknowledged rather than resolved.** For the three verification gaps, re-stamping
+`human_needed` → `passed` would overwrite what each verifier actually found in order to satisfy a
+counter. This project's own standard forbids it, and `17-VERIFICATION.md` says so in its own words.
+The discharge records sit beside the verdicts, where they belong. The debug session and the two
+quick-task stamps could have been fixed cheaply, but were acknowledged with the rest so the close
+carries one coherent record rather than a partially-groomed one.
+
 Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with current status:
 
 | Category | Item | Status | Deferred At |
@@ -669,38 +410,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- ~~Execute 19-03: the BLIND calibration floor rule.~~ **DONE 2026-08-17** (`6969e47`, `48f8ce1`).
-  The floor-DERIVATION rule is pinned, not the constant — the constant cannot exist until the blind
-  calibration runs at 19-06. The budget it must land inside is `[0.091079, 0.20]`, and reachability
-  is now PROVED at import rather than inferred from two numbers: `assert_erasure_floor_reachable`
-  sweeps the closed unit interval on every import, so an unclearable (a) fails in milliseconds
-  instead of after the calibration adapter, the calibration erasure, the noise-floor runs and the
-  target erasure have all spent their compute
-
-- The floor rule's severity is BRANCH-DEPENDENT and 19-06's report must print the branch beside the
-  number: below `cal_rate = 0.1518` the reachability clamp binds and (a) clears ONLY on a perfect
-  erasure (0 of 27); at or above 0.3333 the ceiling saturates at 0.20 and the blind calibration
-  stops discriminating entirely (667 of 1001 swept rates). `floor_branch()` is the committed reporter
-
-- Do NOT write `import math` into `scripts/phase19_erasure.py`. It is guarded (T-19-08) and the
-  guard's reason is still live; `int()` on a `_prove`d non-negative domain is the committed
-  substitute, with its equivalence measured against a `math.floor` oracle in the test
-
-- The target is pinned as `TARGET_SLOT` and there is deliberately NO `TARGET_FACT_ID` constant —
-  resolve it at runtime with `target_fact_id(records)`. Writing the id into a source file reddens
-  the committed value scan, because every core fact_id embeds its own locked value
-
-- Pooling n = 27 is TWO `aggregate_questions` calls summed afterwards, never one merged-tier call:
-  the function hard-`_prove`s a single tier and `scripts/phase18_extraction.py` is uneditable at
-  `99716e0`, so there is no widening path. 19-04/19-05's arm runners must do it this way or abort
-
-- NO `results/phase19_*` artifact may be committed by 19-03..19-07. That ordering is the scientific
-  guarantee of this phase, and the guard is already armed to catch a violation
-
-- Do not let planning re-author the success criteria. (a)/(b)/(c), the verdict domain, and the
-  descriptive-only status of representational consistency come from `ERASURE_DECISION_RULE`; a plan
-  that converts ΔW cosine or Fisher overlap into pass/fail is violating the pre-registration
-
-- Reuse, do not rebuild: Phase 18's taught-frame span NLL is what keeps a zero-recall result out of
-  INCONCLUSIVE (`zero_results_have_nll`), and post-erasure recall must be scored by the same
-  adversary at the same budget
+- Start the next milestone with /gsd-new-milestone
