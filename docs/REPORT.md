@@ -1312,3 +1312,15 @@ arm, with its rate and its one-sided 95% Wilson lower bound; the adapter-off con
 verdict itself; and the `(92, 104, 0, 104)` Phase 19 handoff computed from those four question-unit
 counts. Nothing above is withdrawn, qualified or narrowed. What this section adds is a pointer the
 outbound link could not carry.
+
+## Figure Corrections to the Section Above (recorded 2026-08-19)
+
+*Appended additively. No line above this heading is altered.*
+
+Two figures in the section above are wrong. They are corrected here rather than edited in place,
+and nothing else in that section changes.
+
+| location | as published | correct |
+| --- | --- | --- |
+| `:1283-1284` | "the token-length spread and **the three reductions**" | the token-length spread and **both reductions** — the table carries three frames and two reductions |
+| `:1278` | "It sits **190 lines above** the dated continuation" | It sits **far above** the dated continuation |
