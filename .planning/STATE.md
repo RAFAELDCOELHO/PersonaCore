@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 executing — plan 4 of 7 complete, wave 3 done
-last_updated: "2026-08-20T20:22:00.000Z"
+stopped_at: Phase 20 executing — plan 5 of 7 complete, wave 4 done, the pin is CLOSED
+last_updated: "2026-08-20T20:48:36.644Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 7
-  completed_plans: 4
-  percent: 57
+  completed_plans: 5
+  percent: 71
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — EXECUTING
-Plan: 5 of 7 (wave 3 complete — 20-04 done)
+Plan: 6 of 7 (wave 4 complete — 20-05 done)
 Status: Executing Phase 20
-Last activity: 2026-08-20 — 20-04 complete: condition (c)'s two legs exist in their corrected asymmetric form (dialogue_gap_band, retention_cap) and mitigation_point_verdict returns (verdict, reasons, arm) over 21 required keyword-only arguments with three differentially-proved INCONCLUSIVE branches
+Last activity: 2026-08-20 — 20-05 complete: **the pin is CLOSED.** `scripts/mitigation_gate.py` now carries the per-arm existential, K's ratchet and promotion rule, GATE-10's capacity comparison with both branches and the D-26 fallback committed, three module-scope fixtures and a six-outcome `__main__` whose every branch was watched firing. sha256 `86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14` — the last permitted change to that file
 
 ## Performance Metrics
 
@@ -107,6 +107,7 @@ Last activity: 2026-08-20 — 20-04 complete: condition (c)'s two legs exist in 
 | Phase 20 P02 | 18min | 2 tasks | 1 files |
 | Phase 20 P03 | 13min | 2 tasks | 2 files |
 | Phase 20 P04 | 18min | 2 tasks | 1 files |
+| Phase 20 P05 | 18min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -336,6 +337,13 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 20]: 20-04: all three INCONCLUSIVE branches were proved DIFFERENTIALLY against the verdict they override, not merely observed returning INCONCLUSIVE — GATE-05 (early return, before any reason, 1-element list) and GATE-06 (late return, 5 reasons, per-condition detail preserved) each flip a kwargs set that returns FAIL; GATE-08 flips a kwargs set that returns PASS, appending a reason opening with the module constant REPLICATION_PENDING_MARKER = "clears all three conditions, replication pending" so plan 20-05's promote_to_full_fidelity can tell a gate-candidate INCONCLUSIVE from a truncated-sweep one without a second hand-typed spelling
 - [Phase 20]: 20-04: plan 20-04 Task 1's acceptance criterion `'V20_RETENTION_NOISE_FLOOR' in src` is False is UNSATISFIABLE and was already so when written — scripts/mitigation_gate.py:25 is 20-01's OWN module docstring explaining why that name is never imported, and the same task's action text requires the name's substance in retention_cap.__doc__. The INTENT was verified instead: the name is absent from the from-import list (AST) and 0.068930 appears as no numeric constant. Second unsatisfiable substring-scan criterion in this phase after 20-03's `grep -c "shell=True"`; the same lesson applies — audit by AST, never by substring
 - [Phase 20]: 20-04: NO requirement marked complete — GATE-01/02/03/04/05/06/08 are all touched here but GATE-07's per-arm existential, GATE-09's six-outcome __main__ and CAL-04's promotion rule are 20-05's, and 20-06 owns the audits that prove the keyword-only/no-retyped-baseline properties in CI. Tenth application of 17-01's recorded over-claim-avoidance pattern
+- [Phase 20]: 20-05: **THE PIN IS CLOSED.** scripts/mitigation_gate.py is COMPLETE at sha256 86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14, 1,431 lines, 614 insertions / 0 deletions across three commits (0bdcedf, 546134d, abf9072). From plan 20-07's first `results/phase20_*` commit onward, any commit touching that file turns test_phase20_prereg_is_frozen_before_every_phase20_result permanently RED, and `git rm` plus re-add CANNOT launder it — the guard takes adds[-1], the EARLIEST add, proved empirically across five states in 20-03. The correction path is recorded in the module's OWN docstring: append_addendum(path, addendum, *, pending, recorded) — both keywords required, signature read from scripts/_addendum.py:55 — plus a machine-readable artifact carrying a `governs` field and a tripwire test, never an edit (D-24)
+- [Phase 20]: 20-05: GATE-07's existential is UNFORMABLE over the union, not merely discouraged — exists_clearing_point(*, points, arm) _proves every point's third field equals `arm` BEFORE computing anything, so "there exists a clearing point" across dp and adversarial aborts with SystemExit naming both arms. Only PASS satisfies it (an INCONCLUSIVE is by construction not a clear, D-29, or the GATE-08 branch that returns INCONCLUSIVE over a would-be PASS would be undone by the next function that read it). An empty point list raises ValueError rather than returning (False, …): a missing measurement is not a negative result, and the not-cleared claim carries its denominator ("0 of 2 point(s) examined")
+- [Phase 20]: 20-05: the K RATCHET has ONE implementation and promote_to_full_fidelity CALLS it — ratchet_k(*, fixed_k, proposed_k) _proves both values are K_RUNGS members and proposed_k >= fixed_k, message quoting phase18_extraction.py:84-93 (fewer draws is less power to observe extraction, i.e. an EASIER null, so a post-null reduction buys the very result it reacts to; pre-flight was "the one moment the pin leaves open for it" and for v4.0 that moment is Phase 23's rung SELECTION). K reaches the gate as a REQUIRED KWARG (D-20), so imports stay {erasure_gate, pathlib, sys} and mitigation_budget is never imported. Verified: full_k below curve_k raises through the single ratchet, not a duplicate
+- [Phase 20]: 20-05: GATE-10 is TOTAL and both branches were committed before either capacity ran — _CAPACITY_DISPATCH keys all four (small_cleared, large_cleared) pairs with a MODULE-SCOPE _prove of key-set totality and value-set containment, so there is no fall-through to add an investigate-the-instrument escape hatch into (the Phase 16 licensed_headline lesson: the outcome the evidence predicted is a FIRST-CLASS branch, phase16_ladder.py:305-306). Comparability is STRUCTURAL with a ZERO tolerance constant on MECHANISM_KEYS = ("sigma","steps","delta","q") (D-25); the D-26 fallback raises SystemExit naming D-26 AND CAL-03 when its tolerance is unset, so the third chosen constant is flagged rather than smuggled and must be decided before Phase 21's CAL-03 runs
+- [Phase 20]: 20-05: the __main__ block carries ZERO float literals, DELIBERATELY — 20-06 Task 2's _module_scope_floats collects floats inside module-scope ast.Assign nodes excluding FIXTURE_*, and an assignment inside `if __name__ == "__main__":` IS module scope under _enclosing_functions (which records module scope as None rather than dropping it). So D-12's counterfactual X is DERIVED as wilson_upper_bound(0, 104) + MARGIN_K * (4 / 27) — 4/27 is the published (b) floor's own derivation, phase19_floor.py:106-113, hometown 21/27 -> 17/27 — reproducing 0.3216515249612375 bit-exactly and tolerating 25/104, and the mechanism mapping is dict.fromkeys(MECHANISM_KEYS, 1). Deliberately NOT routed through extraction_ceiling: its provenance tripwire would correctly refuse a non-target-recall floor, and labelling it never-taught to get through would be a lie inside the fixture
+- [Phase 20]: 20-05: the module's numeric surface, as the stated expectation 20-06 asserts against — module-scope ASSIGNED floats outside FIXTURE_* are exactly {0.5, 0.7}; CHOSEN_CONSTANTS is 2 entries; the FIXTURE_* name set is exactly {FIXTURE_CLEARING_POINT, FIXTURE_DESTROYED_MODEL, FIXTURE_TRUNCATED_SWEEP}; every one of the 18 other float constants in the file lives inside a FIXTURE_* assignment; the five-name from-import list did NOT grow; `grep -ci provisional` is 0; 0.005214448168350039 is still present ONCE as a docstring substring and absent as a numeric constant. FIXTURE_DESTROYED_MODEL's four published fields were asserted equal to the parsed results/phase19_arm_erased.json, with retention_ppl INDEXED as a LIST and control_gap written AS THE SUBTRACTION (the true double is 1.2420966625043919; the short form 1.242096662504392 is a different float and appears nowhere)
+- [Phase 20]: 20-05: NO requirement marked complete — GATE-07/08/09/10 and CAL-04 are all implemented here, but the CI guards that turn this session's one-shot observations into standing facts are 20-06's. Eleventh application of 17-01's recorded over-claim-avoidance pattern. ALSO: gsd-sdk state handlers misbehaved a FIFTH time — state.advance-plan overwrote frontmatter stopped_at with the stale "Completed 20-04-PLAN.md" and set percent: 0; state.update-progress returned "Progress field not found in STATE.md" AND re-corrupted the same two fields while mirroring body prose into last_activity; state.record-metric and state.add-decision both rejected their own documented positional argv ("phase, plan, and duration required" / "summary required"). All repaired by hand; the metric row and these decision entries were written by hand
 
 ### Roadmap Evolution
 
@@ -468,8 +476,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-20T20:22:00.000Z
-Stopped at: Completed 20-04-PLAN.md
+Last session: 2026-08-20T20:48:36.637Z
+Stopped at: Completed 20-05-PLAN.md — the pin is CLOSED
 Resume file: None
 
 ## Operator Next Steps
