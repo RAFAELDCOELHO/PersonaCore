@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 executed 7/7 plans but REOPENED — verification returned gaps_found (5/6 must-haves); GATE-06 needs a dated continuation before Phase 23
-last_updated: "2026-08-20T22:40:00.000Z"
-last_activity: 2026-08-20
+stopped_at: Phase 20 executed 7/7 plans but REOPENED — verification returned gaps_found (5/6 must-haves) and 20-SECURITY.md is blocked at threats_open 2; gap-closure plans 20-08..20-12 are now planned and ready to execute. GATE-06 needs its dated continuation before Phase 23
+last_updated: "2026-08-21T13:53:13.424Z"
+last_activity: 2026-08-21 -- Phase 20 gap-closure planning complete (5 plans, 5 waves)
 progress:
   total_phases: 9
   completed_phases: 0
-  total_plans: 7
+  total_plans: 12
   completed_plans: 7
-  percent: 100
+  percent: 58
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — REOPENED (gaps_found)
-Plan: 7 of 7 (wave 6 complete — 20-07 done)
-Status: 7/7 plans executed and the goal was achieved (ordering verified against the commit DAG), but 20-VERIFICATION.md returned gaps_found at 5/6 must-haves. SC3 partial: GATE-06 decides sweep coverage on raw rates while condition (a) decides on wilson_upper_bound — reproduced in both directions (spurious INCONCLUSIVE and spurious FAIL; no spurious PASS constructible) — and there is no sweep_heldout_recalls parameter at all. The pin is permanently uneditable, so the fix is a dated continuation via scripts/_addendum.py plus an armed tripwire. Next: `/gsd:plan-phase 20 --gaps`.
-Last activity: 2026-08-20 — 20-07 complete: **the first v4.0 artifact has landed and the ordering is now irreversible.** `scripts/phase20_run.py` (UNPINNED, committed `669d082` with NO results file) measured the adapter-regime retention noise floor on MPS; `results/phase20_retention_floor.json` followed in its OWN commit `9bb34ad`, strictly after a pushed and unmodified pin. **The seed-1337 bit-identity control passed EXACTLY** — `abs_delta = 0.0` on both readings against `results/phase19_noise_floors.json`'s published block, and against a DIFFERENT adapter file — so the instrument was verified before the seed-2024 reading was taken at all. Every D-06 expectation reproduced with zero disagreement: floor `0.008681618994239138`, cap `3.9085032379884783` (the borrowed Phase 12 full-fine-tune `0.068930` is `7.94x` larger and its cap `4.029` correspondingly looser — **the re-measurement is TIGHTER, not easier**). **The ancestry guard has stopped being VACUOUS**: `tracked_artifacts` `0 → 1`, `checked` `0 → 9`. `scripts/mitigation_gate.py` is still sha256 `86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14`, appears in neither of this plan's commits, and is now **PERMANENTLY UNEDITABLE** — every correction from here is a dated continuation via `scripts/_addendum.py` plus an armed tripwire (D-24)
+Plan: 7 of 12 (waves 1-6 executed; gap-closure waves 1-5 planned, 0 executed)
+Status: Ready to execute — gap-closure plans 20-08..20-12. The original 7 plans executed and the phase GOAL was achieved (ordering verified against the commit DAG), but 20-VERIFICATION.md returned gaps_found at 5/6 must-haves and 20-SECURITY.md is `status: blocked` with `threats_open: 2` (T-20-21, T-20-19). SC3 partial: GATE-06 decides sweep coverage on RAW rates while condition (a) decides on `wilson_upper_bound` — reproduced in BOTH directions (spurious INCONCLUSIVE and spurious FAIL; no spurious PASS constructible under self-consistent inputs) — and there is no `sweep_heldout_recalls` parameter at all, so the held-out leg of a pair-valued Y has no coverage check. The pin is permanently uneditable, so the fix is a new UNPINNED `scripts/phase20_gate_coverage.py` plus `results/phase20_gate_coverage_correction.{md,json}` and an armed tripwire (D-34/D-35). Does not block Phase 21; MUST close before Phase 23.
+Last activity: 2026-08-21 -- Phase 20 gap-closure planning complete: 5 plans in 5 waves, 3 revision iterations, all 3 blockers from the final check verified fixed on disk
 
 ## Performance Metrics
 
@@ -493,16 +493,19 @@ Resume file: None
   was committed and pushed before `results/phase20_retention_floor.json`'s first add (`abf9072` is an
   ancestor of `9bb34ad`, verified mechanically), and the ancestry guard is green with `checked = 9`
   against `tracked_artifacts = 1` — no longer the vacuous `0 == n x 0` it read through waves 1-5.
+
 - **`scripts/mitigation_gate.py` MUST NOT BE EDITED AGAIN — ever.** The guard takes `adds[-1]`, the
   EARLIEST add, so a `git rm` plus re-add cannot launder a post-artifact edit (measured across five
   states in a throwaway repo, plan 20-03). The ONLY legal correction is a dated continuation via
   `scripts/_addendum.py::append_addendum(path, addendum, *, pending, recorded)` — both keywords
   required, and the module refuses a second append — plus an ARMED TRIPWIRE TEST that fires when a
   later plan would consume the wrong value (D-24). A prose note gets missed.
+
 - **Carry this number forward to Phase 25:** the v4.0 retention cap is `3.9085032379884783`, from the
   measured adapter-regime floor `0.008681618994239138`. It is NOT `4.029` — that cap comes from a
   Phase 12 full-fine-tune floor and governs Phase 19 only. `retention_cap` has no default for the
   floor, so a caller cannot fall back to the wrong one silently, but it also cannot be omitted.
+
 - Next: `/gsd-verify-work` on Phase 20, then plan Phase 21 (the privacy unit, the DP data path, and
   the n=64 corpus).
 
