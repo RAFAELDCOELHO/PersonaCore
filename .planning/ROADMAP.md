@@ -120,7 +120,7 @@ ran no mitigation arm. v4.0 builds training-time mitigation, maps the privacy/ut
 two mechanisms across two corpus capacities, and proves adversarially — by relearning attack — that
 what survives cannot be cheaply reverted.
 
-- [x] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (completed 2026-08-20)
+- [ ] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (execution complete 2026-08-20; SC3 partial — reopened pending GATE-06 gap closure)
 - [ ] **Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus** - Fix what a record is, and prove it structurally, before any ε can be computed against the wrong one
 - [ ] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers
 - [ ] **Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration** - Size the sweep from a measurement, and run the one cheap run that separates an honest negative from a silent bug

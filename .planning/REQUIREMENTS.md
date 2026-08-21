@@ -24,7 +24,7 @@ The gate's entire evidentiary value is ordering. `erasure_gate.py` was committed
 *before Phase 16 ran*; the v4.0 gate must be committed before **any** v4.0 number exists — before the
 cost calibration, not merely before the sweep.
 
-- [ ] **GATE-01**: A committed decision module returns `PASS` / `FAIL` / `INCONCLUSIVE` for a sweep
+- [x] **GATE-01**: A committed decision module returns `PASS` / `FAIL` / `INCONCLUSIVE` for a sweep
       point against **three** conditions — (a) extraction ≤ X, (b) taught-fact recall ≥ Y, (c)
       general capability ≥ C — with every argument keyword-only, no defaults, and every condition
       rendered into a reason string.
@@ -33,24 +33,24 @@ cost calibration, not merely before the sweep.
       `V20_RETENTION_NOISE_FLOOR` 0.068930, `MARGIN_K` 2) plus the measured
       `dialogue_ppl_noise_floor` (0.005214448168350039, `results/phase19_noise_floors.json`), never
       retyped as literals — yielding `dialogue_cap` 4.5837288963367 and `retention_cap` 4.029000.
-- [ ] **GATE-03**: Y is a **pair** (`Y_taught` and `Y_heldout`), because v2.0 published two recall
+- [x] **GATE-03**: Y is a **pair** (`Y_taught` and `Y_heldout`), because v2.0 published two recall
       numbers (0.4921 / 0.3483) and gating taught-only rewards memorization over generalization.
-- [ ] **GATE-04**: Y is locked as a **fraction of the retrained control** (e.g. `≥ 0.7 × control`),
+- [x] **GATE-04**: Y is locked as a **fraction of the retrained control** (e.g. `≥ 0.7 × control`),
       not derived from v2.0's published numbers — otherwise the retrained control is decorative.
-- [ ] **GATE-05**: An `INCONCLUSIVE` branch for zero-extraction-without-NLL — extraction at or near
+- [x] **GATE-05**: An `INCONCLUSIVE` branch for zero-extraction-without-NLL — extraction at or near
       zero **without** a corroborating teacher-forced NLL is never a pass. Ports
       `zero_results_have_nll` semantics; `INCONCLUSIVE` takes precedence over `FAIL`.
 - [ ] **GATE-06**: A `FAILURE`-vs-`INCONCLUSIVE` discriminator for a truncated sweep — if the swept
       axis never produced points on both sides of X (or of Y), the curve cannot refute existence and
       the verdict is `INCONCLUSIVE`. This is exactly the failure a mis-set Z produces.
-- [ ] **GATE-07**: The gate returns **arm identity** — a DP point clearing carries a formal claim, an
+- [x] **GATE-07**: The gate returns **arm identity** — a DP point clearing carries a formal claim, an
       adversarial point clearing does not, and "∃ a point" over the union conflates them.
-- [ ] **GATE-08**: A clearing point is provisional until **replicated at a second seed**, required by
+- [x] **GATE-08**: A clearing point is provisional until **replicated at a second seed**, required by
       the gate rather than reported beside it (Phase 17's worst-pair-at-k=3 pattern).
-- [ ] **GATE-09**: The `__main__` self-check exercises every branch including the failing ones, and a
+- [x] **GATE-09**: The `__main__` self-check exercises every branch including the failing ones, and a
       **"mitigation that destroyed the model" fixture is run through it and observed returning
       `FAIL`** — a branch nobody has watched fire is a branch nobody has verified.
-- [ ] **GATE-10**: The n=8-vs-n=64 capacity comparison rule is committed in the same module, before
+- [x] **GATE-10**: The n=8-vs-n=64 capacity comparison rule is committed in the same module, before
       either run: if n=64 recovers recall that n=8 did not at equivalent ε_fact, that is a finding
       about where capacity stops destroying the mitigation; if it does not, the null is confirmed at
       two capacities. Both branches are publishable and neither may be chosen after seeing data.
@@ -273,13 +273,13 @@ Every REQ-ID maps to exactly one phase. **48/48 mapped, 0 orphans, 0 duplicates*
 | GATE-03 | Phase 20 | |
 | GATE-04 | Phase 20 | |
 | GATE-05 | Phase 20 | |
-| GATE-06 | Phase 20 | |
+| GATE-06 | Phase 20 | **DEFERRED — mechanism shipped but DEFECTIVE; awaiting the Phase 20 gap-closure phase.** The discriminator exists at `scripts/mitigation_gate.py:798-801`, but it decides sweep coverage on a DIFFERENT STATISTIC than the criterion it protects: condition (a) decides on `wilson_upper_bound(k, n) <= ceiling` (`:755`) while GATE-06 decides on RAW rates against the same `ceiling`. Reproduced in BOTH directions at n=104, X=0.04535522866494124 — `(1/104, 3/104)` brackets X under the (a) rule (wilson 0.041950 clears, 0.069999 fails) yet reads as never-crossed → spurious `INCONCLUSIVE`; `(3/104, 11/104)` reads as covered while ZERO points clear X → spurious `FAIL`, the exact "it did not work" collapse this requirement exists to prevent. No spurious `PASS` is constructible under self-consistent inputs. SECOND HOLE, same block: there is NO `sweep_heldout_recalls` parameter anywhere in the 21-kwarg signature (grep count 0), so the held-out leg that SC2 makes load-bearing has no coverage check at all, and unlike the statistic mismatch no caller convention can supply one. `scripts/mitigation_gate.py` is PERMANENTLY UNEDITABLE (artifact `9bb34ad` committed; the frozen-pin guard takes `adds[-1]`), so the ONLY legal remediation is a dated continuation via `scripts/_addendum.py::append_addendum(path, addendum, *, pending, recorded)` plus an armed tripwire proving RED-then-GREEN against BOTH reproduced cases — not merely the happy case. Does not block Phase 21 (which does not consume GATE-06); MUST close before Phase 23, where Z's sweep width is set and coverage stops being hypothetical. |
 | GATE-07 | Phase 20 | |
 | GATE-08 | Phase 20 | |
 | GATE-09 | Phase 20 | |
 | GATE-10 | Phase 20 | |
 | CAL-04 | Phase 20 | phase-zero: K + promotion rule pre-committed |
-| RPT-02 | Phase 20 | `_prose.normalized`, needed from the first correction sweep |
+| RPT-02 | Phase 20 | **DEFERRED to Phase 25 — first half shipped, second half is the unmet conjunction.** The requirement is a conjunction: the helper must *exist* AND *be used for correction sweeps*. `scripts/_prose.py::normalized` exists and is committed at plan `20-03` (`ac4d781`), closing the first half and converting v3.0's `grep -c` lesson into a mechanism. The second half is NOT discharged: routing doc-consistency checks through `normalized` belongs to the phase that runs the first correction sweep. Recorded here rather than only in `20-03-SUMMARY.md`. NOTE — this phase produced FOUR independent instances of the exact defect class RPT-02 exists to close, each caught and worked around rather than papered over: 20-03 (`grep -c "shell=True"` matching 20-01's docstring saying shell=True is never used), 20-04 (`'V20_RETENTION_NOISE_FLOOR' in src` matching the docstring explaining why that name is never imported), 20-05 (a `__doc__` case-sensitivity mismatch), and 20-06 (`0.4921`/`0.3483`/`0.005214448168350039` present as source substrings inside comments stating those values must never be used). Every audit in `tests/test_phase20_prereg.py` is consequently an AST walk or goes through `normalized` — no `grep -c` or `in src` audit was committed. |
 | UNIT-01 | Phase 21 | |
 | UNIT-02 | Phase 21 | |
 | UNIT-03 | Phase 21 | |

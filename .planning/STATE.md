@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 complete — plan 7 of 7 done, the first v4.0 artifact has landed and the pin is now permanently uneditable
+stopped_at: Phase 20 executed 7/7 plans but REOPENED — verification returned gaps_found (5/6 must-haves); GATE-06 needs a dated continuation before Phase 23
 last_updated: "2026-08-20T22:40:00.000Z"
 last_activity: 2026-08-20
 progress:
   total_phases: 9
-  completed_phases: 1
+  completed_phases: 0
   total_plans: 7
   completed_plans: 7
   percent: 100
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 20 (pre-registration-the-three-condition-gate) — COMPLETE
+Phase: 20 (pre-registration-the-three-condition-gate) — REOPENED (gaps_found)
 Plan: 7 of 7 (wave 6 complete — 20-07 done)
-Status: Phase 20 complete — ready for `/gsd:verify-work`, then Phase 21
+Status: 7/7 plans executed and the goal was achieved (ordering verified against the commit DAG), but 20-VERIFICATION.md returned gaps_found at 5/6 must-haves. SC3 partial: GATE-06 decides sweep coverage on raw rates while condition (a) decides on wilson_upper_bound — reproduced in both directions (spurious INCONCLUSIVE and spurious FAIL; no spurious PASS constructible) — and there is no sweep_heldout_recalls parameter at all. The pin is permanently uneditable, so the fix is a dated continuation via scripts/_addendum.py plus an armed tripwire. Next: `/gsd:plan-phase 20 --gaps`.
 Last activity: 2026-08-20 — 20-07 complete: **the first v4.0 artifact has landed and the ordering is now irreversible.** `scripts/phase20_run.py` (UNPINNED, committed `669d082` with NO results file) measured the adapter-regime retention noise floor on MPS; `results/phase20_retention_floor.json` followed in its OWN commit `9bb34ad`, strictly after a pushed and unmodified pin. **The seed-1337 bit-identity control passed EXACTLY** — `abs_delta = 0.0` on both readings against `results/phase19_noise_floors.json`'s published block, and against a DIFFERENT adapter file — so the instrument was verified before the seed-2024 reading was taken at all. Every D-06 expectation reproduced with zero disagreement: floor `0.008681618994239138`, cap `3.9085032379884783` (the borrowed Phase 12 full-fine-tune `0.068930` is `7.94x` larger and its cap `4.029` correspondingly looser — **the re-measurement is TIGHTER, not easier**). **The ancestry guard has stopped being VACUOUS**: `tracked_artifacts` `0 → 1`, `checked` `0 → 9`. `scripts/mitigation_gate.py` is still sha256 `86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14`, appears in neither of this plan's commits, and is now **PERMANENTLY UNEDITABLE** — every correction from here is a dated continuation via `scripts/_addendum.py` plus an armed tripwire (D-24)
 
 ## Performance Metrics
