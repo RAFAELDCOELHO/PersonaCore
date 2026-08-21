@@ -1,145 +1,145 @@
 ---
 phase: 20-pre-registration-the-three-condition-gate
-verified: 2026-08-20T23:14:01Z
+verified: 2026-08-21T16:53:03Z
 status: gaps_found
 score: 5/6 must-haves verified
 overrides_applied: 0
 re_verification:
-  previous_status: null
-  previous_score: null
-  note: "Initial verification — no prior 20-VERIFICATION.md existed."
+  previous_status: gaps_found
+  previous_score: 5/6
+  gaps_closed:
+    - "Every phase-20 requirement ID is accounted for as complete, explicitly deferred, or genuinely unmet — all 12 IDs now carry state in REQUIREMENTS.md; 11 checked with function+guard traceability notes, RPT-02 unchecked with its Phase 25 deferral recorded"
+    - "CR-01's extraction half — coverage_verdict decides the extraction axis on wilson_upper_bound(k, n), the same statistic condition (a) reads. Both reproduced directions now armed as pin-vs-correction differentials (tests/test_phase20_correction.py:174, :229), 29/29 phase-20 tests green"
+    - "The four prescribed remediation artifacts all landed: results/phase20_gate_coverage_correction.json with governs/supersedes, the D-24 dated continuation .md appended via scripts/_addendum.py with an additivity guard, the armed tripwire file, and a recorded WR-09 decision (D-35 — corrected, not accepted)"
+  gaps_remaining:
+    - "SC3's GATE-06 clause on the Y axes — WR-09 is closed as a PARAMETER but its coverage finding is manufacturable; measured differential flips a genuinely truncated held-out axis from INCONCLUSIVE to PASS"
+  regressions:
+    - "None in previously-passing truths. scripts/mitigation_gate.py and scripts/erasure_gate.py byte-identical (git diff --exit-code returns 0); ancestry guard strengthened 1->3 artifacts x 9 pin commits; 874 passed / 1 skipped; ruff check + format clean"
 gaps:
-  - truth: "ROADMAP SC3 — a sweep that never produced points on both sides of X (or of Y) returns INCONCLUSIVE rather than FAILURE"
+  - truth: "ROADMAP SC3 (as amended by D-34/D-37) — a sweep that never produced points on both sides of X (or of Y) returns INCONCLUSIVE rather than FAILURE, read through coverage_verdict / corrected_point_verdict"
     status: partial
     reason: >-
-      Five of SC3's six clauses are verified by running the module. The GATE-06 clause is
-      implemented against a DIFFERENT STATISTIC than the criterion it claims to bracket, on BOTH
-      axes, and the verifier reproduced the failure in both directions — including a direction the
-      code review did not record. The pin is frozen, so the only legal remediation is a dated
-      continuation plus an armed tripwire in an unpinned file.
+      The X half is genuinely closed and armed. The Y half is closed structurally (the missing
+      sweep_heldout_recalls parameter now exists and both legs are decided in one body) but not
+      behaviourally: the two Y legs are validated for LENGTH ONLY, so a coverage finding on either
+      leg can be produced by the input rather than by the data. Measured differential on the same
+      genuinely-truncated axis, against Y_heldout = 0.24499999999999997 — sweep (0.30, 0.28) returns
+      INCONCLUSIVE with a GATE-06 reason (correct); sweep (nan, 0.28), which is STRICTLY MORE
+      truncated, returns PASS with NO GATE-06 reason. `nan >= criterion` is False so the NaN is
+      counted as a FAILING point, manufacturing the bracket. `42.0` and `-99.0` are likewise
+      accepted as recalls. This is direction (ii)'s false-coverage defect class reappearing on the
+      exact axis WR-09 exists to cover, and it reaches a spurious PASS — the direction the previous
+      verification certified the frozen pin could not produce.
     artifacts:
-      - path: "scripts/mitigation_gate.py"
+      - path: "scripts/phase20_gate_coverage.py"
         issue: >-
-          :755-756 decides condition (a) on wilson_upper_bound(successes, questions) <= ceiling,
-          while :798-799 decides GATE-06's coverage on RAW RATES against the SAME ceiling (CR-01).
-          Reproduced at n=104, X=0.04535522866494124: (1) sweep (1/104, 3/104) genuinely brackets
-          the criterion — wilson_upper(1,104)=0.041950 clears, wilson_upper(3,104)=0.069999 fails —
-          yet returns INCONCLUSIVE "the sweep never produced points on both sides", demoting a
-          would-be PASS and blocking promote_to_full_fidelity. (2) NOT IN THE REVIEW: sweep
-          (3/104, 11/104), where NO point's Wilson bound clears X, is NOT flagged because the raw
-          rates straddle X, and the gate returns a decisive FAIL — publishing "it did not work"
-          where the honest finding is "we could not tell", which is the exact collapse GATE-06
-          exists to prevent.
-      - path: "scripts/mitigation_gate.py"
-        issue: >-
-          :800-801 checks sweep coverage on the taught leg only (sweep_taught_recalls against
-          y_taught). There is no sweep_heldout_recalls parameter anywhere in the 21-kwarg
-          signature, so the held-out leg of Y — which SC2 / GATE-03 / GATE-04 make load-bearing —
-          has NO coverage check at all and cannot acquire one without editing a frozen file
-          (WR-09).
+          :241-247 validates sweep_taught_recalls / sweep_heldout_recalls for length only; :296-297
+          consumes their values raw. The extraction axis on the same function gets three per-element
+          _prove calls (:248-277) justified at :274-276 on the grounds that "a coverage finding
+          attributed to the data when it was produced by the criterion" is unacceptable. The two
+          axes this gap closure ADDED are held to no such standard.
     missing:
-      - "results/phase20_gate_coverage_correction.json with a `governs` field stating that `sweep_extraction_rates` MUST be supplied in Wilson-bound space, in the shape results/phase19_calibration_correction.json already uses"
-      - "append_addendum(...) dated continuation recording the correction beside the published text (D-24 — NEVER an edit to scripts/mitigation_gate.py)"
-      - "An armed tripwire in an UNPINNED test file that fires when a Phase 23/25 caller passes raw rates, and a second asserting the direction-(ii) case returns INCONCLUSIVE not FAIL"
-      - "A recorded decision on the un-coverable held-out Y leg (WR-09): either accept the hole in writing with its cost named, or route the held-out coverage check through the same correction artifact"
-  - truth: "Every phase-20 requirement ID is accounted for as complete, explicitly deferred, or genuinely unmet"
+      - "A per-element range _prove on both Y legs — `all(isinstance(v, (int, float)) and 0.0 <= v <= 1.0 for v in values)`, which is False for NaN so it subsumes the NaN case — placed beside the extraction leg's own value checks in coverage_verdict"
+      - "A tripwire in tests/test_phase20_correction.py asserting the measured differential: the same held-out axis returns INCONCLUSIVE at (0.30, 0.28) and must NOT return PASS at (nan, 0.28)"
+      - "Enforce the count guard by type at :257 — `isinstance(k, int) and not isinstance(k, bool)` — so the module's own rate-space SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) cannot pass as counts (measured: it does, producing a spurious INCONCLUSIVE)"
+  - truth: "20-SECURITY.md reaches threats_open: 0 with each closure pointing at a watched guard, never at a plan (20-12 must-have) — and GATE-02's residual is discharged by a choke point that refuses a borrowed retention floor"
     status: partial
     reason: >-
-      The over-claim-avoidance discipline held for plans 20-01..20-06 (twelve recorded
-      applications, each declining to mark a requirement claimed by a later plan). It then failed
-      at the hand-off: 20-06 explicitly deferred GATE-01 through GATE-10 and RPT-02 to 20-07, but
-      20-07's frontmatter claims only [GATE-02, CAL-04] and its "Requirements assessed" table
-      assesses only those two. Eight IDs that ARE genuinely discharged in the committed code were
-      never marked and carry no deferral note.
+      T-20-19's named harm is "the looser cap a borrowing buys" (20-SECURITY.md:91). The guard
+      refuses one bit pattern, not the cap. Measured: 0.06893 * (1 + 2**-50) = 0.06893000000000006
+      passes the `retention_noise_floor != V20_RETENTION_NOISE_FLOOR` refusal, and
+      retention_cap returns a BIT-IDENTICAL 4.029 — the exact borrowed cap — and
+      corrected_point_verdict returns PASS. Control confirms the unperturbed 0.06893 IS refused, so
+      the guard exists and computes; its coverage is one ULP wide. Separately and with no malformed
+      input at all: retention_noise_floor=5.0 with a clean {"regime": "adapter", "seeds": (1337,
+      2024)} provenance returns PASS at cap 13.89114 against the governing 3.9085032379884783 — a
+      3.55x looser cap through the sanctioned route. Provenance is a caller assertion; nothing
+      bounds magnitude. The register row, GATE-02's traceability note and the `status: verified` /
+      `threats_open: 0` flip all rest on this guard.
     artifacts:
+      - path: "scripts/phase20_gate_coverage.py"
+        issue: >-
+          :396-406 refuses the borrowed floor by float `!=` (bit-pattern inequality), and
+          _prove_retention_floor (:353-406) never constrains the floor's magnitude. The measured
+          adapter-regime floor is already a module constant at :339, so the property check is one
+          line away.
+      - path: ".planning/phases/20-pre-registration-the-three-condition-gate/20-SECURITY.md"
+        issue: ":91 records T-20-19 as CLOSED and :4-5 publish status: verified / threats_open: 0 on the strength of that guard."
       - path: ".planning/REQUIREMENTS.md"
-        issue: >-
-          GATE-01 (:27), GATE-03 (:36), GATE-04 (:38), GATE-05 (:40), GATE-07 (:46), GATE-08 (:48),
-          GATE-09 (:50), GATE-10 (:53) are all `[ ]` unchecked, and their traceability rows
-          (:271-280) carry empty notes — despite each being verified discharged in
-          scripts/mitigation_gate.py and guarded in tests/test_phase20_prereg.py.
+        issue: ":303 discharges GATE-02's residual naming _prove_retention_floor as a choke point that catches a caller who lies about regime 'by the number itself'. Measured: a one-ULP perturbation defeats it."
     missing:
-      - "Mark GATE-01, GATE-03, GATE-04, GATE-05, GATE-07, GATE-08, GATE-09, GATE-10 complete with a traceability note naming the discharging function and its guard"
-      - "Leave GATE-06 unchecked and add a traceability note naming CR-01 + WR-09 and the correction artifact that will close them"
-      - "Leave RPT-02 unchecked and record the deferral explicitly: the helper and its differential ship here, but 'used for correction sweeps' is report-time work (Phase 25/28), which 20-03-SUMMARY.md already reasons out and REQUIREMENTS.md does not record"
+      - "A magnitude bound in _prove_retention_floor — `retention_noise_floor <= _ADAPTER_REGIME_RETENTION_FLOOR * (1.0 + 1e-9)` — which admits any TIGHTER floor a later phase measures and refuses the whole looser class, of which V20_RETENTION_NOISE_FLOOR is one member rather than the definition. Keep the existing `!=` as the named-value refusal."
+      - "Two tripwire cases in test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict: the one-ULP-nudged borrowed floor, and an arbitrarily looser floor (5.0) with clean provenance — both must raise"
+      - "Re-open T-20-19 in 20-SECURITY.md (threats_open: 1) until the bound lands, or re-scope the row's claim to what the guard actually proves"
+      - "Census the IMPORT as well as the call in test_mitigation_point_verdict_has_no_caller_outside_this_module — the sole enforcement of the choke point is blind to `from mitigation_gate import mitigation_point_verdict as mpv` (ast.Name id='mpv') and to getattr-dispatch"
 deferred: []
+human_verification:
+  - test: "Decide whether _prove_retention_floor, authored 2026-08-21 and refusing exactly one competitor to the floor measured 2026-08-20, is an acceptable D-24 dated continuation or a post-hoc rule"
+    expected: "Either a recorded acceptance naming the asymmetry, or the magnitude bound (which makes the rule a property rather than a name and removes the question)"
+    why_human: "This is the pre-registration policy question the previous verification escalated for the extraction leg, now instantiated on the retention leg. The evidence is unambiguous; the convention is a judgment call."
+  - test: "Decide whether the NaN/out-of-range Y-sweep hole is a BLOCKER for Phase 21 or may ride to Phase 23"
+    expected: "A dated decision. No sweep exists until Phase 25 and Phase 21 does not consume GATE-06, so the hole is not currently reachable by any committed caller — but Phase 23 is where sweep width is set and coverage stops being hypothetical."
+    why_human: "Reachability-in-practice depends on scheduling intent that is not in the codebase."
 ---
 
 # Phase 20: Pre-Registration — The Three-Condition Gate — Verification Report
 
 **Phase Goal:** "Every rule that will judge a v4.0 number is committed to git before any v4.0 number
 of any kind exists — including before the cost calibration" (ROADMAP.md:150-151)
-**Verified:** 2026-08-20T23:14:01Z
+**Verified:** 2026-08-21T16:53:03Z
 **Status:** gaps_found
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after the 20-08..20-12 gap closure targeting gap 1
 
 ---
 
-## The crux: does CR-01 mean the phase goal is unmet?
+## Bottom line
 
-The brief asks for an explicit answer to a question the two halves of which are genuinely different.
-Here it is, with the reasoning stated rather than asserted.
+The gap closure did real, verifiable work and it did not achieve what its own records claim.
 
-**Decompose the goal sentence.** It makes four claims, and every one of them is about the
-*provenance* of the rules, not about their *soundness*:
+**Closed, and I proved it by running it rather than reading it.** CR-01's extraction half is
+genuinely fixed: `coverage_verdict` decides the extraction axis on `wilson_upper_bound(k, n)`, the
+same statistic condition (a) reads, and both reproduced directions are armed as *pin-vs-correction
+differentials* — the test asserts the frozen pin's wrong answer AND the correction's right one in one
+body, so a regression in either side reddens. WR-09's missing parameter now exists and both legs of Y
+are decided in the same function against the same rule. All four remediation artifacts the previous
+verification prescribed landed. The pin survived its own correction byte-identically, and the
+ancestry guard got *stronger* (1 → 3 artifacts × 9 commits) rather than being loosened to accommodate
+the new files. That is the hard part of a pre-registration correction and it was done correctly.
 
-1. **Completeness** — "every rule that will judge a v4.0 number"
-2. **Existence** — "is committed to git"
-3. **Ordering** — "before any v4.0 number of any kind exists"
-4. **Ordering bound** — "including before the cost calibration" (Phase 23, not merely Phase 25)
+**Not closed.** Every guard the closure added on the three axes it introduced — both Y legs and the
+retention floor — is weaker than the record that cites it, and I reproduced each hole in my own
+process:
 
-CR-01 is a correctness defect *inside* the content of one committed rule. It does not touch (2),
-(3) or (4), all three of which I verified independently against the object graph rather than against
-any SUMMARY. It touches (1) only under a reading of "rule" as "correct rule" — and that reading
-would make pre-registration incoherent, because the entire evidentiary value of a pre-registration
-comes from the rule staying frozen *precisely when it turns out to be suboptimal*. A pre-registration
-you may repair after seeing the data is not a pre-registration. This repository has already written
-that argument down twice, at `MITIGATION_DECISION_RULE` clause 2 and at
-`results/phase19_erasure_report.md:453-457`, about `erasure_gate.py`.
+| What the record claims | What I measured |
+|---|---|
+| REQUIREMENTS.md:303 — the retention choke point catches "a caller that lies about `regime` … by the number itself" | `0.06893 * (1 + 2**-50)` passes the refusal and `retention_cap` returns a **bit-identical `4.029`** — the exact borrowed cap. Control: unperturbed `0.06893` IS refused. |
+| 20-SECURITY.md:91 — T-20-19 CLOSED; the harm is "the looser cap a borrowing buys" | `retention_noise_floor=5.0` with clean adapter provenance → **`PASS`**, cap `13.89114` vs governing `3.9085032379884783` |
+| ROADMAP SC3 amendment — coverage now decided on "both Y legs included" | Held-out axis `(0.30, 0.28)` → `INCONCLUSIVE`. **Same axis, one point NaN'd — `(nan, 0.28)` → `PASS`, no GATE-06 reason.** More truncated, decisively judged. |
 
-**So: the goal is ACHIEVED, and CR-01 is a real defect in a correctly pre-registered rule.** Those
-are the two findings and they coexist. The pin was committed nine times between 16:27:23 and
-17:43:17; the first v4.0 number was committed at 19:37:56; the cost calibration has not run. Nothing
-about CR-01 moves any of those facts.
+The third row is the one that matters most and it is sharper than the code review recorded. The
+review showed garbage input reaching a PASS. What I measured is a **verdict flip on the identical
+truncated axis**: NaN-ing one of two points makes a sweep that never crossed Y read as bracketed. The
+review's `(-99.0, 42.0)` demonstration invites the answer "that is garbage in, garbage out". A
+differential does not: the honest reading is `INCONCLUSIVE`, and one NaN buys the maximally
+favourable verdict instead. `nan >= criterion` is `False`, so the NaN is *counted as a failing point*
+— it does not merely pass through, it actively manufactures the bracket. A NaN recall is what `0/0`
+produces from an empty held-out question set.
 
-**What I will not hand-wave in the other direction.** Two things make the defect materially worse
-than the code review and the orchestrator's brief record it:
+**The pattern across all three is the same and it is worth naming, because the fix for all three is
+the same six lines the review already wrote.** Each guard refuses a *name* where the harm is a
+*property*: the borrowed floor by its bit pattern rather than by being loose; the regime by a
+caller-asserted string; the Y sweeps by length rather than by being recalls. The module knows the
+difference — it spends three `_prove` calls and a fourteen-line message enforcing exactly this
+distinction on the extraction axis, at `:248-277`, justified on the grounds that "a coverage finding
+attributed to the data when it was produced by the criterion" is unacceptable. The four axes this gap
+closure added are held to a length check.
 
-**(a) The bias is NOT one-directional.** The brief states the defect "produces SPURIOUS
-INCONCLUSIVE, never a spurious PASS", and REVIEW.md lists only that direction. I reproduced the
-opposite direction as well. Because `{raw > X} ⊆ {wilson > X}` and `{wilson ≤ X} ⊆ {raw ≤ X}`, the
-raw-rate test can also spuriously satisfy `x_at_or_below` — so a sweep in which **no** point's Wilson
-bound clears X, i.e. a genuinely truncated extraction axis, escapes the GATE-06 branch entirely and
-receives a decisive **FAIL**. I ran it: `sweep_extraction_rates=(3/104, 11/104)` at X=0.045355,
-where `wilson_upper(3,104)=0.070` and `wilson_upper(11,104)=0.166` both exceed X, returns `FAIL`
-with no GATE-06 reason. That is "it did not work" published where the honest finding is "we could
-not tell" — the exact collapse GATE-06 was built to prevent, produced by GATE-06.
-
-The narrower claim *does* survive: the defect cannot manufacture a spurious **PASS** under
-self-consistent inputs, because a point that clears (a) has `wilson ≤ X`, which forces
-`x_at_or_below` true under both readings. So the milestone's headline claim cannot be inflated by
-this. But "conservative only" is the wrong description of a defect that can suppress an
-INCONCLUSIVE.
-
-**(b) GATE-06 has a second, independent hole in the same block.** `:800-801` reads only
-`sweep_taught_recalls` against `y_taught`. There is no `sweep_heldout_recalls` parameter in the
-21-kwarg signature at all. SC2 and GATE-03/GATE-04 make the held-out leg load-bearing precisely so
-that "gating taught-only cannot reward memorization over generalization" — and the coverage check
-that is supposed to protect the Y axis reads half of Y. Unlike CR-01, this one cannot be corrected by
-a caller convention: the parameter does not exist and the file is frozen.
-
-**Net effect on SC3.** SC3 is a roadmap success criterion and it is **demonstrably false as
-written** for its GATE-06 clause, in a form I reproduced rather than inferred. That is a FAILED
-must-have. It is *not* a failure of the goal sentence, and I have marked the two separately below so
-neither reading can borrow credit from the other.
-
-**Does it block Phase 21?** No. Phase 21 (privacy unit, DP data path, n=64 corpus) does not consume
-GATE-06. The binding deadline is **Phase 23**, where Z's sweep width is set — sweep coverage and
-sweep sizing are the same decision — and absolutely Phase 25, which judges points by importing this
-rule. Committing the correction now is free: `results/phase20_gate_coverage_correction.json` is a new
-`results/phase20_*` file whose first add would land after all nine pin commits, so the ancestry guard
-stays green. The review prescribed exactly this remediation and **it has not been done** — no
-correction artifact, no `append_addendum` call, no tripwire exists in the repository.
+**Proportion, stated so this is not read as bigger than it is.** No committed caller can reach any of
+these holes today — `corrected_point_verdict` has exactly zero non-test callers, which the AST census
+measures and I confirmed. The extraction leg, the leg CR-01 was actually about, is validated three
+ways. Nothing here inflates a published v4.0 number, because no v4.0 sweep exists. The defects are in
+a rule that will be consumed at Phase 23/25, and closing them costs roughly ten lines plus two test
+cases. This is a phase that is one small commit from done, not a phase that failed.
 
 ---
 
@@ -147,249 +147,265 @@ correction artifact, no `append_addendum` call, no tripwire exists in the reposi
 
 ### Observable Truths
 
+Must-haves carried forward from the previous verification. Truths 0-2 and 4-5 receive a regression
+check (they passed before and nothing in the closure touched the pin); truth 3 receives full
+three-level re-verification.
+
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 0 | **The goal sentence** — every rule committed to git before any v4.0 number of any kind exists, including before the cost calibration | ✓ VERIFIED | Verified against the commit DAG, not against SUMMARY claims. Nine pin commits `95b3c8a`..`abf9072` (16:27:23→17:43:17); artifact first-add `9bb34ad` (19:37:56). I ran `git merge-base --is-ancestor` for all nine pairs — 9/9 OK. `git log --diff-filter=A -- results/` shows the phase20 artifact is the ONLY results file added after the pin; every other is Phase 19 or earlier. Phase 23 has not run. Guard live and non-vacuous: 1 artifact × 9 commits = 9 checks. |
-| 1 | **SC1** — PASS/FAIL/INCONCLUSIVE against three conditions, every argument keyword-only with no defaults, every condition rendered into a reason string; (c)'s caps computed from imported constants, never retyped | ✓ VERIFIED (with the ROADMAP's own dated D-06 amendment) | `mitigation_point_verdict:637-831`, 21 keyword-only args, zero defaults — proved by AST over ALL public functions, not just the verdict one. Ran it: 4 condition reason strings. `superseded_dialogue_cap(gap_noise_floor=0.005214448168350039)` returns `4.5837288963367` **exactly** (I ran it). `retention_cap` computes from imported `V20_EWC_RETENTION_PPL` + `MARGIN_K` × required-kwarg floor → `3.9085032379884783`, bit-identical to the artifact's `cap` (I ran it). AST scan proves 4.5733 / 3.891140 / 0.068930 / 0.005214448168350039 appear as no numeric constant. |
-| 2 | **SC2** — Y is a pair, a locked fraction of the retrained control, never derived from v2.0's 0.4921 / 0.3483 | ✓ VERIFIED | `:765-768` — `y_taught = F_Y * control_taught_recall`, `y_heldout = F_Y * control_heldout_recall`; both controls are required kwargs with no default. AST scan asserts `0.4921` and `0.3483` appear as no numeric constant; the `from erasure_gate import` list is asserted by **exact equality** to five names, so `V20_TAUGHT_RECALL`/`V20_HELDOUT_RECALL` cannot be present. |
-| 3 | **SC3** — every verdict branch watched firing; GATE-05 precedence over FAIL; a sweep that never crossed X (or Y) returns INCONCLUSIVE not FAILURE; arm identity on the verdict; a clear is provisional until replicated | ✗ **FAILED (partial — 5 of 6 clauses)** | Five clauses verified by RUNNING the module (exit 0, all six outcomes printed): destroyed-model fixture → FAIL; GATE-05 early return with a 1-element reason list, differential against that FAIL; GATE-08 INCONCLUSIVE overriding a would-be PASS with `REPLICATION_PENDING_MARKER`; arm identity on the 3-tuple; mixed-arm list raises. **The GATE-06 clause fails on both axes** — see the crux section. Reproduced in both directions at n=104. |
-| 4 | **SC4** — the n=8-vs-n=64 capacity rule committed before either run, both branches publishable, neither selectable after seeing data | ✓ VERIFIED | `_CAPACITY_DISPATCH:1039-1044` total over all four `(small_cleared, large_cleared)` combinations, proved at import by a module-scope `_prove`; `CAPACITY_BRANCHES` closed at five. Both named branches observed firing in the self-check I ran. The D-26 fallback raises with the tolerance unset and the message names D-26 — the third chosen constant is flagged, not smuggled. |
-| 5 | **SC5** — per-point K, the full-fidelity K and the promotion rule all committed before the first v4.0 artifact; a CPU-only ancestry test; `_prose.normalized` finds a line-wrapped phrase `grep -c` reports absent | ✓ VERIFIED | `K_RUNGS = (48, 24, 16, 8)` closed and ordered; `ratchet_k` refuses decreases and the refusal cites ATK-03; `promote_to_full_fidelity` takes both Ks as required kwargs and reaches the ratchet through ONE implementation (proved by the abort path). Ancestry test is CPU-only and green. **I ran a real `grep -c "the three reductions"` on the wrapped bytes → `0`, and `normalized(phrase) in normalized(text)` → `True`** on the same bytes. |
+| 0 | **The goal sentence** — every rule committed before any v4.0 number of any kind exists, including before the cost calibration | ✓ VERIFIED (scope narrowed — see below) | Regression check green and *strengthened*. `git diff --exit-code -- scripts/mitigation_gate.py` returns 0 and `git diff 7e6de4b HEAD` on the pin and on `erasure_gate.py` is empty — the pin is byte-identical across its own correction. The ancestry guard's `V4_ARTIFACT_GLOBS = ("results/phase20_*",)` now matches **three** artifacts (`phase20_retention_floor.json` 2026-08-20 19:37:56, `phase20_gate_coverage_correction.md` 12:18:24, `.json` 12:22:25) against nine pin commits `95b3c8a`..`abf9072` (16:27:23→17:43:17), all first-adds after the last pin commit. Phase 23 has not run. |
+| 1 | **SC1** — three conditions, keyword-only with no defaults, reason strings; (c)'s caps computed from imported constants, never retyped | ✓ VERIFIED | Regression: 18/18 `test_phase20_prereg.py` green; pin unchanged. The D-06 amendment is intact and I re-derived it: `retention_cap(retention_noise_floor=0.008681618994239138)` = `3.9085032379884783`. The gap closure's `_GOVERNING_CAP` recomputes the same value by calling the frozen function rather than retyping it. |
+| 2 | **SC2** — Y is a pair, a locked fraction of the retrained control, never v2.0's 0.4921 / 0.3483 | ✓ VERIFIED | Regression: pin unchanged, exact-equality import assertion still green. The correction reads `F_Y` by import identity and computes both legs from their own controls (`:521-522`). |
+| 3 | **SC3 (as amended by D-34/D-37)** — every branch watched firing; GATE-05 precedence; a sweep that never crossed X **or Y** returns INCONCLUSIVE not FAILURE; arm identity; provisional until replicated | ✗ **FAILED (partial — X half closed, Y half falsifiable)** | **X: CLOSED.** `coverage_verdict:279-282` computes `wilson_upper_bound(k, n)` per point; `:294-297` compares each axis on its criterion's own direction. Both directions armed as pin-differentials at `tests/test_phase20_correction.py:196-226` and `:254-302`, plus the third case (`FIXTURE_CLEARING_POINT` at `(3,11)`, a pin `PASS` → corrected `INCONCLUSIVE`). **Y: FALSIFIED.** Measured differential against `Y_heldout = 0.24499999999999997`: `(0.30, 0.28)` → `INCONCLUSIVE` + GATE-06 reason; `(nan, 0.28)` → `PASS`, no GATE-06 reason. See the crux table above. |
+| 4 | **SC4** — the n=8-vs-n=64 capacity rule committed before either run, both branches publishable | ✓ VERIFIED | Regression: `_CAPACITY_DISPATCH` totality proved at import, pin unchanged, guard green. |
+| 5 | **SC5** — per-point K, full-fidelity K, promotion rule committed before the first v4.0 artifact; CPU-only ancestry test; `_prose.normalized` differential | ✓ VERIFIED | Regression: ancestry test green and now covering three artifacts rather than one. `_prose.py` untouched by the closure. |
 
 **Score: 5/6 truths verified**
+
+### Gap-closure plan must-haves (20-08..20-12), verified individually
+
+The gap-closure plans declared their own must-haves. These are additive to the roadmap SCs and are
+verified here rather than taken from SUMMARY.md.
+
+| Plan | Declared truth | Status | Evidence |
+|---|---|---|---|
+| 20-08 | Extraction coverage decided on `wilson_upper_bound(k, n)` | ✓ VERIFIED | `:279-282`, `:294-295`; armed differential |
+| 20-08 | Coverage decided on **both** legs of Y | ✓ VERIFIED (structurally) | `sweep_heldout_recalls` exists, is length-checked at `:241-247`, decided at `:286`/`:296-297` in the same body. The *finding* it produces is not trustworthy — see gap 1. |
+| 20-08 | A floor with no provenance / wrong regime / <2 seeds / **or the borrowed 0.06893** cannot reach a verdict | ⚠️ VERIFIED LITERALLY, DEFEATED IN CLASS | The literal value `0.06893` is refused (I ran the control). `0.06893 * (1 + 2**-50)` is not, and buys the bit-identical `4.029`. |
+| 20-08 | Raw-rate space unreachable: the parameter is gone AND a smuggled rate is refused by name | ⚠️ PARTIAL | The parameter is genuinely absent (`SystemExit` on `sweep_extraction_rates=`, guarded at `:305`). The value refusal accepts integral floats: the module's own `SUPERSEDED_SWEEP_SENTINEL = (0.0, 1.0)` passes as counts (measured → spurious `INCONCLUSIVE`). Demotion-only, so warning-grade. |
+| 20-08 | The bound-direction resolution written down with reason and cost | ✓ VERIFIED | Module docstring + `bound_direction.cost` in the artifact, naming the Y legs' inherited lack of a confidence bound |
+| 20-09 | Every requirement ID carries a traceability note naming function + guard | ✓ VERIFIED | REQUIREMENTS.md:302-313; both names resolve for all eleven checked IDs |
+| 20-09 | A reader who greps `4.029000` lands on a dated amendment | ✓ VERIFIED | REQUIREMENTS.md:55 D-36 amendment beneath the GATE-02 bullet |
+| 20-10 | Machine-readable artifact naming what it governs and supersedes | ✓ VERIFIED | `governs`, `supersedes`, `governing_module`, `governing_entry_point`, `defects`, `evidence`, `heldout_coverage`, `proof` all present |
+| 20-10 | The pin's published reading preserved unedited, correction added beside it | ✓ VERIFIED | Two commits (`4e4d5ef` then `2a32394`); the append is a diff against existing bytes, not a rewrite |
+| 20-10 | key_link pattern `Addendum — 2026-08-20` | ℹ️ DEVIATED, CORRECTLY | The committed heading is `## Addendum — 2026-08-21`, the real write date. The deviation is recorded in ROADMAP.md:279 and is the honest choice. |
+| 20-11 | Both directions watched RED-then-GREEN, not merely written | ✓ VERIFIED | Pin-vs-correction differentials, four watched-RED breaks recorded and restored byte-identically |
+| 20-11 | A future caller reaching a verdict without the correction turns a test red | ⚠️ PARTIAL | The census (`:925-936`) keys on `node.func.id or node.func.attr` against the literal name. `from mitigation_gate import mitigation_point_verdict as mpv; mpv(...)` is `ast.Name(id='mpv')` — invisible. Scope is `scripts/` + `src/` only. |
+| 20-11 | A hand-edited number in the artifact turns a test red | ✓ VERIFIED | `test_every_published_number_re_derives_from_the_modules` (`:575`); one-digit `cap` edit watched red |
+| 20-11 | The artifact→`retention_cap` coupling watched on both sides (WR-02) | ✓ VERIFIED | `test_v4_retention_cap_reads_the_measured_adapter_regime_floor` (`:850`) — the previous verification's WR-02 PARTIAL is closed |
+| 20-12 | GATE-06 marked complete only after the correction exists, is watched, and is enforced | ⚠️ PARTIAL | Exists ✓, watched ✓, *enforced* only against the call form the census can see, and the Y-leg enforcement is a length check |
+| 20-12 | SC3 carries a dated amendment so a re-verifier cannot re-file the identical gap | ✓ VERIFIED | ROADMAP.md SC3 blockquote; original text byte-preserved (40 insertions, 0 deletions). I did not re-file the identical gap — the X half is closed and I recorded it as closed. |
+| 20-12 | `threats_open: 0` with each closure pointing at a watched guard | ✗ **FAILED** | The file reaches `threats_open: 0` and each row names a guard. T-20-19's guard does not cover T-20-19's named harm — measured, twice. |
+| 20-12 | Published total substantiated by the file's own rows | ✓ VERIFIED | 66 rows, 8 transcribed with citations |
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `scripts/mitigation_gate.py` | The complete pin — verdict domain, arms, two chosen constants, K menu + ratchet + promotion, X + tripwire + tolerance reporter, both (c) legs, three-condition verdict, per-arm existential, capacity rule, six-outcome `__main__` | ⚠️ SUBSTANTIVE, WIRED, **defect in GATE-06** | 1,431 lines, 9 commits. Every named surface exists and executes. Imported by `tests/test_phase20_prereg.py` and run as a subprocess in CI. Frozen: any further commit reddens the ancestry guard irreversibly. |
-| `tests/test_phase20_prereg.py` | Ancestry guard, RPT-02 differential, D-22 four-state throwaway-repo fixture, AST register, constant audits, behavioural twin | ✓ VERIFIED | 1,368 lines, 18 tests, 18 passed in 1.07s (I ran it). The D-22 fixture drives `_assert_ordering_holds` — the SAME helper the live guard calls, parameterized on `root` — through five states in a `tmp_path` repo. |
-| `scripts/_prose.py` | The one whitespace-normalizing prose read, phase-neutral, import-free | ✓ VERIFIED | 46 lines, zero imports (AST-asserted). Leading underscore verified by fnmatch against six pin globs. |
-| `scripts/phase20_run.py` | The UNPINNED MPS retention-floor driver with its bit-identity control | ✓ VERIFIED | 288 lines. `retention_perplexity(model, pin.RETENTION_BIN, block_size, device, tok)` — the fourth return of `load_adapted_model` is discarded as `_forbid`, avoiding the instrument trap exactly as `phase19_run.py:803` does. Unpinned by design so the pin stays an ancestor of the artifact it produced. |
-| `results/phase20_retention_floor.json` | The adapter-regime retention noise floor with embedded provenance | ✓ VERIFIED | Floor `0.008681618994239138` — I verified it equals `abs(adapter_on_1337 − adapter_on_2024)` exactly. Bit-identity control: seed 1337 reproduces the published `adapter_off 3.891139975617828` and `adapter_on 4.219759892336485` at `abs_delta 0.0`, across two distinct adapter files (both sha256s recorded). `governs` field present and correct. |
+| `scripts/mitigation_gate.py` | The frozen pin, unedited | ✓ VERIFIED FROZEN | Byte-identical across the entire gap closure. `git diff 7e6de4b HEAD` empty; worktree clean. The pre-registration survived its own correction — this is the load-bearing fact and it holds. |
+| `scripts/phase20_gate_coverage.py` | The governing correction — `coverage_verdict`, `wilson_lower_bound`, `_prove_retention_floor`, `corrected_point_verdict` | ⚠️ SUBSTANTIVE, WIRED, **defects on the three axes it adds** | 602 lines. Every named surface exists and computes. Wilson mirror verified sound by the review and consistent with `erasure_gate:139-158`. Imports `wilson_upper_bound` / `F_Y` / `MARGIN_K` by identity, calls the pin rather than reimplementing it. Holes: `:241-247` (Y length-only), `:257` (integral floats as counts), `:396-406` (bit-pattern refusal), `:353-406` (no magnitude bound). |
+| `tests/test_phase20_correction.py` | The armed tripwires | ✓ VERIFIED (with a named blind spot) | 957 lines, 11 tests, 11 passed. Genuinely armed on the extraction axis: differentials assert the pin's RED and the correction's GREEN in one body. Blind spot: the census's alias hole (GC-06). |
+| `results/phase20_gate_coverage_correction.json` | `governs` / `supersedes` / defects / evidence / proof | ✓ VERIFIED | 234 lines. `governs` names `coverage_verdict` as the computation and `corrected_point_verdict` as the route. Every number in it is re-derived by a committed test. Records `heldout_coverage` with a worked demonstration. |
+| `results/phase20_gate_coverage_correction.md` | The D-24 dated continuation | ✓ VERIFIED | `## Addendum — 2026-08-21` appended via `scripts/_addendum.py::append_addendum`; additivity guarded by `test_correction_addendum_is_additive_on_the_published_artifact` at a synthetic tmp location. |
+| `.planning/REQUIREMENTS.md` | All 12 IDs accounted for | ✓ VERIFIED | Previous gap 2 closed — see Requirements Coverage below. |
+| `20-SECURITY.md` | `threats_open: 0`, each closure evidenced | ⚠️ **BOOKKEEPING COMPLETE, ONE CLOSURE UNSUPPORTED** | 66 rows, totals reconcile by transcription. T-20-19's closure is contradicted by measurement. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `mitigation_gate.py` | `erasure_gate.py` | `from erasure_gate import (...)` after sys.path bootstrap | ✓ WIRED | Exactly five names, asserted by **equality** not subset. Runtime `is`-identity asserted for all five. |
-| `mitigation_point_verdict` | `extraction_ceiling` | internal call — the single choke point for the D-14a tripwire | ✓ WIRED | Driven THROUGH the verdict function by `test_extraction_floor_tripwire_is_the_only_route_to_a_verdict`; a single-seed floor and a borrowed arm both abort, while the fixture differing only in provenance still PASSes. |
-| `promote_to_full_fidelity` | `ratchet_k` | internal call — one ratchet, not two | ✓ WIRED | Proved by the abort path: `full_k < curve_k` raises through the promotion rule carrying the ratchet's own ATK-03 message. |
-| `retention_cap` | `results/phase20_retention_floor.json` | the floor this artifact publishes is the required kwarg the function consumes | ⚠️ PARTIAL | The link is real and I verified it arithmetically end to end. But **no committed test reads the artifact** (REVIEW WR-02) — the coupling exists only in prose and in the artifact's `governs` field. A future edit to either side breaks nothing that CI watches. |
-| `tests/test_phase20_prereg.py` | `scripts/mitigation_gate.py` | `PHASE20_PREREG_ARTIFACT` → `git log --format=%H --` | ✓ WIRED | Live and non-vacuous: `tracked_artifacts` 0→1, `checked` 0→9. |
-| `mitigation_gate.py` | `mitigation_budget.py` | **must NOT exist** (D-20 / AST guard) | ✓ VERIFIED ABSENT | Import set is `{pathlib, sys, erasure_gate}`, asserted as a SUBSET of the allow-set. `scipy`/`numpy`/`torch` separately asserted absent. |
-| `mitigation_point_verdict` (a) | `mitigation_point_verdict` GATE-06 | **must read ONE statistic** | ✗ **NOT WIRED** | (a) reads `wilson_upper_bound(...)`; GATE-06 reads raw rates. Different spaces, same ceiling. **This is CR-01.** |
+| `phase20_gate_coverage.py` | `erasure_gate.wilson_upper_bound` | import by object identity | ✓ WIRED | Imported, not redefined; `wilson_lower_bound` is a mirror with the clamp flipped, not a second copy of the upper bound |
+| `corrected_point_verdict` | `mitigation_gate.mitigation_point_verdict` | one call, with the neutralising sentinel | ✓ WIRED | Called once at `:556`; GATE-05, GATE-08, arm identity and all three conditions come back unaltered. Sentinel provably neutralises `:798-812` given the preconditions proved at `:536-552`. |
+| `corrected_point_verdict` | `_prove_retention_floor` | called FIRST, before any compute — the choke point | ⚠️ WIRED, **INSUFFICIENT** | The call *is* first (`:498`) and unavoidable on this route. What it proves is one bit pattern and one caller-asserted string. Measured: `5.0` passes. |
+| `coverage_verdict` | both Y legs | one body, one rule (D-35 / WR-09) | ⚠️ WIRED, **HOLLOW FINDING** | Both legs read; the finding is manufacturable from unvalidated values |
+| AST caller census | every `mitigation_point_verdict` call site | `ast.walk` over `scripts/` + `src/` | ⚠️ PARTIAL | Blind to aliased imports and getattr-dispatch; blind outside `scripts/`+`src/`. This is the **sole** enforcement of the choke point per both modules' docstrings. |
+| ancestry guard | `results/phase20_*` | `git log --diff-filter=A` | ✓ WIRED, STRENGTHENED | 3 artifacts × 9 commits = 27 checks (was 9) |
+| `scripts/phase20_gate_coverage.py` | any ancestry guard | — | ℹ️ **ABSENT** | `PHASE20_PREREG_ARTIFACT` is `scripts/mitigation_gate.py` alone. The module the amendment makes GOVERNING has no ordering guard and postdates the phase's one v4.0 artifact by ~17h. Legitimate under D-24 and dated — but see Human Decision 1. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|--------------------|--------|
-| `results/phase20_retention_floor.json` | `retention_ppl_noise_floor` | Two MPS `retention_perplexity` readings over `data/retention_val.bin`, 1,000,285 scored tokens, 3,908 windows | Yes — floor recomputes exactly from the two embedded `adapter_on` readings | ✓ FLOWING |
-| `mitigation_gate.retention_cap` | `cap` | imported `V20_EWC_RETENTION_PPL` + `MARGIN_K` × required-kwarg floor | Yes — reproduces the artifact's `cap` bit-exact from the artifact's own floor | ✓ FLOWING |
-| `mitigation_gate.extraction_ceiling` | `X` | required kwargs only — no v4.0 floor exists until Phase 23 (D-13) | N/A by design — the tripwire refuses an unlabelled floor | ✓ FLOWING (correctly deferred) |
-| `mitigation_point_verdict` GATE-06 | `x_at_or_below` / `x_above` | `sweep_extraction_rates` kwarg, undocumented as to which space | **No** — compared against a ceiling defined in a different space | ⚠️ HOLLOW |
+| `coverage_verdict` extraction axis | `x_uppers` | `wilson_upper_bound(k, n)` over validated counts | Yes — three per-element `_prove`s upstream | ✓ FLOWING |
+| `coverage_verdict` taught axis | `sweep_taught_recalls` | caller, **unvalidated** | No — any value at all is accepted | ⚠️ HOLLOW |
+| `coverage_verdict` held-out axis | `sweep_heldout_recalls` | caller, **unvalidated** | No — NaN manufactures a bracket (measured) | ⚠️ HOLLOW |
+| `_prove_retention_floor` | `retention_noise_floor` | caller + caller-asserted provenance | No — magnitude unconstrained; `5.0` reaches a PASS | ⚠️ HOLLOW |
+| `_GOVERNING_CAP` / `_BORROWED_CAP` | derived caps in the refusal messages | computed by calling the frozen `retention_cap` | Yes — never retyped | ✓ FLOWING |
+| correction artifact `evidence` | all verdicts and bounds | re-derived by a committed test | Yes | ✓ FLOWING |
 
 ### Behavioral Spot-Checks
 
+All run in my own process against the committed tree with `.venv/bin/python`, not read off a SUMMARY.
+
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| The pin's six outcomes fire | `.venv/bin/python scripts/mitigation_gate.py` | exit 0; 6/6 outcomes + ratchet + promotion + both capacity branches + D-12 counterfactual printed | ✓ PASS |
-| Phase 20 guards are green | `.venv/bin/python -m pytest tests/test_phase20_prereg.py -q` | `18 passed in 1.07s` | ✓ PASS |
-| Lint gates | `ruff check .` / `ruff format --check .` | `All checks passed!` / `174 files already formatted` | ✓ PASS |
-| Ordering holds on the object graph | `git merge-base --is-ancestor <each pin commit> <artifact first add>` | 9/9 OK | ✓ PASS |
-| SC1's supersession is a computation | `superseded_dialogue_cap(gap_noise_floor=0.005214448168350039)` | `4.5837288963367` exactly | ✓ PASS |
-| D-06's cap is TIGHTER, not looser | `retention_cap(floor=0.008681618994239138)` vs `borrowed_cap` | `3.9085032379884783 < 4.029` | ✓ PASS |
-| SC5's differential against a REAL grep | `grep -c "the three reductions"` on wrapped bytes | `0`, while `normalized` finds it → `True` | ✓ PASS |
-| **CR-01 direction (i)** | verdict with `sweep_extraction_rates=(1/104, 3/104)` | `INCONCLUSIVE` where the bracket is genuine and all three conditions cleared | ✗ **FAIL** |
-| **CR-01 direction (ii)** | verdict with `sweep_extraction_rates=(3/104, 11/104)`, no Wilson bound clearing X | `FAIL` with **no GATE-06 reason** — a truncated axis judged decisively | ✗ **FAIL** |
+| Full suite | `.venv/bin/python -m pytest -q` | `874 passed, 1 skipped in 198.52s` | ✓ PASS |
+| Phase-20 guards | `pytest tests/test_phase20_correction.py tests/test_phase20_prereg.py -q` | `29 passed in 1.86s` | ✓ PASS |
+| Lint | `ruff check .` / `ruff format --check .` | `All checks passed!` / `176 files already formatted` | ✓ PASS |
+| Pin frozen across the correction | `git diff 7e6de4b HEAD -- scripts/mitigation_gate.py scripts/erasure_gate.py` | empty | ✓ PASS |
+| Ancestry still holds, now over 3 artifacts | `git log --diff-filter=A -- results/phase20_*` vs 9 pin commits | all first-adds ≥ 2026-08-20 19:37, last pin commit 17:43 | ✓ PASS |
+| **GC-01** — borrowed-floor refusal | `retention_cap(0.06893*(1+2**-50))` through `corrected_point_verdict` | `PASS`; cap `4.029` **bit-identical** to `retention_cap(0.06893)`. Control: `0.06893` refused. | ✗ **FAIL** |
+| **GC-02** — looser floor, clean provenance | `corrected_point_verdict(retention_noise_floor=5.0, provenance={"regime":"adapter","seeds":(1337,2024)})` | `PASS`; cap `13.89114` vs governing `3.9085032379884783` | ✗ **FAIL** |
+| **GC-03 differential (sharper than the review)** | held-out `(0.30, 0.28)` vs `(nan, 0.28)`, `Y_heldout = 0.24499999999999997` | `INCONCLUSIVE` + GATE-06 reason → **`PASS`, no GATE-06 reason** | ✗ **FAIL** |
+| **GC-04** — module's own rate-space sentinel as counts | `sweep_extraction_successes=(0.0, 1.0)` | accepted as counts → spurious `INCONCLUSIVE` | ⚠️ WARN |
+| **GC-05** — contradictory reason payload | corrected route on `FIXTURE_CLEARING_POINT` at `(3,11)` | `INCONCLUSIVE` carrying 4 decisive *clearing* reason lines verbatim | ⚠️ WARN |
+| **GC-06** — census blind spot | read `tests/test_phase20_correction.py:925-936` | keys on `node.func.id or .attr` vs the literal name; alias/getattr invisible | ⚠️ WARN |
 
 ### Probe Execution
 
-No `scripts/*/tests/probe-*.sh` exists in this repository and no PLAN declares one. The equivalent
-runnable checks for this phase are the module `__main__` self-check and the pytest twin, both
-executed above in my own process rather than read off a SUMMARY.
+No `scripts/*/tests/probe-*.sh` exists in this repository and no PLAN declares one. The runnable
+equivalents are the module self-check and the pytest twins, executed above in my own process.
 
 | Probe | Command | Result | Status |
 |-------|---------|--------|--------|
-| `scripts/mitigation_gate.py` `__main__` | `.venv/bin/python scripts/mitigation_gate.py` | exit 0, 11 lines of observed branch output | PASS |
-| Behavioural twin | `pytest tests/test_phase20_prereg.py::test_gate_self_check_runs_clean_in_a_fresh_interpreter` | included in 18/18 | PASS |
+| Phase-20 behavioural twins | `pytest tests/test_phase20_correction.py tests/test_phase20_prereg.py -q` | `29 passed` | PASS |
+| Whole-repo regression | `pytest -q` | `874 passed, 1 skipped` | PASS |
 
 ### Requirements Coverage
 
-Every ID from every PLAN frontmatter, cross-referenced against `.planning/REQUIREMENTS.md`.
-**Bookkeeping state is reported separately from code state, because they disagree.**
+**Previous gap 2 is CLOSED.** All twelve IDs now carry state, and the eight that were silently
+unchecked are checked with traceability notes naming the discharging function and its guard. I
+spot-checked that the named functions and guards resolve.
 
 | Requirement | Source Plan(s) | Code state | REQUIREMENTS.md | Evidence |
 |-------------|----------------|-----------|-----------------|----------|
-| GATE-01 | 20-01, 20-02, 20-04, 20-06 | ✓ SATISFIED | ✗ `[ ]` unchecked | `mitigation_point_verdict` returns the three-name domain; AST proves every public function keyword-only with zero defaults; 4 reason strings observed |
-| GATE-02 | 20-01, 20-04, 20-06, 20-07 | ⚠️ SATISFIED-WITH-SUPERSESSION | `[x]` + note | Mechanism discharged and AST-audited. Stated yield `retention_cap 4.029000` **not produced** — see the honesty assessment below |
-| GATE-03 | 20-04, 20-06 | ✓ SATISFIED | ✗ `[ ]` unchecked | Y is the pair `(y_taught, y_heldout)` at `:765-766` |
-| GATE-04 | 20-04, 20-06 | ✓ SATISFIED | ✗ `[ ]` unchecked | Each leg is `F_Y ×` its OWN control; 0.4921/0.3483 absent as numeric constants; recall constants absent from the exact-equality import list |
-| GATE-05 | 20-04, 20-06 | ✓ SATISFIED | ✗ `[ ]` unchecked | Early return before any reason is appended; watched firing differentially against the FAIL it overrides |
-| GATE-06 | 20-04, 20-06 | ✗ **PARTIAL** | `[ ]` unchecked (**correctly**) | Branch exists and fires, but reads raw rates against a Wilson-space ceiling (CR-01) and only the taught leg of a pair-valued Y (WR-09). Both reproduced. |
-| GATE-07 | 20-01, 20-05, 20-06 | ✓ SATISFIED | ✗ `[ ]` unchecked | 3-tuple carries `arm`; `exists_clearing_point` aborts on a mixed-arm list; `ARM_CLAIMS` proved equal to `ARMS` at import |
-| GATE-08 | 20-04, 20-05, 20-06 | ✓ SATISFIED | ✗ `[ ]` unchecked | INCONCLUSIVE over a would-be PASS; `REPLICATION_PENDING_MARKER` is one constant read by both the branch and the promotion rule; no `provisional` identifier, string or comment anywhere (AST + normalized-source scan) |
-| GATE-09 | 20-05, 20-06 | ✓ SATISFIED | ✗ `[ ]` unchecked | Six outcomes observed firing; destroyed-model fixture built from Phase 19's real published M1 readings, four fields asserted against the parsed artifact; subprocess twin re-runs it in CI |
-| GATE-10 | 20-05, 20-06 | ✓ SATISFIED | ✗ `[ ]` unchecked | Total dispatch proved at import; both named branches fired; unset fallback tolerance raises naming D-26 |
-| CAL-04 | 20-01, 20-05, 20-06, 20-07 | ✓ SATISFIED | `[x]` | `K_RUNGS` + `ratchet_k` + `promote_to_full_fidelity` all committed at 20-05, all preceding the first artifact |
-| RPT-02 | 20-03, 20-06 | ⚠️ PARTIAL BY DESIGN | `[ ]` unchecked | Helper exists with its differential proof (SC5's literal requirement — VERIFIED). The requirement's second clause, "**is used for correction sweeps**", has exactly one non-self-referential call site (`test_phase20_prereg.py:957`, scanning the pin's comments). Correction sweeps are report-time work. **Legitimately deferred, but the deferral is recorded only in 20-03-SUMMARY.md, not in REQUIREMENTS.md.** |
+| GATE-01 | 20-01, 20-02, 20-04, 20-06 | ✓ SATISFIED | `[x]` + note (:302) | Three-name domain, AST-proved keyword-only, four reason strings |
+| GATE-02 | 20-01, 20-04, 20-06, 20-07, 20-08..20-12 | ⚠️ MECHANISM SATISFIED, RESIDUAL **RE-OPENS** | `[x]` + D-36 amendment + residual-closed note (:303) | The supersession is honest and tighter (verified arithmetically, unchanged from the previous verification). The residual's *closure* — the retention choke point — is defeated by a one-ULP nudge and by any looser floor. See gap 2. |
+| GATE-03 | 20-04, 20-06 | ✓ SATISFIED | `[x]` + note (:304) | `y_taught` / `y_heldout` pair at `:765-766` |
+| GATE-04 | 20-04, 20-06 | ✓ SATISFIED | `[x]` + note (:305) | Each leg `F_Y ×` its own control; 0.4921/0.3483 AST-absent |
+| GATE-05 | 20-04, 20-06 | ✓ SATISFIED | `[x]` + note (:306) | Early return before any reason appended; watched differentially |
+| GATE-06 | 20-04, 20-06, 20-08, 20-10, 20-11, 20-12 | ⚠️ **PARTIAL** — X closed, Y falsifiable | `[x]` + long note (:307) | The note is accurate about what was built and about the pin being unedited. It over-claims on the Y axis: "closing WR-09 in the same function" is true of the parameter and not of the finding. See gap 1. |
+| GATE-07 | 20-01, 20-05, 20-06 | ✓ SATISFIED | `[x]` + note (:308) | 3-tuple carries `arm`; mixed-arm list aborts |
+| GATE-08 | 20-04, 20-05, 20-06 | ✓ SATISFIED | `[x]` + note (:309) | INCONCLUSIVE over a would-be PASS; one `REPLICATION_PENDING_MARKER` constant |
+| GATE-09 | 20-05, 20-06 | ✓ SATISFIED | `[x]` + note (:310) | Six outcomes fired; fixture asserted against the parsed Phase 19 artifact |
+| GATE-10 | 20-05, 20-06 | ✓ SATISFIED | `[x]` + note (:311) | `_CAPACITY_DISPATCH` totality proved at import |
+| CAL-04 | 20-01, 20-05, 20-06, 20-07 | ✓ SATISFIED | `[x]` (:312) | `K_RUNGS` + `ratchet_k` + `promote_to_full_fidelity` precede the first artifact. ℹ️ Its traceability note is a five-word stub — the only one of the twelve that does not name a function and a guard. Cosmetic; the underlying discharge is verified. |
+| RPT-02 | 20-03, 20-06 | ⚠️ PARTIAL BY DESIGN | `[ ]` + explicit deferral (:313) | Correctly unchecked. The previous verification's complaint — that the deferral lived only in a SUMMARY — is closed: the Phase 25 deferral is now recorded in REQUIREMENTS.md with the four in-phase instances of the defect class it exists to close. |
 
 **Orphaned requirements:** none. `grep -E "Phase 20" .planning/REQUIREMENTS.md` maps exactly the
-twelve IDs the plans claim; no ID is expected of this phase that no plan claimed.
+twelve IDs the plans claim.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| — | — | `TBD` / `FIXME` / `XXX` | — | **None.** All five phase-modified files scanned; zero debt markers. The debt-marker gate is clean. |
+| — | — | `TBD` / `FIXME` / `XXX` | — | **None** in any file the gap closure touched. Debt-marker gate clean. |
 | — | — | `TODO` / `HACK` / `PLACEHOLDER` | — | None |
-| `scripts/mitigation_gate.py` | 798-812 | Two statistics compared against one ceiling | 🛑 Blocker (against SC3) | CR-01 — see crux |
-| `scripts/mitigation_gate.py` | 800-801 | Pair-valued criterion checked on one leg | ⚠️ Warning | WR-09 — the held-out Y axis has no coverage check and no parameter to give it one |
-| `scripts/mitigation_gate.py` | 595-634 | `retention_cap` validates only the sign of its floor | ⚠️ Warning | WR-01 — `extraction_ceiling` gets three provenance `_prove`s; the retention floor gets none, so a borrowed floor reaches (c) silently. The asymmetry is undocumented. |
-| `results/phase20_retention_floor.json` | — | No committed test reads it | ⚠️ Warning | WR-02 — the artifact→`retention_cap` coupling is prose-only; CI watches neither side |
-| `scripts/mitigation_gate.py` | 320-329 | `MITIGATION_GOAL_FRAMING` referenced nowhere | ℹ️ Info | IN-09 — module data with no reader; harmless, and frozen |
-| `scripts/mitigation_gate.py` | 1283+ | `__main__` uses bare `assert`, strippable under `-O` | ℹ️ Info | IN-06 — contradicts `_prove`'s own stated rationale, but the pytest twin re-asserts every outcome in CI, so the self-check is not the only witness |
+| `scripts/phase20_gate_coverage.py` | 241-247, 296-297 | A pair-valued criterion validated for length while its values are consumed raw | 🛑 Blocker (against SC3) | Gap 1 — NaN manufactures coverage |
+| `scripts/phase20_gate_coverage.py` | 396-406 | Float `!=` standing in for a magnitude property | 🛑 Blocker (against 20-12's `threats_open: 0`) | Gap 2 — one ULP defeats T-20-19's named refusal |
+| `scripts/phase20_gate_coverage.py` | 353-406 | Provenance validated, magnitude unconstrained | 🛑 Blocker (against 20-12's `threats_open: 0`) | Gap 2 — `5.0` reaches a PASS at a 3.55× looser cap |
+| `scripts/phase20_gate_coverage.py` | 257 | `isinstance(k, float) and k.is_integer()` admits rates | ⚠️ Warning | The module's own `SUPERSEDED_SWEEP_SENTINEL` passes as counts. Demotion-only. |
+| `scripts/phase20_gate_coverage.py` | 588-602 | Decisive clearing reasons returned verbatim under a contradicting INCONCLUSIVE | ⚠️ Warning | A reader scanning reasons rather than the verdict reads a cleared point. Reason-scanning is an established pattern here (`REPLICATION_PENDING_MARKER`, `_names_gate06`). |
+| `tests/test_phase20_correction.py` | 925-936 | The sole choke-point enforcement is blind to aliased imports | ⚠️ Warning | `mpv(...)` after `import … as mpv` bypasses every correction silently |
+| `scripts/phase20_gate_coverage.py` | 339 | `_ADAPTER_REGIME_RETENTION_FLOOR` retyped from a committed JSON artifact | ⚠️ Warning | Against the module's own stated "never retyped" discipline; drift caught only incidentally by a substring assertion |
+| `scripts/phase20_gate_coverage.py` | 248-255 | Refusal message argues about a failure mode its predicate cannot detect | ℹ️ Info | A draw-denominated `n` is positive and passes; `n = 104.5` computes without complaint |
+| `scripts/phase20_gate_coverage.py` | 386-387 | Unhashable `seeds` raises `TypeError` instead of a refusal | ℹ️ Info | Leaks a traceback from a function whose "whole output is the refusal" |
 
-No stub patterns. Every `return` in the pin is a computed value; `FIXTURE_*` dicts are labelled
-inputs to a demonstration, and four of their fields are asserted against a parsed published artifact.
+No stub patterns. Every `return` computes; no empty handler, no hardcoded-empty prop, no
+`return null` shape anywhere in either new file.
 
 ---
 
-## The GATE-02 supersession: is marking it complete honest?
+## Did the gap closure close gap 1?
 
-The brief asks this directly, so here is a direct answer with the arithmetic I ran rather than the
-arithmetic the SUMMARY quotes.
+The previous verification listed four missing items. **All four landed.** Judged individually:
 
-**What GATE-02 literally says** (REQUIREMENTS.md:31-35): condition (c) is computed from four
-constants imported from `erasure_gate.py` — including `V20_RETENTION_NOISE_FLOOR` 0.068930 —
-"yielding `dialogue_cap` 4.5837288963367 and `retention_cap` 4.029000."
+1. **`results/phase20_gate_coverage_correction.json` with a `governs` field, in the
+   `phase19_calibration_correction.json` shape** — ✓ landed, and exceeded: it also carries
+   `supersedes`, `defects`, `evidence` for all three cases, `heldout_coverage`, `bound_direction`
+   with its cost, and `recorded_not_corrected` for the items deliberately left. Every number in it is
+   re-derived by a committed test, and a one-digit edit was watched turning that test red.
+2. **`append_addendum(...)` dated continuation, never an edit to the pin** — ✓ landed. The `.md`
+   carries `## Addendum — 2026-08-21` written through `scripts/_addendum.py`, in two commits so the
+   append is provably additive, with a tmp-location additivity guard. The pin is byte-identical.
+3. **An armed tripwire in an unpinned test file, both directions** — ✓ landed and genuinely armed.
+   The arming is structural, which is the right kind: each test asserts the *frozen pin's* wrong
+   answer and the *correction's* right answer in one body, so neither side can regress silently.
+   Four watched-RED breaks were performed and restored byte-identically.
+4. **A recorded decision on the un-coverable held-out Y leg (WR-09)** — ✓ landed, and the *stronger*
+   of the two options the previous verification offered: corrected rather than accepted-in-writing.
+   `sweep_heldout_recalls` exists and both legs are decided in one body.
 
-**What the pin does.** It deliberately does NOT import `V20_RETENTION_NOISE_FLOOR` (a test asserts
-its absence from a five-name import list checked by equality), and it does NOT produce 4.029000. The
-governing v4.0 cap is 3.9085032379884783. So GATE-02 as written is **not** satisfied on one of its
-four named constants and one of its two stated yields.
+**So the prescription was followed.** What the closure then did beyond the prescription is where it
+went wrong: it flipped `GATE-06` to `[x]`, `20-SECURITY.md` to `status: verified` / `threats_open: 0`,
+and T-20-19 to closed — three assertions of completeness resting on guards that are one length check
+and one float `!=` wide. The previous verification's own instruction was "leave GATE-06 unchecked and
+add a traceability note naming CR-01 + WR-09 and the correction artifact that will close them." The
+artifact now exists, so checking it is defensible in principle. It is not defensible on the Y axis,
+where the coverage finding the checkbox certifies can be produced by the input.
 
-**Verdict: marking it `[x]` with the recorded supersession is HONEST, and is the better of the two
-available options.** Three reasons, in order of weight:
-
-1. **The supersession cannot buy an easier result.** I computed both caps from the committed code:
-   3.9085032379884783 against 4.029, from a measured floor 7.94× smaller than the borrowed one. The
-   amendment makes condition (c) **harder** to clear. A self-serving amendment moves a threshold the
-   other way. This is the single strongest piece of evidence and it is arithmetic, not narrative.
-2. **The borrowed value was measurably wrong for the regime it would have governed.** 0.068930 is a
-   Phase 12 **full-fine-tune** seed pair; v4.0 verdicts are **adapter-regime**. The artifact's
-   `governs` field states the mirror of what `results/phase19_noise_floors.json` already says about
-   the full-fine-tune *dialogue* floor — Phase 19 caught that defect on one leg and left it
-   unremarked on the other. Correcting it is closing a known defect, not inventing a licence.
-3. **Nothing is hidden.** The supersession is recorded in three places — the REQUIREMENTS.md
-   traceability row, a dated inline amendment in ROADMAP SC1, and the artifact's machine-readable
-   `governs` field (the shape `results/phase19_calibration_correction.json` already established).
-   The requirement text was deliberately NOT edited, which is the correct treatment of a
-   pre-registration record. `erasure_gate.py:246` still computes 4.029 for Phase 19 and is
-   explicitly not corrected.
-
-**Why reverting to unchecked would be worse.** An unchecked box carries no note into a milestone
-rollup. It would read as "Phase 20 failed to do this", which is false about the mechanism, and it
-would make the supersession *less* visible, not more.
-
-**The residual risk, stated rather than glossed.** A `[x]` is machine-readable; the supersession note
-beside it is not. An automated audit that counts checkboxes will report GATE-02 satisfied *as
-written*, and a reader who greps `4.029000` in REQUIREMENTS.md finds an unamended requirement. That
-is a WARNING, not a BLOCKER — the substance is recorded in three places including a machine-readable
-artifact — but it is a real gap between what the checkbox asserts and what the code does.
-
-## Over-claim-avoidance discipline: did it hold?
-
-**Yes for 20-01 through 20-06, and then it broke at the hand-off.** Twelve applications are recorded,
-one per plan-summary, each declining to mark a requirement also claimed by a later plan. That is
-genuine discipline and I found no instance of a plan marking a requirement it had not discharged.
-
-But the twelfth application (20-06) deferred **GATE-01 through GATE-10 and RPT-02** to 20-07 — and
-20-07's frontmatter claims only `[GATE-02, CAL-04]`, so its "Requirements assessed" table assesses
-only those two. Eight IDs that ARE genuinely discharged in the committed code fell through the gap
-and were never marked. Over-claim-avoidance ran one application past its useful life and became a
-terminal under-claim.
-
-**Nothing is marked complete that is not genuinely discharged.** I checked the two that are marked:
-CAL-04 is fully discharged (the rules landed at 20-05 and 20-07 is where the "before any v4.0
-artifact exists" clause becomes provable rather than vacuous — `checked` went 0→9). GATE-02 is
-assessed above. **The failure is under-claiming, not over-claiming**, which is the safer direction
-but is still a traceability gap the milestone audit will trip over.
+**A gate cannot be green over guards with measured holes when the guards are the entire basis for the
+green.** That is not a stylistic objection — it is the trust boundary this file's own register names
+at 20-SECURITY.md:39: *"a plan that says a thing will be done ↔ a guard that proves it was."* The
+closure honoured that boundary against SUMMARY claims (it re-ran guards rather than citing
+summaries — genuinely good practice, and I confirmed the re-runs happened). It did not extend the
+same scepticism to whether the guards prove what their messages say. GC-01 is the same defect class as
+T-20-19 itself: a borrowed floor reaching the cap with no refusal, now one ULP away from the value the
+guard names.
 
 ---
 
 ## Human Decision Requested (Escalation Gate)
 
-Three items where automated verification has taken the question as far as evidence can and a human
-owns the call.
+### 1. Is `_prove_retention_floor` a dated continuation or a post-hoc rule?
 
-### 1. Accept or reject the GATE-02 `[x]`-with-supersession treatment
+**Test:** `results/phase20_retention_floor.json` was committed 2026-08-20 19:37:56. The rule that
+judges that floor's provenance was committed 2026-08-21, and refuses exactly one competitor to it
+while admitting every looser value. Decide whether that ordering is acceptable under D-24.
+**Expected:** Either a recorded acceptance naming the asymmetry, or the one-line magnitude bound —
+which converts the rule from a name to a property and makes the ordering question moot, because a
+property bound authored after the measurement still cannot be tuned toward a favourable answer.
+**Why human:** This is the pre-registration policy question the previous verification escalated for
+the extraction leg (item 2), now instantiated on the retention leg. My recommendation: take the
+bound. It is one line, it is strictly conservative, the review already wrote it, and it removes both
+gap 2 and the policy question in the same commit.
 
-**Test:** Read REQUIREMENTS.md:31-35 and its traceability note at :272, then decide whether a
-checked box on a requirement whose stated yield the phase deliberately does not produce is the
-record you want carried into the milestone audit.
-**Expected:** Either confirm the current treatment (my assessment: defensible, and the amendment is
-tighter — verified arithmetically), or amend the requirement text with a dated in-place amendment in
-the same style ROADMAP SC1 already uses.
-**Why human:** This is a policy question about how a pre-registration record is amended, not a
-question about code. The evidence is unambiguous; the convention is a judgment call.
+### 2. Does the Y-sweep hole block Phase 21, or may it ride to Phase 23?
 
-### 2. Decide the CR-01 remediation route before Phase 23
+**Test:** No committed caller reaches `corrected_point_verdict` today (the census measures zero
+non-test callers and I confirmed it). Phase 21 does not consume GATE-06. Phase 23 sets sweep width,
+which is where coverage stops being hypothetical.
+**Expected:** A dated decision either way.
+**Why human:** Reachability-in-practice depends on scheduling intent that is not in the codebase. My
+reading: it does not block Phase 21, and it absolutely must close before Phase 23.
 
-**Test:** Decide whether `sweep_extraction_rates` will be supplied in Wilson-bound space (a caller
-convention, no new code in the pin) or whether the coverage rule is corrected by a dated continuation
-artifact — and record the decision NOW.
-**Expected:** A committed `results/phase20_gate_coverage_correction.json` with a `governs` field, plus
-an armed tripwire in an unpinned test.
-**Why human:** The parameter's space is **undocumented** in the pin, which means a Phase 25 caller
-could pass Wilson bounds and the comparison would become consistent *without any edit*. That is the
-cheap fix — and it is also a researcher degree of freedom, because choosing it *after* seeing that
-raw rates return INCONCLUSIVE would be exactly the post-hoc latitude pre-registration exists to
-remove. Whichever route is chosen, it must be chosen and dated **before** Phase 23 measures anything.
+### 3. Should `20-SECURITY.md` be re-opened, or its T-20-19 row re-scoped?
 
-### 3. Accept or close the un-coverable held-out Y leg (WR-09)
-
-**Test:** Decide whether GATE-06's Y-axis coverage checking only `sweep_taught_recalls` is an
-accepted, written-down hole or is corrected through the same continuation artifact.
-**Expected:** Either a recorded acceptance naming the cost, or a correction.
-**Why human:** Unlike CR-01 this cannot be fixed by a caller convention — the `sweep_heldout_recalls`
-parameter does not exist and the file is frozen. Someone has to decide whether the pair-valued Y that
-SC2 makes load-bearing is allowed to have half its coverage check missing.
+**Test:** Read 20-SECURITY.md:91 against the two measurements in gap 2.
+**Expected:** Either `threats_open: 1` until the bound lands, or a rewritten row scoping the closure
+to what the guard proves (one named value, one asserted string) with the residual named.
+**Why human:** Whether a security gate may publish `verified` with a known-narrow guard is a policy
+call about this project's own standard, and this file has an unusually strict one.
 
 ---
 
 ## Gaps Summary
 
-**The phase goal is achieved.** Every rule that will judge a v4.0 number is committed, and the
-ordering was verified against the commit DAG in my own process: nine pin commits, then the first
-v4.0 number two hours later, with the cost calibration still unrun. The ancestry guard is live and no
-longer vacuous, the file is genuinely frozen (`git rm` + re-add cannot launder it, proven across five
-states in a throwaway repo that CI re-executes), and the pin is stdlib-plus-one-sibling with every
-instrument imported by object identity rather than copied. That is a real pre-registration and it
-does what a pre-registration is for.
+**The phase goal remains achieved and the pre-registration is intact.** The pin is byte-identical
+across its own correction, the ancestry guard is stronger than before (3 artifacts × 9 commits, all
+first-adds after the last pin commit), the correction landed as an unpinned module plus a dated
+continuation rather than as an edit, and the whole repository is green at 874 passed / 1 skipped with
+lint clean. That is the hard part of correcting a frozen pre-registration and it was done right.
 
-**It ships one real defect and one bookkeeping gap.**
+**Gap 1 (the previous FAILED must-have) is half closed.** CR-01's extraction half — the half the gap
+was filed about — is genuinely fixed and genuinely armed, with pin-vs-correction differentials that
+redden on either side. WR-09's missing parameter now exists. But the two Y legs the closure added are
+validated for length only, and I measured a differential the code review did not: the *same*
+genuinely-truncated held-out axis returns `INCONCLUSIVE` at `(0.30, 0.28)` and `PASS` at
+`(nan, 0.28)`. A NaN does not merely pass through — `nan >= criterion` is `False`, so it is *counted
+as a failing point* and actively manufactures the bracket. That is direction (ii)'s false-coverage
+defect reappearing on the exact axis WR-09 exists to cover, reaching a spurious `PASS` — the one
+direction the previous verification certified the frozen pin could not produce.
 
-The defect is CR-01, in GATE-06, and it is worse than recorded: the coverage test reads raw rates
-against a Wilson-space ceiling, which I reproduced producing **both** a spurious INCONCLUSIVE on a
-genuinely bracketing sweep **and** a suppressed INCONCLUSIVE — a decisive FAIL — on a genuinely
-truncated one. The second direction is not in REVIEW.md and contradicts the "conservative only"
-framing. The narrower and more important claim survives: it cannot manufacture a spurious PASS under
-self-consistent inputs, so no v4.0 headline can be inflated by it. A second hole in the same block
-(WR-09) leaves the held-out leg of a pair-valued Y with no coverage check and no parameter to give it
-one. Neither is fixable in place. The review prescribed the dated-continuation remediation and **none
-of it has been committed** — no correction artifact, no `append_addendum` call, no tripwire.
+**Gap 2 is new to this verification and is arguably the more serious of the two,** because it needs
+no malformed input at all: a well-formed call with `retention_noise_floor=5.0` and clean
+adapter-regime provenance returns `PASS` at a cap of `13.89114` against the governing
+`3.9085032379884783`. And the guard that is supposed to refuse the borrowed Phase 12 floor is
+defeated by a one-ULP nudge that buys a *bit-identical* `4.029` — the exact borrowed cap. The
+unperturbed value IS refused, so the mechanism exists, computes, and is watched. Its coverage is one
+bit wide, and `GATE-06`'s checkbox, GATE-02's residual discharge, T-20-19's closed row and
+`threats_open: 0` all rest on it.
 
-The bookkeeping gap is that eight of twelve requirement IDs are genuinely discharged in code and
-still sit unchecked, because the over-claim-avoidance pattern was applied one plan past its useful
-life: 20-06 deferred them to 20-07, and 20-07 assessed only the two IDs in its own frontmatter.
-GATE-06 is correctly unchecked. RPT-02 is correctly unchecked but its deferral is recorded only in a
-SUMMARY, not in REQUIREMENTS.md.
+**The previous verification's gap 2 (requirement bookkeeping) is fully closed** — all twelve IDs
+carry state, eleven checked with function-and-guard traceability notes, RPT-02 correctly unchecked
+with its Phase 25 deferral now recorded in REQUIREMENTS.md rather than only in a SUMMARY.
 
-**Neither gap blocks Phase 21**, which does not consume GATE-06. Both must close before Phase 23,
-which is where Z's sweep width is set and where sweep coverage stops being hypothetical.
+**Neither gap blocks Phase 21**, which does not consume GATE-06 and cannot reach either hole — no
+committed caller reaches `corrected_point_verdict` at all. Both must close before **Phase 23**. The
+total remediation is roughly ten lines of `_prove` across two functions plus four test cases, all of
+which the code review has already written out. This is a phase one small commit from done.
 
 ---
 
-_Verified: 2026-08-20T23:14:01Z_
-_Verifier: Claude (gsd-verifier) — goal-backward, FORCE stance_
+_Verified: 2026-08-21T16:53:03Z_
+_Verifier: Claude (gsd-verifier) — goal-backward, FORCE stance, re-verification_
