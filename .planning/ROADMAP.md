@@ -236,7 +236,7 @@ kind exists — including before the cost calibration
      `scripts/_prose.py::normalized` exists and finds a line-wrapped phrase that `grep -c` reports as
      absent — v3.0's recorded lesson converted into a mechanism. (CAL-04, RPT-02)
 
-**Plans**: 12 plans across 10 waves (7 original + 5 gap-closure)
+**Plans**: 17 plans across 16 waves (7 original + 5 gap-closure wave 1 + 5 gap-closure wave 2)
 
 Plans:
 **Wave 1**
@@ -285,6 +285,28 @@ Plans:
 **Wave 11** *(blocked on Wave 10 completion)*
 
 - [x] 20-12-PLAN.md — GATE-06 discharged in REQUIREMENTS.md, Success Criterion 3 amended in place with a dated blockquote pointing at the correction, and 20-SECURITY.md flipped to `status: verified` / `threats_open: 0` — all three against a re-run rather than against a plan (the guards re-run in the closing process: `29 passed` zero skips, both frozen files `git diff --exit-code` 0, and the FOUR gap-closure watched-RED breaks re-applied and observed failing rather than transcribed — one of which diverged from `20-11`'s record and is published. Register totals reconciled to the file's own rows at **66 threats, 66 closed, 0 open**, the eight inherited IDs transcribed from the committed `20-05` / `20-06` registers)
+
+**Gap closure — wave 2** *(`/gsd:plan-phase 20 --gaps` — 20-VERIFICATION.md gaps 1-2 after the 2026-08-21 re-verification returned `gaps_found` at 5/6: the two Y sweep legs were validated for LENGTH ONLY, and `_prove_retention_floor` refused a NAME where the harm is a PROPERTY)*
+
+**Wave 12**
+
+- [ ] 20-13-PLAN.md — D-38/D-39/D-40/D-41 recorded in `20-CONTEXT.md` before any artifact cites them, and T-20-19 flipped back to OPEN in `20-SECURITY.md` (`status: blocked` / `threats_open: 1`) as the FIRST act — an honest record of the real state while the correction is pending (D-39), in a commit separate from the re-close
+
+**Wave 13** *(blocked on Wave 12 — every later plan cites D-38…D-41, so the record must exist first; enforced by the wave graph, not asserted in prose)*
+
+- [ ] 20-14-PLAN.md — `coverage_verdict` gains a per-element `[0.0, 1.0]` `_prove` on BOTH Y legs (subsuming NaN with no special-case check) and enforces the extraction count guard BY TYPE; the measured route-level differential armed as a tripwire — on `FIXTURE_CLEARING_POINT` at `(1,3)/(104,104)`, held-out `(0.30, 0.28)` returns INCONCLUSIVE with a GATE-06 reason while `(nan, 0.28)`, strictly MORE truncated, returned `PASS` with none
+
+**Wave 14** *(blocked on Wave 13 completion — same two files)*
+
+- [ ] 20-15-PLAN.md — `_prove_retention_floor` gains a magnitude bound alongside the existing `!=` name refusal (D-38); the sanctioned route's test harness supplies the governing floor read from `results/phase20_retention_floor.json` (D-41 — the bound refuses this repo's own fixtures at `0.009`); the aliased IMPORT censused as well as the call (GC-06)
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
+- [ ] 20-16-PLAN.md — the second correction published: five new `defects` keys plus a `value_guards` block written additively into `results/phase20_gate_coverage_correction.json` with its own additivity guard, a SECOND dated continuation appended to the `.md` via `scripts/_addendum.py` in its own commit, and `REQUIREMENTS.md`'s falsified "caught by the number itself" claim corrected
+
+**Wave 16** *(blocked on Wave 15 completion)*
+
+- [ ] 20-17-PLAN.md — T-20-19 re-closed and `20-SECURITY.md` flipped back to `status: verified` / `threats_open: 0`, gated on the 20-14/20-15 breaks being RE-APPLIED and observed in the closing process (D-39), with the total reconciled to the file's own 84 rows; ROADMAP and STATE brought current
 
 ### Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus
 
