@@ -47,8 +47,11 @@ CPU-only: stdlib plus three sibling scripts and ``git``. No torch, no numpy, no 
 
 import ast
 import inspect
+import json
 import math
 import pathlib
+import re
+import subprocess
 import sys
 
 import pytest
@@ -58,7 +61,8 @@ _SCRIPTS = _ROOT / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-import erasure_gate  # noqa: E402  (needs the sys.path insert above)
+import _addendum  # noqa: E402  (needs the sys.path insert above)
+import erasure_gate  # noqa: E402  (same reason)
 import mitigation_gate  # noqa: E402  (same reason)
 import phase20_gate_coverage as coverage  # noqa: E402  (same reason)
 
@@ -101,6 +105,15 @@ QUESTIONS = (N, N)
 # make the tripwire disagree with the artifact it exists to protect.
 DEFAULT_HELDOUT_SWEEP = (0.30, 0.20)
 DEFAULT_RETENTION_PROVENANCE = {"regime": "adapter", "seeds": (1337, 2024)}
+
+
+def _git(*args):
+    done = subprocess.run(("git", *args), cwd=_ROOT, capture_output=True, check=True)
+    return done.stdout.decode("utf-8")
+
+
+def _payload():
+    return json.loads(PAYLOAD_PATH.read_text(encoding="utf-8"))
 
 
 def _corrected_call(fixture_name, **overrides):
@@ -475,3 +488,269 @@ def test_wilson_bounds_are_exact_mirrors():
             f"{name} is assigned at module scope in scripts/phase20_gate_coverage.py — a second "
             "copy of a protocol requirement, which is exactly what T-20-53 forbids"
         )
+
+
+def test_correction_addendum_is_additive_on_the_published_artifact():
+    """The continuation was ADDED beside the published verdict, never written over it.
+
+    ``tests/test_phase20_prereg.py`` and ``tests/test_phase19_docs.py`` prove
+    ``scripts/_addendum.py`` appends — at a synthetic tmp location, against bytes the test itself
+    wrote. This proves what that writer actually DID to the published artifact, which is a
+    different claim: a writer can be append-only and still have been run against a file some other
+    hand had already rewritten. Every assertion below therefore runs on the COMMITTED BYTES.
+
+    The pre-append revision is DERIVED from history rather than pinned to a hash, and it is derived
+    from ``git log`` rather than ``git ls-files``. MEASURED: ``ls-files`` prints the path for a file
+    that is staged and never committed, so it cannot distinguish a committed revision from an index
+    entry — precisely the state the two-commit rule forbids.
+    """
+    assert CORRECTION_PATH.exists(), f"{CORRECTION_REL} is missing — plan 20-10 committed it"
+    assert _git("rev-parse", "--is-shallow-repository").strip() == "false", (
+        "shallow clone: the pre-append revision is not in the object store, so this guard cannot "
+        "distinguish 'the append was additive' from 'the history was never read'. "
+        "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+    )
+
+    # The newest committed revision still carrying the placeholder is BY DEFINITION the one before
+    # the append, and that stays true however many later commits touch the file.
+    before = None
+    for revision in _git("log", "--format=%H", "--", CORRECTION_REL).split():  # newest first
+        blob = _git("show", f"{revision}:{CORRECTION_REL}")
+        if PENDING in blob:
+            before = blob
+            break
+    assert before is not None, (
+        f"no committed revision of {CORRECTION_REL} carries {PENDING!r}, so there is no "
+        "pre-append state to compare against. Either the placeholder never existed (the file is "
+        "not this writer's output, i.e. the two-commit rule was not followed) or the history was "
+        "rewritten"
+    )
+    after = CORRECTION_PATH.read_text(encoding="utf-8")
+
+    cut = before.index(PENDING)
+    assert after[:cut] == before[:cut], (
+        f"the published {CORRECTION_REL} no longer starts with its pre-append bytes. Everything "
+        "above the placeholder is the FROZEN PIN's own literal reading — all four verdicts with "
+        "the fixture named — and an append may not touch any of it"
+    )
+
+    before_lines, after_lines = before.splitlines(), after.splitlines()
+    changed = [(old, new) for old, new in zip(before_lines, after_lines) if old != new]
+    assert changed == [(PENDING, RECORDED)], (
+        "exactly one published line may differ, and it is the placeholder becoming a pointer at "
+        f"the appended section: {changed}"
+    )
+    assert after_lines[: len(before_lines)] == [
+        RECORDED if line == PENDING else line for line in before_lines
+    ], "a published line was moved, deleted or reordered rather than left in place"
+    assert len(after_lines) > len(before_lines), "nothing was appended"
+    assert ADDENDUM_HEADING in "\n".join(after_lines[len(before_lines) :]), (
+        f"{ADDENDUM_HEADING!r} is not in the appended region, so the section was spliced into the "
+        "body rather than added after it. NOTE the date: the continuation is dated 2026-08-21, "
+        "the day it was written and its numbers re-derived, not the 2026-08-20 its plan hardcoded"
+    )
+
+    recorded_after = _addendum._verdict.recorded_verdict(after)
+    assert recorded_after == _addendum._verdict.recorded_verdict(before), (
+        "the recorded `## Verdict` section changed across the append. It is the section the "
+        "clobber guards anchor on and the one thing a continuation exists to sit BESIDE"
+    )
+    assert recorded_after is not None, (
+        f"{CORRECTION_REL} has no `## Verdict` section at all, so the equality above compared "
+        "None with None and `append_addendum`'s own unchanged-verdict guard was vacuous on this "
+        "file — it would have permitted any rewrite whatsoever of a document with no such heading"
+    )
+
+    # STAT-02 as the LINE-SCOPED rule 20-10 wrote this artifact against: a line carrying a `%`
+    # figure must carry an explicit k/n denominator on that same line. A percentage with its
+    # denominator on some other line is a percentage a reader meets without one.
+    for number, line in enumerate(after_lines, start=1):
+        if re.search(r"\d\s*%", line) and not re.search(r"\d\s*/\s*\d", line):
+            raise AssertionError(
+                f"{CORRECTION_REL}:{number} publishes a percentage with no k/n denominator on the "
+                f"same line: {line!r}"
+            )
+
+
+def test_every_published_number_re_derives_from_the_modules():
+    """Every float in the correction JSON, obtained by CALLING the modules. A hand edit goes red.
+
+    The artifact was generated by a throwaway script that imported the three modules and called
+    them; the script is not committed, so the discipline it enforced has no standing enforcement
+    until this test exists (T-20-51). Nothing below is typed as a literal.
+
+    ONE published field is deliberately NOT re-derived: ``zero_successes_short_circuit
+    .measured_residue_at_n_104``. Re-deriving it would require writing out the naive mirror's
+    ``centre - spread`` in this file, i.e. a second copy of exactly the estimator the module
+    short-circuits — the T-20-53 defect, introduced by the test that exists to prevent it. The
+    short-circuit's OUTPUT is asserted instead, which is the part any decision could read.
+    """
+    payload = _payload()
+    evidence = payload["evidence"]
+    fixture = mitigation_gate.FIXTURE_CLEARING_POINT
+
+    assert evidence["n"] == fixture["control_extraction_questions"]
+    assert evidence["X"] == _ceiling_for("FIXTURE_CLEARING_POINT"), (
+        f"the payload publishes X = {evidence['X']!r} but extraction_ceiling on the fixture's own "
+        f"arguments returns {_ceiling_for('FIXTURE_CLEARING_POINT')!r}"
+    )
+    assert evidence["y_taught"] == coverage.F_Y * fixture["control_taught_recall"]
+    assert evidence["y_heldout"] == coverage.F_Y * fixture["control_heldout_recall"]
+
+    ceiling = evidence["X"]
+    for point in evidence["swept_points"]:
+        k, n = point["successes"], point["questions"]
+        upper = coverage.wilson_upper_bound(k, n)
+        assert point["wilson_upper_bound"] == upper, (point, upper)
+        assert point["raw_rate"] == k / n, (point, k / n)
+        assert point["clears_under_condition_a"] == (upper <= ceiling), point
+        assert point["clears_under_the_frozen_block"] == (k / n <= ceiling), point
+
+    # BOTH verdicts per direction, re-measured through the pin and through the route. The fixture
+    # is read OUT of the payload rather than assumed, so a payload that renamed its fixture is
+    # measured against the fixture it actually names.
+    for key, successes in (
+        ("direction_i", DIRECTION_I_SUCCESSES),
+        ("direction_ii", DIRECTION_II_SUCCESSES),
+        ("direction_ii_on_clearing_fixture", DIRECTION_II_SUCCESSES),
+    ):
+        entry = evidence[key]
+        name = entry["fixture"]
+        assert tuple(entry["successes"]) == successes, (key, entry["successes"])
+        questions = tuple(entry["questions"])
+        assert tuple(entry["raw_rates"]) == tuple(k / n for k, n in zip(successes, questions)), (
+            entry
+        )
+        assert tuple(entry["wilson_upper"]) == tuple(
+            coverage.wilson_upper_bound(k, n) for k, n in zip(successes, questions)
+        ), entry
+
+        pin_verdict, _pin_reasons, _pin_arm = mitigation_gate.mitigation_point_verdict(
+            **_pin_call(name, sweep_extraction_rates=tuple(entry["raw_rates"]))
+        )
+        assert entry["pin_verdict"] == pin_verdict, (
+            f"{key}: the payload publishes pin_verdict {entry['pin_verdict']!r} but the frozen pin "
+            f"on {name} returns {pin_verdict!r}"
+        )
+        corrected, _reasons, _arm = coverage.corrected_point_verdict(
+            **_corrected_call(
+                name,
+                sweep_extraction_successes=successes,
+                sweep_extraction_questions=questions,
+            )
+        )
+        assert entry["corrected_verdict"] == corrected, (
+            f"{key}: the payload publishes corrected_verdict {entry['corrected_verdict']!r} but "
+            f"the sanctioned route on {name} returns {corrected!r}"
+        )
+
+    # The retention leg's whole evidentiary record — two floors, two caps, the ratio.
+    retention = payload["retention_provenance"]
+    measured_floor = json.loads(RETENTION_FLOOR_PATH.read_text(encoding="utf-8"))[
+        "retention_ppl_noise_floor"
+    ]
+    assert retention["measured_floor"] == measured_floor
+    assert retention["borrowed_floor"] == erasure_gate.V20_RETENTION_NOISE_FLOOR
+    assert retention["borrowed_cap"] == mitigation_gate.retention_cap(
+        retention_noise_floor=erasure_gate.V20_RETENTION_NOISE_FLOOR
+    )
+    assert retention["governing_cap"] == mitigation_gate.retention_cap(
+        retention_noise_floor=measured_floor
+    )
+    assert retention["ratio"] == erasure_gate.V20_RETENTION_NOISE_FLOOR / measured_floor
+    assert retention["borrowed_floor_is_looser"] is (
+        retention["governing_cap"] < retention["borrowed_cap"]
+    )
+
+    # The REPORTED lower bounds — priced at the nearest whole count at n = 104, because the fixture
+    # Y points are fabricated RATES carrying no count. The count is published beside each bound and
+    # is re-derived here rather than taken on trust.
+    for entries in payload["bound_direction"]["reported_lower_bounds"].values():
+        for entry in entries:
+            k, n = entry["successes_priced_at_n_104"], entry["questions"]
+            assert k == round(entry["fixture_rate"] * n), entry
+            assert entry["wilson_lower_bound"] == coverage.wilson_lower_bound(k, n), entry
+            assert entry["wilson_upper_bound"] == coverage.wilson_upper_bound(k, n), entry
+    short_circuit = payload["bound_direction"]["zero_successes_short_circuit"]
+    assert short_circuit["wilson_lower_bound_at_zero"] == coverage.wilson_lower_bound(0, N)
+
+    # The module data the artifact serialises rather than restates.
+    assert payload["supersedes"] == coverage.SUPERSEDED_GATE06_BLOCK
+    assert tuple(payload["superseded_sweep_sentinel"]) == coverage.SUPERSEDED_SWEEP_SENTINEL
+    assert (
+        tuple(
+            (entry["axis"], entry["statistic"], entry["criterion_site"])
+            for entry in payload["coverage_statistic_by_axis"]
+        )
+        == coverage.COVERAGE_STATISTIC_BY_AXIS
+    )
+
+    # WR-09's held-out leg: the ONE published case that overrides the default sweep, and the case
+    # the frozen 21-keyword signature has no parameter to reach at all.
+    heldout = payload["heldout_coverage"]
+    assert heldout["pin_has_the_parameter"] is (
+        "sweep_heldout_recalls"
+        in inspect.signature(mitigation_gate.mitigation_point_verdict).parameters
+    )
+    verdict, reasons, _arm = coverage.corrected_point_verdict(
+        **_corrected_call(
+            "FIXTURE_CLEARING_POINT",
+            sweep_extraction_successes=DIRECTION_I_SUCCESSES,
+            sweep_extraction_questions=QUESTIONS,
+            sweep_heldout_recalls=tuple(heldout["sweep_heldout_recalls"]),
+        )
+    )
+    assert heldout["corrected_route_verdict"] == verdict
+    assert heldout["y_heldout"] == coverage.F_Y * fixture["control_heldout_recall"]
+    assert heldout["sentence"] in reasons[-1], (
+        f"the payload's held-out truncation sentence is not the one the route produces: "
+        f"{heldout['sentence']!r} against {reasons[-1]!r}"
+    )
+
+
+def test_the_three_defects_are_still_live_in_the_frozen_pin():
+    """Each defect asserted against the CODE, never against the prose that describes it.
+
+    A description that outlives its defect is worse than no description: it teaches a reader to
+    distrust an artifact that is now correct (T-20-57). If any assertion here goes green, the
+    continuation needs RE-READING, not deleting — and the pin is frozen, so a defect going away is
+    itself evidence that something moved that should not have.
+    """
+    payload = _payload()
+
+    # CR-01 — the coverage statistic. The pin still demotes a would-be PASS on direction (i).
+    pin_verdict, _reasons, _arm = mitigation_gate.mitigation_point_verdict(
+        **_pin_call(
+            "FIXTURE_CLEARING_POINT",
+            sweep_extraction_rates=tuple(k / N for k in DIRECTION_I_SUCCESSES),
+        )
+    )
+    assert pin_verdict == "INCONCLUSIVE", (
+        f"CR-01 is GONE: the frozen pin now returns {pin_verdict!r} on direction (i). "
+        f"{CORRECTION_REL} needs re-reading rather than deleting — and since the pin cannot be "
+        "edited, a change in its behaviour means something else moved"
+    )
+
+    # WR-09 — the held-out leg has no parameter at all in the frozen 21-keyword signature.
+    parameters = inspect.signature(mitigation_gate.mitigation_point_verdict).parameters
+    assert "sweep_heldout_recalls" not in parameters, (
+        "WR-09 is GONE: mitigation_point_verdict now carries a sweep_heldout_recalls parameter, so "
+        "the held-out leg of the pair-valued Y is no longer uncoverable by the frozen gate. The "
+        f"continuation says it is; {CORRECTION_REL} needs re-reading rather than deleting"
+    )
+    assert len(parameters) == 21, len(parameters)
+
+    # T-20-19 — retention_cap accepts the Phase 12 full-fine-tune floor with NO refusal at all,
+    # and returns the LOOSER cap. Asserted against the artifact's own published value rather than
+    # against a retyped literal.
+    borrowed_cap = mitigation_gate.retention_cap(
+        retention_noise_floor=erasure_gate.V20_RETENTION_NOISE_FLOOR
+    )
+    assert borrowed_cap == payload["retention_provenance"]["borrowed_cap"], (
+        f"T-20-19 has MOVED: retention_cap on the borrowed floor now returns {borrowed_cap!r} "
+        f"against the published {payload['retention_provenance']['borrowed_cap']!r}"
+    )
+    assert borrowed_cap > payload["retention_provenance"]["governing_cap"], (
+        "T-20-19 is GONE: the borrowed floor no longer buys the looser cap, so the substitution is "
+        f"no longer the one an unguarded borrowing profits from. {CORRECTION_REL} needs re-reading"
+    )
