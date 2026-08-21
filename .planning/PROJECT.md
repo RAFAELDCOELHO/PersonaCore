@@ -227,6 +227,16 @@ adapter-off control protocol and the 42,480-draw budget precedent all come from 
 is N adapter training runs on the M3 (v2.0 precedent: ~38 min per 4000-step arm) times sweep width
 across two arms, which is why the DP-SGD cost number gates the sweep design rather than following it.
 
+**Progress — Phase 20 complete, re-verified 7/7 on 2026-08-21.** Every v4.0 outcome threshold, the
+capacity-comparison rule and the per-point draw budget are committed and guarded BEFORE any v4.0
+number of any kind exists. Validated here: GATE-01 … GATE-10, CAL-04, RPT-02. The phase reopened
+twice for gap closure, and both times the defect was one class worth carrying into Phases 21-28:
+*a guard that refuses a NAME where the harm is a PROPERTY*. A NaN recall — reachable from `0/0` on
+an empty held-out set — slipped a length-only Y check and actively manufactured coverage; a
+one-ULP nudge slipped a float `!=` and bought a bit-identical borrowed retention cap. Both are now
+refused by property, and the bound was proven non-vacuous rather than assumed. Next: Phase 21 fixes
+what a privacy *record* is, structurally, before any ε can be computed against the wrong one.
+
 ## Core Value
 
 The novel claim must be true and demonstrable: **personalization lives in the weights, not in a prompt or a store** — and the from-scratch implementation must be correct enough to prove it. If everything else fails, the project must still show real ML depth built by hand.
