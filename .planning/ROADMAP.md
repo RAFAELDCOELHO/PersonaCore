@@ -196,7 +196,7 @@ kind exists — including before the cost calibration
      `scripts/_prose.py::normalized` exists and finds a line-wrapped phrase that `grep -c` reports as
      absent — v3.0's recorded lesson converted into a mechanism. (CAL-04, RPT-02)
 
-**Plans**: 7 plans across 6 waves
+**Plans**: 12 plans across 10 waves (7 original + 5 gap-closure)
 
 Plans:
 **Wave 1**
@@ -223,6 +223,25 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [x] 20-07-PLAN.md — Blocking push checkpoint, the unpinned MPS retention-floor driver, and `results/phase20_retention_floor.json` committed strictly after the pin
+
+**Gap closure** *(`/gsd:plan-phase 20 --gaps` — 20-VERIFICATION.md gaps 1-2, 20-SECURITY.md `threats_open: 2`)*
+
+**Wave 7**
+
+- [ ] 20-08-PLAN.md — `scripts/phase20_gate_coverage.py`: `coverage_verdict` deciding each axis on the statistic its criterion is decided on (Wilson upper on X, raw rates on both Y legs), `_prove_retention_floor`, and `corrected_point_verdict` — the one route with no `sweep_extraction_rates` parameter
+- [ ] 20-09-PLAN.md — The eight empty REQUIREMENTS.md traceability notes, and D-36's dated in-place GATE-02 amendment so a grep for `4.029000` lands on the correction
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 20-10-PLAN.md — `results/phase20_gate_coverage_correction.{md,json}`: the `governs`/`supersedes` artifact and the D-24 dated continuation, in two commits so the append is provably additive
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 20-11-PLAN.md — `tests/test_phase20_correction.py`: both reproduced directions watched RED-then-GREEN, the retention refusal suite, WR-02's artifact coupling, and the AST caller census enforcing the choke point
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 20-12-PLAN.md — GATE-06 discharged in REQUIREMENTS.md and 20-SECURITY.md flipped to `status: verified` / `threats_open: 0`, both against a re-run rather than against a plan
 
 ### Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus
 
