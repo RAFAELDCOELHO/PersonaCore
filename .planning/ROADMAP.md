@@ -120,7 +120,7 @@ ran no mitigation arm. v4.0 builds training-time mitigation, maps the privacy/ut
 two mechanisms across two corpus capacities, and proves adversarially — by relearning attack — that
 what survives cannot be cheaply reverted.
 
-- [ ] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (execution complete 2026-08-20; SC3 partial — reopened pending GATE-06 gap closure)
+- [ ] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (execution complete 2026-08-20; reopened for GATE-06 gap closure, all 12 plans executed 2026-08-21 — SC3's GATE-06 clause superseded by a dated D-34/D-37 amendment, GATE-06 discharged, `20-SECURITY.md` at `threats_open: 0`. Awaiting re-verification by `/gsd:verify-phase 20`)
 - [ ] **Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus** - Fix what a record is, and prove it structurally, before any ε can be computed against the wrong one
 - [ ] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers
 - [ ] **Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration** - Size the sweep from a measurement, and run the one cheap run that separates an honest negative from a silent bug
@@ -284,7 +284,7 @@ Plans:
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 20-12-PLAN.md — GATE-06 discharged in REQUIREMENTS.md, Success Criterion 3 amended in place with a dated blockquote pointing at the correction, and 20-SECURITY.md flipped to `status: verified` / `threats_open: 0` — all three against a re-run rather than against a plan
+- [x] 20-12-PLAN.md — GATE-06 discharged in REQUIREMENTS.md, Success Criterion 3 amended in place with a dated blockquote pointing at the correction, and 20-SECURITY.md flipped to `status: verified` / `threats_open: 0` — all three against a re-run rather than against a plan (the guards re-run in the closing process: `29 passed` zero skips, both frozen files `git diff --exit-code` 0, and the FOUR gap-closure watched-RED breaks re-applied and observed failing rather than transcribed — one of which diverged from `20-11`'s record and is published. Register totals reconciled to the file's own rows at **66 threats, 66 closed, 0 open**, the eight inherited IDs transcribed from the committed `20-05` / `20-06` registers)
 
 ### Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus
 
