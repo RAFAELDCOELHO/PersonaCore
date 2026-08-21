@@ -297,3 +297,112 @@ def coverage_verdict(
         tuple(truncated_axes),
         ("the sweep never produced points on both sides of " + "; ".join(parts)),
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# T-20-19 — THE RETENTION LEG'S PROVENANCE CHOKE POINT, WHICH THE FROZEN `retention_cap` CANNOT
+# HAVE. `mitigation_gate.extraction_ceiling` guards its floor with THREE `_prove` calls (`:417`,
+# `:425`, `:436`) and D-14(a) states why they are code and not a per-call-site convention: "they
+# are not a per-call-site convention a later caller can forget". `mitigation_gate.retention_cap`
+# (`:595-634`) validates ONLY `retention_noise_floor < 0` and has ZERO provenance checks. That
+# asymmetry is T-20-19, and the pin is frozen, so the missing half is supplied HERE and made
+# unavoidable by being called FIRST in `corrected_point_verdict`.
+#
+# The names mirror the extraction leg one for one: `EXTRACTION_FLOOR_PROVENANCE_KEYS` ->
+# `RETENTION_FLOOR_PROVENANCE_KEYS`, `NEVER_TAUGHT_ARM` -> `ADAPTER_REGIME`. The seed count is
+# NOT mirrored, it is REUSED: `EXTRACTION_FLOOR_MIN_SEEDS` is imported above, because it is the
+# same two-seed protocol the dialogue and retention floors were both measured under, and a retyped
+# `2` would be a second copy of one protocol requirement (T-20-53).
+# ---------------------------------------------------------------------------------------------
+RETENTION_FLOOR_PROVENANCE_KEYS = ("regime", "seeds")
+ADAPTER_REGIME = "adapter"
+
+# `results/phase20_retention_floor.json::retention_ppl_noise_floor`, the measured adapter-regime
+# floor produced by plan 20-07. It is here ONLY so the refusal messages below can name what the
+# borrowed value is being refused IN FAVOUR OF; nothing in this module reads it as a default, and
+# `retention_cap`'s floor stays a required keyword argument with no fallback (D-07).
+_ADAPTER_REGIME_RETENTION_FLOOR = 0.008681618994239138
+
+# The three published numbers in the refusals below are DERIVED from the two floors, never
+# retyped: the borrowed cap, the governing cap and their ratio all fall out of the frozen
+# `retention_cap` and the imported `V20_RETENTION_NOISE_FLOOR`. Typing `4.029` as a literal is
+# exactly how a refusal message acquires a wrong number in a phase whose stated discipline is
+# "computed from imported constants, never retyped".
+_BORROWED_CAP = mitigation_gate.retention_cap(retention_noise_floor=V20_RETENTION_NOISE_FLOOR)
+_GOVERNING_CAP = mitigation_gate.retention_cap(
+    retention_noise_floor=_ADAPTER_REGIME_RETENTION_FLOOR
+)
+_BORROWED_FLOOR_RATIO = V20_RETENTION_NOISE_FLOOR / _ADAPTER_REGIME_RETENTION_FLOOR
+
+
+def _prove_retention_floor(*, retention_noise_floor, retention_floor_provenance):
+    """The FOUR refusals a retention floor must survive before it can reach a v4.0 verdict.
+
+    Returns ``None``; its whole output is the refusal. Both arguments are keyword-only with no
+    default, GATE-01's discipline. The first three mirror ``extraction_ceiling``'s calls at
+    ``:417`` / ``:425`` / ``:436`` one for one — mapping with the required keys, the right regime,
+    at least ``EXTRACTION_FLOOR_MIN_SEEDS`` distinct seeds. The fourth has no counterpart on the
+    extraction leg and exists because this leg has a specific borrowed value in circulation:
+    ``erasure_gate.V20_RETENTION_NOISE_FLOOR`` reaches the frozen ``retention_cap`` today with no
+    refusal whatsoever, and it is refused here BY IDENTITY — imported, never typed — so a caller
+    that lies about ``regime`` is still caught by the number itself.
+    """
+    has_keys = hasattr(retention_floor_provenance, "keys")
+    _prove(
+        has_keys and set(retention_floor_provenance) >= set(RETENTION_FLOOR_PROVENANCE_KEYS),
+        f"the retention noise floor arrived with provenance {retention_floor_provenance!r}, which "
+        f"is not a mapping carrying every key in {RETENTION_FLOOR_PROVENANCE_KEYS}. The cap is not "
+        "computable from a floor whose regime and seeds are unstated: an unlabelled number is "
+        "indistinguishable from a borrowed one, and D-14(a) commits that obligation as CODE rather "
+        "than as prose precisely because a prose note gets missed",
+    )
+    _prove(
+        retention_floor_provenance["regime"] == ADAPTER_REGIME,
+        f"the retention noise floor names regime "
+        f"{retention_floor_provenance['regime']!r}, not {ADAPTER_REGIME!r}. D-06 refuses one "
+        f"borrowing BY NAME: {V20_RETENTION_NOISE_FLOOR} is a Phase 12 FULL-FINE-TUNE seed pair — "
+        "wrong regime for an adapter verdict — and it is "
+        f"{_BORROWED_FLOOR_RATIO}x larger than the measured adapter-regime floor "
+        f"{_ADAPTER_REGIME_RETENTION_FLOOR}. Substituting it yields the LOOSER cap "
+        f"{_BORROWED_CAP} against the governing {_GOVERNING_CAP}, so the unguarded substitution is "
+        "the one that buys an easier pass. That is the identical error D-12 corrects for the "
+        "extraction floor, where a Phase 19 ablation reading would have set X to 0.321652",
+    )
+    seeds = retention_floor_provenance["seeds"]
+    distinct = len(set(seeds)) if isinstance(seeds, (list, tuple, set, frozenset)) else 0
+    _prove(
+        distinct >= EXTRACTION_FLOOR_MIN_SEEDS,
+        f"the retention noise floor reports seeds {seeds!r}, which is {distinct} distinct value(s) "
+        f"against the {EXTRACTION_FLOOR_MIN_SEEDS}-seed protocol used for the dialogue and "
+        "extraction floors. A single-seed floor is NOT a noise floor, it is ONE DRAW: there is no "
+        "second reading for it to vary against, so it measures nothing about run-to-run variance "
+        f"and the k={MARGIN_K} margin built on it would be a margin over an unknown",
+    )
+    _prove(
+        retention_noise_floor != V20_RETENTION_NOISE_FLOOR,
+        f"the retention noise floor IS {V20_RETENTION_NOISE_FLOOR}, the Phase 12 full-fine-tune "
+        "seed pair, whatever regime the provenance claims. Refused by identity against the value "
+        "imported from `erasure_gate` rather than against a retyped literal, so the check cannot "
+        f"drift away from the constant it refuses. It is {_BORROWED_FLOOR_RATIO}x the measured "
+        f"adapter-regime floor {_ADAPTER_REGIME_RETENTION_FLOOR} and yields the LOOSER cap "
+        f"{_BORROWED_CAP} against the governing {_GOVERNING_CAP} — T-20-19 reproduced: "
+        "`retention_cap` accepts it today with no refusal at all, and the looser cap is the one a "
+        "borrowing buys",
+    )
+
+
+# ---------------------------------------------------------------------------------------------
+# THE SUPERSESSION CONSTANTS. Module data, read by both the correction artifact and `20-11`'s
+# tripwire, so "which block is superseded" is a value rather than a sentence in a report.
+# ---------------------------------------------------------------------------------------------
+SUPERSEDED_GATE06_BLOCK = "scripts/mitigation_gate.py:798-812"
+
+# WHAT MAKES `(0.0, 1.0)` LEGITIMATE RATHER THAN LUCKY, written at the definition so a reader
+# meets the justification here and not four functions away. It is fed to the pin's
+# `sweep_extraction_rates` and `sweep_taught_recalls` to neutralise the superseded block, and it
+# brackets ANY criterion strictly inside the unit interval on both sides: 0.0 is at-or-below and
+# 1.0 is above any `X` with `0.0 < X < 1.0`; 1.0 is at-or-above and 0.0 is below any `Y` with
+# `0.0 < Y <= 1.0`. That is exactly the precondition `corrected_point_verdict` establishes with
+# `_prove` calls on `ceiling`, `y_taught` and `y_heldout` BEFORE the sentinel is ever passed — so
+# the bracketing is proved at the call site rather than assumed of the caller's data.
+SUPERSEDED_SWEEP_SENTINEL = (0.0, 1.0)
