@@ -306,7 +306,7 @@ Plans:
 
 **Wave 16** *(blocked on Wave 15 completion)*
 
-- [ ] 20-17-PLAN.md — T-20-19 re-closed and `20-SECURITY.md` flipped back to `status: verified` / `threats_open: 0`, gated on the 20-14/20-15 breaks being RE-APPLIED and observed in the closing process (D-39), with the total reconciled to the file's own 84 rows; ROADMAP and STATE brought current
+- [ ] 20-17-PLAN.md — T-20-19 re-closed and `20-SECURITY.md` flipped back to `status: verified` / `threats_open: 0`, gated on the 20-14/20-15 breaks being RE-APPLIED and observed in the closing process (D-39), with the total reconciled to the file's own 84 distinct threat IDs; ROADMAP and STATE brought current
 
 ### Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus
 
