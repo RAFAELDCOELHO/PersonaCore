@@ -387,12 +387,20 @@ one of these IDs before its record exists. Each is LOCKED on the same terms as D
   **this plan, `20-13`, wave 12**; the re-close to `threats_open: 0` is **plan `20-17`, wave 16**, and
   is gated on the D-38 magnitude bound's tripwires having been **OBSERVED red-then-green against BOTH
   measured cases** — `0.06893 * (1 + 2**-50)` and `5.0`. They must not be the same commit. The reason
-  is this phase's own trust boundary at `20-SECURITY.md:39` — *"a plan that says a thing will be done
-  ↔ a guard that proves it was."* At HEAD that file publishes `status: verified` / `threats_open: 0`
+  is this phase's own trust boundary — *"a plan that says a thing will be done
+  ↔ a guard that proves it was."* At `5da028a` that file publishes `status: verified` / `threats_open: 0`
   over a guard the re-verification defeated twice by measurement; a register that publishes a closure
   it cannot substantiate is the exact failure its own boundary names. Flipping it open is therefore
   the FIRST act of this wave-set, not the last — a gate that goes honest only after its remediation
   lands was never carrying the state it published.
+  **Anchor warning, measured at `20-13` and binding on `20-14`…`20-17`:** this plan's own additive
+  flip inserts lines above every trust-boundary row, so EVERY `20-SECURITY.md:NN` citation written
+  before it is stale by construction. Measured `5da028a` → post-flip: `:33`→`:37` (measured ↔
+  borrowed floor), `:38`→`:42` (frozen pin ↔ its correction), `:39`→`:43` (plan ↔ guard),
+  `:40`→`:44` (published total ↔ its rows), `:91`→`:135` (the `T-20-19` register row). `20-14`
+  cites `:39`; `20-15` cites `:39` and `:33`; `20-16` cites `:38` and `:40`; `20-17` cites `:39`
+  and `:40` — all against the pre-flip file. Resolve them by TEXT, never by number, and expect a
+  second shift when `20-17` re-closes.
 
 - **D-40 — both gaps close in this pass; the Y hole is NOT deferred to Phase 23.** This is the dated
   decision `20-VERIFICATION.md`'s human-verification item 2 (`:80-82`) asks for. What closes, in
