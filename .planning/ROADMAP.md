@@ -240,7 +240,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 20-11-PLAN.md — `tests/test_phase20_correction.py`: both reproduced directions watched RED-then-GREEN, the retention refusal suite, WR-02's artifact coupling, and the AST caller census enforcing the choke point
+- [x] 20-11-PLAN.md — `tests/test_phase20_correction.py`: both reproduced directions watched RED-then-GREEN, the retention refusal suite, WR-02's artifact coupling, and the AST caller census enforcing the choke point (11 tests, 957 lines; **FOUR** watched-RED breaks observed and restored byte-identically — the coverage statistic flipped to `k/n`, a scratch bypassing caller in the `ast.Attribute` form, one `_prove` deleted from `_prove_retention_floor`, and a one-digit `cap` edit. Census named `test_mitigation_point_verdict_has_no_caller_outside_this_module` — the name the shipped module already cites — not the plan's proposed name)
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
@@ -507,7 +507,7 @@ capacities — with every number in prose generated from a committed record rath
 | 1-8 | v1.0 | 29/29 | Complete | 2026-06-10 |
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
-| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 10/12 | Reopened — gap closure (wave 3 of 5 done) | 7/7 on 2026-08-20 |
+| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 11/12 | Reopened — gap closure (wave 4 of 5 done) | 7/7 on 2026-08-20 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 0/TBD | Not started | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
