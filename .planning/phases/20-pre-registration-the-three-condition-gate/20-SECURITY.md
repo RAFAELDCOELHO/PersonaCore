@@ -1,8 +1,8 @@
 ---
 phase: 20
 slug: pre-registration-the-three-condition-gate
-status: blocked
-threats_open: 1
+status: verified
+threats_open: 0
 asvs_level: 1
 created: 2026-08-20
 ---
@@ -15,10 +15,15 @@ created: 2026-08-20
 parseable `<threat_model>` block, and every SUMMARY carried `## Threat Flags`. This audit therefore
 **verified that the declared mitigations exist**; it did not build a retroactive STRIDE register.
 
-**Gate status: BLOCKED.** `threats_open: 1`. **`T-20-19` is carried OPEN again at plan `20-13`
-(2026-08-21), pending the D-38 magnitude bound** — `20-VERIFICATION.md` gap 2 reproduced two defeats
-of the guard on which its `20-12` closure rests. See `### Open` below for both reproductions and the
-named closing condition.
+**Gate status: CLOSED.** `threats_open: 0`. **`T-20-19` was carried OPEN again at plan `20-13`
+(2026-08-21) after `20-VERIFICATION.md` gap 2 reproduced two defeats of the guard on which its
+`20-12` closure rested, and is RE-CLOSED here at plan `20-17` (2026-08-21) — in a commit distinct
+from the OPEN flip (`72ef455`), per D-39.** What closed it is the **D-38 magnitude bound** shipped at
+`20-15`: `_MAX_ADMISSIBLE_RETENTION_FLOOR`, a fifth `_prove` in `_prove_retention_floor` that refuses
+the looser floor as a CLASS where the `!=` refused one NAME. Both measured defeats are now refused
+and the governing floor is still admitted, and the guards were **re-run and the watched-RED breaks
+re-applied in THIS closing process** rather than cited from any SUMMARY — see the Watched-RED
+evidence table and the Sign-Off below for the observed output. `### Open` reads `None.`
 The three-item dated continuation landed across plans
 `20-08` (the superseding module), `20-10` (the D-24 continuation artifact) and `20-11` (the armed
 tripwires), and the two remaining threats were closed at `20-12` **against a re-run of the guards in
@@ -47,7 +52,7 @@ resolution.
 
 ## Threat Register
 
-66 threats. **65 closed, 1 open.**
+84 threats. **84 closed, 0 open.**
 
 **THE COUNTING METHOD, stated once here and BINDING on `20-17` too** — two incompatible methods would
 let a later reader re-derive a different total from the same rows. A threat is counted once per
@@ -61,16 +66,47 @@ method is not changed here; it is written down. It is also why `### Open` names 
 rather than as a row: a second `| T-20-19 |` row-start there would make the count of rows at Status
 `open` read 2 against a published 1.
 
+**RE-MEASURED at plan `20-17` (2026-08-21) by a command run in the re-closing process, never
+inherited from the paragraph above** — the same discipline `20-12` used to close the 46-vs-38
+discrepancy: distinct ids across table lines = **84**, which is the published total above; table
+lines that START with `| T-20-NN |` = **57**, carrying **53** distinct ids; register rows at Status
+`open` = **0**. Neither 57 nor 53 is the total, which is exactly why the method is fixed in writing
+rather than left to whichever regex a later reader reaches for first. The 18 ids added this wave-set
+are each ALSO their own six-column row, so the wave-2 addition reconciles under both readings even
+though only the distinct count is the published figure. The `### Open` corollary in the sentence
+above is now historical rather than operative: `### Open` reads `None.`, the `20-13` re-opening text
+is preserved beneath it as prose, and it still contributes **0** row-starts.
+
 **The total is substantiated by this file's own rows: `38` previously named `+ 8` inherited rows now
-transcribed from the committed `20-05` / `20-06` registers `+ 20` new gap-closure threats `= 66`.**
+transcribed from the committed `20-05` / `20-06` registers `+ 20` new gap-closure wave-1 threats
+`= 66`, `+ 18` new gap-closure wave-2 threats `= 84`.**
 Every one of the 66 is an actual row below, so the published total is no longer inherited from a
-prior audit. The eight transcribed rows are `T-20-26`…`T-20-30` and `T-20-36`…`T-20-38`: they were
+prior audit. The same holds for the 18 added at `20-17`: `T-20-67` … `T-20-84` are each their own
+six-column row in the `20-13` … `20-17` section below, so the wave-2 addition reconciles by row as
+well as by distinct id. The eight transcribed rows are `T-20-26`…`T-20-30` and `T-20-36`…`T-20-38`: they were
 always counted in the earlier `46` and always enumerated by the inclusive ranges in the plan-grouped
 table, and their full mitigation text was committed one directory over in `20-05-PLAN.md` /
 `20-05-SUMMARY.md` and `20-06-PLAN.md` / `20-06-SUMMARY.md`. Each is copied from that source and
 cites it, so the count reconciles by transcription rather than by disclosure.
 
 ### Open
+
+**None.** `T-20-19` was the one open threat and is **RE-CLOSED at plan `20-17` (2026-08-21), against
+a re-run** — its row is below, under *The two formerly-open threats*, and now carries the full arc:
+asserted, falsified, re-opened, corrected, re-closed. A regex count of this file's own register rows
+at Status `open` returns **0**, which is what `threats_open: 0` in the frontmatter must equal.
+
+**The `20-13` re-opening record is PRESERVED below rather than deleted.** It is past tense at this
+marker and present tense in its own body, which is the `20-13` wording left unedited. It stays for
+two reasons: the closing condition it names is exactly what this re-close had to satisfy, and a
+reader who cannot see the condition cannot check that it was met; and the `T-20-19` row's pointer at
+*"the `### Open` PARAGRAPH above"* would otherwise be left dangling. Same additive discipline
+`T-20-61` names. **The condition was MET** — see *Watched-RED evidence* and the `20-17` approval
+paragraph in *Sign-Off* for the observed red-then-green output against both measured cases.
+
+---
+
+*Preserved from `20-13` (2026-08-21), verbatim:*
 
 **`T-20-19` — a v3.0-regime floor standing in for the v4.0 retention floor. RE-OPENED 2026-08-21 at
 plan `20-13` (D-39).** Its register row is below, under *The two formerly-open threats*; that row's
@@ -132,7 +168,7 @@ these two rows.
 | Threat ID | Category | Component | Disposition | Mitigation | Status |
 |-----------|----------|-----------|-------------|------------|--------|
 | T-20-21 | Repudiation | an INCONCLUSIVE silently reported as a FAIL, or vice versa | mitigate | **CLOSED at `20-12`.** *What was wrong, preserved:* the declared mitigation (three branches, each proved differentially against the counterfactual it overrides) was present and verified, but did not reach a **fourth** mislabeling path — GATE-06's sweep-coverage test decided on RAW rates (`mitigation_gate.py:798-812`) while condition (a) decided on `wilson_upper_bound(k, n)` (`:755`), against the same `ceiling`. Reproduced in **both** directions at n=104, X=0.04535522866494124: `FIXTURE_CLEARING_POINT` + `(1/104, 3/104)` brackets X under the (a) rule yet read as never-crossed → spurious `INCONCLUSIVE`; `FIXTURE_DESTROYED_MODEL` + `(3/104, 11/104)` read as covered while ZERO points cleared X → spurious `FAIL`. A third case in no prior report, `FIXTURE_CLEARING_POINT` + `(3/104, 11/104)`, returned `PASS` off that same truncated axis. No spurious `PASS` was constructible under self-consistent inputs. WR-09, the second hole in the same block: no `sweep_heldout_recalls` parameter existed in the 21-kwarg signature at all. *The closure:* `scripts/phase20_gate_coverage.py::coverage_verdict` decides each axis on the statistic that axis's criterion is decided on and decides BOTH Y legs, closing WR-09 in the same function (D-35); `corrected_point_verdict` is the one sanctioned route and has no `sweep_extraction_rates` parameter, so raw-rate space is unreachable through it. Published at `results/phase20_gate_coverage_correction.json` (`governs` / `supersedes`). **Watched by `tests/test_phase20_correction.py`** — both directions asserted RED against the frozen pin and GREEN through the correction in one differential body each — and watched FAILING in this closing process (row 6 of the Watched-RED table). `scripts/mitigation_gate.py` was NOT edited. | **closed** |
-| T-20-19 | Spoofing | a v3.0-regime floor standing in for the v4.0 retention floor | mitigate | **CLOSED at `20-12`.** *What was wrong, preserved:* the declared mitigation was verified true — `V20_RETENTION_NOISE_FLOOR` is neither imported (AST: five names, absent) nor present as a numeric constant (`0.068930` absent) — but it did not cover the **caller-supplied** path. `extraction_ceiling` carried **3** `_prove` calls refusing wrong-arm / <2-seed / missing-provenance floors; `retention_cap` carried **0**. Measured: `retention_cap(retention_noise_floor=0.068930)` returned `4.029` — the *looser* cap — with no refusal. That was asymmetric against T-20-24, whose whole point is that `mitigation_point_verdict` calls `extraction_ceiling` itself so no path to a verdict skips the provenance check. *The closure:* `scripts/phase20_gate_coverage.py::_prove_retention_floor` supplies the four refusals the frozen function cannot be given — three mirroring `extraction_ceiling`'s at `mitigation_gate.py:417` / `:425` / `:436`, plus a fourth refusing `V20_RETENTION_NOISE_FLOOR` BY IDENTITY — and is called FIRST in `corrected_point_verdict`, before any compute, so it is a choke point and not an advisory. **Watched by `tests/test_phase20_correction.py::test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict`**, which drives all eight refusals THROUGH the route with a positive control, and which was watched FAILING in this closing process (row 8 of the Watched-RED table). GATE-02's traceability row is rewritten from RESIDUAL-OPEN to a discharge naming the same function and guard. **RE-OPENED 2026-08-21 at plan `20-13` (D-39).** Every character before this sentence is the `20-12` record, preserved byte-identically — what was wrong with it is recorded beside it rather than over it, the same additive discipline D-36 and the ROADMAP SC3 amendment used. `20-VERIFICATION.md` gap 2 defeated that closure twice, by measurement. (i) `0.06893 * (1 + 2**-50)` passes the `!=` refusal at `scripts/phase20_gate_coverage.py:396-406` and buys a **BIT-IDENTICAL** `4.029` — the exact borrowed cap — reaching `PASS`; the control confirms the unperturbed `0.06893` IS refused, so the refusal's coverage is one bit wide. (ii) `retention_noise_floor=5.0` under clean `{"regime": "adapter", "seeds": (1337, 2024)}` provenance reaches `PASS` at cap `13.89114` against the governing `3.9085032379884783`, with no malformed input at all — provenance is a caller assertion and nothing bounded magnitude. The guard refuses a NAME where this row's own named harm, "the looser cap a borrowing buys", is a PROPERTY. **The closing condition is stated in the `### Open` PARAGRAPH above — prose, deliberately not a second row for this id.** | **open** |
+| T-20-19 | Spoofing | a v3.0-regime floor standing in for the v4.0 retention floor | mitigate | **CLOSED at `20-12`.** *What was wrong, preserved:* the declared mitigation was verified true — `V20_RETENTION_NOISE_FLOOR` is neither imported (AST: five names, absent) nor present as a numeric constant (`0.068930` absent) — but it did not cover the **caller-supplied** path. `extraction_ceiling` carried **3** `_prove` calls refusing wrong-arm / <2-seed / missing-provenance floors; `retention_cap` carried **0**. Measured: `retention_cap(retention_noise_floor=0.068930)` returned `4.029` — the *looser* cap — with no refusal. That was asymmetric against T-20-24, whose whole point is that `mitigation_point_verdict` calls `extraction_ceiling` itself so no path to a verdict skips the provenance check. *The closure:* `scripts/phase20_gate_coverage.py::_prove_retention_floor` supplies the four refusals the frozen function cannot be given — three mirroring `extraction_ceiling`'s at `mitigation_gate.py:417` / `:425` / `:436`, plus a fourth refusing `V20_RETENTION_NOISE_FLOOR` BY IDENTITY — and is called FIRST in `corrected_point_verdict`, before any compute, so it is a choke point and not an advisory. **Watched by `tests/test_phase20_correction.py::test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict`**, which drives all eight refusals THROUGH the route with a positive control, and which was watched FAILING in this closing process (row 8 of the Watched-RED table). GATE-02's traceability row is rewritten from RESIDUAL-OPEN to a discharge naming the same function and guard. **RE-OPENED 2026-08-21 at plan `20-13` (D-39).** Every character before this sentence is the `20-12` record, preserved byte-identically — what was wrong with it is recorded beside it rather than over it, the same additive discipline D-36 and the ROADMAP SC3 amendment used. `20-VERIFICATION.md` gap 2 defeated that closure twice, by measurement. (i) `0.06893 * (1 + 2**-50)` passes the `!=` refusal at `scripts/phase20_gate_coverage.py:396-406` and buys a **BIT-IDENTICAL** `4.029` — the exact borrowed cap — reaching `PASS`; the control confirms the unperturbed `0.06893` IS refused, so the refusal's coverage is one bit wide. (ii) `retention_noise_floor=5.0` under clean `{"regime": "adapter", "seeds": (1337, 2024)}` provenance reaches `PASS` at cap `13.89114` against the governing `3.9085032379884783`, with no malformed input at all — provenance is a caller assertion and nothing bounded magnitude. The guard refuses a NAME where this row's own named harm, "the looser cap a borrowing buys", is a PROPERTY. **The closing condition is stated in the `### Open` PARAGRAPH above — prose, deliberately not a second row for this id.** **RE-CLOSED 2026-08-21 at plan `20-17`, against a re-run.** Every character before this sentence is preserved byte-identically — the `20-12` closure, the `20-13` re-opening, both untouched — and this re-closure is appended beneath them, never over them. *What closed it:* the D-38 MAGNITUDE bound shipped at `20-15` — a **fifth `_prove`** in `scripts/phase20_gate_coverage.py::_prove_retention_floor` asserting `retention_noise_floor <= _MAX_ADMISSIBLE_RETENTION_FLOOR`, where that ceiling is DERIVED (`_ADAPTER_REGIME_RETENTION_FLOOR * (1.0 + _RETENTION_FLOOR_RELATIVE_TOLERANCE)`, tolerance measured `1e-09`) rather than typed. It is placed AFTER the `!=` deliberately, so the named-value refusal still fires first and still publishes the three numbers this file's audit cites; the bound then refuses the PROPERTY that made that one value worth refusing. *Both measured defeats are now refused, re-measured in this closing process:* `0.06893 * (1 + 2**-50)` → refused by MAGNITUDE, and `retention_noise_floor=5.0` under clean `{"regime": "adapter", "seeds": (1337, 2024)}` provenance → refused by MAGNITUDE. **The bound is not vacuous:** the governing floor `0.008681618994239138` is still ADMITTED, so every tighter floor a later phase measures passes unchanged — the refusal is one-sided and strictly conservative. *D-41's consequence, published rather than hidden:* the bound's FIRST catch is this repository's own committed fixtures at `retention_noise_floor: 0.009` inside the FROZEN pin, so the sanctioned route's test harness supplies the governing floor READ from `results/phase20_retention_floor.json` — the tolerance was NOT widened to admit a value already in hand — and all four published verdicts are bit-unchanged under the substitution, with the governing cap `3.9085032379884783` TIGHTER than the fixture's `3.90914`. *The guard:* **`tests/test_phase20_correction.py::test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict`**, which drives every refusal THROUGH `corrected_point_verdict` — so the claim proved is reachability, not helper existence — with a positive control, plus **`test_every_published_number_re_derives_from_the_modules`**, which re-derives the bound's published numbers from the module. *Re-applied in THIS process, not transcribed:* neutering the fifth `_prove` (`_prove(` → `_BREAK_1_DELETED = (`) produced `E Failed: DID NOT RAISE <class 'SystemExit'>` at `tests/test_phase20_correction.py:1191`, reached from `refused(retention_noise_floor=nudged)` at `:1252` with `overrides = {'retention_noise_floor': 0.06893000000000006}` in the frame — **`1 failed, 13 passed in 0.51s`**; widening `_RETENTION_FLOOR_RELATIVE_TOLERANCE` `1e-9` → `0.05` produced `E AssertionError: the admissible ceiling 0.009115699943951094 now ADMITS the fabricated fixture floor 0.009. …` / `E assert 0.009115699943951094 < 0.009` at `:1270` — **`2 failed, 12 passed in 0.53s`**, which DIVERGES from `20-15-SUMMARY.md`'s recorded `1 failed, 12 passed` and is published rather than smoothed (see the note beneath the Watched-RED table). Both restored byte-identically: `shasum -a 256` → `962b1a26…9b5af` equal, `git diff --exit-code` → 0. | **closed** |
 
 #### Transcribed from the committed `20-05` / `20-06` registers
 
@@ -177,6 +213,34 @@ reconstruction.
 | T-20-62 | Repudiation | an accepted risk that never reaches the Accepted Risks Log | mitigate | This file's own line — "accepted risks do not resurface in future audit runs" — is only true if they are logged. R-20-05, R-20-06 and R-20-07 are logged below with rationales and dates, and no R- entry is written for a `mitigate` disposition. The same reasoning forced the eight inherited rows to be TRANSCRIBED rather than disclosed: eight IDs counted in a published total but carried by no row are phantom coverage that resurfaces in the next audit, and the mitigation text was committed one directory over, so transcription cost nothing and fabricated nothing. *Declared and discharged at `20-12`.* | closed |
 | T-20-66 | Repudiation | an amendment that mis-states its own direction of movement | mitigate | MEASURED across all three cases: direction (i) `INCONCLUSIVE → PASS`, direction (ii) `FAIL → INCONCLUSIVE`, third case `PASS → INCONCLUSIVE`. On the favourability ordering `FAIL < INCONCLUSIVE < PASS` the first two BOTH move toward a more favourable verdict, so an earlier draft's "in both directions" would have been an over-claim published inside an anti-over-claim amendment. The SC3 block says "Not uniformly tighter", attributes the tightening solely to the third demoted case, and names criterion-matching as the justification; the verify asserts `DEMOTED`, `FIXTURE_CLEARING_POINT` and `criterion-match` present and `TIGHTER` absent, so the corrected claim is machine-checked rather than trusted to prose review. *Declared and discharged at `20-12`.* | closed |
 
+#### New at the gap-closure plans `20-13` … `20-17`
+
+Eighteen IDs, each declared in the `<threat_model>` of the plan named in its row and each stated
+against **what was actually built**, not against what its plan intended. Component and Mitigation are
+transcribed from the declaring plan; where that plan cited a line anchor, the anchor is replaced by
+the NAME it pointed at, because every anchor written this wave-set was measured stale on arrival.
+
+| Threat ID | Category | Component | Disposition | Mitigation | Status |
+|-----------|----------|-----------|-------------|------------|--------|
+| T-20-67 | Repudiation | a D-38…D-41 citation landing before the record exists | mitigate | `20-13` is wave 12 and every later plan in this wave-set declares it in `depends_on`; the ordering is a property of the plan graph, exactly as `20-09` → `20-08` was, not a sentence in a SUMMARY. **BUILT:** D-38…D-41 landed in `20-CONTEXT.md` at `4772efe` (82 insertions / 0 deletions), one commit BEFORE the register flip at `72ef455` and four plans before any artifact citing them. *Declared and discharged at `20-13`.* | closed |
+| T-20-68 | Tampering | a decision recorded as a decision but tuned toward a favourable answer | mitigate | D-38 bounds a PROPERTY whose value is the adapter floor already committed at `20-07` (`results/phase20_retention_floor.json`), so it cannot be moved without moving a committed artifact. **BUILT:** `_MAX_ADMISSIBLE_RETENTION_FLOOR` is derived from `_ADAPTER_REGIME_RETENTION_FLOOR`, never typed, and D-41 publishes the against-interest half — the bound's first catch is this repository's OWN fixture floor. *Declared at `20-13`, discharged at `20-15`.* | closed |
+| T-20-69 | Repudiation | a register flipped OPEN and then never re-closed, or re-closed on the plan | mitigate | D-39 names `20-17` as the re-close and names its precondition — both tripwires observed red-then-green against both measured cases — and the `### Open` prose states that condition in the file itself, so a re-close that skips it contradicts the file. **BUILT:** the condition was met and the `### Open` text is PRESERVED rather than deleted, so a reader can still check it against the evidence. `20-17` re-ran every guard and re-applied all seven breaks in its own process. *Declared at `20-13`, discharged at `20-17`.* | closed |
+| T-20-70 | Tampering | the OPEN flip rewriting rows other than T-20-19's | mitigate | `20-13`'s acceptance criteria asserted `T-20-21`'s row byte-identical against `git show HEAD`, exactly one row at Status `open`, and the `*What was wrong, preserved:*` span surviving verbatim. **BUILT and re-asserted at `20-17`:** the same two spans are diffed against `git show HEAD` again at the re-close, and both are byte-identical. *Declared at `20-13`, discharged at `20-13` and re-verified at `20-17`.* | closed |
+| T-20-71 | Spoofing | a Y coverage finding manufactured by the input rather than by the data | mitigate | A per-element `_prove` on BOTH Y legs inside `coverage_verdict`, placed before the `x_uppers` comprehension so no value reaches the axis loop unvalidated. `0.0 <= v <= 1.0` is `False` for NaN, so the range check SUBSUMES the NaN case with no special-case branch a later reader can delete separately. **BUILT** at `86f7a55`; measured before the guard, `(nan, 0.28)` — strictly MORE truncated than `(0.30, 0.28)` — returned `PASS` with zero GATE-06 reasons, because `nan >= 0.24499999999999997` is `False` and the NaN was counted as a FAILING point that manufactured the bracket. **Watched RED at `20-14` and RE-APPLIED at `20-17`** (row A). *Declared at `20-14`.* | closed |
+| T-20-72 | Tampering | a guard written but never watched failing | mitigate | Every guard this wave-set shipped was broken deliberately, observed failing, and restored with `shasum -a 256` equality plus `git diff --exit-code`. **BUILT:** `20-14` watched 2, `20-15` watched 3, `20-16` watched 3. **And re-applied at `20-17`: all seven, in the closing process, with one observed result DIVERGING from its SUMMARY and published.** Observed counts are published even where they contradict a plan's prediction. *Declared at `20-14`, discharged across `20-14`…`20-17`.* | closed |
+| T-20-73 | Repudiation | a tripwire that asserts only the post-fix refusal, losing the record of the flip it prevents | mitigate | The differential asserts the honest axis's finding AND the more-truncated axis's refusal in one body, AND the mechanism (`not (nan >= y_heldout)`), with the pre-guard `PASS` recorded in the assertion message. **BUILT** in `test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage`; confirmed at `20-17` by failure attribution — the re-applied break fails at case 3 with cases 1 and 2 evaluated and PASSED first, so the record of the flip is live rather than decorative. *Declared at `20-14`.* | closed |
+| T-20-74 | Spoofing | this module's own rate-space sentinel passing as a count of successes | mitigate | `whole = isinstance(k, int) and not isinstance(k, bool)`, replacing the integral-float acceptance that admitted a RATE as a COUNT; the sentinel is read from `coverage.SUPERSEDED_SWEEP_SENTINEL`, never retyped, so a later change to that constant travels into the refusal message and the test. **BUILT** at `86f7a55`. **Watched RED at `20-14` and RE-APPLIED at `20-17`** (row B). *Declared at `20-14`.* | closed |
+| T-20-75 | Spoofing | a looser retention floor reaching a v4.0 cap under clean provenance | mitigate | `_prove(retention_noise_floor <= _MAX_ADMISSIBLE_RETENTION_FLOOR, ...)` in `_prove_retention_floor`, which `corrected_point_verdict` calls FIRST before any compute, so it is a choke point and not an advisory. Asserted THROUGH the route via the `refused(...)` helper, so the claim proved is REACHABILITY rather than helper existence. **BUILT** at `f163b1c`. **Watched RED at `20-15` and RE-APPLIED at `20-17`** (row C). This is T-20-19's closure. *Declared at `20-15`.* | closed |
+| T-20-76 | Tampering | the bound's tolerance widened until a value already in hand passes | mitigate | D-41 records the rejection in writing and `_RETENTION_FLOOR_RELATIVE_TOLERANCE` is a NAMED constant, so a widening shows up in a diff as its own line. **BUILT, and it was needed:** `20-15`'s BREAK 2a measured the suite **GREEN** under a `1e-9` → `0.05` widening — a factor of 5×10⁷ that ADMITS the fabricated `0.009` — so a pin was added in `20-15`'s third commit (`9b010c8`). **RE-APPLIED at `20-17`** (row D), where it now reddens **TWO** guards rather than one. *Declared at `20-15`.* | closed |
+| T-20-77 | Elevation of privilege | an aliased import bypassing the choke point invisibly | mitigate | An `ast.ImportFrom` census on `mitigation_gate` for the name `mitigation_point_verdict`, which no alias can hide, with a synthetic non-vacuity control because the real tree yields zero import hits. **BUILT** at `763fc36`. The residual is RECORDED in the docstring rather than implied closed: `getattr(mitigation_gate, "mitigation_point_verdict")(...)` is invisible to both matchers, and the walk is scoped to `scripts/` + `src/`. **Watched RED at `20-15` and RE-APPLIED at `20-17`** (row E), with the positive control returning `1 passed` the moment the probe was removed. *Declared at `20-15`.* | closed |
+| T-20-78 | Tampering | the harness's substituted floor drifting from the committed artifact | mitigate | `DEFAULT_RETENTION_FLOOR` is READ from `results/phase20_retention_floor.json`, never retyped. **BUILT, and named as PARTIAL rather than claimed whole:** `coverage._ADAPTER_REGIME_RETENTION_FLOOR` is still a transcription of the same number (GC-07, out of scope at `20-15`), so the catch is ONE-DIRECTIONAL — a drift making the module constant TIGHTER than the artifact reddens every call, a drift making it LOOSER is not caught. Stated in `_corrected_call`'s docstring rather than presented as GC-07's closure. *Declared at `20-15`.* | closed |
+| T-20-79 | Tampering | a second continuation written as an edit rather than an append | mitigate | Written through `scripts/_addendum.py::append_addendum` in the idempotent-pointer form (`pending=RECORDED, recorded=RECORDED`), whose three guards run on the PRODUCED BYTES, in a commit (`69be030`) separate from the JSON (`001138d`) so a pre-append revision exists in history. **BUILT at +152 / −0 lines**; `test_correction_addendum_is_additive_on_the_published_artifact` kept every pre-existing assertion unedited and gained presence + ORDER assertions on the second heading. **Watched RED at `20-16` and RE-APPLIED at `20-17`** (row G), with the failure confirmed to name the ORDERING assertion and not a pre-existing one. *Declared at `20-16`.* | closed |
+| T-20-80 | Tampering | a published JSON key silently rewritten under cover of an additive write | mitigate | `test_correction_payload_is_additive_across_the_second_correction` derives the pre-write revision from `git log` — the newest blob with no `value_guards` key, true by definition — and asserts every old key EQUAL, `recorded_not_corrected` and `evidence` equal as wholes, and `value_guards` the only new top-level key. **BUILT** at `001138d`. Its docstring states that LINE-level additivity is not its claim, because a JSON key-append necessarily gives the previous last key a trailing comma. **Watched RED TWICE at `20-16` and RE-APPLIED at `20-17`** (rows F and F1b), where F1b mutates a leaf no re-derivation reads and reddens exactly ONE test — proving the guard independently load-bearing rather than merely co-firing. *Declared at `20-16`.* | closed |
+| T-20-81 | Repudiation | a corrected claim that over-claims again | mitigate | The `REQUIREMENTS.md` GATE-02 amendment states what the PAIR proves — one name by identity, one class by magnitude — and names both watched cases; the GATE-06 amendment states the Y half was structural-not-behavioural and gives the measured differential. **BUILT** at `1ae18a7`, where the falsified clause *"a caller that lies about `regime` is still caught by the number itself"* was corrected IN PLACE rather than amended beside it: D-36's additive register exists so a superseded NUMBER stays visible, not so a falsified CLAIM stays standing. The row's stale refusal count was RE-COUNTED at runtime (**10**, from 8 static `refused(...)` sites of which 2 are loops), not trusted. *Declared at `20-16`.* | closed |
+| T-20-82 | Repudiation | a continuation implying a completeness it did not achieve | mitigate | The addendum's fourth subsection names GC-05, GC-07 and GC-08…GC-12 as NOT closed, and `value_guards.census.residuals_not_closed` records the two census residuals GC-06 left open — the `getattr` dispatch and the `scripts/`+`src/` scope — as a state rather than a silent omission. **BUILT** at `69be030`. *Declared at `20-16`.* | closed |
+| T-20-83 | Repudiation | a register re-closed on the strength of a plan rather than a re-run | mitigate | The precondition D-39 sets, enforced as a STOP: `20-17` re-ran the phase-20 pair, the full suite, lint, both frozen-pin diffs and the ancestry guard, then re-applied **all seven** watched-RED breaks in its own process and quoted the output it observed. A break that failed to reproduce would have stopped the flip with `threats_open: 1` left standing. **BUILT:** none failed to reproduce; **one diverged** (row D reddens two guards where `20-15` recorded one) and the divergence is published beside the table rather than smoothed. *Declared and discharged at `20-17`.* | closed |
+| T-20-84 | Tampering | a re-close that edits the preserved historical text | mitigate | The re-closure is APPEND-ONLY. `T-20-21`'s row and `T-20-19`'s `*What was wrong, preserved:*` / `*The closure:*` / `RE-OPENED 2026-08-21 at plan 20-13` spans are asserted byte-identical against `git show HEAD` by explicit diff rather than by eye, and the `### Open` re-opening record is PRESERVED beneath the `None.` sentence rather than deleted. The OPEN flip (`72ef455`, `20-13`) and this re-close are provably distinct commits, four plans apart. *Declared and discharged at `20-17`.* | closed |
+
 **Watched-RED evidence (mitigations observed failing, then restored byte-identically):**
 
 | Threat ID | Deliberate break | Observed |
@@ -190,6 +254,42 @@ reconstruction.
 | T-20-48 | `scripts/_scratch_bypass_probe.py` added, calling `mitigation_gate.mitigation_point_verdict(...)` — the `ast.Attribute` form | **Re-run at `20-12`. Census fired:** `AssertionError: 1 call site(s) reach a v4.0 verdict through the frozen pin directly, bypassing scripts/phase20_gate_coverage.py::corrected_point_verdict: ['scripts/_scratch_bypass_probe.py:7']` / `assert ['scripts/_sc...s_probe.py:7'] == []`. Positive control: the same test returned `1 passed` the moment the scratch file was removed. This is precisely the form a bare-name matcher would have missed (WR-07) |
 | T-20-19 | the distinct-seed `_prove` deleted from `_prove_retention_floor` (8 lines removed) | **Re-run at `20-12`: `Failed: DID NOT RAISE <class 'SystemExit'>`** on `test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict` (`tests/test_phase20_correction.py:777`). Restored byte-identically |
 | T-20-51 | `results/phase20_retention_floor.json`'s `cap` edited at the 16th significant digit (`…4783` → `…4793`) | **Re-run at `20-12`. WR-02 fired:** `AssertionError: the artifact publishes cap 3.908503237988479 but retention_cap on its own published floor returns 3.9085032379884783`. `1 failed, 10 passed`. Restored byte-identically |
+
+**Re-applied at `20-17` in the closing process (D-39) — eight breaks, all OBSERVED.** Rows A…G below
+are the `20-14` / `20-15` / `20-16` breaks re-taken in the re-closing process rather than transcribed
+from those SUMMARYs. Pre-break digests, recorded before any break:
+`962b1a26…9b5af` (`scripts/phase20_gate_coverage.py`), `16dfdc13…b32f7`
+(`results/phase20_gate_coverage_correction.json`), `06cc11f1…8dd22`
+(`results/phase20_gate_coverage_correction.md`). Command in every case is
+`.venv/bin/python -m pytest tests/test_phase20_correction.py -q` unless a node id is named.
+
+| # | Threat ID | Deliberate break | Observed at `20-17` | Restore proof |
+|---|-----------|------------------|---------------------|---------------|
+| A | T-20-71 | the entire per-element Y `_prove` loop deleted, both legs (`git diff --stat`: **21 deletions**) | `E Failed: DID NOT RAISE <class 'SystemExit'>` at `tests/test_phase20_correction.py:486`, in `test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage`, at **case 3** (`# 3. THE FLIP, REFUSED.`) with cases 1 and 2 evaluated and PASSED first. **`1 failed, 13 passed in 0.81s`** | `shasum -a 256` → `962b1a26…9b5af` (**equal**); `git diff --exit-code -- scripts/phase20_gate_coverage.py` → **0** |
+| B | T-20-74 | `whole` reverted to `isinstance(k, int) or (isinstance(k, float) and k.is_integer())` | `E Failed: DID NOT RAISE <class 'SystemExit'>` at `:546`, in `test_the_modules_own_rate_space_sentinel_cannot_pass_as_counts`, at the FIRST iteration of the sentinel loop — on `coverage.SUPERSEDED_SWEEP_SENTINEL` itself. **`1 failed, 13 passed in 0.59s`** | `shasum -a 256` → `962b1a26…9b5af` (**equal**); `git diff --exit-code` → **0** |
+| C | T-20-75 | the fifth `_prove` neutered (`_prove(` → `_BREAK_1_DELETED = (`) in `_prove_retention_floor` | `E Failed: DID NOT RAISE <class 'SystemExit'>` at `:1191`, reached from `refused(retention_noise_floor=nudged)` at `:1252` with `overrides = {'retention_noise_floor': 0.06893000000000006}` in the frame — the one-ULP nudge. **`1 failed, 13 passed in 0.51s`** | `shasum -a 256` → `962b1a26…9b5af` (**equal**); `git diff --exit-code` → **0** |
+| D | T-20-76 | `_RETENTION_FLOOR_RELATIVE_TOLERANCE` widened `1e-9` → `0.05` | `E AssertionError: the admissible ceiling 0.009115699943951094 now ADMITS the fabricated fixture floor 0.009. …` / `E assert 0.009115699943951094 < 0.009` at `:1270`, AND `E assert 1e-09 == 0.05` / `+ where 0.05 = coverage._RETENTION_FLOOR_RELATIVE_TOLERANCE` at `:967`. **`2 failed, 12 passed in 0.53s`** — **DIVERGES from `20-15`'s recorded `1 failed, 12 passed`; see the note below** | `shasum -a 256` → `962b1a26…9b5af` (**equal**); `git diff --exit-code` → **0** |
+| E | T-20-77 | scratch `scripts/_wr07_probe.py` with `from mitigation_gate import mitigation_point_verdict as mpv` | node id `…::test_mitigation_point_verdict_has_no_caller_outside_this_module`: `E AssertionError: 1 call site(s) or import(s) reach a v4.0 verdict through the frozen pin directly … ['scripts/_wr07_probe.py:3 (imported as mpv)']` at `:1440`. **`1 failed in 0.24s`**. Positive control: `1 passed` the moment the probe was removed | probe deleted; `test ! -e scripts/_wr07_probe.py` **succeeds**; `git status --porcelain scripts/` **EMPTY**; `git diff --exit-code -- scripts/` → **0** |
+| F | T-20-80 | `evidence.X` last digit `0.04535522866494124` → `…125` in the committed JSON | `E AssertionError: the published `evidence` was rewritten under cover of an additive write. …` / `E {'X': 0.04535522866494125} != {'X': 0.04535522866494124}` at `:1072`. **`2 failed, 12 passed in 0.75s`** — the additivity guard AND `test_every_published_number_re_derives_from_the_modules`, which is why F1b exists | `shasum -a 256` → `16dfdc13…b32f7` (**equal**); `git diff --exit-code -- results/` → **0** |
+| F1b | T-20-80 | `recorded_not_corrected.IN-06.finding`: `(:1291-1425)` → `(:1291-1426)` — a leaf NO re-derivation reads | `E AssertionError: the published `recorded_not_corrected` was rewritten under cover of an additive write. …` at `:1072`. **`1 failed, 13 passed in 0.50s`** — the additivity guard **ALONE**, so it is independently load-bearing rather than merely co-firing | `shasum -a 256` → `16dfdc13…b32f7` (**equal**); `git diff --exit-code -- results/` → **0** |
+| G | T-20-79 | one line carrying `ADDENDUM_HEADING_SECOND` spliced at `:118` — the FIRST line of the appended region, RE-DERIVED here from `git log` (pre-append revision `4e4d5ef` = **117** lines, `RECORDED` pointer at `:117`, first `## Addendum` at `:119`) rather than taken from `20-16` | `> assert appended.index(ADDENDUM_HEADING_SECOND) > appended.index(ADDENDUM_HEADING)` / `E AssertionError: the second continuation appears BEFORE the first in the appended region. …` / `E assert 0 > 111` at `:747`. **`1 failed, 13 passed in 0.48s`**. **NOT** `changed == [(PENDING, RECORDED)]` and **NOT** `after[:cut] == before[:cut]` — both are above it, both evaluated and PASSED, as did the presence assertion immediately above the ordering one | `shasum -a 256` → `06cc11f1…8dd22` (**equal**); `git diff --exit-code -- results/` → **0**; `git status --porcelain results/ scripts/ tests/` → **EMPTY** |
+
+**The `20-17` divergence, published rather than smoothed — row D.** `20-15-SUMMARY.md` records the
+tolerance widening as reddening exactly one test. Re-applied here it reddens **two**:
+`test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict` as recorded, and additionally
+`test_every_published_number_re_derives_from_the_modules`, whose failure is
+`assert 1e-09 == 0.05`. The cause is attributable and is a STRENGTHENING, not a discrepancy: `20-16`
+published `value_guards.retention_magnitude_bound.relative_tolerance` into
+`results/phase20_gate_coverage_correction.json`, and that guard re-derives the tolerance from the
+module. A second, independent guard now bites on the same widening, and it did not exist when `20-15`
+took the measurement. This also independently re-confirms the tolerance's measured value as
+**`1e-09`**: what `20-15` shipped is a PIN AGAINST the `0.05` widening, not the widening itself, and
+any record saying the tolerance is `0.05` is wrong. Rows A, B, C, E, F, F1b and G reproduced their
+recorded results, with only the line numbers moved (both files are unpinned and both grew at `20-15`
+and `20-16`) and row A's passing count at `13` rather than `12` because `20-16` added a test function.
+`20-15`'s BREAK 2a — the suite measured GREEN under the same widening *before* the pin existed — is
+**not re-runnable** and is not re-claimed here: the pin is committed, so that state no longer exists.
+Its status as a finding rests on `20-15`'s record and on row D, which shows what the pin now does.
 
 A guard nobody has watched fail is a guard nobody has verified; all nine above were watched, and the
 four gap-closure rows were **re-run in `20-12`'s own process** rather than copied from
@@ -272,6 +372,7 @@ in the past tense.
 | 2026-08-20 | 46 | 44 | 2 | `/gsd:secure-phase 20` — orchestrator, State B (create) from plan-time register |
 | 2026-08-21 | 66 | 66 | 0 | `/gsd:plan-phase 20 --gaps` → plans `20-08`, `20-09`, `20-10`, `20-11`, `20-12`. Totals reconciled to this file's own rows: 38 previously named + 8 transcribed from `20-05` / `20-06` + 20 new gap-closure threats |
 | 2026-08-21 | 66 | 65 | 1 | `/gsd:plan-phase 20 --gaps` (wave 2) — plan `20-13`, `T-20-19` re-opened against `20-VERIFICATION.md` gap 2 |
+| 2026-08-21 | 84 | 84 | 0 | `/gsd:plan-phase 20 --gaps (wave 2) — plans 20-13 … 20-17`. `T-20-19` re-closed at `20-17` against a re-run, in a commit distinct from the `20-13` OPEN flip (`72ef455`), per D-39. Total reconciled to this file's own tables by the binding DISTINCT-id method: 66 previously reconciled + 18 new wave-2 threats `T-20-67` … `T-20-84`, each also its own six-column row |
 
 ---
 
@@ -279,8 +380,33 @@ in the past tense.
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [ ] `threats_open: 0` confirmed — 66 of 66 closed, `### Open` empty
-- [ ] `status: verified` set in frontmatter
+- [x] `threats_open: 0` confirmed — 84 of 84 closed, `### Open` reads `None.`
+- [x] `status: verified` set in frontmatter
+
+**Approval RE-GRANTED 2026-08-21 at plan `20-17` (D-39).** The two boxes above are re-checked, and
+the `20-13` withdrawal paragraph and the `20-12` approval paragraph below are both left
+byte-identical — they are the record of what was approved then, of why it was withdrawn, and of the
+evidence each rested on. This file was flipped only after the following commands were run **in this
+re-closing process** and their output observed:
+
+- `.venv/bin/python -m pytest tests/test_phase20_correction.py tests/test_phase20_prereg.py -q` →
+  **`32 passed in 2.13s`**, zero skips, zero xfail.
+- `.venv/bin/python -m pytest -q` → **`877 passed, 1 skipped, 83 warnings in 191.72s`**, reconciling
+  exactly against the `877 / 1` baseline at `ca74fbf` — this plan writes no code, so any movement
+  would itself have been the defect.
+- `ruff check . && ruff format --check .` → `All checks passed!` / `176 files already formatted`.
+- `git diff --exit-code -- scripts/mitigation_gate.py scripts/erasure_gate.py` → exit **0**; both
+  frozen files byte-identical to their pinned commits. `git diff --exit-code -- scripts/ tests/
+  results/` → exit **0**.
+- The ancestry guard by its REAL node id,
+  `tests/test_phase20_prereg.py::test_phase20_prereg_is_frozen_before_every_phase20_result` →
+  **`1 passed in 0.89s`**; and by the `-k phase20_prereg_is_frozen` selector →
+  **`1 passed, 17 deselected in 0.88s`**, the selection count printed so a silent zero-selection
+  could not pass unnoticed.
+- **Eight watched-RED breaks re-applied and observed failing** — rows A…G above — each restored with
+  `shasum -a 256` equality and `git diff --exit-code` returning 0. One diverged from its SUMMARY and
+  the divergence is published beside the table rather than smoothed, which is the same discipline
+  `20-12` used and `T-20-83` names.
 
 **Approval WITHDRAWN 2026-08-21 at plan `20-13` (D-39), pending plan `20-17`.** The two boxes above
 were checked at `20-12` and are now false: `T-20-19` is open, the register reads 65 closed / 1 open,
