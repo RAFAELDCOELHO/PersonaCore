@@ -309,6 +309,50 @@ resolves a conflict the discussion did not see, and each is LOCKED on the same t
   incomplete one, so a future phase that forgets its prefix fails silently. That risk is accepted in
   exchange for never asserting coverage this phase cannot demonstrate.
 
+### Resolved during gap closure — decisions forced by 20-VERIFICATION.md
+
+*Added 2026-08-20, after `20-VERIFICATION.md` reproduced the GATE-06 (CR-01 / WR-09) and T-20-19
+defects against the running code rather than against a SUMMARY, and the gap-closure plans were
+written. Recorded here at plan `20-09` — the whole of gap-closure wave 1, which `20-08` declares
+`depends_on`, so no shipped artifact cites one of these IDs before its record exists. Each is LOCKED
+on the same terms as D-01…D-33.*
+
+- **D-34 — the GATE-06 correction is a REAL COMPUTATION in unpinned code, not a caller convention.**
+  The rejected alternative was a documented calling convention plus a tripwire asserting that callers
+  comply. It was rejected on two measured grounds: a convention cannot supply the held-out leg at all
+  (there is no `sweep_heldout_recalls` parameter in the frozen 21-kwarg signature to hold it), and its
+  tripwire could only assert COMPLIANCE, never COMPUTE the correction — so a compliant caller passing
+  a wrong sweep still gets a wrong verdict. Resolution: `scripts/phase20_gate_coverage.py` computes
+  coverage itself, and `corrected_point_verdict` is the sanctioned route. The cost is named rather
+  than hidden: that route has no authority a Phase 23/25 caller cannot simply decline to invoke, so
+  the AST caller census in `tests/test_phase20_correction.py` is what enforces it.
+
+- **D-35 — WR-09's held-out leg closes in the SAME function and by the SAME discipline as the taught
+  leg.** Not a separate work item, not a partially accepted risk, not a follow-on phase.
+  `coverage_verdict` decides taught and held-out coverage in one body against one rule. ROADMAP SC2
+  makes the held-out leg load-bearing; splitting its coverage check out would leave the load-bearing
+  half guarded by a plan rather than by code.
+
+- **D-36 — GATE-02's pre-registration TEXT is amended IN PLACE, dated, and additively.** This repo's
+  convention is that pre-registration requirement text is not edited — which is why the supersession
+  originally lived only in the traceability row. The amendment is accepted here on four grounds, all
+  four required together: it is DATED, it is IN PLACE (so `grep 4.029000` cannot miss it), it is
+  ADDITIVE (the original text stays byte-identical above it), and it is provably TIGHTER
+  (`3.9085032379884783 < 4.029`, from a floor `7.939763314393305x` smaller — a self-serving amendment
+  moves a threshold the other way). *Precedent: ROADMAP SC1 already carries exactly this shape, for
+  exactly this number, from D-06 at plan `20-07`.*
+
+- **D-37 — the coverage statistic is chosen by CRITERION-MATCHING per axis, not by "always use
+  Wilson".** X is a ceiling and condition (a) decides on `wilson_upper_bound(k, n)`, so X coverage
+  reads the Wilson upper bound. Both Y legs are floors and condition (b) decides on the RAW recall
+  with no bound, so Y coverage reads the raw recall. A Wilson LOWER bound on a floor would decide
+  coverage on a statistic the criterion does not read — CR-01's own defect class with the sign
+  flipped — and would invert the conservatism of a floor. `wilson_lower_bound` is therefore defined
+  for REPORTING only, published alongside and never instead of the deciding statistic, in
+  `erasure_gate`'s own `rule_of_three` register. The cost is recorded and deliberately NOT fixed: the
+  Y legs inherit condition (b)'s lack of a confidence bound, and fixing that would mean moving a
+  pre-registered threshold after seeing the data it governs.
+
 ### Claude's Discretion
 
 Accepted as proposed, with the precedent cited for each so a reviewer can contest any of them
