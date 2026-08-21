@@ -310,8 +310,9 @@ this plan's output.
 
 ## Self-Check: PASSED
 
-- `results/phase20_gate_coverage_correction.md` — FOUND (238 lines after the append)
-- `results/phase20_gate_coverage_correction.json` — FOUND (parses, 14 top-level keys)
+- `results/phase20_gate_coverage_correction.md` — FOUND (237 lines after the append, `wc -l`)
+- `results/phase20_gate_coverage_correction.json` — FOUND (parses, 16 top-level keys — the 13 the
+  plan's verify asserts, plus `dated`, `dated_note` and `superseded_sweep_sentinel`)
 - `.planning/phases/20-pre-registration-the-three-condition-gate/20-10-SUMMARY.md` — FOUND
 - commit `4e4d5ef` — FOUND
 - commit `2a32394` — FOUND
