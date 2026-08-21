@@ -353,6 +353,88 @@ on the same terms as D-01…D-33.*
   Y legs inherit condition (b)'s lack of a confidence bound, and fixing that would mean moving a
   pre-registered threshold after seeing the data it governs.
 
+### Resolved during gap-closure wave 2 — decisions forced by the 2026-08-21 re-verification
+
+*Added 2026-08-21, after `20-VERIFICATION.md` returned `gaps_found` at 5/6 must-haves and reproduced
+both remaining holes in its own process rather than reading them off a SUMMARY. Recorded here at plan
+`20-13`, which every later plan in this wave-set declares `depends_on`, so no shipped artifact cites
+one of these IDs before its record exists. Each is LOCKED on the same terms as D-01…D-37.*
+
+- **D-38 — the retention floor is refused by PROPERTY as well as by NAME.**
+  `_prove_retention_floor` keeps its existing `retention_noise_floor != V20_RETENTION_NOISE_FLOOR`
+  refusal at `scripts/phase20_gate_coverage.py:396-406` **and** gains a magnitude bound
+  `retention_noise_floor <= _ADAPTER_REGIME_RETENTION_FLOOR * (1.0 + 1e-9)`, placed AFTER it. The two
+  together are the one named value refused by identity plus the entire looser class refused by
+  magnitude — of which `V20_RETENTION_NOISE_FLOOR` is **one member rather than the definition**.
+  **Measured, re-derived at `20-13` by calling the committed modules, never transcribed:**
+  `0.06893 * (1 + 2**-50)` = `0.06893000000000006` passes the `!=` (it is a different bit pattern)
+  and buys a **BIT-IDENTICAL** `4.029` — `retention_cap(nudged) == retention_cap(0.06893)` is
+  `True` — reaching `PASS` through `corrected_point_verdict`; the control confirms the unperturbed
+  `0.06893` **is** refused, so the mechanism exists and computes, and its coverage is one bit wide.
+  Separately, and with no malformed input at all, `retention_noise_floor=5.0` under clean
+  `{"regime": "adapter", "seeds": (1337, 2024)}` provenance reaches `PASS` at cap `13.89114` against
+  the governing `3.9085032379884783`. Provenance is a caller assertion; nothing bounded magnitude.
+  **This also answers `20-VERIFICATION.md`'s escalation 1 BY ELIMINATION.** That escalation asks
+  whether a rule authored 2026-08-21 to judge a floor measured 2026-08-20 is a D-24 dated
+  continuation or a post-hoc rule. The question is well-posed against an IDENTITY rule, which names a
+  single already-known value and could have been written to admit a preferred competitor. It does not
+  arise for a PROPERTY bound: a magnitude bound authored after the measurement cannot be tuned toward
+  a favourable answer, because every value it admits is TIGHTER than the committed measurement and a
+  tighter floor buys a tighter cap. Taking the bound removes gap 2 and the policy question together.
+
+- **D-39 — the security register is flipped OPEN first, and re-closed only on watched-RED evidence.**
+  Stated as a requirement on the PLAN GRAPH, not as an intention: the flip to `threats_open: 1` is
+  **this plan, `20-13`, wave 12**; the re-close to `threats_open: 0` is **plan `20-17`, wave 16**, and
+  is gated on the D-38 magnitude bound's tripwires having been **OBSERVED red-then-green against BOTH
+  measured cases** — `0.06893 * (1 + 2**-50)` and `5.0`. They must not be the same commit. The reason
+  is this phase's own trust boundary at `20-SECURITY.md:39` — *"a plan that says a thing will be done
+  ↔ a guard that proves it was."* At HEAD that file publishes `status: verified` / `threats_open: 0`
+  over a guard the re-verification defeated twice by measurement; a register that publishes a closure
+  it cannot substantiate is the exact failure its own boundary names. Flipping it open is therefore
+  the FIRST act of this wave-set, not the last — a gate that goes honest only after its remediation
+  lands was never carrying the state it published.
+
+- **D-40 — both gaps close in this pass; the Y hole is NOT deferred to Phase 23.** This is the dated
+  decision `20-VERIFICATION.md`'s human-verification item 2 (`:80-82`) asks for. What closes, in
+  full: a per-element `[0.0, 1.0]` range `_prove` on **both** Y legs — which subsumes NaN with no
+  special-case check, because `0.0 <= float("nan") <= 1.0` is `False` (measured) — the measured
+  route-level differential armed as a tripwire (`(0.30, 0.28)` → `INCONCLUSIVE` carrying a GATE-06
+  reason, versus `(nan, 0.28)` → `PASS` carrying none, on the identical axis against
+  `Y_heldout = 0.24499999999999997`; `nan >= criterion` is `False`, so the NaN is COUNTED as a
+  failing point and actively manufactures the bracket rather than merely passing through), the
+  `isinstance(k, int) and not isinstance(k, bool)` count guard replacing the integral-float
+  acceptance at `scripts/phase20_gate_coverage.py:257`, and D-38's magnitude bound.
+  **The reachability finding is recorded honestly rather than used as an excuse:** no committed
+  caller reaches `corrected_point_verdict` today — grepping `scripts/` and `src/` outside its own
+  module returns nothing — so the hole does not block Phase 21. It closes now anyway, because
+  Phase 23 is where sweep width is set and coverage stops being hypothetical, and a rule closed
+  before its first consumer is the whole point of a pre-registration.
+
+- **D-41 — the sanctioned route's TEST HARNESS supplies the governing retention floor; the bound's
+  tolerance is never widened to admit a fixture.** Forced by a measurement neither the code review
+  nor the verification recorded, and stated as a measurement. `mitigation_gate`'s **three** committed
+  fixtures — `FIXTURE_DESTROYED_MODEL` (`:1237`), `FIXTURE_CLEARING_POINT` (`:1267`) and
+  `FIXTURE_TRUNCATED_SWEEP`, which inherits the key through `**FIXTURE_DESTROYED_MODEL` — all carry
+  `retention_noise_floor = 0.009`, and
+  `0.009 > 0.008681618994239138 * (1.0 + 1e-9) = 0.008681619002920757`, so **D-38's bound REFUSES
+  this repository's own fixtures.** The fixture floor is `1.0366729991228745x` looser than the
+  measured adapter-regime floor and buys cap `3.90914` against the governing `3.9085032379884783`.
+  **Two routes were available and one is rejected in writing.** Widening the tolerance until `0.009`
+  passes is rejected outright: tuning a bound's tolerance to admit a value already in hand is exactly
+  the researcher degree of freedom D-38 exists to remove, and it would make the bound's first act a
+  concession to the fixture it was written to judge. **The taken route** is that
+  `tests/test_phase20_correction.py::_corrected_call` supplies the governing floor READ from
+  `results/phase20_retention_floor.json::retention_ppl_noise_floor`, in the same `base` dict
+  (`:136-139`) that already supplies the two arguments the frozen fixtures cannot
+  (`sweep_heldout_recalls`, `retention_floor_provenance`).
+  **The against-interest half, recorded rather than omitted:** every published verdict is
+  BIT-UNCHANGED under the substitution — `direction_i` `PASS`, `direction_ii` `INCONCLUSIVE`,
+  `direction_ii_on_clearing_fixture` `INCONCLUSIVE` and `heldout_coverage` `INCONCLUSIVE`, all four
+  measured at BOTH floors at `20-13`. The bound buys no verdict change here, so it cannot be read as
+  having been taken for the answer it produces. `mitigation_gate.py` is frozen and its fixtures
+  cannot be edited, so the bound's FIRST catch is a ~3.67% loosening inside this repository that no
+  name-based refusal could ever have seen.
+
 ### Claude's Discretion
 
 Accepted as proposed, with the precedent cited for each so a reviewer can contest any of them
