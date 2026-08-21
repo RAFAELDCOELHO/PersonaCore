@@ -236,7 +236,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 20-10-PLAN.md — `results/phase20_gate_coverage_correction.{md,json}`: the `governs`/`supersedes` artifact and the D-24 dated continuation, in two commits so the append is provably additive
+- [x] 20-10-PLAN.md — `results/phase20_gate_coverage_correction.{md,json}`: the `governs`/`supersedes` artifact and the D-24 dated continuation, in two commits so the append is provably additive (dated **2026-08-21**, the day it was written, not the plan's authoring date 2026-08-20 — `20-11` must declare `ADDENDUM_HEADING` against the committed heading)
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
@@ -507,7 +507,7 @@ capacities — with every number in prose generated from a committed record rath
 | 1-8 | v1.0 | 29/29 | Complete | 2026-06-10 |
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
-| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 9/12 | Reopened — gap closure (wave 2 of 5 done) | 7/7 on 2026-08-20 |
+| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 10/12 | Reopened — gap closure (wave 3 of 5 done) | 7/7 on 2026-08-20 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 0/TBD | Not started | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
