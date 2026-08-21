@@ -185,6 +185,46 @@ kind exists — including before the cost calibration
      clearing cannot be conflated under one ∃; and a clearing point is provisional until the gate
      itself requires a second-seed replication. (GATE-05, GATE-06, GATE-07, GATE-08, GATE-09)
 
+     > **Amended by D-34 and D-37 at plan `20-12` (2026-08-21). SC3's GATE-06 clause is SUPERSEDED
+     > for v4.0.** Every word of SC3 above is unedited and stays the pre-registered text.
+     >
+     > **What was wrong.** The GATE-06 clause above — "a sweep that never produced points on both
+     > sides of X (or of Y) returns `INCONCLUSIVE` rather than `FAILURE`" — is an unqualified claim
+     > about the verdict behaviour of `scripts/mitigation_gate.py`, and that block is defective on
+     > both axes and permanently frozen. **CR-01:** `:798-812` decided coverage on RAW rates while
+     > condition (a) at `:755` decides on `wilson_upper_bound(k, n)` against the same ceiling.
+     > **WR-09:** it had no held-out leg to decide at all — no `sweep_heldout_recalls` parameter
+     > exists in the 21-keyword signature, so half of a pair-valued Y was never covered.
+     >
+     > **What governs now.** `scripts/phase20_gate_coverage.py::coverage_verdict` is the governing
+     > COMPUTATION — each axis decided on the statistic that axis's criterion is decided on, both Y
+     > legs included — and `::corrected_point_verdict` is the governing ROUTE to a v4.0 verdict.
+     > SC3's clause is read through those. A verdict read through
+     > `mitigation_gate.mitigation_point_verdict` directly is read through the superseded block and
+     > does not govern.
+     >
+     > **The record and the guard.** `results/phase20_gate_coverage_correction.json` — its `governs`
+     > field names the computation and the route, its `supersedes` field names
+     > `scripts/mitigation_gate.py:798-812` — beside the D-24 dated continuation
+     > `results/phase20_gate_coverage_correction.md`. Watched by
+     > `tests/test_phase20_correction.py`.
+     >
+     > **`scripts/mitigation_gate.py` was NOT edited.** It is byte-identical to its nine pinned
+     > commits, the ancestry guard is still green, and `git diff --exit-code` on it returns 0. This
+     > is a dated continuation, per D-24 — never an edit to a pre-registration.
+     >
+     > **The honesty clause, and it is where this amendment differs from SC1's.** Not uniformly
+     > tighter — both reproduced directions move toward a MORE favourable verdict; the tightening is
+     > supplied by the third, previously unreported case, where `FIXTURE_CLEARING_POINT` under
+     > `(3/104, 11/104)` is DEMOTED from `PASS` to `INCONCLUSIVE`. The justification is
+     > criterion-matching, not conservatism. On the favourability ordering
+     > `FAIL < INCONCLUSIVE < PASS`, direction (i) `INCONCLUSIVE → PASS` and direction (ii)
+     > `FAIL → INCONCLUSIVE` both increase favourability, so describing that pair as movement "in
+     > both directions" would publish a small over-claim inside the very amendment whose purpose is
+     > to prevent one. What is claimed instead is exactly what was built: each axis's coverage test
+     > reads the statistic that axis's criterion reads. The demoted `PASS` is the only
+     > against-interest movement and appears in no prior report; it is published anyway.
+
   4. The n=8-vs-n=64 capacity comparison rule is committed in the same module **before either run**,
      with both branches publishable — recovery at n=64 that n=8 did not achieve at equivalent ε_fact
      is a finding about where capacity stops destroying the mitigation; no recovery confirms the null
