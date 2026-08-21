@@ -754,3 +754,204 @@ def test_the_three_defects_are_still_live_in_the_frozen_pin():
         "T-20-19 is GONE: the borrowed floor no longer buys the looser cap, so the substitution is "
         f"no longer the one an unguarded borrowing profits from. {CORRECTION_REL} needs re-reading"
     )
+
+
+def test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict():
+    """T-20-19 as a REACHABILITY claim — the twin of ``tests/test_phase20_prereg.py:1297-1330``.
+
+    Every case is driven THROUGH ``corrected_point_verdict``, never against
+    ``_prove_retention_floor`` in isolation. The claim being proved is that no path to a v4.0
+    verdict skips the check; a test calling the helper directly would prove the check exists, which
+    is a different and much weaker claim. ``extraction_ceiling``'s three ``_prove`` calls are
+    unavoidable for exactly this structural reason — ``mitigation_point_verdict`` CALLS it — and
+    the retention leg gets the same shape rather than a promise.
+
+    The last case is not a provenance case at all. It is WR-08, asserted at BOTH magnitudes,
+    because a guard's POSITION is part of the guard.
+    """
+    measured_floor = json.loads(RETENTION_FLOOR_PATH.read_text(encoding="utf-8"))[
+        "retention_ppl_noise_floor"
+    ]
+
+    def refused(**overrides):
+        with pytest.raises(SystemExit) as raised:
+            coverage.corrected_point_verdict(
+                **_corrected_call(
+                    "FIXTURE_CLEARING_POINT",
+                    sweep_extraction_successes=DIRECTION_I_SUCCESSES,
+                    sweep_extraction_questions=QUESTIONS,
+                    **overrides,
+                )
+            )
+        return str(raised.value)
+
+    # The four provenance refusals, each mirroring one of `extraction_ceiling`'s at :417/:425/:436
+    # — except the fourth, which has no counterpart on the extraction leg.
+    refused(retention_floor_provenance={})
+    refused(retention_floor_provenance={"seeds": (1337, 2024)})
+    refused(retention_floor_provenance={"regime": "full-finetune", "seeds": (1337, 2024)})
+    for seeds in ((1337,), (1337, 1337)):
+        message = refused(retention_floor_provenance={"regime": "adapter", "seeds": seeds})
+        assert "1 distinct" in message, (
+            f"the single-seed refusal does not report the count it counted: {message!r}. A "
+            "single-seed floor is not a noise floor, it is ONE DRAW — there is no second reading "
+            "for it to vary against — and the refusal has to say so with its number"
+        )
+
+    # THE BORROWED VALUE, refused BY IDENTITY even under an otherwise clean adapter provenance, so
+    # a caller who states the right regime and the right seeds while passing the Phase 12
+    # full-fine-tune number is still caught — by the number itself.
+    borrowed = refused(retention_noise_floor=erasure_gate.V20_RETENTION_NOISE_FLOOR)
+    published = (
+        erasure_gate.V20_RETENTION_NOISE_FLOOR / measured_floor,
+        mitigation_gate.retention_cap(retention_noise_floor=erasure_gate.V20_RETENTION_NOISE_FLOOR),
+        mitigation_gate.retention_cap(retention_noise_floor=measured_floor),
+    )
+    for number in published:
+        assert repr(number) in borrowed, (
+            f"the borrowed-floor refusal does not publish {number!r}: {borrowed!r}. The ratio, the "
+            "looser cap it buys and the governing cap it displaces are what make the refusal an "
+            "argument rather than an assertion — and all three are DERIVED here through the frozen "
+            "retention_cap, never retyped"
+        )
+
+    # WR-08 — THE SIGN CHECK, PROVED AT THE MAGNITUDE WHERE ITS ORDERING MATTERS. MEASURED: a floor
+    # of -0.01 still yields a POSITIVE ceiling (0.005355228664941234), so a sign check placed AFTER
+    # the ceiling computation fires with the right message and -0.01 alone proves nothing about
+    # position. -0.05 drives the ceiling to -0.07464477133505877, where the `0.0 < ceiling < 1.0`
+    # refusal would pre-empt it and the caller would be told the ceiling is out of range rather
+    # than that their floor is negative. Both magnitudes, and asserted on the MESSAGE.
+    for magnitude in (-0.01, -0.05):
+        message = refused(extraction_noise_floor=magnitude)
+        assert "NEGATIVE" in message and "extraction_noise_floor" in message, (
+            f"the refusal at extraction_noise_floor={magnitude} does not name the floor's SIGN: "
+            f"{message!r}"
+        )
+        assert "the extraction ceiling came out" not in message, (
+            f"at extraction_noise_floor={magnitude} the caller is told the CEILING is out of "
+            f"range rather than that their FLOOR is negative: {message!r}. The sign check has "
+            "moved below the ceiling computation it protects, and the misattribution it exists to "
+            "prevent is back"
+        )
+
+    # THE POSITIVE CONTROL. A fixture differing from the eight above in ONLY the refused field
+    # still reaches a verdict, which is what makes those aborts attributable to the tripwire rather
+    # than to anything else in the route.
+    verdict, _reasons, _arm = coverage.corrected_point_verdict(
+        **_corrected_call(
+            "FIXTURE_CLEARING_POINT",
+            sweep_extraction_successes=DIRECTION_I_SUCCESSES,
+            sweep_extraction_questions=QUESTIONS,
+        )
+    )
+    assert verdict == "PASS", verdict
+
+
+def test_v4_retention_cap_reads_the_measured_adapter_regime_floor():
+    """WR-02: ``results/phase20_retention_floor.json`` was read by NOTHING in ``tests/``.
+
+    An artifact no test reads is an artifact whose arithmetic can silently rot. CI can never
+    RE-MEASURE this one — ``checkpoints/`` and ``data/`` are gitignored (R-20-04), so the two
+    perplexity readings are unreproducible here — which makes the artifact's own INTERNAL
+    consistency the only check available. It is taken, on both sides.
+    """
+    artifact = json.loads(RETENTION_FLOOR_PATH.read_text(encoding="utf-8"))
+    floor = artifact["retention_ppl_noise_floor"]
+
+    assert floor != erasure_gate.V20_RETENTION_NOISE_FLOOR, (
+        f"the measured adapter-regime floor is now {floor!r}, the Phase 12 FULL-FINE-TUNE seed "
+        "pair. The borrowed value is back in the artifact the v4.0 cap is read from — which is "
+        "T-20-19 realized at its source rather than at a call site"
+    )
+    assert mitigation_gate.retention_cap(retention_noise_floor=floor) == artifact["cap"], (
+        f"the artifact publishes cap {artifact['cap']!r} but retention_cap on its own published "
+        f"floor returns {mitigation_gate.retention_cap(retention_noise_floor=floor)!r}. A "
+        "hand-edited number goes red here"
+    )
+    assert artifact["borrowed_cap"] == mitigation_gate.retention_cap(
+        retention_noise_floor=erasure_gate.V20_RETENTION_NOISE_FLOOR
+    )
+    assert artifact["cap"] < artifact["borrowed_cap"], (
+        f"the re-measured cap {artifact['cap']!r} is not TIGHTER than the borrowed "
+        f"{artifact['borrowed_cap']!r}. D-06's whole claim is that the re-measurement does not buy "
+        "an easier pass, and that claim is asserted here rather than narrated"
+    )
+    assert artifact["borrowed_floor_ratio"] == (erasure_gate.V20_RETENTION_NOISE_FLOOR / floor), (
+        artifact["borrowed_floor_ratio"]
+    )
+
+    # THE ARTIFACT'S INTERNAL CONSISTENCY: the floor IS the spread between the two seeds' own
+    # published readings. Bit-exact — the two deltas are committed, so there is no reason to allow
+    # a tolerance over a subtraction of two committed doubles.
+    deltas = [
+        artifact["retention_ppl"][str(seed)]["delta_on_minus_off"] for seed in artifact["seeds"]
+    ]
+    assert len(deltas) == 2, deltas
+    assert floor == abs(deltas[0] - deltas[1]), (
+        f"the published floor {floor!r} is not the spread between the two seeds' published "
+        f"delta_on_minus_off readings {deltas} (which differ by {abs(deltas[0] - deltas[1])!r}). "
+        "checkpoints/ and data/ are gitignored, so this is the ONLY re-derivation CI can perform "
+        "on this number, and it is the one that catches a hand edit"
+    )
+    for seed in artifact["seeds"]:
+        entry = artifact["retention_ppl"][str(seed)]
+        assert entry["delta_on_minus_off"] == entry["adapter_on"] - entry["adapter_off"], entry
+
+
+def test_mitigation_point_verdict_has_no_caller_outside_this_module():
+    """The census that ENFORCES the choke point — the name ``phase20_gate_coverage.py`` cites.
+
+    ``corrected_point_verdict`` has no authority a Phase 23/25 caller cannot simply not invoke:
+    nothing in Python stops a module importing ``mitigation_gate.mitigation_point_verdict`` and
+    bypassing every correction in that file (T-20-48). What stops it is this walk, which goes RED
+    on the first such caller.
+
+    MATCHED ON BOTH ``.id`` AND ``.attr``. ``tests/test_phase19_erasure.py:1389`` matches on
+    ``getattr(node.func, "id", None)`` alone, which is invisible to
+    ``mitigation_gate.mitigation_point_verdict(...)`` — an ``ast.Attribute`` node, and exactly the
+    form a Phase 23 driver would write. That is WR-07's latent hole and it is not copied here.
+
+    ``tests/`` IS DELIBERATELY EXCLUDED, and the reason is recorded rather than assumed: the prereg
+    suite drives the pin's own branches directly, which is the behavioural twin of the pin and not
+    a bypass of the correction. The pin's own definition file is excluded for the same
+    exclude-the-successor reason ``tests/test_phase19_erasure.py`` states — by NAME, never by
+    lowering a count.
+    """
+    definition = _SCRIPTS / "mitigation_gate.py"
+    sanctioned = _SCRIPTS / "phase20_gate_coverage.py"
+
+    bypassing = []
+    inside_sanctioned = 0
+    for path in sorted(_SCRIPTS.rglob("*.py")) + sorted((_ROOT / "src").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            called = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            if called != "mitigation_point_verdict":
+                continue
+            if path == sanctioned:
+                inside_sanctioned += 1
+            elif path != definition:
+                bypassing.append(f"{path.relative_to(_ROOT)}:{node.lineno}")
+
+    assert bypassing == [], (
+        f"{len(bypassing)} call site(s) reach a v4.0 verdict through the frozen pin directly, "
+        f"bypassing scripts/phase20_gate_coverage.py::corrected_point_verdict: {bypassing}. Such a "
+        "caller gets RAW-RATE coverage on the extraction axis (the CR-01 defect, which mislabels "
+        "in both directions), NO coverage at all on the held-out leg (WR-09 — the frozen "
+        "21-keyword signature has no sweep_heldout_recalls parameter), and NO retention "
+        f"provenance check whatsoever (T-20-19). See {PAYLOAD_REL}, whose `governs` field names "
+        "corrected_point_verdict as the governing route: a verdict read through "
+        "mitigation_point_verdict directly is read through the superseded block and does not govern"
+    )
+
+    # NON-VACUITY, as a RECORDED STATE rather than a silent pass — `tests/test_phase16_prereg.py`'s
+    # `bool(checked) == bool(tracked)` register. A census that returns empty because its matcher is
+    # broken proves nothing, so the matcher is proved to fire where a call certainly exists.
+    assert inside_sanctioned >= 1, (
+        "the census found ZERO calls to mitigation_point_verdict inside "
+        "scripts/phase20_gate_coverage.py, which calls it exactly once at step 6 of "
+        "corrected_point_verdict. The matcher is broken or the sanctioned route stopped calling "
+        "the pin — either way the empty result above proves nothing"
+    )
