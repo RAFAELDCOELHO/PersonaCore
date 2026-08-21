@@ -1017,6 +1017,22 @@ def test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict():
         "is no longer proved to be the thing that closes this hole"
     )
 
+    # THE TOLERANCE IS PINNED AGAINST THE ONE WIDENING D-41 FORBIDS, because MEASURED it was not:
+    # widening `_RETENTION_FLOOR_RELATIVE_TOLERANCE` from 1e-9 to 0.05 moves the ceiling to
+    # 0.009115699943951094, which ADMITS the fixture floor while still refusing both cases here —
+    # so before this assertion existed the whole suite stayed GREEN under a fifty-million-fold
+    # widening and no committed test distinguished the tolerance from a rubber stamp. The fixture
+    # floor is READ, never retyped: it is annotated `# fabricated` in the frozen pin, which is
+    # exactly why the harness may not inherit it and why this ceiling may not grow to fit it.
+    fixture_floor = mitigation_gate.FIXTURE_CLEARING_POINT["retention_noise_floor"]
+    assert coverage._MAX_ADMISSIBLE_RETENTION_FLOOR < fixture_floor, (
+        f"the admissible ceiling {coverage._MAX_ADMISSIBLE_RETENTION_FLOOR!r} now ADMITS the "
+        f"fabricated fixture floor {fixture_floor!r}. D-41 rejected exactly this: the sanctioned "
+        "closure is for a caller to supply the measured floor from "
+        f"{RETENTION_FLOOR_REL}, never for the tolerance to be widened until a value already in "
+        "hand passes. A bound that admits the number it was written to catch is not a bound"
+    )
+
     # D-38 CASE 2 — A LOOSER FLOOR WITH NO MALFORMED INPUT ANYWHERE. Clean adapter provenance, a
     # value named nowhere, and the harm stated as the inequality it is rather than as prose.
     loose = 5.0
