@@ -106,6 +106,15 @@ QUESTIONS = (N, N)
 DEFAULT_HELDOUT_SWEEP = (0.30, 0.20)
 DEFAULT_RETENTION_PROVENANCE = {"regime": "adapter", "seeds": (1337, 2024)}
 
+# THE THIRD ARGUMENT THE FROZEN FIXTURES CANNOT SUPPLY (D-41). Unlike the two above, the frozen
+# signature DOES have this parameter — the fixtures simply carry a value the sanctioned route now
+# refuses by magnitude. READ from the committed artifact, never retyped: the module's own
+# `_ADAPTER_REGIME_RETENTION_FLOOR` is a transcription of this same number, and reading rather than
+# copying is what stops a third copy joining the two.
+DEFAULT_RETENTION_FLOOR = json.loads(RETENTION_FLOOR_PATH.read_text(encoding="utf-8"))[
+    "retention_ppl_noise_floor"
+]
+
 
 def _git(*args):
     done = subprocess.run(("git", *args), cwd=_ROOT, capture_output=True, check=True)
@@ -120,9 +129,28 @@ def _corrected_call(fixture_name, **overrides):
     """The corrected-route kwargs for a committed fixture, READ OFF the fixture, never retyped.
 
     Takes ``mitigation_gate.<fixture_name>``, drops ``sweep_extraction_rates`` (which does not
-    exist on the corrected route) and supplies the two arguments the frozen signature has no
-    parameter for. Hand-copying twenty-one keyword arguments into a test is how a fixture and its
-    guard drift apart.
+    exist on the corrected route) and supplies the THREE arguments the fixtures cannot. Hand-copying
+    twenty-one keyword arguments into a test is how a fixture and its guard drift apart.
+
+    THE THIRD ONE IS D-41, AND ITS REASON IS DIFFERENT FROM THE OTHER TWO. ``sweep_heldout_recalls``
+    and ``retention_floor_provenance`` are absent from the frozen 21-keyword signature entirely, so
+    no fixture could carry them. ``retention_noise_floor`` IS in that signature — all three
+    committed fixtures carry ``0.009``, annotated ``# fabricated`` at
+    ``scripts/mitigation_gate.py:1237`` — and the sanctioned route now refuses it by MAGNITUDE at
+    1.0366729991228745x the governing floor. ``scripts/mitigation_gate.py`` is permanently frozen
+    and its fixtures cannot be edited, so the substitution happens here. The measurement that makes
+    it safe: every published verdict is BIT-UNCHANGED under it — ``direction_i`` PASS,
+    ``direction_ii`` INCONCLUSIVE, ``direction_ii_on_clearing_fixture`` INCONCLUSIVE,
+    ``heldout_coverage`` INCONCLUSIVE — and the only reason string that moves is condition (c)'s,
+    which now reports the governing cap 3.9085032379884783 in place of the fixture floor's looser
+    3.90914. TIGHTER, so the substitution cannot buy a pass that the fixture floor would have
+    withheld.
+
+    THE DRIFT CATCH IS ONE-DIRECTIONAL, named as partial rather than claimed as a closure.
+    ``coverage._ADAPTER_REGIME_RETENTION_FLOOR`` is retyped from this same artifact (GC-07, out of
+    scope here). A drift that made the module constant TIGHTER than the artifact would redden every
+    call below, because the artifact's floor would then exceed the module's admissible ceiling. A
+    drift that made it LOOSER would not be caught here at all.
 
     THE MERGE FORM IS LOAD-BEARING, and MEASURED. The obvious one-expression version —
     ``dict(f, sweep_heldout_recalls=..., retention_floor_provenance=..., **overrides)`` — raises
@@ -136,6 +164,7 @@ def _corrected_call(fixture_name, **overrides):
     base = {
         "sweep_heldout_recalls": DEFAULT_HELDOUT_SWEEP,
         "retention_floor_provenance": dict(DEFAULT_RETENTION_PROVENANCE),
+        "retention_noise_floor": DEFAULT_RETENTION_FLOOR,
     }
     base.update(overrides)
     return dict(kwargs, **base)

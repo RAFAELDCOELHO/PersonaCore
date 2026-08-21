@@ -380,18 +380,54 @@ _GOVERNING_CAP = mitigation_gate.retention_cap(
 )
 _BORROWED_FLOOR_RATIO = V20_RETENTION_NOISE_FLOOR / _ADAPTER_REGIME_RETENTION_FLOOR
 
+# THE MAGNITUDE BOUND (D-38). Refusing ONE named value is one bit of coverage: MEASURED, a
+# one-ULP nudge `V20_RETENTION_NOISE_FLOOR * (1 + 2**-50)` passes the `!=` below and `retention_cap`
+# returns a BIT-IDENTICAL 4.029, the exact borrowed cap. So the floor is bounded by its PROPERTY as
+# well as by its NAME, and the ceiling is DERIVED from the governing floor in the same register as
+# `_GOVERNING_CAP` above — never a typed threshold.
+#
+# WHAT THE TOLERANCE IS FOR, and what it is NOT for. It absorbs float round-trip on a floor that
+# equals the committed artifact's value (a caller that reads
+# `results/phase20_retention_floor.json` and hands the number straight back must be admitted). It
+# is NEVER widened to admit a floor a caller happens to hold: D-41 records that rejection in
+# writing, and the constant is named rather than buried in an expression precisely so a widening
+# shows up in a diff as its own line.
+_RETENTION_FLOOR_RELATIVE_TOLERANCE = 1e-9
+_MAX_ADMISSIBLE_RETENTION_FLOOR = _ADAPTER_REGIME_RETENTION_FLOOR * (
+    1.0 + _RETENTION_FLOOR_RELATIVE_TOLERANCE
+)
+
+# The two reproductions the refusal below argues with, computed rather than typed. `5.0` is the
+# ILLUSTRATIVE INPUT — a floor with no malformed provenance whatsoever — and the cap it buys is
+# derived from it. The fixture floor is READ from the frozen pin: D-41's finding is that this
+# bound's first catch is inside this repository, and reading it keeps that claim true rather than
+# transcribed.
+_LOOSE_FLOOR_REPRODUCTION = 5.0
+_LOOSE_FLOOR_REPRODUCTION_CAP = mitigation_gate.retention_cap(
+    retention_noise_floor=_LOOSE_FLOOR_REPRODUCTION
+)
+_FIXTURE_RETENTION_FLOOR = mitigation_gate.FIXTURE_CLEARING_POINT["retention_noise_floor"]
+_FIXTURE_FLOOR_RATIO = _FIXTURE_RETENTION_FLOOR / _ADAPTER_REGIME_RETENTION_FLOOR
+
 
 def _prove_retention_floor(*, retention_noise_floor, retention_floor_provenance):
-    """The FOUR refusals a retention floor must survive before it can reach a v4.0 verdict.
+    """The FIVE refusals a retention floor must survive before it can reach a v4.0 verdict.
 
     Returns ``None``; its whole output is the refusal. Both arguments are keyword-only with no
     default, GATE-01's discipline. The first three mirror ``extraction_ceiling``'s calls at
     ``:417`` / ``:425`` / ``:436`` one for one — mapping with the required keys, the right regime,
-    at least ``EXTRACTION_FLOOR_MIN_SEEDS`` distinct seeds. The fourth has no counterpart on the
-    extraction leg and exists because this leg has a specific borrowed value in circulation:
+    at least ``EXTRACTION_FLOOR_MIN_SEEDS`` distinct seeds. The last TWO have no counterpart on the
+    extraction leg and exist because this leg has a specific borrowed value in circulation:
     ``erasure_gate.V20_RETENTION_NOISE_FLOOR`` reaches the frozen ``retention_cap`` today with no
-    refusal whatsoever, and it is refused here BY IDENTITY — imported, never typed — so a caller
-    that lies about ``regime`` is still caught by the number itself.
+    refusal whatsoever.
+
+    THE FOURTH AND FIFTH ARE A PAIR, AND NEITHER ALONE IS THE CHECK. The fourth refuses that ONE
+    value BY IDENTITY — imported, never typed — so it cannot drift away from the constant it
+    refuses. The fifth refuses the whole LOOSER CLASS by magnitude, of which the borrowed value is
+    one member rather than the definition. MEASURED, and the reason the pair exists: a one-ULP
+    nudge passes the fourth and still buys a bit-identical borrowed cap, so identity alone is one
+    bit of coverage; and a clean-provenance floor that was never named anywhere reaches a v4.0 cap
+    unrefused, so provenance alone is no coverage at all.
     """
     has_keys = hasattr(retention_floor_provenance, "keys")
     _prove(
@@ -434,6 +470,35 @@ def _prove_retention_floor(*, retention_noise_floor, retention_floor_provenance)
         f"{_BORROWED_CAP} against the governing {_GOVERNING_CAP} — T-20-19 reproduced: "
         "`retention_cap` accepts it today with no refusal at all, and the looser cap is the one a "
         "borrowing buys",
+    )
+    # THE ORDERING IS LOAD-BEARING, so it is stated rather than left to be inferred. The `!=` above
+    # names ONE value and its message publishes three numbers — the ratio, the borrowed cap and the
+    # governing cap — which `tests/test_phase20_correction.py` asserts by `repr` in the
+    # borrowed-value case of `test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict`.
+    # `V20_RETENTION_NOISE_FLOOR` is also a member of the looser class this bound refuses, so if the
+    # bound ran first the borrowed floor would never reach the message that argues about it. Name
+    # first, then property.
+    _prove(
+        retention_noise_floor <= _MAX_ADMISSIBLE_RETENTION_FLOOR,
+        f"the retention noise floor {retention_noise_floor!r} is LOOSER than the governing "
+        f"adapter-regime floor, above the admissible ceiling "
+        f"{_MAX_ADMISSIBLE_RETENTION_FLOOR!r}. A looser floor buys a looser cap, so this is the "
+        "substitution that buys an easier pass — the same sentence the refusal above makes about "
+        "one NAMED value, made here about the PROPERTY that made that value worth refusing. "
+        "Refusing the name alone is one bit of coverage, and TWO REPRODUCTIONS say why: (1) "
+        "`V20_RETENTION_NOISE_FLOOR * (1 + 2**-50)` — a one-ULP nudge — passes the `!=` above and "
+        f"still yields the bit-identical borrowed cap {_BORROWED_CAP}; (2) a floor of "
+        f"{_LOOSE_FLOOR_REPRODUCTION!r} under a perfectly clean adapter provenance, with no "
+        f"malformed input anywhere, reaches the cap {_LOOSE_FLOOR_REPRODUCTION_CAP!r} against the "
+        f"governing {_GOVERNING_CAP!r}. The bound is ONE-SIDED and therefore strictly "
+        "conservative: any TIGHTER floor a later phase measures is admitted unchanged, so a real "
+        "re-measurement is never blocked, and only the looser class is refused. D-41, and the "
+        "bound's FIRST catch is inside this repository: `mitigation_gate`'s committed fixtures "
+        f"carry {_FIXTURE_RETENTION_FLOOR!r}, which is {_FIXTURE_FLOOR_RATIO!r}x the governing "
+        "floor and is refused here. That fixture floor is not a counter-example to this rule, it "
+        "is the first instance of it — annotated `# fabricated` in the frozen pin — so the "
+        "sanctioned response is for a caller to supply the measured floor, never for this ceiling "
+        "to be widened until the fixture fits",
     )
 
 
