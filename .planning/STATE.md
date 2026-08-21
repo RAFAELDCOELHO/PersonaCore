@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: executing
-stopped_at: Phase 20 gap-closure wave 2 COMPLETE — 20-13..20-17 all executed, awaiting /gsd:verify-phase 20. Both 20-VERIFICATION.md gaps are closed IN CODE and WATCHED — the Y sweep legs now carry a per-element [0.0, 1.0] _prove on both legs (subsuming NaN) and the count guard is enforced by type, and _prove_retention_floor gained the D-38 MAGNITUDE bound beside the != so the looser floor is refused as a CLASS, with the one-ULP nudge and 5.0 both refused and the governing floor still admitted. 20-SECURITY.md is re-closed at status verified / threats_open 0, 84 distinct threat IDs, against a re-run in which eight watched-RED breaks were re-applied and observed rather than transcribed
-last_updated: "2026-08-21T21:14:00.000Z"
+status: ready_to_plan
+stopped_at: Phase 20 complete (17/17) — ready to discuss Phase 21
+last_updated: 2026-08-21T21:34:56.009Z
 last_activity: 2026-08-21
 progress:
   total_phases: 9
-  completed_phases: 0
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  completed_phases: 1
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
-**Current focus:** Phase 20 — pre-registration-the-three-condition-gate
+**Current focus:** Phase 21 — the privacy unit, the dp data path, and the n=64 corpus
 
 ## Current Position
 
-Phase: 20 (pre-registration-the-three-condition-gate) — gap-closure wave 2 COMPLETE, awaiting re-verification
-Plan: 17 of 17 (waves 1-6 executed; gap-closure wave 1 complete — 20-09, 20-08, 20-10, 20-11, 20-12; gap-closure wave 2 complete — 20-13, 20-14, 20-15, 20-16, 20-17)
-Status: Awaiting /gsd:verify-phase 20 — both gaps closed in code and watched, the register re-closed against a re-run
+Phase: 21
+Plan: Not started
+Status: Ready to plan
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
 EXECUTED — all five plans landed and every claim below is now a measured state rather than a plan. GAP 1 (GATE-06) closed at `20-14`: `coverage_verdict` carries a per-element `[0.0, 1.0]` `_prove` on BOTH Y legs, placed before `x_uppers` so no value reaches the axis loop unvalidated, and the range check subsumes NaN with no deletable special case; the success-count unit is enforced BY TYPE (`isinstance(k, int) and not isinstance(k, bool)`), which also refuses the module's own rate-space `SUPERSEDED_SWEEP_SENTINEL`. GAP 2 (GATE-02 / T-20-19) closed at `20-15`: `_prove_retention_floor` gained a fifth `_prove` bounding the floor's MAGNITUDE — `_MAX_ADMISSIBLE_RETENTION_FLOOR`, DERIVED from the governing floor times a separately-named `_RETENTION_FLOOR_RELATIVE_TOLERANCE` (measured `1e-09`) — placed AFTER the `!=` so the named-value refusal still fires first; the one-ULP nudge and `5.0` under clean provenance are both refused by MAGNITUDE and the governing floor `0.008681618994239138` is still ADMITTED, so the bound is one-sided and not vacuous. THE FINDING A FUTURE READER MOST NEEDS IS **D-41**: that bound refuses THIS REPOSITORY'S OWN committed fixtures at `retention_noise_floor: 0.009` inside the FROZEN pin, so the sanctioned route's test harness supplies the governing floor READ from `results/phase20_retention_floor.json` rather than the tolerance being widened to admit a value already in hand — and every published verdict is BIT-UNCHANGED under the substitution (all four `PASS`/`INCONCLUSIVE` readings identical, the governing cap `3.9085032379884783` strictly TIGHTER than the fixture's `3.90914`, so the rewire cannot buy a pass the fixture floor would have withheld). `20-16` published the second dated continuation additively (+152 / −0 via `append_addendum`, in its own commit) and corrected in place the one `REQUIREMENTS.md` sentence the verification measured FALSE. `20-17` re-closed `20-SECURITY.md` to `status: verified` / `threats_open: 0` at 84 distinct threat IDs with zero rows at Status `open`, in a commit distinct from `20-13`'s OPEN flip (D-39), gated on RE-APPLYING eight watched-RED breaks in its own process — all observed RED, all restored byte-identically, and ONE DIVERGED from its SUMMARY and was published rather than smoothed. Full suite `877 passed, 1 skipped`; both frozen pins `git diff --exit-code` 0. Confirmation is the ORCHESTRATOR's audit at `/gsd:verify-phase 20`, not this record. PRIOR ENTRY (2026-08-21, at dispatch, carried forward rather than deleted): The 2026-08-21 re-verification returned `gaps_found` at 5/6 must-haves, and both remaining gaps are the same defect class — a guard that refuses a NAME where the harm is a PROPERTY. GAP 1 (GATE-06 / ROADMAP SC3) — `coverage_verdict` length-checks both Y sweep legs and consumes their values raw, while the extraction axis on the same function gets three per-element `_prove` calls; measured, held-out `(0.30, 0.28)` is correctly flagged truncated but `(nan, 0.28)`, strictly MORE truncated, drops out of the truncated set entirely and reaches `PASS` — `nan >= criterion` is False, so the NaN is COUNTED as a failing point and actively manufactures the bracket. GAP 2 (GATE-02 / T-20-19) — `_prove_retention_floor` refuses the borrowed floor by float `!=`; measured, `0.06893 * (1 + 2**-50)` defeats it and returns a BIT-IDENTICAL `4.029`, and `retention_noise_floor=5.0` with clean adapter provenance needs no malformed input at all to reach `PASS` at cap `13.89114` against the governing `3.9085032379884783`. Both reproduced against HEAD before planning. THE PLANNED CLOSURE, per three escalation decisions taken at the gate: the magnitude bound lands BESIDE the `!=` (name refused by identity AND class refused by magnitude, which also moots the D-24 post-hoc question); T-20-19 flips OPEN / `threats_open: 1` as 20-13's FIRST act and returns to CLOSED only after the bound's tripwires are watched RED against both measured cases, in a separate commit; and the Y hole is NOT deferred to Phase 23. PLANNER FINDING, not in any source document: the bound refuses this repository's OWN committed fixtures — `retention_noise_floor: 0.009` at `scripts/mitigation_gate.py:1237`, annotated `# fabricated`, inside the FROZEN file — so landing it alone reddens 5 of 11 correction tests. Recorded as D-41 and closed by having the test harness read the governing floor from `results/phase20_retention_floor.json` rather than by widening the tolerance to admit a value already in hand. Verified by the plan-checker end to end: bound alone 5 failed / 6 passed, bound + harness 11 passed, all fixture verdicts bit-unchanged. NOT YET EXECUTED — no code has changed; `git diff --exit-code -- scripts/ tests/ results/` returns 0.
-Last activity: 2026-08-21 -- Phase 20 gap-closure wave 2 EXECUTION COMPLETE (5 plans, 14 tasks, strictly serial as dispatched). Landed: 20-13 (D-38..D-41 recorded, register flipped OPEN, plus a Rule-1 anchor correction its own flip forced), 20-14 (both Y-leg value guards + the count-by-type guard, 2 breaks watched), 20-15 (the magnitude bound, the D-41 harness rewire, the aliased-import census, and a TOLERANCE PIN added because the plan's hedged contingency turned out to be the measured case — the suite was GREEN under a 5e7-fold widening), 20-16 (the second correction's JSON value_guards + additivity guard, the second dated continuation, the falsified GATE-02 claim corrected in place), 20-17 (register re-closed to verified / 0 open at 84 distinct IDs, ROADMAP and STATE brought current). No `gsd-sdk` state.* or roadmap.* mutation handler was invoked anywhere in this wave-set; STATE.md and ROADMAP.md were edited BY HAND and diffed line-by-line before commit. PRIOR ENTRY (at dispatch): Phase 20 gap-closure wave 2 EXECUTION STARTED (5 plans, 14 tasks, strictly serial — every pair shares files or a record-ordering dependency). Planning closed at errors 0 / warnings 0 across three plan-checker iterations; 12/12 phase REQ-IDs covered across the 17 plans. Dispatch is main-tree sequential rather than worktree-isolated: no wave holds two plans, so isolation protects nothing, and 20-13/20-17 must write the exact shared artifacts (20-SECURITY.md, ROADMAP.md, STATE.md) that worktree mode forbids an executor to touch. Baseline before any change: `git diff --exit-code -- scripts/ tests/ results/` returns 0.
+Last activity: 2026-08-21 -- Phase 20 COMPLETE and VERIFIED (17/17 plans, 19 commits). Gap-closure wave 2 (20-13..20-17) closed both 20-VERIFICATION.md gaps in code: the Y sweep legs gained a per-element [0.0, 1.0] `_prove` on BOTH legs (subsuming NaN) with the count guard enforced by type, and `_prove_retention_floor` gained the D-38 MAGNITUDE bound beside the `!=` so a looser floor is refused as a CLASS. Re-verification scored 7/7 must-haves, re-measured independently — the verifier applied six of its own guard-neutering breaks rather than accepting any SUMMARY claim, and confirmed the bound is NOT vacuous (governing floor 0.008681618994239138 admitted, governing*(1+1e-6) refused). 20-17 re-closed the register against a re-run of eight breaks and PUBLISHED the one that diverged from its own record. Full suite 877 passed / 1 skipped, confirmed twice; both frozen pins byte-identical against the phase-start commit cc99321 across all 19 commits. NOT run: `/gsd:code-review 20` (advisory gate, still outstanding).
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Last activity: 2026-08-21 -- Phase 20 gap-closure wave 2 EXECUTION COMPLETE (5 p
 | 16 | 11 | - | - |
 | 17 | 11 | - | - |
 | 19 | 16 | - | - |
+| 20 | 17 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 | Phase 12 P01 | 14min | 3 tasks | 3 files |

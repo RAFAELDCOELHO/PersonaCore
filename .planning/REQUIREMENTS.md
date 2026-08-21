@@ -246,7 +246,7 @@ The only mechanism in the whole research pass that tests the **guarantee** rathe
 - [ ] **RPT-01**: The milestone report publishes whichever way the numbers came out, including the
       expected DP null at both capacities, with the standing expectation above quoted as having been
       recorded before any run.
-- [ ] **RPT-02**: A whitespace-normalizing prose-search helper exists and is used for correction
+- [x] **RPT-02**: A whitespace-normalizing prose-search helper exists and is used for correction
       sweeps — v3.0's `grep -c` lesson (a line-wrapped phrase reported as absent on a file containing
       it) was recorded and never converted into a mechanism.
 - [ ] **RPT-03**: Zero new runtime dependencies; `pyproject.toml` sha256-pinned state carries forward
