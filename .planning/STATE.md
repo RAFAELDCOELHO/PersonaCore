@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 executed 7/7 plans but REOPENED — verification returned gaps_found (5/6 must-haves) and 20-SECURITY.md is blocked at threats_open 2; gap-closure plans 20-08..20-12 are now planned and ready to execute. GATE-06 needs its dated continuation before Phase 23
-last_updated: "2026-08-21T13:53:13.424Z"
-last_activity: 2026-08-21 -- Phase 20 gap-closure planning complete (5 plans, 5 waves)
+stopped_at: Phase 20 REOPENED — gap-closure execution in progress (20-08..20-12, 5 waves). Original 7 plans complete; verification returned gaps_found (5/6 must-haves) and 20-SECURITY.md is blocked at threats_open 2. GATE-06 needs its dated continuation before Phase 23
+last_updated: "2026-08-21T14:40:00.000Z"
+last_activity: 2026-08-21 -- Phase 20 gap-closure execution started (waves 1-5)
 progress:
   total_phases: 9
   completed_phases: 0
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — REOPENED (gaps_found)
-Plan: 7 of 12 (waves 1-6 executed; gap-closure waves 1-5 planned, 0 executed)
-Status: Ready to execute — gap-closure plans 20-08..20-12. The original 7 plans executed and the phase GOAL was achieved (ordering verified against the commit DAG), but 20-VERIFICATION.md returned gaps_found at 5/6 must-haves and 20-SECURITY.md is `status: blocked` with `threats_open: 2` (T-20-21, T-20-19). SC3 partial: GATE-06 decides sweep coverage on RAW rates while condition (a) decides on `wilson_upper_bound` — reproduced in BOTH directions (spurious INCONCLUSIVE and spurious FAIL; no spurious PASS constructible under self-consistent inputs) — and there is no `sweep_heldout_recalls` parameter at all, so the held-out leg of a pair-valued Y has no coverage check. The pin is permanently uneditable, so the fix is a new UNPINNED `scripts/phase20_gate_coverage.py` plus `results/phase20_gate_coverage_correction.{md,json}` and an armed tripwire (D-34/D-35). Does not block Phase 21; MUST close before Phase 23.
-Last activity: 2026-08-21 -- Phase 20 gap-closure planning complete: 5 plans in 5 waves, 3 revision iterations, all 3 blockers from the final check verified fixed on disk
+Plan: 7 of 12 (waves 1-6 executed; gap-closure waves 1-5 executing, 0 of 5 complete)
+Status: Executing — gap-closure plans 20-08..20-12. The original 7 plans executed and the phase GOAL was achieved (ordering verified against the commit DAG), but 20-VERIFICATION.md returned gaps_found at 5/6 must-haves and 20-SECURITY.md is `status: blocked` with `threats_open: 2` (T-20-21, T-20-19). SC3 partial: GATE-06 decides sweep coverage on RAW rates while condition (a) decides on `wilson_upper_bound` — reproduced in BOTH directions (spurious INCONCLUSIVE and spurious FAIL; no spurious PASS constructible under self-consistent inputs) — and there is no `sweep_heldout_recalls` parameter at all, so the held-out leg of a pair-valued Y has no coverage check. The pin is permanently uneditable, so the fix is a new UNPINNED `scripts/phase20_gate_coverage.py` plus `results/phase20_gate_coverage_correction.{md,json}` and an armed tripwire (D-34/D-35). Does not block Phase 21; MUST close before Phase 23.
+Last activity: 2026-08-21 -- Phase 20 gap-closure execution started: 5 plans in 5 waves (20-09 → 20-08 → 20-10 → 20-11 → 20-12), strictly serial chain
 
 ## Performance Metrics
 
