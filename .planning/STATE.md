@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 REOPENED — gap-closure execution in progress (20-08..20-12, 5 waves). Original 7 plans complete; verification returned gaps_found (5/6 must-haves) and 20-SECURITY.md is blocked at threats_open 2. GATE-06 needs its dated continuation before Phase 23
-last_updated: "2026-08-21T14:40:00.000Z"
-last_activity: 2026-08-21 -- Phase 20 gap-closure execution started (waves 1-5)
+stopped_at: Phase 20 REOPENED — gap-closure wave 1 of 5 COMPLETE (20-09 bookkeeping shipped). Next is wave 2, 20-08 — scripts/phase20_gate_coverage.py, now unblocked because D-34/D-35/D-37 are recorded. 20-SECURITY.md still blocked at threats_open 2 (T-20-21, T-20-19); GATE-06 needs its dated continuation before Phase 23
+last_updated: "2026-08-21T14:46:00.000Z"
+last_activity: 2026-08-21 -- 20-09 executed: D-34..D-37 recorded, 8 traceability notes filled, D-36 GATE-02 amendment
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 12
-  completed_plans: 7
-  percent: 58
+  completed_plans: 8
+  percent: 67
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — REOPENED (gaps_found)
-Plan: 7 of 12 (waves 1-6 executed; gap-closure waves 1-5 executing, 0 of 5 complete)
+Plan: 8 of 12 (waves 1-6 executed; gap-closure waves 1-5 executing, 1 of 5 complete — 20-09 done)
 Status: Executing — gap-closure plans 20-08..20-12. The original 7 plans executed and the phase GOAL was achieved (ordering verified against the commit DAG), but 20-VERIFICATION.md returned gaps_found at 5/6 must-haves and 20-SECURITY.md is `status: blocked` with `threats_open: 2` (T-20-21, T-20-19). SC3 partial: GATE-06 decides sweep coverage on RAW rates while condition (a) decides on `wilson_upper_bound` — reproduced in BOTH directions (spurious INCONCLUSIVE and spurious FAIL; no spurious PASS constructible under self-consistent inputs) — and there is no `sweep_heldout_recalls` parameter at all, so the held-out leg of a pair-valued Y has no coverage check. The pin is permanently uneditable, so the fix is a new UNPINNED `scripts/phase20_gate_coverage.py` plus `results/phase20_gate_coverage_correction.{md,json}` and an armed tripwire (D-34/D-35). Does not block Phase 21; MUST close before Phase 23.
-Last activity: 2026-08-21 -- Phase 20 gap-closure execution started: 5 plans in 5 waves (20-09 → 20-08 → 20-10 → 20-11 → 20-12), strictly serial chain
+Last activity: 2026-08-21 -- 20-09 COMPLETE (wave 1 of the strictly serial chain 20-09 → 20-08 → 20-10 → 20-11 → 20-12). D-34/D-35/D-36/D-37 are now recorded in 20-CONTEXT.md, so 20-08 may cite them in its module docstring; the eight empty Phase 20 traceability notes are filled and AST-resolved on both sides; GATE-02's requirement text carries D-36's dated in-place amendment naming the governing cap 3.9085032379884783. Next: wave 2, 20-08
 
 ## Performance Metrics
 
@@ -110,6 +110,7 @@ Last activity: 2026-08-21 -- Phase 20 gap-closure execution started: 5 plans in 
 | Phase 20 P05 | 18min | 3 tasks | 1 files |
 | Phase 20 P06 | 16min | 3 tasks | 2 files |
 | Phase 20 P07 | 26min | 3 tasks | 5 files |
+| Phase 20 P09 | 10min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -351,6 +352,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 20]: 20-06: a watched-RED whose red arrives at the WRONG STAGE is not a verified guard, and both attempts are recorded rather than only the one that worked. Mutation (a) placed `import mitigation_budget` inside `_prove`, which `_prove_verdict_domain()` calls AT IMPORT, so the test module died at collection with `ModuleNotFoundError` and the D-20 assertion never ran. Re-driven inside `capacity_comparison` (never called at import): the module loads and the STATIC scan fires, reporting `imports: ['erasure_gate', 'mitigation_budget', 'pathlib', 'sys']`. The relocation is also the stronger observation — it proves the `ast.walk` finds an import at ANY depth, where a top-level-only scan would have missed it
 - [Phase 20]: 20-06: the `FIXTURE_*` exclusion's residual hole is ACCEPTED and stated in words, not closed. Exactly FOUR fixture fields are proved against `results/phase19_arm_erased.json`; every other float in the three dicts is deliberately fabricated with no source to check it against (no v4.0 arm exists, D-13), so a third chosen constant hidden inside one WOULD NOT be caught. Asserting fabricated inputs against a source that does not exist is exactly the unprovable assertion this phase exists to refuse. The hole is narrowed instead by a name allow-list: the module-scope `FIXTURE_*` names are asserted to be exactly three, so a fourth dict is caught
 - [Phase 20]: 20-06: full-suite runtime RE-MEASURED at 863 passed, 1 skipped in 188.55s with this phase's tests present; per-task gate 18 passed in 0.79-0.81s over three runs. The 13.44s drop against 20-VALIDATION.md's pre-phase 201.99s row is MACHINE VARIANCE and is written down as such — a suite that gained 18 tests cannot have got 13s faster because of them; against 20-05's 186.74s one wave earlier the honest figure is +1.81s for 14 new tests
+- [Phase 20]: 20-09: D-34/D-35/D-36/D-37 are LOCKED and recorded in 20-CONTEXT.md — the correction is a real computation in unpinned code rather than a caller convention (D-34: a convention cannot supply the held-out leg, and its tripwire could only assert compliance, never compute); WR-09's held-out leg closes in the SAME function as the taught leg (D-35); GATE-02's pre-registration text is amended IN PLACE on four conjoined grounds (D-36); the coverage statistic is CRITERION-MATCHED per axis — Wilson upper on the X ceiling, raw recall on both Y floors — with wilson_lower_bound defined for REPORTING only and the Y legs' missing confidence bound recorded and deliberately NOT fixed (D-37)
+- [Phase 20]: 20-09: the record-before-citation ordering is enforced by the WAVE GRAPH, not by prose — 20-09 is the whole of gap-closure wave 1 and 20-08 declares depends_on: [20-09], so the module docstring citing D-34/D-35/D-37 provably cannot be written before the record exists. Within-plan task order can never bind a sibling plan in the same wave
+- [Phase 20]: 20-09: every verify assertion is SCOPED to the span its task wrote, because the strings were MEASURED first — `2026-08-20` already occurred 4x in 20-CONTEXT.md and `3.9085032379884783` / `0.008681618994239138` / `0.06893` were already in REQUIREMENTS.md, so a whole-file `assert s in text` on any of them could not have failed. Documentation wearing a guard's clothes is the T-20-63 defect class
+- [Phase 20]: 20-09: the eight filled traceability notes are checked by AST RESOLUTION on BOTH sides — a backticked token must land in the FunctionDef / module-scope Assign set of scripts/mitigation_gate.py AND in the test_* set of tests/test_phase20_prereg.py — plus a visited-set equality so a renamed or deleted row reddens instead of being skipped. A note naming a guard that does not exist is worse than an empty note: it manufactures the appearance of coverage. Checkboxes NOT re-touched (already [x] at 0f265e2, T-20-56)
+- [Phase 20]: 20-09: D-36's amendment is admissible only as a CONJUNCTION — dated (2026-08-21), in place (so `grep 4.029000` cannot miss it), additive (the original bullet byte-identical above it), and provably TIGHTER: 3.9085032379884783 < 4.029, from a floor 7.939763314393305x smaller, so condition (c) gets HARDER. A self-serving amendment moves a threshold the other way, and that arithmetic is IN the amendment rather than in a footnote. It also names the enforcement (_prove_retention_floor at 20-08, the bit-exact assertion at 20-11), which is what stops it being prose
+- [Phase 20]: 20-09: gsd-sdk state/roadmap mutation verbs were NOT called at all this session — STATE.md and ROADMAP.md were hand-edited, and `requirements.mark-complete` was skipped because GATE-02 is already [x] and the verb would have rewritten the exact traceability row this plan just amended. Sixth consecutive session treating those handlers as unsafe
 
 ### Roadmap Evolution
 

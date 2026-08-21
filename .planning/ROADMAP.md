@@ -228,7 +228,7 @@ Plans:
 
 **Wave 7**
 
-- [ ] 20-09-PLAN.md — D-34/D-35/D-36/D-37 recorded in `20-CONTEXT.md` before any artifact cites them, the eight empty REQUIREMENTS.md traceability notes (each AST-resolved against a real function and a real guard), and D-36's dated in-place GATE-02 amendment so a grep for `4.029000` lands on the correction
+- [x] 20-09-PLAN.md — D-34/D-35/D-36/D-37 recorded in `20-CONTEXT.md` before any artifact cites them, the eight empty REQUIREMENTS.md traceability notes (each AST-resolved against a real function and a real guard), and D-36's dated in-place GATE-02 amendment so a grep for `4.029000` lands on the correction
 
 **Wave 8** *(blocked on Wave 7 completion — 20-08's module docstring CITES D-34/D-35, so the record must exist first; enforced by the wave graph, not asserted in prose)*
 
@@ -507,7 +507,7 @@ capacities — with every number in prose generated from a committed record rath
 | 1-8 | v1.0 | 29/29 | Complete | 2026-06-10 |
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
-| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 7/7 | Complete   | 2026-08-20 |
+| 20. Pre-Registration — The Three-Condition Gate | v4.0 | 8/12 | Reopened — gap closure (wave 1 of 5 done) | 7/7 on 2026-08-20 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 0/TBD | Not started | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
