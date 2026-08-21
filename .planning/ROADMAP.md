@@ -229,7 +229,7 @@ Plans:
 **Wave 7**
 
 - [ ] 20-08-PLAN.md — `scripts/phase20_gate_coverage.py`: `coverage_verdict` deciding each axis on the statistic its criterion is decided on (Wilson upper on X, raw rates on both Y legs), `_prove_retention_floor`, and `corrected_point_verdict` — the one route with no `sweep_extraction_rates` parameter
-- [ ] 20-09-PLAN.md — The eight empty REQUIREMENTS.md traceability notes, and D-36's dated in-place GATE-02 amendment so a grep for `4.029000` lands on the correction
+- [ ] 20-09-PLAN.md — D-34/D-35/D-36/D-37 recorded in `20-CONTEXT.md` before any artifact cites them, the eight empty REQUIREMENTS.md traceability notes (each AST-resolved against a real function and a real guard), and D-36's dated in-place GATE-02 amendment so a grep for `4.029000` lands on the correction
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -241,7 +241,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 20-12-PLAN.md — GATE-06 discharged in REQUIREMENTS.md and 20-SECURITY.md flipped to `status: verified` / `threats_open: 0`, both against a re-run rather than against a plan
+- [ ] 20-12-PLAN.md — GATE-06 discharged in REQUIREMENTS.md, Success Criterion 3 amended in place with a dated blockquote pointing at the correction, and 20-SECURITY.md flipped to `status: verified` / `threats_open: 0` — all three against a re-run rather than against a plan
 
 ### Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus
 
