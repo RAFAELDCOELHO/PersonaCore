@@ -69,6 +69,21 @@ so the resolution is contradicted by module data rather than only by prose.
     the Wilson bound and never instead of it, and "publishing both is what stops the quieter of the
     two being chosen after the fact".
 
+THE CHOKE POINT AND ITS ENFORCEMENT, READABLE TOGETHER
+======================================================
+``corrected_point_verdict`` is the ONE sanctioned route to a v4.0 verdict, and it has no authority
+a caller can be trusted to invoke: nothing in Python stops a Phase 23/25 module importing
+``mitigation_gate.mitigation_point_verdict`` directly and bypassing every correction in this file
+(T-20-48). What stops it is an AST CALLER CENSUS, built at plan ``20-11`` in
+``tests/test_phase20_correction.py`` as
+``test_mitigation_point_verdict_has_no_caller_outside_this_module``: it walks ``scripts/`` and
+``src/`` for any call to ``mitigation_point_verdict`` outside this module and outside ``tests/``,
+and goes RED on the first one. MEASURED GREEN TODAY at zero such callers — the pin's own
+``__main__`` self-check is the only non-test caller and is excluded BY NAME, in
+``tests/test_phase19_erasure.py``'s exclude-the-successor register rather than by lowering a count,
+so a genuinely new bypass anywhere else still reddens it. Recorded as a state, never as a silent
+skip — ``tests/test_phase16_prereg.py``'s ``bool(checked) == bool(tracked)`` discipline.
+
 CPU-only: stdlib plus two sibling scripts. No torch, no numpy, no network, no file I/O.
 """
 
@@ -406,3 +421,182 @@ SUPERSEDED_GATE06_BLOCK = "scripts/mitigation_gate.py:798-812"
 # `_prove` calls on `ceiling`, `y_taught` and `y_heldout` BEFORE the sentinel is ever passed — so
 # the bracketing is proved at the call site rather than assumed of the caller's data.
 SUPERSEDED_SWEEP_SENTINEL = (0.0, 1.0)
+
+
+def corrected_point_verdict(
+    *,
+    arm,
+    point_extraction_successes,
+    point_extraction_questions,
+    control_extraction_successes,
+    control_extraction_questions,
+    extraction_noise_floor,
+    extraction_floor_provenance,
+    zero_extraction_has_nll,
+    point_taught_recall,
+    point_heldout_recall,
+    control_taught_recall,
+    control_heldout_recall,
+    point_dialogue_ppl_on,
+    point_dialogue_ppl_off,
+    control_gap,
+    gap_noise_floor,
+    point_retention_ppl,
+    retention_noise_floor,
+    retention_floor_provenance,
+    sweep_extraction_successes,
+    sweep_extraction_questions,
+    sweep_taught_recalls,
+    sweep_heldout_recalls,
+    replicated_at_second_seed,
+):
+    """THE SANCTIONED ROUTE to a v4.0 verdict. Returns the pin's ``(verdict, reasons, arm)``.
+
+    Twenty-four required keyword arguments: the frozen gate's twenty-one MINUS
+    ``sweep_extraction_rates``, PLUS ``sweep_extraction_successes``, ``sweep_extraction_questions``,
+    ``sweep_heldout_recalls`` and ``retention_floor_provenance``. Written out explicitly and NOT as
+    ``**kwargs``: the pin pays 21 explicit arguments precisely so a caller cannot silently omit an
+    anchor and still get a verdict, and a ``**kwargs`` passthrough would hand that protection back.
+
+    ``sweep_extraction_rates`` IS ABSENT BY CONSTRUCTION. Raw-rate space is not reachable through
+    this route because the parameter that accepted it does not exist here, and a raw rate smuggled
+    into ``sweep_extraction_successes`` is refused by ``coverage_verdict``'s fourth ``_prove``,
+    by name. That PAIR — the path removed and the value refused — is what D-34 bought over the
+    rejected caller-convention route, which could have done neither.
+
+    THE PIN IS CALLED, NEVER EDITED. ``mitigation_gate.extraction_ceiling`` computes X here, so its
+    own three provenance ``_prove`` calls fire on this path and there is no second copy of X free to
+    disagree (T-20-53). ``mitigation_gate.mitigation_point_verdict`` is called ONCE, and GATE-05,
+    GATE-08, arm identity, all three conditions and every reason string come back unaltered.
+
+    WHY THE SENTINEL IS FED TO THE PIN'S TWO SWEEP PARAMETERS. ``SUPERSEDED_SWEEP_SENTINEL`` goes
+    to both ``sweep_extraction_rates`` and ``sweep_taught_recalls``. Those two parameters are read
+    by exactly one block, ``mitigation_gate.py:798-812``, and nothing else in that 195-line function
+    reads them — this correction supersedes that block WHOLESALE, and feeding it a sweep it cannot
+    fire on is the mechanical expression of "superseded". Coverage has already been decided
+    correctly, on all three axes, before the pin is called at all.
+
+    TWO DIVERGENCES FROM THE PIN'S CONTRACT, NAMED SO A READER COMPARING THE TWO ROUTES DOES NOT
+    READ THEM AS THE PIN BEING BROKEN. BOTH ARE STRICTER, NOT LOOSER, AND NEITHER IS AN EDIT:
+
+      1. THE GATE-05 REASON COUNT. ``mitigation_gate.py:1310`` asserts that a GATE-05 case — zero
+         extraction with no corroborating teacher-forced NLL — returns EXACTLY ONE reason. Through
+         this route, a GATE-05 case whose sweep is ALSO truncated returns TWO: the pin's one, plus
+         the corrected GATE-06 reason appended below. The pin's one-element guarantee still holds
+         FOR THE PIN and is untouched; this route adds a finding the pin has no parameter to see.
+
+      2. THE ORDERING OF THE FLOOR CHECKS AGAINST THE GATE-05 BRANCH. This route runs
+         ``_prove_retention_floor`` and the ``extraction_noise_floor`` sign check first, and calls
+         ``extraction_ceiling`` third — all BEFORE the pin's GATE-05 early return at ``:730-745``
+         would have fired. So a call with a bad extraction-floor provenance, a negative extraction
+         floor, or a borrowed retention floor raises ``SystemExit`` here where the pin returns
+         ``INCONCLUSIVE``. Refusing an unprovenanced or ill-signed floor outright is stricter than
+         returning "we could not tell" about it, and it is D-14(b)'s ordering: there is no path to
+         a verdict that computes X from an unlabelled floor.
+
+    ENFORCEMENT, STATED PLAINLY BECAUSE "DOCUMENTED" IS NOT "CORRECTED". Nothing in Python stops a
+    Phase 23/25 module importing ``mitigation_gate.mitigation_point_verdict`` directly and
+    bypassing every correction in this file. What stops it is an AST CALLER CENSUS, built at plan
+    ``20-11`` in ``tests/test_phase20_correction.py`` as
+    ``test_mitigation_point_verdict_has_no_caller_outside_this_module``: it walks ``scripts/`` and
+    ``src/`` for any call to ``mitigation_point_verdict`` outside this module and outside
+    ``tests/``, and goes RED on the first one. MEASURED GREEN TODAY at zero such callers — the pin's
+    own ``__main__`` self-check is the only non-test caller and is excluded by name, in
+    ``tests/test_phase19_erasure.py``'s exclude-the-successor register rather than by lowering a
+    count. Recorded as a state, never as a silent skip.
+    """
+    _prove_retention_floor(
+        retention_noise_floor=retention_noise_floor,
+        retention_floor_provenance=retention_floor_provenance,
+    )
+    _prove(
+        extraction_noise_floor >= 0,
+        f"extraction_noise_floor {extraction_noise_floor} is NEGATIVE; a noise floor is a "
+        "magnitude. WR-08, and the POSITION of this check is the whole point of it: "
+        "`extraction_ceiling` is the one floor consumer of the four that does not validate its "
+        "floor's sign, while its own docstring asserts the non-negative precondition in prose. "
+        "MEASURED at n=104 with a clean never-taught provenance: a floor of -0.01 still yields a "
+        "POSITIVE ceiling 0.005355228664941234, so a sign check placed after the ceiling "
+        "computation does fire with the right message — but -0.05 yields -0.07464477133505877, "
+        "the `0.0 < ceiling < 1.0` refusal below fires first, and the caller is told the ceiling "
+        "is out of range rather than that their floor is negative. That misattribution is exactly "
+        "what this check exists to prevent, so a check correct only for small-magnitude floors is "
+        "not the check",
+    )
+
+    ceiling = mitigation_gate.extraction_ceiling(
+        nontarget_successes=control_extraction_successes,
+        nontarget_questions=control_extraction_questions,
+        extraction_noise_floor=extraction_noise_floor,
+        extraction_floor_provenance=extraction_floor_provenance,
+    )
+    y_taught = F_Y * control_taught_recall
+    y_heldout = F_Y * control_heldout_recall
+
+    _prove(
+        0.0 < ceiling < 1.0,
+        f"the extraction ceiling came out {ceiling}, outside the open interval (0.0, 1.0). A "
+        "ceiling of 1.0 tolerates every possible outcome and is a vacuous criterion, and a "
+        "non-positive one is unclearable — refusing both is correct independently of anything "
+        f"below. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL "
+        f"{SUPERSEDED_SWEEP_SENTINEL} provably bracket the extraction axis when it is handed to "
+        "the pin, so the sentinel is never passed against a criterion it might not straddle",
+    )
+    _prove(
+        0.0 < y_taught <= 1.0 and 0.0 < y_heldout <= 1.0,
+        f"the recall floors came out Y_taught={y_taught}, Y_heldout={y_heldout}; both must lie in "
+        "(0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 "
+        "is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL "
+        f"{SUPERSEDED_SWEEP_SENTINEL} provably bracket the taught-recall axis the pin still reads, "
+        "so the sentinel is never passed against a criterion it might not straddle",
+    )
+
+    covered, truncated_axes, sentence = coverage_verdict(
+        sweep_extraction_successes=sweep_extraction_successes,
+        sweep_extraction_questions=sweep_extraction_questions,
+        sweep_taught_recalls=sweep_taught_recalls,
+        sweep_heldout_recalls=sweep_heldout_recalls,
+        extraction_ceiling_value=ceiling,
+        y_taught=y_taught,
+        y_heldout=y_heldout,
+    )
+
+    verdict, reasons, verdict_arm = mitigation_gate.mitigation_point_verdict(
+        arm=arm,
+        point_extraction_successes=point_extraction_successes,
+        point_extraction_questions=point_extraction_questions,
+        control_extraction_successes=control_extraction_successes,
+        control_extraction_questions=control_extraction_questions,
+        extraction_noise_floor=extraction_noise_floor,
+        extraction_floor_provenance=extraction_floor_provenance,
+        zero_extraction_has_nll=zero_extraction_has_nll,
+        point_taught_recall=point_taught_recall,
+        point_heldout_recall=point_heldout_recall,
+        control_taught_recall=control_taught_recall,
+        control_heldout_recall=control_heldout_recall,
+        point_dialogue_ppl_on=point_dialogue_ppl_on,
+        point_dialogue_ppl_off=point_dialogue_ppl_off,
+        control_gap=control_gap,
+        gap_noise_floor=gap_noise_floor,
+        point_retention_ppl=point_retention_ppl,
+        retention_noise_floor=retention_noise_floor,
+        sweep_extraction_rates=SUPERSEDED_SWEEP_SENTINEL,
+        sweep_taught_recalls=SUPERSEDED_SWEEP_SENTINEL,
+        replicated_at_second_seed=replicated_at_second_seed,
+    )
+
+    if covered:
+        return verdict, reasons, verdict_arm
+    return (
+        "INCONCLUSIVE",
+        [
+            *reasons,
+            f"INCONCLUSIVE (GATE-06, CORRECTED — supersedes {SUPERSEDED_GATE06_BLOCK}, which "
+            "decides coverage on RAW rates while condition (a) decides on wilson_upper_bound, and "
+            f"which cannot see the held-out leg at all): {sentence}. Truncated axes: "
+            f"{truncated_axes}. A curve that never crossed cannot refute existence, so this is 'we "
+            "could not tell', not 'it did not work' — the mis-set-Z failure this branch exists to "
+            "catch",
+        ],
+        verdict_arm,
+    )
