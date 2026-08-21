@@ -33,6 +33,37 @@ cost calibration, not merely before the sweep.
       `V20_RETENTION_NOISE_FLOOR` 0.068930, `MARGIN_K` 2) plus the measured
       `dialogue_ppl_noise_floor` (0.005214448168350039, `results/phase19_noise_floors.json`), never
       retyped as literals — yielding `dialogue_cap` 4.5837288963367 and `retention_cap` 4.029000.
+
+  > **Amended by D-36 at plan `20-09`, and the amendment is TIGHTER.** The `retention_cap`
+  > `4.029000` above is derived from `V20_RETENTION_NOISE_FLOOR = 0.068930`, a **Phase 12
+  > FULL-FINE-TUNE** seed pair, and it is NOT what governs v4.0.
+  > `scripts/mitigation_gate.py::retention_cap` deliberately does not import that constant — a test
+  > asserts its absence from a five-name `from erasure_gate import` list checked by EXACT EQUALITY —
+  > and takes the retention floor as a **required keyword argument** with no default instead (D-07).
+  > The governing floor is the **adapter-regime** `0.008681618994239138`, measured at plan `20-07`
+  > (`results/phase20_retention_floor.json`, two seeds, bit-identity control passed at
+  > `abs_delta = 0.0`), so the governing v4.0 `retention_cap` is **`3.9085032379884783`**. The
+  > borrowed floor is `7.939763314393305x` larger and its cap `4.029` correspondingly LOOSER, which
+  > means this amendment makes condition (c) **harder** to clear — a self-serving amendment moves a
+  > threshold the other way. `dialogue_cap` `4.5837288963367` is unchanged, and
+  > `scripts/erasure_gate.py:246` still computes `4.029` for **Phase 19** verdicts and is
+  > deliberately NOT corrected.
+  >
+  > **Why the pre-registration text is edited at all, when this repo's convention is that it is
+  > not.** The supersession was already recorded in the traceability row below at plan `20-07`, but
+  > a `[x]` is machine-readable and the note beside it is not, so an automated audit that counts
+  > checkboxes reports GATE-02 satisfied AS WRITTEN. D-36 accepts an in-place edit on four grounds
+  > that must hold together: it is DATED (2026-08-21), it is IN PLACE so a `grep` for `4.029000`
+  > cannot miss it, it is ADDITIVE — every word of the original requirement above is byte-identical
+  > — and it is provably TIGHTER by the arithmetic just given. ROADMAP SC1 already carries this
+  > exact shape for this exact number.
+  >
+  > **The enforcement, so this is a mechanism and not prose.** `_prove_retention_floor` in
+  > `scripts/phase20_gate_coverage.py` (plan `20-08`) refuses `0.06893` at the choke point every
+  > corrected verdict passes through, and `tests/test_phase20_correction.py` (plan `20-11`) asserts
+  > that `retention_cap` called with the measured floor equals the artifact's published `cap`
+  > bit-exact.
+
 - [x] **GATE-03**: Y is a **pair** (`Y_taught` and `Y_heldout`), because v2.0 published two recall
       numbers (0.4921 / 0.3483) and gating taught-only rewards memorization over generalization.
 - [x] **GATE-04**: Y is locked as a **fraction of the retrained control** (e.g. `≥ 0.7 × control`),
@@ -269,7 +300,7 @@ Every REQ-ID maps to exactly one phase. **48/48 mapped, 0 orphans, 0 duplicates*
 | REQ-ID | Phase | Note |
 |--------|-------|------|
 | GATE-01 | Phase 20 | `mitigation_point_verdict` returns the three-name `V4_VERDICTS` domain, proved at import by the module-scope `_prove_verdict_domain()`, with four condition reason strings observed rendering. Guarded by `test_verdict_domain_stays_exactly_three` and by `test_every_gate_function_is_keyword_only_with_no_defaults`, whose AST walk covers ALL public functions in the module rather than the verdict one alone. |
-| GATE-02 | Phase 20 | **The MECHANISM is discharged; the stated `retention_cap 4.029000` is SUPERSEDED by D-06.** `scripts/mitigation_gate.py::retention_cap` imports `V20_EWC_RETENTION_PPL` and `MARGIN_K` and retypes nothing, but it takes the retention floor as a REQUIRED keyword argument (D-07) and does NOT import `V20_RETENTION_NOISE_FLOOR = 0.068930` — that is a Phase 12 FULL-FINE-TUNE reading. The adapter-regime floor `0.008681618994239138` measured at plan `20-07` (`results/phase20_retention_floor.json`) is what governs v4.0, yielding `3.9085032379884783`. The requirement's `4.029000` is published beside it in the artifact as `borrowed_cap` so the supersession is visible rather than silent. `scripts/erasure_gate.py:246` still computes `4.029` for Phase 19 verdicts and is NOT corrected. **RESIDUAL — OPEN, bound to the GATE-06 gap-closure phase (threat T-20-19, `20-SECURITY.md`).** The supersession is recorded but not *enforced*: `extraction_ceiling` carries THREE `_prove` calls refusing a wrong-arm / <2-seed / missing-provenance floor, while `retention_cap` carries ZERO. Measured — `retention_cap(retention_noise_floor=0.068930)` returns `4.029`, the LOOSER cap, with no refusal. This is asymmetric against T-20-24, whose whole point is that `mitigation_point_verdict` calls `extraction_ceiling` itself so no path to a verdict skips the provenance check; the retention leg has no equivalent choke point. The gap-closure phase must add a provenance tripwire on `retention_cap` MIRRORING the three `_prove` calls that already protect `extraction_ceiling` — corrected with the same structural discipline, not merely documented. The pin is frozen, so this ships as part of the same dated continuation as GATE-06 items 1 and 2, and all three close together. |
+| GATE-02 | Phase 20 | **The MECHANISM is discharged; the stated `retention_cap 4.029000` is SUPERSEDED by D-06.** `scripts/mitigation_gate.py::retention_cap` imports `V20_EWC_RETENTION_PPL` and `MARGIN_K` and retypes nothing, but it takes the retention floor as a REQUIRED keyword argument (D-07) and does NOT import `V20_RETENTION_NOISE_FLOOR = 0.068930` — that is a Phase 12 FULL-FINE-TUNE reading. The adapter-regime floor `0.008681618994239138` measured at plan `20-07` (`results/phase20_retention_floor.json`) is what governs v4.0, yielding `3.9085032379884783`. The requirement's `4.029000` is published beside it in the artifact as `borrowed_cap` so the supersession is visible rather than silent. `scripts/erasure_gate.py:246` still computes `4.029` for Phase 19 verdicts and is NOT corrected. **RESIDUAL — OPEN, bound to the GATE-06 gap-closure phase (threat T-20-19, `20-SECURITY.md`).** The supersession is recorded but not *enforced*: `extraction_ceiling` carries THREE `_prove` calls refusing a wrong-arm / <2-seed / missing-provenance floor, while `retention_cap` carries ZERO. Measured — `retention_cap(retention_noise_floor=0.068930)` returns `4.029`, the LOOSER cap, with no refusal. This is asymmetric against T-20-24, whose whole point is that `mitigation_point_verdict` calls `extraction_ceiling` itself so no path to a verdict skips the provenance check; the retention leg has no equivalent choke point. The gap-closure phase must add a provenance tripwire on `retention_cap` MIRRORING the three `_prove` calls that already protect `extraction_ceiling` — corrected with the same structural discipline, not merely documented. The pin is frozen, so this ships as part of the same dated continuation as GATE-06 items 1 and 2, and all three close together. **The requirement's own text now carries this supersession too** — see the dated D-36 amendment beneath the `- [x] **GATE-02**` bullet, added at plan `20-09` (2026-08-21), so a reader who greps `4.029000` lands on the correction instead of on the superseded number alone. |
 | GATE-03 | Phase 20 | Y is the pair `(y_taught, y_heldout)` computed inside `mitigation_point_verdict` at `:765-766`, each leg from `F_Y` times its own control, and both legs are read by condition (b). Guarded by `test_every_verdict_branch_fires`. |
 | GATE-04 | Phase 20 | Each leg is `F_Y` × its OWN retrained control, never v2.0's published numbers: `0.4921` and `0.3483` are asserted absent as numeric constants by AST, and the `from erasure_gate import` list is asserted by EXACT EQUALITY to five names so `V20_TAUGHT_RECALL` / `V20_HELDOUT_RECALL` cannot reach `mitigation_point_verdict`. Guarded by `test_no_imported_baseline_is_retyped`. |
 | GATE-05 | Phase 20 | The zero-extraction-without-NLL early return at `:730-745` fires BEFORE any reason is appended, so `mitigation_point_verdict` hands back a one-element reason list and INCONCLUSIVE precedes FAIL. Watched firing differentially against the FAIL it overrides by `test_every_verdict_branch_fires`. |
