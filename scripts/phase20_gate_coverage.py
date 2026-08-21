@@ -245,6 +245,27 @@ def coverage_verdict(
         "over the same points, so a length mismatch means one leg is being judged on a sweep the "
         "other never ran — which is WR-09's hole reopened from the other side",
     )
+    for leg, values in (("taught", sweep_taught_recalls), ("held-out", sweep_heldout_recalls)):
+        _prove(
+            all(isinstance(v, (int, float)) and 0.0 <= v <= 1.0 for v in values),
+            f"the {leg} recall sweep carries {tuple(values)!r}; every point must be a recall in "
+            "[0.0, 1.0]. THE MECHANISM, because a bad value here does not merely pass through — it "
+            "MANUFACTURES the finding: `nan >= criterion` is False, so a NaN is counted as a "
+            "failing point, and one NaN beside one clearing point makes a TRUNCATED axis read as "
+            "BRACKETED, whereupon this route publishes a decisive verdict off a leg that never "
+            "crossed. That is direction (ii)'s false-coverage defect, on the exact axis WR-09 "
+            "exists to cover, and a NaN recall is not an exotic input: it is what `0/0` produces "
+            "from an empty held-out question set. The range check SUBSUMES the NaN case with no "
+            "special-case branch a later reader can delete separately, because "
+            '`0.0 <= float("nan") <= 1.0` is False. BOOLS PASS HERE ON PURPOSE, and the asymmetry '
+            "with the count leg below is deliberate rather than an oversight: `isinstance(True, "
+            "int)` is True and `0.0 <= True <= 1.0` is True, so (True, False) is admitted — on a "
+            "recall leg True and False numerically ARE 1.0 and 0.0, both are legitimate recalls, "
+            "and the axis they describe is a real bracket, whereas the same pair handed to "
+            "`sweep_extraction_successes` is a rate-shaped value masquerading as a COUNT and is "
+            "refused there. Excluding bools here would refuse a legitimate reading, so do not "
+            "restore the symmetry",
+        )
     _prove(
         all(n > 0 for n in sweep_extraction_questions),
         f"the extraction sweep reports question counts {tuple(sweep_extraction_questions)!r}, at "
@@ -254,7 +275,7 @@ def coverage_verdict(
         "direction, so the error is invisible in the output",
     )
     for k, n in zip(sweep_extraction_successes, sweep_extraction_questions):
-        whole = isinstance(k, int) or (isinstance(k, float) and k.is_integer())
+        whole = isinstance(k, int) and not isinstance(k, bool)
         _prove(
             whole and 0 <= k <= n,
             f"the extraction sweep hands {k!r} to `sweep_extraction_successes`, which means a "
@@ -266,7 +287,17 @@ def coverage_verdict(
             "output to say why — conservative in direction, silent in operation. Deleting the "
             "`sweep_extraction_rates` parameter removes the raw-rate PATH; this check removes the "
             "raw-rate VALUE. Both are needed: the first stops the old call from type-checking, the "
-            "second stops the mis-port from computing",
+            "second stops the mis-port from computing. WHAT ENFORCING THE UNIT BY TYPE NOW ALSO "
+            "REFUSES, and why the old `isinstance(k, float) and k.is_integer()` acceptance was not "
+            "enough: an INTEGRAL float is still a rate, and this module's own "
+            f"SUPERSEDED_SWEEP_SENTINEL {SUPERSEDED_SWEEP_SENTINEL} — a RATE-space pair defined "
+            "below in this same file — passed this guard as MEASURED, read as 0 and 1 successes "
+            "out of 104 questions, both clearing X, the axis reading truncated, and this route "
+            "returning a spurious INCONCLUSIVE: precisely the 'conservative in direction, silent "
+            "in operation' outcome the paragraph above describes. `isinstance(True, int)` is True, "
+            "so (True, False) passed too, which is why bools are excluded HERE and admitted on the "
+            "two recall legs above, where True and False numerically ARE 1.0 and 0.0 and are "
+            "legitimate recalls",
         )
     _prove(
         0.0 < extraction_ceiling_value,
