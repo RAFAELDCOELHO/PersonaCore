@@ -235,3 +235,155 @@ The machine-readable half of this statement is the `governs` field of `results/p
 and whose `supersedes` field names `scripts/mitigation_gate.py:798-812` exactly.
 
 None of the above edits `scripts/mitigation_gate.py`.
+
+## Addendum — 2026-08-21 (second) — the value guards on both Y legs and the retention floor's magnitude bound
+
+`scripts/mitigation_gate.py` is PERMANENTLY FROZEN and this is a SECOND DATED CONTINUATION, not an
+edit. It was written by `scripts/_addendum.py::append_addendum` in the idempotent-pointer form —
+the first continuation consumed the placeholder, so the pointer line it left is passed as BOTH
+halves of the marker pair — and in a commit separate from the JSON, so a pre-append revision of
+this file exists in history for the additivity guard to compare against. Nothing above this line
+was changed by it. The machine-readable half is the `value_guards` block of
+`results/phase20_gate_coverage_correction.json`.
+
+The first continuation shipped a correction whose own inputs were unchecked on three axes. This one
+records what closed them, and what it did not close.
+
+### What the first continuation left unguarded
+
+`coverage_verdict` decides both legs of the pair-valued Y in the same body as the extraction axis
+(D-35). The extraction axis arrived with three per-element `_prove` calls. The two Y legs arrived
+validated for LENGTH only, and their values were consumed raw — so a coverage finding on either leg
+could be produced by the INPUT rather than by the data.
+
+Measured at `576b57d`, on `FIXTURE_CLEARING_POINT` at the `(1, 3)` / `(104, 104)` sweep, with the
+fixture's own `sweep_taught_recalls = (0.45, 0.2)` legitimately bracketing
+`Y_taught = 0.35` so that the held-out leg is the only axis under test:
+
+```
+held-out (0.3, 0.28)   ->  INCONCLUSIVE, one GATE-06 reason, truncated axes ('heldout_recall',)
+held-out (nan, 0.28)  ->  PASS, NO GATE-06 reason, coverage_verdict (True, (), None)
+```
+
+The second sweep is STRICTLY MORE truncated than the first and it read as fully covered. The
+mechanism is one comparison: `nan >= 0.24499999999999997` is `False`,
+so the NaN was not passed through — it was COUNTED as a FAILING point beside
+`0.28`'s clearing one, and MANUFACTURED the bracket the honest sweep lacks. A NaN recall is
+what `0/0` produces from an empty held-out question set, so the input is reachable rather than
+contrived. A per-element `[0.0, 1.0]` range check on both legs subsumes it with no special-case
+branch a later reader can delete, and it is placed before the `x_uppers` comprehension so nothing
+reaches `wilson_upper_bound` unvalidated. Guarded by
+`tests/test_phase20_correction.py::test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage`.
+
+The same body accepted a success COUNT that was really a rate. `(0.0, 1.0)`
+is this file's own rate-space `SUPERSEDED_SWEEP_SENTINEL`, and under the old
+`isinstance(k, float) and k.is_integer()` acceptance it passed as counts, was read as
+[0, 1] successes out of [104, 104] questions, and returned a
+spurious `INCONCLUSIVE` — a demotion, conservative in direction and
+silent in operation. The unit is now enforced BY TYPE: `isinstance(k, int) and not isinstance(k, bool)`. Bools stay
+legitimate on the two recall legs, where they are `1.0` and `0.0`; the asymmetry is deliberate and
+is stated in the refusal message. Guarded by
+`tests/test_phase20_correction.py::test_the_modules_own_rate_space_sentinel_cannot_pass_as_counts`.
+
+### The retention floor: a name where the harm was a property
+
+The choke point `_prove_retention_floor` refused `erasure_gate.V20_RETENTION_NOISE_FLOOR` BY
+IDENTITY, against the imported constant. One name is one bit pattern of coverage, and this section
+of the first continuation over-claimed on exactly that point. Measured through the frozen
+`retention_cap`:
+
+```
+V20_RETENTION_NOISE_FLOOR                 = 0.06893
+V20_RETENTION_NOISE_FLOOR * (1 + 2**-50)  = 0.06893000000000006     <- distinct: True
+retention_cap(the nudged floor)           = 4.029
+retention_cap(the borrowed floor)         = 4.029     <- BIT-IDENTICAL: True
+```
+
+One ULP of arithmetic defeats the `!=` and buys the entire borrowing. And nothing about a floor
+needs to be malformed for it to be wrong: under clean adapter provenance over two distinct seeds, a
+value named nowhere —
+
+```
+retention_cap(5.0)   = 13.89114
+retention_cap(the governing floor) = 3.9085032379884783   <- GOVERNS
+```
+
+— reaches a cap the three provenance refusals have no way to see is loose.
+
+D-38's resolution is BOTH refusals, in this order: the NAME first, the PROPERTY second. The
+magnitude bound is `retention_noise_floor <= _MAX_ADMISSIBLE_RETENTION_FLOOR`, which is
+`0.008681619002920757` — computed as the governing floor times the separately named
+`_RETENTION_FLOOR_RELATIVE_TOLERANCE` (`1e-09`), never typed. The ordering
+is load-bearing rather than cosmetic: the borrowed value is ITSELF a member of the looser class, so
+a bound running first would swallow the by-identity message that publishes the ratio, the looser cap
+it buys and the governing cap it displaces — and that message is the argument. Which refusal fires
+is asserted by which message comes back, never by reading the source:
+
+| floor handed to the sanctioned route | refused by |
+| --- | --- |
+| `V20_RETENTION_NOISE_FLOOR` | IDENTITY |
+| `V20_RETENTION_NOISE_FLOOR * (1 + 2**-50)` | MAGNITUDE |
+| `5.0` under clean adapter provenance | MAGNITUDE |
+| the fixtures' `0.009` | MAGNITUDE |
+| the governing measured floor | ADMITTED — the bound is not vacuous |
+
+The pair proves what neither half proves alone: the named value by identity, and the entire looser
+class by magnitude. It still admits any TIGHTER floor a later phase measures. Guarded by
+`tests/test_phase20_correction.py::test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict`,
+with both new cases watched red and then green.
+
+### The finding that forced D-41, published because it is against interest
+
+The bound's first catch is this repository's own committed fixtures. All three `FIXTURE_*` dicts
+carry `retention_noise_floor = 0.009`, annotated `# fabricated` in the frozen pin:
+
+```
+fabricated fixture floor / governing floor = 1.0366729991228745
+retention_cap(the fixture floor)   = 3.90914
+retention_cap(the governing floor) = 3.9085032379884783   <- TIGHTER
+```
+
+Widening the tolerance until that value passes was REJECTED. A bound that admits the number it was
+written to catch is not a bound, and a tolerance moved to fit a value already in hand is a threshold
+moved after seeing the data it governs — the researcher degree of freedom this whole pre-registration
+exists to remove. The frozen fixtures cannot be edited either. So the sanctioned route's TEST
+HARNESS supplies the governing floor instead, read from `results/phase20_retention_floor.json` and
+never retyped.
+
+The measurement that makes that substitution admissible, taken rather than assumed: every verdict
+published above is BIT-UNCHANGED under it — `direction_i` `PASS`, `direction_ii` `INCONCLUSIVE`,
+`direction_ii_on_clearing_fixture` `INCONCLUSIVE`, `heldout_coverage` `INCONCLUSIVE`. Exactly one
+reason string moves, condition (c)'s, which prints the cap; the governing cap it now prints is the
+TIGHTER of the two, so the substitution cannot buy a pass the fixture floor would have withheld. It
+is conservative in the only direction that makes it admissible.
+
+The drift catch this leaves is ONE-DIRECTIONAL and is named as partial rather than claimed as a
+closure: `_ADAPTER_REGIME_RETENTION_FLOOR` is still a transcription of the same artifact number
+(GC-07). A drift making the module constant TIGHTER than the artifact reddens every call; a drift
+making it LOOSER is not caught here at all.
+
+### What is closed, and what is recorded and not closed
+
+CLOSED in this wave-set, each against a WATCHED guard rather than against a plan:
+
+| finding | closed at | guard |
+| --- | --- | --- |
+| GC-01 — the by-identity refusal defeated by a one-ULP nudge | `20-15` | `test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict` |
+| GC-02 — an arbitrarily looser floor reaching a v4.0 cap | `20-15` | `test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict` |
+| GC-03 — a NaN recall manufacturing Y coverage | `20-14` | `test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage` |
+| GC-04 — an integral rate passing as a success count | `20-14` | `test_the_modules_own_rate_space_sentinel_cannot_pass_as_counts` |
+| GC-06 — the caller census blind to an aliased import | `20-15` | `test_mitigation_point_verdict_has_no_caller_outside_this_module` |
+
+RECORDED AND NOT CLOSED. GC-05 (the verdict overridden to `INCONCLUSIVE` while the pin's decisive
+clearing reasons are returned verbatim), GC-07 (`_ADAPTER_REGIME_RETENTION_FLOOR` retyped from a
+committed artifact), GC-08, GC-09, GC-10, GC-11 and GC-12 are NOT closed by this wave-set. GC-06 is
+closed for the IMPORT only, and `value_guards.census.residuals_not_closed` records the two forms
+that remain: a `getattr` dispatch names the function in neither an import nor a call node, and the
+walk is scoped to `scripts/` and `src/`, so a driver at the repo root or under `tools/` is
+unpoliced.
+
+That list is here because a continuation which implies a completeness it did not achieve is the
+same defect as a register publishing a closure it cannot substantiate — the defect this document
+exists to correct, pointed the other way.
+
+None of the above edits `scripts/mitigation_gate.py`.

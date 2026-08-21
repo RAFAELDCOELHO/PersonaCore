@@ -91,6 +91,14 @@ ADDENDUM_HEADING = (
     "## Addendum — 2026-08-21 — the coverage statistic, the held-out leg, and the retention "
     "floor's missing tripwire"
 )
+# THE SECOND CONTINUATION, dated the same day and distinguished by `(second)` rather than by a
+# date that would be false. Also TAKEN FROM THE COMMITTED FILE. Both are asserted, and asserted IN
+# ORDER: a section spliced into the body rather than appended after it would still be "present",
+# which is why presence alone is not the claim.
+ADDENDUM_HEADING_SECOND = (
+    "## Addendum — 2026-08-21 (second) — the value guards on both Y legs and the retention "
+    "floor's magnitude bound"
+)
 
 # The sweep the reproductions are driven at. COUNTS out of QUESTIONS, never rates — the whole
 # migration mistake this file also arms a tripwire against.
@@ -725,10 +733,22 @@ def test_correction_addendum_is_additive_on_the_published_artifact():
         RECORDED if line == PENDING else line for line in before_lines
     ], "a published line was moved, deleted or reordered rather than left in place"
     assert len(after_lines) > len(before_lines), "nothing was appended"
-    assert ADDENDUM_HEADING in "\n".join(after_lines[len(before_lines) :]), (
+    appended = "\n".join(after_lines[len(before_lines) :])
+    assert ADDENDUM_HEADING in appended, (
         f"{ADDENDUM_HEADING!r} is not in the appended region, so the section was spliced into the "
         "body rather than added after it. NOTE the date: the continuation is dated 2026-08-21, "
         "the day it was written and its numbers re-derived, not the 2026-08-20 its plan hardcoded"
+    )
+    assert ADDENDUM_HEADING_SECOND in appended, (
+        f"{ADDENDUM_HEADING_SECOND!r} is not in the appended region. The second continuation is a "
+        "D-24 dated continuation on the same terms as the first: added beside the published "
+        "verdict, never spliced into it"
+    )
+    assert appended.index(ADDENDUM_HEADING_SECOND) > appended.index(ADDENDUM_HEADING), (
+        "the second continuation appears BEFORE the first in the appended region. A continuation "
+        "is a dated record and its order is part of the record — a later section spliced above an "
+        "earlier one rewrites the chronology of a document whose entire purpose is honest "
+        "provenance, and it does so while still passing every presence check above"
     )
 
     recorded_after = _addendum._verdict.recorded_verdict(after)
@@ -988,6 +1008,14 @@ def test_every_published_number_re_derives_from_the_modules():
         "what makes it unable to buy a pass the fixture floor would have withheld — and the "
         f"payload publishes {d41['cap_on_governing_floor']!r} against "
         f"{d41['cap_on_fixture_floor']!r}"
+    )
+
+    # The JSON half names the heading the .md half carries, so the two halves of the second
+    # correction cannot drift into describing different sections.
+    assert guards["second_continuation"]["heading"] == ADDENDUM_HEADING_SECOND, (
+        "the payload names the second continuation's heading as "
+        f"{guards['second_continuation']['heading']!r}, which is not the one committed in "
+        f"{CORRECTION_REL}"
     )
 
 
