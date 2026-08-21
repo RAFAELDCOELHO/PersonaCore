@@ -1,8 +1,8 @@
 ---
 phase: 20
 slug: pre-registration-the-three-condition-gate
-status: verified
-threats_open: 0
+status: blocked
+threats_open: 1
 asvs_level: 1
 created: 2026-08-20
 ---
@@ -15,7 +15,11 @@ created: 2026-08-20
 parseable `<threat_model>` block, and every SUMMARY carried `## Threat Flags`. This audit therefore
 **verified that the declared mitigations exist**; it did not build a retroactive STRIDE register.
 
-**Gate status: CLOSED.** `threats_open: 0`. The three-item dated continuation landed across plans
+**Gate status: BLOCKED.** `threats_open: 1`. **`T-20-19` is carried OPEN again at plan `20-13`
+(2026-08-21), pending the D-38 magnitude bound** — `20-VERIFICATION.md` gap 2 reproduced two defeats
+of the guard on which its `20-12` closure rests. See `### Open` below for both reproductions and the
+named closing condition.
+The three-item dated continuation landed across plans
 `20-08` (the superseding module), `20-10` (the D-24 continuation artifact) and `20-11` (the armed
 tripwires), and the two remaining threats were closed at `20-12` **against a re-run of the guards in
 the closing process** — not against any SUMMARY. See *Blocking Remediation* below for the item-by-item
@@ -43,7 +47,19 @@ resolution.
 
 ## Threat Register
 
-66 threats. **66 closed, 0 open.**
+66 threats. **65 closed, 1 open.**
+
+**THE COUNTING METHOD, stated once here and BINDING on `20-17` too** — two incompatible methods would
+let a later reader re-derive a different total from the same rows. A threat is counted once per
+DISTINCT `T-20-NN` id appearing **anywhere inside this file's register TABLES**, including the ids
+enumerated inside a single cell of the grouped-by-plan table below, which are threats but not
+row-starts. MEASURED at `5da028a`, this file's state immediately before the `20-13` flip: distinct
+ids across table lines = **66** — the published total, which therefore already reconciles; table
+lines that START with `| T-20-NN |` = **39**, carrying **35** distinct ids. Counting row-starts would
+publish 35, contradicting the total this file already substantiates in the paragraph below. The
+method is not changed here; it is written down. It is also why `### Open` names `T-20-19` in PROSE
+rather than as a row: a second `| T-20-19 |` row-start there would make the count of rows at Status
+`open` read 2 against a published 1.
 
 **The total is substantiated by this file's own rows: `38` previously named `+ 8` inherited rows now
 transcribed from the committed `20-05` / `20-06` registers `+ 20` new gap-closure threats `= 66`.**
@@ -56,8 +72,36 @@ cites it, so the count reconciles by transcription rather than by disclosure.
 
 ### Open
 
-None. `T-20-21` and `T-20-19` — the two threats this file carried as open — are closed below, each
-against a guard that was watched failing in the closing process.
+**`T-20-19` — a v3.0-regime floor standing in for the v4.0 retention floor. RE-OPENED 2026-08-21 at
+plan `20-13` (D-39).** Its register row is below, under *The two formerly-open threats*; that row's
+`20-12` text is preserved byte-identically and only its Status cell moved back to `open`, with a
+dated re-opening sentence appended beside the historical claim rather than over it.
+**This entry is deliberately PROSE and not a table row.** `threats_open` must equal the count of
+register ROWS whose Status cell reads `open`; a second `| T-20-19 |` row-start here would make that
+count 2 against a published 1.
+
+**What is open, in the present tense.** The declared mitigation refuses one bit pattern and one
+caller-asserted string. `_prove_retention_floor` at `scripts/phase20_gate_coverage.py:353-406` never
+constrains the floor's MAGNITUDE, and `20-VERIFICATION.md` gap 2 reproduced both consequences by
+measurement. First: `0.06893 * (1 + 2**-50)` passes the
+`retention_noise_floor != V20_RETENTION_NOISE_FLOOR` refusal at `:396-406` — float `!=` is
+bit-pattern inequality, not numeric distinguishability — and buys a **BIT-IDENTICAL** `4.029`, the
+exact borrowed cap, reaching `PASS` through `corrected_point_verdict`. Second, and needing no
+malformed input at all: `retention_noise_floor=5.0` under clean
+`{"regime": "adapter", "seeds": (1337, 2024)}` provenance reaches `PASS` at cap `13.89114` against
+the governing `3.9085032379884783`. The control confirms the unperturbed `0.06893` IS refused, so the
+guard exists, computes and is watched — its coverage is one bit wide. The harm T-20-19 names is *"the
+looser cap a borrowing buys"*: a PROPERTY, guarded by a NAME.
+
+**The closing condition, named here so a re-close that skips it contradicts this file.** The D-38
+magnitude bound — `retention_noise_floor <= _ADAPTER_REGIME_RETENTION_FLOOR * (1.0 + 1e-9)`, which
+admits every tighter floor a later phase measures and refuses the whole looser class — lands at plan
+`20-15`, **and** its tripwires must be OBSERVED red-then-green against BOTH measured cases above,
+`0.06893 * (1 + 2**-50)` and `5.0`. Only then is the row re-closed and `threats_open` returned to `0`,
+at plan `20-17` (D-39). The flip and the re-close must not be the same commit.
+
+**`T-20-21` is NOT re-opened.** It stays closed exactly as recorded at `20-12`, against a guard
+watched failing in that closing process. This section re-opens one threat, not two.
 
 ### Closed
 
@@ -88,7 +132,7 @@ these two rows.
 | Threat ID | Category | Component | Disposition | Mitigation | Status |
 |-----------|----------|-----------|-------------|------------|--------|
 | T-20-21 | Repudiation | an INCONCLUSIVE silently reported as a FAIL, or vice versa | mitigate | **CLOSED at `20-12`.** *What was wrong, preserved:* the declared mitigation (three branches, each proved differentially against the counterfactual it overrides) was present and verified, but did not reach a **fourth** mislabeling path — GATE-06's sweep-coverage test decided on RAW rates (`mitigation_gate.py:798-812`) while condition (a) decided on `wilson_upper_bound(k, n)` (`:755`), against the same `ceiling`. Reproduced in **both** directions at n=104, X=0.04535522866494124: `FIXTURE_CLEARING_POINT` + `(1/104, 3/104)` brackets X under the (a) rule yet read as never-crossed → spurious `INCONCLUSIVE`; `FIXTURE_DESTROYED_MODEL` + `(3/104, 11/104)` read as covered while ZERO points cleared X → spurious `FAIL`. A third case in no prior report, `FIXTURE_CLEARING_POINT` + `(3/104, 11/104)`, returned `PASS` off that same truncated axis. No spurious `PASS` was constructible under self-consistent inputs. WR-09, the second hole in the same block: no `sweep_heldout_recalls` parameter existed in the 21-kwarg signature at all. *The closure:* `scripts/phase20_gate_coverage.py::coverage_verdict` decides each axis on the statistic that axis's criterion is decided on and decides BOTH Y legs, closing WR-09 in the same function (D-35); `corrected_point_verdict` is the one sanctioned route and has no `sweep_extraction_rates` parameter, so raw-rate space is unreachable through it. Published at `results/phase20_gate_coverage_correction.json` (`governs` / `supersedes`). **Watched by `tests/test_phase20_correction.py`** — both directions asserted RED against the frozen pin and GREEN through the correction in one differential body each — and watched FAILING in this closing process (row 6 of the Watched-RED table). `scripts/mitigation_gate.py` was NOT edited. | **closed** |
-| T-20-19 | Spoofing | a v3.0-regime floor standing in for the v4.0 retention floor | mitigate | **CLOSED at `20-12`.** *What was wrong, preserved:* the declared mitigation was verified true — `V20_RETENTION_NOISE_FLOOR` is neither imported (AST: five names, absent) nor present as a numeric constant (`0.068930` absent) — but it did not cover the **caller-supplied** path. `extraction_ceiling` carried **3** `_prove` calls refusing wrong-arm / <2-seed / missing-provenance floors; `retention_cap` carried **0**. Measured: `retention_cap(retention_noise_floor=0.068930)` returned `4.029` — the *looser* cap — with no refusal. That was asymmetric against T-20-24, whose whole point is that `mitigation_point_verdict` calls `extraction_ceiling` itself so no path to a verdict skips the provenance check. *The closure:* `scripts/phase20_gate_coverage.py::_prove_retention_floor` supplies the four refusals the frozen function cannot be given — three mirroring `extraction_ceiling`'s at `mitigation_gate.py:417` / `:425` / `:436`, plus a fourth refusing `V20_RETENTION_NOISE_FLOOR` BY IDENTITY — and is called FIRST in `corrected_point_verdict`, before any compute, so it is a choke point and not an advisory. **Watched by `tests/test_phase20_correction.py::test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict`**, which drives all eight refusals THROUGH the route with a positive control, and which was watched FAILING in this closing process (row 8 of the Watched-RED table). GATE-02's traceability row is rewritten from RESIDUAL-OPEN to a discharge naming the same function and guard. | **closed** |
+| T-20-19 | Spoofing | a v3.0-regime floor standing in for the v4.0 retention floor | mitigate | **CLOSED at `20-12`.** *What was wrong, preserved:* the declared mitigation was verified true — `V20_RETENTION_NOISE_FLOOR` is neither imported (AST: five names, absent) nor present as a numeric constant (`0.068930` absent) — but it did not cover the **caller-supplied** path. `extraction_ceiling` carried **3** `_prove` calls refusing wrong-arm / <2-seed / missing-provenance floors; `retention_cap` carried **0**. Measured: `retention_cap(retention_noise_floor=0.068930)` returned `4.029` — the *looser* cap — with no refusal. That was asymmetric against T-20-24, whose whole point is that `mitigation_point_verdict` calls `extraction_ceiling` itself so no path to a verdict skips the provenance check. *The closure:* `scripts/phase20_gate_coverage.py::_prove_retention_floor` supplies the four refusals the frozen function cannot be given — three mirroring `extraction_ceiling`'s at `mitigation_gate.py:417` / `:425` / `:436`, plus a fourth refusing `V20_RETENTION_NOISE_FLOOR` BY IDENTITY — and is called FIRST in `corrected_point_verdict`, before any compute, so it is a choke point and not an advisory. **Watched by `tests/test_phase20_correction.py::test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict`**, which drives all eight refusals THROUGH the route with a positive control, and which was watched FAILING in this closing process (row 8 of the Watched-RED table). GATE-02's traceability row is rewritten from RESIDUAL-OPEN to a discharge naming the same function and guard. **RE-OPENED 2026-08-21 at plan `20-13` (D-39).** Every character before this sentence is the `20-12` record, preserved byte-identically — what was wrong with it is recorded beside it rather than over it, the same additive discipline D-36 and the ROADMAP SC3 amendment used. `20-VERIFICATION.md` gap 2 defeated that closure twice, by measurement. (i) `0.06893 * (1 + 2**-50)` passes the `!=` refusal at `scripts/phase20_gate_coverage.py:396-406` and buys a **BIT-IDENTICAL** `4.029` — the exact borrowed cap — reaching `PASS`; the control confirms the unperturbed `0.06893` IS refused, so the refusal's coverage is one bit wide. (ii) `retention_noise_floor=5.0` under clean `{"regime": "adapter", "seeds": (1337, 2024)}` provenance reaches `PASS` at cap `13.89114` against the governing `3.9085032379884783`, with no malformed input at all — provenance is a caller assertion and nothing bounded magnitude. The guard refuses a NAME where this row's own named harm, "the looser cap a borrowing buys", is a PROPERTY. **The closing condition is stated in the `### Open` PARAGRAPH above — prose, deliberately not a second row for this id.** | **open** |
 
 #### Transcribed from the committed `20-05` / `20-06` registers
 
@@ -227,6 +271,7 @@ in the past tense.
 |------------|---------------|--------|------|--------|
 | 2026-08-20 | 46 | 44 | 2 | `/gsd:secure-phase 20` — orchestrator, State B (create) from plan-time register |
 | 2026-08-21 | 66 | 66 | 0 | `/gsd:plan-phase 20 --gaps` → plans `20-08`, `20-09`, `20-10`, `20-11`, `20-12`. Totals reconciled to this file's own rows: 38 previously named + 8 transcribed from `20-05` / `20-06` + 20 new gap-closure threats |
+| 2026-08-21 | 66 | 65 | 1 | `/gsd:plan-phase 20 --gaps` (wave 2) — plan `20-13`, `T-20-19` re-opened against `20-VERIFICATION.md` gap 2 |
 
 ---
 
@@ -234,8 +279,15 @@ in the past tense.
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [x] `threats_open: 0` confirmed — 66 of 66 closed, `### Open` empty
-- [x] `status: verified` set in frontmatter
+- [ ] `threats_open: 0` confirmed — 66 of 66 closed, `### Open` empty
+- [ ] `status: verified` set in frontmatter
+
+**Approval WITHDRAWN 2026-08-21 at plan `20-13` (D-39), pending plan `20-17`.** The two boxes above
+were checked at `20-12` and are now false: `T-20-19` is open, the register reads 65 closed / 1 open,
+and the frontmatter reads `status: blocked`. They are unchecked rather than rewritten, and the `20-12`
+approval paragraph below is left byte-identical — it is the record of what was approved then, and of
+the evidence it was approved on. Re-approval is gated on the condition named in `### Open`: the D-38
+magnitude bound at plan `20-15` AND its tripwires observed red-then-green against both measured cases.
 
 **Approval:** approved at plan `20-12` (2026-08-21). The three-item dated continuation was discharged
 by plans `20-08` (`scripts/phase20_gate_coverage.py`), `20-10`
