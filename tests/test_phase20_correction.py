@@ -374,6 +374,143 @@ def test_the_sanctioned_route_cannot_be_handed_raw_rates():
     assert verdict in ("PASS", "FAIL", "INCONCLUSIVE"), verdict
 
 
+def test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage():
+    """The Y legs' value discipline, as a MEASURED DIFFERENTIAL asserted at the route level.
+
+    This is the tripwire ``20-VERIFICATION.md`` gap 1 item 2 asks for, and it is driven through
+    ``corrected_point_verdict`` rather than against ``coverage_verdict`` in isolation because that
+    is where the INCONCLUSIVE→PASS flip lives and where a regression is user-visible.
+
+    Both halves live in ONE body, the register the two direction tests above use. The HONEST
+    truncated axis reaches a finding; the STRICTLY MORE truncated axis — the same leg with one
+    point replaced by a NaN — is REFUSED, where before the guard it was PROMOTED to PASS. Splitting
+    a differential across two functions lets one half go stale without the other noticing.
+
+    The fixture's own ``sweep_taught_recalls = (0.45, 0.2)`` legitimately brackets
+    ``y_taught = 0.35``, so the held-out leg is the only axis under test in cases 1-3.
+    """
+    fixture = mitigation_gate.FIXTURE_CLEARING_POINT
+    y_heldout = coverage.F_Y * fixture["control_heldout_recall"]
+
+    def route(**overrides):
+        return coverage.corrected_point_verdict(
+            **_corrected_call(
+                "FIXTURE_CLEARING_POINT",
+                sweep_extraction_successes=DIRECTION_I_SUCCESSES,
+                sweep_extraction_questions=QUESTIONS,
+                **overrides,
+            )
+        )
+
+    # 1. THE HONEST READING. Both points sit at or above Y_heldout, so the axis produced ZERO
+    #    failing points and genuinely never crossed. That is a finding, and the guard below must
+    #    leave it exactly where it was.
+    honest = (0.30, 0.28)
+    assert all(point >= y_heldout for point in honest), (
+        f"{honest} does not sit entirely at or above Y_heldout = {y_heldout!r}, so this axis is "
+        "not truncated and case 1 is measuring something other than the honest reading"
+    )
+    verdict, reasons, _arm = route(sweep_heldout_recalls=honest)
+    named = _names_gate06(reasons)
+    assert verdict == "INCONCLUSIVE" and named, (
+        f"the honest truncated held-out sweep {honest} against Y_heldout = {y_heldout!r} returns "
+        f"{verdict!r} with GATE-06 reasons at {named}, not the INCONCLUSIVE carrying one. The "
+        f"per-element range guard must not have moved the honest finding. Reasons: {reasons}"
+    )
+    assert "heldout_recall" in reasons[named[-1]], (
+        f"the GATE-06 reason does not name the heldout_recall axis: {reasons[named[-1]]!r}. Then "
+        "the demotion is coming from some other leg and this case proves nothing about WR-09's"
+    )
+
+    # 2. THE MECHANISM, ASSERTED RATHER THAN NARRATED. This is why the NaN manufactured the
+    #    bracket — it was COUNTED as a failing point, not merely passed through — and it is a
+    #    property of the comparison, so it stays true after the guard lands.
+    assert not (float("nan") >= y_heldout), (
+        f"nan >= {y_heldout!r} is no longer False, so a NaN is no longer counted as a FAILING "
+        "point and the manufacturing mechanism this test exists to refuse has changed shape"
+    )
+
+    # 3. THE FLIP, REFUSED. The SAME axis, STRICTLY MORE truncated than case 1.
+    with pytest.raises(SystemExit) as refused:
+        route(sweep_heldout_recalls=(float("nan"), 0.28))
+    message = str(refused.value)
+    assert "held-out" in message and "[0.0, 1.0]" in message, (
+        f"the refusal does not name the leg and its [0.0, 1.0] requirement: {message!r}. MEASURED "
+        f"BEFORE THIS GUARD, on this fixture at the {DIRECTION_I_SUCCESSES} / {QUESTIONS} sweep: "
+        "(nan, 0.28) returned 'PASS' with NO GATE-06 reason at all and coverage_verdict reported "
+        f"(True, ()) — FULLY COVERED — while the strictly LESS truncated {honest} returned "
+        "'INCONCLUSIVE'. A guard that raises for some other reason does not close that flip"
+    )
+
+    # 4. THE WHOLE OUT-OF-RANGE CLASS, ON BOTH LEGS. The review's original demonstration invites
+    #    "that is garbage in, garbage out"; case 3 is what makes the claim a differential, and
+    #    these two are what make it cover the class rather than one value.
+    for label, override in (
+        ("the held-out leg", {"sweep_heldout_recalls": (42.0, -99.0)}),
+        ("the taught leg", {"sweep_taught_recalls": (-99.0, 42.0)}),
+    ):
+        with pytest.raises(SystemExit) as out_of_range:
+            route(**override)
+        assert "[0.0, 1.0]" in str(out_of_range.value), (
+            f"{label} accepted {override} without naming the [0.0, 1.0] requirement: "
+            f"{str(out_of_range.value)!r}. 42.0 and -99.0 straddle any floor in (0.0, 1.0], so any "
+            "garbage pair would certify coverage on an axis nothing was ever measured on"
+        )
+
+    # THE POSITIVE CONTROL, in the register test_the_sanctioned_route_cannot_be_handed_raw_rates
+    # uses at :365. An in-range held-out sweep that GENUINELY brackets still reaches a verdict, so
+    # the four aborts above are attributable to this guard and not to anything else in the route.
+    assert DEFAULT_HELDOUT_SWEEP[0] >= y_heldout > DEFAULT_HELDOUT_SWEEP[1], (
+        f"{DEFAULT_HELDOUT_SWEEP} does not bracket Y_heldout = {y_heldout!r}, so the control is "
+        "not a covered axis and cannot distinguish 'the guard fires' from 'nothing works'"
+    )
+    control, _control_reasons, _control_arm = route(sweep_heldout_recalls=DEFAULT_HELDOUT_SWEEP)
+    assert control in ("PASS", "FAIL", "INCONCLUSIVE"), control
+
+
+def test_the_modules_own_rate_space_sentinel_cannot_pass_as_counts():
+    """GC-04: the RATE-vs-COUNT guard enforced BY TYPE, driven with this module's own constant.
+
+    ``SUPERSEDED_SWEEP_SENTINEL`` is READ from the module and never retyped, so a later change to
+    that constant travels into this guard rather than leaving it asserting a stale pair. The old
+    ``isinstance(k, float) and k.is_integer()`` acceptance admitted it: a rate-space constant
+    defined in the very file whose docstring claims raw-rate space is unreachable through this
+    route.
+    """
+
+    def route(**overrides):
+        return coverage.corrected_point_verdict(
+            **_corrected_call(
+                "FIXTURE_CLEARING_POINT",
+                sweep_extraction_questions=QUESTIONS,
+                **overrides,
+            )
+        )
+
+    for successes, label in (
+        (coverage.SUPERSEDED_SWEEP_SENTINEL, "this module's own rate-space sentinel"),
+        ((True, False), "a pair of bools"),
+    ):
+        with pytest.raises(SystemExit) as refused:
+            route(sweep_extraction_successes=successes)
+        message = str(refused.value)
+        assert "RATE" in message and "COUNT" in message, (
+            f"{label} {successes!r} passes as a COUNT of successes without the caller being told "
+            f"the UNIT is wrong: {message!r}. MEASURED before the guard was enforced by type: "
+            f"{coverage.SUPERSEDED_SWEEP_SENTINEL} was read as 0 and 1 successes out of {N} "
+            "questions, both clearing X, the extraction axis reading truncated, and the route "
+            "returning a spurious INCONCLUSIVE — a DEMOTION, conservative in direction and silent "
+            "in operation, which is exactly what this guard's own message says it exists to "
+            "prevent. `isinstance(True, int)` is True, so the bool pair was admitted for the same "
+            "reason. Bools stay legitimate on the two RECALL legs, where they are 1.0 and 0.0"
+        )
+
+    # THE POSITIVE CONTROL. Genuine integer counts on the same fixture and the same denominators
+    # still reach a verdict, so the two aborts above are attributable to the type enforcement.
+    verdict, _reasons, _arm = route(sweep_extraction_successes=DIRECTION_I_SUCCESSES)
+    assert verdict in ("PASS", "FAIL", "INCONCLUSIVE"), verdict
+
+
 def test_the_superseded_sweep_sentinel_cannot_fire_the_frozen_gate06_branch():
     """What makes ``corrected_point_verdict``'s step 6 legitimate rather than lucky.
 
