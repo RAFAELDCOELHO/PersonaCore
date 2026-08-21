@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 20 REOPENED — gap-closure wave 1 of 5 COMPLETE (20-09 bookkeeping shipped). Next is wave 2, 20-08 — scripts/phase20_gate_coverage.py, now unblocked because D-34/D-35/D-37 are recorded. 20-SECURITY.md still blocked at threats_open 2 (T-20-21, T-20-19); GATE-06 needs its dated continuation before Phase 23
-last_updated: "2026-08-21T14:46:00.000Z"
-last_activity: 2026-08-21 -- 20-09 executed: D-34..D-37 recorded, 8 traceability notes filled, D-36 GATE-02 amendment
+stopped_at: Phase 20 REOPENED — gap-closure wave 2 of 5 COMPLETE (20-08 shipped scripts/phase20_gate_coverage.py, 602 lines, UNPINNED; both frozen files byte-identical). Next is wave 3, 20-10 — results/phase20_gate_coverage_correction.{md,json}. 20-SECURITY.md still blocked at threats_open 2 (T-20-21, T-20-19): the MECHANISM now exists but neither threat closes until 20-11's tripwire has been watched RED-then-GREEN
+last_updated: "2026-08-21T15:07:00.000Z"
+last_activity: 2026-08-21 -- 20-08 executed: coverage_verdict (criterion-matched per axis, both Y legs), wilson_lower_bound, _prove_retention_floor, corrected_point_verdict
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 12
-  completed_plans: 8
-  percent: 67
+  completed_plans: 9
+  percent: 75
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 20 (pre-registration-the-three-condition-gate) — REOPENED (gaps_found)
-Plan: 8 of 12 (waves 1-6 executed; gap-closure waves 1-5 executing, 1 of 5 complete — 20-09 done)
+Plan: 9 of 12 (waves 1-6 executed; gap-closure waves 1-5 executing, 2 of 5 complete — 20-09, 20-08 done)
 Status: Executing — gap-closure plans 20-08..20-12. The original 7 plans executed and the phase GOAL was achieved (ordering verified against the commit DAG), but 20-VERIFICATION.md returned gaps_found at 5/6 must-haves and 20-SECURITY.md is `status: blocked` with `threats_open: 2` (T-20-21, T-20-19). SC3 partial: GATE-06 decides sweep coverage on RAW rates while condition (a) decides on `wilson_upper_bound` — reproduced in BOTH directions (spurious INCONCLUSIVE and spurious FAIL; no spurious PASS constructible under self-consistent inputs) — and there is no `sweep_heldout_recalls` parameter at all, so the held-out leg of a pair-valued Y has no coverage check. The pin is permanently uneditable, so the fix is a new UNPINNED `scripts/phase20_gate_coverage.py` plus `results/phase20_gate_coverage_correction.{md,json}` and an armed tripwire (D-34/D-35). Does not block Phase 21; MUST close before Phase 23.
-Last activity: 2026-08-21 -- 20-09 COMPLETE (wave 1 of the strictly serial chain 20-09 → 20-08 → 20-10 → 20-11 → 20-12). D-34/D-35/D-36/D-37 are now recorded in 20-CONTEXT.md, so 20-08 may cite them in its module docstring; the eight empty Phase 20 traceability notes are filled and AST-resolved on both sides; GATE-02's requirement text carries D-36's dated in-place amendment naming the governing cap 3.9085032379884783. Next: wave 2, 20-08
+Last activity: 2026-08-21 -- 20-08 COMPLETE (wave 2 of the strictly serial chain 20-09 → 20-08 → 20-10 → 20-11 → 20-12). scripts/phase20_gate_coverage.py exists, UNPINNED, 602 lines, stdlib + two sibling scripts: coverage_verdict decides the extraction axis on wilson_upper_bound(k, n) — the statistic condition (a) decides on — and decides BOTH Y legs on raw recall, closing WR-09 in the same function (D-35); wilson_lower_bound is defined for REPORTING only with an analytically-exact successes==0 short-circuit; _prove_retention_floor supplies the four refusals the frozen retention_cap cannot be given (T-20-19); corrected_point_verdict is the one route to a v4.0 verdict, 24 keyword-only args with sweep_extraction_rates ABSENT BY CONSTRUCTION. Measured through the route: direction (i) PASS where the pin says INCONCLUSIVE, direction (ii) INCONCLUSIVE where the pin says FAIL. scripts/mitigation_gate.py and scripts/erasure_gate.py byte-identical to HEAD. Next: wave 3, 20-10
 
 ## Performance Metrics
 
@@ -111,6 +111,7 @@ Last activity: 2026-08-21 -- 20-09 COMPLETE (wave 1 of the strictly serial chain
 | Phase 20 P06 | 16min | 3 tasks | 2 files |
 | Phase 20 P07 | 26min | 3 tasks | 5 files |
 | Phase 20 P09 | 10min | 3 tasks | 2 files |
+| Phase 20 P08 | 13min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -358,6 +359,16 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 20]: 20-09: the eight filled traceability notes are checked by AST RESOLUTION on BOTH sides — a backticked token must land in the FunctionDef / module-scope Assign set of scripts/mitigation_gate.py AND in the test_* set of tests/test_phase20_prereg.py — plus a visited-set equality so a renamed or deleted row reddens instead of being skipped. A note naming a guard that does not exist is worse than an empty note: it manufactures the appearance of coverage. Checkboxes NOT re-touched (already [x] at 0f265e2, T-20-56)
 - [Phase 20]: 20-09: D-36's amendment is admissible only as a CONJUNCTION — dated (2026-08-21), in place (so `grep 4.029000` cannot miss it), additive (the original bullet byte-identical above it), and provably TIGHTER: 3.9085032379884783 < 4.029, from a floor 7.939763314393305x smaller, so condition (c) gets HARDER. A self-serving amendment moves a threshold the other way, and that arithmetic is IN the amendment rather than in a footnote. It also names the enforcement (_prove_retention_floor at 20-08, the bit-exact assertion at 20-11), which is what stops it being prose
 - [Phase 20]: 20-09: gsd-sdk state/roadmap mutation verbs were NOT called at all this session — STATE.md and ROADMAP.md were hand-edited, and `requirements.mark-complete` was skipped because GATE-02 is already [x] and the verb would have rewritten the exact traceability row this plan just amended. Sixth consecutive session treating those handlers as unsafe
+- [Phase 20]: 20-08: the CORRECTION IS A COMPUTATION, and it lives in scripts/phase20_gate_coverage.py — 602 lines, UNPINNED, stdlib + erasure_gate + mitigation_gate, zero file I/O. Both frozen files are byte-identical to HEAD (`git diff --exit-code` exit 0 after every one of the three task commits). D-37 is implemented as CRITERION-MATCHING, not "always use Wilson": coverage_verdict reads wilson_upper_bound(k, n) on the X ceiling because condition (a) at :755-756 does, and reads the RAW recall on both Y floors because condition (b) at :767-768 does. Applying a Wilson LOWER bound to a floor would be CR-01's own defect class with the sign flipped
+- [Phase 20]: 20-08: wilson_lower_bound OPENS with `if successes == 0: return 0.0`, and the divergence from the exact mirror is declared rather than silent. At p=0 the algebra gives centre == spread IDENTICALLY (both z²/2n), so the analytic lower bound IS 0 and the short-circuit returns the TRUE value. MEASURED over n in 2..300: 75 denominators leave a nonzero centre - spread, 20 of those residues are NEGATIVE and absorbed by max(0.0, ...), leaving 55 where wilson_lower_bound(0, n) actually returns nonzero — smallest n=11, with this phase's own 104 and 208 among them, while n=8/16/50/200 return exactly 0.0. Both counts are published because they differ and only one is the defect rate (STAT-02 applied to this repo's own prose)
+- [Phase 20]: 20-08: raw-rate space is closed by a PAIR, and neither half suffices alone — corrected_point_verdict has NO sweep_extraction_rates parameter (the PATH is gone, so the old call cannot type-check) and coverage_verdict's fourth _prove refuses a fractional successes count BY NAME (the VALUE is gone, so the mis-port cannot compute). MEASURED: at n=104 every fractional `successes` yields a Wilson upper bound under X, so the silent failure mode was a spurious INCONCLUSIVE with nothing in the output to say why — conservative in direction, silent in operation
+- [Phase 20]: 20-08: the WR-08 sign check runs BEFORE extraction_ceiling, and the ORDERING is the check rather than an implementation detail. MEASURED at n=104 with clean never-taught provenance: extraction_noise_floor=-0.01 still yields a POSITIVE ceiling 0.005355228664941234 (so a post-hoc check fires correctly), but -0.05 yields -0.07464477133505877 and the `0.0 < ceiling < 1.0` refusal pre-empts it — the caller is told the ceiling is out of range rather than that their floor is negative. A check correct only for small-magnitude floors is not the check
+- [Phase 20]: 20-08: the three numbers in _prove_retention_floor's refusals are DERIVED, never typed — _BORROWED_CAP and _GOVERNING_CAP come from calling the frozen mitigation_gate.retention_cap on the imported V20_RETENTION_NOISE_FLOOR and on the one literal in the file (0.008681618994239138, results/phase20_retention_floor.json), and the 7.939763314393305x ratio falls out of the same two. Typing `4.029` is exactly how a refusal message acquires a wrong number in a phase whose discipline is "computed from imported constants, never retyped"
+- [Phase 20]: 20-08: EXTRACTION_FLOOR_MIN_SEEDS reuse is proved STRUCTURALLY, by AST, because an identity check on it is vacuous — it is the small int 2, CPython interns it, and a retyped `EXTRACTION_FLOOR_MIN_SEEDS = 2` satisfies `is` identically (MEASURED). The guard is instead: the name must appear in a `from mitigation_gate import ...` alias list and in NO module-scope ast.Assign target. F_Y (0.7, a float) is covered by the same AST check AND would bite under `is`; both are asserted the way that can actually fail for that object
+- [Phase 20]: 20-08: measured through corrected_point_verdict against the committed fixtures — direction (i) FIXTURE_CLEARING_POINT with sweep_extraction_successes=(1,3) returns PASS where the pin returns INCONCLUSIVE; direction (ii) FIXTURE_DESTROYED_MODEL with (3,11) returns INCONCLUSIVE where the pin returns FAIL; and the THIRD unreported case, FIXTURE_CLEARING_POINT with (3,11), returns INCONCLUSIVE where the pin returns PASS off an extraction axis that never produced a clearing point. sweep_heldout_recalls=(0.30,0.28) on an otherwise-clearing call returns INCONCLUSIVE — WR-09's hole is now detectable
+- [Phase 20]: 20-08: TWO divergences from the pin's contract are named in corrected_point_verdict.__doc__, both STRICTER and neither an edit — (1) mitigation_gate.py:1310 asserts a GATE-05 case returns exactly ONE reason; through this route a GATE-05 case whose sweep is also truncated returns TWO, and the pin's guarantee still holds for the pin; (2) the retention/sign refusals and extraction_ceiling all run BEFORE the pin's GATE-05 early return at :730-745, so a bad floor raises SystemExit here where the pin returns INCONCLUSIVE. That is D-14(b)'s ordering: no path to a verdict computes X from an unlabelled floor
+- [Phase 20]: 20-08: the choke point has no authority a caller can be trusted to invoke, so the module docstring NAMES its enforcement — tests/test_phase20_correction.py::test_mitigation_point_verdict_has_no_caller_outside_this_module, built at 20-11, walking scripts/ and src/ for any mitigation_point_verdict call outside this module and outside tests/. MEASURED GREEN TODAY: the only five non-test call sites are all inside mitigation_gate.py's own __main__ self-check (:1291, :1295, :1301, :1317, :1326), excluded BY NAME in tests/test_phase19_erasure.py's exclude-the-successor register rather than by lowering a count. 20-11 must honour both that test name and the 20-11 mirror-test name test_wilson_bounds_are_exact_mirrors, which this module's docstrings now cite
+- [Phase 20]: 20-08: gsd-sdk state/roadmap mutation verbs were NOT called — STATE.md and ROADMAP.md hand-edited again, and requirements.mark-complete was skipped for the plan's `requirements: [GATE-06, GATE-02]` because NEITHER is discharged by this plan: GATE-06 belongs to 20-12 and closes only after 20-11's tripwire has been watched RED-then-GREEN, and GATE-02 was already [x] and amended at 20-09. Seventh consecutive session treating those handlers as unsafe; twelfth application of 17-01's over-claim-avoidance pattern
 
 ### Roadmap Evolution
 
@@ -490,8 +501,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-20T22:40:00.000Z
-Stopped at: Completed 20-07-PLAN.md — the first v4.0 artifact has landed; the pin is permanently uneditable
+Last session: 2026-08-21T15:07:00.000Z
+Stopped at: Completed 20-08-PLAN.md — the correction MECHANISM exists in unpinned code (scripts/phase20_gate_coverage.py); the artifact (20-10), the tripwire (20-11) and the discharge (20-12) are still ahead
 Resume file: None
 
 ## Operator Next Steps
