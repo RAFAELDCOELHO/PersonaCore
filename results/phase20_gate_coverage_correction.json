@@ -65,6 +65,11 @@
   "dated_note": "The date this continuation was WRITTEN and its numbers re-derived. The gap-closure plan that prescribes it was authored 2026-08-20 and hardcoded that date; execution landed the next day. A dated continuation whose date is not the date of writing puts a false date on the one artifact whose entire purpose is honest provenance, so the true date is used here and in the addendum heading of the continuation, and the divergence from the plan is recorded in 20-10-SUMMARY.md rather than absorbed silently.",
   "defects": {
     "CR-01": "scripts/mitigation_gate.py:798-812 decides sweep coverage of the extraction axis on the RAW rate while condition (a) at :755-756 decides the same axis on wilson_upper_bound(k, n) against the same ceiling. Since rate <= wilson_upper_bound(rate*n, n) always, the coverage test is systematically shifted BELOW the criterion it claims to bracket. Measured at n = 104, X = 0.04535522866494124: the sweep (1, 3) successes over 104 questions each returns INCONCLUSIVE from the pin and PASS from the correction, and the sweep (3, 11) returns FAIL from the pin and INCONCLUSIVE from the correction on FIXTURE_DESTROYED_MODEL.",
+    "GC-01": "scripts/phase20_gate_coverage.py::_prove_retention_floor refused erasure_gate.V20_RETENTION_NOISE_FLOOR BY IDENTITY only, and one name is one bit pattern of coverage. Measured through the frozen mitigation_gate.retention_cap: 0.06893 * (1 + 2**-50) = 0.06893000000000006 passes the `!=` and returns 4.029, BIT-IDENTICAL to the 4.029 the refused value itself buys. CLOSED at plan 20-15 by the MAGNITUDE bound retention_noise_floor <= _MAX_ADMISSIBLE_RETENTION_FLOOR, placed AFTER the `!=` so the named-value refusal still fires first and still publishes its three numbers. Guarded by tests/test_phase20_correction.py::test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict, which asserts WHICH of the two refusals fired. See value_guards.retention_magnitude_bound.",
+    "GC-02": "scripts/phase20_gate_coverage.py::_prove_retention_floor's three provenance refusals (mirroring extraction_ceiling's at scripts/mitigation_gate.py:417 / :425 / :436) see nothing wrong with a floor that is merely LOOSE: a value named nowhere, under clean adapter provenance over two distinct seeds, is malformed in no way they can detect. Measured through the frozen retention_cap: a floor of 5.0 returns 13.89114 against the governing 3.9085032379884783, a cap 3.554081742848731x looser. CLOSED at plan 20-15 by the same magnitude bound, guarded by the same test. The tolerance is the NAMED constant _RETENTION_FLOOR_RELATIVE_TOLERANCE so a widening shows up in a diff as its own line, and it is itself pinned against the widening D-41 forbids.",
+    "GC-03": "scripts/phase20_gate_coverage.py::coverage_verdict validated sweep_taught_recalls and sweep_heldout_recalls for LENGTH only, while the extraction axis decided in the same body carried three per-element _prove calls, so any float at all reached the axis loop. MEASURED at 576b57d on FIXTURE_CLEARING_POINT at the (1, 3) / (104, 104) sweep: the held-out leg (nan, 0.28) returned PASS with NO GATE-06 reason and coverage_verdict (True, (), None) — FULLY COVERED, zero truncated axes — while the strictly LESS truncated (0.3, 0.28) returned INCONCLUSIVE with one. The mechanism is that nan >= 0.24499999999999997 is False, so the NaN was COUNTED as a failing point beside 0.28's clearing one and MANUFACTURED the bracket. CLOSED at plan 20-14 by a per-element [0.0, 1.0] _prove on BOTH legs, placed before the x_uppers comprehension so no value reaches wilson_upper_bound or the axis loop unvalidated. Guarded by tests/test_phase20_correction.py::test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage. See value_guards.y_leg_differential.",
+    "GC-04": "scripts/phase20_gate_coverage.py accepted a success count as whole when `isinstance(k, int) or (isinstance(k, float) and k.is_integer())`, which admits an integral RAW RATE — including this module's own rate-space SUPERSEDED_SWEEP_SENTINEL [0.0, 1.0], defined in the very file whose docstring claims raw-rate space is unreachable through this route. MEASURED at 576b57d: the sentinel passed as counts, was read as [0, 1] successes out of [104, 104] questions, both points cleared X = 0.04535522866494124, the extraction axis read as truncated and the route returned a spurious INCONCLUSIVE — a DEMOTION, conservative in direction and silent in operation. CLOSED at plan 20-14 by `isinstance(k, int) and not isinstance(k, bool)`, guarded by tests/test_phase20_correction.py::test_the_modules_own_rate_space_sentinel_cannot_pass_as_counts. See value_guards.count_type_guard.",
+    "GC-06": "tests/test_phase20_correction.py::test_mitigation_point_verdict_has_no_caller_outside_this_module is the SOLE enforcement of the choke point named by the `governs` field above, and it matched CALL nodes only, on node.func.id or node.func.attr. `from mitigation_gate import mitigation_point_verdict as mpv` followed by `mpv(...)` is invisible to that matcher — the call node is an ast.Name whose .id is `mpv` — so an alias hid a bypass from the only guard that polices it. CLOSED at plan 20-15 by an ast.ImportFrom census, which an alias cannot hide because the pin's real name must appear in the import for the binding to exist at all, with a synthetic non-vacuity control because the real tree yields ZERO import hits and an empty result would otherwise be indistinguishable from a broken matcher. CLOSED FOR THE IMPORT ONLY: two residuals are recorded, not implied closed — see value_guards.census.residuals_not_closed.",
     "T-20-19": "scripts/mitigation_gate.py:595-634 (retention_cap) validates only that its floor is non-negative and carries ZERO provenance checks, while scripts/mitigation_gate.py:417 / :425 / :436 guard the extraction floor with three. The Phase 12 full-fine-tune floor 0.06893 therefore reaches the cap with no refusal at all, yielding 4.029 against the governing 3.9085032379884783 — the LOOSER cap, which is what an unguarded borrowing buys. See retention_provenance.",
     "WR-08": "scripts/mitigation_gate.py:404-414 validates nontarget_questions and nontarget_successes but never the SIGN of extraction_noise_floor, while its own docstring at :373-377 asserts the reachability invariant 'for any non-negative floor'. Three of the pin's four floor consumers reject a negative floor (:239-243, :578-582, :629-633); extraction_ceiling called directly returns the bad X silently, and on the gate's path the failure surfaces four functions away as an out-of-range CEILING rather than as the sign error that caused it.",
     "WR-09": "scripts/mitigation_gate.py:800-812 brackets only sweep_taught_recalls, and no sweep_heldout_recalls parameter exists anywhere in mitigation_point_verdict's 21-keyword signature, while :765-769 decides condition (b) as b_ok = taught_ok and heldout_ok — a PAIR. A sweep truncated on the held-out leg is therefore undetectable to the frozen gate, which can produce no coverage reading of any kind on that axis. See heldout_coverage."
@@ -230,5 +235,150 @@
     0.0,
     1.0
   ],
-  "supersedes": "scripts/mitigation_gate.py:798-812"
+  "supersedes": "scripts/mitigation_gate.py:798-812",
+  "value_guards": {
+    "census": {
+      "closed_at_plan": "20-15",
+      "guarded_by": "tests/test_phase20_correction.py::test_mitigation_point_verdict_has_no_caller_outside_this_module",
+      "matches": [
+        "ast.Call whose func carries .id == 'mitigation_point_verdict' (a bare call)",
+        "ast.Call whose func carries .attr == 'mitigation_point_verdict' (a module-qualified call, the form a Phase 23 driver would write)",
+        "ast.ImportFrom with module == 'mitigation_gate' binding the name 'mitigation_point_verdict', under any alias"
+      ],
+      "non_vacuity_control": "the SAME imported_aliases() function is run over ast.parse('from mitigation_gate import mitigation_point_verdict as mpv') and must return [(1, 'mpv')]. MEASURED: the real scripts/ + src/ walk yields ZERO import hits today, so an empty result there is indistinguishable from a broken matcher; the control is the SAME function over a synthetic tree, never a re-implementation of it.",
+      "residuals_not_closed": [
+        "getattr(mitigation_gate, 'mitigation_point_verdict')(...) needs no import naming the function and produces no call node naming it either, so it is invisible to BOTH matchers.",
+        "the walk is scoped to scripts/ and src/, so a driver at the repo root or under tools/ is unpoliced."
+      ],
+      "residuals_note": "RECORDED AS A STATE, never as a claim of completeness. Both residuals were named by GC-06 and neither is closed by this wave-set; they are written into the guard's own docstring as well, so a reader meets them where the guard is."
+    },
+    "count_type_guard": {
+      "closed_at_plan": "20-14",
+      "guarded_by": "tests/test_phase20_correction.py::test_the_modules_own_rate_space_sentinel_cannot_pass_as_counts",
+      "pre_guard": {
+        "measured_at": "576b57d",
+        "predicate": "isinstance(k, int) or (isinstance(k, float) and k.is_integer())",
+        "questions": [
+          104,
+          104
+        ],
+        "read_as_successes": [
+          0,
+          1
+        ],
+        "route_verdict": "INCONCLUSIVE",
+        "truncated_axes": [
+          "extraction"
+        ],
+        "why_it_matters": "a spurious demotion — conservative in direction and silent in operation. Both points cleared X, the extraction axis read as truncated, and nothing in the output said the UNIT was wrong."
+      },
+      "predicate": "isinstance(k, int) and not isinstance(k, bool)",
+      "sentinel": [
+        0.0,
+        1.0
+      ],
+      "sentinel_source": "scripts/phase20_gate_coverage.py::SUPERSEDED_SWEEP_SENTINEL",
+      "why_by_type": "isinstance(True, int) is True, so the bool pair passed for the same reason the sentinel did. Bools stay legitimate on the two RECALL legs, where they are 1.0 and 0.0 — the asymmetry is deliberate and is stated in the refusal message so a later reader does not 'restore the symmetry'."
+    },
+    "nothing_moved_out_of_recorded_not_corrected": "recorded_not_corrected holds IN-06, IN-09, WR-03, WR-04, WR-05 and WR-10, and NONE of them is a defect this wave-set closed. GC-01 through GC-12 are findings from 20-REVIEW-GAP-CLOSURE.md, which POSTDATES this artifact, so none of them was ever recorded there as accepted-and-not-corrected. The block is therefore byte-unchanged across this second correction, and tests/test_phase20_correction.py::test_correction_payload_is_additive_across_the_second_correction asserts it EQUAL as a whole against the newest committed revision carrying no value_guards key — which is the pre-write state by definition.",
+    "retention_magnitude_bound": {
+      "admissible_ceiling": 0.008681619002920757,
+      "admissible_ceiling_derivation": "_ADAPTER_REGIME_RETENTION_FLOOR * (1.0 + _RETENTION_FLOOR_RELATIVE_TOLERANCE), computed from the module constants and never typed.",
+      "closed_at_plan": "20-15",
+      "d41_case": {
+        "cap_on_fixture_floor": 3.90914,
+        "cap_on_governing_floor": 3.9085032379884783,
+        "every_published_verdict_bit_unchanged": true,
+        "fixture_floor": 0.009,
+        "fixture_floor_source": "mitigation_gate.FIXTURE_CLEARING_POINT['retention_noise_floor'], annotated `# fabricated` in the frozen pin and carried by all three committed FIXTURE_* dicts",
+        "governing_cap_is_tighter": true,
+        "published_against_interest": "the bound refuses THIS REPOSITORY'S OWN committed fixtures. Widening the tolerance to admit them was REJECTED — a bound that admits the number it was written to catch is not a bound — and the sanctioned route's test harness supplies the governing floor read from results/phase20_retention_floor.json instead. The measurement that makes the substitution safe: every verdict published in `evidence` and `heldout_coverage` is BIT-UNCHANGED under it, and the one reason string that moves (condition (c)'s, which prints the cap) reports the TIGHTER governing cap, so the substitution cannot buy a pass the fixture floor would have withheld.",
+        "ratio_to_governing_floor": 1.0366729991228745,
+        "refused_by": "MAGNITUDE"
+      },
+      "guarded_by": "tests/test_phase20_correction.py::test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict",
+      "loose_case": {
+        "cap": 13.89114,
+        "cap_is_looser_than_governing": true,
+        "floor": 5.0,
+        "governing_cap": 3.9085032379884783,
+        "provenance": "clean adapter regime over two distinct seeds. Nothing about this input is malformed, which is precisely why the three provenance refusals and the by-identity refusal cannot see it.",
+        "refused_by": "MAGNITUDE"
+      },
+      "one_ulp_case": {
+        "borrowed_floor": 0.06893,
+        "cap_on_borrowed_floor": 4.029,
+        "cap_on_nudged_floor": 4.029,
+        "caps_are_bit_identical": true,
+        "distinct_from_borrowed_floor": true,
+        "nudge": "V20_RETENTION_NOISE_FLOOR * (1 + 2**-50)",
+        "nudged_floor": 0.06893000000000006,
+        "refused_by": "MAGNITUDE",
+        "why": "the nudge defeats the `!=` and buys the ENTIRE borrowing for one ULP of arithmetic. Refusing the NAME is one bit pattern of coverage; refusing the PROPERTY is the class."
+      },
+      "refusal_ordering": {
+        "V20_RETENTION_NOISE_FLOOR (the borrowed value)": "IDENTITY",
+        "V20_RETENTION_NOISE_FLOOR * (1 + 2**-50) (the one-ULP nudge)": "MAGNITUDE",
+        "the fixtures' fabricated floor": "MAGNITUDE",
+        "the governing measured floor": "ADMITTED — the bound is not vacuous",
+        "the loose floor under clean provenance": "MAGNITUDE"
+      },
+      "refusal_ordering_note": "The magnitude bound is placed AFTER the `!=`, not before, and the ordering is load-bearing: the borrowed value is itself a member of the looser class, so a bound running first would swallow the by-identity message that publishes the ratio, the looser cap it buys and the governing cap it displaces. Which guard fired is asserted by WHICH MESSAGE COMES BACK, never by reading the source.",
+      "relative_tolerance": 1e-09,
+      "tolerance_pin": "MEASURED at plan 20-15: widening _RETENTION_FLOOR_RELATIVE_TOLERANCE from 1e-09 to 0.05 — a factor of 5e7 — moved the admissible ceiling to 0.009115699943951094, which ADMITS the fabricated fixture floor while still refusing both tripwire cases, and the whole committed suite stayed GREEN. Before the pin existed no committed test could distinguish this tolerance from a rubber stamp. The pin asserts _MAX_ADMISSIBLE_RETENTION_FLOOR < the fixture floor READ from the frozen pin, so any widening that reaches it reddens."
+    },
+    "second_continuation": {
+      "dated": "2026-08-21",
+      "heading": "## Addendum — 2026-08-21 (second) — the value guards on both Y legs and the retention floor's magnitude bound",
+      "path": "results/phase20_gate_coverage_correction.md",
+      "why_an_append": "D-24: a defect found in a pre-registration may be corrected only by a dated continuation beside it, never by an edit to it. The section is written by scripts/_addendum.py::append_addendum in the idempotent-pointer form (pending=recorded=the RECORDED pointer line the first continuation left), whose three guards run on the PRODUCED BYTES, in a commit separate from this file so a pre-append revision exists in history for the additivity guard to compare against.",
+      "written_by": "scripts/_addendum.py::append_addendum"
+    },
+    "y_leg_differential": {
+      "closed_at_plan": "20-14",
+      "fixture": "FIXTURE_CLEARING_POINT",
+      "fixture_sweep_taught_recalls": [
+        0.45,
+        0.2
+      ],
+      "fixture_taught_leg_note": "the fixture's own sweep_taught_recalls legitimately BRACKETS y_taught, so the held-out leg is the only axis under test in this differential.",
+      "guarded_by": "tests/test_phase20_correction.py::test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage",
+      "honest_heldout_sweep": [
+        0.3,
+        0.28
+      ],
+      "honest_reading": {
+        "covered": false,
+        "route_verdict": "INCONCLUSIVE",
+        "truncated_axes": [
+          "heldout_recall"
+        ]
+      },
+      "mechanism": "nan >= 0.24499999999999997 is False, so the NaN was COUNTED as a FAILING point beside 0.28's clearing one and MANUFACTURED the bracket that the strictly LESS truncated honest sweep lacks. It did not pass through; it produced the coverage. A NaN recall is what 0/0 yields from an empty held-out question set, so this is a reachable input rather than a contrived one. The per-element [0.0, 1.0] range check subsumes NaN with no special-case branch a later reader can delete.",
+      "pre_guard_reading": {
+        "coverage_verdict": [
+          true,
+          [],
+          null
+        ],
+        "gate06_reasons": 0,
+        "heldout_sweep": "(nan, 0.28)",
+        "heldout_sweep_retained_point": 0.28,
+        "measured_at": "576b57d",
+        "nan_ge_y_heldout": false,
+        "route_verdict": "PASS",
+        "tense": "PAST. This is what the module DID before plan 20-14; the same call now raises SystemExit naming the leg and its [0.0, 1.0] requirement, so this reading is NOT re-derivable from the committed module and is published with the commit it was measured at instead."
+      },
+      "sweep_extraction_questions": [
+        104,
+        104
+      ],
+      "sweep_extraction_successes": [
+        1,
+        3
+      ],
+      "y_heldout": 0.24499999999999997,
+      "y_taught": 0.35
+    }
+  }
 }

@@ -115,6 +115,21 @@ DEFAULT_RETENTION_FLOOR = json.loads(RETENTION_FLOOR_PATH.read_text(encoding="ut
     "retention_ppl_noise_floor"
 ]
 
+# THE FOUR INPUTS `value_guards` PUBLISHES THAT NO MODULE CONSTANT CAN SUPPLY, and the reason they
+# are exempt from this file's no-typed-numbers discipline stated as a decision rather than left as
+# a leak: an INPUT is not derivable from the module it was handed to. Every OUTPUT that follows
+# from them — every cap, ratio, bound, verdict and truncated-axis tuple — is still obtained by
+# calling the modules.
+#
+# HOISTED, NOT DECLARED AFRESH. Each of these already lived as a literal inside the one test body
+# that used it; each is MOVED here and referenced by name from both that body and the payload
+# assertions, so no NEW number enters this file and the payload cannot drift from the case that
+# demonstrates it.
+HONEST_HELDOUT_SWEEP = (0.30, 0.28)
+NAN_HELDOUT_SWEEP = (float("nan"), HONEST_HELDOUT_SWEEP[1])
+LOOSE_RETENTION_FLOOR = 5.0
+NUDGED_RETENTION_FLOOR = erasure_gate.V20_RETENTION_NOISE_FLOOR * (1 + 2**-50)
+
 
 def _git(*args):
     done = subprocess.run(("git", *args), cwd=_ROOT, capture_output=True, check=True)
@@ -434,7 +449,7 @@ def test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage():
     # 1. THE HONEST READING. Both points sit at or above Y_heldout, so the axis produced ZERO
     #    failing points and genuinely never crossed. That is a finding, and the guard below must
     #    leave it exactly where it was.
-    honest = (0.30, 0.28)
+    honest = HONEST_HELDOUT_SWEEP
     assert all(point >= y_heldout for point in honest), (
         f"{honest} does not sit entirely at or above Y_heldout = {y_heldout!r}, so this axis is "
         "not truncated and case 1 is measuring something other than the honest reading"
@@ -461,7 +476,7 @@ def test_a_recall_outside_the_unit_interval_cannot_manufacture_y_coverage():
 
     # 3. THE FLIP, REFUSED. The SAME axis, STRICTLY MORE truncated than case 1.
     with pytest.raises(SystemExit) as refused:
-        route(sweep_heldout_recalls=(float("nan"), 0.28))
+        route(sweep_heldout_recalls=NAN_HELDOUT_SWEEP)
     message = str(refused.value)
     assert "held-out" in message and "[0.0, 1.0]" in message, (
         f"the refusal does not name the leg and its [0.0, 1.0] requirement: {message!r}. MEASURED "
@@ -873,6 +888,205 @@ def test_every_published_number_re_derives_from_the_modules():
         f"{heldout['sentence']!r} against {reasons[-1]!r}"
     )
 
+    # ─── THE SECOND CORRECTION'S `value_guards`, on the same terms as everything above it ───
+    #
+    # ONE published sub-block is deliberately NOT re-derived, for the same structural reason
+    # `measured_residue_at_n_104` is not: `y_leg_differential.pre_guard_reading` records what the
+    # module DID before plan 20-14, and the guard that closed it now raises on that exact input, so
+    # the reading is unreachable from the committed module by construction. It travels with the
+    # commit it was measured at instead, and its `tense` field says so in the artifact.
+    guards = payload["value_guards"]
+    cap = mitigation_gate.retention_cap
+
+    y = guards["y_leg_differential"]
+    assert y["y_taught"] == coverage.F_Y * fixture["control_taught_recall"]
+    assert y["y_heldout"] == coverage.F_Y * fixture["control_heldout_recall"]
+    assert tuple(y["fixture_sweep_taught_recalls"]) == fixture["sweep_taught_recalls"]
+    assert tuple(y["sweep_extraction_successes"]) == DIRECTION_I_SUCCESSES
+    assert tuple(y["sweep_extraction_questions"]) == QUESTIONS
+    assert tuple(y["honest_heldout_sweep"]) == HONEST_HELDOUT_SWEEP
+    pre_guard = y["pre_guard_reading"]
+    assert pre_guard["heldout_sweep_retained_point"] == HONEST_HELDOUT_SWEEP[1]
+    assert pre_guard["nan_ge_y_heldout"] is (NAN_HELDOUT_SWEEP[0] >= y["y_heldout"]), (
+        f"the published mechanism says nan >= Y_heldout is {pre_guard['nan_ge_y_heldout']!r}, but "
+        f"it measures {NAN_HELDOUT_SWEEP[0] >= y['y_heldout']!r}. That comparison IS the reason "
+        "the NaN was counted as a failing point and manufactured the bracket"
+    )
+    covered, truncated, _sentence = coverage.coverage_verdict(
+        sweep_extraction_successes=DIRECTION_I_SUCCESSES,
+        sweep_extraction_questions=QUESTIONS,
+        sweep_taught_recalls=fixture["sweep_taught_recalls"],
+        sweep_heldout_recalls=HONEST_HELDOUT_SWEEP,
+        extraction_ceiling_value=ceiling,
+        y_taught=y["y_taught"],
+        y_heldout=y["y_heldout"],
+    )
+    assert y["honest_reading"]["covered"] is covered
+    assert tuple(y["honest_reading"]["truncated_axes"]) == truncated, (
+        f"the payload publishes truncated axes {y['honest_reading']['truncated_axes']} on the "
+        f"honest held-out sweep but coverage_verdict returns {truncated}"
+    )
+    honest_route, _honest_reasons, _honest_arm = coverage.corrected_point_verdict(
+        **_corrected_call(
+            "FIXTURE_CLEARING_POINT",
+            sweep_extraction_successes=DIRECTION_I_SUCCESSES,
+            sweep_extraction_questions=QUESTIONS,
+            sweep_heldout_recalls=HONEST_HELDOUT_SWEEP,
+        )
+    )
+    assert y["honest_reading"]["route_verdict"] == honest_route
+
+    counts = guards["count_type_guard"]
+    assert tuple(counts["sentinel"]) == coverage.SUPERSEDED_SWEEP_SENTINEL
+    assert tuple(counts["pre_guard"]["questions"]) == QUESTIONS
+    assert counts["pre_guard"]["read_as_successes"] == [
+        int(value) for value in coverage.SUPERSEDED_SWEEP_SENTINEL
+    ], counts["pre_guard"]["read_as_successes"]
+
+    bound = guards["retention_magnitude_bound"]
+    assert bound["relative_tolerance"] == coverage._RETENTION_FLOOR_RELATIVE_TOLERANCE
+    assert bound["admissible_ceiling"] == coverage._MAX_ADMISSIBLE_RETENTION_FLOOR, (
+        f"the payload publishes an admissible ceiling of {bound['admissible_ceiling']!r} but the "
+        f"module computes {coverage._MAX_ADMISSIBLE_RETENTION_FLOOR!r}. The bound is what refuses "
+        "the whole looser class, and a published copy of it free to drift is a second bound"
+    )
+
+    ulp = bound["one_ulp_case"]
+    assert ulp["borrowed_floor"] == erasure_gate.V20_RETENTION_NOISE_FLOOR
+    assert ulp["nudged_floor"] == NUDGED_RETENTION_FLOOR
+    assert ulp["distinct_from_borrowed_floor"] is (
+        NUDGED_RETENTION_FLOOR != erasure_gate.V20_RETENTION_NOISE_FLOOR
+    )
+    assert ulp["cap_on_nudged_floor"] == cap(retention_noise_floor=NUDGED_RETENTION_FLOOR)
+    assert ulp["cap_on_borrowed_floor"] == cap(
+        retention_noise_floor=erasure_gate.V20_RETENTION_NOISE_FLOOR
+    )
+    assert ulp["caps_are_bit_identical"] is (
+        ulp["cap_on_nudged_floor"] == ulp["cap_on_borrowed_floor"]
+    ), (
+        "the payload's whole argument for refusing by MAGNITUDE is that one ULP of arithmetic buys "
+        f"a BIT-IDENTICAL cap: {ulp['cap_on_nudged_floor']!r} against "
+        f"{ulp['cap_on_borrowed_floor']!r}"
+    )
+
+    loose = bound["loose_case"]
+    assert loose["floor"] == LOOSE_RETENTION_FLOOR
+    assert loose["cap"] == cap(retention_noise_floor=LOOSE_RETENTION_FLOOR)
+    assert loose["governing_cap"] == cap(retention_noise_floor=DEFAULT_RETENTION_FLOOR)
+    assert loose["cap_is_looser_than_governing"] is (loose["cap"] > loose["governing_cap"])
+
+    d41 = bound["d41_case"]
+    fixture_floor = fixture["retention_noise_floor"]
+    assert d41["fixture_floor"] == fixture_floor
+    assert d41["ratio_to_governing_floor"] == fixture_floor / DEFAULT_RETENTION_FLOOR
+    assert d41["cap_on_fixture_floor"] == cap(retention_noise_floor=fixture_floor)
+    assert d41["cap_on_governing_floor"] == cap(retention_noise_floor=DEFAULT_RETENTION_FLOOR)
+    assert d41["governing_cap_is_tighter"] is (
+        d41["cap_on_governing_floor"] < d41["cap_on_fixture_floor"]
+    ), (
+        "D-41's substitution is admissible ONLY because the governing cap is TIGHTER — that is "
+        "what makes it unable to buy a pass the fixture floor would have withheld — and the "
+        f"payload publishes {d41['cap_on_governing_floor']!r} against "
+        f"{d41['cap_on_fixture_floor']!r}"
+    )
+
+
+def test_correction_payload_is_additive_across_the_second_correction():
+    """The second correction ADDED keys to the published payload; it rewrote none of them.
+
+    T-20-80: a published JSON key silently rewritten under cover of an additive write. The
+    pre-write revision is DERIVED rather than pinned to a hash, exactly as
+    ``test_correction_addendum_is_additive_on_the_published_artifact`` derives its pre-append
+    revision — the newest committed blob whose parsed payload carries NO ``value_guards`` key IS
+    the pre-write state, BY DEFINITION, and that stays true however many later commits touch the
+    file.
+
+    LINE-LEVEL ADDITIVITY IS NOT THE CLAIM, and saying so here rather than quietly asserting
+    something weaker is the point. ``value_guards`` sorts after every key already published, so
+    adding it necessarily rewrites ONE line — the previous last key gains a trailing comma — and a
+    ``git diff`` deletion count of zero is unachievable for this write. A guard asserting it would
+    be asserting a property of alphabetical ordering, not of the artifact. What T-20-80 needs is
+    that no published VALUE moved, and that is what is asserted below, on the PARSED payload.
+    """
+    assert _git("rev-parse", "--is-shallow-repository").strip() == "false", (
+        "shallow clone: the pre-write revision is not in the object store, so this guard cannot "
+        "distinguish 'the write was additive' from 'the history was never read'. "
+        "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+    )
+
+    before = None
+    for revision in _git("log", "--format=%H", "--", PAYLOAD_REL).split():  # newest first
+        candidate = json.loads(_git("show", f"{revision}:{PAYLOAD_REL}"))
+        if "value_guards" not in candidate:
+            before = candidate
+            break
+    assert before is not None, (
+        f"no committed revision of {PAYLOAD_REL} lacks a `value_guards` key, so there is no "
+        "pre-write state to compare against. Either the key was present from the file's first "
+        "commit — in which case this guard was never the second correction's guard — or the "
+        "history was rewritten"
+    )
+    after = _payload()
+
+    assert set(after) - set(before) == {"value_guards"}, (
+        "the second correction added top-level keys beyond `value_guards`: "
+        f"{sorted(set(after) - set(before))}. Every measurement it publishes belongs INSIDE that "
+        "one key, so a second new key at top level is a second correction nobody declared"
+    )
+    assert set(before) - set(after) == set(), (
+        "the second correction REMOVED published top-level keys: "
+        f"{sorted(set(before) - set(after))}"
+    )
+
+    for key, value in before.items():
+        if key == "defects":
+            continue
+        assert after[key] == value, (
+            f"the published `{key}` was rewritten under cover of an additive write. This artifact "
+            "is a D-24 dated continuation: a defect found in it is corrected by ADDING beside the "
+            "published value, never by moving the published value"
+        )
+
+    # `defects` is the ONE key that legitimately grows, so it is compared key by key rather than
+    # as a whole — and only by ADDITION.
+    for key, value in before["defects"].items():
+        assert after["defects"][key] == value, (
+            f"the published defect description `{key}` was rewritten. A description that outlives "
+            "its defect teaches a reader to distrust a correct artifact (T-20-57); one that is "
+            "silently REPLACED leaves no record that it ever said something else"
+        )
+    assert set(after["defects"]) - set(before["defects"]) == {
+        "GC-01",
+        "GC-02",
+        "GC-03",
+        "GC-04",
+        "GC-06",
+    }, sorted(set(after["defects"]) - set(before["defects"]))
+
+    # These two are asserted EQUAL AS WHOLES rather than key by key, because for them the claim is
+    # that nothing was ADDED either. Nothing this wave-set closed was ever recorded as
+    # accepted-and-not-corrected — GC-01…GC-12 postdate this artifact — and `evidence` is the
+    # CR-01/WR-09 reproduction record with a fixed shape that
+    # test_every_published_number_re_derives_from_the_modules iterates key by key.
+    assert after["recorded_not_corrected"] == before["recorded_not_corrected"], (
+        "a `recorded_not_corrected` entry moved. That block is the record of what was ACCEPTED and "
+        "deliberately not fixed; an entry leaving it silently converts an accepted finding into a "
+        "closed one"
+    )
+    assert set(after["recorded_not_corrected"]) == {
+        "IN-06",
+        "IN-09",
+        "WR-03",
+        "WR-04",
+        "WR-05",
+        "WR-10",
+    }, sorted(after["recorded_not_corrected"])
+    assert after["evidence"] == before["evidence"], (
+        "the `evidence` block changed. The second correction's measurements go in `value_guards` "
+        "precisely because a differently-shaped record inside `evidence` would break the "
+        "key-by-key iteration contract the re-derivation guard holds it to"
+    )
+
 
 def test_the_three_defects_are_still_live_in_the_frozen_pin():
     """Each defect asserted against the CODE, never against the prose that describes it.
@@ -992,7 +1206,7 @@ def test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict():
     # value defeats the `!=` above and buys the SAME cap, bit for bit, so the evasion is real rather
     # than a curiosity. Both halves of that claim are computed through the frozen `retention_cap`,
     # never typed, so the argument stays readable after the guard lands.
-    nudged = erasure_gate.V20_RETENTION_NOISE_FLOOR * (1 + 2**-50)
+    nudged = NUDGED_RETENTION_FLOOR
     assert nudged != erasure_gate.V20_RETENTION_NOISE_FLOOR, (
         f"the one-ULP nudge {nudged!r} is not distinct from "
         f"{erasure_gate.V20_RETENTION_NOISE_FLOOR!r}, so it no longer defeats the by-identity "
@@ -1035,7 +1249,7 @@ def test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict():
 
     # D-38 CASE 2 — A LOOSER FLOOR WITH NO MALFORMED INPUT ANYWHERE. Clean adapter provenance, a
     # value named nowhere, and the harm stated as the inequality it is rather than as prose.
-    loose = 5.0
+    loose = LOOSE_RETENTION_FLOOR
     message = refused(retention_noise_floor=loose)
     assert "admissible ceiling" in message and "LOOSER" in message, (
         f"a floor of {loose!r} under clean provenance is not refused by the MAGNITUDE bound: "
