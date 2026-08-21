@@ -932,6 +932,12 @@ def test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict():
     unavoidable for exactly this structural reason — ``mitigation_point_verdict`` CALLS it — and
     the retention leg gets the same shape rather than a promise.
 
+    THE NAME AND THE PROPERTY ARE ASSERTED SEPARATELY, because either alone was MEASURED
+    insufficient: the ``!=`` refuses one named value and a one-ULP nudge walks straight past it into
+    a bit-identical borrowed cap, while a magnitude bound alone would refuse that named value
+    without ever publishing the three numbers that make its refusal an argument. Both cases below
+    assert which of the two fired, so a later merge of the pair into one check reddens here.
+
     The last case is not a provenance case at all. It is WR-08, asserted at BOTH magnitudes,
     because a guard's POSITION is part of the guard.
     """
@@ -951,8 +957,9 @@ def test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict():
             )
         return str(raised.value)
 
-    # The four provenance refusals, each mirroring one of `extraction_ceiling`'s at :417/:425/:436
-    # — except the fourth, which has no counterpart on the extraction leg.
+    # The three provenance refusals, each mirroring one of `extraction_ceiling`'s at
+    # :417/:425/:436. The remaining two refusal kinds — the named value by IDENTITY and the looser
+    # class by MAGNITUDE — have no counterpart on the extraction leg and are asserted below.
     refused(retention_floor_provenance={})
     refused(retention_floor_provenance={"seeds": (1337, 2024)})
     refused(retention_floor_provenance={"regime": "full-finetune", "seeds": (1337, 2024)})
@@ -981,6 +988,51 @@ def test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict():
             "retention_cap, never retyped"
         )
 
+    # D-38 CASE 1 — THE ONE-ULP NUDGE, which is why refusing the NAME is one bit of coverage. This
+    # value defeats the `!=` above and buys the SAME cap, bit for bit, so the evasion is real rather
+    # than a curiosity. Both halves of that claim are computed through the frozen `retention_cap`,
+    # never typed, so the argument stays readable after the guard lands.
+    nudged = erasure_gate.V20_RETENTION_NOISE_FLOOR * (1 + 2**-50)
+    assert nudged != erasure_gate.V20_RETENTION_NOISE_FLOOR, (
+        f"the one-ULP nudge {nudged!r} is not distinct from "
+        f"{erasure_gate.V20_RETENTION_NOISE_FLOOR!r}, so it no longer defeats the by-identity "
+        "refusal and this case has stopped testing what it was written for"
+    )
+    nudged_cap = mitigation_gate.retention_cap(retention_noise_floor=nudged)
+    borrowed_cap = mitigation_gate.retention_cap(
+        retention_noise_floor=erasure_gate.V20_RETENTION_NOISE_FLOOR
+    )
+    assert nudged_cap == borrowed_cap, (
+        f"the nudged floor no longer buys a BIT-IDENTICAL cap to the borrowed one "
+        f"({nudged_cap!r} against {borrowed_cap!r}). The whole point of this case is that one ULP "
+        "of arithmetic buys the entire borrowing"
+    )
+    message = refused(retention_noise_floor=nudged)
+    assert "admissible ceiling" in message and "LOOSER" in message, (
+        f"the one-ULP nudge is not refused by the MAGNITUDE bound: {message!r}"
+    )
+    assert f"IS {erasure_gate.V20_RETENTION_NOISE_FLOOR}" not in message, (
+        f"the nudged floor was caught by the by-identity refusal rather than the magnitude bound: "
+        f"{message!r}. If identity now catches it, the two guards have been merged and the bound "
+        "is no longer proved to be the thing that closes this hole"
+    )
+
+    # D-38 CASE 2 — A LOOSER FLOOR WITH NO MALFORMED INPUT ANYWHERE. Clean adapter provenance, a
+    # value named nowhere, and the harm stated as the inequality it is rather than as prose.
+    loose = 5.0
+    message = refused(retention_noise_floor=loose)
+    assert "admissible ceiling" in message and "LOOSER" in message, (
+        f"a floor of {loose!r} under clean provenance is not refused by the MAGNITUDE bound: "
+        f"{message!r}. Nothing about this input is malformed — that is precisely why the "
+        "name-based refusal cannot see it"
+    )
+    assert mitigation_gate.retention_cap(
+        retention_noise_floor=loose
+    ) > mitigation_gate.retention_cap(retention_noise_floor=DEFAULT_RETENTION_FLOOR), (
+        f"a floor of {loose!r} no longer buys a LOOSER cap than the governing "
+        f"{DEFAULT_RETENTION_FLOOR!r}, so this case has stopped demonstrating the harm it names"
+    )
+
     # WR-08 — THE SIGN CHECK, PROVED AT THE MAGNITUDE WHERE ITS ORDERING MATTERS. MEASURED: a floor
     # of -0.01 still yields a POSITIVE ceiling (0.005355228664941234), so a sign check placed AFTER
     # the ceiling computation fires with the right message and -0.01 alone proves nothing about
@@ -1000,7 +1052,7 @@ def test_the_retention_floor_tripwire_is_the_only_route_to_a_verdict():
             "prevent is back"
         )
 
-    # THE POSITIVE CONTROL. A fixture differing from the eight above in ONLY the refused field
+    # THE POSITIVE CONTROL. A fixture differing from the ten above in ONLY the refused field
     # still reaches a verdict, which is what makes those aborts attributable to the tripwire rather
     # than to anything else in the route.
     verdict, _reasons, _arm = coverage.corrected_point_verdict(
@@ -1077,6 +1129,17 @@ def test_mitigation_point_verdict_has_no_caller_outside_this_module():
     ``mitigation_gate.mitigation_point_verdict(...)`` — an ``ast.Attribute`` node, and exactly the
     form a Phase 23 driver would write. That is WR-07's latent hole and it is not copied here.
 
+    THE IMPORT IS CENSUSED AS WELL AS THE CALL (GC-06). An alias can hide the CALL —
+    ``from mitigation_gate import mitigation_point_verdict as mpv`` followed by ``mpv(...)`` is an
+    ``ast.Name`` whose ``.id`` is ``mpv``, invisible to the matcher above — but it cannot hide the
+    IMPORT, where the pin's real name must appear for the binding to exist at all.
+
+    WHAT THIS STILL DOES NOT COVER, recorded as a state rather than implied closed. (1)
+    ``getattr(mitigation_gate, "mitigation_point_verdict")(...)`` needs no import naming the
+    function and produces no call node naming it either, so it remains invisible to both halves.
+    (2) The walk is scoped to ``scripts/`` and ``src/``, so a driver at the repo root or under
+    ``tools/`` is unpoliced. Both were named by GC-06 and neither is closed here.
+
     ``tests/`` IS DELIBERATELY EXCLUDED, and the reason is recorded rather than assumed: the prereg
     suite drives the pin's own branches directly, which is the behavioural twin of the pin and not
     a bypass of the correction. The pin's own definition file is excluded for the same
@@ -1085,6 +1148,16 @@ def test_mitigation_point_verdict_has_no_caller_outside_this_module():
     """
     definition = _SCRIPTS / "mitigation_gate.py"
     sanctioned = _SCRIPTS / "phase20_gate_coverage.py"
+
+    def imported_aliases(tree):
+        """Every name `mitigation_point_verdict` is bound to by an import, with its line."""
+        return [
+            (node.lineno, alias.asname or alias.name)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module == "mitigation_gate"
+            for alias in node.names
+            if alias.name == "mitigation_point_verdict"
+        ]
 
     bypassing = []
     inside_sanctioned = 0
@@ -1100,9 +1173,15 @@ def test_mitigation_point_verdict_has_no_caller_outside_this_module():
                 inside_sanctioned += 1
             elif path != definition:
                 bypassing.append(f"{path.relative_to(_ROOT)}:{node.lineno}")
+        if path not in (sanctioned, definition):
+            bypassing.extend(
+                f"{path.relative_to(_ROOT)}:{lineno} (imported as {bound})"
+                for lineno, bound in imported_aliases(tree)
+            )
 
     assert bypassing == [], (
-        f"{len(bypassing)} call site(s) reach a v4.0 verdict through the frozen pin directly, "
+        f"{len(bypassing)} call site(s) or import(s) reach a v4.0 verdict through the frozen pin "
+        "directly, "
         f"bypassing scripts/phase20_gate_coverage.py::corrected_point_verdict: {bypassing}. Such a "
         "caller gets RAW-RATE coverage on the extraction axis (the CR-01 defect, which mislabels "
         "in both directions), NO coverage at all on the held-out leg (WR-09 — the frozen "
@@ -1120,4 +1199,17 @@ def test_mitigation_point_verdict_has_no_caller_outside_this_module():
         "scripts/phase20_gate_coverage.py, which calls it exactly once at step 6 of "
         "corrected_point_verdict. The matcher is broken or the sanctioned route stopped calling "
         "the pin — either way the empty result above proves nothing"
+    )
+
+    # NON-VACUITY FOR THE IMPORT HALF, which needs its own control: MEASURED, the real tree yields
+    # ZERO import hits today, so an empty result there is indistinguishable from a broken matcher.
+    # The SAME function is run over a synthetic tree carrying the exact form an alias would take.
+    synthetic = imported_aliases(
+        ast.parse("from mitigation_gate import mitigation_point_verdict as mpv\n")
+    )
+    assert synthetic == [(1, "mpv")], (
+        f"the import census does not flag `from mitigation_gate import mitigation_point_verdict as "
+        f"mpv`, reporting {synthetic!r} instead of [(1, 'mpv')]. An alias can hide the CALL — "
+        "`mpv(...)` is an ast.Name whose .id is `mpv` — so the import is the half that cannot be "
+        "hidden, and a matcher that misses it leaves the choke point enforced by nothing"
     )
