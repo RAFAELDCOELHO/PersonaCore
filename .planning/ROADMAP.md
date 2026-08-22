@@ -342,16 +342,30 @@ unit is not a number that can be corrected by re-running
 **Plans**: 11 plans across 5 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 21-01-PLAN.md — pin `scripts/mitigation_unit.py` (SC1 + SC4) and ARM the `results/phase21_*` ancestry guard, both halves (D-19, D-20, D-22, D-23)
 - [ ] 21-02-PLAN.md — capture both v2.0 golden fixtures from a git-clean PRE-EDIT tree, with a mechanical dirty-tree refusal
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 21-03-PLAN.md — drive the phase21 prefix RED-then-GREEN through five states in a throwaway repo (D-20)
 - [ ] 21-04-PLAN.md — `build_bins(..., align_facts=None)`, the ragged third `*_fact.bin`, and the window-purity content proof (D-01, D-05)
 - [ ] 21-05-PLAN.md — `render_family(..., forms=None)` with its non-vacuity pair; `question_bank` dropped as unfalsifiable (D-16)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 21-06-PLAN.md — `get_batch_fact_aligned` and the mutate-between-calls proof that the fact map is consumed at RUN TIME (D-06)
 - [ ] 21-07-PLAN.md — the 56 unscored filler facts, a disjoint slot grammar, and the re-implemented minting discipline (D-12…D-17)
 - [ ] 21-08-PLAN.md — close the D-11 replay side channel by differential, and add `train()`'s additive replay seam (D-10, D-24, D-25)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 21-09-PLAN.md — the `dp_n8` / `dp_n64` arms (D-14) and the SC5 non-disturbance proof across all 8 `== 10` wall sites (D-18)
 - [ ] 21-10-PLAN.md — the multiplicity instrument, its conservation law, and the proof that it can report ≠ 1 (D-26)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 21-11-PLAN.md — write and COMMIT `results/phase21_privacy_unit.json` + `results/phase21_multiplicity.json`; the guard goes live
 
 ### Phase 22: DP-SGD Core, Accountant, and the Correctness Battery

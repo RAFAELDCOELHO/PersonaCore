@@ -1092,9 +1092,20 @@ has one corpus.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> **All four were resolved during planning (`fc2e6dc`), not deferred.** The question bodies below
+> are kept unedited as the record of what was asked; each carries its resolution inline.
+
+| # | Question | RESOLVED in | How |
+|---|----------|-------------|-----|
+| 1 | `question_bank` siting | **plan 21-05** | **Dropped.** `SLOT_QUESTION_BANK` is read only at `phase14_factset.py:279` inside `_assign_probes()`, which iterates `all_pools()` — and filler is deliberately outside it (D-13). The guard could not fail, so the kwarg does not ship. Only `forms=None` lands, with a two-register `*_is_wired` pair. The measurement is recorded in the source as a waiver. |
+| 2 | Multiplicity attribution rule | **plan 21-10** | `ATTRIBUTION_RULE = "first-token-owns-draw"`. Conservation is an exact **equality** at `200 × 8 = 1,600`, matching D-26's own denominator. Named in the instrument, the test message, and the artifact schema; the rejected alternative and its inequality cost are tabled. |
+| 3 | Which site sizes replay after D-10 | **plan 21-08** | `_prepend_replay` **survives** and gains `n_facts=None`. The differential runs against **both** sites; the legacy branch is retained explicitly as the **negative control** that proves the differential can see a side channel at all. |
+| 4 | `results/phase21_*` filenames | **plan 21-10** | `results/phase21_privacy_unit.json` and `results/phase21_multiplicity.json`, declared as the `ARTIFACTS` module constant in `scripts/phase21_unit_record.py` before either is written. Consistent across 21-03 / 21-10 / 21-11. |
 
 **1. `render_family(..., question_bank=None)` has no path to `render_family`'s output.**
+> **RESOLVED — plan 21-05: dropped.** The recommendation's option (a) was taken.
 - **What we know (measured):** `SLOT_QUESTION_BANK` occurs exactly 3× in `scripts/phase14_factset.py`
   — `:55` (comment), `:151` (definition), `:279` (the sole read, inside `_assign_probes()`).
   `_render_family` at `:690` reads only `SLOT_FORMS[fact.slot]`. `_assign_probes()` iterates

@@ -1,8 +1,8 @@
 ---
 phase: 21
 slug: the-privacy-unit-the-dp-data-path-and-the-n-64-corpus
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-08-22
 ---
@@ -159,13 +159,16 @@ either re-site the kwarg or drop it; it must not ship a guard that cannot fail.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] Every `*_byte_identity` test is paired with a non-vacuity `*_is_wired` test
-- [ ] Every new guard proven **deliberate-RED then byte-identically restored**
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 36s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies — **29/29 tasks; zero MISSING markers**
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references — all 10 artifacts owned by a named plan (aligned_bins→21-04, aligned_loader→21-06, multiplicity→21-10, replay_volume→21-08, unit_pin→21-01, filler→21-05/21-07, sc5→21-09, both goldens→21-02, both `test_phase20_prereg.py` edits→21-01)
+- [x] Every `*_byte_identity` test is paired with a non-vacuity `*_is_wired` test — `question_bank` was **dropped** rather than shipped unfalsifiable (21-05)
+- [x] Every new guard proven **deliberate-RED then byte-identically restored**
+- [x] No watch-mode flags — task-granularity commands run 1.9s–36s
+- [x] Feedback latency < 36s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+`wave_0_complete` stays **false** by design: the ten Wave 0 files are *planned and owned*, not yet
+written. It flips during execution, not during planning.
+
+**Approval:** approved 2026-08-22 — plan set `fc2e6dc`, verified by `gsd-plan-checker` (0 blockers).
