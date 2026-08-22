@@ -339,7 +339,7 @@ unit is not a number that can be corrected by re-running
      — the 8 `LOCKED_FACTS`, the 270-question fixture and the ancestry-guarded
      `scripts/phase18_extraction.py` are all unchanged and still green. (UNIT-06)
 
-**Plans**: 11 plans across 5 waves
+**Plans**: 11 plans across 6 waves
 
 Plans:
 **Wave 1**
@@ -361,10 +361,13 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 21-09-PLAN.md — the `dp_n8` / `dp_n64` arms (D-14) and the SC5 non-disturbance proof across all 8 `== 10` wall sites (D-18)
 - [ ] 21-10-PLAN.md — the multiplicity instrument, its conservation law, and the proof that it can report ≠ 1 (D-26)
 
-**Wave 5** *(blocked on Wave 4 completion)*
+**Wave 5** *(blocked on Wave 4 completion)* — 21-09 is serialized BEHIND 21-10, not beside it: its three deliberate-REDs transiently mutate working-tree files it does not own (including the ancestry-guarded `scripts/phase18_extraction.py`) that 21-10's full-suite verification reads
+
+- [ ] 21-09-PLAN.md — the `dp_n8` / `dp_n64` arms (D-14) and the SC5 non-disturbance proof across all 8 `== 10` wall sites (D-18)
+
+**Wave 6** *(blocked on Wave 5 completion)*
 
 - [ ] 21-11-PLAN.md — write and COMMIT `results/phase21_privacy_unit.json` + `results/phase21_multiplicity.json`; the guard goes live
 
