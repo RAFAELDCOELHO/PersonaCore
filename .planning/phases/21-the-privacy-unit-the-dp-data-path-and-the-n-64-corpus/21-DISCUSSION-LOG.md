@@ -135,3 +135,145 @@ is built — and no new capability was proposed.
 3. **UNIT-05's δ record form.**
 
 A planner must not invent answers to these. Re-run `/gsd-discuss-phase 21` → "Update it".
+
+**→ ALL THREE CLOSED IN SESSION 3.** See below.
+
+---
+---
+
+# Session 3 — 2026-08-22
+
+**Areas discussed:** Where the constants live (new, surfaced by scouting); D-11's replay constant;
+UNIT-03's measurement path
+**Outcome:** D-19 … D-26. Context status PARTIAL → **COMPLETE**, 0 open questions.
+
+---
+
+## Where the constants live
+
+Not in session 2's open list. Surfaced while scouting: SC1's `PRIVACY_UNIT` and SC4's δ both need a
+home, and `scripts/mitigation_gate.py` is FROZEN (Phase 20 D-24).
+
+**User stated a position before the options were shown, and named the premise to check** — that a
+`mitigation_*.py` module becomes permanently frozen once its first artifact lands, asking whether a
+middle ground exists. **Measured: half true.** The freeze is real and irrevocable
+(`test_phase20_prereg.py:143` reads every commit touching the pin; `:157` compares against the
+earliest add). **But the name does not confer it** — `PHASE20_PREREG_ARTIFACT` (`:91`), an explicit
+hand-written path, does. The glob buys one import-hygiene scan; the other content scans read the
+single path and do not extend to siblings.
+
+### Q1 — pin timing
+
+| Option | Description | Selected |
+|---|---|---|
+| Defer the pin to the ε phase | Name it `mitigation_*.py` now, arm the ancestry pin at Phase 22/23 when ε is first computed *(recommended)* | |
+| Arm against `results/phase21_*` now | Full 20-01 discipline; freezes before Phases 22-25 know what constants they need | |
+| **Arm now, constants-only + a separate unfrozen module** | Frozen module for what is already final; unfrozen sibling for what is not | ✓ |
+
+**User's choice:** the split. **Notes:** "Proteção máxima onde a decisão já está fechada, espaço real
+para crescer onde ainda não está." Sibling to be named under the same pattern so it stays swept by
+the glob scans, without the same immediate immutability. → **D-19, D-20, D-21**
+
+### Q2 — the import ceiling
+
+Measured mid-discussion: `allowed = {"pathlib", "sys", "erasure_gate"}` (`:522`) as a **subset** over
+imports accumulated across **all** glob members (`:498`); `from_erasure_gate` by **exact equality** to
+five names (`:538`). `json` is unreachable, so no `mitigation_*` module can write an artifact.
+
+| Option | Description | Selected |
+|---|---|---|
+| **Driver outside the glob writes them** | Rule module holds constants + `_prove`; a separate driver emits the artifacts *(recommended)* | ✓ |
+| Widen the allow-set to admit `json` | One-line test edit; loosens the assertion whose purpose is catching the unanticipated import | |
+| δ gets no artifact at all | In-module only | |
+
+**User's choice:** driver outside the glob. **Notes:** "Espelha o próprio padrão gate/budget já
+estabelecido neste repositório — regra num lugar, emissão em outro." → **D-22**
+
+### Q3 — does the sibling get created?
+
+| Option | Description | Selected |
+|---|---|---|
+| **Record the convention, don't create the file** | Glob catches it the moment it exists *(recommended)* | ✓ |
+| Create it now, empty but documented | Placeholder, green over nothing | |
+| Create it and seed it with a provisional constant | Would mean settling D-11 under freeze pressure | |
+
+**User's choice:** convention only. → **D-21**
+
+### Q4 — frozen content boundary
+
+| Option | Description | Selected |
+|---|---|---|
+| **SC1 + SC4's already-locked decisions** | `PRIVACY_UNIT`; replay-outside-N (`q=1`, `N=n_facts`, = D-07); δ=1e-5 + rejected recipe *(recommended)* | ✓ |
+| δ and `PRIVACY_UNIT` only | Smallest surface, but SC4 asks for the replay decision recorded too | |
+| Everything, including D-11's volume constant | Would settle D-11 under freeze pressure | |
+
+**User's choice:** option 1. **Notes:** "D-11's constante de VOLUME de replay, ainda aberta, fica de
+fora — vai para o driver ou para o futuro módulo irmão, decidida em sua própria rodada, não sob
+pressão de congelamento." → **D-23**
+
+---
+
+## D-11's replay constant
+
+### Q1 — unit and magnitude
+
+| Option | Description | Selected |
+|---|---|---|
+| **4 windows/fact = 1,024 tokens** | Integral, both factors public, 49.23% of the padded bin vs today's 50.00%, 49.90% at n=64 *(recommended)* | ✓ |
+| Raw 948 tokens/fact | Preserves 50% exactly, but 3.7017 windows (needs truncation in the reused path) and the value is `7581/8` — read off private data | |
+| 3 windows/fact = 768 | 42.11%; pushes on condition (c) that D-08 kept replay for | |
+
+**User's choice:** 4 windows/fact. **Notes:** "público em ambos os fatores (4 e `block_size=256`) …
+sem depender de comprimento de fato privado em nenhum ponto." → **D-24**
+
+### Q2 — where the replay pass sits
+
+Raised because D-24 **expired the premise** of one of D-10's rejections: replay-as-separate-
+micro-steps was rejected for making `grad_accum_steps` data-dependent, but `4 × n_facts` is public.
+
+| Option | Description | Selected |
+|---|---|---|
+| **Separate un-clipped pass, outside `grad_accum_steps`** | `grad_accum_steps = n_facts` stays literal; Phase 22's clipping seam has an obvious place to not apply *(recommended)* | ✓ |
+| Per-micro-step draw into a separate bucket | Smaller batches, but two accumulators and an ambiguous pairing | |
+| You decide — record only the invariant | Leave mechanics to research | |
+
+**User's choice:** separate pass. **Notes:** the 256-window pass at n=64 needs internal
+micro-batching on MPS — "detalhe de implementação para a Fase 22 resolver, não motivo para preferir a
+estrutura mais ambígua da opção 2." → **D-25**
+
+---
+
+## UNIT-03's measurement path
+
+| Option | Description | Selected |
+|---|---|---|
+| **Both paths, instrumented at the real seed and budget** | Observed per-fact distribution on the old path, observed count on the aligned path *(recommended)* | ✓ |
+| New path only; old path analytic | Would leave UNIT-01's indictment resting on an inferred figure | |
+| Old path only; new path proven structurally | D-05/D-06 already prove 1-per-record | |
+
+**User's choice:** both, instrumented. **Notes:** each row labelled with its exact bin composition
+(`replay-in-bin @1.0` / `facts-only (D-10)` / `fact-aligned (D-01, D-05)`), "fechando a ambiguidade
+que a formulação original de SC3 deixou ao predatar a decisão de D-10." → **D-26**
+
+---
+
+## Claude's Discretion
+
+- **The frozen module's exact filename.** Constrained by the discussion to match `mitigation_*.py`
+  and to be named for its subject rather than its phase, following `mitigation_gate.py`
+  (`test_phase20_prereg.py:59-60`). The suffix itself was not asked.
+- **Numbering repair in `21-CONTEXT.md`** — four canonical refs cited bare `D-33`/`D-23`/`D-21`/`D-24`
+  for **Phase 20** decisions, against the file's own rule. Harmless until session 3 created a Phase 21
+  D-21…D-24. Corrected in place with a note, not silently.
+
+## Deferred Ideas
+
+None new in session 3. Session 1's four deferrals stand unchanged.
+
+## Scope creep
+
+None raised. Every question stayed inside UNIT-01…UNIT-06.
+
+## Still open after this session
+
+**None.** D-01 … D-26 are locked and `21-CONTEXT.md` is COMPLETE. Next: `/gsd:plan-phase 21`.

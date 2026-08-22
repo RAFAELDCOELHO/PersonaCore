@@ -1,9 +1,10 @@
 # Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus - Context
 
-**Gathered:** 2026-08-22 · **Updated:** 2026-08-22 (session 2)
-**Status:** PARTIAL — shard geometry, the replay path, and the **n=64 corpus** are LOCKED
-(D-01 … D-18); three areas remain OPEN (see `<open_questions>`). Re-run
-`/gsd-discuss-phase 21` and choose "Update it" to close them.
+**Gathered:** 2026-08-22 · **Updated:** 2026-08-22 (session 3)
+**Status:** COMPLETE — D-01 … D-26. Every area session 2 left OPEN is now closed: D-11's replay
+constant (D-24, D-25), UNIT-03's measurement path (D-26), and UNIT-05's record form — the last
+resolved *structurally*, as a consequence of D-22/D-23, rather than chosen. Ready for
+`/gsd:plan-phase 21`.
 
 > **Numbering.** A bare `D-NN` is always **this phase's** decision. Phase 20's decisions are
 > always written `Phase 20 D-NN`. This matters: Phase 21 D-13/D-14/D-17 are different decisions
@@ -293,13 +294,170 @@ decision** and Phase 21 must not attempt to set it.
   (Also `tests/test_phase14_factset.py:102-103` caps `len(LOCKED_FACTS) <= 8` and
   `len(SOFT_TIER_FACTS) <= 3`, so filler could not have lived in either existing tier regardless.)
 
+### Where the pre-registered constants live — the pin, the ceiling, and the sibling
+
+- **D-19 — the constants live in a NEW `scripts/mitigation_*.py` module, and the NAME is NOT what
+  freezes it. The premise was measured before it was locked, and half of it was false.**
+  The stated position was that a `mitigation_*.py` module becomes permanently frozen the moment its
+  first artifact lands. Measured against `tests/test_phase20_prereg.py`:
+
+  | mechanism | what it actually covers | confers the freeze? |
+  |---|---|---|
+  | `_GATE_MODULES` glob (`:72`) | ONE content test — the import-graph subset scan (`:474`) — plus `_collapsed_glob_guard` (`:445`) and the `_prose.py` exclusion (`:606`) | **no** |
+  | `_MITIGATION_GATE_PATH` singular | `:740`, `:805`, `:928`, `:991` — constants count, retyped-baseline, verdict domain, keyword-only. **Do NOT extend to siblings.** | no |
+  | `PHASE20_PREREG_ARTIFACT` (`:91`) | the ancestry ordering test, via `prereg_artifact=` | **yes — this alone** |
+
+  **The freeze half of the premise is TRUE and worth restating precisely:** `prereg_commits` is
+  `git log -- <pin>` — **every** commit touching the pin (`:143`) — compared against `adds[-1]`, the
+  **earliest** add of each artifact (`:157`), which is what makes delete-and-re-add unable to launder
+  the ordering. Phase 20 D-24 is accurate.
+  **The false half is the load-bearing one:** the freeze comes from a hand-written explicit path
+  constant, not from the filename. So the "middle ground" — protected but not frozen — is not
+  something to invent; it is the repo's **default state** for any `mitigation_*.py` sibling, and the
+  glob's own comment (`:64-66`) says it exists precisely so a module "enters these scans the moment
+  it exists".
+
+- **D-20 — the frozen module IS armed now, against `results/phase21_*`, in the phase's FIRST plan.**
+  A second `_assert_ordering_holds(prereg_artifact=<the new module>, artifact_glob="results/phase21_*",
+  globs=V4_ARTIFACT_GLOBS)` lands before any `results/phase21_*` artifact exists — the 20-01
+  discipline, arm-then-write. From the first artifact onward the module is frozen irrevocably.
+  **A GAP FOUND WHILE MEASURING, recorded because Phase 20 D-33 does not say it:** adding
+  `results/phase21_*` to `V4_ARTIFACT_GLOBS` creates **no ancestry check by itself**. `globs` is used
+  only for the `assert artifact_glob in globs` consistency check (`:129`); the loop runs on
+  `artifact_glob` **singular**. The D-33 addition is a *declaration* — without a test calling
+  `_assert_ordering_holds` with that glob, nothing is enforced. Both halves are required.
+  **And the reflexivity note travels with it** (`:300-304`): `git merge-base --is-ancestor X X`
+  exits **0**, so a pin and an artifact in the SAME commit PASS. D-08's "strictly after" is a
+  discipline tighter than the mechanism enforces — inherited deliberately, not assumed.
+
+- **D-21 — constants Phase 22+ has not yet discovered land in an UNFROZEN `mitigation_*.py` sibling,
+  unpinned until its own phase arms it. Phase 21 records the convention and does NOT create the
+  file.** An empty module is a placeholder that joins the import-graph scan while being green over
+  nothing; the glob captures the sibling automatically the moment it genuinely comes to exist, so
+  deferring costs nothing. **This is what buys maximum protection where the decision is closed and
+  real room to grow where it is not** — the reason the split was chosen over freezing everything or
+  freezing nothing.
+
+- **D-22 — joining the glob imposes a HARD IMPORT CEILING, and that is why the artifact writer lives
+  OUTSIDE it.** Measured: `allowed = {"pathlib", "sys", "erasure_gate"}` (`:522`), asserted as a
+  **subset** over `imported` accumulated across **all** `_GATE_MODULES` (`:498`); and
+  `from_erasure_gate` is asserted with **exact equality** to five names (`:538`) — `MARGIN_K`,
+  `V20_EWC_RETENTION_PPL`, `V20_MASKED_DIALOGUE_VAL_PPL`, `rule_of_three`, `wilson_upper_bound`.
+  Because that is a **set**, a new sibling may import **from among** those five (a no-op against the
+  equality); it may **not** introduce a sixth.
+  **The consequence:** `json` is outside the allow-set, so **no `mitigation_*` module can serialize an
+  artifact**. The frozen module therefore holds constants + arithmetic + `_prove` guards and does
+  **zero I/O**; a separate driver **outside** the glob — `scripts/phase21_unit_record.py` or
+  equivalent — imports the constants and writes the real `results/phase21_*` artifacts. This mirrors
+  the repo's own gate/budget split: the rule lives in one place, its emission in another. It also
+  keeps the frozen module's surface minimal, which is precisely what makes freezing it cheap.
+  *(Rejected: widening the allow-set to admit `json`. Mechanically legal — the test file is not
+  itself pinned — but it loosens a subset assertion whose stated purpose (`:525-527`) is "catches the
+  one nobody anticipated", and the first thing it would ever have caught would be us.)*
+
+- **D-23 — the frozen module contains SC1 + SC4's already-settled decisions, and nothing else.**
+  Freezing means content-complete at arm time, so the boundary is the decision that cannot be
+  revisited:
+  1. `PRIVACY_UNIT = "one taught fact"` with its arithmetic (SC1 / UNIT-01);
+  2. the replay-outside-N decision — `q = 1`, `N = n_facts` — with its ε consequence
+     (SC4 / UNIT-04, already locked as **D-07**);
+  3. `δ = 1e-5` with the rejected `1/N^1.1` recipe's self-contradiction (SC4 / UNIT-05).
+  **All three are genuinely closed today.** D-11's replay VOLUME constant is **explicitly excluded**
+  and settled in its own round (D-24) rather than under freeze pressure.
+  **δ's arithmetic, verified rather than quoted:** `1/N^1.1` at N=8 is **0.101532**, so `δ·N =
+  0.812252` against its own `δ·N < 0.01` assertion — failing by **81.2×**. At N=64 it is 0.010309,
+  `δ·N = 0.659754`, still failing by **66.0×** — so the recipe is not merely wrong at the small
+  capacity, it is wrong at **both** capacities this milestone runs. The pinned literal passes at both:
+  `δ·N` = 8.00e-05 at N=8 (by 125×) and 6.40e-04 at N=64 (by 16×). Needs **no import** — `N ** -1.1`
+  is an operator — which is what makes it fit inside D-22's ceiling.
+
+### D-11's replay constant — the value, the unit, and where the pass sits
+
+- **D-24 — the replay constant is `4 windows per fact = 1,024 tokens`, window-quantized, never a raw
+  token count.** Both factors are public (`4`, and `block_size = 256`), so the volume depends on
+  nothing private — which is the whole point of D-11. Measured against D-01's geometry:
+
+  | constant | tok/fact | integral windows? | share of the padded bin | vs today's 50.00% |
+  |---|---|---|---|---|
+  | 3 windows | 768 | yes | 42.11% | −7.9 pts |
+  | **4 windows** | **1,024** | **yes** | **49.23%** | **−0.77 pts** |
+  | 5 windows | 1,280 | yes | 54.79% | +4.8 pts |
+  | raw ≈948 | 947.625 | **NO — 3.7017** | 50.00% (vs *raw* teaching) | 0 |
+
+  **Two findings the table does not show, and both killed the raw option.** *First:*
+  `get_batch_memmap_masked` draws whole `block_size` windows only (`data.py:117-124`), so a raw-token
+  constant needs a truncation step **inside the very path D-10 chose because it was already proven** —
+  paying new code in the one place D-10 spent a decision to avoid it. *Second, and worse:*
+  **947.625 is `7581 / 8`** — derived from the private token lengths. Choosing the constant to match
+  today's corpus re-introduces D-11's own side channel one level up, **at design time**. A constant
+  that is "public" because it is published, but whose value was read off private data, is exactly the
+  property-not-name defect this phase already named as its own class.
+  **The ratio also holds for free across capacities:** at n=64 the share is **49.90%**, because both
+  sides scale with `n_facts`. Nothing re-tunes.
+
+- **D-25 — replay is drawn and accumulated in its OWN pass per lot, structurally OUTSIDE the
+  per-record accumulation loop, so `grad_accum_steps = n_facts` stays LITERALLY true.**
+  Phase 22's clipping seam then has an obvious place to *not* apply: replay never enters the clipped
+  loop, so the public term stays provably independent of any private record.
+  **This reopened a question D-10 had closed, and the reopening is the record's point.** D-10 rejected
+  "replay windows as N separate un-clipped micro-steps" **because it made `grad_accum_steps`
+  data-dependent** — but under D-24 the replay window count is `4 × n_facts`, **fully public**, so
+  that rejection's premise is now false. The option space genuinely reopened; the separate-pass shape
+  was chosen on its own merits rather than inherited from a reason that had expired.
+  **The cost is named, not hidden:** at n=64 the pass is `4 × 64 = 256` windows per lot, so it needs
+  its own internal micro-batching on MPS. That is a Phase-22 implementation detail and explicitly
+  **not** a reason to prefer the more ambiguous per-micro-step pairing, which would need two gradient
+  accumulators in `train()` and would invite a future reader to think replay is part of the record.
+
+### UNIT-03 — what is measured, and on which path
+
+- **D-26 — BOTH paths are measured on an INSTRUMENTED loader at the real seed and budget
+  (`SEED = 1337`, `MAX_STEPS = 200`, `BATCH_SIZE = 8`), and each row is labelled with its exact bin
+  composition.** The old random-window path records the **observed per-fact distribution** —
+  min/max/mean/spread, not merely an expectation — and the aligned path records an **observed** count,
+  so "1 by construction" is *verified* rather than assumed. Both rows land in `results/phase21_*`.
+
+  Analytic expectations, computed here and stated **as analytic** precisely because they are the kind
+  of number UNIT-03 refuses:
+
+  | path | bin | E[touches per fact] over 1,600 draws |
+  |---|---|---|
+  | replay-in-bin, today's ratio 1.0 | 15,162 tok | 129.2 |
+  | facts-only bin (D-10) | 7,581 tok | **262.9** |
+  | fact-aligned (D-01 / D-05) | 33 windows | 1 per step, deterministic, `q = 1` |
+
+  **The finding that sharpens the phase's own case: D-10 roughly DOUBLES the old path's multiplicity**
+  (129.2 → 262.9), because the same 1,600 draws now land on half as much data. Removing replay from
+  the bin improved the privacy *accounting* and made the *unaligned* multiplicity worse — so the two
+  decisions are not independent, and UNIT-01's indictment of the old loader gets stronger, not weaker,
+  once D-10 is in force.
+  **This also settles a reading SC3 could not have anticipated.** SC3 says the multiplicity is measured
+  "after `build_bins` packing at the chosen `replay_ratio`" — phrasing that **predates D-10**, which
+  moved replay out of the teaching bin entirely. Labelling each row with its bin composition
+  (`replay-in-bin @1.0` / `facts-only (D-10)` / `fact-aligned (D-01, D-05)`) closes that ambiguity in
+  the artifact rather than leaving a planner to guess which bin SC3 meant.
+
 </decisions>
 
 <open_questions>
-## OPEN — not yet discussed, and NOT Claude's discretion
+## CLOSED — session 3. Nothing here is left for a planner to invent.
 
-These were presented and deferred by choice of discussion order, not resolved. A planner must not
-invent answers to them; re-run `/gsd-discuss-phase 21` → "Update it".
+**All three items below were OPEN at the end of session 2 and are now resolved.** The list is kept
+rather than deleted so the resolution is traceable to the question it answered.
+
+| was open | closed by | how |
+|---|---|---|
+| 1. D-11's replay constant — the value, not the property | **D-24**, **D-25** | 4 windows/fact = 1,024 tokens; separate un-clipped pass per lot |
+| 2. What UNIT-03 measures, and on which path | **D-26** | both paths, instrumented at `SEED=1337` / 200 steps / batch 8, each row labelled with its bin composition |
+| 3. UNIT-05's δ record form | **D-22 + D-23** | resolved *structurally*: δ is a frozen in-module constant AND reaches a driver-written artifact — the "both" branch, arrived at rather than chosen |
+
+**One correction to item 1's own text, recorded so it is not inherited wrong.** Session 2 wrote
+*"at `grad_accum_steps = 64` the replay draw is per-step, so the constant sets how much public data
+rides in every lot."* **D-25 makes the first clause false**: replay is drawn in its own pass per
+**lot**, structurally outside the per-record loop, precisely so `grad_accum_steps = n_facts` stays
+literally true. The second clause survives — the constant does set the public volume per lot.
+
+The original text of the three questions follows, unedited, as the record of what was asked:
 
 1. **D-11's replay CONSTANT — the value, not the property.** *(Not in the original open list; found
    while scouting in session 2 and recorded here so it is not lost.)* D-11 locks replay volume to
@@ -391,13 +549,51 @@ invent answers to them; re-run `/gsd-discuss-phase 21` → "Update it".
   `MAX_STEPS = 200`, `WARMUP_STEPS = 20`.
 
 ### The ordering mechanism Phase 21 must extend
+
+> **Numbering corrected in session 3.** The four references below cited bare `D-33` / `D-23` /
+> `D-21` / `D-24` for **Phase 20** decisions, against this file's own rule that a bare `D-NN` means
+> *this* phase. Harmless until session 3, which created a Phase 21 D-21…D-24. Now written in full.
+
 - `tests/test_phase20_prereg.py:102` — `V4_ARTIFACT_GLOBS = ("results/phase20_*",)`. **Phase 21
-  adds `results/phase21_*` here** (D-33), proven RED-then-GREEN per D-22.
+  adds `results/phase21_*` here** (Phase 20 D-33), proven RED-then-GREEN per Phase 20 D-22.
+  **Necessary but NOT sufficient — see D-20.**
 - `tests/test_phase20_prereg.py:72` — `_GATE_MODULES` glob over `scripts/mitigation_*.py`; `:638`
-  — the `_prose.py`-is-excluded assertion, i.e. the leading-underscore mechanism (D-23).
-- `tests/test_phase16_prereg.py:322-403` — the **Phase 18 shape**, the one to copy (D-21); see
-  `:396-398` for the reason in its own words.
-- `scripts/_addendum.py` — the only sanctioned correction path (D-24).
+  — the `_prose.py`-is-excluded assertion, i.e. the leading-underscore mechanism (Phase 20 D-23).
+- `tests/test_phase16_prereg.py:322-403` — the **Phase 18 shape**, the one to copy (Phase 20 D-21);
+  see `:396-398` for the reason in its own words.
+- `scripts/_addendum.py` — the only sanctioned correction path (Phase 20 D-24).
+
+### The ancestry mechanism, read line-by-line in session 3 — D-19 … D-23's evidence
+
+**Read these before writing the pin or its test. The distinction they encode — that the glob and the
+freeze are two different mechanisms — is what D-19 corrects.**
+
+- `tests/test_phase20_prereg.py:91` — `PHASE20_PREREG_ARTIFACT = "scripts/mitigation_gate.py"`, a
+  hand-written explicit path. **This constant, and nothing else, is what freezes a module.**
+- `tests/test_phase20_prereg.py:121-183` — `_assert_ordering_holds`, keyword-only and parameterized
+  on `root`. **Phase 21 calls this same function with its own `prereg_artifact`** (D-20); a lookalike
+  copy would prove something about a different function.
+- `:143` — `prereg_commits = git log --format=%H -- <pin>`: **EVERY** commit touching the pin, so a
+  later edit is caught, not merely a wrong first commit.
+- `:157` — `first_add = adds[-1]`, the **earliest** add. This is what makes delete-and-re-add unable
+  to launder the ordering, and therefore what makes the freeze irrevocable.
+- `:129` — `assert artifact_glob in globs`. **The ONLY use of `V4_ARTIFACT_GLOBS` inside the ordering
+  body.** The loop runs on `artifact_glob` *singular* — which is why the Phase 20 D-33 glob addition
+  enforces nothing on its own (D-20).
+- `:166-183` — the product assertion and the `bool(checked) == bool(tracked_artifacts)` equivalence
+  that stops a vacuous guard surviving the artifacts' arrival.
+- `:281-330` — `test_phase20_glob_sees_the_phase20_prefix_red_then_green`, the throwaway-repo fixture
+  shape Phase 21 copies for its own prefix; `:300-304` — **the reflexivity note**: `git merge-base
+  --is-ancestor X X` exits 0, so pin-and-artifact in the same commit PASSES, and "strictly after" is
+  a discipline tighter than the mechanism.
+- `:64-66` — the glob exists so a sibling "enters these scans the moment it exists". **D-21's
+  licence to not create the sibling file.**
+- `:474-579` — the import-graph scan, the **one** content test that iterates `_GATE_MODULES`;
+  `:498` — `imported` accumulates across **all** modules in the glob; `:522` —
+  `allowed = {"pathlib", "sys", "erasure_gate"}`; `:538` — `from_erasure_gate` asserted by **exact
+  equality** to five names. **D-22's ceiling, and why the artifact writer lives outside the glob.**
+- `:740`, `:805`, `:928`, `:991` — the content scans that read `_MITIGATION_GATE_PATH` **singular**
+  and therefore do **not** extend to a sibling. Half of D-19's correction.
 
 ### Requirements and roadmap
 - `.planning/REQUIREMENTS.md:89-110` — UNIT-01 … UNIT-06 with the dependency-chain rationale.
@@ -459,7 +655,21 @@ invent answers to them; re-run `/gsd-discuss-phase 21` → "Update it".
 - `scripts/teach_persona.py:405-421` — `arm_spec` gains a **new arm or an `n_facts` parameter** so
   the n=8 arm draws `LOCKED_FACTS` only and the n=64 arm draws 8 + 56 filler (D-14). **In scope for
   this phase**, not deferred to Phase 22.
-- `tests/test_phase20_prereg.py` — `V4_ARTIFACT_GLOBS` gains `results/phase21_*` (Phase 20 D-33).
+- `scripts/mitigation_<unit>.py` — **NEW, FROZEN from the first `results/phase21_*` artifact**
+  (D-19, D-20, D-23). Holds `PRIVACY_UNIT`, the `q=1` / `N=n_facts` replay-outside-N decision, and
+  `δ = 1e-5` with the rejected `1/N^1.1` arithmetic — plus `_prove` guards. **Imports only
+  `pathlib`/`sys` and at most the five already-accumulated `erasure_gate` names; zero `json`, zero
+  I/O** (D-22). Exact filename is Claude's discretion, constrained to match `mitigation_*.py` and to
+  be named for its SUBJECT rather than its phase, as `mitigation_gate.py` is (`test_phase20_prereg.py:59-60`).
+- `scripts/phase21_unit_record.py` — **NEW driver, deliberately OUTSIDE the `mitigation_*.py` glob**
+  (D-22). Imports the frozen constants and writes the `results/phase21_*` artifacts, including
+  D-26's two labelled multiplicity rows. This is where `json` lives.
+- **The unfrozen `mitigation_*.py` sibling — NOT created in Phase 21** (D-21). Recorded as a
+  convention: Phase 22+ constants land there, unpinned until that phase arms it.
+- `tests/test_phase20_prereg.py` — **two additive changes, and BOTH are required** (D-20):
+  `V4_ARTIFACT_GLOBS` gains `results/phase21_*` (Phase 20 D-33), **and** a new
+  `_assert_ordering_holds(prereg_artifact=<the new module>, artifact_glob="results/phase21_*")` test
+  — the glob addition alone enforces nothing (`:129`).
 - `results/phase21_*` — **new**; the first v4.0 artifacts after Phase 20's. They are what make the
   Phase 20 D-33 glob addition load-bearing.
 - **UNTOUCHED, and each is a test that turns red if it isn't:** `scripts/phase18_extraction.py`
@@ -505,6 +715,36 @@ invent answers to them; re-run `/gsd-discuss-phase 21` → "Update it".
   lesson is *a guard that refuses a NAME where the harm is a PROPERTY*. D-11 is its sibling: a
   quantity **declared** public whose **value** is a function of private data. Whatever guards the
   aligned path should refuse the property, not the name.
+- **Session 3 ran the premise-check a FOURTH time, and this time the premise was HALF FALSE — which
+  is the first time in this phase that measuring changed the mechanism rather than only the reason.**
+  The stated position was "a `mitigation_*.py` module becomes permanently frozen once its first
+  artifact lands." The freeze half is true and irrevocable (`:143` reads every commit touching the
+  pin, `:157` compares against the earliest add). **The naming half is false**: the freeze comes from
+  `PHASE20_PREREG_ARTIFACT` (`:91`), an explicit hand-written path, not from the filename. The
+  requested "middle ground — protected but not irrevocably frozen" therefore did not need inventing;
+  **it is the repo's default state**, and the glob's own comment (`:64-66`) says so. Had the premise
+  been accepted, the phase would have either over-frozen a module that still needs to grow or
+  abandoned the glob's protection entirely — both on a mechanism that does not exist.
+- **Two findings in session 3 appear in no source document.** *(a)* Adding `results/phase21_*` to
+  `V4_ARTIFACT_GLOBS` **enforces nothing by itself** — `globs` is used only for the `artifact_glob in
+  globs` consistency check (`:129`) and the loop runs on the singular argument. Phase 20 D-33 names
+  the glob addition as the obligation and stops there, so a phase doing exactly what D-33 says would
+  ship an unenforced declaration. *(b)* The `mitigation_*.py` glob carries a **hard import ceiling**
+  of `{pathlib, sys, erasure_gate}` accumulated across every module in it (`:498`, `:522`), which
+  makes `json` unreachable and therefore forces the rule/emission split of D-22. Neither is stated
+  in any requirement; both came from reading the test.
+- **A rejection's premise expired, and noticing that was worth more than the decision it changed.**
+  D-10 rejected replay-as-separate-micro-steps *because* it made `grad_accum_steps` data-dependent.
+  D-24's window-quantized constant makes the count `4 × n_facts` — fully public — so the premise is
+  now false and the option space genuinely reopened. D-25 then chose the separate pass **on its own
+  merits** rather than inheriting a conclusion from a reason that had expired. **A locked decision's
+  REASON can decay while the decision still looks sound; re-reading the reason when a neighbouring
+  constant changes is what catches it.**
+- **D-10 and UNIT-03 turned out not to be independent, and the interaction runs the "wrong" way.**
+  Moving replay out of the teaching bin (D-10) roughly **doubles** the old path's per-fact
+  multiplicity, 129.2 → 262.9, because the same 1,600 draws land on half the data. A decision taken
+  purely for honest accounting made the unaligned number worse — which strengthens UNIT-01's
+  indictment rather than weakening it, but only because someone computed both numbers instead of one.
 
 </specifics>
 
@@ -529,5 +769,7 @@ invent answers to them; re-run `/gsd-discuss-phase 21` → "Update it".
 ---
 
 *Phase: 21-The Privacy Unit, the DP Data Path, and the n=64 Corpus*
-*Context gathered: 2026-08-22 · updated 2026-08-22 (session 2) — PARTIAL, see `<open_questions>`*
-*Locked: D-01 … D-18. Open: 3 (D-11's replay constant, UNIT-03's measurement path, UNIT-05's record form).*
+*Context gathered: 2026-08-22 · updated 2026-08-22 (session 3) — **COMPLETE***
+*Locked: D-01 … D-26. Open: 0.*
+*Session 3 closed the pin/ceiling/sibling question (D-19 … D-23), D-11's replay constant
+(D-24, D-25), and UNIT-03's measurement path (D-26); UNIT-05's record form fell out structurally.*
