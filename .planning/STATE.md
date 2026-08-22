@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: ready_to_plan
-stopped_at: Phase 20 complete (17/17) — ready to discuss Phase 21
-last_updated: 2026-08-21T21:34:56.009Z
-last_activity: 2026-08-21
+status: planning
+stopped_at: Phase 21 context PARTIAL — shard geometry + replay path locked; n=64 corpus, UNIT-03 multiplicity, UNIT-05 delta record still OPEN
+last_updated: 2026-08-22T10:25:04.351Z
+last_activity: 2026-08-22
 progress:
   total_phases: 9
   completed_phases: 1
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 17
+  completed_plans: 17
+  percent: 11
 ---
 
 # Project State
@@ -517,9 +517,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-21T15:07:00.000Z
-Stopped at: Completed 20-08-PLAN.md — the correction MECHANISM exists in unpinned code (scripts/phase20_gate_coverage.py); the artifact (20-10), the tripwire (20-11) and the discharge (20-12) are still ahead
-Resume file: None
+Last session: 2026-08-22T10:25:04.343Z
+Stopped at: Phase 21 context PARTIAL — shard geometry + replay path locked; n=64 corpus, UNIT-03 multiplicity, UNIT-05 delta record still OPEN
+Resume file: .planning/phases/21-the-privacy-unit-the-dp-data-path-and-the-n-64-corpus/21-CONTEXT.md
 
 ## Operator Next Steps
 
