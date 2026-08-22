@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: planning
-stopped_at: Phase 21 context PARTIAL — n=64 corpus now LOCKED (D-12..D-18); D-11 replay constant, UNIT-03 multiplicity, UNIT-05 delta record still OPEN
-last_updated: 2026-08-22T11:08:27.658Z
+stopped_at: Phase 21 context COMPLETE — D-01..D-26, 0 open questions; ready to plan
+last_updated: 2026-08-22T12:00:31.853Z
 last_activity: 2026-08-22
 progress:
   total_phases: 9
@@ -517,8 +517,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-22T11:08:27.650Z
-Stopped at: Phase 21 context PARTIAL — n=64 corpus now LOCKED (D-12..D-18); D-11 replay constant, UNIT-03 multiplicity, UNIT-05 delta record still OPEN
+Last session: 2026-08-22T12:00:31.845Z
+Stopped at: Phase 21 context COMPLETE — D-01..D-26, 0 open questions; ready to plan
 Resume file: .planning/phases/21-the-privacy-unit-the-dp-data-path-and-the-n-64-corpus/21-CONTEXT.md
 
 ## Operator Next Steps
