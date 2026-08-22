@@ -1,12 +1,13 @@
 # PersonaCore
 
-A conversational AI where memory lives in the model weights — no databases, no vector
-stores, no external files: privacy by design. **Milestone 2 demonstrates that claim rather
-than promising it:** a from-scratch LoRA adapter is taught personal facts in conversation,
-and a *fresh process with an empty prompt* recalls them from the weights alone — while a
-from-scratch EWC penalty keeps the base model from being destroyed in the process.
-**Milestone 1** is the foundation this runs on, not a superseded draft: a correct, tested
-13.9M-parameter GPT written by hand and trained entirely on-device.
+PersonaCore is a from-scratch, on-device research system for studying parametric
+personalization. It first demonstrated that synthetic profile values could be recalled from
+LoRA weights without prompt-side facts. A subsequent adversarial audit found that 88.5% of
+held-out questions were extractable under the strongest of four tested black-box attack
+families, against a 0% baseline with no adapter present — and that selective erasure of a
+single fact destroyed 77.6% of the model's dialogue adaptation while failing to protect any
+of seven non-target facts. The project therefore studies both the capabilities and the
+privacy costs of weight-based memory.
 
 ![Gradio chat demo streaming a TinyStories completion token-by-token on a laptop CPU](assets/demo.gif)
 
