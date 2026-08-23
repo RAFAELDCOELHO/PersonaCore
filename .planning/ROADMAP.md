@@ -344,8 +344,8 @@ unit is not a number that can be corrected by re-running
 Plans:
 **Wave 1**
 
-- [ ] 21-01-PLAN.md — pin `scripts/mitigation_unit.py` (SC1 + SC4) and ARM the `results/phase21_*` ancestry guard, both halves (D-19, D-20, D-22, D-23)
-- [ ] 21-02-PLAN.md — capture both v2.0 golden fixtures from a git-clean PRE-EDIT tree, with a mechanical dirty-tree refusal
+- [x] 21-01-PLAN.md — pin `scripts/mitigation_unit.py` (SC1 + SC4) and ARM the `results/phase21_*` ancestry guard, both halves (D-19, D-20, D-22, D-23)
+- [x] 21-02-PLAN.md — capture both v2.0 golden fixtures from a git-clean PRE-EDIT tree, with a mechanical dirty-tree refusal
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -600,7 +600,7 @@ capacities — with every number in prose generated from a committed record rath
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
-| 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 0/TBD | Not started | - |
+| 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 2/11 | In Progress | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
