@@ -590,14 +590,23 @@ def _measure_capacity(tok, arm, workdir, *, with_replay_row):
     return out
 
 
-def _measure_all(workdir):
-    """Both capacities, one tokenizer load, one seeding. Returns ``{arm: measurement}``."""
+def _measure_all(workdir, *, with_aligned_rows=False):
+    """Both capacities, one tokenizer load, one seeding. Returns ``{arm: measurement}``.
+
+    ``with_aligned_rows`` runs ``count_aligned`` while the bins still exist. ``workdir`` is a
+    temporary directory in both emitters' default path, so a caller that deferred the count until
+    after the return would be pointing the loader at deleted files.
+    """
     seed_everything(SEED)
     tok = from_json(tp.TOKENIZER_PATH)  # FROZEN production artifact — never retrain
-    return {
+    measurements = {
         arm: _measure_capacity(tok, arm, workdir, with_replay_row=(arm == "dp_n8"))
         for arm in CAPACITY_ARMS
     }
+    if with_aligned_rows:
+        for measurement in measurements.values():
+            measurement["aligned_row"] = _aligned_row(measurement)
+    return measurements
 
 
 def _provenance(**extra):
@@ -809,5 +818,405 @@ def emit_privacy_unit(path=None, workdir=None):
             document = privacy_unit_document(_measure_all(tmp))
     else:
         document = privacy_unit_document(_measure_all(workdir))
+    _write(path, document)
+    return document
+
+
+# =================================================================================================
+# ARTIFACT 2 — results/phase21_multiplicity.json (SC3 / UNIT-03, D-26)
+# =================================================================================================
+
+
+def _analytic_expectations(*, total_draws, mean_fact_length, bin_tokens):
+    """BOTH rules' closed forms, each NAMED, computed from the observed geometry at write time.
+
+    UNIT-03 refuses an analytic number AS the measurement, so these travel in a separately named
+    field BESIDE the measured value and never in place of it (T-21-51). Both rules appear because
+    the frozen pin's ``262.94`` is the OVERLAP rule's figure while every row here is counted under
+    ``first-token-owns-draw`` — publishing one without the other is exactly how a reader ends up
+    comparing two quantities that answer different questions.
+    """
+    support = bin_tokens - BLOCK_SIZE - 1
+    return {
+        "labelled": "ANALYTIC — an expectation over the draw distribution, NOT a measurement",
+        "draw_start_offsets": support,
+        "draw_start_offsets_formula": "bin_tokens - block_size - 1",
+        "mean_fact_length": mean_fact_length,
+        "first_token_rule": total_draws * mean_fact_length / support,
+        "overlap_rule": total_draws * (mean_fact_length + BLOCK_SIZE) / support,
+        "rule_this_row_was_counted_under": ATTRIBUTION_RULE,
+        "which_one_matches_this_row": "first_token_rule",
+        "gap_between_the_two_rules": total_draws * BLOCK_SIZE / support,
+        "note": (
+            "`first_token_rule` is the closed form for THIS row's attribution rule. "
+            "`overlap_rule` is the REJECTED rule's closed form and is the quantity "
+            "scripts/mitigation_unit.py's PRIVACY_UNIT_ARITHMETIC computes. They differ by "
+            "total_draws * block_size / draw_start_offsets per fact. Neither is wrong; a row "
+            "that does not name its rule is unreadable."
+        ),
+    }
+
+
+def _split_replay_sentinel(row):
+    """Move the replay sentinel's draws OUT of the per-fact summary, keeping BOTH denominators.
+
+    On the ``replay-in-bin @1.0`` composition a draw whose first token is a replay token is owned
+    by NO privacy record. Two wrong answers were available and both are refused: crediting those
+    draws to a fact inflates that fact, and dropping them breaks the conservation law silently.
+    The sentinel is therefore removed from ``counts``, ``min``/``max``/``mean``/``spread`` are
+    recomputed over the facts ALONE, and the removed total is published as ``replay_draws`` with
+    the exact conservation law it satisfies. That is the number the row is really about: it is how
+    much of the budget bought no teaching at all.
+    """
+    counts = {key: value for key, value in row["counts"].items() if key != REPLAY_FACT_ID}
+    replay_draws = row["counts"].get(REPLAY_FACT_ID, 0)
+    row = dict(row)
+    row["counts"] = counts
+    row["n_facts"] = len(counts)
+    row.update(_summarise(counts))
+    row["replay_fact_id"] = REPLAY_FACT_ID
+    row["replay_draws"] = replay_draws
+    row["draws_landing_on_a_fact"] = sum(counts.values())
+    row["conservation"] = "draws_landing_on_a_fact + replay_draws == total_draws"
+    if row["draws_landing_on_a_fact"] + replay_draws != row["total_draws"]:
+        raise ValueError(
+            f"{row['draws_landing_on_a_fact']} fact draws + {replay_draws} replay draws != "
+            f"{row['total_draws']} total draws — a draw was lost or double-counted"
+        )
+    return row
+
+
+def _unaligned_row(corpus, measurement, *, bin_composition, extra=None):
+    """One ``count_unaligned`` row at the D-26 budget, with its analytic expectation attached."""
+    row = count_unaligned(
+        corpus["bin"],
+        corpus["mask"],
+        corpus["fact"],
+        steps=MAX_STEPS,
+        batch_size=BATCH_SIZE,
+        seed=SEED,
+        block_size=BLOCK_SIZE,
+        bin_composition=bin_composition,
+    )
+    if extra == "replay":
+        row = _split_replay_sentinel(row)
+    row["analytic_expectation"] = _analytic_expectations(
+        total_draws=row["total_draws"],
+        mean_fact_length=measurement["teaching_tokens"] / measurement["n_facts"],
+        bin_tokens=row["bin_tokens"],
+    )
+    row["conservation_pinned_mean"] = row["total_draws"] / measurement["n_facts"]
+    return row
+
+
+def _aligned_row(measurement):
+    """The fact-aligned row: ONE FULL LOT, so ``steps == n_facts`` and every count must be 1.
+
+    One lot is the unit of the aligned accounting — ``grad_accum_steps = n_facts`` (SC2) — so the
+    per-fact multiplicity this row reports is exactly what one privacy record contributes to one
+    optimiser step. Counting a longer run would multiply every entry by the number of lots and say
+    nothing new: the aligned draw is DETERMINISTIC, so at any multiple of ``n_facts`` the counts
+    are exactly ``steps / n_facts`` with ``spread == 0``.
+
+    ``count_aligned`` runs at its ``strict=True`` DEFAULT. A mis-built bin must abort rather than
+    quietly produce a published row (T-21-63).
+    """
+    corpus = measurement["aligned"]
+    n_facts = measurement["n_facts"]
+    row = count_aligned(
+        corpus["bin"],
+        corpus["mask"],
+        corpus["fact"],
+        steps=n_facts,
+        n_facts=n_facts,
+        block_size=BLOCK_SIZE,
+        bin_composition=BIN_COMPOSITION_LABELS[2],
+    )
+    row["lot_length_steps"] = n_facts
+    row["analytic_expectation"] = {
+        "labelled": "ANALYTIC — exactly 1 per micro-step, DETERMINISTIC, by construction",
+        "first_token_rule": 1.0,
+        "overlap_rule": 1.0,
+        "rule_this_row_was_counted_under": ATTRIBUTION_RULE,
+        "which_one_matches_this_row": "both",
+        "note": (
+            "The two attribution rules COINCIDE on an aligned bin: a block_size-aligned window "
+            "overlaps exactly one fact, which SC2's input-space purity proof establishes at build "
+            "time. The measured value is still reported from a counter proven able to report "
+            "otherwise — plan 21-10 observed per_step_distinct_facts == 2 on a rolled bin."
+        ),
+    }
+    return row
+
+
+def _corpus_geometry(measurement):
+    """The OBSERVED ragged geometry for one capacity — this is what discharges A3.
+
+    ``21-RESEARCH.md`` assumption A3 estimated the n=64 corpus at ~264 windows from "56 filler
+    facts at ~4 windows each", and marked it ``[ASSUMED — depends on values not yet minted]``. It
+    is not adjusted to fit here and the corpus is not adjusted to hit it: the observed total is
+    published and the divergence is stated.
+
+    ``grad_accum_steps`` is ASSERTED equal to the OBSERVED micro-step count of one full lot, not
+    declared equal to ``n_facts``. SC2's claim is that one micro-step is one privacy record; a
+    declared value would restate the claim instead of checking it.
+    """
+    stats = measurement["aligned"]["stats"]
+    aligned_row = measurement["aligned_row"]
+    n_facts = measurement["n_facts"]
+
+    observed_records = [fact for fact, count in aligned_row["counts"].items() if count > 0]
+    micro_steps = sum(aligned_row["counts"].values())
+    if not (len(observed_records) == micro_steps == n_facts):
+        raise ValueError(
+            f"one lot produced {micro_steps} micro-step(s) over {len(observed_records)} distinct "
+            f"privacy record(s) against n_facts = {n_facts} — grad_accum_steps = n_facts is not "
+            "true of this bin, so SC2 would be a declaration rather than a measurement"
+        )
+
+    windows_per_fact = list(stats["windows_per_fact"])
+    total_tokens = int(stats["tokens"])
+    return {
+        "n_facts": n_facts,
+        "arm": measurement["arm"],
+        "episodes": measurement["episodes"],
+        "windows_per_fact": windows_per_fact,
+        "total_windows": int(stats["n_windows"]),
+        "total_tokens": total_tokens,
+        "total_tokens_formula": "total_windows * block_size + 1 (the label-shift tail)",
+        "teaching_tokens": measurement["teaching_tokens"],
+        "pad_tokens": int(stats["pad_tokens"]),
+        "pad_fraction": stats["pad_tokens"] / total_tokens,
+        "pad_fraction_denominator": "total_tokens (padded, including the label-shift tail)",
+        "per_fact_token_lengths": measurement["per_fact_lengths"],
+        "per_fact_token_min": min(measurement["per_fact_lengths"]),
+        "per_fact_token_max": max(measurement["per_fact_lengths"]),
+        "grad_accum_steps": micro_steps,
+        "grad_accum_steps_source": (
+            "OBSERVED: the number of micro-steps one full lot of get_batch_fact_aligned produced, "
+            "asserted equal to len(distinct fact indices the loader returned) and to n_facts"
+        ),
+        "replay_windows_per_lot": tp.replay_window_budget(n_facts) // BLOCK_SIZE,
+        "replay_tokens_per_lot": tp.replay_window_budget(n_facts),
+    }
+
+
+def multiplicity_document(measurements):
+    """SC3's labelled measured rows, the observed geometry at both capacities, and the findings."""
+    n8, n64 = measurements["dp_n8"], measurements["dp_n64"]
+
+    rows = [
+        _unaligned_row(n8["replay"], n8, bin_composition=BIN_COMPOSITION_LABELS[0], extra="replay"),
+        _unaligned_row(n8["facts_only"], n8, bin_composition=BIN_COMPOSITION_LABELS[1]),
+        n8["aligned_row"],
+        _unaligned_row(n64["facts_only"], n64, bin_composition=BIN_COMPOSITION_LABELS[1]),
+        n64["aligned_row"],
+    ]
+
+    geometry = [_corpus_geometry(n8), _corpus_geometry(n64)]
+    a3 = _discharge_a3(geometry)
+
+    replay_row, facts_row = rows[0], rows[1]
+    return {
+        "budget": {
+            "seed": SEED,
+            "max_steps": MAX_STEPS,
+            "batch_size": BATCH_SIZE,
+            "block_size": BLOCK_SIZE,
+            "total_draws_unaligned": MAX_STEPS * BATCH_SIZE,
+            "attribution_rule": ATTRIBUTION_RULE,
+            "attribution_rule_note": (
+                "Under first-token-owns-draw the conservation law is an EXACT EQUALITY, so the "
+                "per-fact MEAN is pinned at total_draws / n_facts by arithmetic and carries no "
+                "information about the corpus. Everything this measurement says lives in "
+                "min / max / spread — which is why D-26 asks for those and not an expectation."
+            ),
+            "device": _DEVICE,
+        },
+        "rows": rows,
+        "corpus_geometry": geometry,
+        "a3_discharge": a3,
+        "pin_discrepancy": _pin_discrepancy(n8),
+        "findings": _findings(replay_row, facts_row, n8, geometry),
+        "provenance": _provenance(row_schema=list(ROW_SCHEMA) + ["analytic_expectation"]),
+    }
+
+
+def _discharge_a3(geometry):
+    """``21-RESEARCH.md`` A3, replaced by a measurement — the assumed number is NOT back-fitted."""
+    n8, n64 = geometry[0], geometry[1]
+    filler_windows = n64["total_windows"] - n8["total_windows"]
+    filler_facts = n64["n_facts"] - n8["n_facts"]
+    return {
+        "assumption": (
+            "21-RESEARCH.md A3 [ASSUMED — depends on values not yet minted]: the 56 filler facts "
+            "were assumed to render ~22 rows / ~4 windows each, giving n=64 ~= 264 windows."
+        ),
+        "assumed_total_windows": 264,
+        "observed_total_windows": n64["total_windows"],
+        "holds": n64["total_windows"] == 264,
+        "divergence_windows": n64["total_windows"] - 264,
+        "divergence_fraction": (n64["total_windows"] - 264) / 264,
+        "why": (
+            f"The 8 locked facts pack to {n8['total_windows']} windows "
+            f"({n8['total_windows'] / n8['n_facts']:.3f} per fact) and the {filler_facts} filler "
+            f"facts to {filler_windows} ({filler_windows / filler_facts:.3f} per fact). The "
+            "filler facts are LONGER than the locked ones, so the ~4-windows-each estimate "
+            "under-counts them. The corpus was NOT adjusted to reach 264; the measurement is "
+            "published as taken."
+        ),
+        "observed_filler_windows": filler_windows,
+        "observed_filler_windows_per_fact": filler_windows / filler_facts,
+        "observed_locked_windows_per_fact": n8["total_windows"] / n8["n_facts"],
+    }
+
+
+def _pin_discrepancy(n8):
+    """The 262.9437-vs-207.018 finding, RECORDED with both numbers and their reconciliation.
+
+    Plan 21-10 measured that ``scripts/mitigation_unit.py``'s ``262.9437`` is the OVERLAP rule's
+    figure — the alternative the pinned ``ATTRIBUTION_RULE`` explicitly rejects. Neither number is
+    wrong; they answer different questions and they reconcile exactly.
+
+    **The pin is NOT edited to settle this.** ``scripts/mitigation_unit.py`` is frozen from the
+    first ``results/phase21_*`` commit onward; editing a closed pre-registration permanently
+    reddens the ancestry guard and a delete-and-re-add cannot launder it (``adds[-1]``, measured on
+    a real cycle by plan 21-03). A correction to the pin is a DATED CONTINUATION via
+    ``scripts/_addendum.py``, which is not this plan. The artifact's duty is to RECORD the
+    discrepancy so nobody quotes 262.9437 as this rule's measurement.
+    """
+    n_facts = n8["n_facts"]
+    mean_length = n8["teaching_tokens"] / n_facts
+    bin_tokens = n8["teaching_tokens"]
+    support = bin_tokens - BLOCK_SIZE - 1
+    total_draws = MAX_STEPS * BATCH_SIZE
+    overlap = total_draws * (mean_length + BLOCK_SIZE) / support
+    first_token = total_draws * mean_length / support
+    return {
+        "status": "RECORDED, NOT RESOLVED — the pin is frozen and is not edited",
+        "pin_module": "scripts/mitigation_unit.py",
+        "pin_figure": overlap,
+        "pin_figure_rule": "overlap (credit every fact the window touches) — the REJECTED rule",
+        "pin_formula": (
+            f"{total_draws} * ({mean_length} + {BLOCK_SIZE}) / "
+            f"({bin_tokens} - {BLOCK_SIZE} - 1) = {overlap}"
+        ),
+        "artifact_rule": ATTRIBUTION_RULE,
+        "artifact_rule_figure": first_token,
+        "artifact_rule_formula": (
+            f"{total_draws} * {mean_length} / ({bin_tokens} - {BLOCK_SIZE} - 1) = {first_token}"
+        ),
+        "gap_per_interior_fact": total_draws * BLOCK_SIZE / support,
+        "reconciliation": (
+            f"{overlap} - {total_draws} * {BLOCK_SIZE} / {support} = {first_token}. The two "
+            "figures reconcile EXACTLY, so neither is wrong — they answer different questions."
+        ),
+        "conservation_pinned_mean": total_draws / n_facts,
+        "conservation_pinned_mean_note": (
+            f"Under the pinned rule the per-fact mean is {total_draws} / {n_facts} = "
+            f"{total_draws / n_facts} BY ARITHMETIC. Publishing it would restate the budget, not "
+            "the corpus. The measurement is in min / max / spread."
+        ),
+        "how_a_correction_would_be_made": (
+            "scripts/_addendum.py — a dated continuation. NEVER an edit to scripts/"
+            "mitigation_unit.py: from the first results/phase21_* commit that file is frozen, and "
+            "tests/test_phase20_prereg.py:157 takes adds[-1] so a delete-and-re-add cannot "
+            "launder a wrong ordering (measured on a real cycle by plan 21-03)."
+        ),
+    }
+
+
+def _findings(replay_row, facts_row, n8, geometry):
+    """The two results that appear in no source document and should survive into the report."""
+    lengths = n8["per_fact_lengths"]
+    return {
+        "d10_doubles_the_unaligned_multiplicity": {
+            "claim": (
+                "Moving replay OUT of the teaching bin (D-10) roughly DOUBLES the old path's "
+                "per-fact multiplicity, because the same 1,600 draws now land on half as much "
+                "data. A decision taken purely for honest accounting made the UNALIGNED number "
+                "WORSE — which STRENGTHENS UNIT-01's indictment rather than weakening it, and "
+                "only shows up because BOTH numbers were measured instead of one."
+            ),
+            "replay_in_bin": {
+                "bin_composition": replay_row["bin_composition"],
+                "bin_tokens": replay_row["bin_tokens"],
+                "mean_over_facts": replay_row["mean"],
+                "min": replay_row["min"],
+                "max": replay_row["max"],
+                "spread": replay_row["spread"],
+                "replay_draws": replay_row["replay_draws"],
+                "draws_landing_on_a_fact": replay_row["draws_landing_on_a_fact"],
+                "total_draws": replay_row["total_draws"],
+            },
+            "facts_only": {
+                "bin_composition": facts_row["bin_composition"],
+                "bin_tokens": facts_row["bin_tokens"],
+                "mean_over_facts": facts_row["mean"],
+                "min": facts_row["min"],
+                "max": facts_row["max"],
+                "spread": facts_row["spread"],
+                "total_draws": facts_row["total_draws"],
+            },
+            "ratio_of_the_means": facts_row["mean"] / replay_row["mean"],
+            "ratio_denominator": "facts-only mean / replay-in-bin mean, over the SAME 8 facts",
+            "second_reading": (
+                "The replay-in-bin row's other number is the sharper one: "
+                f"{replay_row['replay_draws']} of {replay_row['total_draws']} draws "
+                f"({replay_row['replay_draws'] / replay_row['total_draws']:.1%}) started inside "
+                "the public replay prefix and bought NO teaching at all. Under an example-level "
+                "accounting those draws are indistinguishable from the ones that touched a fact."
+            ),
+        },
+        "d11_teaching_tokens_side_channel": {
+            "channel": (
+                "The v3.0 replay sizing is round(replay_ratio * teaching_tokens), and "
+                "teaching_tokens is the sum of the FACTS' OWN token lengths. The volume of "
+                "'public' data in the lot was therefore a function of PRIVATE content, which "
+                "breaks the un-clipped public-gradient argument: the public term stops being "
+                "independent of the private records."
+            ),
+            "what_made_it_measurable": (
+                "The per-fact token lengths are not uniform. Observed across the 8 locked facts: "
+                f"min {min(lengths)}, max {max(lengths)}, spread {max(lengths) - min(lengths)} "
+                f"tokens over a total of {sum(lengths)}. A corpus whose facts all packed to the "
+                "same length would leak nothing through this channel and the defect would have "
+                "been invisible."
+            ),
+            "per_fact_token_lengths": lengths,
+            "closure": (
+                "D-24: replay_window_budget(n_facts) = REPLAY_WINDOWS_PER_FACT * n_facts * "
+                "block_size. Every factor is public BY DERIVATION — 4 is a small integer authored "
+                "before any fact existed, n_facts is a COUNT of records, block_size is a model "
+                "hyperparameter. replay_ratio and teaching_tokens are IGNORED ENTIRELY on that "
+                "branch, and the closure is proven by a DIFFERENTIAL (vary the fact VALUES at "
+                "fixed n_facts, observe the volume unchanged) rather than by a constant assertion "
+                "that would pass whenever the corpus happened to land on the same number."
+            ),
+            "closure_is_watched": (
+                "tests/test_phase21_replay_volume.py — the LEGACY n_facts=None branch is retained "
+                "deliberately so test_side_channel_negative_control has a live positive control "
+                "proving the differential can see a side channel at all."
+            ),
+            "replay_windows_per_lot_observed": {
+                geo["n_facts"]: geo["replay_windows_per_lot"] for geo in geometry
+            },
+        },
+    }
+
+
+def emit_multiplicity(path=None, workdir=None):
+    """Measure both paths at both capacities and write ``results/phase21_multiplicity.json``.
+
+    Bins are built under a temporary directory, never at an ``arm_outputs`` path, so no recorded
+    arm evidence is touched. ``git status --porcelain data/`` is empty after this runs.
+    """
+    path = pathlib.Path(path or ARTIFACTS["multiplicity"])
+    refuse_existing_artifacts([path])
+    if workdir is None:
+        with tempfile.TemporaryDirectory() as tmp:
+            document = multiplicity_document(_measure_all(tmp, with_aligned_rows=True))
+    else:
+        document = multiplicity_document(_measure_all(workdir, with_aligned_rows=True))
     _write(path, document)
     return document
