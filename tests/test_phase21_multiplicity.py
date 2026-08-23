@@ -22,7 +22,9 @@ CPU-only, GPU/MPS-free, no network. Everything under ``tmp_path``; nothing write
 or ``results/``. Do NOT weaken any assertion to make these pass.
 """
 
+import math
 import pathlib
+import subprocess
 import sys
 from typing import NamedTuple
 
@@ -30,6 +32,7 @@ import numpy as np
 import pytest
 
 from personacore.seeding import seed_everything
+from personacore.training.data import fact_window_impurities
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "scripts"))
@@ -460,3 +463,176 @@ def test_the_wrapper_call_count_is_asserted_not_assumed(tmp_path, monkeypatch):
     # for every later test in the session.
     assert np.random.randint.__module__ != __name__
     assert isinstance(np.random.randint(0, 3, size=2), np.ndarray)
+
+
+# ===================================================================================
+# ===== instrument_can_report_not_one — the NON-VACUITY of the aligned row. ========
+# ===== D-26 records an OBSERVED count so "1 by construction" is verified. But =====
+# ===== an instrument that PRINTS 1 without counting produces that row too =========
+# ===== (Pitfall 7: the warning sign is the aligned row being a literal in the =====
+# ===== driver rather than a value returned by the counter). =======================
+# ===================================================================================
+
+
+def _roll_fact_bin(fact_path):
+    """A1's roll-by-1 at the REAL ``block_size`` — every element right by one, tail re-appended.
+
+    Preserves length, the id multiset and the block remainder, so every offset-shaped check agrees
+    with the correct bin. Only a positional INPUT-space read separates them.
+    """
+    ids = np.fromfile(fact_path, dtype=np.uint16)
+    np.concatenate([np.roll(ids[:-1], 1), ids[-1:]]).tofile(fact_path)
+
+
+@pytest.mark.parametrize("rolled", [True, False], ids=["mis-built", "correct-control"])
+def test_instrument_can_report_not_one(aligned_bins, rolled):
+    """Fed a bin that PROVABLY carries two facts in one window, the counter must report > 1.
+
+    An instrument which can only ever see valid input cannot demonstrate that it is counting —
+    that is the whole reason ``strict`` exists. ``get_batch_fact_aligned`` RAISES on an impure
+    drawn window, so at the ``strict=True`` default the counter aborts before it can report
+    anything and this test is unwritable; ``strict=False`` wraps BOTH the span and the loader in
+    one ``try/except ValueError`` and records ``per_step_raised`` instead of propagating.
+
+    The two arms differ ONLY in the bin — the same call, the same steps, the same ``strict=False``.
+    """
+    n_facts = aligned_bins.stats["n_facts"]
+    if rolled:
+        _roll_fact_bin(aligned_bins.fact)
+
+    fact_ids = np.fromfile(aligned_bins.fact, dtype=np.uint16)
+
+    # FIRST: the fixture really is (or is not) corrupted, in INPUT space at its `space="input"`
+    # DEFAULT — SC2's claim verbatim. A fixture that failed to corrupt anything would otherwise
+    # make every assertion below pass vacuously. NOT target space: a roll leaves target space
+    # EMPTY (measured in plan 21-04), so a target-space assertion would pass on the CORRUPTED bin
+    # for the wrong reason.
+    impurities = fact_window_impurities(fact_ids, BLOCK)
+    assert (impurities != []) is rolled, (rolled, impurities)
+
+    # A FULL LOT. A run of `steps < n_facts` never reaches the step whose SPAN raises, and would
+    # pass over a counter that aborts there — so the lot length is asserted in the body, not left
+    # to the parametrize table.
+    steps = n_facts
+    assert steps >= n_facts
+    row = _count_aligned(aligned_bins, steps=steps, strict=False)
+    seen = [d for d in row["per_step_distinct_facts"] if d is not None]
+
+    if rolled:
+        assert max(seen) > 1, (
+            "the instrument reported 1-per-step on a bin that provably carries two — it is not "
+            f"counting (per_step_distinct_facts={row['per_step_distinct_facts']})"
+        )
+        # The roll's NON-CONTIGUITY was OBSERVED and not swallowed. `fact_window_span` raises for
+        # the one fact the roll left split across the bin's two ends; that is STRONGER evidence of
+        # a mis-built bin than `distinct == 2`, so it is its own outcome class.
+        assert "span" in row["per_step_raised"], row["per_step_raised"]
+        assert "loader" in row["per_step_raised"], row["per_step_raised"]
+    else:
+        # THE NEGATIVE CONTROL, through the SAME call. Without it, a `strict=False` that swallowed
+        # every step would satisfy the assertions above on the rolled bin and nobody would notice.
+        assert seen == [1] * steps, row["per_step_distinct_facts"]
+        assert row["per_step_raised"] == [None] * steps, row["per_step_raised"]
+        assert sum(row["counts"].values()) == steps
+
+
+def test_the_correct_bin_returns_normally_at_the_strict_default(aligned_bins):
+    """``strict=False`` is a TEST AFFORDANCE, not a way to hide a real defect from the record.
+
+    The DEFAULT is what plan 21-11 calls, so the default must be the path that produces the row.
+    """
+    n_facts = aligned_bins.stats["n_facts"]
+    row = _count_aligned(aligned_bins, steps=n_facts)  # strict=True, no raise
+
+    assert row["per_step_raised"] == [None] * n_facts
+    assert row["per_step_distinct_facts"] == [1] * n_facts
+    assert sum(row["counts"].values()) == n_facts
+
+    # ...and on the MIS-BUILT bin the default ABORTS rather than reporting a clean-looking row.
+    _roll_fact_bin(aligned_bins.fact)
+    with pytest.raises(ValueError):
+        _count_aligned(aligned_bins, steps=n_facts)
+
+
+# ===================================================================================
+# ===== The analytic numbers as a CROSS-CHECK on the instrument, NEVER as the ======
+# ===== record. The record is the measured row. =====================================
+# ===================================================================================
+
+EQUAL_FACT_LEN = 2048  # two facts of EXACTLY equal length — the closed-form fixture
+ANALYTIC_DRAWS = MAX_STEPS * BATCH_SIZE  # 1,600
+ANALYTIC_SUPPORT = 2 * EQUAL_FACT_LEN - BLOCK - 1  # 3,839 reachable start offsets
+ANALYTIC_Z = 4.0  # the multiplier, written out rather than hidden in a loose tolerance
+
+
+def test_analytic_cross_check_only(tmp_path):
+    """Two facts of EXACTLY equal length: the counts must sit in a stated binomial interval.
+
+    This is a cross-check ON THE INSTRUMENT and it is NEVER the record — the record is the
+    measured row, which is the whole of what UNIT-03 asks for.
+
+    The interval is centred on the CLOSED-FORM expectation and not on ``n/2``, and the difference
+    is the point. ``np.random.randint(0, len(data) - block_size - 1)`` cannot start a window in the
+    last ``block_size + 1`` elements, so with two equal facts the SECOND one loses that tail from
+    its reachable support: ``p(fact 0) = 2048 / 3839 = 0.5335``, not ``0.5``. At 1,600 draws the
+    naive ``n/2 = 800`` sits ~2.7 sigma below the true expectation — it would still fall inside a
+    4-sigma band, so a test written against ``n/2`` would pass for the WRONG REASON. That is the
+    same denominator confusion ``scripts/mitigation_unit.py`` had to write a formula into a frozen
+    file to settle (``1600 * 256 / 7581 = 54.03`` is not the number either).
+    """
+    flat = _flat(tmp_path, "equal", (EQUAL_FACT_LEN, EQUAL_FACT_LEN))
+    assert len(flat.fact_ids) - BLOCK - 1 == ANALYTIC_SUPPORT == 3839
+
+    p_first = EQUAL_FACT_LEN / ANALYTIC_SUPPORT
+    expected_first = ANALYTIC_DRAWS * p_first
+    sigma = math.sqrt(ANALYTIC_DRAWS * p_first * (1 - p_first))
+    band = ANALYTIC_Z * sigma
+
+    # Hand-checked literals, so a drifted fixture fails here instead of widening the band.
+    assert expected_first == pytest.approx(853.56, abs=0.05)
+    assert sigma == pytest.approx(19.96, abs=0.05)
+    assert band == pytest.approx(79.82, abs=0.2)
+
+    row = _count(flat, steps=MAX_STEPS, batch_size=BATCH_SIZE)
+    assert row["counts"][0] == pytest.approx(expected_first, abs=band)
+    assert row["counts"][1] == pytest.approx(ANALYTIC_DRAWS - expected_first, abs=band)
+    assert sum(row["counts"].values()) == ANALYTIC_DRAWS  # conservation still exact
+
+    # The naive centre is FAR ENOUGH from the true one to matter, asserted so the finding cannot
+    # go stale silently: it is inside the 4-sigma band, which is exactly why centring there would
+    # be an unfalsifiable-by-accident test rather than a wrong one.
+    naive = ANALYTIC_DRAWS / 2
+    assert abs(expected_first - naive) > 2 * sigma
+    assert abs(expected_first - naive) < band
+
+
+# ===================================================================================
+# ===== The artifact ordering is IRREVOCABLE (adds[-1]). Catch an accidental =======
+# ===== early write while it is still cheap. ========================================
+# ===================================================================================
+
+
+def test_the_artifact_is_not_written_yet():
+    """This plan builds the INSTRUMENT; plan 21-11 writes and commits the artifact.
+
+    ``tests/test_phase20_prereg.py:157`` takes ``adds[-1]``, the EARLIEST add, so a
+    ``results/phase21_*`` path committed before the pin cannot be laundered by a delete and
+    re-add. There is no recovery path, which is why the check is here rather than at 21-11.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", "results/phase21_*"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert tracked == [], (
+        f"{tracked} is already tracked — the ancestry ordering is now permanent and this plan "
+        "was not the one permitted to fix it (plan 21-11 owns the first add)"
+    )
+    # The paths are declared as constants HERE precisely so 21-11 resolves them from the module
+    # rather than from a string literal in a plan step. Declared is not written.
+    assert set(unit.ARTIFACTS) == {"privacy_unit", "multiplicity"}
+    for path in unit.ARTIFACTS.values():
+        assert path.name.startswith("phase21_")
+        assert path.parent.name == "results"
