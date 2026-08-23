@@ -675,19 +675,28 @@ def _to_second_person(answer: str) -> str:
     return answer
 
 
-def _render_family(family_id: str, fact: Fact, *, second_person: bool = False):
+def _render_family(
+    family_id: str,
+    fact: Fact,
+    *,
+    second_person: bool = False,
+    forms: dict[str, SlotForms] | None = None,
+):
     """Render every ``(question, answer)`` instance of one family for one fact.
 
     Surface wording varies WITHIN the family's frame (openers, word order, article choice) so
     the taught paraphrase count per fact lands inside ``PARAPHRASES_PER_FACT_TARGET``. Every
-    renderer is slot-aware: it reads ``fact.slot`` and composes from ``SLOT_FORMS``.
+    renderer is slot-aware: it reads ``fact.slot`` and composes from ``SLOT_FORMS`` — or from
+    ``forms``, the D-16 additive override, when one is supplied. A missing slot raises ``KeyError``
+    naming it rather than falling back to ``SLOT_FORMS``, so a filler grammar with a typo fails
+    loudly instead of quietly rendering through a SCORED slot.
 
     A phrasing never names the fact VALUE in the question except in ``F5`` (yes/no
     verification), where the value in the question is the point, and in ``F4`` (reversed
     direction), where naming the value IS the reversal — those two are the definitions of
     their frames, not leaks.
     """
-    s = SLOT_FORMS[fact.slot]
+    s = (SLOT_FORMS if forms is None else forms)[fact.slot]
     value = fact.value
     ans1 = s.ans1.format(v=value)
     ans2 = s.ans2.format(v=value)
@@ -821,10 +830,45 @@ HELDOUT_FAMILY_IDS: frozenset[str] = frozenset({"F3", "F7", "F8"})
 PARAPHRASES_PER_FACT_TARGET: tuple[int, int] = (20, 50)
 
 
-def render_family(family_id: str, fact: Fact, *, second_person: bool = False):
-    """Dispatch into ``FAMILIES`` (D-01 first person) or ``FAMILIES_SECOND_PERSON`` (D-21)."""
+def render_family(
+    family_id: str,
+    fact: Fact,
+    *,
+    second_person: bool = False,
+    forms: dict[str, SlotForms] | None = None,
+):
+    """Dispatch into ``FAMILIES`` (D-01 first person) or ``FAMILIES_SECOND_PERSON`` (D-21).
+
+    ``forms`` (D-16) is an ADDITIVE slot-grammar override for the Phase 21 filler corpus, whose
+    slots are DISJOINT from the 11 published ones. When it is ``None`` this runs the two lines it
+    always ran, so the default is not merely EQUAL to the v2.0 output — it is the same code path.
+    ``tests/test_phase21_filler.py`` pins that against the pre-edit digests in
+    ``tests/fixtures/golden_render_family_v2.json``, in both registers over all 8 families.
+
+    When ``forms`` IS supplied the import-time closures are bypassed. ``_family_table`` binds one
+    lambda per family id per register at import time and takes no ``forms`` argument, so threading
+    a runtime value through it would mean rebuilding both tables on every call. Bypassing covers
+    both registers instead, because ``_render_family``'s ``second_person`` argument is the same one
+    those closures pass. The table lookup happens FIRST on BOTH branches, so an unknown family id
+    fails identically either way rather than reaching ``_render_family``'s own raise by a second
+    route.
+
+    **``question_bank=`` is deliberately NOT a parameter here**, resolving 21-RESEARCH Open
+    Question 1. This omission is a recorded decision, not an oversight. ``SLOT_QUESTION_BANK`` is
+    read at exactly one site — inside ``_assign_probes()`` — and ``_render_family`` reads only
+    ``SLOT_FORMS``, so no value of a ``question_bank=`` kwarg could change this function's return
+    value, and a byte-identity guard over it could not fail. ``_assign_probes()`` iterates
+    ``all_pools()``, which the Phase 21 filler corpus is deliberately outside (D-13), so the filler
+    tier needs no reserved probe bank at all: it is never scored, never enters ``GATE_PROBES``, and
+    never enters the 10-value leak vocabulary (D-18). This does not reopen D-16, whose decision is
+    "additive kwarg, byte-identical when None" — only the SITING of one of the two kwargs changed,
+    and the one that is actually read is the one that shipped.
+    """
     table = FAMILIES_SECOND_PERSON if second_person else FAMILIES
-    return table[family_id](fact)
+    generate = table[family_id]  # validates family_id identically on BOTH branches
+    if forms is None:
+        return generate(fact)
+    return _render_family(family_id, fact, second_person=second_person, forms=forms)
 
 
 def heldout_questions() -> tuple[str, ...]:
