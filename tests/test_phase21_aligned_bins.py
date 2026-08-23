@@ -78,9 +78,7 @@ def test_window_purity_adversaries_a4_raises_on_length():
 
 def test_window_purity_input_is_the_default():
     """`space="input"` is SC2's claim verbatim, and it is what an omitted kwarg selects."""
-    assert fact_window_impurities(GOOD, BLOCK) == fact_window_impurities(
-        GOOD, BLOCK, space="input"
-    )
+    assert fact_window_impurities(GOOD, BLOCK) == fact_window_impurities(GOOD, BLOCK, space="input")
     assert fact_window_impurities(GOOD, BLOCK) == []
 
 
