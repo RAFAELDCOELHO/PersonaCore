@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "captured_at_sha": "a18f6751abf4d5d9ae076ae1f7027118afbe9538",
+    "family_ids": [
+      "F1",
+      "F2",
+      "F3",
+      "F4",
+      "F5",
+      "F6",
+      "F7",
+      "F8"
+    ],
+    "fact_ids": [
+      "cand_person_quillon",
+      "cand_dog_zorp",
+      "cand_cat_zibby",
+      "cand_sister_orsala",
+      "cand_town_brindlemoor",
+      "cand_street_marrowgate",
+      "cand_year_1987",
+      "cand_house_7412",
+      "cand_color_chartreuse",
+      "cand_food_marzipan"
+    ],
+    "serialization": {
+      "ensure_ascii": false,
+      "sort_keys": false,
+      "separators": [
+        ",",
+        ":"
+      ]
+    },
+    "order": "for family_id in sorted(FAMILY_IDS) for fact in (LOCKED_FACTS + SOFT_TIER_FACTS)"
+  },
+  "first_person": {
+    "sha256": "5f2b67ee52b0383cdb5f269231e4616ee628093d70a4159980c55fd6090385d0",
+    "rows": 310
+  },
+  "second_person": {
+    "sha256": "5e051c8fe8563f1ee08774b379940b4866c3ef49b216e65535d7f74b3f087612",
+    "rows": 310
+  }
+}

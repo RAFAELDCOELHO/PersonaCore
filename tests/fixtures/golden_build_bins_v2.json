@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "captured_at_sha": "a18f6751abf4d5d9ae076ae1f7027118afbe9538",
+    "arm": "real-facts-taught-families",
+    "facts": [
+      "cand_person_quillon",
+      "cand_dog_zorp",
+      "cand_cat_zibby",
+      "cand_sister_orsala",
+      "cand_town_brindlemoor",
+      "cand_street_marrowgate",
+      "cand_year_1987",
+      "cand_house_7412",
+      "cand_color_chartreuse",
+      "cand_food_marzipan"
+    ],
+    "family_ids": [
+      "F1",
+      "F2",
+      "F4",
+      "F5",
+      "F6"
+    ],
+    "second_person": false,
+    "replay_ratio": 0.0,
+    "tokenizer_sha256": "e82e8e83d621075c7c46d222f52d87c56c79329c137df8f5d3241255eda863e0",
+    "recipe": "seed_everything(SEED); tok = from_json(TOKENIZER_PATH); episodes = render_episodes(LOCKED_FACTS + SOFT_TIER_FACTS, TAUGHT_FAMILY_IDS, second_person=False); build_bins(tok, episodes, <tmp>/tokens.bin, <tmp>/mask.bin, replay_ratio=0.0)"
+  },
+  "token_bin_sha256": "91c2549388079c3da2d5888706ba6b80f70383f320112ae768f6a78372f90fac",
+  "mask_bin_sha256": "4a674423ec9412fc6a302adcc419faa98d78a1e8b8c00107b13aeb864c15061f",
+  "token_bin_bytes": 20036,
+  "mask_bin_bytes": 10018,
+  "stats_repr": "{'episodes': 220, 'tokens': 10018, 'teaching_tokens': 10018, 'replay_tokens': 0, 'replay_ratio': 0.0, 'episode_len_mean': 45.53636363636364, 'episode_len_min': 24, 'episode_len_max': 84, 'mask_fraction': 0.37232980634857255, 'mask_fraction_mean': 0.38100409967870663, 'mask_fraction_min': 0.18840579710144928, 'mask_fraction_max': 0.6}"
+}
