@@ -261,3 +261,121 @@ def test_replay_constant_is_not_derived_from_the_corpus():
         "integral number of windows (3.7017)."
     )
     assert per_fact == 1024
+
+
+# ===== train()'s additive replay seam (D-10 / D-25) =====
+#
+# The additive-seam playbook from tests/test_loop_penalty_fn.py: an off-identity assertion is
+# vacuous on its own — three kwargs that are ACCEPTED AND DISCARDED satisfy it perfectly. Every
+# identity test below is half a pair, and the on-changes-the-trajectory half is the other half.
+
+SEAM_BATCH = 4
+SEAM_WINDOWS = 10  # deliberately NOT a multiple of SEAM_BATCH: 4 + 4 + 2 exercises the ragged
+# tail, so a ceil-division off-by-one (which would draw 12) cannot hide.
+
+
+def _seam_config():
+    from personacore.config import TrainConfig
+
+    return TrainConfig(lr=1e-2, warmup_steps=1, max_steps=3, batch_size=SEAM_BATCH)
+
+
+def _seam_fingerprint(model):
+    """sha256 over EVERY parameter — the bitwise trajectory fingerprint."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    for _, tensor in sorted(model.named_parameters()):
+        digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
+    return digest.hexdigest()
+
+
+def _seam_run(**train_kwargs):
+    """One tiny CPU train() on a fixed_batch; returns the parameter fingerprint."""
+    import torch
+
+    from personacore.config import ModelConfig, RuntimeConfig
+    from personacore.model import BigramLanguageModel
+    from personacore.training.loop import train
+
+    model_cfg = ModelConfig()
+    seed_everything(1234)
+    model = BigramLanguageModel(vocab_size=model_cfg.vocab_size)
+    gen = torch.Generator(device="cpu").manual_seed(7)
+    xb = torch.randint(0, model_cfg.vocab_size, (SEAM_BATCH, 16), generator=gen)
+    yb = torch.randint(0, model_cfg.vocab_size, (SEAM_BATCH, 16), generator=gen)
+    train(
+        train_config=_seam_config(),
+        runtime_config=RuntimeConfig(device="cpu"),
+        model=model,
+        fixed_batch=(xb, yb),
+        **train_kwargs,
+    )
+    return _seam_fingerprint(model)
+
+
+def test_replay_seam_off_is_bit_identical():
+    """Omitting the three kwargs equals passing them explicitly None. NEVER skips."""
+    omitted = _seam_run()
+    explicit_none = _seam_run(replay_bin=None, replay_mask_bin=None, replay_windows=None)
+    assert omitted == explicit_none
+
+
+def test_replay_seam_on_changes_the_trajectory(replay_source):
+    """THE NON-VACUITY HALF — without it, three discarded kwargs pass the identity test."""
+    bin_path, mask_path = replay_source
+    off = _seam_run()
+    on = _seam_run(replay_bin=bin_path, replay_mask_bin=mask_path, replay_windows=SEAM_WINDOWS)
+    assert off != on, (
+        "the replay seam changed nothing: train() accepted replay_bin / replay_mask_bin / "
+        "replay_windows and discarded them. The off-identity guard above is satisfied by "
+        "exactly that defect, so it carries no guarantee on its own."
+    )
+
+
+def test_replay_seam_draws_exactly_the_public_budget(replay_source, monkeypatch):
+    """The windows drawn per OPTIMIZER STEP equal replay_windows exactly — no ceil overdraw."""
+    from personacore.training import loop as loop_mod
+
+    bin_path, mask_path = replay_source
+    drawn = []
+    real = loop_mod.get_batch_memmap_masked
+
+    def counting(bin_arg, mask_arg, batch_size, block_size, device):
+        # fixed_batch means batch_fn never draws, so every recorded call is the replay pass.
+        assert (bin_arg, mask_arg) == (bin_path, mask_path)
+        drawn.append(batch_size)
+        return real(bin_arg, mask_arg, batch_size, block_size, device)
+
+    monkeypatch.setattr(loop_mod, "get_batch_memmap_masked", counting)
+    _seam_run(replay_bin=bin_path, replay_mask_bin=mask_path, replay_windows=SEAM_WINDOWS)
+
+    steps = _seam_config().max_steps
+    assert sum(drawn) == SEAM_WINDOWS * steps, (
+        f"the seam drew {sum(drawn)} windows over {steps} optimizer steps, not "
+        f"{SEAM_WINDOWS * steps} — a ceil-division off-by-one silently changes the PUBLIC "
+        f"replay volume, which is the one quantity D-11 pins. Per-call sizes: {drawn}"
+    )
+    assert drawn == [4, 4, 2] * steps, (
+        f"micro-batching drifted: {drawn}. Expected ceil division at the loop's own batch_size "
+        f"({SEAM_BATCH}) with a ragged final micro-batch — 4 + 4 + 2 = {SEAM_WINDOWS}."
+    )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "needle"),
+    [
+        ({"replay_bin": "a.bin"}, "replay_mask_bin"),
+        ({"replay_bin": "a.bin", "replay_mask_bin": "m.bin"}, "replay_windows"),
+        ({"replay_windows": 8}, "replay_bin"),
+        ({"replay_bin": "a.bin", "replay_mask_bin": "m.bin", "replay_windows": 0}, "positive int"),
+        (
+            {"replay_bin": "a.bin", "replay_mask_bin": "m.bin", "replay_windows": True},
+            "positive int",
+        ),
+    ],
+)
+def test_replay_seam_refuses_partial_or_malformed_wiring(kwargs, needle):
+    """A partially-wired seam must NAME what is missing rather than silently no-op."""
+    with pytest.raises(ValueError, match=needle):
+        _seam_run(**kwargs)

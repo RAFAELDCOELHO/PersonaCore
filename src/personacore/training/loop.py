@@ -134,7 +134,15 @@ def sample(model, idx, max_new_tokens, temperature=1.0):
 
 
 def _optimizer_step(
-    model, optimizer, scheduler, scaler, train_cfg, runtime, batch_fn, penalty_fn=None
+    model,
+    optimizer,
+    scheduler,
+    scaler,
+    train_cfg,
+    runtime,
+    batch_fn,
+    penalty_fn=None,
+    replay_fn=None,
 ):
     """Run ONE optimizer step with the load-bearing AMP+accum+clip ordering (TRAIN-02).
 
@@ -146,6 +154,12 @@ def _optimizer_step(
     ``base_loss`` via ``assemble_loss`` BEFORE the ``/accum`` divide — params are constant
     across the accumulation window, so the divided contributions sum to exactly ONE full
     penalty per optimizer step (Pitfall 5). ``None`` keeps the M1 identity bit-for-bit.
+
+    ``replay_fn`` (the Phase-21 replay seam, D-10/D-25) runs ONCE per optimizer step, AFTER the
+    per-micro-step accumulation loop and BEFORE ``unscale_``, accumulating into the same
+    gradient buffer. It is structurally OUTSIDE the per-record loop above — see :func:`train`
+    for what that placement does and does not claim. ``None`` is bit-for-bit inert: no new line
+    executes on the default path.
     """
     optimizer.zero_grad(set_to_none=True)
     accum = max(1, train_cfg.grad_accum_steps)
@@ -161,6 +175,8 @@ def _optimizer_step(
             loss = total / accum  # scale so accumulated grads average across micro-batches
         scaler.scale(loss).backward()
         summed += float(base_loss.item())
+    if replay_fn is not None:
+        replay_fn(model, scaler)  # D-25: its OWN pass per lot, outside the per-record loop
     scaler.unscale_(optimizer)  # UNSCALE before clip (mandatory order — Pitfall 1)
     torch.nn.utils.clip_grad_norm_(model.parameters(), train_cfg.grad_clip)
     scaler.step(optimizer)
@@ -180,6 +196,9 @@ def train(
     val_bin=None,
     train_mask_bin=None,
     val_mask_bin=None,
+    replay_bin=None,
+    replay_mask_bin=None,
+    replay_windows=None,
     eos_id=8184,
     fixed_batch=None,
     scaler=None,
@@ -230,6 +249,46 @@ def train(
             reward modeling user turns and make "best" mean something the report never
             measures. (Gates elsewhere use the deterministic ``masked_perplexity`` sweep,
             never in-loop val_loss.) None reproduces v1.0 bit-for-bit.
+        replay_bin: Phase-21 replay seam (D-10/D-25) — PersonaChat token ``.bin`` PATH that
+            replay windows are drawn from at TRAIN time. Requires ``replay_mask_bin`` and
+            ``replay_windows``. All three None reproduces v1.0 bit-for-bit.
+        replay_mask_bin: aligned ``uint8`` mask PATH for ``replay_bin``.
+        replay_windows: how many ``block_size`` windows of replay to draw per OPTIMIZER STEP.
+            The caller computes this from PUBLIC quantities only —
+            ``teach_persona.replay_window_budget(n_facts) // block_size``, i.e.
+            ``REPLAY_WINDOWS_PER_FACT * n_facts`` (D-11/D-24). This loop never derives it from
+            the data.
+
+            **What this seam DOES claim.** It lets the teaching bin hold FACTS ONLY, so
+            ``grad_accum_steps = n_facts`` is LITERALLY true with no roadmap amendment (D-10).
+            Replay is drawn and accumulated in its OWN pass per LOT, structurally outside the
+            per-record accumulation loop, so Phase 22's clipping seam has an obvious place to
+            NOT apply and the public term stays provably independent of any private record
+            (D-25). The draw reuses the existing, already-validated
+            ``get_batch_memmap_masked`` — reuse of a proven path, not new infrastructure — and
+            is micro-batched by ceil division at the loop's own ``batch_size`` so
+            ``4 * 64 = 256`` windows per lot at n=64 need not fit one MPS allocation. Each
+            micro-batch is weighted by its ACTUAL window count over ``replay_windows``, so the
+            ragged final micro-batch contributes exactly one full replay MEAN per step rather
+            than over-weighting a short tail.
+
+            **What it does NOT claim.** Phase 21 delivers the STRUCTURAL SEPARATION ONLY. The
+            ``clip_grad_norm_`` call in :func:`_optimizer_step` still clips the AVERAGED
+            gradient, replay included. Per-record clipping and a genuinely un-clipped replay
+            term are DPSGD-01/DPSGD-04, Phase 22. Do not read an un-clipped public-gradient
+            guarantee into this seam; it is not delivered here.
+
+            **The overlap is a RECORDED COST, not an accident.** This is DPSGD-01's "new
+            additive gradient-side seam", pulled into Phase 21 deliberately by D-10.
+
+            **D-10's two rejected alternatives, for the record.** (1) An in-bin
+            sentinel-tagged single un-clipped micro-step — ``grad_accum_steps = n_facts + 1``,
+            which would have needed a DATED AMENDMENT to SC2 rather than satisfying it.
+            (2) Replay windows as N separate un-clipped micro-steps — rejected because it made
+            ``grad_accum_steps`` data-dependent, the exact quantity SC2 exists to pin. **D-25
+            reopened (2)**: under D-24 the replay window count is ``4 * n_facts``, fully public,
+            so that rejection's premise had EXPIRED. The separate-pass shape was then chosen on
+            its own merits rather than inherited from a reason that no longer held.
         eos_id: document separator id for the doc-level split (no-leakage, TRAIN-03).
         fixed_batch: ``(xb, yb)`` reused every step — the overfit gate (TRAIN-05).
         scaler: an injectable GradScaler-shaped object (the AMP-ordering spy hook); defaults to a
@@ -285,6 +344,29 @@ def train(
             "(a memmap .bin PATH) — estimate_loss only honors the mask when the val "
             "source is a .bin path routed through get_batch_memmap_masked; any other "
             "val source would silently drop the mask (USER LOCK 3)."
+        )
+    _replay = {
+        "replay_bin": replay_bin,
+        "replay_mask_bin": replay_mask_bin,
+        "replay_windows": replay_windows,
+    }
+    _missing = sorted(name for name, value in _replay.items() if value is None)
+    if _missing and len(_missing) != len(_replay):
+        raise ValueError(
+            f"the Phase-21 replay seam needs all three of {sorted(_replay)} or none of them — "
+            f"missing {_missing}. The token and mask .bin are element-aligned, and "
+            "replay_windows is the PUBLIC per-step budget (D-11/D-24: "
+            "REPLAY_WINDOWS_PER_FACT * n_facts); this loop never derives it from the data, so "
+            "it cannot be defaulted."
+        )
+    if replay_windows is not None and (
+        isinstance(replay_windows, bool)
+        or not (isinstance(replay_windows, int) and replay_windows > 0)
+    ):
+        raise ValueError(
+            f"replay_windows={replay_windows!r} — the replay budget is a positive int count of "
+            "block_size windows drawn per OPTIMIZER STEP (D-24 is window-quantized precisely so "
+            "this is a whole number and needs no truncation step)."
         )
     runtime = runtime_config if runtime_config is not None else RuntimeConfig()
     model_cfg = model_config if model_config is not None else ModelConfig()
@@ -369,6 +451,27 @@ def train(
             sl = slice(micro * _bs, (micro + 1) * _bs)
             return _full_x[sl], _full_y[sl]
 
+    # --- Phase-21 replay seam (D-10/D-25): its OWN pass per lot, outside the per-record loop ---
+    replay_fn = None
+    if replay_windows is not None:
+
+        def replay_fn(model, scaler):
+            drawn = 0
+            while drawn < replay_windows:
+                # Ceil division by iteration: the last micro-batch is the ragged remainder, so
+                # the total drawn is EXACTLY replay_windows and never a rounded-up overdraw.
+                micro = min(train_config.batch_size, replay_windows - drawn)
+                xb, yb = get_batch_memmap_masked(
+                    replay_bin, replay_mask_bin, micro, model_cfg.block_size, runtime.device
+                )
+                with runtime.autocast():
+                    _, replay_loss = model(xb, yb)
+                    # Weight by ACTUAL windows / total, so the ragged tail is not over-weighted
+                    # and the pass contributes exactly ONE full replay mean per optimizer step.
+                    loss = replay_loss * (micro / replay_windows)
+                scaler.scale(loss).backward()
+                drawn += micro
+
     # --- Resume: restore full state + RNG, continue the step counter (NEVER re-seed) ---
     start_step = 0
     resumed_best_val_loss = None
@@ -405,7 +508,15 @@ def train(
     try:
         while step < target_steps:
             train_loss = _optimizer_step(
-                model, optimizer, scheduler, scaler, train_config, runtime, batch_fn, penalty_fn
+                model,
+                optimizer,
+                scheduler,
+                scaler,
+                train_config,
+                runtime,
+                batch_fn,
+                penalty_fn,
+                replay_fn,
             )
             final_loss = train_loss
             step += 1
