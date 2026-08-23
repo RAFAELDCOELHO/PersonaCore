@@ -124,3 +124,76 @@ def get_batch_memmap_masked(bin_path, mask_path, batch_size, block_size, device)
     )
     y[m == 0] = -100
     return x.to(device), y.to(device)
+
+
+def fact_window_impurities(fact_ids, block_size, *, space="input"):
+    """Indices of every ``block_size``-aligned window carrying MORE THAN ONE distinct fact id.
+
+    The ONE purity predicate for the fact-aligned path (D-05): ``build_bins``' build-time
+    proof 7, the loader's run-time check and the tests all drive THIS implementation, so
+    there is no second copy to drift. Pure numpy — no I/O, no torch. Callers pass ids they
+    read BACK FROM DISK (``np.fromfile``), never the packer's own arithmetic: a packing bug
+    that writes correct offsets over wrong bytes passes an offset check and must fail this one.
+
+    **Length contract.** The aligned bins carry ``n_windows * block_size + 1`` elements. The
+    trailing ``+1`` is the LABEL-SHIFT TAIL — one pad slot so that every window's target slice
+    ``[k*B+1 : (k+1)*B+1]`` is in range for all ``k``, which is what makes the target-space
+    claim assertable DIRECTLY over all ``n`` windows instead of inferred from three premises.
+    A length whose ``(len - 1) % block_size`` is non-zero therefore raises HERE, before the
+    purity loop, and the message names the remainder so a truncate-by-1 adversary is
+    distinguishable from an impurity finding.
+
+    **``space`` takes exactly two values and defaults to ``"input"``.** There is no union mode,
+    and adding one would be a denial of service rather than a stricter check: on a CORRECTLY
+    built bin target space is never empty (see below), so a union default would make
+    ``build_bins``' proof 7 abort every aligned build.
+
+    * ``"input"`` — ``fact_ids[:-1].reshape(-1, block_size)``. This is D-05/SC2's claim
+      verbatim: *no ``block_size``-aligned window contains token ids from two fact shards* is a
+      statement about the WINDOW. Proof 7(a)'s ``== []`` assertion and the loader's run-time
+      check both use it.
+    * ``"target"`` — ``fact_ids[1:].reshape(-1, block_size)``. MEASURED, and it is why the
+      default is a correction rather than a preference: window ``k``'s target slice is
+      ``fact_ids[k*block_size + 1 : (k+1)*block_size + 1]``, whose LAST element is index
+      ``(k+1)*block_size`` — the FIRST token of window ``k+1``. When window ``k`` is a fact's
+      last window that element belongs to the NEXT fact, so on a correct bin target space
+      returns EXACTLY ``n_facts - 1`` rows, never ``[]``.
+
+    That target-space count is a POSITIVE property of a correct bin, not a defect to be
+    waived, and it is the claim that actually supports *one micro-step is one privacy record*:
+    each boundary token is the next fact's ``<|system|>`` token, which carries mask 0
+    (``src/personacore/dialogue/serialize.py:81``, ``emit([system_id], 0)``), so
+    ``y[m == 0] = -100`` above sets it to ``F.cross_entropy``'s ``ignore_index`` and it
+    contributes NOTHING to the record's loss. The label shift therefore never leaks one fact's
+    gradient into another record's micro-step.
+
+    **DERIVED CONSTRAINT on the packer — a consequence, not a decision.** Padding slots inside
+    a fact's final window MUST carry that fact's OWN id. A reserved sentinel would put two
+    distinct ids in every fact's last window in INPUT space, making this guard permanently
+    unsatisfiable with a long debugging path, and sentinel ``0`` additionally collides with
+    fact index 0 in a ``uint16`` map. The padding is masked to 0 anyway, so the id it carries
+    is purely an accounting label.
+
+    Returns:
+        ``list[int]`` — impure window indices, in ascending order. Empty is the PASS condition
+        for ``space="input"`` only.
+    """
+    if space not in ("input", "target"):
+        raise ValueError(
+            f"fact_window_impurities: space={space!r} is not a supported space — pass "
+            "'input' (the default, D-05/SC2's window claim) or 'target' (the +1 label-shift "
+            "reading). There is deliberately no union mode: it would refuse every correctly "
+            "built bin."
+        )
+    fact_ids = np.asarray(fact_ids)
+    remainder = (len(fact_ids) - 1) % block_size
+    if remainder != 0:
+        raise ValueError(
+            f"fact bin length {len(fact_ids)} is not n_windows * block_size + 1 for "
+            f"block_size={block_size}: (len - 1) % block_size == {remainder}, expected 0. "
+            "The trailing +1 is the LABEL-SHIFT TAIL, one pad slot so every window's target "
+            "slice is in range — a bin off by this remainder is truncated or mis-packed, "
+            "which is a LENGTH failure and not a window-content finding."
+        )
+    rows = (fact_ids[:-1] if space == "input" else fact_ids[1:]).reshape(-1, block_size)
+    return [k for k in range(rows.shape[0]) if np.unique(rows[k]).size != 1]
