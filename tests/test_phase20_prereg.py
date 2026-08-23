@@ -529,6 +529,183 @@ def test_phase20_glob_sees_the_phase20_prefix_red_then_green(tmp_path):
     )
 
 
+def test_phase21_glob_sees_the_phase21_prefix_red_then_green(tmp_path):
+    """Phase 21 D-20/D-22: watch the ordering guard go RED then GREEN on a real `phase21_*` path.
+
+    **Why this exists, and why it cannot wait for plan 21-11.** The live
+    `test_phase21_prereg_is_frozen_before_every_phase21_result` is vacuous today BY CONSTRUCTION:
+    nothing matches `results/phase21_*` yet, so `checked` is 0 and its product assertion reads
+    `0 == n * 0` — green having compared nothing. `results/phase21_*` has therefore never once been
+    OBSERVED matching anything. Reading a glob pattern and confirming it bites are different acts,
+    and a pattern that reads correctly while matching nothing is green over nothing: precisely the
+    failure this phase exists to refuse. This drives the prefix through five states in a throwaway
+    repository and asserts the observed outcome at each, so the prefix is demonstrated BEFORE plan
+    21-11 lands the first artifact — while being wrong about it is still cheap.
+
+    **State 2 is the load-bearing one.** An ORDERING failure is unreachable unless
+    `git ls-files "results/phase21_*"` matched the probe, so the `ls-files` assertion there is a
+    POSITIVE OBSERVATION of the prefix rather than an inference from the pattern's text. It is not
+    decoration: `V4_ARTIFACT_GLOBS` holds BOTH `results/phase20_*` and `results/phase21_*` since
+    plan 21-01, so a mutation swapping this fixture's `artifact_glob` to the phase20 prefix would
+    still satisfy the `assert artifact_glob in globs` consistency check and would be INVISIBLE
+    without it. That mutation was run and watched failing here — see plan 21-03's summary.
+
+    **It runs against the SAME `_assert_ordering_holds` the live guard calls**, parameterized on
+    `root`, rather than copying its body. A lookalike copy would prove something about a different
+    function than the one CI executes, and would decay silently the moment the real helper changed.
+    That is also why this is a COMMITTED FIXTURE re-executed every CI run rather than a one-time
+    manual observation in a scratch directory.
+
+    **Reflexivity, recorded so it reads as neither a defect nor a licence.** Re-measured on this
+    repository: `git merge-base --is-ancestor X X` exits **0**. A pin and an artifact landing in the
+    SAME commit therefore PASS this guard. D-20's "strictly after" is a DISCIPLINE tighter than the
+    mechanism enforces, deliberately — the gap is written down here so a later reader meets it as a
+    known property instead of discovering it and mistaking it for either a bug or permission.
+
+    **The real repository's history is never touched, and that is not a tidiness concern.** Every
+    probe lives under pytest's `tmp_path` and dies with it; every `_git` call below passes
+    `cwd=tmp_path`, never the module's `_ROOT` default, and there is no `shell=True` and no `rm -rf`
+    anywhere in this module. A `phase21_`-named probe escaping into the real history would
+    PERMANENTLY corrupt the ordering evidence this phase exists to produce: the ancestry loop takes
+    `adds[-1]`, the EARLIEST add, so deleting the file afterwards could not launder it — which is
+    exactly what state 4 below measures across a real delete-and-re-add cycle. The invariant
+    `git log --diff-filter=A -- 'results/phase21_*'` is EMPTY must hold before and after this runs;
+    `test_phase21_has_no_artifact_yet_so_the_arming_is_honest` asserts it from the outside.
+
+    Identity is set as LOCAL repo config: it writes only to `tmp_path/.git/config`, needs no
+    widening of `_git`, and makes the fixture independent of whether the host has a global
+    `user.email` at all (CI runners generally do not).
+    """
+    _git("init", "-q", cwd=tmp_path)
+    _git("config", "user.name", "phase21-fixture", cwd=tmp_path)
+    _git("config", "user.email", "phase21-fixture@localhost", cwd=tmp_path)
+
+    probe = tmp_path / "results" / "phase21_probe.json"
+    probe.parent.mkdir()
+    probe.write_text('{"probe": true}\n')
+    _git("add", "results/phase21_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 1: a phase21 artifact, before any pin exists", cwd=tmp_path)
+    state1_add = _git(
+        "log", "--diff-filter=A", "--format=%H", "--", "results/phase21_probe.json", cwd=tmp_path
+    ).split()[-1]
+
+    # STATE 1 — probe committed, NO pin yet. RED, but a DIFFERENT RED: the run stops at
+    # `assert prereg_commits` long before any ancestry is compared. Distinguishing the two reds is
+    # the point — "the pre-registration does not exist" and "the ordering is violated" are
+    # different findings, and a fixture that only checked "something raised" would conflate them.
+    with pytest.raises(AssertionError) as no_pin:
+        _assert_ordering_holds(
+            root=tmp_path,
+            prereg_artifact=PHASE21_PREREG_ARTIFACT,
+            artifact_glob="results/phase21_*",
+            globs=V4_ARTIFACT_GLOBS,
+        )
+    assert PHASE21_PREREG_ARTIFACT in str(no_pin.value), (
+        "state 1 raised an AssertionError that does not name the pin — the expected red here is "
+        f"the `assert prereg_commits` branch reporting that {PHASE21_PREREG_ARTIFACT} has no "
+        "commits, not some other assertion that happens to fire first"
+    )
+
+    # STATE 2 — the pin lands SECOND, i.e. the ordering this phase forbids.
+    pin = tmp_path / PHASE21_PREREG_ARTIFACT
+    pin.parent.mkdir()
+    pin.write_text(
+        "# stand-in for the pin: the CONTENT is irrelevant here, the ORDER is the subject\n"
+    )
+    _git("add", PHASE21_PREREG_ARTIFACT, cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 2: the pin, committed AFTER the artifact", cwd=tmp_path)
+
+    # THE PROOF THE GLOB SEES THE `phase21_` PREFIX, stated rather than inferred: the ordering
+    # failure below is unreachable unless this match set is non-empty. Without this assertion a
+    # swap to `results/phase20_*` — also a member of V4_ARTIFACT_GLOBS — would go unnoticed.
+    assert _git("ls-files", "results/phase21_*", cwd=tmp_path).split() == [
+        "results/phase21_probe.json"
+    ], "`git ls-files results/phase21_*` did not match a committed results/phase21_probe.json"
+
+    with pytest.raises(subprocess.CalledProcessError) as out_of_order:
+        _assert_ordering_holds(
+            root=tmp_path,
+            prereg_artifact=PHASE21_PREREG_ARTIFACT,
+            artifact_glob="results/phase21_*",
+            globs=V4_ARTIFACT_GLOBS,
+        )
+    # `subprocess.run(check=True)` fails with no explanatory message, so name the failing command:
+    # without this, ANY CalledProcessError from ANY git call would satisfy the `raises` above.
+    assert tuple(out_of_order.value.cmd[:3]) == ("git", "merge-base", "--is-ancestor"), (
+        f"state 2 failed on {out_of_order.value.cmd} — the expected red is the ancestry check "
+        "itself, not an incidental git failure elsewhere in the helper"
+    )
+
+    # STATE 3 — `git rm` the probe and do not re-add it. GREEN at tracked=0: the red IS reversible,
+    # but ONLY by not having the artifact, which for a real phase means having no result at all.
+    _git("rm", "-q", "results/phase21_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 3: remove the probe", cwd=tmp_path)
+    assert _git("ls-files", "results/phase21_*", cwd=tmp_path) == ""
+    _assert_ordering_holds(
+        root=tmp_path,
+        prereg_artifact=PHASE21_PREREG_ARTIFACT,
+        artifact_glob="results/phase21_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+
+    # STATE 4 — re-add at the IDENTICAL path. Measured gotcha: `git rm` of the last file in
+    # `results/` removes the directory from the working tree, so the re-add needs the mkdir.
+    probe.parent.mkdir(exist_ok=True)
+    probe.write_text('{"probe": true}\n')
+    _git("add", "results/phase21_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 4: re-add at the identical path", cwd=tmp_path)
+
+    adds = _git(
+        "log", "--diff-filter=A", "--format=%H", "--", "results/phase21_probe.json", cwd=tmp_path
+    ).split()
+    assert len(adds) == 2, f"expected two adds after a delete-and-re-add cycle, got {adds}"
+    # LAUNDERING IS IMPOSSIBLE. `git log` is newest-first, so `adds[-1]` is the EARLIEST add — and
+    # it is byte-identical to the SHA state 1 recorded, across a delete and a re-add. Once the
+    # ordering is violated, deleting the artifact and committing it again does not reset it. This
+    # is the property that makes a phase21-named probe in the REAL history unrecoverable.
+    assert adds[-1] == state1_add, (
+        f"the earliest add is now {adds[-1]} but state 1 recorded {state1_add} — `adds[-1]` no "
+        "longer identifies the FIRST add, so a delete-and-re-add cycle could launder a red guard"
+    )
+
+    with pytest.raises(subprocess.CalledProcessError) as still_out_of_order:
+        _assert_ordering_holds(
+            root=tmp_path,
+            prereg_artifact=PHASE21_PREREG_ARTIFACT,
+            artifact_glob="results/phase21_*",
+            globs=V4_ARTIFACT_GLOBS,
+        )
+    assert tuple(still_out_of_order.value.cmd[:3]) == ("git", "merge-base", "--is-ancestor")
+
+    # STATE 5 — the GREEN half of RED-then-GREEN. The probe is gone and a real-shaped artifact
+    # lands whose FIRST add comes after the pin's commit: exactly one tracked artifact, checked
+    # against the pin, and the guard passes. The filename is the one plan 21-11 actually commits,
+    # so this state rehearses the real transition rather than a stand-in shape.
+    _git("rm", "-q", "results/phase21_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 5: remove the probe for good", cwd=tmp_path)
+    artifact = tmp_path / "results" / "phase21_privacy_unit.json"
+    artifact.parent.mkdir(exist_ok=True)
+    artifact.write_text('{"note": "shape only — this repository is a throwaway"}\n')
+    _git("add", "results/phase21_privacy_unit.json", cwd=tmp_path)
+    _git(
+        "commit",
+        "-q",
+        "-m",
+        "state 5: a real-shaped artifact, strictly after the pin",
+        cwd=tmp_path,
+    )
+
+    assert _git("ls-files", "results/phase21_*", cwd=tmp_path).split() == [
+        "results/phase21_privacy_unit.json"
+    ]
+    _assert_ordering_holds(
+        root=tmp_path,
+        prereg_artifact=PHASE21_PREREG_ARTIFACT,
+        artifact_glob="results/phase21_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+
+
 def _collapsed_glob_guard():
     """A glob that stops matching makes every scan below green over nothing."""
     assert len(_GATE_MODULES) >= 1, (
