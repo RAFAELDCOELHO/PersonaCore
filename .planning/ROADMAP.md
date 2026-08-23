@@ -361,7 +361,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 21-10-PLAN.md — the multiplicity instrument, its conservation law, and the proof that it can report ≠ 1 (D-26)
+- [x] 21-10-PLAN.md — the multiplicity instrument, its conservation law, and the proof that it can report ≠ 1 (D-26)
 
 **Wave 5** *(blocked on Wave 4 completion)* — 21-09 is serialized BEHIND 21-10, not beside it: its three deliberate-REDs transiently mutate working-tree files it does not own (including the ancestry-guarded `scripts/phase18_extraction.py`) that 21-10's full-suite verification reads
 
@@ -600,7 +600,7 @@ capacities — with every number in prose generated from a committed record rath
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
-| 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 8/11 | In Progress | - |
+| 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 9/11 | In Progress | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
