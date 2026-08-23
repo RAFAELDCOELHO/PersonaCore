@@ -307,8 +307,14 @@ SC5_GUARD_SET = (
 # =====================================================================================
 
 
-def test_frozen_instruments_are_byte_unchanged():
+def test_instruments_unchanged_byte_for_byte():
     """SC5's "unchanged" half, as two sha256 pins.
+
+    NAMED so that ``-k instruments_unchanged`` actually SELECTS it. ``21-VALIDATION.md:88-89``
+    pins that selector for both of this test's rows, and against the plan's own name
+    (``..._frozen_instruments_are_byte_unchanged``) it matched nothing: pytest reported
+    "4 deselected" and exited **0**. A published verification command that selects zero tests
+    passes vacuously, which is the one failure mode a verification table cannot afford.
 
     Read as BYTES, never as text. The reason is copied here rather than cited to
     ``tests/test_package.py:34-35``, because a rule whose reason lives only in another file drifts
