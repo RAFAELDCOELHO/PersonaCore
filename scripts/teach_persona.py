@@ -223,7 +223,19 @@ REAL_RUN_REPLAY_RATIO = REPLAY_ARM_RATIO
 # pre-registration block exists to prevent, so the real run stays first person.
 REAL_RUN_SECOND_PERSON = False
 
-ARMS = ("cal_first_person", "cal_first_person_replay", "cal_second_person", "real")
+ARMS = (
+    "cal_first_person",
+    "cal_first_person_replay",
+    "cal_second_person",
+    "real",
+    # v4.0's two DP capacities (UNIT-06). NEW ARM NAMES rather than an `arm_spec(..., n_facts=)`
+    # axis, because `arm_outputs` already scopes `bin`, `mask`, `csv`, `checkpoint` and `adapter`
+    # by arm NAME: two names get disjoint paths and `refuse_if_exists` protection for free, while
+    # an `n_facts` axis `arm_outputs` knows nothing about would collide with the `real` arm's
+    # RECORDED bins.
+    "dp_n8",
+    "dp_n64",
+)
 
 
 def _require_go_verdict(report_path):
@@ -319,12 +331,58 @@ def refuse_if_exists(paths):
             )
 
 
+def _slot_forms_for(facts):
+    """``None`` for a purely published-slot corpus; the WIDENED union when filler is present.
+
+    ``arm_spec('dp_n64')`` returns 8 locked facts + 56 filler facts, and the filler slots are
+    DELIBERATELY disjoint from the 11 published ones (D-13/D-16). ``render_family``'s default
+    grammar is ``fs.SLOT_FORMS``, which does not define them — so without this the n=64 capacity
+    is not reachable at all: it raises ``KeyError: 'filler_boat_name'`` on the FIRST filler fact.
+    Measured, not reasoned about: ``arm_spec`` alone makes n=64 *declarable*, not *buildable*.
+
+    Returning ``None`` for every existing arm is the point. ``render_family`` then runs the two
+    lines it always ran (its own docstring: "the default is not merely EQUAL to the v2.0 output —
+    it is the same code path"), so ``tests/fixtures/golden_render_family_v2.json`` and every
+    recorded arm's bins are untouched by this function's existence.
+
+    Both guards below are correctness requirements at the same trust boundary the ``== 10`` wall
+    protects one level down. A ``{**published, **filler}`` union silently PREFERS the filler
+    mapping on a key collision, which would let a filler grammar quietly replace a published slot's
+    rendering; and an undeclared slot would otherwise surface as a bare ``KeyError`` from inside
+    ``_render_family`` naming no fact and no path.
+    """
+    if all(fact.slot in fs.SLOT_FORMS for fact in facts):
+        return None
+
+    import phase21_filler  # lazy, for the same reason `arm_spec`'s is — see its docstring
+
+    clash = sorted(set(fs.SLOT_FORMS) & set(phase21_filler.FILLER_SLOT_FORMS))
+    if clash:
+        raise SystemExit(
+            f"[teach_persona] filler slots {clash} collide with the PUBLISHED slot grammar. The "
+            "union below prefers the filler mapping, so a collision would silently replace a "
+            "published slot's rendering. D-13 requires the two slot sets to be disjoint."
+        )
+    widened = {**fs.SLOT_FORMS, **phase21_filler.FILLER_SLOT_FORMS}
+    undeclared = sorted({fact.slot for fact in facts} - set(widened))
+    if undeclared:
+        raise SystemExit(
+            f"[teach_persona] no slot grammar defines {undeclared} — neither "
+            "phase14_factset.SLOT_FORMS nor phase21_filler.FILLER_SLOT_FORMS. Rendering would "
+            "raise a bare KeyError from inside _render_family, naming no fact and no arm."
+        )
+    return widened
+
+
 def render_episodes(facts, family_ids, *, second_person=False):
     """The facts x families x instances cross product, as ``(question, answer)`` pairs."""
     episodes = []
+    forms = _slot_forms_for(facts)
     for fact in facts:
         for family_id in sorted(family_ids):
-            episodes.extend(fs.render_family(family_id, fact, second_person=second_person))
+            episodes.extend(
+                fs.render_family(family_id, fact, second_person=second_person, forms=forms)
+            )
     return episodes
 
 
@@ -708,9 +766,14 @@ def sanity_check(tok, arm, bin_path, mask_path, facts, stats):
         )
 
     # --- proof 5: DEMO-05's paraphrase band, per fact ---
+    # `forms` is resolved from the ARM's facts for the same reason `render_episodes` resolves it:
+    # this is the SECOND `render_family` call site on the dp_n64 build path, and without it the
+    # n=64 arm builds its bins successfully and then dies here on `KeyError: 'filler_boat_name'`.
+    # It is `None` for every published-slot arm, so the proof runs the code path it always ran.
+    forms = _slot_forms_for(facts)
     lo, hi = fs.PARAPHRASES_PER_FACT_TARGET
     for fact in facts:
-        count = sum(len(fs.render_family(fid, fact)) for fid in fs.TAUGHT_FAMILY_IDS)
+        count = sum(len(fs.render_family(fid, fact, forms=forms)) for fid in fs.TAUGHT_FAMILY_IDS)
         if not lo <= count <= hi:
             raise SystemExit(
                 f"[teach_persona] {arm}: fact {fact.id!r} has {count} taught paraphrases, "
@@ -739,7 +802,29 @@ def sanity_check(tok, arm, bin_path, mask_path, facts, stats):
 
 
 def arm_spec(arm):
-    """(facts, second_person, replay_ratio) for one arm — the only per-arm branching."""
+    """(facts, second_person, replay_ratio) for one arm — the only per-arm branching.
+
+    **The two v4.0 DP arms exclude the SOFT TIER entirely (D-14), and the reason is a
+    pre-registration, not a preference.** v4.0 already pre-registered its small capacity as
+    literally 8: ``REQUIREMENTS.md:84`` (GATE-10, ``[x]`` COMPLETE inside the FROZEN
+    ``scripts/mitigation_gate.py``), ``REQUIREMENTS.md:173`` / ``ROADMAP.md:430-433`` (CAL-03),
+    ``REQUIREMENTS.md:206`` (FRONT-01), and ``ROADMAP.md:52``'s pre-registered null at L=8 facts.
+    An n=10 small capacity contradicts GATE-10, CAL-03 and FRONT-01 at once. The free second
+    benefit: exclusion keeps D-01 and D-02 valid EXACTLY AS MEASURED — both benchmarked 8 facts at
+    the ragged ``windows_per_fact = (4,4,4,4,4,5,4,4)``; at n=10 both soft facts are 5-window and
+    both measurements would have needed redoing. The ``real`` arm's
+    ``LOCKED_FACTS + SOFT_TIER_FACTS`` below is a RECORDED v3.0 composition whose bins are
+    committed evidence, so it is left alone.
+
+    **``replay_ratio = 0.0`` on both DP arms is LOAD-BEARING, not a default.** Under D-10 replay
+    LEAVES the teaching bin entirely and is drawn at TRAIN time from ``data/dialog_train.bin``
+    through ``train()``'s replay seam at the public volume ``replay_window_budget(n_facts)``. The
+    teaching bin therefore holds FACTS ONLY, which is what makes ``grad_accum_steps = n_facts``
+    literally true with no roadmap amendment. A non-zero ratio here would put replay back in the
+    bin and silently reintroduce D-09's measured consequence: 7,581 replay tokens is roughly 30
+    windows against 33 fact windows, so an aligned loader turning every window into a micro-step
+    would give ``grad_accum_steps = 63``, not 8 — falsifying SC2 by about 7.9x.
+    """
     if arm == "cal_first_person":
         return fs.CALIBRATION_FACTS, False, REPLAY_RATIO
     if arm == "cal_first_person_replay":
@@ -755,6 +840,17 @@ def arm_spec(arm):
             REAL_RUN_SECOND_PERSON,
             REAL_RUN_REPLAY_RATIO,
         )
+    if arm == "dp_n8":
+        return fs.LOCKED_FACTS, False, 0.0
+    if arm == "dp_n64":
+        # LAZY import, deliberately not at module scope: it keeps `teach_persona`'s import graph
+        # unchanged for every existing consumer (`tests/test_phase14_scoring.py`'s clean-room
+        # scan among them), and `phase21_filler`'s import-time collision refusal still runs
+        # unconditionally in CI through `tests/test_phase21_filler.py` and
+        # `tests/test_phase21_sc5.py`. Nothing is lost and one coupling is avoided.
+        import phase21_filler
+
+        return fs.LOCKED_FACTS + phase21_filler.FILLER_FACTS, False, 0.0
     raise SystemExit(f"[teach_persona] unknown arm {arm!r} — expected one of {ARMS}")
 
 
