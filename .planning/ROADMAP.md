@@ -365,7 +365,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)* — 21-09 is serialized BEHIND 21-10, not beside it: its three deliberate-REDs transiently mutate working-tree files it does not own (including the ancestry-guarded `scripts/phase18_extraction.py`) that 21-10's full-suite verification reads
 
-- [ ] 21-09-PLAN.md — the `dp_n8` / `dp_n64` arms (D-14) and the SC5 non-disturbance proof across all 8 `== 10` wall sites (D-18)
+- [x] 21-09-PLAN.md — the `dp_n8` / `dp_n64` arms (D-14) and the SC5 non-disturbance proof across all 8 `== 10` wall sites (D-18)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -600,7 +600,7 @@ capacities — with every number in prose generated from a committed record rath
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
-| 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 9/11 | In Progress | - |
+| 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 10/11 | In Progress | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
