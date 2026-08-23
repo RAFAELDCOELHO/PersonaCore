@@ -4,7 +4,7 @@ PersonaCore is a from-scratch, on-device research system for studying parametric
 personalization. It first demonstrated that synthetic profile values could be recalled from
 LoRA weights without prompt-side facts. A subsequent adversarial audit found that 88.5% of
 held-out questions were extractable under the strongest of four tested black-box attack
-families, against a 0% baseline with no adapter present — and that selective erasure of a
+families, against a no-adapter control of exactly 0/104 — and that selective erasure of a
 single fact destroyed 77.6% of the model's dialogue adaptation while failing to protect any
 of seven non-target facts. The project therefore studies both the capabilities and the
 privacy costs of weight-based memory.
