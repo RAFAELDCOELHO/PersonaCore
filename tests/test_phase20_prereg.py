@@ -90,6 +90,23 @@ WRAPPED_INCIDENT_PHRASE = "the three reductions"
 # into, and after the first artifact every commit here is a reviewed cost.
 PHASE20_PREREG_ARTIFACT = "scripts/mitigation_gate.py"
 
+# Phase 21's pin (D-19). THIS HAND-WRITTEN EXPLICIT PATH — and NOT the `mitigation_*.py` filename —
+# is what confers the freeze, and the distinction was MEASURED before it was relied on because half
+# the obvious premise is false. The premise "a mitigation_*.py module is frozen once its first
+# artifact lands" is true of the FREEZE and false of the NAMING:
+#
+#   * the `_GATE_MODULES` glob (`:72`) reaches exactly ONE content test — the import-graph scan at
+#     `:474` — plus `_collapsed_glob_guard()` and the `_prose.py` exclusion. It confers no freeze.
+#   * `_MITIGATION_GATE_PATH` is SINGULAR and drives `:740`, `:805`, `:928`, `:991`. It does NOT
+#     extend to a sibling.
+#   * only a `prereg_artifact=` constant reaches `_assert_ordering_holds`, and that is the whole
+#     mechanism.
+#
+# So a `mitigation_*.py` sibling is protected-but-not-frozen BY DEFAULT, which is exactly the
+# "middle ground" a phase might otherwise think it had to invent (D-21). Naming a module here is
+# the deliberate act that gives that up, and it is irrevocable from the first matching artifact.
+PHASE21_PREREG_ARTIFACT = "scripts/mitigation_unit.py"
+
 # Every v4.0 results artifact this phase can PROVE it watches — `phase20_*` and nothing else
 # (D-33). Pre-declaring `phase21_*`..`phase28_*` was considered and REJECTED: only `phase20_*` can
 # be proven RED-then-GREEN by this phase's own throwaway-repo fixture, and an advance declaration
@@ -99,7 +116,18 @@ PHASE20_PREREG_ARTIFACT = "scripts/mitigation_gate.py"
 # catches an EMPTY match set, never an INCOMPLETE one, so a future phase that forgets its prefix
 # fails silently. That risk is ACCEPTED in exchange for never asserting coverage this phase cannot
 # demonstrate. So this tuple is DELIBERATELY NARROW, not stale.
-V4_ARTIFACT_GLOBS = ("results/phase20_*",)
+#
+# PHASE 21 ADDED `results/phase21_*` HERE, AND FOUND THAT THIS ADDITION ENFORCES NOTHING BY ITSELF
+# (Phase 21 D-20). Recorded rather than left for the next phase to re-discover: `globs` is read in
+# exactly ONE place inside `_assert_ordering_holds` — the `assert artifact_glob in globs`
+# consistency check at `:129` — while the ordering loop at `:150` runs on the SINGULAR
+# `artifact_glob`. So widening this tuple buys a consistency check and no ancestry check at all.
+# D-33 above names the glob addition as the obligation and stops there, which means a phase doing
+# exactly what D-33 literally says would ship an UNENFORCED DECLARATION: a tuple entry that reads
+# like coverage while nothing iterates it. BOTH HALVES ARE REQUIRED — this entry AND a live test
+# calling `_assert_ordering_holds(artifact_glob="results/phase21_*")`. See
+# `test_phase21_prereg_is_frozen_before_every_phase21_result` for the second half.
+V4_ARTIFACT_GLOBS = ("results/phase20_*", "results/phase21_*")
 
 
 def _git(*args, cwd=_ROOT):
@@ -209,6 +237,67 @@ def test_phase20_prereg_is_frozen_before_every_phase20_result():
         prereg_artifact=PHASE20_PREREG_ARTIFACT,
         artifact_glob="results/phase20_*",
         globs=V4_ARTIFACT_GLOBS,
+    )
+
+
+def test_phase21_prereg_is_frozen_before_every_phase21_result():
+    """Phase 21 D-20: the privacy-unit pin never moved after a Phase 21 number existed.
+
+    **Vacuous TODAY BY CONSTRUCTION, and that is the point rather than a weakness.** Plan 21-01 is
+    the FIRST plan of Phase 21 and it arms this guard deliberately before any `results/phase21_*`
+    artifact exists, so `git ls-files results/phase21_*` matches nothing, `checked` is 0, and the
+    product assertion reads `0 == n * 0` — green, having compared nothing. Arming first is what
+    buys the guarantee: `git ls-files` is this guard's input, so an artifact becomes watched when it
+    is COMMITTED, not when it is written, and `:157` (`adds[-1]`, the EARLIEST add) makes a wrong
+    order permanent. A guard retro-fitted once there is something to miss has already missed it.
+
+    The closing equivalence assertion at `:178` is what stops that vacuity SURVIVING the artifacts'
+    arrival: it ties `checked` to whether anything was tracked at all, so the first committed Phase
+    21 result makes a still-empty match set RED instead of quietly green.
+
+    **This calls the SAME `_assert_ordering_holds` the Phase 20 guard calls**, parameterized on
+    `root`, rather than copying its body. A lookalike copy would prove something about a different
+    function — the reason recorded at `:296-298`.
+
+    **Reflexivity, inherited deliberately and not silently.** Measured on this repository:
+    `git merge-base --is-ancestor X X` exits 0, so a pin and an artifact landing in the SAME commit
+    PASS this guard. D-20's "strictly after" is therefore a DISCIPLINE tighter than the mechanism
+    enforces. That gap is written down here, as it is at `:300-304`, so a later reader meets it as a
+    known property rather than mistaking it for either a bug or a licence.
+    """
+    _assert_ordering_holds(
+        root=_ROOT,
+        prereg_artifact=PHASE21_PREREG_ARTIFACT,
+        artifact_glob="results/phase21_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+
+
+def test_phase21_has_no_artifact_yet_so_the_arming_is_honest():
+    """The arm-then-write claim made CHECKABLE on this repository, not merely promised.
+
+    The guard above is vacuous today, and its docstring says so — but "vacuous because we armed
+    early" and "vacuous because the glob is looking in the wrong place" are indistinguishable from
+    inside that test. This one distinguishes them from the outside: it asserts that NO
+    `results/phase21_*` file has ever been ADDED in this history, which is the fact that makes the
+    vacuity honest rather than accidental.
+
+    **It is also the invariant that protects the evidence.** A `phase21_`-named probe reaching the
+    real git history — rather than staying under a throwaway `tmp_path` repo — would permanently
+    corrupt the ordering record this phase exists to produce, and `:157` means it could not be
+    laundered by deleting the file afterwards. This assertion fires the moment that happens.
+
+    **EXPECTED TO BE DELETED OR INVERTED BY PLAN 21-11**, which commits the first real
+    `results/phase21_*` artifact. Removing it there is the RECORDED TRANSITION from "armed, nothing
+    to watch" to "armed and watching", not an erasure of an inconvenient guard — and from that
+    commit onward the equivalence assertion at `:178` carries the same duty this test carries now.
+    """
+    adds = _git("log", "--diff-filter=A", "--format=%H", "--", "results/phase21_*").split()
+    assert adds == [], (
+        f"{len(adds)} commit(s) already ADDED a results/phase21_* artifact: {adds}. Plan 21-01 "
+        "arms the ordering guard BEFORE the first artifact, so finding one here means either the "
+        "arming is no longer first — and `adds[-1]` makes that permanent — or a phase21-named "
+        "probe escaped a tmp_path fixture into the real history"
     )
 
 
