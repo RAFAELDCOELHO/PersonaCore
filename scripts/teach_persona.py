@@ -131,6 +131,66 @@ MASK_FRACTION_BAND = (0.15, 0.95)
 REPLAY_RATIO = 0.0  # every arm except the replay arm
 REPLAY_ARM_RATIO = 1.0  # D-15's with-replay arm: one replay token per teaching token
 
+# ===== Phase 21 / UNIT-04: the v4.0 replay volume, a function of PUBLIC quantities ONLY =====
+#
+# D-11: replay VOLUME must depend only on PUBLIC quantities, never on
+# ``round(replay_ratio * teaching_tokens)``. ``teaching_tokens`` is the sum of the FACTS' OWN
+# token lengths (measured 7,581 over 8 facts, 867-1,041 per fact, a 174-token spread), so the
+# v3.0 sizing makes the volume of "public" data in the lot a function of PRIVATE content. That
+# breaks the un-clipped public-gradient argument: the public term stops being independent of the
+# private records.
+#
+# D-24 — the constant is 4 WINDOWS PER FACT = 1,024 tokens, window-quantized, never a raw token
+# count. Measured against D-01's geometry (every row travels with its denominator):
+#
+#   | constant  | tok/fact | integral windows? | share of the padded bin | vs today's 50.00% |
+#   |-----------|----------|-------------------|-------------------------|-------------------|
+#   | 3 windows |      768 | yes               |                  42.11% |            -7.9pt |
+#   | 4 windows |    1,024 | yes               |                  49.23% |           -0.77pt |
+#   | 5 windows |    1,280 | yes               |                  54.79% |            +4.8pt |
+#   | raw ~=948 |  947.625 | NO -- 3.7017      |                  50.00% |                 0 |
+#
+# Two findings killed the raw row, and the second is the load-bearing one. FIRST:
+# ``get_batch_memmap_masked`` draws whole ``block_size`` windows only, so a raw-token constant
+# needs a truncation step inside the very path D-10 chose BECAUSE it was already proven. SECOND
+# and worse: 947.625 IS 7581 / 8 -- read off the private token lengths. A constant that is
+# "public" because it is published, but whose VALUE was read off private data, is the same
+# property-not-name defect one level up, at design time. It is refused BY TEST
+# (``tests/test_phase21_replay_volume.py::test_replay_constant_is_not_derived_from_the_corpus``),
+# not merely by preference.
+#
+# The share holds across capacities for free: 49.90% at n=64, because both sides scale with
+# ``n_facts``. Nothing re-tunes.
+REPLAY_WINDOWS_PER_FACT = 4
+
+
+def replay_window_budget(n_facts, block_size=BLOCK_SIZE):
+    """The v4.0 replay volume in tokens — THE ONLY SITE that computes it (D-11 / D-24).
+
+    ``REPLAY_WINDOWS_PER_FACT * n_facts * block_size``. Every consumer calls this function:
+    :func:`_prepend_replay`'s ``n_facts`` branch, ``train()``'s replay seam via its caller, the
+    plan-21-11 driver, and every test. RESEARCH Open Question 3 asks which site the differential
+    should target; the answer is that there is exactly one, and its callers are named.
+
+    **Every factor is PUBLIC, and each by DERIVATION rather than by publication:**
+
+    * ``REPLAY_WINDOWS_PER_FACT = 4`` — chosen from the D-24 table above over the 3- and
+      5-window candidates. All three are small integers authored before any fact exists; none
+      was read off the corpus. The one candidate that WAS read off the corpus (947.625 = 7581/8)
+      is refused, and refused by test.
+    * ``n_facts`` — a COUNT of records, not a function of their content. D-11 names it public,
+      and SC2 pre-registers ``grad_accum_steps = n_facts`` publicly at both capacities.
+    * ``block_size`` — ``ModelConfig.block_size``, a model hyperparameter fixed before the fact
+      set existed.
+
+    So no private quantity appears on the right-hand side. That is the whole point of D-11, and
+    it is proven by a DIFFERENTIAL (vary the fact values at fixed ``n_facts``, observe the volume
+    unchanged) rather than by a constant assertion, which would pass on the defective
+    implementation whenever the corpus happened to land on the same number.
+    """
+    return REPLAY_WINDOWS_PER_FACT * int(n_facts) * int(block_size)
+
+
 # ===== The two REAL-ARM settings derived by plan 14-09's calibration run =====
 #
 # D-15 verdict, from ``replay_required(4.5737, 14.8559)`` -> **True**. Training the persona with
@@ -552,24 +612,72 @@ def _build_aligned_bins(tok, episodes, bin_path, mask_path, replay_ratio, align_
     }
 
 
-def _prepend_replay(id_shards, mask_shards, replay_ratio, teaching_tokens):
+def _prepend_replay(id_shards, mask_shards, replay_ratio, teaching_tokens, *, n_facts=None):
     """Concatenate a leading slice of the PersonaChat bins ahead of the teaching episodes.
 
     Build-time replay (Open Q5): ``train()`` accepts one ``train_bin``, so the mixture ratio is
     baked into the bin instead of into the loop. Returns the replay token count.
+
+    **Two branches, and which one runs is decided by ``n_facts`` alone (D-11 / D-24):**
+
+    ``n_facts is None`` — the LEGACY v3.0 sizing, ``round(replay_ratio * teaching_tokens)``,
+    UNCHANGED. This branch exists ONLY to reproduce the recorded v3.0 arms
+    (``cal_first_person_replay`` and ``real``), whose bins are committed evidence and which are
+    NOT DP. **It retains the D-11 side channel BY DESIGN**, so that
+    ``tests/test_phase21_replay_volume.py::test_side_channel_negative_control`` has a live
+    negative control proving the differential can see a side channel at all. An open defect that
+    is ASSERTED PRESENT by a passing test is a different artifact from an open defect tolerated
+    in silence — the retention is deliberate and it is watched.
+
+    ``n_facts`` an int — the v4.0 sizing, ``replay_window_budget(n_facts)``. ``replay_ratio`` and
+    ``teaching_tokens`` are **IGNORED ENTIRELY**: not multiplied in, not used as a cap, not
+    consulted at all. Any residual dependence on ``teaching_tokens`` reopens the channel, so the
+    precedence is total rather than blended. Both ignored inputs are named in this function's own
+    reporting (the short-slice message below) so a caller cannot mistake which sizing ran.
+
+    A raise on a non-default ``replay_ratio`` here would be self-defeating, which is why there
+    isn't one: the differential runs the SAME call ONE KWARG APART
+    (``replay_ratio=1.0, n_facts=8`` versus ``replay_ratio=1.0, n_facts=None``), and that shared
+    call shape is the only thing making the two verdicts a property of the BRANCH rather than of
+    two different fixtures. (Distinct from ``_refuse_ambiguous_aligned_input``'s ``replay_ratio``
+    refusal, which is 21-04's and stands untouched: that one guards the ALIGNED branch, where
+    D-10 puts replay outside the teaching bin entirely and a baked-in ratio would falsify
+    ``grad_accum_steps = n_facts`` by ~7.9x. The aligned branch raises before ever reaching this
+    function, so the two guards cannot collide.)
     """
+    if n_facts is not None and (
+        isinstance(n_facts, bool) or not (isinstance(n_facts, int) and n_facts > 0)
+    ):
+        raise SystemExit(
+            f"[teach_persona] _prepend_replay got n_facts={n_facts!r} — the v4.0 replay budget "
+            "is REPLAY_WINDOWS_PER_FACT * n_facts * BLOCK_SIZE, so n_facts must be a positive "
+            "int (a COUNT of privacy records). Pass n_facts=None for the legacy v3.0 sizing."
+        )
     if not DIALOG_TRAIN_BIN.exists() or not DIALOG_TRAIN_MASK.exists():
         raise SystemExit(
             f"[teach_persona] replay arm needs {DIALOG_TRAIN_BIN} and {DIALOG_TRAIN_MASK} — run "
             "`python scripts/prepare_dialog_corpus.py` first."
         )
-    want = int(round(replay_ratio * teaching_tokens))
+    if n_facts is None:
+        want = int(round(replay_ratio * teaching_tokens))
+        sizing = (
+            f"legacy v3.0 sizing round({replay_ratio} * {teaching_tokens:,} teaching_tokens) "
+            "— this branch carries the D-11 side channel by design"
+        )
+    else:
+        want = replay_window_budget(n_facts)
+        sizing = (
+            f"v4.0 public sizing replay_window_budget({n_facts}) = "
+            f"{REPLAY_WINDOWS_PER_FACT} windows/fact * {n_facts} facts * {BLOCK_SIZE} tokens; "
+            f"replay_ratio={replay_ratio} and teaching_tokens={teaching_tokens:,} were IGNORED "
+            "ENTIRELY (D-11 — the volume depends on public quantities only)"
+        )
     replay_ids = np.fromfile(DIALOG_TRAIN_BIN, dtype=np.uint16, count=want)
     replay_mask = np.fromfile(DIALOG_TRAIN_MASK, dtype=np.uint8, count=want)
     if len(replay_ids) != want or len(replay_mask) != want:
         raise SystemExit(
             f"[teach_persona] replay slice short: wanted {want:,} tokens, read "
-            f"{len(replay_ids):,} ids / {len(replay_mask):,} mask elements."
+            f"{len(replay_ids):,} ids / {len(replay_mask):,} mask elements. Sizing was {sizing}."
         )
     id_shards.insert(0, replay_ids)
     mask_shards.insert(0, replay_mask)
