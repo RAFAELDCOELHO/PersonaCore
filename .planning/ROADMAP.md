@@ -355,9 +355,9 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 21-06-PLAN.md — `get_batch_fact_aligned` and the mutate-between-calls proof that the fact map is consumed at RUN TIME (D-06)
-- [ ] 21-07-PLAN.md — the 56 unscored filler facts, a disjoint slot grammar, and the re-implemented minting discipline (D-12…D-17)
-- [ ] 21-08-PLAN.md — close the D-11 replay side channel by differential, and add `train()`'s additive replay seam (D-10, D-24, D-25)
+- [x] 21-06-PLAN.md — `get_batch_fact_aligned` and the mutate-between-calls proof that the fact map is consumed at RUN TIME (D-06)
+- [x] 21-07-PLAN.md — the 56 unscored filler facts, a disjoint slot grammar, and the re-implemented minting discipline (D-12…D-17)
+- [x] 21-08-PLAN.md — close the D-11 replay side channel by differential, and add `train()`'s additive replay seam (D-10, D-24, D-25)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -600,7 +600,7 @@ capacities — with every number in prose generated from a committed record rath
 | 9-15 | v2.0 | 39/39 | Complete | 2026-08-02 |
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
-| 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 5/11 | In Progress | - |
+| 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 8/11 | In Progress | - |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 0/TBD | Not started | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
