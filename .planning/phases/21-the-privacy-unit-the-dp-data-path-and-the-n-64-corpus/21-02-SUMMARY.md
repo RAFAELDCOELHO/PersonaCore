@@ -205,3 +205,10 @@ pattern beyond reading two already-tracked source files and writing two fixtures
 |---|---|---|
 | `a18f675` | 1 | capture script + git-cleanliness refusal + `golden_build_bins_v2.json` |
 | `4e2ce1a` | 2 | `render_family` emitter + `golden_render_family_v2.json` + single-SHA re-capture |
+| `b13b5a8` | — | this SUMMARY |
+
+## Self-Check: PASSED
+
+All four claimed files exist on disk; all three code/fixture commits present in
+`git log ef2839f..HEAD`; working tree clean; `.planning/STATE.md` and `.planning/ROADMAP.md`
+byte-unchanged (`git diff --exit-code ef2839f HEAD` returns 0) as required in worktree mode.
