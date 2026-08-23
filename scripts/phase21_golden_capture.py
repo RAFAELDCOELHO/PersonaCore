@@ -49,6 +49,28 @@ separately and unconditionally, so a float surprise can never weaken the byte-le
 STALE fixture from a code regression (T-21-16) instead of reporting one as the other. It is recorded
 for the ``build_bins`` fixture only: ``render_family`` never touches the tokenizer, and pinning an
 irrelevant input there would invite a false STALE reading later.
+
+**WHY THE RENDER FIXTURE COVERS THE FULL CROSS PRODUCT** rather than the cheaper taught-only,
+first-person subset — each axis earns its place:
+
+  - **All 8 ``FAMILY_IDS``, not just the 5 taught.** ``HELDOUT_FAMILY_IDS = {F3, F7, F8}`` feeds
+    ``heldout_questions()`` (``phase14_factset.py:830``), which feeds the published held-out split.
+    An additive edit that broke a held-out family would sail straight through a taught-only fixture.
+  - **BOTH registers.** ``_family_table`` closes over ``second_person`` PER FAMILY ID (``:763-768``)
+    and is called twice — ``FAMILIES`` (``:771``) and ``FAMILIES_SECOND_PERSON`` (``:775``, the live
+    path for the ``cal_second_person`` arm). An additive kwarg must thread through BOTH closures, so
+    a single-register fixture would let the second-person half silently keep the old behaviour.
+  - **All 10 facts**, ``LOCKED_FACTS + SOFT_TIER_FACTS`` in that order.
+
+The two register digests are asserted DIFFERENT at capture time. If they hashed alike the fixture
+would be structurally blind to a register bug, and that has to fail here — loudly, once — rather
+than pass silently forever afterwards.
+
+**BOTH the serialization kwargs AND the iteration order are recorded into the fixture**, and the
+capture drives its own ``json.dumps`` call from the very constant it records, so ``meta`` cannot
+drift from what was hashed. A consuming test that retyped either would not be reproducing this
+capture, and its failure would read as a behaviour change rather than as the transcription error it
+actually was.
 """
 
 import hashlib
@@ -74,7 +96,15 @@ WATCHED = ("scripts/teach_persona.py", "scripts/phase14_factset.py")
 # The exact json.dumps kwargs the render capture hashes through. Recorded INTO the fixture so the
 # consuming test reads its serialization from the fixture instead of retyping it — a retyped
 # separator is a wrong separator, and it would fail as a behaviour change.
+# `separators` is a list because JSON has no tuple; the call below re-tuples it.
 RENDER_SERIALIZATION = {"ensure_ascii": False, "sort_keys": False, "separators": [",", ":"]}
+
+# The iteration order the render digest is taken over, recorded for the same reason as the
+# serialization: it is a free choice, so it must be written down rather than re-guessed. NOTE it is
+# family-outer/fact-inner, which is the TRANSPOSE of `render_episodes:250-252` (fact-outer). Both
+# are fine — they cover the same set — but a consuming test that assumed the `render_episodes`
+# order would compute a different digest over identical behaviour.
+RENDER_ORDER = "for family_id in sorted(FAMILY_IDS) for fact in (LOCKED_FACTS + SOFT_TIER_FACTS)"
 
 
 def _git(*args):
@@ -171,15 +201,65 @@ def capture_build_bins(captured_at_sha):
     return payload
 
 
+def _render_digest(facts, *, second_person):
+    """sha256 over every ``render_family`` output in one register. See the module docstring."""
+    rendered = [
+        fs.render_family(family_id, fact, second_person=second_person)
+        for family_id in sorted(fs.FAMILY_IDS)
+        for fact in facts
+    ]
+    kwargs = dict(RENDER_SERIALIZATION)
+    kwargs["separators"] = tuple(kwargs["separators"])
+    blob = json.dumps(rendered, **kwargs).encode("utf-8")
+    return {
+        "sha256": hashlib.sha256(blob).hexdigest(),
+        "rows": sum(len(pairs) for pairs in rendered),
+    }
+
+
+def capture_render_family(captured_at_sha):
+    """The v2.0 ``render_family`` baseline: all 8 families x 10 facts, in BOTH registers."""
+    facts = fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS
+    first_person = _render_digest(facts, second_person=False)
+    second_person = _render_digest(facts, second_person=True)
+
+    # A fixture whose two registers hash alike is blind to exactly the bug it exists to catch: a
+    # kwarg threaded through FAMILIES but not FAMILIES_SECOND_PERSON. Fail at capture, not later.
+    if first_person["sha256"] == second_person["sha256"]:
+        raise SystemExit(
+            "[phase21_golden_capture] the two registers hashed IDENTICALLY "
+            f"({first_person['sha256']}) — a register-blind fixture cannot detect an additive "
+            "kwarg that threads through FAMILIES but not FAMILIES_SECOND_PERSON. Refusing to "
+            "write a guard that cannot fail."
+        )
+
+    payload = {
+        "meta": {
+            "captured_at_sha": captured_at_sha,
+            "family_ids": sorted(fs.FAMILY_IDS),
+            "fact_ids": [f.id for f in facts],
+            "serialization": RENDER_SERIALIZATION,
+            "order": RENDER_ORDER,
+        },
+        "first_person": first_person,
+        "second_person": second_person,
+    }
+    _write(GOLDEN_RENDER_FAMILY, payload)
+    return payload
+
+
 def main():
     _refuse_if_dirty()  # again at call time: import may have happened arbitrarily long ago
     tp.refuse_if_exists([GOLDEN_BUILD_BINS, GOLDEN_RENDER_FAMILY])
 
     captured_at_sha = _git("rev-parse", "HEAD")
     build = capture_build_bins(captured_at_sha)
+    render = capture_render_family(captured_at_sha)
 
     print(f"[phase21_golden_capture] captured at {captured_at_sha}")
     print(f"[phase21_golden_capture] build_bins  {build['stats_repr']}")
+    print(f"[phase21_golden_capture] first_person  {render['first_person']}")
+    print(f"[phase21_golden_capture] second_person {render['second_person']}")
 
 
 if __name__ == "__main__":
