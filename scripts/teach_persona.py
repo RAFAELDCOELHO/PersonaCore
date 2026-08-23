@@ -84,7 +84,10 @@ from personacore.provenance import git_sha  # noqa: E402
 from personacore.seeding import seed_everything  # noqa: E402
 from personacore.tokenizer import from_json  # noqa: E402
 from personacore.training import train  # noqa: E402
-from personacore.training.data import get_batch_memmap_masked  # noqa: E402
+from personacore.training.data import (  # noqa: E402
+    fact_window_impurities,
+    get_batch_memmap_masked,
+)
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONVBASE_BEST = _REPO_ROOT / "checkpoints" / "convbase_best.pt"  # own trusted checkpoint
@@ -233,6 +236,18 @@ def arm_outputs(arm, *, prefix="phase14"):
     }
 
 
+def fact_bin_path(bin_path):
+    """The THIRD aligned bin's path, DERIVED — never a string literal at a call site.
+
+    ``data/persona_real_train.bin`` -> ``data/persona_real_train_fact.bin``. Every consumer —
+    the loader in plan 21-06, the drivers in 21-10/21-11, and every test — resolves the fact
+    bin from HERE. This repository has shipped plans naming paths the code refuses; a single
+    derivation function is the cheapest fix.
+    """
+    bin_path = pathlib.Path(bin_path)
+    return bin_path.with_name(bin_path.stem + "_fact" + bin_path.suffix)
+
+
 def refuse_if_exists(paths):
     """Refuse-to-rerun: an arm's outputs are RECORDED evidence once written — a rerun on
     drifted code or a drifted fact set would silently replace them. Fail loud, name the file."""
@@ -253,14 +268,24 @@ def render_episodes(facts, family_ids, *, second_person=False):
     return episodes
 
 
-def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0):
+def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0, align_facts=None):
     """Encode every episode into an aligned token/mask bin pair; return the measured stats.
 
     Every episode goes through ``encode_dialogue`` with an EMPTY persona — the bare
     ``<|system|>`` clean-room shape — so the D-07 persona cap is a structural no-op here and is
     deliberately never applied. Ids are ``uint16``, mask is ``uint8``, written with the
     ``prepare_dialog_corpus.py`` shard-and-write idiom.
+
+    ``align_facts`` (Phase 21, UNIT-02) selects the RAGGED FACT-ALIGNED path — a third
+    ``*_fact.bin`` and one privacy record per fact. **When it is ``None`` this function is
+    BYTE-IDENTICAL to v2.0**, which is asserted against ``tests/fixtures/golden_build_bins_v2``
+    rather than argued: the shard loop, the ``np.concatenate`` order and all twelve stats keys
+    below are untouched, and the five additive keys appear ONLY on the aligned branch. See
+    :func:`_build_aligned_bins` for the pinned shape of the argument.
     """
+    if align_facts is not None:
+        return _build_aligned_bins(tok, episodes, bin_path, mask_path, replay_ratio, align_facts)
+
     id_shards, mask_shards, lengths, fractions = [], [], [], []
     for question, answer in episodes:
         ids, mask = encode_dialogue(tok, [], [(question, answer)])
@@ -286,6 +311,32 @@ def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0):
             f"{len(mask_all):,} — bins must be 1:1 aligned."
         )
 
+    frac = _prove_floor_and_band(ids_all, mask_all)
+
+    return {
+        "episodes": len(episodes),
+        "tokens": int(len(ids_all)),
+        "teaching_tokens": teaching_tokens,
+        "replay_tokens": replay_tokens,
+        "replay_ratio": replay_ratio,
+        "episode_len_mean": float(np.mean(lengths)),
+        "episode_len_min": int(min(lengths)),
+        "episode_len_max": int(max(lengths)),
+        "mask_fraction": frac,
+        "mask_fraction_mean": float(np.mean(fractions)),
+        "mask_fraction_min": float(min(fractions)),
+        "mask_fraction_max": float(max(fractions)),
+    }
+
+
+def _prove_floor_and_band(ids_all, mask_all):
+    """Proofs 2 and 3, shared by the flat and the fact-aligned branch; returns the fraction.
+
+    ONE implementation on purpose: two copies of a guard drift, and both branches write bins
+    that the same ``get_batch_memmap_masked`` will draw from. Extracting these changed no byte
+    written to disk and no raise message on the ``align_facts=None`` path, which the golden
+    fixture comparison in ``tests/test_phase21_aligned_bins.py`` proves rather than asserts.
+    """
     # --- proof 2: the corpus floor (14-RESEARCH Pitfall 5) ---
     # get_batch_memmap_masked calls np.random.randint(0, len(data) - block_size - 1); at or
     # below block_size + 1 that dies with an opaque `ValueError: low >= high` at step 0. A
@@ -307,12 +358,182 @@ def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0):
             "means the mask was never set and exactly 1.0 means it covers everything "
             "(PITFALLS-14). Span-level correctness is pinned by test_answer_span_mask."
         )
+    return frac
+
+
+def _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts):
+    """Every way the aligned branch can be called with two sources of truth for one bin."""
+    if not align_facts:
+        raise SystemExit(
+            "[teach_persona] align_facts is empty — the aligned path derives "
+            "grad_accum_steps = n_facts from it, so a zero-record bin is a defect, not an "
+            "empty-corpus edge case. Pass align_facts=None for the flat v2.0 path."
+        )
+    for index, pair in enumerate(align_facts):
+        if not (isinstance(pair, (tuple, list)) and len(pair) == 2 and hasattr(pair[0], "id")):
+            raise SystemExit(
+                f"[teach_persona] align_facts[{index}] is not a (fact, episodes) pair whose "
+                f"first member carries an .id — got {type(pair).__name__}. The PINNED shape is "
+                "a list of (fact, ALREADY-RENDERED episodes) pairs, i.e. "
+                "[(f, render_episodes([f], family_ids, second_person=...)) for f in facts] — "
+                "never bare Fact objects. build_bins would otherwise need the family ids AND "
+                "the second_person flag as new parameters, and every caller already holds both."
+            )
+        if not pair[1]:
+            raise SystemExit(
+                f"[teach_persona] align_facts[{index}] (fact {pair[0].id!r}) carries zero "
+                "rendered episodes — it would pack to zero windows, so its privacy record "
+                "would exist in the accounting and nowhere in the bin."
+            )
+    ids = [pair[0].id for pair in align_facts]
+    duplicates = sorted({fid for fid in ids if ids.count(fid) > 1})
+    if duplicates:
+        raise SystemExit(
+            f"[teach_persona] align_facts carries duplicate fact ids {duplicates} — "
+            "grad_accum_steps is about to be derived from len(align_facts), and a duplicate id "
+            "would silently merge two privacy records into one."
+        )
+    if episodes:
+        raise SystemExit(
+            f"[teach_persona] build_bins got {len(episodes):,} flat episodes AND "
+            f"{len(align_facts):,} align_facts pairs — two sources of truth for one bin. "
+            "Callers on the aligned branch pass episodes=[]; the flat list is never silently "
+            "ignored and never merged with the pairs."
+        )
+    if replay_ratio:
+        raise SystemExit(
+            f"[teach_persona] build_bins got replay_ratio={replay_ratio} alongside "
+            f"{len(align_facts):,} align_facts pairs. D-10 puts replay OUTSIDE the teaching "
+            "bin entirely on the aligned path — it is drawn at train time from "
+            "data/dialog_train.bin — so baking it in here would add ~30 replay windows to 33 "
+            "fact windows and falsify grad_accum_steps = n_facts by ~7.9x (D-09)."
+        )
+
+
+def _build_aligned_bins(tok, episodes, bin_path, mask_path, replay_ratio, align_facts):
+    """The RAGGED fact-aligned packer (D-01 / D-05): three 1:1 bins, one privacy record per fact.
+
+    ``align_facts`` is a list of ``(fact, episodes)`` PAIRS whose second member is that fact's
+    ALREADY-RENDERED flat ``(question, answer)`` list — the caller renders, this packs. Each
+    fact is re-rendered into its own shard rather than sliced out of the flat ``episodes`` list,
+    so the fact boundary is STRUCTURAL rather than reconstructed.
+
+    Each fact is padded to its OWN ``ceil(tokens / BLOCK_SIZE)`` windows — RAGGED, never a
+    common W. D-01 measured 10.26% padding ragged versus 24% uniform-at-W=5, and D-02 measured
+    ragged accumulation at 1.14x the batched reference versus 1.39x uniform and 1.35x
+    vmap-uniform. Ragged wins on BOTH axes, so a uniform-W implementation would be a regression
+    against measured numbers rather than a simplification.
+
+    **D-03/D-04 are a VERIFICATION here, not an implementation.** Within one fact the loss is a
+    MEAN over its windows, and that costs ZERO new loss code: ``y[m == 0] = -100``
+    (``src/personacore/training/data.py:125``) plus ``F.cross_entropy``'s default
+    ``reduction="mean"`` (``src/personacore/model/gpt.py:212``) already averages over
+    NON-IGNORED targets only, and with one fact per micro-step that IS mean-over-the-record.
+    The cost D-03 accepts, named rather than glossed: tokens are NOT weighted equally across the
+    corpus — a 5-window fact's windows count 1/5 each where a 4-window fact's count 1/4. That is
+    the right asymmetry, because it weights by PRIVACY RECORD rather than by how text happens to
+    pack into ``block_size``.
+    """
+    _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts)
+
+    id_shards, mask_shards, fact_shards = [], [], []
+    lengths, fractions, windows_per_fact = [], [], []
+    pad_tokens = 0
+    for index, (_fact, fact_episodes) in enumerate(align_facts):
+        shard_ids, shard_mask = [], []
+        for question, answer in fact_episodes:
+            ids, mask = encode_dialogue(tok, [], [(question, answer)])
+            shard_ids.extend(ids)
+            shard_mask.extend(mask)
+            lengths.append(len(ids))
+            fractions.append(float(np.mean(mask)))
+        n_windows = math.ceil(len(shard_ids) / BLOCK_SIZE)
+        pad = n_windows * BLOCK_SIZE - len(shard_ids)
+        pad_tokens += pad
+        windows_per_fact.append(n_windows)
+        # Pad token 0 and pad mask 0 (so `y[m == 0] = -100` makes it contribute nothing to the
+        # loss — D-04), and fact-id pad = THE OWNING FACT'S OWN INDEX, never a sentinel: a
+        # sentinel would put two distinct ids in every fact's LAST window IN INPUT SPACE, which
+        # makes proof 7(a) permanently unsatisfiable, and sentinel 0 collides with fact index 0.
+        id_shards.append(np.asarray(shard_ids + [0] * pad, dtype=np.uint16))
+        mask_shards.append(np.asarray(shard_mask + [0] * pad, dtype=np.uint8))
+        fact_shards.append(np.full(n_windows * BLOCK_SIZE, index, dtype=np.uint16))
+
+    # The LABEL-SHIFT TAIL: one extra element on all THREE bins, so every window's target slice
+    # [k*B+1 : (k+1)*B+1] is in range for all k and the total length is n_windows * B + 1. The
+    # tail carries the LAST fact's own index, which is what makes the final window a NON-boundary
+    # in target space — hence proof 7(b) expects n_facts - 1 boundary rows and not n_facts.
+    id_shards.append(np.zeros(1, dtype=np.uint16))
+    mask_shards.append(np.zeros(1, dtype=np.uint8))
+    fact_shards.append(np.full(1, len(align_facts) - 1, dtype=np.uint16))
+
+    ids_all = np.concatenate(id_shards)
+    mask_all = np.concatenate(mask_shards)
+    facts_all = np.concatenate(fact_shards)
+    fact_path = fact_bin_path(bin_path)
+    ids_all.tofile(bin_path)
+    mask_all.tofile(mask_path)
+    facts_all.tofile(fact_path)
+
+    # --- proof 1 (D-06's build-time half): all THREE bins must be 1:1 element-aligned ---
+    if not len(ids_all) == len(mask_all) == len(facts_all):
+        raise SystemExit(
+            f"[teach_persona] the three aligned bins are not 1:1: {bin_path} has "
+            f"{len(ids_all):,} elements, {mask_path} has {len(mask_all):,}, and {fact_path} has "
+            f"{len(facts_all):,} — all three must match element for element (D-06)."
+        )
+
+    frac = _prove_floor_and_band(ids_all, mask_all)
+
+    # --- proof 7: window purity, read BACK FROM DISK, in BOTH spaces ---
+    # np.fromfile, never the packer's own arithmetic: a check that re-derives boundaries from
+    # the same cumulative padded lengths the packer used shares the packer's defect. This is the
+    # same predicate the tests drive and the loader (plan 21-06) will call.
+    read_facts = np.fromfile(fact_path, dtype=np.uint16)
+    read_mask = np.fromfile(mask_path, dtype=np.uint8)
+
+    # (a) INPUT SPACE — THIS IS SC2: no block_size-aligned window carries two fact shards.
+    impure = fact_window_impurities(read_facts, BLOCK_SIZE)
+    if impure:
+        raise SystemExit(
+            f"[teach_persona] {len(impure)} block_size-aligned window(s) in {fact_path} carry "
+            f"ids from more than one fact, at row(s) {impure} — SC2's 'one window, one fact' "
+            "is FALSE for this bin, so grad_accum_steps = n_facts would not be a privacy claim."
+        )
+
+    # (b) TARGET SPACE — a POSITIVE claim, not a waiver. Exactly n_facts - 1 boundary rows, each
+    # one masked (so `y[m == 0] = -100` removes it from the loss) and each carrying the NEXT
+    # fact's index (so the pack is in fact order). Together these are what make "one micro-step
+    # is one privacy record" true ACROSS the label shift.
+    boundaries = fact_window_impurities(read_facts, BLOCK_SIZE, space="target")
+    expected = len(align_facts) - 1
+    if len(boundaries) != expected:
+        raise SystemExit(
+            f"[teach_persona] {fact_path} has {len(boundaries)} target-space boundary rows "
+            f"{boundaries}, expected exactly n_facts - 1 = {expected}. Each boundary is the +1 "
+            "label shift reading the first token of the next window; a different count is a "
+            "REAL packing defect (a fact split across shards, or a lost label-shift tail)."
+        )
+    for row in boundaries:
+        at = (row + 1) * BLOCK_SIZE
+        if read_mask[at] != 0:
+            raise SystemExit(
+                f"[teach_persona] target-space boundary row {row} of {fact_path} points at "
+                f"element {at}, whose mask is {read_mask[at]} and not 0 — an UNMASKED boundary "
+                "token leaks the next fact's gradient into this record's micro-step."
+            )
+        if int(read_facts[at]) != int(read_facts[row * BLOCK_SIZE]) + 1:
+            raise SystemExit(
+                f"[teach_persona] target-space boundary row {row} of {fact_path} crosses from "
+                f"fact {read_facts[row * BLOCK_SIZE]} to fact {read_facts[at]} — a boundary must "
+                "land on the NEXT fact's index, so the shards are packed out of fact order."
+            )
 
     return {
-        "episodes": len(episodes),
+        "episodes": sum(len(eps) for _fact, eps in align_facts),
         "tokens": int(len(ids_all)),
-        "teaching_tokens": teaching_tokens,
-        "replay_tokens": replay_tokens,
+        "teaching_tokens": int(sum(lengths)),
+        "replay_tokens": 0,
         "replay_ratio": replay_ratio,
         "episode_len_mean": float(np.mean(lengths)),
         "episode_len_min": int(min(lengths)),
@@ -321,6 +542,13 @@ def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0):
         "mask_fraction_mean": float(np.mean(fractions)),
         "mask_fraction_min": float(min(fractions)),
         "mask_fraction_max": float(max(fractions)),
+        # --- additive, ALIGNED BRANCH ONLY: a key added unconditionally would turn the golden
+        # fixture's stats_repr comparison red and be a scope change disguised as a refactor. ---
+        "fact_bin": str(fact_path),
+        "n_windows": int(sum(windows_per_fact)),
+        "windows_per_fact": tuple(windows_per_fact),
+        "pad_tokens": int(pad_tokens),
+        "n_facts": len(align_facts),
     }
 
 
