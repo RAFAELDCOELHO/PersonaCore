@@ -197,3 +197,183 @@ def fact_window_impurities(fact_ids, block_size, *, space="input"):
         )
     rows = (fact_ids[:-1] if space == "input" else fact_ids[1:]).reshape(-1, block_size)
     return [k for k in range(rows.shape[0]) if np.unique(rows[k]).size != 1]
+
+
+def fact_window_span(fact_ids, fact_index, block_size):
+    """The contiguous run of ``block_size``-aligned windows that fact ``fact_index`` OWNS.
+
+    Returns ``(start_element, n_windows)`` — the element offset of the fact's FIRST window and
+    how many windows it spans (4 or 5 under D-01's RAGGED geometry). Pure numpy: no I/O, no
+    torch, no ``device``.
+
+    **EXPORTED on purpose, and the docstring says why because the reason is a design
+    constraint, not a convenience.** Plan 21-10's ``count_aligned`` needs exactly this window
+    range in order to observe ``per_step_distinct_facts``; a second copy of the arithmetic
+    would be a second implementation, free to drift from the one the loader actually draws
+    through, so the counter would end up measuring a different draw than the one served. One
+    function, two callers.
+
+    Window owners are read from the FACT BIN'S CONTENTS — ``fact_ids[k * block_size]`` for each
+    window ``k`` — never from a ``cumsum`` of the padded lengths. That distinction is the whole
+    of D-06: a cumsum reconstruction reproduces the packer's own arithmetic and therefore shares
+    any packing defect, and it makes run-time consumption of the map UNOBSERVABLE — a loader
+    that never reads the bytes cannot be caught reading the wrong ones.
+
+    Raises ``ValueError`` if the fact owns no window (its privacy record exists in the
+    accounting and nowhere in the bin) or if its windows are not contiguous (a fact split
+    across shards is a packing defect, not a draw to serve).
+
+    The ``n_windows * block_size + 1`` LENGTH contract is deliberately not re-checked here: it
+    lives in :func:`fact_window_impurities`, the one purity predicate, and the three-bin length
+    equality lives in :func:`get_batch_fact_aligned`. The owners are read with a STRIDED slice
+    rather than a reshape precisely so this function carries no second copy of that guard.
+    """
+    fact_ids = np.asarray(fact_ids)
+    n_windows = (len(fact_ids) - 1) // block_size
+    owners = fact_ids[: n_windows * block_size : block_size]
+    rows = np.flatnonzero(owners == fact_index)
+    if rows.size == 0:
+        raise ValueError(
+            f"fact {fact_index} owns no block_size-aligned window in a fact map of "
+            f"{n_windows} window(s) carrying ids {np.unique(owners).tolist()} — that fact's "
+            "privacy record exists in the accounting and nowhere in the bin, so "
+            "grad_accum_steps = n_facts would count a record the loop never draws."
+        )
+    if int(rows[-1] - rows[0]) + 1 != int(rows.size):
+        gaps = [int(rows[j]) for j in range(1, rows.size) if rows[j] - rows[j - 1] != 1]
+        raise ValueError(
+            f"fact {fact_index} owns NON-CONTIGUOUS windows {rows.tolist()} — the run breaks "
+            f"before window(s) {gaps}. A fact split across shards is a packing defect, not a "
+            "draw to serve: its micro-step would not be one privacy record."
+        )
+    return int(rows[0]) * block_size, int(rows.size)
+
+
+def get_batch_fact_aligned(bin_path, mask_path, fact_path, block_size, device, *, step, n_facts):
+    """Draw EVERY window of ONE fact — one micro-step, one privacy record (D-01 / D-05 / D-06).
+
+    The fact-aligned SIBLING of :func:`get_batch_memmap_masked`, not a replacement: that
+    function is byte-unchanged and stays the replay draw's path (D-10). Returns
+    ``(x, y, fact_index)``.
+
+    **Deterministic, not random — ``q = 1``, no subsampling.** The record for this micro-step is
+    ``step % n_facts``, and the batch is EVERY window that fact owns, in bin order. Under D-01's
+    ragged geometry that is 4 or 5 windows, so the batch size VARIES by record. That is not a
+    defect to smooth over: it is exactly what makes one micro-step one privacy record, and D-02
+    measured the ragged accumulation at 1.14x the batched reference against 1.39x for
+    uniform-W, so the cheap path is also the honest one. ``torch.stack`` refuses a ragged vmap
+    batch outright, which is why vmap leaves the critical path entirely (D-02): with one record
+    per micro-step the ordinary backward hands back the per-record gradient directly.
+
+    **All THREE memmaps are re-opened on EVERY call**, for two independent reasons that are
+    recorded here because either one alone would justify it:
+
+    1. A long-lived memmap accumulates RSS across thousands of training steps — the nanoGPT
+       leak (Pitfall 1), the same reason documented at :func:`get_batch_memmap_masked`.
+    2. D-06: the fact map is CONSUMED AT RUN TIME, not merely asserted once at build time. A
+       cached handle (or boundaries reconstructed from a stored ``cumsum``) would make "one
+       window, one fact" a claim about a PAST construction, and would make the
+       mutate-between-calls proof in ``tests/test_phase21_aligned_loader.py`` impossible to
+       write — which is the same thing as making the property impossible to check.
+
+    **The draw-time purity check is INPUT space, and widening it to target space would raise on
+    every fact but the last, on a PERFECTLY built bin.** Window ``k``'s target slice ends at
+    ``fact_ids[(k + 1) * block_size]`` — the FIRST token of window ``k + 1`` — which for a
+    fact's last window belongs to the NEXT fact. The property is nonetheless sound: that
+    boundary token is the next fact's ``<|system|>`` token, which carries mask 0
+    (``src/personacore/dialogue/serialize.py:81``, ``emit([system_id], 0)``), so ``y[m == 0] =
+    -100`` below sets it to ``F.cross_entropy``'s ``ignore_index`` and it contributes NOTHING to
+    this record's loss. The counted, POSITIVE form of that claim — exactly ``n_facts - 1``
+    boundary rows, each masked, each in fact order — is a whole-bin invariant asserted once at
+    build time by ``teach_persona._build_aligned_bins``' proof 7(b); it belongs there, not in a
+    per-draw check. Only the ``k`` windows being handed back are checked here, so the per-call
+    cost is O(batch) rather than O(corpus).
+
+    The slice passed to :func:`fact_window_impurities` carries a trailing ``+1``, and that is
+    REQUIRED rather than incidental: the predicate raises on
+    ``(len - 1) % block_size != 0`` (the LABEL-SHIFT TAIL contract), so a bare
+    ``k * block_size`` slice would raise SPURIOUSLY on every valid draw —
+    ``(1024 - 1) % 256 == 255``. Relaxing that remainder assertion to make a short slice fit
+    would silently kill the truncation adversary for the packer and the tests as well as for
+    the loader.
+
+    **D-03/D-04 are VERIFIED here, not implemented.** Within one fact the loss is a MEAN over
+    its windows, and it costs ZERO new loss code: ``y[m == 0] = -100`` below plus
+    ``F.cross_entropy``'s default ``reduction="mean"`` (``src/personacore/model/gpt.py:212``)
+    averages over NON-IGNORED targets only, and with one fact per micro-step that IS
+    mean-over-the-record. The accepted cost, named rather than glossed: a 5-window fact's
+    windows count 1/5 each where a 4-window fact's count 1/4 — which weights by PRIVACY RECORD
+    rather than by how text happens to pack into ``block_size``.
+
+    ``fact_index`` is returned because the guarantee has to be observable from OUTSIDE the
+    loader: it is the run-time attribution the D-06 proof reads, and it is what makes
+    ``grad_accum_steps = n_facts`` an OBSERVED property of the micro-step sequence instead of a
+    number declared from a bin's shape.
+
+    Every failure raises ``ValueError`` in the ``:112-116`` register — name every path and every
+    length — and each class carries a DISTINGUISHABLE message so a red is identified by which
+    guard fired, not by "an exception occurred".
+    """
+    data = np.memmap(bin_path, dtype=np.uint16, mode="r")
+    mask = np.memmap(mask_path, dtype=np.uint8, mode="r")
+    try:
+        facts = np.memmap(fact_path, dtype=np.uint16, mode="r")
+    except (FileNotFoundError, ValueError) as exc:
+        # Do NOT let np.memmap's own FileNotFoundError carry the message: with three bins in
+        # play the caller needs to know WHICH one is absent.
+        raise ValueError(
+            f"the fact bin {fact_path} could not be opened ({exc}) — a fact-aligned draw "
+            f"cannot proceed without it (token bin {bin_path}, mask bin {mask_path} were "
+            "opened). Falling back to positionally-guessed boundaries would make "
+            "grad_accum_steps = n_facts a declaration instead of a property of the data (D-06)."
+        ) from exc
+
+    if not len(data) == len(mask) == len(facts):
+        raise ValueError(
+            f"the three aligned bins are not 1:1: {bin_path} has {len(data)} elements, "
+            f"{mask_path} has {len(mask)} and the fact bin {fact_path} has {len(facts)} — all "
+            "three must match element for element (T-11-04 extended from two files to three, "
+            "D-06 proof 1). A length skew silently mis-attributes windows to records."
+        )
+
+    n_windows = (len(facts) - 1) // block_size
+    observed = np.unique(facts[: n_windows * block_size : block_size])
+    if observed.size != n_facts:
+        raise ValueError(
+            f"the fact bin {fact_path} carries {observed.size} distinct fact id(s) "
+            f"{observed.tolist()} across {n_windows} window(s), but n_facts={n_facts} was "
+            "declared. Content purity alone does not pin n_facts, so the loader asserts both — "
+            "otherwise grad_accum_steps = n_facts would bound a lot the bin does not contain."
+        )
+
+    fact_index = step % n_facts
+    start, k = fact_window_span(facts, fact_index, block_size)
+
+    # INPUT space, the DEFAULT, on the drawn slice only. The trailing +1 is the label-shift tail.
+    impure = fact_window_impurities(facts[start : start + k * block_size + 1], block_size)
+    if impure:
+
+        def _row_ids(row):
+            at = start + row * block_size
+            return np.unique(facts[at : at + block_size]).tolist()
+
+        detail = "; ".join(
+            f"window {start // block_size + row} carries ids {_row_ids(row)}" for row in impure
+        )
+        raise ValueError(
+            f"the fact bin {fact_path} is IMPURE on the draw for fact {fact_index}: {detail} — "
+            f"every one of that fact's {k} window(s) must carry only id {fact_index}. SC2's "
+            "'one window, one fact' is FALSE for this draw, so this micro-step is not one "
+            "privacy record."
+        )
+
+    ix = range(start, start + k * block_size, block_size)
+    x = torch.stack([torch.from_numpy(data[i : i + block_size].astype(np.int64)) for i in ix])
+    y = torch.stack(
+        [torch.from_numpy(data[i + 1 : i + 1 + block_size].astype(np.int64)) for i in ix]
+    )
+    m = torch.stack(
+        [torch.from_numpy(mask[i + 1 : i + 1 + block_size].astype(np.int64)) for i in ix]
+    )
+    y[m == 0] = -100
+    return x.to(device), y.to(device), fact_index
