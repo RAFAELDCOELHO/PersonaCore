@@ -126,6 +126,33 @@ def get_batch_memmap_masked(bin_path, mask_path, batch_size, block_size, device)
     return x.to(device), y.to(device)
 
 
+def _window_count(n_elements, block_size, detail):
+    """``n_windows`` from a bin length — the ONE place the LABEL-SHIFT TAIL contract is enforced.
+
+    Every derivation of ``n_windows`` from a whole-bin length goes through here, because
+    ``(n - 1) // block_size`` FLOORS: on a bin that lost its trailing ``+1`` the floor is one
+    short and the last window vanishes from ``owners`` with nothing raised. That is a silent
+    wrong answer, and the caller it hurts is whichever record owns the final window — it is
+    served a strictly smaller batch than the packer wrote, while the three-bin 1:1 check, the
+    distinct-owner count, span contiguity and input-space purity all still pass.
+
+    ``detail`` is the CALLER'S sentence: it names which bin(s) and which length(s), so a red is
+    identified by which guard fired rather than by "an exception occurred". The shared tail below
+    is the contract itself, stated once so the three callers cannot drift on what it means.
+    """
+    remainder = (n_elements - 1) % block_size
+    if remainder != 0:
+        raise ValueError(
+            f"{detail}: (len - 1) % block_size == {remainder} for block_size={block_size}, "
+            "expected 0. The trailing +1 is the LABEL-SHIFT TAIL, one pad slot so every window's "
+            "target slice [k*B+1 : (k+1)*B+1] is in range — a bin off by this remainder is "
+            "TRUNCATED or mis-packed, and flooring it would silently drop the final window from "
+            "whichever record owns it, computing that record's gradient over less than the "
+            "record the accounting charges for."
+        )
+    return (n_elements - 1) // block_size
+
+
 def fact_window_impurities(fact_ids, block_size, *, space="input"):
     """Indices of every ``block_size``-aligned window carrying MORE THAN ONE distinct fact id.
 
@@ -186,15 +213,11 @@ def fact_window_impurities(fact_ids, block_size, *, space="input"):
             "built bin."
         )
     fact_ids = np.asarray(fact_ids)
-    remainder = (len(fact_ids) - 1) % block_size
-    if remainder != 0:
-        raise ValueError(
-            f"fact bin length {len(fact_ids)} is not n_windows * block_size + 1 for "
-            f"block_size={block_size}: (len - 1) % block_size == {remainder}, expected 0. "
-            "The trailing +1 is the LABEL-SHIFT TAIL, one pad slot so every window's target "
-            "slice is in range — a bin off by this remainder is truncated or mis-packed, "
-            "which is a LENGTH failure and not a window-content finding."
-        )
+    _window_count(
+        len(fact_ids),
+        block_size,
+        f"fact bin length {len(fact_ids)} is not n_windows * block_size + 1",
+    )
     rows = (fact_ids[:-1] if space == "input" else fact_ids[1:]).reshape(-1, block_size)
     return [k for k in range(rows.shape[0]) if np.unique(rows[k]).size != 1]
 
@@ -223,13 +246,23 @@ def fact_window_span(fact_ids, fact_index, block_size):
     accounting and nowhere in the bin) or if its windows are not contiguous (a fact split
     across shards is a packing defect, not a draw to serve).
 
-    The ``n_windows * block_size + 1`` LENGTH contract is deliberately not re-checked here: it
-    lives in :func:`fact_window_impurities`, the one purity predicate, and the three-bin length
-    equality lives in :func:`get_batch_fact_aligned`. The owners are read with a STRIDED slice
-    rather than a reshape precisely so this function carries no second copy of that guard.
+    The ``n_windows * block_size + 1`` LENGTH contract IS enforced here, via the shared
+    :func:`_window_count`. It was previously delegated to :func:`fact_window_impurities` on the
+    grounds that a second copy of the guard would be free to drift — a correct instinct applied
+    to the wrong mechanism, and the delegation was UNSOUND: the owners are read with a STRIDED
+    slice, so a bin that lost its trailing ``+1`` floors ``n_windows`` by one and drops the final
+    window from ``owners`` SILENTLY, and neither this function nor its callers ever hand
+    :func:`fact_window_impurities` a whole bin to check. ``scripts/phase21_unit_record``'s
+    ``count_aligned`` calls THIS function directly on a whole map, so the guard belongs here and
+    not only at the loader. There is still exactly one copy of the arithmetic — it moved into
+    :func:`_window_count` rather than being duplicated.
     """
     fact_ids = np.asarray(fact_ids)
-    n_windows = (len(fact_ids) - 1) // block_size
+    n_windows = _window_count(
+        len(fact_ids),
+        block_size,
+        f"the fact map is {len(fact_ids)} elements, which is not n_windows * block_size + 1",
+    )
     owners = fact_ids[: n_windows * block_size : block_size]
     rows = np.flatnonzero(owners == fact_index)
     if rows.size == 0:
@@ -297,6 +330,16 @@ def get_batch_fact_aligned(bin_path, mask_path, fact_path, block_size, device, *
     would silently kill the truncation adversary for the packer and the tests as well as for
     the loader.
 
+    **That per-draw call does NOT enforce the WHOLE-BIN contract, and an earlier version of this
+    docstring claimed it did.** The slice is always built as
+    ``facts[start : start + k * block_size + 1]`` from a ``block_size``-aligned ``start``, so its
+    ``(len - 1) % block_size`` is 0 BY CONSTRUCTION and the predicate's own remainder guard is
+    UNREACHABLE on it. Measured on the real 8-fact corpus (``BLOCK=256``) with the label-shift
+    tail dropped from ALL THREE bins so 1:1 survives: window counts went
+    ``[4,4,4,4,4,5,4,4]`` -> ``[4,4,4,4,4,5,4,3]`` with NO raise — every guard below passed and
+    record 7 was served three quarters of itself. The whole-bin contract is therefore asserted
+    HERE, through :func:`_window_count`, before ``n_windows`` is derived.
+
     **D-03/D-04 are VERIFIED here, not implemented.** Within one fact the loss is a MEAN over
     its windows, and it costs ZERO new loss code: ``y[m == 0] = -100`` below plus
     ``F.cross_entropy``'s default ``reduction="mean"`` (``src/personacore/model/gpt.py:212``)
@@ -336,7 +379,18 @@ def get_batch_fact_aligned(bin_path, mask_path, fact_path, block_size, device, *
             "D-06 proof 1). A length skew silently mis-attributes windows to records."
         )
 
-    n_windows = (len(facts) - 1) // block_size
+    # BEFORE n_windows is derived, and BEFORE the distinct-owner check: a truncated bin can
+    # still carry all n_facts distinct ids, so the owner-count guard would either pass it or
+    # (when the tail owner loses its only window) mis-report a LENGTH defect as an owner-count
+    # defect. The three lengths are equal by the guard above; naming all three anyway is what
+    # makes this message distinguishable from that 1:1 guard rather than a near-duplicate.
+    n_windows = _window_count(
+        len(facts),
+        block_size,
+        f"the three aligned bins are {len(data)}, {len(mask)} and {len(facts)} elements "
+        f"({bin_path}, {mask_path}, {fact_path}) — 1:1 with each other, but not "
+        "n_windows * block_size + 1",
+    )
     observed = np.unique(facts[: n_windows * block_size : block_size])
     if observed.size != n_facts:
         raise ValueError(

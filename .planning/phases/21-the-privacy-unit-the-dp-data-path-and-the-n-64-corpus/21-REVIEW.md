@@ -532,6 +532,123 @@ Recorded so the boundary of this review is visible rather than implied.
 
 ---
 
+## CR-01 — CLOSED
+
+Fixed in `98962d9`. `src/personacore/training/data.py`,
+`tests/test_phase21_aligned_loader.py`. Two files, no others.
+
+### The finding reproduced — at REAL scale, not the toy
+
+The review's repro was `block_size=4`, 3 facts. I re-ran it on the **real 8-fact D-01 corpus**
+through the actual packer (`BLOCK=256`, `n_windows=33`), dropping the label-shift tail from
+**all three** bins so 1:1 survives:
+
+```
+BLOCK=256 n_facts=8 n_windows=33
+packer windows_per_fact = (4, 4, 4, 4, 4, 5, 4, 4)
+GOOD bin length = 8449
+
+no-tail bin length = 8448 = n_windows*B exactly; (len-1) % B == 255
+all three still 1:1: 8448 8448 8448
+
+NOTAIL  step 5 fact 5 windows 5 (span k=5)
+NOTAIL  step 6 fact 6 windows 4 (span k=4)
+NOTAIL  step 7 fact 7 windows 3 (span k=3)   <-- NO RAISE
+
+GOOD   window counts: [4, 4, 4, 4, 4, 5, 4, 4]
+NOTAIL window counts: [4, 4, 4, 4, 4, 5, 4, 3]
+packer said         : [4, 4, 4, 4, 4, 5, 4, 4]
+```
+
+CR-01 is confirmed exactly as written. Every guard passed on the way through: three bins 1:1 at
+8448, `observed.size == 8 == n_facts`, fact 7's remaining windows contiguous, input-space purity
+on the drawn slice clean. `n_windows` floored 33 to 32 and record 7 was served **3 of its 4
+windows** — a 25% shortfall in the gradient mass of a published privacy record, silently. The
+review's mechanism is also confirmed: the slice handed to `fact_window_impurities` is always
+`facts[start : start + k*B + 1]` from a block-aligned `start`, so its remainder is 0 **by
+construction** and its own guard is unreachable there.
+
+### One correction to the review — the finding's SCOPE was too narrow
+
+> "`_build_aligned_bins` **does** enforce the whole-bin length contract at build time … **which
+> is why CR-01 is a loader-only hole.**" — line 514
+>
+> "`fact_window_span`'s strided slice … **is correct on well-formed and over-long bins**" — line 510
+
+Measured: it is **not** a loader-only hole. `fact_window_span:232` computes the same
+`n_windows = (len(fact_ids) - 1) // block_size` floor, and on a SHORT bin (the case lines 510-512
+do not cover) its `owners` slice silently loses the final window — visible in the run above as
+`span k=3` alongside the loader's `windows 3`. That function is called **directly on a whole map**,
+outside the loader, by `scripts/phase21_unit_record.py:407` (`count_aligned`), so patching only
+`get_batch_fact_aligned` would have left a second consumer reading the same wrong answer.
+
+The review's own line 510 note that the strided slice was chosen *"precisely so this function
+carries no second copy of that guard"* was the right instinct pointed at the wrong mechanism: the
+guard was not duplicated, it was **absent**, and `fact_window_span`'s docstring asserted a
+delegation to `fact_window_impurities` that no code path performs.
+
+### The fix — at the root, one copy of the arithmetic
+
+The review's suggested patch (inline `if (len(facts) - 1) % block_size != 0` in the loader) would
+have closed the loader and left `count_aligned` open. Instead, `_window_count(n_elements,
+block_size, detail)` is now the **one** derivation of `n_windows` from a bin length and the **one**
+enforcement of the contract. Three callers route through it — `fact_window_impurities` (which
+already had the check), `fact_window_span` and `get_batch_fact_aligned` — each passing its own
+`detail` sentence so the message stays distinguishable. The arithmetic **moved**; it was not
+duplicated, so the standing "no second copy to drift" rule is kept rather than traded away.
+
+In the loader the guard fires **before** `n_windows` is derived and **before** the distinct-owner
+check, because a truncated bin can still carry all `n_facts` ids — so the owner-count guard would
+either wave it through or, when the tail owner loses its only window, mis-report a LENGTH defect as
+an owner-count defect.
+
+Two docstring claims corrected, both of which asserted a property the code did not have:
+`fact_window_span:226-229` (the delegation) and `get_batch_fact_aligned:292-298` (the
+"`fact_window_impurities` owns this" argument, replaced with the measurement above).
+
+### RED then GREEN, observed
+
+The new adversary was written **before** the guard existed, so the RED needed no mutate-and-restore
+and no `git checkout` — the 21-01/21-04 destruction mode was structurally avoided rather than
+survived.
+
+* **RED** (guard absent): `Failed: DID NOT RAISE <class 'ValueError'>` at
+  `tests/test_phase21_aligned_loader.py:247`, with the literal window counts above recorded in the
+  test's own docstring.
+* **GREEN** (guard present): all 8 steps refuse, e.g.
+  `the three aligned bins are 8448, 8448 and 8448 elements (…) — 1:1 with each other, but not
+  n_windows * block_size + 1: (len - 1) % block_size == 255 for block_size=256, expected 0.`
+* **Non-vacuity, both directions.** `test_n7_…` draws the tail-owning fact on the **unmutated**
+  bytes first and asserts it returns `windows_per_fact[7] == 4`; the GOOD arm of the repro still
+  yields `[4,4,4,4,4,5,4,4]` unchanged. `test_valid_bin_never_raises_on_any_fact` and
+  `test_n5_unmutated_fact_bin_is_the_negative_control` remain green. A guard that refused
+  everything would fail all three.
+* **Distinguishability** asserted positively (`LABEL-SHIFT TAIL`, the remainder `255`, all three
+  paths, all three lengths) *and* negatively (`not 1:1`, `IMPURE`, `distinct fact id`,
+  `could not be opened` must all be **absent**), so a red names which guard fired.
+* N7 is distinct from 21-06's N2 by construction: N2 truncates the **fact bin alone** and is caught
+  by the 1:1 guard; N7 truncates **all three together**, which is what an interrupted build leaves
+  and what no N1-N6 case could see.
+
+### Suite
+
+`976 passed, 7 skipped` (literal, full suite, `.venv/bin/python -m pytest -q`). Against the stated
+`981 passed, 1 skipped` baseline: 976 + 7 = **983 collected = 982 + the one new test**, zero
+regressions. All 7 skips are environmental, verified with `-rs` — 6 are gitignored artifacts absent
+from the worktree (`test_forbid_ids`, `test_lora_artifact`, `test_slim_checkpoint`,
+`test_phase14_demo` ×2, `test_phase15_plots`) and 1 is the CUDA-only fp16 smoke that also skips on
+main. `ruff check` and `ruff format --check` clean on both changed files.
+
+One transient full-suite failure —
+`test_phase21_unit_record.py::test_driver_refuses_to_rerun` — was traced to the worktree having no
+`data/` directory at all (`teach_persona.py:715` needs `data/dialog_train*.bin`, gitignored). It
+passed after copying the four dialog bins in; unrelated to this change.
+
+`scripts/mitigation_unit.py` byte-unchanged (`sha256 45f37e15…`, verified). `results/phase21_*.json`
+untouched. `STATE.md` / `ROADMAP.md` untouched.
+
+---
+
 _Reviewed: 2026-08-24_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_

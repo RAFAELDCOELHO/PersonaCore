@@ -194,6 +194,79 @@ def test_fact_bin_required_raises_distinguishably(bins, name, mutate, must_conta
     assert _sha(bins.tokens) == tok_sha and _sha(bins.mask) == mask_sha
 
 
+def _n7_truncate_all_three(bins):
+    """Drop the LABEL-SHIFT TAIL from all three bins at once — the shape N2 cannot see.
+
+    N2 truncates the FACT bin ALONE, which breaks 1:1 and is caught by the length-equality
+    guard. Truncating all three TOGETHER keeps 1:1 intact, which is what an interrupted or
+    half-written build actually leaves behind.
+    """
+    for path, dtype in ((bins.tokens, np.uint16), (bins.mask, np.uint8), (bins.fact, np.uint16)):
+        np.fromfile(path, dtype=dtype)[:-1].tofile(path)
+
+
+def test_n7_all_three_bins_truncated_together_is_refused(bins):
+    """N7 — the whole-bin ``n_windows * block_size + 1`` contract, which N1-N6 provably miss.
+
+    MEASURED before the guard existed (real corpus, ``BLOCK=256``, 8 facts, the tail dropped
+    from all three bins so they stay 1:1)::
+
+        GOOD   window counts: [4, 4, 4, 4, 4, 5, 4, 4]
+        NOTAIL window counts: [4, 4, 4, 4, 4, 5, 4, 3]   <-- NO RAISE
+        packer said         : (4, 4, 4, 4, 4, 5, 4, 4)
+
+    Every existing guard passed: the three bins were still 1:1 (8448 each), ``observed.size``
+    was still 8, fact 7's remaining windows were still contiguous, and input-space purity on
+    the drawn slice was still clean. ``n_windows = (len - 1) // block_size`` floored 33 to 32
+    and fact 7 was served 3 of its 4 windows. Under D-03 the loss is a MEAN over the record's
+    windows, so record 7's gradient was computed over three quarters of the record the
+    accountant charges for — with ``grad_accum_steps = n_facts`` still reading true.
+
+    The purity predicate cannot own this contract for the loader: the slice it is handed is
+    always ``facts[start : start + k * block_size + 1]`` from a block-aligned ``start``, so its
+    remainder is 0 BY CONSTRUCTION and its own guard is unreachable on that slice.
+    """
+    tail_owner = bins.stats["n_facts"] - 1
+    good_len = len(np.fromfile(bins.fact, dtype=np.uint16))
+    assert good_len == bins.stats["n_windows"] * BLOCK + 1
+
+    # Non-vacuity, on THESE bytes, BEFORE the mutation: the guard must admit a correct bin.
+    x, _y, fact_index = _draw(bins, step=tail_owner)
+    assert fact_index == tail_owner
+    assert x.shape[0] == bins.stats["windows_per_fact"][tail_owner]
+
+    _n7_truncate_all_three(bins)
+    lengths = [
+        len(np.fromfile(p, dtype=d))
+        for p, d in ((bins.tokens, np.uint16), (bins.mask, np.uint8), (bins.fact, np.uint16))
+    ]
+    # The adversary's whole point: 1:1 SURVIVES, so the sibling guard cannot fire.
+    assert lengths == [good_len - 1] * 3
+    assert (lengths[0] - 1) % BLOCK == BLOCK - 1 != 0
+
+    with pytest.raises(ValueError) as excinfo:
+        _draw(bins, step=tail_owner)
+    message = str(excinfo.value)
+
+    assert "LABEL-SHIFT TAIL" in message, message  # the contract, named
+    assert str(BLOCK - 1) in message, message  # the remainder
+    for path in (bins.tokens, bins.mask, bins.fact):
+        assert str(path) in message, message  # all THREE paths, not just the fact bin
+    assert message.count(str(good_len - 1)) >= 3, message  # all THREE lengths
+
+    # Distinguishable from every sibling guard: a red here is identified by WHICH one fired.
+    assert "not 1:1" not in message, message
+    assert "IMPURE" not in message, message
+    assert "distinct fact id" not in message, message
+    assert "could not be opened" not in message, message
+
+    # ROOT, not the call site: the shared span helper floors the same way and is called
+    # DIRECTLY on a whole bin by scripts/phase21_unit_record.count_aligned, so it refuses too.
+    with pytest.raises(ValueError) as span_exc:
+        fact_window_span(np.fromfile(bins.fact, dtype=np.uint16), tail_owner, BLOCK)
+    assert "LABEL-SHIFT TAIL" in str(span_exc.value), str(span_exc.value)
+
+
 @pytest.mark.parametrize(
     ("name", "mutate"), [("N3-rolled", _n3_roll), ("N4-interior", _n4_flip_interior)]
 )
