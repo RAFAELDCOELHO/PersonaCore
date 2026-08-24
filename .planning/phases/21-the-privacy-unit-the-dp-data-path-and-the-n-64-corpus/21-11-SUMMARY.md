@@ -26,6 +26,8 @@ tech-stack:
     - "An analytic expectation is a separately NAMED field beside the measured value, carrying BOTH candidate rules, never in place of the measurement"
     - "A documented claim that the measurement contradicts is recorded in the artifact WITH its denominators, not smoothed and not silently adopted"
     - "A frozen pre-registration whose figure answers a different question is RECORDED as a discrepancy; the fix is a dated continuation, never an edit"
+    - "A discipline the guard does not check is a comment. If a docstring says 'tighter than the mechanism enforces', either enforce it or stop claiming it"
+    - "A strengthened predicate is proved by running BOTH the old and the new against ONE identical state, and by showing it still ADMITS the legitimate case — a guard that refuses everything is as useless as one that admits everything"
 key-files:
   created:
     - "tests/test_phase21_unit_record.py"
@@ -33,6 +35,7 @@ key-files:
     - "results/phase21_multiplicity.json (uncommitted)"
   modified:
     - "scripts/phase21_unit_record.py"
+    - "tests/test_phase20_prereg.py"
 decisions:
   - "Replay tokens carry a sentinel fact id (65535) in the `replay-in-bin @1.0` row's fact map, and their draws are published as `replay_draws` BESIDE the per-fact summary rather than inside it. Crediting them to a fact inflates that fact; dropping them breaks the conservation law silently. The split surfaced the row's sharpest number: 854 of 1,600 draws (53.4%) bought no teaching at all."
   - "The fact-aligned rows measure ONE FULL LOT (steps == n_facts), which is what makes `mean == 1.0` the per-record multiplicity per optimiser step rather than an arbitrary multiple. The aligned draw is deterministic, so any multiple of n_facts gives steps/n_facts with spread 0 and says nothing new."
@@ -355,15 +358,147 @@ staged or committed. The five checks the plan requires before pausing, all run a
 **Predicted `checked` after the artifact commit: `1 pin commit x 2 tracked artifacts = 2`**, both
 sides non-zero, which is what turns `:206`'s equivalence from vacuous to live.
 
-**The reflexivity gap, measured on this repository:** `git merge-base --is-ancestor HEAD HEAD` exits
-`0`, so a pin and an artifact in the SAME commit would PASS the mechanism. D-20's "strictly after"
-is a DISCIPLINE tighter than the guard enforces, and the plan honours it — the artifacts get their
-own commit, never amended into a pin commit.
+**The reflexivity gap is now CLOSED — see the next section.** It was measured, the operator refused
+to accept it as a recorded discipline, and the mechanism now enforces it.
 
-**Not applied, awaiting approval:** the `tests/test_phase20_prereg.py` edit that deletes
-`test_phase21_has_no_artifact_yet_so_the_arming_is_honest` (which becomes false by design at the
-artifact commit, and whose own docstring at `:290-293` records that plan 21-11 removes it) and
-replaces it with `test_phase21_guard_is_now_live`.
+**Not applied, awaiting approval:** the `test_phase21_has_no_artifact_yet_so_the_arming_is_honest`
+→ `test_phase21_guard_is_now_live` swap. It is **RED until the artifacts are committed** and
+therefore belongs in the artifact commit itself — see "The plan's STEP 2 is unsatisfiable" below.
+
+---
+
+## Gate review round 2: the reflexivity gap, CLOSED and proved by mutation
+
+The operator refused to approve the artifact commit while the guard was a pure
+`merge-base --is-ancestor(pin, artifact_first_add)`, on the ground that a discipline the guard does
+not check is a comment. `_assert_ordering_holds` now carries the conjunction:
+
+```
+prereg != first_add   AND   merge-base --is-ancestor(prereg, first_add)
+```
+
+### The premise was tested before the fix was written, and it is TRUE
+
+Three throwaway repos, literal commands and literal exit codes. **Nothing touched the real
+history.**
+
+```
+STATE A — pin and artifact in the SAME commit
+pin commit          = bbbe9af4888a09e81779be7293f5362e0240d933
+artifact first add  = bbbe9af4888a09e81779be7293f5362e0240d933
+same commit?          YES
+
+--- OLD predicate: git merge-base --is-ancestor $PIN $ADD
+    exit code = 0    <-- ADMITS the state D-20 forbids   ... THE RED
+
+--- NEW predicate: $PIN != $ADD AND is-ancestor($PIN,$ADD)
+    exit code = 1    <-- REFUSES                          ... THE GREEN
+
+STATE B — the LEGITIMATE ordering (pin strictly first)
+pin commit          = 752485179daa05c1e89c999b05e1a183e784757b
+artifact first add  = 443fb5863eeb18915d056aca09773149feeb4647
+same commit?          NO
+--- NEW predicate
+    exit code = 0    <-- ADMITS: the guard is not vacuous in the other direction
+
+STATE C — artifact BEFORE pin (the original defect the guard already caught)
+--- OLD predicate  exit code = 1
+--- NEW predicate  exit code = 1    <-- the strengthening does not weaken the existing check
+```
+
+### It is a COMMITTED FIXTURE, not a one-off observation
+
+`tests/test_phase20_prereg.py::test_a_same_commit_pin_and_artifact_is_refused` rebuilds the
+same-commit state under `tmp_path` and runs **both** predicates against that one identical state.
+The old predicate's exit code is **computed** with `check=False` and asserted to be `0` — the wrong
+answer is executed, never described — so if reflexivity ever stops admitting a same-commit pin the
+test reports that as a finding instead of quietly becoming decoration. The legitimate ordering is
+driven through the same helper and must pass.
+
+```
+$ pytest -q tests/test_phase20_prereg.py -k same_commit
+1 passed, 21 deselected in 0.41s
+```
+
+### It does not break the live guards
+
+The strengthening applies to Phase 20's committed history too, so it was measured there **before**
+being committed: **9 pin commits x 3 tracked artifacts = 27 pairs, of which ZERO are same-commit.**
+
+```
+$ pytest -q tests/test_phase20_prereg.py
+22 passed in 2.35s
+$ pytest -q tests/test_phase20_prereg.py tests/test_phase21_unit_pin.py \
+    tests/test_phase21_unit_record.py tests/test_phase21_multiplicity.py \
+    tests/test_phase16_prereg.py tests/test_phase18_prereg.py
+93 passed in 19.15s
+```
+
+Three docstrings recorded the old gap as deliberate (`:262`, `:389`, `:559` before the edit); all
+three were corrected in the same commit rather than left asserting a property the code no longer
+has. `scripts/mitigation_unit.py` is byte-unchanged.
+
+**Commit `d32b51a`.** `git ls-files 'results/phase21_*'` remained EMPTY throughout.
+
+## FINDING: the plan's STEP 1 → STEP 2 → STEP 3 sequence is unsatisfiable
+
+The plan's STEP 2 says *"commit the test edit ALONE first, and confirm it is GREEN."* **Measured, it
+is RED**, and it cannot be otherwise:
+
+```
+$ pytest -q tests/test_phase20_prereg.py          # with the full step-1 edit applied
+E  AssertionError: no results/phase21_* artifact is tracked, so the ancestry guard is
+   still vacuous. This test asserts the guard has gone LIVE; if the artifacts are not
+   committed yet it is being run one commit too early.
+E  assert []
+FAILED tests/test_phase20_prereg.py::test_phase21_guard_is_now_live
+1 failed, 21 passed in 2.34s
+```
+
+`test_phase21_guard_is_now_live` asserts `checked` is non-zero, and `checked` is
+`len(pins) * len(tracked_artifacts)`. While `results/phase21_*` is uncommitted `tracked_artifacts`
+is `[]`, so `checked` is 0 **by construction**. The test can only be green *after* the artifacts are
+committed — which is exactly the commit STEP 2 was supposed to precede.
+
+**The step-1 edit is two changes with different commitability, and separating them is the fix:**
+
+| half | state with artifacts uncommitted | disposition |
+|---|---|---|
+| the strict-ancestor strengthening + its mutation proof | **GREEN** (22 passed) | **committed** as `d32b51a` — and being a strict ancestor of the artifact commit is precisely the arm-then-write discipline STEP 2 was reaching for |
+| the `has_no_artifact_yet` → `guard_is_now_live` swap | **RED** (1 failed, 21 passed) | **not committed.** It belongs in the SAME commit as the artifacts |
+
+This is a finding of the same class as the other ten this phase has produced, and it is reported
+rather than engineered around. The corrected sequence for the continuation agent is:
+
+1. ~~commit the test edit alone~~ — **impossible**; the guard-side half that *can* be committed
+   alone already is (`d32b51a`).
+2. `git add results/phase21_privacy_unit.json results/phase21_multiplicity.json` **together with**
+   the `guard_is_now_live` swap, in one commit. The artifacts and the test that observes them go
+   live in the same instant, which is what `:206`'s equivalence demands.
+
+**The exact swap, recorded here so it survives the worktree being removed** — replace
+`test_phase21_has_no_artifact_yet_so_the_arming_is_honest` with:
+
+```python
+def test_phase21_guard_is_now_live():
+    """The RECORDED TRANSITION from "armed, nothing to watch" to "armed and watching"."""
+    tracked = _git("ls-files", "results/phase21_*").split()
+    assert tracked, (
+        "no results/phase21_* artifact is tracked, so the ancestry guard is still vacuous. "
+        "This test asserts the guard has gone LIVE; if the artifacts are not committed yet "
+        "it is being run one commit too early."
+    )
+    pins = _git("log", "--format=%H", "--", PHASE21_PREREG_ARTIFACT).split()
+    _assert_ordering_holds(
+        root=_ROOT,
+        prereg_artifact=PHASE21_PREREG_ARTIFACT,
+        artifact_glob="results/phase21_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+    assert len(pins) * len(tracked) > 0
+```
+
+Expected after that commit: `checked = 1 pin x 2 artifacts = 2`, both sides non-zero.
 
 ## Requirements — deliberately NOT marked complete
 
@@ -404,9 +539,13 @@ staying vacuous) is the checkpoint's own subject and is **not yet discharged**.
 |---|---|---|
 | `17b3c85` | 1 | the privacy-unit emitter, `_measure_capacity`/`_measure_all`, the D-24 candidate table recomputed at both capacities, 4 tests |
 | `bc5f5f0` | 2 | the multiplicity emitter, the replay sentinel split, A3's discharge, the pin-discrepancy record, the findings block, 7 tests |
+| `b41de0f` | — | this SUMMARY (first revision, at the gate) |
+| `d32b51a` | 3 (gate round 2) | the strict-ancestor strengthening + `test_a_same_commit_pin_and_artifact_is_refused`, and the three corrected reflexivity docstrings |
 
-Exactly the two files this plan declared; `git diff --diff-filter=D --name-only fa97b66 HEAD` is
-empty — zero deletions.
+`tests/test_phase20_prereg.py` is a third file this plan modified, beyond the two its
+`files_modified` frontmatter declares. It is declared in the plan's **task-3 `<files>`** block, so
+it is in scope — but the frontmatter is narrower than the tasks, which is worth noting.
+`git diff --diff-filter=D --name-only fa97b66 HEAD` is empty — zero deletions.
 
 ## Verification
 
@@ -416,7 +555,7 @@ empty — zero deletions.
 | `... tests/test_phase21_unit_pin.py tests/test_phase20_prereg.py tests/test_phase21_replay_volume.py tests/test_phase21_aligned_bins.py tests/test_phase21_aligned_loader.py tests/test_phase21_sc5.py` | **87 passed in 11.87s** |
 | `pytest -q tests/test_phase21_multiplicity.py` (21-10's instrument) | **17 passed**, unchanged |
 | `pytest -q tests/test_phase20_prereg.py -k phase21` | **3 passed, 18 deselected** — the selector selects |
-| **Full suite** | **974 passed, 7 skipped in 187.66s**, exit 0 |
+| **Full suite** | **975 passed, 7 skipped in 191.55s**, exit 0 (974 before the gate-round-2 strengthening added 1 test) |
 | `git diff --exit-code` on the frozen paths | **0** — `mitigation_unit.py`, `mitigation_gate.py`, `phase18_extraction.py`, `phase16_recall_sample.json` |
 | `shasum -a 256 scripts/mitigation_unit.py` | `45f37e152bb4035667b804c1463431b3f12fa5096c47de32b1dc27abbe000473` — 21-01's frozen value |
 | `git status --porcelain data/` | **empty** |
@@ -428,8 +567,10 @@ empty — zero deletions.
 the main checkout; six of those tests skip in a worktree for want of gitignored artifacts
 (checkpoints, adapters, the slim artifact), so the worktree baseline at `fa97b66` is
 **963 passed, 7 skipped** — the number 21-09 measured. This plan adds **11 tests** and
-`963 + 11 = 974`. Zero failures, and the skip count is unchanged: copying the PersonaChat replay
-bins in un-skipped nothing, because none of the six skips is gated on `data/`.
+`963 + 11 = 974`, and the gate-round-2 strengthening adds
+`test_a_same_commit_pin_and_artifact_is_refused` for **975**. Zero failures, and the skip count is
+unchanged: copying the PersonaChat replay bins in un-skipped nothing, because none of the six skips
+is gated on `data/`.
 
 ## Self-Check
 
