@@ -237,6 +237,15 @@ ARMS = (
     "dp_n64",
 )
 
+# The subset of ``ARMS`` that packs the RAGGED FACT-ALIGNED three-bin path instead of the flat
+# v3.0 pack. **The arm NAME is what couples an arm to its packer** — `build_arm_bins` reads this
+# tuple and nothing else, so an arm called `dp_*` cannot end up building the un-indicted flat bin
+# UNIT-01 exists to replace. Before this coupling existed, `python scripts/teach_persona.py dp_n8`
+# ran to completion writing two bins and an adapter, and a consumer pointing
+# `get_batch_fact_aligned` at the result failed only much later with "the fact bin
+# data/persona_dp_n8_train_fact.bin could not be opened".
+DP_ARMS = ("dp_n8", "dp_n64")
+
 
 def _require_go_verdict(report_path):
     """D-06 gate: hard-exit unless the report's ``## Verdict`` section reads GO or ADAPT.
@@ -318,6 +327,21 @@ def fact_bin_path(bin_path):
     """
     bin_path = pathlib.Path(bin_path)
     return bin_path.with_name(bin_path.stem + "_fact" + bin_path.suffix)
+
+
+def arm_bin_targets(arm, outputs):
+    """The bin paths one arm WRITES — THREE for a DP arm, two for a flat one.
+
+    The fact bin is recorded evidence exactly like the other two, so ``refuse_if_exists`` has to
+    know about it: a refusal that lists two of the three written files tells the operator to
+    delete two and leaves the third silently in place. One derivation for both call sites (the
+    ``build_arm_bins`` guard and the five-target guard in ``train_arm``) because two copies of a
+    guard drift — the same reason ``_prove_floor_and_band`` is one function.
+    """
+    paths = [outputs["bin"], outputs["mask"]]
+    if arm in DP_ARMS:
+        paths.append(fact_bin_path(outputs["bin"]))
+    return paths
 
 
 def refuse_if_exists(paths):
@@ -865,15 +889,51 @@ def build_arm_bins(
     ``seed`` and ``prefix`` are Phase 17's additive widening (D-14 / D-16: import this
     instrument, never copy it). Both default to today's values, so every Phase-14 arm builds
     bit-identical bins at bit-identical paths.
+
+    **The packer is chosen by ARM NAME (``DP_ARMS``), at the one seam that writes an arm's
+    bins.** A ``dp_*`` arm packs the ragged fact-aligned three-bin path; every other arm packs
+    the flat v3.0 pack through the SAME ``build_bins`` call below with ``align_facts=None``, so
+    "no arm can be trained on bins built by a different code path" stays literally true and the
+    four published arms stay byte-identical (proven against
+    ``tests/fixtures/golden_build_bins_v2.json``, not argued).
+
+    ``replay_ratio`` is threaded to ``build_bins`` UNCHANGED on both branches, deliberately.
+    ``arm_spec`` returns ``0.0`` for both DP arms and that zero is load-bearing (D-10 puts replay
+    outside the teaching bin, drawn at train time from ``data/dialog_train.bin``), so it is falsy
+    and never trips ``_refuse_ambiguous_aligned_input``'s replay guard. Special-casing the
+    argument away here would DISARM that guard: leaving it wired means the day someone sets a
+    non-zero ratio on a DP arm, this function raises instead of quietly baking ~30 replay windows
+    in beside 33 fact windows and falsifying ``grad_accum_steps = n_facts`` by ~7.9x (D-09).
     """
     outputs = arm_outputs(arm, prefix=prefix)
-    refuse_if_exists([outputs["bin"], outputs["mask"]])
+    refuse_if_exists(arm_bin_targets(arm, outputs))
 
     seed_everything(seed)
     tok = from_json(TOKENIZER_PATH)  # FROZEN production artifact — never retrain
-    episodes = render_episodes(facts, family_ids, second_person=second_person)
+    aligned = arm in DP_ARMS
+    if aligned:
+        # The PINNED ``align_facts`` shape: one (fact, that fact's ALREADY-RENDERED episodes)
+        # pair per fact, and the flat list EMPTY beside it — the aligned branch refuses two
+        # sources of truth for one bin. Rendering per fact rather than slicing a flat list is
+        # what makes the fact boundary STRUCTURAL; the call order (facts outer, sorted families
+        # inner) is `render_episodes`' own, so the episode sequence is unchanged.
+        pairs = [
+            (fact, render_episodes([fact], family_ids, second_person=second_person))
+            for fact in facts
+        ]
+        episodes = []
+    else:
+        pairs = None
+        episodes = render_episodes(facts, family_ids, second_person=second_person)
     started = time.time()
-    stats = build_bins(tok, episodes, outputs["bin"], outputs["mask"], replay_ratio=replay_ratio)
+    stats = build_bins(
+        tok,
+        episodes,
+        outputs["bin"],
+        outputs["mask"],
+        replay_ratio=replay_ratio,
+        align_facts=pairs,
+    )
     sanity_check(tok, arm, outputs["bin"], outputs["mask"], facts, stats)
 
     print(
@@ -889,7 +949,18 @@ def build_arm_bins(
         f"wall={time.time() - started:.1f}s "
         f"utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
     )
-    print(f"[teach_persona] bins written (gitignored): {outputs['bin']} + {outputs['mask']}")
+    # ``stats['fact_bin']`` is the PACKER's own ``fact_bin_path(bin_path)`` result — the third
+    # bin is never re-derived by string here, and a two-bin line for a three-bin build would
+    # under-report what the operator now has to treat as recorded evidence.
+    written = f"{outputs['bin']} + {outputs['mask']}"
+    if aligned:
+        written += f" + {stats['fact_bin']}"
+        print(
+            f"[teach_persona] {arm}: FACT-ALIGNED pack — {stats['n_facts']} privacy records, "
+            f"{stats['n_windows']} windows {stats['windows_per_fact']}, "
+            f"{stats['pad_tokens']:,} pad tokens"
+        )
+    print(f"[teach_persona] bins written (gitignored): {written}")
     return tok, stats, outputs
 
 
@@ -920,6 +991,13 @@ def main(argv=None):
         family_ids=fs.TAUGHT_FAMILY_IDS,
         second_person=second_person,
         replay_ratio=replay_ratio,
+        # `arm_outputs`' prefix exists so a run's artifacts say WHICH PHASE produced them. The
+        # DP arms are v4.0/Phase-21, so `phase14_dp_n64_adapter.pt` and `results/phase14_dp_n64/`
+        # would be a false provenance claim on the very parameter added to prevent one. Nothing
+        # is orphaned by labelling them correctly: no `phase14_dp_*` artifact has ever been
+        # recorded. `bin`/`mask`/`fact` carry no phase label either way (arm_outputs' own
+        # non-widening), so this moves the csv, the checkpoint and the adapter only.
+        prefix="phase21" if arm in DP_ARMS else "phase14",
     )
 
 
@@ -987,10 +1065,11 @@ def train_arm(
         print(f"[teach_persona] calibration verdict: {cal_verdict} — real arm cleared (W-02)")
 
     paths = arm_outputs(arm, prefix=prefix)
-    # Refuse on ALL five targets up front, before a single token is written: discovering a
-    # recorded checkpoint only after rebuilding the bins would already have clobbered them.
+    # Refuse on EVERY target up front (five, or six once a DP arm's fact bin is counted),
+    # before a single token is written: discovering a recorded checkpoint only after rebuilding
+    # the bins would already have clobbered them.
     refuse_if_exists(
-        [paths["bin"], paths["mask"], paths["csv"], paths["checkpoint"], paths["adapter"]]
+        arm_bin_targets(arm, paths) + [paths["csv"], paths["checkpoint"], paths["adapter"]]
     )
 
     summary = preflight_device(strict=True)  # CUDA-P100 -> MPS -> CPU raise, BEFORE the run
