@@ -313,3 +313,125 @@ def test_three_bin_alignment_truncation_raises_in_both_spaces(tmp_path):
         with pytest.raises(ValueError) as excinfo:
             fact_window_impurities(reread, BLOCK_SIZE, space=space)
         assert "255" in str(excinfo.value), (space, str(excinfo.value))
+
+
+# ===================================================================================
+# ===== THE ARM LAYER (WR-02). Everything above proves the aligned PACKER is =======
+# ===== correct; none of it proves any arm REACHES it. `build_arm_bins` is the =====
+# ===== one seam that writes an arm's bins, and it used to call `build_bins` =======
+# ===== with no `align_facts` for every arm — so `teach_persona.py dp_n8` ran to ===
+# ===== completion writing the FLAT bin UNIT-01 indicts, under a `phase14_` name. ==
+# ===================================================================================
+
+
+def _build_arm(tmp_path, monkeypatch, arm):
+    """One arm through the REAL `build_arm_bins`, writing under tmp_path instead of the repo.
+
+    Only `arm_outputs` reads `_REPO_ROOT` at call time, so redirecting it moves the bins and
+    leaves `TOKENIZER_PATH` (resolved at import, the FROZEN artifact) pointing at the real one.
+    """
+    monkeypatch.setattr(tp, "_REPO_ROOT", tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    facts, second_person, replay_ratio = tp.arm_spec(arm)
+    tok, stats, outputs = tp.build_arm_bins(
+        arm,
+        facts,
+        fs.TAUGHT_FAMILY_IDS,
+        second_person=second_person,
+        replay_ratio=replay_ratio,
+    )
+    del tok
+    return facts, stats, outputs
+
+
+ALIGNED_ONLY_KEYS = {"fact_bin", "n_windows", "windows_per_fact", "pad_tokens", "n_facts"}
+
+
+@pytest.mark.parametrize("arm", tp.DP_ARMS)
+def test_dp_arms_build_the_fact_aligned_path(tmp_path, monkeypatch, arm):
+    """WR-02, THE LOAD-BEARING HALF: an arm named `dp_*` reaches the aligned packer.
+
+    Without this the coupling silently reverts and the failure surfaces only in Phase 22, as
+    `get_batch_fact_aligned` raising "the fact bin ... could not be opened" — long after the
+    adapter was trained and exported on a bin whose privacy records do not exist.
+    """
+    facts, stats, outputs = _build_arm(tmp_path, monkeypatch, arm)
+    fact_path = tp.fact_bin_path(outputs["bin"])
+
+    assert fact_path.exists(), (
+        f"{arm} wrote no third bin — it built the FLAT v3.0 pack, which is the exact data "
+        "path UNIT-01 indicts and this phase exists to replace"
+    )
+    assert ALIGNED_ONLY_KEYS <= set(stats), sorted(ALIGNED_ONLY_KEYS - set(stats))
+    assert stats["fact_bin"] == str(fact_path)  # resolved by `fact_bin_path`, never string-built
+    assert stats["n_facts"] == len(facts)
+    assert stats["replay_tokens"] == 0  # D-10: replay is OUTSIDE the aligned teaching bin
+
+    # `refuse_if_exists` must treat all THREE written files as recorded evidence.
+    assert tp.arm_bin_targets(arm, outputs) == [outputs["bin"], outputs["mask"], fact_path]
+
+    ids = np.fromfile(outputs["bin"], dtype=np.uint16)
+    mask_ids = np.fromfile(outputs["mask"], dtype=np.uint8)
+    fact_ids = np.fromfile(fact_path, dtype=np.uint16)
+
+    assert len(ids) == len(mask_ids) == len(fact_ids) == stats["tokens"]
+    # The CR-01 whole-bin contract. The FLAT bin this arm used to write failed it: 7,581
+    # elements gives (len - 1) % 256 == 156, not 0.
+    assert (len(ids) - 1) % BLOCK_SIZE == 0
+    assert (len(ids) - 1) // BLOCK_SIZE == stats["n_windows"]
+
+    # SC2 read BACK FROM DISK — a reading the flat bin cannot produce at all, because it has
+    # no fact bin to read.
+    assert fact_window_impurities(fact_ids, BLOCK_SIZE) == []
+    boundaries = fact_window_impurities(fact_ids, BLOCK_SIZE, space="target")
+    assert len(boundaries) == len(facts) - 1
+    for row in boundaries:
+        at = (row + 1) * BLOCK_SIZE
+        assert mask_ids[at] == 0
+        assert int(fact_ids[at]) == int(fact_ids[row * BLOCK_SIZE]) + 1
+
+    if arm == "dp_n8":
+        # D-01/D-02's RAGGED geometry, which both benchmarked at exactly this shape.
+        assert stats["windows_per_fact"] == (4, 4, 4, 4, 4, 5, 4, 4)
+        assert (stats["n_windows"], stats["pad_tokens"], stats["tokens"]) == (33, 867, 8449)
+
+
+@pytest.mark.parametrize("arm", ("cal_first_person", "cal_second_person"))
+def test_published_arms_are_not_dragged_onto_the_aligned_path(tmp_path, monkeypatch, arm):
+    """THE PAIRED HALF. `DP_ARMS` selects a SUBSET, so it has to exclude something.
+
+    A wiring test with no exclusion half passes just as well for a `build_arm_bins` that aligns
+    EVERY arm — which would move four published instruments' bins. The two replay-free
+    calibration arms are used because the other two need `data/dialog_train.bin`, which is
+    gitignored and absent in CI; `build_bins`' own flat path is pinned byte-for-byte against
+    `golden_build_bins_v2.json` above.
+    """
+    _facts, stats, outputs = _build_arm(tmp_path, monkeypatch, arm)
+
+    assert not tp.fact_bin_path(outputs["bin"]).exists()
+    assert ALIGNED_ONLY_KEYS.isdisjoint(stats), sorted(ALIGNED_ONLY_KEYS & set(stats))
+    assert tp.arm_bin_targets(arm, outputs) == [outputs["bin"], outputs["mask"]]
+
+
+def test_dp_arm_replay_ratio_is_still_refused_through_build_arm_bins(tmp_path, monkeypatch):
+    """The reconciliation, kept live: `build_arm_bins` threads `replay_ratio` UNCHANGED.
+
+    `arm_spec` returns a load-bearing `0.0` for both DP arms, so nothing trips today. Passing
+    the argument through rather than special-casing it away is what keeps
+    `_refuse_ambiguous_aligned_input`'s guard armed: baking replay into a DP teaching bin would
+    add ~30 replay windows beside 33 fact windows and falsify `grad_accum_steps = n_facts` by
+    ~7.9x (D-09), and that has to raise rather than train.
+    """
+    assert tp.arm_spec("dp_n8")[2] == 0.0
+
+    monkeypatch.setattr(tp, "_REPO_ROOT", tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    with pytest.raises(SystemExit) as excinfo:
+        tp.build_arm_bins("dp_n8", fs.LOCKED_FACTS, fs.TAUGHT_FAMILY_IDS, replay_ratio=1.0)
+    assert "replay_ratio=1.0" in str(excinfo.value), str(excinfo.value)
+
+
+def test_dp_arms_are_declared_arms():
+    """`DP_ARMS` is a subset of `ARMS` — a name here that `main()` rejects is a dead coupling."""
+    assert set(tp.DP_ARMS) <= set(tp.ARMS)
+    assert set(tp.DP_ARMS) == {"dp_n8", "dp_n64"}

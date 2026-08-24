@@ -649,6 +649,215 @@ untouched. `STATE.md` / `ROADMAP.md` untouched.
 
 ---
 
+## WR-02 — CLOSED
+
+Fixed in `154525e`. `scripts/teach_persona.py`, `tests/test_phase21_aligned_bins.py`. Two files,
+no others. **Verdict: the finding is REAL**, established by running the arms rather than reading
+them.
+
+### The finding reproduced — by MEASUREMENT, three ways
+
+**(1) `build_arm_bins` on both DP arms, at the shipped defaults, `_REPO_ROOT` redirected to a
+sandbox** (base `8ae9e3c`):
+
+```
+ARM dp_n8   arm_spec -> 8 facts,  second_person=False, replay_ratio=0.0
+  FILES WRITTEN:  persona_dp_n8_train.bin  15,162 B
+                  persona_dp_n8_train_mask.bin  7,581 B
+  fact_bin_path(bin) = persona_dp_n8_train_fact.bin ; EXISTS = False
+  stats keys: [episode_len_max, episode_len_mean, episode_len_min, episodes, mask_fraction,
+               mask_fraction_max, mask_fraction_mean, mask_fraction_min, replay_ratio,
+               replay_tokens, teaching_tokens, tokens]
+  aligned-only keys fact_bin / n_windows / windows_per_fact / pad_tokens / n_facts: ALL False
+  tokens=7,581   (len - 1) % 256 == 156      <-- CR-01's whole-bin contract VIOLATED
+
+ARM dp_n64  arm_spec -> 64 facts, second_person=False, replay_ratio=0.0
+  FILES WRITTEN:  persona_dp_n64_train.bin 144,186 B + _mask.bin 72,093 B ; no third bin
+  tokens=72,093  (len - 1) % 256 == 156
+```
+
+Both flat, both two-file, neither carries a single aligned-only stat. The 176 episodes / 7,581
+teaching tokens and 1,408 / 72,093 match 21-09's recorded figures exactly, so this is the same
+build 21-09 measured — through the *flat* packer, as its SUMMARY says.
+
+**(2) CLI-reachable as shipped.** `python scripts/teach_persona.py dp_n8` ran to **completion** in
+~82 s on this worktree (D-06 verdict `ADAPT` → preflight → bins → 200-step LoRA train → export):
+
+```
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'dp_n8'
+[teach_persona] dp_n8: 176 episodes, 7,581 tokens (7,581 teaching + 0 replay), ...
+[teach_persona] bins written (gitignored): .../data/persona_dp_n8_train.bin
+                                         + .../data/persona_dp_n8_train_mask.bin
+[teach_persona] wrote .../checkpoints/phase14_dp_n8_adapter.pt (1.35 MB)
+```
+
+Nothing refuses it. A v4.0 DP arm trained an adapter on the un-indicted bin and exported it under
+a `phase14_` name — the secondary half of the finding, confirmed at the same call.
+
+**(3) The consumer, traced.** `get_batch_fact_aligned` pointed at those exact shipped paths:
+
+```
+fact  persona_dp_n8_train_fact.bin  exists=False
+RAISE ValueError: the fact bin .../data/persona_dp_n8_train_fact.bin could not be opened
+  ([Errno 2] No such file or directory) — a fact-aligned draw cannot proceed without it
+```
+
+Verbatim the failure the review predicted. Note what this means for severity: the raise is the
+*good* outcome. The bad one already happened one step earlier — an adapter was trained and
+exported on a bin whose privacy records do not exist, and nothing in that 82 s said so.
+
+### One correction to the review — "a Phase-22 consumer" overstates today's blast radius
+
+The review reads as though a live consumer is pointed at these bins. Traced: **nothing today reads
+`data/persona_dp_n*_train.bin` at all.** `scripts/phase21_unit_record.py` is the only non-test
+caller of the aligned loader and it builds its **own** bins in a tmpdir (`_measure_capacity`,
+`{arm}_aligned.bin`), never touching the arm paths. So this is a **latent** foot-gun, not a live
+break — which is exactly why it survived 21-09's end-to-end measurement of both capacities.
+
+That does not soften it. The arm is the only producer of those paths, its name promises DP, and the
+first consumer to arrive inherits the wrong data path with an already-trained adapter beside it.
+
+### The fix — the arm NAME is coupled to the packer, at the one seam that writes bins
+
+`DP_ARMS = ("dp_n8", "dp_n64")`, read by `build_arm_bins` and nothing else. Deliberately **one**
+`build_bins` call site is kept (`align_facts=pairs` or `None`), because `build_arm_bins`' own
+docstring claims "no arm can be trained on bins built by a different code path" and two call sites
+would make that false. The third bin is resolved by `fact_bin_path()` inside the packer and echoed
+from `stats["fact_bin"]` — never string-built at the call site.
+
+**Other `build_bins` callers, grepped and classified** (the fix is at the only one that was wrong):
+
+| Call site | Branch | Verdict |
+|---|---|---|
+| `teach_persona.build_arm_bins` | was flat for **every** arm | **FIXED** — routes by `DP_ARMS` |
+| `phase21_unit_record.py:551` (`facts_only`) | flat | correct — the differential's flat row |
+| `phase21_unit_record.py:567` (`aligned`) | aligned | already correct |
+| `phase21_unit_record.py:580` (`replay`) | flat, `replay_ratio=1.0` | correct — D-11 side-channel control |
+| `phase21_golden_capture.py:173` | flat | correct by definition — captures the v2.0 golden |
+| tests | both | by design |
+
+Two guards were widened with it, at one shared derivation (`arm_bin_targets`) rather than two
+copies: `refuse_if_exists` in `build_arm_bins` and the five-target guard in `train_arm` now count
+the fact bin, so a refusal message names all three written files instead of two of three.
+
+**`replay_ratio` vs 21-04's aligned-branch refusal — decided, not worked around.** It is threaded
+to `build_bins` **unchanged on both branches**. `arm_spec` returns `0.0` for both DP arms; `0.0` is
+falsy, so `_refuse_ambiguous_aligned_input`'s `if replay_ratio:` never fires today. Special-casing
+the argument away would have *disarmed* that guard. Leaving it wired turns `arm_spec`'s load-bearing
+`0.0` into a live tripwire: the day anyone sets a non-zero ratio on a DP arm, `build_arm_bins`
+raises instead of baking ~30 replay windows in beside 33 fact windows and falsifying
+`grad_accum_steps = n_facts` by ~7.9× (D-09). Pinned by
+`test_dp_arm_replay_ratio_is_still_refused_through_build_arm_bins`.
+
+**Prefix (the review's secondary point) applied at `main()` only.** `prefix="phase21" if arm in
+DP_ARMS else "phase14"`. No `phase14_dp_*` artifact has ever been recorded (checked: absent from
+`data/`, `checkpoints/` and `results/` on main), so nothing is orphaned. It is set at the CLI
+call rather than inside `arm_outputs` so the parameter stays the caller's choice; `main()` is the
+only DP entry point (`run_calibration` iterates `CAL_ARMS`; `phase17_isolation` passes its own
+persona names — overlap with `DP_ARMS` measured as `set()`).
+
+### GREEN — the aligned contract read off the bins the CLI actually wrote
+
+Same invocation, after the fix. Three bins, correctly named, and the arm labelled:
+
+```
+[teach_persona] dp_n8: 176 episodes, 8,449 tokens (7,581 teaching + 0 replay)
+[teach_persona] dp_n8: FACT-ALIGNED pack — 8 privacy records, 33 windows (4,4,4,4,4,5,4,4),
+                       867 pad tokens
+[teach_persona] bins written (gitignored): .../persona_dp_n8_train.bin
+                       + .../persona_dp_n8_train_mask.bin + .../persona_dp_n8_train_fact.bin
+[teach_persona] wrote .../checkpoints/phase21_dp_n8_adapter.pt (1.35 MB)
+```
+
+Read back from those files — **not** from the packer's own arithmetic:
+
+```
+lengths  8,449 / 8,449 / 8,449            1:1 = True
+whole-bin contract (CR-01): (len - 1) % 256 == 0     [was 156]
+n_windows = (len - 1) // 256 = 33
+INPUT-space impurities (SC2): []          <-- unproducible before: there was no fact bin
+TARGET-space boundary rows: 7 = n_facts - 1   rows [3, 7, 11, 15, 19, 24, 28]
+fact_window_span (start element, windows):
+  0:    0 ->4   1: 1024 ->4   2: 2048 ->4   3: 3072 ->4
+  4: 4096 ->4   5: 5120 ->5   6: 6400 ->4   7: 7424 ->4
+get_batch_fact_aligned, one full lot:
+  step 0 fact 0 x(4,256) live 300      step 4 fact 4 x(4,256) live 337
+  step 1 fact 1 x(4,256) live 287      step 5 fact 5 x(5,256) live 399
+  step 2 fact 2 x(4,256) live 309      step 6 fact 6 x(4,256) live 358
+  step 3 fact 3 x(4,256) live 379      step 7 fact 7 x(4,256) live 350
+  observed fact indices [0..7] -> one micro-step per privacy record: True
+```
+
+`7,581 → 8,449` is padding only — `teaching_tokens` is unchanged at 7,581, and `8,449 = 33×256 + 1`
+= 867 pad + the label-shift tail. The ragged `(4,4,4,4,4,5,4,4)` is the exact geometry D-01 and D-02
+benchmarked, and step 5's `x(5,256)` is that raggedness visible in a batch shape. dp_n64 lands at
+64 records / 316 windows / 8,803 pad / 80,897 = 316×256 + 1.
+
+### The published arms are byte-identical — measured, not reasoned from "I only added a branch"
+
+All six arms built through `build_arm_bins` at base `8ae9e3c` and again at `154525e`, comparing
+`sha256(token bin)`, `sha256(mask bin)`, byte count and `repr(stats)`:
+
+```
+cal_first_person         [PUBLISHED]  before == after: True
+cal_first_person_replay  [PUBLISHED]  before == after: True
+cal_second_person        [PUBLISHED]  before == after: True
+real                     [PUBLISHED]  before == after: True
+dp_n8                    [DP]         before == after: False  (fact bin False->True,
+                                       token 7,581->8,449 elements, mask sha changed)
+dp_n64                   [DP]         before == after: False  (72,093 -> 80,897)
+```
+
+`test_build_bins_byte_identity_default_matches_the_v2_golden` passes against
+`golden_build_bins_v2.json` (token `91c2549388079c3da2d5888706ba6b80f70383f320112ae768f6a78372f90fac`),
+as do `test_build_bins_byte_identity_omitted_equals_align_facts_none` and the two
+`golden_render_family_v2.json` tests in `test_phase21_filler.py`.
+
+### Regression cover — RED observed at the assertion, not only at import
+
+Six tests appended to `tests/test_phase21_aligned_bins.py` (17 → 23 in that file):
+
+* `test_dp_arms_build_the_fact_aligned_path[dp_n8|dp_n64]` — the load-bearing half. Third bin
+  exists at `fact_bin_path()`, aligned-only stats present, three-bin 1:1, `(len-1) % 256 == 0`,
+  input-space purity `[]`, `n_facts - 1` masked in-order target boundaries, and dp_n8's literal
+  `(4,4,4,4,4,5,4,4) / 33 / 867 / 8449`.
+* `test_published_arms_are_not_dragged_onto_the_aligned_path[cal_first_person|cal_second_person]`
+  — the **paired** half. `DP_ARMS` selects a subset, so it must exclude something; without this,
+  a `build_arm_bins` that aligned *every* arm would pass the half above. (The two replay arms are
+  omitted because they need gitignored `data/dialog_train.bin`; their flat path is pinned by the
+  golden fixture instead.)
+* `test_dp_arm_replay_ratio_is_still_refused_through_build_arm_bins` — the reconciliation, kept live.
+* `test_dp_arms_are_declared_arms` — `DP_ARMS ⊆ ARMS`; a name `main()` rejects is a dead coupling.
+
+RED confirmed two ways after the GREEN commit: at the true pre-fix source the module fails
+collection (`AttributeError: module 'teach_persona' has no attribute 'DP_ARMS'`), and under
+`monkeypatch.setattr(tp, "DP_ARMS", ())` — which reproduces the pre-fix routing exactly — both
+parametrisations fail on the first assertion:
+
+```
+E  AssertionError: dp_n8 wrote no third bin — it built the FLAT v3.0 pack, which is the exact
+   data path UNIT-01 indicts and this phase exists to replace
+E  AssertionError: dp_n64 wrote no third bin — ...
+```
+
+### Suite
+
+`982 passed, 7 skipped` (literal, full suite, `.venv/bin/python -m pytest -q`, 190 s). Against the
+stated `982 passed, 1 skipped` baseline: 982 + 7 = **989 collected = 983 + the six new tests**,
+zero regressions. All 7 skips are environmental, verified with `-rs` — 6 are gitignored artifacts
+absent from the worktree (`test_forbid_ids`, `test_lora_artifact`, `test_slim_checkpoint`,
+`test_phase14_demo` ×2, `test_phase15_plots`) and 1 is the CUDA-only fp16 smoke that also skips on
+main; on main those 6 run, giving the equivalent `988 passed, 1 skipped`. `ruff check` and
+`ruff format --check` clean on both changed files.
+
+`scripts/mitigation_unit.py` byte-unchanged (`sha256 45f37e15…`, verified). `results/phase21_*.json`
+untouched — and the `results/phase21_dp_n8/run.csv` produced by the CLI demonstration run above was
+**deleted**, not committed: it is a worktree byproduct, not a recorded measurement, and committing
+it would both fake an artifact and trip `refuse_if_exists` for whoever runs the arm for real.
+`STATE.md` / `ROADMAP.md` untouched.
+
+---
+
 _Reviewed: 2026-08-24_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
