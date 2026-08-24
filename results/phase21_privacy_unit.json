@@ -1,0 +1,144 @@
+{
+  "unit": {
+    "privacy_unit": "one taught fact",
+    "privacy_n_rule": "N = n_facts",
+    "rationale": "An example-level epsilon bounds nothing about a FACT. `get_batch_memmap_masked` (src/personacore/training/data.py:117) draws `batch_size` window START OFFSETS with `np.random.randint` over a FLAT CONCATENATED bin \u2014 with replacement, and with no notion of where one fact ends and the next begins \u2014 so a single fact is touched an unbounded number of times per pass and `one example` is not a stable quantity to protect.",
+    "measured_multiplicity": "NOT restated here. The OBSERVED per-fact distribution (min/max/mean/spread, every row labelled with its bin composition and carrying its own denominator) is in results/phase21_multiplicity.json. A number appearing in two artifacts is two numbers that can disagree.",
+    "pin_arithmetic": "WHY AN EXAMPLE-LEVEL EPSILON BOUNDS NOTHING ABOUT A FACT. `get_batch_memmap_masked` (`src/personacore/training/data.py:117`) draws `batch_size` window START OFFSETS with `np.random.randint` over a FLAT CONCATENATED bin \u2014 with replacement, and with no notion of where one fact ends and the next begins. A single fact is therefore touched an unbounded number of times per pass, so `one example` is not a stable quantity to protect and an epsilon accounted per example says nothing about what an adversary learns about a FACT. \n\nANALYTIC, and labelled as such because UNIT-03 refuses precisely this kind of number as a final answer. At the real budget \u2014 MAX_STEPS = 200 x BATCH_SIZE = 8 = 1,600 draws (`scripts/teach_persona.py:523` and `:517`) over the 7,581-token facts-only teaching bin (D-10; 8 facts, mean 947.625 tokens each) \u2014 the expected number of draws whose window overlaps a given fact is \n\n    1,600 * (947.625 + 256) / (7,581 - 256 - 1) = 262.94\n\nTHE FORMULA IS WRITTEN OUT RATHER THAN LEFT IMPLICIT, because the reading that stating a denominator invites \u2014 draws * block_size / bin_tokens = 1,600 * 256 / 7,581 = 54.03 \u2014 is NOT this number, and a number nobody can reproduce cannot be corrected inside a frozen file. A window of `block_size` tokens overlaps a fact of L tokens from any of `L + block_size` start offsets, and `randint(0, len(data) - block_size - 1)` offers `7,581 - 257` of them. \n\nThe same formula on the replay-in-bin composition (15,162 tokens at replay_ratio 1.0) gives 129.21, so removing replay from the teaching bin (D-10) roughly DOUBLES the unaligned multiplicity \u2014 the same 1,600 draws land on half the data. A decision taken purely for honest accounting made the unaligned number WORSE, which is what makes this indictment stronger under D-10 rather than weaker. \n\nUnder fact-aligned accumulation (D-01, D-05, D-06) the same quantity is exactly 1 per micro-step, deterministic, by construction \u2014 which is what makes SAMPLING_RATE_Q = 1.0 below honest rather than assumed. \n\nTHIS MODULE IS NOT THE SOURCE OF THE MEASUREMENT. Both figures above are EXPECTATIONS over the draw distribution, computed from the geometry. D-26 requires the OBSERVED per-fact distribution \u2014 min/max/mean/spread on an instrumented loader at SEED = 1337 \u2014 and plan 21-11 writes that measured row to `results/phase21_*`. A reader should expect the measurement to differ from 262.94 by sampling noise; a reader quoting 262.94 AS a measurement is quoting the wrong thing."
+  },
+  "lot": {
+    "sampling_rate_q": 1.0,
+    "privacy_n_rule": "N = n_facts",
+    "privacy_n_at_capacities": {
+      "8": 8,
+      "64": 64
+    },
+    "replay_in_lot": true,
+    "replay_inside_privacy_n": false,
+    "epsilon_consequence": "REPLAY SITS OUTSIDE THE PRIVACY N ENTIRELY: honest q = 1, N = n_facts (D-07). Replay is public PersonaChat dialogue serving a TRAINING-STABILITY role; it is not private data needing protection. \n\nTHE EPSILON CONSEQUENCE, which is the whole reason this is a pinned decision and not an implementation detail: counting replay inside N would shrink q artificially and produce a flatteringly SMALL epsilon that does not reflect what the mechanism actually protects. That is the exact trap UNIT-04 names. A subsampled-mechanism epsilon shrinks with q, so folding public padding into the lot buys a better-looking number for nothing \u2014 the published bound would be about a lot that includes data no adversary cares about. \n\nTHE MEASURED BASIS: at `replay_ratio = 1.0` replay is 7,581 tokens, exactly 50% of today's bin \u2014 so this is not a marginal share being waved away, it is half the tokens. \n\nAND REPLAY IS NOT DROPPED FROM THE DP ARMS (D-08). Removing it would risk gate condition (c): losing dialogue capability is exactly the class of harm an identity-only guard misses, and `f_C = 0.5` sits only 2.24x above the measured non-vacuity floor 0.2237 (Phase 20 D-17). There is little room before a dialogue collapse stops being distinguishable from a pass. So replay stays in the run and leaves the ACCOUNTING, which is a different thing from leaving the training.",
+    "replay_volume": {
+      "replay_windows_per_fact": 4,
+      "replay_tokens_per_fact": 1024,
+      "replay_tokens_at_n8": 8192,
+      "replay_tokens_at_n64": 65536,
+      "observed_share_of_the_padded_bin": [
+        {
+          "n_facts": 8,
+          "replay_tokens": 8192,
+          "aligned_teaching_bin_tokens_padded": 8449,
+          "share_of_the_combined_lot": 0.4922781082867616,
+          "denominator": "replay_tokens + aligned_teaching_bin_tokens_padded"
+        },
+        {
+          "n_facts": 64,
+          "replay_tokens": 65536,
+          "aligned_teaching_bin_tokens_padded": 80897,
+          "share_of_the_combined_lot": 0.4475493911891445,
+          "denominator": "replay_tokens + aligned_teaching_bin_tokens_padded"
+        }
+      ],
+      "d24_candidate_table_reproduced": {
+        "criterion": "share of the combined lot = replay_tokens / (replay_tokens + padded_bin)",
+        "rows": [
+          {
+            "windows_per_fact": 3,
+            "n_facts": 8,
+            "replay_tokens": 6144,
+            "aligned_teaching_bin_tokens_padded": 8449,
+            "share_of_the_combined_lot": 0.42102377852394984,
+            "is_the_pinned_constant": false
+          },
+          {
+            "windows_per_fact": 3,
+            "n_facts": 64,
+            "replay_tokens": 49152,
+            "aligned_teaching_bin_tokens_padded": 80897,
+            "share_of_the_combined_lot": 0.3779498496720467,
+            "is_the_pinned_constant": false
+          },
+          {
+            "windows_per_fact": 4,
+            "n_facts": 8,
+            "replay_tokens": 8192,
+            "aligned_teaching_bin_tokens_padded": 8449,
+            "share_of_the_combined_lot": 0.4922781082867616,
+            "is_the_pinned_constant": true
+          },
+          {
+            "windows_per_fact": 4,
+            "n_facts": 64,
+            "replay_tokens": 65536,
+            "aligned_teaching_bin_tokens_padded": 80897,
+            "share_of_the_combined_lot": 0.4475493911891445,
+            "is_the_pinned_constant": true
+          },
+          {
+            "windows_per_fact": 5,
+            "n_facts": 8,
+            "replay_tokens": 10240,
+            "aligned_teaching_bin_tokens_padded": 8449,
+            "share_of_the_combined_lot": 0.5479158863502596,
+            "is_the_pinned_constant": false
+          },
+          {
+            "windows_per_fact": 5,
+            "n_facts": 64,
+            "replay_tokens": 81920,
+            "aligned_teaching_bin_tokens_padded": 80897,
+            "share_of_the_combined_lot": 0.5031415638416136,
+            "is_the_pinned_constant": false
+          }
+        ],
+        "n8_rows_reproduce_the_documented_table": true,
+        "documented_n8_table": {
+          "3": 0.4211,
+          "4": 0.4923,
+          "5": 0.5479
+        },
+        "documented_n64_claim": "scripts/teach_persona.py:162-163 \u2014 'The share holds across capacities for free: 49.90% at n=64, because both sides scale with n_facts.'",
+        "documented_n64_claim_holds": false,
+        "measured_n64_share_at_the_pinned_constant": 0.4475493911891445,
+        "why_the_premise_fails": "Replay scales exactly with n_facts; the PADDED TEACHING BIN does not. The 56 filler facts pack to 283 of the 316 ragged windows (5.054 each) against the 8 locked facts' 33 (4.125 each), so the n=64 bin is 80,897 tokens where linear scaling from n=8 predicts 8 x 8,449 = 67,592. Under the linear premise the share would be 49.2278% \u2014 i.e. UNCHANGED from n=8, not the 49.90% stated \u2014 so the documented figure does not follow from its own stated reason either.",
+        "consequence_recorded_not_acted_on": "At n=64 the table's own 'closest to 50%' criterion ranks 5 windows (50.31%) ahead of the pinned 4 (44.75%). D-24 is a LOCKED decision taken on the n=8 geometry and REPLAY_WINDOWS_PER_FACT is pinned by test; this artifact RECORDS the divergence and changes nothing. Re-opening it would be a dated continuation, not an edit."
+      },
+      "separate_pass_per_lot": true,
+      "rejected_raw_constant": 947.625,
+      "rejected_raw_constant_reason": "7581 / 8 \u2014 read off PRIVATE token lengths. A replay volume derived from the corpus is a side channel: it publishes a function of the facts it is meant to be independent of (D-11 / D-24)."
+    }
+  },
+  "delta": {
+    "delta": 1e-05,
+    "ceiling": 0.01,
+    "ceiling_rule": "delta * N < ceiling",
+    "rejected_recipe": "1/N**1.1",
+    "rejected_recipe_reason": "`1/N**1.1` FAILS ITS OWN `delta * N < 0.01` ASSERTION AT BOTH CAPACITIES THIS MILESTONE RUNS, which is a strictly stronger record than a single-N check. At N = 8 it is 0.10153154954452942, so delta * N = 0.8122523963562354 \u2014 failing by 81.2x. At N = 64 it is 0.010308655552913232, so delta * N = 0.6597539553864469 \u2014 failing by 66.0x. The recipe is not merely wrong at the small capacity; it is wrong at n = 8 AND at n = 64, and a reader who checked only n = 8 could have believed it was an artefact of the small arm. \n\nThe pinned literal passes at both: delta * N = 8e-05 at N = 8 (by 125.0x) and 0.00064 at N = 64 (by 15.625x). Note the direction \u2014 a CONSTANT delta gets tighter relative to the ceiling as N grows, while the rejected recipe stays broken across the whole range, so the n = 64 arm is where the literal has least headroom and it still clears by more than an order of magnitude.",
+    "capacities": [
+      {
+        "n": 8,
+        "pinned_delta_times_n": 8e-05,
+        "pinned_margin": 124.99999999999999,
+        "rejected_delta": 0.10153154954452942,
+        "rejected_delta_times_n": 0.8122523963562354,
+        "rejected_overshoot_multiple": 81.22523963562354
+      },
+      {
+        "n": 64,
+        "pinned_delta_times_n": 0.00064,
+        "pinned_margin": 15.624999999999998,
+        "rejected_delta": 0.010308655552913232,
+        "rejected_delta_times_n": 0.6597539553864469,
+        "rejected_overshoot_multiple": 65.97539553864469
+      }
+    ]
+  },
+  "provenance": {
+    "git_sha": "fa97b6667043ae0aca287dab64741bfb99029522",
+    "written_utc": "2026-08-23T23:16:19Z",
+    "python": "3.11.15",
+    "seed": 1337,
+    "pin_module": "scripts/mitigation_unit.py",
+    "pin_sha256": "45f37e152bb4035667b804c1463431b3f12fa5096c47de32b1dc27abbe000473",
+    "epsilon_computed": false,
+    "epsilon_note": "NO EPSILON IS COMPUTED ANYWHERE IN PHASE 21. This artifact records the privacy UNIT and the data path that makes it real; the accountant that consumes them is Phase 22 (DPSGD-01). A number labelled epsilon here would be a bound with no mechanism behind it, which is precisely the substitution UNIT-03 exists to refuse."
+  }
+}

@@ -612,27 +612,42 @@ def test_analytic_cross_check_only(tmp_path):
 # ===================================================================================
 
 
-def test_the_artifact_is_not_written_yet():
-    """This plan builds the INSTRUMENT; plan 21-11 writes and commits the artifact.
+def test_the_committed_artifacts_are_exactly_the_declared_paths():
+    """The DECLARED constants and the COMMITTED paths are the same set — checked, not assumed.
 
-    ``tests/test_phase20_prereg.py:157`` takes ``adds[-1]``, the EARLIEST add, so a
-    ``results/phase21_*`` path committed before the pin cannot be laundered by a delete and
-    re-add. There is no recovery path, which is why the check is here rather than at 21-11.
+    **This inverts `test_the_artifact_is_not_written_yet`, which plan 21-11 made false by design.**
+    That test asserted `git ls-files 'results/phase21_*' == []` while 21-10 shipped the instrument
+    and no artifact; its own docstring named 21-11 as the plan that writes and commits them. The
+    inversion is the RECORDED TRANSITION, not an erasure — the same treatment
+    `test_phase21_has_no_artifact_yet_so_the_arming_is_honest` received in
+    `tests/test_phase20_prereg.py`, and it is the SECOND guard of that shape. The plan's task-3
+    text names only the first, which is why this one was found by running the full suite rather
+    than by reading the plan.
+
+    What it guards now is the defect this repository keeps producing: a plan naming an artifact
+    path the code refuses. `ARTIFACTS` is the single declaration, the driver writes through it,
+    and this asserts the COMMITTED set is exactly that declaration — so an artifact landing at a
+    path nobody declared, or a declared path that never got committed, is red either way.
     """
-    tracked = subprocess.run(
-        ["git", "ls-files", "results/phase21_*"],
-        cwd=_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
-    assert tracked == [], (
-        f"{tracked} is already tracked — the ancestry ordering is now permanent and this plan "
-        "was not the one permitted to fix it (plan 21-11 owns the first add)"
+    tracked = sorted(
+        subprocess.run(
+            ["git", "ls-files", "results/phase21_*"],
+            cwd=_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+    )
+    declared = sorted(str(path.relative_to(_ROOT)) for path in unit.ARTIFACTS.values())
+    assert tracked == declared, (
+        f"committed {tracked} but ARTIFACTS declares {declared} — an artifact at an undeclared "
+        "path, or a declared path that was never committed. `adds[-1]` makes the ancestry "
+        "ordering of the committed path permanent, so a stray path cannot simply be moved."
     )
     # The paths are declared as constants HERE precisely so 21-11 resolves them from the module
-    # rather than from a string literal in a plan step. Declared is not written.
+    # rather than from a string literal in a plan step.
     assert set(unit.ARTIFACTS) == {"privacy_unit", "multiplicity"}
     for path in unit.ARTIFACTS.values():
         assert path.name.startswith("phase21_")
         assert path.parent.name == "results"
+        assert path.exists(), f"{path} is tracked but absent from the working tree"
