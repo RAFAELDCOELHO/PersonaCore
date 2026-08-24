@@ -806,8 +806,8 @@
     }
   },
   "provenance": {
-    "git_sha": "17b3c8568ece86cb2d69a7934683e681a796d3c4",
-    "written_utc": "2026-08-23T23:20:19Z",
+    "git_sha": "eba0571a7f75e6631b7b080939d130947b703cdf",
+    "written_utc": "2026-08-24T21:42:38Z",
     "python": "3.11.15",
     "seed": 1337,
     "pin_module": "scripts/mitigation_unit.py",
