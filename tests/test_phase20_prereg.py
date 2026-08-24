@@ -388,36 +388,40 @@ def test_a_same_commit_pin_and_artifact_is_refused(tmp_path):
     )
 
 
-def test_phase21_has_no_artifact_yet_so_the_arming_is_honest():
-    """The arm-then-write claim made CHECKABLE on this repository, not merely promised.
+def test_phase21_guard_is_now_live():
+    """The RECORDED TRANSITION from "armed, nothing to watch" to "armed and watching".
 
-    The guard above is vacuous today, and its docstring says so — but "vacuous because we armed
-    early" and "vacuous because the glob is looking in the wrong place" are indistinguishable from
-    inside that test. This one distinguishes them from the outside: it asserts that NO
-    `results/phase21_*` file has ever been ADDED in this history, which is the fact that makes the
-    vacuity honest rather than accidental.
+    Replaces `test_phase21_has_no_artifact_yet_so_the_arming_is_honest`, which asserts the opposite
+    and becomes false BY DESIGN at the commit adding the first `results/phase21_*` artifact. That
+    test's own docstring records plan 21-11 as the remover, so the deletion is the transition and
+    not an erasure of an inconvenient guard.
 
-    **It is also the invariant that protects the evidence.** A `phase21_`-named probe reaching the
-    real git history — rather than staying under a throwaway `tmp_path` repo — would permanently
-    corrupt the ordering record this phase exists to produce, and `adds[-1]` means it could not be
-    laundered by deleting the file afterwards. This assertion fires the moment that happens.
+    While `checked == n * 0 == 0` the ancestry guard is vacuous BY CONSTRUCTION — green having
+    compared nothing. From the artifact commit onward `_assert_ordering_holds`'s closing
+    equivalence demands a NON-ZERO `checked`; this asserts both sides from the outside. Phase 20
+    already carried the same trajectory: 9 pin commits x 3 tracked artifacts = `checked = 27`.
 
-    **EXPECTED TO BE DELETED OR INVERTED BY PLAN 21-11**, which commits the first real
-    `results/phase21_*` artifact. Removing it there is the RECORDED TRANSITION from "armed, nothing
-    to watch" to "armed and watching", not an erasure of an inconvenient guard — and from that
-    commit onward the closing equivalence assertion carries the same duty this test carries now.
-
-    **MEASURED at 21-11's gate, and it is why this test is still here:** the replacement
-    `test_phase21_guard_is_now_live` is RED for as long as `results/phase21_*` is uncommitted
-    (`checked` is 0), so the plan's "commit the test edit ALONE first, and confirm it is GREEN"
-    cannot be satisfied. The swap belongs in the SAME commit as the artifacts, not before them.
+    **THIS TEST IS RED UNTIL THE ARTIFACTS ARE COMMITTED, AND THAT IS WHY IT SHIPS IN THE SAME
+    COMMIT AS THEM.** Measured at 21-11's gate: with `results/phase21_*` uncommitted this is
+    `1 failed, 21 passed`. The plan's "commit the test edit ALONE first, and confirm it is GREEN"
+    is therefore unsatisfiable as written — the guard-side change that CAN stand alone (the strict
+    ancestor conjunct) was split out and committed separately.
     """
-    adds = _git("log", "--diff-filter=A", "--format=%H", "--", "results/phase21_*").split()
-    assert adds == [], (
-        f"{len(adds)} commit(s) already ADDED a results/phase21_* artifact: {adds}. Plan 21-01 "
-        "arms the ordering guard BEFORE the first artifact, so finding one here means either the "
-        "arming is no longer first — and `adds[-1]` makes that permanent — or a phase21-named "
-        "probe escaped a tmp_path fixture into the real history"
+    tracked = _git("ls-files", "results/phase21_*").split()
+    assert tracked, (
+        "no results/phase21_* artifact is tracked, so the ancestry guard is still vacuous. This "
+        "test asserts the guard has gone LIVE; if the artifacts are not committed yet it is being "
+        "run one commit too early."
+    )
+    pins = _git("log", "--format=%H", "--", PHASE21_PREREG_ARTIFACT).split()
+    _assert_ordering_holds(
+        root=_ROOT,
+        prereg_artifact=PHASE21_PREREG_ARTIFACT,
+        artifact_glob="results/phase21_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+    assert len(pins) * len(tracked) > 0, (
+        f"checked would be {len(pins)} x {len(tracked)} = 0 — the guard is still comparing nothing"
     )
 
 
