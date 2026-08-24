@@ -25,81 +25,124 @@
         {
           "n_facts": 8,
           "replay_tokens": 8192,
+          "replay_windows": 32,
           "aligned_teaching_bin_tokens_padded": 8449,
-          "share_of_the_combined_lot": 0.4922781082867616,
-          "denominator": "replay_tokens + aligned_teaching_bin_tokens_padded"
+          "aligned_teaching_bin_trainable_tokens": 8448,
+          "aligned_teaching_bin_windows": 33,
+          "share_of_the_combined_lot": 0.49230769230769234,
+          "denominator": "replay_tokens + aligned_teaching_bin_trainable_tokens",
+          "denominator_excludes": "the LABEL-SHIFT TAIL (the trailing +1 token). Both bin sizes are published above \u2014 see d24_candidate_table_reproduced.denominator_reconciliation for the unit-invariance measurement that chooses between them (21-REVIEW.md WR-01)."
         },
         {
           "n_facts": 64,
           "replay_tokens": 65536,
+          "replay_windows": 256,
           "aligned_teaching_bin_tokens_padded": 80897,
-          "share_of_the_combined_lot": 0.4475493911891445,
-          "denominator": "replay_tokens + aligned_teaching_bin_tokens_padded"
+          "aligned_teaching_bin_trainable_tokens": 80896,
+          "aligned_teaching_bin_windows": 316,
+          "share_of_the_combined_lot": 0.44755244755244755,
+          "denominator": "replay_tokens + aligned_teaching_bin_trainable_tokens",
+          "denominator_excludes": "the LABEL-SHIFT TAIL (the trailing +1 token). Both bin sizes are published above \u2014 see d24_candidate_table_reproduced.denominator_reconciliation for the unit-invariance measurement that chooses between them (21-REVIEW.md WR-01)."
         }
       ],
       "d24_candidate_table_reproduced": {
-        "criterion": "share of the combined lot = replay_tokens / (replay_tokens + padded_bin)",
+        "criterion": "share of the combined lot = replay_tokens / (replay_tokens + aligned_teaching_bin_trainable_tokens)",
         "rows": [
           {
             "windows_per_fact": 3,
             "n_facts": 8,
             "replay_tokens": 6144,
+            "replay_windows": 24,
             "aligned_teaching_bin_tokens_padded": 8449,
-            "share_of_the_combined_lot": 0.42102377852394984,
+            "aligned_teaching_bin_trainable_tokens": 8448,
+            "aligned_teaching_bin_windows": 33,
+            "share_of_the_combined_lot": 0.42105263157894735,
+            "share_computed_in_windows": 0.42105263157894735,
             "is_the_pinned_constant": false
           },
           {
             "windows_per_fact": 3,
             "n_facts": 64,
             "replay_tokens": 49152,
+            "replay_windows": 192,
             "aligned_teaching_bin_tokens_padded": 80897,
-            "share_of_the_combined_lot": 0.3779498496720467,
+            "aligned_teaching_bin_trainable_tokens": 80896,
+            "aligned_teaching_bin_windows": 316,
+            "share_of_the_combined_lot": 0.3779527559055118,
+            "share_computed_in_windows": 0.3779527559055118,
             "is_the_pinned_constant": false
           },
           {
             "windows_per_fact": 4,
             "n_facts": 8,
             "replay_tokens": 8192,
+            "replay_windows": 32,
             "aligned_teaching_bin_tokens_padded": 8449,
-            "share_of_the_combined_lot": 0.4922781082867616,
+            "aligned_teaching_bin_trainable_tokens": 8448,
+            "aligned_teaching_bin_windows": 33,
+            "share_of_the_combined_lot": 0.49230769230769234,
+            "share_computed_in_windows": 0.49230769230769234,
             "is_the_pinned_constant": true
           },
           {
             "windows_per_fact": 4,
             "n_facts": 64,
             "replay_tokens": 65536,
+            "replay_windows": 256,
             "aligned_teaching_bin_tokens_padded": 80897,
-            "share_of_the_combined_lot": 0.4475493911891445,
+            "aligned_teaching_bin_trainable_tokens": 80896,
+            "aligned_teaching_bin_windows": 316,
+            "share_of_the_combined_lot": 0.44755244755244755,
+            "share_computed_in_windows": 0.44755244755244755,
             "is_the_pinned_constant": true
           },
           {
             "windows_per_fact": 5,
             "n_facts": 8,
             "replay_tokens": 10240,
+            "replay_windows": 40,
             "aligned_teaching_bin_tokens_padded": 8449,
-            "share_of_the_combined_lot": 0.5479158863502596,
+            "aligned_teaching_bin_trainable_tokens": 8448,
+            "aligned_teaching_bin_windows": 33,
+            "share_of_the_combined_lot": 0.547945205479452,
+            "share_computed_in_windows": 0.547945205479452,
             "is_the_pinned_constant": false
           },
           {
             "windows_per_fact": 5,
             "n_facts": 64,
             "replay_tokens": 81920,
+            "replay_windows": 320,
             "aligned_teaching_bin_tokens_padded": 80897,
-            "share_of_the_combined_lot": 0.5031415638416136,
+            "aligned_teaching_bin_trainable_tokens": 80896,
+            "aligned_teaching_bin_windows": 316,
+            "share_of_the_combined_lot": 0.5031446540880503,
+            "share_computed_in_windows": 0.5031446540880503,
             "is_the_pinned_constant": false
           }
         ],
         "n8_rows_reproduce_the_documented_table": true,
+        "n8_rows_reproduce_the_documented_table_tolerance": "round(share, 4) == the documented value EXACTLY \u2014 the comment states 4 decimals, so the comparison is made at 4 decimals and at no other precision",
         "documented_n8_table": {
           "3": 0.4211,
           "4": 0.4923,
           "5": 0.5479
         },
+        "denominator_reconciliation": {
+          "disagreement": "D-24's table divides by 8448 at n=8; this artifact divided by 8449 until 21-REVIEW.md WR-01. They differ by the LABEL-SHIFT TAIL, the trailing +1 token of an aligned bin (total_windows * block_size + 1), and the difference is visible only in the 3-window row's 4th decimal: 0.4211 vs 0.4210.",
+          "resolved_in_favour_of": "D-24 (the tail EXCLUDED \u2014 trainable_tokens)",
+          "resolved_by": "UNIT INVARIANCE, measured. The numerator is a whole number of windows (replay_window_budget(n) % block_size == 0), so the share must be computable in windows or in tokens and come out the same. It does, bit for bit, only when the denominator is total_windows * block_size. Every row publishes both share_of_the_combined_lot and share_computed_in_windows so this is checkable from the artifact alone.",
+          "why_the_tail_is_not_part_of_the_lot": "The +1 token is a TARGET-ONLY position: it is the label for the last window's final input token and is never itself a window start. It belongs to no window, so it cannot appear in a window-basis count, and a token-basis count that includes it is measuring a different thing from the one it is compared against.",
+          "what_the_correction_does_not_rescue": "documented_n64_claim_holds is still False: the corrected n=64 share is 44.755245% against the documented 49.90%, where the old tail-bearing denominator gave 44.754939%. The correction moves it by 3.06e-06 and leaves the claim just as false. A denominator chosen to flatter the record would have rescued the claim this block is actually about; this one does not touch it."
+        },
         "documented_n64_claim": "scripts/teach_persona.py:162-163 \u2014 'The share holds across capacities for free: 49.90% at n=64, because both sides scale with n_facts.'",
+        "documented_n64_claim_value": 0.499,
         "documented_n64_claim_holds": false,
-        "measured_n64_share_at_the_pinned_constant": 0.4475493911891445,
-        "why_the_premise_fails": "Replay scales exactly with n_facts; the PADDED TEACHING BIN does not. The 56 filler facts pack to 283 of the 316 ragged windows (5.054 each) against the 8 locked facts' 33 (4.125 each), so the n=64 bin is 80,897 tokens where linear scaling from n=8 predicts 8 x 8,449 = 67,592. Under the linear premise the share would be 49.2278% \u2014 i.e. UNCHANGED from n=8, not the 49.90% stated \u2014 so the documented figure does not follow from its own stated reason either.",
-        "consequence_recorded_not_acted_on": "At n=64 the table's own 'closest to 50%' criterion ranks 5 windows (50.31%) ahead of the pinned 4 (44.75%). D-24 is a LOCKED decision taken on the n=8 geometry and REPLAY_WINDOWS_PER_FACT is pinned by test; this artifact RECORDS the divergence and changes nothing. Re-opening it would be a dated continuation, not an edit."
+        "measured_n64_share_at_the_pinned_constant": 0.44755244755244755,
+        "why_the_premise_fails": "Replay scales exactly with n_facts; the TEACHING BIN does not. The 56 filler facts pack to 283 of the 316 ragged windows (5.054 each) against the 8 locked facts' 33 (4.125 each), so the n=64 bin is 80,896 trainable tokens where linear scaling from n=8 predicts 8 x 8,448 = 67,584. Under the linear premise the share would be 49.2308% \u2014 i.e. EXACTLY the n=8 value of 49.2308%, not the 49.90% stated \u2014 so the documented figure does not follow from its own stated reason either.",
+        "linear_premise_share_at_n64": 0.49230769230769234,
+        "linear_premise_equals_the_n8_share": true,
+        "consequence_recorded_not_acted_on": "At n=64 the table's own 'closest to 50%' criterion ranks 5 windows (50.31%) ahead of the pinned 4 (44.76%). D-24 is a LOCKED decision taken on the n=8 geometry and REPLAY_WINDOWS_PER_FACT is pinned by test; this artifact RECORDS the divergence and changes nothing. Re-opening it would be a dated continuation, not an edit."
       },
       "separate_pass_per_lot": true,
       "rejected_raw_constant": 947.625,
@@ -132,8 +175,8 @@
     ]
   },
   "provenance": {
-    "git_sha": "fa97b6667043ae0aca287dab64741bfb99029522",
-    "written_utc": "2026-08-23T23:16:19Z",
+    "git_sha": "eba0571a7f75e6631b7b080939d130947b703cdf",
+    "written_utc": "2026-08-24T21:42:37Z",
     "python": "3.11.15",
     "seed": 1337,
     "pin_module": "scripts/mitigation_unit.py",

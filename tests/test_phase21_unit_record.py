@@ -24,9 +24,12 @@ CPU-only, no GPU, no network.
 
 import json
 import pathlib
+import subprocess
 import sys
 
 import pytest
+
+from personacore.provenance import refuse_if_dirty
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "scripts"))
@@ -34,6 +37,13 @@ sys.path.insert(0, str(_ROOT / "scripts"))
 import mitigation_unit as mu  # noqa: E402
 import phase21_unit_record as r  # noqa: E402
 import teach_persona as tp  # noqa: E402
+
+
+def _git(*args, cwd):
+    """``git`` at ``cwd``, argv-style. Never ``shell=True``; see test_phase20_prereg.py:141."""
+    return subprocess.run(
+        ("git", *args), cwd=cwd, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
 
 def _load(key):
@@ -185,6 +195,116 @@ def test_artifact_values_come_from_the_pin(unit):
     assert volume["replay_tokens_at_n64"] == tp.replay_window_budget(64)
 
 
+def test_the_n8_reproduction_claim_is_computed_and_could_have_been_false(unit):
+    """WR-01: the flag is the RESULT of the comparison it claims, and the comparison can fail.
+
+    It shipped as the Python literal `True` with nothing evaluating it, and it was FALSE at the
+    precision it claimed: the 3-window row measured 0.4210 against D-24's documented 0.4211. A
+    flag no code computes is the guard-that-cannot-fail class this phase has spent eleven plans
+    removing, so asserting the flag alone would repeat the defect one level up — this test
+    RECOMPUTES the comparison from the artifact's own published rows and then, separately, shows
+    the comparison is capable of returning False.
+    """
+    table = unit["lot"]["replay_volume"]["d24_candidate_table_reproduced"]
+    documented = table["documented_n8_table"]
+    assert documented == r.DOCUMENTED_N8_TABLE, (
+        "the published table and the constant the flag is checked against must be one object, or "
+        "they are two numbers that can drift apart — which is how WR-01 happened"
+    )
+
+    n8_rows = {row["windows_per_fact"]: row for row in table["rows"] if row["n_facts"] == 8}
+    assert sorted(n8_rows) == [3, 4, 5]
+    recomputed = all(
+        round(n8_rows[w]["share_of_the_combined_lot"], 4) == documented[str(w)] for w in (3, 4, 5)
+    )
+    assert table["n8_rows_reproduce_the_documented_table"] is recomputed, (
+        "the published flag disagrees with the artifact's own rows — it is not a computation of "
+        "what it claims to be a computation of"
+    )
+    assert recomputed is True, {w: n8_rows[w]["share_of_the_combined_lot"] for w in (3, 4, 5)}
+
+    # NON-VACUITY. The same predicate on the denominator the artifact USED TO carry (the padded
+    # bin, tail included) returns False, reproducing WR-01's measurement exactly. Without this the
+    # assertion above would be satisfied by a predicate that is True for every input.
+    with_tail = all(
+        round(
+            r._share_of_the_combined_lot(
+                w * 8 * r.BLOCK_SIZE,
+                {"trainable_tokens": n8_rows[w]["aligned_teaching_bin_tokens_padded"]},
+            ),
+            4,
+        )
+        == documented[str(w)]
+        for w in (3, 4, 5)
+    )
+    assert with_tail is False, (
+        "the reproduction check passes against BOTH denominators, so it cannot distinguish them "
+        "and its True says nothing. WR-01 measured 0.4210 vs 0.4211 on the 3-window row; if that "
+        "gap has closed, the corpus or the block size changed and the reconciliation below needs "
+        "re-deriving rather than re-asserting."
+    )
+
+
+def test_the_share_denominator_is_the_one_that_is_unit_invariant(unit):
+    """WR-01's reconciliation, checkable from the artifact alone: 8448 vs 8449, decided.
+
+    The choice is not a rounding preference and is not "whichever makes the flag True". A share is
+    a share only if it does not depend on the unit it is counted in, and the numerator
+    (`replay_window_budget`) is a whole number of windows with remainder exactly 0 — so the
+    window-basis and token-basis shares must agree. They agree bit-for-bit only when the
+    denominator excludes the label-shift tail.
+
+    This also pins the thing that proves the correction was not self-serving: the load-bearing
+    claim in the same block, `documented_n64_claim_holds`, is False before and after.
+    """
+    table = unit["lot"]["replay_volume"]["d24_candidate_table_reproduced"]
+
+    for row in table["rows"]:
+        # The bin is `total_windows * block_size + 1` (CR-01 made this an enforced contract).
+        assert row["aligned_teaching_bin_trainable_tokens"] == (
+            row["aligned_teaching_bin_windows"] * tp.BLOCK_SIZE
+        )
+        assert row["aligned_teaching_bin_tokens_padded"] == (
+            row["aligned_teaching_bin_trainable_tokens"] + 1
+        )
+        # The numerator is tail-free BY CONSTRUCTION — this is what forces the denominator's unit.
+        assert row["replay_tokens"] == row["replay_windows"] * tp.BLOCK_SIZE
+        # UNIT INVARIANCE: exact equality, not approx. A tolerance here would admit 8449 back.
+        assert row["share_of_the_combined_lot"] == row["share_computed_in_windows"], (
+            f"w={row['windows_per_fact']} n={row['n_facts']}: the share differs between the "
+            "window basis and the token basis, so it is not a share of anything consistent"
+        )
+        # And the tail-bearing denominator is measurably NOT unit-invariant, at the one row where
+        # a single token is visible at 4 decimals.
+        if row["windows_per_fact"] == 3 and row["n_facts"] == 8:
+            with_tail = row["replay_tokens"] / (
+                row["replay_tokens"] + row["aligned_teaching_bin_tokens_padded"]
+            )
+            assert with_tail != row["share_computed_in_windows"]
+
+    assert table["documented_n64_claim_holds"] is False, (
+        "the n=64 claim is the load-bearing one in this block and it must survive the denominator "
+        "correction unchanged. If it ever reads True, check that the denominator was not chosen "
+        "to make it so."
+    )
+    assert table["linear_premise_equals_the_n8_share"] is True, (
+        "under the corrected denominator the linear premise predicts EXACTLY the n=8 share, which "
+        "is what makes 'the documented 49.90% does not follow from its own stated reason' an "
+        "arithmetic statement rather than an approximate one"
+    )
+
+    # The same quantity must not appear twice with two answers. The `lot` block's pinned-constant
+    # share and the candidate table's `is_the_pinned_constant` rows are one number.
+    pinned = {
+        row["n_facts"]: row["share_of_the_combined_lot"]
+        for row in table["rows"]
+        if row["is_the_pinned_constant"]
+    }
+    for observed in unit["lot"]["replay_volume"]["observed_share_of_the_padded_bin"]:
+        assert observed["share_of_the_combined_lot"] == pinned[observed["n_facts"]]
+        assert observed["denominator"].endswith("aligned_teaching_bin_trainable_tokens")
+
+
 def test_the_artifact_records_the_pin_it_was_written_against(unit):
     """``pin_sha256`` is the digest of the pin file as it stands, and it is 21-01's frozen value.
 
@@ -205,6 +325,116 @@ def test_the_artifact_records_the_pin_it_was_written_against(unit):
         "test_phase21_prereg_is_frozen_before_every_phase21_result. Corrections after the first "
         "results/phase21_* commit are dated continuations via scripts/_addendum.py, never edits."
     )
+
+
+@pytest.mark.parametrize(
+    "key,emitter", [("privacy_unit", "emit_privacy_unit"), ("multiplicity", "emit_multiplicity")]
+)
+def test_the_recorded_git_sha_names_a_commit_where_the_emitter_exists(key, emitter):
+    """CR-02: the SHA an artifact records must be a commit that could have produced it.
+
+    The reproducibility guarantee this whole project rests on (CLAUDE.md, QA-02) is "seed + git
+    SHA + config-embedded-in-checkpoint". An artifact whose recorded SHA predates its own emitter
+    cannot be regenerated from the commit it names, so the guarantee is false on precisely the two
+    files that exist to demonstrate it.
+
+    It WAS false. Measured at review time, and reproduced here as the reason this test exists:
+
+        results/phase21_privacy_unit.json  git_sha fa97b666 -> `def emit_privacy_unit` x0
+        results/phase21_multiplicity.json  git_sha 17b3c856 -> `def emit_multiplicity` x0
+
+    (The file `scripts/phase21_unit_record.py` DOES exist at both commits — 21-REVIEW.md's table
+    is right that the EMITTER is absent, and the sharper reading "the script was absent entirely"
+    is not. At fa97b666 it is the 21-10 counter-only revision, six functions, no `_provenance` at
+    all; at 17b3c856 `emit_privacy_unit` is present but `emit_multiplicity` is not.)
+
+    The ancestry guard in `tests/test_phase20_prereg.py` cannot see this class: it checks commit
+    ORDERING between the pin and the artifact, never whether the recorded SHA can produce the
+    bytes. A well-ordered commit carrying a false SHA is invisible to it and fatal to the record.
+
+    Checked with `git cat-file`, so it reads the commit's OWN tree rather than the working copy.
+    """
+    document = _load(key)
+    sha = document["provenance"]["git_sha"]
+    assert sha != "unknown", (
+        "git_sha() degraded to its 'unknown' default, so this record names no commit at all. "
+        "That fallback exists so a Kaggle run never dies on a missing .git; it must never reach "
+        "a published artifact."
+    )
+    blob = subprocess.run(
+        ("git", "cat-file", "-p", f"{sha}:scripts/phase21_unit_record.py"),
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert blob.returncode == 0, (
+        f"{r.ARTIFACTS[key].name} records git_sha {sha}, but scripts/phase21_unit_record.py does "
+        f"not exist in that commit's tree — the artifact names a tree it cannot come from."
+    )
+    assert f"def {emitter}" in blob.stdout, (
+        f"{r.ARTIFACTS[key].name} records git_sha {sha[:8]}, but `def {emitter}` is not defined "
+        f"in scripts/phase21_unit_record.py at that commit. The recorded SHA does not identify "
+        f"the code that produced this file, so the record cannot be regenerated from it "
+        f"(21-REVIEW.md CR-02). Re-emit from a CLEAN tree via `python scripts/phase21_emit.py`."
+    )
+
+
+def test_publishing_from_a_dirty_tree_is_refused(tmp_path):
+    """The mechanism that makes CR-02 unrepeatable, proved CLEAN-then-DIRTY in a throwaway repo.
+
+    Exercised against a scratch repository rather than this one because the assertion must be
+    about the GUARD, not about whatever state the developer's working tree happens to be in. A
+    test that passed only on a clean checkout would be reporting the tree, not the code.
+
+    Both directions are asserted. A refusal that fires unconditionally would be useless in exactly
+    the same way a hardcoded `True` is (WR-01, one finding over): it would prove nothing about the
+    tree, so the clean arm is what makes the dirty arm mean something.
+    """
+    _git("init", "-q", cwd=tmp_path)
+    _git("config", "user.name", "phase21-fixture", cwd=tmp_path)
+    _git("config", "user.email", "phase21-fixture@localhost", cwd=tmp_path)
+    (tmp_path / "emitter.py").write_text("def emit(): ...\n", encoding="utf-8")
+    _git("add", "emitter.py", cwd=tmp_path)
+    _git("commit", "-q", "-m", "emitter", cwd=tmp_path)
+
+    # CLEAN: returns the empty status and does not raise.
+    assert refuse_if_dirty(who="probe", detail="d", cwd=tmp_path) == ""
+
+    # DIRTY: the same call refuses, and the abort names the offending path.
+    (tmp_path / "emitter.py").write_text("def emit(): return 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as excinfo:
+        refuse_if_dirty(who="probe", detail="the SHA would not reproduce this", cwd=tmp_path)
+    assert "emitter.py" in str(excinfo.value)
+    assert "the SHA would not reproduce this" in str(excinfo.value)
+
+    # UNTRACKED counts as dirty too: a .py that is not in HEAD cannot be at the recorded SHA.
+    _git("checkout", "--", "emitter.py", cwd=tmp_path)
+    assert refuse_if_dirty(who="probe", detail="d", cwd=tmp_path) == ""
+    (tmp_path / "helper.py").write_text("X = 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        refuse_if_dirty(who="probe", detail="d", cwd=tmp_path)
+
+
+def test_the_dirty_guard_is_scoped_to_the_published_paths(tmp_path):
+    """It fires on the two committed records and on nothing else — checked by RESOLVED path.
+
+    The scope is the reason `test_driver_refuses_to_rerun` below can still write into `tmp_path`
+    while this repository is mid-edit. It is also the reason the scope cannot be "anything named
+    phase21_privacy_unit.json": a fixture in a temp directory shares that basename and is thrown
+    away by the process that wrote it, so there is no permanent record for a SHA to be false about.
+    """
+    for artifact in r.ARTIFACTS.values():
+        assert r.is_publication_target(artifact)
+        # A relative spelling and a `..` detour name the same file and must answer the same.
+        assert r.is_publication_target(artifact.relative_to(_ROOT))
+        assert r.is_publication_target(artifact.parent / ".." / "results" / artifact.name)
+
+    decoy = tmp_path / "phase21_privacy_unit.json"
+    assert not r.is_publication_target(decoy), (
+        "a same-basename fixture in a temp directory is not the published record; treating it as "
+        "one would tie the test suite's outcome to the working tree's git state"
+    )
+    assert r.refuse_dirty_publication(decoy) is None
 
 
 def test_driver_refuses_to_rerun(tmp_path):

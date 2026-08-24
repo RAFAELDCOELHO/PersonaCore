@@ -858,6 +858,300 @@ it would both fake an artifact and trip `refuse_if_exists` for whoever runs the 
 
 ---
 
+## CR-02 — CLOSED
+
+Code in `eba0571`; artifacts re-emitted in `9e27f18`. **Verdict: the finding is REAL**, confirmed
+mechanically before any code was written. One correction to its supporting table, below.
+
+Run LAST and from a base containing both prior fixes (`8b509bc`, carrying CR-01's `_window_count`
+and WR-02's `DP_ARMS`), because the artifacts had to be re-emitted from a tree where those fixes
+already exist. Emitting earlier would have recreated CR-02 by the act of fixing it.
+
+### The finding reproduced
+
+```
+results/phase21_privacy_unit.json  sha=fa97b666  def emit_privacy_unit occurrences = 0
+results/phase21_multiplicity.json  sha=17b3c856  def emit_multiplicity occurrences = 0
+```
+
+Neither artifact can be regenerated from the commit it names.
+
+### One correction to the review — the file was present, the EMITTER was not
+
+The finding's table is right (`grep -c emit_privacy_unit` → 0), but the gap-closure brief sharpened
+it to "`scripts/phase21_unit_record.py` **absent entirely**" at `fa97b666`. Measured, that is false
+— and the true state is more precise:
+
+| sha | `phase21_unit_record.py` | functions defined |
+|---|---|---|
+| `fa97b666` | **present**, 18,972 B | the 21-10 counter only: `refuse_existing_artifacts`, `_summarise`, `_row`, `_read_fact_map`, `count_unaligned`, `count_aligned`. **No `_provenance`** — the function that wrote the provenance block did not exist either. |
+| `17b3c856` | present, 40,440 B | + `_provenance`, `_write`, `_d24_candidate_table`, `privacy_unit_document`, `emit_privacy_unit`. **`emit_multiplicity` absent.** |
+
+So `phase21_privacy_unit.json` named a commit predating its emitter by a whole plan, and
+`phase21_multiplicity.json` named the commit that added the *other* emitter. Both are off by
+exactly one emission.
+
+### One correction to the review — the prescribed FIX introduces a worse defect, measured
+
+CR-02 prescribes porting `_refuse_if_dirty` into `phase21_unit_record.py` "at BOTH sites, module
+scope and call time, mirroring `phase21_golden_capture.py`'s placement". That was implemented first
+and run:
+
+```
+$ .venv/bin/python -m pytest -q
+INTERNALERROR> SystemExit: [phase21_unit_record] REFUSING: the working tree is dirty.
+INTERNALERROR>  M scripts/phase21_unit_record.py
+INTERNALERROR>  M src/personacore/provenance.py
+
+no tests ran in 3.63s
+```
+
+`phase21_golden_capture` is imported by **no test** (`grep -rn golden_capture tests/` → nothing), so
+its module-scope refusal costs the suite nothing. `phase21_unit_record` is imported by
+`tests/test_phase21_unit_record.py:35` **and** `tests/test_phase21_multiplicity.py`, and a
+`SystemExit` raised during pytest **collection** is an `INTERNALERROR` that aborts the whole run
+rather than failing one module. The observed cost is not "two red files" — it is **the entire
+989-test suite refusing to run**, on any tree with an uncommitted file under `scripts/` or `src/`,
+i.e. during exactly the editing that precedes a re-emission. The placement's rationale is sound;
+it does not transfer to a module that is also a library.
+
+### The fix — the same two sites, at seams where they are stronger, not weaker
+
+* **`personacore.provenance.refuse_if_dirty`** — the refusal now lives beside `git_sha()`, the
+  function whose output it qualifies, so the next caller that publishes a SHA finds it. Deliberately
+  **not** wired into `git_sha()`: that is called by `save_checkpoint` on every training run, and
+  training from a dirty tree is normal and must never abort. `phase21_golden_capture._refuse_if_dirty`
+  now delegates to it, so there is one implementation and not two.
+* **Call time — `phase21_unit_record._write`.** The root seam: both artifacts' bytes pass through
+  this one function, so the guard cannot be bypassed by calling an emitter directly, by importing
+  `multiplicity_document` and writing the JSON by hand, or by a future third emitter. It runs
+  *after* the document is built, which is the point — the measurement takes minutes and the tree
+  can change inside that window. The emitters check again before starting, so a doomed run does not
+  burn the measurement first.
+* **Module scope — `scripts/phase21_emit.py`**, a driver nothing imports, running its check
+  **before** `import phase21_unit_record`. This is *stronger* than the prescribed site, not a
+  concession: a check at the top of `phase21_unit_record.py` runs after Python has already read and
+  compiled that file, so it can never establish that the emitter itself is committed. Running it
+  before the import covers the emitter's own bytes. It also gives the emission a **written-down
+  command** — 21-11 emitted via an ad-hoc `python -c` one-liner that lives in no file, which is
+  plausibly how CR-02 happened at all.
+
+Scoped by **resolved path** to the two published artifacts. A `tmp_path/phase21_privacy_unit.json`
+fixture shares the basename but is not the published record, so `test_driver_refuses_to_rerun` still
+works mid-edit. Tying a test's outcome to the working tree's git state is how a guard gets deleted.
+
+The two artifact paths are **excluded** from their own dirty check. That is not a softening — it is
+what makes the guard reachable: re-emitting requires deleting the previous record first
+(`refuse_if_exists`), which is itself a dirty tree. The SHA claims the code and inputs reproduce
+these bytes, never that the output file was untouched.
+
+### The guard proven to REFUSE — observed, not asserted
+
+On the live dirty tree, before committing:
+
+```
+$ python -c "r.refuse_dirty_publication(r.ARTIFACTS['privacy_unit'])"
+SystemExit: [phase21_unit_record] REFUSING: the working tree is dirty.
+ M scripts/phase21_golden_capture.py
+ M scripts/phase21_unit_record.py
+ M src/personacore/provenance.py
+?? scripts/phase21_emit.py
+
+$ python scripts/phase21_emit.py
+[phase21_emit] REFUSING: the working tree is dirty.   <-- at module scope, before the import
+```
+
+Both directions asserted, because a refusal that fires unconditionally proves nothing about the
+tree: the same dirty tree left `refuse_dirty_publication(tmp_path/…)` returning `None`, and
+`test_publishing_from_a_dirty_tree_is_refused` runs CLEAN-then-DIRTY in a throwaway repo — clean
+returns `""`, a modified file refuses naming the path, and an **untracked** file refuses too.
+
+### RED then GREEN, observed
+
+The new provenance test was written before the re-emission, so the RED needed no mutation:
+
+* **RED** (as-committed artifacts): both parametrizations fail —
+  `phase21_multiplicity.json records git_sha 17b3c856, but 'def emit_multiplicity' is not defined
+  in scripts/phase21_unit_record.py at that commit.`
+* **GREEN** (after re-emission): both pass.
+
+### Re-emission, and the recorded SHA verified
+
+Emitted by `python scripts/phase21_emit.py` at HEAD `eba0571`, tree clean (`git status --porcelain`
+→ 0 entries). The check that failed before, re-run:
+
+```
+artifact                               git_sha    emitter                      present at that commit?
+----------------------------------------------------------------------------------------------------
+phase21_privacy_unit.json              eba0571a   def emit_privacy_unit        YES
+                                                  scripts/phase21_emit.py      YES
+phase21_multiplicity.json              eba0571a   def emit_multiplicity        YES
+                                                  scripts/phase21_emit.py      YES
+```
+
+**`phase21_multiplicity.json` changed in `provenance.git_sha` and `provenance.written_utc` and
+NOWHERE ELSE.** All five labelled rows, both corpus geometries, the A3 discharge, the pin
+discrepancy and both findings reproduced **bit-for-bit** — different commit, different worktree, a
+day later. The only thing ever wrong with that artifact was its provenance, and the re-emission is
+itself the QA-02 guarantee (seed + git SHA + config) demonstrated rather than asserted.
+
+### The ancestry guard is still GREEN
+
+Content rewrites do not move `git log --diff-filter=A`, and the artifacts were never `git rm`'d —
+the working copies were removed to satisfy `refuse_if_exists` and the index entries stayed tracked
+throughout (`git ls-files` confirmed between the delete and the write).
+
+```
+prereg commits   : ['8d3beb44']
+tracked artifacts: ['results/phase21_multiplicity.json', 'results/phase21_privacy_unit.json']
+  multiplicity : adds=['c79b9bfa']  first_add(adds[-1])=c79b9bfa
+     CONJUNCT1 pin != first_add: True   CONJUNCT2 is-ancestor(pin, first_add): True
+  privacy_unit : adds=['c79b9bfa']  first_add(adds[-1])=c79b9bfa
+     CONJUNCT1 pin != first_add: True   CONJUNCT2 is-ancestor(pin, first_add): True
+checked = 2  expected = 2   STRICT CONJUNCT HOLDS: True
+```
+
+`tests/test_phase20_prereg.py` fully green (`26 passed`).
+
+---
+
+## WR-01 — CLOSED
+
+Fixed in `eba0571`, artifact in `9e27f18`. **Verdict: the finding is REAL** — the flag was a literal
+nothing evaluated, and the comparison it claimed did fail. The review's diagnosis of the CAUSE is
+also correct. What it left open is which denominator is right, and that is settled here by
+measurement rather than by preference.
+
+### The finding reproduced
+
+`grep -rn "n8_rows_reproduce" tests/` → no matches. Nothing anywhere compared the computed shares
+against `documented_n8_table` one line below. Evaluating the comparison against the as-committed
+denominator:
+
+```
+OLD as-committed (padded 8449)     flag=False
+    w=3  got=0.421   documented=0.4211  MISMATCH
+    w=4  got=0.4923  documented=0.4923  ok
+    w=5  got=0.5479  documented=0.5479  ok
+```
+
+### The reconciliation — 8448 vs 8449, decided by UNIT INVARIANCE
+
+The review is right that D-24 divided by 8448 and the artifact by 8449. But "which one is correct
+for the quantity being claimed" cannot be answered by "whichever makes the flag True" — that is the
+tuning the brief forbids. The deciding property is measurable:
+
+> a share is a share only if it does not depend on whether you count in windows or in tokens.
+
+The numerator is `REPLAY_WINDOWS_PER_FACT * n_facts * block_size`, a whole number of windows with
+remainder **exactly 0** (`replay_window_budget(8) == 8192 == 32 × 256`, `% 256 == 0`, measured). So
+the same share is computable in either unit and must agree. Observed across all six rows:
+
+```
+ w   n                windows    tokens/8448-basis    tokens/8449-basis     doc
+ 3   8     0.4210526315789473   0.4210526315789473   0.4210237785239498  <-- doc 0.4211  8448:True  8449:False
+ 3  64     0.3779527559055118   0.3779527559055118   0.3779498496720467
+ 4   8     0.4923076923076923   0.4923076923076923   0.4922781082867616  <-- doc 0.4923  8448:True  8449:True
+ 4  64     0.4475524475524476   0.4475524475524476   0.4475493911891445
+ 5   8     0.5479452054794520   0.5479452054794520   0.5479158863502596  <-- doc 0.5479  8448:True  8449:True
+ 5  64     0.5031446540880503   0.5031446540880503   0.5031415638416136
+```
+
+`total_windows * block_size` is unit-invariant **bit for bit**; the padded bin is not, at every
+single row. 8449 compares a tail-free numerator against a tail-bearing denominator, so it is not a
+share of anything consistent. The mechanism: the `+1` is a **target-only position** — the label for
+the last window's final input token. It is never a window start, so it belongs to no window and
+cannot appear in a window-basis count at all.
+
+**D-24 was right and the artifact was wrong.** CR-01's `_window_count` contract makes
+`n_windows * block_size + 1` the only valid *bin length*, which is what the artifact reported — but
+the bin's length and the lot's trainable extent are different quantities, and the share is about the
+second.
+
+### Not tuned — the check is the claim it does NOT rescue
+
+`documented_n64_claim_holds` is the load-bearing claim in the same block. Before: **false**
+(44.754939%). After: **false** (44.755245%). The correction moves it by `3.06e-06` against a
+documented 49.90% and leaves it just as false. A denominator chosen to flatter the record would have
+rescued the claim the block is actually about.
+
+It does make one thing *sharper*, in the honest direction. Under the linear premise the corrected
+n=64 share is `0.49230769230769234` — **bit-identical** to the n=8 share, where at 8449 it was
+49.2278%, "almost unchanged" only because the tail broke the arithmetic. So "the documented 49.90%
+does not follow from its own stated reason" is now an exact statement rather than an approximate one.
+Published as `linear_premise_equals_the_n8_share: true`.
+
+**D-24 is NOT reopened.** `REPLAY_WINDOWS_PER_FACT = 4` is untouched and still pinned by
+`tests/test_phase21_replay_volume.py`. Every row now publishes **both** bin sizes
+(`aligned_teaching_bin_tokens_padded` and `aligned_teaching_bin_trainable_tokens`), both window
+counts, and `share_computed_in_windows`, so a reader who disagrees can recompute the other share
+without re-running anything. The disagreement and its resolution are recorded in the artifact under
+`denominator_reconciliation`.
+
+### The fix — computed, over ONE derivation
+
+`_share_of_the_combined_lot(replay_tokens, geo)` is now the single derivation, used by **both** the
+`lot` block's `observed_share_of_the_padded_bin` and the candidate table's rows. Those were the same
+quantity computed twice; correcting one and not the other would have left the artifact holding two
+answers for one number — the defect this project names as "a number appearing in two artifacts is
+two numbers that can disagree", one level down.
+
+`DOCUMENTED_N8_TABLE` is a module constant, so the value the artifact **publishes** and the value the
+flag is **checked against** are one object. Two copies is how WR-01 happened.
+
+Three prose fields that retyped now-stale numbers (`why_the_premise_fails`'s "49.2278%" and
+"8 × 8,449 = 67,592", `consequence_recorded_not_acted_on`'s ranking percentages) are now f-strings
+over the computed values — leaving a hand-typed figure that the same fix had just falsified would
+have reproduced WR-01 in prose.
+
+### The honest value, published
+
+**`n8_rows_reproduce_the_documented_table: true`** — and this is the one place the record needs
+care, because the byte is unchanged. Before it was a literal that nothing evaluated *and whose
+underlying comparison failed*. After, it is computed from the artifact's own rows and passes at all
+three rows:
+
+```
+  w=3 share=0.4210526315789473 rounded=0.4211 doc=0.4211 match=True windows_basis_identical=True
+  w=4 share=0.4923076923076923 rounded=0.4923 doc=0.4923 match=True windows_basis_identical=True
+  w=5 share=0.5479452054794520 rounded=0.5479 doc=0.5479 match=True windows_basis_identical=True
+```
+
+Same value, different epistemic status. Had the reconciliation gone the other way the artifact would
+now read `false`; the phase has shipped `LEAKAGE_DEMONSTRATED` and `FAILURE` before and the flag was
+built to be able to say so.
+
+### Non-vacuity, asserted in the test rather than argued
+
+`test_the_n8_reproduction_claim_is_computed_and_could_have_been_false` recomputes the comparison
+from the published rows, asserts the published flag **equals** that recomputation (so a flag that
+disagrees with its own artifact is red), and then asserts the same predicate returns **False** on
+the old tail-bearing denominator. Without that second half, `assert flag is True` would be satisfied
+by a predicate true for every input — which is exactly the defect being closed.
+`test_the_share_denominator_is_the_one_that_is_unit_invariant` asserts window-basis equals
+token-basis by **exact equality** on every row; a tolerance there would admit 8449 back.
+
+### Suite
+
+`988 passed, 7 skipped` (literal, full suite, `.venv/bin/python -m pytest -q`, 191 s). Against the
+stated `988 passed, 1 skipped` baseline: 988 + 7 = **995 collected = 989 + the six new tests**, zero
+regressions. All 7 skips are environmental, verified with `-rs` — 6 are gitignored artifacts absent
+from the worktree (`test_forbid_ids`, `test_lora_artifact`, `test_slim_checkpoint`,
+`test_phase14_demo` ×2, `test_phase15_plots`) and 1 is the CUDA-only fp16 smoke that also skips on
+main. `ruff check` and `ruff format --check` clean across `scripts/ src/ tests/`.
+
+`scripts/mitigation_unit.py` byte-unchanged — `sha256 45f37e15…`, verified identical to the copy at
+base `8b509bc` and to 21-01's recorded value. `STATE.md` / `ROADMAP.md` untouched.
+
+Re-emitted artifact digests, for verification after the merge:
+
+```
+results/phase21_privacy_unit.json  84d8f3bd85c4088e9cfc7051aa166f1e7d6f1d56dc893e5cbd46c937220eee81
+results/phase21_multiplicity.json  e9e3b9bf3d31525ad27f90c0afdac0faf97e7faef324cf05d832898c00944da1
+```
+
+---
+
 _Reviewed: 2026-08-24_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
