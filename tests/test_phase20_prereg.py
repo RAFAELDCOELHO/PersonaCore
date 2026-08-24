@@ -184,6 +184,20 @@ def _assert_ordering_holds(*, root, prereg_artifact, artifact_glob, globs):
         # earliest add is what makes a delete-and-re-add cycle unable to launder the ordering.
         first_add = adds[-1]
         for prereg in prereg_commits:
+            # CONJUNCT 1 — STRICTLY after (Phase 21). `git merge-base --is-ancestor X X` exits 0,
+            # so the ancestry call ALONE admits a pin and an artifact landing in the SAME commit —
+            # a state D-08 and D-20 both forbid. That gap used to be recorded in three docstrings
+            # as "a DISCIPLINE tighter than the mechanism enforces"; a discipline the guard does
+            # not check is a comment, so the mechanism now enforces it. MEASURED both ways in
+            # `test_a_same_commit_pin_and_artifact_is_refused`: on an identical throwaway state the
+            # bare ancestry call exits 0 (admits) and this conjunction refuses.
+            assert prereg != first_add, (
+                f"{prereg_artifact} and {artifact} were committed in the SAME commit {prereg} — "
+                "the pre-registration must land STRICTLY BEFORE the artifact it pins, or it is "
+                "not a pre-registration at all. `git merge-base --is-ancestor X X` exits 0, so "
+                "the ancestry check below cannot see this on its own."
+            )
+            # CONJUNCT 2 — the ancestry itself.
             subprocess.run(
                 ("git", "merge-base", "--is-ancestor", prereg, first_add),
                 cwd=root,
@@ -259,14 +273,115 @@ def test_phase21_prereg_is_frozen_before_every_phase21_result():
     `root`, rather than copying its body. A lookalike copy would prove something about a different
     function — the reason recorded at `:296-298`.
 
-    **Reflexivity, inherited deliberately and not silently.** Measured on this repository:
-    `git merge-base --is-ancestor X X` exits 0, so a pin and an artifact landing in the SAME commit
-    PASS this guard. D-20's "strictly after" is therefore a DISCIPLINE tighter than the mechanism
-    enforces. That gap is written down here, as it is at `:300-304`, so a later reader meets it as a
-    known property rather than mistaking it for either a bug or a licence.
+    **Reflexivity, CLOSED rather than merely recorded.** `git merge-base --is-ancestor X X` exits
+    0, so the bare ancestry call admits a pin and an artifact landing in the SAME commit. This
+    docstring used to record that as "a DISCIPLINE tighter than the mechanism enforces" — but a
+    discipline the guard does not check is a comment, and D-20 says STRICTLY after. The strict
+    conjunct `prereg != first_add` now sits inside `_assert_ordering_holds` beside the ancestry
+    call, and `test_a_same_commit_pin_and_artifact_is_refused` observes both halves on one
+    identical throwaway state: the bare call exits 0, the conjunction refuses.
     """
     _assert_ordering_holds(
         root=_ROOT,
+        prereg_artifact=PHASE21_PREREG_ARTIFACT,
+        artifact_glob="results/phase21_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+
+
+def test_a_same_commit_pin_and_artifact_is_refused(tmp_path):
+    """D-08/D-20 "STRICTLY after", proved by mutation: the old predicate ADMITS, the new REFUSES.
+
+    **The state under test is the one the strengthening targets** — a pin and an artifact committed
+    in the SAME commit. Both predicates are run against that ONE identical state, so this is a
+    differential and not two separate observations:
+
+    * the OLD predicate (`git merge-base --is-ancestor` alone) is COMPUTED here and shown to exit
+      **0**, i.e. to admit a state D-20 forbids. The wrong answer is executed rather than described,
+      which is this repository's standing rule for a rejected alternative.
+    * the NEW predicate (`_assert_ordering_holds`, carrying `prereg != first_add`) REFUSES it.
+
+    **And the third state is what stops the strengthening being vacuous in the other direction.** A
+    guard that refuses everything is exactly as useless as one that admits everything, so the
+    legitimate ordering — pin committed strictly before the artifact, which is the order plan 21-11
+    proposes — is run through the SAME helper and must pass.
+
+    This calls the real `_assert_ordering_holds`, parameterized on `root`. A lookalike copy would
+    prove something about a different function than the one CI runs.
+
+    **The real history is never touched.** Every probe lives under `tmp_path` and dies with it; the
+    identity is local repo config; there is no `shell=True` and no `rm -rf`.
+    """
+    _git("init", "-q", cwd=tmp_path)
+    _git("config", "user.name", "phase21-fixture", cwd=tmp_path)
+    _git("config", "user.email", "phase21-fixture@localhost", cwd=tmp_path)
+
+    pin = tmp_path / PHASE21_PREREG_ARTIFACT
+    pin.parent.mkdir(parents=True)
+    pin.write_text("# stand-in for the pin: the ORDER is the subject, not the content\n")
+    probe = tmp_path / "results" / "phase21_probe.json"
+    probe.parent.mkdir(parents=True)
+    probe.write_text('{"probe": true}\n')
+
+    # STATE 1 — pin and artifact in ONE commit. This is the state D-20 forbids.
+    _git("add", PHASE21_PREREG_ARTIFACT, "results/phase21_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 1: the pin AND the artifact, one single commit", cwd=tmp_path)
+
+    pin_commit = _git("log", "--format=%H", "--", PHASE21_PREREG_ARTIFACT, cwd=tmp_path).split()[-1]
+    first_add = _git(
+        "log", "--diff-filter=A", "--format=%H", "--", "results/phase21_probe.json", cwd=tmp_path
+    ).split()[-1]
+    assert pin_commit == first_add, (
+        "the fixture failed to build the state it exists to test — the pin and the artifact are in "
+        "different commits, so nothing below is about reflexivity"
+    )
+
+    # THE OLD PREDICATE, COMPUTED. `check=False` because its EXIT CODE is the finding: 0 means the
+    # bare ancestry call admits this state, which is the defect the conjunct closes.
+    old = subprocess.run(
+        ("git", "merge-base", "--is-ancestor", pin_commit, first_add), cwd=tmp_path, check=False
+    )
+    assert old.returncode == 0, (
+        f"`git merge-base --is-ancestor X X` returned {old.returncode}, not 0. If this ever holds, "
+        "reflexivity no longer admits a same-commit pin and the strict conjunct below is "
+        "redundant — which is a finding to report, not a test to delete."
+    )
+
+    # THE NEW PREDICATE. Same state, same helper the live guards call.
+    with pytest.raises(AssertionError) as same_commit:
+        _assert_ordering_holds(
+            root=tmp_path,
+            prereg_artifact=PHASE21_PREREG_ARTIFACT,
+            artifact_glob="results/phase21_*",
+            globs=V4_ARTIFACT_GLOBS,
+        )
+    assert "SAME commit" in str(same_commit.value), (
+        f"the refusal does not name the same-commit condition: {same_commit.value}. Any other "
+        "AssertionError firing first would make this fixture green for the wrong reason."
+    )
+
+    # STATE 2 — NOT VACUOUS IN THE OTHER DIRECTION. A fresh repo with the legitimate ordering: the
+    # pin strictly first, the artifact strictly after. The same helper must ADMIT it.
+    legit = tmp_path / "legit"
+    (legit / "results").mkdir(parents=True)
+    (legit / pathlib.Path(PHASE21_PREREG_ARTIFACT).parent).mkdir(parents=True, exist_ok=True)
+    _git("init", "-q", cwd=legit)
+    _git("config", "user.name", "phase21-fixture", cwd=legit)
+    _git("config", "user.email", "phase21-fixture@localhost", cwd=legit)
+
+    (legit / PHASE21_PREREG_ARTIFACT).write_text("# stand-in for the pin\n")
+    _git("add", PHASE21_PREREG_ARTIFACT, cwd=legit)
+    _git("commit", "-q", "-m", "the pin, alone and FIRST", cwd=legit)
+
+    (legit / "results" / "phase21_probe.json").write_text('{"probe": true}\n')
+    _git("add", "results/phase21_probe.json", cwd=legit)
+    _git("commit", "-q", "-m", "the artifact, strictly AFTER the pin", cwd=legit)
+
+    assert _git("ls-files", "results/phase21_*", cwd=legit).split() == [
+        "results/phase21_probe.json"
+    ], "the ADMIT half is unreachable unless the glob matched — otherwise it passes vacuously"
+    _assert_ordering_holds(
+        root=legit,
         prereg_artifact=PHASE21_PREREG_ARTIFACT,
         artifact_glob="results/phase21_*",
         globs=V4_ARTIFACT_GLOBS,
@@ -284,13 +399,18 @@ def test_phase21_has_no_artifact_yet_so_the_arming_is_honest():
 
     **It is also the invariant that protects the evidence.** A `phase21_`-named probe reaching the
     real git history — rather than staying under a throwaway `tmp_path` repo — would permanently
-    corrupt the ordering record this phase exists to produce, and `:157` means it could not be
+    corrupt the ordering record this phase exists to produce, and `adds[-1]` means it could not be
     laundered by deleting the file afterwards. This assertion fires the moment that happens.
 
     **EXPECTED TO BE DELETED OR INVERTED BY PLAN 21-11**, which commits the first real
     `results/phase21_*` artifact. Removing it there is the RECORDED TRANSITION from "armed, nothing
     to watch" to "armed and watching", not an erasure of an inconvenient guard — and from that
-    commit onward the equivalence assertion at `:178` carries the same duty this test carries now.
+    commit onward the closing equivalence assertion carries the same duty this test carries now.
+
+    **MEASURED at 21-11's gate, and it is why this test is still here:** the replacement
+    `test_phase21_guard_is_now_live` is RED for as long as `results/phase21_*` is uncommitted
+    (`checked` is 0), so the plan's "commit the test edit ALONE first, and confirm it is GREEN"
+    cannot be satisfied. The swap belongs in the SAME commit as the artifacts, not before them.
     """
     adds = _git("log", "--diff-filter=A", "--format=%H", "--", "results/phase21_*").split()
     assert adds == [], (
@@ -386,11 +506,12 @@ def test_phase20_glob_sees_the_phase20_prefix_red_then_green(tmp_path):
     calls, parameterized on `root`, so what is proven here is the code that ships. A lookalike copy
     would prove something about a different function.
 
-    **Reflexivity, recorded so it is read as neither a defect nor a licence.** Measured during
-    planning: `git merge-base --is-ancestor X X` exits **0**. The pin and an artifact landing in the
-    SAME commit would therefore PASS this guard. D-08's "strictly after" rule is a DISCIPLINE
-    tighter than the mechanism enforces, deliberately, and that gap is written down here rather than
-    left for a later reader to discover and mistake for either a bug or permission.
+    **Reflexivity, CLOSED in Phase 21.** `git merge-base --is-ancestor X X` exits **0**, so the
+    bare ancestry call would admit a pin and an artifact landing in the SAME commit. This was
+    recorded here as a deliberate gap — "a DISCIPLINE tighter than the mechanism enforces" — until
+    plan 21-11 made the mechanism enforce it: `_assert_ordering_holds` now asserts
+    `prereg != first_add` as a first conjunct. D-08's "strictly after" is checked, not trusted.
+    `test_a_same_commit_pin_and_artifact_is_refused` proves it by mutation.
 
     **The real repository's history is never touched.** Every probe lives under pytest's `tmp_path`
     and is destroyed with it; there is no `shell=True` and no `rm -rf` anywhere in this module. The
@@ -556,11 +677,13 @@ def test_phase21_glob_sees_the_phase21_prefix_red_then_green(tmp_path):
     That is also why this is a COMMITTED FIXTURE re-executed every CI run rather than a one-time
     manual observation in a scratch directory.
 
-    **Reflexivity, recorded so it reads as neither a defect nor a licence.** Re-measured on this
-    repository: `git merge-base --is-ancestor X X` exits **0**. A pin and an artifact landing in the
-    SAME commit therefore PASS this guard. D-20's "strictly after" is a DISCIPLINE tighter than the
-    mechanism enforces, deliberately — the gap is written down here so a later reader meets it as a
-    known property instead of discovering it and mistaking it for either a bug or permission.
+    **Reflexivity, CLOSED by plan 21-11 rather than left as a recorded gap.** `git merge-base
+    --is-ancestor X X` exits **0**, so the bare ancestry call admits a pin and an artifact landing
+    in the SAME commit. This docstring recorded that as a deliberate discipline-not-mechanism gap;
+    the operator's gate review at 21-11 refused it on the ground that a discipline the guard does
+    not check is a comment. `_assert_ordering_holds` now asserts `prereg != first_add` first, and
+    `test_a_same_commit_pin_and_artifact_is_refused` observes the old and new predicates on ONE
+    identical same-commit state: exit 0 versus a refusal.
 
     **The real repository's history is never touched, and that is not a tidiness concern.** Every
     probe lives under pytest's `tmp_path` and dies with it; every `_git` call below passes
