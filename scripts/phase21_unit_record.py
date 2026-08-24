@@ -121,7 +121,7 @@ import tempfile
 
 import numpy as np
 
-from personacore.provenance import git_sha
+from personacore.provenance import git_sha, refuse_if_dirty
 from personacore.seeding import seed_everything
 from personacore.tokenizer import from_json
 from personacore.training.data import (
@@ -158,6 +158,32 @@ ARTIFACTS = {
     "privacy_unit": _ROOT / "results" / "phase21_privacy_unit.json",
     "multiplicity": _ROOT / "results" / "phase21_multiplicity.json",
 }
+
+# The dirty-tree scope for a PUBLICATION: everything, MINUS the two artifacts being written.
+# Derived from `ARTIFACTS` rather than retyped, so a path can never be watched and written under
+# two different spellings.
+#
+# The exclusions are not a softening — they are what makes the guard reachable at all. Re-emitting
+# requires deleting the previous artifact first (`refuse_if_exists`), which is itself a dirty
+# working tree; without the exclusions the guard would refuse every re-emission including the
+# clean ones, and the first person to need one would delete the guard. What the recorded `git_sha`
+# claims is that the CODE and INPUTS at that commit reproduce these bytes; the previous contents
+# of the output file are neither.
+_PUBLICATION_PATHSPEC = (
+    ".",
+    *(f":(exclude){path.relative_to(_ROOT)}" for path in ARTIFACTS.values()),
+)
+
+_DIRTY_DETAIL = (
+    "`provenance.git_sha()` records HEAD at write time, so a record written from a dirty tree "
+    "names a commit that does NOT contain the code that produced it — the artifact points at a "
+    "tree it cannot be regenerated from. That is not hypothetical: 21-REVIEW.md CR-02 found BOTH "
+    "committed artifacts carrying exactly that defect (phase21_privacy_unit.json recorded "
+    "fa97b666, where `emit_privacy_unit` was not yet defined; phase21_multiplicity.json recorded "
+    "17b3c856, where `emit_multiplicity` was not yet defined). Commit the tree, then re-run. Do "
+    "NOT work around this by writing to a temporary path and copying the file into results/ — "
+    "that reproduces CR-02 with extra steps."
+)
 
 # The schema every row carries, so a silently thinned record fails a one-line assertion rather
 # than reaching the artifact. D-26: "min/max/mean/spread, not merely an expectation".
@@ -199,6 +225,12 @@ CAPACITY_ARMS = ("dp_n8", "dp_n64")
 # fact index at any capacity this project will reach.
 REPLAY_FACT_ID = 65535
 
+# D-24's published n=8 table (`scripts/teach_persona.py:146-151`), to the 4 decimals it states.
+# A MODULE CONSTANT so the value the artifact PUBLISHES and the value its reproduction flag is
+# CHECKED AGAINST are one object. Two copies is how `n8_rows_reproduce_the_documented_table`
+# became a hardcoded `True` that nothing evaluated (21-REVIEW.md WR-01).
+DOCUMENTED_N8_TABLE = {"3": 0.4211, "4": 0.4923, "5": 0.5479}
+
 
 def refuse_existing_artifacts(paths=None):
     """Refuse-to-rerun for the artifact paths — ``teach_persona.refuse_if_exists``, IMPORTED.
@@ -209,6 +241,53 @@ def refuse_existing_artifacts(paths=None):
     ``teach_persona``.
     """
     return tp.refuse_if_exists([pathlib.Path(p) for p in (paths or ARTIFACTS.values())])
+
+
+def is_publication_target(path):
+    """Is ``path`` one of the two PERMANENT, committed records in :data:`ARTIFACTS`?
+
+    Resolved before comparison, so a relative path, a symlinked route or a ``..`` detour to the
+    same file all answer the same. The comparison is by RESOLVED PATH and never by name: a
+    ``tmp_path/phase21_privacy_unit.json`` in a test shares the basename with the real record and
+    must not be mistaken for it.
+    """
+    path = pathlib.Path(path).resolve()
+    return any(path == artifact.resolve() for artifact in ARTIFACTS.values())
+
+
+def refuse_dirty_publication(path):
+    """Refuse to write a PUBLISHED record from a dirty tree. No-op for any other path.
+
+    **Why this is scoped to the publication targets instead of firing on every call.** The defect
+    CR-02 names is a false `provenance.git_sha` in a file that is COMMITTED and then quoted
+    forever; nothing else this module writes survives the process that wrote it. Guarding every
+    call would instead make `emit_privacy_unit(path=tmp_path/...)` — the write path
+    ``tests/test_phase21_unit_record.py::test_driver_refuses_to_rerun`` exercises — fail whenever
+    the working tree happened to be dirty, which is a test outcome that depends on git state
+    rather than on code. A guard that turns the suite red during ordinary development is a guard
+    that gets deleted.
+
+    **Why it is HERE (and in `_write`) rather than at module scope, which is what 21-REVIEW.md
+    CR-02 prescribed.** Mirroring `phase21_golden_capture.py`'s module-scope placement was tried
+    first and MEASURED: `phase21_golden_capture` is imported by no test, so its import-time
+    refusal costs the suite nothing, but this module is imported by
+    `tests/test_phase21_unit_record.py:35` and `tests/test_phase21_multiplicity.py`. A
+    `SystemExit` raised while pytest is COLLECTING is an `INTERNALERROR` that aborts the whole
+    run, so the observed result was `no tests ran in 3.63s` for the ENTIRE 989-test suite on any
+    tree with an uncommitted file under `scripts/` or `src/` — i.e. during every edit that would
+    precede a re-emission. The module-scope site that CR-02 correctly asks for lives in
+    `scripts/phase21_emit.py`, which nothing imports, and which runs its check BEFORE importing
+    this module — a strictly stronger position than the top of this file, because it also covers
+    this file's own import.
+    """
+    if not is_publication_target(path):
+        return None
+    return refuse_if_dirty(
+        who="phase21_unit_record",
+        detail=_DIRTY_DETAIL,
+        pathspec=_PUBLICATION_PATHSPEC,
+        cwd=_ROOT,
+    )
 
 
 def _summarise(counts):
@@ -637,13 +716,26 @@ def _provenance(**extra):
 
 
 def _write(path, document):
-    """Refuse-to-rerun, then write. The refusal is ``teach_persona.refuse_if_exists``, IMPORTED.
+    """Refuse-to-rerun and refuse-if-dirty, then write. Both refusals are IMPORTED, not invented.
 
     Recorded evidence is never silently replaced by a rerun on drifted code, and the abort names
     the file and the delete command.
+
+    **This is the root seam and that is why the dirty check is here.** Both emitters route their
+    bytes through this one function, so a check here cannot be bypassed by calling
+    ``emit_multiplicity`` directly, by importing ``multiplicity_document`` and writing the JSON by
+    hand, or by any future third emitter. The emitters ALSO check before starting their
+    measurement — not for safety but for courtesy, since discovering the refusal after building
+    two corpora wastes the run — but this is the check that makes the property true.
+
+    It runs AFTER the document is built, which is the point: the measurement takes minutes, and a
+    tree that was clean when it started can be dirty by the time the bytes land. The recorded
+    ``git_sha`` was captured inside that window by ``_provenance()``, so the tree must still be
+    clean HERE for it to mean anything.
     """
     path = pathlib.Path(path)
     refuse_existing_artifacts([path])
+    refuse_dirty_publication(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(document, indent=2, sort_keys=False) + "\n", encoding="utf-8")
     return path
@@ -654,23 +746,94 @@ def _write(path, document):
 # =================================================================================================
 
 
-def _d24_candidate_table(padded):
+def _lot_geometry(measurements):
+    """The aligned bin's size at each capacity, in BOTH units, because they are not the same size.
+
+    ``padded_tokens`` is the bin as WRITTEN — ``total_windows * block_size + 1``, where the ``+1``
+    is the label-shift tail. ``trainable_tokens`` is ``total_windows * block_size``: the tail
+    excluded.
+
+    The distinction is the whole of 21-REVIEW.md WR-01 and it is not a rounding preference. See
+    :func:`_share_of_the_combined_lot` for which one the published share divides by and the
+    measurement that settles it.
+    """
+    return {
+        m["n_facts"]: {
+            "total_windows": int(m["aligned"]["stats"]["n_windows"]),
+            "padded_tokens": int(m["aligned"]["stats"]["tokens"]),
+            "trainable_tokens": int(m["aligned"]["stats"]["n_windows"]) * BLOCK_SIZE,
+        }
+        for m in measurements.values()
+    }
+
+
+def _share_of_the_combined_lot(replay_tokens, geo):
+    """THE one derivation of "what fraction of one lot is public replay". Both callers use it.
+
+    ``replay_tokens / (replay_tokens + trainable_tokens)`` — the LABEL-SHIFT TAIL EXCLUDED from
+    the denominator.
+
+    **WHY THE TAIL IS EXCLUDED, MEASURED RATHER THAN ARGUED (21-REVIEW.md WR-01).** The review
+    found ``n8_rows_reproduce_the_documented_table`` published as a hardcoded ``True`` that was
+    false at the precision it claimed: the 3-window row measured 0.4210 against D-24's documented
+    0.4211. It traced the cause correctly to a denominator disagreement — D-24 divided by 8448,
+    the artifact by 8449 — but a disagreement is not yet an answer, and "whichever makes the flag
+    True" is not a reason. The deciding test is UNIT INVARIANCE:
+
+        a share is a share only if it does not depend on whether you count in windows or tokens
+
+    The numerator is ``REPLAY_WINDOWS_PER_FACT * n_facts * block_size``, a whole number of windows
+    with remainder exactly 0 (``replay_window_budget(8) % 256 == 0``, measured). So the same
+    quantity is computable in either unit, and it must come out the same. Observed at n=8, w=3:
+
+        windows          24 / (24 + 33)       = 0.4210526315789473
+        tokens / 8448  6144 / (6144 + 8448)   = 0.4210526315789473   <- identical, bit for bit
+        tokens / 8449  6144 / (6144 + 8449)   = 0.4210237785239498   <- disagrees
+
+    Only ``total_windows * block_size`` is unit-invariant. 8449 is not a "share of the lot" in any
+    consistent unit: it compares a tail-free numerator against a tail-bearing denominator. The
+    ``+1`` token is a TARGET-ONLY position — it is never a window start, so it belongs to no
+    window and cannot appear in a window-basis count at all.
+
+    **This is not a denominator tuned to make a flag come out True, and the check that it isn't is
+    that the flag it does NOT rescue stays false.** ``documented_n64_claim_holds`` is the
+    load-bearing claim in this block, and the correction moves the n=64 share from 44.7549% to
+    44.7552% — against a documented 49.90%. It was false before and it is false after. What the
+    correction does change is that the linear premise's own prediction becomes EXACT: at 8448 the
+    n=64 share under linear scaling is 0.49230769230769234, bit-identical to n=8, where at 8449 it
+    was 49.2278% — "almost unchanged" only because the tail broke the arithmetic.
+
+    **D-24 IS NOT REOPENED.** ``REPLAY_WINDOWS_PER_FACT = 4`` is a locked decision pinned by
+    ``tests/test_phase21_replay_volume.py``. What this settles is which denominator D-24's own
+    table was computed under — and the answer is that D-24 was right and the artifact was wrong.
+    Both numbers are published side by side in every row regardless, so a reader can recompute.
+    """
+    return replay_tokens / (replay_tokens + geo["trainable_tokens"])
+
+
+def _d24_candidate_table(geometry):
     """D-24's 3/4/5-window candidate table, RECOMPUTED at both capacities on the observed bins.
 
     Two things at once, and the second is the finding:
 
-    1. **A validation of this measurement against a documented one.** All three n=8 rows of the
-       table at ``scripts/teach_persona.py:146-151`` (42.11% / 49.23% / 54.79%) reproduce here to
-       four decimals from the OBSERVED padded bin. A share computed from a bin nobody measured
-       would be unfalsifiable; this one closes against a number authored before it.
+    1. **A validation of this measurement against a documented one.** The three n=8 rows of the
+       table at ``scripts/teach_persona.py:146-151`` (42.11% / 49.23% / 54.79%) are compared
+       against the shares computed here from the OBSERVED bin, to the 4 decimals the comment
+       states. ``n8_rows_reproduce_the_documented_table`` is the RESULT of that comparison —
+       :data:`DOCUMENTED_N8_TABLE` is the same object the artifact publishes, so the claim and the
+       check cannot be two numbers. It was a hardcoded ``True`` that nothing evaluated until
+       21-REVIEW.md WR-01, and it was FALSE: the 3-window row measured 0.4210 against 0.4211
+       because the artifact divided by the tail-bearing 8449 where D-24 divided by 8448. See
+       :func:`_share_of_the_combined_lot` for the unit-invariance measurement that settles which
+       denominator the quantity has, and for why the answer is not "the one that makes this True".
 
     2. **The n=64 half of that comment is FALSE, and it is recorded rather than smoothed.**
        ``teach_persona.py:162-163`` states *"The share holds across capacities for free: 49.90% at
        n=64, because both sides scale with ``n_facts``."* Both sides do NOT scale with
-       ``n_facts``. Replay does, exactly (``4 * n_facts * block_size``); the padded teaching bin
-       does not, because the 56 filler facts pack to ~5.05 windows each against the 8 locked
-       facts' 4.125. The linear premise predicts ``8 * 8,449 = 67,592`` tokens at n=64 and the
-       measurement is ``80,897``.
+       ``n_facts``. Replay does, exactly (``4 * n_facts * block_size``); the teaching bin does
+       not, because the 56 filler facts pack to ~5.05 windows each against the 8 locked facts'
+       4.125. This survives the denominator correction unchanged — which is the evidence that the
+       correction was not made to flatter the record: it rescues nothing that was failing.
 
     **This does NOT reopen D-24.** ``REPLAY_WINDOWS_PER_FACT = 4`` is a locked decision pinned by
     ``tests/test_phase21_replay_volume.py``, it was chosen on the n=8 table, and that table is
@@ -678,61 +841,143 @@ def _d24_candidate_table(padded):
     capacity — recorded here because the same table's own "closest to 50%" criterion ranks the
     candidates differently at n=64 than at n=8, and a reader who quotes 49.90% is quoting a
     number no bin produces.
+
+    Every row carries BOTH bin sizes, so a reader who disagrees with the choice can recompute the
+    other share without re-running the measurement.
     """
+    n8, n64 = geometry[8], geometry[64]
+    documented_n64 = 0.4990
+    filler_facts = 64 - 8
+    filler_windows = n64["total_windows"] - n8["total_windows"]
+    linear_n64_trainable = 8 * n8["trainable_tokens"]
+    linear_n64_share = tp.replay_window_budget(64) / (
+        tp.replay_window_budget(64) + linear_n64_trainable
+    )
+    n8_share = _share_of_the_combined_lot(tp.replay_window_budget(8), n8)
+    n64_share = _share_of_the_combined_lot(tp.replay_window_budget(64), n64)
+    n64_at_5 = _share_of_the_combined_lot(5 * 64 * BLOCK_SIZE, n64)
+    # The share the OLD (tail-bearing) denominator gave, kept only to publish how little the
+    # correction moved the claim it does not rescue.
+    n64_at_4 = tp.replay_window_budget(64)
+    n64_share_with_tail = n64_at_4 / (n64_at_4 + n64["padded_tokens"])
     return {
-        "criterion": "share of the combined lot = replay_tokens / (replay_tokens + padded_bin)",
+        "criterion": (
+            "share of the combined lot = replay_tokens / (replay_tokens + "
+            "aligned_teaching_bin_trainable_tokens)"
+        ),
         "rows": [
             {
                 "windows_per_fact": w,
                 "n_facts": n,
                 "replay_tokens": w * n * BLOCK_SIZE,
-                "aligned_teaching_bin_tokens_padded": padded[n],
-                "share_of_the_combined_lot": (w * n * BLOCK_SIZE)
-                / (w * n * BLOCK_SIZE + padded[n]),
+                "replay_windows": w * n,
+                "aligned_teaching_bin_tokens_padded": geometry[n]["padded_tokens"],
+                "aligned_teaching_bin_trainable_tokens": geometry[n]["trainable_tokens"],
+                "aligned_teaching_bin_windows": geometry[n]["total_windows"],
+                "share_of_the_combined_lot": _share_of_the_combined_lot(
+                    w * n * BLOCK_SIZE, geometry[n]
+                ),
+                "share_computed_in_windows": (w * n) / (w * n + geometry[n]["total_windows"]),
                 "is_the_pinned_constant": w == tp.REPLAY_WINDOWS_PER_FACT,
             }
             for w in (3, 4, 5)
-            for n in sorted(padded)
+            for n in sorted(geometry)
         ],
-        "n8_rows_reproduce_the_documented_table": True,
-        "documented_n8_table": {"3": 0.4211, "4": 0.4923, "5": 0.5479},
+        # COMPUTED, not asserted (WR-01). `DOCUMENTED_N8_TABLE` is the object published below.
+        "n8_rows_reproduce_the_documented_table": all(
+            round(_share_of_the_combined_lot(w * 8 * BLOCK_SIZE, n8), 4)
+            == DOCUMENTED_N8_TABLE[str(w)]
+            for w in (3, 4, 5)
+        ),
+        "n8_rows_reproduce_the_documented_table_tolerance": (
+            "round(share, 4) == the documented value EXACTLY — the comment states 4 decimals, so "
+            "the comparison is made at 4 decimals and at no other precision"
+        ),
+        "documented_n8_table": DOCUMENTED_N8_TABLE,
+        "denominator_reconciliation": {
+            "disagreement": (
+                "D-24's table divides by 8448 at n=8; this artifact divided by 8449 until "
+                "21-REVIEW.md WR-01. They differ by the LABEL-SHIFT TAIL, the trailing +1 token "
+                "of an aligned bin (total_windows * block_size + 1), and the difference is "
+                "visible only in the 3-window row's 4th decimal: 0.4211 vs 0.4210."
+            ),
+            "resolved_in_favour_of": "D-24 (the tail EXCLUDED — trainable_tokens)",
+            "resolved_by": (
+                "UNIT INVARIANCE, measured. The numerator is a whole number of windows "
+                "(replay_window_budget(n) % block_size == 0), so the share must be computable in "
+                "windows or in tokens and come out the same. It does, bit for bit, only when the "
+                "denominator is total_windows * block_size. Every row publishes both "
+                "share_of_the_combined_lot and share_computed_in_windows so this is checkable "
+                "from the artifact alone."
+            ),
+            "why_the_tail_is_not_part_of_the_lot": (
+                "The +1 token is a TARGET-ONLY position: it is the label for the last window's "
+                "final input token and is never itself a window start. It belongs to no window, "
+                "so it cannot appear in a window-basis count, and a token-basis count that "
+                "includes it is measuring a different thing from the one it is compared against."
+            ),
+            "what_the_correction_does_not_rescue": (
+                f"documented_n64_claim_holds is still False: the corrected n=64 share is "
+                f"{n64_share:.6%} against the documented 49.90%, where the old tail-bearing "
+                f"denominator gave {n64_share_with_tail:.6%}. The correction moves it by "
+                f"{abs(n64_share - n64_share_with_tail):.2e} and leaves the claim just as false. "
+                "A denominator chosen to flatter the record would have rescued the claim this "
+                "block is actually about; this one does not touch it."
+            ),
+        },
         "documented_n64_claim": (
             "scripts/teach_persona.py:162-163 — 'The share holds across capacities for free: "
             "49.90% at n=64, because both sides scale with n_facts.'"
         ),
-        "documented_n64_claim_holds": False,
-        "measured_n64_share_at_the_pinned_constant": (
-            tp.replay_window_budget(64) / (tp.replay_window_budget(64) + padded[64])
-        ),
+        "documented_n64_claim_value": documented_n64,
+        "documented_n64_claim_holds": round(n64_share, 4) == documented_n64,
+        "measured_n64_share_at_the_pinned_constant": n64_share,
         "why_the_premise_fails": (
-            "Replay scales exactly with n_facts; the PADDED TEACHING BIN does not. The 56 filler "
-            "facts pack to 283 of the 316 ragged windows (5.054 each) against the 8 locked facts' "
-            "33 (4.125 each), so the n=64 bin is 80,897 tokens where linear scaling from n=8 "
-            "predicts 8 x 8,449 = 67,592. Under the linear premise the share would be 49.2278% — "
-            "i.e. UNCHANGED from n=8, not the 49.90% stated — so the documented figure does not "
-            "follow from its own stated reason either."
+            f"Replay scales exactly with n_facts; the TEACHING BIN does not. The {filler_facts} "
+            f"filler facts pack to {filler_windows} of the {n64['total_windows']} ragged windows "
+            f"({filler_windows / filler_facts:.3f} each) against the 8 locked facts' "
+            f"{n8['total_windows']} ({n8['total_windows'] / 8:.3f} each), so the n=64 bin is "
+            f"{n64['trainable_tokens']:,} trainable tokens where linear scaling from n=8 predicts "
+            f"8 x {n8['trainable_tokens']:,} = {linear_n64_trainable:,}. Under the linear premise "
+            f"the share would be {linear_n64_share:.4%} — i.e. EXACTLY the n=8 value of "
+            f"{n8_share:.4%}, not the 49.90% stated — so the documented figure does not follow "
+            "from its own stated reason either."
         ),
+        "linear_premise_share_at_n64": linear_n64_share,
+        "linear_premise_equals_the_n8_share": linear_n64_share == n8_share,
         "consequence_recorded_not_acted_on": (
-            "At n=64 the table's own 'closest to 50%' criterion ranks 5 windows (50.31%) ahead of "
-            "the pinned 4 (44.75%). D-24 is a LOCKED decision taken on the n=8 geometry and "
-            "REPLAY_WINDOWS_PER_FACT is pinned by test; this artifact RECORDS the divergence and "
-            "changes nothing. Re-opening it would be a dated continuation, not an edit."
+            f"At n=64 the table's own 'closest to 50%' criterion ranks 5 windows "
+            f"({n64_at_5:.2%}) ahead of the pinned 4 ({n64_share:.2%}). D-24 is a LOCKED decision "
+            "taken on the n=8 geometry and REPLAY_WINDOWS_PER_FACT is pinned by test; this "
+            "artifact RECORDS the divergence and changes nothing. Re-opening it would be a dated "
+            "continuation, not an edit."
         ),
     }
 
 
 def privacy_unit_document(measurements):
     """SC1 + SC4's record, every pinned value COMPUTED from :mod:`mitigation_unit` at write time."""
-    padded = {m["n_facts"]: int(m["aligned"]["stats"]["tokens"]) for m in measurements.values()}
+    geometry = _lot_geometry(measurements)
     replay_share = {}
-    for n_facts, bin_tokens in padded.items():
+    for n_facts, geo in geometry.items():
         volume = tp.replay_window_budget(n_facts)
         replay_share[n_facts] = {
             "n_facts": n_facts,
             "replay_tokens": volume,
-            "aligned_teaching_bin_tokens_padded": bin_tokens,
-            "share_of_the_combined_lot": volume / (volume + bin_tokens),
-            "denominator": "replay_tokens + aligned_teaching_bin_tokens_padded",
+            "replay_windows": volume // BLOCK_SIZE,
+            "aligned_teaching_bin_tokens_padded": geo["padded_tokens"],
+            "aligned_teaching_bin_trainable_tokens": geo["trainable_tokens"],
+            "aligned_teaching_bin_windows": geo["total_windows"],
+            # THE SAME derivation the candidate table's `is_the_pinned_constant` row uses. This
+            # value and that one are the same quantity, so they come from one function: computing
+            # a number twice in one artifact is how the artifact acquires two answers.
+            "share_of_the_combined_lot": _share_of_the_combined_lot(volume, geo),
+            "denominator": "replay_tokens + aligned_teaching_bin_trainable_tokens",
+            "denominator_excludes": (
+                "the LABEL-SHIFT TAIL (the trailing +1 token). Both bin sizes are published above "
+                "— see d24_candidate_table_reproduced.denominator_reconciliation for the "
+                "unit-invariance measurement that chooses between them (21-REVIEW.md WR-01)."
+            ),
         }
 
     return {
@@ -768,7 +1013,7 @@ def privacy_unit_document(measurements):
                 "replay_tokens_at_n8": tp.replay_window_budget(8),
                 "replay_tokens_at_n64": tp.replay_window_budget(64),
                 "observed_share_of_the_padded_bin": list(replay_share.values()),
-                "d24_candidate_table_reproduced": _d24_candidate_table(padded),
+                "d24_candidate_table_reproduced": _d24_candidate_table(geometry),
                 "separate_pass_per_lot": True,
                 "rejected_raw_constant": 947.625,
                 "rejected_raw_constant_reason": (
@@ -813,6 +1058,7 @@ def emit_privacy_unit(path=None, workdir=None):
     # Refuse BEFORE spending the measurement, as well as inside `_write` — a driver that builds
     # two corpora and only then discovers it may not write has wasted the run for nothing.
     refuse_existing_artifacts([path])
+    refuse_dirty_publication(path)
     if workdir is None:
         with tempfile.TemporaryDirectory() as tmp:
             document = privacy_unit_document(_measure_all(tmp))
@@ -1213,6 +1459,7 @@ def emit_multiplicity(path=None, workdir=None):
     """
     path = pathlib.Path(path or ARTIFACTS["multiplicity"])
     refuse_existing_artifacts([path])
+    refuse_dirty_publication(path)
     if workdir is None:
         with tempfile.TemporaryDirectory() as tmp:
             document = multiplicity_document(_measure_all(tmp, with_aligned_rows=True))

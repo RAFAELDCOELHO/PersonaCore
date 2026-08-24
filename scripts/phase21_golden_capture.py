@@ -81,6 +81,8 @@ import subprocess
 import sys
 import tempfile
 
+from personacore.provenance import refuse_if_dirty
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -120,17 +122,26 @@ def _git(*args):
 
 
 def _refuse_if_dirty():
-    """Abort unless both captured files are clean in git. See this module's docstring."""
-    dirty = _git("status", "--porcelain", "--", *WATCHED)
-    if dirty:
-        raise SystemExit(
-            "[phase21_golden_capture] REFUSING to capture: the working tree is dirty for "
-            f"{' and/or '.join(WATCHED)}.\n{dirty}\n"
+    """Abort unless both captured files are clean in git. See this module's docstring.
+
+    The refusal itself is :func:`personacore.provenance.refuse_if_dirty` — IMPORTED, so there is
+    one implementation of "a git-derived claim is void on a dirty tree" in this repository and not
+    two. What stays local is the only thing that is local: :data:`WATCHED`, this capture's own
+    scope, and the sentence saying what the dirt would falsify HERE. ``scripts/phase21_emit.py``
+    and ``phase21_unit_record._write`` call the same function with their own scope and their own
+    sentence (21-REVIEW.md CR-02).
+    """
+    return refuse_if_dirty(
+        who="phase21_golden_capture",
+        pathspec=WATCHED,
+        cwd=_REPO_ROOT,
+        detail=(
             "A golden fixture captured AFTER the edit encodes the NEW behaviour as the OLD "
             "baseline, which turns every 'byte-identical to v2.0 when None' assertion downstream "
             "into a tautology. This refusal is why that constraint is mechanical and not a "
             f"promise. Restore with `git checkout -- {' '.join(WATCHED)}` and re-run."
-        )
+        ),
+    )
 
 
 _refuse_if_dirty()  # BEFORE the two imports below — the check is worthless after them.
