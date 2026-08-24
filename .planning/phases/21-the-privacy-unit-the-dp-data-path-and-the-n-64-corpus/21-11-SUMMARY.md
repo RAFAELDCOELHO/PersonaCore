@@ -3,7 +3,7 @@ phase: 21-the-privacy-unit-the-dp-data-path-and-the-n-64-corpus
 plan: 11
 subsystem: privacy-unit-record
 tags: [unit-01, unit-03, unit-04, unit-05, unit-06, sc1, sc3, sc4, d-19, d-20, d-26, wave-6, checkpoint-blocked, t-21-03, t-21-06, t-21-50, t-21-51, t-21-52, t-21-53, t-21-54, t-21-49]
-status: INCOMPLETE — stopped at the task-3 blocking human-verify checkpoint
+status: COMPLETE — gate approved, artifacts committed, ancestry guard LIVE (checked = 2)
 requires:
   - "21-01 — scripts/mitigation_unit.py, the FROZEN pin every value in phase21_privacy_unit.json is computed from"
   - "21-03 — the five observed guard states and the measured no-undo result that make the ordering irrevocable"
@@ -14,8 +14,10 @@ provides:
   - "scripts/phase21_unit_record.py::emit_multiplicity / multiplicity_document — SC3's five labelled rows"
   - "scripts/phase21_unit_record.py::_measure_capacity / _measure_all — ONE corpus builder both emitters share"
   - "tests/test_phase21_unit_record.py — 11 tests: artifact schema, values-from-the-pin, refuse-to-rerun, A3's discharge, the pin discrepancy"
-  - "results/phase21_privacy_unit.json — WRITTEN, NOT COMMITTED (awaiting the task-3 gate)"
-  - "results/phase21_multiplicity.json — WRITTEN, NOT COMMITTED (awaiting the task-3 gate)"
+  - "results/phase21_privacy_unit.json — COMMITTED in c79b9bf, strictly after the pin"
+  - "results/phase21_multiplicity.json — COMMITTED in c79b9bf, strictly after the pin"
+  - "tests/test_phase20_prereg.py::_assert_ordering_holds — now enforces D-20 'strictly after'"
+  - "tests/test_phase20_prereg.py::test_phase21_guard_is_now_live — checked = 2, the guard is live"
 affects:
   - "the task-3 continuation agent — owns the first results/phase21_* commit and the guard's vacuous->live transition"
   - "Phase 22 DPSGD-01 — the unit, q, N and delta the accountant consumes, and the multiplicity row shape"
@@ -43,19 +45,22 @@ decisions:
   - "The row schema follows 21-10's `ROW_SCHEMA` constant (`steps`, `n_windows`), not the plan's prose (`max_steps`, `window_count`). The constant is pinned by an existing test; the prose is not."
   - "The 262.9437-vs-207.018 discrepancy is recorded in `pin_discrepancy` with both figures, both rules and the exact reconciliation. `scripts/mitigation_unit.py` is byte-unchanged (sha256 45f37e15...). Editing a closed pre-registration reddens the ancestry guard permanently and a delete-and-re-add cannot launder it."
 metrics:
-  duration: "~1h (tasks 1-2; task 3 blocked)"
-  tasks_completed: 2
+  duration: "~2h including two gate-review rounds"
+  tasks_completed: 3
   tasks_total: 3
-  completed: 2026-08-23
+  completed: 2026-08-24
 ---
 
 # Phase 21 Plan 11: The Privacy Unit and the Multiplicity Record Summary
 
-Both `results/phase21_*` artifacts are **written, verified and deliberately UNCOMMITTED**. Task 3
-is a `checkpoint:human-verify` with `gate="blocking"`, and this executor stopped there:
-`git ls-files 'results/phase21_*'` is **empty**, and `git log --diff-filter=A -- 'results/phase21_*'`
-is **empty** — the ordering `tests/test_phase20_prereg.py:185`'s `adds[-1]` makes irrevocable has
-not yet been spent.
+Both `results/phase21_*` artifacts are **committed**, strictly after the single pin commit, and the
+ancestry guard has carried the transition from vacuous to **live**: `checked = 1 pin x 2 artifacts
+= 2`, both factors non-zero. `scripts/mitigation_unit.py` is frozen from `c79b9bf` onward.
+
+The blocking gate was cleared by the human only after a required strengthening and a mutation
+proof — see "Gate review round 2" below. The plan's STEP 1→2→3 sequence was measured
+**unsatisfiable** and replaced with a corrected order, and a **second** not-yet-written guard the
+plan names nowhere was found by running the suite.
 
 ---
 
@@ -500,22 +505,119 @@ def test_phase21_guard_is_now_live():
 
 Expected after that commit: `checked = 1 pin x 2 artifacts = 2`, both sides non-zero.
 
-## Requirements — deliberately NOT marked complete
+---
 
-`UNIT-01`, `UNIT-03`, `UNIT-04`, `UNIT-05`, `UNIT-06` are this plan's `requirements:` frontmatter
-and **none is marked complete**; `REQUIREMENTS.md` was not modified. Every one of them is satisfied
-by a **committed** `results/phase21_*` artifact, and neither artifact is committed yet. Marking them
-complete against an untracked file would claim a record that does not exist in the history — the
-same substitution UNIT-03 exists to refuse.
+## Task 3 EXECUTED: the artifacts are committed and the guard is LIVE
+
+Gate approved. The corrected order was used: **one commit** carrying the swap and both artifacts
+(`c79b9bf`), because STEP 2 as written is unsatisfiable.
+
+### Pre-commit, before any `git add`
+
+```
+$ git ls-files 'results/phase21_*'                              # (no output — EMPTY)
+$ git log --diff-filter=A --format=%H -- 'results/phase21_*'    # (no output — NEVER ADDED)
+$ git log --format=%H -- scripts/mitigation_unit.py
+8d3beb446f08327f9df242420b900f15baf670b3                        # exactly 1 pin commit
+$ git merge-base --is-ancestor 8d3beb44... HEAD; echo $?
+0
+$ shasum -a 256 scripts/mitigation_unit.py
+45f37e152bb4035667b804c1463431b3f12fa5096c47de32b1dc27abbe000473
+$ pytest -q tests/test_phase20_prereg.py
+FAILED tests/test_phase20_prereg.py::test_phase21_guard_is_now_live
+1 failed, 21 passed in 2.29s                                    # the deliberate RED, sole failure
+```
+
+### Post-commit — the vacuous→live transition, MEASURED
+
+```
+$ git ls-files 'results/phase21_*'
+results/phase21_multiplicity.json
+results/phase21_privacy_unit.json
+$ git log --diff-filter=A --format=%H -- 'results/phase21_*'
+c79b9bfa1b28e7a6cb24a4fde8b608b6e734e192                        # ONE add, this commit
+
+pin commits      : 1 ['8d3beb44']
+tracked artifacts: 2
+  results/phase21_multiplicity.json   first_add=c79b9bfa  pin != first_add=True  is-ancestor exit=0
+  results/phase21_privacy_unit.json   first_add=c79b9bfa  pin != first_add=True  is-ancestor exit=0
+
+checked = 2   == len(pins)*len(arts) = 2
+bool(checked) == bool(tracked): True -> GUARD IS LIVE
+
+$ pytest -q tests/test_phase20_prereg.py
+22 passed in 2.40s                                              # fully green, swap included
+$ pytest -q tests/test_phase20_prereg.py -k "guard_is_now_live or same_commit"
+2 passed, 20 deselected in 0.56s
+```
+
+The strict conjunct added at `d32b51a` is satisfied on real history: the pin commit is **not** the
+artifacts' first-add commit and **is** a strict ancestor of it. D-20's "strictly after" is now
+enforced by the mechanism rather than by the operator's care.
+
+### FINDING: there were TWO not-yet-written guards, and the plan names only one
+
+The full suite immediately after `c79b9bf` was **not** green:
+
+```
+FAILED tests/test_phase21_multiplicity.py::test_the_artifact_is_not_written_yet
+AssertionError: ['results/phase21_multiplicity.json', 'results/phase21_privacy_unit.json'] is
+already tracked — the ancestry ordering is now permanent and this plan was not the one
+permitted to fix it (plan 21-11 owns the first add)
+1 failed, 974 passed, 7 skipped
+```
+
+Plan 21-10 shipped its **own** copy of the "no artifact yet" assertion, and `21-11-PLAN.md` task 3
+names only the `tests/test_phase20_prereg.py` one. This was found by **running the suite, not by
+reading the plan** — the same class as the phase's other findings, and a concrete argument for
+running the full suite after an irrevocable commit rather than trusting the plan's file list.
+
+Inverted in `11a2a17` to `test_the_committed_artifacts_are_exactly_the_declared_paths`, which now
+guards the defect class this repository keeps producing: the COMMITTED set must equal the
+`ARTIFACTS` constant's DECLARED set, so an artifact at an undeclared path *or* a declared path that
+never got committed is red either way. Its own docstring already named 21-11 as the plan that
+commits the artifacts, so this is the recorded transition, exactly as for the first guard.
+
+### Byte-identity of the committed blobs
+
+Requested so the orchestrator can safely delete the untracked copies in the main checkout before
+merging. The committed git blobs and the main-checkout files are identical:
+
+| artifact | sha256 (committed blob, `git show`) | sha256 (main checkout) |
+|---|---|---|
+| `results/phase21_privacy_unit.json` | `f80ceda8e355465a07e09d352afe91f50e13ad81078dca81684a593caa1ec081` | **same** |
+| `results/phase21_multiplicity.json` | `9e89344cc9caf80e8bf9d0c466675cc383e906cbdd4fc31b648ca94ffe434954` | **same** |
+
+The untracked copies at `/Users/juliorcoelho/PersonaCore/results/phase21_*.json` are now redundant
+and safe to delete before the merge.
+
+### Executed deviation from the plan's STEP 1 → 2 → 3
+
+| plan step | what happened | why |
+|---|---|---|
+| STEP 1 — edit the test | **split.** The strict-ancestor conjunct + its mutation proof went in `d32b51a`; the swap went in `c79b9bf` with the artifacts | the two halves have different commitability — one green, one RED by construction |
+| STEP 2 — commit the test edit ALONE, confirm GREEN | **NOT ATTEMPTED — unsatisfiable.** Measured `1 failed, 21 passed` | `checked = len(pins) * len(tracked)`; `tracked` is `[]` until the artifacts commit, so `checked` is 0 by construction |
+| STEP 3 — commit the artifacts in their own commit | **done as ONE commit with the swap** (`c79b9bf`). Not amended, not squashed into any pin commit | the artifacts and the test observing them must go live in the same instant |
+
+The plan was **not** amended. This deviation is recorded here, which is where findings belong.
+
+## Requirements
+
+`UNIT-01`, `UNIT-03`, `UNIT-04`, `UNIT-05`, `UNIT-06` are this plan's `requirements:` frontmatter.
+All five are now satisfied by **committed** `results/phase21_*` artifacts — the condition that was
+missing when this SUMMARY was first written at the gate.
+
+`REQUIREMENTS.md` was **not modified**, deliberately: this executor runs in worktree mode and the
+orchestrator is the single writer for the planning-state files. The requirement IDs are listed here
+so the orchestrator can mark them, with the evidence (`c79b9bf`, `checked = 2`) rather than a claim.
 
 ## Known Stubs
 
-**One, and it is the plan's design.** Both artifacts exist on disk and neither is tracked. This is
-the `Known Stubs` entry 21-10 opened (`refuse_existing_artifacts` wired to nothing) now half-closed:
-the emitters are fully implemented and both have run to completion against the real corpora. The
-remaining step is a commit that only a human may authorise, because `adds[-1]` makes its ordering
-irrevocable. **No stub prevents this plan's goal** — the goal is blocked on a gate, not on missing
-code.
+**None.** The `Known Stubs` entry 21-10 opened (`refuse_existing_artifacts` declared and wired to
+nothing, `ARTIFACTS` declared and neither path written) is now **fully closed**: both emitters are
+implemented, both have run to completion against the real corpora, and both artifacts are committed
+at exactly the declared paths — which
+`test_the_committed_artifacts_are_exactly_the_declared_paths` now asserts as an equality.
 
 ## Threat Flags
 
@@ -541,6 +643,9 @@ staying vacuous) is the checkpoint's own subject and is **not yet discharged**.
 | `bc5f5f0` | 2 | the multiplicity emitter, the replay sentinel split, A3's discharge, the pin-discrepancy record, the findings block, 7 tests |
 | `b41de0f` | — | this SUMMARY (first revision, at the gate) |
 | `d32b51a` | 3 (gate round 2) | the strict-ancestor strengthening + `test_a_same_commit_pin_and_artifact_is_refused`, and the three corrected reflexivity docstrings |
+| `1147583` | — | SUMMARY revision recording the strengthening and the STEP-2 gap |
+| **`c79b9bf`** | **3** | **THE IRREVOCABLE COMMIT** — both artifacts + the `guard_is_now_live` swap, in one commit |
+| `11a2a17` | 3 | invert 21-10's second not-yet-written guard, found by the full suite |
 
 `tests/test_phase20_prereg.py` is a third file this plan modified, beyond the two its
 `files_modified` frontmatter declares. It is declared in the plan's **task-3 `<files>`** block, so
@@ -555,11 +660,11 @@ it is in scope — but the frontmatter is narrower than the tasks, which is wort
 | `... tests/test_phase21_unit_pin.py tests/test_phase20_prereg.py tests/test_phase21_replay_volume.py tests/test_phase21_aligned_bins.py tests/test_phase21_aligned_loader.py tests/test_phase21_sc5.py` | **87 passed in 11.87s** |
 | `pytest -q tests/test_phase21_multiplicity.py` (21-10's instrument) | **17 passed**, unchanged |
 | `pytest -q tests/test_phase20_prereg.py -k phase21` | **3 passed, 18 deselected** — the selector selects |
-| **Full suite** | **975 passed, 7 skipped in 191.55s**, exit 0 (974 before the gate-round-2 strengthening added 1 test) |
+| **Full suite (final, after the artifact commit)** | **975 passed, 7 skipped in 180.95s**, exit 0 |
 | `git diff --exit-code` on the frozen paths | **0** — `mitigation_unit.py`, `mitigation_gate.py`, `phase18_extraction.py`, `phase16_recall_sample.json` |
 | `shasum -a 256 scripts/mitigation_unit.py` | `45f37e152bb4035667b804c1463431b3f12fa5096c47de32b1dc27abbe000473` — 21-01's frozen value |
 | `git status --porcelain data/` | **empty** |
-| `git ls-files 'results/phase21_*'` | **empty** |
+| `git ls-files 'results/phase21_*'` | exactly the two declared artifacts; `checked = 2`, guard LIVE |
 | `ruff check . && ruff format --check .` | All checks passed · 188 files formatted |
 | `.planning/STATE.md` / `ROADMAP.md` / `REQUIREMENTS.md` | byte-unchanged (worktree mode — the orchestrator owns them) |
 
@@ -576,8 +681,9 @@ is gated on `data/`.
 
 - `scripts/phase21_unit_record.py` — FOUND (modified)
 - `tests/test_phase21_unit_record.py` — FOUND
-- `results/phase21_privacy_unit.json` — FOUND on disk, **untracked by design**
-- `results/phase21_multiplicity.json` — FOUND on disk, **untracked by design**
-- `17b3c85`, `bc5f5f0` — both FOUND in `git log fa97b66..HEAD`
-- The two artifacts are gitignored-adjacent but NOT gitignored; they are deliberately left
-  untracked in the worktree and must be preserved for the continuation agent.
+- `results/phase21_privacy_unit.json` — FOUND, **tracked**, sha256 `f80ceda8…ec081`
+- `results/phase21_multiplicity.json` — FOUND, **tracked**, sha256 `9e89344c…34954`
+- `17b3c85`, `bc5f5f0`, `b41de0f`, `d32b51a`, `1147583`, `c79b9bf`, `11a2a17` — all FOUND in
+  `git log fa97b66..HEAD`
+- `scripts/mitigation_unit.py` — sha256 `45f37e15…000473`, `git diff --exit-code` = 0. **FROZEN**
+- Working tree clean; `.planning/STATE.md`, `ROADMAP.md` and `REQUIREMENTS.md` byte-unchanged
