@@ -19,6 +19,7 @@ CPU-only, GPU-free, no torch, no network.
 import ast
 import math
 import pathlib
+import random
 import subprocess
 import sys
 
@@ -548,6 +549,151 @@ def test_sigma_for_uses_the_forward_function():
         f"sigma_for's body calls {sorted(forbidden)} directly. The inverse must bisect over "
         f"epsilon_for, not over a re-derived closed form: a second bisection here is free to "
         f"disagree with the forward direction, which is the divergence D-12 forbids."
+    )
+
+
+# The composition sweep's RNG seed, stated once and used by every consumer below so the sweep is
+# reproducible and its distribution is RESEARCH F3's: sigma log-uniform in [0.5, 200], T uniform
+# integer in [1, 5000]. F3 drew 4,000 samples from exactly this and measured a 19.9% bitwise
+# disagreement rate end to end.
+_COMPOSITION_SEED = 20260825
+
+
+def _composition_pairs():
+    """A deterministic grid plus a seeded sample from RESEARCH F3's own distribution.
+
+    Both halves are needed and they fail differently. The GRID pins the frontier points a reader
+    can check by hand and keeps the sweep meaningful if the RNG implementation ever changes; the
+    SAMPLE is what actually contains bitwise disagreement, because round sigmas are much more
+    likely to agree to the last bit. F3 measured that trap directly — its first five hand-chosen
+    pairs were all bitwise equal — which is why ``test_composition_identity`` alone is not enough
+    and its negative control below asserts the sample is doing its job.
+    """
+    grid = [
+        (0.5, 1),
+        (0.5, 64),
+        (0.7, 200),
+        (1.0, 1),
+        (1.0, 1000),
+        (2.0, 200),
+        (3.0, 64),
+        (5.0, 200),
+        (8.0, 64),
+        (10.0, 200),
+        (14.142135623730951, 200),
+        (20.0, 200),
+        (50.0, 1),
+        (50.0, 5000),
+        (100.0, 3000),
+        (200.0, 5000),
+    ]
+    rng = random.Random(_COMPOSITION_SEED)
+    sample = [
+        (math.exp(rng.uniform(math.log(0.5), math.log(200.0))), rng.randint(1, 5000))
+        for _ in range(12)
+    ]
+    return grid + sample
+
+
+@pytest.mark.parametrize(("sigma", "steps"), _composition_pairs())
+def test_composition_identity(sigma, steps):
+    """V-03 -- the SECOND oracle: ``eps(sigma, T, d)`` against ``eps(sigma/sqrt(T), 1, d)``.
+
+    THE IDENTITY IS EXACT IN REAL ARITHMETIC. ``mu_eff(sigma, T) = sqrt(T)/sigma`` and
+    ``mu(sigma/sqrt(T), 1) = 1/(sigma/sqrt(T))`` are the same number, and Dong-Roth-Su Corollary
+    3.3 is an EXACT EQUALITY of trade-off functions covering adaptive composition — not an upper
+    bound. So this is a genuine oracle on ``epsilon_for``, reached by a different call shape.
+
+    AND IT FAILS BITWISE 19.9% OF THE TIME IN FLOAT64. RESEARCH F3, 4,000 samples at seed
+    20260825: 795/4000 disagree end to end, worst relative gap **1.184e-14 (82 ulp)** at
+    sigma=184.50381354671796, T=119. The cause is double-rounding and nothing else —
+    ``sqrt(T)/sigma`` costs two roundings, ``1.0/(sigma/sqrt(T))`` costs three. **The mathematics
+    of D-13 is confirmed exact; only its transcription as ``==`` is wrong.**
+
+    1e-12 is therefore the tolerance, ~2 orders over the measured worst case, and NEVER ``==``.
+    Measured over this sweep's own pairs: worst relative gap 9.01e-16.
+    """
+    delta = mitigation_unit.DELTA
+    composed = epsilon_for(sigma, steps, delta)
+    single = epsilon_for(sigma / math.sqrt(steps), 1, delta)
+    assert abs(composed - single) <= 1e-12 * abs(single), (
+        f"the composition identity failed at sigma={sigma!r}, T={steps}: "
+        f"epsilon_for(sigma, T) = {composed!r} against epsilon_for(sigma/sqrt(T), 1) = {single!r}, "
+        f"relative {abs(composed - single) / abs(single):.3e} over the 1e-12 budget"
+    )
+
+
+def test_composition_identity_would_fail_under_exact_equality():
+    """The negative control: this sweep really does contain bitwise disagreement.
+
+    Without it ``test_composition_identity`` could be green on a sweep that happens to be
+    all-bitwise-equal by luck, proving nothing about the tolerance it uses — and RESEARCH F3
+    measured exactly that trap: *"my first 5 hand-chosen pairs were all bitwise equal, and so were
+    the 3 in the end-to-end check."* A sweep that agreed everywhere would make ``==`` look correct
+    and would silently license writing it, which is the one conclusion F3 forbids.
+
+    So this asserts the sweep is NON-DEGENERATE rather than asserting a rate: fewer bitwise-equal
+    pairs than pairs. Measured on this sweep: 3 of 28 disagree (F3's own 19.9% is over 4,000
+    random draws; a 16-point round-number grid pulls this sweep's rate down, which is precisely
+    why the seeded sample is in it).
+    """
+    delta = mitigation_unit.DELTA
+    pairs = _composition_pairs()
+    # Meta-guard: an empty or truncated sweep would make the count assertion below vacuous.
+    assert len(pairs) >= 20, (
+        f"the composition sweep is {len(pairs)} pairs, fewer than the 20 V-03 requires — a "
+        f"shrunken sweep makes both this control and the identity test green over less"
+    )
+    equal = [
+        (sigma, steps)
+        for sigma, steps in pairs
+        if epsilon_for(sigma, steps, delta) == epsilon_for(sigma / math.sqrt(steps), 1, delta)
+    ]
+    assert len(equal) < len(pairs), (
+        f"all {len(pairs)} swept pairs are BITWISE equal, so test_composition_identity is green "
+        f"over a sweep containing no disagreement at all and proves nothing about its tolerance. "
+        f"RESEARCH F3 measures 19.9% disagreement over 4,000 random draws — widen the sweep "
+        f"(more seeded samples, or a wider sigma/T range) rather than believing this."
+    )
+
+
+def test_tolerance_register_is_documented():
+    """Both tolerance registers are written down, ADJACENTLY, so they cannot be conflated.
+
+    V-03 above compares TWO DIFFERENT CALL SHAPES and must use ``rel_tol``. DPSGD-05's kill/resume
+    check (plan 22-07) compares THE SAME CALL SHAPE across two processes and must use exact
+    ``==``. Both are correct; each is wrong in the other's place, and the failure mode is a reader
+    who has seen only one of them. Writing them down next to each other is what prevents it, so
+    this asserts they ARE next to each other rather than trusting that they are.
+
+    The ``==`` half cites ``lora/inject.py::load_adapter_weights``'s W1 comment, which argues for
+    exact equality on precisely this ground — the same operation on the same operands gives a
+    bit-identical float — and says in its own words that *"a tolerance would only weaken this."*
+    """
+    tree = ast.parse(_ACCOUNTANT_PATH.read_text(encoding="utf-8"))
+    docstring = ast.get_docstring(tree)
+    # Meta-guard: a missing or emptied module docstring would satisfy nothing below by vacuity,
+    # but it would also make every "in" check fail confusingly rather than at the real cause.
+    assert docstring and len(docstring) > 500, (
+        f"accountant.py's module docstring is {len(docstring or '')} characters — there is no "
+        f"register to read, so this guard would be asserting against an empty string"
+    )
+    required = [
+        "TWO DIFFERENT CALL SHAPES",
+        "RELATIVE TOLERANCE of 1e-12",
+        "THE SAME CALL SHAPE ACROSS TWO PROCESSES",
+        "exact ``==``",
+        "DPSGD-05",
+        "lora/inject.py::load_adapter_weights",
+        "a tolerance would only weaken",
+        "F3",
+    ]
+    missing = [text for text in required if text not in docstring]
+    assert missing == [], (
+        f"accountant.py's module docstring no longer states {missing}. Both halves of RESEARCH "
+        f"F3's rule must live in one place: rel_tol=1e-12 for two different call shapes, exact == "
+        f"for the same call shape across two processes. A register with one half removed is how "
+        f"the two get conflated."
     )
 
 
