@@ -526,15 +526,40 @@ def test_dpsgd_has_exactly_one_clip_constant():
 
 _RESEED_CALLS = frozenset({"manual_seed", "seed", "set_state"})
 
+# The methods allowed to touch the generator's seed/state, as a HARD-EQUALITY allowlist naming
+# WHICH call each one is credited with — the `_ALLOWED_GRAD_WRITES` discipline, applied to FAKE 4.
+#
+# WHY THE EXEMPTION LIST WAS WIDENED, recorded rather than granted silently (plan 22-06 (f)).
+# `__init__` was the sole exemption because D-17's construct-once seeding lives there. Plan 22-06
+# adds `load_noise_rng_state`, whose body IS `self._g.set_state(state)` — FAKE 4's own shape. It is
+# not FAKE 4 because of WHERE it is callable from: `training/loop.py::train`'s `resume_from` block
+# and tests, never a step method. DPSGD-05 requires it — a write-only `dp_noise_rng` slot means a
+# resumed run re-seeds from the caller's seed and REPLAYS noise it already released, which is FAKE 4
+# ARRIVING THROUGH PRODUCTION and which D-16 invariant 4 is structurally blind to (`_prev_gen_state`
+# is None on a fresh object, so the continuity check is vacuous on the first post-resume step).
+#
+# A NAME-ONLY exemption would be the guard getting weaker while looking bigger: a future author
+# could park a re-seed in a method spelled `load_noise_rng_state` and call it from `finalize`. So
+# the exemption ships PAIRED with `test_reseed_exempt_methods_are_unreachable_from_the_step_path`,
+# which walks the same closure the `.grad` guards use and asserts no step entry can reach it.
+_ALLOWED_RESEED_SITES = {
+    "__init__": ["manual_seed"],
+    "load_noise_rng_state": ["set_state"],
+}
 
-def test_dpsgd_never_reseeds_its_generator():
-    """FAKE 4's structural half: the ONE seeding lives in ``__init__`` and nowhere else.
+# The public step entries `_optimizer_step` drives between `zero_grad` and `optimizer.step()`:
+# `begin_step` -> `absorb_record` -> `finalize`. Only the last two are walked by the closure
+# helper — `begin_step` is a LEAF (it calls no DPSGD method at all), and the helper's own
+# `len(seen) > 1` meta-guard REFUSES a leaf entry rather than reporting a vacuous "no offenders".
+# That refusal is correct and is not worked around: `begin_step` gets the stronger direct
+# assertion below, that it is a leaf, which IS its reachability proof.
+_STEP_ENTRIES = ("absorb_record", "finalize")
+_LEAF_STEP_ENTRY = "begin_step"
 
-    ``__init__`` is exempt because D-17's construct-once seeding lives there. Every other
-    occurrence is FAKE 4's positive insertion — an in-step re-seed makes every step draw the same
-    noise vector while the accountant charges for T independent compositions.
-    """
-    tree = ast.parse(_dpsgd_source())
+
+def _reseed_sites(source_text):
+    """``{method: sorted(calls)}`` per ``DPSGD`` method that touches the generator seed/state."""
+    tree = ast.parse(source_text)
     classes = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
     assert "DPSGD" in classes, f"DPSGD is gone (found: {sorted(classes)})"
 
@@ -545,6 +570,18 @@ def test_dpsgd_never_reseeds_its_generator():
         for node in ast.walk(method):
             if isinstance(node, ast.Call) and getattr(node.func, "attr", None) in _RESEED_CALLS:
                 seeding_sites.setdefault(method.name, []).append(node.func.attr)
+    return {name: sorted(calls) for name, calls in seeding_sites.items()}
+
+
+def test_dpsgd_never_reseeds_its_generator():
+    """FAKE 4's structural half: the seed/state calls are EXACTLY the two sanctioned ones.
+
+    HARD EQUALITY against ``_ALLOWED_RESEED_SITES``, never a subset: a third site, a re-seed moved
+    into a helper, or an extra call credited to an exempt method all redden this. Every occurrence
+    outside those two is FAKE 4's positive insertion — an in-step re-seed makes every step draw the
+    same noise vector while the accountant charges for T independent compositions.
+    """
+    seeding_sites = _reseed_sites(_dpsgd_source())
 
     # META-GUARD: __init__ must still carry a seeding call, or this walk is green over a
     # mechanism whose construct-once seeding was deleted outright.
@@ -552,11 +589,71 @@ def test_dpsgd_never_reseeds_its_generator():
         "no manual_seed/seed/set_state call was found in DPSGD.__init__ — either the walk broke "
         f"or the construct-once seeding is gone (sites found: {seeding_sites})"
     )
-    outside = {name: calls for name, calls in seeding_sites.items() if name != "__init__"}
-    assert outside == {}, (
-        f"DPSGD re-seeds its generator outside __init__: {outside}. That is FAKE 4's positive "
-        "insertion — the runtime generator-continuity invariant catches it on today's inputs, and "
-        "this catches the FUTURE edit that a runtime check cannot see"
+    assert seeding_sites == _ALLOWED_RESEED_SITES, (
+        f"DPSGD's generator seed/state call sites are {seeding_sites}, not exactly "
+        f"{_ALLOWED_RESEED_SITES}. Anything else is FAKE 4's positive insertion — the runtime "
+        "generator-continuity invariant catches it on today's inputs, and this catches the FUTURE "
+        "edit that a runtime check cannot see"
+    )
+
+
+def test_reseed_exempt_methods_are_unreachable_from_the_step_path():
+    """The other half of the exemption: no step entry's call graph can reach a sanctioned re-seed.
+
+    Without this, ``_ALLOWED_RESEED_SITES`` would be a NAME-based pass: a re-seed parked in a
+    method spelled ``load_noise_rng_state`` and called from ``finalize`` would satisfy the
+    hard-equality guard above while being FAKE 4 verbatim. This walks the SAME closure the
+    ``.grad`` guards use — ``_forbidden_calls_reachable_from`` with the exempt method names as the
+    forbidden token set — so the exemption is conditional on unreachability, not on spelling.
+    """
+    source = _dpsgd_source()
+    exempt = frozenset(_ALLOWED_RESEED_SITES)
+
+    # `begin_step` is a LEAF, and that is its reachability proof. Asserted directly because the
+    # closure helper's `len(seen) > 1` meta-guard refuses a leaf entry outright — correctly, since
+    # a walk that stops at its own entry reports no offenders no matter what the module does.
+    tree = ast.parse(source)
+    methods = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert _LEAF_STEP_ENTRY in methods, f"{_LEAF_STEP_ENTRY} is gone — this guard checks nothing"
+    leaf_callees = {
+        getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+        for node in ast.walk(methods[_LEAF_STEP_ENTRY])
+        if isinstance(node, ast.Call)
+    }
+    assert not (leaf_callees & set(methods)), (
+        f"{_LEAF_STEP_ENTRY} is no longer a leaf — it calls {sorted(leaf_callees & set(methods))}. "
+        "Add it to _STEP_ENTRIES so the closure walk covers it; the direct leaf assertion here is "
+        "only sufficient while it reaches nothing"
+    )
+
+    for entry in _STEP_ENTRIES:
+        offenders = _forbidden_calls_reachable_from(source, entry=entry, forbidden=exempt)
+        # `.grad=` hits are the two writes D-01 mandates and are not what this guard is about;
+        # only a call INTO an exempt method counts here.
+        reached = {
+            name: [hit for hit in hits if hit in exempt]
+            for name, hits in offenders.items()
+            if any(hit in exempt for hit in hits)
+        }
+        assert reached == {}, (
+            f"DPSGD.{entry}'s call graph reaches a re-seed-exempt method: {reached}. The exemption "
+            f"in _ALLOWED_RESEED_SITES is safe ONLY because {sorted(exempt)} are unreachable from "
+            "the step path; a call from a step method turns the sanctioned restore into FAKE 4"
+        )
+
+    # META-GUARD: the closure really does resolve calls into DPSGD methods, so an empty `reached`
+    # above means "unreachable" rather than "the walk never followed a self.<method>() call".
+    control = _forbidden_calls_reachable_from(
+        source, entry="finalize", forbidden=frozenset({"_write_once", "_noised_private"})
+    )
+    assert control.get("finalize") == ["_noised_private", "_write_once"], (
+        f"the closure from finalize reported {control} for its own two mandated helpers — the "
+        "self.<method>() arm of the walk is broken, and the unreachability assertions above are "
+        "then vacuous"
     )
 
 

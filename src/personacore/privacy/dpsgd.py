@@ -17,12 +17,16 @@ public term ``.grad`` already holds.
 
 WHAT THIS SEAM DOES **NOT** CLAIM
 ---------------------------------
-It does not claim the legacy ``clip_grad_norm_`` at ``training/loop.py`` is unreachable -- making
-it structurally unreachable inside an ``if dp_fn is None`` branch is plan 22-06's edit, not this
-module's. It does not claim any particular ``sigma`` or ``clip_norm``: BOTH ARE KEYWORD-ONLY WITH
-NO DEFAULT (D-08) and no numeric value for either exists anywhere in Phase 22's tree, so there is
-nothing for Phase 23 to override and nothing to drift across Phase 20's Z boundary. It does not
-claim an epsilon; ``privacy/accountant.py`` owns that, and it consumes ``sigma`` and ``T``, never
+It does not claim ANYTHING about ``training/loop.py`` on its own. The legacy ``clip_grad_norm_``
+is now structurally unreachable on the DP path -- it has exactly ONE reachable call site there and
+it sits inside an ``if dp_fn is None:`` branch -- but that is ``loop.py``'s edit and ``loop.py``'s
+guard (``tests/test_phase22_dpsgd.py::test_legacy_clip_is_unreachable_on_the_dp_path`` observes it
+firing once with the seam off and zero times with it on); this module cannot enforce it and does
+not pretend to. It does not claim any particular ``sigma`` or ``clip_norm``: BOTH ARE
+KEYWORD-ONLY WITH NO DEFAULT (D-08) and no numeric value for either exists anywhere in Phase 22's
+tree, so there is nothing for Phase 23 to override and nothing to drift across Phase 20's Z
+boundary. It does not claim an epsilon; ``privacy/accountant.py`` owns that, and it consumes
+``sigma`` and ``T``, never
 ``C`` (the clip constant cancels out of the accounting -- see below). And it does not claim the
 optimizer leaves the released value alone: DP is closed under post-processing, so epsilon survives
 ``clip_grad_norm_``, weight decay and AdamW's own per-parameter rescale by sqrt(v). The rule that
@@ -310,6 +314,58 @@ class DPSGD:
             self._g.manual_seed(torch.initial_seed() if seed is None else int(seed))
         else:
             self._g = generator
+
+    # ---------------------------------------------------------------------------------------
+    # The checkpoint slot (D-14). NEITHER of these is on the step path, and neither may ever
+    # become reachable from one: `load_noise_rng_state` is FAKE 4's own shape, made safe only by
+    # WHERE it is callable from. `tests/test_phase22_dpsgd_ast.py::test_dpsgd_never_reseeds_its
+    # _generator` pins that with an exemption paired to an unreachability proof.
+    # ---------------------------------------------------------------------------------------
+
+    def noise_rng_state(self):
+        """The dedicated generator's state, for the checkpoint's ``dp_noise_rng`` slot (D-14).
+
+        Measured under torch 2.7.1, WITH ITS DENOMINATOR because the figure is DEVICE-DEPENDENT:
+        this state is **5,056 bytes on CPU** and **44 bytes on MPS**; ``set_state`` round-trips
+        exactly on both. Every Phase-22 test runs on CPU (``22-VALIDATION.md`` says so for every
+        row), so a test asserting a byte count must assert the CPU figure or assert
+        ``len(state) > 0`` rather than the 44 a planning document quoted from an MPS probe.
+
+        A dedicated generator's draw does NOT change the global MPS state -- which is exactly why
+        D-14 keeps TWO separately-named slots: ``rng["mps"]`` (DPSGD-05's literal requirement,
+        recorded honestly as required-but-UNEXERCISED) and ``dp_noise_rng`` (the slot the DP path
+        actually FIRES). Reading the live state at SAVE time rather than binding it once is the
+        whole point: ``train()``'s ``checkpoint_extra`` is bound at entry, so a value placed there
+        would be stale at every save after the first, and DPSGD-05 gates on a resume reproducing a
+        BIT-IDENTICAL reported epsilon.
+        """
+        return self._g.get_state()
+
+    def load_noise_rng_state(self, state):
+        """Restore a saved generator state on RESUME. **This is not a re-seed.**
+
+        Called from exactly two places -- ``training/loop.py::train``'s ``resume_from`` block and
+        tests -- and from NO step method. The distinction is the whole safety argument: the same
+        call inside ``finalize`` would be FAKE 4 (*RNG reused across steps*), which is why the AST
+        guard's exemption for this method ships alongside an assertion that no step entry's call
+        graph can reach it.
+
+        Omitting the restore is the failure every other guard is blind to. ``__init__`` re-seeds
+        ``self._g`` from the caller's seed, so a resumed run REPLAYS noise it already released;
+        D-16 invariant 4 cannot see it because ``_prev_gen_state`` is ``None`` on a freshly
+        constructed object, making the continuity check vacuous on the first post-resume step. And
+        ``CLAUDE.md`` makes resume ROUTINE on the primary M3 path (laptop sleep/interrupt), so this
+        is the common case rather than an edge one.
+        """
+        if self._prev_gen_state is not None:
+            raise RuntimeError(
+                "[dp-refusal:rng-restore] this seam has already released noise for at least one "
+                "step, so restoring a generator state into it would REWIND a stream that has "
+                "already been drawn from -- the same observable as FAKE 4. A resume restores into "
+                "a FRESHLY CONSTRUCTED seam (train()'s resume_from block runs before the first "
+                "step), which is the only shape this method is reachable in through production."
+            )
+        self._g.set_state(state)
 
     # ---------------------------------------------------------------------------------------
     # The step path. Together these own EVERYTHING between accumulation and optimizer.step();

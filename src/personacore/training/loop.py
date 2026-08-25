@@ -24,6 +24,13 @@ seam is now LIVE (EWC-02): ``train(..., penalty_fn=...)`` evaluates the penalty 
 and it joins ``base_loss`` BEFORE the ``/accum`` divide; ``penalty_fn=None`` (the default) keeps
 the M1 identity bit-for-bit (pinned against tests/fixtures/golden_trajectory_v1.json), and
 ``checkpoint_extra`` splats fisher/theta_star into every in-loop ``save_checkpoint`` (Open Q1).
+DPSGD-01/D-01/D-02/D-03: ``train(..., dp_fn=...)`` is the NEW ADDITIVE **GRADIENT-SIDE** seam —
+``penalty_fn`` above is loss-side and runs pre-``backward()``, so it structurally cannot carry
+per-example clipping. With ``dp_fn`` set the ``/accum`` divide is bypassed (the per-record backward
+is UNDIVIDED, so ``clip(g_i, C)`` gives sensitivity exactly ``C`` independent of ``N``) and the
+legacy ``clip_grad_norm_`` becomes structurally unreachable — it has exactly ONE reachable call
+site in this module and it sits inside ``if dp_fn is None:``. ``dp_fn=None`` is bit-for-bit inert,
+pinned against the same golden fixture.
 D-11: the minimal ``sample`` lives
 HERE as a free function (not on the model) so Phase-6's richer ``generate`` supersedes it without a
 model rewrite. The loop NEVER calls ``torch.cuda.*`` — ``RuntimeConfig`` is the single device/AMP
@@ -143,6 +150,7 @@ def _optimizer_step(
     batch_fn,
     penalty_fn=None,
     replay_fn=None,
+    dp_fn=None,
 ):
     """Run ONE optimizer step with the load-bearing AMP+accum+clip ordering (TRAIN-02).
 
@@ -160,8 +168,23 @@ def _optimizer_step(
     gradient buffer. It is structurally OUTSIDE the per-record loop above — see :func:`train`
     for what that placement does and does not claim. ``None`` is bit-for-bit inert: no new line
     executes on the default path.
+
+    ``dp_fn`` (the Phase-22 DP-SGD seam, DPSGD-01 / D-01/D-02/D-03) owns EVERYTHING between
+    accumulation and ``optimizer.step()``. When set it takes over four points below, and each
+    branch leaves the ``None`` path executing exactly the operations it executed before:
+    ``begin_step()`` after the single ``zero_grad``; the ``/accum`` divide BYPASSED so the
+    per-record backward is UNDIVIDED; ``absorb_record()`` after each backward (clip -> add to the
+    DP-owned SUM -> DRAIN ``.grad``, so ``replay_fn`` then leaves ``.grad`` holding the PUBLIC
+    term exactly); and ``finalize(accum)`` in place of the legacy clip — noise on the sum, the
+    ``/N`` last, then the ONE combining write, with ``scaler.step(optimizer)`` as the very next
+    statement. See :func:`train` for the full register.
     """
     optimizer.zero_grad(set_to_none=True)
+    if dp_fn is not None:
+        # D-01: the single zero above STAYS where it is. The per-micro-step drain the DP path
+        # needs lives INSIDE the seam (absorb_record), which is what keeps DPSGD-02's bit-identity
+        # intact — no zeroing moves on the default path.
+        dp_fn.begin_step()
     accum = max(1, train_cfg.grad_accum_steps)
     # Sum the per-micro-batch loss BEFORE the /accum scaling, then average -> the loss for the
     # effective (big) batch. This is what makes grad_accum_steps=N match one N×-bigger batch.
@@ -172,13 +195,31 @@ def _optimizer_step(
             _, base_loss = model(xb, yb)
             penalties = (penalty_fn(model),) if penalty_fn is not None else ()
             total = assemble_loss(base_loss, penalties)  # identity when no penalty (D-04)
-            loss = total / accum  # scale so accumulated grads average across micro-batches
+            # D-02: on the DP path the per-record backward is UNDIVIDED, so clip(g_i, C) gives
+            # sensitivity exactly C independent of N; the /accum happens LAST, in dp_fn.finalize.
+            # THE TRAP THE DRAIN EXPOSES, and it arrives for free by INHERITING this one line:
+            # with /accum left in place, .grad after each backward holds g_i / N, so clipping THAT
+            # to C sets the true per-record sensitivity to C*N while the accountant is told C —
+            # DPSGD-04's wrong-sensitivity fake, and it converges fine. On the default path the
+            # expression is the same operands under the same operator, so no float op moves.
+            loss = total if dp_fn is not None else total / accum
         scaler.scale(loss).backward()
+        if dp_fn is not None:
+            # D-01, per micro-step: read .grad -> clip to C -> add into the DP-owned SUM -> DRAIN.
+            dp_fn.absorb_record()
         summed += float(base_loss.item())
     if replay_fn is not None:
         replay_fn(model, scaler)  # D-25: its OWN pass per lot, outside the per-record loop
     scaler.unscale_(optimizer)  # UNSCALE before clip (mandatory order — Pitfall 1)
-    torch.nn.utils.clip_grad_norm_(model.parameters(), train_cfg.grad_clip)
+    if dp_fn is None:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), train_cfg.grad_clip)
+    else:
+        # D-03, STRUCTURAL: the legacy clip has exactly ONE reachable call site in this module and
+        # it is the branch above, so it is unreachable on the DP path by call-graph inspection
+        # rather than by a runtime-measured norm. finalize() adds the noise to the SUM, divides by
+        # N last, and performs the one combining write — and scaler.step(optimizer) is the VERY
+        # NEXT statement, so "nothing between the noise and optimizer.step()" holds literally.
+        dp_fn.finalize(accum)
     scaler.step(optimizer)
     scaler.update()
     scheduler.step()  # ONCE per optimizer step, never per micro-batch (Pitfall 2)
@@ -214,6 +255,7 @@ def train(
     tokenizer=None,
     sample_max_new_tokens=64,
     penalty_fn=None,
+    dp_fn=None,
     checkpoint_extra=None,
     extra_eval_fns=None,
     return_final_loss=False,
@@ -272,11 +314,23 @@ def train(
             ragged final micro-batch contributes exactly one full replay MEAN per step rather
             than over-weighting a short tail.
 
-            **What it does NOT claim.** Phase 21 delivers the STRUCTURAL SEPARATION ONLY. The
+            **What it does NOT claim, and what has since been DISCHARGED.** Phase 21 delivered
+            the STRUCTURAL SEPARATION ONLY, and this entry used to record that the
             ``clip_grad_norm_`` call in :func:`_optimizer_step` still clips the AVERAGED
-            gradient, replay included. Per-record clipping and a genuinely un-clipped replay
-            term are DPSGD-01/DPSGD-04, Phase 22. Do not read an un-clipped public-gradient
-            guarantee into this seam; it is not delivered here.
+            gradient, replay included, with per-record clipping named as future Phase-22 work.
+            **That forward reference is discharged: ``dp_fn`` (below) is the seam, and the legacy
+            clip now has exactly ONE reachable call site, inside ``if dp_fn is None:``.** The
+            sentence still holds ON THE DEFAULT PATH — with ``dp_fn=None`` the averaged gradient
+            is clipped exactly as before, replay included — so ``replay_bin`` alone still carries
+            no un-clipped public-gradient guarantee. It gets one only in the presence of
+            ``dp_fn``, and that is ``dp_fn``'s claim to make.
+
+            **Why the DP path needs its OWN accumulator instead of subtracting replay back out.**
+            Measured at the frozen-base regime: private-only grad norm ``0.143608``,
+            private+replay ``0.436096``, ``torch.allclose(mixed, private_only)`` **False**. Replay
+            is **67.1%** of the mixed norm and is INSEPARABLE after the fact — the two terms meet
+            in the same ``.grad`` buffers and nothing can pull them apart afterwards. That is why
+            D-01 gives the private term a DP-owned accumulator and leaves ``replay_fn`` untouched.
 
             **The overlap is a RECORDED COST, not an accident.** This is DPSGD-01's "new
             additive gradient-side seam", pulled into Phase 21 deliberately by D-10.
@@ -315,6 +369,39 @@ def train(
         penalty_fn: callable ``(model) -> scalar tensor`` added to ``base_loss`` via
             ``assemble_loss`` per micro-batch (the M2 EWC seam, EWC-02); None reproduces
             v1.0 bit-for-bit.
+        dp_fn: Phase-22 DP-SGD seam (DPSGD-01) — a ``personacore.privacy.dpsgd.DPSGD``, or None.
+            It is the NEW ADDITIVE **GRADIENT-SIDE** seam, and it had to be a new one:
+            ``penalty_fn`` above is a LOSS-side seam evaluated pre-``backward()``, and per-example
+            clipping cannot be expressed there at all — there are no gradients yet.
+
+            **What this seam DOES claim.** Per-example clipping to a single ``C`` and Gaussian
+            noise on the LoRA gradients ONLY, base frozen, entering as an additive kwarg. ``None``
+            is bit-for-bit inert: no new float operation executes on the default path, and that is
+            PROVEN rather than argued — ``tests/test_phase22_dpsgd.py::test_seam_off_bit_identical``
+            replays ``tests/fixtures/golden_trajectory_v1.json`` and asserts all three fingerprints
+            (exact CSV text, the final loss's ``repr``, the sha256 of the parameter bytes), with
+            ``::test_seam_omitted_equals_seam_none`` carrying the same guarantee platform-
+            independently where the golden replay's platform gate skips.
+
+            **What it does NOT claim.** It does not choose σ or ``C``. Both arrive KEYWORD-ONLY
+            WITH NO DEFAULT on ``DPSGD.__init__`` (D-08), no numeric value for either exists
+            anywhere in Phase 22's tree, and Phase 23 supplies them from
+            ``scripts/mitigation_budget.py`` (Phase 20's Z boundary). It does not claim an ε —
+            ``privacy/accountant.py`` owns that. And it does not claim the optimizer leaves the
+            released value alone: DP is closed under post-processing, so ε survives
+            ``clip_grad_norm_``, weight decay and AdamW's own per-parameter rescale by √v. The
+            rule that survives contact is *nothing between the noise and* ``optimizer.step()``,
+            and it rests on AUDITABILITY plus not erasing the wrong-sensitivity control's signal,
+            never on privacy — the absolute version would forbid the optimizer.
+
+            **The two REJECTED alternatives, for the record (D-01).** (a) Both terms in DP-owned
+            buffers with ``.grad`` written exactly once — equivalent in guarantee, larger diff, and
+            it would edit ``replay_fn``, which is proven bit-identical-when-off and better left
+            alone. (b) Tensor hooks intercepting at write time — **measured infeasible**: a
+            per-record GLOBAL norm over all 72 LoRA tensors is not knowable until ``backward()``
+            completes, while hooks fire per-tensor MID-backward, so hooks would force
+            per-**parameter** clipping — a different and strictly weaker sensitivity bound than
+            the one DPSGD-01 states and the accountant is told.
         checkpoint_extra: dict splatted into every in-loop ``save_checkpoint`` call (the
             M2 fisher/theta_star carry, RESEARCH Open Q1); None adds no caller keys (the
             loop itself always records ``best_val_loss`` — Seam 3 continuity).
@@ -472,6 +559,15 @@ def train(
                 scaler.scale(loss).backward()
                 drawn += micro
 
+    # --- D-14's dp_noise_rng slot, SAVE half (DPSGD-05) --------------------------------------
+    # `checkpoint_extra` is bound ONCE at train() entry, so a dp_noise_rng value placed there would
+    # be STALE at every save after the first — and DPSGD-05 gates on a kill+resume reproducing a
+    # BIT-IDENTICAL reported epsilon, which needs the LIVE generator state. This closure is
+    # re-evaluated at each splat instead. The value rides `**extra` with NO FORMAT CHANGE, exactly
+    # as fisher/theta_star did, so `CKPT_SCHEMA_VERSION` must NOT bump.
+    def _dp_extra():
+        return {} if dp_fn is None else {"dp_noise_rng": dp_fn.noise_rng_state()}
+
     # --- Resume: restore full state + RNG, continue the step counter (NEVER re-seed) ---
     start_step = 0
     resumed_best_val_loss = None
@@ -485,6 +581,19 @@ def train(
         # pre-kill best. Pre-fix checkpoints lack the key — .get() falls back to None and the
         # fresh-run float("inf") below, so old checkpoints still resume (open-dict contract).
         resumed_best_val_loss = ckpt.get("best_val_loss")
+        # D-14's dp_noise_rng slot, READ half — and a write-only slot is worse than no slot.
+        # `.get()`, NEVER a subscript: same back-compat reason as `best_val_loss` above and as
+        # `rng.get("mps")` in checkpoint.py — every checkpoint written before Phase 22 lacks the
+        # key. Omitting this restore is not a missing nicety: `DPSGD.__init__` re-seeds its
+        # generator from the caller's seed, so a resumed run REPLAYS NOISE IT ALREADY RELEASED —
+        # DPSGD-04/SC4's fourth named fake (RNG reused across steps) reachable through PRODUCTION
+        # rather than by a deliberate edit. D-16 invariant 4 is structurally blind to it
+        # (`_prev_gen_state` is None on a freshly constructed object, so the continuity check is
+        # vacuous on the first post-resume step), which is why this is a WIRING requirement no
+        # runtime invariant can cover. CLAUDE.md makes resume routine on the primary M3 path
+        # (laptop sleep/interrupt), so this boundary is crossed in the common case.
+        if dp_fn is not None and ckpt.get("dp_noise_rng") is not None:
+            dp_fn.load_noise_rng_state(ckpt["dp_noise_rng"])
 
     # Phase-12 telemetry seam: per-run fieldnames — the module constant is NEVER mutated.
     # A pre-existing CSV with the old header makes CSVLogger's DictWriter raise on the new
@@ -517,6 +626,7 @@ def train(
                 batch_fn,
                 penalty_fn,
                 replay_fn,
+                dp_fn,
             )
             final_loss = train_loss
             step += 1
@@ -587,6 +697,7 @@ def train(
                         val_loss=val_loss,
                         best_val_loss=best_val_loss,  # Seam 3 continuity across kill+resume.
                         **(checkpoint_extra or {}),
+                        **_dp_extra(),
                     )
 
             # Seam 4a — periodic latest.pt (kill-survivability, Pitfall 5): the same end-of-call
@@ -609,6 +720,7 @@ def train(
                     val_loss=final_loss,
                     best_val_loss=best_val_loss,  # Seam 3 continuity across kill+resume.
                     **(checkpoint_extra or {}),
+                    **_dp_extra(),
                 )
 
             # Seam 4b — periodic qualitative sample print (D-06 coherence check): every S steps,
@@ -635,6 +747,7 @@ def train(
             val_loss=final_loss,
             best_val_loss=best_val_loss,  # Seam 3 continuity across kill+resume.
             **(checkpoint_extra or {}),
+            **_dp_extra(),
         )
 
     return final_loss if return_final_loss else None
