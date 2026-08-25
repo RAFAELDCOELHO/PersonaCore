@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-03-PLAN.md
-last_updated: "2026-08-25T21:53:24.047Z"
+stopped_at: Completed 22-04-PLAN.md
+last_updated: "2026-08-25T22:20:48.636Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 39
-  completed_plans: 30
+  completed_plans: 31
   percent: 22
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — EXECUTING
-Plan: 4 of 11
+Plan: 5 of 11
 Status: Executing Phase 22
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -124,6 +124,7 @@ Last activity: 2026-08-25
 | Phase 22 P01 | 25min | 2 tasks | 4 files |
 | Phase 22 P02 | 30min | 2 tasks | 2 files |
 | Phase 22 P03 | 35min | 3 tasks | 3 files |
+| Phase 22 P04 | 45min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -398,6 +399,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22]: 22-03: DELTA_FRONTIER's truths are decimal STRINGS of VARYING width — 9 rows carry 13 significant digits, 1 carries 12, and (2.0, 0.1) carries 11. V-01's tolerance is therefore per-row (1e-12 implementation bound + the string's own half-ulp); the plan's flat 1e-12 is unsatisfiable at 1.84e-12 on that row, and the excess is the fixture's rounding, not the accountant's error
 - [Phase 22]: 22-03: delta_quadrature's condition 1 was WIDENED to the negative-z half — measured mu=76 (z=-38.0) raised a bare OverflowError from the scaled integrand before any refusal could fire. The clause is 'ez <= -745.0 or (z < 0.0 and ez < -709.782712893384)', still ONE condition with ONE message, so the three-distinct-messages shape plan 22-09 reads is unchanged
 - [Phase 22]: 22-03: the accountant's docstring is a LOAD-BEARING artifact, not commentary — it is one of the three sites tests/test_phase22_dpsgd_ast.py::test_adjacency_relation_consistent reads, so 'add/remove one fact' and the 1.0 multiplier are spelled in scripts/mitigation_accountant.py::NEIGHBOURING's exact words
+- [Phase 22]: 22-04: D-16 invariant 4 asserts generator CONTINUITY (this step's pre-draw state == last step's post-draw state), inverting the plan's 'refuse if pre == prev' which would fire on every correct second step and stay silent on manual_seed(FIXED)
+- [Phase 22]: 22-04: the live V-11 entries assert a hard-equality .grad-write ALLOWLIST rather than offenders == {} — measured, finalize reports {'_write_once': ['.grad=']} and absorb_record {'absorb_record': ['.grad=']}, and both writes are mandated by D-01
+- [Phase 22]: 22-04: C = infinity is a FINITE bound whose non-binding is COUNTED (_clip_bind_count == 0), math.inf refused — 0.0 * inf is nan and torch.normal(std=nan) raises at exactly D-06's identity input
 
 ### Roadmap Evolution
 
@@ -530,8 +534,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-25T21:52:45.820Z
-Stopped at: Completed 22-03-PLAN.md
+Last session: 2026-08-25T22:20:22.918Z
+Stopped at: Completed 22-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
