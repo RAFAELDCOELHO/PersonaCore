@@ -25,10 +25,21 @@ import sys
 import pytest
 from tests.fixtures.phase22_reference import DELTA_FRONTIER, VACUOUS_AGREEMENT_ROW
 
-from personacore.privacy.accountant import delta_closed, delta_quadrature
+from personacore.privacy.accountant import delta_closed, delta_quadrature, epsilon_for
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _ACCOUNTANT_PATH = _ROOT / "src" / "personacore" / "privacy" / "accountant.py"
+
+# The pin is read, never imported by `src/`: `scripts/` is not a package and the pre-registration
+# import ceiling runs the other way (D-10). A TEST is the sanctioned reader — 22-02's own words,
+# "the pin is what a test reads to prove the two agree". Idempotence guard per
+# tests/test_phase20_prereg.py's shape.
+_SCRIPTS = str(_ROOT / "scripts")
+if _SCRIPTS not in sys.path:
+    sys.path.insert(0, _SCRIPTS)
+
+import mitigation_accountant  # noqa: E402  (needs the sys.path insert above)
+import mitigation_unit  # noqa: E402  (same reason)
 
 # The implementation's own measured bound against 60-dps ground truth, before the reference
 # string's quantization is added on top. RESEARCH reports 7.9e-13; measured here the worst
@@ -278,6 +289,175 @@ def test_quadrature_rejects_bad_grid(n):
     """
     with pytest.raises(ValueError, match="Simpson"):
         delta_quadrature(1.0, 1.0, n=n)
+
+
+@pytest.mark.parametrize("steps", [1, 64, 200, 1000])
+def test_sigma_zero(steps):
+    """V-08 -- ``sigma = 0`` is ``eps = inf``, and it is a RETURN rather than an exception.
+
+    ``mu = sqrt(T)/sigma`` is ``1.0/0.0``, which raises ``ZeroDivisionError`` in CPython rather
+    than returning ``inf``, so without the explicit branch Phase 23's first executed run (the
+    sigma = 0 DP arm, DPSGD-06) would crash at REPORT time rather than in the mechanism.
+
+    ``inf`` is also the mathematically correct value, not a guard: as ``mu -> inf`` the closed
+    form's first term goes to 1 and its second to 0, so ``delta -> 1`` for EVERY finite eps
+    (measured at 60 dps: 0.999999059179780138 at mu = 10, exactly 1.0 at mu >= 100). No finite eps
+    satisfies a target below 1, so the infimum over admissible eps IS ``+inf``.
+    """
+    try:
+        got = epsilon_for(0.0, steps, mitigation_unit.DELTA)
+    except ZeroDivisionError as exc:  # pragma: no cover - the failure this test exists to catch
+        pytest.fail(
+            f"epsilon_for(0.0, {steps}, delta) raised ZeroDivisionError ({exc}) — the explicit "
+            f"sigma = 0 branch is gone and 1.0/0.0 is being reached. inf is the correct RETURN."
+        )
+    assert math.isinf(got) and got > 0.0, (
+        f"epsilon_for(0.0, {steps}, delta) returned {got!r}, not +inf. sigma = 0 releases a "
+        f"deterministic function of the data: it is (inf, delta)-DP and nothing better."
+    )
+
+
+def test_epsilon_for_matches_golden():
+    """``epsilon_for`` reproduces the FROZEN pin's seven pre-registered epsilons.
+
+    The pin's epsilons are bisected against the exp-quadrature ORACLE, never snapshotted from this
+    module (D-13), so the two routes are different mathematics and differ at ~1e-14 by
+    construction. That is why the comparison is ``GOLDEN_EPSILON_REL_TOL`` and not ``==``: an
+    exact float pin would redden on correct code.
+
+    delta is READ from ``mitigation_unit.DELTA`` and never re-spelled here — the pin's own
+    ``GOLDEN_EPSILON_DELTA_SOURCE`` says a consuming test must resolve it from that module, which
+    is the only shape that keeps ONE delta in the repository.
+    """
+    rows = mitigation_accountant.GOLDEN_EPSILON
+    # Meta-guard: a truncated pin would make this sweep green having compared nothing.
+    assert len(rows) == 7, (
+        f"the pin carries {len(rows)} GOLDEN_EPSILON rows, not 7 — a truncated table makes this "
+        f"test green over less than it claims"
+    )
+    tol = mitigation_accountant.GOLDEN_EPSILON_REL_TOL
+    worst = 0.0
+    for sigma, steps, pinned in rows:
+        got = epsilon_for(sigma, steps, mitigation_unit.DELTA)
+        rel = abs(got - pinned) / abs(pinned)
+        worst = max(worst, rel)
+        assert rel <= tol, (
+            f"epsilon_for({sigma!r}, {steps!r}, delta) = {got!r} against the pinned {pinned!r} — "
+            f"relative {rel:.3e} over the pin's own budget {tol:.3e}"
+        )
+    # Non-vacuity in the other direction: a bisection that collapsed to returning the pinned value
+    # would show a perfect zero. The two routes are different mathematics and MUST differ a little.
+    assert worst > 0.0, (
+        "every epsilon_for row matched its pinned value BITWISE. The pin comes from the "
+        "exp-quadrature oracle and this function bisects the erfc closed form; a bitwise match on "
+        "all seven rows means the table is a photograph of the code, not a constraint on it."
+    )
+
+
+@pytest.mark.parametrize("sigma", [0.40, 0.30])
+def test_epsilon_for_survives_the_overflow_regime(sigma):
+    """RESEARCH F2 -- the search WALKS INTO eps > 709.78, and must come back with a number.
+
+    Phase 23 would never PUBLISH eps = 776. But ``sigma_for`` bisects sigma downward and
+    ``epsilon_for`` doubles its bracket upward, so both enter this domain during an ordinary
+    search: at the frozen delta, sigma = 0.40 / T = 200 solves to eps = 775.79 and sigma = 0.30 /
+    T = 200 to eps = 1312.16. The naive ``exp(eps) * erfc(b)`` second term raises
+    ``OverflowError`` there and would abort a legitimate solve; the log-space form does not.
+    """
+    got = epsilon_for(sigma, 200, mitigation_unit.DELTA)
+    assert math.isfinite(got), f"epsilon_for({sigma}, 200, delta) returned {got!r}"
+    assert got > 700.0, (
+        f"epsilon_for({sigma}, 200, delta) = {got!r}, which is BELOW the overflow regime this "
+        f"test exists to walk through — RESEARCH F2 measures 775.79 and 1312.16 for these two"
+    )
+
+
+@pytest.mark.parametrize(
+    ("sigma", "steps", "delta"),
+    [
+        (1.0, 0, mitigation_unit.DELTA),  # steps below one
+        (1.0, 200, 0.0),  # delta at the closed lower end
+        (1.0, 200, 1.0),  # delta at the closed upper end
+        (-1.0, 200, mitigation_unit.DELTA),  # a negative noise multiplier
+        (float("nan"), 200, mitigation_unit.DELTA),  # a non-finite sigma
+        (float("inf"), 200, mitigation_unit.DELTA),  # sigma = inf is a limit, not a configuration
+        (1.0, 200.0, mitigation_unit.DELTA),  # steps as a float — a count, not a measurement
+        (1.0, 200, float("nan")),  # a non-finite delta
+        (1.0, 200, 1e-320),  # below the solvable floor
+    ],
+)
+def test_epsilon_for_domain_refusals(sigma, steps, delta):
+    """Every degenerate input is a ``ValueError``, never a ``ZeroDivisionError`` and never a number.
+
+    ``steps = 0`` is the one worth naming: ``sqrt(0)/sigma`` is ``0.0``, which would reach
+    ``delta_closed`` as ``mu = 0.0`` and surface one call later as a message about mu rather than
+    about the step count that produced it.
+    """
+    with pytest.raises(ValueError):
+        epsilon_for(sigma, steps, delta)
+
+
+def test_epsilon_for_refusals_carry_distinct_messages():
+    """Nine refusals wearing one message would be one refusal, so distinctness is asserted.
+
+    The same discipline ``test_oracle_refuses`` applies to the quadrature's three non-vacuity
+    conditions, applied to the inverse solver's domain.
+    """
+    cases = [
+        (1.0, 0, mitigation_unit.DELTA),
+        (1.0, 200, 0.0),
+        (1.0, 200, 1.0),
+        (-1.0, 200, mitigation_unit.DELTA),
+        (float("nan"), 200, mitigation_unit.DELTA),
+        (float("inf"), 200, mitigation_unit.DELTA),
+        (1.0, 200.0, mitigation_unit.DELTA),
+        (1.0, 200, float("nan")),
+        (1.0, 200, 1e-320),
+    ]
+    texts = []
+    for sigma, steps, delta in cases:
+        with pytest.raises(ValueError) as excinfo:
+            epsilon_for(sigma, steps, delta)
+        texts.append(str(excinfo.value))
+    assert len(set(texts)) == len(cases), (
+        "epsilon_for's domain refusals do not carry distinct messages:\n"
+        + "\n".join(f"  {case}: {text[:110]}" for case, text in zip(cases, texts))
+    )
+
+
+def test_delta_closed_still_ships_exactly_four_raises():
+    """``epsilon_for`` reads a caught ``ValueError`` as the underflow corner — this pins that.
+
+    ``_delta_or_below_float64`` maps a ``delta_closed`` refusal to "delta is below float64's
+    range, therefore below the target". That is sound because ``delta_closed`` ships exactly FOUR
+    ``raise`` statements and the first two — a non-finite input, and ``mu <= 0.0`` — are
+    structurally unreachable from the search, which re-checks ``eps`` finite and enters with a
+    finite, strictly positive ``mu``. Only the representability and exact-zero refusals can fire,
+    and both mean exactly one thing.
+
+    (FOUR ``raise`` statements, THREE numbered refusals: ``delta_closed``'s docstring calls the
+    non-finite check and the ``mu <= 0.0`` check "Refusal 1 of 3" jointly, and they are two
+    statements. This test counts statements, because a statement is what a new refusal would add.)
+
+    A FIFTH ``raise`` with different semantics would silently widen that reading into something
+    the argument no longer covers. This reddens instead, which is the whole point: it forces the
+    next author to re-read ``_delta_or_below_float64``'s contract rather than inherit it.
+    """
+    tree = ast.parse(_ACCOUNTANT_PATH.read_text(encoding="utf-8"))
+    bodies = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "delta_closed"
+    }
+    assert "delta_closed" in bodies, (
+        "delta_closed has no FunctionDef in accountant.py — the AST walk found nothing to count"
+    )
+    raises = [n.lineno for n in ast.walk(bodies["delta_closed"]) if isinstance(n, ast.Raise)]
+    assert len(raises) == 4, (
+        f"delta_closed now raises at {raises} — {len(raises)} statements, not the four "
+        f"epsilon_for's underflow reading is argued against. Re-read "
+        f"accountant._delta_or_below_float64's docstring before changing this number."
+    )
 
 
 def test_accountant_imports_math_only():

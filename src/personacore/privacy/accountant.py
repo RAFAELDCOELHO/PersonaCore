@@ -54,6 +54,26 @@ Invariants (each one pinned by ``tests/test_phase22_accountant.py``):
     **never** ``_prove``, which is a ``scripts/`` convention (measured: 18 ``scripts/`` modules,
     0 ``src/`` modules).
 
+  - THE TOLERANCE REGISTER HAS TWO ENTRIES AND THEY ARE WRITTEN DOWN TOGETHER, because the whole
+    risk is that they get conflated:
+
+      * **TWO DIFFERENT CALL SHAPES => a RELATIVE TOLERANCE of 1e-12, never ``==``.** The q = 1
+        composition identity ``epsilon_for(sigma, T, delta) == epsilon_for(sigma/sqrt(T), 1,
+        delta)`` is EXACT in real arithmetic (Dong-Roth-Su Corollary 3.3 is an exact equality of
+        trade-off functions), and it still FAILS BITWISE 19.9% of the time in float64 -- 795 of
+        4000 sampled pairs, worst relative gap 1.184e-14 (82 ulp), purely from double-rounding:
+        ``sqrt(T)/sigma`` costs two roundings and ``1.0/(sigma/sqrt(T))`` costs three (RESEARCH
+        F3). The MATHEMATICS is confirmed exact; only its transcription as ``==`` is wrong.
+
+      * **THE SAME CALL SHAPE ACROSS TWO PROCESSES => exact ``==``.** DPSGD-05's kill->resume
+        check compares one call shape run twice, which is deterministic, so equality is the
+        correct assertion and a tolerance would only weaken it. That is
+        ``lora/inject.py::load_adapter_weights``'s W1 reasoning applied here: the same operation
+        on the same operands gives a bit-identical float, and *"a tolerance would only weaken
+        this"* is its own recorded wording.
+
+    Neither entry generalises to the other's case.
+
 This module imports ``math`` and nothing else (D-10), so ``pyproject.toml`` stays untouched and
 RPT-03's zero-new-dependency streak holds. ``tests/test_phase22_accountant.py``'s V-09 asserts
 that as a hard equality, statically and out-of-process.
@@ -68,6 +88,40 @@ _INV_SQRT_2PI = 1.0 / math.sqrt(2.0 * math.pi)
 # bounds the quadrature oracle's conditioning in the NEGATIVE-z direction, and it is the same
 # constant RESEARCH F2 measured for the closed form's rejected `exp(eps) * erfc(b)` product.
 _EXP_OVERFLOW_ARG = 709.782712893384
+
+# Both bisections stop at this RELATIVE width of their own variable, or at the iteration cap,
+# whichever comes first. 1e-15 is a little over one float64 ulp (2.22e-16), so the cap is a
+# backstop against a bracket that cannot narrow rather than the normal exit: a bracket of relative
+# width 1 reaches 1e-15 in about 50 halvings.
+_BISECT_REL_WIDTH = 1e-15
+_MAX_BISECTIONS = 200
+
+# The doubling walk's cap. From a start of 1.0 this reaches 2**200 ~ 1.6e60 before refusing, which
+# is finite by construction -- so no non-finite eps ever reaches `delta_closed`, and its
+# non-finite-input refusal is therefore UNREACHABLE from the search. That is what makes
+# `_delta_or_below_float64` able to read a caught ValueError as the underflow corner and nothing
+# else (see its docstring).
+_MAX_DOUBLINGS = 200
+
+# The smallest target delta `epsilon_for` will solve for. NOT arbitrary: the search reads a
+# `delta_closed` refusal as "delta here is below float64's range, so below the target", and that
+# reading needs headroom over float64's subnormal floor to be airtight. MEASURED, at every mu from
+# 1e-8 to 1e8, `delta_closed` returns exactly 5e-324 -- the smallest positive float64 -- at the
+# last eps before it refuses. Any target at or below that floor would make "below the target"
+# ambiguous by less than one subnormal; 1e-300 is 24 decades of margin, and no delta a DP report
+# can name comes anywhere near it (this project's frozen delta is 1e-5).
+_MIN_TARGET_DELTA = 1e-300
+
+# The round-trip budget for `sigma_for(epsilon_for(sigma, T, delta), T, delta)` against `sigma`.
+# MEASURED ACHIEVABLE: 8.29e-15 worst relative deviation over 48 (sigma, T) pairs -- the seven
+# GOLDEN_EPSILON sigmas plus 0.5, 0.7, 1.5, 3.0 and 50.0, each at T in {1, 64, 200, 1000}. So this
+# carries a little over two orders of margin, and it is deliberately NOT tightened to the
+# measurement: the number above is one machine's 48 points, not a bound.
+#
+# (For scale, the OTHER 1e-12 in this module is a different quantity measured on a different
+# thing: `GOLDEN_EPSILON_REL_TOL` covers the gap between the two ORACLES' bisected epsilon, worst
+# case 1.07e-14. Same tolerance, unrelated denominators.)
+ROUND_TRIP_REL_TOL = 1e-12
 
 
 def delta_closed(eps, mu):
@@ -335,3 +389,223 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
             f"corner it exists to catch (here z = {z!r}, phi(z) still representable)."
         )
     return delta
+
+
+def _refuse_bad_steps_or_delta(where, steps, delta):
+    """The (steps, delta) domain, refused once for both public directions.
+
+    ``epsilon_for`` and ``sigma_for`` take the same two arguments and must refuse them the same
+    way, so the refusals live in one place and each message names its caller. ``where`` is the
+    caller's rendered call, so the four refusals below stay distinguishable per direction rather
+    than reading as one anonymous validator.
+    """
+    if isinstance(steps, bool) or not isinstance(steps, int):
+        raise ValueError(
+            f"{where}: steps must be an int -- it is a COUNT of composed mechanism invocations, "
+            f"not a measurement. Got {steps!r} ({type(steps).__name__}). bool is rejected "
+            f"explicitly because it is an int subclass, so True would silently mean one step."
+        )
+    if steps < 1:
+        raise ValueError(
+            f"{where}: steps must be >= 1. Got {steps!r}. Zero steps is not a mechanism that "
+            f"released anything, and Dong-Roth-Su Corollary 3.3 composes T >= 1 invocations; "
+            f"sqrt(0)/sigma = 0.0 would otherwise reach delta_closed as mu = 0.0."
+        )
+    if not math.isfinite(delta):
+        raise ValueError(
+            f"{where}: delta must be finite. Got {delta!r}. A non-finite target makes every "
+            f"bisection comparison against it silently False, and the search would return its "
+            f"bracket rather than a solution."
+        )
+    if delta <= 0.0 or delta >= 1.0:
+        raise ValueError(
+            f"{where}: delta must lie strictly inside (0.0, 1.0). Got {delta!r}. delta = 0.0 is "
+            f"pure eps-DP, which the Gaussian mechanism cannot deliver at any finite eps (its "
+            f"privacy loss is unbounded), and delta >= 1.0 is satisfied by releasing the raw data."
+        )
+    if delta < _MIN_TARGET_DELTA:
+        raise ValueError(
+            f"{where}: delta = {delta!r} is below this accountant's smallest solvable target "
+            f"{_MIN_TARGET_DELTA!r}. This is a DOMAIN LIMIT of the search, stated rather than "
+            f"papered over: the bracketing walk reads a delta_closed refusal as 'delta here is "
+            f"below float64's range, therefore below the target', and measured, delta_closed "
+            f"returns exactly 5e-324 at the last eps before it refuses. A target within a "
+            f"subnormal of that floor would make the comparison ambiguous instead of decisive."
+        )
+
+
+def _delta_or_below_float64(eps, mu):
+    """``delta_closed(eps, mu)``, or ``None`` when delta has left float64's range entirely.
+
+    ``None`` IS NOT A NUMBER AND NEVER REACHES A CALLER. It is the ORDERING FACT the refusal
+    itself carries, which is a strictly different thing from substituting a value for one:
+    ``delta_closed`` refuses precisely because delta is smaller than float64 can hold, and the
+    only use made of that here is "smaller than the target", which is the one conclusion the
+    refusal's own condition licenses. Turning it into a returned ``0.0`` -- the failure RESEARCH
+    F1 exists to prevent -- would instead let it be COMPARED against another oracle's ``0.0``.
+
+    MEASURED, not assumed: at every mu from 1e-8 to 1e8, ``delta_closed`` returns exactly
+    ``5e-324`` (float64's smallest positive value) at the last eps before it refuses. Since
+    ``_refuse_bad_steps_or_delta`` floors the target at 1e-300, a refusal is 24 decades below the
+    target rather than a subnormal away from it.
+
+    WHY THE CAUGHT ``ValueError`` CANNOT BE A DIFFERENT REFUSAL. ``delta_closed`` ships exactly
+    four ``raise`` statements, and the first two (a non-finite input; ``mu <= 0.0``) are
+    UNREACHABLE from here: ``eps`` is re-checked finite below, and ``mu`` is a finite
+    strictly-positive number the caller computed before entering the loop. Only the
+    representability and exact-zero refusals -- the two that mean "below float64's range" -- can
+    fire. ``tests/test_phase22_accountant.py::test_delta_closed_still_ships_exactly_four_raises``
+    reddens if a fifth is ever added, because that argument would then need re-reading rather than
+    silently widening.
+
+    Letting the refusal propagate instead is NOT AN OPTION, and this is measured too: the
+    doubling walk overshoots into the underflow corner on a normal input (mu = 141.4, reached at
+    sigma = 0.5 / T = 5000 in V-03's own sweep), so propagation would abort a legitimate solve
+    that has already bracketed its answer.
+    """
+    if not math.isfinite(eps):
+        raise ValueError(
+            f"_delta_or_below_float64({eps!r}, {mu!r}): eps must be finite here. A non-finite eps "
+            f"would reach delta_closed's FIRST refusal, whose meaning is 'this input is garbage' "
+            f"and NOT 'delta is below float64's range' -- reading one as the other is exactly the "
+            f"conflation this helper's contract forbids."
+        )
+    try:
+        return delta_closed(eps, mu)
+    except ValueError:
+        return None
+
+
+def epsilon_for(sigma, steps, delta):
+    """The smallest eps for which the T-fold composed Gaussian mechanism is (eps, delta)-DP.
+
+    THE SIGNATURE IS ``(sigma, steps, delta)`` -- THREE PARAMETERS, AND THERE IS DELIBERATELY NO
+    ``clip_norm=``. ``sigma`` is the noise multiplier ``sigma_noise / clip_norm`` (unitless), so
+    ``mu_eff = sqrt(steps) / sigma`` and the clip constant cancels out of the accounting entirely.
+    A ``clip_norm=`` parameter would create a FIFTH mechanism key beside
+    ``scripts/mitigation_gate.py::MECHANISM_KEYS`` -- ``("sigma", "steps", "delta", "q")``, a
+    FROZEN artifact whose own comment says there is no fifth key. Consistency with
+    ``MECHANISM_KEYS`` is not a preference here (RESEARCH F4).
+
+    Solved by BISECTION on the strictly-decreasing map ``eps -> delta_closed(eps, mu_eff)``, over
+    the same closed form ``delta_closed`` implements. ``sigma_for`` then bisects over THIS
+    function rather than over a second transcription of the form, so the two directions cannot
+    disagree by construction (D-12's one choke point).
+
+    THE FIVE PRECONDITIONS ARE ``scripts/mitigation_accountant.py::REQUIRED_FORM_CONDITIONS``,
+    which is the frozen statement of them; two are repeated here because no other artifact in
+    ``src/`` states them and both fail SILENTLY:
+
+      2. HOMOGENEOUS ``sigma`` AND ``Delta`` ACROSS ALL T STEPS. The general composition is
+         ``sqrt(sum of mu_i squared)``; it collapses to ``mu * sqrt(T)`` only if every step is
+         identical. A mid-run sigma change invalidates ``mu * sqrt(T)`` with nothing raising --
+         the published number is simply wrong.
+      3. T FIXED IN ADVANCE, NOT A DATA-DEPENDENT STOPPING TIME. Early-stopping on a validation
+         metric makes T itself a function of the private data, and the composition theorem no
+         longer applies to it.
+
+    And the non-obvious half, recorded because a reader is likely to assume it runs the other way:
+    ADAPTIVITY IS PERMITTED AT NO COST. Dong-Roth-Su Corollary 3.3 covers mechanisms whose inputs
+    depend on earlier outputs, so DP-SGD's step-to-step dependence buys no penalty. An unnecessary
+    penalty applied out of caution is still a wrong published number. (Conditions 1 and 5 -- q = 1,
+    and Delta being the per-step sensitivity under a fixed adjacency -- are pinned by
+    ``scripts/mitigation_unit.py::SAMPLING_RATE_Q`` and by this module's adjacency paragraph.)
+
+    Args:
+        sigma: the NOISE MULTIPLIER, ``>= 0.0``. ``0.0`` is the deterministic mechanism and is
+            handled explicitly below.
+        steps: T, the number of composed invocations. An ``int`` ``>= 1``.
+        delta: the target delta, strictly inside ``(0.0, 1.0)`` and at least
+            ``_MIN_TARGET_DELTA``.
+
+    Returns:
+        The eps solving ``delta_closed(eps, sqrt(steps)/sigma) == delta`` to a relative bracket
+        width of 1e-15, or ``math.inf`` at ``sigma == 0.0``, or ``0.0`` when the mechanism already
+        meets the target at eps = 0. Cross-checked against
+        ``scripts/mitigation_accountant.py::GOLDEN_EPSILON`` at that pin's own
+        ``GOLDEN_EPSILON_REL_TOL`` (1e-12) by
+        ``tests/test_phase22_accountant.py::test_epsilon_for_matches_golden``; measured worst
+        relative deviation over its seven rows is **1.07e-14**, at sigma = 2.0 / T = 200 -- which
+        is the gap between the two ORACLES, not this function's error, since the pin's epsilons
+        are bisected against the exp-quadrature oracle and this bisects against the erfc closed
+        form.
+
+    Raises:
+        ValueError: on a negative or non-finite sigma, a non-integer or non-positive steps, a
+            delta outside ``(0.0, 1.0)`` or below the solvable floor, or a bracket that failed to
+            close within its documented iteration cap.
+    """
+    where = f"epsilon_for({sigma!r}, {steps!r}, {delta!r})"
+    if not math.isfinite(sigma):
+        raise ValueError(
+            f"{where}: sigma must be finite. Got {sigma!r}. sigma = inf is the infinitely noisy "
+            f"mechanism (eps = 0), which is a limit rather than a configuration, and nan would "
+            f"make every bisection comparison False and return a bracket endpoint."
+        )
+    if sigma < 0.0:
+        raise ValueError(
+            f"{where}: sigma must be >= 0.0. Got {sigma!r}. A negative noise multiplier is not a "
+            f"mechanism; it would give mu < 0.0, which delta_closed refuses one call later with a "
+            f"message about mu rather than about the sigma that produced it."
+        )
+    _refuse_bad_steps_or_delta(where, steps, delta)
+
+    # --- sigma = 0: THE EXPLICIT BRANCH, and it sits immediately before the ONLY division in this
+    # function so that `sqrt(steps) / sigma` is never reached. `1.0/0.0` raises ZeroDivisionError
+    # in CPython (it does NOT return inf), so the branch is operationally required -- but inf is
+    # also the MATHEMATICALLY CORRECT return value, not a guard papering over an exception:
+    #
+    #   sigma -> 0  =>  mu -> inf, and in the closed form
+    #     Phi(mu/2 - eps/mu)          -> Phi(+inf) = 1
+    #     exp(eps) * Phi(-mu/2 - eps/mu) -> exp(eps) * Phi(-inf) = 0
+    #   =>  delta(eps, mu) -> 1 for EVERY finite eps.
+    #
+    # Measured at 60 dps: delta = 0.999999059179780138 at mu = 10, and exactly 1.0 at mu >= 100
+    # for eps in {1, 10, 100}. Since delta = 1 at every finite eps, NO finite eps satisfies
+    # delta <= a target below 1, so the infimum over admissible eps is +inf. That agrees with the
+    # mechanism-level statement: sigma = 0 releases a deterministic function of the data, which is
+    # (inf, delta)-DP for any delta < 1 and nothing better.
+    if sigma == 0.0:
+        return math.inf
+
+    mu = math.sqrt(steps) / sigma
+
+    # eps = 0 is the left end of the domain (a negative eps is not a privacy loss). If the
+    # mechanism already meets the target there, 0.0 IS the infimum and there is nothing to bisect.
+    at_zero = _delta_or_below_float64(0.0, mu)
+    if at_zero is None or at_zero <= delta:
+        return 0.0
+
+    # --- Bracket by DOUBLING the upper bound. Safe past eps = 709.78 because delta_closed
+    # computes its second term as exp(eps + log(erfc(b))) rather than exp(eps) * erfc(b): the
+    # naive product raises OverflowError there, and the walk REACHES that domain on this project's
+    # own frontier (RESEARCH F2 -- sigma = 0.40 / T = 200 solves to eps = 775.79, sigma = 0.30 /
+    # T = 200 to eps = 1312.16). The cap is an iteration count rather than a magnitude, so `hi`
+    # stays finite and delta_closed's non-finite refusal stays unreachable from here.
+    lo, hi = 0.0, 1.0
+    for _ in range(_MAX_DOUBLINGS):
+        above = _delta_or_below_float64(hi, mu)
+        if above is None or above <= delta:
+            break
+        lo = hi
+        hi *= 2.0
+    else:
+        raise ValueError(
+            f"{where}: the upper bracket failed to close in {_MAX_DOUBLINGS} doublings, reaching "
+            f"eps = {hi!r} at mu = {mu!r} with delta still above the target. Refusing rather than "
+            f"looping: a walk that has not bracketed its root has no answer to return."
+        )
+
+    for _ in range(_MAX_BISECTIONS):
+        mid = 0.5 * (lo + hi)
+        # Stop on the relative width OR on a midpoint that no longer separates the bracket -- at
+        # adjacent floats `0.5 * (lo + hi)` returns one of the endpoints and the loop would
+        # otherwise spin out its remaining iterations for no refinement.
+        if mid <= lo or mid >= hi or hi - lo <= _BISECT_REL_WIDTH * hi:
+            break
+        middle = _delta_or_below_float64(mid, mu)
+        if middle is None or middle <= delta:
+            hi = mid
+        else:
+            lo = mid
+    return 0.5 * (lo + hi)
