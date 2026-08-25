@@ -3,12 +3,28 @@ status: partial
 phase: 21-the-privacy-unit-the-dp-data-path-and-the-n-64-corpus
 source: [21-VERIFICATION.md]
 started: 2026-08-24T22:20:00Z
-updated: 2026-08-24T22:20:00Z
+updated: 2026-08-25T01:00:00Z
 ---
 
 ## Current Test
 
-[awaiting human decision]
+number: 3
+name: WR-06 — a bare `assert` strippable by `python -O`
+expected: |
+  `scripts/phase21_filler.py:262` guards the `== 10` leak-vocabulary wall with a bare
+  `assert`. Confirmed live: `.venv/bin/python -O -c 'import phase21_filler'` imports
+  cleanly with the assert stripped.
+
+  The module's own comment on the line above says it "joins the `== 10` wall HERE, at the
+  one file in the repo that could break it", and its sibling frozen pin
+  (`mitigation_unit.py:73-76`) states the exact rule this violates. Every other refusal in
+  the same file (`refuse_collisions`, `verify_round_trips`) correctly raises `SystemExit`.
+
+  The repo does not run under `-O` today, so this is a latent robustness gap rather than a
+  live failure — unlike WR-04, which turned out to have two present-tense call sites.
+
+  Decide: promote to `raise SystemExit`, or accept the latent gap.
+awaiting: user response
 
 ## Tests
 
@@ -26,7 +42,17 @@ states are green today.
 
 decision: annotate in place before Phase 22, or accept the divergence.
 
-result: [pending]
+result: pass
+decided: "Annotate in place. Retracted at c05880c."
+notes: |
+  Executed, not just decided. The user's stated figure (44.7549%) was the SUPERSEDED
+  pre-WR-01 value; the committed artifact records 44.755245%, so 44.7552% was written.
+  The repo-wide check the user asked for found a second live-source site carrying the
+  identical uncorrected claim — tests/test_phase21_replay_volume.py:63 — retracted the
+  same way. A third site (phase21_unit_record.py:831) was made stale BY the edit and
+  fixed to past tense; its sibling at :929-930 was deliberately left alone because it is
+  emitted into the artifact, and both artifact sha256 verified unchanged afterwards.
+  Suite 994 passed / 1 skipped, ruff clean.
 
 ### 2. WR-04 — `privacy_n` unvalidated inside the frozen module Phase 22 imports
 
@@ -45,7 +71,32 @@ decision. The pin is FROZEN, so the only route is a dated continuation via `scri
 decision: write the `_addendum.py` continuation exporting a validated `privacy_n` before Phase 22,
 or accept the pin's version and let Phase 22 own it.
 
-result: [pending]
+result: pass
+decided: "Write the continuation. Landed at 9a407d6 as scripts/phase21_unit_continuation.py."
+notes: |
+  ESCALATED. The premise "nothing is wrong TODAY, Phase 22 owns it" is FALSE.
+  scripts/phase21_unit_record.py:1009 and :1037 already reached the pin, aliased as
+  `mu.privacy_n` — invisible to any matcher keyed on the literal string. :1037's n is
+  multiplied by DELTA and checked against DELTA_TIMES_N_CEILING, so a zero N there CLEARS
+  THE PUBLISHED CEILING rather than mislabelling a row. Both were redirected, not exempted.
+
+  Two of my own premises were corrected: _addendum.py is a markdown append-only writer and
+  cannot host code (vehicle moved to the phase20_gate_coverage.py shape the repo already
+  built for superseding a frozen pin); and no sys.modules hook, shadow or rename forces the
+  import, so enforcement is an AST guard modeled on test_phase20_prereg.py:873-905.
+
+  Exact floats (7.0) refused, justified from teach_persona.py:743-750's existing rule on the
+  same quantity rather than from preference. Wider than any document recorded:
+  privacy_n(False) -> 0, privacy_n(7.0) -> 7, privacy_n(3.0000000001) -> 3.
+
+  RED/GREEN re-verified by the orchestrator on main: pin still returns 7 / 0 / -3; the
+  continuation raises SystemExit on 7.9, 0, -3, True, 7.0, '8' and admits 8. Guard exemption
+  is a frozenset of two resolve()d paths, proven against a same-basename decoy under tmp_path.
+  Suite 1024 passed / 1 skipped; ruff clean; pin and both artifact digests unchanged.
+
+  TWO GAPS RECORDED, NOT CLOSED (both already named at test_phase20_correction.py:1395-1399):
+  getattr(mitigation_unit, "privacy_n") produces no matching AST node, and a driver at the
+  repo root or under tools/ is unscanned.
 
 ### 3. WR-06 — a bare `assert` strippable by `python -O`
 
@@ -90,9 +141,9 @@ result: [pending]
 ## Summary
 
 total: 4
-passed: 0
+passed: 2
 issues: 0
-pending: 4
+pending: 2
 skipped: 0
 blocked: 0
 
