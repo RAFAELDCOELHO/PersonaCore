@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 22 context gathered
-last_updated: "2026-08-25T20:28:57.826Z"
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-08-25T21:01:28.703Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 39
-  completed_plans: 28
+  completed_plans: 29
   percent: 22
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
-**Current focus:** Phase 22 — dp sgd core, accountant, and the correctness battery
+**Current focus:** Phase 22 — dp-sgd-core-accountant-and-the-correctness-battery
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
-Status: Ready to execute
+Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — EXECUTING
+Plan: 2 of 11
+Status: Executing Phase 22
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
@@ -121,6 +121,7 @@ Last activity: 2026-08-25
 | Phase 20 P10 | 16min | 2 tasks | 2 files |
 | Phase 20 P11 | 22min | 3 tasks | 1 files |
 | Phase 20 P12 | 32min | 2 tasks | 3 files |
+| Phase 22 P01 | 25min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -386,6 +387,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 20]: 20-12: the SC3 amendment does NOT claim to be TIGHTER, and that is a correction to the plan's own earlier draft. On the favourability ordering FAIL < INCONCLUSIVE < PASS, direction (i) INCONCLUSIVE→PASS and direction (ii) FAIL→INCONCLUSIVE BOTH move toward a more favourable verdict, so "movement in both directions" would be an over-claim published inside the amendment whose purpose is to prevent one. The block reads "Not uniformly tighter", attributes the tightening solely to the third case (FIXTURE_CLEARING_POINT under (3/104, 11/104) DEMOTED from PASS to INCONCLUSIVE), and names criterion-matching as the justification — machine-checked by asserting DEMOTED/FIXTURE_CLEARING_POINT/criterion-match present and TIGHTER absent (T-20-66)
 - [Phase 20]: 20-12: the Security Audit Trail row is dated 2026-08-21 with totals 66/66/0, NOT the plan's hardcoded 2026-08-20 and 65/65/0. Same stale-date correction 20-10 made for the continuation heading, and the totals must count T-20-66, which this plan declares in its own threat_model — a register publishing a total it does not enumerate is exactly the T-20-62 defect
 - [Phase 20]: 20-12: gsd-sdk state/roadmap mutation verbs were NOT called — STATE.md, ROADMAP.md and REQUIREMENTS.md hand-edited and the diffs reviewed. Tenth consecutive session treating those handlers as unsafe in this repo. requirements.mark-complete was ALSO not called: GATE-06 was discharged by a hand-edited row and bullet, because the verb would have rewritten the traceability rows 20-09 filled and the GATE-02 D-36 amendment it added
+- [Phase 22]: 22-01: DELTA_FRONTIER's 60-dps truths are committed as decimal STRINGS — row (2.0, 0.05)'s 1.24028351258e-352 is below the float64 subnormal floor, so a float literal parses to 0.0 silently and destroys the row before any test reads it. Consumers call float(); the meta-guard asserts by HARD EQUALITY which single row underflows.
+- [Phase 22]: 22-01: src/personacore/privacy/__init__.py ships ZERO re-exports (departing from continual/__init__.py's form) so accountant.py (22-02) and dpsgd.py (22-04) never make this file a shared write target across parallel waves.
+- [Phase 22]: 22-01: the Phase-22 AST guards take SOURCE TEXT, never a path — the live check (22-04) and the FAKE mutation probes (22-09) execute identical code, per tests/test_phase20_prereg.py:153-155. _ALLOWED_CLASS_CONSTANTS starts EMPTY; a future plan adds its name in the same commit as the constant.
 
 ### Roadmap Evolution
 
@@ -518,9 +522,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-25T16:01:23.885Z
-Stopped at: Phase 22 context gathered
-Resume file: .planning/phases/22-dp-sgd-core-accountant-and-the-correctness-battery/22-CONTEXT.md
+Last session: 2026-08-25T21:01:28.691Z
+Stopped at: Completed 22-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
