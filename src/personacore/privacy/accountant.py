@@ -609,3 +609,96 @@ def epsilon_for(sigma, steps, delta):
         else:
             lo = mid
     return 0.5 * (lo + hi)
+
+
+def sigma_for(target_epsilon, steps, delta):
+    """The smallest noise multiplier reaching ``target_epsilon`` at ``steps`` and ``delta``.
+
+    IT BISECTS OVER ``epsilon_for``, NOT OVER A RE-DERIVED CLOSED FORM. That is D-12's ONE choke
+    point, and the reason is not tidiness: the inverse is the forward function inverted, so a
+    divergence between the two directions is impossible BY CONSTRUCTION rather than by discipline.
+    ``tests/test_phase22_accountant.py::test_sigma_for_uses_the_forward_function`` asserts that
+    structurally, by AST -- a second bisection inlined here would redden it -- and
+    ``::test_round_trip`` catches a divergence numerically.
+
+    D-12's SECOND PREMISE CORRECTION, recorded because the corrected reason is the load-bearing
+    one: *"forward-only would force Phase 23 to improvise bisection outside the frozen module"* is
+    FALSE AS STATED, because under D-09 the frozen module (``scripts/mitigation_accountant.py``)
+    holds no executable formula at all -- everything executable is already outside it. The real
+    risk is improvisation outside the ACCOUNTANT'S SINGLE CHOKE POINT: a bisection written inline
+    in ``scripts/mitigation_budget.py`` or in a Phase 23 driver would be untested against
+    ``GOLDEN_EPSILON`` and free to disagree with the forward direction while both look right.
+
+    ``epsilon_for`` is strictly DECREASING in sigma, so the bracket is walked in both directions:
+    ``hi`` doubles while its epsilon is still above the target, then ``lo`` halves while its
+    epsilon is still below it.
+
+    Args:
+        target_epsilon: the epsilon to hit. Strictly positive; ``math.inf`` is the sigma = 0 point
+            and is answered exactly rather than bisected.
+        steps: T, the number of composed invocations. An ``int`` ``>= 1``.
+        delta: the target delta, strictly inside ``(0.0, 1.0)``.
+
+    Returns:
+        The sigma whose ``epsilon_for`` meets ``target_epsilon``, bisected to a relative width of
+        1e-15, or exactly ``0.0`` at ``target_epsilon = math.inf``. Round-tripped against
+        ``epsilon_for`` at ``ROUND_TRIP_REL_TOL``; measured worst deviation over 48 (sigma, T)
+        pairs is 8.29e-15.
+
+    Raises:
+        ValueError: on a non-positive or non-finite (other than ``+inf``) target_epsilon, a bad
+            steps or delta, or a bracket that failed to close within its documented cap.
+    """
+    where = f"sigma_for({target_epsilon!r}, {steps!r}, {delta!r})"
+    _refuse_bad_steps_or_delta(where, steps, delta)
+    if target_epsilon == math.inf:
+        # The exact boundary, closing the round trip at the sigma = 0 point rather than bisecting
+        # toward it: no finite sigma gives an infinite epsilon, so this is the answer and not an
+        # approximation of one. Both ends of `sigma_for(epsilon_for(0.0, T, d), T, d)` are
+        # therefore exact, which is why that round trip is asserted with `==`.
+        return 0.0
+    if not math.isfinite(target_epsilon):
+        raise ValueError(
+            f"{where}: target_epsilon must be finite or +inf. Got {target_epsilon!r}. -inf and "
+            f"nan are not privacy losses; +inf is the sigma = 0 point and is handled above."
+        )
+    if target_epsilon <= 0.0:
+        raise ValueError(
+            f"{where}: target_epsilon must be strictly positive. Got {target_epsilon!r}. "
+            f"epsilon = 0.0 is perfect privacy, which the Gaussian mechanism reaches only in the "
+            f"sigma -> inf limit, so no finite sigma solves it and there is nothing to bracket."
+        )
+
+    hi = 1.0
+    for _ in range(_MAX_DOUBLINGS):
+        if epsilon_for(hi, steps, delta) <= target_epsilon:
+            break
+        hi *= 2.0
+    else:
+        raise ValueError(
+            f"{where}: the NOISY end of the bracket failed to close in {_MAX_DOUBLINGS} "
+            f"doublings, reaching sigma = {hi!r} with epsilon still above the target. Refusing "
+            f"rather than looping: a walk that has not bracketed its root has no answer."
+        )
+
+    lo = hi
+    for _ in range(_MAX_DOUBLINGS):
+        lo *= 0.5
+        if epsilon_for(lo, steps, delta) >= target_epsilon:
+            break
+    else:
+        raise ValueError(
+            f"{where}: the QUIET end of the bracket failed to close in {_MAX_DOUBLINGS} halvings, "
+            f"reaching sigma = {lo!r} with epsilon still below the target against an upper bound "
+            f"of {hi!r}. Refusing rather than looping."
+        )
+
+    for _ in range(_MAX_BISECTIONS):
+        mid = 0.5 * (lo + hi)
+        if mid <= lo or mid >= hi or hi - lo <= _BISECT_REL_WIDTH * hi:
+            break
+        if epsilon_for(mid, steps, delta) <= target_epsilon:
+            hi = mid
+        else:
+            lo = mid
+    return 0.5 * (lo + hi)

@@ -25,7 +25,13 @@ import sys
 import pytest
 from tests.fixtures.phase22_reference import DELTA_FRONTIER, VACUOUS_AGREEMENT_ROW
 
-from personacore.privacy.accountant import delta_closed, delta_quadrature, epsilon_for
+from personacore.privacy.accountant import (
+    ROUND_TRIP_REL_TOL,
+    delta_closed,
+    delta_quadrature,
+    epsilon_for,
+    sigma_for,
+)
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _ACCOUNTANT_PATH = _ROOT / "src" / "personacore" / "privacy" / "accountant.py"
@@ -422,6 +428,126 @@ def test_epsilon_for_refusals_carry_distinct_messages():
     assert len(set(texts)) == len(cases), (
         "epsilon_for's domain refusals do not carry distinct messages:\n"
         + "\n".join(f"  {case}: {text[:110]}" for case, text in zip(cases, texts))
+    )
+
+
+def _round_trip_pairs():
+    """Twelve-plus (sigma, T) pairs spanning the frontier the Phase 23 sweep will visit.
+
+    The seven ``GOLDEN_EPSILON`` sigmas (so the round trip is exercised at exactly the points the
+    frozen pin constrains) plus five that are not pinned anywhere — 0.5 and 0.7 at the noisy end,
+    1.5 and 3.0 in the middle, 50.0 at the quiet end — each at four step counts.
+    """
+    sigmas = [row[0] for row in mitigation_accountant.GOLDEN_EPSILON] + [0.5, 0.7, 1.5, 3.0, 50.0]
+    return [(sigma, steps) for sigma in sigmas for steps in (1, 64, 200, 1000)]
+
+
+@pytest.mark.parametrize(("sigma", "steps"), _round_trip_pairs())
+def test_round_trip(sigma, steps):
+    """V-07 -- ``sigma_for(epsilon_for(sigma, T, d), T, d)`` returns ``sigma``.
+
+    D-12's stated purpose, and it is worth restating because the test looks redundant with the
+    golden check: this is FREE, and it catches a divergent inverse — which NO single-direction
+    test can see. A forward function that is wrong and an inverse that is wrong in exactly the
+    compensating way both pass their own tests and fail this one.
+
+    Measured worst deviation over these 48 pairs: **8.29e-15 relative**, against the
+    ``ROUND_TRIP_REL_TOL`` budget of 1e-12.
+    """
+    epsilon = epsilon_for(sigma, steps, mitigation_unit.DELTA)
+    back = sigma_for(epsilon, steps, mitigation_unit.DELTA)
+    assert abs(back - sigma) <= ROUND_TRIP_REL_TOL * sigma, (
+        f"round trip at sigma={sigma!r}, T={steps} went out at epsilon={epsilon!r} and came back "
+        f"as {back!r} — relative {abs(back - sigma) / sigma:.3e} over {ROUND_TRIP_REL_TOL:.3e}"
+    )
+
+
+def test_round_trip_pairs_is_not_empty():
+    """Meta-guard: V-07 sweeps 48 pairs, and the locator is really producing them.
+
+    A parametrization built off ``GOLDEN_EPSILON`` inherits that table's failure modes — a
+    truncated pin would silently shrink this sweep instead of reddening.
+    """
+    pairs = _round_trip_pairs()
+    assert len(pairs) == 48, (
+        f"V-07 is parametrized over {len(pairs)} pairs, not the 48 the sweep claims "
+        f"(12 sigmas x 4 step counts) — the pin or the extra sigma list has changed"
+    )
+    assert len({sigma for sigma, _ in pairs}) == 12, (
+        f"the sweep covers {len({s for s, _ in pairs})} distinct sigmas, not 12 — two entries "
+        f"have collided and the sweep is narrower than it reads"
+    )
+
+
+@pytest.mark.parametrize("steps", [1, 64, 200, 1000])
+def test_round_trip_at_sigma_zero(steps):
+    """The sigma = 0 boundary round-trips EXACTLY, and here ``==`` is the correct assertion.
+
+    Both ends are exact boundary values rather than bisected ones: ``epsilon_for`` returns
+    ``math.inf`` from an explicit branch and ``sigma_for`` returns ``0.0`` from an explicit branch,
+    so no arithmetic runs in either direction. This is the D-06 identity's own input — Phase 23's
+    first executed DP run is the sigma = 0 point — which is why closing the round trip there
+    matters more than closing it at any interior sigma.
+    """
+    delta = mitigation_unit.DELTA
+    assert sigma_for(epsilon_for(0.0, steps, delta), steps, delta) == 0.0
+
+
+@pytest.mark.parametrize(
+    ("target_epsilon", "steps", "delta"),
+    [
+        (0.0, 200, mitigation_unit.DELTA),  # perfect privacy — no finite sigma solves it
+        (-1.0, 200, mitigation_unit.DELTA),  # a negative privacy loss is not a mechanism
+        (float("nan"), 200, mitigation_unit.DELTA),  # non-finite, and NOT +inf
+        (float("-inf"), 200, mitigation_unit.DELTA),  # ditto
+        (1.0, 0, mitigation_unit.DELTA),  # steps below one
+        (1.0, 200.0, mitigation_unit.DELTA),  # steps as a float
+        (1.0, 200, 0.0),  # delta at the closed lower end
+        (1.0, 200, 1.0),  # delta at the closed upper end
+        (math.inf, 0, mitigation_unit.DELTA),  # the +inf branch must NOT skip the domain check
+        (math.inf, 200, 1.0),  # ditto, on delta
+    ],
+)
+def test_sigma_for_domain_refusals(target_epsilon, steps, delta):
+    """Degenerate inputs refuse, INCLUDING on the ``+inf`` fast path.
+
+    The last two cases are the ones a naive ordering would miss: returning ``0.0`` for
+    ``target_epsilon = inf`` BEFORE validating ``steps`` and ``delta`` would answer a question
+    nobody could have asked, so ``_refuse_bad_steps_or_delta`` runs first.
+    """
+    with pytest.raises(ValueError):
+        sigma_for(target_epsilon, steps, delta)
+
+
+def test_sigma_for_uses_the_forward_function():
+    """D-12's ONE choke point, asserted STRUCTURALLY rather than described.
+
+    ``sigma_for`` must bisect over ``epsilon_for`` and over nothing else. A second bisection
+    inlined here — over ``delta_closed`` directly, or over the quadrature oracle — would be free
+    to disagree with the forward direction while both look right in isolation, which is exactly
+    the failure D-12 exists to make impossible. The round trip catches that numerically; this
+    catches it in the source, so a future edit reddens before it can be measured.
+    """
+    tree = ast.parse(_ACCOUNTANT_PATH.read_text(encoding="utf-8"))
+    functions = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    # Meta-guard: an AST walk that stopped working would make every assertion below vacuous.
+    assert "sigma_for" in functions, (
+        f"accountant.py has no sigma_for FunctionDef — the walk found {sorted(functions)}"
+    )
+    called = {
+        node.func.id
+        for node in ast.walk(functions["sigma_for"])
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "epsilon_for" in called, (
+        f"sigma_for's body calls {sorted(called)} and does NOT call epsilon_for — the inverse has "
+        f"stopped bisecting over the forward function and D-12's one choke point is gone"
+    )
+    forbidden = called & {"delta_closed", "delta_quadrature"}
+    assert forbidden == set(), (
+        f"sigma_for's body calls {sorted(forbidden)} directly. The inverse must bisect over "
+        f"epsilon_for, not over a re-derived closed form: a second bisection here is free to "
+        f"disagree with the forward direction, which is the divergence D-12 forbids."
     )
 
 
