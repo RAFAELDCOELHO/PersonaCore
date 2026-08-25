@@ -310,3 +310,253 @@ class DPSGD:
             self._g.manual_seed(torch.initial_seed() if seed is None else int(seed))
         else:
             self._g = generator
+
+    # ---------------------------------------------------------------------------------------
+    # The step path. Together these own EVERYTHING between accumulation and optimizer.step();
+    # nothing else may write .grad in that window (D-03's surviving rule).
+    # ---------------------------------------------------------------------------------------
+
+    def begin_step(self):
+        """Arm the seam for one optimizer step: zero the accumulator, reset the per-step counters.
+
+        The accumulator buffers are ZEROED, never re-allocated, so ``data_ptr()`` identity is
+        stable across steps and the single-write assertion's aliasing check cannot be defeated by
+        a fresh allocation each step.
+
+        ``_clip_bind_count`` is deliberately NOT reset. It is a RUN-LIFETIME counter, so the
+        ``C = infinity`` identity test can assert the bound never bound across the WHOLE run
+        rather than only on the last step.
+        """
+        for buf in self._accum:
+            buf.zero_()
+        self._writes = 0
+        self._records = 0
+        self._drained = True
+
+    def _global_norm(self, tensors):
+        """The L2 norm across ALL trainable LoRA gradients as ONE vector -- GLOBAL, not per-tensor.
+
+        The norm of the per-tensor norms IS the norm of the concatenation, which is what
+        ``clip_grad_norm_`` computes and what DPSGD-01's sensitivity bound is stated over.
+
+        D-01's rejected alternative (b), recorded here because it is the shape a future reader is
+        most likely to reach for: TENSOR HOOKS. Hooks fire per-tensor MID-backward, and a
+        per-record GLOBAL norm over all 72 tensors is not knowable until ``backward()`` completes.
+        Hooks would therefore force per-PARAMETER clipping -- a different and strictly weaker
+        sensitivity bound than the one DPSGD-01 states and the accountant is told.
+        """
+        parts = [torch.linalg.vector_norm(t.detach().float()) for t in tensors]
+        return float(torch.linalg.vector_norm(torch.stack(parts)))
+
+    def absorb_record(self):
+        """Clip ONE record's gradients to ``C``, add them into the SUM, and drain ``.grad``.
+
+        Called after each micro-batch's ``backward()``. One micro-step IS one privacy record
+        (Phase 21 D-02), so the gradients sitting in ``.grad`` at entry are exactly one record's.
+
+        D-16 invariant 1 (drain) is enforced from BOTH ends. At entry the seam refuses unless the
+        previous call actually drained -- ``_drained`` is cleared before anything is read and set
+        again only by the drain loop at the very bottom, so a refactor that DROPS the drain leaves
+        the flag false and the next record is refused. And a ``.grad`` of ``None`` at entry is
+        refused too, because that is the caller having skipped a backward.
+
+        The consequence D-01 names, stated once: ``backward()`` ACCUMULATES. Without the
+        per-micro-step drain, record *i*'s clip would see records 1..*i* summed and the true
+        per-record sensitivity would silently become ``N*C`` while the accountant is told ``C``.
+        """
+        if not self._drained:
+            raise RuntimeError(
+                "[dp-invariant:drain] the previous absorb_record did not drain .grad, so this "
+                "record's clip would see a RUNNING SUM rather than one record. backward() "
+                "ACCUMULATES: without the per-micro-step drain, record i's clip sees records "
+                "1..i summed and the true per-record sensitivity silently becomes N*C while the "
+                "accountant is told C. Nothing else in the system would notice -- the run "
+                "converges fine."
+            )
+        self._drained = False
+        missing = [i for i, p in enumerate(self._params) if p.grad is None]
+        if missing:
+            raise RuntimeError(
+                f"[dp-invariant:drain] {len(missing)} of {len(self._params)} trainable LoRA "
+                f"parameters have .grad = None at absorb_record entry (first: index "
+                f"{missing[0]}). There is nothing to absorb: either no backward() ran for this "
+                "record, or absorb_record was called twice for one backward. Absorbing a partial "
+                "record would under-count the sum while the accountant charges a full record."
+            )
+
+        grads = [p.grad for p in self._params]
+        norm = self._global_norm(grads)
+        if norm <= self.C:
+            # coef is EXACTLY 1.0 and x * 1.0 is bit-identical in IEEE-754 for finite x, so the
+            # clip is a genuine no-op through the SAME code path -- no branch skips it.
+            coef = 1.0
+        else:
+            # reads self.C (D-17): the single clip constant. A second constant here is FAKE 2.
+            coef = self.C / norm
+            # THE ONLY place the clip actually scales. This counter is what turns "a finite bound
+            # that does not bind" from an ASSUMPTION into an OBSERVATION, and it is how C =
+            # infinity is represented now that math.inf is refused -- 22-CONTEXT.md's *Claude's
+            # Discretion* sanctions choosing the representation, and this is the choice: a finite
+            # bound whose non-binding is COUNTED rather than hoped for.
+            self._clip_bind_count += 1
+
+        scaled = [g.detach() * coef for g in grads]
+        # D-16 invariant 2 (sensitivity), RE-COMPUTED from the clipped tensors rather than as
+        # norm * coef -- the latter is C by construction and could never fail.
+        clipped_norm = self._global_norm(scaled)
+        if clipped_norm > self.C * (1.0 + self.sensitivity_tolerance):
+            raise RuntimeError(
+                f"[dp-invariant:sensitivity] the CLIPPED global norm is {clipped_norm!r}, above "
+                f"C * (1 + {self.sensitivity_tolerance!r}) = "
+                f"{self.C * (1.0 + self.sensitivity_tolerance)!r}. The noise is scaled to a "
+                "sensitivity of exactly C, so a record contributing more than C means the noise "
+                "is scaled to the WRONG SENSITIVITY and the published epsilon is optimistic by "
+                "the ratio. This reads the SAME self.C the clip and the noise line read."
+            )
+
+        for buf, contribution in zip(self._accum, scaled):
+            # The SUM, never a running mean (D-02): one record moves it by at most C, so the
+            # sensitivity is exactly C independently of the lot size N.
+            buf.add_(contribution)
+        self._records += 1
+
+        for p in self._params:
+            p.grad = None  # D-01's per-micro-step drain -- load-bearing, not tidiness.
+        self._drained = True
+
+    def _draw_noise(self):
+        """One Gaussian draw per accumulator buffer, from the DEDICATED generator (D-07).
+
+        There is NO branch on ``sigma == 0``. ``torch.normal`` with ``std=0.0`` returns exact zeros
+        AND advances the generator, which is precisely what leaves "the noise never got added"
+        with nowhere to hide: the call sequence is identical at every sigma.
+        """
+        return [
+            torch.normal(
+                mean=0.0,
+                # reads self.C and self.sigma (D-17). std = sigma * C, sigma being the noise
+                # MULTIPLIER. Adjacency is add/remove one fact, multiplier 1.0, so Delta = C.
+                std=self.sigma * self.C,
+                size=buf.shape,
+                generator=self._g,
+                device=buf.device,
+                dtype=buf.dtype,
+            )
+            for buf in self._accum
+        ]
+
+    def _noised_private(self, accum):
+        """noise ON THE SUM, then ``/N`` LAST (D-02), with D-16 invariant 4 around the draws.
+
+        The order is the whole point and it is not interchangeable. ``self._accum`` holds the SUM
+        of clipped per-record gradients; the noise is added to THAT sum (one record moves the sum
+        by at most C -- the textbook sensitivity argument); only then is the result divided by N.
+
+        D-02's trap, which arrives for free by inheriting one existing line: with
+        ``loop.py``'s ``loss = total / accum`` left in place on the DP path, ``.grad`` after each
+        backward would hold ``g_i / N``, so clipping THAT to C sets the true per-record
+        sensitivity to ``C*N`` while the accountant is told ``C``. That is DPSGD-04's
+        wrong-sensitivity fake, and it converges fine.
+        """
+        pre = self._g.get_state()
+        if self._prev_gen_state is not None and not torch.equal(pre, self._prev_gen_state):
+            raise RuntimeError(
+                "[dp-invariant:generator] this step's PRE-draw generator state is not the "
+                "previous step's POST-draw state, so something touched the generator between "
+                "steps. That is FAKE 4 -- RNG REUSED ACROSS STEPS: an in-step manual_seed makes "
+                "every step draw the SAME noise vector, the noise stops being independent across "
+                "compositions, and the T-fold composition the accountant charges for is not the "
+                "mechanism that ran. CONTINUITY is asserted rather than 'the pre-state differs "
+                "from last step's pre-state', because the latter is silent on a re-seed to a "
+                "DIFFERENT fixed value and on any foreign consumer draining the same stream."
+            )
+        noise = self._draw_noise()
+        post = self._g.get_state()
+        if torch.equal(pre, post):
+            raise RuntimeError(
+                "[dp-invariant:generator] the generator state did not advance across the draws, "
+                "so the draw did not happen. At sigma = 0 the values are exact zeros BUT the "
+                "state still moves (measured, torch 2.7.1) -- which is exactly why 'noise was "
+                "added' stays verifiable at the identity input instead of being unfalsifiable."
+            )
+        self._prev_gen_state = post
+        return [(buf + drawn) / accum for buf, drawn in zip(self._accum, noise)]
+
+    def _write_once(self, private):
+        """The SINGLE combining write, as a MEASURED count rather than a described sequence.
+
+        Exactly one assignment per trainable parameter: ``p.grad = private`` when there is no
+        public term, else ``p.grad.add_(private)``. D-01: *"``p.grad += private_accum`` is the
+        SINGLE write that combines the two terms, immediately before ``optimizer.step()``. Nothing
+        re-normalizes after that sum."*
+        """
+        for buf, p, term in zip(self._accum, self._params, private):
+            if buf.data_ptr() == term.data_ptr():
+                raise RuntimeError(
+                    "[dp-invariant:single-write] the private term ALIASES its accumulator buffer, "
+                    "so the write would mutate the accumulator in place and the next step would "
+                    "start from a noised, already-released sum."
+                )
+            if p.grad is None:
+                p.grad = term
+            else:
+                p.grad.add_(term)
+            self._writes += 1
+        if self._writes != len(self._params):
+            raise RuntimeError(
+                f"[dp-invariant:single-write] {self._writes} writes for "
+                f"{len(self._params)} trainable parameters. Exactly one write per parameter "
+                "combines the private and public terms; anything else means a parameter was "
+                "written twice (a second write re-releases private data the accountant charged "
+                "for once) or not at all (its update carries no noise)."
+            )
+        buf_ptrs = {buf.data_ptr() for buf in self._accum}
+        grad_ptrs = {p.grad.data_ptr() for p in self._params}
+        if buf_ptrs & grad_ptrs:
+            raise RuntimeError(
+                f"[dp-invariant:single-write] {len(buf_ptrs & grad_ptrs)} accumulator buffer(s) "
+                "share storage with a .grad tensor. private_accum must never alias .grad: a "
+                "shared buffer makes the drain and the release the same memory, and the "
+                "single-write count above would then be counting writes that overwrite each other."
+            )
+
+    def finalize(self, accum):
+        """Draw the noise, divide by N, and perform the one combining write. Then ``step()``.
+
+        Called AFTER ``replay_fn`` has run, so ``.grad`` holds the PUBLIC term exactly and this
+        method's write is the only place the two terms meet.
+
+        D-03's SURVIVING rule, and its correct basis -- the stronger version would be an
+        over-claim. DP is closed under post-processing, so epsilon survives ``clip_grad_norm_``,
+        weight decay and AdamW's own per-parameter rescale by sqrt(v); an absolute "nothing
+        re-normalizes after noise" rule would forbid the optimizer. The rule that survives contact
+        is *nothing between the noise and* ``optimizer.step()``, and it rests on three MEASURED
+        things:
+
+          1. ``clip_grad_norm_(model.parameters(), ...)`` runs over the MIXED buffer, so the
+             released private magnitude becomes a function of PUBLIC data. Not a privacy break,
+             but it makes "the public term is independent of the private records" unstateable in
+             the direction the report needs.
+          2. It DEFEATS a DPSGD-04 positive control: wrong sensitivity is detectable in the
+             released magnitude, and renormalizing to a fixed norm erases exactly that signal. The
+             fake would converge AND pass.
+          3. Measured, it is inert BY ACCIDENT rather than by construction: at the frozen-base
+             regime the mixed norm goes 0.436096 -> 0.436096, factor 1.000000, so it does not bind
+             at ``grad_clip = 1.0``. Whether it binds on the REAL corpus at 200 overfit steps is
+             UNMEASURED. Inert-by-accident is the definition of a convention.
+        """
+        lot = int(accum)
+        if lot < 1:
+            raise ValueError(
+                f"[dp-invariant:lot] accum is {accum!r}; the divisor in D-02's 'divide LAST' step "
+                "is the number of records summed and must be at least 1."
+            )
+        if self._records != lot:
+            raise RuntimeError(
+                f"[dp-invariant:lot] {self._records} records were absorbed but accum is {lot}. "
+                "The /N that happens LAST must divide by the number of records actually clipped "
+                "and summed; dividing by a different N releases something that is not the mean of "
+                "what was charged for. A zero here means begin_step/absorb_record never ran."
+            )
+        private = self._noised_private(lot)
+        self._write_once(private)

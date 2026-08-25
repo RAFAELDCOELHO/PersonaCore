@@ -217,3 +217,256 @@ def test_seam_constructs_cleanly():
         "the dedicated generator produced exact zeros at std=1.0 — the draw did not happen, and "
         "the 'global stream untouched' assertion above would then be vacuous"
     )
+
+
+# =============================================================================================
+# V-13 -- D-16's FOUR RUNTIME INVARIANTS, each proven to BITE and not merely to pass.
+#
+# A guard nobody has watched fail is a guard nobody has verified. Every invariant below has a
+# test that observes it RAISE on a deliberate break, alongside the test that observes the
+# correct path pass.
+# =============================================================================================
+
+# A test-local, NON-BINDING clip. NOT a budget (D-08 / Phase 20's Z boundary): this is the
+# arithmetic test vector that represents `C = infinity` as a FINITE bound proven not to bind,
+# now that math.inf is refused. Measured basis for the choice: at the frozen-base regime the
+# private-only grad norm is 0.143608 and private+replay 0.436096, and the hand-set fixture
+# gradients below carry a global norm of ~0.58 (331,776 standard normals scaled by 1e-3), so a
+# bound seven orders above cannot bind. `_clip_bind_count == 0` is asserted rather than assumed,
+# so if a future change ever makes it bind the assertion reddens with a nameable cause instead of
+# silently clipping.
+_NON_BINDING_CLIP = 1e6
+_GRAD_SCALE = 1e-3
+_BINDING_CLIP = 1e-3
+
+
+def _hand_set_grads(dp, seed):
+    """Write one record's gradients by hand and return them, so the expected mean is exact."""
+    gen = torch.Generator().manual_seed(seed)
+    grads = []
+    for p in dp._params:
+        g = torch.randn(p.shape, generator=gen) * _GRAD_SCALE
+        p.grad = g
+        grads.append(g)
+    return grads
+
+
+def _absorb(dp, seed):
+    grads = _hand_set_grads(dp, seed)
+    dp.absorb_record()
+    return grads
+
+
+# --- D-16 invariant 1: the per-micro-step drain --------------------------------------------------
+
+
+def test_drain_invariant_fires():
+    """Two ``absorb_record`` calls for one backward: the second has nothing to absorb."""
+    dp = _seam(_model(), sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=3)
+    dp.begin_step()
+    _absorb(dp, seed=1)
+    # POSITIVE CONTROL: the drain really happened, so the refusal below is about the drain and
+    # not about a gradient that was never written.
+    assert all(p.grad is None for p in dp._params)
+    with pytest.raises(RuntimeError, match="dp-invariant:drain"):
+        dp.absorb_record()
+
+
+def test_drain_invariant_fires_when_the_drain_itself_is_dropped():
+    """The refactor D-01 names: the drain loop removed, every other guard still green.
+
+    ``_drained`` is cleared before anything is read and set again ONLY by the drain, so a
+    mechanism that stops draining refuses the NEXT record rather than silently clipping a running
+    sum to ``C`` and letting the true per-record sensitivity become ``N*C``.
+    """
+    dp = _seam(_model(), sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=3)
+    dp.begin_step()
+    _absorb(dp, seed=1)
+    dp._drained = False  # exactly the state a dropped drain leaves behind
+    _hand_set_grads(dp, seed=2)  # a fresh backward's worth of gradients, so .grad is NOT None
+    with pytest.raises(RuntimeError, match="N\\*C"):
+        dp.absorb_record()
+
+
+# --- D-16 invariant 2: sensitivity against C * (1 + tol) -----------------------------------------
+
+
+class _UnderReportingNorm(DPSGD):
+    """FAKE: the PRE-clip norm reads 0.0, so ``coef`` never binds while the record is far over C.
+
+    This is what a wrong-sensitivity fake looks like at run time -- the clip is present, reads the
+    single ``self.C``, and simply does not bind. Only the RE-COMPUTED post-clip norm can see it,
+    which is why invariant 2 measures the clipped tensors instead of trusting ``norm * coef``.
+    """
+
+    def _global_norm(self, tensors):
+        real = super()._global_norm(tensors)
+        self._norm_calls = getattr(self, "_norm_calls", 0) + 1
+        return 0.0 if self._norm_calls % 2 == 1 else real
+
+
+def test_sensitivity_invariant_fires():
+    """The clip BINDS on a real over-large record, and the invariant bites when it does not."""
+    dp = _seam(_model(), sigma=0.0, clip_norm=_BINDING_CLIP, seed=5)
+    dp.begin_step()
+    _absorb(dp, seed=1)
+
+    # The POSITIVE property: after one absorbed record the accumulated norm sits ON the bound.
+    accumulated = dp._global_norm(dp._accum)
+    assert accumulated <= _BINDING_CLIP * (1.0 + dp.sensitivity_tolerance)
+    assert accumulated > _BINDING_CLIP * (1.0 - dp.sensitivity_tolerance), (
+        f"the accumulated norm is {accumulated!r}, well below C = {_BINDING_CLIP} — the clip did "
+        "not bind, so this test is asserting a bound that was never exercised"
+    )
+    # The counter's OWN positive control. A counter that never increments would make every
+    # `_clip_bind_count == 0` assertion elsewhere vacuous.
+    assert dp._clip_bind_count > 0
+
+    # And the invariant bites: same fixture, one broken norm away.
+    fake = _UnderReportingNorm(_model(), sigma=0.0, clip_norm=_BINDING_CLIP, seed=5)
+    fake.begin_step()
+    _hand_set_grads(fake, seed=1)
+    with pytest.raises(RuntimeError, match="dp-invariant:sensitivity"):
+        fake.absorb_record()
+    assert fake._clip_bind_count == 0, (
+        "the fake's clip bound after all, so the RuntimeError above may be the honest path "
+        "refusing rather than the invariant catching a non-binding clip"
+    )
+
+
+# --- D-16 invariant 3: the single-write count, MEASURED -----------------------------------------
+
+
+def test_single_write_count():
+    """Exactly one write per parameter, and no accumulator buffer aliases any ``.grad``."""
+    dp = _seam(_model(), sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=7)
+    dp.begin_step()
+    _absorb(dp, seed=1)
+    dp.finalize(1)
+
+    assert dp._writes == len(dp._params)
+    buf_ptrs = {buf.data_ptr() for buf in dp._accum}
+    grad_ptrs = {p.grad.data_ptr() for p in dp._params}
+    assert not (buf_ptrs & grad_ptrs)
+    assert len(buf_ptrs) == len(dp._accum), "accumulator buffers alias EACH OTHER"
+
+    # WATCHED RED 1: a write that skips a parameter. The count is a measurement, so it moves.
+    dp.begin_step()
+    _absorb(dp, seed=2)
+    private = dp._noised_private(1)
+    with pytest.raises(RuntimeError, match="dp-invariant:single-write"):
+        dp._write_once(private[:-1])
+
+    # WATCHED RED 2: a private term that IS the accumulator buffer.
+    dp.begin_step()
+    _absorb(dp, seed=3)
+    with pytest.raises(RuntimeError, match="ALIASES"):
+        dp._write_once(list(dp._accum))
+
+
+def test_the_single_write_combines_rather_than_overwrites():
+    """With a PUBLIC term already in ``.grad`` the one write ADDS -- it never replaces it.
+
+    D-01: replay stays in ``.grad`` untouched and ``p.grad += private_accum`` is the SINGLE write
+    that combines the two terms. A write that replaced the public term would silently drop the
+    replay pass whose whole purpose is to sit outside the per-record loop.
+    """
+    dp = _seam(_model(), sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=9)
+    dp.begin_step()
+    records = _absorb(dp, seed=1)
+    public = [torch.full_like(p, 0.25) for p in dp._params]
+    for p, term in zip(dp._params, public):
+        p.grad = term.clone()
+    dp.finalize(1)
+    for p, rec, pub in zip(dp._params, records, public):
+        assert torch.equal(p.grad, pub + rec)
+
+
+# --- D-16 invariant 4: the generator advances and is never re-seeded ------------------------------
+
+
+def test_generator_advances_and_is_never_reseeded():
+    """Two steps, different noise; the state advances in-step; a re-seed between them bites."""
+    dp = _seam(_model(), sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=13)
+
+    dp.begin_step()
+    _absorb(dp, seed=1)
+    pre = dp._g.get_state().clone()
+    dp.finalize(1)
+    first = [p.grad.clone() for p in dp._params]
+    assert not torch.equal(pre, dp._g.get_state()), "the generator did not advance within the step"
+
+    dp.begin_step()
+    _absorb(dp, seed=1)  # IDENTICAL record gradients, so any difference is the noise alone
+    dp.finalize(1)
+    second = [p.grad.clone() for p in dp._params]
+    assert not any(torch.equal(a, b) for a, b in zip(first, second)), (
+        "two consecutive steps produced identical released gradients from identical records — "
+        "the noise is being reused across steps, which is FAKE 4"
+    )
+
+    # WATCHED RED: FAKE 4's positive insertion, applied from outside so the module stays honest.
+    dp.begin_step()
+    _absorb(dp, seed=1)
+    dp._g.manual_seed(999)
+    with pytest.raises(RuntimeError, match="dp-invariant:generator"):
+        dp.finalize(1)
+
+
+def test_sigma_zero_is_exact_zeros_through_the_same_code_path():
+    """D-07, asserted as TWO INDEPENDENT FACTS: exact zeros, and the generator still advanced."""
+    dp = _seam(_model(), sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=17)
+    dp.begin_step()
+    _absorb(dp, seed=1)
+
+    pre = dp._g.get_state().clone()
+    noise = dp._draw_noise()
+    post = dp._g.get_state()
+
+    # FACT 1: the drawn values are EXACTLY zero -- not close to zero.
+    assert all(torch.equal(n, torch.zeros_like(n)) for n in noise)
+    # FACT 2: the generator advanced anyway. This is what leaves "the noise never got added" with
+    # nowhere to hide: the call sequence is identical at sigma = 0 and at sigma > 0.
+    assert not torch.equal(pre, post)
+
+
+# --- D-02: sum -> noise -> divide, with the divide LAST -------------------------------------------
+
+
+@pytest.mark.parametrize("n_records", [1, 2])
+def test_sum_then_noise_then_divide(n_records):
+    """At sigma = 0 and a non-binding C the released term is the PLAIN MEAN, bit-for-bit.
+
+    This is what pins D-02's ``/N`` placement structurally rather than by argument: get the divide
+    wrong and this identity breaks immediately, on CPU, before any M3 time. Measured exact
+    (``torch.equal``) at both N = 1 and N = 2 under torch 2.7.1 -- the accumulator starts at +0.0,
+    ``x + 0.0`` and ``x * 1.0`` are bit-identical for finite x, and the division by a small power
+    of two is exact.
+    """
+    dp = _seam(_model(), sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=19)
+    dp.begin_step()
+    records = [_absorb(dp, seed=k) for k in range(1, n_records + 1)]
+
+    # `C = infinity` as an OBSERVATION, not a hope about the fixture's magnitudes.
+    assert dp._clip_bind_count == 0, (
+        f"the non-binding clip {_NON_BINDING_CLIP} bound on {dp._clip_bind_count} record(s), so "
+        "the identity below is comparing a CLIPPED mean against an unclipped one"
+    )
+    dp.finalize(n_records)
+
+    for i, p in enumerate(dp._params):
+        expected = records[0][i]
+        for r in records[1:]:
+            expected = expected + r[i]
+        assert torch.equal(p.grad, expected / n_records)
+
+
+def test_finalize_refuses_a_divisor_that_is_not_the_record_count():
+    """The ``/N`` LAST must divide by the number of records actually clipped and summed."""
+    dp = _seam(_model(), sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=23)
+    dp.begin_step()
+    _absorb(dp, seed=1)
+    with pytest.raises(RuntimeError, match="dp-invariant:lot"):
+        dp.finalize(2)
+    with pytest.raises(ValueError, match="dp-invariant:lot"):
+        dp.finalize(0)
