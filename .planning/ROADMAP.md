@@ -401,7 +401,48 @@ CPU before a single second of M3 time is spent
      is not restructured into `nn.Linear` submodules and `persona_adapter.pt` plus every v3.0
      checkpoint still load unchanged. (DPSGD-05, DPSGD-07)
 
-**Plans**: TBD
+**Plans**: 11 plans in 6 waves
+
+**Wave 1** *(no dependencies)*
+
+- [ ] 22-01-PLAN.md — Wave-0 scaffolding: privacy subpackage, the committed 60-dps reference table
+      (no `mpmath`, RPT-03), and the text-taking D-05 axis-1 AST guards with six synthetic RED probes
+- [ ] 22-02-PLAN.md — the FROZEN pin `scripts/mitigation_accountant.py` (zero imports, `REQUIRED_FORM`,
+      `REJECTED_FORM`, D-18's `NEIGHBOURING`/`SENSITIVITY_MULTIPLIER`, `GOLDEN_EPSILON`) plus D-11's
+      BOTH halves and the phase23-prefix RED-then-GREEN fixture
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 22-03-PLAN.md — `accountant.py`'s two δ oracles: Balle–Wang closed form and the `exp`-only
+      quadrature, with F1's SYMMETRIC silent-zero refusal and F2's log-space overflow fix
+- [ ] 22-04-PLAN.md — `dpsgd.py`: construct-once capture, D-04's three property refusals, per-record
+      global clip, dedicated-generator noise, the single combining write, D-16's four runtime invariants
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 22-05-PLAN.md — `epsilon_for` / `sigma_for` over ONE choke point, the explicit σ=0 → ∞ branch,
+      the round-trip, and V-03's composition oracle at `rel_tol` (never `==`, per F3)
+- [ ] 22-06-PLAN.md — the additive `dp_fn=` gradient-side seam in `_optimizer_step` + `train()`, the
+      legacy clip made structurally unreachable, and V-14's golden bit-identity + V-12's differential
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 22-07-PLAN.md — `checkpoint.py`'s `rng["mps"]` slot with `.get()` back-compat, V-15's
+      bit-identical resumed ε, and DPSGD-07's LoRALinear key-set stability
+- [ ] 22-08-PLAN.md — the additive `fact_bin=` data seam routing to `get_batch_fact_aligned`, with the
+      accum-agreement refusal and the one-record-per-micro-step property
+- [ ] 22-09-PLAN.md — V-06 (`GOLDEN_EPSILON` re-derived from the ORACLE alone) and V-25 (D-18's
+      three-site adjacency consistency check)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 22-10-PLAN.md — D-08's four wirings at `teach_persona.py::main()` on `dp_n8`/`dp_n64`, σ and C
+      as required no-default CLI arguments, and V-23's end-to-end run that writes NO scored artifact
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 22-11-PLAN.md — the four positive controls (V-18…V-21), each WATCHED failing on the real source
+      with its RED output captured, then restored byte-identically and re-greened
 
 ### Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration
 
