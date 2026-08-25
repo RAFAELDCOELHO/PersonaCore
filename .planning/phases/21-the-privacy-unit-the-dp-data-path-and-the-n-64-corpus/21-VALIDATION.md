@@ -1,10 +1,13 @@
 ---
 phase: 21
 slug: the-privacy-unit-the-dp-data-path-and-the-n-64-corpus
-status: approved
+status: closed
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-08-22
+closed: 2026-08-25
+closed_by: gap closure, UAT decision 4 — the documentation ledger
+commands_verified: 48/48 (every command below executed; exit 0 AND non-zero collection)
 ---
 
 # Phase 21 — Validation Strategy
@@ -14,6 +17,13 @@ created: 2026-08-22
 > **Source of truth for the full requirement→test map:** `21-RESEARCH.md` §`## Validation
 > Architecture` (`:175`), whose every command and timing is marked `[VERIFIED]` against a real run.
 > This file is the execution-time contract; that file is the evidence.
+
+> **CLOSED 2026-08-25.** The phase is EXECUTED and VERIFIED; this document is the ledger for it.
+> **What "closed" does and does not mean:** every row below now carries a measured status and a
+> command that was executed rather than typed. It is **not** a claim that the phase passed —
+> `21-VERIFICATION.md` returned **`human_needed`**, not `passed`, and five review warnings plus
+> three infos in `21-REVIEW.md` remain open (WR-03, WR-05, WR-06, WR-07 and IN-01…IN-04 as of this
+> writing; WR-04 closed at `9a407d6`). See `## Closure` at the foot of this file.
 
 ---
 
@@ -25,13 +35,41 @@ created: 2026-08-22
 | **Python** | 3.11.15 — **`.venv` only.** The dev box is 3.14 and is NOT a supported target (CLAUDE.md). Never validate there. |
 | **Config file** | `pyproject.toml` `[tool.pytest.ini_options]` (`:24-26`) — `testpaths = ["tests"]`, `pythonpath = ["."]` |
 | **Quick run command** | `.venv/bin/python -m pytest -q tests/test_phase20_prereg.py tests/test_package.py tests/test_masked_batch.py tests/test_phase14_teaching.py` |
-| **SC5 guard set** | `.venv/bin/python -m pytest -q tests/test_phase14_scoring.py tests/test_phase16_driver.py tests/test_phase16_ladder.py tests/test_phase18_corpus.py tests/test_phase18_prereg.py tests/test_phase19_erasure.py tests/test_phase14_factset.py tests/test_phase14_demo.py` |
+| **SC5 guard set** | `.venv/bin/python -m pytest -q tests/test_phase14_scoring.py tests/test_phase16_driver.py tests/test_phase16_ladder.py tests/test_phase18_corpus.py tests/test_phase18_prereg.py tests/test_phase19_erasure.py tests/test_phase14_factset.py tests/test_phase14_demo.py tests/test_phase21_filler.py tests/test_phase21_multiplicity.py` |
 | **Full suite command** | `make test` (`pytest -q`) |
-| **Estimated runtime** | quick **3.45s** (62 passed) · SC5 guard set **~36s** (314 passed for 7 files; +`test_phase14_demo.py`) · full **195.26s** (877 passed, 1 skipped, exit 0) |
+| **Measured runtime (2026-08-25)** | quick **70 passed** · SC5 guard set **364 passed** · full **≈199s, 1,025 collected** |
 
-**The one skip is expected by design:** `test_loop_penalty_fn::test_golden_trajectory_bit_identity`
-is platform-gated; the in-process identity tests carry the guarantee
-(`tests/test_loop_penalty_fn.py:95-107`). A run reporting `877 passed, 1 skipped` is GREEN.
+**The SC5 guard set grew from 8 files to 10 during execution**, and the growth is not editorial:
+`tests/test_phase21_filler.py` and `tests/test_phase21_multiplicity.py` were added because both hold
+`== 10` wall sites (see the census below). The membership is now checkable rather than promised —
+`tests/test_phase21_sc5.py:291-302` holds `SC5_GUARD_SET` as a tuple and
+`tests/test_phase21_sc5.py:286` asserts every file the census discovers is a member of it, so a wall
+site landing in a file the guard set does not run turns the census RED.
+
+**The "one skip" named here was wrong, and is corrected.** This file claimed the single skip was
+`test_loop_penalty_fn::test_golden_trajectory_bit_identity`. 21-10 measured that that test does not
+skip. The real platform-gated skip is **`tests/test_train_loop.py:81`** — a CUDA-only fp16 AMP
+smoke, which skips on MPS, on CPU and in CI alike.
+
+**Suite figures — the binding number and the worktree number are different, deliberately.**
+
+| Figure | Value | Where it holds |
+|---|---|---|
+| **Binding (full checkout)** | **`1024 passed, 1 skipped`** = 1,025 collected | `main` with `data/` and the gitignored artifacts present. This is the GREEN definition. |
+| Measured here (gap-closure worktree, literal) | `1018 passed, 7 skipped` in 201.72s, exit 0 | A worktree lacks the gitignored `artifacts/`; **6 of the 7 skips are those absent artifacts** and 1 is the CUDA gate. |
+
+**The two reconcile exactly.** Restore the 6 gitignored artifacts and those 6 skips pass:
+`1018 + 6 = 1024` passed, `1` skipped. Collection is `1,025` either way, independently confirmed by
+`pytest -q -k <non-matching>` reporting `1025 deselected`. Skip reasons enumerated with `-rs` in
+`21-REVIEW.md` → `## Ledger — CLOSED`, so "environmental" is a reading rather than an assertion.
+
+The stale `877 passed, 1 skipped` this file carried predates the phase's own 30 new tests and every
+Phase-20 correction test; it is superseded, not merely out of date.
+
+> A worktree run that reports `1 failed` on `tests/test_phase21_unit_record.py::test_driver_refuses_to_rerun`
+> is an **environment** result, not a regression: the test reaches `_prepend_replay`, which needs
+> `data/dialog_train.bin` and `data/dialog_train_mask.bin`. Copy those two files (≈16 MB of the 4.8 GB
+> `data/`) and it passes. Verified both ways during this closure.
 
 **CI prerequisite that is load-bearing here:** `.github/workflows/ci.yml:21` sets `fetch-depth: 0`.
 `_assert_ordering_holds` asserts `rev-parse --is-shallow-repository == "false"` and refuses to skip
@@ -49,89 +87,216 @@ not a silent pass.
   **armed and green first** (1.86s / 21 tests). `git ls-files` is the guard's input, so an artifact
   becomes watched when it is **committed**, not when it is written. Arm-then-write is an ordering
   constraint on commits, and `:157` (`adds[-1]`, the earliest add) makes it irrevocable.
-- **Before `/gsd:verify-work`:** full suite green — `877 passed, 1 skipped`.
+- **Before `/gsd:verify-work`:** full suite green — `1024 passed, 1 skipped` on a full checkout.
 - **Max feedback latency:** 36s at wave granularity; 3.5s at task granularity.
+
+**OBSERVED, and it is the one sampling rule this phase had to change mid-flight:** plan-check pass 3
+found six per-plan bare `pytest -q` invocations in waves 3's plans (21-06 / 21-07 / 21-08). Because
+`testpaths = ["tests"]`, a bare run collects a *sibling's* live deliberate-RED. They were replaced
+with explicit file lists; the full suite stayed a WAVE-CLOSE gate, which is what `:47` and `:52`
+already said. Recorded here because it is a fact about how the sampling rate was actually applied.
 
 ---
 
 ## Per-Task Verification Map
 
-Task IDs are assigned by the planner. Rows below are the requirement-level contract every plan
-must map its tasks onto; `File Exists` is measured against the repo as of 2026-08-22.
+**Every command in this table was EXECUTED during closure, not typed.** Ownership (`Plan`, `Wave`,
+`Shipped`) is resolved from `git log --diff-filter=A` on each artifact, not from the plan set.
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | UNIT-02 | — | N/A | golden fixture | `pytest -q tests/test_phase21_aligned_bins.py -k byte_identity` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-02 | — | N/A | unit (non-vacuity) | `... -k align_facts_is_wired` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-02 | — | N/A | content | `... -k window_purity_input` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-02 | — | N/A | content | `... -k window_purity_target` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-02 | — | N/A | adversarial | `... -k window_purity_adversaries` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-02 | — | N/A | unit | `... -k three_bin_alignment` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-02 | — | N/A | integration | `pytest -q tests/test_phase21_aligned_loader.py -k grad_accum` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-02 (D-06) | — | fact map read on EVERY access | adversarial | `... -k consumed_at_runtime` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-02 (D-06) | — | loader RAISES on missing/truncated fact bin | unit | `... -k fact_bin_required` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-03 | — | N/A | unit | `pytest -q tests/test_phase21_multiplicity.py -k conservation` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-03 | — | N/A | adversarial | `... -k instrument_can_report_not_one` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-03 | — | N/A | unit | `... -k seed_reproducible` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-04 (D-11) | — | replay volume independent of private fact VALUES | differential | `pytest -q tests/test_phase21_replay_volume.py -k side_channel_closed` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-04 (D-24) | — | N/A | unit | `... -k window_quantized` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-01/04/05 | — | N/A | unit | `pytest -q tests/test_phase21_unit_pin.py -k prove_guards` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-01/04/05 | — | frozen module imports ⊆ `{pathlib, sys, erasure_gate}` | AST | `pytest -q tests/test_phase20_prereg.py -k import_graph` | ✅ covers the new module via the glob | ⬜ pending |
-| TBD | TBD | TBD | UNIT-01/04/05 | — | guard armed BEFORE first artifact | git history | `pytest -q tests/test_phase20_prereg.py -k phase21` | ❌ W0 (two additive edits, both required) | ⬜ pending |
-| TBD | TBD | TBD | UNIT-01/04/05 | — | guard proven non-vacuous | git fixture | `... -k phase21_glob_red_then_green` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 (D-16) | — | N/A | golden fixture | `pytest -q tests/test_phase21_filler.py -k render_family_byte_identity` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 (D-16) | — | N/A | unit (non-vacuity) | `... -k forms_is_wired` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 (D-16) | — | filler slots DISJOINT from the 11 published slots | unit | `... -k slots_disjoint` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 (D-17) | — | collision refusal vs the 10, the 28, and each other | unit | `... -k minting_discipline` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 (D-13) | — | filler OUTSIDE `all_pools()`; `_BY_ID` gains no keys | unit | `... -k outside_all_pools` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 / SC5 (D-18) | — | no filler value reaches any published instrument | content | `pytest -q tests/test_phase21_sc5.py -k no_filler_leak` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 / SC5 | — | `scripts/phase18_extraction.py` byte-unchanged | sha256 | `... -k instruments_unchanged` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 / SC5 | — | 270-question fixture byte-unchanged | sha256 | `... -k instruments_unchanged` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 / SC5 | — | all 8 `== 10` wall sites still green | existing | the **SC5 guard set** command above | ✅ exists | ⬜ pending |
-| TBD | TBD | TBD | UNIT-06 / SC5 | — | `len(LOCKED_FACTS) <= 8`, `len(SOFT_TIER_FACTS) <= 3` | existing | `pytest -q tests/test_phase14_factset.py -k composition_targets` | ✅ `tests/test_phase14_factset.py:101-103` | ⬜ pending |
-| TBD | TBD | TBD | all (RPT-03) | — | `pyproject.toml` untouched — zero new deps | sha256 | `pytest -q tests/test_package.py` | ✅ `tests/test_package.py:37` | ⬜ pending |
+### Why these are node ids and not `-k` selectors
+
+The planning-time table addressed every single-test row as `-k <substring>`. That is the weaker
+form, and this phase produced the proof: `-k phase21_glob_red_then_green` matched **nothing** for
+the whole phase because the real test is `test_phase21_glob_sees_the_phase21_prefix_red_then_green`
+— `-k` is substring matching and `glob_red_then_green` is not a substring of it.
+
+**The reason to prefer node ids is NOT that a bad `-k` "silently exits 0". That framing is false and
+this file will not repeat it.** Measured here, with the exit code taken from the pytest process
+itself (`OUT=$(...)` then `E=$?`) rather than through a pipe:
+
+| invocation | output | EXIT |
+|---|---|---|
+| mistyped `-k` | `4 deselected in 0.72s` | **5** (`NO_TESTS_COLLECTED`) |
+| wrong node id | `ERROR: not found: …::test_instruments_unchanged` + `no tests ran` | **4** (`USAGE_ERROR`) |
+| correct node id | `1 passed` | **0** |
+
+Neither form passes silently. **The node id is still strictly better** — exit 4 *and* the error
+NAMES the id that is missing, where exit 5 only says "deselected" and never says what was expected.
+
+**Where the false "exit 0" came from, reproduced exactly.** `pytest … | tail -1` then `$?` reports
+**tail's** status, not pytest's:
+
+```
+$ .venv/bin/python -m pytest -q tests/test_phase21_sc5.py -k frozen_instruments_are_byte_unchanged | tail -1
+4 deselected in 0.49s
+$ echo $?
+0            # <-- tail's exit status
+```
+```
+$ OUT=$(.venv/bin/python -m pytest -q tests/test_phase21_sc5.py -k frozen_instruments_are_byte_unchanged 2>&1); echo $?
+5            # <-- pytest's actual exit status
+```
+
+That artifact produced the same wrong claim in **four** places in this phase: `21-VERIFICATION.md:24`
+and `:211`, `21-REVIEW.md` IN-03 (`:481`), and — the one nobody had caught — a **shipped source
+docstring** at `tests/test_phase21_sc5.py:317`. All four are corrected; see `## Closure`.
+
+### The map
+
+`Command` is the exact argv after `.venv/bin/python -m pytest -q`. `Ran` is the number of tests that
+actually executed. All 48 returned **exit 0 with `Ran > 0`**.
+
+| Plan | Wave | Requirement | Secure behavior | Type | Command (node id unless marked PREFIX) | Ran | Shipped | Status |
+|------|------|-------------|-----------------|------|----------------------------------------|-----|---------|--------|
+| 21-04 | 2 | UNIT-02 | N/A | golden fixture | `tests/test_phase21_aligned_bins.py::test_build_bins_byte_identity_default_matches_the_v2_golden` | 1 | `a3fe2ab` | ✅ green |
+| 21-04 | 2 | UNIT-02 | N/A | golden fixture | `tests/test_phase21_aligned_bins.py::test_build_bins_byte_identity_omitted_equals_align_facts_none` | 1 | `a3fe2ab` | ✅ green |
+| 21-04 | 2 | UNIT-02 | identity claim cannot be vacuous | unit (non-vacuity) | `tests/test_phase21_aligned_bins.py::test_align_facts_is_wired` | 1 | `a3fe2ab` | ✅ green |
+| 21-04 | 2 | UNIT-02 | `space="input"` is the DEFAULT (no union mode) | content | `tests/test_phase21_aligned_bins.py::test_window_purity_input_is_the_default` | 1 | `a3fe2ab` | ✅ green |
+| 21-04 | 2 | UNIT-02 | `n_facts − 1` boundary rows, stated POSITIVELY | content | `tests/test_phase21_aligned_bins.py::test_window_purity_target_boundary_rows_are_a_positive_claim` | 1 | `a3fe2ab` | ✅ green |
+| 21-04 | 2 | UNIT-02 | A0–A5 adversaries caught | adversarial | `tests/test_phase21_aligned_bins.py::test_window_purity_adversaries_input_space` | 5 | `a3fe2ab` | ✅ green |
+| 21-04 | 2 | UNIT-02 | A4 length violation RAISES | adversarial | `tests/test_phase21_aligned_bins.py::test_window_purity_adversaries_a4_raises_on_length` | 1 | `a3fe2ab` | ✅ green |
+| 21-04 | 2 | UNIT-02 | token/mask/fact bins 1:1 | unit | `tests/test_phase21_aligned_bins.py::test_three_bin_alignment_is_1to1` | 1 | `a3fe2ab` | ✅ green |
+| 21-04 | 2 | UNIT-02 | truncation refused in BOTH spaces | unit | `tests/test_phase21_aligned_bins.py::test_three_bin_alignment_truncation_raises_in_both_spaces` | 1 | `a3fe2ab` | ✅ green |
+| 21-06 | 3 | UNIT-02 | `grad_accum_steps == n_facts` OBSERVED, not configured | integration | `tests/test_phase21_aligned_loader.py::test_grad_accum_steps_equals_n_facts` | 1 | `ef2dd4a` | ✅ green |
+| 21-06 | 3 | UNIT-02 (D-06) | fact map read on EVERY access | adversarial | `tests/test_phase21_aligned_loader.py::test_fact_map_is_consumed_at_runtime` | 1 | `ef2dd4a` | ✅ green |
+| 21-06 | 3 | UNIT-02 (D-06) | loader RAISES on missing/truncated fact bin, **distinguishably** | unit | `tests/test_phase21_aligned_loader.py::test_fact_bin_required_raises_distinguishably` | 2 | `ef2dd4a` | ✅ green |
+| 21-06 | 3 | UNIT-02 (**CR-01**) | whole-bin length contract enforced at DRAW time | adversarial | `tests/test_phase21_aligned_loader.py::test_n7_all_three_bins_truncated_together_is_refused` | 1 | CR-01 fix | ✅ green |
+| 21-10 | 4 | UNIT-03 | counts conserve against their own denominator | unit | `tests/test_phase21_multiplicity.py::test_conservation` | 3 | `f1e8677` | ✅ green |
+| 21-10 | 4 | UNIT-03 | conserves at the REAL budget too | unit | `tests/test_phase21_multiplicity.py::test_conservation_holds_at_the_real_budget_denominator` | 1 | `f1e8677` | ✅ green |
+| 21-10 | 4 | UNIT-03 | aligned branch conserves | unit | `tests/test_phase21_multiplicity.py::test_aligned_conservation` | 1 | `f1e8677` | ✅ green |
+| 21-10 | 4 | UNIT-03 | instrument CAN report ≠ 1 (with a negative control) | adversarial | `tests/test_phase21_multiplicity.py::test_instrument_can_report_not_one` | 2 | `f1e8677` | ✅ green |
+| 21-10 | 4 | UNIT-03 | SEED=1337 reproduces | unit | `tests/test_phase21_multiplicity.py::test_seed_reproducible` | 1 | `f1e8677` | ✅ green |
+| 21-10 | 4 | UNIT-03 | every row carries its OWN denominator | content | `tests/test_phase21_multiplicity.py::test_row_carries_its_denominator` | 1 | `f1e8677` | ✅ green |
+| 21-10 | 4 | UNIT-03 | validated against 4 independent oracles | oracle — **PREFIX**, means all 4 oracle tests | `tests/test_phase21_multiplicity.py -k oracle` | 4 | `f1e8677` | ✅ green |
+| 21-08 | 3 | UNIT-04 (D-11) | replay volume independent of private fact VALUES | differential | `tests/test_phase21_replay_volume.py::test_side_channel_closed` | 1 | `f756474` | ✅ green |
+| 21-08 | 3 | UNIT-04 (D-11) | the differential's live negative control | differential | `tests/test_phase21_replay_volume.py::test_side_channel_negative_control` | 1 | `f756474` | ✅ green |
+| 21-08 | 3 | UNIT-04 (D-24) | budget quantized to whole windows at n=8 AND n=64 | unit | `tests/test_phase21_replay_volume.py::test_window_quantized` | 2 | `f756474` | ✅ green |
+| 21-01 | 1 | UNIT-01/04/05 | δ clears its own ceiling at N=8 and N=64 | unit | `tests/test_phase21_unit_pin.py::test_prove_guards_pinned_delta_clears_the_ceiling` | 2 | `7347472` | ✅ green |
+| 21-01 | 1 | UNIT-05 | the REJECTED `1/N^1.1` recipe fails its own ceiling | unit | `tests/test_phase21_unit_pin.py::test_prove_guards_rejected_recipe_fails_its_own_ceiling` | 2 | `7347472` | ✅ green |
+| 21-01 | 1 | UNIT-05 | the rejection ratio is published, not asserted | unit | `tests/test_phase21_unit_pin.py::test_prove_guards_rejected_ratio_to_ceiling` | 2 | `7347472` | ✅ green |
+| 21-01 | 1 | UNIT-01 | frozen module imports ⊆ `{pathlib, sys, erasure_gate}` | AST | `tests/test_phase21_unit_pin.py::test_pin_imports_nothing` | 1 | `7347472` | ✅ green |
+| 21-01 | 1 | UNIT-01 | the same AST rule on the gate module | AST | `tests/test_phase20_prereg.py::test_mitigation_gate_import_graph_is_stdlib_and_erasure_gate_only` | 1 | pre-existing | ✅ green |
+| 21-01 / 21-11 | 1 / 6 | UNIT-01/04/05 (D-20) | guard armed BEFORE the first artifact | git history | `tests/test_phase20_prereg.py::test_phase21_prereg_is_frozen_before_every_phase21_result` | 1 | `21ed755` → `d32b51a` | ✅ green |
+| 21-03 | 2 | UNIT-01/04/05 | the guard is LIVE — `checked == 2`, both non-zero | git history | `tests/test_phase20_prereg.py::test_phase21_guard_is_now_live` | 1 | `76926ef` | ✅ green |
+| 21-03 | 2 | UNIT-01/04/05 | guard proven non-vacuous, RED then GREEN | git fixture | `tests/test_phase20_prereg.py::test_phase21_glob_sees_the_phase21_prefix_red_then_green` | 1 | `76926ef` | ✅ green — **selector corrected, see IN-03** |
+| gap `9a407d6` | — | UNIT-01 (**WR-04**) | `privacy_n` refuses float / str / 0 / negative / bool | unit | `tests/test_phase21_unit_continuation.py::test_the_continuation_refuses_what_the_pin_admits` | 3 | `9a407d6` | ✅ green |
+| gap `9a407d6` | — | UNIT-01 (**WR-04**) | no module reaches the pin's `privacy_n` — AST census | AST | `tests/test_phase21_unit_continuation.py::test_privacy_n_has_no_route_through_the_pin_outside_this_module` | 1 | `9a407d6` | ✅ green |
+| 21-05 | 2 | UNIT-06 (D-16) | `render_family` byte-identical, both registers | golden fixture | `tests/test_phase21_filler.py::test_render_family_byte_identity` | 2 | `ab81800` | ✅ green |
+| 21-05 | 2 | UNIT-06 (D-16) | `forms=` is READ — the identity claim is falsifiable | unit (non-vacuity) | `tests/test_phase21_filler.py::test_forms_is_wired` | 2 | `ab81800` | ✅ green |
+| 21-07 | 3 | UNIT-06 (D-16) | filler slots DISJOINT from the 11 published slots | unit | `tests/test_phase21_filler.py::test_slots_disjoint` | 1 | `fe9cabe` | ✅ green |
+| 21-07 | 3 | UNIT-06 (D-17) | collision refusal vs the 10, the 28, and each other | unit | `tests/test_phase21_filler.py::test_minting_discipline` | 1 | `fe9cabe` | ✅ green |
+| 21-07 | 3 | UNIT-06 (D-13) | filler OUTSIDE `all_pools()`; `_BY_ID` gains no keys | unit | `tests/test_phase21_filler.py::test_outside_all_pools` | 1 | `fe9cabe` | ✅ green |
+| 21-07 | 3 | UNIT-06 | render order stable ACROSS PROCESSES (frozenset fix) | unit | `tests/test_phase21_filler.py::test_render_filler_episodes_is_order_stable` | 1 | `fe9cabe` | ✅ green |
+| 21-09 | 5 | UNIT-06 / SC5 (D-18) | no filler value reaches any published instrument | content | `tests/test_phase21_sc5.py::test_no_filler_leak` | 1 | `3941236` | ✅ green |
+| 21-09 | 5 | UNIT-06 / SC5 | `scripts/phase18_extraction.py` **and** the 270-question fixture byte-unchanged — BOTH sha256 pins are in this one test | sha256 | `tests/test_phase21_sc5.py::test_instruments_unchanged_byte_for_byte` | 1 | `3941236` | ✅ green |
+| 21-09 | 5 | UNIT-06 / SC5 | the `== 10` wall census is the MEASURED set, mechanically | census | `tests/test_phase21_sc5.py::test_wall_census_is_the_measured_set` | 1 | `3941236` | ✅ green |
+| 21-09 | 5 | UNIT-06 / SC5 | tier composition pinned by EQUALITY, not `<=` | unit | `tests/test_phase21_sc5.py::test_locked_and_soft_tiers_are_unmoved` | 1 | `3941236` | ✅ green |
+| 21-09 | 5 | UNIT-06 / SC5 | all **11** `== 10` wall sites still green | existing | the **SC5 guard set** command above | 364 | pre-existing | ✅ green |
+| — | — | UNIT-06 / SC5 | `len(LOCKED_FACTS) <= 8`, `len(SOFT_TIER_FACTS) <= 3` | existing | `tests/test_phase14_factset.py::test_composition_targets` | 1 | pre-existing | ✅ green |
+| — | — | all (RPT-03) | `pyproject.toml` untouched — zero new deps | sha256 | `tests/test_package.py` | 3 | pre-existing | ✅ green |
+| — | — | sampling | the quick run | suite | `tests/test_phase20_prereg.py tests/test_package.py tests/test_masked_batch.py tests/test_phase14_teaching.py` | 70 | — | ✅ green |
+| — | — | sampling | the SC5 guard set (10 files) | suite | see Test Infrastructure above | 364 | — | ✅ green |
+| — | — | sampling | the whole Phase-21 family — **PREFIX**, means every test whose id contains `phase21` | suite | `-k phase21` | 142 | — | ✅ green |
+
+**48 commands · 48 PASS (exit 0 AND `Ran > 0`) · 0 FAIL.** Executed 2026-08-25 by a mechanical loop
+that took each exit code from `subprocess.returncode` and parsed the ran-count out of pytest's own
+summary line; a command that collected zero tests would have been recorded FAIL even at exit 0.
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
-### The `== 10` wall is 8 sites across 7 files, not 4
+### The `== 10` wall is 11 sites across 8 files — every earlier figure in this file was low
 
-CONTEXT.md D-18 names **four**; `21-RESEARCH.md` corrected it to **seven across six**; a direct
-grep finds **eight across seven**. Any plan sampling fewer under-samples the wall SC5 rests on:
+This file previously claimed **8 across 7**. That is superseded. 21-07 censused the wall
+mechanically with **three independent grep patterns** (a bare `== 10\b` sweep plus two
+variable-shaped patterns) and measured **11 sites across 8 files** — and, unlike every prior count,
+that census is now a **shipped, executable test** rather than a table in a document:
+`tests/test_phase21_sc5.py::test_wall_census_is_the_measured_set`, whose `_EXPECTED_WALL` at
+`tests/test_phase21_sc5.py:217-231` is the list below. Confirmed independently during this closure
+by `grep -n "== 10" tests/*.py`.
 
-| # | Site | Variable |
-|---|------|----------|
-| 1 | `tests/test_phase14_scoring.py:405` | `forbidden` |
-| 2 | `tests/test_phase16_driver.py:313` | `forbidden` |
-| 3 | `tests/test_phase16_ladder.py:443` | `forbidden` |
-| 4 | `tests/test_phase16_ladder.py:711` | `forbidden` |
-| 5 | `tests/test_phase18_prereg.py:127` | `forbidden` |
-| 6 | `tests/test_phase19_erasure.py:625` | `forbidden` |
-| 7 | `tests/test_phase18_corpus.py:430` | `values` |
-| 8 | **`tests/test_phase14_demo.py:394`** | `values` — **named in neither CONTEXT.md nor RESEARCH.md**; B-01 demo fact-freedom, same `LOCKED_FACTS + SOFT_TIER_FACTS == 10` assertion |
+| # | Site | Assertion |
+|---|------|-----------|
+| 1 | `tests/test_phase14_scoring.py:405` | `len(forbidden) == 10` |
+| 2 | `tests/test_phase14_demo.py:394` | `len(values) == 10` |
+| 3 | **`tests/test_phase14_demo.py:568`** | `len(result["values"]) == 10` |
+| 4 | `tests/test_phase16_driver.py:313` | `len(forbidden) == 10` |
+| 5 | `tests/test_phase16_ladder.py:443` | `len(forbidden) == 10` |
+| 6 | `tests/test_phase16_ladder.py:711` | `len(forbidden) == 10` |
+| 7 | `tests/test_phase18_prereg.py:127` | `len(forbidden) == 10` |
+| 8 | `tests/test_phase18_corpus.py:430` | `len(values) == 10` |
+| 9 | `tests/test_phase19_erasure.py:625` | `len(forbidden) == 10` |
+| 10 | **`tests/test_phase19_erasure.py:1689`** | `taught == 10` |
+| 11 | **`tests/test_phase21_filler.py:165`** | `len(fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS) == 10` (added by 21-05) |
 
-`tests/test_phase14_demo.py` is therefore added to the SC5 guard set above.
+**How the figure drifted, and the correction to the correction.** The trail is
+`21-CONTEXT.md` D-18 → **4**; `21-RESEARCH.md` → **7 across 6**; plan-check pass 1 → **8 across 7**
+(the table this section replaces); plan-check pass 3 → **9**; 21-07's mechanical census → **11
+across 8**.
+
+> **One claim carried into this closure task was falsified and is not passed through.** The two sites
+> said to "appear in no document" were `tests/test_phase16_ladder.py:711` and
+> `tests/test_phase19_erasure.py:625`. Both were already rows 4 and 6 of *this file's own* superseded
+> 8-site table. The three sites genuinely absent from it are the **bolded** rows above —
+> `test_phase14_demo.py:568`, `test_phase19_erasure.py:1689` and `test_phase21_filler.py:165`.
+> Recorded rather than quietly fixed, because "a documented figure is low" is the finding, and
+> replacing one wrong attribution with another would be the same defect.
+
+`test_phase14_demo.py:568` deserves its own line: this file previously recorded it as "a ninth
+`== 10` assertion … it matches NEITHER census grep pattern, so the 8/7 count stays internally
+consistent." The three-pattern census **does** match it, so that consistency argument is void — the
+site was always part of the wall and the old two-pattern census simply could not see it.
+
+**Three further sites of the same class exist and are deliberately outside the census, each for a
+stated reason** — recorded so the next reader meets them as known facts rather than as regressions:
+
+| Site | Why excluded |
+|---|---|
+| `tests/test_phase21_sc5.py:100` (`len(scored) == 10`) | the census's OWN file, excluded by a mechanical `__file__` check so it cannot discover itself |
+| `scripts/phase21_filler.py:262` (`len(FORBIDDEN_SCORED_VALUES) == 10`) | outside `tests/`; the census walks `tests/` only. **This one is WR-06 and is still OPEN:** it is a strippable `assert`, verified live — `python -O -c 'import phase21_filler'` imports clean |
+| `tests/test_phase16_ladder.py:232`, `test_phase15_stats.py:127`, `test_phase21_multiplicity.py:298` | `== 10` matches that are not leak-vocabulary claims; listed with their reasons in `_NOT_WALL_SITES` (`tests/test_phase21_sc5.py:202-213`) |
+
+`tests/test_phase14_demo.py`, `tests/test_phase21_filler.py` and `tests/test_phase21_multiplicity.py`
+are therefore all in the SC5 guard set above, and `tests/test_phase21_sc5.py:286` asserts that
+membership mechanically.
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/test_phase21_aligned_bins.py` — UNIT-02 content proofs + `build_bins` golden fixture
-- [ ] `tests/test_phase21_aligned_loader.py` — UNIT-02 / D-06 run-time consumption proofs
-- [ ] `tests/test_phase21_multiplicity.py` — UNIT-03 instrument validation
-- [ ] `tests/test_phase21_replay_volume.py` — UNIT-04 / D-11 / D-24 side-channel differential
-- [ ] `tests/test_phase21_unit_pin.py` — the frozen module's `_prove` guards
-- [ ] `tests/test_phase21_filler.py` — UNIT-06 corpus + `render_family` golden fixture
-- [ ] `tests/test_phase21_sc5.py` — SC5 non-disturbance
-- [ ] `tests/fixtures/golden_build_bins_v2.json` — captured from a **git-clean, pre-edit**
-      `teach_persona.py`. Captured after the edit it proves nothing.
-- [ ] `tests/fixtures/golden_render_family_v2.json` — captured from a **git-clean, pre-edit**
-      `phase14_factset.py`. Same constraint.
-- [ ] **Two additive edits to `tests/test_phase20_prereg.py`** (D-20) — the `V4_ARTIFACT_GLOBS`
-      addition **and** a `_assert_ordering_holds(..., artifact_glob="results/phase21_*")` call.
-      Neither is sufficient alone: `globs` is used only at `:129` for a consistency check and the
-      ordering loop runs on the singular `artifact_glob`.
+**All ten landed.** `Shipped` is the commit that ADDED the file, from `git log --diff-filter=A`.
 
-**No new framework, no new fixture infrastructure, no conftest change, no new dependency.**
+- [x] `tests/test_phase21_aligned_bins.py` — UNIT-02 content proofs + `build_bins` golden fixture — `a3fe2ab` (21-04), 23 tests
+- [x] `tests/test_phase21_aligned_loader.py` — UNIT-02 / D-06 run-time consumption proofs — `ef2dd4a` (21-06), 11 tests
+- [x] `tests/test_phase21_multiplicity.py` — UNIT-03 instrument validation — `f1e8677` (21-10), 17 tests
+- [x] `tests/test_phase21_replay_volume.py` — UNIT-04 / D-11 / D-24 side-channel differential — `f756474` (21-08), 13 tests
+- [x] `tests/test_phase21_unit_pin.py` — the frozen module's `_prove` guards — `7347472` (21-01), 11 tests
+- [x] `tests/test_phase21_filler.py` — UNIT-06 corpus + `render_family` golden fixture — `ab81800` (21-05), 13 tests
+- [x] `tests/test_phase21_sc5.py` — SC5 non-disturbance — `3941236` (21-09), 4 tests
+- [x] `tests/fixtures/golden_build_bins_v2.json` — captured from a **git-clean, pre-edit**
+      `teach_persona.py` — `a18f675` (21-02). The pre-edit constraint was enforced mechanically, not
+      by convention: `scripts/phase21_golden_capture.py` calls `_refuse_if_dirty()` at module scope
+      (`:147`, BEFORE the sibling imports) and again at call time (`:263`).
+- [x] `tests/fixtures/golden_render_family_v2.json` — captured pre-edit from `phase14_factset.py` —
+      `4e2ce1a` (21-02), same refusal.
+- [x] **Two additive edits to `tests/test_phase20_prereg.py`** (D-20) — `V4_ARTIFACT_GLOBS` at
+      `tests/test_phase20_prereg.py:130` **and** the `artifact_glob="results/phase21_*"` ordering
+      call. Both landed at `21ed755` (21-01); `76926ef` (21-03) proved the glob non-vacuous and
+      `d32b51a` (21-11) closed the reflexivity gap.
+
+**Held: no new framework, no new fixture infrastructure, no conftest change, no new dependency.**
+`tests/test_package.py` (3 tests, exit 0) pins `pyproject.toml` by sha256 — RPT-03 makes four
+milestones.
+
+**Two files were added beyond the ten, both recorded rather than smuggled in:**
+`tests/test_phase21_unit_record.py` (`17b3c85`, 21-11 — the emitters, 17 tests) and
+`tests/test_phase21_unit_continuation.py` (`9a407d6` — WR-04's dated continuation, 30 tests).
+
+Per-file counts measured by `pytest --collect-only -q`, not hand-counted: **139 tests** across the
+nine `tests/test_phase21_*.py` files. The `-k phase21` PREFIX row in the map reports **142**, and
+the difference is not slack — it is the 3 `test_phase21_*` tests that live in
+`tests/test_phase20_prereg.py` (`test_phase21_prereg_is_frozen_before_every_phase21_result`,
+`test_phase21_guard_is_now_live`, `test_phase21_glob_sees_the_phase21_prefix_red_then_green`),
+enumerated to confirm the decomposition rather than assumed from the totals matching.
 
 ### The governing rule for every byte-identity proof in this phase
 
@@ -150,10 +315,11 @@ either re-site the kwarg or drop it; it must not ship a guard that cannot fail.
 
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| Arm-then-write commit ORDER for the ancestry guard | UNIT-01/04/05 (D-20) | The property is over **git history**, not over a working tree. A test can assert the ordering holds, but only the operator controls which commit lands first — and `:157` (`adds[-1]`) makes a wrong order permanent. | Land the two `test_phase20_prereg.py` edits GREEN in a commit that is a strict ancestor of the first `results/phase21_*` commit. Verify with `git merge-base --is-ancestor <pin-commit> <artifact-commit>` before committing any artifact. Note `:300-304`: `--is-ancestor X X` exits 0, so same-commit PASSES the mechanism — "strictly after" is a tighter discipline than the guard enforces, and it is deliberate. |
-| `results/phase21_*` artifacts are COMMITTED, not merely written | UNIT-03 (D-26) | `git ls-files` is the guard's input. `results/` is not gitignored, but an uncommitted artifact is invisible to the guard — a silent no-op, not a failure. | After the driver writes, confirm `git ls-files results/phase21_*` is non-empty before claiming the guard covers them. |
+| Behavior | Requirement | Why Manual | Test Instructions | OUTCOME (measured 2026-08-25) |
+|----------|-------------|------------|-------------------|-------------------------------|
+| Arm-then-write commit ORDER for the ancestry guard | UNIT-01/04/05 (D-20) | The property is over **git history**, not over a working tree. A test can assert the ordering holds, but only the operator controls which commit lands first — and `:157` (`adds[-1]`) makes a wrong order permanent. | Land the two `test_phase20_prereg.py` edits GREEN in a commit that is a strict ancestor of the first `results/phase21_*` commit. Verify with `git merge-base --is-ancestor <pin-commit> <artifact-commit>` before committing any artifact. Note `:300-304`: `--is-ancestor X X` exits 0, so same-commit PASSES the mechanism — "strictly after" is a tighter discipline than the guard enforces, and it is deliberate. | ✅ **HELD, and STRICTLY.** Pin `scripts/mitigation_unit.py` added at **`8d3beb4`**; both artifacts first added at **`c79b9bf`**. `git merge-base --is-ancestor 8d3beb4 c79b9bf` → **exit 0**, and `8d3beb4 != c79b9bf`, so BOTH conjuncts hold — the order is strictly-after, not merely same-commit. The guard is LIVE, not vacuous: 1 pin × 2 tracked artifacts = **`checked = 2`**, both non-zero. `adds` has exactly ONE entry per artifact, so the CR-02 re-emit at `eba0571` did not move the first-add and no delete-and-re-add laundering occurred. Independently recomputed by `21-VERIFICATION.md:65` and again during this closure. |
+| `results/phase21_*` artifacts are COMMITTED, not merely written | UNIT-03 (D-26) | `git ls-files` is the guard's input. `results/` is not gitignored, but an uncommitted artifact is invisible to the guard — a silent no-op, not a failure. | After the driver writes, confirm `git ls-files results/phase21_*` is non-empty before claiming the guard covers them. | ✅ **HELD.** `git ls-files 'results/phase21_*'` returns both `results/phase21_multiplicity.json` and `results/phase21_privacy_unit.json` — non-empty, so the guard has real input. Belt-and-braces added during execution: `provenance.refuse_if_dirty` (`scripts/phase21_emit.py:77`) makes a dirty-tree publication a `SystemExit` rather than a `git_sha` the tree cannot reproduce — that was CR-02, and the guard was **watched firing** on an untracked file. |
+| CI is not shallow | UNIT-01/04/05 (D-20) | `_assert_ordering_holds` asserts `rev-parse --is-shallow-repository == "false"` and REFUSES to skip (`tests/test_phase20_prereg.py:136-141`), so a shallow clone turns the guard into an error rather than a silent pass. Whether CI checks out deep is a workflow-file property. | `.github/workflows/ci.yml:21` must set `fetch-depth: 0`. | ✅ **HELD.** `git rev-parse --is-shallow-repository` → `false` here. Row added during closure because the prerequisite was stated in prose at `## Test Infrastructure` but had no row of its own. |
 
 ---
 
@@ -168,8 +334,9 @@ either re-site the kwarg or drop it; it must not ship a guard that cannot fail.
 - [x] Feedback latency < 36s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-`wave_0_complete` stays **false** by design: the ten Wave 0 files are *planned and owned*, not yet
-written. It flips during execution, not during planning.
+`wave_0_complete` was **false** by design at planning time: the ten Wave 0 files were *planned and
+owned*, not yet written. **It is now `true`** — all ten landed, each with the commit that added it
+recorded above. It flipped during execution, exactly as this line said it would.
 
 ### Wave structure — SIX waves, not five
 
@@ -285,13 +452,85 @@ cannot reconstruct later:
 | W3 | **pre-existing at HEAD** | `test_wall_census_is_eight_sites` was specified to FAIL: the same task requires `test_phase21_sc5.py` to carry `len(forbidden) == 10`, while the census greps for exactly that and asserts 8 sites / 7 files with an explicit instruction not to adjust the number. Measured: 8/7 today, 9/8 with the new file | 21-09 — mechanical `__file__` exclusion in the walk (not a comment), with the reason stated: the census measures the PRE-EXISTING wall. The re-siting alternative (21-05's non-matching `len(fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS) == 10` form) was rejected for dodging the grep by accident of phrasing |
 | W4 | **pre-existing convention, overstated by revision 2** | The pass-2 paragraph claimed every `T-21-NN` denotes exactly one threat. False for `T-21-03` (three sites) and `T-21-04` (two) | the paragraph above, rewritten as a threat-CLASS table naming all nine shared IDs. Nothing renumbered |
 
-**A ninth `== 10` assertion exists and is now recorded** (INFO, surfaced by check 3):
+~~**A ninth `== 10` assertion exists and is now recorded** (INFO, surfaced by check 3):
 `tests/test_phase14_demo.py:568` — `assert len(result["values"]) == 10`. It matches NEITHER census
 grep pattern, so the 8/7 count stays internally consistent, and it IS executed because the SC5 guard
-set runs that whole file. Written into 21-09's census docstring so the next reader meets it as a
-known fact instead of re-discovering it as a regression.
+set runs that whole file.~~
 
-**Status: revised three times, awaiting re-check.** No `gsd-plan-checker` pass has run against the
-set as it stands after the four fixes above. `status: approved` in the frontmatter refers to the
-validation STRATEGY, which is unchanged; it is not a claim that the current plan set has been
-re-checked. The next `gsd-plan-checker` run is what upgrades this line.
+> **SUPERSEDED 2026-08-25 — struck through rather than deleted.** The site is real and the guard-set
+> half is right, but the "matches NEITHER census grep pattern, so 8/7 stays internally consistent"
+> reasoning is **void**: 21-07's three-pattern census DOES match it. It is site 3 of 11 in the
+> measured wall (`### The == 10 wall is 11 sites across 8 files` above). The 8/7 figure was low, not
+> internally consistent — it was consistent only with a census that could not see this row. It is
+> written into 21-09's census docstring and, better, into the executable `_EXPECTED_WALL`.
+
+~~**Status: revised three times, awaiting re-check.**~~ Superseded by `## Closure` below: the phase
+executed and was verified, so the plan set is no longer the thing awaiting a check.
+
+---
+
+## Closure
+
+**Closed 2026-08-25** as UAT decision 4 (the documentation ledger). `status:` in the frontmatter is
+now `closed` and refers to THIS DOCUMENT, not to the phase.
+
+### What was actually verified
+
+| Check | Result |
+|---|---|
+| Commands in this file executed, not typed | **48 / 48 PASS** — exit 0 AND non-zero collection, every one |
+| Single-test rows converted to explicit node ids | 45 of 48; the 3 exceptions are marked **PREFIX** in the map and say what family they mean |
+| Every node id cited across this file, `21-REVIEW.md` and `REQUIREMENTS.md`, re-extracted **from the documents** and run | **62 / 63 PASS**; the 1 FAIL is the deliberate wrong-node-id example above, which is *supposed* to exit 4 — it is the sweep's own negative control |
+| Full suite | `1024 passed, 1 skipped` binding on a full checkout; `1018 passed, 7 skipped` here — **1,025 collected either way** |
+| `ruff check .` / `ruff format --check .` | clean |
+| `scripts/mitigation_unit.py` (frozen pin) | `sha256 45f37e15…` — **unchanged** |
+| `results/phase21_privacy_unit.json` | `sha256 84d8f3bd…` — **unchanged** |
+| `results/phase21_multiplicity.json` | `sha256 e9e3b9bf…` — **unchanged** |
+| `.planning/STATE.md`, `.planning/ROADMAP.md` | untouched |
+
+### What this closure does NOT claim
+
+**The phase is not complete and did not pass.** `21-VERIFICATION.md` returned **`human_needed`** at
+6/6 must-haves — the goal is achieved and the evidence is reproducible, but the report withheld
+`passed` deliberately. Still open from `21-REVIEW.md`, unchanged by this closure:
+
+| ID | Severity | Still open? | One line |
+|---|---|---|---|
+| CR-01, CR-02, WR-01, WR-02 | critical / warning | **CLOSED** | closure records in `21-REVIEW.md`, re-measured by the verifier |
+| WR-04 | warning | **CLOSED** at `9a407d6` | `privacy_n` validated in a dated continuation + an AST import census |
+| WR-03 | warning | **OPEN** | `scripts/teach_persona.py:162-163` states 49.90% at n=64; the phase's own artifact records `documented_n64_claim_holds: false` and `0.44755244755244755` |
+| WR-05 | warning | **OPEN** | a headline artifact "finding" is an arithmetic identity the same artifact elsewhere disclaims |
+| WR-06 | warning | **OPEN** | `scripts/phase21_filler.py:262`'s `== 10` wall is a strippable `assert`; `python -O` imports it clean |
+| WR-07 | warning | **OPEN** | the frozen pin attributes a systematic rule gap to "sampling noise" |
+| IN-01, IN-02 | info | **OPEN** | a tautological `_prove`; stale line anchors — both inside the frozen pin |
+| IN-03 | info | **CLOSED here** | the dead `-k` selector: this document was its only home |
+| IN-04 | info | **OPEN** | the replay seam has no production caller — a declared Phase-22 seam |
+
+Nothing above was closed by writing this document except IN-03, which was a defect *in* this
+document.
+
+### IN-03 — closed, and the framing corrected
+
+The finding is real: `-k phase21_glob_red_then_green` collects **zero** tests, because the real name
+is `test_phase21_glob_sees_the_phase21_prefix_red_then_green`. The row now names that node id and it
+runs (1 passed, exit 0).
+
+**But IN-03's stated mechanism was wrong, and so was the same claim in `21-VERIFICATION.md:24` and
+`:211`.** All three recorded "exit 0". Measured correctly, a dead `-k` exits **5**. The wrong number
+came from reading `$?` after a pipe. Full reproduction in `### Why these are node ids` above.
+
+**A fourth instance, in shipped source, was found during this closure and is corrected in place:**
+`tests/test_phase21_sc5.py:317` claimed a dead `-k` "exited **0**". It exits 5. Corrected under the
+project's retract-in-place rule; the file is neither frozen nor ancestry-pinned.
+
+**A fifth was found in the wall-census provenance and is recorded above** rather than passed
+through: the two sites said to appear in no document were already rows 4 and 6 of this file's own
+superseded table.
+
+### The pattern, stated once
+
+Five documents in this phase carried a claim that measurement falsified, and in every case the
+measurement was right and the document was wrong. The wall count went 4 → 7 → 8 → 9 → **11**, each
+step a document copying the last document. It stopped moving when 21-09 made it an **executable
+test** instead of a table. That is the transferable lesson and it is why this closure verified every
+command by running it rather than by reading it.

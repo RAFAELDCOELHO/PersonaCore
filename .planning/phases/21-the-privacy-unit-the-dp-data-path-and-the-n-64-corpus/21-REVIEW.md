@@ -1389,6 +1389,213 @@ land in; this closure is scoped to WR-04's executable defect and adds no prose c
 
 ---
 
+## Ledger — CLOSED
+
+**2026-08-25.** UAT decision 4. Closes `21-VALIDATION.md` and the six empty UNIT traceability notes
+in `.planning/REQUIREMENTS.md`. **Closes IN-03 and nothing else** — no other finding in this report
+changed state as a result of this work.
+
+### What was executed
+
+`21-VALIDATION.md` published 26 verification commands, every one as a `-k` substring selector, and
+every row read `TBD | TBD | TBD` / `⬜ pending`. The table is rebuilt on **explicit node ids** and
+**every command in it was run**:
+
+| | |
+|---|---|
+| Commands executed | **48** |
+| PASS (exit 0 **AND** non-zero collection) | **48** |
+| FAIL | **0** |
+| Rows converted to explicit `path::test_name` | 45 of 48 |
+| Rows left as `-k`, each marked **PREFIX** and stating the family it means | 3 (`-k phase21` = 142, `-k oracle` = 4, plus the guard-set file list) |
+
+The harness took each exit code from `subprocess.returncode` and parsed the ran-count out of
+pytest's own summary line, so a command that collected zero tests would be recorded FAIL **even at
+exit 0**. That is not a hypothetical guard — see below.
+
+Ownership (`Plan`, `Wave`, `Shipped`) was resolved from `git log --diff-filter=A` per artifact, not
+transcribed from the plan set.
+
+### A second sweep, over the documents themselves — and it caught five defects in this closure
+
+The 48-command run only covers `21-VALIDATION.md`'s table. `REQUIREMENTS.md`'s six new UNIT notes
+cite dozens more node ids in prose. A second harness **re-extracted every `path::test_name` from the
+three edited files** — the documents as input, nothing hand-listed — and ran each:
+
+| | |
+|---|---|
+| Distinct node ids cited across the 3 documents | **63** |
+| PASS (exit 0, ran > 0) | **62** |
+| FAIL | **1** — the deliberate wrong-node-id example in `21-VALIDATION.md`'s exit-code table, which is *supposed* to exit 4. It is the sweep's own negative control |
+
+**It earned its keep on the first run: 5 real defects, all mine, all in `REQUIREMENTS.md`.** The
+notes use a bare `::test_name` shorthand after naming a file, and five of those bare references sat
+after an *unrelated* file mention — so `::test_render_filler_episodes_is_order_stable` read as living
+in `test_phase21_sc5.py` (it is in `test_phase21_filler.py`),
+`::test_published_arms_are_not_dragged_onto_the_aligned_path` read as `aligned_loader` (it is
+`aligned_bins`), and `::test_the_n8_reproduction_claim_is_computed_and_could_have_been_false` read as
+`test_phase18_docs.py` (it is `test_phase21_unit_record.py`). Every one exits 4 and pytest names the
+missing id. All five are now written with full paths.
+
+This is the same defect class as IN-03 — a document naming a test path the code refuses — reproduced
+inside the document written to close IN-03. It is recorded rather than quietly fixed, because a
+closure that silently repaired its own instance of the defect it documents would be worth less than
+one that shows the check firing.
+
+### IN-03 — CLOSED, and its stated mechanism was wrong
+
+The finding is real. `-k phase21_glob_red_then_green` collects **zero** tests; the real name is
+`test_phase21_glob_sees_the_phase21_prefix_red_then_green` and `glob_red_then_green` is not a
+substring of it. `21-VALIDATION.md` now names the node id, and it runs: `1 passed`, exit 0.
+
+**But IN-03's headline — "selects zero tests and exits 0" — is FALSE, and so is the same claim in
+`21-VERIFICATION.md:24` and `:211`.** Measured with the exit code taken from the pytest process
+rather than through a pipe:
+
+| invocation | output | EXIT |
+|---|---|---|
+| mistyped `-k` (`tests/test_phase21_sc5.py -k this_selector_does_not_exist_anywhere`) | `4 deselected in 0.72s` | **5** |
+| `-k phase21_glob_red_then_green` on `tests/test_phase20_prereg.py` | `22 deselected in 0.01s` | **5** |
+| same selector, whole suite | `1025 deselected in 2.83s` | **5** |
+| wrong node id (`…::test_instruments_unchanged`) | `ERROR: not found: …` + `no tests ran` | **4** |
+| correct node id | `1 passed` | **0** |
+
+**The provenance of the wrong number, reproduced exactly:**
+
+```
+$ .venv/bin/python -m pytest -q tests/test_phase21_sc5.py -k frozen_instruments_are_byte_unchanged | tail -1
+4 deselected in 0.49s
+$ echo $?
+0                                        # tail's status
+$ OUT=$(.venv/bin/python -m pytest -q tests/test_phase21_sc5.py -k frozen_instruments_are_byte_unchanged 2>&1); echo $?
+5                                        # pytest's status
+```
+
+`pytest … | tail` reports **tail's** exit status. Every "exit 0" in this phase traces to that
+pipeline. `pytest` returns `5` (`NO_TESTS_COLLECTED`) for a dead `-k` and `4` (`USAGE_ERROR`) for a
+bad node id; **neither form passes silently.**
+
+Node ids are still strictly better, for a reason the retracted framing obscured: exit 4 **names the
+id that is missing**, where exit 5 says only "deselected" and never says what was expected.
+
+### A fourth instance, in shipped source — corrected in place
+
+Three reports carried the false claim. A fourth was found during this closure and it is not a
+planning document: **`tests/test_phase21_sc5.py:317`**, the docstring of
+`test_instruments_unchanged_byte_for_byte`, stated that the non-matching selector "reported
+'4 deselected' and exited **0**" and called it a command that "passes vacuously". It exits 5.
+
+Corrected in place under the project's retract-in-place rule — the file is neither frozen nor
+ancestry-pinned. The rename it justifies is unaffected and the corrected docstring gives the
+stronger reason. `tests/test_phase21_sc5.py` → 4 passed after the edit.
+
+### The `== 10` wall census — a second false attribution, published rather than passed through
+
+The closure brief stated that 21-07's census "named two that appear in no document
+(`tests/test_phase16_ladder.py:711`, `tests/test_phase19_erasure.py:625`)". **Falsified:** both are
+rows 4 and 6 of `21-VALIDATION.md`'s own superseded 8-site table.
+
+The measured wall is **11 sites across 8 files** — confirmed here by an independent
+`grep -n "== 10" tests/*.py` and by the shipped `_EXPECTED_WALL` at `tests/test_phase21_sc5.py:217-231`.
+The three sites genuinely absent from the 8-site table are:
+
+| Site | Assertion |
+|---|---|
+| `tests/test_phase14_demo.py:568` | `len(result["values"]) == 10` |
+| `tests/test_phase19_erasure.py:1689` | `taught == 10` |
+| `tests/test_phase21_filler.py:165` | `len(fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS) == 10` |
+
+`test_phase14_demo.py:568` is the interesting one: `21-VALIDATION.md` had recorded it as matching
+"NEITHER census grep pattern, so the 8/7 count stays internally consistent." The three-pattern
+census **does** match it, so that consistency argument is void. The old figure was low, not
+self-consistent. The line is struck through in place, not deleted.
+
+Drift trail, for the record: `21-CONTEXT.md` D-18 **4** → `21-RESEARCH.md` **7 across 6** →
+plan-check pass 1 **8 across 7** → pass 3 **9** → 21-07 measured **11 across 8**. It stopped moving
+when 21-09 made it an executable test instead of a table.
+
+### Two stale figures in `21-VALIDATION.md`, corrected
+
+| Claim | Status |
+|---|---|
+| full suite `877 passed, 1 skipped` | **superseded** — predates this phase's 30 new tests and every Phase-20 correction test. Binding figure is now `1024 passed, 1 skipped` on a full checkout; **1,025 collected**, independently confirmed by a non-matching `-k` reporting `1025 deselected` |
+| "the one skip is `test_loop_penalty_fn::test_golden_trajectory_bit_identity`" | **wrong** — 21-10 measured that it does not skip. The real one is `tests/test_train_loop.py:81`, CUDA-gated |
+| SC5 guard set is 8 files | **grew to 10** during execution (`test_phase21_filler.py`, `test_phase21_multiplicity.py` both hold wall sites); membership is now asserted mechanically at `tests/test_phase21_sc5.py:286` |
+
+### Suite and pins at closure
+
+`ruff check .` and `ruff format --check .` clean.
+
+Full suite in this gap-closure worktree, **literal**: `1018 passed, 7 skipped, 3 warnings in
+201.72s`, **exit 0**. Before copying `data/dialog_train.bin` and `data/dialog_train_mask.bin` in from
+the main checkout the same tree reported `1 failed, 1017 passed, 7 skipped` — the failure was
+`tests/test_phase21_unit_record.py::test_driver_refuses_to_rerun` reaching `_prepend_replay`, which
+`SystemExit`s naming the two missing bins. **Environmental, not a regression**; recorded because a
+future worktree run will hit it again and this is the two-line fix.
+
+> **A predicted figure was written into this section and then falsified by running it.** The draft
+> said `1025 passed, 0 skipped`, reasoning that copying the two bins would clear the failure and that
+> collection was 1,025. Collection *is* 1,025 — but 7 tests skip, so the passed count is 1018. The
+> sentence was corrected before commit. Recorded because predicting a suite figure instead of
+> measuring it is the same defect this whole ledger documents, committed once more in the act of
+> documenting it.
+
+**The 7 skips, enumerated with `-rs` so "environmental" is a reading and not a claim:**
+
+| Skip | Reason |
+|---|---|
+| `tests/test_forbid_ids.py:196` | real slim artifact not present (CI) |
+| `tests/test_lora_artifact.py:238` | real slim artifact not present (CI) |
+| `tests/test_phase14_demo.py:611` | real checkpoints absent (gitignored in CI) |
+| `tests/test_phase14_demo.py:625` | real checkpoints absent (gitignored in CI) |
+| `tests/test_phase15_plots.py:191` | gitignored checkpoints not present (CI) |
+| `tests/test_slim_checkpoint.py:168` | real slim artifact not present (CI) |
+| **`tests/test_train_loop.py:81`** | **fp16 AMP smoke needs a CUDA GPU** — the platform gate |
+
+**This reconciles the two figures exactly, which is the point of listing them.** Six skips are
+gitignored artifacts a worktree does not have; restore them and those six pass. `1018 + 6 = 1024`
+passed with `1` skipped — the binding full-checkout figure — and `1018 + 7 = 1025` collected either
+way. The last row is also the direct confirmation that `21-VALIDATION.md`'s named "one skip"
+(`test_loop_penalty_fn::test_golden_trajectory_bit_identity`) was wrong: the CUDA gate is the only
+non-environmental skip in the suite, verbatim from pytest's own `-rs` output.
+
+Frozen artifacts re-verified byte-identical at closure:
+
+```
+scripts/mitigation_unit.py         45f37e152bb4035667b804c1463431b3f12fa5096c47de32b1dc27abbe000473
+results/phase21_privacy_unit.json  84d8f3bd85c4088e9cfc7051aa166f1e7d6f1d56dc893e5cbd46c937220eee81
+results/phase21_multiplicity.json  e9e3b9bf3d31525ad27f90c0afdac0faf97e7faef324cf05d832898c00944da1
+```
+
+`.planning/STATE.md` and `.planning/ROADMAP.md` untouched.
+
+### What is still open
+
+**This closure does not advance the phase's status.** `21-VERIFICATION.md` remains `human_needed`,
+not `passed`. Open at closure: **WR-03** (a measured-false 49.90% standing in live, editable source
+against the phase's own `documented_n64_claim_holds: false`), **WR-05**, **WR-06** (the `== 10` wall
+in `scripts/phase21_filler.py:262` is a strippable `assert`; `python -O` imports it clean),
+**WR-07**, **IN-01**, **IN-02**, **IN-04**. WR-04 closed separately at `9a407d6`.
+
+The two cheapest and most consequential remain WR-03 and WR-06: one is a false number in live source
+with retract-in-place available, the other is a one-word change from `assert` to `raise SystemExit`.
+
+### The pattern, stated once
+
+Documents in this phase asserted things measurement falsified, and the measurement was right every
+time: the wall count (4 → 7 → 8 → 9 → **11**), the exit code (four places, one of them shipped
+source), the identity of the platform-gated skip, the suite total, the census-provenance attribution
+in the brief for this very task — and then, twice, **this closure's own drafts**: a predicted
+`1025 passed, 0 skipped` and five mis-pathed node ids.
+
+Every instance is a document copying a document. Every one was caught by running something. The wall
+count stopped drifting the moment 21-09 turned it into a test; the node ids stopped being wrong the
+moment a harness read them out of the file and executed them. That is the whole argument for
+verifying a ledger by execution rather than by review, and this closure is its seventh data point.
+
+---
+
 _Reviewed: 2026-08-24_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Ledger closed: 2026-08-25 — 48/48 commands verified by execution_

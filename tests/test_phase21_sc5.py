@@ -310,11 +310,25 @@ SC5_GUARD_SET = (
 def test_instruments_unchanged_byte_for_byte():
     """SC5's "unchanged" half, as two sha256 pins.
 
-    NAMED so that ``-k instruments_unchanged`` actually SELECTS it. ``21-VALIDATION.md:88-89``
-    pins that selector for both of this test's rows, and against the plan's own name
-    (``..._frozen_instruments_are_byte_unchanged``) it matched nothing: pytest reported
-    "4 deselected" and exited **0**. A published verification command that selects zero tests
-    passes vacuously, which is the one failure mode a verification table cannot afford.
+    NAMED so that ``-k instruments_unchanged`` actually SELECTS it. ``21-VALIDATION.md`` pins that
+    selector for both of this test's rows, and against the plan's own name
+    (``..._frozen_instruments_are_byte_unchanged``) it matched nothing.
+
+    CORRECTION (2026-08-25, ledger closure): this docstring said the non-matching selector "reported
+    '4 deselected' and exited **0**", and called it a command that "passes vacuously". MEASURED
+    FALSE. It exits **5** (``NO_TESTS_COLLECTED``)::
+
+        OUT=$(pytest -q tests/test_phase21_sc5.py -k frozen_instruments_are_byte_unchanged 2>&1)
+        echo $?   # 5
+
+    The **0** came from reading ``$?`` after a pipe -- ``pytest ... | tail -1`` reports *tail's*
+    status, not pytest's. The same artifact produced the same wrong number in
+    ``21-VERIFICATION.md`` and in ``21-REVIEW.md``'s IN-03; all are corrected together.
+
+    The rename is still right, and for a stronger reason than the retracted one. A dead ``-k``
+    exits 5 but only says "deselected" -- it never says *what* it expected. A wrong NODE ID exits 4
+    and the error NAMES the missing id. Neither passes silently; the node id is the one that tells
+    you which name was wrong.
 
     Read as BYTES, never as text. The reason is copied here rather than cited to
     ``tests/test_package.py:34-35``, because a rule whose reason lives only in another file drifts
