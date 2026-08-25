@@ -1152,6 +1152,243 @@ results/phase21_multiplicity.json  e9e3b9bf3d31525ad27f90c0afdac0faf97e7faef324c
 
 ---
 
+## WR-04 — CLOSED
+
+Fixed in `9a407d6`. **Verdict: the finding is REAL**, reproduced byte-for-byte, and **wider than
+recorded in two respects** — one in the input domain and one in the blast radius, both measured
+below. Two corrections to the review, both about *how* rather than *whether*.
+
+### The finding reproduced — every input the review names, computed
+
+`privacy_n` at the frozen pin (`c05880c`, sha256 `45f37e15…`), executed rather than quoted:
+
+```
+privacy_n(             7.9) -> 7        type=int
+privacy_n(               0) -> 0        type=int
+privacy_n(              -3) -> -3       type=int
+privacy_n(             '8') -> 8        type=int
+privacy_n(            True) -> 1        type=int
+privacy_n(            8)    -> 8        type=int
+```
+
+**Wider than recorded, part 1 — three more admitted inputs the review does not list:**
+
+```
+privacy_n(           False) -> 0        # N = 0 from a flag, by the bool route
+privacy_n(             7.0) -> 7        # an int returned for a float that was never counted
+privacy_n(    3.0000000001) -> 3        # "looks whole" and "is whole" are different properties
+```
+
+Only `[]` and `None` raise, and they raise `TypeError` from `int()` itself — not a refusal the
+module authored.
+
+### One correction to the review — the prescribed VEHICLE cannot host this
+
+The Fix says "`scripts/_addendum.py` continuation exporting a validated accessor". Measured,
+`_addendum.py` is an **append-only MARKDOWN writer**: its sole public function is
+`append_addendum(path, addendum, *, pending, recorded)`, which appends a prose section to a report
+and swaps exactly one placeholder line. Its one live caller, `phase19_erasure.py:2320`, passes
+`pending=ERASURE_SHIP_PENDING_LINE, recorded=ERASURE_SHIP_RECORDED_LINE` against a `results/*.md`
+document. It cannot export a Python function.
+
+The review's **intent** is right and is this project's established pattern — `mitigation_gate.py:26`
+names `_addendum.append_addendum` as the correction path for its own pin. Only the vehicle moved,
+and it moved to the one the repository already built for exactly this: **`scripts/phase20_gate_
+coverage.py`**, the D-24 "executable half" that supersedes a frozen pin from unpinned code, calls
+it, and never edits it. `scripts/phase21_unit_continuation.py` is that shape applied to Phase 21's
+pin. `_addendum.py` is untouched.
+
+Also corrected: the review's draft raises `SystemExit("[_addendum] …")`. The prefix would name a
+module the code is not in — the defect `mitigation_unit.py:73-76` explicitly records ("an abort
+naming the wrong module sends its reader to the wrong file"). The shipped prefix is
+`[phase21_unit_continuation]`.
+
+### One correction to the review — the blast radius is PRESENT TENSE, not Phase 22's
+
+The Issue says the defect sits "in the pre-registration module **Phase 22's accountant will import**
+for N". Measured, there is a **live consumer today**, in `scripts/`, in the aliased attribute form:
+
+```
+scripts/phase21_unit_record.py:1009   mu.privacy_n     ->  lot.privacy_n_at_capacities
+scripts/phase21_unit_record.py:1037   mu.privacy_n     ->  delta.capacities[].n
+```
+
+The second is not a transcription site. That `n` is multiplied by `DELTA` two lines later and
+checked against `DELTA_TIMES_N_CEILING` — so a zero or truncated N there does not mislabel a row, it
+**clears the published ceiling**: `delta * 0 = 0.0 < 0.01` passes by construction, and a negative N
+passes by a wider margin the more wrong it gets. The defect's consequence was already reachable from
+one file over at the time the review was written.
+
+A name-keyed matcher would have missed both: the emitter imports the pin as `import mitigation_unit
+as mu`, so neither site contains the string `mitigation_unit.privacy_n`.
+
+### The exact-float decision, and why it is REFUSED
+
+`7.0` raises. The reasoning is not preference, and the two weaker options were considered:
+
+- A count reaches this function from `len(...)`. A float N therefore came out of **arithmetic** —
+  and that is the same code path that produces `7.9`. Admitting the whole ones makes the verdict
+  depend on whether the upstream defect happened to land on a whole number, so one defective caller
+  passes at n=8 and fails at n=64. That is the "true the day it is written" failure this phase
+  exists to refuse, reintroduced by the guard closing it.
+- `float.is_integer()` is the only cheap admission test and it buys nothing: `3.0000000001` is
+  visibly not an integer, the class it belongs to is invisible at more digits, and the pin truncates
+  every member of it to `3`.
+- **Decisively, the repository already settled this for the same quantity.**
+  `scripts/teach_persona.py:743-750` refuses `n_facts` on
+  `isinstance(n_facts, bool) or not (isinstance(n_facts, int) and n_facts > 0)`, raising `SystemExit`
+  and calling it "a COUNT of privacy records". That predicate already refuses an exact float. The
+  continuation adopts it unchanged — a **looser** rule here than the precedent the review itself
+  cites would be a divergence with no measured need, and two guards on one quantity must not
+  disagree.
+
+### RED then GREEN, observed on one set of inputs
+
+Same three values, both predicates, one table. The pin's answers are **computed**, in
+`test_the_pin_still_silently_admits_what_wr04_measured` — the register
+`test_a_same_commit_pin_and_artifact_is_refused` uses for a superseded predicate.
+
+```
+   7.9   pin=     7   continuation=SystemExit
+     0   pin=     0   continuation=SystemExit
+    -3   pin=    -3   continuation=SystemExit
+   '8'   pin=     8   continuation=SystemExit
+  True   pin=     1   continuation=SystemExit
+ False   pin=     0   continuation=SystemExit
+   7.0   pin=     7   continuation=SystemExit
+     8   pin=     8   continuation=OK -> 8 type=int
+    64   pin=    64   continuation=OK -> 64 type=int
+```
+
+The three the brief names, with the real type and message:
+
+```
+--- privacy_n(7.9) ---  SystemExit
+[phase21_unit_continuation] privacy_n got 7.9 (float). N is a COUNT of privacy records and must
+arrive as an `int`. This REFUSES rather than casting, because the frozen pin's `int()` TRUNCATES:
+measured, `mitigation_unit.privacy_n(7.9)` returns 7, dropping a record from the lot while the
+epsilon computed against the result still claims to protect all of them. […]
+
+--- privacy_n(0) ---   SystemExit
+[phase21_unit_continuation] privacy_n got 0. N must be STRICTLY positive. At N = 0 the pin's own
+published ceiling check `delta * N < 0.01` reads `0.0 < 0.01` and passes BY CONSTRUCTION — a privacy
+guarantee that clears its ceiling because it is about nothing. […]
+
+--- privacy_n(-3) ---  SystemExit
+[phase21_unit_continuation] privacy_n got -3. N must be STRICTLY positive. […] A negative N is
+worse: it makes the product negative, so every ceiling check passes by a wider margin the more wrong
+it gets. The frozen pin admits both (measured: 0 -> 0, -3 -> -3)
+```
+
+**Not vacuous in the other direction.** A validator that refuses everything is as useless as one
+that admits everything, so a correct positive int is admitted **unchanged and as the same object** —
+`is`, not merely `==`, because a cast on the success path would be the pin's defect surviving inside
+its own correction, invisible on every value that was already right:
+
+```
+privacy_n(1) -> 1  is-same-object=True        privacy_n(64)    -> 64     is-same-object=True
+privacy_n(8) -> 8  is-same-object=True        privacy_n(12345) -> 12345  is-same-object=True
+```
+
+### The guard, and it is not vacuous — live RED then GREEN on the real tree
+
+`test_privacy_n_has_no_route_through_the_pin_outside_this_module` walks `scripts/*.py` +
+`src/**/*.py`, modelled on `tests/test_phase20_prereg.py:867-905` (both import forms into one
+result) and `tests/test_phase20_correction.py:1377-1473` (path-identity exemptions). It catches
+`from mitigation_unit import privacy_n` (with `as`, and `import *`), and `import mitigation_unit
+[as X]` + `X.privacy_n`. Two AST passes, because a **function-local** alias import is visited after
+the attribute under breadth-first `ast.walk`.
+
+**RED, observed live** — the pre-fix bytes restored into the tree from `git show HEAD:` and the real
+guard run against them:
+
+```
+E  AssertionError: 2 site(s) reach privacy_n through the FROZEN pin instead of through
+   scripts/phase21_unit_continuation.py: ['scripts/phase21_unit_record.py:1009  mu.privacy_n',
+   'scripts/phase21_unit_record.py:1037  mu.privacy_n']. […]
+1 failed, 29 deselected
+```
+
+**GREEN**, after routing those two sites to the continuation: `1 passed, 29 deselected`.
+
+**The zero on the real tree is an ENFORCED zero, not an exempted one.** The emitter was
+**redirected**, not added to the exempt set. The redirect moves no published number and that is
+proved rather than asserted: the continuation carries a module-level `_prove` that
+`privacy_n(n) == mitigation_unit.privacy_n(n) == n` at both published capacities, so a future edit
+making them disagree at 8 or 64 aborts at import.
+
+Six synthetic-fire probes are written as real `.py` files under `tmp_path` and read back through the
+same `_routes_in` the live guard calls — plain, aliased, star, attribute, aliased attribute, and
+function-local aliased attribute. Five clean probes prove it is not refusing everything: both
+sanctioned routes through the continuation, `mu.DELTA`, `mu.rejected_delta`, and a local variable
+that merely happens to be named `privacy_n`.
+
+### The exemption is PATH IDENTITY — proved against a same-named decoy
+
+`_EXEMPT` is a frozenset of two `.resolve()`d paths. `test_the_exemption_is_path_identity_and_not_a_
+name` writes a decoy at `tmp_path/phase21_unit_continuation.py` — the exempt file's **exact
+basename** — carrying `from mitigation_unit import privacy_n`, and asserts it is **still flagged**.
+A substring or basename rule would exempt it, and would exempt any file a later author chose to name
+that. Both exemptions are also proved load-bearing by what they hold: the continuation *does* reach
+the pin (that is its job) and the pin's own routes are `[]` (it DEFINES the name and imports nothing
+at all, D-22 — exclude-the-definition, not a route being allowed).
+
+`21-09`'s lesson is asserted rather than trusted: `test_the_census_scope_excludes_tests_and_this_
+file_itself` checks this file's own resolved path is absent from the scan set. It imports
+`mitigation_unit` at module scope and *would* be a hit if the scope widened.
+
+### The pin's own tests were SCOPED OUT, never weakened
+
+`tests/test_phase21_unit_pin.py:127` asserts `mitigation_unit.privacy_n(n) == n`. That is a
+**record of what the frozen module does**, not a consumer of it — the behavioural twin of the pin,
+which is verbatim the reason `tests/test_phase20_correction.py:1401-1405` gives for excluding
+`tests/` from its own census. The census walks `scripts/` + `src/` only, so the file is structurally
+out of scope; the exclusion is asserted mechanically (`tests_dir in p.parents`), and its **positive
+half** is asserted too — `_routes_in` on `test_phase21_unit_pin.py` must be non-empty, or the
+exclusion is protecting nothing and the reasoning has gone stale. `test_phase21_unit_pin.py` is
+byte-unchanged (empty `git diff`) and all 11 of its tests pass.
+
+### No mechanism FORCES the import — the premise held under attempt
+
+Nothing in Python makes `from mitigation_unit import privacy_n` fail or redirect without editing the
+pin, and the pin cannot be edited. `sys.modules` shadowing needs a hook installed before any
+consumer imports (a runtime side effect this repo's zero-I/O modules forbid, and it would redden the
+pin's own tests); a module-level `__getattr__` on the pin is an edit; a conftest monkeypatch would
+make tests green while production still bypassed, which is worse than nothing. The AST census is the
+strongest available mechanism, which is the same conclusion `scripts/phase20_gate_coverage.py:74-81`
+already reached for `mitigation_point_verdict`.
+
+**Two gaps recorded rather than implied closed**, inherited from
+`tests/test_phase20_correction.py:1395-1399` because they are properties of static analysis:
+`getattr(mitigation_unit, "privacy_n")` / `importlib.import_module(...)` produce no matching AST
+node; and a driver at the repo root or under `tools/` is unpoliced. Neither is closed here.
+
+### Suite
+
+`1018 passed, 7 skipped` (literal, full suite, `.venv/bin/python -m pytest -q -rs`, 188 s). Against
+the stated `994 passed, 1 skipped` baseline: 994 + 1 = **995 collected**, and 1018 + 7 = **1025 =
+995 + the 30 new tests**, zero regressions. All 7 skips are environmental, verified with `-rs` — 6
+are gitignored artifacts absent from this worktree (`test_forbid_ids`, `test_lora_artifact`,
+`test_slim_checkpoint`, `test_phase14_demo` ×2, `test_phase15_plots`) and 1 is the CUDA-only fp16
+smoke that also skips on main. `ruff check` and `ruff format --check` clean across
+`scripts/ src/ tests/` (189 files).
+
+`scripts/mitigation_unit.py` byte-unchanged — `sha256 45f37e15…`, verified identical before and
+after. The two committed artifacts are untouched (never re-emitted):
+
+```
+results/phase21_privacy_unit.json  84d8f3bd85c4088e9cfc7051aa166f1e7d6f1d56dc893e5cbd46c937220eee81
+results/phase21_multiplicity.json  e9e3b9bf3d31525ad27f90c0afdac0faf97e7faef324cf05d832898c00944da1
+```
+
+`STATE.md` / `ROADMAP.md` untouched.
+
+**Still open from this finding's neighbourhood:** WR-07 and IN-02 both prescribe prose corrections
+"in the same continuation as WR-04". `scripts/phase21_unit_continuation.py` is the file they should
+land in; this closure is scoped to WR-04's executable defect and adds no prose constants.
+
+---
+
 _Reviewed: 2026-08-24_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
