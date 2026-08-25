@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: ready_to_plan
-stopped_at: Phase 21 complete (11/11) — ready to discuss Phase 22
-last_updated: 2026-08-25T12:56:33.845Z
-last_activity: 2026-08-24
+status: planning
+stopped_at: Phase 22 context gathered
+last_updated: 2026-08-25T16:01:23.893Z
+last_activity: 2026-08-25
 progress:
   total_phases: 9
   completed_phases: 2
@@ -518,9 +518,9 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-22T12:00:31.845Z
-Stopped at: Phase 21 context COMPLETE — D-01..D-26, 0 open questions; ready to plan
-Resume file: .planning/phases/21-the-privacy-unit-the-dp-data-path-and-the-n-64-corpus/21-CONTEXT.md
+Last session: 2026-08-25T16:01:23.885Z
+Stopped at: Phase 22 context gathered
+Resume file: .planning/phases/22-dp-sgd-core-accountant-and-the-correctness-battery/22-CONTEXT.md
 
 ## Operator Next Steps
 
