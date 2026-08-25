@@ -47,6 +47,7 @@ if _SCRIPTS not in sys.path:
 
 import _prose  # noqa: E402  (needs the sys.path insert above)
 import erasure_gate  # noqa: E402  (same reason)
+import mitigation_accountant  # noqa: E402  (same reason)
 import mitigation_gate  # noqa: E402  (same reason)
 
 _PROSE_PATH = _ROOT / "scripts" / "_prose.py"
@@ -107,6 +108,20 @@ PHASE20_PREREG_ARTIFACT = "scripts/mitigation_gate.py"
 # the deliberate act that gives that up, and it is irrevocable from the first matching artifact.
 PHASE21_PREREG_ARTIFACT = "scripts/mitigation_unit.py"
 
+# Phase 22's pin (D-09/D-11), and the block above applies to it UNCHANGED — recorded rather than
+# left to be re-derived a third time. Being named `mitigation_*.py` makes this module PROTECTED:
+# it joins `_GATE_MODULES`, so the accumulated import ceiling and the rule/emission split now
+# police it, and one `import math` inside it turns
+# `test_mitigation_gate_import_graph_is_stdlib_and_erasure_gate_only` RED. That is protection and
+# it is not a freeze. What confers the FREEZE is THIS LINE — a hand-written explicit path reaching
+# `_assert_ordering_holds` as a `prereg_artifact=` — and nothing else in the file does.
+#
+# The freeze is deliberate here for a reason the other two pins do not share: the accountant's
+# exposure is the PUBLISHED EPSILON LABEL on every swept point rather than a verdict, so what has
+# to be uneditable is an OUTPUT TABLE (D-09). And it is armed a WHOLE PHASE before the first
+# epsilon-bearing artifact, which is the widest margin any pin in this repository has had.
+PHASE22_PREREG_ARTIFACT = "scripts/mitigation_accountant.py"
+
 # Every v4.0 results artifact this phase can PROVE it watches — `phase20_*` and nothing else
 # (D-33). Pre-declaring `phase21_*`..`phase28_*` was considered and REJECTED: only `phase20_*` can
 # be proven RED-then-GREEN by this phase's own throwaway-repo fixture, and an advance declaration
@@ -119,15 +134,40 @@ PHASE21_PREREG_ARTIFACT = "scripts/mitigation_unit.py"
 #
 # PHASE 21 ADDED `results/phase21_*` HERE, AND FOUND THAT THIS ADDITION ENFORCES NOTHING BY ITSELF
 # (Phase 21 D-20). Recorded rather than left for the next phase to re-discover: `globs` is read in
-# exactly ONE place inside `_assert_ordering_holds` — the `assert artifact_glob in globs`
-# consistency check at `:129` — while the ordering loop at `:150` runs on the SINGULAR
-# `artifact_glob`. So widening this tuple buys a consistency check and no ancestry check at all.
-# D-33 above names the glob addition as the obligation and stops there, which means a phase doing
-# exactly what D-33 literally says would ship an UNENFORCED DECLARATION: a tuple entry that reads
-# like coverage while nothing iterates it. BOTH HALVES ARE REQUIRED — this entry AND a live test
-# calling `_assert_ordering_holds(artifact_glob="results/phase21_*")`. See
-# `test_phase21_prereg_is_frozen_before_every_phase21_result` for the second half.
-V4_ARTIFACT_GLOBS = ("results/phase20_*", "results/phase21_*")
+# exactly ONE place inside `_assert_ordering_holds` — its `assert artifact_glob in globs`
+# consistency check — while its `for artifact in tracked_artifacts` ordering loop runs on the
+# SINGULAR `artifact_glob`. So widening this tuple buys a consistency check and no ancestry check
+# at all. D-33 above names the glob addition as the obligation and stops there, which means a
+# phase doing exactly what D-33 literally says would ship an UNENFORCED DECLARATION: a tuple entry
+# that reads like coverage while nothing iterates it. BOTH HALVES ARE REQUIRED — this entry AND a
+# live test calling `_assert_ordering_holds(artifact_glob=...)`. See
+# `test_phase21_prereg_is_frozen_before_every_phase21_result` and
+# `test_phase22_prereg_is_frozen_before_every_phase23_result` for the second half of each.
+#
+# THE TWO SENTENCES ABOVE USED TO CITE TWO LINE NUMBERS IN THIS FILE. Phase 22 REMOVED them rather
+# than correcting them, and the distinction is the whole point: both were stale — the statements
+# they pointed at sat far below where the comment claimed — and this block's OWN insertions
+# (Phase 22 added a path constant above it and a third tuple entry below it) push those statements
+# further down again. So a corrected number would have been wrong the instant the correcting diff
+# landed, and the only thing the correction would have bought is a next reader who trusts it. The
+# numbers are not repeated here either, for the same reason: quoting a stale anchor to record its
+# removal puts it back in the file for the next grep to find. A statement's TEXT and a symbol's
+# NAME survive every edit to the file they live in; a line number survives none. That is the
+# lesson `scripts/mitigation_unit.py` is now FROZEN with four uncorrectable stale anchors of.
+#
+# PHASE 22 ADDS `results/phase23_*` (D-11), AND DELIBERATELY NOT `results/phase22_*`. Under D-08
+# Phase 22 writes no scored artifact at all, so arming a `phase22_*` prefix would ship a guard
+# VACUOUS BY CONSTRUCTION — a pattern that cannot ever match, sitting in a tuple that reads like
+# coverage. That is the failure mode this whole block exists to name, and it does not become
+# acceptable because the phase adding it is the one being cautious.
+#
+# AND WITH THREE PREFIXES LIVE THE MUTATION-INVISIBILITY GETS WORSE, which is why each prefix
+# needs its own throwaway-repo fixture rather than only a live call. A mutation swapping any
+# fixture's `artifact_glob` to a DIFFERENT member of this tuple still satisfies the
+# `assert artifact_glob in globs` consistency check, still names a real prefix, and is INVISIBLE
+# without a positive `git ls-files` observation of the prefix actually matching something. See
+# `test_phase23_glob_sees_the_phase23_prefix_red_then_green`.
+V4_ARTIFACT_GLOBS = ("results/phase20_*", "results/phase21_*", "results/phase23_*")
 
 
 def _git(*args, cwd=_ROOT):
@@ -285,6 +325,53 @@ def test_phase21_prereg_is_frozen_before_every_phase21_result():
         root=_ROOT,
         prereg_artifact=PHASE21_PREREG_ARTIFACT,
         artifact_glob="results/phase21_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+
+
+def test_phase22_prereg_is_frozen_before_every_phase23_result():
+    """D-11: the accountant pin never moved after a Phase 23 number existed.
+
+    **This call is the OTHER HALF, and without it the tuple entry above enforces nothing.** Phase
+    21 D-20 measured that and recorded it in its own words: `globs` is read in exactly one place
+    inside `_assert_ordering_holds`, its `assert artifact_glob in globs` consistency check, while
+    the `for artifact in tracked_artifacts` ordering loop runs on the SINGULAR `artifact_glob`. So
+    adding `results/phase23_*` to `V4_ARTIFACT_GLOBS` buys a consistency check and no ancestry
+    check whatsoever. A phase that added the entry and stopped would have shipped a declaration
+    that reads like coverage while nothing iterated it — which is worse than no entry, because an
+    absent prefix is visibly absent and an unenforced one is not.
+
+    **Vacuous TODAY BY CONSTRUCTION, and that is a RECORDED state rather than a hidden one.**
+    Nothing matches `results/phase23_*` yet — Phase 22 writes no scored artifact under D-08 — so
+    `checked` is 0 and the product assertion reads `0 == n * 0`: green, having compared nothing.
+    The closing `assert bool(checked) == bool(tracked_artifacts)` is what stops that vacuity
+    surviving the artifacts' arrival, by tying `checked` to whether anything was tracked at all.
+    Green while zero `phase23_*` artifacts are tracked, demanding non-zero from the first one
+    onward. **That is the Phase-18 shape and never Phase 16's**, whose unconditional `assert
+    checked` over a working-tree glob is RED from the pin's first commit until an artifact lands —
+    inverting the very ordering this discipline exists to establish.
+
+    **The pin precedes the first epsilon-bearing artifact by a WHOLE PHASE**, which is the widest
+    margin any pre-registration in this repository has had: `scripts/mitigation_accountant.py`
+    lands in Phase 22 and the first `results/phase23_*` file cannot exist before Phase 23. That is
+    the same discipline that has validated `erasure_gate.py` since `23a830c`. `git ls-files` is
+    this guard's input, so an artifact becomes watched when it is COMMITTED rather than when it is
+    written, and the ordering loop's `adds[-1]` — the EARLIEST add — makes a wrong order permanent
+    across any later delete-and-re-add. A guard retro-fitted once there is something to miss has
+    already missed it.
+
+    **This calls the SAME `_assert_ordering_holds` the Phase 20 and Phase 21 guards call**,
+    parameterized on `root`, rather than copying its body. A lookalike copy would prove something
+    about a different function than the one CI executes.
+
+    Reading a glob pattern and confirming it BITES are different acts, so the prefix is also
+    observed matching in a throwaway repository by
+    `test_phase23_glob_sees_the_phase23_prefix_red_then_green`.
+    """
+    _assert_ordering_holds(
+        root=_ROOT,
+        prereg_artifact=PHASE22_PREREG_ARTIFACT,
+        artifact_glob="results/phase23_*",
         globs=V4_ARTIFACT_GLOBS,
     )
 
@@ -833,6 +920,185 @@ def test_phase21_glob_sees_the_phase21_prefix_red_then_green(tmp_path):
     )
 
 
+def test_phase23_glob_sees_the_phase23_prefix_red_then_green(tmp_path):
+    """D-11: watch the ordering guard go RED then GREEN on a real `phase23_*` path.
+
+    **Why this exists, and why it cannot wait for Phase 23.** The live
+    `test_phase22_prereg_is_frozen_before_every_phase23_result` is VACUOUS TODAY BY CONSTRUCTION:
+    nothing matches `results/phase23_*` yet — Phase 22 writes no scored artifact under D-08, and
+    Phase 23 has not started — so `checked` is 0 and its product assertion reads `0 == n * 0`,
+    green having compared nothing. `results/phase23_*` has therefore never once been OBSERVED
+    matching anything. Reading a glob pattern and confirming it bites are different acts, and a
+    pattern that reads correctly while matching nothing is green over nothing: precisely the
+    failure this discipline exists to refuse. This drives the prefix through five states in a
+    throwaway repository and asserts the observed outcome at each, so the prefix is demonstrated
+    while being wrong about it is still cheap.
+
+    **State 2 is the load-bearing one, and with THREE prefixes live it is more load-bearing than
+    it was for Phase 21.** An ORDERING failure is unreachable unless `git ls-files
+    "results/phase23_*"` matched the probe, so the `ls-files` assertion there is a POSITIVE
+    OBSERVATION of the prefix rather than an inference from the pattern's text. `V4_ARTIFACT_GLOBS`
+    now holds `results/phase20_*`, `results/phase21_*` AND `results/phase23_*`, so a mutation
+    swapping this fixture's `artifact_glob` to EITHER of the other two would still satisfy the
+    `assert artifact_glob in globs` consistency check inside `_assert_ordering_holds` and would be
+    INVISIBLE without it. One more prefix is one more silently-passing mutation.
+
+    **It runs against the SAME `_assert_ordering_holds` the live guard calls**, parameterized on
+    `root`, rather than copying its body — a lookalike copy would prove something about a different
+    function than the one CI executes, and would decay silently the moment the real helper changed.
+    That is also why this is a COMMITTED FIXTURE re-executed every CI run rather than a one-time
+    manual observation in a scratch directory.
+
+    **The real repository's history is never touched, and that is not a tidiness concern.** Every
+    probe lives under pytest's `tmp_path` and dies with it; every `_git` call below passes
+    `cwd=tmp_path`, never the module's `_ROOT` default, and there is no `shell=True` and no
+    `rm -rf` anywhere in this module. A `phase23_`-named probe escaping into the real history would
+    PERMANENTLY freeze `scripts/mitigation_accountant.py` a phase early and corrupt the ordering
+    evidence D-11 exists to produce: the ordering loop takes `adds[-1]`, the EARLIEST add, so
+    deleting the file afterwards could not launder it — which is exactly what state 4 below
+    measures across a real delete-and-re-add cycle.
+
+    **State 5's filename is a SHAPE STAND-IN and is labelled as one.** The Phase-21 sibling could
+    use the exact name its own phase commits; Phase 23 has no plans yet, so there is no real
+    filename to rehearse and claiming otherwise would be the kind of unevidenced assertion this
+    file exists to refuse. What state 5 proves is the TRANSITION — one tracked artifact whose first
+    add is strictly after the pin's commit turns the guard green — and that is independent of the
+    name.
+
+    Identity is set as LOCAL repo config: it writes only to `tmp_path/.git/config`, needs no
+    widening of `_git`, and makes the fixture independent of whether the host has a global
+    `user.email` at all (CI runners generally do not).
+    """
+    _git("init", "-q", cwd=tmp_path)
+    _git("config", "user.name", "phase23-fixture", cwd=tmp_path)
+    _git("config", "user.email", "phase23-fixture@localhost", cwd=tmp_path)
+
+    probe = tmp_path / "results" / "phase23_probe.json"
+    probe.parent.mkdir()
+    probe.write_text('{"probe": true}\n')
+    _git("add", "results/phase23_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 1: a phase23 artifact, before any pin exists", cwd=tmp_path)
+    state1_add = _git(
+        "log", "--diff-filter=A", "--format=%H", "--", "results/phase23_probe.json", cwd=tmp_path
+    ).split()[-1]
+
+    # STATE 1 — probe committed, NO pin yet. RED, but a DIFFERENT RED: the run stops at
+    # `assert prereg_commits` long before any ancestry is compared. Distinguishing the two reds is
+    # the point — "the pre-registration does not exist" and "the ordering is violated" are
+    # different findings, and a fixture that only checked "something raised" would conflate them.
+    with pytest.raises(AssertionError) as no_pin:
+        _assert_ordering_holds(
+            root=tmp_path,
+            prereg_artifact=PHASE22_PREREG_ARTIFACT,
+            artifact_glob="results/phase23_*",
+            globs=V4_ARTIFACT_GLOBS,
+        )
+    assert PHASE22_PREREG_ARTIFACT in str(no_pin.value), (
+        "state 1 raised an AssertionError that does not name the pin — the expected red here is "
+        f"the `assert prereg_commits` branch reporting that {PHASE22_PREREG_ARTIFACT} has no "
+        "commits, not some other assertion that happens to fire first"
+    )
+
+    # STATE 2 — the pin lands SECOND, i.e. the ordering D-11 forbids.
+    pin = tmp_path / PHASE22_PREREG_ARTIFACT
+    pin.parent.mkdir()
+    pin.write_text(
+        "# stand-in for the pin: the CONTENT is irrelevant here, the ORDER is the subject\n"
+    )
+    _git("add", PHASE22_PREREG_ARTIFACT, cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 2: the pin, committed AFTER the artifact", cwd=tmp_path)
+
+    # THE PROOF THE GLOB SEES THE `phase23_` PREFIX, stated rather than inferred: the ordering
+    # failure below is unreachable unless this match set is non-empty. Without this assertion a
+    # swap to EITHER other member of V4_ARTIFACT_GLOBS would go unnoticed.
+    assert _git("ls-files", "results/phase23_*", cwd=tmp_path).split() == [
+        "results/phase23_probe.json"
+    ], "`git ls-files results/phase23_*` did not match a committed results/phase23_probe.json"
+
+    with pytest.raises(subprocess.CalledProcessError) as out_of_order:
+        _assert_ordering_holds(
+            root=tmp_path,
+            prereg_artifact=PHASE22_PREREG_ARTIFACT,
+            artifact_glob="results/phase23_*",
+            globs=V4_ARTIFACT_GLOBS,
+        )
+    # `subprocess.run(check=True)` fails with no explanatory message, so name the failing command:
+    # without this, ANY CalledProcessError from ANY git call would satisfy the `raises` above.
+    assert tuple(out_of_order.value.cmd[:3]) == ("git", "merge-base", "--is-ancestor"), (
+        f"state 2 failed on {out_of_order.value.cmd} — the expected red is the ancestry check "
+        "itself, not an incidental git failure elsewhere in the helper"
+    )
+
+    # STATE 3 — `git rm` the probe and do not re-add it. GREEN at tracked=0: the red IS reversible,
+    # but ONLY by not having the artifact, which for a real phase means having no result at all.
+    _git("rm", "-q", "results/phase23_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 3: remove the probe", cwd=tmp_path)
+    assert _git("ls-files", "results/phase23_*", cwd=tmp_path) == ""
+    _assert_ordering_holds(
+        root=tmp_path,
+        prereg_artifact=PHASE22_PREREG_ARTIFACT,
+        artifact_glob="results/phase23_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+
+    # STATE 4 — re-add at the IDENTICAL path. Measured gotcha: `git rm` of the last file in
+    # `results/` removes the directory from the working tree, so the re-add needs the mkdir.
+    probe.parent.mkdir(exist_ok=True)
+    probe.write_text('{"probe": true}\n')
+    _git("add", "results/phase23_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 4: re-add at the identical path", cwd=tmp_path)
+
+    adds = _git(
+        "log", "--diff-filter=A", "--format=%H", "--", "results/phase23_probe.json", cwd=tmp_path
+    ).split()
+    assert len(adds) == 2, f"expected two adds after a delete-and-re-add cycle, got {adds}"
+    # LAUNDERING IS IMPOSSIBLE. `git log` is newest-first, so `adds[-1]` is the EARLIEST add — and
+    # it is byte-identical to the SHA state 1 recorded, across a delete and a re-add. Once the
+    # ordering is violated, deleting the artifact and committing it again does not reset it. This
+    # is the property that makes a phase23-named probe in the REAL history unrecoverable.
+    assert adds[-1] == state1_add, (
+        f"the earliest add is now {adds[-1]} but state 1 recorded {state1_add} — `adds[-1]` no "
+        "longer identifies the FIRST add, so a delete-and-re-add cycle could launder a red guard"
+    )
+
+    with pytest.raises(subprocess.CalledProcessError) as still_out_of_order:
+        _assert_ordering_holds(
+            root=tmp_path,
+            prereg_artifact=PHASE22_PREREG_ARTIFACT,
+            artifact_glob="results/phase23_*",
+            globs=V4_ARTIFACT_GLOBS,
+        )
+    assert tuple(still_out_of_order.value.cmd[:3]) == ("git", "merge-base", "--is-ancestor")
+
+    # STATE 5 — the GREEN half of RED-then-GREEN. The probe is gone and a real-SHAPED artifact
+    # lands whose FIRST add comes after the pin's commit: exactly one tracked artifact, checked
+    # against the pin, and the guard passes. The name is a stand-in (see the docstring) — Phase 23
+    # has no plans yet, so what this rehearses is the transition, not a committed filename.
+    _git("rm", "-q", "results/phase23_probe.json", cwd=tmp_path)
+    _git("commit", "-q", "-m", "state 5: remove the probe for good", cwd=tmp_path)
+    artifact = tmp_path / "results" / "phase23_cost_calibration.json"
+    artifact.parent.mkdir(exist_ok=True)
+    artifact.write_text('{"note": "shape only — this repository is a throwaway"}\n')
+    _git("add", "results/phase23_cost_calibration.json", cwd=tmp_path)
+    _git(
+        "commit",
+        "-q",
+        "-m",
+        "state 5: a real-shaped artifact, strictly after the pin",
+        cwd=tmp_path,
+    )
+
+    assert _git("ls-files", "results/phase23_*", cwd=tmp_path).split() == [
+        "results/phase23_cost_calibration.json"
+    ]
+    _assert_ordering_holds(
+        root=tmp_path,
+        prereg_artifact=PHASE22_PREREG_ARTIFACT,
+        artifact_glob="results/phase23_*",
+        globs=V4_ARTIFACT_GLOBS,
+    )
+
+
 def _collapsed_glob_guard():
     """A glob that stops matching makes every scan below green over nothing."""
     assert len(_GATE_MODULES) >= 1, (
@@ -969,6 +1235,133 @@ def test_mitigation_gate_import_graph_is_stdlib_and_erasure_gate_only():
         "— the rule is import the instrument, never copy it, or the two silently diverge. A "
         "second copy of an estimator is a SECOND ESTIMATOR, and the day they stop agreeing is the "
         "day a verdict depends on which one the caller happened to reach"
+    )
+
+
+def test_mitigation_accountant_pin_has_no_executable_formula():
+    """V-10 / D-09: the accountant pin holds a RULE and OUTPUTS, and nothing that computes.
+
+    **Stricter than the accumulated ceiling above, deliberately.** That test asserts
+    `imported <= {"pathlib", "sys", "erasure_gate"}` over a set accumulated across every
+    `mitigation_*.py`, so this file satisfies it VACUOUSLY — it contributes nothing to the union
+    and would keep satisfying it while importing any of the three. Here the assertion is EMPTINESS,
+    which is the property D-10's split actually rests on: `erfc` and `exp` are reachable by no
+    operator, so a pin that imports nothing cannot compute the closed form even by accident, and
+    the computation is FORCED out to `src/personacore/privacy/accountant.py` rather than merely
+    asked to leave.
+
+    **The other four assertions close the routes an import ban does not.** A formula does not need
+    an import to arrive: it can arrive as a second `def`, as a call to a helper, or as arithmetic
+    folded into a constant. So exactly one `FunctionDef` (`_prove`), every module-level `Call` a
+    `_prove` call, every module-level `Assign` a literal, and every `BinOp` inside a `_prove`
+    argument. The `FunctionDef` count is specifically what refuses a `rejected_epsilon()` arriving
+    by pattern-match from `scripts/mitigation_unit.py`, which DOES ship its rejected recipe
+    runnable — D-09 requires this one to be NAMED WITHOUT TRANSCRIBING ITS LOGIC, and the two files
+    differ on exactly that point.
+
+    **The forbidden-symbol check reads NODES and never TEXT, and that distinction is load-bearing.**
+    The pin's prose discusses `erfc` and `exp` at length — it has to, because why they are
+    unreachable is the whole reason the file is split the way it is. A `grep` would redden on the
+    explanation of the rule. An AST walk sees them only if they are code.
+    """
+    _collapsed_glob_guard()
+    pin_path = _ROOT / PHASE22_PREREG_ARTIFACT
+    assert pin_path in _GATE_MODULES, (
+        f"{PHASE22_PREREG_ARTIFACT} is not in the mitigation_*.py glob "
+        f"{[p.name for p in _GATE_MODULES]} — this guard would be reading a file the import "
+        "ceiling does not police, or the pin constant and the glob would name two different files"
+    )
+    tree = _tree(pin_path)
+    assert tree.body, (
+        f"{PHASE22_PREREG_ARTIFACT} parsed to an EMPTY module body — every assertion below would "
+        "pass over nothing, which is the one way a static guard is green and blind at once"
+    )
+
+    imports = [n for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))]
+    assert imports == [], (
+        f"{PHASE22_PREREG_ARTIFACT} carries {[ast.unparse(n) for n in imports]}. "
+        "The pin's import set must be EMPTY, not merely inside the accumulated allow-set: D-10's "
+        "split is FORCED by `exp` and `erfc` being reachable by no operator, and one import is all "
+        "it takes to make the frozen half able to compute what the unfrozen half exists to compute"
+    )
+
+    functions = [
+        n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    assert [n.name for n in functions] == ["_prove"], (
+        f"{PHASE22_PREREG_ARTIFACT} defines {[n.name for n in functions]}, not exactly ['_prove']. "
+        "A second function in a pin whose entire content is meant to be a rule and a table is an "
+        "executable formula by another name — and the specific one D-09 forbids is a "
+        "runnable rejected form copied in by pattern-match from scripts/mitigation_unit.py, which "
+        "ships ITS rejected recipe executable on an argument that does not carry over"
+    )
+
+    owner = _enclosing_functions(tree)
+    module_calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and owner.get(n) is None]
+    stray = [ast.unparse(n.func) for n in module_calls if ast.unparse(n.func) != "_prove"]
+    assert stray == [], (
+        f"{PHASE22_PREREG_ARTIFACT} calls {stray} at module scope. Every module-level call must be "
+        "a `_prove` guard: the guards are the only thing in this file that is allowed to execute, "
+        "and a helper invocation is how a formula enters a file that imports nothing. This is also "
+        "why the pin's own guards use slice and chained comparisons instead of `len` and `sorted`"
+    )
+
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [ast.unparse(t) for t in node.targets]
+        try:
+            ast.literal_eval(node.value)
+        except (ValueError, SyntaxError) as exc:
+            raise AssertionError(
+                f"{PHASE22_PREREG_ARTIFACT}'s module-level assignment to {targets} is not a "
+                f"literal ({exc}). A pin's constants must be values someone typed, not values "
+                "something derived — a derived constant is a formula whose output happens to be "
+                "stored, and it would move silently when the thing it derives from moved"
+            ) from None
+        binops = [n for n in ast.walk(node.value) if isinstance(n, ast.BinOp)]
+        assert binops == [], (
+            f"{PHASE22_PREREG_ARTIFACT}'s assignment to {targets} contains "
+            f"{len(binops)} arithmetic operator(s). `ast.literal_eval` alone would admit these — "
+            "it permits `+`/`-` for complex literals — so the BinOp ban is asserted separately. "
+            "GOLDEN_EPSILON's rows are OUTPUTS transcribed from an independent oracle; a row "
+            "computed in place would be the pin quoting itself"
+        )
+
+    proved = {
+        n
+        for call in module_calls
+        for arg in call.args
+        for n in ast.walk(arg)
+        if isinstance(n, ast.BinOp)
+    }
+    everywhere = {n for n in ast.walk(tree) if isinstance(n, ast.BinOp)}
+    assert everywhere == proved, (
+        f"{PHASE22_PREREG_ARTIFACT} has {len(everywhere - proved)} arithmetic expression(s) "
+        "outside a `_prove` call's arguments. Arithmetic INSIDE a guard message is the sanctioned "
+        "idiom — it is how the `T ** 0.5` composition margin is computed at import rather than "
+        "transcribed by hand and left to rot — and arithmetic anywhere else is the executable "
+        "formula the rule/emission split exists to keep out"
+    )
+
+    reachable = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)} | {
+        n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)
+    }
+    forbidden = {"erfc", "exp", "log", "sqrt", "math"} & reachable
+    assert forbidden == set(), (
+        f"{PHASE22_PREREG_ARTIFACT} reaches {sorted(forbidden)} as a Name or an Attribute. This is "
+        "asserted over AST NODES and never over the file's TEXT, and the distinction is "
+        "load-bearing: the pin's prose has to discuss `erfc` and `exp` at length, because their "
+        "being reachable by no operator is the entire reason D-10 splits the rule from the "
+        "computation. A grep would redden on the explanation of the rule it is enforcing"
+    )
+
+    assert mitigation_accountant.NEIGHBOURING == "add/remove one fact", (
+        f"the loaded pin's NEIGHBOURING is {mitigation_accountant.NEIGHBOURING!r}. The static walk "
+        "above proves the file contains no formula; this proves the RUNNING module holds the "
+        "adjacency relation D-18 pinned, since a file can be literal-only and still say the wrong "
+        "thing. Its numeric consequence, SENSITIVITY_MULTIPLIER, is proved beside it in the pin's "
+        "own module-scope guards, which run at this import"
     )
 
 
