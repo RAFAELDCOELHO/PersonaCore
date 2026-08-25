@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-08-25T21:01:28.703Z"
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-08-25T21:24:40.444Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 9
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — EXECUTING
-Plan: 2 of 11
+Plan: 3 of 11
 Status: Executing Phase 22
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -122,6 +122,7 @@ Last activity: 2026-08-25
 | Phase 20 P11 | 22min | 3 tasks | 1 files |
 | Phase 20 P12 | 32min | 2 tasks | 3 files |
 | Phase 22 P01 | 25min | 2 tasks | 4 files |
+| Phase 22 P02 | 30min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -390,6 +391,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22]: 22-01: DELTA_FRONTIER's 60-dps truths are committed as decimal STRINGS — row (2.0, 0.05)'s 1.24028351258e-352 is below the float64 subnormal floor, so a float literal parses to 0.0 silently and destroys the row before any test reads it. Consumers call float(); the meta-guard asserts by HARD EQUALITY which single row underflows.
 - [Phase 22]: 22-01: src/personacore/privacy/__init__.py ships ZERO re-exports (departing from continual/__init__.py's form) so accountant.py (22-02) and dpsgd.py (22-04) never make this file a shared write target across parallel waves.
 - [Phase 22]: 22-01: the Phase-22 AST guards take SOURCE TEXT, never a path — the live check (22-04) and the FAKE mutation probes (22-09) execute identical code, per tests/test_phase20_prereg.py:153-155. _ALLOWED_CLASS_CONSTANTS starts EMPTY; a future plan adds its name in the same commit as the constant.
+- [Phase 22]: Phase 22's frozen pin cites by NAME and SYMBOL only — zero line-number anchors in scripts/mitigation_accountant.py, because a stale anchor inside a frozen file is uncorrectable
+- [Phase 22]: D-18 landed: NEIGHBOURING = 'add/remove one fact' and SENSITIVITY_MULTIPLIER = 1.0, the adjacency relation PITFALLS P3 assigned to P20/P21 that neither phase shipped
+- [Phase 22]: Stale line anchors are REMOVED and replaced by statement-text citations, never renumbered — a corrected number is stale again the instant the correcting diff lands
 
 ### Roadmap Evolution
 
@@ -522,8 +526,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-25T21:01:28.691Z
-Stopped at: Completed 22-01-PLAN.md
+Last session: 2026-08-25T21:24:25.063Z
+Stopped at: Completed 22-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
