@@ -1,7 +1,7 @@
 ---
 phase: 21-the-privacy-unit-the-dp-data-path-and-the-n-64-corpus
 verified: 2026-08-24T22:09:57Z
-status: human_needed
+status: passed
 score: 6/6 must-haves verified
 overrides_applied: 0
 re_verification:
@@ -30,11 +30,38 @@ human_verification:
 **Phase Goal:** Fix what a "record" is and prove it structurally, because an ε computed against the
 wrong unit is not a number that can be corrected by re-running.
 **Verified:** 2026-08-24T22:09:57Z
-**Status:** human_needed
+**Status:** passed (was human_needed; all four human items resolved 2026-08-25)
 **Re-verification:** No — initial verification
 **Tree:** clean at `cf356a3`, 74 commits in the phase
 **Suite:** `994 passed, 1 skipped` in 200.89s — the skip is `tests/test_train_loop.py:81`
 (`fp16 AMP smoke needs a CUDA GPU`), platform-gated by design.
+
+## Human items — RESOLVED 2026-08-25
+
+This status was flipped by the ORCHESTRATOR after `/gsd-verify-work 21`, not by a fresh verifier
+run. Stated so a reader knows the provenance. The 6/6 must-have score is the verifier's own; what
+changed is that its four `human_verification` decisions are now made AND executed:
+
+| item | decision | landed |
+|------|----------|--------|
+| WR-03 — 49.90% asserted in live source | retract in place | `c05880c` |
+| WR-04 — `privacy_n` unvalidated in the frozen pin | write the continuation + AST guard | `9a407d6` |
+| WR-06 — `== 10` wall as a bare `assert` | promote to `raise SystemExit` | `c552244` |
+| ledger — `21-VALIDATION.md`, `REQUIREMENTS.md` | close both | `80b7e82` |
+
+Three escalated beyond their original framing. WR-04 was recorded here as "nothing is wrong TODAY";
+that was FALSE — `phase21_unit_record.py:1009` and `:1037` already reached the pin aliased as
+`mu.privacy_n`, and `:1037` multiplies by `DELTA` against `DELTA_TIMES_N_CEILING`, so a zero N
+there clears the published ceiling. Both were redirected rather than exempted.
+
+This report's own "exit 0" claim for the vacuous `-k` selector is likewise FALSE and is corrected
+here rather than left standing: a vacuous `-k` exits **5**, a wrong node id exits **4** and names
+the missing id. The figure came from `$?` after a `| tail`, which reports `tail`.
+
+Suite at closure: **1024 passed, 1 skipped**; ruff clean; frozen pin `45f37e15…` and both
+`results/phase21_*` digests unchanged.
+
+REMAINING OPEN, not closed by this pass: WR-05, WR-07, IN-01, IN-02, IN-04 in `21-REVIEW.md`.
 
 ## Method and its boundary
 

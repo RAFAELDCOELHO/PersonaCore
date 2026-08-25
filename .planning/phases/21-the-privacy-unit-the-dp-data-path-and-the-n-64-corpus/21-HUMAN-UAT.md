@@ -1,30 +1,14 @@
 ---
-status: partial
+status: complete
 phase: 21-the-privacy-unit-the-dp-data-path-and-the-n-64-corpus
 source: [21-VERIFICATION.md]
 started: 2026-08-24T22:20:00Z
-updated: 2026-08-25T01:00:00Z
+updated: 2026-08-25T03:00:00Z
 ---
 
 ## Current Test
 
-number: 3
-name: WR-06 — a bare `assert` strippable by `python -O`
-expected: |
-  `scripts/phase21_filler.py:262` guards the `== 10` leak-vocabulary wall with a bare
-  `assert`. Confirmed live: `.venv/bin/python -O -c 'import phase21_filler'` imports
-  cleanly with the assert stripped.
-
-  The module's own comment on the line above says it "joins the `== 10` wall HERE, at the
-  one file in the repo that could break it", and its sibling frozen pin
-  (`mitigation_unit.py:73-76`) states the exact rule this violates. Every other refusal in
-  the same file (`refuse_collisions`, `verify_round_trips`) correctly raises `SystemExit`.
-
-  The repo does not run under `-O` today, so this is a latent robustness gap rather than a
-  live failure — unlike WR-04, which turned out to have two present-tense call sites.
-
-  Decide: promote to `raise SystemExit`, or accept the latent gap.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -112,7 +96,24 @@ live failure. Whether it is worth a commit is a judgement.
 
 decision: promote to `raise SystemExit`, or accept the latent gap.
 
-result: [pending]
+result: pass
+decided: "Promote. Landed at c552244."
+notes: |
+  RED and GREEN both observed on copies under the scratchpad — the real file was never
+  mutated in place, since a git checkout over an uncommitted implementation destroyed work
+  twice earlier in this phase.
+
+  RED, same broken wall (== 11 against a real 10), two interpreters:
+    plain python -> AssertionError, guard fires
+    python -O    -> IMPORT SUCCEEDED, nothing fired
+  GREEN, after the promotion, same broken copy:
+    python -O    -> [phase21_filler] REFUSED ... exit 1
+    plain python -> same refusal
+  NON-VACUITY: the real unbroken module still imports clean under -O, exit 0, 10 values.
+
+  Form matches the module's own siblings (refuse_collisions' two arms, verify_round_trips).
+  No bare asserts remain at module or guard level in the file.
+  Suite 1024 passed / 1 skipped; ruff clean.
 
 ### 4. The phase's own documentation ledger
 
@@ -136,14 +137,35 @@ human decision rather than another handler call.
 
 decision: close the ledger before Phase 22, or carry it forward.
 
-result: [pending]
+result: pass
+decided: "Close it. Landed at 80b7e82."
+notes: |
+  48 commands in 21-VALIDATION.md resolved to explicit node ids and ALL 48 run: 48 PASS.
+  A second sweep re-extracted every path::test_name from the three edited documents and ran
+  those too — 63 cited, 62 PASS, the one FAIL being a deliberate wrong-node-id negative
+  control that must exit 4. Six UNIT traceability notes filled to GATE-01..GATE-10 depth;
+  six UNIT bullets flipped to [x].
+
+  THE PREMISE I GAVE WAS PARTLY WRONG AND WAS CORRECTED BY MEASUREMENT. A vacuous -k exits
+  5, not 0; a wrong node id exits 4 AND names the missing id. The "silent exit 0" in
+  21-VERIFICATION.md, 21-REVIEW.md and 21-03's summary is a shell artifact — `$?` after
+  `| tail` reports tail. A FOURTH instance was then found in shipped source
+  (tests/test_phase21_sc5.py:317) and corrected in place. Only ONE of the two selectors was
+  genuinely broken; -k instruments_unchanged already worked after 21-09's rename.
+
+  My wall-census attribution was also wrong: test_phase16_ladder.py:711 and
+  test_phase19_erasure.py:625 ARE in 21-VALIDATION.md's own table. The three genuinely
+  undocumented are test_phase14_demo.py:568, test_phase19_erasure.py:1689,
+  test_phase21_filler.py:165. The count 11-across-8 stands.
+
+  Suite 1024 passed / 1 skipped; ruff clean; frozen pin and both artifact digests unchanged.
 
 ## Summary
 
 total: 4
-passed: 2
+passed: 4
 issues: 0
-pending: 2
+pending: 0
 skipped: 0
 blocked: 0
 
