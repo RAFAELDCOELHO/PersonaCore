@@ -804,7 +804,17 @@ applicable to this phase.
 
 ---
 
-## Open Questions for the Planner
+## Open Questions (RESOLVED)
+
+> All three were closed before planning. Retitled and annotated per the Phase-22 revision so no
+> reader treats a resolved question as still open:
+> **Q1** — closed by `22-CONTEXT.md` **D-18** (`NEIGHBOURING` / `SENSITIVITY_MULTIPLIER` pinned in
+> the frozen module, cross-site test built here rather than deferred).
+> **Q2** — closed by `22-CONTEXT.md`'s naming correction (σ is the noise MULTIPLIER, so `μ = 1/σ`
+> and `μ_eff = √T/σ`) together with this document's **F4**; no `clip_norm=` parameter reaches
+> `epsilon_for`, so no fifth `MECHANISM_KEYS` entry is created.
+> **Q3** — closed by plan **22-02 Task 1**, which fixes the frozen pin's contents, its zero-import
+> ceiling and its `GOLDEN_EPSILON` provenance.
 
 1. **Which adjacency relation does the published ε assume? (F6)**
    - What I know: `μ = Δ/σ` needs a fixed adjacency; add/remove-one gives Δ=C, replace-one gives

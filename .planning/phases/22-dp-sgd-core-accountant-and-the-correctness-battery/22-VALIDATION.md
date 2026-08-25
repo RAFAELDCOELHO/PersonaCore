@@ -1,8 +1,8 @@
 ---
 phase: 22
 slug: dp-sgd-core-accountant-and-the-correctness-battery
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-08-25
 ---
@@ -117,12 +117,16 @@ DP guarantee itself, covered by the D-05/D-16/D-17 guard rows rather than by an 
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or a Wave 0 dependency
-- [ ] Sampling continuity: no 3 consecutive tasks without an automated verify
-- [ ] Wave 0 covers all ❌ MISSING references above
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30 s
-- [ ] All four positive controls have their RED output recorded, not just their GREEN
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or a Wave 0 dependency — **measured 29/29 across
+      `22-01-PLAN.md` … `22-11-PLAN.md`**
+- [x] Sampling continuity: no 3 consecutive tasks without an automated verify — trivially held,
+      every task carries one
+- [x] Wave 0 covers all ❌ MISSING references above — **0 `MISSING` references in any plan**
+- [x] No watch-mode flags — **0 occurrences of `--watch` / `--watchAll`**
+- [x] Feedback latency < 30 s — plan `22-10` Task 3's budget was tightened from 60 s to 30 s so the
+      plan and this row agree
+- [ ] All four positive controls have their RED output recorded, not just their GREEN —
+      **execution-time; stays open until Wave 0 runs**
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-08-25
