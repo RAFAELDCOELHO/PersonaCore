@@ -18,6 +18,37 @@ with full (non-``weights_only``) pickle. It is therefore TRUSTED-ONLY — load i
 your own files. The slim INFERENCE checkpoint (``export_slim`` / ``load_slim``, Phase 8)
 uses ``weights_only=True``. Loading always passes ``map_location="cpu"`` so a CUDA-saved
 file resumes on a CPU laptop (Pitfall 5).
+
+THE TWO RNG SLOTS DP-SGD ADDS, NAMED APART AND NEITHER COLLAPSED INTO THE OTHER (D-14)
+--------------------------------------------------------------------------------------
+Phase 22 puts a per-step random consumer into training for the first time, and it needs TWO
+separately-named checkpoint slots that prove DIFFERENT things. Describing either as the other
+would be a false claim, so both are written down here:
+
+  * ``rng["mps"]`` — **DPSGD-05's literal requirement**, and honestly **REQUIRED-BUT-UNEXERCISED**.
+    It mirrors the ``cuda`` slot beside it (same ``None``-when-unavailable shape) and it is right
+    to carry: the device stream belongs in a full-state checkpoint. But the DP path does **not**
+    fire it. D-07 locked a **DEDICATED** ``torch.Generator``, and a dedicated generator's draw does
+    not change the global MPS state — measured, alongside the fact that a real GPT+LoRA
+    forward+backward on MPS also leaves ``torch.mps.get_rng_state()`` unchanged. So the slot was
+    LATENT rather than missing before Phase 22 (the loop consumed zero device RNG), and it stays
+    unexercised by DP afterwards. CI is CPU-only, so its round-trip test is ``skipif``-gated;
+    ``tests/test_phase22_checkpoint.py::test_old_checkpoint_without_mps_slot_still_loads`` is the
+    leg that does not skip and carries the backward-compatibility guarantee everywhere.
+  * ``dp_noise_rng`` — arriving through ``**extra`` exactly as ``fisher`` / ``theta_star`` did, with
+    NO format change and NO ``CKPT_SCHEMA_VERSION`` bump. **This is the slot the DP path actually
+    FIRES**, written by ``training/loop.py::train``'s ``_dp_extra()`` closure and restored in its
+    ``resume_from`` block. ``set_state`` round-trips exactly. Its size travels WITH ITS DEVICE
+    because the figure is device-dependent and every Phase-22 test runs on CPU: the dedicated
+    generator's state is **44 bytes on MPS and 5,056 bytes on CPU** (measured, torch 2.7.1). A bare
+    "44 bytes" would be an MPS-only number quoted in a CPU-only battery.
+
+The measurement that decided the generator's device, recorded because the obvious reading is wrong:
+CPU and MPS ``torch.Generator``s do **not** agree at the same seed, a CPU generator cannot fill an
+MPS tensor (``RuntimeError: Expected a 'mps' device type for generator but found 'cpu'``), and the
+cost delta at ``MAX_STEPS = 200`` is **1.76 s per arm against a 4.77 h/point evaluation — 0.01%, so
+cost decides nothing**. The "guard that never fires" problem is decided by **which SLOT carries the
+DP state**, not by the generator's device. Hence two slots.
 """
 
 import random
@@ -71,8 +102,12 @@ def save_checkpoint(
     """Serialize the full training state to ``path`` as an open dict.
 
     Captures model/optimizer/scheduler state_dicts, the step counter, the COMPLETE RNG
-    generator state (python/numpy/torch/cuda), the embedded configs (D-03 / QA-02), the
+    generator state (python/numpy/torch/cuda/**mps**), the embedded configs (D-03 / QA-02), the
     git SHA (provenance), and any ``**extra`` keys (the M2 EWC seam).
+
+    The ``mps`` slot is DPSGD-05's literal requirement and is recorded as REQUIRED-BUT-UNEXERCISED
+    by the DP path — the module docstring's two-slot register says why, and names ``dp_noise_rng``
+    (an ``**extra`` key, no schema bump) as the slot DP actually fires.
 
     The ``GradScaler`` state (CLAUDE.md's named ``scaler`` checkpoint field) is serialized too:
     on the fp16/P100 path the scale factor + growth tracker EVOLVE during training, so a resume
@@ -104,6 +139,13 @@ def save_checkpoint(
             "numpy": np.random.get_state(),
             "torch": torch.get_rng_state(),
             "cuda": (torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None),
+            # DPSGD-05 / D-14: the MPS device stream, in the IDENTICAL None-when-unavailable shape
+            # as `cuda` directly above. It was LATENT rather than missing before Phase 22 — the
+            # loop consumed ZERO device RNG (measured: a real GPT+LoRA forward+backward on MPS
+            # leaves torch.mps.get_rng_state() unchanged) and DP noise is the first per-step
+            # consumer. It is still NOT the slot the DP path fires; see the module docstring's
+            # two-slot register, which records that honestly rather than implying otherwise.
+            "mps": (torch.mps.get_rng_state() if torch.backends.mps.is_available() else None),
         },
         # OPEN DICT: M2 may add "fisher" / "theta_star" here with no format change.
         **extra,
@@ -121,7 +163,11 @@ def load_checkpoint(
     the full dict so the caller can read ``step`` / configs / ``git_sha`` / extra keys.
 
     ``scaler`` restore uses ``ckpt.get("scaler")`` so a pre-fix (scaler-less) checkpoint resumes
-    cleanly without it — the open-dict format stays backward compatible.
+    cleanly without it — the open-dict format stays backward compatible. The ``mps`` RNG restore
+    (DPSGD-05 / D-14) follows that precedent verbatim via ``rng.get("mps")``: the key arrives in
+    Phase 22, so every checkpoint written before it lacks the key and a subscript would KeyError on
+    exactly the artifacts backward compatibility is about. ``rng["cuda"]`` keeps its subscript
+    because that key has existed since schema v1.
     """
     # weights_only=False: the resume checkpoint carries pickled optimizer/RNG/numpy
     # objects that the torch>=2.6 weights_only=True default rejects. TRUSTED-only file
@@ -141,6 +187,17 @@ def load_checkpoint(
     torch.set_rng_state(rng["torch"])
     if rng["cuda"] is not None and torch.cuda.is_available():
         torch.cuda.set_rng_state_all(rng["cuda"])
+    # DPSGD-05 / D-14: `.get()`, NEVER a subscript — and the ASYMMETRY with the `rng["cuda"]` line
+    # directly above is the entire point rather than an inconsistency. `cuda` has been in the dict
+    # since schema v1, so every checkpoint this project has ever written carries it and `[]` is
+    # safe there. `mps` arrives NOW, so every checkpoint written before Phase 22 lacks it —
+    # measured on the real gitignored artifacts, e.g. `checkpoints/latest.pt` (step 50,000) whose
+    # rng keys are exactly {python, numpy, torch, cuda}. A subscript here would raise KeyError on
+    # precisely the artifacts DPSGD-05 requires to still resume. `ckpt.get("scaler")` above is the
+    # recorded precedent for this in this same function, and `training/loop.py::train` uses the
+    # same `.get()` form for `best_val_loss` and `dp_noise_rng`.
+    if rng.get("mps") is not None and torch.backends.mps.is_available():
+        torch.mps.set_rng_state(rng["mps"])
 
     return ckpt  # caller reads step / configs / git_sha / extra keys
 
