@@ -422,7 +422,7 @@ CPU before a single second of M3 time is spent
 
 - [x] 22-05-PLAN.md — `epsilon_for` / `sigma_for` over ONE choke point, the explicit σ=0 → ∞ branch,
       the round-trip, and V-03's composition oracle at `rel_tol` (never `==`, per F3)
-- [ ] 22-06-PLAN.md — the additive `dp_fn=` gradient-side seam in `_optimizer_step` + `train()`, the
+- [x] 22-06-PLAN.md — the additive `dp_fn=` gradient-side seam in `_optimizer_step` + `train()`, the
       legacy clip made structurally unreachable, and V-14's golden bit-identity + V-12's differential
 
 **Wave 4** *(blocked on Wave 3)*
@@ -642,7 +642,7 @@ capacities — with every number in prose generated from a committed record rath
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
-| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 5/11 | In Progress | - |
+| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 6/11 | In Progress | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |

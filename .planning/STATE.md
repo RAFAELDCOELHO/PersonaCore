@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-05-PLAN.md
-last_updated: "2026-08-25T22:49:52.908Z"
+stopped_at: Completed 22-06-PLAN.md
+last_updated: "2026-08-25T23:31:16.712Z"
 last_activity: 2026-08-25
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 39
-  completed_plans: 32
+  completed_plans: 34
   percent: 22
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — EXECUTING
-Plan: 6 of 11
+Plan: 7 of 11
 Status: Executing Phase 22
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -126,6 +126,7 @@ Last activity: 2026-08-25
 | Phase 22 P03 | 35min | 3 tasks | 3 files |
 | Phase 22 P04 | 45min | 3 tasks | 3 files |
 | Phase 22 P05 | 45min | 3 tasks | 2 files |
+| Phase 22 P06 | 70min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -406,6 +407,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22]: 22-05: the accountant's inverse reads a delta_closed refusal as an ORDERING fact (delta is below float64's range, hence below the target), never as a substituted number — the plan's 'let the ValueError propagate' is unsatisfiable and was watched RED at sigma=50/T=1 on the FIRST doubling step
 - [Phase 22]: 22-05: ROUND_TRIP_REL_TOL ships the MEASURED 8.29e-15 over 48 pairs, not the plan's '1.07e-15' — that number is a mis-transcription of RESEARCH's 1.07e-14, which measures the two-ORACLE gap and is not a round-trip measurement at all
 - [Phase 22]: 22-05: sigma_for's one-choke-point property is asserted by AST (calls epsilon_for, calls neither delta oracle) AND numerically by a 48-pair round trip — a 1e-9 divergent inverse reddens 48 of 48
+- [Phase 22]: 22-06: dp_fn= is a NEW ADDITIVE gradient-side seam in _optimizer_step/train(); the legacy clip_grad_norm_ now has exactly ONE reachable call site in loop.py, inside `if dp_fn is None:`. Seam-off bit-identity proven against golden_trajectory_v1.json on all three fingerprints (the golden replay RAN on this box, not skipped).
+- [Phase 22]: 22-06: the plan's accum=4 'documented tolerance' case is UNSATISFIABLE — measured, the sigma-of-zero identity is BITWISE at every power-of-two lot size (72/72 at 1,2,4,8; rel dev exactly 0). The tolerance moved to accum=3, the smallest non-power-of-two, where the gap is real (5.681269e-06) and a non-degeneracy assertion proves it does work.
+- [Phase 22]: 22-06: D-17's table credits D-06's sigma-of-zero identity with detecting FAKE 3 (noise added after averaging). WATCHED: the mutation leaves the whole suite GREEN — at sigma=0 the draw is exactly zero, so the divide's position is unobservable. A magnitude guard at sigma>0 was added and watched RED; 22-09 must not inherit the false table entry.
 
 ### Roadmap Evolution
 
@@ -538,8 +542,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-25T22:49:52.900Z
-Stopped at: Completed 22-05-PLAN.md
+Last session: 2026-08-25T23:31:09.793Z
+Stopped at: Completed 22-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
