@@ -159,8 +159,21 @@ REPLAY_ARM_RATIO = 1.0  # D-15's with-replay arm: one replay token per teaching 
 # (``tests/test_phase21_replay_volume.py::test_replay_constant_is_not_derived_from_the_corpus``),
 # not merely by preference.
 #
-# The share holds across capacities for free: 49.90% at n=64, because both sides scale with
-# ``n_facts``. Nothing re-tunes.
+# RETRACTED 2026-08-25 (Phase 21, WR-03). This comment read: "The share holds across capacities
+# for free: 49.90% at n=64, because both sides scale with ``n_facts``. Nothing re-tunes." It does
+# not hold. MEASURED at n=64: 44.7552% (``results/phase21_multiplicity.json``, recorded under
+# ``documented_n64_claim_holds: false``).
+#
+# D-24's constant is UNTOUCHED and still measures exactly right: 4 windows = 1,024 tok/fact =
+# 49.23% of the padded bin at n=8. What was falsified is the CONSEQUENCE. Replay scales exactly
+# with ``n_facts``; the TEACHING BIN does not. The 56 filler facts pack to 283 of the 316 ragged
+# windows (5.054 each) against the 8 locked facts' 33 (4.125 each), so the n=64 bin carries
+# 80,896 trainable tokens where linear scaling from n=8 predicts 8 x 8,448 = 67,584.
+#
+# Sharper, and the reason this is a retraction rather than a re-measurement: under the linear
+# premise the old comment ITSELF stated, the share would be 49.2308% -- exactly the n=8 value --
+# not the 49.90% it claimed. The figure never followed from its own stated reason either.
+# Re-tuning IS required across capacities.
 REPLAY_WINDOWS_PER_FACT = 4
 
 

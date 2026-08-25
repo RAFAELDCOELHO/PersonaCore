@@ -828,8 +828,11 @@ def _d24_candidate_table(geometry):
        denominator the quantity has, and for why the answer is not "the one that makes this True".
 
     2. **The n=64 half of that comment is FALSE, and it is recorded rather than smoothed.**
-       ``teach_persona.py:162-163`` states *"The share holds across capacities for free: 49.90% at
-       n=64, because both sides scale with ``n_facts``."* Both sides do NOT scale with
+       ``teach_persona.py:162-163`` STATED *"The share holds across capacities for free: 49.90% at
+       n=64, because both sides scale with ``n_facts``."* — past tense since 2026-08-25, when
+       WR-03 retracted it in place; the emitted ``documented_n64_claim`` field deliberately keeps
+       the original wording so a re-emission stays byte-identical to the committed record.
+       Both sides do NOT scale with
        ``n_facts``. Replay does, exactly (``4 * n_facts * block_size``); the teaching bin does
        not, because the 56 filler facts pack to ~5.05 windows each against the 8 locked facts'
        4.125. This survives the denominator correction unchanged — which is the evidence that the

@@ -59,8 +59,16 @@ AMBIGUOUS, reported rather than resolved to the convenient reading:
 
 ===== MEASURED SHARES (D-24), carried here so the numbers travel with the test =====
 
-4 windows = 1,024 tok/fact = 49.23% of the padded bin at n=8 (-0.77 pts vs today's 50.00%),
-and 49.90% at n=64 — both sides scale with ``n_facts``, so nothing re-tunes across capacities.
+4 windows = 1,024 tok/fact = 49.23% of the padded bin at n=8 (-0.77 pts vs today's 50.00%).
+That n=8 figure is D-24's and still measures exactly right.
+
+**Its n=64 companion is RETRACTED (2026-08-25, Phase 21 WR-03).** This docstring read "and
+49.90% at n=64 — both sides scale with ``n_facts``, so nothing re-tunes across capacities."
+MEASURED: 44.7552% (``results/phase21_multiplicity.json``). Replay scales exactly with
+``n_facts``; the teaching bin does not, because the 56 filler facts pack 5.054 windows each
+against the 8 locked facts' 4.125. Under the linear premise the old sentence itself stated, the
+share would have been 49.2308% — exactly the n=8 value — so 49.90% never followed from its own
+stated reason either.
 
 CPU-only, GPU-free, no network. Everything under ``tmp_path``: ``data/`` is gitignored and
 machine-local, so a test reading the real ``data/dialog_train.bin`` would be unrunnable on CI.
