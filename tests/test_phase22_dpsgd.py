@@ -17,10 +17,59 @@ therefore asserts its OWN ``[dp-refusal:...]`` marker is present AND that the ot
 markers are absent -- pairwise distinctness proven per test item, with no state shared across
 items.
 
+V-14 / DPSGD-02 -- SEAM OFF IS BIT-IDENTICAL, PROVEN TWO WAYS
+------------------------------------------------------------
+The ``dp_fn=`` seam is ADDITIVE, so ``dp_fn=None`` (or omitted) must reproduce the v1.0 trajectory
+bit-for-bit. That is proven the same two ways ``tests/test_loop_penalty_fn.py`` proves it for
+``penalty_fn`` -- executed evidence, not code review -- and this file REUSES that module's
+``_run_recipe`` rather than defining a second one, because two recipes that drift is exactly the
+failure the reuse prevents:
+
+1. **Golden replay (platform-gated).** ``tests/fixtures/golden_trajectory_v1.json`` was captured
+   from the git-clean, PRE-EDIT loop (its ``meta.captured_at_sha`` records the commit). The replay
+   asserts exact CSV text + the ``repr`` of the final loss + the sha256 of the parameter bytes --
+   but ONLY where ``(platform.system(), platform.machine(), torch.__version__)`` matches the
+   fixture's ``meta.platform``. fp32 transcendental kernels are NOT bit-stable across OS/arch/BLAS
+   backends OR torch releases, so x86_64 Linux CI -- **and equally a routine torch 2.7.x PATCH BUMP
+   on the capture machine itself** -- must SKIP with that named reason, reading the mismatch as a
+   STALE FIXTURE to regenerate rather than as a phantom loop regression, while the in-process
+   identity below still passes.
+2. **In-process identity (every platform, never skips).** ``dp_fn`` omitted vs ``dp_fn=None``
+   asserted bitwise identical to EACH OTHER in the same process. This is what carries the
+   guarantee when the platform gate skips.
+
+Golden-fixture regeneration recipe (only ever from a git-clean, pre-edit ``loop.py``): the fixture's
+``meta`` block documents the full capture -- ``seed_everything(meta.seed)``, build
+``BigramLanguageModel(vocab_size=ModelConfig().vocab_size)``, then ``train()`` with
+``TrainConfig(**meta.train_config)``, ``RuntimeConfig(device="cpu")`` passed EXPLICITLY,
+``corpus_path=meta.corpus``, ``eos_id=meta.eos_id``, ``eval_interval=meta.eval_interval``, a temp
+``log_path``, ``return_final_loss=True``; record the CSV text, ``repr(float(final))`` and the
+``hashlib.sha256`` of the parameter bytes plus the new ``git rev-parse HEAD`` and the capturing
+platform's identity.
+
+**The golden recipe trains a ``BigramLanguageModel``, not GPT+LoRA**, so ``DPSGD.__init__``'s D-04
+census would correctly REFUSE it. The golden tests therefore run with the seam OFF only; the sigma
+of zero identity further down builds its own GPT+LoRA fixture rather than feeding a bigram to
+``DPSGD``.
+
+D-06 -- THE TWO SIGMA-OF-ZERO CLAIMS, NAMED APART SO NEITHER BORROWS THE OTHER'S WEIGHT
+---------------------------------------------------------------------------------------
+This file ships the **Phase 22 MECHANISM-CORRECTNESS** claim: CPU, fixture scale, deterministic,
+CI-reproducible, ``train(dp_fn=None)`` reproduced by ``dp_fn`` at a sigma of zero and a non-binding
+``C``, bitwise at ``grad_accum_steps = 1`` and to a MEASURED relative tolerance above it.
+
+Phase 23's **DPSGD-06 SCIENTIFIC-RESULT** claim is a different thing entirely: M3, the real corpus,
+200 steps, sigma of zero reproducing the unmitigated control *within the measured seed-to-seed noise
+floor*. It is **NOT bit-identical, by design**. Neither claim substitutes for the other and neither
+may be cited for the other -- Phase 20's ``borrowed_cap`` discipline, two artifacts and two claims.
+
 CPU-only, GPU-free, no network.
 """
 
 import math
+import pathlib
+import platform
+import sys
 
 import pytest
 import torch
@@ -30,6 +79,19 @@ from personacore.lora.config import LoRAConfig
 from personacore.lora.inject import inject_lora, mark_only_lora_trainable
 from personacore.model.gpt import GPT
 from personacore.privacy.dpsgd import DPSGD
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_ROOT / "tests"))
+
+# ONE recipe definition in the repository (`grep -rn "def _run_recipe" tests/` returns exactly one,
+# in test_loop_penalty_fn.py). Imported rather than re-written: a second recipe is free to drift
+# from the fixture's own `meta` block, and then a green golden replay proves nothing about the
+# capture. This is `tests/test_phase21_aligned_loader.py:43-49`'s cross-test idiom verbatim.
+from test_loop_penalty_fn import (  # noqa: E402  (tests/ is not a package)
+    _CAPTURE_PLATFORM,
+    _GOLDEN,
+    _run_recipe,
+)
 
 # Test-local fixture values, NOT a budget. Phase 22 names no sigma and no C anywhere in its tree
 # (D-08 / Phase 20's Z boundary); these are arithmetic test vectors in exactly the sense plan
@@ -470,3 +532,69 @@ def test_finalize_refuses_a_divisor_that_is_not_the_record_count():
         dp.finalize(2)
     with pytest.raises(ValueError, match="dp-invariant:lot"):
         dp.finalize(0)
+
+
+# =============================================================================================
+# V-14 / DPSGD-02 -- the seam OFF is bit-identical to the Phase-10 golden trajectory.
+#
+# See the module docstring for the two-way proof, the regeneration recipe, and the reason the
+# golden half is platform-gated while the in-process half never skips.
+# =============================================================================================
+
+
+def test_golden_fixture_is_the_phase10_one():
+    """META-GUARD: a truncated or regenerated fixture must not make the identity vacuous.
+
+    Every assertion in ``test_seam_off_bit_identical`` compares against a key of ``_GOLDEN``. A
+    fixture that lost ``csv_text`` (or shipped it empty) would turn ``csv_text == _GOLDEN[...]``
+    into a comparison of two empty strings, and the bit-identity claim would be green over nothing.
+    """
+    assert set(_GOLDEN) == {"csv_text", "final_loss_repr", "param_sha256", "meta"}, sorted(_GOLDEN)
+    assert _GOLDEN["csv_text"].strip(), (
+        "the golden CSV text is empty — the identity would be vacuous"
+    )
+    assert _GOLDEN["csv_text"].startswith("step,train_loss,val_loss,lr,tokens,wall_clock"), (
+        f"the golden CSV header is not the v1.0 one: {_GOLDEN['csv_text'][:80]!r}"
+    )
+    # sha256 hex digest, and a param_sha256 of the empty string would still be 64 hex chars — so
+    # the CSV assertions above are what stop an empty capture, not this one.
+    assert len(_GOLDEN["param_sha256"]) == 64, _GOLDEN["param_sha256"]
+    assert _GOLDEN["final_loss_repr"], "the golden final-loss repr is empty"
+
+
+@pytest.mark.skipif(
+    (platform.system(), platform.machine(), torch.__version__) != _CAPTURE_PLATFORM,
+    reason=(
+        "V-14's golden bitwise replay is only valid on the capture platform + torch build "
+        f"{_CAPTURE_PLATFORM} (running torch {torch.__version__}) — fp32 transcendental kernels "
+        "are not bit-stable across OS/arch/BLAS backends OR torch releases, so a mismatch here is "
+        "a STALE FIXTURE to regenerate per the module docstring recipe, NOT a phantom loop "
+        "regression; reading it the other way would make a routine torch 2.7.x patch bump look "
+        "like the dp_fn seam broke v1.0. test_seam_omitted_equals_seam_none carries the "
+        "DPSGD-02 guarantee on every platform either way"
+    ),
+)
+def test_seam_off_bit_identical(tmp_path):
+    """V-14, platform-gated half: ``dp_fn=None`` reproduces the golden trajectory BYTE FOR BYTE.
+
+    All three fingerprints, none of them a loss curve: exact CSV TEXT, the exact ``repr`` of the
+    final loss, and the sha256 of the parameter BYTES. "The loss curve matches" is not bit-identity
+    and is not what this asserts.
+    """
+    csv_text, final_repr, sha = _run_recipe(tmp_path / "dp_seam_off.csv", dp_fn=None)
+    assert csv_text == _GOLDEN["csv_text"]
+    assert final_repr == _GOLDEN["final_loss_repr"]
+    assert sha == _GOLDEN["param_sha256"]
+
+
+def test_seam_omitted_equals_seam_none(tmp_path):
+    """V-14, platform-INDEPENDENT half: omitting ``dp_fn`` and passing ``None`` are identical.
+
+    Never skips. This is the assertion CI relies on wherever the golden replay's platform gate
+    fires, and it is the ``tests/test_loop_penalty_fn.py::test_omitted_equals_none_in_process``
+    shape: two runs in the SAME process, so the comparison is free of any cross-platform kernel
+    question, and all three fingerprints must agree bitwise.
+    """
+    omitted = _run_recipe(tmp_path / "omitted.csv")
+    explicit_none = _run_recipe(tmp_path / "none.csv", dp_fn=None)
+    assert omitted == explicit_none  # (csv_text, final_loss_repr, param_sha256), all bitwise
