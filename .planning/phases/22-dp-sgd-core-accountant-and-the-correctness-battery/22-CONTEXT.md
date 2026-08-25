@@ -1,7 +1,22 @@
 # Phase 22: DP-SGD Core, Accountant, and the Correctness Battery - Context
 
 **Gathered:** 2026-08-25
-**Status:** COMPLETE — D-01 … D-17, 0 open. Ready for `/gsd:plan-phase 22`.
+**Status:** COMPLETE — D-01 … D-18, 0 open. Ready for `/gsd:plan-phase 22`.
+
+> **D-18 was added on 2026-08-25 after the research pass**, on the user's explicit decision. It pins
+> the **adjacency relation** — a stated precondition of `μ = Δ/σ` that `.planning/research/PITFALLS.md`
+> P3 assigned to Phase 20/21 and that **measurably never landed** (zero hits in `scripts/`, `src/`,
+> `tests/`). It is the one gap D-17's guards structurally cannot reach.
+>
+> **One naming correction, recorded here rather than by editing a locked decision.** D-12's phrase
+> `μ = C/σ` is outlier wording: `σ` is the **noise multiplier** (`σ_noise / C`, unitless), so
+> `μ = 1/σ` and `μ_eff = √T/σ`. Three committed artifacts agree —
+> `scripts/mitigation_gate.py:1026` (`MECHANISM_KEYS = ("sigma", "steps", "delta", "q")`, FROZEN, its
+> own comment saying *"there is no fifth key"*), `:161` (*"the recorded **noise multiplier**"*), and
+> `.planning/research/ARCHITECTURE.md:14` (`μ = √T/σ`). D-12's substance is unaffected — `1.0/0.0`
+> still raises `ZeroDivisionError`, so the explicit `σ=0 → ε=∞` branch is still required. **The plan
+> must NOT add a `clip_norm=` parameter to `epsilon_for`**: that would create the fifth mechanism key
+> the frozen gate says does not exist. See `22-RESEARCH.md` F4.
 
 > **Numbering.** A bare `D-NN` is always **this phase's** decision. Phase 20's and Phase 21's are
 > always written `Phase 20 D-NN` / `Phase 21 D-NN`. This matters: Phase 21 D-01/D-02/D-07 are
@@ -455,6 +470,49 @@ against the tree, never transcribed from a planning document.**
   | noise added after averaging | D-02 (`sum → noise → divide` locked) | D-06's CPU identity; D-05 axis 1 | build `divide → noise`; watch the identity break |
   | RNG reused across steps | D-17 (construct-once generator) | D-16 generator-state check | add an in-step `manual_seed`; watch the AST guard + state check redden |
 
+### The adjacency relation — the definitional half D-17's guards structurally cannot reach
+
+- **D-18 — `NEIGHBOURING = "add/remove one fact"` and `SENSITIVITY_MULTIPLIER = 1.0` are pinned in
+  `scripts/mitigation_accountant.py` beside `REQUIRED_FORM`, and the cross-site consistency test is
+  built HERE, in Phase 22, not deferred.** Same frozen file, same zero-import discipline — two
+  literals, one a string and one a float, both inside the ceiling.
+
+  **Added after the Phase-22 research pass; it is a carry-forward gap, not a new question.**
+  `.planning/research/PITFALLS.md:143-165` (pitfall **P3, "Noise scaled to the wrong sensitivity"**)
+  already prescribes exactly these two constants and assigns them to **"P20 (constant), P21
+  (accountant consumes it)"**. **Measured against HEAD: neither constant exists.**
+  `grep -rn "NEIGHBOURING\|SENSITIVITY_MULTIPLIER" scripts/ src/ tests/` returns **zero hits**, and
+  the eight `adjacen*` hits in the tree are all unrelated (character-pair transposition,
+  frozen-adjacent dynamics, ADJACENT caveat placement). Phase 20 and Phase 21 both closed without
+  landing it and this document did not carry it forward.
+
+  **The choice matches the argument already written, rather than being inherited by silence.**
+  `μ = Δ/σ` requires Δ under a **fixed** relation: add/remove-one (unbounded DP) gives `Δ = C`,
+  replace-one (bounded DP) gives `Δ = 2C`. D-02's own sensitivity argument — *"one record moves the
+  sum by at most `C` — the textbook sensitivity argument"* — **is** the add/remove-one argument, so
+  ×1.0 is the reading D-02 already assumes; and "one fact" is `mitigation_unit.py`'s `PRIVACY_UNIT`
+  verbatim, so the pin introduces no second vocabulary for the same thing. Since ε is roughly linear
+  in μ over the operating range, the alternative would be roughly **2× on every published ε**.
+
+  **Why the existing guards cannot reach it, which is why it needs its own pin.** D-17 makes the
+  wrong-sensitivity fake impossible at the **code** level (single-source `self.C`, so a second
+  constant is a positive insertion D-05 axis 1 catches). It does not touch the **definitional**
+  half: single-sourcing proves the code is self-consistent, **not that `C` is the right sensitivity
+  for the adjacency the report claims.** An implementation can pass all four of D-05's axes and all
+  four of D-16's runtime invariants while publishing an ε that is 2× optimistic — every guard
+  compares `C` against `C`. PITFALLS P3's stated warning sign is precisely this: *"the report says
+  add/remove and the accountant's docstring says replace."*
+
+  **The cross-site consistency test is IN SCOPE here, closing the "a constant nothing enforces"
+  gap.** PITFALLS P3's own test — *"assert the accountant call site and the noise call site read the
+  same constant"* — is built in Phase 22, not deferred. It reads the relation as documented at
+  `accountant.py` and as used at `dpsgd.py`'s noise line and refuses on disagreement. Note the pin
+  **cannot be imported** by either (the ceiling runs the other way: `scripts/mitigation_*.py` may
+  import only `{pathlib, sys, erasure_gate}`, and `src/` never imports `scripts/` — D-10), so the
+  check is a test that reads all sites, which is the shape D-05 axis 1 already builds. Deferring the
+  test was explicitly rejected: it would ship a definition with nothing enforcing it, into the one
+  phase whose entire purpose is that guards are watched failing before they are believed.
+
 ### Claude's Discretion
 
 The planner resolves these; none changes the shape above:
@@ -751,5 +809,6 @@ already stale in two of them.**
 
 *Phase: 22-DP-SGD Core, Accountant, and the Correctness Battery*
 *Context gathered: 2026-08-25 — **COMPLETE***
-*Locked: D-01 … D-17. Open: 0.*
+*Locked: D-01 … D-18. Open: 0.*
+*D-18 added 2026-08-25 post-research: the adjacency relation PITFALLS P3 assigned to P20/P21 and that never landed.*
 *Seven premise-checks run; two changed a mechanism, five changed a reason while the decision stood.*
