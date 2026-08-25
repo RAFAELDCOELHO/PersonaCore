@@ -48,6 +48,7 @@ Neither entry generalises to the other's case. V-15 is the first; it uses ``==``
 """
 
 import glob
+import math
 import pathlib
 
 import pytest
@@ -58,8 +59,10 @@ from personacore.config import ModelConfig, RuntimeConfig, TrainConfig
 from personacore.lora.config import LoRAConfig
 from personacore.lora.inject import inject_lora, mark_only_lora_trainable
 from personacore.model.gpt import GPT
+from personacore.privacy.accountant import epsilon_for
 from personacore.privacy.dpsgd import DPSGD
 from personacore.provenance import git_sha
+from personacore.training.loop import train
 
 # --- Fixture scale. A tiny GPT, not the 13.9M production one: DPSGD's closed-form census is
 # r * n_layer * 18 * n_embd, which holds at ANY shape, so the cheap fixture exercises the same
@@ -287,3 +290,236 @@ def test_dp_noise_rng_rides_extra_without_a_schema_bump(tmp_path):
     # core resume state.
     with pytest.raises(ValueError, match="collide with reserved"):
         _save(tmp_path / "clash.pt", rng={"python": None})
+
+
+# ==================================================================================================
+# V-15 — a kill -> resume THROUGH train(resume_from=...) reproduces a bit-identical reported epsilon
+# ==================================================================================================
+
+_TOTAL_STEPS = 4
+_KILL_AT = 2
+_ACCUM = 2
+_MICRO_BS = 2
+_DP_SEED = 4242
+_RESUME_SEED = 999  # deliberately NOT _DP_SEED — see the positive control below.
+
+_FIXTURE_GEN = torch.Generator().manual_seed(20220705)
+_BATCH = (
+    torch.randint(0, _TINY.vocab_size, (_MICRO_BS, _TINY.block_size), generator=_FIXTURE_GEN),
+    torch.randint(0, _TINY.vocab_size, (_MICRO_BS, _TINY.block_size), generator=_FIXTURE_GEN),
+)
+
+
+def _dp_train(model, dp, *, checkpoint_path, steps, resume_from=None):
+    """One ``train()`` call with the DP seam live. Everything below is asserted about THIS."""
+    train(
+        train_config=TrainConfig(
+            lr=1e-3,
+            warmup_steps=0,
+            max_steps=_TOTAL_STEPS,
+            batch_size=_MICRO_BS,
+            grad_accum_steps=_ACCUM,
+        ),
+        runtime_config=RuntimeConfig(device="cpu"),
+        model=model,
+        model_config=_TINY,
+        fixed_batch=_BATCH,
+        dp_fn=dp,
+        checkpoint_path=checkpoint_path,
+        resume_from=resume_from,
+        max_steps_override=steps,
+    )
+    return torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
+
+def _seam(model, sigma, seed):
+    return DPSGD(
+        model,
+        sigma=sigma,
+        # FINITE and non-binding. Plan 22-04 REFUSES math.inf: 0.0 * math.inf is nan and
+        # torch.normal(std=nan) raises, which would crash at exactly the sigma = 0 row below.
+        clip_norm=_NON_BINDING_CLIP,
+        seed=seed,
+        runtime=RuntimeConfig(device="cpu"),
+    )
+
+
+def _count_composed_steps(dp):
+    """Count the optimizer steps this seam ACTUALLY composed, by shadowing ``finalize``.
+
+    Load-bearing, and it was added because a mutation measured the obvious version incapable: with
+    ``train()``'s ``start_step = ckpt["step"]`` mutated to ``start_step = 0``, the resumed run
+    executes ``_TOTAL_STEPS`` MORE steps on top of the pre-kill ones — composing 6 — while its
+    end-of-call checkpoint still records ``step = 4``. An ε read off that ``step`` field is then
+    identical across the two arms and OPTIMISTIC: the published number describes a 4-fold
+    composition that never ran. Counting the real invocations is what makes the ε assertion a
+    statement about **the mechanism that actually ran** rather than about a field.
+    """
+    calls = []
+    real = dp.finalize
+
+    def counting(accum):
+        calls.append(accum)
+        return real(accum)
+
+    dp.finalize = counting  # per-INSTANCE shadow; the class method is untouched.
+    return calls
+
+
+def _next_draw(dp):
+    """One draw from the seam's OWN generator — "the noise this seam would release next".
+
+    ``std`` is fixed at 1.0 rather than at the arm's sigma **on purpose**: at sigma = 0 every
+    released value is exactly zero, so comparing released VALUES could never see a stream that
+    resumed at the wrong position — while the generator still ADVANCES (measured, torch 2.7.1:
+    ``torch.normal(std=0.0)`` returns exact zeros AND moves the state). Probing at std = 1.0 makes
+    the sigma = 0 row carry the same evidence as the sigma > 0 one.
+    """
+    return torch.normal(mean=0.0, std=1.0, size=(16,), generator=dp._g)
+
+
+@pytest.mark.parametrize("sigma", [1.0, 0.0])
+def test_resume_epsilon_bit_identical(tmp_path, sigma):
+    """**V-15 / DPSGD-05.** A kill→resume reproduces the reported ε under EXACT ``==``.
+
+    WHY ``==`` AND NOT V-03's ``rel_tol``, WRITTEN DOWN TOGETHER SO THEY CANNOT BE CONFLATED.
+    This compares **the same call shape** — ``epsilon_for(sigma, steps, delta)`` with identical
+    arguments — across two processes. That is deterministic, so equality is the correct assertion
+    and *"a tolerance would only weaken this"* (``src/personacore/lora/inject.py::
+    load_adapter_weights``'s W1 reasoning, at ``inject.py:113-118``: the same operation on the same
+    operands gives a bit-identical float). V-03 is the OTHER register entirely: it compares two
+    **different** call shapes whose double-rounding disagrees bitwise **19.9%** of the time
+    (795/4000 pairs), and it uses ``ROUND_TRIP_REL_TOL = 1e-12``. Neither generalises to the other.
+
+    THE RESUME GOES THROUGH ``train(resume_from=…)`` — THE PRODUCTION PATH — AND NOTHING HERE
+    RESTORES BY HAND. Plan 22-06 (e.2) is what wires ``dp_fn.load_noise_rng_state(...)`` into the
+    ``resume_from`` block; a test that called it directly would be green over a production path
+    that never restores, which is exactly the defect this assertion exists to catch. Every property
+    below is asserted about what ``train()`` did.
+
+    **ε BIT-IDENTITY ALONE DOES NOT PROVE THE RNG RESUMED**, and saying otherwise would be the
+    over-claim this phase exists to prevent: ε is a function of (σ, T, δ) and **not** of the RNG.
+    The negative control at the bottom is what closes that gap. The failure it stands for: without
+    the restore, ``DPSGD.__init__`` re-seeds from the caller's seed and the resumed run REPLAYS
+    NOISE IT ALREADY RELEASED — DPSGD-04/SC4's fourth fake (*RNG reused across steps*), reachable
+    through PRODUCTION rather than by a deliberate edit, and invisible to D-16 invariant 4 because
+    ``_prev_gen_state`` is ``None`` on a freshly constructed object.
+
+    ``sigma = 0`` is a parametrized case because D-12's premise correction identifies it as where
+    the forward direction bites: without ``epsilon_for``'s explicit σ=0 branch, Phase 23's first
+    executed run crashes at REPORT time rather than in the mechanism. ``inf == inf`` is ``True``,
+    so the same ``==`` carries it.
+    """
+    # --- Arm A: uninterrupted, _TOTAL_STEPS in one call ---------------------------------------
+    model_a = _tiny_lora_model()
+    dp_a = _seam(model_a, sigma, _DP_SEED)
+    composed_a = _count_composed_steps(dp_a)
+    blob_a = _dp_train(model_a, dp_a, checkpoint_path=tmp_path / "a.pt", steps=_TOTAL_STEPS)
+
+    # META-GUARD: the run really took the DP path. A resume test over a run where dp_fn was
+    # silently None would otherwise pass while proving nothing.
+    assert dp_a._records == _ACCUM, (
+        f"the DP seam absorbed {dp_a._records} records on its last step, not {_ACCUM} — this run "
+        "did not go through dp_fn at all"
+    )
+    assert blob_a["step"] == _TOTAL_STEPS == len(composed_a)
+
+    # --- Arm B: kill at _KILL_AT, then resume to _TOTAL_STEPS ----------------------------------
+    model_b = _tiny_lora_model()
+    dp_b = _seam(model_b, sigma, _DP_SEED)
+    composed_b = _count_composed_steps(dp_b)
+    kill = _dp_train(model_b, dp_b, checkpoint_path=tmp_path / "kill.pt", steps=_KILL_AT)
+
+    # META-GUARD on the END-OF-CALL save specifically: max_steps_override exits the while loop
+    # NORMALLY, so this is the checkpoint the resume reads. A dp_noise_rng refresh wired only to
+    # the in-loop saves would leave the key absent here, and this is what catches that.
+    assert kill["step"] == _KILL_AT
+    assert "dp_noise_rng" in kill, (
+        "the END-OF-CALL checkpoint carries no dp_noise_rng — an in-loop-only splat misses exactly "
+        "the save a max_steps_override kill writes"
+    )
+    assert kill["dp_noise_rng"].numel() > 0
+
+    # The KILL: the process state is dropped by constructing model + seam FRESH
+    # (tests/test_resume_curve.py's existing pattern). train() builds its own optimizer, so the
+    # optimizer state crosses the boundary only through the checkpoint.
+    model_c = _tiny_lora_model()
+    dp_c = _seam(model_c, sigma, _RESUME_SEED)
+    composed_c = _count_composed_steps(dp_c)
+    # POSITIVE CONTROL: the fresh seam's stream really is somewhere else, so anything matching
+    # afterwards is the restore working rather than two objects that agreed to begin with.
+    assert not torch.equal(dp_c.noise_rng_state(), kill["dp_noise_rng"])
+    blob_c = _dp_train(
+        model_c,
+        dp_c,
+        checkpoint_path=tmp_path / "c.pt",
+        steps=_TOTAL_STEPS,
+        resume_from=tmp_path / "kill.pt",
+    )
+    assert blob_c["step"] == _TOTAL_STEPS
+
+    # --- THE CLAIM: a BIT-IDENTICAL reported epsilon over THE MECHANISM THAT ACTUALLY RAN -------
+    # T is the COUNT OF COMPOSED STEPS, not the checkpoint's `step` field, and the difference is
+    # measured rather than stylistic: with train()'s `start_step = ckpt["step"]` mutated to 0 the
+    # resumed arm composes 6 steps while its checkpoint still says 4, so a field-read eps matches
+    # across the arms and UNDER-REPORTS the composition. Reading the invocation count makes the
+    # equality a statement about the mechanism instead of about a number in a file. Every checkpoint
+    # `step` above is asserted equal to its own count, so the two readings are pinned together.
+    steps_a = len(composed_a)
+    steps_b = len(composed_b) + len(composed_c)
+    assert (len(composed_b), len(composed_c)) == (_KILL_AT, _TOTAL_STEPS - _KILL_AT)
+    assert blob_c["step"] == steps_b, (
+        f"the resumed run REPORTS T = {blob_c['step']} but composed {steps_b} steps "
+        f"({len(composed_b)} before the kill + {len(composed_c)} after). The published epsilon "
+        "would then describe a composition that never ran, and it would be optimistic"
+    )
+    epsilon_a = epsilon_for(sigma, steps_a, _DELTA)
+    epsilon_b = epsilon_for(sigma, steps_b, _DELTA)
+    assert epsilon_a == epsilon_b, (
+        f"reported epsilon diverged across a kill+resume: {epsilon_a!r} vs {epsilon_b!r}"
+    )
+
+    if sigma == 0.0:
+        assert math.isinf(epsilon_a) and math.isinf(epsilon_b)
+    else:
+        assert math.isfinite(epsilon_a) and epsilon_a > 0.0
+        # NON-DEGENERACY: eps genuinely MOVES with the step count, so the equality above is not
+        # green over a quantity that never varies. This control cannot exist at sigma = 0 — eps is
+        # inf for every T there — which is precisely why the sigma > 0 row carries it.
+        assert epsilon_for(sigma, _KILL_AT, _DELTA) != epsilon_a
+
+    # --- The RNG half, which epsilon is structurally blind to ----------------------------------
+    # The uninterrupted arm and the resumed arm must be at the SAME stream position: dp_a drew on
+    # _TOTAL_STEPS steps; dp_c restored dp_b's state at _KILL_AT and drew on the remaining ones.
+    # (Asserted end-to-end rather than "equal to the saved state immediately after the resume",
+    # which is only true when the resume takes ZERO further steps — 22-06's
+    # test_dp_noise_rng_round_trips_through_a_kill_and_resume already pins that narrower form.)
+    draw_uninterrupted = _next_draw(dp_a)
+    draw_resumed = _next_draw(dp_c)
+    assert draw_uninterrupted.abs().sum() > 0.0, "a degenerate probe draw would compare two zeros"
+    assert torch.equal(draw_uninterrupted, draw_resumed), (
+        "the resumed seam's next noise draw differs from the uninterrupted run's, so the "
+        "production restore in train()'s resume_from block did not fire"
+    )
+
+    # NEGATIVE CONTROL, defeated at the PRODUCTION boundary rather than in the seam: a checkpoint
+    # whose dp_noise_rng key is missing. That is also the pre-Phase-22 shape, so loop.py's `.get()`
+    # guard is exercised here at the same time — it must read a missing key as "no restore", not
+    # raise.
+    stripped = dict(kill)
+    del stripped["dp_noise_rng"]
+    torch.save(stripped, tmp_path / "stripped.pt")
+    model_d = _tiny_lora_model()
+    dp_d = _seam(model_d, sigma, _RESUME_SEED)
+    _dp_train(
+        model_d,
+        dp_d,
+        checkpoint_path=tmp_path / "d.pt",
+        steps=_TOTAL_STEPS,
+        resume_from=tmp_path / "stripped.pt",
+    )
+    assert not torch.equal(draw_uninterrupted, _next_draw(dp_d)), (
+        "with dp_noise_rng deleted the resumed run STILL produced the uninterrupted run's next "
+        "noise draw — the positive assertion above would then be green with the restore removed, "
+        "so it would prove nothing"
+    )
