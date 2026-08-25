@@ -260,11 +260,19 @@ FORBIDDEN_SCORED_VALUES: frozenset[str] = frozenset(
     fs.normalize_for_match(f.value) for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS
 )
 # This module joins the `== 10` wall HERE, at the one file in the repo that could break it.
-assert len(FORBIDDEN_SCORED_VALUES) == 10, (  # all 8 locked + both soft — no tier is exempt
-    f"the published leak vocabulary is LOCKED + SOFT = 10, measured "
-    f"{len(FORBIDDEN_SCORED_VALUES)} — the filler corpus is minted against this list, so a "
-    f"change to it invalidates every collision refusal below"
-)
+#
+# `raise SystemExit`, not `assert` (WR-06, promoted 2026-08-25). `python -O` STRIPS asserts, and
+# measured on this exact line it did: with the wall deliberately broken, plain python raised
+# AssertionError and `python -O` imported the module SILENTLY. A wall that vanishes under an
+# interpreter flag is not a wall, and this is the one file in the repo that could break it. The
+# form below matches `refuse_collisions` and `verify_round_trips` further down — every other
+# refusal in this module already raises.
+if len(FORBIDDEN_SCORED_VALUES) != 10:  # all 8 locked + both soft — no tier is exempt
+    raise SystemExit(
+        f"[phase21_filler] REFUSED: the published leak vocabulary is LOCKED + SOFT = 10, measured "
+        f"{len(FORBIDDEN_SCORED_VALUES)} — the filler corpus is minted against this list, so a "
+        f"change to it invalidates every collision refusal below"
+    )
 
 # Every value in every published pool. NOT hardcoded: 21-CONTEXT's "28" is the NON-LOCKED subtotal
 # (12 GATE_REJECTED_CANDIDATES + 10 CALIBRATION_POOL + 6 REGISTER_ARM_POOL), and ``all_pools()``'
