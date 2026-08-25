@@ -22,7 +22,7 @@ import pathlib
 import pytest
 from tests.fixtures.phase22_reference import DELTA_FRONTIER, VACUOUS_AGREEMENT_ROW
 
-from personacore.privacy.accountant import delta_closed
+from personacore.privacy.accountant import delta_closed, delta_quadrature
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _ACCOUNTANT_PATH = _ROOT / "src" / "personacore" / "privacy" / "accountant.py"
@@ -161,3 +161,117 @@ def test_closed_form_domain_refusals_on_eps(eps):
     """A non-finite eps refuses rather than returning a nan delta every comparison then passes."""
     with pytest.raises(ValueError):
         delta_closed(eps, 1.0)
+
+
+@pytest.mark.parametrize(("eps", "mu", "truth_str"), _representable_rows())
+def test_two_oracles_agree(eps, mu, truth_str):
+    """V-02 -- the two oracles agree relatively, AFTER each is proven non-zero.
+
+    The ordering is the whole test. RESEARCH F1 measured that past z ~ 38.47 ``math.erfc``
+    underflows and the closed form returns ``0.0``, while the quadrature's ``phi(z)`` prefactor
+    underflows and it returns ``0.0`` too -- so ``abs(a - b) <= 1e-9 * abs(b)`` reads ``0.0 == 0.0``
+    and PASSES, against a true delta of ``1.24028351258e-352``. Two independent implementations buy
+    nothing when both fail on the same underlying quantity, so the zero must be refused before the
+    comparison is even reached, each with its own message.
+
+    Measured worst gap between the two oracles over these eleven rows: **2.84e-12 relative**, at
+    eps=2.0, mu=0.1 -- roughly 350x inside the 1e-9 budget.
+    """
+    a = delta_quadrature(eps, mu)
+    b = delta_closed(eps, mu)
+    assert a != 0.0, (
+        f"delta_quadrature({eps}, {mu}) returned exactly 0.0 (true delta {truth_str}) — "
+        f"RESEARCH F1's vacuous half. A zero is a refusal, never an oracle value."
+    )
+    assert b != 0.0, (
+        f"delta_closed({eps}, {mu}) returned exactly 0.0 (true delta {truth_str}) — "
+        f"RESEARCH F1's vacuous half. A zero is a refusal, never an oracle value."
+    )
+    assert abs(a - b) <= 1e-9 * abs(b), (
+        f"the two oracles disagree at eps={eps}, mu={mu}: quadrature {a!r} against closed form "
+        f"{b!r}, relative {abs(a - b) / abs(b):.3e} over the 1e-9 budget"
+    )
+
+
+def test_low_privacy_corner():
+    """V-04 -- the DERIVED range is what fixes eps=8, mu=0.5, and the fixed range is measured wrong.
+
+    Two halves, and the second is the load-bearing one. Without the negative control this test
+    proves the oracle is right but not that the derived range is WHAT MADE IT right, so a future
+    edit replacing the width rule with a constant could keep it green.
+
+    At eps=8, mu=0.5 the integrand's support starts at ``t > eps/mu + mu/2 = 16.25``, entirely
+    outside a fixed ``[-14, 14]``. The literal form over that range therefore integrates zero
+    everywhere and returns exactly ``0.0`` -- a perfectly plausible delta, wrong by 57 orders of
+    magnitude. The derived rule puts the grid on ``[t_min, t_min + U]`` with ``U = 2.41`` and lands
+    within 3.6e-13.
+    """
+    truth = float("1.048659178913e-57")
+    got = delta_quadrature(8.0, 0.5)
+    assert abs(got - truth) <= 1e-11 * truth, (
+        f"derived-range oracle at eps=8, mu=0.5: {got!r} against {truth!r}, relative "
+        f"{abs(got - truth) / truth:.3e}"
+    )
+
+    def _fixed_range_trapezoid(eps, mu, lo=-14.0, hi=14.0, n=4001):
+        """D-13's original probe: the LITERAL integrand on a fixed range. Test-local on purpose."""
+        h = (hi - lo) / (n - 1)
+        inv = 1.0 / math.sqrt(2.0 * math.pi)
+        total = 0.0
+        for i in range(n):
+            t = lo + i * h
+            loss = mu * t - 0.5 * mu * mu
+            value = inv * math.exp(-0.5 * (t - mu) ** 2) * max(0.0, 1.0 - math.exp(eps - loss))
+            total += value * (0.5 if i in (0, n - 1) else 1.0)
+        return total * h
+
+    fixed = _fixed_range_trapezoid(8.0, 0.5)
+    assert abs(fixed - truth) / truth >= 0.99, (
+        f"the fixed [-14, 14] negative control returned {fixed!r} at relative error "
+        f"{abs(fixed - truth) / truth:.3e} — it was supposed to be catastrophically wrong "
+        f"(measured 1.00e+00). If this is now accurate the control has stopped controlling."
+    )
+
+
+def test_oracle_refuses():
+    """V-05 -- all three non-vacuity conditions fire, SEPARATELY, with three distinct messages.
+
+    Three conditions sharing one message are one condition wearing three hats, so the messages are
+    asserted pairwise distinct rather than merely present.
+
+      1. ``phi(z)`` underflow at eps=12.0, mu=0.3 (z = 39.85, exp argument -794.0).
+      2. Relative truncation at a deliberately narrowed ``lam=1.0``, where the rigorous Mills bound
+         on the discarded tail is 2.45e-01 against a captured integral of 2.19e-01.
+      3. Exact zero at eps=1.92625, mu=0.05 (z = 38.5) -- and this input is the measurement that
+         condition 3 is NOT implied by condition 2. In the band 38.372164249 < z < 38.6005 the
+         prefactor is still representable (condition 1 silent) and ``trunc/integral`` is ~3.2e-15
+         (condition 2 silent), yet the product underflows to exactly ``0.0``.
+    """
+    messages = []
+    for label, args, kwargs in [
+        ("condition 1 (phi(z) underflow)", (12.0, 0.3), {}),
+        ("condition 2 (relative truncation)", (1.0, 1.0), {"lam": 1.0}),
+        ("condition 3 (exact zero)", (1.92625, 0.05), {}),
+    ]:
+        with pytest.raises(ValueError) as excinfo:
+            delta_quadrature(*args, **kwargs)
+        messages.append((label, str(excinfo.value)))
+
+    texts = [text for _, text in messages]
+    assert len(set(texts)) == 3, (
+        "the three non-vacuity conditions do not carry three distinct messages — they are one "
+        "condition wearing three hats:\n"
+        + "\n".join(f"  {label}: {text[:120]}" for label, text in messages)
+    )
+
+
+@pytest.mark.parametrize("n", [20000, 4, 2, 1, 0])
+def test_quadrature_rejects_bad_grid(n):
+    """An even node count or fewer than three nodes is a ``ValueError``, never a silent bad rule.
+
+    Composite Simpson needs an odd node count (an even panel count). An even ``n`` applies the
+    4/2 weights across a half panel and degrades the rule to something with no stated order, which
+    would then be compared against a tolerance calibrated for Simpson's.
+    """
+    with pytest.raises(ValueError, match="Simpson"):
+        delta_quadrature(1.0, 1.0, n=n)
