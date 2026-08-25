@@ -16,8 +16,11 @@ Two disciplines run through the whole file and neither is decoration:
 CPU-only, GPU-free, no torch, no network.
 """
 
+import ast
 import math
 import pathlib
+import subprocess
+import sys
 
 import pytest
 from tests.fixtures.phase22_reference import DELTA_FRONTIER, VACUOUS_AGREEMENT_ROW
@@ -275,3 +278,96 @@ def test_quadrature_rejects_bad_grid(n):
     """
     with pytest.raises(ValueError, match="Simpson"):
         delta_quadrature(1.0, 1.0, n=n)
+
+
+def test_accountant_imports_math_only():
+    """V-09 -- ``accountant.py`` imports ``math`` and nothing else, statically AND transitively.
+
+    Two complementary halves, the ``tests/test_phase15_plots.py`` shape. (a) is the readable
+    statement of intent; (b) is the one that cannot be fooled -- it catches an import arriving
+    through a helper module the single-file walk cannot see. (b) MUST run out of process: by the
+    time this test runs, ``torch`` is already in ``sys.modules`` from sibling tests, so an
+    in-process ``"torch" not in sys.modules`` check would be vacuous.
+
+    The static half asserts HARD EQUALITY rather than ``imported <= {"math"}``. A subset form is
+    satisfied by the empty set, which is exactly the collapsed-walk failure the meta-guard above it
+    exists to catch -- equality makes that structural instead of leaving it to the meta-guard alone.
+
+    SCOPING NOTE (22-PATTERNS.md section 3), recorded because a future reader will otherwise
+    believe this guard is broader than it is: it scopes to this ONE file. A ``privacy/__init__.py``
+    that re-exported from ``accountant`` would add a relative ``ImportFrom`` (``node.level == 1``)
+    to the PACKAGE, not to this module, so it would pass here and that is correct. Plan 22-01
+    shipped ``__init__.py`` with no re-exports, so the question is currently moot.
+    """
+    tree = ast.parse(_ACCOUNTANT_PATH.read_text(encoding="utf-8"))
+    imported = {
+        alias.name.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    # Meta-guard FIRST: a walk that silently stopped working would otherwise pass by finding
+    # nothing at all.
+    assert imported, "the AST import walk found no imports — the walk stopped working"
+    assert imported == {"math"}, (
+        f"accountant.py imports {sorted(imported)}; D-10 permits exactly {{'math'}}. Offenders: "
+        f"{sorted(imported - {'math'})}. pyproject.toml must stay untouched (RPT-03)."
+    )
+
+    relative = _ACCOUNTANT_PATH.relative_to(_ROOT).as_posix()
+    probe = (
+        "import importlib.util, sys;"
+        f"spec = importlib.util.spec_from_file_location('acct', {relative!r});"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m);"
+        "bad = [n for n in ('torch', 'numpy', 'scipy', 'mpmath') if n in sys.modules];"
+        "print(bad); sys.exit(1 if bad else 0)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"accountant.py transitively loads a forbidden module — D-10/RPT-03 violated\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+
+def test_accountant_has_no_assert_and_no_prove():
+    """D-15's refusal register, enforced structurally rather than left to convention.
+
+    An ``assert`` is stripped under ``python -O``, which would turn a loud refusal into a silently
+    wrong published delta -- ``lora/layer.py::LoRALinear.merge``'s docstring records that exact
+    reason for this repository, and Phase 21 WR-06 promoted a wall from ``assert`` to ``SystemExit``
+    on the same grounds. ``_prove`` is the ``scripts/`` register (measured: 18 ``scripts/`` modules,
+    0 ``src/`` modules); importing that habit here would put two refusal vocabularies in one
+    package.
+
+    The ``ast.Raise`` presence check is the load-bearing half: a file that lost every refusal would
+    otherwise pass this test by having lost the asserts along with them.
+    """
+    tree = ast.parse(_ACCOUNTANT_PATH.read_text(encoding="utf-8"))
+    raises = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Raise)]
+    assert len(raises) >= 6, (
+        f"accountant.py contains {len(raises)} raise statements, fewer than the six refusals the "
+        f"two oracles ship — this guard is vacuous on a file that has lost its refusals"
+    )
+    asserts = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Assert)]
+    assert asserts == [], (
+        f"accountant.py asserts at lines {asserts}; D-15 requires `raise` — an assert is stripped "
+        f"under `python -O`, turning a loud refusal into a silently wrong delta"
+    )
+    proves = [
+        n.lineno
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "_prove"
+    ]
+    assert proves == [], (
+        f"accountant.py calls _prove at lines {proves}; that is the scripts/ register (18 "
+        f"scripts/ modules, 0 src/ modules), never src/'s"
+    )
