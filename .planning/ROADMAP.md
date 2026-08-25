@@ -407,13 +407,13 @@ CPU before a single second of M3 time is spent
 
 - [x] 22-01-PLAN.md — Wave-0 scaffolding: privacy subpackage, the committed 60-dps reference table
       (no `mpmath`, RPT-03), and the text-taking D-05 axis-1 AST guards with six synthetic RED probes
-- [ ] 22-02-PLAN.md — the FROZEN pin `scripts/mitigation_accountant.py` (zero imports, `REQUIRED_FORM`,
+- [x] 22-02-PLAN.md — the FROZEN pin `scripts/mitigation_accountant.py` (zero imports, `REQUIRED_FORM`,
       `REJECTED_FORM`, D-18's `NEIGHBOURING`/`SENSITIVITY_MULTIPLIER`, `GOLDEN_EPSILON`) plus D-11's
       BOTH halves and the phase23-prefix RED-then-GREEN fixture
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 22-03-PLAN.md — `accountant.py`'s two δ oracles: Balle–Wang closed form and the `exp`-only
+- [x] 22-03-PLAN.md — `accountant.py`'s two δ oracles: Balle–Wang closed form and the `exp`-only
       quadrature, with F1's SYMMETRIC silent-zero refusal and F2's log-space overflow fix
 - [ ] 22-04-PLAN.md — `dpsgd.py`: construct-once capture, D-04's three property refusals, per-record
       global clip, dedicated-generator noise, the single combining write, D-16's four runtime invariants
@@ -642,7 +642,7 @@ capacities — with every number in prose generated from a committed record rath
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
-| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 2/11 | In Progress | - |
+| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 3/11 | In Progress | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
