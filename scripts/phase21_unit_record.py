@@ -135,6 +135,17 @@ sys.path.insert(0, str(_ROOT / "scripts"))
 
 import mitigation_unit as mu  # noqa: E402  (the FROZEN pin — every pinned value is IMPORTED)
 import phase14_factset as fs  # noqa: E402  (sibling script; the path insert above is what finds it)
+
+# N COMES FROM THE CONTINUATION, NOT FROM THE PIN (WR-04, 2026-08-25). Every other pinned value on
+# this page still reads `mu.<name>` — only `privacy_n` moved, because only `privacy_n` was wrong.
+# The pin's version is `return int(n_facts)`, which TRUNCATES rather than refuses (measured:
+# `mu.privacy_n(7.9) == 7`, `mu.privacy_n(0) == 0`, `mu.privacy_n(-3) == -3`), and the `n` it
+# returns is multiplied by DELTA in the `delta.capacities` rows below and checked against
+# `DELTA_TIMES_N_CEILING` — so a truncated or non-positive N here does not merely mislabel a row,
+# it clears the published ceiling. `scripts/phase21_unit_continuation.py` returns a correct positive
+# int UNCHANGED and proves that agreement with the pin at BOTH published capacities in a
+# module-level guard, so no committed `results/phase21_*` number moves.
+import phase21_unit_continuation as puc  # noqa: E402  (same reason)
 import teach_persona as tp  # noqa: E402  (sibling script; the path insert above is what finds it)
 
 # The resolution of `21-RESEARCH.md` Open Question 2. One place, imported by the tests and by the
@@ -1006,7 +1017,7 @@ def privacy_unit_document(measurements):
         "lot": {
             "sampling_rate_q": mu.SAMPLING_RATE_Q,
             "privacy_n_rule": "N = n_facts",
-            "privacy_n_at_capacities": {n: mu.privacy_n(n) for n in (8, 64)},
+            "privacy_n_at_capacities": {n: puc.privacy_n(n) for n in (8, 64)},
             "replay_in_lot": True,
             "replay_inside_privacy_n": False,
             "epsilon_consequence": mu.REPLAY_OUTSIDE_N,
@@ -1034,7 +1045,7 @@ def privacy_unit_document(measurements):
             "rejected_recipe_reason": mu.REJECTED_DELTA_REASON,
             "capacities": [
                 {
-                    "n": mu.privacy_n(n),
+                    "n": puc.privacy_n(n),
                     "pinned_delta_times_n": mu.DELTA * n,
                     "pinned_margin": mu.DELTA_TIMES_N_CEILING / (mu.DELTA * n),
                     "rejected_delta": mu.rejected_delta(n),
