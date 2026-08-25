@@ -32,13 +32,17 @@ Other test modules consume these helpers directly::
         _assert_single_clip_constant,
     )
 
-No assertion in THIS plan reads ``src/personacore/privacy/dpsgd.py`` — that module does not exist
-yet, and its live check is plan 22-04's.
+Plan 22-04 appended the LIVE half at the bottom of this file: the same functions the synthetic
+probes above exercise, fed ``src/personacore/privacy/dpsgd.py``'s real bytes. That is
+``tests/test_phase20_prereg.py:153-155``'s rule — *a guard proved correct in a scratch repository
+and a guard running against this one must be the SAME code, or the proof is about a different
+function than the one CI runs.*
 
 CPU-only, GPU-free, no torch, no network.
 """
 
 import ast
+import pathlib
 
 import pytest
 
@@ -433,3 +437,169 @@ def test_meta_guards_bite():
 
     with pytest.raises(AssertionError, match="would check nothing"):
         _assert_single_clip_constant(GREEN, class_name="NotAClass", allowed_attr="C")
+
+
+# =============================================================================================
+# THE LIVE HALF (plan 22-04). Everything below feeds the REAL bytes of
+# `src/personacore/privacy/dpsgd.py` into the SAME functions the six synthetic mutations above
+# were watched biting. Nothing here re-implements a helper: `tests/test_phase20_prereg.py:153-155`
+# — *a guard proved correct in a scratch repository and a guard running against this one must be
+# the SAME code, or the proof is about a different function than the one CI runs.*
+# =============================================================================================
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_DPSGD_PATH = _ROOT / "src" / "personacore" / "privacy" / "dpsgd.py"
+
+
+def _dpsgd_source():
+    """The mechanism's own bytes, behind the meta-guard an emptied or renamed module fails."""
+    source = _DPSGD_PATH.read_text(encoding="utf-8")
+    assert source.strip(), f"{_DPSGD_PATH} is empty — every guard below would pass over no source"
+    assert "class DPSGD" in source, (
+        f"{_DPSGD_PATH} no longer defines `class DPSGD`. Without this meta-guard a renamed class "
+        "would make the clip-constant guard's own 'is gone' assertion the only thing standing "
+        "between a rewritten mechanism and a green suite"
+    )
+    return source
+
+
+# The two `.grad` writes the mechanism is ALLOWED to make, as a hard-equality allowlist per entry.
+#
+# WHY THIS IS NOT `_assert_no_forbidden_between_noise_and_step(..., entry="finalize")`, recorded
+# because the plan text asked for exactly that and it is UNSATISFIABLE ON CORRECT CODE. The
+# wrapper asserts `offenders == {}`, and a `.grad` Store is an offender. But the mechanism has two
+# `.grad` Stores BY CONSTRUCTION and both are mandated by the same decisions the guard exists to
+# protect: D-01's per-micro-step drain (`p.grad = None` in `absorb_record`, without which record
+# i's clip sees records 1..i summed) and D-01's SINGLE combining write (`p.grad = private` in
+# `_write_once`, which IS the release). Measured against the shipped module, the wrapper reports
+# `{'absorb_record': ['.grad=']}` and `{'_write_once': ['.grad=']}` respectively.
+#
+# So `== {}` at those entries could only be reached by contorting the mechanism to hide its own
+# release write, or by scoping the guard to a method that structurally cannot write `.grad` — the
+# guard getting weaker while looking bigger. A hard-equality ALLOWLIST is strictly stronger than
+# `== {}` over a hand-picked scope: it pins WHICH function writes `.grad`, HOW MANY writes it is
+# credited with, and that nothing else reachable from the entry writes one or reaches any
+# forbidden token. A third write, a write moved into a helper, or any `backward` / `clip_grad_norm_`
+# / `normalize` / `manual_seed` anywhere in the closure all redden it.
+#
+# The wrapper itself still runs live, at `_noised_private` — the noise-bearing method — where
+# `== {}` is both satisfiable and exactly the D-05 axis-1 claim: from the draw through the divide,
+# nothing recomputes, renormalises, re-seeds or writes `.grad`.
+_ALLOWED_GRAD_WRITES = {
+    "absorb_record": {"absorb_record": [".grad="]},
+    "finalize": {"_write_once": [".grad="]},
+}
+
+
+@pytest.mark.parametrize("entry", sorted(_ALLOWED_GRAD_WRITES))
+def test_dpsgd_step_reaches_no_forbidden_call(entry):
+    """V-11 live: the ONLY thing the step path reaches is its own two mandated ``.grad`` writes."""
+    offenders = _forbidden_calls_reachable_from(
+        _dpsgd_source(), entry=entry, forbidden=_FORBIDDEN_BETWEEN_NOISE_AND_STEP
+    )
+    # HARD EQUALITY, never `in` and never a subset (tests/test_phase14_scoring.py:554-555).
+    assert offenders == _ALLOWED_GRAD_WRITES[entry], (
+        f"functions reachable from DPSGD.{entry} reach {offenders}, not exactly "
+        f"{_ALLOWED_GRAD_WRITES[entry]}. Between the noise write and optimizer.step() there may "
+        "be no .backward(), no clip/normalize and no re-seed, and the ONLY .grad writes in the "
+        "whole mechanism are D-01's per-micro-step drain and D-01's single combining write"
+    )
+
+
+def test_dpsgd_noise_path_reaches_no_forbidden_call():
+    """The wrapper itself, live: from the noise draw through the divide, ``offenders == {}``."""
+    _assert_no_forbidden_between_noise_and_step(_dpsgd_source(), entry="_noised_private")
+
+
+def test_dpsgd_has_exactly_one_clip_constant():
+    """V-11 live / FAKE 2: the clip-bearing set in the mechanism's own bytes is exactly ``{"C"}``.
+
+    ``_ALLOWED_CLASS_CONSTANTS`` was NOT widened for this module and the guard's clip-operand
+    predicate was NOT touched. ``self._clip_bind_count`` appears only as an assignment target — an
+    ``ast.Assign`` in ``__init__`` and an ``ast.AugAssign`` in ``absorb_record`` — and never as a
+    direct operand of a comparison or a division, which is the half the pinned predicate turns on.
+    Measured against the shipped module: the clip-bearing set is ``{"C"}`` and the class body
+    carries no numeric constants at all.
+    """
+    _assert_single_clip_constant(_dpsgd_source(), class_name="DPSGD", allowed_attr="C")
+
+
+_RESEED_CALLS = frozenset({"manual_seed", "seed", "set_state"})
+
+
+def test_dpsgd_never_reseeds_its_generator():
+    """FAKE 4's structural half: the ONE seeding lives in ``__init__`` and nowhere else.
+
+    ``__init__`` is exempt because D-17's construct-once seeding lives there. Every other
+    occurrence is FAKE 4's positive insertion — an in-step re-seed makes every step draw the same
+    noise vector while the accountant charges for T independent compositions.
+    """
+    tree = ast.parse(_dpsgd_source())
+    classes = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+    assert "DPSGD" in classes, f"DPSGD is gone (found: {sorted(classes)})"
+
+    seeding_sites = {}
+    for method in ast.walk(classes["DPSGD"]):
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for node in ast.walk(method):
+            if isinstance(node, ast.Call) and getattr(node.func, "attr", None) in _RESEED_CALLS:
+                seeding_sites.setdefault(method.name, []).append(node.func.attr)
+
+    # META-GUARD: __init__ must still carry a seeding call, or this walk is green over a
+    # mechanism whose construct-once seeding was deleted outright.
+    assert seeding_sites.get("__init__"), (
+        "no manual_seed/seed/set_state call was found in DPSGD.__init__ — either the walk broke "
+        f"or the construct-once seeding is gone (sites found: {seeding_sites})"
+    )
+    outside = {name: calls for name, calls in seeding_sites.items() if name != "__init__"}
+    assert outside == {}, (
+        f"DPSGD re-seeds its generator outside __init__: {outside}. That is FAKE 4's positive "
+        "insertion — the runtime generator-continuity invariant catches it on today's inputs, and "
+        "this catches the FUTURE edit that a runtime check cannot see"
+    )
+
+
+def test_dpsgd_has_no_numeric_sigma_or_clip_default():
+    """D-08, structurally: ``sigma`` and ``clip_norm`` are keyword-only with EMPTY default slots.
+
+    Python's AST spells "no default" as a ``None`` slot in ``kw_defaults``, so this is an
+    assertion about the grammar rather than a grep that a docstring sentence could satisfy.
+
+    Phase 20's Z boundary is the reason: Phase 22 names NO sigma and NO C value anywhere in its
+    tree, so there is nothing for Phase 23 to override and nothing to drift. Phase 23 supplies
+    both from ``scripts/mitigation_budget.py``.
+    """
+    tree = ast.parse(_dpsgd_source())
+    classes = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+    assert "DPSGD" in classes, f"DPSGD is gone (found: {sorted(classes)})"
+    init = next(
+        (
+            node
+            for node in classes["DPSGD"].body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "__init__"
+        ),
+        None,
+    )
+    assert init is not None, "DPSGD.__init__ is gone — this guard would check nothing"
+
+    names = [arg.arg for arg in init.args.kwonlyargs]
+    slots = dict(zip(names, init.args.kw_defaults))
+    assert len(init.args.kw_defaults) == len(names), "kwonlyargs/kw_defaults are out of step"
+    # META-GUARD: some kwonly argument DOES carry a default, so a `None` slot below means "no
+    # default" rather than "the parse returned an empty list".
+    assert any(slot is not None for slot in init.args.kw_defaults), (
+        "no keyword-only argument of DPSGD.__init__ carries a default, so an all-None kw_defaults "
+        "list is indistinguishable from a broken parse and the assertion below proves nothing"
+    )
+    for required in ("sigma", "clip_norm"):
+        assert required in slots, (
+            f"{required} is not a KEYWORD-ONLY argument of DPSGD.__init__ (kwonlyargs: {names}). "
+            "A positional sigma or C can be supplied by accident and by order"
+        )
+        assert slots[required] is None, (
+            f"DPSGD.__init__ gives {required} a default of "
+            f"{ast.dump(slots[required])}. D-08: sigma and clip_norm are keyword-only with NO "
+            "default, so Phase 22 names no value for either and Phase 20's Z boundary stays "
+            "untouched — a default here is a Phase-23 resource parameter smuggled into Phase 22"
+        )
