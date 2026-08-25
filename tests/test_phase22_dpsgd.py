@@ -73,20 +73,29 @@ import sys
 
 import pytest
 import torch
+from torch.amp import GradScaler
 
-from personacore.config import ModelConfig, RuntimeConfig
+from personacore.config import ModelConfig, RuntimeConfig, TrainConfig
 from personacore.lora.config import LoRAConfig
 from personacore.lora.inject import inject_lora, mark_only_lora_trainable
 from personacore.model.gpt import GPT
 from personacore.privacy.dpsgd import DPSGD
+from personacore.training.loop import _optimizer_step, train
+from personacore.training.schedule import build_scheduler
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "tests"))
 
-# ONE recipe definition in the repository (`grep -rn "def _run_recipe" tests/` returns exactly one,
-# in test_loop_penalty_fn.py). Imported rather than re-written: a second recipe is free to drift
-# from the fixture's own `meta` block, and then a green golden replay proves nothing about the
-# capture. This is `tests/test_phase21_aligned_loader.py:43-49`'s cross-test idiom verbatim.
+# The GOLDEN recipe is imported, never re-written. A second copy is free to drift from the
+# fixture's own `meta` block, and then a green golden replay proves nothing about the capture. This
+# is `tests/test_phase21_aligned_loader.py:43-49`'s cross-test idiom verbatim.
+#
+# MEASURED, and stated precisely because the obvious phrasing is false: `grep -rn "def _run_recipe"
+# tests/` returns FOUR definitions, not one — test_loop_penalty_fn.py:73 (this one),
+# test_extra_eval_fns.py:42 and test_masked_train_seam.py:150. The other two predate Phase 22 and
+# drive DIFFERENT fixtures (the telemetry seam and the mask seam); neither touches
+# golden_trajectory_v1.json. So the property that actually matters holds and is the one to assert:
+# exactly ONE recipe drives the GOLDEN fixture, and this plan added no new recipe at all.
 from test_loop_penalty_fn import (  # noqa: E402  (tests/ is not a package)
     _CAPTURE_PLATFORM,
     _GOLDEN,
@@ -598,3 +607,510 @@ def test_seam_omitted_equals_seam_none(tmp_path):
     omitted = _run_recipe(tmp_path / "omitted.csv")
     explicit_none = _run_recipe(tmp_path / "none.csv", dp_fn=None)
     assert omitted == explicit_none  # (csv_text, final_loss_repr, param_sha256), all bitwise
+
+
+# =============================================================================================
+# V-12 / D-05 axis 2 -- the ONE-KWARG-APART differential, D-03's runtime half, and D-06's
+# separately-named sigma-of-zero identity. All three run on CPU at fixture scale.
+# =============================================================================================
+
+# Deterministic synthetic ids, drawn ONCE from a dedicated generator so the global torch stream is
+# untouched and both branches of every differential below see byte-identical inputs.
+_FIXTURE_GEN = torch.Generator().manual_seed(20220612)
+_MICRO_BS = 2
+_CTX = 24
+_STEP_X = torch.randint(0, ModelConfig().vocab_size, (8, _CTX), generator=_FIXTURE_GEN)
+_STEP_Y = torch.randint(0, ModelConfig().vocab_size, (8, _CTX), generator=_FIXTURE_GEN)
+_REPLAY_X = torch.randint(0, ModelConfig().vocab_size, (4, _CTX), generator=_FIXTURE_GEN)
+_REPLAY_Y = torch.randint(0, ModelConfig().vocab_size, (4, _CTX), generator=_FIXTURE_GEN)
+
+
+def _step_batch_fn(micro):
+    sl = slice(micro * _MICRO_BS, (micro + 1) * _MICRO_BS)
+    return _STEP_X[sl], _STEP_Y[sl]
+
+
+def _public_replay_fn(model, scaler):
+    """A real un-clipped public pass, in ``replay_fn``'s exact ``(model, scaler)`` shape."""
+    _, replay_loss = model(_REPLAY_X, _REPLAY_Y)
+    scaler.scale(replay_loss).backward()
+
+
+def _dp_optimizer_step(*, replay_fn, capture, sigma=_SIGMA, clip_norm=_CLIP, seed=4242):
+    """Drive ONE real ``_optimizer_step`` on a GPT+LoRA fixture with the DP seam live.
+
+    Returns ``(mixed_grads, dp)``; the private term lands in ``capture`` via the ``_write_once``
+    spy the caller installs, so the private and public terms can be compared SEPARATELY after they
+    have already met in ``.grad``.
+    """
+    model = _model()
+    runtime = RuntimeConfig(device="cpu")
+    cfg = TrainConfig(
+        lr=1e-3,
+        warmup_steps=0,
+        max_steps=1,
+        batch_size=_MICRO_BS,
+        grad_accum_steps=2,
+        grad_clip=_NON_BINDING_CLIP,
+    )
+    dp = _seam(model, sigma=sigma, clip_norm=clip_norm, seed=seed, runtime=runtime)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
+    scheduler = build_scheduler(optimizer, cfg)
+    scaler = GradScaler(device="cpu", enabled=False)
+    before = len(capture)
+    _optimizer_step(
+        model, optimizer, scheduler, scaler, cfg, runtime, _step_batch_fn, None, replay_fn, dp
+    )
+    assert len(capture) == before + 1, (
+        f"the _write_once spy recorded {len(capture) - before} private terms for one optimizer "
+        "step — the capture is broken and the comparison below would be over stale tensors"
+    )
+    return [p.grad.detach().clone() for p in dp._params], dp
+
+
+def test_side_channel_negative_control(monkeypatch):
+    """V-12 / D-05 axis 2: the private noised term is byte-identical ONE KWARG APART.
+
+    The SAME call site — ``_optimizer_step`` — is run twice, differing ONLY in whether
+    ``replay_fn`` is present. That is what makes this a property of the **BRANCH** rather than of
+    two different fixtures: identical model init, identical micro-batches, identical DP seed, one
+    kwarg. The dedicated generator is consulted the same number of times in the same order in both
+    branches, and the public pass runs strictly AFTER the per-record accumulation loop, so it
+    cannot perturb either the per-record gradients or the noise stream.
+
+    **Both halves are load-bearing** (``tests/test_phase21_replay_volume.py::test_side_channel_
+    negative_control``'s discipline). The fixture is proven to VARY first: without that, the
+    byte-identity below would be a comparison over an implementation that returns a constant for
+    every input — green while saying nothing about the mechanism.
+
+    Measured on this fixture: **36 of 72** mixed buffers differ between the two branches. The other
+    36 are the ``lora_A`` gradients, which are EXACTLY ZERO for the replay pass too, because
+    ``lora_B`` is initialised to zeros and ``dL/dA`` carries a factor of ``B``. So the variation
+    lives entirely in the ``lora_B`` half — one per wrapped module — which is a structural fact
+    about LoRA init rather than a coincidence, and it is asserted as such.
+    """
+    capture = []
+    real_write = DPSGD._write_once
+
+    def _spy_write(self, private):
+        capture.append([t.detach().clone() for t in private])
+        return real_write(self, private)
+
+    monkeypatch.setattr(DPSGD, "_write_once", _spy_write)
+
+    mixed_private_only, dp_a = _dp_optimizer_step(replay_fn=None, capture=capture)
+    private_only = capture[-1]
+    mixed_with_public, dp_b = _dp_optimizer_step(replay_fn=_public_replay_fn, capture=capture)
+    with_public = capture[-1]
+
+    # 1 — THE FIXTURE ACTUALLY VARIES. The public term really reaches .grad, so the differential
+    # below is observed over a genuinely varying input.
+    differing = [
+        i
+        for i, (a, b) in enumerate(zip(mixed_private_only, mixed_with_public))
+        if not torch.equal(a, b)
+    ]
+    assert len(differing) == _FROZEN_TENSORS // 2, (
+        f"{len(differing)} of {_FROZEN_TENSORS} mixed buffers differ between the two branches, "
+        f"not the expected {_FROZEN_TENSORS // 2}. Exactly the lora_B half must move: lora_A's "
+        "gradient carries a factor of B and B is initialised to zeros, so the replay pass "
+        "contributes exactly 0.0 there. A count of 0 means replay_fn never reached .grad and the "
+        "byte-identity below would be comparing a branch against itself"
+    )
+
+    # 2 — THE PRIVATE NOISED TERM IS BYTE-IDENTICAL ACROSS BOTH BRANCHES. Not "close": torch.equal.
+    for i, (a, b) in enumerate(zip(private_only, with_public)):
+        assert torch.equal(a, b), (
+            f"the private noised term for parameter {i} moved when the PUBLIC replay term was "
+            "added. The released private magnitude must not be a function of public data — that "
+            "is D-03's surviving rule, and a difference here means something between the noise "
+            "and optimizer.step() mixed the two terms before the single combining write"
+        )
+
+    # The two branches consumed the generator identically, and the clip behaved identically.
+    assert torch.equal(dp_a.noise_rng_state(), dp_b.noise_rng_state())
+    assert dp_a._records == dp_b._records == 2
+    assert dp_a._clip_bind_count == dp_b._clip_bind_count
+
+
+def test_legacy_clip_is_unreachable_on_the_dp_path(monkeypatch):
+    """D-03's RUNTIME half: the legacy clip fires once per step with the seam off, zero with it on.
+
+    This is the runtime half ONLY. The STRUCTURAL half — ``clip_grad_norm_`` having exactly one
+    reachable call site in ``loop.py`` and that site sitting inside ``if dp_fn is None:`` — is what
+    actually carries D-03, and it is enforced by ``tests/test_phase22_dpsgd_ast.py``'s closure
+    guards, because a runtime check on TODAY's inputs cannot catch a FUTURE edit that reintroduces
+    the call on the DP path.
+
+    The seam-off branch is the CONTROL and is not optional: without it a broken spy (one that never
+    records) would make the seam-on assertion vacuously green.
+    """
+    calls = []
+    real_clip = torch.nn.utils.clip_grad_norm_
+
+    def _spy_clip(params, max_norm, *a, **k):
+        calls.append("clip")
+        return real_clip(params, max_norm, *a, **k)
+
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", _spy_clip)
+
+    steps = 2
+    cfg = TrainConfig(
+        lr=1e-3, warmup_steps=0, max_steps=steps, batch_size=_MICRO_BS, grad_accum_steps=1
+    )
+    runtime = RuntimeConfig(device="cpu")
+
+    off = _model()
+    train(
+        train_config=cfg,
+        runtime_config=runtime,
+        model=off,
+        model_config=ModelConfig(),
+        fixed_batch=(_STEP_X[:_MICRO_BS], _STEP_Y[:_MICRO_BS]),
+    )
+    assert calls.count("clip") == steps, (
+        f"the seam-OFF control fired the legacy clip {calls.count('clip')} times over {steps} "
+        "optimizer steps, not once per step — the spy is not observing the call site, so the "
+        "seam-ON assertion below would be green over a broken instrument"
+    )
+
+    calls.clear()
+    on = _model()
+    dp = _seam(on, sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=31, runtime=runtime)
+    train(
+        train_config=cfg,
+        runtime_config=runtime,
+        model=on,
+        model_config=ModelConfig(),
+        fixed_batch=(_STEP_X[:_MICRO_BS], _STEP_Y[:_MICRO_BS]),
+        dp_fn=dp,
+    )
+    assert calls.count("clip") == 0, (
+        f"the legacy clip_grad_norm_ fired {calls.count('clip')} times on the DP path. It clips "
+        "the MIXED buffer, so the released private magnitude becomes a function of PUBLIC data — "
+        "and, measured, renormalising to a fixed norm ERASES exactly the signal the "
+        "wrong-sensitivity positive control detects, so that fake would converge AND pass"
+    )
+    assert dp._records == 1 and dp._clip_bind_count == 0
+
+
+# The documented relative tolerance for the sigma-of-zero identity at a NON-POWER-OF-TWO
+# grad_accum_steps, with the measurement it ships against rather than a guessed bound. See
+# `test_sigma_zero_non_binding_clip_reproduces_the_default_path` for the full measurement table.
+_ACCUM_IDENTITY_REL_TOL = 1e-4
+
+
+def _identity_run(*, grad_accum_steps, with_dp, clip_record=None):
+    """One short GPT+LoRA recipe, run either seam-off or with a sigma-of-zero seam."""
+    model = _model()
+    runtime = RuntimeConfig(device="cpu")
+    # grad_clip is set to the SAME non-binding bound as C. `C = infinity` on the DP side has no
+    # meaning for the identity unless the legacy clip is equally inert on the control side: these
+    # are two DIFFERENT clips and EITHER one binding breaks the identity for a different reason.
+    # At TrainConfig's default grad_clip = 1.0 the legacy clip DOES bind on this fixture (measured
+    # pre-clip norm 2.0938 at step 1), which is precisely why non-binding is arranged and then
+    # OBSERVED rather than assumed.
+    cfg = TrainConfig(
+        lr=1e-3,
+        warmup_steps=0,
+        max_steps=2,
+        batch_size=_MICRO_BS,
+        grad_accum_steps=grad_accum_steps,
+        grad_clip=_NON_BINDING_CLIP,
+    )
+    dp = (
+        _seam(model, sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=101, runtime=runtime)
+        if with_dp
+        else None
+    )
+    real_clip = torch.nn.utils.clip_grad_norm_
+    if clip_record is not None:
+
+        def _observing_clip(params, max_norm, *a, **k):
+            params = list(params)
+            before = [p.grad.detach().clone() for p in params if p.grad is not None]
+            total_norm = real_clip(params, max_norm, *a, **k)
+            after = [p.grad for p in params if p.grad is not None]
+            unchanged = all(torch.equal(b, a2) for b, a2 in zip(before, after))
+            clip_record.append((float(total_norm), float(max_norm), unchanged))
+            return total_norm
+
+        torch.nn.utils.clip_grad_norm_ = _observing_clip
+    try:
+        train(
+            train_config=cfg,
+            runtime_config=runtime,
+            model=model,
+            model_config=ModelConfig(),
+            dp_fn=dp,
+            return_final_loss=True,
+        )
+    finally:
+        torch.nn.utils.clip_grad_norm_ = real_clip
+    params = {n: p.detach().clone() for n, p in model.named_parameters() if p.requires_grad}
+    return params, dp
+
+
+@pytest.mark.parametrize("grad_accum_steps", [1, 4, 3])
+def test_sigma_zero_non_binding_clip_reproduces_the_default_path(grad_accum_steps):
+    """D-06's **Phase-22 MECHANISM-CORRECTNESS** claim: sigma of zero + non-binding C == default.
+
+    This is NOT Phase 23's DPSGD-06 scientific-result claim. That one is M3, the real corpus, 200
+    steps, and agreement only within the measured seed-to-seed noise floor — not bit-identical by
+    design. Neither borrows the other's weight; see the module docstring.
+
+    It is what pins D-02's ``1/N`` placement STRUCTURALLY rather than by argument: inherit
+    ``loop.py``'s ``loss = total / accum`` on the DP path and the released term is off by a factor
+    of ``N``, so this CPU identity breaks immediately, before any M3 time is spent.
+
+    **Both clips are asserted NOT TO BIND, and they are two different clips.** ``clip_grad_norm_``
+    on the control run (observed through a spy that compares the gradient buffers before and after
+    the real call — an OBSERVATION, not a model of torch's internal ``clip_coef`` arithmetic) and
+    ``DPSGD``'s per-record clip on the DP run (``_clip_bind_count == 0``, asserted BEFORE the
+    parameters are compared). Either one binding would break the identity for a different reason,
+    and at ``TrainConfig``'s default ``grad_clip = 1.0`` the legacy clip really does bind here —
+    measured pre-clip norm ``2.0937681198120117`` at step 1 — so this is inert BY CONSTRUCTION,
+    never inert by accident.
+
+    **Measured, this identity is BITWISE at every power-of-two lot size and only there.** The
+    default path divides the LOSS by ``accum`` before ``backward()`` while the DP path divides the
+    summed GRADIENT after; scaling by a power of two is exact in IEEE-754, so the two orders agree
+    bit-for-bit — but only then. Measured over 2 optimizer steps on this fixture, as
+    ``||theta_default - theta_dp|| / ||theta_default||`` over all 72 concatenated LoRA tensors:
+
+    ======  =================  =========================
+    accum   bitwise tensors    global relative deviation
+    ======  =================  =========================
+    1       72/72              0.000000e+00
+    2       72/72              0.000000e+00
+    4       72/72              0.000000e+00
+    8       72/72              0.000000e+00
+    3        0/72              5.681269e-06
+    5        0/72              8.573839e-05
+    6        0/72              1.737541e-04
+    7        0/72              5.290843e-06
+    ======  =================  =========================
+
+    D-06 allows "bitwise **or** documented tolerance". The plan expected ``accum = 4`` to need the
+    tolerance; measured it does not, so ``4`` asserts BITWISE and a third case at ``accum = 3`` —
+    the smallest non-power-of-two — carries the documented tolerance instead. A tolerance nobody
+    needs is a tolerance a future error can hide in.
+
+    ``_ACCUM_IDENTITY_REL_TOL = 1e-4`` sits ~18x above the measured 5.68e-06 and is still three
+    orders BELOW what the failure it exists to catch would produce: inheriting the ``/accum``
+    divide on the DP path scales the released term by ``1/N``, an O(1) relative error at any
+    ``N > 1``, not an O(1e-5) one.
+    """
+    clip_record = []
+    control, _ = _identity_run(
+        grad_accum_steps=grad_accum_steps, with_dp=False, clip_record=clip_record
+    )
+    private, dp = _identity_run(grad_accum_steps=grad_accum_steps, with_dp=True)
+
+    # NON-BINDING 1, the LEGACY clip on the control run — observed, not modelled.
+    assert len(clip_record) == 2, f"the clip spy recorded {len(clip_record)} calls, not 2"
+    for total_norm, max_norm, unchanged in clip_record:
+        assert total_norm <= max_norm, (
+            f"the legacy clip's pre-clip norm {total_norm!r} exceeds grad_clip {max_norm!r}, so "
+            "the control run's gradients were RESCALED and the identity below would be comparing "
+            "a clipped trajectory against an unclipped one"
+        )
+        assert unchanged, (
+            f"the legacy clip changed the gradient buffers at pre-clip norm {total_norm!r} "
+            f"against grad_clip {max_norm!r} — the coefficient was not exactly 1.0"
+        )
+
+    # NON-BINDING 2, the DP per-record clip — a COUNTED observation over the whole run.
+    assert dp._clip_bind_count == 0, (
+        f"the non-binding bound {_NON_BINDING_CLIP} bound on {dp._clip_bind_count} record(s), so "
+        "the comparison below is between a CLIPPED mean and an unclipped one rather than between "
+        "two orderings of the same arithmetic"
+    )
+    assert dp._records == grad_accum_steps
+
+    assert sorted(control) == sorted(private) and len(control) == _FROZEN_TENSORS
+    bitwise = [name for name in control if torch.equal(control[name], private[name])]
+    flat_control = torch.cat([control[name].flatten() for name in sorted(control)])
+    flat_private = torch.cat([private[name].flatten() for name in sorted(control)])
+    rel = float(
+        torch.linalg.vector_norm(flat_control - flat_private)
+        / torch.linalg.vector_norm(flat_control)
+    )
+
+    if grad_accum_steps & (grad_accum_steps - 1) == 0:  # a power of two -> exact loss-side scaling
+        assert len(bitwise) == _FROZEN_TENSORS, (
+            f"only {len(bitwise)} of {_FROZEN_TENSORS} tensors are bitwise identical at "
+            f"grad_accum_steps={grad_accum_steps} (relative deviation {rel:.6e}). Scaling by a "
+            "power of two is exact in IEEE-754, so the loss-side and gradient-side divides must "
+            "agree bit-for-bit here"
+        )
+        assert rel == 0.0
+    else:
+        assert rel <= _ACCUM_IDENTITY_REL_TOL, (
+            f"the sigma-of-zero identity deviates by {rel:.6e} at "
+            f"grad_accum_steps={grad_accum_steps}, above the documented "
+            f"{_ACCUM_IDENTITY_REL_TOL:.0e}. Inheriting loop.py's /accum divide on the DP path is "
+            "an O(1) error, so a deviation this large is a different defect than the one the "
+            "tolerance exists to absorb"
+        )
+        # NON-DEGENERACY: the tolerance must be doing work here, or this branch is green over a
+        # sample that `==` would have passed too (22-05's sweep-control discipline).
+        assert bitwise == [], (
+            f"{len(bitwise)} of {_FROZEN_TENSORS} tensors are bitwise identical at a "
+            f"NON-power-of-two grad_accum_steps={grad_accum_steps} — the tolerance branch is "
+            "asserting nothing the bitwise branch would not already have caught"
+        )
+
+
+def test_dp_noise_rng_round_trips_through_a_kill_and_resume(tmp_path):
+    """D-14 / DPSGD-05 wiring: the noise generator's state survives a kill+resume, BOTH halves.
+
+    A write-only slot is worse than no slot, so both directions are asserted here. The SAVE half is
+    the ``_dp_extra()`` splat, and the site that matters is the **END-OF-CALL** one:
+    ``max_steps_override`` is ``train()``'s own documented *"kill in the resume test"*, and such a
+    kill exits the ``while`` loop NORMALLY — so the checkpoint the resume reads is written after
+    the ``finally:``, not by either in-loop site. A splat added only in-loop passes a grep and
+    still misses the one that is read.
+
+    The READ half is the ``resume_from`` block's ``.get()``-guarded
+    ``dp_fn.load_noise_rng_state``. Without it ``DPSGD.__init__`` re-seeds from the caller's seed
+    and the resumed run REPLAYS NOISE IT ALREADY RELEASED — DPSGD-04/SC4's fourth named fake
+    reachable through PRODUCTION. D-16 invariant 4 cannot see it: ``_prev_gen_state`` is ``None``
+    on a freshly constructed object, so the continuity check is vacuous on the first post-resume
+    step. That is why this is wiring rather than something a runtime invariant covers.
+
+    The pre-Phase-22 checkpoint case is asserted too: the key is absent from every checkpoint this
+    project has ever written, and ``.get()`` rather than a subscript is what keeps them loadable.
+    """
+    runtime = RuntimeConfig(device="cpu")
+    cfg = TrainConfig(
+        lr=1e-3, warmup_steps=0, max_steps=4, batch_size=_MICRO_BS, grad_accum_steps=1
+    )
+    batch = (_STEP_X[:_MICRO_BS], _STEP_Y[:_MICRO_BS])
+    latest = tmp_path / "latest.pt"
+
+    pre_kill = _model()
+    dp_pre = _seam(pre_kill, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=77, runtime=runtime)
+    train(
+        train_config=cfg,
+        runtime_config=runtime,
+        model=pre_kill,
+        model_config=ModelConfig(),
+        fixed_batch=batch,
+        dp_fn=dp_pre,
+        checkpoint_path=latest,
+        max_steps_override=1,  # the "kill" — exits the while loop normally
+    )
+    blob = torch.load(latest, weights_only=False)
+    assert "dp_noise_rng" in blob, (
+        "the END-OF-CALL save carries no dp_noise_rng. max_steps_override exits the loop normally, "
+        "so this is the save a resume reads — an in-loop-only splat misses exactly this one"
+    )
+    assert torch.equal(blob["dp_noise_rng"], dp_pre.noise_rng_state()), (
+        "the saved dp_noise_rng is not the LIVE generator state. checkpoint_extra is bound once at "
+        "train() entry, which is why the state is read through a closure at each save instead"
+    )
+    assert blob["schema_version"] == 1, "dp_noise_rng rides **extra — the schema must NOT bump"
+
+    resumed = _model()
+    dp_post = _seam(resumed, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=999, runtime=runtime)
+    # POSITIVE CONTROL: the fresh seam's stream really is somewhere else, so the equality after the
+    # resume is the restore working rather than two objects that agreed to begin with.
+    assert not torch.equal(dp_post.noise_rng_state(), blob["dp_noise_rng"])
+    train(
+        train_config=cfg,
+        runtime_config=runtime,
+        model=resumed,
+        model_config=ModelConfig(),
+        fixed_batch=batch,
+        dp_fn=dp_post,
+        resume_from=latest,
+        max_steps_override=1,  # already at step 1 -> no further steps, so no draw perturbs this
+    )
+    assert torch.equal(dp_post.noise_rng_state(), blob["dp_noise_rng"]), (
+        "the resumed seam's generator was NOT restored from dp_noise_rng, so it re-seeds from the "
+        "caller's seed and replays noise the pre-kill run already released"
+    )
+
+    # BACK-COMPAT: every checkpoint written before Phase 22 lacks the key, and `.get()` is what
+    # keeps them resumable with the seam live.
+    del blob["dp_noise_rng"]
+    old = tmp_path / "pre_phase22.pt"
+    torch.save(blob, old)
+    legacy = _model()
+    dp_legacy = _seam(legacy, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=5, runtime=runtime)
+    fresh_state = dp_legacy.noise_rng_state().clone()
+    train(
+        train_config=cfg,
+        runtime_config=runtime,
+        model=legacy,
+        model_config=ModelConfig(),
+        fixed_batch=batch,
+        dp_fn=dp_legacy,
+        resume_from=old,
+        max_steps_override=1,
+    )
+    assert torch.equal(dp_legacy.noise_rng_state(), fresh_state), (
+        "a pre-Phase-22 checkpoint moved the generator state — the .get() guard let a missing key "
+        "through as something other than 'no restore'"
+    )
+
+
+# The band on the empirical noise standard deviation below. The relative standard error of a
+# sample standard deviation over `n` normals is ~1/sqrt(2n); at n = 331,776 that is 0.123%, and the
+# measured deviation is 0.069%. 1% is ~8x the standard error and ~400x below the factor-of-N error
+# the test exists to catch.
+_NOISE_STD_REL_BAND = 0.01
+
+
+@pytest.mark.parametrize("n_records", [1, 4])
+def test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST(n_records):
+    """FAKE 3 (*noise added after averaging*), which the sigma-of-zero identity CANNOT see.
+
+    **This test exists because a mutation probe measured the guard it replaces to be incapable.**
+    D-17's fake table credits D-06's CPU identity with detecting *noise added after averaging*
+    ("build divide -> noise; watch the identity break"). Watched: rewriting ``finalize`` to divide
+    the accumulator BEFORE ``_noised_private`` and then divide by 1 leaves the whole suite GREEN,
+    including every sigma-of-zero identity. The reason is structural rather than incidental — at a
+    sigma of zero the drawn values are EXACTLY zero, so ``(sum + 0)/N`` and ``(sum/N) + 0`` are the
+    same number for every N. An identity taken at the one sigma where the noise vanishes can never
+    see where the noise was added.
+
+    So the order is pinned where it is observable: at ``sigma > 0`` and over the noise MAGNITUDE.
+    With every record's gradient set to exactly zero the accumulator is the zero vector and the
+    released term is PURE NOISE divided by the lot size, so its standard deviation must be
+    ``sigma * C / N``. Under the wrong order it would be ``sigma * C`` — a factor of ``N``, which
+    at ``N = 4`` is 400x outside this test's band.
+
+    Measured over all 331,776 released elements at ``sigma = 1.0``, ``C = 1.0``: ``std`` is
+    ``1.00069046`` at ``N = 1`` and ``0.25017262`` at ``N = 4``, both a ratio of ``1.000690`` to
+    the expectation — one draw's sampling deviation, within the 0.123% standard error of a sample
+    standard deviation at this ``n``.
+    """
+    dp = _seam(
+        _model(), sigma=_SIGMA, clip_norm=_CLIP, seed=61, runtime=RuntimeConfig(device="cpu")
+    )
+    dp.begin_step()
+    for _ in range(n_records):
+        for p in dp._params:
+            p.grad = torch.zeros_like(p)
+        dp.absorb_record()
+
+    # POSITIVE CONTROL: the accumulated SUM really is the zero vector, so everything released below
+    # is noise and the standard deviation is not measuring a gradient.
+    assert dp._global_norm(dp._accum) == 0.0
+    assert dp._clip_bind_count == 0
+    dp.finalize(n_records)
+
+    released = torch.cat([p.grad.flatten() for p in dp._params])
+    assert released.numel() == _FROZEN_PARAMS
+    expected = _SIGMA * _CLIP / n_records
+    ratio = float(released.std()) / expected
+    assert abs(ratio - 1.0) <= _NOISE_STD_REL_BAND, (
+        f"the released noise has std {float(released.std())!r} at N = {n_records}, a ratio of "
+        f"{ratio:.6f} to the expected sigma*C/N = {expected!r}. D-02 puts the /N LAST: the noise "
+        "is added to the SUM (one record moves the sum by at most C — the textbook sensitivity "
+        f"argument) and only then divided. A ratio near {n_records} means the divide moved AHEAD "
+        "of the draw, so the released noise is N times too large for the sensitivity the "
+        "accountant was told"
+    )
