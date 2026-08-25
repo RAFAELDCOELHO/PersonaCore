@@ -86,9 +86,9 @@ completed: 2026-08-25
 
 ## Files Created/Modified
 
-- `src/personacore/privacy/dpsgd.py` (new, **562 lines**) — module docstring in `perplexity.py`'s register: DPSGD-01 on line 1, a WHAT THIS SEAM CLAIMS / DOES **NOT** CLAIM pair copied in shape from `loop.py`'s `replay_bin` entry, the adjacency paragraph in the pin's own words, and a six-bullet invariants block naming both test files. Then `DPSGD` with `__init__` (a full pre-pass of 9 refusals), `begin_step`, `_global_norm`, `absorb_record`, `_draw_noise`, `_noised_private`, `_write_once`, `finalize`. **Zero `assert`, zero `_prove`, 14 `raise` sites.**
+- `src/personacore/privacy/dpsgd.py` (new, **562 lines**) — module docstring in `perplexity.py`'s register: DPSGD-01 on line 1, a WHAT THIS SEAM CLAIMS / DOES **NOT** CLAIM pair copied in shape from `loop.py`'s `replay_bin` entry, the adjacency paragraph in the pin's own words, and a six-bullet invariants block naming both test files. Then `DPSGD` with `__init__` (a full pre-pass of 9 refusals), `begin_step`, `_global_norm`, `absorb_record`, `_draw_noise`, `_noised_private`, `_write_once`, `finalize`. **Zero `assert`, zero `_prove`, 24 `raise` sites.**
 - `tests/test_phase22_dpsgd.py` (new, **472 lines**) — **18 tests**: V-22 ×3 parametrized with per-case marker distinctness, the `runtime.amp` half of refusal 2, the measured `inf → nan → RuntimeError` chain, `test_clip_norm_must_be_finite` ×2 with its large-finite negative side, clean construction with the dedicated-generator proof, and V-13's four invariants each with a watched RED alongside its GREEN.
-- `tests/test_phase22_dpsgd_ast.py` (modified, +170 lines, 10 → **16 tests**) — the LIVE half: the hard-equality `.grad`-write allowlist at both step entries, the wrapper live at `_noised_private`, `_assert_single_clip_constant` on the real class, FAKE 4's structural half, and D-08 asserted on the AST grammar.
+- `tests/test_phase22_dpsgd_ast.py` (modified, +172 / −2 lines, 10 → **16 tests**) — the LIVE half: the hard-equality `.grad`-write allowlist at both step entries, the wrapper live at `_noised_private`, `_assert_single_clip_constant` on the real class, FAKE 4's structural half, and D-08 asserted on the AST grammar.
 
 ## Decisions Made
 
