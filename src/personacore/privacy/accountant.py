@@ -221,13 +221,23 @@ def delta_closed(eps, mu):
             ``sigma = inf`` and is ``epsilon_for``'s boundary to own, not this function's.
 
     Returns:
-        ``delta`` in ``(0, 1]``, carrying at least 12 significant digits of the 60-dps ground truth
-        everywhere this function does not refuse. Measured against the committed
-        ``tests/fixtures/phase22_reference.py::DELTA_FRONTIER`` truths, the largest deviation over
-        the eleven float64-representable rows is **1.84e-12 relative, at eps=2.0, mu=0.1** -- and
-        that row's committed truth carries only 11 significant digits, so ~5e-11 of that budget is
-        the reference string's own quantization rather than this function's error. The largest
-        deviation on a 13-digit row is **9.03e-13, at eps=8.0, mu=0.5**.
+        ``delta`` in ``(0, 1]``. **THE ACCURACY CLAIM IS SCOPED TO WHAT WAS MEASURED, and that
+        scoping is a correction rather than a caveat.** This block previously read "carrying at
+        least 12 significant digits of the 60-dps ground truth EVERYWHERE THIS FUNCTION DOES NOT
+        REFUSE" -- a universal claim over the whole domain, backed by a sweep of eleven committed
+        rows none of which entered the band where the function was wrong. Measured, it delivered
+        ZERO correct significant digits at (eps=775.7866600701457, mu=35.35533905932738) and did
+        not refuse. A bound measured on a fixture set is a statement about the fixture set.
+
+        RE-MEASURED IN THIS SESSION over the TWELVE float64-representable
+        ``tests/fixtures/phase22_reference.py::DELTA_FRONTIER`` rows -- twelve rather than eleven
+        because the thirteenth row now puts the sweep inside the ``b > 27.2`` band that produced
+        the defect above. Largest deviation **1.84e-12 relative, at eps=2.0, mu=0.1**; that row's
+        committed truth carries only 11 significant digits, so ~5e-11 of that budget is the
+        reference string's own quantization rather than this function's error. Largest deviation on
+        a 13-digit row: **9.03e-13, at eps=8.0, mu=0.5**. Both figures are UNCHANGED by the new
+        row, which lands at 4.11e-14 against its committed string and is therefore not the binding
+        case -- the sweep got wider without the bound getting worse.
 
     Raises:
         ValueError: on a non-finite input or ``mu <= 0.0``; when delta is below float64's range
@@ -355,13 +365,25 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
         rel_tol: the relative truncation budget condition 2 proves the range met.
 
     Returns:
-        ``delta`` in ``(0, 1]``. Worst relative error ANYWHERE this returns a value, measured over
-        the eleven representable ``DELTA_FRONTIER`` rows against 60-dps ground truth, is
-        **1.0e-12** -- and that row (eps=2.0, mu=0.1) carries an 11-digit committed truth, so most
-        of that budget is the reference string's own quantization. The worst deviation on a 13-digit
-        row is **3.6e-13, at eps=8.0, mu=0.5**: the low-privacy corner where a fixed ``[-14, 14]``
-        range gives relative error **1.00e+00**, returning a perfectly plausible ``0.0`` against a
-        true ``1.048659178913e-57``. Everything worse than this is REFUSED rather than returned.
+        ``delta``, RE-MEASURED IN THIS SESSION over the TWELVE representable ``DELTA_FRONTIER``
+        rows against 60-dps ground truth. Worst relative error **1.109e-11, at
+        (eps=775.7866600701457, mu=35.35533905932738)** -- the thirteenth row, which MOVED this
+        bound by an order of magnitude when it landed (the previous holder, eps=2.0, mu=0.1 at
+        1.0e-12, is now second). That row integrates over a support starting at t_min = 39.62 and
+        the accumulated Simpson round-off is the binding term there; it is still 90x inside the
+        1e-9 budget ``test_two_oracles_agree`` compares the two oracles at. The worst deviation on
+        the low-privacy corner (eps=8.0, mu=0.5) is **3.6e-13**, where a fixed ``[-14, 14]`` range
+        instead gives relative error **1.00e+00**, returning a perfectly plausible ``0.0`` against
+        a true ``1.048659178913e-57``.
+
+        THE RANGE IS NOT ENFORCED, and saying so is deliberate. Phase 22's verification measured
+        this function returning ``+inf`` (at eps=4.40884929509763e-4, mu=75.3129260813192) and
+        values marginally above 1.0 (60 of 4000 sampled cells, max 1.000000000000009) for a
+        quantity that is a probability: condition 1 bounds a SINGLE ``math.exp`` argument while the
+        Simpson loop sums 20001 terms with weights up to 4, so it fires ~0.19 too late in z, and
+        the only magnitude refusal below is ``delta <= 0.0``. That defect is real, is OUTSIDE this
+        plan's closure, and is recorded here rather than left implied by an unqualified
+        ``(0, 1]`` -- a contract this docstring can no longer honestly assert.
 
     Raises:
         ValueError: on a degenerate input or grid, or on any of the three non-vacuity conditions.
