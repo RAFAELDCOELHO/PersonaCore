@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-08-PLAN.md
-last_updated: "2026-08-26T00:34:11.270Z"
+stopped_at: Completed 22-09-PLAN.md
+last_updated: "2026-08-26T00:53:03.136Z"
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 39
-  completed_plans: 36
+  completed_plans: 37
   percent: 22
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — EXECUTING
-Plan: 9 of 11
+Plan: 10 of 11
 Status: Executing Phase 22
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -129,6 +129,7 @@ Last activity: 2026-08-26
 | Phase 22 P06 | 70min | 3 tasks | 5 files |
 | Phase 22 P07 | 32min | 3 tasks | 3 files |
 | Phase 22 P08 | 35min | 2 tasks | 2 files |
+| Phase 22 P09 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -419,6 +420,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22]: Python closures capture the CELL and resolve at CALL time — the plan's mandated comment stated the opposite; measured [0,1,2] before writing the corrected comment
 - [Phase 22]: Patch personacore.training.loop, never .data: loop.py uses a from-import, so a spy on the defining module yields 0 calls (meta-guard shipped)
 - [Phase 22]: The per-step multiset check is EQUIVALENT to set equality under the accum refusal (mutation M7 green); both false stronger-than claims corrected in place
+- [Phase 22]: 22-09: V-06 and V-25 landed. All seven GOLDEN_EPSILON rows re-derive from delta_quadrature ALONE, worst relative deviation 5.749506e-15 against the pin's 1e-12 (173.9x margin), with 'from the oracle alone' asserted over the TEST'S OWN AST rather than promised in a docstring. test_adjacency_relation_consistent exists under EXACTLY the name scripts/mitigation_accountant.py cites by symbol, so the frozen pin's forward citation now resolves
+- [Phase 22]: 22-09: TWO plan-supplied guards measured INCAPABLE and replaced. (a) The plan's file-wide 'no replace-one substring' assertion is UNSATISFIABLE — all three sites contain it (1+1+5 = 7 occurrences), every one inside the sentence REJECTING it; the check that survives reads the 60-char DECLARATION window, measured 179 chars clear. (b) The plan's '10 * GOLDEN_EPSILON_REL_TOL' negative control reduces to 10t > t and is GREEN for every t — watched green at t=1e-3, the exact widening it exists to detect. Replaced with a FIXED 1e-9 perturbation plus a 1e-11 tolerance ceiling
+- [Phase 22]: 22-09: D-17's FAKE 3 row is carried forward CORRECTED for 22-11, not transcribed. 22-06 measured the sigma=0 identity structurally incapable of detecting noise-added-after-averaging (the whole suite stays GREEN because at sigma=0 the draw is exactly zero). The detector that bites is test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST at sigma > 0
 
 ### Roadmap Evolution
 
@@ -551,8 +555,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T00:34:11.262Z
-Stopped at: Completed 22-08-PLAN.md
+Last session: 2026-08-26T00:52:43.738Z
+Stopped at: Completed 22-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
