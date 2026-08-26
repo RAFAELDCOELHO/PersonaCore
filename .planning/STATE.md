@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: executing
-stopped_at: Completed 22-10-PLAN.md
-last_updated: "2026-08-26T01:44:57.722Z"
+status: verifying
+stopped_at: Completed 22-11-PLAN.md
+last_updated: "2026-08-26T02:25:35.588Z"
 last_activity: 2026-08-26
 progress:
   total_phases: 9
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 39
-  completed_plans: 38
-  percent: 22
+  completed_plans: 39
+  percent: 33
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — EXECUTING
+Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — COMPLETE (11/11, ready for verification)
 Plan: 11 of 11
-Status: Executing Phase 22
+Status: Phase complete — ready for verification
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
@@ -131,6 +131,7 @@ Last activity: 2026-08-26
 | Phase 22 P08 | 35min | 2 tasks | 2 files |
 | Phase 22 P09 | 25min | 2 tasks | 2 files |
 | Phase 22 P10 | 60min | 3 tasks | 3 files |
+| Phase 22 P11 | 75min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -428,6 +429,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22] 22-10: the two gated kwarg splats are spelled dict(kw=...) not {"kw": ...} — MEASURED, the string-key form left 22-08's code-hit predicate reading 0 against a file that plainly DID wire grad_accum_steps
 - [Phase 22] 22-10: DPSGD is constructed after model.to(runtime.device), not where the plan says — __init__ allocates zeros_like over the LIVE params, so a pre-move build pins the DP sum on CPU while the params travel to MPS
 - [Phase 22] 22-10: mutation M5 (wirings made unconditional) was GREEN across the whole suite — a control that stubs the callee proves nothing about what the callee received; a non-DP end-to-end control now bites
+- [Phase 22] 22-11: all four fakes applied to the REAL dpsgd.py and watched reddening — 9 detectors, 9 distinct RED signatures, 4 byte-identical restores (sha256 140f5108, blob f0e267c2)
+- [Phase 22] 22-11: D-17's FAKE 3 row re-measured FALSE against the real module — the sigma=0 identity stayed GREEN under divide-then-noise; a SECOND blind spot found, accum=1 is invisible at every sigma
+- [Phase 22] 22-11: the runtime C*(1+tol) sensitivity check is ONE-SIDED — a second clip constant SMALLER than C completes with no refusal (measured); only the AST guard catches both directions
+- [Phase 22] 22-11: make lint EXITS 0 on this box (pyenv ruff 0.16.4, 229 files) — four prior summaries recorded the opposite; what is broken is make test (exit 2)
 
 ### Roadmap Evolution
 
@@ -560,8 +565,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T01:44:25.202Z
-Stopped at: Completed 22-10-PLAN.md
+Last session: 2026-08-26T02:25:25.899Z
+Stopped at: Completed 22-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

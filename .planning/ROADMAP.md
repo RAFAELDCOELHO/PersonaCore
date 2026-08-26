@@ -122,7 +122,7 @@ what survives cannot be cheaply reverted.
 
 - [x] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (execution complete 2026-08-20; reopened for GATE-06 gap closure, all 12 plans executed 2026-08-21 — SC3's GATE-06 clause superseded by a dated D-34/D-37 amendment, GATE-06 discharged, `20-SECURITY.md` at `threats_open: 0`. Awaiting re-verification by `/gsd:verify-phase 20`) (completed 2026-08-21)
 - [x] **Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus** - Fix what a record is, and prove it structurally, before any ε can be computed against the wrong one (completed 2026-08-25)
-- [ ] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers
+- [x] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers (completed 2026-08-26)
 - [ ] **Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration** - Size the sweep from a measurement, and run the one cheap run that separates an honest negative from a silent bug
 - [ ] **Phase 24: Adversarial Extraction-Aware Training + the Held-Out Attack Family** - The second arm as a data-mixture ratio, with generalization converted from a disclaimer into a measurement
 - [ ] **Phase 25: Frontier Sweep and the Existence-Gate Verdict** - Both arms, both capacities, one plane, judged by importing the Phase 20 constants
@@ -441,7 +441,7 @@ CPU before a single second of M3 time is spent
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 22-11-PLAN.md — the four positive controls (V-18…V-21), each WATCHED failing on the real source
+- [x] 22-11-PLAN.md — the four positive controls (V-18…V-21), each WATCHED failing on the real source
       with its RED output captured, then restored byte-identically and re-greened
 
 ### Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration
@@ -642,7 +642,7 @@ capacities — with every number in prose generated from a committed record rath
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
-| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 10/11 | In Progress | - |
+| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 11/11 | Complete   | 2026-08-26 |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
