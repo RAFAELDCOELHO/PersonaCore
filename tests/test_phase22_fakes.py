@@ -122,13 +122,35 @@ def _record(params, seed):
     FAKE 1's whole meaning: ``backward()`` does ``p.grad += g``, not ``p.grad = g``. A helper that
     overwrites cannot express the fake at all, because the fake IS the second backward landing on
     top of the first.
+
+    **THE DRAW STAYS ON CPU AND ONLY THE TENSOR MOVES**, and that is load-bearing rather than
+    stylistic (23-RESEARCH.md Pitfall 4). Two of the constants this helper feeds are FITTED:
+    ``_FAKE1_LEAK_RATIO = 1.734481`` (band ``0.02``) and ``_FAKE3_STD_RATIO_AT_N4 = 3.999986``
+    (band ``0.01``). A DEVICE-LOCAL generator here — one constructed against ``p.device`` instead
+    of the bare CPU one below — would draw **different gradient values** on MPS and put both
+    constants at risk for a reason that has nothing to do with the fake, and the resulting RED
+    would read as a FAKE DETECTION, which is the worst possible disguise for a device artefact.
+    Keeping the CPU draw and moving the result with ``.to()`` makes the bytes identical to the CPU
+    run, so both constants stay valid **by construction**.
+
+    There is no ``device`` parameter: it is read off ``p.device``, so no call site changes and
+    there is nothing for a caller to pass wrong. The assertion below is the tripwire for a future
+    edit that reintroduces a device-local generator — it must fail HERE, not two files away inside
+    a fitted band.
     """
     gen = torch.Generator().manual_seed(seed)
     drawn = []
     for p in params:
-        g = torch.randn(p.shape, generator=gen) * _GRAD_SCALE
-        p.grad = g if p.grad is None else p.grad + g
-        drawn.append(g)
+        g = torch.randn(p.shape, generator=gen) * _GRAD_SCALE  # CPU. Deliberately.
+        g_dev = g.to(p.device)
+        p.grad = g_dev if p.grad is None else p.grad + g_dev
+        assert g_dev.device == p.device == p.grad.device, (
+            f"_record produced a gradient on {g_dev.device} for a parameter on {p.device}. The "
+            "draw must stay on CPU and the TENSOR must move; a device-local generator would draw "
+            "different values and move _FAKE1_LEAK_RATIO / _FAKE3_STD_RATIO_AT_N4 for a reason "
+            "that has nothing to do with either fake"
+        )
+        drawn.append(g_dev)
     return drawn
 
 
@@ -488,6 +510,25 @@ def _released(seam_cls, model, params, *, sigma, n_records):
     return released
 
 
+# -------------------------------------------------------------------------------------------------
+# D-02's DEVICE-PARAMETRIZATION EXEMPTION, WRITTEN DOWN RATHER THAN SILENTLY SKIPPED.
+#
+# Two Phase-22 files are exempt from the CPU->MPS parametrization surface, and the exemption is
+# recorded HERE, in source, because *a probe that claims a device pass it did not perform is the
+# very defect D-02 exists to prevent*. An exemption inferred from an absence is indistinguishable
+# from an oversight.
+#
+#   * `tests/test_phase22_dpsgd_ast.py` -- 16 tests, pure `ast.parse` over source TEXT. It imports
+#     no torch runtime at all, so there is no tensor, no generator and no device for a result to
+#     depend on. Re-running it under `device="mps"` executes byte-identical code.
+#   * `tests/test_phase22_accountant.py` -- 37 tests, stdlib `math` only. Same argument.
+#
+# MEASURED: 16 + 37 = **53 of the 113 Phase-22 tests** (`grep -c '^def test_'` across
+# accountant 37 / checkpoint 9 / dpsgd_ast 16 / dpsgd 23 / fakes 8 / wiring 20), so the exemption
+# removes just under half the surface and is worth stating precisely rather than waving at.
+# The four fakes' AST halves in THIS file inherit the same exemption for the same reason; their
+# RUNTIME halves do not, and 23-06 performs the watched RED for those on MPS.
+# -------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize(("sigma", "n_records"), sorted(_FAKE3_DIFFERENTIAL_SEES))
 def test_fake_noise_after_averaging(sigma, n_records):
     """V-20 / FAKE 3, with its two BLIND SPOTS measured rather than glossed.
@@ -711,8 +752,15 @@ _WATCHED_RED_NODE_IDS = {
         "tests/test_phase22_dpsgd.py::test_sensitivity_invariant_fires",
     ),
     "FAKE 3": (
+        # `[4]` -> `[4-cpu]`, CORRECTED when 23-01 added the device axis to this test. The case is
+        # UNCHANGED -- N = 4 on CPU is exactly what Phase 22 ran and watched redden; the device is
+        # now spelled in the id rather than implied by the file being CPU-only. MEASURED: the old
+        # `[4]` no longer collects ("no match in any of [<Module test_phase22_dpsgd.py>]"), which
+        # is this repository's most recurring defect class -- a stale anchor -- and
+        # `test_watched_red_node_ids_resolve` cannot catch it, because it deliberately does not
+        # resolve the part inside `[...]`.
         "tests/test_phase22_dpsgd.py::"
-        "test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST[4]",
+        "test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST[4-cpu]",
         "tests/test_phase22_dpsgd_ast.py::test_dpsgd_draws_the_noise_before_it_divides",
     ),
     "FAKE 4": (

@@ -102,6 +102,12 @@ from test_loop_penalty_fn import (  # noqa: E402  (tests/ is not a package)
     _run_recipe,
 )
 
+# ONE device register for the whole phase, imported rather than re-spelled (D-02). Two copies of a
+# device gate drift, and a drifted gate is how an MPS leg stops being counted. See
+# `tests/test_phase23_mps_venue.py` for why the register is a `pytest.param(..., marks=skipif)`
+# tuple and not a list that shrinks to `["cpu"]` in CI.
+from test_phase23_mps_venue import _DEVICES  # noqa: E402
+
 # Test-local fixture values, NOT a budget. Phase 22 names no sigma and no C anywhere in its tree
 # (D-08 / Phase 20's Z boundary); these are arithmetic test vectors in exactly the sense plan
 # 22-02 draws for GOLDEN_EPSILON's sigma/T columns.
@@ -118,13 +124,28 @@ _FROZEN_TENSORS = 72
 _FROZEN_PARAMS = 331_776
 
 
-def _model(*, freeze=True):
-    """A real GPT + real LoRA on CPU; ``freeze=False`` is D-04 trap 1's positive control."""
+def _model(*, freeze=True, device="cpu"):
+    """A real GPT + real LoRA; ``freeze=False`` is D-04 trap 1's positive control.
+
+    ``device`` is an ADDITIVE widening whose default is BYTE-IDENTICAL to the CPU-only shape this
+    helper had through Phase 22 — the same ``dp_sigma=None`` sentinel discipline
+    ``scripts/teach_persona.py``'s ``train_arm`` already records: a new knob may not change what
+    the existing callers do. **The blast radius is 31 tests across two files** (MEASURED;
+    ``tests/test_phase22_fakes.py:46-50`` imports this helper), which is why the default matters
+    more than the knob.
+
+    The ``.to(device)`` happens AFTER ``mark_only_lora_trainable``, and after it the model is fully
+    resident before any ``DPSGD`` is built over it. That ordering is load-bearing:
+    ``DPSGD.__init__`` allocates ``_accum`` with ``torch.zeros_like(p)`` and derives its generator
+    device from ``params[0].device``, so a seam constructed over a still-CPU model and only then
+    moved would carry a CPU accumulator and a CPU generator against MPS gradients.
+    """
     torch.manual_seed(1234)
     model = GPT(ModelConfig())
     inject_lora(model, LoRAConfig())
     if freeze:
         mark_only_lora_trainable(model)
+    model.to(device)
     return model
 
 
@@ -631,20 +652,28 @@ def _step_batch_fn(micro):
 
 
 def _public_replay_fn(model, scaler):
-    """A real un-clipped public pass, in ``replay_fn``'s exact ``(model, scaler)`` shape."""
-    _, replay_loss = model(_REPLAY_X, _REPLAY_Y)
+    """A real un-clipped public pass, in ``replay_fn``'s exact ``(model, scaler)`` shape.
+
+    The device is READ OFF the model rather than passed, so no call site can pass it wrong. The
+    fixture tensors themselves were drawn once at module scope on CPU and only MOVE here — the
+    same discipline ``tests/test_phase22_fakes.py::_record`` records at length.
+    """
+    device = next(model.parameters()).device
+    _, replay_loss = model(_REPLAY_X.to(device), _REPLAY_Y.to(device))
     scaler.scale(replay_loss).backward()
 
 
-def _dp_optimizer_step(*, replay_fn, capture, sigma=_SIGMA, clip_norm=_CLIP, seed=4242):
+def _dp_optimizer_step(
+    *, replay_fn, capture, sigma=_SIGMA, clip_norm=_CLIP, seed=4242, device="cpu"
+):
     """Drive ONE real ``_optimizer_step`` on a GPT+LoRA fixture with the DP seam live.
 
     Returns ``(mixed_grads, dp)``; the private term lands in ``capture`` via the ``_write_once``
     spy the caller installs, so the private and public terms can be compared SEPARATELY after they
     have already met in ``.grad``.
     """
-    model = _model()
-    runtime = RuntimeConfig(device="cpu")
+    model = _model(device=device)
+    runtime = RuntimeConfig(device=device)
     cfg = TrainConfig(
         lr=1e-3,
         warmup_steps=0,
@@ -656,10 +685,17 @@ def _dp_optimizer_step(*, replay_fn, capture, sigma=_SIGMA, clip_norm=_CLIP, see
     dp = _seam(model, sigma=sigma, clip_norm=clip_norm, seed=seed, runtime=runtime)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     scheduler = build_scheduler(optimizer, cfg)
-    scaler = GradScaler(device="cpu", enabled=False)
+    # `_optimizer_step` does NOT move what `batch_fn` returns, so the move happens here. The DRAW
+    # stayed at module scope on CPU; only the tensor travels, so both devices see the same bytes.
+    scaler = GradScaler(device=device, enabled=False)
+
+    def _device_batch_fn(micro):
+        xb, yb = _step_batch_fn(micro)
+        return xb.to(device), yb.to(device)
+
     before = len(capture)
     _optimizer_step(
-        model, optimizer, scheduler, scaler, cfg, runtime, _step_batch_fn, None, replay_fn, dp
+        model, optimizer, scheduler, scaler, cfg, runtime, _device_batch_fn, None, replay_fn, dp
     )
     assert len(capture) == before + 1, (
         f"the _write_once spy recorded {len(capture) - before} private terms for one optimizer "
@@ -668,7 +704,8 @@ def _dp_optimizer_step(*, replay_fn, capture, sigma=_SIGMA, clip_norm=_CLIP, see
     return [p.grad.detach().clone() for p in dp._params], dp
 
 
-def test_side_channel_negative_control(monkeypatch):
+@pytest.mark.parametrize("device", _DEVICES)
+def test_side_channel_negative_control(monkeypatch, device):
     """V-12 / D-05 axis 2: the private noised term is byte-identical ONE KWARG APART.
 
     The SAME call site — ``_optimizer_step`` — is run twice, differing ONLY in whether
@@ -698,9 +735,11 @@ def test_side_channel_negative_control(monkeypatch):
 
     monkeypatch.setattr(DPSGD, "_write_once", _spy_write)
 
-    mixed_private_only, dp_a = _dp_optimizer_step(replay_fn=None, capture=capture)
+    mixed_private_only, dp_a = _dp_optimizer_step(replay_fn=None, capture=capture, device=device)
     private_only = capture[-1]
-    mixed_with_public, dp_b = _dp_optimizer_step(replay_fn=_public_replay_fn, capture=capture)
+    mixed_with_public, dp_b = _dp_optimizer_step(
+        replay_fn=_public_replay_fn, capture=capture, device=device
+    )
     with_public = capture[-1]
 
     # 1 — THE FIXTURE ACTUALLY VARIES. The public term really reaches .grad, so the differential
@@ -733,7 +772,8 @@ def test_side_channel_negative_control(monkeypatch):
     assert dp_a._clip_bind_count == dp_b._clip_bind_count
 
 
-def test_legacy_clip_is_unreachable_on_the_dp_path(monkeypatch):
+@pytest.mark.parametrize("device", _DEVICES)
+def test_legacy_clip_is_unreachable_on_the_dp_path(monkeypatch, device):
     """D-03's RUNTIME half: the legacy clip fires once per step with the seam off, zero with it on.
 
     This is the runtime half ONLY. The STRUCTURAL half — ``clip_grad_norm_`` having exactly one
@@ -758,9 +798,9 @@ def test_legacy_clip_is_unreachable_on_the_dp_path(monkeypatch):
     cfg = TrainConfig(
         lr=1e-3, warmup_steps=0, max_steps=steps, batch_size=_MICRO_BS, grad_accum_steps=1
     )
-    runtime = RuntimeConfig(device="cpu")
+    runtime = RuntimeConfig(device=device)
 
-    off = _model()
+    off = _model(device=device)
     train(
         train_config=cfg,
         runtime_config=runtime,
@@ -775,7 +815,7 @@ def test_legacy_clip_is_unreachable_on_the_dp_path(monkeypatch):
     )
 
     calls.clear()
-    on = _model()
+    on = _model(device=device)
     dp = _seam(on, sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=31, runtime=runtime)
     train(
         train_config=cfg,
@@ -800,10 +840,10 @@ def test_legacy_clip_is_unreachable_on_the_dp_path(monkeypatch):
 _ACCUM_IDENTITY_REL_TOL = 1e-4
 
 
-def _identity_run(*, grad_accum_steps, with_dp, clip_record=None):
+def _identity_run(*, grad_accum_steps, with_dp, clip_record=None, device="cpu"):
     """One short GPT+LoRA recipe, run either seam-off or with a sigma-of-zero seam."""
-    model = _model()
-    runtime = RuntimeConfig(device="cpu")
+    model = _model(device=device)
+    runtime = RuntimeConfig(device=device)
     # grad_clip is set to the SAME non-binding bound as C. `C = infinity` on the DP side has no
     # meaning for the identity unless the legacy clip is equally inert on the control side: these
     # are two DIFFERENT clips and EITHER one binding breaks the identity for a different reason.
@@ -851,8 +891,9 @@ def _identity_run(*, grad_accum_steps, with_dp, clip_record=None):
     return params, dp
 
 
+@pytest.mark.parametrize("device", _DEVICES)
 @pytest.mark.parametrize("grad_accum_steps", [1, 4, 3])
-def test_sigma_zero_non_binding_clip_reproduces_the_default_path(grad_accum_steps):
+def test_sigma_zero_non_binding_clip_reproduces_the_default_path(grad_accum_steps, device):
     """D-06's **Phase-22 MECHANISM-CORRECTNESS** claim: sigma of zero + non-binding C == default.
 
     This is NOT Phase 23's DPSGD-06 scientific-result claim. That one is M3, the real corpus, 200
@@ -903,9 +944,9 @@ def test_sigma_zero_non_binding_clip_reproduces_the_default_path(grad_accum_step
     """
     clip_record = []
     control, _ = _identity_run(
-        grad_accum_steps=grad_accum_steps, with_dp=False, clip_record=clip_record
+        grad_accum_steps=grad_accum_steps, with_dp=False, clip_record=clip_record, device=device
     )
-    private, dp = _identity_run(grad_accum_steps=grad_accum_steps, with_dp=True)
+    private, dp = _identity_run(grad_accum_steps=grad_accum_steps, with_dp=True, device=device)
 
     # NON-BINDING 1, the LEGACY clip on the control run — observed, not modelled.
     assert len(clip_record) == 2, f"the clip spy recorded {len(clip_record)} calls, not 2"
@@ -962,7 +1003,8 @@ def test_sigma_zero_non_binding_clip_reproduces_the_default_path(grad_accum_step
         )
 
 
-def test_dp_noise_rng_round_trips_through_a_kill_and_resume(tmp_path):
+@pytest.mark.parametrize("device", _DEVICES)
+def test_dp_noise_rng_round_trips_through_a_kill_and_resume(tmp_path, device):
     """D-14 / DPSGD-05 wiring: the noise generator's state survives a kill+resume, BOTH halves.
 
     A write-only slot is worse than no slot, so both directions are asserted here. The SAVE half is
@@ -982,14 +1024,14 @@ def test_dp_noise_rng_round_trips_through_a_kill_and_resume(tmp_path):
     The pre-Phase-22 checkpoint case is asserted too: the key is absent from every checkpoint this
     project has ever written, and ``.get()`` rather than a subscript is what keeps them loadable.
     """
-    runtime = RuntimeConfig(device="cpu")
+    runtime = RuntimeConfig(device=device)
     cfg = TrainConfig(
         lr=1e-3, warmup_steps=0, max_steps=4, batch_size=_MICRO_BS, grad_accum_steps=1
     )
-    batch = (_STEP_X[:_MICRO_BS], _STEP_Y[:_MICRO_BS])
+    batch = (_STEP_X[:_MICRO_BS], _STEP_Y[:_MICRO_BS])  # train() moves fixed_batch itself
     latest = tmp_path / "latest.pt"
 
-    pre_kill = _model()
+    pre_kill = _model(device=device)
     dp_pre = _seam(pre_kill, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=77, runtime=runtime)
     train(
         train_config=cfg,
@@ -1012,7 +1054,7 @@ def test_dp_noise_rng_round_trips_through_a_kill_and_resume(tmp_path):
     )
     assert blob["schema_version"] == 1, "dp_noise_rng rides **extra — the schema must NOT bump"
 
-    resumed = _model()
+    resumed = _model(device=device)
     dp_post = _seam(resumed, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=999, runtime=runtime)
     # POSITIVE CONTROL: the fresh seam's stream really is somewhere else, so the equality after the
     # resume is the restore working rather than two objects that agreed to begin with.
@@ -1037,7 +1079,7 @@ def test_dp_noise_rng_round_trips_through_a_kill_and_resume(tmp_path):
     del blob["dp_noise_rng"]
     old = tmp_path / "pre_phase22.pt"
     torch.save(blob, old)
-    legacy = _model()
+    legacy = _model(device=device)
     dp_legacy = _seam(legacy, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=5, runtime=runtime)
     fresh_state = dp_legacy.noise_rng_state().clone()
     train(
@@ -1056,7 +1098,8 @@ def test_dp_noise_rng_round_trips_through_a_kill_and_resume(tmp_path):
     )
 
 
-def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
+@pytest.mark.parametrize("device", _DEVICES)
+def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path, device):
     """WARNING-1's symmetric half, pinned in ALL THREE ``(seam, slot)`` directions.
 
     The direction this REFUSES: ``dp_fn=None`` resuming a checkpoint that carries ``dp_noise_rng``.
@@ -1082,11 +1125,11 @@ def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
     would satisfy leg 1 and still pass, while breaking every non-DP resume in the project
     (``test_resume_curve.py``, ``test_resume_memmap.py``, ``scripts/pretrain_tinystories.py``).
     """
-    runtime = RuntimeConfig(device="cpu")
+    runtime = RuntimeConfig(device=device)
     cfg = TrainConfig(
         lr=1e-3, warmup_steps=0, max_steps=4, batch_size=_MICRO_BS, grad_accum_steps=1
     )
-    batch = (_STEP_X[:_MICRO_BS], _STEP_Y[:_MICRO_BS])
+    batch = (_STEP_X[:_MICRO_BS], _STEP_Y[:_MICRO_BS])  # train() moves fixed_batch itself
 
     def _run(model, dp, ckpt, *, resume=None, steps=1):
         """One ``train()`` call in this module's own idiom; ``max_steps_override`` is the kill."""
@@ -1104,7 +1147,7 @@ def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
 
     # --- LEG 1: the REFUSAL -------------------------------------------------------------------
     private = tmp_path / "private.pt"
-    writer = _model()
+    writer = _model(device=device)
     dp_writer = _seam(writer, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=77, runtime=runtime)
     _run(writer, dp_writer, private)
     blob = torch.load(private, weights_only=False)
@@ -1116,7 +1159,7 @@ def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
     )
 
     unreachable = tmp_path / "unreachable.pt"
-    seamless = _model()
+    seamless = _model(device=device)
     with pytest.raises(ValueError, match="dp_noise_rng") as excinfo:
         _run(seamless, None, unreachable, resume=private)
     assert "dp_fn=None" in str(excinfo.value), (
@@ -1133,7 +1176,7 @@ def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
     del blob["dp_noise_rng"]
     no_slot = tmp_path / "no_slot.pt"
     torch.save(blob, no_slot)
-    legacy = _model()
+    legacy = _model(device=device)
     dp_legacy = _seam(legacy, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=5, runtime=runtime)
     fresh_state = dp_legacy.noise_rng_state().clone()
     _run(legacy, dp_legacy, tmp_path / "legacy.pt", resume=no_slot)
@@ -1146,7 +1189,7 @@ def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
 
     # --- LEG 3: the ORDINARY non-DP resume, which the refusal must NOT catch --------------------
     plain = tmp_path / "plain.pt"
-    control = _model()
+    control = _model(device=device)
     _run(control, None, plain)
     plain_blob = torch.load(plain, weights_only=False)
     assert "dp_noise_rng" not in plain_blob, (
@@ -1154,7 +1197,7 @@ def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
         "leg 3 would otherwise be driving leg 1's case instead of the ordinary resume"
     )
     resumed_ckpt = tmp_path / "plain_resumed.pt"
-    resumed = _model()
+    resumed = _model(device=device)
     _run(resumed, None, resumed_ckpt, resume=plain, steps=2)
     assert torch.load(resumed_ckpt, weights_only=False)["step"] == 2, (
         "the ordinary non-DP resume did not take its post-resume step, so 'it completed' is not "
@@ -1169,8 +1212,9 @@ def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
 _NOISE_STD_REL_BAND = 0.01
 
 
+@pytest.mark.parametrize("device", _DEVICES)
 @pytest.mark.parametrize("n_records", [1, 4])
-def test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST(n_records):
+def test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST(n_records, device):
     """FAKE 3 (*noise added after averaging*), which the sigma-of-zero identity CANNOT see.
 
     **This test exists because a mutation probe measured the guard it replaces to be incapable.**
@@ -1194,7 +1238,11 @@ def test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST(n_records
     standard deviation at this ``n``.
     """
     dp = _seam(
-        _model(), sigma=_SIGMA, clip_norm=_CLIP, seed=61, runtime=RuntimeConfig(device="cpu")
+        _model(device=device),
+        sigma=_SIGMA,
+        clip_norm=_CLIP,
+        seed=61,
+        runtime=RuntimeConfig(device=device),
     )
     dp.begin_step()
     for _ in range(n_records):
