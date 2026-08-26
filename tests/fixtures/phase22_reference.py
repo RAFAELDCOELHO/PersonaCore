@@ -22,7 +22,7 @@ Consumers:
 
 # =============================================================================================
 # 1. DELTA_FRONTIER — delta(eps, mu) for the analytic Gaussian mechanism (Balle-Wang Thm 8 /
-#    Dong-Roth-Su Cor 2.13). The V-01 ground truth, 12 rows.
+#    Dong-Roth-Su Cor 2.13). The V-01 ground truth, 13 rows.
 #
 #    PROVENANCE: 60-dps mpmath ground truth, computed once in the 22-RESEARCH session, committed
 #    as data so no test imports mpmath (RPT-03).
@@ -53,6 +53,48 @@ DELTA_FRONTIER = (
     (0.01, 8.0, "0.9999363400557"),
     (2.0, 0.1, "3.7194507268e-91"),
     (2.0, 0.05, "1.24028351258e-352"),
+    # ---- THE THIRTEENTH ROW: RESEARCH F1'S TWIN, AND THE ONE NOBODY LOOKED AT ------------------
+    # F1's finding is that past z ~ 38.47 the FIRST erfc underflows and BOTH oracles return 0.0.
+    # Its twin is what happens EARLIER, in the band between the two cliffs: past b ~ 27.2 the
+    # SECOND erfc underflows while the FIRST is still perfectly healthy. Measured here:
+    # a = 3.015733201402912 with erfc(a) = 1.999999999999944e-05, and b = 28.01573320140291 with
+    # erfc(b) = exactly 0.0. So delta_closed does NOT refuse — it returns a plausible number with
+    # the whole second term silently discarded, worth 11.3% of the answer.
+    #
+    # THE CROSS-CHECK WAS STRUCTURALLY UNABLE TO SEE IT. Every one of the twelve rows above has a
+    # healthy erfc(b) (largest b is 11.5, at the (8.0, 0.5) row), so V-01 and V-02 swept the whole
+    # committed frontier without ever entering the band. Phase 22 verified `gaps_found` on exactly
+    # this: the shipped closed form returned 9.99999999999972e-06 here — 12.7357% high against the
+    # truth below, ZERO correct significant digits, under a docstring promising at least twelve.
+    # This row exists so that the two-oracle agreement DPSGD-03 rests on is swept where it broke.
+    #
+    # THE INPUTS' MEANING: sigma = 0.40 / T = 200 at the frozen delta, i.e. mu = sqrt(200)/0.40 =
+    # 35.35533905932738 (bit-exact), and eps = 775.7866600701457 — the epsilon the SHIPPED
+    # accountant returned for that point, which is why b lands past the cliff. It is the exact
+    # input `accountant.py`'s own comment cites as reachable on this project's frontier.
+    #
+    # PROVENANCE — THREE ROUTES, AGREEING, before the literal was committed:
+    #   1. 60-dps mpmath, the truth below. ONE-OFF shell invocation, output committed as data:
+    #        .venv/bin/python -c "
+    #        from mpmath import mp
+    #        mp.dps = 60
+    #        eps = mp.mpf(775.7866600701457); mu = mp.mpf(35.35533905932738)
+    #        a = (eps/mu - mu/2)/mp.sqrt(2); b = (eps/mu + mu/2)/mp.sqrt(2)
+    #        print(mp.nstr(mp.mpf(0.5)*mp.erfc(a) - mp.mpf(0.5)*mp.exp(eps)*mp.erfc(b), 25))"
+    #        # -> 8.870303048329795521072e-6
+    #      The inputs go through `mp.mpf(<python float>)`, NOT `mp.mpf("<decimal string>")`.
+    #      That is recorded because the two differ: measured, the string form gives
+    #      8.870303048329874498e-6, a relative 8.90e-15 away. Both round to the SAME 13-digit
+    #      literal below, so the artifact is unaffected — but a provenance that does not say which
+    #      form was used is not reproducible.
+    #   2. `delta_quadrature(775.7866600701457, 35.35533905932738)` — DIFFERENT MATHEMATICS
+    #      (Simpson on the (eps,delta)-DP definition, `exp` only, no erfc and no Phi), float64:
+    #      8.870303048231617e-06, a relative 1.107e-11 from route 1.
+    #   3. `delta_closed` through the erfc asymptotic route, float64: 8.870303048329635e-06, a
+    #      relative 1.814e-14 from route 1.
+    #   Route 2 is the one that licenses this literal: it shares no transcendental with route 3
+    #   beyond `exp`, so it cannot inherit the erfc cliff that produced the defect.
+    (775.7866600701457, 35.35533905932738, "8.870303048330e-6"),
 )
 
 # The ONE frontier row whose true delta is not representable in float64 (z = 39.975). Named as
@@ -90,6 +132,62 @@ EPSILON_GOLDEN = (
     (2.0, 200, 54.376639014985045),
     (1.0, 1, 4.377178095681209),
     (8.0, 64, 4.377178095681209),
+)
+
+# =============================================================================================
+# 2b. EPSILON_OVERFLOW_REGIME — (sigma, steps, epsilon) at T = 200 for the ONLY two sigmas whose
+#     solved epsilon walks past the `math.exp` overflow boundary (709.782712893384). Evaluated at
+#     the frozen delta — stated as prose and NOT re-spelled as a literal, exactly as the
+#     REJECTED_FORM_CROSSOVER block does; the consuming test resolves
+#     `scripts/mitigation_unit.py::DELTA` and passes it in, which keeps ONE delta in the repository.
+#
+#     WHY IT EXISTS: `test_epsilon_for_survives_the_overflow_regime` parametrized over these two
+#     sigmas — the two points where the dropped second term bit hardest — and asserted only that a
+#     finite number above 700.0 came back. The test that walked directly into the defect never
+#     compared its number to anything. These are the numbers it compares against now.
+#
+#     PROVENANCE: 60-dps mpmath + bisection to a 4096-wide bracket halved 400 times, ONE-OFF shell
+#     invocation, output committed as data:
+#       .venv/bin/python -c "
+#       from mpmath import mp
+#       mp.dps = 60
+#       def d(eps, mu):
+#           a = (eps/mu - mu/2)/mp.sqrt(2); b = (eps/mu + mu/2)/mp.sqrt(2)
+#           return mp.mpf(0.5)*mp.erfc(a) - mp.mpf(0.5)*mp.exp(eps)*mp.erfc(b)
+#       target = mp.mpf(1e-5)
+#       for mu64 in (35.35533905932738, 47.14045207910317):
+#           mu = mp.mpf(mu64); lo, hi = mp.mpf(0), mp.mpf(4096)
+#           for _ in range(400):
+#               mid = (lo+hi)/2
+#               if d(mid, mu) <= target: hi = mid
+#               else: lo = mid
+#           print(mp.nstr(hi, 25))"
+#     `mu` enters as `mp.mpf(<the float64 sqrt(steps)/sigma>)` and the target as `mp.mpf(1e-5)`,
+#     i.e. the exact binary64 values `epsilon_for` itself computes and compares — so the deviation
+#     measured against these truths is the implementation's own, with no input mismatch folded in.
+#     (Recorded honestly: an independent bisection run while planning this row obtained
+#     774.8427215876996890674888 and 1311.202790704405527755873 — a relative 6.6e-17 and 6.8e-17
+#     from the literals below, i.e. under half a float64 ulp. At 1e-12 the choice between them is
+#     four orders of magnitude below anything that can change a verdict; it is recorded rather than
+#     silently reconciled because the last digits of a 25-digit literal are at the noise floor and
+#     a reader should know it.)
+#
+#     WHAT THIS CONSTANT DOES **NOT** BUY, stated rather than overclaimed. It is a 60-dps
+#     evaluation of the SAME closed form the implementation uses, so it catches float64 error and
+#     asymptotic-truncation error and CANNOT catch a formula error — both sides would be wrong
+#     together. That is precisely why D-13 has GOLDEN_EPSILON bisected against the QUADRATURE
+#     oracle instead. Independence in THIS band is carried by the thirteenth DELTA_FRONTIER row's
+#     V-02 leg, which compares the two oracles at exactly this (eps, mu); the coverage exists, but
+#     it comes from that row and not from this constant.
+#
+#     THE SIZE OF WHAT IT NOW CATCHES: before this phase's fix the SHIPPED accountant returned
+#     775.7866600701457 and 1312.1599912046381 for these two rows — a relative 1.218e-03 and
+#     7.300e-04, in a module whose two published tolerances are both 1e-12. The error is EXACTLY
+#     ZERO at sigma >= 0.42, so these two rows are the whole reachable band.
+# =============================================================================================
+EPSILON_OVERFLOW_REGIME = (
+    (0.40, 200, "774.8427215876997401873883"),
+    (0.30, 200, "1311.202790704405616448176"),
 )
 
 # =============================================================================================
@@ -184,10 +282,18 @@ QUADRATURE_PARAMS = {
 #    as data so no test imports mpmath (RPT-03).
 # =============================================================================================
 
-# The oracle's worst relative error ANYWHERE it returns a value, across the whole 12-row frontier
-# (attained at eps=8, mu=0.5 — the row a fixed [-14, 14] range got wrong by 57 orders of
-# magnitude, 1.00e+00 relative). Everything worse than this is REFUSED rather than returned.
-WORST_RELATIVE_ERROR = 2.7e-12
+# The oracle's worst relative error ANYWHERE it returns a value, across the whole 13-row frontier.
+# RE-MEASURED when the thirteenth row landed, because that row moved it: the worst is now
+# **1.107e-11**, at (eps=775.7866600701457, mu=35.35533905932738), where the quadrature integrates
+# over a support starting at t_min = 39.62 and the accumulated Simpson round-off is the binding
+# term. The previous holder — eps=8, mu=0.5, the row a fixed [-14, 14] range got wrong by 57
+# orders of magnitude (1.00e+00 relative) — sits at 3.6e-13. Everything worse than this is REFUSED
+# rather than returned.
+#
+# This is the ORACLE's error, and it is deliberately NOT the budget V-02 compares the two oracles
+# at (1e-9, which the new row clears by 90x). A bound recorded over 12 rows and left standing over
+# 13 is exactly the stale-denominator failure this table exists to prevent.
+WORST_RELATIVE_ERROR = 1.2e-11
 
 # The pin tolerance for EPSILON_GOLDEN. Relative, never absolute: true delta spans 9.99e-1 down to
 # 1.05e-57, so any absolute tolerance passes trivially for every row below its own magnitude —

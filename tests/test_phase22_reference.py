@@ -56,9 +56,11 @@ def test_reference_table_is_populated():
     a second one ever is, the two-oracle cross-check has gone vacuous somewhere new and this must
     redden rather than shrug.
     """
-    assert len(DELTA_FRONTIER) == 12, (
-        f"DELTA_FRONTIER holds {len(DELTA_FRONTIER)} rows, not the 12-point frontier V-01 sweeps "
-        "— a table that lost rows makes the frontier test green over less than it claims"
+    assert len(DELTA_FRONTIER) == 13, (
+        f"DELTA_FRONTIER holds {len(DELTA_FRONTIER)} rows, not the 13-point frontier V-01 sweeps "
+        "— a table that lost rows makes the frontier test green over less than it claims. The "
+        "thirteenth is the b > 27.2 row (eps=775.7866600701457, mu=35.35533905932738), the band "
+        "where the closed form silently dropped its second term and no committed row looked"
     )
     assert len(EPSILON_GOLDEN) == 7, (
         f"EPSILON_GOLDEN holds {len(EPSILON_GOLDEN)} rows, not 7 — same failure mode as above, "

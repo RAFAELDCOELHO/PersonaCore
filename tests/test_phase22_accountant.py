@@ -24,7 +24,11 @@ import subprocess
 import sys
 
 import pytest
-from tests.fixtures.phase22_reference import DELTA_FRONTIER, VACUOUS_AGREEMENT_ROW
+from tests.fixtures.phase22_reference import (
+    DELTA_FRONTIER,
+    EPSILON_OVERFLOW_REGIME,
+    VACUOUS_AGREEMENT_ROW,
+)
 
 from personacore.privacy.accountant import (
     ROUND_TRIP_REL_TOL,
@@ -112,7 +116,7 @@ def test_closed_form_frontier(eps, mu, truth_str):
 
 
 def test_closed_form_frontier_parametrization_is_not_empty():
-    """Meta-guard: V-01 sweeps eleven rows, and it is really sweeping them.
+    """Meta-guard: V-01 sweeps twelve rows, and it is really sweeping them.
 
     A parametrization that silently emptied -- a renamed fixture constant, a truncated table, a
     locator that stopped matching -- makes V-01 green having compared nothing at all. Hard equality
@@ -120,8 +124,10 @@ def test_closed_form_frontier_parametrization_is_not_empty():
     representable" is satisfied by a table where a DIFFERENT row silently went to zero.
     """
     rows = _representable_rows()
-    assert len(rows) == 11, (
-        f"V-01 is parametrized over {len(rows)} rows, not the 11 representable frontier rows"
+    assert len(rows) == 12, (
+        f"V-01 is parametrized over {len(rows)} rows, not the 12 representable frontier rows — "
+        f"the twelfth is the b > 27.2 row (eps=775.7866600701457, mu=35.35533905932738), whose "
+        f"whole purpose is to put V-01 and V-02 inside the band they could not previously reach"
     )
     kept = {r[:2] for r in rows}
     excluded = [(eps, mu) for eps, mu, _ in DELTA_FRONTIER if (eps, mu) not in kept]
@@ -175,13 +181,13 @@ def _erfc_b(eps, mu):
     return (eps / mu + mu / 2.0) / math.sqrt(2.0)
 
 
-def _inert_points():
-    """Every ``(label, eps, mu)`` at which this module's answer is ALREADY PINNED.
+def _pinned_points():
+    """Every ``(label, eps, mu)`` this module answers on a committed or FROZEN row.
 
-    The eleven representable ``DELTA_FRONTIER`` rows, plus the seven FROZEN ``GOLDEN_EPSILON``
-    rows re-expressed as ``(pinned_epsilon, sqrt(steps)/sigma)`` — which is exactly the
-    ``(eps, mu)`` pair ``epsilon_for``'s bisection converges onto, and therefore the pair whose
-    ``b`` must keep routing through ``_log_erfc``'s fast path.
+    The representable ``DELTA_FRONTIER`` rows, plus the seven FROZEN ``GOLDEN_EPSILON`` rows
+    re-expressed as ``(pinned_epsilon, sqrt(steps)/sigma)`` — which is exactly the ``(eps, mu)``
+    pair ``epsilon_for``'s bisection converges onto, and therefore the pair whose ``b`` decides
+    which branch of ``_log_erfc`` answers it.
     """
     points = [(f"DELTA_FRONTIER({eps}, {mu})", eps, mu) for eps, mu, _ in _representable_rows()]
     points += [
@@ -189,6 +195,52 @@ def _inert_points():
         for sigma, steps, pinned in mitigation_accountant.GOLDEN_EPSILON
     ]
     return points
+
+
+def _inert_points():
+    """The pinned points whose ``b`` is OUTSIDE the erfc underflow band.
+
+    Located by ``math.erfc(b) > 0.0`` rather than by index or by name, so the set cannot rot if a
+    table is reordered — the same locator discipline ``_representable_rows`` uses. The one pinned
+    point this excludes is the thirteenth ``DELTA_FRONTIER`` row, which exists precisely BECAUSE
+    its ``b`` underflows, and which ``test_log_erfc_matches_the_committed_underflow_truth`` owns
+    instead. ``test_log_erfc_inert_points_are_not_empty`` pins both the count and that exclusion by
+    hard equality, so this filter cannot silently swallow a row it was never meant to.
+    """
+    return [point for point in _pinned_points() if math.erfc(_erfc_b(point[1], point[2])) > 0.0]
+
+
+def test_log_erfc_inert_points_are_not_empty():
+    """Meta-guard: the inertness sweep covers 18 pinned points, and excludes exactly the one row.
+
+    ``_inert_points`` filters on ``erfc(b) > 0.0``, so the per-point test below cannot ALSO assert
+    that condition without asserting a tautology. The non-vacuity therefore lives here, in this
+    file's own established shape (``test_closed_form_frontier_parametrization_is_not_empty``,
+    ``test_round_trip_pairs_is_not_empty``): a filter that silently emptied, or that swallowed a
+    pinned row along with the intended one, would leave the sweep green over less than it claims —
+    and what it claims is that a FROZEN pre-registration cannot move.
+
+    Eighteen: eleven previously-representable ``DELTA_FRONTIER`` rows plus seven ``GOLDEN_EPSILON``
+    rows. The exclusion is asserted by HARD EQUALITY rather than by count, because "one row is in
+    the band" is equally satisfied by a table where a DIFFERENT row drifted into it — which would
+    mean a pinned epsilon had started being answered by the asymptotic series without anything
+    reddening.
+    """
+    points = _inert_points()
+    assert len(points) == 18, (
+        f"the inertness sweep covers {len(points)} pinned points, not the 18 it claims (11 "
+        f"previously-representable DELTA_FRONTIER rows + 7 GOLDEN_EPSILON rows)"
+    )
+    kept = {label for label, _, _ in points}
+    excluded = [(label, eps, mu) for label, eps, mu in _pinned_points() if label not in kept]
+    assert [label for label, _, _ in excluded] == [
+        "DELTA_FRONTIER(775.7866600701457, 35.35533905932738)"
+    ], (
+        f"the pinned points inside the erfc underflow band are {[p[0] for p in excluded]}, not "
+        f"exactly the thirteenth DELTA_FRONTIER row. Any OTHER row landing in that band means a "
+        f"pinned answer is now produced by the asymptotic series instead of by math.log(erfc(b)) — "
+        f"and GOLDEN_EPSILON is FROZEN, so such a move would be unrecoverable"
+    )
 
 
 @pytest.mark.parametrize(("label", "eps", "mu"), _inert_points())
@@ -210,18 +262,13 @@ def test_log_erfc_is_inert_where_erfc_is_healthy(label, eps, mu):
     because the pinned rows sit at ``b`` between 3.19 and 7.94 where the asymptotic expansion is
     worth roughly three digits.
 
-    The ``erfc(b) > 0.0`` assertion is the META-GUARD, and it is not decoration: on a row whose
-    ``b`` had drifted into the underflow band both sides would take the SERIES branch, the
-    equality would compare the series against ``math.log(0.0)``'s own ``ValueError`` — or, worse,
-    against itself — and this test would pass while asserting nothing about inertness at all.
+    The non-vacuity half — that this sweep really covers 18 points and excludes exactly the one
+    row whose ``b`` underflows — lives in ``test_log_erfc_inert_points_are_not_empty``, because
+    ``_inert_points`` already filters on ``erfc(b) > 0.0`` and re-asserting it here would be a
+    tautology rather than a guard.
     """
     b = _erfc_b(eps, mu)
     healthy = math.erfc(b)
-    assert healthy > 0.0, (
-        f"{label}: b = {b!r} has erfc(b) = {healthy!r}, so this pinned row is INSIDE the underflow "
-        f"band and no longer exercises _log_erfc's fast path. The equality below would then be "
-        f"comparing the asymptotic series against itself and proving nothing about inertness"
-    )
     assert _log_erfc(b) == math.log(healthy), (
         f"{label}: _log_erfc({b!r}) = {_log_erfc(b)!r} is NOT BIT-IDENTICAL to "
         f"math.log(math.erfc(b)) = {math.log(healthy)!r}. The fast path is gone or reordered, so "
@@ -321,8 +368,13 @@ def test_two_oracles_agree(eps, mu, truth_str):
     nothing when both fail on the same underlying quantity, so the zero must be refused before the
     comparison is even reached, each with its own message.
 
-    Measured worst gap between the two oracles over these eleven rows: **2.84e-12 relative**, at
-    eps=2.0, mu=0.1 -- roughly 350x inside the 1e-9 budget.
+    Measured worst gap between the two oracles over these TWELVE rows: **1.105e-11 relative**, at
+    the thirteenth frontier row (eps=775.7866600701457, mu=35.35533905932738) -- roughly 90x
+    inside the 1e-9 budget. That row is the reason this figure moved: the previous worst was
+    2.84e-12 at eps=2.0, mu=0.1, over a sweep that never entered the ``b > 27.2`` band at all.
+    Where the shipped closed form silently dropped its second term there, this comparison read
+    **12.74% relative** -- the falsification that made Phase 22 verify ``gaps_found``. The budget
+    is NOT widened to accommodate it; 1e-9 stands, and the fix is what brought the gap inside it.
     """
     a = delta_quadrature(eps, mu)
     b = delta_closed(eps, mu)
@@ -487,21 +539,57 @@ def test_epsilon_for_matches_golden():
     )
 
 
-@pytest.mark.parametrize("sigma", [0.40, 0.30])
-def test_epsilon_for_survives_the_overflow_regime(sigma):
-    """RESEARCH F2 -- the search WALKS INTO eps > 709.78, and must come back with a number.
+@pytest.mark.parametrize(("sigma", "steps", "truth_str"), EPSILON_OVERFLOW_REGIME)
+def test_epsilon_for_survives_the_overflow_regime(sigma, steps, truth_str):
+    """RESEARCH F2 -- the search WALKS INTO eps > 709.78, and comes back with the RIGHT number.
 
-    Phase 23 would never PUBLISH eps = 776. But ``sigma_for`` bisects sigma downward and
+    Phase 23 would never PUBLISH eps = 775. But ``sigma_for`` bisects sigma downward and
     ``epsilon_for`` doubles its bracket upward, so both enter this domain during an ordinary
-    search: at the frozen delta, sigma = 0.40 / T = 200 solves to eps = 775.79 and sigma = 0.30 /
-    T = 200 to eps = 1312.16. The naive ``exp(eps) * erfc(b)`` second term raises
-    ``OverflowError`` there and would abort a legitimate solve; the log-space form does not.
+    search. The naive ``exp(eps) * erfc(b)`` second term raises ``OverflowError`` there and would
+    abort a legitimate solve; the log-space form does not.
+
+    WHY A LIVENESS ASSERTION WAS NOT ENOUGH, which is this test's own history rather than a
+    hypothetical. It shipped parametrized over exactly these two sigmas -- the ONLY two on the
+    whole frontier where the closed form's dropped second term bites -- and asserted nothing about
+    the value beyond ``math.isfinite(got)`` and ``got > 700.0``. Both held perfectly while
+    ``epsilon_for`` returned 775.7866600701457 against a truth of 774.8427215876997, a relative
+    **1.218e-03** in a module whose two published tolerances are both 1e-12. The test that walked
+    straight into the defect was structurally incapable of seeing it: a number wrong in the fourth
+    significant digit is still finite and still above 700. ``test_two_oracles_agree`` could not see
+    it either, because no committed frontier row lived in the band -- which is what the thirteenth
+    ``DELTA_FRONTIER`` row now fixes.
+
+    THE ``math.isfinite`` LEG IS KEPT rather than subsumed. It states the overflow-survival
+    property directly, and it is the assertion that fails with a readable message if a future edit
+    reintroduces the naive product: an ``OverflowError`` escaping from inside the bisection is a
+    different and less legible failure than a comparison against a committed truth.
+
+    THE TOLERANCE IS MEASURED. Deviation of the fixed ``epsilon_for`` from these committed 60-dps
+    truths on this box: **0.0e+00** at sigma=0.40 (the 60-dps root and the float64 root round to
+    one double) and **1.734e-16** at sigma=0.30. ``ROUND_TRIP_REL_TOL`` -- this module's existing
+    1e-12 register -- therefore carries at least twelve orders of margin here, and no
+    "these must differ" non-vacuity leg is asserted, because at sigma=0.40 a bitwise match is the
+    CORRECT outcome rather than a suspicious one: the 60-dps root sits 0.45 ulp from the float64
+    root, so landing on the same double is what a correct implementation does. The pin that must
+    NOT match bitwise is ``GOLDEN_EPSILON``, and its own test carries that control.
+
+    The truths are a 60-dps bisection of the SAME closed form, so they catch float64 and
+    truncation error and NOT a formula error -- see ``EPSILON_OVERFLOW_REGIME``'s provenance block,
+    which says so, and names the thirteenth frontier row's V-02 leg as where independence in this
+    band actually comes from.
     """
-    got = epsilon_for(sigma, 200, mitigation_unit.DELTA)
-    assert math.isfinite(got), f"epsilon_for({sigma}, 200, delta) returned {got!r}"
-    assert got > 700.0, (
-        f"epsilon_for({sigma}, 200, delta) = {got!r}, which is BELOW the overflow regime this "
-        f"test exists to walk through — RESEARCH F2 measures 775.79 and 1312.16 for these two"
+    got = epsilon_for(sigma, steps, mitigation_unit.DELTA)
+    assert math.isfinite(got), (
+        f"epsilon_for({sigma}, {steps}, delta) returned {got!r} — the search did not survive the "
+        f"eps > 709.782712893384 regime it walks through to reach this answer"
+    )
+    truth = float(truth_str)
+    rel = abs(got - truth) / truth
+    assert rel <= ROUND_TRIP_REL_TOL, (
+        f"epsilon_for({sigma}, {steps}, delta) = {got!r} against the committed 60-dps truth "
+        f"{truth_str} — relative {rel:.3e} over {ROUND_TRIP_REL_TOL:.3e}. The shipped accountant "
+        f"returned 775.7866600701457 and 1312.1599912046381 for these two rows (1.218e-03 and "
+        f"7.300e-04 relative) by discarding delta_closed's second term past the erfc cliff"
     )
 
 
