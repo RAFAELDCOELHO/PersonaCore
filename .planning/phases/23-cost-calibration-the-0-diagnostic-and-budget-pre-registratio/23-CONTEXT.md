@@ -96,15 +96,58 @@ Requirements: CAL-01, CAL-02, CAL-03, CAL-05, DPSGD-06, CTRL-03.
   machinery, not new risky capability. It closes WARNING-2 and gives DPSGD-05 a real production path
   that exercises it, instead of repeating IN-04's pattern (a seam built and never connected).
 
+### Resolved after research (2026-08-26) — the three forks the researcher routed to the user
+
+Opened by `23-RESEARCH.md` (commit `1da1d3f`), closed by the user before planning. Locked on the
+same footing as D-01…D-07.
+
+- **D-08: CTRL-03's never-taught arm is trained at the SAME N seeds (3–5) that D-03 uses for the
+  control noise floor** — one *scheduling*, N seeds, not one seed. `scripts/mitigation_gate.py:426-441`
+  is FROZEN and `_prove`s that the extraction floor's provenance names `arm == "never-taught"` and
+  **`>= 2` distinct seeds**; a one-seed floor is refused in Phase 25 and the gate cannot be relaxed.
+  Reading "trained once" as one scheduling satisfies `EXTRACTION_FLOOR_MIN_SEEDS = 2` by construction
+  at ~20 s/arm of training — negligible. This converts a known Phase-25 refusal into a decision
+  resolved now, in the cheapest phase that can resolve it.
+
+- **D-09: The SC3 guard gains the TRANSITIVE half** — an out-of-process `subprocess` probe, the same
+  pattern already proven in the accountant's guard (`tests/test_phase22_accountant.py:1350`), ~12
+  lines. It confirms that a real process run never loads `mitigation_budget` into memory, covering
+  the **gate → erasure_gate → budget** route that the static AST scan cannot reach because
+  `scripts/erasure_gate.py` sits **outside** the `mitigation_*.py` glob. SC3's claim of "structurally
+  unable to import" then rests on real execution evidence, not only on the half that already exists.
+  **The static half is NOT rewritten** — Phase 20 already shipped it at
+  `tests/test_phase20_prereg.py::test_mitigation_gate_import_graph_is_stdlib_and_erasure_gate_only`,
+  it already names `mitigation_budget` by string, and `scripts/mitigation_gate.py` is frozen
+  (committed `results/phase20_*` artifacts) — **nothing in Phase 23 may edit the gate.**
+
+- **D-10: The falsified "~1,010×" cost claim is corrected in THIS phase by retract-in-place** — a
+  dated additive continuation naming the measurement that falsified it, re-scoping the sentence
+  explicitly to the **non-DP arm**, original left standing and visible. Same pattern already used in
+  `scripts/teach_persona.py` in Phase 21. `.planning/REQUIREMENTS.md` (CAL preamble) and
+  `.planning/STATE.md:493` claim evaluation costs ~1,010× training; measured on MPS at production
+  shape that holds for the non-DP arm (20.4 s, 843×) and collapses on the DP path — **`dp_n8`
+  3.79 min / 75×, `dp_n64` 29.98 min / 9.5×** — because `scripts/teach_persona.py:1352` sets
+  `grad_accum_steps = n_facts` and `training/loop.py:685-699` adds `ceil(4 * n_facts / batch_size)`
+  replay micro-batches per optimizer step. Evaluation stays binding at every capacity, so **no locked
+  decision changes**; what changes is the *margin* — a 16-point n=64 sweep budgeted at `16 × 17 s` is
+  short by roughly **8 hours**. Phase 23 is where the real DP figure is measured, so the correction
+  lands in the same place and moment as the evidence supporting it. This satisfies CAL-01 directly.
+
 ### Claude's Discretion
 
 - Sweep width and the concrete Z values in `scripts/mitigation_budget.py` — these are outputs of
   CAL-01/CAL-05's measurements, not choices to be made in advance. The AST guard forbidding the gate
-  from importing the budget module (SC3) is an implementation shape for the planner.
+  from importing the budget module (SC3) is an implementation shape for the planner, now bounded by
+  D-09.
 - Checkpoint frequency for the resume path, and the exact form of the resume-aware
   `refuse_if_exists` branch.
-- How the never-taught fresh adapter (CTRL-03) is scheduled — the requirement fixes that it is
-  trained once at identical budget and seed protocol and consumed twice.
+- The exact N within D-03's 3–5 seed range. Per research Open Question 4, cost the **scoring** leg
+  per seed before choosing — training is ~20 s and does not bind. D-08 inherits whichever N is chosen.
+- Whether D-03's floor lives in `scripts/mitigation_budget.py` or in a separate literal-only file.
+  Research recommends **one file**: `mitigation_budget.py` is *protected but not frozen* today (it is
+  not a `prereg_artifact=`, a distinction `tests/test_phase20_prereg.py:96-110` calls deliberate),
+  which is exactly the middle ground D-03 needs. Do **not** register it as a `prereg_artifact=` —
+  that would freeze it and forbid the Z values from ever being written.
 
 </decisions>
 
