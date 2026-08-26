@@ -124,6 +124,26 @@ _MIN_TARGET_DELTA = 1e-300
 # case 1.07e-14. Same tolerance, unrelated denominators.)
 ROUND_TRIP_REL_TOL = 1e-12
 
+# How far ABOVE 1.0 `delta_quadrature`'s Simpson accumulation is permitted to land before the
+# result is refused instead of returned. `delta <= 1.0` is a THEOREM -- delta is a probability --
+# so anything above 1.0 is float64's rounding, not mathematics, and the only question is how much
+# of it is the accumulation's own resolution.
+#
+# 22-VERIFICATION.md proposed the LITERAL `if not (0.0 < delta <= 1.0): raise`. MEASURED, that form
+# is OVER-BROAD and would refuse correct answers: over 6000 draws at seed 20260826 (eps log-uniform
+# in [1e-8, 5.0], mu log-uniform in [0.01, 200.0]), 5351 cells were answered and **267 of them --
+# 4.99% -- returned a value strictly above 1.0, the largest being 1.000000000000051, an excess of
+# 5.107e-14 (230 ulp of 1.0)**. Those are not broken cells; they are true deltas within an ulp of
+# 1.0 (the eps -> 0 limit of every mechanism) wearing the Simpson sum's rounding. The worst excess
+# measured ANYWHERE, including a dense eps=1e-4 sweep of mu in [74, 78], is 6.550e-14.
+#
+# 1e-11 is 100x the seeded maximum rounded UP to a decade, which leaves **195.8x** margin over that
+# maximum and **152.7x** over the worst excess measured anywhere. A result outside it is an
+# overflowed accumulation and refuses loudly; a result inside it saturates at the mathematical
+# bound. That is what makes `delta_quadrature`'s "delta in (0, 1]" contract literally true rather
+# than approximately true.
+_DELTA_ACCUMULATION_SLACK = 1e-11
+
 
 def _log_erfc(x):
     """``log(erfc(x))``, carried through the point where ``math.erfc`` itself underflows to 0.0.
@@ -365,10 +385,33 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
         rel_tol: the relative truncation budget condition 2 proves the range met.
 
     Returns:
-        ``delta``, RE-MEASURED IN THIS SESSION over the TWELVE representable ``DELTA_FRONTIER``
-        rows against 60-dps ground truth. Worst relative error **1.109e-11, at
-        (eps=775.7866600701457, mu=35.35533905932738)** -- the thirteenth row, which MOVED this
-        bound by an order of magnitude when it landed (the previous holder, eps=2.0, mu=0.1 at
+        ``delta`` in ``(0, 1]``, AND THAT RANGE IS NOW ENFORCED RATHER THAN CLAIMED. Phase 22's
+        verification measured this function returning ``+inf`` (at eps=4.40884929509763e-4,
+        mu=75.3129260813192) and values above 1.0, for a quantity that is a probability. Both are
+        closed, and both closures were re-measured in this session:
+
+          - **NON-FINITE: 0.** Condition 1's negative-z clause budgets for the Simpson SUM
+            (``log(4*n)``) instead of for one ``math.exp`` term. Re-running the sweep that found
+            the defect -- eps=1e-4 over mu in [74.0, 78.0] at a step of 1e-3 -- gives **0 of 4001
+            cells** non-finite against the 404 it found before, and an independent 6000-draw
+            seeded sample (seed 20260826) likewise returns 0 non-finite over 5351 answered cells.
+          - **ABOVE 1.0: REFUSED OR SATURATED, never returned.** A result above
+            ``1.0 + _DELTA_ACCUMULATION_SLACK`` (1e-11) refuses as an overflowed accumulation; a
+            result inside that slack returns the mathematical bound 1.0. The slack is MEASURED,
+            not transcribed: 267 of those 5351 answered cells landed above 1.0, the largest by
+            5.107e-14 (230 ulp), so a literal ``delta <= 1.0`` refusal would have rejected 4.99%
+            of a legitimate sweep for a deviation smaller than the value's own last two hundred
+            bits.
+
+        A non-finite or above-slack result therefore RAISES rather than returning, and a returned
+        value satisfies ``0.0 < delta <= 1.0`` exactly.
+
+        THE ACCURACY CLAIM, RE-MEASURED TODAY over the TWELVE representable ``DELTA_FRONTIER``
+        rows against 60-dps ground truth: worst relative error **1.109e-11, at
+        (eps=775.7866600701457, mu=35.35533905932738)** -- unchanged by the two closures above,
+        because the largest delta any of those rows reaches is 0.99994 and none is near either
+        boundary. It is the thirteenth row, which MOVED this bound by an order of magnitude when
+        it landed (the previous holder, eps=2.0, mu=0.1 at
         1.0e-12, is now second). That row integrates over a support starting at t_min = 39.62 and
         the accumulated Simpson round-off is the binding term there; it is still 90x inside the
         1e-9 budget ``test_two_oracles_agree`` compares the two oracles at. The worst deviation on
@@ -376,19 +419,10 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
         instead gives relative error **1.00e+00**, returning a perfectly plausible ``0.0`` against
         a true ``1.048659178913e-57``.
 
-        THE ``+inf`` HALF OF THE RANGE IS NOW ENFORCED; THE UPPER HALF IS NOT YET. Phase 22's
-        verification measured this function returning ``+inf`` (at eps=4.40884929509763e-4,
-        mu=75.3129260813192) and values marginally above 1.0, for a quantity that is a probability.
-        The ``+inf`` half is closed: condition 1's negative-z clause now budgets for the Simpson
-        SUM (``log(4*n)``) rather than for one ``math.exp`` term, and re-running the measurement
-        that found it -- eps=1e-4 over mu in [74.0, 78.0] at a step of 1e-3 -- gives **0 of 4001
-        cells** non-finite against the 404 it found before. The UPPER half is still open: the only
-        magnitude refusal below is ``delta <= 0.0``, so a value marginally above 1.0 is still
-        returned. That remainder is recorded here rather than left implied by an unqualified
-        ``(0, 1]`` -- a contract this docstring cannot yet honestly assert.
-
     Raises:
-        ValueError: on a degenerate input or grid, or on any of the three non-vacuity conditions.
+        ValueError: on a degenerate input or grid, or on any of the three non-vacuity conditions
+            -- the third of which now covers the upper end (non-finite, or above 1.0 by more than
+            the measured accumulation slack) as well as the exact zero it originally owned.
     """
     # --- Input refusals, each separately messaged (D-15). mu <= 0.0 must precede eps/mu.
     if not math.isfinite(eps) or not math.isfinite(mu) or not math.isfinite(lam):
@@ -527,15 +561,38 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
     # exactly the regime delta does, so the relative test degenerates to `0.0 > 0.0` = False and
     # the guard is inert on the very failure it exists to catch (RESEARCH F1's table: z = 39.850
     # and z = 99.900 both slip through).
-    if delta <= 0.0:
+    #
+    # THE SAME CHECK OWNS THE UPPER END, because both ends are the same fact: what came back is not
+    # a probability. Below 1.0 the failure is cancellation to zero; above it, or at `inf`, the
+    # failure is the Simpson accumulation leaving float64 -- which condition 1 CANNOT see for an
+    # arbitrary grid, since it budgets the sum at the `n` it was handed and a float addition that
+    # overflows returns `inf` silently rather than raising.
+    if not math.isfinite(delta) or delta <= 0.0 or delta > 1.0 + _DELTA_ACCUMULATION_SLACK:
         raise ValueError(
-            f"delta_quadrature({eps!r}, {mu!r}) computed delta = {delta!r}, which is provably "
-            f"wrong: delta is STRICTLY positive for every finite eps and every mu > 0, because the "
-            f"Gaussian has full support and the integrand is positive on a set of positive "
-            f"measure. This condition is NOT implied by the truncation check above -- that one is "
-            f"RELATIVE, and a relative test degenerates to `0.0 > 0.0` = False in exactly the "
-            f"corner it exists to catch (here z = {z!r}, phi(z) still representable)."
+            f"delta_quadrature({eps!r}, {mu!r}) computed delta = {delta!r}, which is not a "
+            f"probability and is therefore provably wrong. delta is STRICTLY positive for every "
+            f"finite eps and every mu > 0, because the Gaussian has full support and the integrand "
+            f"is positive on a set of positive measure; and delta <= 1.0 is a THEOREM, not a "
+            f"tolerance. This condition is NOT implied by the truncation check above -- that one "
+            f"is RELATIVE, and a relative test degenerates to `0.0 > 0.0` = False in exactly the "
+            f"corner it exists to catch (measured band 38.372164249 < z < 38.6005, e.g. "
+            f"eps=1.92625 / mu=0.05; here z = {z!r}, phi(z) still representable). A NON-FINITE "
+            f"result, or one above 1.0 by more than the measured float64 accumulation slack "
+            f"{_DELTA_ACCUMULATION_SLACK!r}, means the Simpson SUM overflowed -- which the "
+            f"single-term conditioning check above cannot see, because it bounds the sum at the "
+            f"`n` it was given while a float addition that leaves float64 returns `inf` silently."
         )
+
+    # SATURATION, and this is NOT papering over an error. `delta <= 1.0` is a THEOREM (delta is a
+    # probability), the excess above it is bounded by a MEASURED float64 accumulation artifact --
+    # worst 5.107e-14 over 5351 answered cells at seed 20260826, 6.550e-14 anywhere measured -- and
+    # anything outside `_DELTA_ACCUMULATION_SLACK` has already refused loudly above. Returning
+    # 1.0000000000000655 for a probability would make the `Returns:` contract false; returning the
+    # mathematical bound makes it true. The verification's literal `not (0.0 < delta <= 1.0): raise`
+    # would instead have REFUSED all 267 of those cells -- 4.99% of a legitimate sweep -- for a
+    # deviation smaller than the value's own last two hundred bits.
+    if delta > 1.0:
+        return 1.0
     return delta
 
 

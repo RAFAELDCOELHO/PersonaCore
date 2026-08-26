@@ -520,6 +520,69 @@ def test_quadrature_budgets_the_simpson_sum_not_one_term():
     )
 
 
+def test_quadrature_returns_a_probability_or_refuses():
+    """V-05's upper half — the oracle returns a value in ``(0, 1]`` or it raises. Never between.
+
+    ``delta_quadrature`` is the INDEPENDENT ORACLE the whole DPSGD-03 correctness argument rests
+    on, and an oracle that can return ``inf`` or 1.0000000000000655 for a PROBABILITY is not one
+    that can be compared to anything. The shipped magnitude refusal was one-sided
+    (``if delta <= 0.0``), so the upper end was unguarded entirely.
+
+    THE BOUNDARY IS MEASURED, NOT TRANSCRIBED, and that distinction is the point of this test.
+    ``22-VERIFICATION.md`` proposed the literal ``if not (0.0 < delta <= 1.0): raise``. Measured
+    over 6000 draws at seed 20260826 (eps log-uniform in [1e-8, 5.0], mu log-uniform in
+    [0.01, 200.0]), that form would have REFUSED **267 of 5351 answered cells — 4.99%** — whose
+    true delta is within an ulp of 1.0 (the eps -> 0 limit of every mechanism), the largest excess
+    being 5.107e-14, i.e. 230 ulp. ``delta_closed`` never exceeds 1.0; only the Simpson
+    accumulation does, and only by float64 rounding. So the shipped refusal fires above
+    ``1.0 + _DELTA_ACCUMULATION_SLACK`` (1e-11, 195.8x the seeded maximum and 152.7x the worst
+    excess measured anywhere) and saturates at the mathematical bound below it.
+
+    THE META-GUARDS ARE WHAT KEEP THIS FROM BEING DECORATIVE. A sweep that refused everything, or
+    that never reached the boundary at all, would pass a bare ``0 < d <= 1`` loop trivially. So
+    the answered and refused counts are BOTH pinned non-empty, and — the one that actually
+    matters — so is the SATURATION count: if no cell in this sample lands above 1.0 before
+    saturation, reverting the check to the shipped one-sided ``delta <= 0.0`` would leave this
+    test green and it would be watching nothing. Measured on this sample: 212 answered, 28
+    refused, **14 saturated**, in 0.60 s.
+    """
+    rng = random.Random(20260826)
+    cells = []
+    for _ in range(240):
+        eps = math.exp(rng.uniform(math.log(1e-8), math.log(5.0)))
+        mu = math.exp(rng.uniform(math.log(0.01), math.log(200.0)))
+        cells.append((eps, mu))
+
+    answered = refused = saturated = 0
+    for eps, mu in cells:
+        try:
+            delta = delta_quadrature(eps, mu)
+        except ValueError:
+            refused += 1
+            continue
+        answered += 1
+        assert math.isfinite(delta), (
+            f"delta_quadrature({eps!r}, {mu!r}) returned {delta!r} — a non-finite probability. The "
+            f"Simpson accumulation left float64 and condition 1 did not see it."
+        )
+        assert 0.0 < delta <= 1.0, (
+            f"delta_quadrature({eps!r}, {mu!r}) returned {delta!r}, which is not in (0, 1]. delta "
+            f"is a probability and delta <= 1.0 is a THEOREM, not a tolerance."
+        )
+        if delta == 1.0:
+            saturated += 1
+
+    assert answered >= 1 and refused >= 1, (
+        f"the sweep answered {answered} and refused {refused} of {len(cells)} cells — a sweep that "
+        f"does one or the other exclusively passes the (0, 1] loop above vacuously"
+    )
+    assert saturated >= 1, (
+        f"no cell in this {len(cells)}-cell sample reached the saturation branch (measured: 14). "
+        f"Without one, reverting the magnitude check to the shipped one-sided `delta <= 0.0` "
+        f"would leave this test GREEN — it would be watching nothing. Widen the sample."
+    )
+
+
 @pytest.mark.parametrize("n", [20000, 4, 2, 1, 0])
 def test_quadrature_rejects_bad_grid(n):
     """An even node count or fewer than three nodes is a ``ValueError``, never a silent bad rule.
