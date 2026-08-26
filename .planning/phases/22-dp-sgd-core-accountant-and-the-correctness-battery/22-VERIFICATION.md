@@ -1,103 +1,127 @@
 ---
 phase: 22-dp-sgd-core-accountant-and-the-correctness-battery
-verified: 2026-08-26T03:08:10Z
+verified: 2026-08-26T13:46:14Z
 status: gaps_found
 score: 4/5 must-haves verified
 overrides_applied: 0
 re_verification:
-  previous_status: none
-  previous_score: n/a
+  previous_status: gaps_found
+  previous_score: 4/5 must-haves verified
+  gaps_closed:
+    - "missing item 1 — `_log_erfc` carries the second term through the erfc underflow. VERIFIED: `delta_closed(775.7866600701457, 35.35533905932738)` = 8.870303048329635e-06 (was 9.99999999999972e-06, 12.7357% high); two-oracle gap 1.105e-11 against the un-widened 1e-9 budget."
+    - "missing item 2 — `mu` finiteness in `epsilon_for`. VERIFIED: `epsilon_for(5e-308, 200, 1e-5)` = `inf` (was `0.0`); sigma=0.0 and the next representable float now AGREE at `inf`, so the discontinuity is removed rather than relocated. Mutation M2 (delete the check) reddens 4 tests."
+    - "missing item 3 — `delta_quadrature` upper bound + Simpson `log(4*n)` headroom. VERIFIED: the 4001-cell band rescan (eps=1e-4, mu in [74,78]) returns 0 non-finite and 0 outside (0,1] where 404 `inf` cells stood. Mutation M1 (revert the headroom) reddens `test_quadrature_budgets_the_simpson_sum_not_one_term`."
+    - "missing item 4 — a DELTA_FRONTIER row in the `b > 27.2` band. VERIFIED: the 13th row (775.7866600701457, 35.35533905932738) ships and its V-02 leg measures 1.105e-11 against a 1e-9 budget."
+    - "missing item 5 — a committed truth replacing `> 700.0`. VERIFIED: `EPSILON_OVERFLOW_REGIME` ships two 60-dps epsilons; mutation M3 (truncate the series to one term) reddens 5 tests including both overflow-regime rows."
+    - "WARNING-1 — `loop.py` now REFUSES `dp_fn is None` with `dp_noise_rng` PRESENT (loop.py:766), which is the direction the prior report named as worse in KIND. The opposite direction stays tolerated on a measured argument that names the two committed guards it would redden."
+  gaps_remaining:
+    - "SC3 / DPSGD-03's two-oracle agreement is STILL falsified — in the `erfc(b)` SUBNORMAL band immediately adjacent to the band 22-12 closed. Same conjunct, same mechanism, one band over."
+  regressions: []
 gaps:
   - truth: "The (eps, delta) accountant is stdlib `math` only, exact under q=1 composition, and agrees with two oracles of DIFFERENT mathematics (SC3 / DPSGD-03)"
     status: partial
     reason: >-
-      Two of three conjuncts hold. The third — the two-oracle agreement that IS this
-      requirement's entire mechanism of proof — is FALSIFIED in a band the module's own
-      docstring names as reachable on this project's frontier. `delta_closed` and
-      `delta_quadrature` disagree by up to 12.74% relative in delta, and the second oracle
-      itself returns `+inf` and values above 1.0 for a quantity that is a probability. The
-      agreement test only sweeps the 12 committed DELTA_FRONTIER rows, none of which is in
-      the failing band, so the cross-check is structurally incapable of firing there.
-      Measured, not argued — every figure below is from `.venv/bin/python` in this tree.
+      Two of three conjuncts hold, unchanged. The third — the two-oracle agreement that IS this
+      requirement's entire mechanism of proof — is STILL falsified by measurement, at a point on
+      this project's own frozen frontier (T=200, delta=1e-5). 22-12 closed the band where
+      `math.erfc(b)` underflows to exactly 0.0. It did not close the band DIRECTLY BELOW it, where
+      `math.erfc(b)` returns a SUBNORMAL and has lost up to 52 of its 53 mantissa bits.
+      `_log_erfc`'s fast path is guarded on `erfc(x) > 0.0`, so that whole band takes
+      `math.log(math.erfc(x))` — bit-for-bit the arithmetic that already shipped — while the
+      asymptotic series sitting nine lines below in the same function is 8.5e11x more accurate
+      there and is never reached. Measured, not argued; every figure below is from
+      `.venv/bin/python` in this tree, adjudicated at 80 dps.
     artifacts:
-      - path: "src/personacore/privacy/accountant.py:186"
+      - path: "src/personacore/privacy/accountant.py:196-198"
         issue: >-
-          `second = 0.0 if eb == 0.0 else 0.5 * math.exp(eps + math.log(eb))` treats an
-          `erfc` UNDERFLOW as a negligible term. At (eps=775.7866600701457, mu=35.35533905932738)
-          — i.e. sigma=0.40 / T=200 / delta=1e-5, the EXACT input the comment three lines above
-          cites as reachable — `math.erfc(b)` is 0.0 while `exp(eps)` is ~8.3e336, so the true
-          second term is 1.1296969516700846e-06 against a first term of 9.99999999999972e-06.
-          Shipped `delta_closed` returns 9.99999999999972e-06; the correct value is
-          8.870303048329635e-06 (verified independently three ways: `delta_quadrature` returns
-          8.870303048231617e-06, an asymptotic log-erfc expansion agrees to 1.1e-11, and the
-          reviewer's 60-dps mpmath agrees). Shipped value is 12.74% HIGH. The function's own
-          docstring promises "at least 12 significant digits ... everywhere this function does
-          not refuse"; it delivers zero correct digits and does not refuse. 19 of 72 (sigma, T)
-          cells on a delta=1e-5 grid show two-oracle disagreement above 1e-9; worst 11.36%.
-          Direction is CONSERVATIVE (delta over-stated => epsilon over-stated), so no published
-          number is optimistic. Induced epsilon error is 1.218e-03 relative at sigma=0.40/T=200
-          (775.786660 shipped vs 774.842722 corrected) and EXACTLY ZERO at sigma >= 0.42.
-      - path: "src/personacore/privacy/accountant.py:311-318, 373-391"
+          `e = math.erfc(x); if e > 0.0: return math.log(e)` routes the ENTIRE erfc-subnormal band
+          x in [26.54325845425098, 27.2) to the fast path. `math.erfc` first returns a subnormal at
+          x = 26.54325845425098 and first returns exactly 0.0 at x = 27.2, so the band is 0.657
+          wide in x and 100% of it is answered by `math.log` of a float that has already lost its
+          low bits. WORST ABSOLUTE ERROR in the returned log across the band: **0.2094**, at
+          x = 27.196716292271255. The docstring's own conversion rule ("an absolute error d in the
+          log is a relative error d in exp(eps + log)") makes that a **23.3% relative error in
+          `delta_closed`'s second term**. The asymptotic series in the same function, measured over
+          the identical band, is worst 2.458e-13 — **852,064,491,825x more accurate than the branch
+          actually taken**. The docstring states the fast path's inertness is "THE LOAD-BEARING
+          PROPERTY OF THIS FUNCTION"; measured, that inertness is exactly what preserves the
+          pre-existing error here, because `delta_closed`'s pre-fix `else` branch computed the same
+          thing.
+      - path: "src/personacore/privacy/accountant.py:313"
         issue: >-
-          `delta_quadrature` — the INDEPENDENT ORACLE that DPSGD-03's whole argument rests on —
-          returns non-probabilities without refusing. Reproduced: `delta_quadrature(0.000440884929509763,
-          75.3129260813192)` returns `inf`; scanning mu in [74.0, 78.0] at eps=1e-4 gives 426
-          cells that are `inf` or above 1.0, first `inf` at mu=74.952. Condition 1 bounds a
-          SINGLE `math.exp` argument while the Simpson loop sums 20001 terms with weights up to
-          4, so it fires ~0.19 too late in z — and its own message already names this case
-          ("the separated integral overflows (z < 0)"). Separately, 60 of 4000 sampled cells
-          return delta slightly above 1.0 (max 1.000000000000009); there is no upper-bound
-          refusal, only `if delta <= 0.0`. `delta_closed` never exceeds 1.0. NOTE: the
-          orchestrator's brief reported the `inf` band as unreproducible — it reproduces.
-      - path: "src/personacore/privacy/accountant.py:479-611"
+          REACHABLE ON THIS PROJECT'S OWN FRONTIER, at the frozen delta. At T=200, delta=1e-5, the
+          solution's `b` crosses the subnormal band for sigma in **[0.4135, 0.4185]** — 0.03 below
+          the sigma=0.40 point 22-12 fixed. Worst case sigma=0.414: `delta_closed` returns
+          1.0000000000000345e-05 against an 80-dps truth of 9.9808100769648472627e-06 — a
+          **1.9227e-03 relative error, ~2.7 correct significant digits**, and it does not refuse.
+          `delta_quadrature` returns 9.980810076863458e-06, correct to 1.016e-11. The **TWO-ORACLE
+          RELATIVE GAP IS 1.919e-03 against `test_two_oracles_agree`'s 1e-9 budget — 1,919,000x
+          over.** Induced epsilon error 2.0125e-05 relative (shipped 728.2043182233367 against a
+          60-dps 728.1896631303156). NOT A REGRESSION: `delta_closed` at these points is
+          BIT-IDENTICAL to the pre-22-12 code (verified by re-running the old `eb == 0.0` guard
+          form), so this is a pre-existing sibling defect the fix did not reach.
+      - path: "src/personacore/privacy/accountant.py:148-225"
         issue: >-
-          `epsilon_for(5e-308, 200, 1e-5)` returns `0.0` — PERFECT PRIVACY for essentially zero
-          noise. `mu = math.sqrt(steps) / sigma` overflows to `inf` (no finiteness check on the
-          QUOTIENT), `_delta_or_below_float64`'s bare `except ValueError` swallows `delta_closed`'s
-          GARBAGE-INPUT refusal, and the caller reads `None` as "delta is below float64's range,
-          therefore below the target". `_delta_or_below_float64`'s own docstring asserts this is
-          impossible ("`mu` is a finite strictly-positive number the caller computed"); nothing
-          establishes that premise. Band measured: 320 (T, sigma) cells, widest sigma at T=200 is
-          4.450147717014403e-308. This is the PRIVACY-UNDERSTATING direction, and it creates a
-          discontinuity at exactly D-12's boundary: sigma=0.0 returns `inf`, the next
-          representable float returns `0.0`. Not reachable from `sigma_for` (which refuses first)
-          nor from any plausible CLI input, which is why this is scoped below CR-03.
-      - path: "tests/test_phase22_accountant.py:364-379"
+          THE DIRECTION IS NOT CONSERVATIVE, and that is a change in KIND from the defect this
+          phase already closed. The original error dropped a strictly positive term, so delta and
+          therefore epsilon were always OVER-stated. A subnormal's lost bits round both ways.
+          MEASURED at T=200/delta=1e-5, the shipped epsilon is BELOW the 60-dps truth — the
+          privacy-UNDERSTATING direction — at sigma = 0.4150 (-3.512e-04 absolute, 4.844e-07
+          relative), 0.4165 (-4.343e-06), 0.4170 (-7.634e-07) and 0.4175 (-6.830e-08). Small, but
+          it is the direction that claims more privacy than the mechanism delivers, and the prior
+          report's "no published number is optimistic" no longer covers this band.
+      - path: "src/personacore/privacy/accountant.py:125"
         issue: >-
-          `test_epsilon_for_survives_the_overflow_regime` parametrizes over sigma in {0.40, 0.30}
-          — the two points where the dropped term bites — and asserts ONLY `math.isfinite(got)`
-          and `got > 700.0`. The test that visits the defect never compares the number to
-          anything. `test_two_oracles_agree` cannot see it either: every DELTA_FRONTIER row has
-          a healthy `erfc(b)` (max b is 11.5, at the (8.0, 0.5) row).
-      - path: ".planning/phases/22-dp-sgd-core-accountant-and-the-correctness-battery/22-03-PLAN.md"
+          `ROUND_TRIP_REL_TOL = 1e-12` is violated by **2.07e+07x** inside the same band. The
+          module's own documented direction, `sigma_for(epsilon_for(sigma, T, delta), T, delta)`
+          against `sigma` at T=200/delta=1e-5, deviates by 2.0703e-05 at sigma=0.414 (returns
+          0.4139914289872259), 4.041e-06 at 0.4145, 5.615e-07 at 0.4150 and 1.054e-11 at 0.4185.
+          The docstring says "measured worst deviation over 48 (sigma, T) pairs is 8.29e-15".
+          `_round_trip_pairs()` sweeps the seven `GOLDEN_EPSILON` sigmas plus {0.5, 0.7, 1.5, 3.0,
+          50.0}; its SMALLEST sigma is 0.5, so the guard cannot reach the band either.
+      - path: "tests/test_phase22_accountant.py:201-211, 361-393"
         issue: >-
-          The plan's own frontmatter must_have is defeated at the input it names: "RESEARCH F2:
-          the closed form uses `exp(eps + log(erfc(b)))`, never `exp(eps) * erfc(b)` — the naive
-          form raises OverflowError at eps > 709.78, reachable during a legitimate inverse solve
-          at sigma=0.40/T=200". At sigma=0.40/T=200 the `else` branch never executes, because
-          `eb == 0.0`. The overflow fix is present in FORM and inert in SUBSTANCE at exactly the
-          cited point.
+          THE SUITE IS STRUCTURALLY BLIND TO THE BAND, exactly as it was to the previous one.
+          Measured over all 22 pinned points (13 `DELTA_FRONTIER` + 7 `GOLDEN_EPSILON` + 2
+          `EPSILON_OVERFLOW_REGIME`): **ZERO have a subnormal `erfc(b)`.** Twenty are at b <= 14.2
+          with a normal erfc; two are past 27.2 in the series band. `_inert_points()` filters on
+          `math.erfc(b) > 0.0` and therefore CLASSIFIES THE ENTIRE DEFECTIVE BAND AS "HEALTHY" —
+          the filter encodes the defect. PROVEN BY EXECUTION, not inferred: patching `_log_erfc` to
+          `return -12345.0` for every input whose `erfc` is subnormal leaves the FULL SUITE at
+          **`1314 passed, 1 skipped`**, byte-identical to the unmutated baseline.
+      - path: "tests/fixtures/phase22_reference.py:186"
+        issue: >-
+          A FALSE FIGURE INHERITED FROM MY OWN PRIOR REPORT, now committed twice. "The error is
+          EXACTLY ZERO at sigma >= 0.42, so these two rows are the whole reachable band" (repeated
+          in `.planning/REQUIREMENTS.md:350` as "EXACTLY ZERO at σ ≥ 0.42"). That measured the
+          FIX's delta — pre-fix versus post-fix SHIPPED values, which are genuinely bit-identical
+          for sigma >= 0.4125 — and not the error against truth. Measured against 60 dps, the error
+          at sigma >= 0.42 is 1.100e-13 at 0.4200 and 9.631e-12 at 0.4185, and the two rows are NOT
+          the whole reachable band: [0.4135, 0.4185] is reachable and uncovered. The gap-closure
+          plans transcribed the figure faithfully; the error is mine and is corrected here.
     missing:
-      - "A `_log_erfc(x)` helper that stays in log space through the erfc underflow (asymptotic series for large positive x), so `second` is never silently dropped"
-      - "A finiteness check on `mu` in `epsilon_for` after `mu = math.sqrt(steps) / sigma`, refusing rather than falling through to `_delta_or_below_float64`"
-      - "An upper-bound refusal in `delta_quadrature`: `if not (0.0 < delta <= 1.0): raise ValueError(...)`, plus a condition-1 headroom budget for the Simpson SUM (log(4*n)) rather than for one `exp` term"
-      - "At least one DELTA_FRONTIER row in the `b > 27.2` band with a healthy `a` (e.g. eps=775.786660, mu=35.3553) so `test_two_oracles_agree` covers it"
-      - "A committed truth for `test_epsilon_for_survives_the_overflow_regime` to compare against, replacing the `> 700.0` liveness assertion"
+      - "Route the erfc-SUBNORMAL band to the asymptotic series: change `_log_erfc`'s fast-path guard from `if e > 0.0` to `if e >= 2.2250738585072014e-308` (float64's smallest normal). MEASURED IN THIS TREE: under that one-line change all 7 GOLDEN_EPSILON are `float.hex()`-BIT-IDENTICAL, the 193 accountant+reference tests pass, and the worst point's two-oracle gap falls from 1.919e-03 to 1.014e-11 — inside the un-widened 1e-9 budget."
+      - "A DELTA_FRONTIER row whose `b` is SUBNORMAL (e.g. eps=728.2043182233367, mu=sqrt(200)/0.414, b=27.15112, erfc(b)=1.43e-322) with a 60-dps truth, so `test_two_oracles_agree` sweeps the band instead of stepping over it. Today 0 of 22 pinned points enter it."
+      - "Retarget `_inert_points()` and `test_log_erfc_inert_points_are_not_empty` from `math.erfc(b) > 0.0` to the smallest-normal threshold. The current filter calls the defective band 'healthy', so it would keep the new row out of the inertness sweep for the wrong reason."
+      - "At least one `_round_trip_pairs()` sigma inside [0.4135, 0.4185] at T=200, so `ROUND_TRIP_REL_TOL` is a bound over a band that includes its own worst case rather than over 48 points that avoid it."
+      - "Correct `tests/fixtures/phase22_reference.py:186` and `.planning/REQUIREMENTS.md:350`: 'EXACTLY ZERO at sigma >= 0.42' is false as written. It is the FIX's delta that is zero there, not the error."
 deferred: []
+human_verification: []
 ---
 
-# Phase 22: DP-SGD Core, Accountant, and the Correctness Battery — Verification Report
+# Phase 22: DP-SGD Core, Accountant, and the Correctness Battery — Re-Verification Report
 
 **Phase Goal:** A from-scratch DP-SGD that is provably not the cheap fake — built and proven
 entirely on CPU before a single second of M3 time is spent.
-**Verified:** 2026-08-26T03:08:10Z
+**Verified:** 2026-08-26T13:46:14Z
 **Status:** gaps_found
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after gap closure (plans 22-12 … 22-16)
 
-**Verdict in one line:** the DP-SGD **mechanism** is genuinely proven not to be the cheap fake —
-SC1, SC2, SC4 and SC5 all hold under adversarial reading. The **accountant** does not meet SC3:
-its two-oracle agreement, which is the entire mechanism by which DPSGD-03 claims correctness,
-is falsified by measurement in a band the module's own docstring names as reachable.
+**Verdict in one line:** all five `missing:` items are genuinely closed and I verified each one by
+independent measurement — but **SC3 is still FAILED, on the same conjunct, by the same mechanism,
+one band over.** 22-12 fixed the band where `math.erfc(b)` underflows to exactly `0.0`. The band
+directly below it, where `math.erfc(b)` returns a **subnormal**, is untouched, reachable at this
+project's own frozen δ, and the full suite stays green with garbage injected across it.
 
 ---
 
@@ -107,13 +131,85 @@ is falsified by measurement in a band the module's own docstring names as reacha
 
 | # | Truth (ROADMAP Success Criterion) | Status | Evidence |
 |---|-----------------------------------|--------|----------|
-| 1 | Per-example clipping + Gaussian noise on the **LoRA gradients only**, base frozen, entering `train()` through a NEW ADDITIVE gradient-side seam (DPSGD-01) | ✓ VERIFIED | `dpsgd.py::absorb_record` clips per RECORD over a GLOBAL L2 across all trainable LoRA tensors (`_global_norm` stacks per-tensor norms — the norm of the concatenation), adds into a SUM accumulator, and DRAINS `.grad`. `_noised_private` draws from the dedicated generator at `std=self.sigma*self.C`, adds to the SUM, `/accum` LAST. `_write_once` = one write per parameter with two aliasing refusals. `__init__` is a nine-refusal pre-pass including a `requires_grad` audit by `"lora_" in name` and a closed-form census `r*n_layer*18*n_embd` derived from the LIVE model. `loop.py::_optimizer_step(..., dp_fn=None)` is a new trailing parameter; `clip_grad_norm_` has exactly ONE call site, inside `if dp_fn is None:` (loop.py:220-221). Production caller exists: `scripts/teach_persona.py::train_arm` constructs `DPSGD` after `mark_only_lora_trainable` + `model.to(device)` and passes `dp_fn=` plus `fact_bin`/`n_facts`/`replay_*`. |
-| 2 | With the seam off, the default path is **BIT-IDENTICAL** to the Phase-10 golden-trajectory fixture (DPSGD-02) | ✓ VERIFIED | `test_seam_off_bit_identical` **RAN, not skipped**, on this box (Darwin/arm64/torch 2.7.1 == `_CAPTURE_PLATFORM`) and passed on all three fingerprints: exact CSV text, `repr` of the final loss (`9.435891151428223`), sha256 of the parameter bytes (`647f5981…`). `tests/fixtures/golden_trajectory_v1.json` is the genuine Phase-10 artifact (file dated 31 Jul, `captured_at_sha 6a46441c…`, and **not** in Phase 22's changed-file set). `_run_recipe` is IMPORTED from `tests/test_loop_penalty_fn.py`, so no second recipe can drift. `test_golden_fixture_is_the_phase10_one` is a live meta-guard against a truncated fixture. `test_seam_omitted_equals_seam_none` carries the guarantee platform-independently. |
-| 3 | The (ε, δ) accountant is stdlib `math` only, exact under q=1 composition, and **agrees with two oracles of DIFFERENT mathematics** (DPSGD-03) | ✗ **FAILED** | (a) stdlib-only: VERIFIED (`import math` is the only import; `test_accountant_imports_math_only` asserts it over the AST). (b) exact under q=1 composition: VERIFIED (`test_composition_identity`, 28 (σ,T) pairs, rel ≤ 1e-12, with `test_composition_identity_would_fail_under_exact_equality` as a live non-vacuity control). (c) **two-oracle agreement: FALSIFIED.** See the three measured defects below. |
-| 4 | Each known silent-non-privacy failure is caught with its positive control **WATCHED FAILING FIRST** (DPSGD-04) | ✓ VERIFIED | All four probes in `tests/test_phase22_fakes.py` mutate the **REAL committed** `dpsgd.py` source (`_mutate` asserts the target appears exactly once and that the replacement applied), feed it to the **LIVE guard functions CI runs** by repointing `ast_guards._DPSGD_PATH`, and each carries an UNMUTATED CONTROL through the identical harness. Read directly: FAKE 1 (drain deleted) → `test_dpsgd_step_reaches_no_forbidden_call[absorb_record]` + `[dp-invariant:drain]`, and the probe MEASURES the consequence (sensitivity 1.734481×C vs 1.000000×C honest); FAKE 2 (second clip constant) → `test_dpsgd_has_exactly_one_clip_constant` + `[dp-invariant:sensitivity]`; FAKE 3 (`/N` hoisted) → `test_dpsgd_draws_the_noise_before_it_divides` + the σ>0/N>1 magnitude guard; FAKE 4 (`manual_seed` in `finalize`) → two AST guards + `[dp-invariant:generator]` on step 2, with the consequence measured (`torch.equal` over all 331,776 elements on two steps). Ledger locks (`test_every_fake_has_at_least_two_independent_detectors`, `test_watched_red_node_ids_resolve`, `test_fakes_ledger_names_its_blind_spots`) make the SUMMARY's claims auditable rather than trusted. See WARNING-1 for the residual on the RNG-reuse *class*. |
-| 5 | `checkpoint.py` carries an MPS RNG slot with backward-compatible load; kill→resume reproduces a **BIT-IDENTICAL reported ε**; `LoRALinear` not restructured; `persona_adapter.pt` + every v3.0 checkpoint still load (DPSGD-05, DPSGD-07) | ✓ VERIFIED | `checkpoint.py:148` saves `rng["mps"]` `None`-when-unavailable beside `cuda`; `:199` loads via `rng.get("mps")` while `rng["cuda"]` keeps its subscript — the asymmetry is correct and load-bearing. `CKPT_SCHEMA_VERSION` unchanged. All 12 `test_phase22_checkpoint.py` cases **PASSED with zero skips on this box**, including the three real on-disk artifacts (`persona_adapter.pt`, `phase14_real_latest.pt`, `model_slim.pt`). `test_resume_epsilon_bit_identical[1.0]` and `[0.0]` both pass: the resume goes through `train(resume_from=…)`, T is read from the COUNT of composed `finalize` calls (not the checkpoint's `step` field), the ε equality is exact `==`, the σ>0 leg carries a non-degeneracy control, AND the RNG half is separately asserted (`torch.equal` on the next draw) with a negative control that strips `dp_noise_rng`. DPSGD-07: `git diff --exit-code -- src/personacore/lora/` exits 0 and the directory's last commit predates Phase 22 entirely. |
+| 1 | Per-example clipping + Gaussian noise on the **LoRA gradients only**, base frozen, entering `train()` through a NEW ADDITIVE gradient-side seam (DPSGD-01) | ✓ VERIFIED (regression check) | Unchanged from the initial verification. `tests/test_phase22_dpsgd.py`, `_dpsgd_ast.py`, `_wiring.py`, `_fakes.py`, `_checkpoint.py`: **94 passed**. `git diff` shows the gap closure touched `loop.py` only in the resume block (66 lines, all inside the `resume_from` guard and its comment); `dpsgd.py` is **not in the changed-file set at all**. |
+| 2 | With the seam off, the default path is **BIT-IDENTICAL** to the Phase-10 golden-trajectory fixture (DPSGD-02) | ✓ VERIFIED (regression check) | `test_seam_off_bit_identical` **PASSED, not skipped**, on this box after the `loop.py` edit. `test_golden_fixture_is_the_phase10_one` and `test_seam_omitted_equals_seam_none` both PASSED. 22-13's new refusal is inside `if resume_from is not None:` and cannot reach the seam-off replay. |
+| 3 | The (ε, δ) accountant is stdlib `math` only, exact under q=1 composition, and **agrees with two oracles of DIFFERENT mathematics** (DPSGD-03) | ✗ **FAILED** | (a) stdlib-only: VERIFIED, `import math` still the only import. (b) q=1 exactness: VERIFIED. (c) **two-oracle agreement: STILL FALSIFIED** — 1.919e-03 relative gap at σ=0.414/T=200/δ=1e-5 against a 1e-9 budget, in the erfc-SUBNORMAL band. See below. |
+| 4 | Each known silent-non-privacy failure is caught with its positive control **WATCHED FAILING FIRST** (DPSGD-04) | ✓ VERIFIED (regression check) | All four probes still pass; `dpsgd.py` unchanged by the gap closure. 22-13's refusal *adds* to this: the `dp_fn is None` + slot-PRESENT direction — the one the initial report named as "worse in KIND" — now raises at `loop.py:766` with a message that states the consequence. |
+| 5 | `checkpoint.py` carries an MPS RNG slot with backward-compatible load; kill→resume reproduces a **BIT-IDENTICAL reported ε**; `LoRALinear` not restructured; `persona_adapter.pt` + every v3.0 checkpoint still load (DPSGD-05, DPSGD-07) | ✓ VERIFIED (regression check) | `test_resume_epsilon_bit_identical[1.0]` and `[0.0]` both PASSED after the `loop.py` edit, as did `test_dp_noise_rng_round_trips_through_a_kill_and_resume` (whose back-compat leg is one of the two guards 22-13 cites as the reason the *other* direction stays tolerated). `git diff --exit-code -- src/personacore/lora/` exits 0; last commit `0a26702`, 2026-08-14, predates Phase 22. |
 
-**Score:** 4/5 truths verified
+**Score:** 4/5 truths verified — unchanged from the initial verification.
+
+---
+
+### The Five `missing:` Items — Each Re-Measured Independently
+
+| # | `missing:` item | Status | My own measurement (not the SUMMARY's) |
+|---|-----------------|--------|-----------------------------------------|
+| 1 | `_log_erfc` in log space through the underflow | ✓ CLOSED | `delta_closed(775.7866600701457, 35.35533905932738)` = **8.870303048329635e-06**. Two-oracle gap **1.1050e-11** vs a 1e-9 budget that was NOT widened. Adjudicated at 80 dps: truth 8.8703030483297955e-06, closed form now correct to 1.81e-14. |
+| 2 | `mu` finiteness check in `epsilon_for` | ✓ CLOSED | `epsilon_for(5e-308, 200, 1e-5)` = **`inf`**; `epsilon_for(0.0, …)` = `inf`; `nextafter(0.0, 1.0)` = `inf`. The discontinuity is REMOVED, not relocated. Just above the boundary the doubling walk refuses loudly at all four of T ∈ {1, 64, 200, 1000}, as the comment claims. |
+| 3 | `delta_quadrature` upper bound + Simpson `log(4*n)` headroom | ✓ CLOSED | Band rescan (eps=1e-4, mu ∈ [74,78] step 1e-3, 4001 cells): **753 answered, 3248 refused, 0 non-finite, 0 outside (0,1]** — where 404 `inf` cells stood. Coverage cost of the tighter condition 1, measured over an independent 4000-draw sweep: **exactly 1 cell** (2457 → 2456). No interaction defect. |
+| 4 | `DELTA_FRONTIER` row in the `b > 27.2` band | ✓ CLOSED | 13th row ships; `b = 28.01573`, `erfc(b) = 0.0` exactly; V-02 gap **1.105e-11** vs 1e-9. |
+| 5 | Committed truth replacing `> 700.0` | ✓ CLOSED | `EPSILON_OVERFLOW_REGIME` ships `(0.40, 200, "774.8427215876997…")` and `(0.30, 200, "1311.202790704405…")`. My independent 60-dps solve at σ=0.40 gives 774.8427215876998 — agrees. |
+
+**All five closed.** The gap plans did what they were asked. The criterion is still not met, because
+the closure was scoped to the five items rather than to the conjunct they were symptoms of.
+
+---
+
+### Guard Capability — Do the NEW Guards Actually Redden? (brief item 3)
+
+Each mutation applied to the **real committed module**, suite re-run, file restored and sha256
+re-checked. All three restores were byte-identical.
+
+| Mutation | Target | Result | Capable? |
+|----------|--------|--------|----------|
+| M1: `sum_headroom = math.log(4.0*n)` → `0.0` | 22-14's Simpson-sum headroom | **1 RED** — `test_quadrature_budgets_the_simpson_sum_not_one_term`. Notably condition 3 then catches the `inf` and refuses, so the layers are independent. | ✓ YES |
+| M2: delete `if not math.isfinite(mu): return math.inf` | 22-15's quotient check | **4 RED** — `test_epsilon_for_answers_inf_in_the_subnormal_sigma_band[1|64|200|1000]` | ✓ YES |
+| M3: truncate the asymptotic series to one term | 22-12's `_log_erfc` series | **5 RED** — `test_log_erfc_matches_the_committed_underflow_truth`, `test_closed_form_frontier[13th row]`, `test_two_oracles_agree[13th row]`, both `test_epsilon_for_survives_the_overflow_regime` rows | ✓ YES |
+| **P1: `_log_erfc` → `-12345.0` for every SUBNORMAL erfc input** | the band this report is about | **`1314 passed, 1 skipped`** — byte-identical to baseline. **ZERO RED.** | ✗ **NO GUARD EXISTS** |
+
+The three guards the gap plans added are genuinely capable — that is a real improvement over this
+phase's central finding. P1 is the point: the guards cover the band the plans measured, and the
+suite has no detector at all one band over.
+
+---
+
+### The Remaining Gap, Measured
+
+**Where the fast path is used and should not be.** `math.erfc` enters the subnormal range at
+x = 26.54325845425098 and reaches exactly 0.0 at x = 27.2. `_log_erfc` guards its fast path on
+`e > 0.0`, so all 0.657 of that band takes `math.log(math.erfc(x))`.
+
+| Quantity, over x ∈ [26.543, 27.2) | Value |
+|---|---|
+| Worst ABSOLUTE error of `_log_erfc` (branch actually taken) in the returned log | **2.094e-01** at x = 27.196716292271255 |
+| Worst ABSOLUTE error of the asymptotic series over the identical band | 2.458e-13 |
+| Ratio | **8.52e+11x** |
+| Implied worst relative error in `delta_closed`'s second term | **≈ 23.3%** |
+
+**Reachability at the project's own frozen δ.** T=200, δ=1e-5, ε solved by the shipped
+`epsilon_for`, error against a 60-dps mpmath solve:
+
+| σ | b at the solution | erfc(b) | shipped ε | rel ε error | two-oracle δ gap | direction |
+|---|---|---|---|---|---|---|
+| 0.4130 | 27.20935 | 0.0 (series) | 731.3711040772157 | 3.28e-16 | 1.024e-11 | — |
+| **0.4135** | 27.18022 | subnormal | 729.7858930406062 | **1.136e-05** | **1.084e-03** | OVER |
+| **0.4140** | 27.15112 | 1.43e-322 | 728.2043182233367 | **2.013e-05** | **1.919e-03** | OVER |
+| **0.4145** | 27.12171 | subnormal | 726.6098109263614 | 3.521e-06 | 3.357e-04 | OVER |
+| **0.4150** | 27.09257 | subnormal | 725.0299956136157 | 4.844e-07 | 4.614e-05 | **UNDER** |
+| **0.4165** | 27.00572 | subnormal | 720.3323963228256 | 6.030e-09 | 5.727e-07 | **UNDER** |
+| **0.4175** | 26.94817 | subnormal | 717.2274893324382 | 9.522e-11 | 9.017e-09 | **UNDER** |
+| 0.4200 | 26.80549 | subnormal | 709.5584251988014 | 1.100e-13 | 2.019e-11 | OVER |
+| 0.4000 | 27.99685 | 0.0 (series) | 774.8427215876998 | 1.43e-16 | — | — |
+
+Worst: **σ = 0.414, ε error 2.0125e-05 relative** (shipped 728.2043182233367 against a 60-dps
+728.1896631303156). Adjudicated at 80 dps at that point — `delta_closed` = 1.0000000000000345e-05,
+truth = 9.9808100769648473e-06, `delta_quadrature` = 9.980810076863458e-06: **the closed form is
+the wrong oracle** (1.923e-03) and the quadrature is right to 1.016e-11.
+
+**Bit-identical to pre-fix.** Re-running the pre-22-12 `second = 0.0 if eb == 0.0 else …` form at
+σ=0.414 gives exactly the shipped value. This is a pre-existing sibling defect the fix did not
+reach — **not a regression introduced by the gap closure.**
 
 ---
 
@@ -121,13 +217,13 @@ is falsified by measurement in a band the module's own docstring names as reacha
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/personacore/privacy/dpsgd.py` | The DP-SGD mechanism | ✓ VERIFIED | 619 lines, substantive, imported by `teach_persona.py` and by 3 test modules. Nine construction refusals, four runtime invariants, all reachable and all exercised. |
-| `src/personacore/privacy/accountant.py` | Two δ oracles + `epsilon_for`/`sigma_for` | ⚠️ **DEFECTIVE** | 705 lines, exists, wired, math-only. Three independent numerical defects — see the gaps table. Correct in every regime the project operates in; wrong outside it, without refusing. |
-| `src/personacore/training/loop.py` | The additive `dp_fn=` gradient-side seam + `fact_bin=` data seam | ✓ VERIFIED | `dp_fn` threaded `train()` → `_optimizer_step`; four take-over points; legacy clip structurally unreachable on the DP path; `_dp_extra()` splatted into **all three** `save_checkpoint` sites (`:877`, `:900`, `:927`). |
-| `src/personacore/checkpoint.py` | `rng["mps"]` slot, back-compatible load | ✓ VERIFIED | Save at `:148`, load at `:199` via `.get()`. Real gitignored artifacts round-trip. |
-| `scripts/teach_persona.py` | D-08's four production wirings on `dp_n8`/`dp_n64` | ✓ VERIFIED | One `is_dp` predicate gates all four; σ and C are required no-default CLI args (`--sigma=`, `--clip-norm=`) with a `SystemExit` when a DP arm lacks either; `grad_accum_steps=stats["n_facts"]` is a real `ast.keyword`. No numeric σ or C literal in the file. |
-| `scripts/mitigation_accountant.py` | The FROZEN pin | ✓ VERIFIED | Zero imports; `GOLDEN_EPSILON`'s seven rows; `REQUIRED_FORM`/`REJECTED_FORM`; `NEIGHBOURING`/`SENSITIVITY_MULTIPLIER`. All seven pinned ε reproduce to ≤ 1.07e-14 relative against `epsilon_for`, and **all seven sit outside the CR-03 defect band** (b ∈ [3.19, 7.94], `erfc(b)` healthy). |
-| `tests/test_phase22_*.py` (7 files) | The correctness battery | ✓ VERIFIED | 253 tests, all passing. Full suite: **1280 passed, 1 skipped** (222 s) — matches the pre-verification baseline exactly, no regression. |
+| `src/personacore/privacy/accountant.py` | Two δ oracles + `epsilon_for`/`sigma_for` | ⚠️ **STILL DEFECTIVE** | 988 lines (was 705). Three of the four numerical defects closed and independently confirmed. The fourth — the erfc-subnormal band — remains, is reachable at the frozen δ, and is not conservative. |
+| `src/personacore/privacy/dpsgd.py` | The DP-SGD mechanism | ✓ VERIFIED | **Not in the gap closure's changed-file set.** No regression possible. |
+| `src/personacore/training/loop.py` | The `dp_fn=` seam + 22-13's refusal | ✓ VERIFIED | +66 lines, all inside the `resume_from` block. The refusal at `:766` fires on `dp_fn is None and ckpt.get("dp_noise_rng") is not None`, with the three-case analysis written out and the two committed guards that pin the tolerated direction named by test id. |
+| `scripts/mitigation_accountant.py` | The FROZEN pin | ✓ VERIFIED | `git diff --exit-code 6ee90dc..HEAD` exits **0** — byte-unchanged across all five gap plans. All 7 `GOLDEN_EPSILON` values re-derived through the changed accountant are bit-identical, and remain bit-identical under my candidate fix. |
+| `tests/fixtures/phase22_reference.py` | 13 frontier rows + the two new tables | ⚠️ **PARTIAL** | The 13th row lands and covers the series band. **Zero rows cover the subnormal band.** Line 186 carries a false inherited figure. |
+| `.planning/ROADMAP.md` | Five unchanged success criteria | ✓ VERIFIED | Goal + SC block diffed against `6ee90dc`: the **only** line that changed is `**Plans**: 11 plans in 6 waves` → `16 plans in 10 waves (…)`, which is bookkeeping, not a criterion. **The bar was not lowered.** |
+| `.planning/REQUIREMENTS.md` DPSGD-03 | An honest retract-in-place | ✓ VERIFIED | See "Is the Record Honest?" below. |
 
 ---
 
@@ -135,12 +231,10 @@ is falsified by measurement in a band the module's own docstring names as reacha
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `teach_persona.py::train_arm` | `DPSGD` | `dp_fn=` kwarg into `train()` | ✓ WIRED | Constructed after freeze + device move; `runtime=` passed so the AMP refusal is armed. |
-| `teach_persona.py::main` | `train_arm` | `dp_n8`/`dp_n64` + `--sigma=`/`--clip-norm=` | ✓ WIRED | `test_phase22_wiring.py::test_end_to_end_writes_no_scored_artifact` drives it end to end. |
-| `train()` | `DPSGD.noise_rng_state` | `_dp_extra()` splat | ✓ WIRED | All three save sites. The end-of-call one is asserted specifically (`test_resume_epsilon_bit_identical:451`). |
-| `train(resume_from=)` | `DPSGD.load_noise_rng_state` | `ckpt.get("dp_noise_rng")` | ⚠️ **PARTIAL** | Wired and proven on the happy path, but the guard is a **silent no-op fallback where a refusal belongs**. See WARNING-1. |
-| `teach_persona.py` | `train(resume_from=)` on a DP arm | — | ⚠️ **NOT WIRED** | No production driver can resume a DP arm at all. See WARNING-2. |
-| `accountant.py` | any production consumer | — | ℹ️ **NONE YET** | `epsilon_for`/`sigma_for` are imported only by `src/personacore/privacy/__init__.py` (lazy re-export) and by tests. No code reports an ε today — that is Phase 23's `mitigation_budget.py`. SC5's "reported ε" is therefore computed by the test, which is correct for this phase's scope but worth recording. |
+| `train(resume_from=)` | refusal on a seamless DP resume | `dp_fn is None and ckpt.get("dp_noise_rng")` | ✓ **WIRED** (was PARTIAL) | WARNING-1's dangerous half is closed at `loop.py:766`. |
+| `train(resume_from=)` | `DPSGD.load_noise_rng_state` | `ckpt.get("dp_noise_rng")` | ✓ WIRED | Unchanged; both committed guards still pass. |
+| `teach_persona.py` | `train(resume_from=)` on a DP arm | — | ⚠️ **NOT WIRED** | WARNING-2, deferred to Phase 23 by explicit decision. Recorded, not inherited as done. |
+| `accountant.py` | any production consumer | — | ℹ️ **NONE YET** | Unchanged. Phase 23's `mitigation_budget.py` is the first consumer — which is why the residual band should close before it lands. |
 
 ---
 
@@ -148,11 +242,10 @@ is falsified by measurement in a band the module's own docstring names as reacha
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|--------------------|--------|
-| `DPSGD._accum` | clipped per-record sum | `p.grad` after each real `backward()` | Yes — `test_sum_then_noise_then_divide`, `test_noise_is_scaled_by_the_lot_size…` measure magnitudes | ✓ FLOWING |
-| `dp_noise_rng` (checkpoint) | `dp_fn.noise_rng_state()` | live generator at each save | Yes — `kill["dp_noise_rng"].numel() > 0` asserted; 5,056 B on CPU | ✓ FLOWING |
-| `rng["mps"]` (checkpoint) | `torch.mps.get_rng_state()` | real MPS state on this box | Yes, but **required-but-UNEXERCISED by the DP path** (the dedicated generator's draw does not move the global MPS stream) — recorded honestly in the module docstring, not glossed | ⚠️ STATIC-BY-DESIGN |
-| `GOLDEN_EPSILON` | seven pinned ε | bisected against `delta_quadrature` ALONE, asserted over the test's own AST | Yes — worst deviation 5.75e-15 vs a 1e-12 budget, and every row deviates (min 1.62e-15), so the pin is not a photograph | ✓ FLOWING |
-| `delta_closed` / `delta_quadrature` | δ | closed form / Simpson quadrature | **Partly** — correct on the 12 committed rows and every operating regime; produces a 12.74%-wrong δ, `+inf`, and `>1.0` outside them without refusing | ⚠️ **HOLLOW AT THE EDGES** |
+| `delta_closed` second term | `0.5*exp(eps + _log_erfc(b))` | `_log_erfc` fast path OR series | Series band: yes (1.81e-14). **Subnormal band: NO** — up to 23.3% wrong, silently | ⚠️ **HOLLOW IN [26.543, 27.2)** |
+| `delta_quadrature` δ | Simpson on the definition | derived range + 3 conditions | Yes — 0 non-finite, 0 outside (0,1] over 4001 cells; right to 1.0e-11 where the closed form is 1.9e-3 wrong | ✓ FLOWING |
+| `epsilon_for` at a subnormal σ | `math.inf` | quotient finiteness check | Yes — continuous with the σ=0 branch at all four T | ✓ FLOWING |
+| `GOLDEN_EPSILON` | seven pinned ε | frozen pin | Yes — bit-identical through the gap closure AND under the candidate fix | ✓ FLOWING |
 
 ---
 
@@ -160,23 +253,29 @@ is falsified by measurement in a band the module's own docstring names as reacha
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full regression suite | `.venv/bin/python -m pytest -q` | `1280 passed, 1 skipped` in 222.28 s | ✓ PASS |
-| Phase-22 battery | `pytest tests/test_phase22_*.py -q` | `253 passed` in 23.87 s | ✓ PASS |
-| Golden bit-identity actually runs | `pytest tests/test_phase22_dpsgd.py -v` | `test_seam_off_bit_identical PASSED` (not skipped) | ✓ PASS |
-| Real v3.0 artifacts load | `pytest tests/test_phase22_checkpoint.py -v` | 12 passed, **0 skipped** — incl. `persona_adapter.pt` | ✓ PASS |
-| LoRA untouched | `git diff --exit-code -- src/personacore/lora/` | exit 0; last commit predates Phase 22 | ✓ PASS |
-| Lint | `ruff check` + `ruff format --check` on all Phase-22 files | `All checks passed!` / `10 files already formatted` | ✓ PASS |
-| `epsilon_for` at a subnormal σ | `epsilon_for(5e-308, 200, 1e-5)` | `0.0` (expected `inf` or a refusal) | ✗ **FAIL** |
-| δ is a probability (quadrature) | `delta_quadrature(0.000440884929509763, 75.3129260813192)` | `inf` | ✗ **FAIL** |
-| δ ≤ 1 (quadrature) | 4000-cell sweep | 60 cells above 1.0, max `1.000000000000009` | ✗ **FAIL** |
-| Two oracles agree at the module's own cited frontier point | `delta_closed(775.7866600701457, 35.35533905932738)` vs `delta_quadrature(…)` | `9.99999999999972e-06` vs `8.870303048231617e-06` — **11.30% apart** | ✗ **FAIL** |
-| Independent third computation of the same δ | asymptotic `log(erfc(b))` series, in-process | `8.870303048329635e-06` — agrees with the QUADRATURE to 1.1e-11; shipped `delta_closed` is **12.74% high** | ✗ **FAIL** |
+| Full regression suite | `.venv/bin/python -m pytest -q` | `1314 passed, 1 skipped` in 226.40 s | ✓ PASS |
+| Phase-22 accountant battery | `pytest tests/test_phase22_accountant.py tests/test_phase22_reference.py` | `193 passed` | ✓ PASS |
+| SC1/2/4/5 files | `pytest tests/test_phase22_{dpsgd,checkpoint,fakes,dpsgd_ast,wiring}.py` | `94 passed` | ✓ PASS |
+| SC2 golden replay actually runs | `pytest tests/test_phase22_dpsgd.py -v` | `test_seam_off_bit_identical PASSED` (not skipped) | ✓ PASS |
+| SC5 resumed ε | `pytest tests/test_phase22_checkpoint.py -v` | `test_resume_epsilon_bit_identical[1.0]` and `[0.0]` PASSED | ✓ PASS |
+| LoRA untouched | `git diff --exit-code -- src/personacore/lora/` | exit 0 | ✓ PASS |
+| Frozen pin untouched | `git diff --exit-code 6ee90dc..HEAD -- scripts/mitigation_accountant.py` | exit 0 | ✓ PASS |
+| Lint | `ruff check .` + `ruff format --check .` | `All checks passed!` / `203 files already formatted` | ✓ PASS |
+| Debt markers in changed files | `grep -E "TBD\|FIXME\|XXX\|TODO\|HACK\|PLACEHOLDER"` | **0** across all 6 changed files | ✓ PASS |
+| `delta_closed` at the 22-12 fix point | `delta_closed(775.7866600701457, 35.35533905932738)` | `8.870303048329635e-06` (was 12.7357% high) | ✓ PASS |
+| `epsilon_for` at a subnormal σ | `epsilon_for(5e-308, 200, 1e-5)` | `inf` (was `0.0`) | ✓ PASS |
+| δ is a probability (quadrature) | 4001-cell band rescan | 0 non-finite, 0 outside (0,1] | ✓ PASS |
+| **Two oracles agree at σ=0.414/T=200/δ=1e-5** | `delta_closed` vs `delta_quadrature` | `1.0000000000000345e-05` vs `9.980810076863458e-06` — **1.919e-03 apart** | ✗ **FAIL** |
+| **Independent 80-dps adjudication of that point** | mpmath `mp.dps=80` | truth `9.9808100769648473e-06` — the **closed form** is wrong by 1.9e-3 | ✗ **FAIL** |
+| **`sigma_for` round trip in the band** | `sigma_for(epsilon_for(0.414,200,1e-5),200,1e-5)` | `0.4139914289872259` vs `0.414` — **2.07e-05**, 2.07e+07x `ROUND_TRIP_REL_TOL` | ✗ **FAIL** |
+| **Any guard for the subnormal band** | `_log_erfc` → `-12345.0` there, full suite | `1314 passed, 1 skipped` — **zero RED** | ✗ **FAIL** |
+| Candidate closure preserves the frozen pin | fast-path guard → `e >= 2.2250738585072014e-308` | 7/7 `GOLDEN_EPSILON` `float.hex()`-identical; 193 tests pass; worst gap 1.919e-03 → **1.014e-11** | ✓ PASS |
 
 ### Probe Execution
 
 | Probe | Command | Result | Status |
 |-------|---------|--------|--------|
-| — | — | No `scripts/*/tests/probe-*.sh` exist in this project and no PLAN declares one; the project's runnable-check convention is pytest, executed above | SKIPPED (N/A) |
+| — | — | No `scripts/*/tests/probe-*.sh` exist and no PLAN declares one; the project's runnable-check convention is pytest, executed above, plus the four mutation probes | SKIPPED (N/A) |
 
 ---
 
@@ -184,15 +283,39 @@ is falsified by measurement in a band the module's own docstring names as reacha
 
 | Requirement | Source Plan(s) | Status | Evidence |
 |-------------|----------------|--------|----------|
-| DPSGD-01 | 22-04, 22-06, 22-10, 22-11 | ✓ SATISFIED | Truth 1. Per-record global clip, SUM accumulator, dedicated-generator noise on the sum, `/N` last, one combining write, LoRA-only enforced as a property of the MECHANISM. Production caller reachable from `main()`. |
-| DPSGD-02 | 22-06, 22-08, 22-11 | ✓ SATISFIED | Truth 2. Three-fingerprint bit-identity against the genuine Phase-10 fixture, ran rather than skipped, with a vacuity meta-guard and a platform-independent companion. |
-| DPSGD-03 | 22-01, 22-02, 22-03, 22-05, 22-09, 22-10 | ✗ **BLOCKED** | Truth 3. Math-only and q=1 exactness hold. The two-oracle agreement — this requirement's own stated mechanism of proof — is falsified by measurement. REQUIREMENTS.md marks this row `[x] SATISFIED`; that row is not supported by the code outside the 12 committed frontier points. |
-| DPSGD-04 | 22-01, 22-02, 22-04, 22-06, 22-09, 22-11 | ✓ SATISFIED | Truth 4. Four fakes, nine detectors, each probe re-applies its mutation to the real module and re-observes the refusal on every run, each with an unmutated control. Blind spots (FAKE 3 at σ=0 and at accum=1; the one-sided `C*(1+tol)` check) are asserted as committed tables rather than described. |
-| DPSGD-05 | 22-05, 22-06, 22-07 | ✓ SATISFIED | Truth 5. MPS slot + `.get()` back-compat + bit-identical resumed ε through the production `train()` API, with the RNG half carrying its own control. |
-| DPSGD-07 | 22-07 | ✓ SATISFIED | Truth 5. `src/personacore/lora/` byte-unchanged; bare `nn.Parameter` asserted directly; key FORM pinned as a literal after M7 was measured to leave set-equality green. |
-| DPSGD-06 | — (Phase 23) | ℹ️ DEFERRED, correctly | REQUIREMENTS.md maps it to Phase 23 and Phase 23's SC1 owns it verbatim. **Not orphaned.** |
+| DPSGD-01 | 22-04, 22-06, 22-10, 22-11 | ✓ SATISFIED | Truth 1. `dpsgd.py` not in the changed-file set; 94 tests pass. |
+| DPSGD-02 | 22-06, 22-08, 22-11 | ✓ SATISFIED | Truth 2. Golden replay RAN and passed after the `loop.py` edit. |
+| DPSGD-03 | 22-01, 22-02, 22-03, 22-05, 22-09, 22-10, **22-12, 22-14, 22-15** | ✗ **BLOCKED** | Truth 3. Math-only and q=1 exactness hold. Three of four numerical defects closed. The two-oracle agreement is still falsified at a reachable point on the frozen frontier, and no guard can see the band. |
+| DPSGD-04 | 22-01, 22-02, 22-04, 22-06, 22-09, 22-11, **22-13** | ✓ SATISFIED | Truth 4, strengthened by 22-13's refusal on the direction the initial report named as worse in kind. |
+| DPSGD-05 | 22-05, 22-06, 22-07, **22-13** | ✓ SATISFIED | Truth 5. Both `test_resume_epsilon_bit_identical` legs pass after the edit. |
+| DPSGD-07 | 22-07 | ✓ SATISFIED | Truth 5. `src/personacore/lora/` byte-unchanged. |
+| DPSGD-06 | — (Phase 23) | ℹ️ DEFERRED, correctly | Unchanged. |
 
-**Orphaned requirements:** none. Every ID the roadmap assigns to Phase 22 (DPSGD-01, 02, 03, 04, 05, 07) is claimed by at least one plan's frontmatter, and DPSGD-06 is explicitly routed to Phase 23 in both REQUIREMENTS.md and ROADMAP.md.
+**Orphaned requirements:** none.
+
+---
+
+### Is the Record Honest? (brief item 4)
+
+**Yes, with one inherited error that is mine, not the executors'.**
+
+- **The retract-in-place left the original assertion standing.** `REQUIREMENTS.md:350` keeps the
+  full original SATISFIED narrative verbatim and appends *"RETRACTED IN PLACE 2026-08-26 (plan
+  22-16)… Everything above is left unamended as the record of what was believed when Phase 22's
+  execution closed."* That is the correct shape.
+- **It withholds the verdict.** *"THE VERDICT ON SC3 IS THE RE-VERIFICATION'S, NOT THIS ROW'S…
+  this row does not pre-empt it."* Confirmed.
+- **It does not overclaim.** It records both denominators explicitly (12.7357% against the 60-dps
+  truth; 11.297% against the quadrature with the closed form as denominator) — I checked both
+  arithmetically and both are right. It records 22-15's **deviation** from my recommendation
+  (`+inf` rather than a raise) and argues it rather than hiding it. It records that in two of three
+  plans the specified mutation was one hunk where the fix ships as two layers.
+- **The ROADMAP's five success criteria are byte-unchanged.** Diffed against `6ee90dc`; the only
+  changed line in the block is the plan-count bookkeeping line.
+- **The one error:** `tests/fixtures/phase22_reference.py:186` and `REQUIREMENTS.md:350` both carry
+  *"EXACTLY ZERO at σ ≥ 0.42"*. That figure came from my own initial report, where I measured the
+  difference between the pre-fix and post-fix shipped values rather than the error against truth.
+  It is false, and it is precisely the sentence that made the residual band look already covered.
 
 ---
 
@@ -200,111 +323,108 @@ is falsified by measurement in a band the module's own docstring names as reacha
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| all 15 Phase-22 files | — | `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER` | — | **ZERO markers.** Clean. |
-| all 15 Phase-22 files | — | `ruff check` / `ruff format --check` | — | Clean. |
-| `accountant.py` | 181-186 | Comment asserts a property the code does not have | 🛑 Blocker | *"Log space keeps the identical product below the line"* — cited against σ=0.40/T=200, which is exactly where `eb == 0.0` makes the `else` branch unreachable and the product is dropped, not kept. |
-| `accountant.py` | 452-464 | Docstring asserts an unreachability proof whose premise never held | 🛑 Blocker | *"`mu` is a finite strictly-positive number the caller computed"* — `mu = sqrt(steps)/sigma` is never checked for finiteness. `test_delta_closed_still_ships_exactly_four_raises` protects the *raise count* the argument rests on and is structurally incapable of noticing the other premise is false. |
-| `accountant.py` | 143-149, 261-267 | `Returns:` contracts measurably false outside the committed rows | 🛑 Blocker | "at least 12 significant digits ... everywhere this function does not refuse" (delivers 0 at eps=775.79); "delta in (0, 1]" (returns `inf` and >1.0). |
-| `loop.py` | 735-736 | Silent no-op fallback where a refusal belongs | ⚠️ Warning | See WARNING-1. |
+| all 6 changed files | — | `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER` | — | **ZERO markers.** Clean. |
+| all 203 files | — | `ruff check` / `ruff format --check` | — | Clean. |
+| `accountant.py` | 151-162 | Comment asserts a property as protective that is in fact the failure mode | 🛑 Blocker | *"THE FAST PATH IS UNCONDITIONAL AND FIRST, AND THAT INERTNESS IS THE LOAD-BEARING PROPERTY OF THIS FUNCTION."* Measured, that unconditional inertness is exactly what preserves a 23.3% error across the erfc-subnormal band. |
+| `accountant.py` | 244-260 | `Returns:` accuracy claim scoped to a fixture set that avoids the defect | ⚠️ Warning | Honest scoping — a real improvement over the previous universal claim — but the scope is the 12 rows, and 0 of 22 pinned points enter the band. |
+| `accountant.py` | 125-129 | `ROUND_TRIP_REL_TOL` documented as 1e-12 with 8.29e-15 measured | 🛑 Blocker | Violated by 2.07e+07x at σ=0.414; the sweep's smallest σ is 0.5. |
+| `test_phase22_accountant.py` | 211 | `erfc(b) > 0.0` used as the definition of "healthy" | 🛑 Blocker | The filter classifies the defective band as healthy, so it encodes the defect it should exclude. |
 
 ---
 
-### WARNINGS (not blocking, but they must not be inherited as clean)
+### WARNINGS
 
-**WARNING-1 — `loop.py:735-736` is a silent fallback, and the review's scoping of it is wrong in
-both directions.**
+**WARNING-1 — CLOSED.** `loop.py:766` refuses `dp_fn is None` with `dp_noise_rng` PRESENT. I
+traced the reachability argument for the tolerated direction and it holds: all three
+`save_checkpoint` sites splat `**_dp_extra()`, and the two guards it names
+(`test_dp_noise_rng_round_trips_through_a_kill_and_resume`'s back-compat leg,
+`test_resume_epsilon_bit_identical`'s negative control) both drive that case and both pass.
 
-The code is `if dp_fn is not None and ckpt.get("dp_noise_rng") is not None:` with no `else`, and
-the comment eleven lines above names the exact consequence and then permits it. That much of
-CR-04 is correct and the fix (refuse) is right.
+**WARNING-2 — DEFERRED to Phase 23, correctly.** `teach_persona.py` still cannot resume a DP arm.
+This is a missing feature rather than a defect in what shipped, and it is routed beside DPSGD-06.
 
-But I traced the reachability myself rather than accepting either the review's claim or the
-orchestrator's, and **"reachable through PRODUCTION" is not supported by this tree**:
+**WARNING-3 — STILL OPEN, and it is now load-bearing.** No production code reports an ε. That is
+still correct for this phase's scope, and it is the only reason the residual band has not
+mis-published anything. Phase 23's `mitigation_budget.py` is the accountant's first consumer.
 
-- All three `save_checkpoint` sites inside `train()` splat `_dp_extra()` (`loop.py:877`, `:900`,
-  `:927`), so **every checkpoint a DP run writes carries `dp_noise_rng`** — the end-of-call one is
-  asserted specifically at `test_phase22_checkpoint.py:451`. The branch is therefore silent only
-  when the prior run was NOT a DP run, and in that case the freshly seeded generator has released
-  nothing, so seeding fresh is the correct behaviour, not a replay.
-- `scripts/teach_persona.py::train_arm` — the only production DP caller — **never passes
-  `resume_from`**, and its `refuse_if_exists(... paths["checkpoint"] ...)` actively blocks
-  re-running a killed DP arm. There is no production path into this branch at all.
-- The review also states the test *"exercises only the happy path, where the key is present."*
-  **That is false.** `test_phase22_checkpoint.py:519-539` deliberately strips `dp_noise_rng` and
-  asserts the resumed stream diverges — it uses the CR-04 branch as its negative control.
-
-What remains genuinely open, and why it still matters: a silent fallback where a refusal belongs,
-plus the **symmetric hole nobody has named** — `dp_fn is None` with `ckpt["dp_noise_rng"]` PRESENT
-is equally unguarded, and that one is worse: a DP run resumed without the seam continues with no
-clipping and no noise, silently. Both become live the moment Phase 23 wires DP resume, which
-`CLAUDE.md` says is routine on the primary M3 path. One guard covering both directions closes it.
-
-**WARNING-2 — DP kill→resume has no production driver.**
-SC5's wording ("a kill→resume reproduces a bit-identical reported ε") is satisfied through
-`train(resume_from=…)`, which is the production API, and the test correctly refuses to restore by
-hand. But `teach_persona.py` cannot resume a DP arm, so the workflow SC5 describes is exercised
-only from tests today. This is the same unwired-seam shape as Phase 21's IN-04 and should be
-carried forward rather than inherited as done.
-
-**WARNING-3 — no production consumer of the accountant exists.**
-`epsilon_for`/`sigma_for` are reachable only from `privacy/__init__.py`'s lazy re-export and from
-tests. No code path publishes an ε. That is correct for this phase's scope (budget
-pre-registration is Phase 23 / CAL-02), but it means the SC3 defects are latent rather than
-currently mis-reporting anything — and it means Phase 23 will be the first consumer, so the
-defects should close before it lands.
+**WARNING-4 (new, informational).** Outside the subnormal band, a 30,000-draw log-uniform sweep
+found 46 further two-oracle disagreements above 1e-9, worst **6.08e-09** at δ = 6.26e-237 — a
+different mechanism (cancellation in `0.5*erfc(a) - second` near the representability floor), 6x
+over budget, and **0 of them at a δ above 1e-12**. Not a blocker; recorded so it is not discovered
+later as a surprise.
 
 ---
 
 ### Human Verification Required
 
-None. Every truth was resolvable from the codebase: the golden replay and the real-artifact legs
-both RAN rather than skipped on this box, so nothing was left to a platform-gated skip. No PLAN
-carried a deferred `<verify><human-check>` block.
+None. Every truth was resolvable from the codebase by measurement: the golden replay and the real
+on-disk artifact legs both RAN rather than skipped on this box, the four mutation probes executed
+against the real committed module with sha256-verified restores, and the disputed oracle was
+adjudicated by an 80-dps third computation. No PLAN carried a deferred `<verify><human-check>`
+block.
 
 ---
 
 ### Gaps Summary
 
-**The mechanism half of this phase is the strongest work in the tree and it does what it says.**
-The clip is genuinely per-record over a global L2 across all 72 LoRA tensors, the accumulator holds
-the SUM so sensitivity is `C` independent of the lot size, the noise lands on the sum with the `/N`
-last, the generator is dedicated and never re-seeded on the step path, the legacy averaged-gradient
-clip really does have exactly one reachable call site inside `if dp_fn is None:`, and the four
-silent-non-privacy fakes are caught by nine detectors whose RED is re-observed on every test run
-against the real committed module rather than trusted from a SUMMARY. I tried to break the
-per-record sensitivity argument and could not. SC1, SC2, SC4 and SC5 hold.
+**The gap closure did real, verifiable work, and I want that stated before the verdict.** All five
+`missing:` items are closed and I confirmed each one myself rather than reading a SUMMARY: the
+dropped second term is recovered to 1.81e-14, the `mu` quotient is checked and answers `+inf`
+continuously with the σ=0 branch, `delta_quadrature` returns a probability or refuses across the
+band where 404 cells returned `inf`, the thirteenth frontier row lands and its V-02 leg measures
+1.105e-11 against a budget that was *not* widened, and the `> 700.0` liveness assertion is gone.
+Three of those guards redden under mutation of the real module. The frozen pre-registration is
+byte-unchanged with all seven ε bit-identical, the ROADMAP's success criteria are byte-unchanged,
+and the DPSGD-03 retraction is one of the more honest records I have read — it names both
+denominators, records a deliberate deviation from my own recommendation and argues it, reports that
+two plan-specified mutations were single hunks against two-layer fixes, and explicitly refuses to
+call SC3 itself.
 
-**The accountant does not meet SC3, and it fails on the specific axis the criterion names.**
-DPSGD-03's whole design is that a second oracle of different mathematics cannot share the
-implementation's failure modes. Measured, the two oracles disagree by up to **12.74% relative in
-δ** — and the disagreement is not a numerical curiosity, it is `delta_closed` silently discarding a
-term worth 11% of the answer whenever `math.erfc(b)` underflows. It happens at
-(σ=0.40, T=200, δ=1e-5), the exact input the line's own comment cites as reachable on this
-project's frontier and the exact input the plan's own `must_haves` names. I confirmed which oracle
-is right with a third, independent computation (asymptotic `log(erfc(b))`): the quadrature is
-correct to 1.1e-11 and the closed form has zero correct significant digits, against a docstring
-promising at least twelve. The test that visits σ ∈ {0.40, 0.30} asserts only that a finite number
-above 700 came back. The agreement test cannot see it because no committed `DELTA_FRONTIER` row
-lives in that band. On top of that, the second oracle itself returns `+inf` and values above 1.0
-for a quantity that is a probability, and `epsilon_for` reports ε = 0 — perfect privacy — for a
-subnormal σ, in the privacy-understating direction, through a guard whose docstring proves its own
-unreachability from a premise nothing establishes.
+**SC3 is still not true.** The criterion is not "five items were addressed"; it is that the
+accountant *agrees with two oracles of different mathematics*. Measured, at σ=0.414 / T=200 /
+δ=1e-5 — this project's own frozen δ, 0.03 in σ away from the point that produced the original
+failure — the two oracles disagree by **1.919e-03 relative, against a 1e-9 budget**. An 80-dps
+third computation says the **closed form** is the wrong one, by 1.9e-3, with roughly 2.7 correct
+significant digits; the quadrature is right to 1.0e-11. The induced ε error is 2.01e-05 relative,
+and at four measured σ it runs in the **privacy-UNDERSTATING** direction — which the previous
+defect never did, so "no published number is optimistic" no longer holds in this band. The module's
+own `ROUND_TRIP_REL_TOL` is violated by 2.07e+07x at the same σ.
 
-**Stated with the honesty this phase demands of itself: no published number is currently wrong.**
-All seven `GOLDEN_EPSILON` rows and all twelve `DELTA_FRONTIER` rows sit outside every defect band.
-CR-03's direction is conservative (δ over-stated ⇒ ε over-stated), its induced ε error is 1.218e-03
-relative at σ=0.40/T=200 and **exactly zero at σ ≥ 0.42**, and CR-01's band needs a subnormal σ that
-no CLI input and no `sigma_for` walk can produce. Nothing in this tree has yet reported an ε at all.
+**The root cause is one line and the shape of it is this phase's own central finding, repeated.**
+`_log_erfc` routes on `math.erfc(x) > 0.0`. That predicate is true throughout the subnormal range,
+where `math.erfc` has already thrown away up to 52 of its 53 mantissa bits — so the branch whose
+inertness the docstring calls "the load-bearing property of this function" faithfully reproduces a
+pre-existing 23.3% error, while the asymptotic series nine lines below, which is 8.5e11x more
+accurate there, is never reached. `delta_closed` at these points is **bit-identical to the pre-22-12
+code**: this is a sibling defect the fix stepped over, not a regression it introduced.
 
-That is precisely why this is a gap and not a catastrophe — and precisely why it must close before
-Phase 23, which is the accountant's first consumer. This phase's stated purpose is *provably* not
-the cheap fake. A module whose two published tolerances are both 1e-12, whose two independent
-oracles disagree by 12.7% where nobody looked, and whose own comments assert three properties the
-code does not have, is not yet proven — it is untested outside its fixture set. The five `missing:`
-items in the frontmatter are the whole closure, and none of them touches `dpsgd.py`, `loop.py`,
-`checkpoint.py` or any of the four positive controls.
+**And the suite cannot see it, for exactly the reason it could not see the last one.** Zero of the
+twenty-two pinned points has a subnormal `erfc(b)`. `_round_trip_pairs()`'s smallest σ is 0.5.
+`_inert_points()` filters on `erfc(b) > 0.0` and therefore *classifies the defective band as
+healthy* — the filter encodes the defect. I proved the blindness by execution rather than
+inference: `_log_erfc` returning `-12345.0` for every subnormal input leaves the full suite at
+`1314 passed, 1 skipped`, byte-identical to baseline. The lesson 22-16 wrote into the permanent
+record — *"an oracle cross-check is worth exactly the band its parametrization sweeps"* — is
+correct, and it applies to the closure as much as to the thing closed.
+
+**One sentence of my own to own.** The reason this band looked already covered is a false figure in
+my initial report — *"the error is EXACTLY ZERO at σ ≥ 0.42"* — which measured the fix's delta
+rather than the error against truth, and which the plans faithfully transcribed into
+`phase22_reference.py:186` and `REQUIREMENTS.md:350`. It needs correcting in both places.
+
+**The closure is small and I measured it here.** Changing the fast-path guard to
+`if e >= 2.2250738585072014e-308` leaves all seven `GOLDEN_EPSILON` bit-identical, passes the 193
+accountant and reference tests, and drops the worst point's two-oracle gap from 1.919e-03 to
+**1.014e-11** — inside the un-widened 1e-9 budget. What it needs beside it is a frontier row in the
+band, a retargeted `_inert_points` filter, and a round-trip σ inside [0.4135, 0.4185], so the next
+verifier is not the detector.
+
+Nothing in this tree publishes an ε yet, so nothing is currently wrong in the world. Phase 23 is the
+first consumer. This phase's stated purpose is that the privacy claim must be *provably* true — and
+an accountant that is 1.9e-3 wrong where nobody swept, in the understating direction, is not yet
+proven.
 
 ---
 
-_Verified: 2026-08-26T03:08:10Z_
-_Verifier: Claude (gsd-verifier)_
+_Verified: 2026-08-26T13:46:14Z_
+_Verifier: Claude (gsd-verifier) — re-verification after gap closure_
