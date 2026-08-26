@@ -85,8 +85,8 @@ completed: 2026-08-26
 
 ## Files Created/Modified
 
-- `tests/test_phase22_fakes.py` (new, **870 lines**, **11 collected**) — the four probes with their subclass fakes, the `_run_live_guard` harness that repoints `_DPSGD_PATH`, the `_mutate` applied-assertion helper, `_FAKE3_DIFFERENTIAL_SEES`'s four-cell coverage table, `_WATCHED_RED_NODE_IDS` and the three ledger locks.
-- `tests/test_phase22_dpsgd_ast.py` (+128 / −2, 20 → **21 tests**) — `_NOISE_CALL`, `_called_names`, `_divides_by`, `_assert_noise_precedes_divide` (ONE definition, imported by the probe file) and its live green test `test_dpsgd_draws_the_noise_before_it_divides`.
+- `tests/test_phase22_fakes.py` (new, **849 lines**, **11 collected**) — the four probes with their subclass fakes, the `_run_live_guard` harness that repoints `_DPSGD_PATH`, the `_mutate` applied-assertion helper, `_FAKE3_DIFFERENTIAL_SEES`'s four-cell coverage table, `_WATCHED_RED_NODE_IDS` and the three ledger locks.
+- `tests/test_phase22_dpsgd_ast.py` (+126 / −0, 19 → **20 collected**) — `_NOISE_CALL`, `_called_names`, `_divides_by`, `_assert_noise_precedes_divide` (ONE definition, imported by the probe file) and its live green test `test_dpsgd_draws_the_noise_before_it_divides`.
 
 ---
 
@@ -494,7 +494,7 @@ Eighth consecutive confirmation that the corruption lives in the **positional** 
 | Check | Result |
 |---|---|
 | `.venv/bin/python -m pytest tests/test_phase22_fakes.py -q` | **9 passed, 2 skipped** pre-SUMMARY (11 passed after) in 2.44 s |
-| `.venv/bin/python -m pytest tests/test_phase22_dpsgd_ast.py -q` | **21 passed** (was 19 at 22-09, 20 after Task 1) |
+| `.venv/bin/python -m pytest tests/test_phase22_dpsgd_ast.py -q` | **20 passed** (was 19 at 22-09; this plan adds exactly 1) |
 | Watched deliberate-RED, FAKE 1 | 12 failed / 65 passed / 2 skipped, restored `140f5108…`, re-green 78/2 |
 | Watched deliberate-RED, FAKE 2 | 5 failed / 73 passed / 2 skipped, restored `140f5108…`, re-green 78/2 |
 | Watched deliberate-RED, FAKE 3 | 6 failed / 71 passed / 2 skipped, restored `140f5108…`, re-green 78/2 |
