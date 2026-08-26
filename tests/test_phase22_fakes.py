@@ -706,12 +706,56 @@ _WATCHED_RED_NODE_IDS = {
         "tests/test_phase22_dpsgd_ast.py::test_dpsgd_step_reaches_no_forbidden_call[absorb_record]",
         "tests/test_phase22_dpsgd.py::test_drain_invariant_fires",
     ),
+    "FAKE 2": (
+        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_has_exactly_one_clip_constant",
+        "tests/test_phase22_dpsgd.py::test_sensitivity_invariant_fires",
+    ),
     "FAKE 3": (
         "tests/test_phase22_dpsgd.py::"
         "test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST[4]",
         "tests/test_phase22_dpsgd_ast.py::test_dpsgd_draws_the_noise_before_it_divides",
     ),
+    "FAKE 4": (
+        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_never_reseeds_its_generator",
+        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_step_reaches_no_forbidden_call[finalize]",
+        "tests/test_phase22_dpsgd.py::test_generator_advances_and_is_never_reseeded",
+    ),
 }
+
+# MEASURED, and recorded because a shared signature would be a coverage gap rather than a double
+# win: the nine entries above produced NINE DISTINCT assertion messages over the real mutated
+# module. The one near-collision is named rather than glossed --
+# `test_dpsgd_step_reaches_no_forbidden_call` catches BOTH FAKE 1 and FAKE 4, but at two different
+# parametrizations (`[absorb_record]` vs `[finalize]`) reporting two different offender dicts
+# (`{}` where the drain's `.grad=` write vanished, against `{'finalize': ['manual_seed'], ...}`
+# where the re-seed appeared). Same guard function, two node ids, two messages.
+_DISTINCT_RED_SIGNATURES = 9
+
+
+def test_every_fake_has_at_least_two_independent_detectors():
+    """No fake rests on ONE guard, and the ledger's signature count is not a summed duplicate.
+
+    A single detector per fake would make the whole DPSGD-04 claim one rename away from vacuous.
+    Measured over the real mutated module: FAKE 1 and FAKE 2 have a structural AND a runtime
+    detector each, FAKE 3 has the statement-order check AND the magnitude guard, and FAKE 4 has two
+    structural detectors AND the runtime generator-continuity check.
+    """
+    assert set(_WATCHED_RED_NODE_IDS) == set(_LEDGER_FAKES), (
+        f"the watched-RED register covers {sorted(_WATCHED_RED_NODE_IDS)}, not all four fakes "
+        f"{list(_LEDGER_FAKES)}. DPSGD-04 is about FOUR silent-non-privacy failures"
+    )
+    for fake, node_ids in _WATCHED_RED_NODE_IDS.items():
+        assert len(node_ids) >= 2, (
+            f"{fake} has only {len(node_ids)} recorded detector(s): {node_ids}. One guard per fake "
+            "makes the claim one rename away from vacuous"
+        )
+        assert len(set(node_ids)) == len(node_ids), f"{fake} lists a duplicate detector: {node_ids}"
+    total = sum(len(ids) for ids in _WATCHED_RED_NODE_IDS.values())
+    assert total == _DISTINCT_RED_SIGNATURES, (
+        f"{total} detectors are registered against a recorded {_DISTINCT_RED_SIGNATURES} DISTINCT "
+        "RED signatures. If two fakes ever trip the same guard with the same message that is a "
+        "COVERAGE GAP to name, not a second win to count -- re-measure rather than re-type"
+    )
 
 
 def test_watched_red_node_ids_resolve():
