@@ -28,6 +28,7 @@ from tests.fixtures.phase22_reference import DELTA_FRONTIER, VACUOUS_AGREEMENT_R
 
 from personacore.privacy.accountant import (
     ROUND_TRIP_REL_TOL,
+    _log_erfc,
     delta_closed,
     delta_quadrature,
     epsilon_for,
@@ -163,6 +164,131 @@ def test_closed_form_survives_high_epsilon():
 
     got = delta_closed(775.7867, 35.355)
     assert math.isfinite(got) and got > 0.0, f"delta_closed at eps=775.79 returned {got!r}"
+
+
+def _erfc_b(eps, mu):
+    """``delta_closed``'s SECOND erfc argument, ``b = (eps/mu + mu/2)/sqrt(2)``.
+
+    Spelled here rather than imported so the two ``_log_erfc`` guards below derive ``b`` the same
+    way the implementation does without reaching into it for the value they are judging.
+    """
+    return (eps / mu + mu / 2.0) / math.sqrt(2.0)
+
+
+def _inert_points():
+    """Every ``(label, eps, mu)`` at which this module's answer is ALREADY PINNED.
+
+    The eleven representable ``DELTA_FRONTIER`` rows, plus the seven FROZEN ``GOLDEN_EPSILON``
+    rows re-expressed as ``(pinned_epsilon, sqrt(steps)/sigma)`` — which is exactly the
+    ``(eps, mu)`` pair ``epsilon_for``'s bisection converges onto, and therefore the pair whose
+    ``b`` must keep routing through ``_log_erfc``'s fast path.
+    """
+    points = [(f"DELTA_FRONTIER({eps}, {mu})", eps, mu) for eps, mu, _ in _representable_rows()]
+    points += [
+        (f"GOLDEN_EPSILON(sigma={sigma}, T={steps})", pinned, math.sqrt(steps) / sigma)
+        for sigma, steps, pinned in mitigation_accountant.GOLDEN_EPSILON
+    ]
+    return points
+
+
+@pytest.mark.parametrize(("label", "eps", "mu"), _inert_points())
+def test_log_erfc_is_inert_where_erfc_is_healthy(label, eps, mu):
+    """``_log_erfc`` CANNOT MOVE A PINNED ROW — asserted by exact equality, never by tolerance.
+
+    ``scripts/mitigation_accountant.py::GOLDEN_EPSILON`` is a FROZEN pre-registration: a
+    correction after the first ``results/phase23_*`` artifact is a dated continuation via
+    ``scripts/_addendum.py`` and never an edit, so an accountant change that MOVES a pinned
+    epsilon is unrecoverable rather than merely wrong. ``_log_erfc``'s fast path is what makes
+    that impossible: ``if erfc(x) > 0.0: return log(erfc(x))`` runs FIRST and UNCONDITIONALLY, so
+    every input whose erfc is healthy gets bit-for-bit the arithmetic the shipped code already
+    performed, and the asymptotic series is reachable only where the shipped code was returning
+    ``0.0`` instead.
+
+    This states that structurally rather than trusting it. The failure it exists to catch is a
+    future edit "simplifying" ``_log_erfc`` into using the series everywhere: measured, deleting
+    the fast path moves six of the seven pinned epsilons and sends four of them to ``0.0``,
+    because the pinned rows sit at ``b`` between 3.19 and 7.94 where the asymptotic expansion is
+    worth roughly three digits.
+
+    The ``erfc(b) > 0.0`` assertion is the META-GUARD, and it is not decoration: on a row whose
+    ``b`` had drifted into the underflow band both sides would take the SERIES branch, the
+    equality would compare the series against ``math.log(0.0)``'s own ``ValueError`` — or, worse,
+    against itself — and this test would pass while asserting nothing about inertness at all.
+    """
+    b = _erfc_b(eps, mu)
+    healthy = math.erfc(b)
+    assert healthy > 0.0, (
+        f"{label}: b = {b!r} has erfc(b) = {healthy!r}, so this pinned row is INSIDE the underflow "
+        f"band and no longer exercises _log_erfc's fast path. The equality below would then be "
+        f"comparing the asymptotic series against itself and proving nothing about inertness"
+    )
+    assert _log_erfc(b) == math.log(healthy), (
+        f"{label}: _log_erfc({b!r}) = {_log_erfc(b)!r} is NOT BIT-IDENTICAL to "
+        f"math.log(math.erfc(b)) = {math.log(healthy)!r}. The fast path is gone or reordered, so "
+        f"this pinned row is now answered by the asymptotic series — and GOLDEN_EPSILON is a "
+        f"FROZEN pre-registration with NO correction path"
+    )
+
+
+def test_log_erfc_matches_the_committed_underflow_truth():
+    """``_log_erfc`` is CORRECT past the erfc cliff, against a committed 60-dps truth.
+
+    The inertness guard above proves ``_log_erfc`` changes nothing where erfc is healthy. It says
+    nothing about the branch that actually does the new work, and a series that is inert AND wrong
+    is exactly as useless as no series at all. This is that branch's own truth.
+
+    ``b = 28.01573320140291`` is ``delta_closed``'s second erfc argument at
+    (eps=775.7866600701457, mu=35.35533905932738) — sigma=0.40 / T=200 at the frozen delta, the
+    point the shipped comment cited as reachable and the point at which the shipped code silently
+    dropped the whole term. ``math.erfc(b)`` there is exactly ``0.0``; ``log(erfc(b))`` is
+    ``-788.787``, a perfectly ordinary number.
+
+    PROVENANCE of the literal — mpmath 1.3.0, present in ``.venv`` only as a TRANSITIVE dependency
+    of torch (torch -> sympy -> mpmath), declared in neither ``pyproject.toml`` nor
+    ``requirements.txt``, and imported by NOTHING in this suite (RPT-03;
+    ``tests/test_phase22_reference.py::test_no_phase22_test_imports_mpmath`` enforces that by AST
+    over the whole ``test_phase22_*`` glob). It was computed by a ONE-OFF shell invocation whose
+    OUTPUT is committed here as data::
+
+        .venv/bin/python -c "
+        from mpmath import mp
+        mp.dps = 60
+        print(mp.nstr(mp.log(mp.erfc(mp.mpf(28.01573320140291))), 25))"
+        # -> -788.7870740351563058464846
+
+    ``mp.mpf(28.01573320140291)`` takes the PYTHON FLOAT, i.e. the exact binary64 value the
+    implementation passes, rather than ``mp.mpf("28.01573320140291")`` which would re-parse the
+    decimal to a different number. That distinction is recorded because it is the denominator:
+    the truth below is ``log(erfc(x))`` at the SAME x the code evaluates, so the deviation
+    measured is the series' own, with no input mismatch folded in.
+
+    THE TOLERANCE IS MEASURED, NOT CHOSEN. Deviation on this box: **7.55e-17 relative**
+    (5.96e-14 ABSOLUTE in the log, which is 0.52 of one ulp of ``-788.787``). 1e-15 is that
+    rounded up to the next decade with ~13x of margin. Stated in the units that matter downstream:
+    an absolute error ``d`` in the log is a relative error ``d`` in ``exp(eps + log)``, so 1e-15
+    relative here is 7.9e-13 relative in the second term — inside the frontier row's own 1.5e-12
+    budget. WATCHED: truncating the series to one term (``S = 1 - 1/(2x**2)``) makes the absolute
+    error 1.2144e-06, six orders past this bound, and reddens this test.
+    """
+    b = (775.7866600701457 / 35.35533905932738 + 35.35533905932738 / 2.0) / math.sqrt(2.0)
+    # META-GUARD: this test's whole subject is the branch BEYOND the cliff. If erfc(b) were still
+    # representable, _log_erfc would return math.log(erfc(b)) from its fast path and this would be
+    # a test of math.log rather than of the asymptotic series.
+    assert math.erfc(b) == 0.0, (
+        f"math.erfc({b!r}) = {math.erfc(b)!r}, not exactly 0.0 — this input is NO LONGER in the "
+        f"underflow band, so _log_erfc answers it from the fast path and the series this test "
+        f"exists to check is never reached"
+    )
+
+    truth = float("-788.7870740351563058464846")
+    got = _log_erfc(b)
+    rel = abs(got - truth) / abs(truth)
+    assert rel <= 1e-15, (
+        f"_log_erfc({b!r}) = {got!r} against the committed 60-dps log(erfc(b)) "
+        f"-788.7870740351563058464846 — relative {rel:.3e} over the measured-plus-margin 1e-15 "
+        f"({abs(got - truth):.3e} ABSOLUTE in the log, which is the same figure as the relative "
+        f"error the second term of delta_closed inherits)"
+    )
 
 
 @pytest.mark.parametrize("mu", [0.0, -1.0, float("nan"), float("inf")])

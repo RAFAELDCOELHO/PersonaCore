@@ -83,6 +83,7 @@ import math
 
 _SQRT2 = math.sqrt(2.0)
 _INV_SQRT_2PI = 1.0 / math.sqrt(2.0 * math.pi)
+_SQRT_PI = math.sqrt(math.pi)
 
 # math.exp raises "OverflowError: math range error" strictly above this argument (bisected). It
 # bounds the quadrature oracle's conditioning in the NEGATIVE-z direction, and it is the same
@@ -122,6 +123,86 @@ _MIN_TARGET_DELTA = 1e-300
 # thing: `GOLDEN_EPSILON_REL_TOL` covers the gap between the two ORACLES' bisected epsilon, worst
 # case 1.07e-14. Same tolerance, unrelated denominators.)
 ROUND_TRIP_REL_TOL = 1e-12
+
+
+def _log_erfc(x):
+    """``log(erfc(x))``, carried through the point where ``math.erfc`` itself underflows to 0.0.
+
+    **THE FAST PATH IS UNCONDITIONAL AND FIRST, AND THAT INERTNESS IS THE LOAD-BEARING PROPERTY
+    OF THIS FUNCTION -- not a side effect of it.** Wherever ``math.erfc(x) > 0.0`` this returns
+    ``math.log(math.erfc(x))`` and computes nothing else, which is bit-for-bit the arithmetic
+    ``delta_closed`` already performed on its ``else`` branch. That is what makes adding this
+    helper a PROVABLE NO-OP on every point the module already answers -- all seven
+    ``scripts/mitigation_accountant.py::GOLDEN_EPSILON`` epsilons and all eleven previously
+    representable ``DELTA_FRONTIER`` deltas are BIT-IDENTICAL across this change, asserted by
+    ``tests/test_phase22_accountant.py::test_log_erfc_is_inert_where_erfc_is_healthy`` with exact
+    ``==`` rather than a tolerance. ``GOLDEN_EPSILON`` is a FROZEN pre-registration with no
+    correction path, so a routing change that sent healthy inputs through the series below would
+    be unrecoverable rather than merely wrong: measured, deleting this fast path moves six of the
+    seven pinned epsilons, four of them to ``0.0``.
+
+    Past ``x ~ 27.2`` ``math.erfc`` underflows to exactly ``0.0`` and ``math.log`` can no longer
+    be applied to it, but ``log(erfc(x))`` is still a perfectly ordinary number there
+    (``-788.79`` at the x this module actually reaches). The asymptotic expansion for large
+    positive x is what recovers it::
+
+        log(erfc(x)) = -x*x - log(x*sqrt(pi)) + log(S),
+        S = 1 - 1/(2x**2) + 3/(4x**4) - 15/(8x**6) + ...
+
+    successive terms multiplying by ``-(2n-1)/(2x**2)``. The series is DIVERGENT, so it is summed
+    under the standard OPTIMAL-TRUNCATION rule -- stop at the first term that is not strictly
+    smaller than its predecessor -- with a relative floor and a hard term cap so no argument can
+    loop. MEASURED against mpmath at ``mp.workdps(120)`` over
+    ``x in {27.2, 27.20000001, 27.3, 28.0, 29.0, 32.0, 45.0, 80.0, 150.0}`` plus the
+    ``x = 28.01573320140291`` this module reaches: worst ABSOLUTE error in the returned log
+    **7.64e-13** (at x = 150.0), and **5.96e-14** at that 28.0157. Every one of those is BELOW ONE
+    ULP of the returned log (worst 0.881 ulp, at x = 29.0), so what is being measured is float64's
+    own resolution rather than truncation error. An absolute error ``d`` in the log is a relative
+    error ``d`` in ``exp(eps + log)``, so those numbers ARE the relative error the second term
+    inherits.
+
+    Args:
+        x: the erfc argument. Any float; the series branch is reached only when ``erfc(x)``
+            has underflowed, which requires ``x > 27.2``.
+
+    Returns:
+        ``log(erfc(x))``. ``-inf`` at an argument so large that ``-x*x`` overflows (checked:
+        ``_log_erfc(1e200)`` is ``-inf``, and ``math.exp(eps + -inf)`` is ``0.0``, which is the
+        correct second term there rather than an exception).
+
+    Raises:
+        ValueError: when ``erfc(x)`` underflowed at ``x <= 0.0``, which is impossible.
+    """
+    e = math.erfc(x)
+    if e > 0.0:
+        return math.log(e)
+    if x <= 0.0:
+        raise ValueError(
+            f"_log_erfc({x!r}): erfc underflowed to exactly 0.0 at a NON-POSITIVE argument, which "
+            f"is impossible -- math.erfc is monotonically decreasing with erfc(x) >= 1.0 for every "
+            f"x <= 0.0, so this means the argument is not the quantity the caller believes it is. "
+            f"UNREACHABLE FROM delta_closed: the series branch requires erfc(x) == 0.0, which "
+            f"first happens at x ~ 27.2, and delta_closed's b = (eps/mu + mu/2)/sqrt(2) would "
+            f"therefore be > 27.2 > 0. Kept as a domain guard in the same spirit as delta_closed's "
+            f"own first two refusals, which are likewise unreachable from the search."
+        )
+
+    inv = 1.0 / (2.0 * x * x)
+    term = 1.0
+    total = 1.0
+    for n in range(1, 61):
+        nxt = term * (-(2 * n - 1) * inv)
+        # OPTIMAL TRUNCATION: an asymptotic series stops helping at its smallest term, so the
+        # first term that is not strictly smaller than its predecessor is discarded rather than
+        # added. The relative floor exits early once the tail is below float64's resolution, and
+        # the range cap bounds a pathological x rather than being the normal exit.
+        if not abs(nxt) < abs(term):
+            break
+        total += nxt
+        term = nxt
+        if abs(nxt) <= 1e-17 * abs(total):
+            break
+    return -x * x - math.log(x * _SQRT_PI) + math.log(total)
 
 
 def delta_closed(eps, mu):
@@ -177,13 +258,29 @@ def delta_closed(eps, mu):
     a = z / _SQRT2
     b = (eps / mu + mu / 2.0) / _SQRT2
 
-    eb = math.erfc(b)
     # exp(eps + log(erfc(b))), NEVER exp(eps) * erfc(b). The naive product raises
     # "OverflowError: math range error" for eps > 709.782712893384 (bisected), and that eps is
     # REACHABLE on this project's own frontier, not a pathological input: solving epsilon_for at
     # sigma=0.40, T=200 against the frozen delta gives eps = 775.79, and sigma_for walks there
-    # while bisecting sigma downward. Log space keeps the identical product below the line.
-    second = 0.0 if eb == 0.0 else 0.5 * math.exp(eps + math.log(eb))
+    # while bisecting sigma downward.
+    #
+    # THE LOG IS `_log_erfc(b)` AND NOT `math.log(math.erfc(b))`, AND IT IS UNCONDITIONAL. The
+    # shipped form guarded the log on `math.erfc(b)` being exactly zero and substituted 0.0 for
+    # the WHOLE second term there, under a comment claiming log space "keeps the identical product
+    # below the line" while citing sigma=0.40/T=200 -- the exact point at which that guard fired
+    # and the log-space branch therefore never executed at all. MEASURED at
+    # (eps=775.7866600701457, mu=35.35533905932738), i.e. that very point: `math.erfc(b)` is
+    # exactly 0.0 while `math.exp(eps)` is ~8.3e336, so the true second term is 1.1297e-06 against
+    # a first term of 9.99999999999972e-06. Treating the underflow as a negligible term returned
+    # 9.99999999999972e-06 against a 60-dps truth of 8.870303048329795e-06 -- **12.7357% high,
+    # ZERO correct significant digits**, and it did not refuse, under a docstring promising at
+    # least twelve. Across a delta=1e-5 (sigma, T) grid, 19 of 72 cells disagreed with the
+    # quadrature oracle above 1e-9, worst 11.36%.
+    #
+    # THE DIRECTION, RECORDED HONESTLY: `second >= 0`, so dropping it OVER-states delta and
+    # therefore OVER-states epsilon. That is the CONSERVATIVE direction, which is why this was a
+    # latent wrong number rather than a live privacy break -- and why it survived a phase.
+    second = 0.5 * math.exp(eps + _log_erfc(b))
 
     # --- Refusal 2 of 3: REPRESENTABILITY. Report the domain limit, never a number.
     ea = math.erfc(a)
