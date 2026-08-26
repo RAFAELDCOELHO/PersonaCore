@@ -401,7 +401,8 @@ CPU before a single second of M3 time is spent
      is not restructured into `nn.Linear` submodules and `persona_adapter.pt` plus every v3.0
      checkpoint still load unchanged. (DPSGD-05, DPSGD-07)
 
-**Plans**: 11 plans in 6 waves
+**Plans**: 16 plans in 10 waves (11 executed; 22-12 … 22-16 close the SC3 / DPSGD-03 gap
+`22-VERIFICATION.md` recorded)
 
 **Wave 1** *(no dependencies)*
 
@@ -443,6 +444,33 @@ CPU before a single second of M3 time is spent
 
 - [x] 22-11-PLAN.md — the four positive controls (V-18…V-21), each WATCHED failing on the real source
       with its RED output captured, then restored byte-identically and re-greened
+
+**Wave 7** *(gap closure — blocked on `22-VERIFICATION.md`, which returned `gaps_found`, 4/5)*
+
+- [ ] 22-12-PLAN.md — `_log_erfc`: carry `delta_closed`'s second term through the `erfc` underflow
+      (measured 12.7357% high at σ=0.40/T=200), add the thirteenth `DELTA_FRONTIER` row in the
+      `b > 27.2` band so V-01/V-02 sweep it, and commit a 60-dps ε for the overflow-regime test —
+      with all 7 `GOLDEN_EPSILON` rows asserted BIT-IDENTICAL across the fix
+- [ ] 22-13-PLAN.md — WARNING-1's dangerous half: refuse a resume with `dp_fn=None` from a checkpoint
+      carrying `dp_noise_rng`, and record in `loop.py` why the other direction is deliberately NOT a
+      refusal (it would redden two committed back-compat controls)
+
+**Wave 8** *(blocked on Wave 7)*
+
+- [ ] 22-14-PLAN.md — `delta_quadrature` returns a probability or refuses: a `log(4*n)` headroom for
+      the Simpson SUM (closing the measured 404-cell `inf` band) and an upper-bound refusal whose
+      slack is measured on 4,000+ cells rather than transcribed
+
+**Wave 9** *(blocked on Wave 8)*
+
+- [ ] 22-15-PLAN.md — `epsilon_for`'s subnormal-σ hole: check the `sqrt(steps)/sigma` QUOTIENT and
+      answer `+inf` continuously with the σ=0 branch, and narrow `_delta_or_below_float64`'s swallow
+      so its docstring premise is established rather than asserted
+
+**Wave 10** *(blocked on Wave 9)*
+
+- [ ] 22-16-PLAN.md — traceability: DPSGD-03's `REQUIREMENTS.md` row corrected retract-in-place, the
+      validation contract extended, and WARNING-2 (no production DP-resume driver) routed to Phase 23
 
 ### Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration
 
