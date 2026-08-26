@@ -271,6 +271,121 @@ def _assert_single_clip_constant(source_text, *, class_name, allowed_attr):
     )
 
 
+# The call whose name identifies a Gaussian draw. Matched on `func.id` OR `func.attr` for the
+# reason `_forbidden_calls_reachable_from` gives: a dotted-path match is blind to
+# `from torch import normal` and to any aliasing.
+_NOISE_CALL = "normal"
+
+
+def _called_names(node):
+    """Every callee name reachable syntactically inside ``node`` (``id`` or ``attr``)."""
+    return {
+        getattr(call.func, "id", None) or getattr(call.func, "attr", None)
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call)
+    }
+
+
+def _divides_by(node, divisor):
+    """``True`` when ``node`` contains a ``BinOp(Div)`` whose RIGHT operand is ``Name(divisor)``."""
+    return any(
+        isinstance(inner, ast.BinOp)
+        and isinstance(inner.op, ast.Div)
+        and isinstance(inner.right, ast.Name)
+        and inner.right.id == divisor
+        for inner in ast.walk(node)
+    )
+
+
+def _assert_noise_precedes_divide(source_text, *, class_name, divisor="accum"):
+    """D-02/FAKE 3's STRUCTURAL half: the draw is a statement EARLIER than the ``/N``.
+
+    This is the detector that catches *noise added after averaging* where the runtime differential
+    structurally cannot: at ``sigma = 0`` the drawn values are exact zeros, so ``(S + 0)/N`` and
+    ``(S/N) + 0`` are the same bytes, and at ``N = 1`` the divide is a no-op at every sigma.
+    Statement ORDER is observable at both. (22-06 measured the sigma-of-zero half and 22-11 measured
+    the ``N = 1`` half; D-17's table credits the sigma-of-zero identity with detecting FAKE 3 and
+    that row is FALSE — see ``tests/test_phase22_fakes.py::test_fake_noise_after_averaging``.)
+
+    **The plan text asked for ``method="finalize"`` and that is UNSATISFIABLE against the shipped
+    module**, which is why this takes no method name and LOCATES one instead. Measured against
+    ``dpsgd.py``: ``finalize``'s body contains neither a ``torch.normal`` call nor any division —
+    it delegates to ``_noised_private``, which owns both. A guard scoped to ``finalize`` would find
+    zero of each and pass over nothing.
+
+    **Scope** — the method that takes a parameter named ``divisor`` AND contains a ``BinOp(Div)``
+    whose RIGHT operand is a ``Name`` load of it. Hard-asserted to be exactly ONE, so a collapsed
+    or duplicated scope reddens rather than passing over the wrong body.
+
+    **The noise statement** — the first top-level statement of that method whose subtree calls a
+    NOISE PRODUCER. Producers are derived from the class rather than hard-coded: ``normal`` itself,
+    plus every method of the class whose own body calls it (which resolves ``self._draw_noise()``,
+    one hop). Meta-guarded to be more than ``{"normal"}`` alone, so a walk that stopped finding
+    ``normal`` cannot report a vacuous pass.
+
+    **Assertion** — ``noise_index < divide_index``, strictly. Equality is refused too: a single
+    statement doing both (``[(buf / accum) + drawn ...]``) is FAKE 3 written on one line.
+    """
+    tree = ast.parse(source_text)
+    classes = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+    assert class_name in classes, (
+        f"{class_name} is gone — this guard would check nothing (found: {sorted(classes)})"
+    )
+    methods = {
+        node.name: node
+        for node in ast.walk(classes[class_name])
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+    producers = {_NOISE_CALL} | {
+        name for name, node in methods.items() if _NOISE_CALL in _called_names(node)
+    }
+    # META-GUARD: some method really does call `normal`, so an "index not found" below means the
+    # statement is absent rather than that the walk never recognised a draw at all.
+    assert producers != {_NOISE_CALL}, (
+        f"no method of {class_name} calls {_NOISE_CALL!r}, so the noise producer set is just "
+        f"{sorted(producers)} and this guard would be looking for a statement that cannot exist"
+    )
+
+    scoped = [
+        node
+        for node in methods.values()
+        if divisor in {arg.arg for arg in node.args.args + node.args.kwonlyargs}
+        and _divides_by(node, divisor)
+    ]
+    assert len(scoped) == 1, (
+        f"expected exactly ONE method of {class_name} dividing by its own {divisor!r} parameter, "
+        f"found {[node.name for node in scoped]}. Zero means D-02's '/N LAST' divide is gone or "
+        "was rewritten past this locator; two or more means the order rule is being asserted about "
+        "an ambiguous body"
+    )
+    method = scoped[0]
+
+    noise_index = next(
+        (i for i, stmt in enumerate(method.body) if _called_names(stmt) & producers), None
+    )
+    divide_index = next(
+        (i for i, stmt in enumerate(method.body) if _divides_by(stmt, divisor)), None
+    )
+    assert noise_index is not None, (
+        f"{class_name}.{method.name} divides by {divisor!r} but no statement in it reaches a noise "
+        f"producer {sorted(producers)} — the draw left the method that owns the divide, so their "
+        "relative order is no longer checkable here"
+    )
+    assert divide_index is not None, (
+        f"{class_name}.{method.name} was located as the divide-bearing method but no top-level "
+        f"statement divides by {divisor!r} — the locator and the index walk disagree"
+    )
+    assert noise_index < divide_index, (
+        f"{class_name}.{method.name} draws the noise at statement {noise_index} and divides by "
+        f"{divisor!r} at statement {divide_index}. D-02 puts the /N LAST: the noise is added to "
+        "the SUM, because one record moves the SUM by at most C and that is the sensitivity the "
+        "accountant is told. Dividing first releases noise N times too large for that sensitivity "
+        "— FAKE 3, and it is INVISIBLE at sigma = 0 (the draw is exact zeros) and at N = 1 (the "
+        "divide is a no-op), which is why the order is pinned structurally as well as by magnitude"
+    )
+
+
 # =============================================================================================
 # The synthetic sources. ONE template, so every RED input differs from GREEN by exactly one line
 # and a failure is attributable to the mutation rather than to two different fixtures — the
@@ -534,6 +649,17 @@ def test_dpsgd_has_exactly_one_clip_constant():
     carries no numeric constants at all.
     """
     _assert_single_clip_constant(_dpsgd_source(), class_name="DPSGD", allowed_attr="C")
+
+
+def test_dpsgd_draws_the_noise_before_it_divides():
+    """D-02 live / FAKE 3: the draw is a strictly earlier statement than the ``/accum``.
+
+    Measured against the shipped module: the divide-bearing method is ``_noised_private``, the
+    noise statement is index 3 (``noise = self._draw_noise()``) and the divide is index 7 (the
+    ``return``). The RED half — the two statements swapped — is in
+    ``tests/test_phase22_fakes.py::test_fake_noise_after_averaging``, fed to THIS function.
+    """
+    _assert_noise_precedes_divide(_dpsgd_source(), class_name="DPSGD")
 
 
 _RESEED_CALLS = frozenset({"manual_seed", "seed", "set_state"})
