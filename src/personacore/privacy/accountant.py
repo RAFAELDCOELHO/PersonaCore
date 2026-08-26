@@ -85,6 +85,16 @@ _SQRT2 = math.sqrt(2.0)
 _INV_SQRT_2PI = 1.0 / math.sqrt(2.0 * math.pi)
 _SQRT_PI = math.sqrt(math.pi)
 
+# float64's smallest positive NORMAL value, and it is `_log_erfc`'s ROUTING THRESHOLD. DERIVED
+# rather than spelled: `math.ldexp(1.0, -1022)` is exactly 2.2250738585072014e-308 and exactly
+# `sys.float_info.min` (both verified in a throwaway interpreter), and this module may not import
+# `sys` -- D-10's ceiling is hard equality with `{"math"}`, asserted by
+# `tests/test_phase22_accountant.py::test_accountant_imports_math_only` STATICALLY and OUT OF
+# PROCESS. Below this value a returned float is a SUBNORMAL that has already discarded up to 52 of
+# its 53 mantissa bits, so it is no longer an input `math.log` can recover information from -- a
+# fact about the float64 format, not about any particular libm.
+_SMALLEST_NORMAL = math.ldexp(1.0, -1022)
+
 # math.exp raises "OverflowError: math range error" strictly above this argument (bisected). It
 # bounds the quadrature oracle's conditioning in the NEGATIVE-z direction, and it is the same
 # constant RESEARCH F2 measured for the closed form's rejected `exp(eps) * erfc(b)` product.
@@ -148,18 +158,41 @@ _DELTA_ACCUMULATION_SLACK = 1e-11
 def _log_erfc(x):
     """``log(erfc(x))``, carried through the point where ``math.erfc`` itself underflows to 0.0.
 
-    **THE FAST PATH IS UNCONDITIONAL AND FIRST, AND THAT INERTNESS IS THE LOAD-BEARING PROPERTY
-    OF THIS FUNCTION -- not a side effect of it.** Wherever ``math.erfc(x) > 0.0`` this returns
-    ``math.log(math.erfc(x))`` and computes nothing else, which is bit-for-bit the arithmetic
-    ``delta_closed`` already performed on its ``else`` branch. That is what makes adding this
+    **THE FAST PATH IS TAKEN WHEREVER ``math.erfc`` STILL RETURNS A NORMAL FLOAT, AND THAT IS THE
+    LOAD-BEARING ROUTING PROPERTY OF THIS FUNCTION.** For ``math.erfc(x) >= _SMALLEST_NORMAL``
+    this returns ``math.log(math.erfc(x))`` and computes nothing else, which is bit-for-bit the
+    arithmetic ``delta_closed`` already performed on its ``else`` branch. That is what keeps this
     helper a PROVABLE NO-OP on every point the module already answers -- all seven
-    ``scripts/mitigation_accountant.py::GOLDEN_EPSILON`` epsilons and all eleven previously
-    representable ``DELTA_FRONTIER`` deltas are BIT-IDENTICAL across this change, asserted by
+    ``scripts/mitigation_accountant.py::GOLDEN_EPSILON`` epsilons and all twelve representable
+    ``DELTA_FRONTIER`` deltas are ``float.hex()``-BIT-IDENTICAL across this change, asserted by
     ``tests/test_phase22_accountant.py::test_log_erfc_is_inert_where_erfc_is_healthy`` with exact
     ``==`` rather than a tolerance. ``GOLDEN_EPSILON`` is a FROZEN pre-registration with no
     correction path, so a routing change that sent healthy inputs through the series below would
     be unrecoverable rather than merely wrong: measured, deleting this fast path moves six of the
     seven pinned epsilons, four of them to ``0.0``.
+
+    **THE PREDICATE WAS ``erfc(x) > 0.0``, AND THAT WAS THE DEFECT RATHER THAN THE PROTECTION.
+    The history is corrected here, not deleted.** This paragraph opened *"THE FAST PATH IS
+    UNCONDITIONAL AND FIRST, AND THAT INERTNESS IS THE LOAD-BEARING PROPERTY OF THIS FUNCTION"*,
+    and ``22-VERIFICATION.md`` records that sentence as a Blocker-severity anti-pattern for a
+    measured reason: strict positivity is TRUE THROUGHOUT THE SUBNORMAL RANGE. So all 0.657 of
+    ``x`` in ``[26.54325845425098, 27.2)`` took ``math.log`` of a float that had already thrown
+    away up to 52 of its 53 mantissa bits, and the "unconditional inertness" faithfully
+    reproduced that loss instead of preventing it -- worst **1.2369e-05 relative** in the returned
+    log at x = 27.15, which by this docstring's own conversion rule is 1.2369e-05 relative in
+    ``delta_closed``'s second term. It was reachable at this project's FROZEN delta (T = 200,
+    delta = 1e-5, sigma in [0.4135, 0.4185]) and it ran in the privacy-UNDERSTATING direction at
+    four measured sigmas. The inertness claim is still true and still load-bearing; what changed
+    is that it is now scoped to the region where ``math.erfc`` has lost nothing.
+
+    **NO THIRD BLIND BAND IS OPENED, and that is measured rather than argued.** Over
+    x in [20, 30] stepped by multiplication from 20.0, adjudicated at ``mp.dps = 120``, the worst
+    relative error of the route ACTUALLY CHOSEN is 1.2369e-05 (at x = 27.15) under ``e > 0.0`` and
+    **2.0621e-16** (at x = 26.95) under this predicate -- and 2.0621e-16 is also
+    ``max_x min(err_L, err_S)``, the floor for ANY routing rule over that band. This predicate
+    EQUALS that floor, so no rule can do better and none can be blind somewhere this one is not.
+    The expansion is asymptotic and improves with x, so widening its domain downward costs nothing
+    at the far end either: worst 5.8118e-17 over x in {30, 40, 60, 100, 150, 300, 1e3, 1e4, 1e6}.
 
     Past ``x ~ 27.2`` ``math.erfc`` underflows to exactly ``0.0`` and ``math.log`` can no longer
     be applied to it, but ``log(erfc(x))`` is still a perfectly ordinary number there
@@ -182,8 +215,12 @@ def _log_erfc(x):
     inherits.
 
     Args:
-        x: the erfc argument. Any float; the series branch is reached only when ``erfc(x)``
-            has underflowed, which requires ``x > 27.2``.
+        x: the erfc argument. Any float; the series branch is reached whenever ``erfc(x)`` is no
+            longer a NORMAL float, which requires ``x >= 26.54325845425098``. That boundary is
+            bisected on this box -- ``erfc`` at the float immediately below it is
+            2.2250738585076065e-308, still normal, and at the boundary itself it is subnormal.
+            It read ``x > 27.2`` while the fast path was guarded on strict positivity, i.e. while
+            the whole subnormal band was answered by ``math.log``.
 
     Returns:
         ``log(erfc(x))``. ``-inf`` at an argument so large that ``-x*x`` overflows (checked:
@@ -191,20 +228,48 @@ def _log_erfc(x):
         correct second term there rather than an exception).
 
     Raises:
-        ValueError: when ``erfc(x)`` underflowed at ``x <= 0.0``, which is impossible.
+        ValueError: when ``erfc(x)`` was not a normal float at ``x <= 0.0``, which is impossible.
     """
     e = math.erfc(x)
-    if e > 0.0:
+    # THE GUARD IS `>= _SMALLEST_NORMAL` AND NOT `> 0.0`, AND THE RESIDUAL SLIVER IS PINNED HERE.
+    # The threshold sits ~0.16 BELOW the true crossover. MEASURED on this box at mp.dps = 120 over
+    # x in [20, 30] stepped by MULTIPLICATION from 20.0 -- a grid ACCUMULATED by `x += 0.05` lands
+    # on different floats and yields different last digits, which is how an earlier draft of this
+    # comment acquired a figure that had to be retracted -- the series is <= route L from x = 26.55
+    # onward and STRICTLY better from x = 26.70 onward, with x in {26.55, 26.60, 26.65} exact TIES.
+    # So the sliver where the series is chosen while route L is in principle no worse is
+    # [26.54325845425098, 26.70).
+    #
+    # WHAT THE SLIVER COSTS, ON THREE GRIDS EACH STATED WITH ITS DENOMINATOR. Chosen-route worst
+    # relative error against 120-dps truth, versus PERFECT routing `min(err_L, err_S)` on the SAME
+    # points: 32 points at clean 0.005 steps -> 1.5184e-16 vs 1.5184e-16 (1.00x); the 400
+    # CONSECUTIVE FLOATS from the boundary -> 1.8815e-16 vs 8.017e-17 (2.35x); 2000 uniform samples
+    # -> 2.3226e-16 vs 2.1461e-16 (1.08x). Worst anywhere in the sliver is 2.3226e-16, about one
+    # ulp of the returned log and the same register as the 2.0621e-16 whole-band floor -- against
+    # the 1.2369e-05 the old predicate cost at x = 27.15, ELEVEN ORDERS the other way. (The two
+    # routes are NOT bit-identical across the sliver, which a draft of this comment asserted: they
+    # agree at 211 of the first 400 floats above the boundary and differ by 1 to 5 ulp elsewhere.)
+    #
+    # DO NOT "OPTIMISE" THIS BOUNDARY UP TO THE CROSSOVER. `_SMALLEST_NORMAL` is a property of the
+    # FLOAT64 FORMAT and is the same number wherever this runs. 26.70 is a property of THIS BOX'S
+    # libm `erfc` and would have to be re-measured against every libm the project ships against.
+    # A boundary that drifts UPWARD re-opens the lossy side -- at x = 26.9 route L is already
+    # 1.6702e-11 wrong and at 27.15 it is 1.2369e-05 wrong -- which is the entire defect this
+    # predicate exists to close. Erring toward the numerically stable route costs one ulp and is
+    # bounded; erring the other way is not. `test_log_erfc_band_routes_accurately` reddens on an
+    # up-moved boundary WITHOUT naming where the boundary is.
+    if e >= _SMALLEST_NORMAL:
         return math.log(e)
     if x <= 0.0:
         raise ValueError(
-            f"_log_erfc({x!r}): erfc underflowed to exactly 0.0 at a NON-POSITIVE argument, which "
-            f"is impossible -- math.erfc is monotonically decreasing with erfc(x) >= 1.0 for every "
+            f"_log_erfc({x!r}): erfc was not a NORMAL float at a NON-POSITIVE argument, which is "
+            f"impossible -- math.erfc is monotonically decreasing with erfc(x) >= 1.0 for every "
             f"x <= 0.0, so this means the argument is not the quantity the caller believes it is. "
-            f"UNREACHABLE FROM delta_closed: the series branch requires erfc(x) == 0.0, which "
-            f"first happens at x ~ 27.2, and delta_closed's b = (eps/mu + mu/2)/sqrt(2) would "
-            f"therefore be > 27.2 > 0. Kept as a domain guard in the same spirit as delta_closed's "
-            f"own first two refusals, which are likewise unreachable from the search."
+            f"UNREACHABLE FROM delta_closed: the series branch requires erfc(x) < "
+            f"{_SMALLEST_NORMAL!r}, which first happens at x = 26.54325845425098 (bisected), and "
+            f"delta_closed's b = (eps/mu + mu/2)/sqrt(2) would therefore be > 26.54 > 0. Kept as a "
+            f"domain guard in the same spirit as delta_closed's own first two refusals, which are "
+            f"likewise unreachable from the search."
         )
 
     inv = 1.0 / (2.0 * x * x)
@@ -682,15 +747,23 @@ def _delta_or_below_float64(eps, mu):
     function's own prologue and holds no matter what any caller computes.
 
     THE ARGUMENT ALSO COVERS ``_log_erfc``, which ``delta_closed`` calls and which raises a fifth
-    ``ValueError`` from OUTSIDE ``delta_closed``'s own FunctionDef. That branch requires
-    ``math.erfc(x)`` to have underflowed to exactly ``0.0`` at ``x <= 0.0``, and it is unreachable
-    from any call whatsoever: ``math.erfc`` is monotonically decreasing with ``erfc(0.0) == 1.0``,
-    so ``erfc(x) >= 1.0`` for every ``x <= 0.0`` and the underflow test cannot be true there.
-    MEASURED, ``math.erfc`` first returns exactly ``0.0`` at ``x = 27.2`` (bisected: ``erfc`` is
-    still ``1e-323`` at ``27.199999999999996``), and ``delta_closed`` reaches ``_log_erfc`` with
-    ``b = (eps/mu + mu/2)/sqrt(2)``, so taking the series branch already implies ``b >= 27.2 > 0``.
-    Its refusal is therefore a domain guard in the same spirit as ``delta_closed``'s own first two,
-    not a fifth meaning this helper's ``except`` could silently acquire.
+    ``ValueError`` from OUTSIDE ``delta_closed``'s own FunctionDef. **THE PREMISE MOVED WITH THE
+    PREDICATE AND IS RESTATED HERE RATHER THAN LEFT STALE.** That branch used to require
+    ``math.erfc(x)`` to have underflowed to exactly ``0.0``; it now requires only that
+    ``math.erfc(x)`` be BELOW ``_SMALLEST_NORMAL`` (2.2250738585072014e-308) -- a strictly weaker
+    condition, reached 0.657 lower in x. The CONCLUSION is unchanged and does not depend on which
+    threshold is used: ``math.erfc`` is monotonically decreasing with ``erfc(0.0) == 1.0``, so
+    ``erfc(x) >= 1.0`` for every ``x <= 0.0``, and 1.0 is not below any positive threshold. So the
+    branch is unreachable from any call whatsoever under either predicate.
+
+    MEASURED at the NEW boundary rather than at the old one: ``math.erfc`` first returns a value
+    below ``_SMALLEST_NORMAL`` at ``x = 26.54325845425098`` (bisected -- ``erfc`` at the float
+    below it is 2.2250738585076065e-308, still normal), where it previously first returned exactly
+    ``0.0`` at ``x = 27.2``. ``delta_closed`` reaches ``_log_erfc`` with
+    ``b = (eps/mu + mu/2)/sqrt(2)``, so taking the series branch already implies
+    ``b >= 26.54325845425098 > 0``. Its refusal is therefore a domain guard in the same spirit as
+    ``delta_closed``'s own first two, not a fifth meaning this helper's ``except`` could silently
+    acquire.
 
     ``tests/test_phase22_accountant.py::test_delta_closed_still_ships_exactly_four_raises`` reddens
     if a fifth is added INSIDE ``delta_closed``, because that argument would then need re-reading
