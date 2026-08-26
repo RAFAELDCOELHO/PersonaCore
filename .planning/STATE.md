@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: ready_to_execute
-stopped_at: Phase 23 planned (14 plans, 8 waves) — ready to execute
-last_updated: 2026-08-26T21:34:03.506Z
+status: executing
+stopped_at: Phase 23 executing (14 plans, 8 waves)
+last_updated: 2026-08-26T22:21:53.647Z
 last_activity: 2026-08-26
 progress:
   total_phases: 9
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
-Status: Ready to execute
+Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
+Plan: 1 of 14
+Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
