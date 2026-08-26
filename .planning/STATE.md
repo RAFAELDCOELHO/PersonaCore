@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-06-PLAN.md
-last_updated: "2026-08-25T23:31:16.712Z"
-last_activity: 2026-08-25
+stopped_at: Completed 22-07-PLAN.md
+last_updated: "2026-08-26T00:07:47.111Z"
+last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 39
-  completed_plans: 34
+  completed_plans: 35
   percent: 22
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — EXECUTING
-Plan: 7 of 11
+Plan: 8 of 11
 Status: Executing Phase 22
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
 EXECUTED — all five plans landed and every claim below is now a measured state rather than a plan. GAP 1 (GATE-06) closed at `20-14`: `coverage_verdict` carries a per-element `[0.0, 1.0]` `_prove` on BOTH Y legs, placed before `x_uppers` so no value reaches the axis loop unvalidated, and the range check subsumes NaN with no deletable special case; the success-count unit is enforced BY TYPE (`isinstance(k, int) and not isinstance(k, bool)`), which also refuses the module's own rate-space `SUPERSEDED_SWEEP_SENTINEL`. GAP 2 (GATE-02 / T-20-19) closed at `20-15`: `_prove_retention_floor` gained a fifth `_prove` bounding the floor's MAGNITUDE — `_MAX_ADMISSIBLE_RETENTION_FLOOR`, DERIVED from the governing floor times a separately-named `_RETENTION_FLOOR_RELATIVE_TOLERANCE` (measured `1e-09`) — placed AFTER the `!=` so the named-value refusal still fires first; the one-ULP nudge and `5.0` under clean provenance are both refused by MAGNITUDE and the governing floor `0.008681618994239138` is still ADMITTED, so the bound is one-sided and not vacuous. THE FINDING A FUTURE READER MOST NEEDS IS **D-41**: that bound refuses THIS REPOSITORY'S OWN committed fixtures at `retention_noise_floor: 0.009` inside the FROZEN pin, so the sanctioned route's test harness supplies the governing floor READ from `results/phase20_retention_floor.json` rather than the tolerance being widened to admit a value already in hand — and every published verdict is BIT-UNCHANGED under the substitution (all four `PASS`/`INCONCLUSIVE` readings identical, the governing cap `3.9085032379884783` strictly TIGHTER than the fixture's `3.90914`, so the rewire cannot buy a pass the fixture floor would have withheld). `20-16` published the second dated continuation additively (+152 / −0 via `append_addendum`, in its own commit) and corrected in place the one `REQUIREMENTS.md` sentence the verification measured FALSE. `20-17` re-closed `20-SECURITY.md` to `status: verified` / `threats_open: 0` at 84 distinct threat IDs with zero rows at Status `open`, in a commit distinct from `20-13`'s OPEN flip (D-39), gated on RE-APPLYING eight watched-RED breaks in its own process — all observed RED, all restored byte-identically, and ONE DIVERGED from its SUMMARY and was published rather than smoothed. Full suite `877 passed, 1 skipped`; both frozen pins `git diff --exit-code` 0. Confirmation is the ORCHESTRATOR's audit at `/gsd:verify-phase 20`, not this record. PRIOR ENTRY (2026-08-21, at dispatch, carried forward rather than deleted): The 2026-08-21 re-verification returned `gaps_found` at 5/6 must-haves, and both remaining gaps are the same defect class — a guard that refuses a NAME where the harm is a PROPERTY. GAP 1 (GATE-06 / ROADMAP SC3) — `coverage_verdict` length-checks both Y sweep legs and consumes their values raw, while the extraction axis on the same function gets three per-element `_prove` calls; measured, held-out `(0.30, 0.28)` is correctly flagged truncated but `(nan, 0.28)`, strictly MORE truncated, drops out of the truncated set entirely and reaches `PASS` — `nan >= criterion` is False, so the NaN is COUNTED as a failing point and actively manufactures the bracket. GAP 2 (GATE-02 / T-20-19) — `_prove_retention_floor` refuses the borrowed floor by float `!=`; measured, `0.06893 * (1 + 2**-50)` defeats it and returns a BIT-IDENTICAL `4.029`, and `retention_noise_floor=5.0` with clean adapter provenance needs no malformed input at all to reach `PASS` at cap `13.89114` against the governing `3.9085032379884783`. Both reproduced against HEAD before planning. THE PLANNED CLOSURE, per three escalation decisions taken at the gate: the magnitude bound lands BESIDE the `!=` (name refused by identity AND class refused by magnitude, which also moots the D-24 post-hoc question); T-20-19 flips OPEN / `threats_open: 1` as 20-13's FIRST act and returns to CLOSED only after the bound's tripwires are watched RED against both measured cases, in a separate commit; and the Y hole is NOT deferred to Phase 23. PLANNER FINDING, not in any source document: the bound refuses this repository's OWN committed fixtures — `retention_noise_floor: 0.009` at `scripts/mitigation_gate.py:1237`, annotated `# fabricated`, inside the FROZEN file — so landing it alone reddens 5 of 11 correction tests. Recorded as D-41 and closed by having the test harness read the governing floor from `results/phase20_retention_floor.json` rather than by widening the tolerance to admit a value already in hand. Verified by the plan-checker end to end: bound alone 5 failed / 6 passed, bound + harness 11 passed, all fixture verdicts bit-unchanged. NOT YET EXECUTED — no code has changed; `git diff --exit-code -- scripts/ tests/ results/` returns 0.
-Last activity: 2026-08-25
+Last activity: 2026-08-26
 
 ## Performance Metrics
 
@@ -127,6 +127,7 @@ Last activity: 2026-08-25
 | Phase 22 P04 | 45min | 3 tasks | 3 files |
 | Phase 22 P05 | 45min | 3 tasks | 2 files |
 | Phase 22 P06 | 70min | 3 tasks | 5 files |
+| Phase 22 P07 | 32min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -410,6 +411,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22]: 22-06: dp_fn= is a NEW ADDITIVE gradient-side seam in _optimizer_step/train(); the legacy clip_grad_norm_ now has exactly ONE reachable call site in loop.py, inside `if dp_fn is None:`. Seam-off bit-identity proven against golden_trajectory_v1.json on all three fingerprints (the golden replay RAN on this box, not skipped).
 - [Phase 22]: 22-06: the plan's accum=4 'documented tolerance' case is UNSATISFIABLE — measured, the sigma-of-zero identity is BITWISE at every power-of-two lot size (72/72 at 1,2,4,8; rel dev exactly 0). The tolerance moved to accum=3, the smallest non-power-of-two, where the gap is real (5.681269e-06) and a non-degeneracy assertion proves it does work.
 - [Phase 22]: 22-06: D-17's table credits D-06's sigma-of-zero identity with detecting FAKE 3 (noise added after averaging). WATCHED: the mutation leaves the whole suite GREEN — at sigma=0 the draw is exactly zero, so the divide's position is unobservable. A magnitude guard at sigma>0 was added and watched RED; 22-09 must not inherit the false table entry.
+- [Phase 22]: 22-07: T for a published epsilon is the COUNT OF COMPOSED STEPS, never the checkpoint's step field — measured, a start_step reset leaves the field at 4 while 6 steps compose, so a field-read epsilon matches across arms and under-reports
+- [Phase 22]: 22-07: a LoRA key-set round trip is SYMMETRIC under a co-moving rename and does NOT detect the restructuring DPSGD-07 forbids; the shipped v3.0 key FORM (...lora_A / ...lora_B) is pinned as a literal instead
+- [Phase 22]: 22-07: rng['mps'] restores via rng.get('mps') while rng['cuda'] keeps its subscript — the asymmetry is correct because the keys have different ages, and the reason lives in the source at the site
 
 ### Roadmap Evolution
 
@@ -542,8 +546,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-25T23:31:09.793Z
-Stopped at: Completed 22-06-PLAN.md
+Last session: 2026-08-26T00:07:32.277Z
+Stopped at: Completed 22-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
