@@ -431,6 +431,7 @@ named as genuinely OPEN rather than inherited silently. **SC3's verdict is still
 
 - [x] 22-01-PLAN.md — Wave-0 scaffolding: privacy subpackage, the committed 60-dps reference table
       (no `mpmath`, RPT-03), and the text-taking D-05 axis-1 AST guards with six synthetic RED probes
+
 - [x] 22-02-PLAN.md — the FROZEN pin `scripts/mitigation_accountant.py` (zero imports, `REQUIRED_FORM`,
       `REJECTED_FORM`, D-18's `NEIGHBOURING`/`SENSITIVITY_MULTIPLIER`, `GOLDEN_EPSILON`) plus D-11's
       BOTH halves and the phase23-prefix RED-then-GREEN fixture
@@ -439,6 +440,7 @@ named as genuinely OPEN rather than inherited silently. **SC3's verdict is still
 
 - [x] 22-03-PLAN.md — `accountant.py`'s two δ oracles: Balle–Wang closed form and the `exp`-only
       quadrature, with F1's SYMMETRIC silent-zero refusal and F2's log-space overflow fix
+
 - [x] 22-04-PLAN.md — `dpsgd.py`: construct-once capture, D-04's three property refusals, per-record
       global clip, dedicated-generator noise, the single combining write, D-16's four runtime invariants
 
@@ -446,6 +448,7 @@ named as genuinely OPEN rather than inherited silently. **SC3's verdict is still
 
 - [x] 22-05-PLAN.md — `epsilon_for` / `sigma_for` over ONE choke point, the explicit σ=0 → ∞ branch,
       the round-trip, and V-03's composition oracle at `rel_tol` (never `==`, per F3)
+
 - [x] 22-06-PLAN.md — the additive `dp_fn=` gradient-side seam in `_optimizer_step` + `train()`, the
       legacy clip made structurally unreachable, and V-14's golden bit-identity + V-12's differential
 
@@ -453,8 +456,10 @@ named as genuinely OPEN rather than inherited silently. **SC3's verdict is still
 
 - [x] 22-07-PLAN.md — `checkpoint.py`'s `rng["mps"]` slot with `.get()` back-compat, V-15's
       bit-identical resumed ε, and DPSGD-07's LoRALinear key-set stability
+
 - [x] 22-08-PLAN.md — the additive `fact_bin=` data seam routing to `get_batch_fact_aligned`, with the
       accum-agreement refusal and the one-record-per-micro-step property
+
 - [x] 22-09-PLAN.md — V-06 (`GOLDEN_EPSILON` re-derived from the ORACLE alone) and V-25 (D-18's
       three-site adjacency consistency check)
 
@@ -474,6 +479,7 @@ named as genuinely OPEN rather than inherited silently. **SC3's verdict is still
       (measured 12.7357% high at σ=0.40/T=200), add the thirteenth `DELTA_FRONTIER` row in the
       `b > 27.2` band so V-01/V-02 sweep it, and commit a 60-dps ε for the overflow-regime test —
       with all 7 `GOLDEN_EPSILON` rows asserted BIT-IDENTICAL across the fix
+
 - [x] 22-13-PLAN.md — WARNING-1's dangerous half: refuse a resume with `dp_fn=None` from a checkpoint
       carrying `dp_noise_rng`, and record in `loop.py` why the other direction is deliberately NOT a
       refusal (it would redden two committed back-compat controls)
@@ -583,19 +589,42 @@ Phase 20 (K and the promotion rule are already committed)
 **Plans**: 14 plans across 8 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 23-01-PLAN.md — D-02 device-parametrize the Phase-22 battery onto MPS + the DPSGD-06 generator keystone
 - [ ] 23-02-PLAN.md — D-09 SC3 transitive out-of-process import probe; both static halves watched RED
 - [ ] 23-03-PLAN.md — the blind pre-registration: noise-floor reduction, D-04 halt verdict, D-06 withdrawal rule, artifact register, three ancestry guards
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 23-04-PLAN.md — CAL-03 instrument: ε/T bit-identity across capacity + the watched N-leak positive control
 - [ ] 23-05-PLAN.md — the cost-record schema, its refusals, ceiling-sized sizing, and the synchronize-bracketed timing helper
 - [ ] 23-06-PLAN.md — D-02 watched RED on MPS for all four DPSGD-04 fakes + the venue-transfer ledger
 - [ ] 23-07-PLAN.md — D-07 resume seam through `train_arm`, closing WARNING-2, with the MPS production kill→resume ε proof
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 23-08-PLAN.md — D-03 + D-08 one scheduling: control and never-taught at N seeds; the floor measured and committed before σ=0
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 23-09-PLAN.md — pin the floor in `scripts/mitigation_budget.py`, literal-only and zero-import, with its `_PROVENANCE` sibling
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 23-10-PLAN.md — DPSGD-06: the σ=0 run, the DP arm's first, with D-04 live
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 23-11-PLAN.md — CAL-01 dp_n64 timing + CAL-05 noised-adapter throughput, floor and ceiling
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 23-12-PLAN.md — D-10 retract-in-place of the falsified "~1,010×" claim across all three planning files
 - [ ] 23-13-PLAN.md — CAL-02: pin Z with `_PROVENANCE` siblings, the K ratchet, and D-06's branch
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 23-14-PLAN.md — CTRL-03: score the never-taught adapters at the pinned K; the record the frozen gate accepts
 
 ### Phase 24: Adversarial Extraction-Aware Training + the Held-Out Attack Family
