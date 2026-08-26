@@ -145,9 +145,13 @@ Task 3(b) asked to move `_BATCH`'s two tensors onto the device inside `_dp_train
 
 `grep -c "allclose"` (Task 1) and `grep -c 'torch.Generator(device'` (Task 2) must both return **0**. Both initially returned 1 — from *docstring prose explaining why the construct is not used*. The prose was reworded to carry the same reasoning without the literal token, so the greps now measure what they were written to measure. Recorded because the same trap will recur in any plan that greps for an anti-pattern in a repository whose docstrings explain anti-patterns at length.
 
+**5. `requirements.mark-complete DPSGD-06` was deliberately NOT called**
+
+This plan's frontmatter carries `requirements: [DPSGD-06]`, and the execute-plan workflow ticks those boxes on completion. **Measured**: DPSGD-06 is claimed by **six** plans in this phase — `23-01`, `23-03`, `23-06`, `23-07`, `23-08`, `23-10` — and the requirement itself reads *"The σ=0 point is the DP arm's **first executed run**"*, which is a RUN that has not happened. This plan commits the venue property that run depends on; it does not perform it. Ticking `- [ ] **DPSGD-06**` in `REQUIREMENTS.md` now would record a satisfied requirement on the strength of one of its six contributing plans, which is the over-claim class this project's own `borrowed_cap` discipline exists to prevent. The box is left unticked; `23-10` is the last DPSGD-06 plan in the wave order and is the correct place to close it.
+
 ---
 
-**Total deviations:** 1 auto-fixed (Rule 1) + 3 plan/code discrepancies recorded.
+**Total deviations:** 1 auto-fixed (Rule 1) + 4 plan/code discrepancies recorded.
 **Impact on plan:** none on scope. The auto-fix repairs a citation this plan's own change broke and is required for correctness of the DPSGD-04 ledger. The three discrepancies are plan-text issues, not implementation changes; every underlying property the criteria targeted was verified by a command that actually measures it.
 
 ## Issues Encountered

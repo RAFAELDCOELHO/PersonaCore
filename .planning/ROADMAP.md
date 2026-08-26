@@ -591,7 +591,7 @@ Phase 20 (K and the promotion rule are already committed)
 Plans:
 **Wave 1**
 
-- [ ] 23-01-PLAN.md — D-02 device-parametrize the Phase-22 battery onto MPS + the DPSGD-06 generator keystone
+- [x] 23-01-PLAN.md — D-02 device-parametrize the Phase-22 battery onto MPS + the DPSGD-06 generator keystone
 - [ ] 23-02-PLAN.md — D-09 SC3 transitive out-of-process import probe; both static halves watched RED
 - [ ] 23-03-PLAN.md — the blind pre-registration: noise-floor reduction, D-04 halt verdict, D-06 withdrawal rule, artifact register, three ancestry guards
 
@@ -791,7 +791,7 @@ capacities — with every number in prose generated from a committed record rath
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
-| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
+| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 1/14 | In Progress | -          |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |

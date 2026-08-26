@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 23 executing (14 plans, 8 waves)
-last_updated: 2026-08-26T22:21:53.647Z
+stopped_at: Completed 23-01-PLAN.md (plan 1 of 14)
+last_updated: 2026-08-26T22:58:21.125Z
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 47
+  completed_plans: 48
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 1 of 14
+Plan: 2 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -141,6 +141,7 @@ Last activity: 2026-08-26
 | Phase 22 P17 | 65min | 3 tasks | 4 files |
 | Phase 22 P18 | 20min | 3 tasks | 4 files |
 | Phase 22 P19 | 35min | 2 tasks | 4 files |
+| Phase 23 P01 | 32min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -479,6 +480,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22] WARNING-4's 46 two-oracle disagreements are ATTRIBUTED to 22-VERIFICATION.md rather than re-derived: a 30,000-draw log-uniform sweep is not reproducible draw-for-draw, and re-running it would produce a different number presented as a confirmation
 - [Phase 22] erfc_subnormal_x = 26.54325845425098 was ADDED as a named ZERO_BOUNDARIES key rather than erfc_zero_x merely corrected, because _log_erfc routes on the SUBNORMAL cliff since 22-17 and a table recording only the zero cliff records the boundary nothing uses
 - [Phase 22] 22-19: gsd-sdk hazards, TENTH session in a row — and the hazard MOVED HANDLERS, which is why a log that only ever confirms itself is not measuring. `state.advance-plan` FLATTENED the body `Status:` prose to "Ready to execute" as in 22-13/14/15/16, left the `Phase:` counter stale at (18/19) — AND, NEW, REGRESSED `stopped_at` BACKWARDS from "Completed 22-18-PLAN.md" to "Completed 22-17-PLAN.md"; frontmatter counters were otherwise correct (46->47). `state.update-progress` returned `{"updated": false, "reason": "Progress field not found"}` — the same string as 22-12…22-16 — but this time THE CLAIMED NO-OP MUTATED TWO FIELDS: it flipped `status: executing` -> `planning` and regressed `stopped_at` to 22-17 a second time. `state.record-metric` was CLEAN — `| Phase 22 P19 | 35min | 2 tasks | 4 files |`, no unit doubling, and `completed_phases` 3 and `percent` 33 both UNCHANGED, so 22-18's `record-metric` regression did NOT reproduce and the executing->planning flip belongs to `update-progress` here, not to it. `state.add-decision` CORRUPTED identically to 22-16 (`- [Phase ?]: `); the remaining three decisions were written BY HAND. `state.record-session` updated its three fields but did NOT flip `status` to `verifying` as it did for 22-16 — set by hand. `roadmap.update-plan-progress` was CLEAN — `| … | 19/19 | Complete   | 2026-08-26 |` with the DATE INTACT, so the 22-12…22-15 blanked-date hazard did not reproduce for the second session running (22-16 recorded the same non-reproduction). Every corruption hand-repaired from a snapshot taken before the first call, and `.planning/` diffed after EVERY call.
+- [Phase 23] 23-01: DPSGD-06's keystone HOLDS on the venue — torch.normal(std=0.0) on an MPS generator returns exact zeros AND advances the 44-byte state at all six widths (1,2,4,8,16,4608), committed as tests/test_phase23_mps_venue.py::test_sigma_zero_advances_the_mps_generator against the real seam's own noise_rng_state(). dpsgd.py's torch.equal(pre,post) refusal was measured on CPU; had the MPS state not advanced, DPSGD-06's sigma=0 first run would have refused at every step and read as a DP bug rather than a venue fact
+- [Phase 23] 23-01: the Phase-22 battery now RUNS on MPS with a skip count of ZERO, recorded as an OBSERVED number (junit-xml: tests 79, failures 0, errors 0, skipped 0) rather than inferred from a terminal line that omits zero skips. _DEVICES is pytest.param("mps", marks=skipif), never a shrinking list — a vanished parametrization cannot be counted, a skipped one can. _record keeps its CPU draw and moves only the tensor, so _FAKE1_LEAK_RATIO=1.734481 and _FAKE3_STD_RATIO_AT_N4=3.999986 are byte-unchanged BY CONSTRUCTION
+- [Phase 23] 23-01 FINDING: adding the device axis silently made FAKE 3's watched-RED ledger anchor uncollectable ([4] -> [4-cpu]) and test_watched_red_node_ids_resolve is structurally blind to it — it deliberately does not resolve the part inside brackets. Corrected in place with the measurement; all nine anchors re-collected, 9 OK / 0 stale. Any future plan that parametrizes a cited test must re-collect every _WATCHED_RED_NODE_IDS entry, not trust that guard
+- [Phase 23] 23-01: gsd-sdk hazards, ELEVENTH session in a row, and the profile SHIFTED again. `state.advance-plan` regressed `stopped_at` BACKWARDS to "Completed 22-19-PLAN.md" (the same backwards-regression class as 22-19) and flattened the body `Status:` prose to "Ready to execute"; the `Phase:`/`Plan:` counters were CORRECT this time (1 of 14 -> 2 of 14), so 22-19's stale-counter hazard did NOT reproduce. `state.update-progress` returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped `last_updated`; it did NOT flip `status` to `planning` this time, so 22-19's executing->planning flip did not reproduce. `state.record-metric` REFUSED positional args (`{"error": "phase, plan, and duration required"}`) and needed `--phase/--plan/--duration/--tasks/--files`; with flags it was CLEAN — `| Phase 23 P01 | 32min | 3 tasks | 4 files |`, `completed_phases` 3 and `percent` 33 both untouched. `state.add-decision` also refused positional args (`{"error": "summary required"}`), needed `--summary`, and CORRUPTED the phase label to `- [Phase ?]: ` on all three calls, exactly as in 22-16/22-19. `state.record-session` was CLEAN and CORRECTED advance-plan's `stopped_at` regression as a side effect; it did not flip `status`. NEW THIS SESSION: `last_updated` came back QUOTED from three separate handlers. All five corruptions hand-repaired 1-line-for-1-line against a snapshot taken before the first call, `git diff .planning/` read after EVERY call, and `wc -l` verified.
 
 ### Roadmap Evolution
 
@@ -611,8 +616,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T16:53:42.504Z
-Stopped at: Completed 22-19-PLAN.md
+Last session: 2026-08-26T22:58:21.115Z
+Stopped at: Completed 23-01-PLAN.md (plan 1 of 14)
 Resume file: None
 
 ## Operator Next Steps
