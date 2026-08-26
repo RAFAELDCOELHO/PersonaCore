@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: executing
-stopped_at: Completed 22-15-PLAN.md
-last_updated: "2026-08-26T12:50:35.017Z"
+status: verifying
+stopped_at: Completed 22-16-PLAN.md
+last_updated: "2026-08-26T13:15:12.662Z"
 last_activity: 2026-08-26
 progress:
   total_phases: 9
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 44
-  completed_plans: 43
-  percent: 22
+  completed_plans: 44
+  percent: 33
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — REOPENED for gap closure (15/16)
-Plan: 15 of 16
-Status: Gap closure in progress — `22-VERIFICATION.md` returned `gaps_found` (4/5). 22-12 landed three of the five `missing:` items; 22-13 closed WARNING-1; 22-14 closed the fourth (`delta_quadrature` returning `+inf` and values above 1.0). 22-15 closed the FIFTH AND LAST code-level gap: `epsilon_for` returned `0.0` — perfect privacy — for every sigma below `sqrt(steps)/sys.float_info.max` (measured 7.866824069956795e-308 at T=200), the privacy-UNDERSTATING direction; the quotient is now checked and answers `math.inf`, CONTINUOUS with the `sigma == 0.0` branch, so the discontinuity the verifier measured is removed rather than relocated (a deliberate return-vs-refuse deviation from the verification's literal wording, recorded in `22-15-SUMMARY.md`). `_delta_or_below_float64` now refuses a non-finite or non-positive `mu` before its `try`, so the docstring premise its swallow rested on is a checked postcondition instead of an assertion about the caller. All five `missing:` items are closed; `REQUIREMENTS.md`'s DPSGD-03 traceability row is 22-16's to correct, and the verdict is the re-verification's.
+Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — gap closure EXECUTED, awaiting re-verification (16/16)
+Plan: 16 of 16
+Status: All 16 plans executed. `22-VERIFICATION.md` returned `gaps_found` (4/5) on SC3 / DPSGD-03; 22-12 closed three of the five `missing:` items, 22-13 closed WARNING-1, 22-14 closed the fourth, 22-15 closed the fifth and last. 22-16 is the RECORD plan and closed the sixth gap, which was in the documents rather than the code: `REQUIREMENTS.md` marked DPSGD-03 `[x] SATISFIED` on the claim *"the two oracles are genuinely different mathematics and they agree"*, which measurement had falsified. That row is now RETRACTED IN PLACE per the UNIT-04 precedent — every original sentence left standing, with a dated block carrying what was measured false (both denominators named: `delta_closed` 12.7357% high against the 60-dps truth, 11.297% apart from the quadrature oracle with the closed form as denominator; `delta_quadrature` returning `inf` in 404 of 4001 cells and above 1.0 in 461; `epsilon_for(5e-308, 200, 1e-5)` returning `0.0`), why the guards could not see it (the agreement test swept only the twelve committed frontier rows, none in the `b > 27.2` band — structurally incapable of firing there), and what closed it plan by plan with each mutation's distinct-RED count. The ROADMAP's Phase 22 block is fully ticked and its five success criteria are proven BYTE-UNCHANGED by sha256 (`73a316f4…`, HEAD vs worktree) — the bar was not lowered to meet the result. `22-VALIDATION.md` gained V-26 … V-34, one row per guard the closure added, every `Automated command` RUN and observed exiting 0. WARNING-2 (no production driver can resume a DP arm) is routed to Phase 23 beside DPSGD-06 as a DELIBERATE deferral with its reasoning — a missing FEATURE, not a defect in what shipped — and WARNING-1 is recorded CLOSED by 22-13 so the pair is not read as two open warnings; `deferred-items.md`'s OverflowError entry, which 22-14 made a false record, carries a dated retraction. **THE SC3 VERDICT IS NOT CLAIMED HERE.** All five `missing:` items are measured closed, the full suite is `1314 passed, 1 skipped`, `ruff` is clean over 203 files and `scripts/mitigation_accountant.py` is byte-unchanged at every gate — but whether that satisfies ROADMAP SC3 is `/gsd:verify-phase 22`'s call, and neither the traceability row nor this line pre-empts it.
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
@@ -136,6 +136,7 @@ Last activity: 2026-08-26
 | Phase 22 P13 | 30min | 2 tasks | 2 files |
 | Phase 22 P14 | 70min | 2 tasks | 2 files |
 | Phase 22 P15 | 45min | 2 tasks | 2 files |
+| Phase 22 P16 | 25min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -450,6 +451,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22] 22-15: epsilon_for answers math.inf, not a raise, when sqrt(steps)/sigma overflows — a deliberate deviation from 22-VERIFICATION's 'refusing' wording. The measured defect IS a discontinuity (sigma=0 gives inf, the next float gave 0.0); returning inf removes it, a raise would relocate it. inf is also what the sigma == 0.0 branch's own 60-dps argument gives as mu -> inf.
 - [Phase 22] 22-15: the overflow band's sigmas are DERIVED per step count (boundary/2.0, nextafter(boundary, 0.0), 5e-324), never hardcoded. 5e-308 is a NORMAL float (float64's smallest normal is 2.225e-308) and is in band at T=200/1000 but OUT of band at T=1/64, so any literal list is unsatisfiable across the four step counts test_sigma_zero covers.
 - [Phase 22] 22-15: gsd-sdk hazards, EIGHTH session in a row and identical to 22-14. state.advance-plan advanced 14->15 in frontmatter, then FLATTENED the body Status prose to 'Ready to execute' and left the (14/16) counter in the Phase line stale. state.add-decision wrote '- [Phase ?]:' on both calls. state.update-progress no-op'd with 'Progress field not found in STATE.md' against a frontmatter that plainly has one. roadmap.update-plan-progress emitted a blank date. state.record-metric and state.record-session were CLEAN under --flag. All corruptions hand-repaired and verified by git diff .planning/ before committing
+- [Phase 22] 22-16: DPSGD-03's traceability row records MEASURED state and explicitly WITHHOLDS the SC3 verdict. The checkbox reflects the code (all five `missing:` items closed, suite 1314 passed / 1 skipped, frozen pin unmoved); whether that satisfies ROADMAP SC3 is `/gsd:verify-phase 22`'s call, and the row says so in as many words. Retract-in-place per the UNIT-04 precedent: every original sentence left standing, dated correction appended, `git diff --numstat` +10/-2 on REQUIREMENTS.md.
+- [Phase 22] 22-16: the 12.7357% and 11.297% figures are DIFFERENT denominators and the permanent row states both. 12.7357% is `delta_closed` against the 60-dps truth; the two-ORACLE gap is 11.297% with the closed form as denominator. The plan's own prose (and the dispatch brief) called the two-oracle disagreement 12.7357%; transcribing that would have put a denominator error into the one document downstream phases read INSTEAD of re-deriving. Measured, not transcribed — the third such catch in this phase.
+- [Phase 22] 22-16: WARNING-2 (no production driver can resume a DP arm) routed to Phase 23 beside DPSGD-06 as a DELIBERATE deferral with its reasoning in `deferred-items.md` — it is a missing FEATURE, not a defect in what Phase 22 shipped, and closing it means adding a resume path AND relaxing a `refuse_if_exists` that exists on purpose, which belongs to the phase whose first act is a real run. WARNING-1 recorded CLOSED by 22-13 in its own section so the pair is not read as two open warnings. Phase 22's five ROADMAP success criteria proven BYTE-UNCHANGED by sha256 (73a316f4…, HEAD vs worktree) — a bar does not get lowered to meet its result.
+- [Phase 22] 22-16: gsd-sdk hazards, NINTH session in a row. `state.advance-plan` advanced 15->16 in frontmatter, then FLATTENED the body `Status:` prose to `Ready to execute` and left the `(15/16)` counter in the `Phase:` line stale — identical to 22-13/22-14/22-15; hand-repaired. `state.add-decision --summary` wrote `- [Phase ?]: ` instead of `- [Phase 22] `; hand-repaired, and the three remaining decisions were written by hand rather than risking a second corruption. `state.update-progress` SILENT NO-OP (`Progress field not found in STATE.md`) against a frontmatter that plainly has one. `state.record-metric --flag` CLEAN (the `25min` unit survived) and also bumped completed_plans 43->44 and completed_phases 2->3. `state.record-session --flag` CLEAN, and correctly flipped `status: executing` -> `verifying`. Both commits used `git commit -F -` with a quoted heredoc; no `-m` string in this plan contains a backtick.
 
 ### Roadmap Evolution
 
@@ -582,8 +587,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T12:49:51.699Z
-Stopped at: Completed 22-15-PLAN.md
+Last session: 2026-08-26T13:14:51.314Z
+Stopped at: Completed 22-16-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
