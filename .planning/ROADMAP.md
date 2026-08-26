@@ -407,7 +407,17 @@ then returned `gaps_found` 4/5 again on the SAME conjunct, one band over: `_log_
 `erfc(x) > 0.0`, so the band where `math.erfc` returns a SUBNORMAL takes `math.log` of a float that
 has already lost up to 52 of its 53 mantissa bits. Reachable at the frozen δ (T=200,
 σ ∈ [0.4135, 0.4185]), **privacy-UNDERSTATING** at four measured σ, and bit-identical to the
-pre-22-12 code — a sibling defect the fix stepped over, not a regression. Reopened for 22-17 … 22-19.)
+pre-22-12 code — a sibling defect the fix stepped over, not a regression. Reopened for 22-17 … 22-19.
+**22-17 executed 2026-08-26:** the predicate is now keyed on `math.ldexp(1.0, -1022)` and the
+two-oracle gap at σ=0.414/T=200/δ=1e-5 fell **1.9190e-03 → 1.0152e-11**, 98.5× inside a 1e-9 budget
+that was NOT widened; worst over the whole reachable band is 1.0237e-11. The worst chosen-route error
+over x ∈ [20,30] fell 1.2369e-05 → 2.0621e-16, which measures **equal to the floor for any routing
+rule**, so no third blind band is opened. `ROUND_TRIP_REL_TOL` — a 🛑 Blocker violated by 2.07e+07×
+— is now worst 4.0274e-16. The frozen pin is proven unmoved by an EMPTY `float.hex()` diff over all
+19 pinned points. The structural deliverable is `LOG_ERFC_BAND` + a sweep that asserts the route
+ACTUALLY CHOSEN is accurate and never names the boundary, with run-time three-regime non-vacuity.
+Full suite `1332 passed, 1 skipped` = the 1314 baseline + exactly 18. **SC3's verdict is still
+`/gsd:verify-phase 22`'s** — 22-18 and 22-19 remain.)
 
 **Wave 1** *(no dependencies)*
 
@@ -479,7 +489,7 @@ pre-22-12 code — a sibling defect the fix stepped over, not a regression. Reop
 
 **Wave 11** *(gap closure round 2 — blocked on the 2026-08-26 re-verification, `gaps_found` 4/5)*
 
-- [ ] 22-17-PLAN.md — route the erfc-SUBNORMAL band to the asymptotic series (fast path keyed on
+- [x] 22-17-PLAN.md — route the erfc-SUBNORMAL band to the asymptotic series (fast path keyed on
       float64's smallest NORMAL, `math.ldexp(1.0, -1022)`), and — the real deliverable — a guard
       parametrized on the ROUTING BOUNDARY rather than on a point list: a committed 60-dps band table
       spanning all three `math.erfc` regimes, with the CHOSEN route asserted accurate at every row.
@@ -698,7 +708,7 @@ capacities — with every number in prose generated from a committed record rath
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
-| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 16/16 | Complete   | 2026-08-26 |
+| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 17/19 | In Progress | 2026-08-26 |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
