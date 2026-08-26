@@ -18,6 +18,7 @@ Consumers:
   - V-04 ``test_low_privacy_corner``     -> ``DELTA_FRONTIER`` row (8.0, 0.5), ``QUADRATURE_PARAMS``
   - V-05 ``test_oracle_refuses``         -> ``ZERO_BOUNDARIES``
   - V-06 ``test_golden_epsilon_from_oracle`` -> ``EPSILON_GOLDEN``, ``GOLDEN_EPSILON_REL_TOL``
+  - ``test_log_erfc_band_routes_accurately`` and its non-vacuity companion -> ``LOG_ERFC_BAND``
 """
 
 # =============================================================================================
@@ -188,6 +189,87 @@ EPSILON_GOLDEN = (
 EPSILON_OVERFLOW_REGIME = (
     (0.40, 200, "774.8427215876997401873883"),
     (0.30, 200, "1311.202790704405616448176"),
+)
+
+# =============================================================================================
+# 2c. LOG_ERFC_BAND — log(erfc(x)) across `_log_erfc`'s ROUTING BOUNDARY, spanning ALL THREE
+#     `math.erfc` regimes end to end: erfc still NORMAL, erfc SUBNORMAL, erfc exactly 0.0.
+#
+#     WHY A BAND AND NOT MORE POINTS. Round 1 pinned the single point where `math.erfc(b)` is
+#     exactly 0.0, and the next verifier found the band immediately BELOW it — where `math.erfc`
+#     returns a subnormal that has already discarded up to 52 of its 53 mantissa bits, and where
+#     `_log_erfc`'s old `if erfc(x) > 0.0` predicate therefore routed everything to `math.log`.
+#     A table of fixed points produces round 3. This table's parametrization IS the boundary's own
+#     neighbourhood: the consuming sweep asserts that WHATEVER ROUTE `_log_erfc` CHOSE at x, that
+#     route is accurate at x, and its companion classifies every row by `math.erfc` AT RUN TIME and
+#     requires all three regimes non-empty. Any predicate `_log_erfc` could plausibly use draws its
+#     boundary somewhere between "erfc is a healthy normal float" and "erfc is gone entirely", so a
+#     band covering all three regimes straddles that boundary WITHOUT NAMING IT.
+#
+#     `x` is a FLOAT LITERAL — the exact binary64 the implementation evaluates — and the truth is a
+#     DECIMAL STRING at 20 significant digits, for the same reason section 1 uses strings.
+#
+#     THREE ROWS ARE DELIBERATE AND NONE OF THEM IS DECORATION:
+#       - 26.54325845425098 is the SUBNORMAL BOUNDARY ITSELF, bisected on this box. `math.erfc` at
+#         the float below it is 2.2250738585076065e-308, which is NORMAL; at it, erfc is
+#         2.225073858507186e-308, the first value strictly below float64's smallest normal
+#         2.2250738585072014e-308. Three consecutive floats apart, and the whole defect lives there.
+#       - 27.151124073213406 is `delta_closed`'s `b` at sigma=0.414 / T=200 — the WORST REACHABLE
+#         POINT on this project's own frozen frontier, and the `b` plan 22-18's new frontier row
+#         will use. Recorded precisely because the number moved when the defect closed: it is `b` at
+#         the PRE-FIX epsilon 728.2043182233367 (erfc = 1.43e-322). The post-fix `epsilon_for` at
+#         that sigma returns 728.1896631303155, whose `b` is 27.150820712787866 (erfc = 1.5e-322).
+#         Both are subnormal and both are in the band; the pre-fix one is pinned because it is the
+#         point 22-VERIFICATION.md measured the 1.919e-03 two-oracle gap at.
+#       - 26.8 CLOSES A GRANULARITY GAP IN THE UP DIRECTION, and MUST NOT BE PRUNED AS REDUNDANT.
+#         Without it the band jumps 26.7 -> 26.9. MEASURED here: row 26.7 scores 4.7584e-16 under
+#         route L and PASSES the 1e-15 budget, so a boundary moved up to anywhere in (26.7, 26.9]
+#         would leave the sweep GREEN. With 26.8 in the table (3.0228e-14 under route L — reddens)
+#         the hideable window shrinks to (26.7, 26.8], and the largest route-L error a boundary
+#         hidden in it can carry is under 3.03e-14.
+#
+#     PROVENANCE — 60-dps mpmath, ONE-OFF shell invocation, its OUTPUT committed here as data
+#     (RPT-03; `tests/test_phase22_reference.py::test_no_phase22_test_imports_mpmath` enforces the
+#     no-import rule by AST over the whole `test_phase22_*` glob):
+#
+#       .venv/bin/python -c "from mpmath import mp; mp.dps=60; [print(repr(x),
+#       mp.nstr(mp.log(mp.erfc(mp.mpf(x))), 20)) for x in (24.0, 25.0, 26.0, 26.4,
+#       26.54325845425098, 26.6, 26.65, 26.7, 26.8, 26.9, 27.0, 27.151124073213406, 27.19, 27.2,
+#       27.6, 28.01573320140291, 29.0)]"
+#
+#     The inputs enter as `mp.mpf(<python float>)`, NOT as `mp.mpf("<decimal string>")`. That is
+#     recorded because the two forms DIFFER — 22-12 measured 8.90e-15 between them on the thirteenth
+#     frontier row — so a provenance that does not say which was used is not reproducible. Taking
+#     the python float means the truth is log(erfc(x)) at the SAME x the code evaluates, with no
+#     input mismatch folded into the deviation measured. (Cross-check: the 28.01573320140291 row
+#     agrees to every digit with the 25-digit literal
+#     `test_log_erfc_matches_the_committed_underflow_truth` already carries.)
+#
+#     WHAT THIS TABLE DOES **NOT** BUY, stated rather than overclaimed, exactly as
+#     EPSILON_OVERFLOW_REGIME's own block does for its narrower case. It is `mpmath`'s own `erfc`
+#     at 60 dps, so it catches a ROUTING error and a FLOAT64 error and CANNOT catch an error in the
+#     asymptotic expansion's DERIVATION — for that to slip through, mpmath's erfc and this module's
+#     hand-rolled series would have to be wrong TOGETHER. They come from different implementations
+#     by different authors, which is why this is a real constraint and not a photograph of the code.
+# =============================================================================================
+LOG_ERFC_BAND = (
+    (24.0, "-579.75128495304457696"),
+    (25.0, "-628.79203917407168537"),
+    (26.0, "-679.83119976319423026"),
+    (26.4, "-700.80644507223147169"),
+    (26.54325845425098, "-708.39641853226411327"),
+    (26.6, "-711.41398156849619185"),
+    (26.65, "-714.07835686349255419"),
+    (26.7, "-716.74772865324142255"),
+    (26.8, "-722.10146176916819577"),
+    (26.9, "-727.47518101989586635"),
+    (27.0, "-732.86888650789741098"),
+    (27.151124073213406, "-741.05799894069437943"),
+    (27.19, "-743.17198938084895565"),
+    (27.2, "-743.71625659997681358"),
+    (27.6, "-765.65083601676106754"),
+    (28.01573320140291, "-788.78707403515630585"),
+    (29.0, "-844.94025442214730431"),
 )
 
 # =============================================================================================

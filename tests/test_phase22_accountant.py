@@ -27,6 +27,7 @@ import pytest
 from tests.fixtures.phase22_reference import (
     DELTA_FRONTIER,
     EPSILON_OVERFLOW_REGIME,
+    LOG_ERFC_BAND,
     VACUOUS_AGREEMENT_ROW,
 )
 
@@ -336,6 +337,117 @@ def test_log_erfc_matches_the_committed_underflow_truth():
         f"-788.7870740351563058464846 — relative {rel:.3e} over the measured-plus-margin 1e-15 "
         f"({abs(got - truth):.3e} ABSOLUTE in the log, which is the same figure as the relative "
         f"error the second term of delta_closed inherits)"
+    )
+
+
+@pytest.mark.parametrize(("x", "truth_str"), LOG_ERFC_BAND)
+def test_log_erfc_band_routes_accurately(x, truth_str):
+    """WHATEVER ROUTE ``_log_erfc`` CHOSE AT ``x``, THAT ROUTE IS ACCURATE AT ``x``.
+
+    THIS TEST DELIBERATELY DOES NOT KNOW WHERE THE ROUTING BOUNDARY IS, and that is the whole
+    design. It asserts a property of the RESULT, never of the predicate. The band spans every
+    ``math.erfc`` regime end to end, so it straddles the boundary wherever the boundary happens to
+    be placed, and a future edit that moves it toward the lossy side puts previously-correct ``x``
+    on the wrong route and reddens this — automatically, with no plan and no verifier involved.
+
+    A BEHAVIOURAL ROUTE DETECTOR WOULD BE UNSOUND AND IS DELIBERATELY NOT BUILT. The obvious shape
+    is to bisect on ``_log_erfc(x) == math.log(math.erfc(x))`` — "bit-identical means the fast path
+    ran" — and assert something about the located boundary. MEASURED: **211 of the first 400 floats
+    above 26.54325845425098 have ``series(x) == math.log(math.erfc(x))`` BIT-FOR-BIT**, so the
+    detector cannot tell the two routes apart there and a bisection walks straight through the
+    boundary, reporting it ~0.107 too high. An AST detector is no better: it would pin the
+    predicate's SYNTAX rather than its effect and break on a behaviourally identical rewrite.
+
+    THE TOLERANCE IS MEASURED, NOT CHOSEN. Worst relative deviation over these seventeen rows on
+    this box: **1.4413e-16, at x = 28.01573320140291** — against **1.5906e-04, at x = 27.19**, under
+    the shipped ``if erfc(x) > 0.0`` predicate, which is TWELVE ORDERS apart. 1e-15 is the measured
+    worst rounded up to the next decade and carries **6.94x** of margin; it is also the tolerance
+    ``test_log_erfc_matches_the_committed_underflow_truth`` next door already uses, which is why it
+    is the right register here rather than a number invented for this test.
+
+    STATED IN THE UNITS THAT MATTER DOWNSTREAM, as the neighbouring guard does: an ABSOLUTE error
+    ``d`` in the log is a RELATIVE error ``d`` in ``exp(eps + log)``, so at ``|log| ~ 743`` a 1e-15
+    relative bound here is a ~7.4e-13 relative bound on ``delta_closed``'s second term — inside the
+    frontier rows' own 1.5e-12 budget.
+
+    **THIS GUARD BOUNDS THE BOUNDARY FROM ABOVE ONLY, and a reader who sees only this test will
+    believe it is broader than it is.** A boundary moved DOWN — the series used where
+    ``math.log(math.erfc(x))`` is marginally better — leaves this GREEN, because below the
+    crossover BOTH routes land within ~2e-16 and neither breaches this tolerance. That direction is
+    owned by ``test_log_erfc_is_inert_where_erfc_is_healthy`` and its hard-count companion
+    ``test_log_erfc_inert_points_are_not_empty``, which 22-12 watched under mutation **M-B**:
+    deleting the fast path moves six of the seven pinned ``GOLDEN_EPSILON`` epsilons and drives
+    four of them to ``0.0``. The two guards bound the boundary from opposite sides, for two
+    different reasons — correctness here, a FROZEN pre-registration there.
+    """
+    truth = float(truth_str)
+    got = _log_erfc(x)
+    rel = abs(got - truth) / abs(truth)
+    assert rel <= 1e-15, (
+        f"_log_erfc({x!r}) = {got!r} against the committed 60-dps log(erfc(x)) {truth_str} — "
+        f"relative {rel:.4e} over the measured-plus-margin 1e-15. math.erfc({x!r}) is "
+        f"{math.erfc(x)!r}, so the route _log_erfc chose here is NOT accurate here: the routing "
+        f"boundary has moved toward the side where math.log is applied to an erfc that has already "
+        f"lost mantissa bits ({abs(got - truth):.4e} ABSOLUTE in the log, which is the same figure "
+        f"as the relative error delta_closed's second term inherits)"
+    )
+
+
+def test_log_erfc_band_spans_all_three_erfc_regimes():
+    """Meta-guard: the band really straddles the boundary — all three ``math.erfc`` regimes.
+
+    THIS IS WHAT MAKES THE SWEEP ABOVE BOUNDARY-PARAMETRIZED RATHER THAN A LONGER POINT LIST. Any
+    predicate ``_log_erfc`` could plausibly use draws its boundary somewhere between "``math.erfc``
+    still returns a healthy NORMAL float" and "``math.erfc`` is gone entirely" — those are the two
+    ends of the only quantity a router has to look at. So a band with all three regimes non-empty
+    CONTAINS that boundary wherever it is placed, and the sweep straddles it without ever naming
+    it. Round 1 pinned a point and the next verifier found the adjacent band; a table of points
+    produces round 3, and this is the shape that does not.
+
+    THE CLASSIFICATION IS COMPUTED AT RUN TIME FROM ``math.erfc``, AND THE SPLIT IS DELIBERATELY
+    NOT HARDCODED. Which x lands in which regime is a property of the platform's libm, not of this
+    repository, so computing it here is what keeps this guard true across libm versions — and it is
+    also what keeps it honest: the classification cannot be fooled by the module under test,
+    because it never calls it. (On this box the split is 4 normal / 9 subnormal / 4 exactly-zero.)
+    The three counts go in the assertion message so a failure reads as "which regime emptied".
+
+    ``sys.float_info`` is available HERE and deliberately not in ``accountant.py``: D-10's import
+    ceiling binds the MODULE (``test_accountant_imports_math_only`` asserts hard equality with
+    ``{"math"}``, statically and out of process), not this test file. The module reaches the same
+    constant through ``math.ldexp(1.0, -1022)``, which is exactly ``sys.float_info.min``.
+    """
+    smallest_normal = sys.float_info.min
+    assert smallest_normal == math.ldexp(1.0, -1022), (
+        f"sys.float_info.min = {smallest_normal!r} is not math.ldexp(1.0, -1022) = "
+        f"{math.ldexp(1.0, -1022)!r} — this box's float64 is not IEEE binary64, so every regime "
+        f"boundary below is measured against the wrong threshold"
+    )
+
+    regimes = {"normal": [], "subnormal": [], "zero": []}
+    for x, _ in LOG_ERFC_BAND:
+        e = math.erfc(x)
+        if e >= smallest_normal:
+            regimes["normal"].append(x)
+        elif e > 0.0:
+            regimes["subnormal"].append(x)
+        else:
+            regimes["zero"].append(x)
+
+    counts = {name: len(xs) for name, xs in regimes.items()}
+    assert all(counts.values()), (
+        f"LOG_ERFC_BAND does not span all three math.erfc regimes — counts {counts} over "
+        f"{len(LOG_ERFC_BAND)} rows. An EMPTY regime means the band no longer straddles "
+        f"_log_erfc's routing boundary, so the sweep beside it is checking ONE route and would "
+        f"stay green through a boundary move. Rows by regime: {regimes}"
+    )
+    # The boundary row is named by hard equality, not by count: "some row is the first subnormal"
+    # is equally satisfied by a table where a DIFFERENT row drifted across, which would move the
+    # band off the boundary while leaving the counts intact.
+    assert min(regimes["subnormal"]) == 26.54325845425098, (
+        f"the lowest SUBNORMAL row is {min(regimes['subnormal'])!r}, not the bisected boundary "
+        f"26.54325845425098 — either the table lost its boundary row or this box's math.erfc "
+        f"crosses into subnormals somewhere else, and in both cases the band's lower edge is no "
+        f"longer pinned to the thing it exists to straddle"
     )
 
 
