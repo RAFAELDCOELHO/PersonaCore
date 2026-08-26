@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-13-PLAN.md
-last_updated: "2026-08-26T12:01:04.540Z"
+stopped_at: Completed 22-14-PLAN.md
+last_updated: "2026-08-26T12:29:42.312Z"
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 44
-  completed_plans: 41
+  completed_plans: 42
   percent: 22
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — REOPENED for gap closure (13/16)
-Plan: 13 of 16
-Status: Gap closure in progress — `22-VERIFICATION.md` returned `gaps_found` (4/5). 22-12 landed three of the five `missing:` items; 22-13 closed WARNING-1; 22-14..22-16 remain.
+Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — REOPENED for gap closure (14/16)
+Plan: 14 of 16
+Status: Gap closure in progress — `22-VERIFICATION.md` returned `gaps_found` (4/5). 22-12 landed three of the five `missing:` items; 22-13 closed WARNING-1; 22-14 closed the fourth (`delta_quadrature` returning `+inf` and values above 1.0 — 404 of 4001 measured `inf` cells now 0, upper bound refused at a MEASURED 1.0 + 1e-11 rather than the verification's over-broad literal). One `missing:` item remains for 22-15/22-16: the finiteness check on `mu` in `epsilon_for`.
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
@@ -134,6 +134,7 @@ Last activity: 2026-08-26
 | Phase 22 P11 | 75min | 3 tasks | 2 files |
 | Phase 22 P12 | 95min | 3 tasks | 4 files |
 | Phase 22 P13 | 30min | 2 tasks | 2 files |
+| Phase 22 P14 | 70min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -442,6 +443,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22] 22-13: a refusal test needs a NARROWNESS leg, not just a positive one. `test_resume_without_the_seam_refuses_a_dp_checkpoint` ships THREE legs — refuses (`dp_fn=None` + slot present), still tolerates (seam live + slot absent), and stays narrow (`dp_fn=None` + slot absent, resumed with `max_steps_override=2` and asserted to have trained its post-resume step). Without leg 3 an over-broad guard refusing EVERY seamless resume passes leg 1 and breaks `test_resume_curve.py`, `test_resume_memmap.py` and `scripts/pretrain_tinystories.py`. Leg 1 additionally asserts `not unreachable.exists()` — the refusal fires in the resume block BEFORE any save, so a non-private continuation is never released to disk, which is placement asserted rather than just existence. Leg 3 writes a GENUINE `train(dp_fn=None, ...)` checkpoint instead of reusing leg 2's hand-stripped blob, which also proves `_dp_extra()` returns `{}` without a seam — the other half of the provenance argument the refusal message rests on
 - [Phase 22] 22-13: mutation M-H deleted the `if` AND the `raise`, not the `raise` alone, because an `if` with an empty body is a SyntaxError and therefore not a runnable mutation — deleting the block reproduces the exact pre-22-13 source. Blast radius measured over the FULL suite rather than the one module the plan asked for: `1 failed, 1302 passed, 1 skipped` in 226.82s, exactly ONE distinct RED (`DID NOT RAISE <class 'ValueError'>` at tests/test_phase22_dpsgd.py:1120), stated as one and not rounded up. The full run is what turns "one detector" from a claim about one file into a claim about the tree, and it simultaneously proves no OTHER test depends on the refusal. Restore proven not asserted: sha256 `293772eaed524cfa1dd8eb57024a49f30dd99ac79a6e6c82be8165d381f67da5` identical pre-probe and post-restore, `git diff --exit-code` exit 0. Post-restore full suite `1303 passed, 1 skipped` = the 1302 baseline plus this plan's one new test, zero regressions
 - [Phase 22] 22-13: gsd-sdk hazards, SIXTH session in a row. `state.advance-plan` kept frontmatter clean this time but FLATTENED the body Status prose to "Ready to execute", destroying the gap-closure status line, and left the `(12/16)` counter in the Phase line stale. `state.update-progress` no-op'd again with "Progress field not found in STATE.md" against a frontmatter that plainly has one. `state.add-decision` wrote `- [Phase ?]:` again (and with a colon after the bracket, where the house style is `- [Phase 22] `). `state.record-metric` and `state.record-session` were clean under the `--flag` form. All corruptions hand-repaired and verified by `git diff .planning/` before committing
+- [Phase 22] 22-14: shipped a MEASURED refusal boundary (1.0 + 1e-11) for delta_quadrature instead of 22-VERIFICATION's literal (0.0 < delta <= 1.0], which measurement shows would refuse 267 of 5351 answered cells (4.99%) whose true delta is within an ulp of 1.0
+- [Phase 22] 22-14: for every mutation that does NOT redden, measure the ORACLE under it, not just the pytest summary. M-D-partial and M-E both left the suite green; re-running delta_quadrature under each (1500-draw seeded probe plus the cited defect point) showed 1343 answered / 157 refused / 0 outside (0, 1] — IDENTICAL to the honest module — so their green is correct inertness, not a blind guard. Opposite findings that look identical from a summary line
+- [Phase 22] 22-14: M-D as the plan phrases it is TWO hunks. 'Revert the probability check to the shipped one-sided form' means the refusal AND the bare return that shipped with it; applying one line leaves the suite GREEN because the saturation branch keeps clamping. Applied as both hunks it reddens test_quadrature_returns_a_probability_or_refuses. Also Rule 2: the saturation branch is bounded on BOTH sides, because a bare 'delta > 1.0' clamps inf (inf > 1.0 is True) and would launder a non-finite delta into a plausible 1.0 — measured, bounded returns inf where unbounded returns 1.0 at the cited defect point
 
 ### Roadmap Evolution
 
@@ -574,8 +578,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T12:01:04.531Z
-Stopped at: Completed 22-13-PLAN.md
+Last session: 2026-08-26T12:29:02.500Z
+Stopped at: Completed 22-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

@@ -457,7 +457,7 @@ CPU before a single second of M3 time is spent
 
 **Wave 8** *(blocked on Wave 7)*
 
-- [ ] 22-14-PLAN.md — `delta_quadrature` returns a probability or refuses: a `log(4*n)` headroom for
+- [x] 22-14-PLAN.md — `delta_quadrature` returns a probability or refuses: a `log(4*n)` headroom for
       the Simpson SUM (closing the measured 404-cell `inf` band) and an upper-bound refusal whose
       slack is measured on 4,000+ cells rather than transcribed
 
@@ -670,7 +670,7 @@ capacities — with every number in prose generated from a committed record rath
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
-| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 13/16 | In Progress | 2026-08-26 |
+| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 14/16 | In Progress | 2026-08-26 |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
