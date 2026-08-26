@@ -32,6 +32,7 @@ from tests.fixtures.phase22_reference import (
 
 from personacore.privacy.accountant import (
     ROUND_TRIP_REL_TOL,
+    _delta_or_below_float64,
     _log_erfc,
     delta_closed,
     delta_quadrature,
@@ -619,6 +620,106 @@ def test_sigma_zero(steps):
         f"epsilon_for(0.0, {steps}, delta) returned {got!r}, not +inf. sigma = 0 releases a "
         f"deterministic function of the data: it is (inf, delta)-DP and nothing better."
     )
+
+
+@pytest.mark.parametrize("steps", [1, 64, 200, 1000])
+def test_epsilon_for_answers_inf_in_the_subnormal_sigma_band(steps):
+    """The band where ``sqrt(steps)/sigma`` OVERFLOWS answers ``+inf``, never ``0.0``.
+
+    22-VERIFICATION.md measured ``epsilon_for(5e-308, 200, 1e-5)`` returning ``0.0`` -- PERFECT
+    PRIVACY for essentially zero noise, the privacy-UNDERSTATING direction. ``mu`` overflowed to
+    ``inf``, ``delta_closed`` refused it as a GARBAGE INPUT, ``_delta_or_below_float64``'s bare
+    ``except ValueError`` swallowed that, and the eps = 0 shortcut read the resulting ``None`` as
+    "delta here is below float64's range, therefore below the target".
+
+    THE BOUNDARY IS DERIVED, NEVER SPELLED, and that is the point of the parametrization rather
+    than a stylistic preference. The quotient overflows exactly when
+    ``sigma < math.sqrt(steps) / sys.float_info.max``, so the band's WIDTH is a function of
+    ``steps``: measured 5.562684646268003e-309 at T = 1, 4.450147717014404e-308 at T = 64,
+    7.866824069956795e-308 at T = 200 and 1.7590753387454952e-307 at T = 1000. A hardcoded sigma
+    list is therefore unsatisfiable across these four step counts, and the defect's own headline
+    number is the proof: ``5e-308`` is a NORMAL float (float64's smallest normal is 2.225e-308,
+    so calling this band "subnormal" is a misnomer inherited from the defect's first framing -- at
+    T = 1000 the boundary sits nearly two decades ABOVE the subnormal floor). ``5e-308`` is inside
+    the band at T = 200 and T = 1000 and OUTSIDE it at T = 1 and T = 64, where ``mu`` stays finite.
+
+    ``sys.float_info`` is available HERE and deliberately not in the module: D-10's import ceiling
+    binds ``accountant.py`` (``test_accountant_imports_math_only`` asserts hard equality with
+    ``{"math"}``, statically and out of process), not this test module, which already imports
+    ``ast``, ``math``, ``pathlib``, ``random``, ``subprocess`` and ``sys``.
+
+    The exact boundary VALUE is pinned by neither direction, because it lands on either side
+    depending on how the division rounds at that ``steps``: measured, ``sqrt(T)/boundary`` is
+    ``inf`` at T = 1 and finite at T = 64, 200 and 1000. Only strictly-below and strictly-above
+    are decidable, so only those are asserted.
+    """
+    delta = mitigation_unit.DELTA
+    boundary = math.sqrt(steps) / sys.float_info.max
+
+    # 1. INSIDE the band: +inf, not 0.0. Each sigma is derived from `boundary` at THIS step count,
+    #    except 5e-324 -- float64's smallest positive value, which is in band at every T.
+    for label, sigma in (
+        ("boundary / 2.0", boundary / 2.0),
+        ("nextafter(boundary, 0.0)", math.nextafter(boundary, 0.0)),
+        ("5e-324 (smallest positive float64)", 5e-324),
+    ):
+        # META-GUARD FIRST: without it this loop passes while testing the ordinary finite-mu path,
+        # which is a different function and already covered elsewhere.
+        assert not math.isfinite(math.sqrt(steps) / sigma), (
+            f"{label} = {sigma!r} at T = {steps}: sqrt(steps)/sigma is "
+            f"{math.sqrt(steps) / sigma!r}, which is FINITE — this sigma is no longer inside the "
+            f"overflow band (boundary {boundary!r}) and the assertion below would be checking the "
+            f"ordinary bisection path instead of the branch this test exists to pin"
+        )
+        got = epsilon_for(sigma, steps, delta)
+        assert math.isinf(got) and got > 0.0, (
+            f"epsilon_for({sigma!r}, {steps}, {delta!r}) returned {got!r}, not +inf — at "
+            f"{label}, where sqrt(steps)/sigma overflows. A returned 0.0 here is PERFECT PRIVACY "
+            f"for essentially zero noise: the privacy-UNDERSTATING direction, and the exact defect "
+            f"22-VERIFICATION.md measured at sigma=5e-308, T=200."
+        )
+
+    # 2. CONTINUITY with the branch next door. The defect the verifier named is a DISCONTINUITY —
+    #    sigma = 0.0 returned inf and the next representable float returned 0.0 — so the two
+    #    branches giving ONE answer is what removes it rather than relocating it.
+    assert epsilon_for(0.0, steps, delta) == epsilon_for(5e-324, steps, delta) == math.inf, (
+        f"epsilon_for(0.0, {steps}, delta) = {epsilon_for(0.0, steps, delta)!r} but "
+        f"epsilon_for(5e-324, {steps}, delta) = {epsilon_for(5e-324, steps, delta)!r} — the "
+        f"sigma = 0 branch and the overflowed-quotient branch disagree, so the measured "
+        f"discontinuity at D-12's boundary has been relocated rather than removed."
+    )
+
+    # 3. THE UPPER EDGE IS SOMEBODY ELSE'S, and it must stay loud. Just above the boundary `mu` is
+    #    finite but enormous and the PRE-EXISTING doubling-bracket refusal fires. Pinned here so a
+    #    future edit that swallows that refusal — or that "extends" the inf branch upward over a
+    #    band already handled — reddens.
+    just_above = math.nextafter(boundary, 1.0)
+    assert math.isfinite(math.sqrt(steps) / just_above), (
+        f"nextafter(boundary, 1.0) = {just_above!r} at T = {steps} still overflows the quotient "
+        f"({math.sqrt(steps) / just_above!r}) — this leg is meant to sit OUTSIDE the band"
+    )
+    with pytest.raises(ValueError, match="upper bracket failed to close"):
+        epsilon_for(just_above, steps, delta)
+
+
+@pytest.mark.parametrize("mu", [float("inf"), float("-inf"), float("nan"), 0.0, -1.0])
+def test_delta_or_below_float64_refuses_the_inputs_it_may_not_read_as_ordering(mu):
+    """The helper's docstring premise is CHECKED, not asserted about the caller.
+
+    ``_delta_or_below_float64`` converts a caught ``ValueError`` into an ORDERING FACT: "delta is
+    below float64's range, therefore below the target". That reading is licensed only by
+    ``delta_closed``'s representability and exact-zero refusals. Its first two — a non-finite
+    input, and ``mu <= 0.0`` — mean something else entirely: "this input is garbage". Reading one
+    as the other is the conflation the helper's whole contract forbids, and it is what published
+    ``epsilon_for(5e-308, 200, 1e-5) = 0.0``.
+
+    Until this landed, the docstring argued those two were unreachable from a premise nothing
+    established (*"``mu`` is a finite strictly-positive number the caller computed"*). Now the
+    helper refuses them itself, so the premise is a postcondition of its own prologue and holds
+    regardless of what any caller computes. ``eps`` was already covered; this is the other operand.
+    """
+    with pytest.raises(ValueError, match="mu must be finite and strictly positive"):
+        _delta_or_below_float64(1.0, mu)
 
 
 def test_epsilon_for_matches_golden():
