@@ -376,14 +376,16 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
         instead gives relative error **1.00e+00**, returning a perfectly plausible ``0.0`` against
         a true ``1.048659178913e-57``.
 
-        THE RANGE IS NOT ENFORCED, and saying so is deliberate. Phase 22's verification measured
-        this function returning ``+inf`` (at eps=4.40884929509763e-4, mu=75.3129260813192) and
-        values marginally above 1.0 (60 of 4000 sampled cells, max 1.000000000000009) for a
-        quantity that is a probability: condition 1 bounds a SINGLE ``math.exp`` argument while the
-        Simpson loop sums 20001 terms with weights up to 4, so it fires ~0.19 too late in z, and
-        the only magnitude refusal below is ``delta <= 0.0``. That defect is real, is OUTSIDE this
-        plan's closure, and is recorded here rather than left implied by an unqualified
-        ``(0, 1]`` -- a contract this docstring can no longer honestly assert.
+        THE ``+inf`` HALF OF THE RANGE IS NOW ENFORCED; THE UPPER HALF IS NOT YET. Phase 22's
+        verification measured this function returning ``+inf`` (at eps=4.40884929509763e-4,
+        mu=75.3129260813192) and values marginally above 1.0, for a quantity that is a probability.
+        The ``+inf`` half is closed: condition 1's negative-z clause now budgets for the Simpson
+        SUM (``log(4*n)``) rather than for one ``math.exp`` term, and re-running the measurement
+        that found it -- eps=1e-4 over mu in [74.0, 78.0] at a step of 1e-3 -- gives **0 of 4001
+        cells** non-finite against the 404 it found before. The UPPER half is still open: the only
+        magnitude refusal below is ``delta <= 0.0``, so a value marginally above 1.0 is still
+        returned. That remainder is recorded here rather than left implied by an unqualified
+        ``(0, 1]`` -- a contract this docstring cannot yet honestly assert.
 
     Raises:
         ValueError: on a degenerate input or grid, or on any of the three non-vacuity conditions.
@@ -427,13 +429,40 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
     # refusal. The second clause is the NEGATIVE-z half of the same conditioning limit -- the
     # scaled form separates a tiny phi(z) prefactor from a huge integral, and for z < -37.677 that
     # integral's own exp overflows (measured: mu=76, eps=0.001 -> z = -38.0 -> OverflowError).
-    if ez <= -745.0 or (z < 0.0 and ez < -_EXP_OVERFLOW_ARG):
+    #
+    # THE NEGATIVE-z BUDGET IS FOR THE SIMPSON **SUM**, NOT FOR ONE `exp` TERM, and that is the
+    # whole arithmetic of this line. `_EXP_OVERFLOW_ARG` bounds a SINGLE `math.exp` argument, but
+    # the loop below accumulates n of them with weights up to 4.0, so the running `total` leaves
+    # float64 well before any individual term does -- and a float ADDITION does not raise, it
+    # silently becomes `inf`. The loop's largest weight is 4.0 and there are n nodes, so `4*n`
+    # bounds the sum's growth over its largest term (the composite-Simpson weights sum to
+    # 3*(n-1) < 4*n), and `log(4*n)` is exactly the exponent budget the single-term check was
+    # missing. It is computed from the ACTUAL `n` argument rather than from the default, because
+    # `n` is caller-supplied and a fixed constant would be wrong at every other node count.
+    #
+    # THIS IS A BOUND ON THE ACCUMULATION, NOT A TIGHTENING OF THE DOMAIN. The mathematics did not
+    # change; only the check's arithmetic did. MEASURED at the shipped default n = 20001:
+    # log(4.0 * 20001) = 11.28983191240606, so the negative-z boundary moves from
+    # -709.782712893384 to -698.4928809809779, i.e. the |z| cliff moves from 37.677 to 37.376.
+    # That 0.30 in z is exactly the band the defect lived in: sweeping eps=1e-4 over
+    # mu in [74.0, 78.0] at a step of 1e-3, the SHIPPED form returned `inf` in 404 of 4001 cells,
+    # first at mu = 74.951, while this refusal did not fire until mu = 75.355 -- ~0.19 too late in
+    # z. Under the headroom the first refusal moves to mu = 74.753 and the `inf` count is 0.
+    #
+    # The positive-z clause (`ez <= -745.0`) is a DIFFERENT limit -- delta below float64's range,
+    # where every loop term is exp(<= 0) <= 1 and no accumulation can overflow -- and is unchanged.
+    sum_headroom = math.log(4.0 * n)
+    if ez <= -745.0 or (z < 0.0 and ez < sum_headroom - _EXP_OVERFLOW_ARG):
         raise ValueError(
             f"delta_quadrature({eps!r}, {mu!r}): this is a DOMAIN LIMIT, not a range bug and not a "
             f"number to return. At z = eps/mu - mu/2 = {z!r} the scaled form's phi(z) prefactor "
             f"(exp({ez!r})) leaves float64's representable band, so delta is below float64 range "
-            f"(z > 0) or the separated integral overflows (z < 0). Reporting a number here is how "
-            f"a true delta of order 1e-352 becomes a published 0.0."
+            f"(z > 0) or the separated integral overflows (z < 0). The z < 0 half budgets for the "
+            f"SUM the Simpson loop actually accumulates -- {n!r} terms at weights up to 4.0, so "
+            f"log(4*n) = {sum_headroom!r} of exponent headroom below the single-term limit "
+            f"{_EXP_OVERFLOW_ARG!r} -- because a float addition that leaves float64 returns `inf` "
+            f"silently rather than raising. Reporting a number here is how a true delta of order "
+            f"1e-352 becomes a published 0.0."
         )
 
     # THE DERIVED RANGE. U is the exact positive root of z*U + U**2/2 == lam, so the discarded tail

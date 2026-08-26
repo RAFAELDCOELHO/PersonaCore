@@ -464,6 +464,62 @@ def test_oracle_refuses():
     )
 
 
+def test_quadrature_budgets_the_simpson_sum_not_one_term():
+    """The measured ``+inf`` band REFUSES — condition 1 budgets for the sum, not for one term.
+
+    ``_EXP_OVERFLOW_ARG`` bounds a SINGLE ``math.exp`` argument, but the Simpson loop accumulates
+    ``n`` of them at weights up to 4.0 and a float ADDITION that leaves float64 returns ``inf``
+    silently rather than raising. So the running ``total`` overflowed while condition 1 was still
+    silent, and the oracle DPSGD-03's whole argument rests on returned ``inf`` for a probability.
+
+    MEASURED IN THIS TREE, before the fix: sweeping eps=1e-4 over mu in [74.0, 78.0] at a step of
+    1e-3 gave **404 of 4001 cells non-finite**, first at mu=74.951, while this refusal did not fire
+    until mu=75.355 — ~0.19 too late in z. After subtracting ``log(4*n)`` (11.28983191240606 at
+    n=20001) from the negative-z budget: **0 non-finite**, and the first refusal moves to
+    mu=74.753. That 4001-cell measurement lives in ``22-14-SUMMARY.md``, NOT here: CI gets a dozen
+    deterministic points spanning the FORMER hole, which run in milliseconds because a refusal
+    short-circuits before the 20,001-node loop.
+
+    SCOPED TO REFUSALS ON PURPOSE. There is deliberately no probability-range assertion in this
+    test. Every point below refuses, so a ``(0, 1]`` clause would assert nothing inside the band —
+    and read over the wider mu in [74, 78], 368 of the 753 cells this fix leaves ANSWERED return
+    1.0000000000000655, which is above 1.0. That half is
+    ``test_quadrature_returns_a_probability_or_refuses``'s, and its boundary is MEASURED rather
+    than guessed.
+    """
+    # The exact point 22-VERIFICATION.md reproduced as returning `inf`.
+    with pytest.raises(ValueError, match="DOMAIN LIMIT"):
+        delta_quadrature(0.000440884929509763, 75.3129260813192)
+
+    lo, hi = 74.951, 75.355  # measured: first shipped `inf` -> first shipped refusal
+    band = [lo + k * (hi - lo) / 13 for k in range(14)]
+    assert len(band) >= 12, (
+        f"the band sweep degenerated to {len(band)} points — a loop over an empty or near-empty "
+        f"list passes vacuously, which is the failure this meta-guard exists to catch"
+    )
+
+    answered = []
+    refused = 0
+    for mu in band:
+        try:
+            answered.append((mu, delta_quadrature(1e-4, mu)))
+        except ValueError:
+            refused += 1
+    assert answered == [], (
+        f"the former `inf` hole is answering again at {answered!r}. Condition 1's negative-z "
+        f"clause is back to bounding ONE math.exp argument instead of the Simpson SUM, so the "
+        f"accumulation leaves float64 silently and this oracle returns a non-probability."
+    )
+    # Meta-guard: a band that stopped reaching the boundary would leave `answered` empty for the
+    # wrong reason only if it also refused nothing, which is impossible here — but a future edit
+    # that made every call raise for an UNRELATED reason (a bad grid, say) would still be caught
+    # by the `match="DOMAIN LIMIT"` above, and an empty band is caught by the length guard.
+    assert refused == len(band), (
+        f"only {refused} of {len(band)} band points refused — the sweep is no longer measuring "
+        f"the boundary it was pinned to"
+    )
+
+
 @pytest.mark.parametrize("n", [20000, 4, 2, 1, 0])
 def test_quadrature_rejects_bad_grid(n):
     """An even node count or fewer than three nodes is a ``ValueError``, never a silent bad rule.
