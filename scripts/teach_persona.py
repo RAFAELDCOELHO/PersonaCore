@@ -1331,8 +1331,16 @@ def train_arm(
     # ===== D-08 wirings 1-3: the kwargs the DP arms add to train(), and nothing else adds =====
     #
     # TWO dicts rather than one, keyed on the SAME ``is_dp`` boolean, because ``grad_accum_steps``
-    # belongs to the ``TrainConfig`` constructor and the other three to ``train()``. On every
+    # belongs to the ``TrainConfig`` constructor and the other four to ``train()``. On every
     # non-DP arm both are empty, so every v2.0/v3.0 arm's ``train()`` call is byte-unchanged.
+    #
+    # ``dict(...)`` and not ``{...}``, deliberately: the entries then read exactly as the KEYWORDS
+    # they become at the splat site, and each one is a real ``ast.keyword`` node. That second
+    # property is load-bearing and was MEASURED. The first draft of this block used
+    # ``{"grad_accum_steps": ...}``, and the 22-08 instrument that re-measures the number baked
+    # into ``loop.py``'s refusal message counts code hits by ``ast.keyword``/``Attribute``/``Name``
+    # — so against a file that DID wire the value it still read **0 code hits**. A wiring the
+    # measurement cannot see is worse than no wiring, because the message stays confidently wrong.
     #
     # WIRING 2 — ``grad_accum_steps``. MEASURED before this plan: the phrase appeared **9 times in
     # this file's PROSE and 0 times in its CODE**, so the ``TrainConfig(...)`` below inherited
@@ -1341,9 +1349,9 @@ def train_arm(
     # ONE. ``loop.py``'s accum-agreement refusal (plan 22-08) now makes a disagreement loud, and
     # the value is read from ``stats`` rather than ``len(facts)`` so the accum, the declared lot
     # size and the bin the loader opens all come from the packer's own record count.
-    dp_accum = {"grad_accum_steps": stats["n_facts"]} if is_dp else {}
+    dp_accum = dict(grad_accum_steps=stats["n_facts"]) if is_dp else {}
     dp_kwargs = (
-        {
+        dict(
             # WIRING 1 — fact-aligned routing. There is NO fact-bin key in ``paths``:
             # ``arm_outputs`` returns exactly {"bin", "mask", "csv", "checkpoint", "adapter"} and
             # ``build_arm_bins`` hands that same dict back. The third bin is DERIVED, by
@@ -1353,18 +1361,18 @@ def train_arm(
             # path through ``train()`` at all before plan 22-08 — zero hits for
             # ``fact_bin``/``fact_aligned``/``align_facts`` in ``loop.py`` — and its sole non-test
             # caller was the REPORTING driver ``scripts/phase21_unit_record.py``.
-            "fact_bin": fact_bin_path(paths["bin"]),
-            "n_facts": stats["n_facts"],
+            fact_bin=fact_bin_path(paths["bin"]),
+            n_facts=stats["n_facts"],
             # WIRING 3 — the replay seam (Phase 21 D-11/D-24), closing IN-04. Under D-10 replay is
             # NOT in the teaching bin (``arm_spec`` returns ``replay_ratio = 0.0`` for both DP
             # arms, load-bearing); it is drawn here at train time from the PUBLIC PersonaChat pair.
             # UNIT CONVERSION, stated because it is the one thing to get wrong:
             # ``replay_window_budget`` returns TOKENS and ``train()`` wants WINDOWS.
-            "replay_bin": DIALOG_TRAIN_BIN,
-            "replay_mask_bin": DIALOG_TRAIN_MASK,
-            "replay_windows": replay_window_budget(stats["n_facts"]) // BLOCK_SIZE,
-            "dp_fn": dp_fn,
-        }
+            replay_bin=DIALOG_TRAIN_BIN,
+            replay_mask_bin=DIALOG_TRAIN_MASK,
+            replay_windows=replay_window_budget(stats["n_facts"]) // BLOCK_SIZE,
+            dp_fn=dp_fn,
+        )
         if is_dp
         else {}
     )
