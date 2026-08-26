@@ -129,6 +129,59 @@ hunk where the fix ships as two independent layers, and reported the single-hunk
 
 ---
 
+## Gap-Closure Addendum, Round 2 — V-35 … V-39 (added 2026-08-26, plan 22-19)
+
+The 2026-08-26 re-verification confirmed all five `missing:` items above genuinely closed and
+returned `gaps_found` 4/5 **anyway** — SC3 falsified on the same conjunct, by the same mechanism,
+one band over: `_log_erfc` routed on `erfc(x) > 0.0`, so the range where `math.erfc` returns a
+SUBNORMAL took `math.log` of a float that had already discarded up to 52 of its 53 mantissa bits.
+Plans `22-17` and `22-18` closed it and added five guards this contract did not cover. Numbering
+continues from V-34; the column shape is the table above's.
+
+**Every `Automated command` below was RUN by plan 22-19 before its row was written**, and the pass
+count in each Status cell is that run's own output, not a prediction. The V-01 … V-25 rows keep
+their pre-execution `⬜ pending` status for the reason the round-1 addendum gives.
+
+**The structural difference from round 1, stated because it is the point rather than a detail.**
+Round 1's guards were a POINT LIST, and a point list is worth exactly the band it sweeps — which is
+how a defect survived one band away from the one that was fixed. V-35 is parametrized on the
+ROUTING BOUNDARY'S OWN NEIGHBOURHOOD and asserts a property of the RESULT ("whatever route was
+chosen at `x`, that route is accurate at `x`"), so it never names the boundary and reddens when the
+boundary moves. V-36 exists because V-35 can be satisfied vacuously by a table that has drifted off
+the boundary.
+
+| V-ID | Requirement | Behaviour validated | Test type / granularity | Automated command | File Exists | Status |
+|------|-------------|---------------------|-------------------------|-------------------|-------------|--------|
+| V-35 | DPSGD-03 | `_log_erfc` agrees with a committed 60-dps `log(erfc(x))` across its ROUTING BOUNDARY, over a band spanning all three `math.erfc` regimes (NORMAL / SUBNORMAL / exactly 0.0). Asserts a property of the **result**, never of the predicate — no route detector, no AST detector — so it reddens on a boundary move **without naming the boundary**. 26.8 is load-bearing and must not be pruned: without it a boundary hidden anywhere in (26.7, 26.9] stays green | unit, 17 band rows | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_log_erfc_band_routes_accurately -q` | ✅ exists | ✅ green (17 passed) |
+| V-36 | DPSGD-03 | V-35's NON-VACUITY companion: every band row is classified by calling `math.erfc` **at run time** and all three regimes must be non-empty (measured on this box: 4 normal / 9 subnormal / 4 zero), plus a HARD-EQUALITY pin that the lowest subnormal row is the boundary float `26.54325845425098`. It never calls `_log_erfc`, so **the module under test cannot satisfy its own meta-guard** | unit, once per run over 17 rows | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_log_erfc_band_spans_all_three_erfc_regimes -q` | ✅ exists | ✅ green (1 passed) |
+| V-37 | DPSGD-03 | The **FOURTEENTH `DELTA_FRONTIER` row** carries V-01 and V-02 into the erfc-SUBNORMAL band that **0 of the previous 22 pinned points entered** — `(728.2043182233367, 34.159747883408095)`, `erfc(b) = 1.43e-322` asserted strictly between 0.0 and the smallest normal at run time. Measured V-01 3.6662e-14 against 1.5e-12 (40.9× inside) and V-02 1.0137e-11 against an **UNWIDENED** 1e-9 (98.6× inside) | unit, 2 legs (V-01 + V-02 at the new row) | `.venv/bin/python -m pytest tests/test_phase22_accountant.py -q -k 728.2043182233367` | ✅ exists | ✅ green (2 passed, 212 deselected) |
+| V-38 | DPSGD-03 | `_inert_points()` is filtered on `sys.float_info.min`, **not** on `erfc(b) > 0.0` — the old filter defined "healthy" as the property the defect satisfies, so it CERTIFIED THE DEFECTIVE BAND AS HEALTHY and the filter encoded the defect. Plus the hard-count companion, held deliberately at 18 with a two-entry exclusion list pinned by equality rather than by count | unit, 18 pinned points + 1 count guard | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_log_erfc_is_inert_where_erfc_is_healthy tests/test_phase22_accountant.py::test_log_erfc_inert_points_are_not_empty -q` | ✅ exists | ✅ green (19 passed) |
+| V-39 | DPSGD-03 | `ROUND_TRIP_REL_TOL` is a bound over a sweep that **includes its own worst case**: σ=0.414 is in `_round_trip_pairs()`, whose T=200 leg was measured **2.07e+07× over** the 1e-12 tolerance before 22-17. Exactly one of its four T legs is in the band (T=200; T=1 and 64 are NORMAL, T=1000 is past the cliff), and no assertion requires otherwise. The presence of 0.414 is pinned by HARD EQUALITY because both count guards pass a swap that keeps the count at 52 | unit, 4 round-trip legs + 1 hard-equality pin | `.venv/bin/python -m pytest tests/test_phase22_accountant.py -q -k "test_round_trip_pairs_is_not_empty or (test_round_trip and 0.414)"` | ✅ exists | ✅ green (5 passed, 209 deselected) |
+
+**Full suite at the time these were recorded:** `.venv/bin/python -m pytest -q` →
+**`1338 passed, 1 skipped`**; `.venv/bin/ruff check . && .venv/bin/ruff format --check .` →
+`All checks passed! / 203 files already formatted`. Plan 22-19 changed **no source code**, so this
+count is 22-18's closing count unmoved — any movement would have been a defect rather than a
+tolerance question.
+
+**`make test` is still BROKEN in this tree and was not used.** The *Full suite command* cell in the
+Test Infrastructure table says `make test`; it was written at planning time and is wrong here.
+**Every command in this addendum was run as `.venv/bin/python -m pytest`** under the Python 3.11
+venv. Recorded here rather than by editing the planning-time row, per this phase's retract-in-place
+discipline — the same reason the round-1 addendum gives.
+
+**Each of these guards was WATCHED RED under a mutation of the real committed source**, which is
+this phase's standard of evidence. `22-17` M-H (revert `_log_erfc`'s predicate to `if e > 0.0:`) —
+**1 distinct test, 5 node ids**, worst 1.5906e-04 relative at x=27.19; M-H-both (additionally
+delete `_SMALLEST_NORMAL`) — same 5 node ids, the second hunk inert to pytest but caught by `ruff`
+as `F821`. `22-18` M-J (a **TEST-SIDE** mutation reverting `_inert_points()`'s filter) — **2
+distinct tests**, one of them a node the old filter GENERATES that demands `_log_erfc` return
+`math.log` of a float whose mantissa is already gone; and M-H re-applied contributes **+3 node ids**
+at 1.28e+09×, 1.92e+06× and 2.07e+07× over their budgets. Both hunk counts VERIFIED at 1 rather than
+inherited from the plan; all restores sha256-identical with `git diff --exit-code` at 0.
+
+---
+
 ## Wave 0 Requirements
 
 - [ ] `tests/test_phase22_accountant.py` — V-01 … V-09

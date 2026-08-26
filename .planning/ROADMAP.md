@@ -122,7 +122,7 @@ what survives cannot be cheaply reverted.
 
 - [x] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (execution complete 2026-08-20; reopened for GATE-06 gap closure, all 12 plans executed 2026-08-21 — SC3's GATE-06 clause superseded by a dated D-34/D-37 amendment, GATE-06 discharged, `20-SECURITY.md` at `threats_open: 0`. Awaiting re-verification by `/gsd:verify-phase 20`) (completed 2026-08-21)
 - [x] **Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus** - Fix what a record is, and prove it structurally, before any ε can be computed against the wrong one (completed 2026-08-25)
-- [x] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers (execution complete 2026-08-26; `22-VERIFICATION.md` returned `gaps_found` 4/5 — SC3's two-oracle agreement falsified by `delta_closed` discarding its second term past the `erfc` cliff — so reopened for gap closure across plans 22-12…22-16. 22-12 executed 2026-08-26: three of the five `missing:` items closed, all 7 `GOLDEN_EPSILON` rows BIT-IDENTICAL. 22-13 executed 2026-08-26: WARNING-1 closed on the direction that matters — `dp_fn=None` resuming a checkpoint carrying `dp_noise_rng` now REFUSES, while the direction 22-REVIEW's CR-04 proposed refusing stays tolerated on its measured reachability argument, with both committed guards that pin it named in `loop.py`; mutation M-H watched failing over the full suite (exactly ONE distinct RED), full suite `1303 passed, 1 skipped`. 22-14 executed 2026-08-26: `delta_quadrature` returns a probability or refuses — the `log(4*n)` Simpson-sum headroom closes the measured 404-of-4001-cell `inf` band, and the upper-bound slack is MEASURED over 5351 answered cells (the verification's literal `0.0 < delta <= 1.0` would have refused 267 of them, 4.99%, all correct). 22-15 executed 2026-08-26: the LAST `missing:` item — `epsilon_for` returned `0.0`, perfect privacy, for every σ below `sqrt(steps)/sys.float_info.max`; the quotient is now checked and answers `+inf`, CONTINUOUS with the σ=0 branch rather than relocating the discontinuity. 22-16 executed 2026-08-26: DPSGD-03's `REQUIREMENTS.md` row retracted in place with what measured it false, this wave list ticked, `22-VALIDATION.md` extended by nine rows (V-26…V-34), and WARNING-2 routed to Phase 23 while WARNING-1 is recorded CLOSED. All five `missing:` items closed; full suite `1314 passed, 1 skipped`, `ruff` clean over 203 files, `scripts/mitigation_accountant.py` byte-unchanged throughout. **The 2026-08-26 re-verification confirmed all five `missing:` items closed and returned `gaps_found` 4/5 anyway — SC3 falsified on the same conjunct, one band over, in the `erfc`-SUBNORMAL range `_log_erfc`'s `e > 0.0` predicate routes to `math.log`. Reopened for 22-17 … 22-19.**)
+- [x] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers (execution complete 2026-08-26; `22-VERIFICATION.md` returned `gaps_found` 4/5 — SC3's two-oracle agreement falsified by `delta_closed` discarding its second term past the `erfc` cliff — so reopened for gap closure across plans 22-12…22-16. 22-12 executed 2026-08-26: three of the five `missing:` items closed, all 7 `GOLDEN_EPSILON` rows BIT-IDENTICAL. 22-13 executed 2026-08-26: WARNING-1 closed on the direction that matters — `dp_fn=None` resuming a checkpoint carrying `dp_noise_rng` now REFUSES, while the direction 22-REVIEW's CR-04 proposed refusing stays tolerated on its measured reachability argument, with both committed guards that pin it named in `loop.py`; mutation M-H watched failing over the full suite (exactly ONE distinct RED), full suite `1303 passed, 1 skipped`. 22-14 executed 2026-08-26: `delta_quadrature` returns a probability or refuses — the `log(4*n)` Simpson-sum headroom closes the measured 404-of-4001-cell `inf` band, and the upper-bound slack is MEASURED over 5351 answered cells (the verification's literal `0.0 < delta <= 1.0` would have refused 267 of them, 4.99%, all correct). 22-15 executed 2026-08-26: the LAST `missing:` item — `epsilon_for` returned `0.0`, perfect privacy, for every σ below `sqrt(steps)/sys.float_info.max`; the quotient is now checked and answers `+inf`, CONTINUOUS with the σ=0 branch rather than relocating the discontinuity. 22-16 executed 2026-08-26: DPSGD-03's `REQUIREMENTS.md` row retracted in place with what measured it false, this wave list ticked, `22-VALIDATION.md` extended by nine rows (V-26…V-34), and WARNING-2 routed to Phase 23 while WARNING-1 is recorded CLOSED. All five `missing:` items closed; full suite `1314 passed, 1 skipped`, `ruff` clean over 203 files, `scripts/mitigation_accountant.py` byte-unchanged throughout. **The 2026-08-26 re-verification confirmed all five `missing:` items closed and returned `gaps_found` 4/5 anyway — SC3 falsified on the same conjunct, one band over, in the `erfc`-SUBNORMAL range `_log_erfc`'s `e > 0.0` predicate routes to `math.log`. Reopened for 22-17 … 22-19.** Round 2 executed 2026-08-26: 22-17 re-keyed the predicate on float64's smallest NORMAL and dropped the two-oracle gap at the frozen δ from `1.9190e-03` to `1.0152e-11` inside an UNWIDENED 1e-9 budget, with a 17-row band table that sweeps the routing boundary's own neighbourhood instead of a point list; 22-18 made the suite able to SEE the band — a fourteenth `DELTA_FRONTIER` row with a SUBNORMAL `erfc(b)`, `_inert_points()` retargeted, and a round-trip σ that reaches its own worst case; 22-19 corrected the record, retracting in place the false *"EXACTLY ZERO at σ ≥ 0.42"* figure that made the band look covered and naming WARNING-4 as genuinely open. Full suite `1338 passed, 1 skipped`, `ruff` clean over 203 files, `scripts/mitigation_accountant.py` byte-unchanged across all eight gap plans. **SC3's verdict is the next `/gsd:verify-phase 22`'s; no plan in this phase has claimed it.**)
 - [ ] **Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration** - Size the sweep from a measurement, and run the one cheap run that separates an honest negative from a silent bug
 - [ ] **Phase 24: Adversarial Extraction-Aware Training + the Held-Out Attack Family** - The second arm as a data-mixture ratio, with generalization converted from a disclaimer into a measurement
 - [ ] **Phase 25: Frontier Sweep and the Existence-Gate Verdict** - Both arms, both capacities, one plane, judged by importing the Phase 20 constants
@@ -401,7 +401,7 @@ CPU before a single second of M3 time is spent
      is not restructured into `nn.Linear` submodules and `persona_adapter.pt` plus every v3.0
      checkpoint still load unchanged. (DPSGD-05, DPSGD-07)
 
-**Plans**: 19 plans in 13 waves (16 executed; 22-12 … 22-16 closed the five `missing:` items
+**Plans**: 19 plans in 13 waves (19 executed; 22-12 … 22-16 closed the five `missing:` items
 `22-VERIFICATION.md` recorded, and the 2026-08-26 **re-verification confirmed all five closed** —
 then returned `gaps_found` 4/5 again on the SAME conjunct, one band over: `_log_erfc` routes on
 `erfc(x) > 0.0`, so the band where `math.erfc` returns a SUBNORMAL takes `math.log` of a float that
@@ -416,8 +416,16 @@ rule**, so no third blind band is opened. `ROUND_TRIP_REL_TOL` — a 🛑 Blocke
 — is now worst 4.0274e-16. The frozen pin is proven unmoved by an EMPTY `float.hex()` diff over all
 19 pinned points. The structural deliverable is `LOG_ERFC_BAND` + a sweep that asserts the route
 ACTUALLY CHOSEN is accurate and never names the boundary, with run-time three-regime non-vacuity.
-Full suite `1332 passed, 1 skipped` = the 1314 baseline + exactly 18. **SC3's verdict is still
-`/gsd:verify-phase 22`'s** — 22-18 and 22-19 remain.)
+Full suite `1332 passed, 1 skipped` = the 1314 baseline + exactly 18. **22-18 executed
+2026-08-26:** the fourteenth `DELTA_FRONTIER` row lands inside the band — 14 rows, exactly 1 with a
+SUBNORMAL `erfc(b)`, where 0 of the previous 22 pinned points entered it at all — `_inert_points()`
+is retargeted off the filter that certified the defective band as healthy, and the round trip
+reaches σ=0.414, previously 2.07e+07× over `ROUND_TRIP_REL_TOL`. Full suite `1338 passed,
+1 skipped` = 22-17's 1332 **+6 exactly**, zero regressions. **22-19 executed 2026-08-26:** the
+record — the false *"EXACTLY ZERO at σ ≥ 0.42"* figure retracted in place in both committed files,
+`erfc_zero_x` corrected 27.5 → the measured 27.2, DPSGD-03 extended with round 2, and WARNING-4
+named as genuinely OPEN rather than inherited silently. **SC3's verdict is still
+`/gsd:verify-phase 22`'s** — no plan in this phase has claimed it, and 22-19 does not either.)
 
 **Wave 1** *(no dependencies)*
 
@@ -519,10 +527,25 @@ Full suite `1332 passed, 1 skipped` = the 1314 baseline + exactly 18. **SC3's ve
 
 **Wave 13** *(blocked on Wave 12)*
 
-- [ ] 22-19-PLAN.md — the record: *"the error is EXACTLY ZERO at σ ≥ 0.42"* — the false figure that
+- [x] 22-19-PLAN.md — the record: *"the error is EXACTLY ZERO at σ ≥ 0.42"* — the false figure that
       made this band look covered — retracted in place in BOTH committed files, `erfc_zero_x`
       corrected from 27.5 to the measured 27.2, DPSGD-03 extended with round 2, and an explicit
       statement of what would make a round 3 necessary (WARNING-4, named as genuinely open)
+      (executed 2026-08-26: **no source code touched**, so the suite is UNMOVED at `1338 passed,
+      1 skipped` and any movement would have been a defect. The retracted figure was re-measured
+      out of tree by rebinding `_log_erfc` to the pre-fix predicate: the pre-fix ε error against
+      60-dps truth is **9.6308e-12 at σ=0.4185 and 1.1001e-13 at σ=0.4200**, reaching only ~1e-16
+      past σ≈0.425 and never exactly zero — reproducing `22-VERIFICATION.md`'s own 9.631e-12 /
+      1.100e-13 rather than transcribing them. A SEVENTH figure was caught wrong in the process,
+      and it was this plan's own: the *fix's-delta* reading also fails at exactly 0.42 (pre
+      709.5584251988014 vs post 709.5584251987232, Δ 7.8216e-11; highest differing σ is **0.4238**,
+      not the 0.4125 the plan asserted), so the sentence is false under BOTH readings.
+      `erfc_zero_x` re-bisected to **27.2** — the float below, 27.199999999999996, still returns
+      1e-323 — the *"a subnormal, still information"* premise retracted with its cost (0.20941
+      absolute in the log, 23.295% relative in `delta_closed`'s second term; 53/34/18/6/3 mantissa
+      bits surviving across the band), and the subnormal cliff 26.54325845425098 recorded beside
+      it. `grep -o "RETRACTED IN PLACE" .planning/REQUIREMENTS.md | wc -l` = **2**; the five
+      success criteria proven byte-unchanged by sha256 `73a316f4…`, HEAD against worktree)
 
 ### Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration
 
