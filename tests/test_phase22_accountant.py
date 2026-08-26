@@ -1013,13 +1013,35 @@ def test_epsilon_for_refusals_carry_distinct_messages():
 
 
 def _round_trip_pairs():
-    """Twelve-plus (sigma, T) pairs spanning the frontier the Phase 23 sweep will visit.
+    """Thirteen sigmas x four step counts, spanning the frontier the Phase 23 sweep will visit.
 
     The seven ``GOLDEN_EPSILON`` sigmas (so the round trip is exercised at exactly the points the
-    frozen pin constrains) plus five that are not pinned anywhere — 0.5 and 0.7 at the noisy end,
-    1.5 and 3.0 in the middle, 50.0 at the quiet end — each at four step counts.
+    frozen pin constrains) plus six that are not pinned anywhere — **0.414 inside the erfc-SUBNORMAL
+    band**, 0.5 and 0.7 at the noisy end, 1.5 and 3.0 in the middle, 50.0 at the quiet end — each at
+    four step counts.
+
+    **0.414 IS THE SIGMA THAT MAKES ``ROUND_TRIP_REL_TOL`` A BOUND OVER ITS OWN WORST CASE.**
+    ``22-VERIFICATION.md`` filed the round trip as a Blocker: at sigma=0.414 / T=200 it deviated by
+    **2.0703e-05, which is 2.07e+07x** the 1e-12 budget, and the sweep could not see it because its
+    smallest sigma was 0.5. Measured after the routing fix, that leg is 2.6817e-16.
+
+    **THE BAND IS A FUNCTION OF T AND THIS DOCSTRING WILL NOT PRETEND OTHERWISE**, which is
+    ``test_epsilon_for_answers_inf_in_the_subnormal_sigma_band``'s finding applied here: a hardcoded
+    sigma is not simultaneously in-band at four step counts, because the ``b`` the solution reaches
+    moves with ``sqrt(T)/sigma``. Measured at sigma=0.414, erfc(b) at the solved point is a NORMAL
+    float at T=1 (b=4.56) and T=64 (b=16.65), **SUBNORMAL at T=200 (b=27.15)** and exactly 0.0 at
+    T=1000 (b=57.02). So exactly ONE of the four legs is the one this sigma was added for; the other
+    three are ordinary coverage, and only the ``0.414-200`` node id reddens when the routing
+    predicate is reverted. All four pass, so the sigma is added unconditionally.
     """
-    sigmas = [row[0] for row in mitigation_accountant.GOLDEN_EPSILON] + [0.5, 0.7, 1.5, 3.0, 50.0]
+    sigmas = [row[0] for row in mitigation_accountant.GOLDEN_EPSILON] + [
+        0.414,
+        0.5,
+        0.7,
+        1.5,
+        3.0,
+        50.0,
+    ]
     return [(sigma, steps) for sigma in sigmas for steps in (1, 64, 200, 1000)]
 
 
@@ -1032,8 +1054,11 @@ def test_round_trip(sigma, steps):
     test can see. A forward function that is wrong and an inverse that is wrong in exactly the
     compensating way both pass their own tests and fail this one.
 
-    Measured worst deviation over these 48 pairs: **8.29e-15 relative**, against the
-    ``ROUND_TRIP_REL_TOL`` budget of 1e-12.
+    Measured worst deviation over these 52 pairs: **8.2901e-15 relative**, at
+    (sigma=14.142135623730951, T=1), against the ``ROUND_TRIP_REL_TOL`` budget of 1e-12. The
+    thirteenth sigma 0.414 did NOT move that worst case — its four legs land at 2.6817e-16,
+    5.3634e-16, 2.6817e-16 and 5.3634e-16 — but before the erfc routing fix its T=200 leg alone
+    read **2.0703e-05, 2.07e+07x the budget**, which is the whole reason it is in the sweep.
     """
     epsilon = epsilon_for(sigma, steps, mitigation_unit.DELTA)
     back = sigma_for(epsilon, steps, mitigation_unit.DELTA)
@@ -1044,19 +1069,29 @@ def test_round_trip(sigma, steps):
 
 
 def test_round_trip_pairs_is_not_empty():
-    """Meta-guard: V-07 sweeps 48 pairs, and the locator is really producing them.
+    """Meta-guard: V-07 sweeps 52 pairs, and the locator is really producing them.
 
     A parametrization built off ``GOLDEN_EPSILON`` inherits that table's failure modes — a
-    truncated pin would silently shrink this sweep instead of reddening.
+    truncated pin would silently shrink this sweep instead of reddening. Both halves matter: the
+    pair count catches a lost step count and the DISTINCT-sigma count catches a lost or collided
+    sigma, and it is the second one that would let 0.414 — the only sigma in this sweep that
+    reaches the erfc-SUBNORMAL band, and the sigma the round trip was measured 2.07e+07x over
+    budget at — disappear silently.
     """
     pairs = _round_trip_pairs()
-    assert len(pairs) == 48, (
-        f"V-07 is parametrized over {len(pairs)} pairs, not the 48 the sweep claims "
-        f"(12 sigmas x 4 step counts) — the pin or the extra sigma list has changed"
+    assert len(pairs) == 52, (
+        f"V-07 is parametrized over {len(pairs)} pairs, not the 52 the sweep claims "
+        f"(13 sigmas x 4 step counts) — the pin or the extra sigma list has changed"
     )
-    assert len({sigma for sigma, _ in pairs}) == 12, (
-        f"the sweep covers {len({s for s, _ in pairs})} distinct sigmas, not 12 — two entries "
+    assert len({sigma for sigma, _ in pairs}) == 13, (
+        f"the sweep covers {len({s for s, _ in pairs})} distinct sigmas, not 13 — two entries "
         f"have collided and the sweep is narrower than it reads"
+    )
+    assert 0.414 in {sigma for sigma, _ in pairs}, (
+        f"sigma=0.414 is gone from the round-trip sweep ({sorted({s for s, _ in pairs})}). It is "
+        f"the ONLY sigma here whose solved b reaches the erfc-SUBNORMAL band (at T=200), and "
+        f"22-VERIFICATION.md measured the round trip 2.07e+07x over ROUND_TRIP_REL_TOL there. "
+        f"Without it the budget is documented over 48 points that avoid their own worst case"
     )
 
 
