@@ -889,10 +889,12 @@ def test_golden_epsilon_from_oracle():
 
     delta is strictly DECREASING in eps at fixed mu, so the bracket invariant is
     ``delta(lo) > target >= delta(hi)`` and the returned ``hi`` is the infimum ``REQUIRED_FORM``
-    names. A ``delta_quadrature`` refusal is deliberately NOT caught: measured, the walk never
-    reaches one (the largest z probed is ~9.1, against the ~38.37 underflow boundary), so a
-    refusal here would mean the bracket left the representable region and the derivation is not
-    valid -- a loud error is the correct outcome, not a substituted ordering fact.
+    names. A ``delta_quadrature`` refusal is deliberately NOT caught: measured over the 356 oracle
+    calls this test makes, the largest ``z = eps/mu - mu/2`` probed is **7.5000** (at eps = 8.0,
+    mu = 1.0), against the committed ``ZERO_BOUNDARIES["delta_quadrature_zero_z"] = 38.372164249``
+    at which the oracle refuses. The walk therefore never reaches one, and a refusal here would
+    mean the bracket had left the representable region and the derivation is not valid -- a loud
+    error is the correct outcome, not a substituted ordering fact.
     """
     target_delta = mitigation_unit.DELTA
     rel_tol = mitigation_accountant.GOLDEN_EPSILON_REL_TOL
