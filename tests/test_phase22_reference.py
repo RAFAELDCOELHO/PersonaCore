@@ -44,7 +44,7 @@ def _imported_top_level(tree):
 
 
 def test_reference_table_is_populated():
-    """The ground truth is 12 delta rows + 7 epsilon rows, and it is REALLY there.
+    """The ground truth is 14 delta rows + 7 epsilon rows, and it is REALLY there.
 
     The meta-guard discipline applied to DATA. A table that silently emptied — a bad merge, a
     truncated write, a refactor that renamed the constant — would make V-01's frontier sweep and
@@ -56,11 +56,14 @@ def test_reference_table_is_populated():
     a second one ever is, the two-oracle cross-check has gone vacuous somewhere new and this must
     redden rather than shrug.
     """
-    assert len(DELTA_FRONTIER) == 13, (
-        f"DELTA_FRONTIER holds {len(DELTA_FRONTIER)} rows, not the 13-point frontier V-01 sweeps "
+    assert len(DELTA_FRONTIER) == 14, (
+        f"DELTA_FRONTIER holds {len(DELTA_FRONTIER)} rows, not the 14-point frontier V-01 sweeps "
         "— a table that lost rows makes the frontier test green over less than it claims. The "
-        "thirteenth is the b > 27.2 row (eps=775.7866600701457, mu=35.35533905932738), the band "
-        "where the closed form silently dropped its second term and no committed row looked"
+        "last two are the two erfc cliffs nobody swept: the thirteenth is the erfc(b) == 0.0 row "
+        "(eps=775.7866600701457, mu=35.35533905932738) where the closed form silently dropped its "
+        "second term, and the fourteenth is the erfc(b) SUBNORMAL row "
+        "(eps=728.2043182233367, mu=34.159747883408095) one cliff earlier, where it kept the term "
+        "but computed it from a float that had already lost up to 52 of its 53 mantissa bits"
     )
     assert len(EPSILON_GOLDEN) == 7, (
         f"EPSILON_GOLDEN holds {len(EPSILON_GOLDEN)} rows, not 7 — same failure mode as above, "

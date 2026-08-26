@@ -23,7 +23,7 @@ Consumers:
 
 # =============================================================================================
 # 1. DELTA_FRONTIER — delta(eps, mu) for the analytic Gaussian mechanism (Balle-Wang Thm 8 /
-#    Dong-Roth-Su Cor 2.13). The V-01 ground truth, 13 rows.
+#    Dong-Roth-Su Cor 2.13). The V-01 ground truth, 14 rows.
 #
 #    PROVENANCE: 60-dps mpmath ground truth, computed once in the 22-RESEARCH session, committed
 #    as data so no test imports mpmath (RPT-03).
@@ -35,7 +35,7 @@ Consumers:
 #    over data the parser had already thrown away. As strings the digits survive; consumers call
 #    float() and get exactly what f64 can hold, which for that row IS 0.0 — and that is the point.
 #
-#    The last two rows are RESEARCH F1's finding, in the table on purpose: past z ~ 38.47 BOTH
+#    Rows 11 and 12 are RESEARCH F1's finding, in the table on purpose: past z ~ 38.47 BOTH
 #    delta_closed (erfc underflow) and delta_quadrature return exactly 0.0, so the "two oracles of
 #    different mathematics" cross-check degenerates to `0.0 == 0.0` and passes on two wrong
 #    answers. Row (2.0, 0.1) is the last row where the cross-check is still meaningful; row
@@ -96,6 +96,60 @@ DELTA_FRONTIER = (
     #   Route 2 is the one that licenses this literal: it shares no transcendental with route 3
     #   beyond `exp`, so it cannot inherit the erfc cliff that produced the defect.
     (775.7866600701457, 35.35533905932738, "8.870303048330e-6"),
+    # ---- THE FOURTEENTH ROW: ONE CLIFF EARLIER STILL, WHERE erfc(b) IS A SUBNORMAL --------------
+    # The thirteenth row above is F1's twin at the cliff where the SECOND erfc reaches exactly 0.0.
+    # This row is the twin ONE CLIFF EARLIER STILL: b sits in the band where math.erfc still returns
+    # a strictly positive float, but one that has already discarded up to 52 of its 53 mantissa
+    # bits. Measured here: a = 2.9965347012327306 with erfc(a) = 2.257809999067321e-05 — HEALTHY,
+    # which is exactly why delta_closed does NOT refuse and returns a plausible wrong number
+    # instead — and b = 27.151124073213406 with erfc(b) = 1.43e-322, strictly between 0.0 and
+    # float64's smallest normal 2.2250738585072014e-308, i.e. genuinely SUBNORMAL.
+    #
+    # THE SUITE WAS STRUCTURALLY BLIND TO THIS BAND TOO, and 22-VERIFICATION.md proved that by
+    # EXECUTION rather than by inference: patching _log_erfc to return -12345.0 for every input
+    # whose erfc is subnormal left the FULL SUITE at `1314 passed, 1 skipped`, byte-identical to
+    # baseline. Zero of the twenty-two then-pinned points had a subnormal erfc(b). The shipped
+    # accountant returned 1.0000000000000345e-05 here — a relative 1.9227e-03 against the truth
+    # below, roughly 2.7 correct significant digits — under a docstring promising at least twelve.
+    #
+    # AND THE DIRECTION IS NOT CONSERVATIVE, which is what distinguishes this row from the
+    # thirteenth. The dropped-second-term defect always OVER-stated delta, so every published
+    # epsilon was pessimistic and "no published number is optimistic" held. A subnormal's lost bits
+    # round both ways: 22-VERIFICATION.md measured the shipped epsilon BELOW the 60-dps truth at
+    # sigma = 0.4150, 0.4165, 0.4170 and 0.4175 — the privacy-UNDERSTATING direction, which is a
+    # change in KIND and not merely in size.
+    #
+    # THE INPUTS' MEANING: sigma = 0.414 / T = 200 at the frozen delta, i.e. mu = sqrt(200)/0.414 =
+    # 34.159747883408095 (bit-exact), and eps = 728.2043182233367 — the epsilon the SHIPPED
+    # (pre-fix) accountant returned there, which is why b lands inside the band. The PRE-FIX epsilon
+    # is used deliberately, exactly as the thirteenth row uses 775.7866600701457: a row keyed on the
+    # fixed accountant's own output would have to be re-derived every time the accountant changed,
+    # which is the photograph-of-the-code failure D-13 exists to prevent. (The post-fix
+    # epsilon_for(0.414, 200, 1e-5) is 728.1896631303155, whose b = 27.150820712787866 is also
+    # subnormal — both are in the band. This one is pinned because it is the point
+    # 22-VERIFICATION.md measured the 1.9190e-03 two-oracle gap at.)
+    #
+    # PROVENANCE — THREE ROUTES, AGREEING, before the literal was committed:
+    #   1. 60-dps mpmath, the truth below. ONE-OFF shell invocation, output committed as data:
+    #        .venv/bin/python -c "
+    #        from mpmath import mp
+    #        mp.dps = 60
+    #        eps = mp.mpf(728.2043182233367); mu = mp.mpf(34.159747883408095)
+    #        a = (eps/mu - mu/2)/mp.sqrt(2); b = (eps/mu + mu/2)/mp.sqrt(2)
+    #        print(mp.nstr(mp.mpf(0.5)*mp.erfc(a) - mp.mpf(0.5)*mp.exp(eps)*mp.erfc(b), 25))"
+    #        # -> 0.000009980810076964806559419972
+    #      The inputs go through `mp.mpf(<python float>)`, NOT `mp.mpf("<decimal string>")`.
+    #      MEASURED FOR THIS ROW, the string form gives 0.00000998081007696484726271054, a relative
+    #      4.078e-15 away — a DIFFERENT figure from the 8.90e-15 the thirteenth row records, which
+    #      is why each row states its own rather than inheriting the sibling's.
+    #   2. `delta_quadrature(728.2043182233367, 34.159747883408095)` — DIFFERENT MATHEMATICS
+    #      (Simpson on the (eps,delta)-DP definition, `exp` only, no erfc and no Phi), float64:
+    #      9.980810076863458e-06, a relative 1.0154e-11 from route 1.
+    #   3. `delta_closed` through the retargeted erfc route, float64: 9.980810076964634e-06, a
+    #      relative 1.728e-14 from route 1.
+    #   Route 2 is the one that licenses this literal: it shares no transcendental with route 3
+    #   beyond `exp`, so it cannot inherit the erfc cliff that produced the defect.
+    (728.2043182233367, 34.159747883408095, "9.980810076965e-6"),
 )
 
 # The ONE frontier row whose true delta is not representable in float64 (z = 39.975). Named as

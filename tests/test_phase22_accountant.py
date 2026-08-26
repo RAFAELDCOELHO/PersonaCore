@@ -118,7 +118,7 @@ def test_closed_form_frontier(eps, mu, truth_str):
 
 
 def test_closed_form_frontier_parametrization_is_not_empty():
-    """Meta-guard: V-01 sweeps twelve rows, and it is really sweeping them.
+    """Meta-guard: V-01 sweeps thirteen rows, and it is really sweeping them.
 
     A parametrization that silently emptied -- a renamed fixture constant, a truncated table, a
     locator that stopped matching -- makes V-01 green having compared nothing at all. Hard equality
@@ -126,10 +126,12 @@ def test_closed_form_frontier_parametrization_is_not_empty():
     representable" is satisfied by a table where a DIFFERENT row silently went to zero.
     """
     rows = _representable_rows()
-    assert len(rows) == 12, (
-        f"V-01 is parametrized over {len(rows)} rows, not the 12 representable frontier rows — "
-        f"the twelfth is the b > 27.2 row (eps=775.7866600701457, mu=35.35533905932738), whose "
-        f"whole purpose is to put V-01 and V-02 inside the band they could not previously reach"
+    assert len(rows) == 13, (
+        f"V-01 is parametrized over {len(rows)} rows, not the 13 representable frontier rows — "
+        f"the last two are the two erfc cliffs: the erfc(b) == 0.0 row (eps=775.7866600701457, "
+        f"mu=35.35533905932738) and the erfc(b) SUBNORMAL row (eps=728.2043182233367, "
+        f"mu=34.159747883408095), whose whole purpose is to put V-01 and V-02 inside the two bands "
+        f"they could not previously reach"
     )
     kept = {r[:2] for r in rows}
     excluded = [(eps, mu) for eps, mu, _ in DELTA_FRONTIER if (eps, mu) not in kept]
@@ -200,48 +202,80 @@ def _pinned_points():
 
 
 def _inert_points():
-    """The pinned points whose ``b`` is OUTSIDE the erfc underflow band.
+    """The pinned points whose ``b`` leaves ``math.erfc`` STILL CARRYING ITS FULL MANTISSA.
 
-    Located by ``math.erfc(b) > 0.0`` rather than by index or by name, so the set cannot rot if a
-    table is reordered — the same locator discipline ``_representable_rows`` uses. The one pinned
-    point this excludes is the thirteenth ``DELTA_FRONTIER`` row, which exists precisely BECAUSE
-    its ``b`` underflows, and which ``test_log_erfc_matches_the_committed_underflow_truth`` owns
-    instead. ``test_log_erfc_inert_points_are_not_empty`` pins both the count and that exclusion by
-    hard equality, so this filter cannot silently swallow a row it was never meant to.
+    **THE FILTER IS ``erfc(b) >= sys.float_info.min`` AND IT USED TO BE ``erfc(b) > 0.0``. That is
+    a correction, not a tightening.** Strict positivity is TRUE THROUGHOUT THE SUBNORMAL RANGE, so
+    the old filter swept the entire defective band into the set it calls healthy —
+    ``22-VERIFICATION.md`` records it at Blocker severity as *"the filter encodes the defect it
+    should exclude"*. A subnormal ``erfc(b)`` is strictly positive and has already discarded up to
+    52 of its 53 mantissa bits, so ``math.log(math.erfc(b))`` is NOT the right answer there and a
+    guard demanding bit-identity with it is demanding the wrong number.
+
+    The property that makes ``math.log(math.erfc(b))`` the right answer for a point is that
+    ``math.erfc`` LOST NOTHING computing it, and that property is ``erfc(b)`` being a NORMAL float.
+    That is what this filter now says. **Do not widen it back toward zero:** every value admitted
+    below ``sys.float_info.min`` is one whose low bits are already gone.
+
+    ``sys.float_info`` is available HERE and deliberately not in ``accountant.py``: D-10's import
+    ceiling binds the MODULE (``test_accountant_imports_math_only`` asserts hard equality with
+    ``{"math"}``, statically and out of process), not this test file, which already imports ``ast``,
+    ``math``, ``pathlib``, ``random``, ``subprocess`` and ``sys``. The module reaches the same
+    constant through ``math.ldexp(1.0, -1022)``.
+
+    Located by the erfc regime rather than by index or by name, so the set cannot rot if a table is
+    reordered — the same locator discipline ``_representable_rows`` uses. The two pinned points this
+    excludes are the last two ``DELTA_FRONTIER`` rows, which exist precisely BECAUSE their ``b``
+    lands past a cliff. ``test_log_erfc_inert_points_are_not_empty`` pins both the count and that
+    exclusion by hard equality, so this filter cannot silently swallow a row it was never meant to.
     """
-    return [point for point in _pinned_points() if math.erfc(_erfc_b(point[1], point[2])) > 0.0]
+    smallest_normal = sys.float_info.min
+    return [
+        point
+        for point in _pinned_points()
+        if math.erfc(_erfc_b(point[1], point[2])) >= smallest_normal
+    ]
 
 
 def test_log_erfc_inert_points_are_not_empty():
-    """Meta-guard: the inertness sweep covers 18 pinned points, and excludes exactly the one row.
+    """Meta-guard: the inertness sweep covers 18 pinned points, and excludes exactly two rows.
 
-    ``_inert_points`` filters on ``erfc(b) > 0.0``, so the per-point test below cannot ALSO assert
+    ``_inert_points`` filters on the erfc regime, so the per-point test below cannot ALSO assert
     that condition without asserting a tautology. The non-vacuity therefore lives here, in this
     file's own established shape (``test_closed_form_frontier_parametrization_is_not_empty``,
     ``test_round_trip_pairs_is_not_empty``): a filter that silently emptied, or that swallowed a
-    pinned row along with the intended one, would leave the sweep green over less than it claims —
+    pinned row along with the intended ones, would leave the sweep green over less than it claims —
     and what it claims is that a FROZEN pre-registration cannot move.
 
-    Eighteen: eleven previously-representable ``DELTA_FRONTIER`` rows plus seven ``GOLDEN_EPSILON``
-    rows. The exclusion is asserted by HARD EQUALITY rather than by count, because "one row is in
-    the band" is equally satisfied by a table where a DIFFERENT row drifted into it — which would
+    Eighteen: eleven healthy ``DELTA_FRONTIER`` rows plus seven ``GOLDEN_EPSILON`` rows. **THE
+    COUNT DID NOT MOVE WHEN THE FOURTEENTH FRONTIER ROW LANDED, AND THAT IS THE POINT.** Under the
+    old ``erfc(b) > 0.0`` filter it would have become NINETEEN, because a subnormal erfc is
+    strictly positive and the old filter therefore called the defective band healthy. So this guard
+    is what makes an unretargeted filter impossible to leave in place once a subnormal row exists:
+    the two changes are coupled, and neither can land alone without something reddening.
+
+    The exclusion is asserted by HARD EQUALITY rather than by count, because "two rows are past a
+    cliff" is equally satisfied by a table where a DIFFERENT row drifted past one — which would
     mean a pinned epsilon had started being answered by the asymptotic series without anything
     reddening.
     """
     points = _inert_points()
     assert len(points) == 18, (
-        f"the inertness sweep covers {len(points)} pinned points, not the 18 it claims (11 "
-        f"previously-representable DELTA_FRONTIER rows + 7 GOLDEN_EPSILON rows)"
+        f"the inertness sweep covers {len(points)} pinned points, not the 18 it claims (11 healthy "
+        f"DELTA_FRONTIER rows + 7 GOLDEN_EPSILON rows). NINETEEN means the filter has been widened "
+        f"back to erfc(b) > 0.0, which readmits the erfc-SUBNORMAL band as 'healthy'"
     )
     kept = {label for label, _, _ in points}
     excluded = [(label, eps, mu) for label, eps, mu in _pinned_points() if label not in kept]
     assert [label for label, _, _ in excluded] == [
-        "DELTA_FRONTIER(775.7866600701457, 35.35533905932738)"
+        "DELTA_FRONTIER(775.7866600701457, 35.35533905932738)",
+        "DELTA_FRONTIER(728.2043182233367, 34.159747883408095)",
     ], (
-        f"the pinned points inside the erfc underflow band are {[p[0] for p in excluded]}, not "
-        f"exactly the thirteenth DELTA_FRONTIER row. Any OTHER row landing in that band means a "
-        f"pinned answer is now produced by the asymptotic series instead of by math.log(erfc(b)) — "
-        f"and GOLDEN_EPSILON is FROZEN, so such a move would be unrecoverable"
+        f"the pinned points past an erfc cliff are {[p[0] for p in excluded]}, not exactly the "
+        f"thirteenth (erfc(b) == 0.0) and fourteenth (erfc(b) SUBNORMAL) DELTA_FRONTIER rows. A "
+        f"THIRD entry means a pinned answer is now produced by the asymptotic series instead of by "
+        f"math.log(erfc(b)) — and GOLDEN_EPSILON is FROZEN with no correction path, so such a move "
+        f"would be unrecoverable rather than merely wrong"
     )
 
 
