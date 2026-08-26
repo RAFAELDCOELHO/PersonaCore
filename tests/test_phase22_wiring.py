@@ -327,7 +327,7 @@ def test_accum_must_equal_n_facts(bins):
     with pytest.raises(ValueError) as excinfo:
         _train(bins, steps=1, accum=1)  # TrainConfig's default — the production configuration
     message = str(excinfo.value)
-    assert "9 times" in message and "0" in message
+    assert "13 times" in message and "exactly 1" in message
     assert "teach_persona" in message
     assert "one micro-step IS one privacy record" in message.replace("ONE", "one")
     assert f"n_facts={n}" in message
@@ -368,35 +368,70 @@ def test_the_production_default_accum_is_refused_at_the_real_fact_count(arm):
         )
 
 
-def test_the_9_in_prose_0_in_code_measurement_is_still_true():
-    """The accum refusal's message states a MEASUREMENT; this re-measures it on every run.
+def _accum_code_hits(tree, *, constants=True):
+    """`grad_accum_steps` occurrences that are CODE, not prose.
 
-    A measured claim baked into a production error message goes stale silently. It is true at
-    the time of writing that `grad_accum_steps` appears 9 times in `scripts/teach_persona.py`
-    and 0 of those are code — every hit is inside a docstring, a comment or an error string.
-
-    **Plan 22-10 will make this RED, and that is correct**: wiring `grad_accum_steps = n_facts`
-    at the caller adds a code hit. When it does, UPDATE `loop.py`'s refusal message to state the
-    new measurement — do not delete this test and do not leave a false number in a message a
-    user will read while debugging a privacy claim.
+    `constants=False` is the PRE-22-10 predicate, kept as a live negative control rather than
+    deleted — see `test_the_prose_vs_code_measurement_is_still_true` for what it is blind to.
     """
-    source = pathlib.Path(tp.__file__).read_text()
-    textual = source.count("grad_accum_steps")
-
-    tree = ast.parse(source)
-    code_hits = [
+    hits = [
         node
         for node in ast.walk(tree)
         if (isinstance(node, ast.keyword) and node.arg == "grad_accum_steps")
         or (isinstance(node, ast.Attribute) and node.attr == "grad_accum_steps")
         or (isinstance(node, ast.Name) and node.id == "grad_accum_steps")
     ]
+    if constants:
+        # A DICT KEY. `{"grad_accum_steps": ...}` is an `ast.Constant`, and a string constant
+        # whose value is EXACTLY the identifier can only be a key or an equally deliberate
+        # reference — the prose hits all embed the word inside a longer sentence, so this
+        # predicate cannot pick one up. Verified by the `> 1` filter never being needed.
+        hits += [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and node.value == "grad_accum_steps"
+        ]
+    return hits
 
-    assert (textual, len(code_hits)) == (9, 0), (
+
+def test_the_prose_vs_code_measurement_is_still_true():
+    """The accum refusal's message states a MEASUREMENT; this re-measures it on every run.
+
+    A measured claim baked into a production error message goes stale silently. Plan 22-08 wrote
+    it as 9 textual / 0 code — every hit inside a docstring, a comment or an error string — and
+    predicted plan 22-10 would legitimately turn it red. It did. **The number in `loop.py` was
+    UPDATED, not the test deleted**, and the current measurement is 13 textual / 1 code.
+
+    **The finding that came with the red, and the reason this test grew a helper.** 22-10 wires
+    the caller through a SPLAT — `{"grad_accum_steps": stats["n_facts"]} if is_dp else {}` — so
+    the one code hit is a DICT KEY, an `ast.Constant`. Measured: the pre-22-10 predicate
+    (`keyword` / `Attribute` / `Name` only) still returns **0** against the wired file. Left
+    alone it would have kept reporting "0 code hits" for a caller that DOES set the value —
+    a detector blind to the exact form the production path uses, at the one measurement a user
+    reads while debugging a privacy claim. The meta-guard below pins that blindness so a future
+    edit cannot silently re-narrow the predicate.
+    """
+    source = pathlib.Path(tp.__file__).read_text()
+    textual = source.count("grad_accum_steps")
+    tree = ast.parse(source)
+    code_hits = _accum_code_hits(tree)
+
+    assert (textual, len(code_hits)) == (13, 1), (
         f"the measurement in loop.py's accum-agreement refusal is STALE: measured "
-        f"{textual} textual / {len(code_hits)} code hits, message says 9 / 0. Update the "
-        "message in src/personacore/training/loop.py to the new numbers."
+        f"{textual} textual / {len(code_hits)} code hits, message says 13 / 1. Update the "
+        "message in src/personacore/training/loop.py to the new numbers — do not delete this "
+        "test and do not leave a false number in a message a user reads while debugging a "
+        "privacy claim."
     )
+
+    # THE META-GUARD. The old predicate is blind to the shipped wiring; asserted, not assumed.
+    assert _accum_code_hits(tree, constants=False) == [], (
+        "the pre-22-10 predicate now finds a hit — the caller stopped wiring grad_accum_steps "
+        "through a dict-key splat. Re-check the (13, 1) numbers above and loop.py's message."
+    )
+    # And the widened predicate found the splat key specifically, not some prose string.
+    assert isinstance(code_hits[0], ast.Constant)
+    assert 'dp_accum = {"grad_accum_steps"' in source.splitlines()[code_hits[0].lineno - 1]
 
 
 # ===================================================================================

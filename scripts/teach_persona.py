@@ -80,6 +80,7 @@ from personacore.lora import (  # noqa: E402
 )
 from personacore.model import GPT  # noqa: E402
 from personacore.preflight import preflight_device  # noqa: E402
+from personacore.privacy.dpsgd import DPSGD  # noqa: E402  (D-08 wiring 4)
 from personacore.provenance import git_sha  # noqa: E402
 from personacore.seeding import seed_everything  # noqa: E402
 from personacore.tokenizer import from_json  # noqa: E402
@@ -181,9 +182,18 @@ def replay_window_budget(n_facts, block_size=BLOCK_SIZE):
     """The v4.0 replay volume in tokens — THE ONLY SITE that computes it (D-11 / D-24).
 
     ``REPLAY_WINDOWS_PER_FACT * n_facts * block_size``. Every consumer calls this function:
-    :func:`_prepend_replay`'s ``n_facts`` branch, ``train()``'s replay seam via its caller, the
-    plan-21-11 driver, and every test. RESEARCH Open Question 3 asks which site the differential
-    should target; the answer is that there is exactly one, and its callers are named.
+    :func:`_prepend_replay`'s ``n_facts`` branch, ``train()``'s replay seam via :func:`train_arm`,
+    the plan-21-11 driver, and every test. RESEARCH Open Question 3 asks which site the
+    differential should target; the answer is that there is exactly one, and its callers are named.
+
+    **IN-04, closed by plan 22-10 — in BOTH directions.** Until that plan this docstring claimed
+    *"``train()``'s replay seam via its caller"* and the claim was FALSE: measured, no call site
+    anywhere passed ``replay_bin`` / ``replay_mask_bin`` / ``replay_windows`` into ``train()``, so
+    the named consumer did not exist. Plan 22-10 wires it at :func:`train_arm` on the two DP arms
+    (D-08 wiring 3), which makes the sentence true, and the sentence is rewritten in the SAME diff
+    to name the real caller rather than left as a claim that happened to become correct. **The
+    unit conversion is the thing to get right at that call site:** this function returns TOKENS
+    and ``train(replay_windows=)`` wants WINDOWS, so the caller divides by ``block_size``.
 
     **Every factor is PUBLIC, and each by DERIVATION rather than by publication:**
 
@@ -977,11 +987,73 @@ def build_arm_bins(
     return tok, stats, outputs
 
 
+SIGMA_FLAG = "--sigma="
+CLIP_FLAG = "--clip-norm="
+
+# Both arm lists are interpolated from their TUPLES, never re-spelled: a hand-typed DP form would
+# be free to drift from `DP_ARMS` the day a third capacity is added.
 USAGE = (
     f"usage: python scripts/teach_persona.py {{{'|'.join(ARMS)}}}\n"
+    f"       python scripts/teach_persona.py {{{'|'.join(DP_ARMS)}}} "
+    f"{SIGMA_FLAG}<float> {CLIP_FLAG}<float>\n"
     "       python scripts/teach_persona.py --calibration [--force]\n"
-    "       python scripts/teach_persona.py --rewrite-report [--force]"
+    "       python scripts/teach_persona.py --rewrite-report [--force]\n"
+    f"\n{SIGMA_FLAG} and {CLIP_FLAG} are REQUIRED on the DP arms and have NO DEFAULT anywhere.\n"
+    "sigma (the unitless noise multiplier) and C (the per-record L2 bound) are Phase 23 resource\n"
+    "parameters under Phase 20's Z boundary; Phase 22 names no value in its tree, so there is\n"
+    "nothing for Phase 23 to override and nothing to drift. A default would silently become the\n"
+    "operating privacy budget of a run nobody pre-registered."
 )
+
+
+def _parse_dp_flags(tokens):
+    """``('--sigma=<float>', '--clip-norm=<float>')`` -> ``(sigma, C)``; refuse anything else.
+
+    Explicit prefix matching in this file's own argv-slicing register — deliberately NOT
+    ``argparse``. ``main`` is argv slicing and ``run_calibration``/``rewrite_report`` are its
+    sub-mode precedent; a second CLI idiom inside one entry point is a maintenance trap.
+
+    The two domain refusals here are the EARLY, CHEAP copy of refusals the mechanism makes too:
+    ``DPSGD.__init__`` re-checks both as ``[dp-refusal:sigma-domain]`` /
+    ``[dp-refusal:clip-domain]`` as properties of the MECHANISM, so a caller that bypasses this
+    CLI is still refused. Neither is redundant — this one names the flag the operator typed.
+    """
+    seen = {}
+    for token in tokens:
+        for flag in (SIGMA_FLAG, CLIP_FLAG):
+            if token.startswith(flag):
+                if flag in seen:
+                    raise SystemExit(f"[teach_persona] {flag} given twice\n\n{USAGE}")
+                try:
+                    seen[flag] = float(token[len(flag) :])
+                except ValueError:
+                    raise SystemExit(
+                        f"[teach_persona] {token!r} is not a float\n\n{USAGE}"
+                    ) from None
+                break
+        else:
+            raise SystemExit(f"[teach_persona] unexpected argument {token!r}\n\n{USAGE}")
+
+    missing = sorted(flag for flag in (SIGMA_FLAG, CLIP_FLAG) if flag not in seen)
+    if missing:
+        raise SystemExit(f"[teach_persona] missing required {' and '.join(missing)}\n\n{USAGE}")
+
+    sigma, clip_norm = seen[SIGMA_FLAG], seen[CLIP_FLAG]
+    if sigma < 0:
+        raise SystemExit(
+            f"[teach_persona] {SIGMA_FLAG}{sigma} is negative. sigma is the unitless NOISE "
+            "MULTIPLIER and the noise standard deviation is sigma * C, so a negative multiplier "
+            "has no meaning; zero is the identity. The DP seam re-checks this as a property of "
+            "the mechanism ([dp-refusal:sigma-domain])."
+        )
+    if clip_norm <= 0:
+        raise SystemExit(
+            f"[teach_persona] {CLIP_FLAG}{clip_norm} is not strictly positive. C is an L2 BOUND: "
+            "a zero bound clips every record to the zero vector and a negative bound is not a "
+            "norm at all. The DP seam re-checks this as a property of the mechanism "
+            "([dp-refusal:clip-domain])."
+        )
+    return sigma, clip_norm
 
 
 def main(argv=None):
@@ -993,13 +1065,23 @@ def main(argv=None):
     if argv and argv[0] == "--rewrite-report":
         rewrite_report(argv[1:])
         return
-    if len(argv) != 1 or argv[0] not in ARMS:
+    if not argv or argv[0] not in ARMS:
         raise SystemExit(USAGE)
     arm = argv[0]
+    # The NON-DP path keeps its exact pre-22-10 shape: `len(argv) != 1` still rejects every extra
+    # token, so no v2.0/v3.0 invocation changes. Only a DP arm reaches the two-flag branch.
+    if arm in DP_ARMS:
+        dp_sigma, dp_clip_norm = _parse_dp_flags(argv[1:])
+    else:
+        dp_sigma = dp_clip_norm = None
+        if len(argv) != 1:
+            raise SystemExit(USAGE)
 
     facts, second_person, replay_ratio = arm_spec(arm)
     train_arm(
         arm,
+        dp_sigma=dp_sigma,
+        dp_clip_norm=dp_clip_norm,
         facts=facts,
         family_ids=fs.TAUGHT_FAMILY_IDS,
         second_person=second_person,
@@ -1050,7 +1132,16 @@ CHECKPOINT_INTERVAL = 50  # a killed run loses <= 50 steps; 200 steps needs no h
 
 
 def train_arm(
-    arm, *, facts, family_ids, second_person=False, replay_ratio=0.0, seed=SEED, prefix="phase14"
+    arm,
+    *,
+    facts,
+    family_ids,
+    second_person=False,
+    replay_ratio=0.0,
+    seed=SEED,
+    prefix="phase14",
+    dp_sigma=None,
+    dp_clip_norm=None,
 ):
     """Build one arm's bins, train ONLY its LoRA parameters on them, and export the adapter.
 
@@ -1067,7 +1158,35 @@ def train_arm(
     ``seed`` (D-14) reaches all three seeding sites: the bins build, the GPT/LoRA-init draw and
     ``TrainConfig``. Phase 17 needs three adapters at three DISTINCT seeds; identical seeds
     would make three personas share one initialization draw and one data order.
+
+    ``dp_sigma`` / ``dp_clip_norm`` (D-08, plan 22-10) are the DP-SGD noise multiplier and the
+    per-record L2 bound ``C``. They are threaded THROUGH from :func:`main`'s CLI rather than read
+    from a module constant, and they are the reason **NO numeric sigma or C literal exists
+    anywhere in this file**: Phase 22 names no value in its tree, so there is nothing for Phase 23
+    to override and nothing to drift across Phase 20's Z boundary.
+
+    **``None`` is a SENTINEL, not a default value.** The plan text for 22-10 asks for "keyword-only
+    with no default", but five call sites outside this module already call ``train_arm``
+    (``phase17_isolation``, ``phase19_erasure`` x3, ``phase19_run``, and :func:`run_calibration`
+    here) and every one of them passes a NON-DP arm; a truly-required parameter would make each of
+    them a ``TypeError``. The sentinel keeps that contract intact AND is what the plan's own
+    refusal instruction ("if either is ``None`` on a DP arm, refuse") presupposes. It names no
+    sigma and no C, so the no-literal property the AST guard pins is unaffected: a DP arm without
+    both values raises ``SystemExit`` below and never trains.
     """
+    # ONE boolean gates all FOUR D-08 wirings below, so the DP-vs-non-DP boundary is a single
+    # readable predicate and a future reader cannot wire three of four by accident.
+    is_dp = arm in DP_ARMS
+    if is_dp and (dp_sigma is None or dp_clip_norm is None):
+        raise SystemExit(
+            f"[teach_persona] arm {arm!r} needs BOTH --sigma and --clip-norm "
+            f"(got sigma={dp_sigma!r} clip_norm={dp_clip_norm!r}). Neither has a default, "
+            "anywhere: sigma and C are Phase 23 RESOURCE PARAMETERS under Phase 20's Z boundary, "
+            "and Phase 22 names no value in its tree so there is nothing for Phase 23 to override "
+            "and nothing to drift. A default here would silently become the operating privacy "
+            "budget of a run nobody pre-registered."
+        )
+
     verdict = _require_go_verdict(FACTSET_REPORT)
     print(f"[teach_persona] D-06 verdict: {verdict} — proceeding with arm {arm!r}")
     if arm == "real":
@@ -1099,6 +1218,17 @@ def train_arm(
             f"[teach_persona] missing {DIALOG_VAL_BIN} / {DIALOG_VAL_MASK} — the held-out "
             "PersonaChat val pair IS the collateral-collapse metric (D-11.2 / D-15). Run "
             "`python scripts/prepare_dialog_corpus.py` first."
+        )
+    if is_dp and (not DIALOG_TRAIN_BIN.exists() or not DIALOG_TRAIN_MASK.exists()):
+        # Same shape as the val guard above, and for the same reason it is UP HERE: under D-10
+        # replay leaves the teaching bin and is drawn at TRAIN time (wiring 3 below), so a missing
+        # replay source surfaces inside train()'s replay_fn — after build_arm_bins has already
+        # written three bins that refuse_if_exists then treats as recorded evidence, forcing the
+        # operator to delete them by hand before retrying.
+        raise SystemExit(
+            f"[teach_persona] missing {DIALOG_TRAIN_BIN} / {DIALOG_TRAIN_MASK} — a DP arm draws "
+            "its PUBLIC replay windows from the PersonaChat TRAIN pair at train time (D-10/D-24). "
+            "Run `python scripts/prepare_dialog_corpus.py` first."
         )
 
     tok, stats, paths = build_arm_bins(
@@ -1164,6 +1294,81 @@ def train_arm(
     paths["csv"].parent.mkdir(parents=True, exist_ok=True)
     paths["checkpoint"].parent.mkdir(parents=True, exist_ok=True)
 
+    # ===== D-08 wiring 4: the DP-SGD mechanism, constructed AFTER the freeze =====
+    #
+    # ORDER IS LOAD-BEARING, twice over.
+    #
+    # (a) AFTER ``mark_only_lora_trainable(model)`` and the census above, or D-04 refusal 1
+    #     (``[dp-refusal:unfrozen-base]``) fires on this caller's own model. ``inject_lora`` does
+    #     NOT freeze; omitting that one line noises 14,223,360 parameters against a sensitivity
+    #     computed for 331,776. **The census above is NOT redundant with the seam's.** This one is
+    #     a property of ONE CALLER, checked once here; the seam re-checks it as a property of the
+    #     MECHANISM, so a future caller that forgets the freeze is refused even though this file
+    #     never sees it. That is D-04's whole point and it is why both exist.
+    # (b) AFTER ``model.to(runtime.device)``, which the plan text does not say and the code
+    #     requires: ``DPSGD.__init__`` allocates its accumulator as ``torch.zeros_like(p)`` over
+    #     the LIVE trainable params, so constructing before the move would pin the DP-owned sum on
+    #     CPU while the params travel to MPS and ``buf.add_(contribution)`` would raise mid-run.
+    #
+    # ``runtime=`` is passed (not in the plan's literal call) so D-04 refusal 2 is ARMED: an
+    # AMP-scaled ``.grad`` read mid-accumulation is wrong by the scale factor, silently. It never
+    # bites on cpu/mps — ``RuntimeConfig.__post_init__`` forces ``amp=False`` there — and is the
+    # P100 fallback's refusal. ``seed=`` is the run seed, so the noise stream's provenance is
+    # greppable rather than an implicit read of ``torch.initial_seed()``.
+    dp_fn = (
+        DPSGD(
+            model,
+            sigma=dp_sigma,
+            clip_norm=dp_clip_norm,
+            device=runtime.device,
+            runtime=runtime,
+            seed=seed,
+        )
+        if is_dp
+        else None
+    )
+
+    # ===== D-08 wirings 1-3: the kwargs the DP arms add to train(), and nothing else adds =====
+    #
+    # TWO dicts rather than one, keyed on the SAME ``is_dp`` boolean, because ``grad_accum_steps``
+    # belongs to the ``TrainConfig`` constructor and the other three to ``train()``. On every
+    # non-DP arm both are empty, so every v2.0/v3.0 arm's ``train()`` call is byte-unchanged.
+    #
+    # WIRING 2 — ``grad_accum_steps``. MEASURED before this plan: the phrase appeared **9 times in
+    # this file's PROSE and 0 times in its CODE**, so the ``TrainConfig(...)`` below inherited
+    # ``config.py``'s default of ``1`` and SC2's "one micro-step = one privacy record" was prose at
+    # the only production caller — the aligned three-bin corpus would have trained at a LOT SIZE OF
+    # ONE. ``loop.py``'s accum-agreement refusal (plan 22-08) now makes a disagreement loud, and
+    # the value is read from ``stats`` rather than ``len(facts)`` so the accum, the declared lot
+    # size and the bin the loader opens all come from the packer's own record count.
+    dp_accum = {"grad_accum_steps": stats["n_facts"]} if is_dp else {}
+    dp_kwargs = (
+        {
+            # WIRING 1 — fact-aligned routing. There is NO fact-bin key in ``paths``:
+            # ``arm_outputs`` returns exactly {"bin", "mask", "csv", "checkpoint", "adapter"} and
+            # ``build_arm_bins`` hands that same dict back. The third bin is DERIVED, by
+            # ``fact_bin_path`` — which is also what the packer itself called, so
+            # ``stats['fact_bin']`` is the same string — and never
+            # a literal at a call site. MEASURED gap this closes: ``get_batch_fact_aligned`` had NO
+            # path through ``train()`` at all before plan 22-08 — zero hits for
+            # ``fact_bin``/``fact_aligned``/``align_facts`` in ``loop.py`` — and its sole non-test
+            # caller was the REPORTING driver ``scripts/phase21_unit_record.py``.
+            "fact_bin": fact_bin_path(paths["bin"]),
+            "n_facts": stats["n_facts"],
+            # WIRING 3 — the replay seam (Phase 21 D-11/D-24), closing IN-04. Under D-10 replay is
+            # NOT in the teaching bin (``arm_spec`` returns ``replay_ratio = 0.0`` for both DP
+            # arms, load-bearing); it is drawn here at train time from the PUBLIC PersonaChat pair.
+            # UNIT CONVERSION, stated because it is the one thing to get wrong:
+            # ``replay_window_budget`` returns TOKENS and ``train()`` wants WINDOWS.
+            "replay_bin": DIALOG_TRAIN_BIN,
+            "replay_mask_bin": DIALOG_TRAIN_MASK,
+            "replay_windows": replay_window_budget(stats["n_facts"]) // BLOCK_SIZE,
+            "dp_fn": dp_fn,
+        }
+        if is_dp
+        else {}
+    )
+
     final = train(
         train_config=TrainConfig(
             lr=LR,
@@ -1172,6 +1377,7 @@ def train_arm(
             batch_size=BATCH_SIZE,
             weight_decay=WEIGHT_DECAY,
             seed=seed,
+            **dp_accum,
         ),
         runtime_config=runtime,
         model=model,
@@ -1204,7 +1410,20 @@ def train_arm(
         checkpoint_path=paths["checkpoint"],
         checkpoint_interval=CHECKPOINT_INTERVAL,
         return_final_loss=True,
+        **dp_kwargs,
     )
+
+    if is_dp:
+        # A DP run whose stdout does not record its budget is a privacy claim with no provenance.
+        # ``_clip_bind_count`` is run-lifetime (``begin_step`` deliberately does not reset it), so
+        # it reports whether C bound AT ALL across the whole run; ``_records`` is per-step and is
+        # therefore the LAST lot's size, which must equal the accum the loop was configured with.
+        print(
+            f"[teach_persona] DP provenance: arm={arm} sigma={dp_sigma} clip_norm={dp_clip_norm} "
+            f"n_facts={stats['n_facts']} grad_accum_steps={stats['n_facts']} "
+            f"replay_windows={dp_kwargs['replay_windows']} last_lot_records={dp_fn._records} "
+            f"clip_bind_count={dp_fn._clip_bind_count}"
+        )
 
     # CANARY (LORA-02 / LORA-05): every trainable moved, every frozen base param bit-untouched.
     # The explicit raises ARE the proof — non-zero exit even under python -O.
