@@ -418,17 +418,25 @@ QUADRATURE_PARAMS = {
 #    as data so no test imports mpmath (RPT-03).
 # =============================================================================================
 
-# The oracle's worst relative error ANYWHERE it returns a value, across the whole 13-row frontier.
-# RE-MEASURED when the thirteenth row landed, because that row moved it: the worst is now
-# **1.107e-11**, at (eps=775.7866600701457, mu=35.35533905932738), where the quadrature integrates
-# over a support starting at t_min = 39.62 and the accumulated Simpson round-off is the binding
-# term. The previous holder — eps=8, mu=0.5, the row a fixed [-14, 14] range got wrong by 57
-# orders of magnitude (1.00e+00 relative) — sits at 3.6e-13. Everything worse than this is REFUSED
-# rather than returned.
+# The oracle's worst relative error ANYWHERE it returns a value, across the whole 14-row frontier.
+# RE-MEASURED when the FOURTEENTH row landed. The worst is **1.1091e-11**, still at
+# (eps=775.7866600701457, mu=35.35533905932738), where the quadrature integrates over a support
+# starting at t_min = 39.62 and the accumulated Simpson round-off is the binding term. The
+# fourteenth row is the new SECOND place at **1.0174e-11** — so the sweep got wider without the
+# bound getting worse, and the constant below does not move. Third is eps=2.0, mu=0.1 at 1.003e-12;
+# the eps=8, mu=0.5 row a fixed [-14, 14] range got wrong by 57 orders of magnitude (1.00e+00
+# relative) sits at 3.604e-13. Everything worse than this is REFUSED rather than returned.
+#
+# TWO DENOMINATORS, BOTH REAL, AND THEY MUST NOT BE CONFLATED. The figures above are measured
+# against the COMMITTED 13-DIGIT STRINGS, which is what the consuming tests compare to. Measured
+# instead against the FULL 60-dps truths, the same two rows read 1.107e-11 and 1.0154e-11 — the
+# provenance blocks in section 1 quote those, because a route-vs-route gap has the unrounded truth
+# as its denominator. The gap between the pairs is the reference strings' own quantization.
 #
 # This is the ORACLE's error, and it is deliberately NOT the budget V-02 compares the two oracles
-# at (1e-9, which the new row clears by 90x). A bound recorded over 12 rows and left standing over
-# 13 is exactly the stale-denominator failure this table exists to prevent.
+# at (1e-9, which the two cliff rows clear by 90x and 99x). A bound recorded over 13 rows and left
+# standing over 14 is exactly the stale-denominator failure this table exists to prevent — and it
+# is the failure that was found here TWICE, once when the thirteenth row landed and once now.
 WORST_RELATIVE_ERROR = 1.2e-11
 
 # The pin tolerance for EPSILON_GOLDEN. Relative, never absolute: true delta spans 9.99e-1 down to

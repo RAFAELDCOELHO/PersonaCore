@@ -124,10 +124,18 @@ _MAX_DOUBLINGS = 200
 _MIN_TARGET_DELTA = 1e-300
 
 # The round-trip budget for `sigma_for(epsilon_for(sigma, T, delta), T, delta)` against `sigma`.
-# MEASURED ACHIEVABLE: 8.29e-15 worst relative deviation over 48 (sigma, T) pairs -- the seven
-# GOLDEN_EPSILON sigmas plus 0.5, 0.7, 1.5, 3.0 and 50.0, each at T in {1, 64, 200, 1000}. So this
-# carries a little over two orders of margin, and it is deliberately NOT tightened to the
-# measurement: the number above is one machine's 48 points, not a bound.
+# MEASURED ACHIEVABLE: 8.2901e-15 worst relative deviation over 52 (sigma, T) pairs -- the seven
+# GOLDEN_EPSILON sigmas plus 0.414, 0.5, 0.7, 1.5, 3.0 and 50.0, each at T in {1, 64, 200, 1000},
+# worst at (sigma=14.142135623730951, T=1). So this carries a little over two orders of margin, and
+# it is deliberately NOT tightened to the measurement: the number above is one machine's 52 points,
+# not a bound.
+#
+# THE SWEEP NOW CONTAINS ITS OWN WORST CASE, WHICH IT PREVIOUSLY DID NOT. 22-VERIFICATION.md filed
+# this tolerance as a Blocker: at sigma=0.414 / T=200 the round trip deviated by 2.0703e-05, which
+# is 2.07e+07x this budget, and the 48-point sweep could not see it because its smallest sigma was
+# 0.5. That deviation was the erfc-SUBNORMAL routing defect showing up in the inverse direction;
+# with the routing fixed the same leg reads 2.6817e-16, and sigma=0.414 is now IN the sweep so the
+# figure above is a measurement over a band that includes the point that broke it.
 #
 # (For scale, the OTHER 1e-12 in this module is a different quantity measured on a different
 # thing: `GOLDEN_EPSILON_REL_TOL` covers the gap between the two ORACLES' bisected epsilon, worst
@@ -163,10 +171,13 @@ def _log_erfc(x):
     this returns ``math.log(math.erfc(x))`` and computes nothing else, which is bit-for-bit the
     arithmetic ``delta_closed`` already performed on its ``else`` branch. That is what keeps this
     helper a PROVABLE NO-OP on every point the module already answers -- all seven
-    ``scripts/mitigation_accountant.py::GOLDEN_EPSILON`` epsilons and all twelve representable
-    ``DELTA_FRONTIER`` deltas are ``float.hex()``-BIT-IDENTICAL across this change, asserted by
-    ``tests/test_phase22_accountant.py::test_log_erfc_is_inert_where_erfc_is_healthy`` with exact
-    ``==`` rather than a tolerance. ``GOLDEN_EPSILON`` is a FROZEN pre-registration with no
+    ``scripts/mitigation_accountant.py::GOLDEN_EPSILON`` epsilons and all thirteen representable
+    ``DELTA_FRONTIER`` deltas are ``float.hex()``-BIT-IDENTICAL across this change.
+    ``tests/test_phase22_accountant.py::test_log_erfc_is_inert_where_erfc_is_healthy`` asserts that
+    with exact ``==`` rather than a tolerance for the EIGHTEEN of those twenty whose ``erfc(b)`` is
+    a normal float; the other two are the frontier's two cliff rows, whose ``b`` is past a cliff BY
+    CONSTRUCTION and which ``test_log_erfc_matches_the_committed_underflow_truth`` and the
+    ``LOG_ERFC_BAND`` sweep own instead. ``GOLDEN_EPSILON`` is a FROZEN pre-registration with no
     correction path, so a routing change that sent healthy inputs through the series below would
     be unrecoverable rather than merely wrong: measured, deleting this fast path moves six of the
     seven pinned epsilons, four of them to ``0.0``.
@@ -314,15 +325,20 @@ def delta_closed(eps, mu):
         ZERO correct significant digits at (eps=775.7866600701457, mu=35.35533905932738) and did
         not refuse. A bound measured on a fixture set is a statement about the fixture set.
 
-        RE-MEASURED IN THIS SESSION over the TWELVE float64-representable
-        ``tests/fixtures/phase22_reference.py::DELTA_FRONTIER`` rows -- twelve rather than eleven
-        because the thirteenth row now puts the sweep inside the ``b > 27.2`` band that produced
-        the defect above. Largest deviation **1.84e-12 relative, at eps=2.0, mu=0.1**; that row's
-        committed truth carries only 11 significant digits, so ~5e-11 of that budget is the
-        reference string's own quantization rather than this function's error. Largest deviation on
-        a 13-digit row: **9.03e-13, at eps=8.0, mu=0.5**. Both figures are UNCHANGED by the new
-        row, which lands at 4.11e-14 against its committed string and is therefore not the binding
-        case -- the sweep got wider without the bound getting worse.
+        RE-MEASURED over the THIRTEEN float64-representable
+        ``tests/fixtures/phase22_reference.py::DELTA_FRONTIER`` rows -- thirteen rather than eleven
+        because the last two rows now put the sweep inside BOTH erfc cliffs: the ``erfc(b) == 0.0``
+        band that produced the defect above, and the ``erfc(b)`` SUBNORMAL band one cliff earlier,
+        where this function kept its second term but computed it from a float that had already lost
+        up to 52 of its 53 mantissa bits. Largest deviation **1.8410e-12 relative, at eps=2.0,
+        mu=0.1**; that row's committed truth carries only 11 significant digits, so ~5e-11 of that
+        budget is the reference string's own quantization rather than this function's error.
+        Largest deviation on a 13-digit row: **9.0281e-13, at eps=8.0, mu=0.5**. Both figures are
+        UNCHANGED by either cliff row -- they land at 4.1061e-14 and 3.6662e-14 against their
+        committed strings and neither is the binding case, so the sweep got wider TWICE without the
+        bound getting worse. That is the shape to expect and not a reason to skip the re-measure:
+        a bound scoped to a fixture set is a statement about the fixture set, and this one has now
+        been found stale twice.
 
     Raises:
         ValueError: on a non-finite input or ``mu <= 0.0``; when delta is below float64's range
@@ -471,16 +487,18 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
         A non-finite or above-slack result therefore RAISES rather than returning, and a returned
         value satisfies ``0.0 < delta <= 1.0`` exactly.
 
-        THE ACCURACY CLAIM, RE-MEASURED TODAY over the TWELVE representable ``DELTA_FRONTIER``
-        rows against 60-dps ground truth: worst relative error **1.109e-11, at
+        THE ACCURACY CLAIM, RE-MEASURED over the THIRTEEN representable ``DELTA_FRONTIER`` rows
+        against the committed 60-dps ground truth: worst relative error **1.1091e-11, at
         (eps=775.7866600701457, mu=35.35533905932738)** -- unchanged by the two closures above,
         because the largest delta any of those rows reaches is 0.99994 and none is near either
-        boundary. It is the thirteenth row, which MOVED this bound by an order of magnitude when
-        it landed (the previous holder, eps=2.0, mu=0.1 at
-        1.0e-12, is now second). That row integrates over a support starting at t_min = 39.62 and
-        the accumulated Simpson round-off is the binding term there; it is still 90x inside the
-        1e-9 budget ``test_two_oracles_agree`` compares the two oracles at. The worst deviation on
-        the low-privacy corner (eps=8.0, mu=0.5) is **3.6e-13**, where a fixed ``[-14, 14]`` range
+        boundary. It is the thirteenth row, which MOVED this bound by an order of magnitude when it
+        landed. The FOURTEENTH row -- the erfc-SUBNORMAL one, (eps=728.2043182233367,
+        mu=34.159747883408095) -- is the new second place at **1.0174e-11**, so this bound did not
+        move when the sweep widened again; eps=2.0, mu=0.1 at 1.0032e-12 is now third. Both cliff
+        rows integrate over a support starting past t_min = 39 and the accumulated Simpson
+        round-off is the binding term there; both are still ~90x and ~99x inside the 1e-9 budget
+        ``test_two_oracles_agree`` compares the two oracles at. The worst deviation on the
+        low-privacy corner (eps=8.0, mu=0.5) is **3.604e-13**, where a fixed ``[-14, 14]`` range
         instead gives relative error **1.00e+00**, returning a perfectly plausible ``0.0`` against
         a true ``1.048659178913e-57``.
 
@@ -998,8 +1016,10 @@ def sigma_for(target_epsilon, steps, delta):
     Returns:
         The sigma whose ``epsilon_for`` meets ``target_epsilon``, bisected to a relative width of
         1e-15, or exactly ``0.0`` at ``target_epsilon = math.inf``. Round-tripped against
-        ``epsilon_for`` at ``ROUND_TRIP_REL_TOL``; measured worst deviation over 48 (sigma, T)
-        pairs is 8.29e-15.
+        ``epsilon_for`` at ``ROUND_TRIP_REL_TOL``; measured worst deviation over 52 (sigma, T)
+        pairs is 8.2901e-15, at (sigma=14.142135623730951, T=1). Fifty-two rather than 48 because
+        the sweep now includes sigma=0.414, whose T=200 leg was measured 2.07e+07x over that budget
+        before the erfc-SUBNORMAL band was routed to the series and reads 2.6817e-16 after.
 
     Raises:
         ValueError: on a non-positive or non-finite (other than ``+inf``) target_epsilon, a bad
