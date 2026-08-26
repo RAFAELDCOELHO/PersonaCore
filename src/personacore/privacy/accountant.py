@@ -591,7 +591,22 @@ def delta_quadrature(eps, mu, *, lam=40.0, n=20001, rel_tol=1e-9):
     # mathematical bound makes it true. The verification's literal `not (0.0 < delta <= 1.0): raise`
     # would instead have REFUSED all 267 of those cells -- 4.99% of a legitimate sweep -- for a
     # deviation smaller than the value's own last two hundred bits.
-    if delta > 1.0:
+    #
+    # THE BRANCH IS BOUNDED ON BOTH SIDES, and the reason is MEASURED rather than stylistic.
+    # Written as a bare `if delta > 1.0`, this branch clamps ANY over-1.0 value -- including `inf`,
+    # since `inf > 1.0` is True. Today that is unreachable, because the refusal above runs first;
+    # bounding it costs one comparison and buys the behaviour under a FUTURE edit that removes the
+    # refusal. MEASURED, with condition 1's headroom AND the refusal above both reverted, at the
+    # exact point 22-VERIFICATION.md cited:
+    #
+    #     bounded   `if 1.0 < delta <= 1.0 + slack`  ->  returns inf   (obviously wrong)
+    #     unbounded `if delta > 1.0`                 ->  returns 1.0   (perfectly plausible)
+    #
+    # A plausible-looking number instead of a refusal is the exact failure this module's own
+    # docstring gives as the reason BOTH oracles refuse in the underflow corner ("Reporting a
+    # number here is how a true delta of order 1e-352 becomes a published 0.0"). Bounded, a value
+    # this branch was never measured for falls through to `return delta` and stays visibly wrong.
+    if 1.0 < delta <= 1.0 + _DELTA_ACCUMULATION_SLACK:
         return 1.0
     return delta
 
