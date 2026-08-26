@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-02-PLAN.md (plan 2 of 14)
-last_updated: 2026-08-26T23:18:16.572Z
+stopped_at: Completed 23-03-PLAN.md (plan 3 of 14)
+last_updated: 2026-08-26T23:46:53.455Z
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 49
+  completed_plans: 50
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 3 of 14
+Plan: 4 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -143,6 +143,7 @@ Last activity: 2026-08-26
 | Phase 22 P19 | 35min | 2 tasks | 4 files |
 | Phase 23 P01 | 32min | 3 tasks | 4 files |
 | Phase 23 P02 | 19min | 2 tasks | 1 files |
+| Phase 23 P03 | 28min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -489,6 +490,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-02: the mitigation import ceiling is MEASURED zero headroom and is now recorded in a TEST FILE rather than only in a plan (T-23-10) — the union across mitigation_accountant.py (no imports), mitigation_unit.py (no imports) and mitigation_gate.py (pathlib, sys, erasure_gate) is EXACTLY the allow-set. So 23-09 scripts/mitigation_budget.py gets ZERO imports, may not import mitigation_gate either (that adds mitigation_gate to the imported set and breaks the subset assertion just as surely as json does), and must restate any selected K as a literal citing scripts/mitigation_gate.py::K_RUNGS with a TEST asserting the two agree. Widening the allow-set was considered and REFUSED: it weakens a committed guard to accommodate a module nobody has written yet.
 - [Phase 23] 23-02: both static assertions reproduced RED in THIS tree rather than cited from 23-RESEARCH.md — (a) AssertionError: a mitigation_*.py module imports mitigation_budget (imports: [erasure_gate, mitigation_budget, pathlib, sys]); (b) AssertionError: the mitigation modules import [json] beyond the allow-set [erasure_gate, pathlib, sys]. Both scratch modules deleted; git status --short scripts/ empty and git diff --exit-code -- scripts/ exit 0. The transitive half RED landed as a PERMANENT tmp_path positive control instead of a one-off hand observation: a watched RED that runs on every suite run cannot silently stop being watched, and tmp_path makes leaking a scratch module into scripts/ structurally impossible.
 - [Phase 23] 23-02: gsd-sdk hazards, TWELFTH session in a row, and the profile shifted AGAIN. `state.advance-plan` was CORRECT on every counter this time (`Plan: 2 of 14` -> `3 of 14`, `completed_plans` 48 -> 49) and did NOT regress `stopped_at` — 23-01's backwards-regression did not reproduce — but it flattened the body `Status:` prose from `Executing Phase 23` to `Ready to execute` and returned `last_updated` QUOTED. `state.update-progress` returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped and re-quoted `last_updated`; it did NOT flip `status`, and `percent`/`completed_phases` stayed 33/3. `state.record-metric` again REFUSED positional args and needed `--phase/--plan/--duration/--tasks/--files`; with flags it was CLEAN. `state.add-decision` again refused positional args, needed `--summary`, and CORRUPTED the label to `- [Phase ?]: ` on all three calls (22-16 / 22-19 / 23-01, unchanged). `state.record-session` was CLEAN and set both `stopped_at` and the body `Stopped at`. `roadmap.update-plan-progress 23` ticked the `23-02-PLAN.md` wave checkbox AND moved the phase row 1/14 -> 2/14, both CORRECT, but MANGLED that row's last two cells from `| In Progress | -          |` to `| In Progress|  |`, dropping the `-` placeholder — a NEW corruption this session, hand-repaired with `ROADMAP.md` line count unchanged at 804. All corruptions hand-repaired 1-line-for-1-line against a snapshot taken before the first call; `git diff .planning/` read after EVERY call; `wc -l` verified 651 -> 656 (1 metric row + 4 decisions).
+- [Phase 23] 23-03: the noise-floor RANGE, the seed-count rule, the D-04 halt and the D-06 withdrawal rule all land in ONE edit-once module in wave 1, while git ls-files 'results/phase23_*' is empty — a rule in the driver that measures the cost deciding it is a rule chosen with that cost visible
+- [Phase 23] 23-03: D-04 has NO warning branch and NO override flag — sigma_zero_verdict returns the string 'proceed' or raises SystemExit, and the HALT fires in BOTH directions including 'beats the control', which is the direction a correctness bug in this class actually produces. The halt has a PERMANENT in-process watched-RED control: a locally-defined weakened verdict returning 'proceed' unconditionally is observed NOT raising on the same breach fixture the real rule halts on, every suite run.
+- [Phase 23] 23-03: H_PER_POINT_FLOOR_SECONDS = 17_175 is derived from 23-RESEARCH §R3.0's UNROUNDED 286.26 min x 60 = 17,175.6 s, NOT from REQUIREMENTS' K=48 row (4.77 h re-derives to 17,172 s, three seconds off). The comment names the unrounded block as the derivation and the REQUIREMENTS row as the ROUNDED restatement, and states the FLOOR status (CAL-05: the rate was measured on the un-adapted base where 45-56 of 64 draws stop-terminated). It is NOT the h_per_point_floor/ceiling keys 23-05 defines and 23-11 measures — those are this phase's own re-measurement; this is the pre-existing budget unit, frozen so a wave-1 rule need not depend on a wave-6 measurement.
+- [Phase 23] 23-03: the sigma>0 escape is closed on CONTENT, not on name. test_every_noised_sweep_point_is_under_the_noised_glob loads every tracked results/phase23_*.json and fnmatches against the IMPORTED NOISED_RECORD_GLOB — and a record carrying sigma>0 with NO sweep_point key is REFUSED, never exempted. sweep_point is not schema-required (23-05's TRAINING_RECORD_KEYS / GENERATION_RECORD_KEYS do not contain it), so without that line the escape moves from 'wrong filename' to 'missing key' — and a wrong filename is a choice somebody made while an omission requires no lie at all. Only an explicit sweep_point:false exempts; both escape routes are watched FAILING on synthetic records in the same test body, with one-sided controls.
+- [Phase 23] 23-03: the three ancestry guards are wrapped in the Phase-18 bool(checked)==bool(tracked) vacuity shape rather than calling _assert_ordering_holds unconditionally, because TWO of the three prereg endpoints (CONTROL_FLOOR_RECORD, SIGMA_ZERO_RECORD) do not exist yet and the helper asserts prereg_commits non-empty — an unconditional call would be Phase 16's shape, RED from this commit until an artifact lands, inverting the ordering the discipline establishes. globs=(artifact_glob,) is passed deliberately rather than widening V4_ARTIFACT_GLOBS: Phase 21 D-20 measured that globs is read in exactly one place, and these three guards bind a different pair of endpoints than the accountant's.
 
 ### Roadmap Evolution
 
@@ -621,8 +627,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T23:18:16.560Z
-Stopped at: Completed 23-02-PLAN.md (plan 2 of 14)
+Last session: 2026-08-26T23:46:53.446Z
+Stopped at: Completed 23-03-PLAN.md (plan 3 of 14)
 Resume file: None
 
 ## Operator Next Steps
