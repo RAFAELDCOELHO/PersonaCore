@@ -68,3 +68,90 @@ that shape. The corner is also unreachable by every consumer in this phase: `mu 
 aborts with an arithmetic error carrying no domain information, instead of the refusal the module
 docstring promises. Never a wrong number — `math.exp` raises rather than returning `inf` — so this
 is a diagnosability defect, not a privacy one.
+
+### RETRACTED IN PLACE 2026-08-26 (plan 22-16)
+
+**The paragraph above beginning *"Not fixed here, and the reason is scope rather than cost"* is
+FALSE as of plan `22-14`, and the obstacle it names never applied.** The original paragraph is left
+standing as the record of what was believed when it was written — the same retract-in-place
+discipline `REQUIREMENTS.md`'s DPSGD-03 row now carries. A deferral log that still says "not fixed"
+about something the tree has fixed is a false record, which is the defect class this project
+retracts rather than quietly edits.
+
+**What closed it.** Plan `22-14` fixed the band. Condition 1's negative-`z` clause now budgets for
+the Simpson **SUM** rather than for a single `math.exp` argument, subtracting
+`math.log(4.0 * n)` = `11.28983191240606` at the default `n = 20001` and moving the negative-`z`
+boundary from `-709.782712893384` to `-698.4928809809779`; condition 3 gained a
+non-finite / upper-bound refusal with a slack measured over 5,351 answered cells. Re-measured by
+plan 22-16 over 22-14's own sweep (ε=1e-4, μ ∈ [74.0, 78.0] at step 1e-3, **4001 cells**), where
+404 cells returned `inf` before the fix:
+
+```
+cells=4001 answered=753 refused=3248 nonfinite=0 above_1.0=0 exactly_1.0=369
+```
+
+**Why the stated obstacle never applied.** This entry gave the reason as scope: *"A dedicated test
+for the negative-`z` refusal would be a fourth refusal case in `test_oracle_refuses`, whose entire
+assertion is that there are exactly three non-vacuity conditions with three distinct messages."*
+Plan 22-14 wrote exactly that dedicated test —
+`tests/test_phase22_accountant.py::test_quadrature_budgets_the_simpson_sum_not_one_term`, which
+asserts `pytest.raises(ValueError, match="DOMAIN LIMIT")` at the cited defect point and sweeps a
+14-point band across the former hole — **as a SEPARATE test function**. It is not a fourth case
+inside `test_oracle_refuses`, so that test's three-conditions/three-messages shape is untouched:
+`22-14-SUMMARY.md` records `test_oracle_refuses` passing unmodified and `delta_quadrature`'s refusal
+messages still **3 fired, 3 distinct** before and after. A dedicated test never had to live inside
+`test_oracle_refuses`; the entry inferred a constraint that was not there.
+
+```
+.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_quadrature_budgets_the_simpson_sum_not_one_term -q
+1 passed in 0.01s
+```
+
+**What remains true from the original entry.** The threshold is still an inequality over measured
+constants, so a future edit that loosens `_EXP_OVERFLOW_ARG`, drops the `z < 0.0` clause, or removes
+the `log(4.0 * n)` headroom re-opens the band. The difference is that this is no longer untested:
+mutation **M-C** (remove the headroom, restoring the single-term bound) was watched RED on the real
+committed module with one distinct RED and a sha256-identical restore (`22-14-SUMMARY.md`).
+
+## WARNING-2 — DP kill→resume has no production driver
+
+Carried forward from `22-VERIFICATION.md` by plan `22-16`. **Routed to Phase 23, beside DPSGD-06 —
+a deliberate deferral with a reason, not an oversight.**
+
+**What was found.** SC5's kill→resume workflow is satisfied through `train(resume_from=…)`, which
+IS the production API, and `tests/test_phase22_checkpoint.py::test_resume_epsilon_bit_identical`
+correctly refuses to restore by hand. But **no production path can resume a DP arm at all**:
+`scripts/teach_persona.py::train_arm` never passes `resume_from`, and its `refuse_if_exists` on the
+checkpoint path actively BLOCKS re-running a killed DP arm. So the workflow SC5 describes is
+exercised only from tests today. This is the same unwired-seam shape as Phase 21's IN-04 and must
+not be inherited as done.
+
+**Deliberately NOT closed here, and the reason is that this is a missing FEATURE rather than a
+defect in what Phase 22 shipped.** Closing it means *adding* a resume path to the production driver
+and *relaxing* a refusal that exists on purpose — a design decision that belongs to the phase whose
+first act is a genuinely real training run, not to a phase that proved a mechanism on CPU fixtures.
+Building the correction now would anticipate functionality only Phase 23 actually needs, and would
+put a relaxed `refuse_if_exists` into the tree ahead of any consumer that could exercise it. The
+user confirmed this routing on exactly that reasoning.
+
+**Phase 22 leaves the eventual wiring SAFER than it found it.** Plan `22-13` shipped the refusal in
+`src/personacore/training/loop.py`: `dp_fn is None` against a checkpoint carrying `dp_noise_rng` now
+raises rather than silently continuing a private run with no clipping and no noise. That guard is
+inert today precisely because no production driver reaches it — and it becomes load-bearing the
+moment Phase 23 adds one. `22-13-SUMMARY.md` records it watched RED under mutation M-H over the
+full suite, with exactly one distinct RED.
+
+**Blast radius if it is never wired:** a killed DP arm cannot be resumed at all, so a long M3 run
+that dies must restart from step 0 — expensive, but never a wrong privacy number. The dangerous
+version (resuming it *without* the seam) is the one 22-13 already refuses.
+
+## WARNING-1 was CLOSED, not deferred
+
+Recorded here in one place so the pair is not read as two open warnings. `22-VERIFICATION.md`'s
+WARNING-1 (`loop.py`'s silent no-op fallback on the resume path) is **closed by plan `22-13`** on
+the direction that matters — `dp_fn is None` with the `dp_noise_rng` slot PRESENT now refuses — and
+its other direction (seam live, slot absent) is documented in `loop.py` as a **deliberate**
+non-refusal, with the three-splat-site reachability measurement that makes it correct and the node
+ids of the two committed back-compat guards that would redden if a future "symmetry" edit refused
+it. 22-REVIEW's CR-04 proposed refusing that direction; `22-VERIFICATION.md` rejected it on
+measurement, and `22-13` did not implement it. Nothing here is open.

@@ -85,6 +85,50 @@ DP guarantee itself, covered by the D-05/D-16/D-17 guard rows rather than by an 
 
 ---
 
+## Gap-Closure Addendum — V-26 … V-34 (added 2026-08-26, plan 22-16)
+
+`22-VERIFICATION.md` returned `gaps_found` at 4/5 and listed five `missing:` items. Plans `22-12`,
+`22-13`, `22-14` and `22-15` closed them and added nine guards that this contract did not cover.
+Numbering continues from V-25; the column shape is the table above's.
+
+**Every `Automated command` below was RUN by plan 22-16 and observed exiting 0** — the pass counts
+in the last column are that run's own output, not a prediction. The V-01 … V-25 rows above keep
+their pre-execution `⬜ pending` status: re-scoring them is the re-verification's job, not this
+addendum's.
+
+| V-ID | Requirement | Behaviour validated | Test type / granularity | Automated command | File Exists | Status |
+|------|-------------|---------------------|-------------------------|-------------------|-------------|--------|
+| V-26 | DPSGD-03 | `_log_erfc` is **inert where `erfc` is healthy** — exact `==` over the 18 pinned points (11 frontier + 7 golden), so the repair cannot move the frozen pin; plus a hard-count companion pinning the count and the single exclusion, because the sweep's own filter would make an in-test meta-guard a tautology | unit, 18 pinned points + 1 count guard | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_log_erfc_is_inert_where_erfc_is_healthy tests/test_phase22_accountant.py::test_log_erfc_inert_points_are_not_empty -q` | ✅ exists | ✅ green (19 passed) |
+| V-27 | DPSGD-03 | `_log_erfc` matches the committed 60-dps `log(erfc(b))` at `b = 28.01573320140291` — the underflow band where `delta_closed`'s shipped `else` branch was unreachable and its second term was silently dropped | unit, once per run | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_log_erfc_matches_the_committed_underflow_truth -q` | ✅ exists | ✅ green (1 passed) |
+| V-28 | DPSGD-03 | The **thirteenth `DELTA_FRONTIER` row** carries V-01 and V-02 into the `b > 27.2` band the twelve committed rows could not reach — measured two-oracle gap **1.1050e-11** against the **UNWIDENED** 1e-9 budget | unit, 2 legs (V-01 + V-02 at the new row) | `.venv/bin/python -m pytest tests/test_phase22_accountant.py -q -k 775.7866600701457` | ✅ exists | ✅ green (2 passed, 188 deselected) |
+| V-29 | DPSGD-03 | `epsilon_for` in the overflow regime is compared against **committed 60-dps epsilons** (`EPSILON_OVERFLOW_REGIME`), replacing the `math.isfinite(got) and got > 700.0` liveness assertion that visited the defect without comparing anything | unit, σ ∈ {0.40, 0.30} | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_epsilon_for_survives_the_overflow_regime -q` | ✅ exists | ✅ green (2 passed) |
+| V-30 | DPSGD-03 | Condition 1 budgets for the Simpson **SUM** via `log(4*n)`, not for one `exp` term — the former **404-of-4001-cell `inf` band** now refuses, and the cited defect point refuses with `DOMAIN LIMIT` rather than a later condition's wrong diagnosis | unit, cited defect point + a 14-point band sweep with a length meta-guard | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_quadrature_budgets_the_simpson_sum_not_one_term -q` | ✅ exists | ✅ green (1 passed) |
+| V-31 | DPSGD-03 | `delta_quadrature` returns a value in `(0, 1]` **or raises — never between**. The slack is `_DELTA_ACCUMULATION_SLACK = 1e-11`, MEASURED over 5,351 answered cells; the verification's literal `0.0 < delta <= 1.0` would have refused 267 of them (4.99%), all correct | unit, 240 cells | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_quadrature_returns_a_probability_or_refuses -q` | ✅ exists | ✅ green (1 passed) |
+| V-32 | DPSGD-03 | `epsilon_for` answers **`+inf`, never `0.0`**, for every σ whose `sqrt(steps)/sigma` overflows — the privacy-UNDERSTATING direction closed, and closed **CONTINUOUSLY with V-08's σ=0 branch** rather than relocating the discontinuity to a raise. Boundary DERIVED per step count from `sys.float_info.max` inside the test, never hardcoded (the module's `math`-only ceiling is V-09's and stays intact) | unit, T ∈ {1, 64, 200, 1000} × 3 in-band σ | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_epsilon_for_answers_inf_in_the_subnormal_sigma_band -q` | ✅ exists | ✅ green (4 passed) |
+| V-33 | DPSGD-03 | `_delta_or_below_float64` **refuses a non-finite or non-positive `mu` before its `try`**, so the docstring premise its bare `except ValueError` rested on is a postcondition of its own prologue instead of an unestablished assertion about the caller | unit, μ ∈ {`inf`, `-inf`, `nan`, `0.0`, `-1.0`} | `.venv/bin/python -m pytest tests/test_phase22_accountant.py::test_delta_or_below_float64_refuses_the_inputs_it_may_not_read_as_ordering -q` | ✅ exists | ✅ green (5 passed) |
+| V-34 | DPSGD-04/05 | Resuming with `dp_fn=None` from a checkpoint carrying `dp_noise_rng` **REFUSES** — the direction that turns a private run non-private in silence — and the refusal fires **before any save**. Two narrowness legs in the same test: the sibling direction (seam live, slot absent) stays TOLERATED, and an ordinary non-DP resume is not caught | integration, 3 legs | `.venv/bin/python -m pytest tests/test_phase22_dpsgd.py::test_resume_without_the_seam_refuses_a_dp_checkpoint -q` | ✅ exists | ✅ green (1 passed) |
+
+**Full suite at the time these were recorded:** `.venv/bin/python -m pytest -q` →
+**`1314 passed, 1 skipped`** in 220.25 s; `.venv/bin/ruff check . && .venv/bin/ruff format --check .`
+→ `All checks passed! / 203 files already formatted`.
+
+**`make test` is BROKEN and must not be used** — bare `pytest` resolves to the pyenv 3.12.13 first
+on `PATH` and produces ~83 `ModuleNotFoundError: torch`. The *Full suite command* cell in the Test
+Infrastructure table above says `make test`; it was written at planning time and is wrong in this
+tree. Use `.venv/bin/python -m pytest -q` (~220 s) and `.venv/bin/ruff check . && .venv/bin/ruff
+format --check .`. Recorded here rather than by editing the row above, per this phase's
+retract-in-place discipline.
+
+**Each of these guards was WATCHED RED under a mutation of the real committed module**, which is
+this phase's standard of evidence — the observed RED, not the final green. Distinct-RED counts,
+verbatim messages and sha256-identical restores are in the SUMMARYs: `22-12` M-A/M-B/M-G (3/6/4),
+`22-13` M-H (1, measured over the FULL suite), `22-14` M-C/M-D/M-D-sat/compound (1 each) with
+M-D-partial and M-E proven behaviourally **inert** rather than reported as unwatched, and `22-15`
+M-E/M-E-both/M-F (1/2/1). Two of those registers found that the mutation the plan specified was one
+hunk where the fix ships as two independent layers, and reported the single-hunk result separately.
+
+---
+
 ## Wave 0 Requirements
 
 - [ ] `tests/test_phase22_accountant.py` — V-01 … V-09
@@ -125,8 +169,15 @@ DP guarantee itself, covered by the D-05/D-16/D-17 guard rows rather than by an 
 - [x] No watch-mode flags — **0 occurrences of `--watch` / `--watchAll`**
 - [x] Feedback latency < 30 s — plan `22-10` Task 3's budget was tightened from 60 s to 30 s so the
       plan and this row agree
-- [ ] All four positive controls have their RED output recorded, not just their GREEN —
-      **execution-time; stays open until Wave 0 runs**
+- [x] All four positive controls have their RED output recorded, not just their GREEN —
+      **CLOSED 2026-08-26 (ticked by plan 22-16 on plan `22-11`'s record, not on this closure's).**
+      `22-11-SUMMARY.md` carries FAKE 1 … FAKE 4 (V-18 … V-21) each applied to the REAL committed
+      `src/personacore/privacy/dpsgd.py`, each watched reddening a named test with its assertion
+      message captured **verbatim**, each restored to a byte-identical blob (pre/post `sha256`
+      equal, `git diff --exit-code` exit 0, all four times) — `12 / 5 / 6 / 10` failed against a
+      `78 passed, 2 skipped` baseline, nine detectors producing nine DISTINCT messages. The gap
+      closure's own mutations (M-A … M-H, above) are **additional** evidence for V-26 … V-34 and
+      are not what ticks this line.
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** approved 2026-08-25

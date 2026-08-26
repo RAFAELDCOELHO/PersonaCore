@@ -122,7 +122,7 @@ what survives cannot be cheaply reverted.
 
 - [x] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (execution complete 2026-08-20; reopened for GATE-06 gap closure, all 12 plans executed 2026-08-21 — SC3's GATE-06 clause superseded by a dated D-34/D-37 amendment, GATE-06 discharged, `20-SECURITY.md` at `threats_open: 0`. Awaiting re-verification by `/gsd:verify-phase 20`) (completed 2026-08-21)
 - [x] **Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus** - Fix what a record is, and prove it structurally, before any ε can be computed against the wrong one (completed 2026-08-25)
-- [x] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers (execution complete 2026-08-26; `22-VERIFICATION.md` returned `gaps_found` 4/5 — SC3's two-oracle agreement falsified by `delta_closed` discarding its second term past the `erfc` cliff — so reopened for gap closure across plans 22-12…22-16. 22-12 executed 2026-08-26: three of the five `missing:` items closed, all 7 `GOLDEN_EPSILON` rows BIT-IDENTICAL. 22-13 executed 2026-08-26: WARNING-1 closed on the direction that matters — `dp_fn=None` resuming a checkpoint carrying `dp_noise_rng` now REFUSES, while the direction 22-REVIEW's CR-04 proposed refusing stays tolerated on its measured reachability argument, with both committed guards that pin it named in `loop.py`; mutation M-H watched failing over the full suite (exactly ONE distinct RED), full suite `1303 passed, 1 skipped`. 22-14…22-16 remain. Awaiting re-verification by `/gsd:verify-phase 22`) (completed 2026-08-26)
+- [x] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers (execution complete 2026-08-26; `22-VERIFICATION.md` returned `gaps_found` 4/5 — SC3's two-oracle agreement falsified by `delta_closed` discarding its second term past the `erfc` cliff — so reopened for gap closure across plans 22-12…22-16. 22-12 executed 2026-08-26: three of the five `missing:` items closed, all 7 `GOLDEN_EPSILON` rows BIT-IDENTICAL. 22-13 executed 2026-08-26: WARNING-1 closed on the direction that matters — `dp_fn=None` resuming a checkpoint carrying `dp_noise_rng` now REFUSES, while the direction 22-REVIEW's CR-04 proposed refusing stays tolerated on its measured reachability argument, with both committed guards that pin it named in `loop.py`; mutation M-H watched failing over the full suite (exactly ONE distinct RED), full suite `1303 passed, 1 skipped`. 22-14 executed 2026-08-26: `delta_quadrature` returns a probability or refuses — the `log(4*n)` Simpson-sum headroom closes the measured 404-of-4001-cell `inf` band, and the upper-bound slack is MEASURED over 5351 answered cells (the verification's literal `0.0 < delta <= 1.0` would have refused 267 of them, 4.99%, all correct). 22-15 executed 2026-08-26: the LAST `missing:` item — `epsilon_for` returned `0.0`, perfect privacy, for every σ below `sqrt(steps)/sys.float_info.max`; the quotient is now checked and answers `+inf`, CONTINUOUS with the σ=0 branch rather than relocating the discontinuity. 22-16 executed 2026-08-26: DPSGD-03's `REQUIREMENTS.md` row retracted in place with what measured it false, this wave list ticked, `22-VALIDATION.md` extended by nine rows (V-26…V-34), and WARNING-2 routed to Phase 23 while WARNING-1 is recorded CLOSED. All five `missing:` items closed; full suite `1314 passed, 1 skipped`, `ruff` clean over 203 files, `scripts/mitigation_accountant.py` byte-unchanged throughout. **The SC3 verdict is the re-verification's — awaiting `/gsd:verify-phase 22`.**) (completed 2026-08-26)
 - [ ] **Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration** - Size the sweep from a measurement, and run the one cheap run that separates an honest negative from a silent bug
 - [ ] **Phase 24: Adversarial Extraction-Aware Training + the Held-Out Attack Family** - The second arm as a data-mixture ratio, with generalization converted from a disclaimer into a measurement
 - [ ] **Phase 25: Frontier Sweep and the Existence-Gate Verdict** - Both arms, both capacities, one plane, judged by importing the Phase 20 constants
@@ -401,8 +401,9 @@ CPU before a single second of M3 time is spent
      is not restructured into `nn.Linear` submodules and `persona_adapter.pt` plus every v3.0
      checkpoint still load unchanged. (DPSGD-05, DPSGD-07)
 
-**Plans**: 16 plans in 10 waves (11 executed; 22-12 … 22-16 close the SC3 / DPSGD-03 gap
-`22-VERIFICATION.md` recorded)
+**Plans**: 16 plans in 10 waves (**all 16 executed**; 22-12 … 22-16 closed the SC3 / DPSGD-03 gap
+`22-VERIFICATION.md` recorded — all five `missing:` items measured closed. Verdict pending
+re-verification.)
 
 **Wave 1** *(no dependencies)*
 
@@ -469,7 +470,7 @@ CPU before a single second of M3 time is spent
 
 **Wave 10** *(blocked on Wave 9)*
 
-- [ ] 22-16-PLAN.md — traceability: DPSGD-03's `REQUIREMENTS.md` row corrected retract-in-place, the
+- [x] 22-16-PLAN.md — traceability: DPSGD-03's `REQUIREMENTS.md` row corrected retract-in-place, the
       validation contract extended, and WARNING-2 (no production DP-resume driver) routed to Phase 23
 
 ### Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration
