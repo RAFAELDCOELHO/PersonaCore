@@ -580,7 +580,23 @@ Phase 20 (K and the promotion rule are already committed)
      scored — serving as both the frontier's lower-left floor and the relearning reference, so it is
      scheduled once and consumed twice. (CTRL-03)
 
-**Plans**: TBD
+**Plans**: 14 plans across 8 waves
+
+Plans:
+- [ ] 23-01-PLAN.md — D-02 device-parametrize the Phase-22 battery onto MPS + the DPSGD-06 generator keystone
+- [ ] 23-02-PLAN.md — D-09 SC3 transitive out-of-process import probe; both static halves watched RED
+- [ ] 23-03-PLAN.md — the blind pre-registration: noise-floor reduction, D-04 halt verdict, D-06 withdrawal rule, artifact register, three ancestry guards
+- [ ] 23-04-PLAN.md — CAL-03 instrument: ε/T bit-identity across capacity + the watched N-leak positive control
+- [ ] 23-05-PLAN.md — the cost-record schema, its refusals, ceiling-sized sizing, and the synchronize-bracketed timing helper
+- [ ] 23-06-PLAN.md — D-02 watched RED on MPS for all four DPSGD-04 fakes + the venue-transfer ledger
+- [ ] 23-07-PLAN.md — D-07 resume seam through `train_arm`, closing WARNING-2, with the MPS production kill→resume ε proof
+- [ ] 23-08-PLAN.md — D-03 + D-08 one scheduling: control and never-taught at N seeds; the floor measured and committed before σ=0
+- [ ] 23-09-PLAN.md — pin the floor in `scripts/mitigation_budget.py`, literal-only and zero-import, with its `_PROVENANCE` sibling
+- [ ] 23-10-PLAN.md — DPSGD-06: the σ=0 run, the DP arm's first, with D-04 live
+- [ ] 23-11-PLAN.md — CAL-01 dp_n64 timing + CAL-05 noised-adapter throughput, floor and ceiling
+- [ ] 23-12-PLAN.md — D-10 retract-in-place of the falsified "~1,010×" claim across all three planning files
+- [ ] 23-13-PLAN.md — CAL-02: pin Z with `_PROVENANCE` siblings, the K ratchet, and D-06's branch
+- [ ] 23-14-PLAN.md — CTRL-03: score the never-taught adapters at the pinned K; the record the frozen gate accepts
 
 ### Phase 24: Adversarial Extraction-Aware Training + the Held-Out Attack Family
 
