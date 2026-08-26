@@ -722,16 +722,62 @@ def train(
         # fresh-run float("inf") below, so old checkpoints still resume (open-dict contract).
         resumed_best_val_loss = ckpt.get("best_val_loss")
         # D-14's dp_noise_rng slot, READ half — and a write-only slot is worse than no slot.
-        # `.get()`, NEVER a subscript: same back-compat reason as `best_val_loss` above and as
-        # `rng.get("mps")` in checkpoint.py — every checkpoint written before Phase 22 lacks the
-        # key. Omitting this restore is not a missing nicety: `DPSGD.__init__` re-seeds its
-        # generator from the caller's seed, so a resumed run REPLAYS NOISE IT ALREADY RELEASED —
-        # DPSGD-04/SC4's fourth named fake (RNG reused across steps) reachable through PRODUCTION
-        # rather than by a deliberate edit. D-16 invariant 4 is structurally blind to it
-        # (`_prev_gen_state` is None on a freshly constructed object, so the continuity check is
-        # vacuous on the first post-resume step), which is why this is a WIRING requirement no
-        # runtime invariant can cover. CLAUDE.md makes resume routine on the primary M3 path
-        # (laptop sleep/interrupt), so this boundary is crossed in the common case.
+        #
+        # THREE (seam, slot) COMBINATIONS REACH THIS POINT AND THEY GET THREE DIFFERENT ANSWERS.
+        # The fourth — no seam, no slot — is the ordinary non-DP resume and needs no words. The
+        # other three are written out because two of them are silent by design and one of them was
+        # silent by omission, and nothing downstream can tell those apart after the fact.
+        #
+        # (1) SLOT PRESENT + SEAM LIVE -> RESTORE (the last branch below).
+        #     `.get()`, NEVER a subscript: same back-compat reason as `best_val_loss` above and as
+        #     `rng.get("mps")` in checkpoint.py — every checkpoint written before Phase 22 lacks
+        #     the key. Omitting this restore is not a missing nicety: `DPSGD.__init__` re-seeds
+        #     its generator from the caller's seed, so a resumed run REPLAYS NOISE IT ALREADY
+        #     RELEASED — DPSGD-04/SC4's fourth named fake (RNG reused across steps) reachable
+        #     through PRODUCTION rather than by a deliberate edit. D-16 invariant 4 is structurally
+        #     blind to it (`_prev_gen_state` is None on a freshly constructed object, so the
+        #     continuity check is vacuous on the first post-resume step), which is why this is a
+        #     WIRING requirement no runtime invariant can cover. CLAUDE.md makes resume routine on
+        #     the primary M3 path (laptop sleep/interrupt), so this boundary is crossed in the
+        #     common case.
+        #
+        # (2) SLOT ABSENT + SEAM LIVE -> SEED FRESH, DELIBERATELY. **NOT A REFUSAL**, and the
+        #     reason is a MEASUREMENT rather than a tolerance nobody got round to tightening: ALL
+        #     THREE `save_checkpoint` call sites in this function splat `**_dp_extra()` (the
+        #     best.pt save, the in-loop latest.pt save, and the end-of-call save), so EVERY
+        #     checkpoint a DP run writes carries the slot. An ABSENT slot therefore means the run
+        #     that wrote it was NOT a DP run — and a generator freshly seeded in `DPSGD.__init__`
+        #     has released nothing, so seeding fresh replays nothing. Refusing here would REDDEN
+        #     TWO COMMITTED GUARDS that drive exactly this case and assert it is tolerated:
+        #       tests/test_phase22_dpsgd.py
+        #           ::test_dp_noise_rng_round_trips_through_a_kill_and_resume — its BACK-COMPAT
+        #           leg strips the key, resumes WITH a seam, and asserts the fresh generator state
+        #           is UNTOUCHED.
+        #       tests/test_phase22_checkpoint.py
+        #           ::test_resume_epsilon_bit_identical — its NEGATIVE CONTROL strips the key,
+        #           resumes WITH a seam, and asserts the stream DIVERGES; without it the positive
+        #           restore assertion above it would be green with the restore deleted.
+        #     22-REVIEW's CR-04 proposed refusing here. 22-VERIFICATION traced the splat sites and
+        #     REJECTED it. Do not re-litigate without re-measuring those three sites first.
+        #
+        # (3) SLOT PRESENT + SEAM ABSENT -> REFUSE (immediately below). WARNING-1's symmetric half,
+        #     and it is worse in KIND, not in degree: (1) and (2) both continue a private
+        #     mechanism, while this one silently stops being one.
+        if dp_fn is None and ckpt.get("dp_noise_rng") is not None:
+            raise ValueError(
+                f"{resume_from} carries a dp_noise_rng slot but train() was called with "
+                "dp_fn=None. The slot's PRESENCE is the provenance: all three save_checkpoint "
+                "sites in this function splat **_dp_extra(), which is empty unless a DP seam is "
+                "live, so only a run with a live DP seam writes that key. Resuming it without the "
+                "seam keeps training the SAME parameters with NO per-record clip and NO Gaussian "
+                "noise, while the checkpoint, the CSV curve and every downstream artifact still "
+                "read as that private run's continuation — the released weights would carry an "
+                "un-noised, un-clipped tail under an epsilon that describes only the prefix. "
+                "Nothing else in the tree can notice: DPSGD is not CONSTRUCTED on this path, so "
+                "none of D-16's runtime invariants exist to fire and there is no seam to refuse. "
+                "Pass the dp_fn= seam to continue this run privately, or resume from a checkpoint "
+                "a non-DP run wrote."
+            )
         if dp_fn is not None and ckpt.get("dp_noise_rng") is not None:
             dp_fn.load_noise_rng_state(ckpt["dp_noise_rng"])
 
