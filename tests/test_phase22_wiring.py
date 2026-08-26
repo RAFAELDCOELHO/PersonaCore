@@ -492,3 +492,201 @@ def test_a_duplicated_record_is_refused(bins, monkeypatch):
         _train(bins, steps=1, spy=spy, monkeypatch=monkeypatch)
     assert sorted(spy.indices) == list(range(n))  # what the REAL loader returned
     assert len(spy.indices) == n  # the accum refusal's consequence, and the equivalence premise
+
+
+# ===================================================================================
+# ===== D-08 / T-22-49: sigma and C are REQUIRED, with NO DEFAULT anywhere ==========
+# ===================================================================================
+
+
+def test_dp_arm_requires_sigma_and_clip_norm(monkeypatch):
+    """Every incomplete DP invocation raises, and the message names BOTH flag names.
+
+    `train_arm` is stubbed to a sentinel that RAISES, so a case that wrongly got past the CLI is
+    a loud, distinguishable failure rather than an attempt to run a real 200-step training job.
+    """
+
+    def _never(*args, **kwargs):
+        raise AssertionError(f"train_arm reached the training half with {kwargs!r}")
+
+    monkeypatch.setattr(tp, "train_arm", _never)
+
+    for arm in tp.DP_ARMS:
+        for argv in (
+            [arm],  # neither flag
+            [arm, f"{tp.SIGMA_FLAG}1.0"],  # sigma alone
+            [arm, f"{tp.CLIP_FLAG}1.0"],  # C alone
+            [arm, f"{tp.SIGMA_FLAG}1.0", f"{tp.CLIP_FLAG}1.0", "--extra"],  # unknown token
+            [arm, f"{tp.SIGMA_FLAG}abc", f"{tp.CLIP_FLAG}1.0"],  # unparseable
+            [arm, f"{tp.SIGMA_FLAG}1.0", f"{tp.SIGMA_FLAG}2.0"],  # duplicate
+        ):
+            with pytest.raises(SystemExit) as excinfo:
+                tp.main(argv)
+            message = str(excinfo.value)
+            assert tp.SIGMA_FLAG in message and tp.CLIP_FLAG in message, (argv, message)
+            # The message says WHY there is no default, not merely that one is missing.
+            assert "Z boundary" in message and "NO DEFAULT" in message, (argv, message)
+
+    # The DOMAIN refusals, which the mechanism re-checks as properties of itself.
+    for argv, needle in (
+        ([tp.DP_ARMS[0], f"{tp.SIGMA_FLAG}-1.0", f"{tp.CLIP_FLAG}1.0"], "sigma-domain"),
+        ([tp.DP_ARMS[0], f"{tp.SIGMA_FLAG}1.0", f"{tp.CLIP_FLAG}0"], "clip-domain"),
+        ([tp.DP_ARMS[0], f"{tp.SIGMA_FLAG}1.0", f"{tp.CLIP_FLAG}-2"], "clip-domain"),
+    ):
+        with pytest.raises(SystemExit, match=needle):
+            tp.main(argv)
+
+    # POSITIVE CONTROL: a well-formed invocation gets PAST the CLI and into `train_arm` with
+    # both values parsed. Without it every raise above could be a blanket refusal of the arm.
+    reached = {}
+    monkeypatch.setattr(tp, "train_arm", lambda arm, **kw: reached.update(arm=arm, **kw))
+    tp.main([tp.DP_ARMS[0], f"{tp.SIGMA_FLAG}1.25", f"{tp.CLIP_FLAG}0.5"])
+    assert (reached["dp_sigma"], reached["dp_clip_norm"]) == (1.25, 0.5)
+
+    # ...and in EITHER order, since the parser is prefix matching and not positional.
+    reached.clear()
+    tp.main([tp.DP_ARMS[0], f"{tp.CLIP_FLAG}0.5", f"{tp.SIGMA_FLAG}1.25"])
+    assert (reached["dp_sigma"], reached["dp_clip_norm"]) == (1.25, 0.5)
+
+
+def test_the_dp_refusal_also_fires_at_train_arm_not_only_at_the_cli():
+    """T-22-49 is a property of the TRAINING ENTRY POINT, not of one argv parser.
+
+    `train_arm` has five callers outside this module (`phase17_isolation`, `phase19_erasure` x3,
+    `phase19_run`) plus `run_calibration` here, none of which goes through `main`. A refusal that
+    lived only in the CLI would let any of them train a DP-named arm with no sigma and no C.
+    """
+    for arm in tp.DP_ARMS:
+        with pytest.raises(SystemExit, match="Z boundary"):
+            tp.train_arm(arm, facts=[], family_ids=())
+
+
+def test_non_dp_arm_cli_is_unchanged(monkeypatch):
+    """THE CONTROL: the new DP branch did not narrow the pre-existing single-token path.
+
+    A non-DP arm is accepted with exactly one token and still rejected with two — the same shape
+    `len(argv) != 1` enforced before plan 22-10 — and it reaches `train_arm` with both DP
+    parameters `None`, so nothing about its `train()` call can differ.
+    """
+    non_dp = [arm for arm in tp.ARMS if arm not in tp.DP_ARMS]
+    assert non_dp, "ARMS carries no non-DP arm — this control would be vacuous"
+
+    seen = []
+    monkeypatch.setattr(tp, "train_arm", lambda arm, **kw: seen.append((arm, kw)))
+    monkeypatch.setattr(tp, "arm_spec", lambda arm: ([], False, 0.0))
+
+    for arm in non_dp:
+        tp.main([arm])  # must NOT raise
+    assert [arm for arm, _kw in seen] == non_dp
+    assert all(kw["dp_sigma"] is None and kw["dp_clip_norm"] is None for _arm, kw in seen)
+
+    # Extra tokens are still refused on the non-DP path, including the DP flags.
+    for argv in ([non_dp[0], "--force"], [non_dp[0], f"{tp.SIGMA_FLAG}1.0"], []):
+        with pytest.raises(SystemExit) as excinfo:
+            tp.main(argv)
+        assert str(excinfo.value) == tp.USAGE, argv
+
+
+def test_usage_lists_the_dp_form():
+    """`USAGE` names every DP arm and both flags, read from the module rather than re-spelled."""
+    assert tp.DP_ARMS, "DP_ARMS is empty — this test would be vacuous"
+    for arm in tp.DP_ARMS:
+        assert arm in tp.USAGE
+    assert tp.SIGMA_FLAG in tp.USAGE and tp.CLIP_FLAG in tp.USAGE
+    # Built by interpolation, not hand-typed: the joined form must appear verbatim.
+    assert "|".join(tp.DP_ARMS) in tp.USAGE
+    assert "|".join(tp.ARMS) in tp.USAGE
+
+
+def test_cli_names_no_sigma_or_clip_value():
+    """T-22-49, STATIC: no numeric literal is bound to any sigma/clip name in this file.
+
+    A default anywhere would silently become the operating privacy budget of a run nobody
+    pre-registered. This walks every `Assign` / `AnnAssign` / `keyword` / default and every dict
+    entry, and refuses a numeric `Constant` reaching a name containing `sigma` or `clip`.
+    """
+    source = pathlib.Path(tp.__file__).read_text()
+    tree = ast.parse(source)
+
+    def _is_number(node):
+        return isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
+
+    def _suspect(name):
+        lowered = name.lower()
+        return "sigma" in lowered or "clip" in lowered
+
+    assigns = [n for n in ast.walk(tree) if isinstance(n, (ast.Assign, ast.AnnAssign))]
+    assert len(assigns) > 1, "the AST walk found no Assign nodes — the guard would be vacuous"
+
+    offenders = []
+    for node in assigns:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        names = [t.id for t in targets if isinstance(t, ast.Name)]
+        if node.value is not None and _is_number(node.value):
+            offenders += [(n, node.lineno) for n in names if _suspect(n)]
+    for node in ast.walk(tree):
+        # Keyword arguments: `DPSGD(sigma=1.1, ...)` and `train_arm(dp_sigma=0.5)`.
+        if isinstance(node, ast.keyword) and node.arg and _suspect(node.arg):
+            if _is_number(node.value):
+                offenders.append((node.arg, node.lineno))
+        # Dict literals: `{"sigma": 1.1}`.
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    if _suspect(key.value) and _is_number(value):
+                        offenders.append((key.value, key.lineno))
+        # Parameter defaults: `def f(*, sigma=1.1)`.
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args
+            pairs = (
+                list(zip(args.args[-len(args.defaults) :], args.defaults)) if args.defaults else []
+            )
+            pairs += [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None]
+            for arg, default in pairs:
+                if _suspect(arg.arg) and _is_number(default):
+                    offenders.append((arg.arg, node.lineno))
+
+    assert offenders == [], (
+        f"a numeric sigma/clip value is bound in {tp.__file__}: {offenders}. Phase 22 names no "
+        "value in its tree — a default here would become the operating privacy budget."
+    )
+
+    # META-GUARD: the walk is capable of finding one. Inject the shape it must catch.
+    injected = ast.parse('def f(*, sigma=1.1):\n    pass\nCLIP_NORM = 0.5\nd = {"sigma": 2.0}\n')
+    found = []
+    for node in ast.walk(injected):
+        if isinstance(node, ast.Assign) and _is_number(node.value):
+            found += [t.id for t in node.targets if isinstance(t, ast.Name) and _suspect(t.id)]
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if isinstance(key, ast.Constant) and _suspect(str(key.value)) and _is_number(value):
+                    found.append(key.value)
+        if isinstance(node, ast.FunctionDef):
+            for arg, default in zip(node.args.kwonlyargs, node.args.kw_defaults):
+                if default is not None and _suspect(arg.arg) and _is_number(default):
+                    found.append(arg.arg)
+    assert sorted(found) == ["CLIP_NORM", "sigma", "sigma"], found
+
+
+def test_the_cli_does_not_use_argparse():
+    """`main` stays in this file's argv-slicing register — a second CLI idiom is a trap.
+
+    Asserted by AST rather than by `grep -n argparse`, which the plan proposed: the grep cannot
+    tell a USE from `_parse_dp_flags`' docstring naming the rejected alternative, so it would
+    have to be satisfied by deleting the one sentence a future reader most needs.
+    """
+    tree = ast.parse(pathlib.Path(tp.__file__).read_text())
+    imported = [
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    ] + [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
+    assert "argparse" not in imported, imported
+    attributes = {
+        node.value.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+    }
+    assert "argparse" not in attributes
+    assert not hasattr(tp, "argparse")
