@@ -823,3 +823,223 @@ def test_accountant_has_no_assert_and_no_prove():
         f"accountant.py calls _prove at lines {proves}; that is the scripts/ register (18 "
         f"scripts/ modules, 0 src/ modules), never src/'s"
     )
+
+
+# =============================================================================================
+# V-06 (plan 22-09). Every pinned golden epsilon RE-DERIVED from the QUADRATURE ORACLE ALONE.
+#
+# WHY THIS IS NOT A CONTRADICTION OF D-12's SINGLE-CHOKE-POINT RULE. D-12 forbids improvising a
+# bisection in PRODUCTION code (`scripts/mitigation_budget.py`, a driver) — a second solver free
+# to disagree with `epsilon_for` is exactly what that rule exists to prevent. D-13 REQUIRES a
+# re-derivation by an independent route HERE, and the two rules do not collide: this bisection is
+# test-local, is never importable by a caller, and its whole purpose is to be a DIFFERENT route.
+# A golden table read off the implementation shares the implementation's failure modes BY
+# CONSTRUCTION — a PHOTOGRAPH OF THE CODE rather than a CONSTRAINT ON IT, green on the day it was
+# taken and green forever after, including every day the code is wrong in the same way.
+# =============================================================================================
+
+_THIS_FILE = pathlib.Path(__file__).resolve()
+
+# The bisection's own budget. The measured worst case over the seven rows is 47 halvings and 6
+# doublings, so these caps are ~4x and ~10x headroom; they exist so a broken oracle produces a
+# named failure instead of an infinite loop.
+_ORACLE_BISECT_REL_WIDTH = 1e-14
+_ORACLE_BISECT_MAX_STEPS = 200
+_ORACLE_BISECT_MAX_DOUBLINGS = 60
+
+# The two callees that would turn V-06 from a constraint into a photograph. Asserted STRUCTURALLY
+# over the test's own AST rather than promised in a docstring, because a docstring cannot redden.
+_V06_FORBIDDEN_CALLEES = frozenset({"epsilon_for", "delta_closed"})
+
+# MEASURED, on this box, by the bisection below: the worst relative deviation between the
+# oracle-derived epsilon and the pinned one across all seven rows is 5.749506e-15 (the sigma = 2.0
+# row). Two float64 quadratures of different integrals cannot agree more closely than this, and
+# `GOLDEN_EPSILON_REL_TOL = 1e-12` therefore carries ~174x of margin over it.
+_V06_MEASURED_ORACLE_GAP = 5.749506e-15
+
+# The negative control's perturbation, and the ceiling that makes it BITE.
+#
+# DELIBERATELY NOT `10 * GOLDEN_EPSILON_REL_TOL`, which is what plan 22-09 specifies and which is
+# STRUCTURALLY INCAPABLE of the job it is given. `abs(p*(1 + 10*t) - p) > t*p` is true for EVERY
+# t > 0, so a perturbation defined as a multiple of the tolerance stays green after the tolerance
+# is widened to 1e-3 — the exact widening the control exists to detect. Watched: with the
+# tolerance at 1e-3 the multiple-of-tolerance form still passes. So the perturbation is a FIXED
+# relative amount (1e-9: ~174,000x the measured oracle gap, and the smallest scale a real
+# implementation error plausibly reaches) and the tolerance carries its own ceiling.
+_V06_PERTURBATION = 1e-9
+_GOLDEN_REL_TOL_CEILING = 1e-11
+
+
+def test_golden_epsilon_from_oracle():
+    """V-06 -- all seven ``GOLDEN_EPSILON`` rows re-derived by bisecting ``delta_quadrature``.
+
+    THE ORACLE ONLY. This body calls neither ``epsilon_for`` nor ``delta_closed``, and that is
+    asserted over this function's OWN AST below rather than claimed here -- a claim in a docstring
+    is exactly what a future edit "simplifying" the test by calling the implementation would leave
+    untouched. See the block comment above for why a test-local bisection does not contradict
+    D-12's one-choke-point rule.
+
+    WHY AN EXACT FLOAT PIN WOULD BE **WRONG** RATHER THAN MERELY STRICT. The pin's epsilons were
+    bisected against the quadrature oracle at 60 decimal places; this bisects the same oracle in
+    float64, and two float64 quadratures of different integrals differ at ~1e-14 by construction.
+    Measured here, worst case 5.749506e-15 across the seven rows. ``GOLDEN_EPSILON_REL_TOL = 1e-12``
+    is ~174x of margin over that and ~1000x TIGHTER than the ceiling the negative control pins, so
+    it is loose enough to accept correct code and tight enough to refuse a moved accountant. An
+    ``==`` here would pin the pin to one of the two mathematics and redden on correct code.
+
+    delta is strictly DECREASING in eps at fixed mu, so the bracket invariant is
+    ``delta(lo) > target >= delta(hi)`` and the returned ``hi`` is the infimum ``REQUIRED_FORM``
+    names. A ``delta_quadrature`` refusal is deliberately NOT caught: measured, the walk never
+    reaches one (the largest z probed is ~9.1, against the ~38.37 underflow boundary), so a
+    refusal here would mean the bracket left the representable region and the derivation is not
+    valid -- a loud error is the correct outcome, not a substituted ordering fact.
+    """
+    target_delta = mitigation_unit.DELTA
+    rel_tol = mitigation_accountant.GOLDEN_EPSILON_REL_TOL
+    rows = mitigation_accountant.GOLDEN_EPSILON
+
+    # META-GUARD 1: a truncated pin cannot make the loop vacuous. Seven is the count the oracle
+    # derivation covers; six would silently drop a row and still "pass every row".
+    assert len(rows) == 7, (
+        f"GOLDEN_EPSILON carries {len(rows)} rows, not the seven the pin's own provenance and its "
+        f"module-scope shape guard both name: {rows}. A truncated table makes this loop green over "
+        "fewer epsilons than the pin claims to constrain"
+    )
+
+    # META-GUARD 2: "derived from the oracle" made STRUCTURAL. Walks this function's own AST and
+    # asserts the called-name set contains delta_quadrature and excludes the implementation's two
+    # other routes. This is the assertion that reddens if a future edit calls epsilon_for here.
+    own_tree = ast.parse(_THIS_FILE.read_text(encoding="utf-8"))
+    own_def = next(
+        (
+            node
+            for node in ast.walk(own_tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "test_golden_epsilon_from_oracle"
+        ),
+        None,
+    )
+    assert own_def is not None, (
+        "test_golden_epsilon_from_oracle was not found in this file's own AST -- the meta-guard "
+        "would then be green over an empty walk, which is the failure it exists to prevent"
+    )
+    own_callees = {
+        getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+        for node in ast.walk(own_def)
+        if isinstance(node, ast.Call)
+    }
+    assert "delta_quadrature" in own_callees, (
+        f"this test's own body calls {sorted(name for name in own_callees if name)} and NOT "
+        "delta_quadrature -- V-06's whole claim is a re-derivation through the oracle, so a body "
+        "that never calls it proves nothing regardless of which asserts pass"
+    )
+    assert not (own_callees & _V06_FORBIDDEN_CALLEES), (
+        f"this test's own body calls {sorted(own_callees & _V06_FORBIDDEN_CALLEES)}. D-13: the "
+        "golden table must be re-derived by an INDEPENDENT route. A derivation that calls the "
+        "implementation shares its failure modes by construction and turns the pin into a "
+        "photograph of the code rather than a constraint on it"
+    )
+
+    worst = 0.0
+    for sigma, steps, pinned in rows:
+        mu_eff = math.sqrt(steps) / sigma
+
+        lo, hi, doublings = 0.0, 1.0, 0
+        while delta_quadrature(hi, mu_eff) > target_delta:
+            lo, hi = hi, hi * 2.0
+            doublings += 1
+            assert doublings <= _ORACLE_BISECT_MAX_DOUBLINGS, (
+                f"the upper bracket walked past eps = {hi!r} at mu_eff = {mu_eff!r} without "
+                f"delta falling to {target_delta!r} -- delta is decreasing in eps, so this means "
+                "the oracle is not decreasing and the derivation below would be meaningless"
+            )
+
+        halvings = 0
+        while (hi - lo) > _ORACLE_BISECT_REL_WIDTH * hi and halvings < _ORACLE_BISECT_MAX_STEPS:
+            mid = 0.5 * (lo + hi)
+            if delta_quadrature(mid, mu_eff) <= target_delta:
+                hi = mid
+            else:
+                lo = mid
+            halvings += 1
+
+        # META-GUARD 3: the bisection CONVERGED rather than returning its initial guess. Without
+        # this, an iteration cap hit on the first pass would compare `hi = 1.0` against the pin
+        # and report a real-looking deviation for a reason that has nothing to do with the pin.
+        assert (hi - lo) <= _ORACLE_BISECT_REL_WIDTH * hi, (
+            f"the bisection at sigma = {sigma!r}, steps = {steps} stopped after {halvings} "
+            f"halvings with a bracket of relative width {(hi - lo) / hi:.3e}, wider than the "
+            f"{_ORACLE_BISECT_REL_WIDTH:.0e} this derivation is compared at. Its result is not a "
+            "converged epsilon and must not be read as one"
+        )
+
+        deviation = abs(hi - pinned) / pinned
+        worst = max(worst, deviation)
+        assert abs(hi - pinned) <= rel_tol * pinned, (
+            f"the quadrature oracle re-derives sigma = {sigma!r}, steps = {steps} as {hi!r}, "
+            f"against the pinned {pinned!r} -- relative deviation {deviation:.6e}, over "
+            f"GOLDEN_EPSILON_REL_TOL = {rel_tol!r}. Both routes bisect at mu_eff = {mu_eff!r} and "
+            "delta = mitigation_unit.DELTA, so a gap this size is a real disagreement between the "
+            "pin and this oracle, not float noise"
+        )
+
+    # NON-DEGENERACY, in the other direction. Measured, every one of the seven rows deviates
+    # (min 1.62e-15, worst 5.75e-15): the pin was derived at 60 decimal places and this route runs
+    # in float64, so a BITWISE match on all seven would mean the pin had been regenerated from a
+    # float64 route -- the photograph D-13 forbids, arriving through the oracle instead of through
+    # the implementation.
+    assert worst > 0.0, (
+        "every pinned epsilon matched the float64 quadrature bisection BITWISE. The pin's "
+        "provenance says 60-decimal-place ground truth, and two different precisions do not agree "
+        "to the last bit on seven rows by chance -- check whether GOLDEN_EPSILON was regenerated "
+        "from a float64 run"
+    )
+    assert worst <= _V06_MEASURED_ORACLE_GAP * 10.0, (
+        f"the worst oracle-vs-pin deviation is {worst:.6e}, more than 10x the "
+        f"{_V06_MEASURED_ORACLE_GAP:.6e} this file records as measured. That is still inside "
+        "GOLDEN_EPSILON_REL_TOL, but the "
+        "recorded measurement is now stale and the tolerance's stated margin is no longer the "
+        "margin that exists"
+    )
+
+
+def test_golden_epsilon_would_catch_a_moved_accountant():
+    """The negative control: ``GOLDEN_EPSILON_REL_TOL`` is neither vacuously wide nor too tight.
+
+    Without a control, a tolerance accidentally widened to 1e-3 leaves V-06 green while
+    constraining nothing at all -- the pin would still be compared, and would still agree, with an
+    accountant that had moved by a part in a thousand.
+
+    THE CONTROL PLAN 22-09 SPECIFIES CANNOT DO THAT JOB, and this is a correction rather than an
+    embellishment. It says to perturb by ``10 * GOLDEN_EPSILON_REL_TOL`` relative and assert the
+    comparison fails. But ``abs(p * (1 + 10*t) - p) > t * p`` reduces to ``10*t*p > t*p``, which is
+    true for EVERY positive t -- so that control is green at t = 1e-12 and equally green at
+    t = 1e-3. It is invariant under exactly the mutation it exists to catch.
+
+    So the perturbation here is a FIXED relative amount, and the tolerance carries its own
+    ceiling. The two assertions bracket the tolerance from both sides: it must be tight enough to
+    refuse a 1e-9 move, and loose enough to accept the measured 5.749506e-15 gap between two
+    float64 quadratures of different integrals.
+    """
+    rel_tol = mitigation_accountant.GOLDEN_EPSILON_REL_TOL
+    assert 0.0 < rel_tol <= _GOLDEN_REL_TOL_CEILING, (
+        f"GOLDEN_EPSILON_REL_TOL is {rel_tol!r}, outside (0, {_GOLDEN_REL_TOL_CEILING!r}]. Above "
+        "that ceiling V-06 stops constraining the accountant: the fixed perturbation below is "
+        f"{_V06_PERTURBATION!r} relative, and a tolerance at or past it would accept a moved "
+        "accountant as agreement"
+    )
+
+    sigma, steps, pinned = mitigation_accountant.GOLDEN_EPSILON[0]
+    moved = pinned * (1.0 + _V06_PERTURBATION)
+    assert abs(moved - pinned) > rel_tol * pinned, (
+        f"an accountant returning {moved!r} for sigma = {sigma!r}, steps = {steps} -- a relative "
+        f"move of {_V06_PERTURBATION!r} off the pinned {pinned!r} -- would PASS the comparison "
+        f"V-06 performs at GOLDEN_EPSILON_REL_TOL = {rel_tol!r}. The pin is then decorative"
+    )
+
+    # The other side, so the tolerance is not merely 'not too wide': it must still accept the
+    # honest float64-vs-60-dps gap, or V-06 reddens on correct code.
+    assert _V06_MEASURED_ORACLE_GAP <= rel_tol, (
+        f"GOLDEN_EPSILON_REL_TOL = {rel_tol!r} is below the measured "
+        f"{_V06_MEASURED_ORACLE_GAP:.6e} gap between the pin's 60-dps derivation and this file's "
+        "float64 one. A tolerance under the construction gap reddens on a correct accountant"
+    )
