@@ -43,8 +43,21 @@ CPU-only, GPU-free, no torch, no network.
 
 import ast
 import pathlib
+import sys
 
 import pytest
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# V-25's site A. The pin is READ by a test and never imported by `src/`: `scripts/` is not a
+# package and the pre-registration import ceiling runs ONE WAY (D-10). A test is the sanctioned
+# reader — `scripts/mitigation_accountant.py::SENSITIVITY_MULTIPLIER_REASON` says so in the frozen
+# file itself. Idempotence guard per tests/test_phase22_accountant.py's shape.
+_SCRIPTS = str(_ROOT / "scripts")
+if _SCRIPTS not in sys.path:
+    sys.path.insert(0, _SCRIPTS)
+
+import mitigation_accountant  # noqa: E402  (needs the sys.path insert above)
 
 # The D-05 axis-1 token set, widened by D-17 to catch FAKE 4's in-step re-seed. Four families:
 # gradient recomputation (`backward`), renormalisation after the noise (`clip_grad_norm_`,
@@ -447,7 +460,6 @@ def test_meta_guards_bite():
 # the SAME code, or the proof is about a different function than the one CI runs.*
 # =============================================================================================
 
-_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _DPSGD_PATH = _ROOT / "src" / "personacore" / "privacy" / "dpsgd.py"
 
 
@@ -700,3 +712,295 @@ def test_dpsgd_has_no_numeric_sigma_or_clip_default():
             "default, so Phase 22 names no value for either and Phase 20's Z boundary stays "
             "untouched — a default here is a Phase-23 resource parameter smuggled into Phase 22"
         )
+
+
+# =============================================================================================
+# V-25 (plan 22-09, D-18). THE THREE-SITE ADJACENCY CONSISTENCY CHECK.
+#
+# The definitional half every guard above is structurally blind to. Single-sourcing `self.C`
+# proves the code is SELF-CONSISTENT; it does not prove `C` is the RIGHT sensitivity for the
+# adjacency the report claims. An implementation can pass all four D-05 axes and all four D-16
+# runtime invariants while publishing an epsilon that is 2x optimistic, because every one of those
+# guards compares C against C.
+#
+# NO IMPORT CONNECTS THE THREE SITES and that is forced, not incidental: the `mitigation_*.py`
+# ceiling admits only `{pathlib, sys, erasure_gate}`, and `src/` never puts `scripts/` on the
+# path. So this is a multi-site SOURCE READ — the same shape D-05 axis 1 already builds.
+#
+# `scripts/mitigation_accountant.py::SENSITIVITY_MULTIPLIER_REASON` names THIS test by symbol, so
+# the name `test_adjacency_relation_consistent` is load-bearing: the pin freezes at the first
+# tracked `results/phase23_*` artifact and a frozen file citing a test that does not exist cannot
+# be corrected except by a dated continuation.
+#
+# PROVENANCE, recorded honestly. `.planning/research/PITFALLS.md` P3 already prescribed
+# `NEIGHBOURING` and `SENSITIVITY_MULTIPLIER` and assigned them to "P20 (constant), P21
+# (accountant consumes it)". Measured against HEAD before this phase,
+# `grep -rn "NEIGHBOURING\|SENSITIVITY_MULTIPLIER" scripts/ src/ tests/` returned ZERO hits: both
+# phases closed without landing them. This is a carry-forward gap being closed, not a new question.
+# =============================================================================================
+
+_ACCOUNTANT_PATH = _ROOT / "src" / "personacore" / "privacy" / "accountant.py"
+
+# The declaration marker every site states its relation with. Matched after normalisation, so
+# ``THE ADJACENCY RELATION IS **add/remove one fact**`` and a lowercase unformatted version are
+# the same statement to this guard.
+_ADJACENCY_MARKER = "the adjacency relation is"
+
+# How much text after the marker counts as the DECLARATION. Measured: at both sites the word
+# "replace" first appears 239 characters into the tail — inside the sentence that REJECTS
+# replace-one — so a 60-character window reads the relation each site ADOPTS and never the one it
+# argues against. That distinction is the whole reason this is a windowed read rather than a
+# file-wide substring scan; see test_adjacency_relation_consistent's docstring.
+_DECLARATION_WINDOW = 60
+
+
+def _normalized(text):
+    """Lowercased, emphasis-stripped, whitespace-collapsed — one spelling per statement."""
+    return " ".join(text.replace("*", " ").replace("`", " ").lower().split())
+
+
+def _declared_relations(docstring):
+    """Every ``the adjacency relation is <...>`` declaration in a module docstring, normalised."""
+    normalized = _normalized(docstring)
+    declarations, start = [], 0
+    while True:
+        found = normalized.find(_ADJACENCY_MARKER, start)
+        if found < 0:
+            return declarations
+        tail = normalized[found + len(_ADJACENCY_MARKER) :].lstrip()
+        declarations.append(tail[:_DECLARATION_WINDOW])
+        start = found + len(_ADJACENCY_MARKER)
+
+
+def _module_docstring(source_text, *, label):
+    """A module docstring behind the two meta-guards an emptied or docstring-less module fails."""
+    assert source_text.strip(), f"{label} is empty — every adjacency assertion would pass over it"
+    tree = ast.parse(source_text)
+    assert tree.body, f"{label} parses to an EMPTY module body — this guard would check nothing"
+    docstring = ast.get_docstring(tree)
+    assert docstring and docstring.strip(), (
+        f"{label} has no module docstring. The adjacency relation is a DEFINITION, not a code "
+        "artifact — the docstring is where this site states it, so a missing one is a site that "
+        "states nothing, and absence must never be read as agreement"
+    )
+    return docstring
+
+
+def _noise_std_expression(source_text):
+    """The ``std=`` keyword expression of the module's ``torch.normal`` call, or ``None``."""
+    for node in ast.walk(ast.parse(source_text)):
+        if not isinstance(node, ast.Call):
+            continue
+        if (getattr(node.func, "attr", None) or getattr(node.func, "id", None)) != "normal":
+            continue
+        for keyword in node.keywords:
+            if keyword.arg == "std":
+                return keyword.value
+    return None
+
+
+def _assert_adjacency_consistent(*, relation, multiplier, accountant_src, dpsgd_src):
+    """V-25's whole comparison, over TEXT, so the RED probes and the live check are ONE function.
+
+    ``tests/test_phase20_prereg.py:153-155``'s rule: a guard proved correct on mutated text and the
+    guard CI runs must be the SAME code, or the proof is about a different function than the one
+    that runs. The live test passes the real bytes; ``test_adjacency_check_bites`` passes mutated
+    ones; both arrive here.
+
+    ``relation`` and ``multiplier`` are VALUES rather than a third source string, because site A is
+    a pin whose constants a test reads directly — that is the reader the frozen file's own
+    ``SENSITIVITY_MULTIPLIER_REASON`` names. The two ``src/`` sites are text because their
+    statements live in prose and in an expression, neither of which is importable.
+
+    ASSERTION ORDER IS LOAD-BEARING: presence at every site FIRST, agreement second. A consistency
+    check that reads a missing relation as agreement is the vacuous-guard failure this ordering
+    exists to prevent, and it is the same discipline as V-02's ``a != 0.0 and b != 0.0``
+    precondition.
+    """
+    # META-GUARDS. A relation degraded to "" makes every substring check below pass trivially.
+    assert len(relation) > 10, (
+        f"NEIGHBOURING is {relation!r} — too short to name a relation. A degraded or emptied "
+        "relation string makes every containment check below vacuously true"
+    )
+    assert isinstance(multiplier, float), (
+        f"SENSITIVITY_MULTIPLIER is {multiplier!r} ({type(multiplier).__name__}), not a float"
+    )
+    wanted = _normalized(relation)
+
+    sites = {
+        "src/personacore/privacy/accountant.py": _module_docstring(
+            accountant_src, label="accountant.py"
+        ),
+        "src/personacore/privacy/dpsgd.py": _module_docstring(dpsgd_src, label="dpsgd.py"),
+    }
+
+    # 1. PRESENCE, each site separately messaged. Absent must never count as agreement.
+    declarations = {}
+    for label, docstring in sites.items():
+        declared = _declared_relations(docstring)
+        assert declared, (
+            f"{label}'s module docstring contains no '{_ADJACENCY_MARKER} ...' statement. This "
+            "site therefore states NO adjacency relation, and a consistency check that treats "
+            "silence as agreement is exactly the guard D-18 exists to refuse: the pin would say "
+            f"{relation!r} and nothing here would contradict it, including an implementation "
+            "built for the other convention"
+        )
+        declarations[label] = declared
+
+    # 2. AGREEMENT. Every declaration at every site names the relation the pin froze.
+    for label, declared in declarations.items():
+        for statement in declared:
+            assert statement.startswith(wanted), (
+                f"{label} declares the adjacency relation as {statement!r}, which does not begin "
+                f"with the pinned {relation!r} (scripts/mitigation_accountant.py::NEIGHBOURING). "
+                "The relation is a definition; nothing in a training loop records which one was "
+                "meant, and papers use both — so the only check available is that the places "
+                "STATING it agree"
+            )
+
+    # 2b. PITFALLS P3's stated warning sign, VERBATIM: the report says add/remove and the
+    # accountant's docstring says replace. Read off the DECLARATION rather than off the file,
+    # because all three sites mention replace-one in the sentence that REJECTS it — a file-wide
+    # substring scan reddens on correct code and would have to be deleted to ship.
+    for label, declared in declarations.items():
+        for statement in declared:
+            assert not ("replace" in statement and multiplier == 1.0), (
+                f"{label} declares {statement!r} while SENSITIVITY_MULTIPLIER is {multiplier!r}. "
+                "That pair is PITFALLS P3's warning sign: replace-one is BOUNDED DP with "
+                "Delta = 2C, so a multiplier of 1.0 under it halves the noise the accountant "
+                "charges for. Each half is internally coherent at one site and wrong across sites"
+            )
+
+    # 3. THE MULTIPLIER MATCHES THE CODE, NOT ONLY THE PROSE. `std=` must be exactly
+    # `self.sigma * self.C`.
+    std_node = _noise_std_expression(dpsgd_src)
+    assert std_node is not None, (
+        "the noise call is gone — this guard would check nothing. V-25's third assertion is about "
+        "the arithmetic of the `std=` argument of `torch.normal`, so a renamed or removed draw "
+        "leaves the check green over an expression that no longer exists"
+    )
+    operands = (
+        [std_node.left, std_node.right]
+        if isinstance(std_node, ast.BinOp) and isinstance(std_node.op, ast.Mult)
+        else []
+    )
+    attrs = {operand.attr for operand in operands if _is_self_attr(operand)}
+    numeric = [
+        ast.dump(node)
+        for node in ast.walk(std_node)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
+    ]
+    assert attrs == {"sigma", "C"} and not numeric, (
+        f"the noise std is `{ast.unparse(std_node)}` — a {type(std_node).__name__} over "
+        f"self attributes {sorted(attrs)} with numeric operands {numeric}. D-18 requires exactly "
+        "`self.sigma * self.C`: a two-operand Mult over two `self` attributes with NO numeric "
+        "factor. A `2.0 *` here is SENSITIVITY_MULTIPLIER = 2.0 in code while the pin says 1.0, "
+        "and since epsilon is roughly linear in mu over the operating range, that is roughly 2x "
+        "ON EVERY PUBLISHED EPSILON — the difference between a defensible number and one an "
+        "informed reader discounts by half"
+    )
+
+    # 4. The pinned multiplier itself.
+    assert multiplier == 1.0, (
+        f"SENSITIVITY_MULTIPLIER is {multiplier!r}, not 1.0, while the relation is {relation!r}. "
+        "add/remove-one is UNBOUNDED DP: removing a record changes the clipped sum by g_i, whose "
+        "norm is at most C, so Delta = C and the multiplier is 1.0. replace-one is BOUNDED DP, "
+        "Delta = 2C. D-02's own sensitivity argument — one record moves the sum by at most C — IS "
+        "the add/remove-one argument, so 1.0 is the reading this project already assumed"
+    )
+
+
+def test_adjacency_relation_consistent():
+    """V-25 -- the relation agrees across the pin, the accountant's prose and the noise line.
+
+    NAMED BY A PRE-REGISTRATION. ``scripts/mitigation_accountant.py::SENSITIVITY_MULTIPLIER_REASON``
+    cites this test by symbol, and that file freezes at the first tracked ``results/phase23_*``
+    artifact, after which a citation to a test that does not exist could only be corrected by a
+    dated continuation. The name is a constraint, not a preference.
+
+    THREE SITES, NO IMPORT BETWEEN THEM. Site A is the frozen pin, read through the ``sys.path``
+    insert at the top of this file. Site B is ``accountant.py``'s module docstring. Site C is
+    ``dpsgd.py``'s module docstring AND its ``torch.normal`` ``std=`` expression -- prose and
+    arithmetic, because prose alone is what P3's warning sign is made of.
+
+    WHY THE ``replace-one`` CHECK READS A WINDOWED DECLARATION RATHER THAN THE WHOLE FILE, which
+    is a correction of plan 22-09's own instruction rather than an embellishment. The plan says to
+    assert no site CONTAINS the string ``replace-one`` while the multiplier is 1.0. Measured, all
+    three sites contain it -- once in ``accountant.py``, once in ``dpsgd.py`` and five times in the
+    pin -- every occurrence inside the sentence REJECTING it, which is the argument the pin exists
+    to record. Applied literally the assertion reddens on correct code and would have to be
+    deleted. What survives contact is the check on the relation each site ADOPTS: the 60-character
+    window after ``the adjacency relation is``, measured to sit 179 characters clear of the
+    nearest rejection sentence at both sites.
+    """
+    _assert_adjacency_consistent(
+        relation=mitigation_accountant.NEIGHBOURING,
+        multiplier=mitigation_accountant.SENSITIVITY_MULTIPLIER,
+        accountant_src=_ACCOUNTANT_PATH.read_text(encoding="utf-8"),
+        dpsgd_src=_dpsgd_source(),
+    )
+
+
+def test_adjacency_check_bites():
+    """The RED half: the same helper the live test runs, fed mutated ``dpsgd.py`` TEXT.
+
+    Three mutations, one per failure mode V-25 exists to refuse -- the relation SWAPPED, the
+    relation ABSENT, and a numeric factor slipped into the noise line. Each replacement is
+    asserted to have actually applied before it is fed in, because a mutation that silently
+    matched nothing would make this test green over the unmutated source and prove precisely
+    nothing about the guard.
+    """
+    relation = mitigation_accountant.NEIGHBOURING
+    multiplier = mitigation_accountant.SENSITIVITY_MULTIPLIER
+    accountant_src = _ACCOUNTANT_PATH.read_text(encoding="utf-8")
+    real = _dpsgd_source()
+
+    declaration = "THE ADJACENCY RELATION IS **add/remove one fact**"
+    noise_line = "std=self.sigma * self.C,"
+    for target in (declaration, noise_line):
+        assert real.count(target) == 1, (
+            f"the mutation target {target!r} appears {real.count(target)} times in dpsgd.py, not "
+            "once — the replacements below would be no-ops and this RED test would be watching "
+            "the unmutated source"
+        )
+
+    # (a) the relation SWAPPED to replace-one, with the multiplier left at the add/remove-one
+    # value. PITFALLS P3's fake exactly: internally coherent at one site, 2x wrong across sites.
+    swapped = real.replace(declaration, "THE ADJACENCY RELATION IS **replace one fact**")
+    with pytest.raises(AssertionError, match="does not begin with the pinned"):
+        _assert_adjacency_consistent(
+            relation=relation,
+            multiplier=multiplier,
+            accountant_src=accountant_src,
+            dpsgd_src=swapped,
+        )
+
+    # (b) the relation ABSENT. T-22-44: a consistency check that passes because a site states
+    # nothing is the vacuous guard the presence-before-agreement ordering exists to prevent.
+    removed = real.replace(declaration, "THE MECHANISM IS A GAUSSIAN")
+    with pytest.raises(AssertionError, match="no '.*' statement"):
+        _assert_adjacency_consistent(
+            relation=relation,
+            multiplier=multiplier,
+            accountant_src=accountant_src,
+            dpsgd_src=removed,
+        )
+
+    # (c) a `2.0 *` factor in the noise line: SENSITIVITY_MULTIPLIER = 2.0 in code while the pin
+    # says 1.0. The prose still agrees at all three sites, so ONLY the AST arm can see this one.
+    doubled = real.replace(noise_line, "std=2.0 * self.sigma * self.C,")
+    with pytest.raises(AssertionError, match="ON EVERY PUBLISHED EPSILON"):
+        _assert_adjacency_consistent(
+            relation=relation,
+            multiplier=multiplier,
+            accountant_src=accountant_src,
+            dpsgd_src=doubled,
+        )
+
+    # The control: the same helper, the same call shape, the REAL bytes — green.
+    _assert_adjacency_consistent(
+        relation=relation,
+        multiplier=multiplier,
+        accountant_src=accountant_src,
+        dpsgd_src=real,
+    )
