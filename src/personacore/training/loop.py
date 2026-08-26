@@ -775,9 +775,14 @@ def train(
                 # fact-aligned accumulation, and THAT claim is what makes an ordinary backward
                 # hand back the per-record gradient dp_fn clips to C.
                 #
-                # `sorted(...) == list(range(n_facts))` is the MULTISET form, deliberately
-                # stronger than set equality: set equality passes a window that drew record 0
-                # twice and record 3 never, which is the exact shape a broken counter produces.
+                # `sorted(...) == list(range(n_facts))` is the MULTISET form. MEASURED, it is
+                # NOT a stronger detector than set equality TODAY, and saying otherwise would
+                # be a claim nobody had watched: the accum-agreement refusal above pins
+                # len(seen) == n_facts, and n draws from n values whose SET is range(n) are
+                # necessarily distinct — so the two forms are equivalent here, and a mutation
+                # swapping one for the other leaves the whole suite green. The multiset form
+                # ships because it is the shape that stays correct if that refusal is ever
+                # relaxed, not because it bites harder now.
                 #
                 # Under this loop's own counter the property holds BY CONSTRUCTION — which is
                 # the point. The check is not here to catch the counter (test_phase22_wiring's
