@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-12-PLAN.md
-last_updated: "2026-08-26T11:37:23.848Z"
+stopped_at: Completed 22-13-PLAN.md
+last_updated: "2026-08-26T12:01:04.540Z"
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 44
-  completed_plans: 40
+  completed_plans: 41
   percent: 22
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — REOPENED for gap closure (12/16)
-Plan: 12 of 16
-Status: Gap closure in progress — `22-VERIFICATION.md` returned `gaps_found` (4/5). 22-12 landed three of the five `missing:` items; 22-13..22-16 remain.
+Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — REOPENED for gap closure (13/16)
+Plan: 13 of 16
+Status: Gap closure in progress — `22-VERIFICATION.md` returned `gaps_found` (4/5). 22-12 landed three of the five `missing:` items; 22-13 closed WARNING-1; 22-14..22-16 remain.
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
@@ -133,6 +133,7 @@ Last activity: 2026-08-26
 | Phase 22 P10 | 60min | 3 tasks | 3 files |
 | Phase 22 P11 | 75min | 3 tasks | 2 files |
 | Phase 22 P12 | 95min | 3 tasks | 4 files |
+| Phase 22 P13 | 30min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -437,6 +438,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22] 22-12: _log_erfc's fast path is unconditional and FIRST, making the erfc-cliff repair a provable no-op on all 19 already-answered points — the only safe shape for editing a module pinned by a frozen pre-registration
 - [Phase 22] 22-12: the 1e-9 two-oracle budget was NOT widened for the new frontier row — measured gap 1.105e-11, 90.5x inside it; had it not fit, the fix would have been wrong rather than the tolerance
 - [Phase 22] 22-12: the plan was internally unsatisfiable across its own two tasks — Task 1's inertness meta-guard (`erfc(b) > 0.0` over every representable row) fails on the very row Task 2 adds, whose `b` underflows by design; fixed by filtering the locator and moving non-vacuity to a hard-count companion
+- [Phase 22] 22-13: WARNING-1's SYMMETRIC half is the one that shipped a refusal, and the review's own proposed fix was NOT implemented. 22-REVIEW CR-04 wanted `dp_fn` set + slot ABSENT refused; 22-VERIFICATION traced the three `_dp_extra()` splat sites and rejected it, because every checkpoint a DP run writes carries the slot, so an ABSENT slot means the prior run was not DP and a freshly seeded generator has released nothing. Implementing CR-04 would have inverted two committed assertions — test_phase22_dpsgd.py::test_dp_noise_rng_round_trips_through_a_kill_and_resume's back-compat leg and test_phase22_checkpoint.py::test_resume_epsilon_bit_identical's negative control — both of which drive that exact case and assert it TOLERATED. Both run by node id after the change and both PASS, unmodified (git show --numstat: tests/test_phase22_dpsgd.py is 106 0, zero deletions; test_phase22_checkpoint.py appears in neither commit). What DID ship is the direction nobody had named: `dp_fn is None` with the slot PRESENT now raises, because a DP run resumed without the seam keeps training the same parameters with no clip and no noise while every downstream artifact still reads as that private run's continuation, and DPSGD is not CONSTRUCTED on that path so no D-16 runtime invariant exists to fire. The tolerated direction is documented IN loop.py with its reachability measurement and both node ids, so 'fixing' it costs two guards visibly rather than silently
+- [Phase 22] 22-13: a refusal test needs a NARROWNESS leg, not just a positive one. `test_resume_without_the_seam_refuses_a_dp_checkpoint` ships THREE legs — refuses (`dp_fn=None` + slot present), still tolerates (seam live + slot absent), and stays narrow (`dp_fn=None` + slot absent, resumed with `max_steps_override=2` and asserted to have trained its post-resume step). Without leg 3 an over-broad guard refusing EVERY seamless resume passes leg 1 and breaks `test_resume_curve.py`, `test_resume_memmap.py` and `scripts/pretrain_tinystories.py`. Leg 1 additionally asserts `not unreachable.exists()` — the refusal fires in the resume block BEFORE any save, so a non-private continuation is never released to disk, which is placement asserted rather than just existence. Leg 3 writes a GENUINE `train(dp_fn=None, ...)` checkpoint instead of reusing leg 2's hand-stripped blob, which also proves `_dp_extra()` returns `{}` without a seam — the other half of the provenance argument the refusal message rests on
+- [Phase 22] 22-13: mutation M-H deleted the `if` AND the `raise`, not the `raise` alone, because an `if` with an empty body is a SyntaxError and therefore not a runnable mutation — deleting the block reproduces the exact pre-22-13 source. Blast radius measured over the FULL suite rather than the one module the plan asked for: `1 failed, 1302 passed, 1 skipped` in 226.82s, exactly ONE distinct RED (`DID NOT RAISE <class 'ValueError'>` at tests/test_phase22_dpsgd.py:1120), stated as one and not rounded up. The full run is what turns "one detector" from a claim about one file into a claim about the tree, and it simultaneously proves no OTHER test depends on the refusal. Restore proven not asserted: sha256 `293772eaed524cfa1dd8eb57024a49f30dd99ac79a6e6c82be8165d381f67da5` identical pre-probe and post-restore, `git diff --exit-code` exit 0. Post-restore full suite `1303 passed, 1 skipped` = the 1302 baseline plus this plan's one new test, zero regressions
+- [Phase 22] 22-13: gsd-sdk hazards, SIXTH session in a row. `state.advance-plan` kept frontmatter clean this time but FLATTENED the body Status prose to "Ready to execute", destroying the gap-closure status line, and left the `(12/16)` counter in the Phase line stale. `state.update-progress` no-op'd again with "Progress field not found in STATE.md" against a frontmatter that plainly has one. `state.add-decision` wrote `- [Phase ?]:` again (and with a colon after the bracket, where the house style is `- [Phase 22] `). `state.record-metric` and `state.record-session` were clean under the `--flag` form. All corruptions hand-repaired and verified by `git diff .planning/` before committing
 
 ### Roadmap Evolution
 
@@ -569,8 +574,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T11:36:38.610Z
-Stopped at: Completed 22-12-PLAN.md
+Last session: 2026-08-26T12:01:04.531Z
+Stopped at: Completed 22-13-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

@@ -122,7 +122,7 @@ what survives cannot be cheaply reverted.
 
 - [x] **Phase 20: Pre-Registration — The Three-Condition Gate** - Every outcome threshold, the capacity-comparison rule and the per-point draw budget committed before any v4.0 number of any kind exists (execution complete 2026-08-20; reopened for GATE-06 gap closure, all 12 plans executed 2026-08-21 — SC3's GATE-06 clause superseded by a dated D-34/D-37 amendment, GATE-06 discharged, `20-SECURITY.md` at `threats_open: 0`. Awaiting re-verification by `/gsd:verify-phase 20`) (completed 2026-08-21)
 - [x] **Phase 21: The Privacy Unit, the DP Data Path, and the n=64 Corpus** - Fix what a record is, and prove it structurally, before any ε can be computed against the wrong one (completed 2026-08-25)
-- [x] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers (execution complete 2026-08-26; `22-VERIFICATION.md` returned `gaps_found` 4/5 — SC3's two-oracle agreement falsified by `delta_closed` discarding its second term past the `erfc` cliff — so reopened for gap closure across plans 22-12…22-16. 22-12 executed 2026-08-26: three of the five `missing:` items closed, all 7 `GOLDEN_EPSILON` rows BIT-IDENTICAL. Awaiting re-verification by `/gsd:verify-phase 22`) (completed 2026-08-26)
+- [x] **Phase 22: DP-SGD Core, Accountant, and the Correctness Battery** - From-scratch per-example clipping + Gaussian noise + (ε, δ) accounting, proven on CPU against the failures that all improve the numbers (execution complete 2026-08-26; `22-VERIFICATION.md` returned `gaps_found` 4/5 — SC3's two-oracle agreement falsified by `delta_closed` discarding its second term past the `erfc` cliff — so reopened for gap closure across plans 22-12…22-16. 22-12 executed 2026-08-26: three of the five `missing:` items closed, all 7 `GOLDEN_EPSILON` rows BIT-IDENTICAL. 22-13 executed 2026-08-26: WARNING-1 closed on the direction that matters — `dp_fn=None` resuming a checkpoint carrying `dp_noise_rng` now REFUSES, while the direction 22-REVIEW's CR-04 proposed refusing stays tolerated on its measured reachability argument, with both committed guards that pin it named in `loop.py`; mutation M-H watched failing over the full suite (exactly ONE distinct RED), full suite `1303 passed, 1 skipped`. 22-14…22-16 remain. Awaiting re-verification by `/gsd:verify-phase 22`) (completed 2026-08-26)
 - [ ] **Phase 23: Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration** - Size the sweep from a measurement, and run the one cheap run that separates an honest negative from a silent bug
 - [ ] **Phase 24: Adversarial Extraction-Aware Training + the Held-Out Attack Family** - The second arm as a data-mixture ratio, with generalization converted from a disclaimer into a measurement
 - [ ] **Phase 25: Frontier Sweep and the Existence-Gate Verdict** - Both arms, both capacities, one plane, judged by importing the Phase 20 constants
@@ -451,7 +451,7 @@ CPU before a single second of M3 time is spent
       (measured 12.7357% high at σ=0.40/T=200), add the thirteenth `DELTA_FRONTIER` row in the
       `b > 27.2` band so V-01/V-02 sweep it, and commit a 60-dps ε for the overflow-regime test —
       with all 7 `GOLDEN_EPSILON` rows asserted BIT-IDENTICAL across the fix
-- [ ] 22-13-PLAN.md — WARNING-1's dangerous half: refuse a resume with `dp_fn=None` from a checkpoint
+- [x] 22-13-PLAN.md — WARNING-1's dangerous half: refuse a resume with `dp_fn=None` from a checkpoint
       carrying `dp_noise_rng`, and record in `loop.py` why the other direction is deliberately NOT a
       refusal (it would redden two committed back-compat controls)
 
@@ -670,7 +670,7 @@ capacities — with every number in prose generated from a committed record rath
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
-| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 12/16 | In Progress | 2026-08-26 |
+| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 13/16 | In Progress | 2026-08-26 |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
