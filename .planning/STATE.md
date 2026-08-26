@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-14-PLAN.md
-last_updated: "2026-08-26T12:29:42.312Z"
+stopped_at: Completed 22-15-PLAN.md
+last_updated: "2026-08-26T12:50:35.017Z"
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 44
-  completed_plans: 42
+  completed_plans: 43
   percent: 22
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — REOPENED for gap closure (14/16)
-Plan: 14 of 16
-Status: Gap closure in progress — `22-VERIFICATION.md` returned `gaps_found` (4/5). 22-12 landed three of the five `missing:` items; 22-13 closed WARNING-1; 22-14 closed the fourth (`delta_quadrature` returning `+inf` and values above 1.0 — 404 of 4001 measured `inf` cells now 0, upper bound refused at a MEASURED 1.0 + 1e-11 rather than the verification's over-broad literal). One `missing:` item remains for 22-15/22-16: the finiteness check on `mu` in `epsilon_for`.
+Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — REOPENED for gap closure (15/16)
+Plan: 15 of 16
+Status: Gap closure in progress — `22-VERIFICATION.md` returned `gaps_found` (4/5). 22-12 landed three of the five `missing:` items; 22-13 closed WARNING-1; 22-14 closed the fourth (`delta_quadrature` returning `+inf` and values above 1.0). 22-15 closed the FIFTH AND LAST code-level gap: `epsilon_for` returned `0.0` — perfect privacy — for every sigma below `sqrt(steps)/sys.float_info.max` (measured 7.866824069956795e-308 at T=200), the privacy-UNDERSTATING direction; the quotient is now checked and answers `math.inf`, CONTINUOUS with the `sigma == 0.0` branch, so the discontinuity the verifier measured is removed rather than relocated (a deliberate return-vs-refuse deviation from the verification's literal wording, recorded in `22-15-SUMMARY.md`). `_delta_or_below_float64` now refuses a non-finite or non-positive `mu` before its `try`, so the docstring premise its swallow rested on is a checked postcondition instead of an assertion about the caller. All five `missing:` items are closed; `REQUIREMENTS.md`'s DPSGD-03 traceability row is 22-16's to correct, and the verdict is the re-verification's.
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
@@ -135,6 +135,7 @@ Last activity: 2026-08-26
 | Phase 22 P12 | 95min | 3 tasks | 4 files |
 | Phase 22 P13 | 30min | 2 tasks | 2 files |
 | Phase 22 P14 | 70min | 2 tasks | 2 files |
+| Phase 22 P15 | 45min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -446,6 +447,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22] 22-14: shipped a MEASURED refusal boundary (1.0 + 1e-11) for delta_quadrature instead of 22-VERIFICATION's literal (0.0 < delta <= 1.0], which measurement shows would refuse 267 of 5351 answered cells (4.99%) whose true delta is within an ulp of 1.0
 - [Phase 22] 22-14: for every mutation that does NOT redden, measure the ORACLE under it, not just the pytest summary. M-D-partial and M-E both left the suite green; re-running delta_quadrature under each (1500-draw seeded probe plus the cited defect point) showed 1343 answered / 157 refused / 0 outside (0, 1] — IDENTICAL to the honest module — so their green is correct inertness, not a blind guard. Opposite findings that look identical from a summary line
 - [Phase 22] 22-14: M-D as the plan phrases it is TWO hunks. 'Revert the probability check to the shipped one-sided form' means the refusal AND the bare return that shipped with it; applying one line leaves the suite GREEN because the saturation branch keeps clamping. Applied as both hunks it reddens test_quadrature_returns_a_probability_or_refuses. Also Rule 2: the saturation branch is bounded on BOTH sides, because a bare 'delta > 1.0' clamps inf (inf > 1.0 is True) and would launder a non-finite delta into a plausible 1.0 — measured, bounded returns inf where unbounded returns 1.0 at the cited defect point
+- [Phase 22] 22-15: epsilon_for answers math.inf, not a raise, when sqrt(steps)/sigma overflows — a deliberate deviation from 22-VERIFICATION's 'refusing' wording. The measured defect IS a discontinuity (sigma=0 gives inf, the next float gave 0.0); returning inf removes it, a raise would relocate it. inf is also what the sigma == 0.0 branch's own 60-dps argument gives as mu -> inf.
+- [Phase 22] 22-15: the overflow band's sigmas are DERIVED per step count (boundary/2.0, nextafter(boundary, 0.0), 5e-324), never hardcoded. 5e-308 is a NORMAL float (float64's smallest normal is 2.225e-308) and is in band at T=200/1000 but OUT of band at T=1/64, so any literal list is unsatisfiable across the four step counts test_sigma_zero covers.
+- [Phase 22] 22-15: gsd-sdk hazards, EIGHTH session in a row and identical to 22-14. state.advance-plan advanced 14->15 in frontmatter, then FLATTENED the body Status prose to 'Ready to execute' and left the (14/16) counter in the Phase line stale. state.add-decision wrote '- [Phase ?]:' on both calls. state.update-progress no-op'd with 'Progress field not found in STATE.md' against a frontmatter that plainly has one. roadmap.update-plan-progress emitted a blank date. state.record-metric and state.record-session were CLEAN under --flag. All corruptions hand-repaired and verified by git diff .planning/ before committing
 
 ### Roadmap Evolution
 
@@ -578,8 +582,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T12:29:02.500Z
-Stopped at: Completed 22-14-PLAN.md
+Last session: 2026-08-26T12:49:51.699Z
+Stopped at: Completed 22-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
