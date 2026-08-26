@@ -239,6 +239,44 @@ EPSILON_GOLDEN = (
 #     775.7866600701457 and 1312.1599912046381 for these two rows — a relative 1.218e-03 and
 #     7.300e-04, in a module whose two published tolerances are both 1e-12. The error is EXACTLY
 #     ZERO at sigma >= 0.42, so these two rows are the whole reachable band.
+#
+#     RETRACTED IN PLACE 2026-08-26 (plan 22-19). The sentence immediately above is LEFT STANDING
+#     as the record of what was believed when this block was written; what follows is what
+#     measurement shows. ATTRIBUTION: the figure originated in `22-VERIFICATION.md`'s FIRST report
+#     and a gap-closure plan transcribed it here faithfully. The verifier retracts it in its own
+#     name (`22-VERIFICATION.md`, 2026-08-26T13:46:14Z): "the error is mine". No executor invented
+#     it — and it entered this file through a plan, which is recorded rather than obscured.
+#
+#     (i) WHAT IT ACTUALLY MEASURED, per the verifier's own account: the difference between the
+#         PRE-FIX and POST-FIX SHIPPED epsilons — the FIX'S DELTA — and not either one against
+#         truth. That is a DENOMINATOR error, the failure class this repository's accountant
+#         docstring warns about in as many words ("same tolerance, unrelated denominators"), and it
+#         is the whole of the mistake.
+#     (ii) THE ERROR IS NOT ZERO AT sigma >= 0.42. Measured 2026-08-26 at T=200 and the frozen
+#         delta, the PRE-FIX `epsilon_for` against a 60-dps bisection at the same mu (the pre-fix
+#         route reproduced OUT OF TREE by rebinding `_log_erfc` to `if erfc(x) > 0.0:
+#         math.log(erfc(x))`, since 22-17 has landed and the module cannot be un-fixed in place):
+#             sigma = 0.4185 -> 9.6308e-12          sigma = 0.4250 -> 9.9323e-17
+#             sigma = 0.4200 -> 1.1001e-13          sigma = 0.4300 -> 1.5526e-16
+#                                                   sigma = 0.4500 -> 3.0649e-16
+#         It reaches machine epsilon only past sigma ~ 0.425, and is ~1e-16 even there — never
+#         exactly zero. The first two agree with `22-VERIFICATION.md`'s own table (9.631e-12 at
+#         0.4185, 1.100e-13 at 0.4200).
+#     (iii) AND THE FIX'S-DELTA READING ALSO FAILS AT EXACTLY 0.42 — recorded rather than smoothed,
+#         because it means the sentence is false under BOTH readings and not merely mis-labelled.
+#         At sigma = 0.42 the two epsilons are NOT bit-identical: pre-fix 709.5584251988014 against
+#         post-fix 709.5584251987232, a delta of 7.8216e-11. Swept at step 1e-4 over sigma in
+#         [0.4100, 0.4599], the HIGHEST sigma at which they still differ is 0.4238.
+#     (iv) THE TWO ROWS WERE NOT THE WHOLE REACHABLE BAND. sigma in [0.4135, 0.4185] is reachable
+#         at T=200 and was swept by nothing. At sigma = 0.414 the pre-fix closed form returned
+#         1.0000000000000345e-05 against a 60-dps truth of 0.000009980810076964806559419972 — a
+#         relative 1.9227e-03, roughly 2.7 correct significant digits — AND IT DID NOT REFUSE. The
+#         two-oracle gap there was 1.9190e-03 against an unwidened 1e-9 budget.
+#     (v) WHAT DISCHARGES IT, named so this correction points at an artifact and not only at an
+#         error: the FOURTEENTH `DELTA_FRONTIER` row plan 22-18 added —
+#         (728.2043182233367, 34.159747883408095), section 1's last row, and the ONE row of the
+#         fourteen whose `erfc(b)` is SUBNORMAL — whose V-01 and V-02 legs now sweep exactly the
+#         band this block claimed was already covered.
 # =============================================================================================
 EPSILON_OVERFLOW_REGIME = (
     (0.40, 200, "774.8427215876997401873883"),
@@ -338,6 +376,14 @@ LOG_ERFC_BAND = (
 #    as sqrt(2)*a in the closed form's first erfc argument. That is not a coincidence, and it is
 #    why both oracles die at nearly the same z: they are governed by one number, so two
 #    independent implementations buy nothing in this corner (F1).
+#
+#    NOTHING IN THE SUITE READS THIS DICT — verified 2026-08-26 (plan 22-19). Outside this file,
+#    `grep -rn "ZERO_BOUNDARIES" tests/ src/ scripts/` returns exactly ONE match,
+#    `tests/test_phase22_accountant.py:1509`, and it is PROSE inside a docstring naming
+#    `delta_quadrature_zero_z`. So no assertion moves when a value here goes stale — which is
+#    exactly how `erfc_zero_x` below carried both a wrong boundary and a retracted premise across
+#    a whole phase, the same silent rot 22-12 found in `WORST_RELATIVE_ERROR`. Recorded because a
+#    reader deserves to know which constants the suite is actually holding.
 # =============================================================================================
 ZERO_BOUNDARIES = {
     # delta_closed(eps, mu) first returns exactly 0.0 at this z.
@@ -348,7 +394,32 @@ ZERO_BOUNDARIES = {
     "delta_quadrature_zero_z": 38.372164249,
     # math.erfc(x) first returns exactly 0.0 at this x. Bisected: erfc(27.00) = 5.237046e-319
     # (a subnormal, still information), erfc(27.50) = 0.0.
-    "erfc_zero_x": 27.5,
+    #
+    # RETRACTED IN PLACE 2026-08-26 (plan 22-19). The two lines above are left standing as the
+    # record of what was believed. BOTH of their claims are wrong, and the second one is round 2's
+    # entire subject.
+    #   - THE VALUE WAS NOT THE BOUNDARY, only a point past it. Re-bisected on this box:
+    #     `math.erfc` first returns exactly 0.0 at 27.2, and the float BELOW it,
+    #     27.199999999999996, still returns 1e-323. The value below is corrected 27.5 -> 27.2.
+    #   - "a subnormal, still information" IS THE FALSE PREMISE THIS ROUND CLOSED. A subnormal
+    #     `erfc` has lost up to 52 of its 53 mantissa bits, and `math.log` of it is wrong by up to
+    #     0.20941 ABSOLUTE in the returned log — at x = 27.196716292271255, over a 1001-point
+    #     uniform sweep of the band, reproducing `22-VERIFICATION.md`'s own 2.094e-01 at the same
+    #     x — which is a 23.295% RELATIVE error in `delta_closed`'s second term. A finer
+    #     26.0 + k*1e-4 grid finds 0.22118 at x = 27.1965 instead; the worst is GRID-DEPENDENT at
+    #     the top of the band precisely BECAUSE the mantissa is gone: both of those x map to the
+    #     SAME float64 `erfc`, 1e-323, so `math.log` cannot tell them apart. Surviving mantissa
+    #     bits, measured across the band: 53 at 26.54325845425098, 34 at 26.8, 18 at 27.0, 6 at
+    #     27.15, 3 at the last float below 27.2.
+    #   `_log_erfc` therefore routes on the SUBNORMAL cliff recorded below it, not on this one.
+    "erfc_zero_x": 27.2,
+    # math.erfc(x) first returns a SUBNORMAL at this x — the OTHER cliff, and the one `_log_erfc`
+    # actually routes on since plan 22-17 (`accountant.py::_SMALLEST_NORMAL = ldexp(1.0, -1022)`).
+    # Added 2026-08-26 (plan 22-19) so this table records both cliffs rather than only the one that
+    # was known. Bisected here: `erfc` at the float below is 2.2250738585076065e-308 (NORMAL); at
+    # this x it is 2.225073858507186e-308, the first value strictly below float64's smallest normal
+    # 2.2250738585072014e-308.
+    "erfc_subnormal_x": 26.54325845425098,
     # math.exp(eps) raises OverflowError above this eps (F2). Reachable on the real frontier:
     # epsilon_for(sigma=0.40, T=200, delta) solves to eps = 775.79. The fix is one line —
     # exp(eps + log(erfc(b))) guarded on erfc(b) == 0.0 — not a domain restriction.
