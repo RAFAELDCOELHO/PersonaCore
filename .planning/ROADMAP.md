@@ -436,7 +436,7 @@ CPU before a single second of M3 time is spent
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 22-10-PLAN.md — D-08's four wirings at `teach_persona.py::main()` on `dp_n8`/`dp_n64`, σ and C
+- [x] 22-10-PLAN.md — D-08's four wirings at `teach_persona.py::main()` on `dp_n8`/`dp_n64`, σ and C
       as required no-default CLI arguments, and V-23's end-to-end run that writes NO scored artifact
 
 **Wave 6** *(blocked on Wave 5)*
@@ -642,7 +642,7 @@ capacities — with every number in prose generated from a committed record rath
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
-| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 9/11 | In Progress | - |
+| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 10/11 | In Progress | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
