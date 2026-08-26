@@ -671,12 +671,32 @@ def _delta_or_below_float64(eps, mu):
 
     WHY THE CAUGHT ``ValueError`` CANNOT BE A DIFFERENT REFUSAL. ``delta_closed`` ships exactly
     four ``raise`` statements, and the first two (a non-finite input; ``mu <= 0.0``) are
-    UNREACHABLE from here: ``eps`` is re-checked finite below, and ``mu`` is a finite
-    strictly-positive number the caller computed before entering the loop. Only the
-    representability and exact-zero refusals -- the two that mean "below float64's range" -- can
-    fire. ``tests/test_phase22_accountant.py::test_delta_closed_still_ships_exactly_four_raises``
-    reddens if a fifth is ever added, because that argument would then need re-reading rather than
-    silently widening.
+    UNREACHABLE from here -- **and that is now ESTABLISHED BY THE TWO CHECKS BELOW rather than
+    asserted about the caller.** This paragraph previously argued from the premise *"``mu`` is a
+    finite strictly-positive number the caller computed"*, and NOTHING CHECKED IT: ``epsilon_for``
+    formed ``mu = sqrt(steps)/sigma`` without testing the quotient, so every sigma below
+    ``sqrt(steps)`` over the largest finite float64 arrived here as ``mu = inf``, took
+    ``delta_closed``'s garbage-input refusal, and was read by the caller as "delta is below
+    float64's range, therefore below the target" -- a published epsilon of 0.0 for essentially zero
+    noise. Both operands are now refused here explicitly, so the premise is a POSTCONDITION of this
+    function's own prologue and holds no matter what any caller computes.
+
+    THE ARGUMENT ALSO COVERS ``_log_erfc``, which ``delta_closed`` calls and which raises a fifth
+    ``ValueError`` from OUTSIDE ``delta_closed``'s own FunctionDef. That branch requires
+    ``math.erfc(x)`` to have underflowed to exactly ``0.0`` at ``x <= 0.0``, and it is unreachable
+    from any call whatsoever: ``math.erfc`` is monotonically decreasing with ``erfc(0.0) == 1.0``,
+    so ``erfc(x) >= 1.0`` for every ``x <= 0.0`` and the underflow test cannot be true there.
+    MEASURED, ``math.erfc`` first returns exactly ``0.0`` at ``x = 27.2`` (bisected: ``erfc`` is
+    still ``1e-323`` at ``27.199999999999996``), and ``delta_closed`` reaches ``_log_erfc`` with
+    ``b = (eps/mu + mu/2)/sqrt(2)``, so taking the series branch already implies ``b >= 27.2 > 0``.
+    Its refusal is therefore a domain guard in the same spirit as ``delta_closed``'s own first two,
+    not a fifth meaning this helper's ``except`` could silently acquire.
+
+    ``tests/test_phase22_accountant.py::test_delta_closed_still_ships_exactly_four_raises`` reddens
+    if a fifth is added INSIDE ``delta_closed``, because that argument would then need re-reading
+    rather than silently widening. It counts statements in one FunctionDef, so it is by
+    construction unable to see either of the two facts above -- which is exactly why they are
+    written as checks and as a reachability measurement rather than left to it.
 
     Letting the refusal propagate instead is NOT AN OPTION, and this is measured too: the
     doubling walk overshoots into the underflow corner on a normal input (mu = 141.4, reached at
@@ -689,6 +709,15 @@ def _delta_or_below_float64(eps, mu):
             f"would reach delta_closed's FIRST refusal, whose meaning is 'this input is garbage' "
             f"and NOT 'delta is below float64's range' -- reading one as the other is exactly the "
             f"conflation this helper's contract forbids."
+        )
+    if not math.isfinite(mu) or mu <= 0.0:
+        raise ValueError(
+            f"_delta_or_below_float64({eps!r}, {mu!r}): mu must be finite and strictly positive "
+            f"here. A non-finite or non-positive mu would reach delta_closed's first two refusals, "
+            f"whose meaning is 'this input is garbage' and NOT 'delta is below float64's range' -- "
+            f"reading one as the other is exactly the conflation this helper's contract forbids, "
+            f"and it is the one that published epsilon = 0.0 for a sigma below "
+            f"sqrt(steps)/<largest finite float64>, where the quotient overflowed to inf."
         )
     try:
         return delta_closed(eps, mu)
@@ -789,6 +818,40 @@ def epsilon_for(sigma, steps, delta):
         return math.inf
 
     mu = math.sqrt(steps) / sigma
+
+    # --- THE QUOTIENT IS CHECKED, not merely its two operands. `sigma` finite and > 0.0 plus
+    # `steps >= 1` does NOT imply `sqrt(steps)/sigma` is finite: the division overflows to `inf`
+    # for every sigma strictly below `sqrt(steps)` over the LARGEST FINITE FLOAT64. That boundary
+    # is a function of `steps`, so the band's width moves with T -- MEASURED 5.562684646268003e-309
+    # at T = 1, 4.450147717014404e-308 at T = 64, 7.866824069956795e-308 at T = 200, and
+    # 1.7590753387454952e-307 at T = 1000. (`5e-308` is a NORMAL float, not a subnormal --
+    # float64's smallest normal is 2.225e-308 -- and it sits INSIDE the band at T = 200 while
+    # sitting OUTSIDE it at T = 64. That is why this is stated as a derivation and not as a
+    # number: any transcribed sigma is in the band at some step counts and out of it at others.)
+    #
+    # WITHOUT THIS CHECK THE FUNCTION RETURNED 0.0 -- PERFECT PRIVACY for essentially zero noise,
+    # which is the privacy-UNDERSTATING direction. Measured: `mu = inf` reached
+    # `_delta_or_below_float64`, `delta_closed` refused it with its NON-FINITE-INPUT refusal
+    # (meaning "this input is garbage"), the bare `except ValueError` swallowed that, and the
+    # eps = 0 shortcut below read the resulting `None` as "delta here is below float64's range,
+    # therefore below the target". The helper now refuses that mu itself, so this branch and that
+    # one are two independent statements of the same fact rather than one relying on the other.
+    #
+    # `math.inf` AND DELIBERATELY NOT A RAISE. It is the SAME answer the `sigma == 0.0` branch
+    # eighteen lines above returns, reached by that branch's own 60-dps argument: as mu -> inf the
+    # closed form's first term goes to 1 and its second to 0, so delta -> 1 for EVERY finite eps,
+    # no finite eps satisfies a target below 1, and the infimum over admissible eps is +inf. A
+    # sigma whose quotient overflows is a mechanism releasing a deterministic function of the data,
+    # and (inf, delta)-DP is what that earns. The measured defect is a DISCONTINUITY -- sigma = 0.0
+    # returned inf and the next representable float returned 0.0 -- so returning inf REMOVES it,
+    # where a refusal would only RELOCATE it (sigma = 0 -> inf, the next float -> ValueError).
+    #
+    # DO NOT EXTEND THIS BRANCH UPWARD. Immediately ABOVE the boundary `mu` is finite but enormous
+    # and the doubling walk below ALREADY refuses, loudly and correctly, with "the upper bracket
+    # failed to close in 200 doublings" -- measured at math.nextafter(boundary, 1.0) for T in
+    # {1, 64, 200, 1000}. That band is handled, and handled better than a return value could.
+    if not math.isfinite(mu):
+        return math.inf
 
     # eps = 0 is the left end of the domain (a negative eps is not a privacy loss). If the
     # mechanism already meets the target there, 0.0 IS the infimum and there is nothing to bisect.
