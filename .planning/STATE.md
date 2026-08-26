@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: verifying
-stopped_at: Completed 22-11-PLAN.md
-last_updated: "2026-08-26T02:25:35.588Z"
+status: executing
+stopped_at: Completed 22-12-PLAN.md
+last_updated: "2026-08-26T11:37:23.848Z"
 last_activity: 2026-08-26
 progress:
   total_phases: 9
-  completed_phases: 3
-  total_plans: 39
-  completed_plans: 39
-  percent: 33
+  completed_phases: 2
+  total_plans: 44
+  completed_plans: 40
+  percent: 22
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — COMPLETE (11/11, ready for verification)
-Plan: 11 of 11
-Status: Phase complete — ready for verification
+Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — REOPENED for gap closure (12/16)
+Plan: 12 of 16
+Status: Gap closure in progress — `22-VERIFICATION.md` returned `gaps_found` (4/5). 22-12 landed three of the five `missing:` items; 22-13..22-16 remain.
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
@@ -132,6 +132,7 @@ Last activity: 2026-08-26
 | Phase 22 P09 | 25min | 2 tasks | 2 files |
 | Phase 22 P10 | 60min | 3 tasks | 3 files |
 | Phase 22 P11 | 75min | 3 tasks | 2 files |
+| Phase 22 P12 | 95min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -433,6 +434,9 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22] 22-11: D-17's FAKE 3 row re-measured FALSE against the real module — the sigma=0 identity stayed GREEN under divide-then-noise; a SECOND blind spot found, accum=1 is invisible at every sigma
 - [Phase 22] 22-11: the runtime C*(1+tol) sensitivity check is ONE-SIDED — a second clip constant SMALLER than C completes with no refusal (measured); only the AST guard catches both directions
 - [Phase 22] 22-11: make lint EXITS 0 on this box (pyenv ruff 0.16.4, 229 files) — four prior summaries recorded the opposite; what is broken is make test (exit 2)
+- [Phase 22] 22-12: _log_erfc's fast path is unconditional and FIRST, making the erfc-cliff repair a provable no-op on all 19 already-answered points — the only safe shape for editing a module pinned by a frozen pre-registration
+- [Phase 22] 22-12: the 1e-9 two-oracle budget was NOT widened for the new frontier row — measured gap 1.105e-11, 90.5x inside it; had it not fit, the fix would have been wrong rather than the tolerance
+- [Phase 22] 22-12: the plan was internally unsatisfiable across its own two tasks — Task 1's inertness meta-guard (`erfc(b) > 0.0` over every representable row) fails on the very row Task 2 adds, whose `b` underflows by design; fixed by filtering the locator and moving non-vacuity to a hard-count companion
 
 ### Roadmap Evolution
 
@@ -565,8 +569,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T02:25:25.899Z
-Stopped at: Completed 22-11-PLAN.md
+Last session: 2026-08-26T11:36:38.610Z
+Stopped at: Completed 22-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
