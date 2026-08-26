@@ -498,10 +498,24 @@ Full suite `1332 passed, 1 skipped` = the 1314 baseline + exactly 18. **SC3's ve
 
 **Wave 12** *(blocked on Wave 11)*
 
-- [ ] 22-18-PLAN.md — make the suite able to SEE the band: a fourteenth `DELTA_FRONTIER` row with a
+- [x] 22-18-PLAN.md — make the suite able to SEE the band: a fourteenth `DELTA_FRONTIER` row with a
       SUBNORMAL `erfc(b)`, `_inert_points()` retargeted off the filter that certified the defective
       band as healthy, a `_round_trip_pairs()` σ whose T=200 leg was 2.07e+07x `ROUND_TRIP_REL_TOL`,
       all four count meta-guards moved together, and four stale accuracy bounds re-measured
+      (executed 2026-08-26: row lands at `(728.2043182233367, 34.159747883408095,
+      "9.980810076965e-6")` with `erfc(b) = 1.43e-322` asserted SUBNORMAL at run time and `erfc(a)`
+      HEALTHY — which is why `delta_closed` never refused there. V-01 3.6662e-14 against 1.5e-12
+      (40.9x inside), V-02 1.0137e-11 against an UNWIDENED 1e-9 (98.6x inside). All 14 pinned
+      figures reproduced bit-exactly. The retarget was FOLDED INTO the row's own commit because the
+      two are coupled: the row alone reddens TWO tests, not the one the plan predicted — the count
+      guard AND a new inertness node demanding `_log_erfc` return `math.log` of a float that has
+      already lost its mantissa. FIVE stale bounds re-measured, not the four planned, plus a sixth
+      whose attribution was never accurate; no constant moved — every widened sweep left its bound
+      where it was. M-J (test-side, watching the FILTER) 2 distinct REDs; M-H re-applied contributes
+      +3 node ids at 1.28e+09x, 1.92e+06x and 2.07e+07x over their budgets; both hunk counts VERIFIED
+      at 1, both restores sha256-identical. Full suite **1338 passed, 1 skipped** = 22-17's 1332
+      **+6 exactly** (2 frontier legs + 4 round-trip legs), zero regressions; all 19 of 22-17's
+      `float.hex()` pinned points re-diff EMPTY; frozen pin exit 0)
 
 **Wave 13** *(blocked on Wave 12)*
 
