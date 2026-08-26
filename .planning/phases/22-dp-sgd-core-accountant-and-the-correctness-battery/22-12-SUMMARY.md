@@ -134,7 +134,7 @@ denominators"), so both are stated.
 
 | Quantity | Measured | Bound | Margin |
 |---|---|---|---|
-| Series truncation, worst over x ∈ {27.2 … 150} | **7.6366e-13** absolute in the log (at x=150) | plan's STOP threshold 1e-11 | 13,000x |
+| Series truncation, worst over x ∈ {27.2 … 150} | **7.6366e-13** absolute in the log (at x=150) | plan's STOP threshold 1e-11 | **13.1x** |
 | Series truncation at the `b = 28.01573320140291` that matters | **5.9579e-14** | — | 0.52 ulp |
 | `_frontier_rel_tol("8.870303048330e-6")` | **1.5e-12** | band `1e-12 < tol ≤ 1e-10` | holds |
 | V-01, fixed `delta_closed` vs the **COMMITTED 13-DIGIT STRING** — *the test's denominator* | **4.1061e-14** | 1.5e-12 | **36.5x** |
@@ -289,9 +289,26 @@ exactly, and 1.1369e-13 is the **ulp of the returned log at |log| ≈ 788**, not
 error (at x=150, |log| ≈ 22505 and one ulp is 3.638e-12). The brief's figure appears to be an
 ulp reported as an error.
 
-The **conclusion is unaffected and arguably strengthened**: every error is sub-ulp, so the quantity
-measured is float64 resolution rather than truncation, and the margin against the plan's 1e-11 STOP
-threshold is ~13,000x rather than ~100x.
+The **conclusion is unaffected**: every error is sub-ulp, so the quantity measured is float64
+resolution rather than truncation, and the STOP rule passes.
+
+**Correction, applied 2026-08-26 by the orchestrator after re-measuring.** This paragraph first
+recorded the margin as "~13,000x rather than ~100x". That is wrong by three orders of magnitude:
+the margin is `1e-11 / 7.6366e-13` = **13.1x**. The worst-error figure (7.6366e-13 at x=150) is
+correct and reproduces the plan's own 7.637e-13; only the ratio was mis-stated. Re-measured over
+the plan's exact nine-point band:
+
+```
+worst ABSOLUTE error over the plan's band: 7.6366e-13 at x=150.0
+margin = 1e-11 / 7.6366e-13 = 13.1x
+at the b that matters (28.01573320140291): 5.9579e-14   (plan says 6.454e-14)
+_log_erfc(1e200) = -inf                                  (required, confirmed)
+```
+
+13.1x is a real pass, not a comfortable one — a future change to the truncation rule has about one
+order of magnitude of room, not four. Recorded here so no later plan inherits the larger number.
+Note also that the worst error over a WIDER sweep (0.5 steps to x≈157) is 4.3344e-12 at x=139.2,
+still ~1.2 ulp; the plan's band caps at x=150 and the STOP rule is defined over that band only.
 
 Similarly, my 60-dps `EPSILON_OVERFLOW_REGIME` bisections differ from the briefed values by
 **6.6e-17 / 6.8e-17 relative** — under half a float64 ulp, four orders below anything that can
