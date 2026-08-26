@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-01-PLAN.md (plan 1 of 14)
-last_updated: 2026-08-26T22:58:21.125Z
+stopped_at: Completed 23-02-PLAN.md (plan 2 of 14)
+last_updated: 2026-08-26T23:18:16.572Z
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 48
+  completed_plans: 49
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 2 of 14
+Plan: 3 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -142,6 +142,7 @@ Last activity: 2026-08-26
 | Phase 22 P18 | 20min | 3 tasks | 4 files |
 | Phase 22 P19 | 35min | 2 tasks | 4 files |
 | Phase 23 P01 | 32min | 3 tasks | 4 files |
+| Phase 23 P02 | 19min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -484,6 +485,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-01: the Phase-22 battery now RUNS on MPS with a skip count of ZERO, recorded as an OBSERVED number (junit-xml: tests 79, failures 0, errors 0, skipped 0) rather than inferred from a terminal line that omits zero skips. _DEVICES is pytest.param("mps", marks=skipif), never a shrinking list — a vanished parametrization cannot be counted, a skipped one can. _record keeps its CPU draw and moves only the tensor, so _FAKE1_LEAK_RATIO=1.734481 and _FAKE3_STD_RATIO_AT_N4=3.999986 are byte-unchanged BY CONSTRUCTION
 - [Phase 23] 23-01 FINDING: adding the device axis silently made FAKE 3's watched-RED ledger anchor uncollectable ([4] -> [4-cpu]) and test_watched_red_node_ids_resolve is structurally blind to it — it deliberately does not resolve the part inside brackets. Corrected in place with the measurement; all nine anchors re-collected, 9 OK / 0 stale. Any future plan that parametrizes a cited test must re-collect every _WATCHED_RED_NODE_IDS entry, not trust that guard
 - [Phase 23] 23-01: gsd-sdk hazards, ELEVENTH session in a row, and the profile SHIFTED again. `state.advance-plan` regressed `stopped_at` BACKWARDS to "Completed 22-19-PLAN.md" (the same backwards-regression class as 22-19) and flattened the body `Status:` prose to "Ready to execute"; the `Phase:`/`Plan:` counters were CORRECT this time (1 of 14 -> 2 of 14), so 22-19's stale-counter hazard did NOT reproduce. `state.update-progress` returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped `last_updated`; it did NOT flip `status` to `planning` this time, so 22-19's executing->planning flip did not reproduce. `state.record-metric` REFUSED positional args (`{"error": "phase, plan, and duration required"}`) and needed `--phase/--plan/--duration/--tasks/--files`; with flags it was CLEAN — `| Phase 23 P01 | 32min | 3 tasks | 4 files |`, `completed_phases` 3 and `percent` 33 both untouched. `state.add-decision` also refused positional args (`{"error": "summary required"}`), needed `--summary`, and CORRUPTED the phase label to `- [Phase ?]: ` on all three calls, exactly as in 22-16/22-19. `state.record-session` was CLEAN and CORRECTED advance-plan's `stopped_at` regression as a side effect; it did not flip `status`. NEW THIS SESSION: `last_updated` came back QUOTED from three separate handlers. All five corruptions hand-repaired 1-line-for-1-line against a snapshot taken before the first call, `git diff .planning/` read after EVERY call, and `wc -l` verified.
+- [Phase 23] 23-02: SC3 transitive half closed at tests/test_phase23_budget.py — an out-of-process subprocess probe execs the real FROZEN scripts/mitigation_gate.py and asserts mitigation_budget (plus torch/numpy/scipy) never enters sys.modules, closing the gate -> erasure_gate -> budget route the static AST scan cannot see because scripts/erasure_gate.py sits OUTSIDE the scripts/mitigation_*.py glob. The static half was NOT duplicated: test_phase20_prereg.py:153-155 states that a lookalike copy proves something about a DIFFERENT function than the one CI executes. The sentinel meta-guard reads NEVER_TAUGHT_ARM off the exec-ed module and is asserted BEFORE the return code, and was watched biting against scripts/erasure_gate.py, which has no such attribute and yields empty stdout.
+- [Phase 23] 23-02: the mitigation import ceiling is MEASURED zero headroom and is now recorded in a TEST FILE rather than only in a plan (T-23-10) — the union across mitigation_accountant.py (no imports), mitigation_unit.py (no imports) and mitigation_gate.py (pathlib, sys, erasure_gate) is EXACTLY the allow-set. So 23-09 scripts/mitigation_budget.py gets ZERO imports, may not import mitigation_gate either (that adds mitigation_gate to the imported set and breaks the subset assertion just as surely as json does), and must restate any selected K as a literal citing scripts/mitigation_gate.py::K_RUNGS with a TEST asserting the two agree. Widening the allow-set was considered and REFUSED: it weakens a committed guard to accommodate a module nobody has written yet.
+- [Phase 23] 23-02: both static assertions reproduced RED in THIS tree rather than cited from 23-RESEARCH.md — (a) AssertionError: a mitigation_*.py module imports mitigation_budget (imports: [erasure_gate, mitigation_budget, pathlib, sys]); (b) AssertionError: the mitigation modules import [json] beyond the allow-set [erasure_gate, pathlib, sys]. Both scratch modules deleted; git status --short scripts/ empty and git diff --exit-code -- scripts/ exit 0. The transitive half RED landed as a PERMANENT tmp_path positive control instead of a one-off hand observation: a watched RED that runs on every suite run cannot silently stop being watched, and tmp_path makes leaking a scratch module into scripts/ structurally impossible.
+- [Phase 23] 23-02: gsd-sdk hazards, TWELFTH session in a row, and the profile shifted AGAIN. `state.advance-plan` was CORRECT on every counter this time (`Plan: 2 of 14` -> `3 of 14`, `completed_plans` 48 -> 49) and did NOT regress `stopped_at` — 23-01's backwards-regression did not reproduce — but it flattened the body `Status:` prose from `Executing Phase 23` to `Ready to execute` and returned `last_updated` QUOTED. `state.update-progress` returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped and re-quoted `last_updated`; it did NOT flip `status`, and `percent`/`completed_phases` stayed 33/3. `state.record-metric` again REFUSED positional args and needed `--phase/--plan/--duration/--tasks/--files`; with flags it was CLEAN. `state.add-decision` again refused positional args, needed `--summary`, and CORRUPTED the label to `- [Phase ?]: ` on all three calls (22-16 / 22-19 / 23-01, unchanged). `state.record-session` was CLEAN and set both `stopped_at` and the body `Stopped at`. `roadmap.update-plan-progress 23` ticked the `23-02-PLAN.md` wave checkbox AND moved the phase row 1/14 -> 2/14, both CORRECT, but MANGLED that row's last two cells from `| In Progress | -          |` to `| In Progress|  |`, dropping the `-` placeholder — a NEW corruption this session, hand-repaired with `ROADMAP.md` line count unchanged at 804. All corruptions hand-repaired 1-line-for-1-line against a snapshot taken before the first call; `git diff .planning/` read after EVERY call; `wc -l` verified 651 -> 656 (1 metric row + 4 decisions).
 
 ### Roadmap Evolution
 
@@ -616,8 +621,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T22:58:21.115Z
-Stopped at: Completed 23-01-PLAN.md (plan 1 of 14)
+Last session: 2026-08-26T23:18:16.560Z
+Stopped at: Completed 23-02-PLAN.md (plan 2 of 14)
 Resume file: None
 
 ## Operator Next Steps

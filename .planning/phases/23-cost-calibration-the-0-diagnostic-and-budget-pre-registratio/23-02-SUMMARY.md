@@ -40,9 +40,11 @@ patterns-established:
   - "A guard nobody has watched fail is not evidence: reproduce the RED in THIS tree with literal failure text, never cite a prior session's observation"
   - "Transient evidence gets a permanent form where one is available — a hand observation that must be deleted becomes a tmp_path positive control that need not be"
 
-requirements-completed: [CAL-02]
+requirements-completed: []
+requirements-advanced:
+  - "CAL-02 (STRUCTURAL half only — NOT marked complete): the gate/budget separation is now enforced statically AND transitively. The requirement itself is 'Z is set FROM the cost measurements and committed in a module separate from the gate', and neither Z nor scripts/mitigation_budget.py exists yet. 23-09 writes the module, 23-13 pins Z. Both also carry requirements: [CAL-02]."
 
-duration: 26min
+duration: 19min
 completed: 2026-08-26
 ---
 
@@ -52,7 +54,7 @@ completed: 2026-08-26
 
 ## Performance
 
-- **Duration:** 26 min
+- **Duration:** 19 min (bounded above: the previous plan's final `STATE.md` stamp is `2026-08-26T22:58:21Z` and this plan's metric was recorded at `23:17:21Z`)
 - **Tasks:** 2
 - **Commits:** 2 task commits + this metadata commit
 - **Suite:** 1366 passed, 1 skipped (baseline 1364 + 2 new tests; the skip is the pre-existing CUDA-only fp16 AMP smoke at `tests/test_train_loop.py:81`)
@@ -245,6 +247,30 @@ under `scripts/` or `results/`.
 - **Found during:** Task 1, `make lint`
 - **Fix:** Rewrapped one f-string fragment. `make lint` clean.
 - **Commit:** `66f42d4`
+
+**3. [Rule 2 — Missing correctness requirement] `CAL-02` was NOT marked complete in
+`REQUIREMENTS.md`, against the plan's `requirements: [CAL-02]` frontmatter**
+
+- **Found during:** state update
+- **Issue:** The plan declares `requirements: [CAL-02]`, and the executor protocol marks every such
+  ID complete. But `23-09-PLAN.md` and `23-13-PLAN.md` **also** carry `requirements: [CAL-02]`, and
+  `REQUIREMENTS.md:187` states the requirement as *"Z (sweep width, per-point draw budget K, step
+  budget) is set **from** those measurements"* and committed in a module separate from the gate.
+  This plan writes **no** budget module and pins **no** Z — 23-09 writes the module, 23-13 pins Z.
+  Ticking it here would publish a completion this repository cannot demonstrate, which is the exact
+  failure mode the pre-registration discipline exists to refuse.
+- **Fix:** `requirements mark-complete CAL-02` deliberately NOT called. The frontmatter records
+  `requirements-completed: []` plus a `requirements-advanced` entry naming the half that did close
+  and the two plans that own the rest.
+
+**4. [Rule 1 — Bug] The first-written duration (26 min) was an overstatement**
+
+- **Found during:** state update, computing the metric row
+- **Issue:** 26 min was estimated, not measured. The previous plan's final `STATE.md` stamp is
+  `2026-08-26T22:58:21Z`, which bounds this session's start from below, and the metric was recorded
+  at `23:17:21Z` — so elapsed is **at most** 19 min.
+- **Fix:** Corrected to `19min` in both the frontmatter and the Performance block, with the bound
+  stated rather than the figure asserted bare.
 
 **No artifact-naming discrepancies.** Every name the plan cited resolved against the code as
 written: `mitigation_gate.NEVER_TAUGHT_ARM` (`scripts/mitigation_gate.py:341`) exists and is
