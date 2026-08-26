@@ -1056,6 +1056,112 @@ def test_dp_noise_rng_round_trips_through_a_kill_and_resume(tmp_path):
     )
 
 
+def test_resume_without_the_seam_refuses_a_dp_checkpoint(tmp_path):
+    """WARNING-1's symmetric half, pinned in ALL THREE ``(seam, slot)`` directions.
+
+    The direction this REFUSES: ``dp_fn=None`` resuming a checkpoint that carries ``dp_noise_rng``.
+    The slot's PRESENCE is the provenance — all three ``save_checkpoint`` sites in :func:`train`
+    splat ``**_dp_extra()``, which is empty without a live seam — so only a DP run writes that key.
+    Resuming it seamlessly keeps training the SAME parameters with no per-record clip and no
+    Gaussian noise while every downstream artifact still reads as that private run's continuation.
+    It is worse in KIND than the replay hole the restore below closes: a replayed stream still
+    continues a private mechanism, this one silently stops being one. And nothing else in the tree
+    can notice, because ``DPSGD`` is not CONSTRUCTED on this path — none of D-16's runtime
+    invariants exist to fire.
+
+    **The direction this deliberately does NOT refuse, asserted here so the boundary is pinned on
+    both sides:** ``dp_fn`` live with the slot ABSENT (leg 2). 22-REVIEW's CR-04 proposed refusing
+    exactly that; 22-VERIFICATION traced the three splat sites and rejected it. An absent slot means
+    the prior run was not a DP run, so its freshly seeded generator has released nothing and seeding
+    fresh replays nothing. Two committed guards already drive that case and assert it is TOLERATED —
+    :func:`test_dp_noise_rng_round_trips_through_a_kill_and_resume`'s BACK-COMPAT leg and
+    ``tests/test_phase22_checkpoint.py::test_resume_epsilon_bit_identical``'s NEGATIVE CONTROL — so
+    a refusal there would break two guards to close a hole measurement says is not there.
+
+    **Leg 3 is what keeps the refusal NARROW.** An over-broad guard refusing every seamless resume
+    would satisfy leg 1 and still pass, while breaking every non-DP resume in the project
+    (``test_resume_curve.py``, ``test_resume_memmap.py``, ``scripts/pretrain_tinystories.py``).
+    """
+    runtime = RuntimeConfig(device="cpu")
+    cfg = TrainConfig(
+        lr=1e-3, warmup_steps=0, max_steps=4, batch_size=_MICRO_BS, grad_accum_steps=1
+    )
+    batch = (_STEP_X[:_MICRO_BS], _STEP_Y[:_MICRO_BS])
+
+    def _run(model, dp, ckpt, *, resume=None, steps=1):
+        """One ``train()`` call in this module's own idiom; ``max_steps_override`` is the kill."""
+        train(
+            train_config=cfg,
+            runtime_config=runtime,
+            model=model,
+            model_config=ModelConfig(),
+            fixed_batch=batch,
+            dp_fn=dp,
+            checkpoint_path=ckpt,
+            resume_from=resume,
+            max_steps_override=steps,
+        )
+
+    # --- LEG 1: the REFUSAL -------------------------------------------------------------------
+    private = tmp_path / "private.pt"
+    writer = _model()
+    dp_writer = _seam(writer, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=77, runtime=runtime)
+    _run(writer, dp_writer, private)
+    blob = torch.load(private, weights_only=False)
+    # META-GUARD, asserted FIRST: a test that resumes a checkpoint lacking the key would be driving
+    # leg 3's case and asserting nothing about the refusal it is named for.
+    assert "dp_noise_rng" in blob, (
+        "the DP run's END-OF-CALL checkpoint carries no dp_noise_rng, so the resume below would be "
+        "an ordinary non-DP resume and the pytest.raises would be asserting nothing"
+    )
+
+    unreachable = tmp_path / "unreachable.pt"
+    seamless = _model()
+    with pytest.raises(ValueError, match="dp_noise_rng") as excinfo:
+        _run(seamless, None, unreachable, resume=private)
+    assert "dp_fn=None" in str(excinfo.value), (
+        f"a ValueError mentioning dp_noise_rng was raised but it is not this guard: {excinfo.value}"
+    )
+    # The refusal fires in the resume block, BEFORE the step loop and before any save — so a run
+    # that is not private never releases a checkpoint that reads as a private run's continuation.
+    assert not unreachable.exists(), (
+        "the refusal fired only after train() had already written a checkpoint, so the "
+        "non-private continuation was released before it was refused"
+    )
+
+    # --- LEG 2: the TOLERATED direction, still tolerated ---------------------------------------
+    del blob["dp_noise_rng"]
+    no_slot = tmp_path / "no_slot.pt"
+    torch.save(blob, no_slot)
+    legacy = _model()
+    dp_legacy = _seam(legacy, sigma=1.0, clip_norm=_NON_BINDING_CLIP, seed=5, runtime=runtime)
+    fresh_state = dp_legacy.noise_rng_state().clone()
+    _run(legacy, dp_legacy, tmp_path / "legacy.pt", resume=no_slot)
+    assert torch.equal(dp_legacy.noise_rng_state(), fresh_state), (
+        "resuming a slot-less checkpoint WITH a live seam either refused or moved the generator — "
+        "the direction CR-04 wanted refused is TOLERATED on purpose, and refusing it reddens "
+        "test_dp_noise_rng_round_trips_through_a_kill_and_resume's back-compat leg and "
+        "test_phase22_checkpoint.py::test_resume_epsilon_bit_identical's negative control"
+    )
+
+    # --- LEG 3: the ORDINARY non-DP resume, which the refusal must NOT catch --------------------
+    plain = tmp_path / "plain.pt"
+    control = _model()
+    _run(control, None, plain)
+    plain_blob = torch.load(plain, weights_only=False)
+    assert "dp_noise_rng" not in plain_blob, (
+        "a dp_fn=None run wrote a dp_noise_rng slot — _dp_extra() is empty without a seam, and "
+        "leg 3 would otherwise be driving leg 1's case instead of the ordinary resume"
+    )
+    resumed_ckpt = tmp_path / "plain_resumed.pt"
+    resumed = _model()
+    _run(resumed, None, resumed_ckpt, resume=plain, steps=2)
+    assert torch.load(resumed_ckpt, weights_only=False)["step"] == 2, (
+        "the ordinary non-DP resume did not take its post-resume step, so 'it completed' is not "
+        "evidence that the refusal left this path alone"
+    )
+
+
 # The band on the empirical noise standard deviation below. The relative standard error of a
 # sample standard deviation over `n` normals is ~1/sqrt(2n); at n = 331,776 that is 0.123%, and the
 # measured deviation is 0.069%. 1% is ~8x the standard error and ~400x below the factor-of-N error
