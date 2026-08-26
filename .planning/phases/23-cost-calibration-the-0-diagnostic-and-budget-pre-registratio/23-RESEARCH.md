@@ -1184,9 +1184,18 @@ failure mode is loud, not silent.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All four were carried forward and closed downstream — two by locked decisions in
+> `23-CONTEXT.md`, two under Claude's Discretion with the resolution pinned in a committed plan.
+> Each question below states what closed it and where. Nothing here is still open; a reader
+> arriving at this section should follow the marker rather than re-open the question.
 
 1. **CTRL-03's seed count vs the FROZEN gate's `EXTRACTION_FLOOR_MIN_SEEDS = 2`.**
+   **RESOLVED — locked as D-08** (`23-CONTEXT.md:104`): the never-taught arm is trained at the
+   SAME N seeds D-03 uses for the control, in ONE scheduling. Executed by plan `23-08`, whose
+   record asserts `len(set(seeds)) >= mitigation_gate.EXTRACTION_FLOOR_MIN_SEEDS` against the
+   IMPORTED frozen constant. The recommendation below was adopted as written.
    - *What we know:* `scripts/mitigation_gate.py:426-441` `_prove`s that the extraction floor's
      provenance names `arm == "never-taught"` and `>= 2` distinct seeds. The gate is frozen and cannot
      be relaxed. CTRL-03's text says the never-taught adapter is *"trained once at identical budget and
@@ -1198,6 +1207,10 @@ failure mode is loud, not silent.
      Phase-25 refusal into a Phase-23 decision. Confirm with the user before planning.
 
 2. **Should the SC3 guard gain the transitive half?**
+   **RESOLVED — locked as D-09** (`23-CONTEXT.md:112`): yes, the guard gains the transitive
+   out-of-process `subprocess` half. Executed by plan `23-02` as
+   `tests/test_phase23_budget.py::test_gate_does_not_transitively_load_the_budget`, with both
+   halves watched RED. The static half is NOT rewritten — `scripts/mitigation_gate.py` is frozen.
    - *What we know:* the accountant's standard is *"guarded statically AND transitively"*
      (`test_phase22_accountant.py:1350`, with an out-of-process `subprocess` probe). The gate/budget
      guard has only the static half, and `scripts/erasure_gate.py` sits outside the `mitigation_*.py`
@@ -1207,6 +1220,11 @@ failure mode is loud, not silent.
      ("structurally unable to import") is a claim the static half alone does not fully support.
 
 3. **Does D-03's floor go in `scripts/mitigation_budget.py` or a separate literal-only file?**
+   **RESOLVED — Claude's Discretion** (`23-CONTEXT.md:146-150`), recommendation adopted: one
+   file. Executed by plan `23-09`, which writes `CONTROL_NOISE_FLOOR` plus its
+   `_PROVENANCE` sibling into `scripts/mitigation_budget.py` and explicitly does NOT register
+   the module as a `prereg_artifact=` — registering it would freeze it and forbid the Z values
+   from ever being written.
    - *What we know:* CONTEXT.md D-03 says "in `scripts/mitigation_budget.py` with a `_PROVENANCE`
      sibling". `scripts/phase19_floor.py`'s own docstring argues that a measured constant derived
      *after* an artifact exists must live outside the closed pin.
@@ -1218,6 +1236,15 @@ failure mode is loud, not silent.
      the Z values from ever being written. Record this reasoning in the plan.
 
 4. **How many seeds for D-03's control — 3, 4, or 5?**
+   **RESOLVED — Claude's Discretion** (`23-CONTEXT.md:144-145`), by a pre-registered rule
+   rather than by a preference. `phase23_prereg.choose_n_seeds(seconds_per_seed)` is committed
+   BLIND in plan `23-03` — in the edit-once pre-registration module, while
+   `git ls-files 'results/phase23_*'` is still empty — and returns the largest N in (5, 4, 3)
+   whose projected scoring time fits one `h_per_point` floor unit, never below 3. Plan `23-08`
+   measures the scoring leg for ONE seed and IMPORTS the rule; it defines no local copy,
+   because `scripts/phase23_run.py` is re-edited by four later plans and could not carry a
+   pre-registration. This is the question whose deferred resolution was caught as a blocker in
+   plan review, which is why the resolution names its landing site explicitly.
    - *What we know:* D-03 says 3–5, discretion. Non-DP arm ≈ 20.4 s of training (measured); the
      scoring leg dominates.
    - *Recommendation:* the planner should cost the **scoring** leg per seed before choosing, because
