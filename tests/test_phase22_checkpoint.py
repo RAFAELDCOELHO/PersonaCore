@@ -50,14 +50,28 @@ Neither entry generalises to the other's case. V-15 is the first; it uses ``==``
 import glob
 import math
 import pathlib
+from dataclasses import asdict
 
 import pytest
 import torch
 
-from personacore.checkpoint import CKPT_SCHEMA_VERSION, load_checkpoint, save_checkpoint
+from personacore.checkpoint import (
+    CKPT_SCHEMA_VERSION,
+    export_adapter,
+    load_adapter,
+    load_checkpoint,
+    load_slim,
+    save_checkpoint,
+)
 from personacore.config import ModelConfig, RuntimeConfig, TrainConfig
 from personacore.lora.config import LoRAConfig
-from personacore.lora.inject import inject_lora, mark_only_lora_trainable
+from personacore.lora.inject import (
+    inject_lora,
+    load_adapter_weights,
+    lora_state_dict,
+    mark_only_lora_trainable,
+)
+from personacore.lora.layer import LoRALinear
 from personacore.model.gpt import GPT
 from personacore.privacy.accountant import epsilon_for
 from personacore.privacy.dpsgd import DPSGD
@@ -523,3 +537,177 @@ def test_resume_epsilon_bit_identical(tmp_path, sigma):
         "noise draw — the positive assertion above would then be green with the restore removed, "
         "so it would prove nothing"
     )
+
+
+# ==================================================================================================
+# V-17 / DPSGD-07 — LoRALinear is NOT restructured, so every v3.0 artifact still loads
+# ==================================================================================================
+
+
+def _nudge_lora_B(model):
+    """``lora_B`` starts at the zeros identity gate; a ``torch.equal`` over zeros proves nothing.
+
+    ``tests/test_lora_artifact.py::_nudge_lora_B_nonzero`` verbatim.
+    """
+    for name, p in model.named_parameters():
+        if name.endswith("lora_B"):
+            torch.nn.init.normal_(p, mean=0.0, std=0.02)
+
+
+def test_lora_state_dict_keys_survive_a_round_trip(tmp_path):
+    """**V-17's binding half, and it runs EVERYWHERE** — no artifact under ``checkpoints/`` needed.
+
+    A v3.0-shaped adapter is built IN-TEST and pushed through THIS PHASE'S modified
+    ``checkpoint.py`` (``export_adapter`` → ``load_adapter``), then its key set is compared to a
+    SECOND, FRESH model's ``lora_state_dict`` key set under **hard equality**. Never ``<=`` or
+    ``issubset``: a subset passes while a key silently disappears, which is the whole failure mode.
+
+    DPSGD-07 names the change this refuses: restructuring ``LoRALinear`` into ``nn.Linear``
+    submodules would rename **every** state-dict key (``…lora_A`` → ``…lora_A.weight``) and
+    invalidate every v3.0 artifact ever exported, ``checkpoints/persona_adapter.pt`` included.
+    ``load_adapter_weights``'s key+shape+scale audit is what turns that rename into a loud refusal,
+    and it is applied here rather than described.
+    """
+    donor = _tiny_lora_model()
+    _nudge_lora_B(donor)
+    path = tmp_path / "v3_adapter.pt"
+    export_adapter(
+        path,
+        adapter=lora_state_dict(donor),
+        lora_config=asdict(LoRAConfig(r=_RANK)),
+        base_fingerprint={"git_sha": git_sha(), "step": 0, "val_loss": None},
+    )
+    loaded = load_adapter(path)
+
+    fresh = _tiny_lora_model()
+    expected = set(lora_state_dict(fresh))
+    # META-GUARD: two EMPTY sets compare equal, so the closed form is asserted first. An A and a B
+    # per wrapped projection, six projections per block (tests/test_lora_artifact.py:112-113).
+    assert len(expected) == 2 * 6 * _TINY.n_layer > 0
+    assert set(loaded["adapter"]) == expected, (
+        "the adapter key set moved across an export/load round trip — a restructured LoRALinear "
+        "renames every key and invalidates every v3.0 persona file (DPSGD-07)"
+    )
+    # The v3.0 key FORM, pinned as a LITERAL rather than merely agreed between two co-moving sides.
+    # MEASURED, and it is why this line exists: under the exact restructuring DPSGD-07 forbids
+    # (bare nn.Parameter -> nn.Linear submodules) the donor and the fresh model move TOGETHER, so
+    # the set equality above stays GREEN while every key silently becomes `…lora_A.weight` and every
+    # real v3.0 artifact stops loading. checkpoints/persona_adapter.pt's 72 keys end in exactly
+    # `lora_A` / `lora_B`; that is the shipped form, pinned here so the property does not depend on
+    # an artifact CI does not have.
+    assert all(k.endswith(("lora_A", "lora_B")) for k in expected), (
+        f"adapter keys are no longer the v3.0 form (…lora_A / …lora_B): {sorted(expected)[:4]}"
+    )
+
+    # …and it APPLIES, through the same key+shape+scale audit every real consumer routes through.
+    load_adapter_weights(fresh, loaded)
+    applied = fresh.state_dict()
+    assert all(torch.equal(applied[k], v) for k, v in loaded["adapter"].items())
+
+
+def test_lora_linear_holds_bare_parameters():
+    """**V-17, structural, runs everywhere** — the property a restructuring breaks, checked direct.
+
+    Asserted rather than inferred from a key set, and it needs no artifact at all. ``lora_A`` /
+    ``lora_B`` are bare ``nn.Parameter``s inside an INLINE matmul (``lora/layer.py:41``), and
+    ``base`` is the only child ``nn.Linear``. That shape is also the second reason D-01 rejected the
+    module-hook design: module hooks do not reach bare parameters.
+    """
+    model = _tiny_lora_model()
+    wrapped = [m for m in model.modules() if isinstance(m, LoRALinear)]
+    assert len(wrapped) == 6 * _TINY.n_layer > 0, "no LoRALinear found — this test would be vacuous"
+    for module in wrapped:
+        assert isinstance(module.lora_A, torch.nn.Parameter)
+        assert isinstance(module.lora_B, torch.nn.Parameter)
+        children = {n for n, c in module.named_children() if isinstance(c, torch.nn.Linear)}
+        assert children == {"base"}, (
+            f"LoRALinear's child nn.Linear set is {sorted(children)}, not exactly {{'base'}} — "
+            "DPSGD-07 forbids restructuring lora_A/lora_B into nn.Linear submodules"
+        )
+
+
+def _load_v3_adapter(path):
+    """A real persona file onto a FRESH model built from today's ``LoRALinear``.
+
+    The base shape is derived from the ARTIFACT's own tensors (``lora_A`` is ``(r, in_features)``,
+    block indices give ``n_layer``) rather than assumed from ``ModelConfig()``'s defaults — these
+    files span several phases.
+    """
+    art = load_adapter(path)
+    keys = sorted(art["adapter"])
+    n_embd = art["adapter"][next(k for k in keys if k.endswith("c_proj.lora_A"))].shape[1]
+    n_layer = 1 + max(int(k.split(".")[1]) for k in keys if k.startswith("blocks."))
+    model = GPT(ModelConfig(n_layer=n_layer, n_embd=n_embd))
+    inject_lora(model, LoRAConfig(**art["lora_config"]))
+    load_adapter_weights(model, art)  # key + shape + scale audit; raises on any rename
+    assert set(lora_state_dict(model)) == set(art["adapter"])
+
+
+def _load_v3_full(path):
+    """A real FULL resume checkpoint through the production ``load_checkpoint``."""
+    raw = torch.load(path, map_location="cpu", weights_only=False)
+    model = GPT(ModelConfig(**raw["model_config"]))
+    lora_keys = sorted(k for k in raw["model"] if "lora_" in k)
+    if lora_keys:
+        inject_lora(model, LoRAConfig(r=raw["model"][lora_keys[0]].shape[0]))
+    restored = load_checkpoint(path, model=model)
+    assert restored["schema_version"] == CKPT_SCHEMA_VERSION
+    assert set(k for k in restored["model"] if "lora_" in k) == set(lora_keys)
+
+
+def _load_v3_slim(path):
+    """A real SLIM inference artifact under the ``weights_only=True`` bar."""
+    loaded = load_slim(path)
+    model = GPT(ModelConfig(**loaded["model_config"]))
+    model.load_state_dict(loaded["model"])
+
+
+def _v3_case(path, loader):
+    """One on-disk case, gated on its OWN existence so a missing file skips only itself."""
+    return pytest.param(
+        path,
+        loader,
+        id=path.name,
+        marks=pytest.mark.skipif(
+            not path.exists(),
+            reason=(
+                f"{path} is not present (CI / fresh clone) — `checkpoints/` is GITIGNORED "
+                "(measured: `git ls-files checkpoints/` returns 0 files; .gitignore carries both "
+                "`checkpoints/` and `*.pt`), so this leg is ADDITIVE and never a precondition. "
+                "V-17 is DPSGD-07's only validation row and it must hold with `checkpoints/` "
+                "empty: what carries it wherever this skips is "
+                "test_lora_state_dict_keys_survive_a_round_trip (a v3.0-shaped adapter built "
+                "in-test and round-tripped under hard key-set equality) and "
+                "test_lora_linear_holds_bare_parameters (the structural assertion), neither of "
+                "which skips anywhere"
+            ),
+        ),
+    )
+
+
+_V3_CASES = [
+    _v3_case(_CHECKPOINTS / "persona_adapter.pt", _load_v3_adapter),
+    _v3_case(_REAL_FULL or _CHECKPOINTS / "__absent_latest.pt", _load_v3_full),
+    _v3_case(_CHECKPOINTS / "model_slim.pt", _load_v3_slim),
+]
+
+
+def test_v3_case_table_declares_every_artifact_regardless_of_what_runs():
+    """Collection meta-guard: an empty ``checkpoints/`` must report 3 SKIPS, never 0 tests.
+
+    ``pytest.param(..., marks=skipif(...))`` per case is what makes that true — a single
+    module-level gate would collapse the parametrization to zero collected items, and "nothing ran"
+    is indistinguishable from "everything passed" in a summary line.
+    """
+    assert len(_V3_CASES) >= 3
+
+
+@pytest.mark.parametrize(("path", "loader"), _V3_CASES)
+def test_v3_on_disk_artifacts_still_load(path, loader):
+    """**V-17, additive and gated**: the REAL v3.0 artifacts, when the box happens to have them.
+
+    Locally this is the stronger evidence — files written by earlier phases, not lookalikes this
+    module synthesized. In CI every case skips and V-17 still holds through the two tests named in
+    each ``reason=``.
+    """
+    loader(path)
