@@ -696,6 +696,58 @@ def test_fake_rng_reuse(monkeypatch, tmp_path):
 
 _LEDGER_FAKES = ("FAKE 1", "FAKE 2", "FAKE 3", "FAKE 4")
 
+# The node ids OBSERVED reddening when each fake was applied to the REAL committed module, one
+# entry per fake per distinct detector. These are the anchors the SUMMARY's ledger cites, and a
+# ledger citing a guard that has been renamed or deleted is this repository's most recurring
+# defect class -- seven stale anchors were measured across 22-02/22-03, and 22-09 recorded the
+# frozen pin's own by-symbol citation resolving only because a test was named to match it.
+_WATCHED_RED_NODE_IDS = {
+    "FAKE 1": (
+        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_step_reaches_no_forbidden_call[absorb_record]",
+        "tests/test_phase22_dpsgd.py::test_drain_invariant_fires",
+    ),
+    "FAKE 3": (
+        "tests/test_phase22_dpsgd.py::"
+        "test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST[4]",
+        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_draws_the_noise_before_it_divides",
+    ),
+}
+
+
+def test_watched_red_node_ids_resolve():
+    """Every node id the SUMMARY's ledger cites as having reddened still names a real test.
+
+    The RED output in the ledger is only evidence while it is ATTRIBUTABLE. A renamed or deleted
+    guard turns a verbatim capture into an unfalsifiable anecdote, and nothing else in the suite
+    would notice -- the ledger is prose in a markdown file.
+
+    The parameter id inside ``[...]`` is not resolved (that needs a collection pass); what is
+    asserted is that the function exists, is callable, and carries a ``parametrize`` mark exactly
+    when the cited id claims a parameter.
+    """
+    import importlib
+
+    assert _WATCHED_RED_NODE_IDS, "no watched RED node ids recorded -- this guard checks nothing"
+    for fake, node_ids in _WATCHED_RED_NODE_IDS.items():
+        for node_id in node_ids:
+            path, _, name = node_id.partition("::")
+            parametrized = name.endswith("]")
+            if parametrized:
+                name = name[: name.index("[")]
+            module = importlib.import_module(pathlib.Path(path).stem)
+            func = getattr(module, name, None)
+            assert callable(func), (
+                f"{fake}'s ledger cites {node_id}, but {name!r} is not a callable in "
+                f"{path}. The verbatim RED capture in the SUMMARY is then unattributable"
+            )
+            marks = {mark.name for mark in getattr(func, "pytestmark", ())}
+            assert parametrized == ("parametrize" in marks), (
+                f"{fake}'s ledger cites {node_id}, whose parametrization does not match the "
+                f"shipped test (marks: {sorted(marks)}). A cited node id that cannot be run is a "
+                "citation nobody can check"
+            )
+
+
 # The sign-off's honest half, by name. A sign-off that lists only green is not a sign-off, so the
 # two measured blind spots and the one required-but-unexercised CI item are required literals.
 _LEDGER_SIGN_OFF_ITEMS = (
