@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 22-07-PLAN.md
-last_updated: "2026-08-26T00:07:47.111Z"
+stopped_at: Completed 22-08-PLAN.md
+last_updated: "2026-08-26T00:34:11.270Z"
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 39
-  completed_plans: 35
+  completed_plans: 36
   percent: 22
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 22 (dp-sgd-core-accountant-and-the-correctness-battery) — EXECUTING
-Plan: 8 of 11
+Plan: 9 of 11
 Status: Executing Phase 22
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -128,6 +128,7 @@ Last activity: 2026-08-26
 | Phase 22 P05 | 45min | 3 tasks | 2 files |
 | Phase 22 P06 | 70min | 3 tasks | 5 files |
 | Phase 22 P07 | 32min | 3 tasks | 3 files |
+| Phase 22 P08 | 35min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -414,6 +415,10 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 22]: 22-07: T for a published epsilon is the COUNT OF COMPOSED STEPS, never the checkpoint's step field — measured, a start_step reset leaves the field at 4 while 6 steps compose, so a field-read epsilon matches across arms and under-reports
 - [Phase 22]: 22-07: a LoRA key-set round trip is SYMMETRIC under a co-moving rename and does NOT detect the restructuring DPSGD-07 forbids; the shipped v3.0 key FORM (...lora_A / ...lora_B) is pinned as a literal instead
 - [Phase 22]: 22-07: rng['mps'] restores via rng.get('mps') while rng['cuda'] keeps its subscript — the asymmetry is correct because the keys have different ages, and the reason lives in the source at the site
+- [Phase 22]: The plan's literal all-or-none construction over a four-key dict raises on every pre-existing mask-seam caller; the fact-seam companion group is gated on fact_bin/n_facts instead
+- [Phase 22]: Python closures capture the CELL and resolve at CALL time — the plan's mandated comment stated the opposite; measured [0,1,2] before writing the corrected comment
+- [Phase 22]: Patch personacore.training.loop, never .data: loop.py uses a from-import, so a spy on the defining module yields 0 calls (meta-guard shipped)
+- [Phase 22]: The per-step multiset check is EQUIVALENT to set equality under the accum refusal (mutation M7 green); both false stronger-than claims corrected in place
 
 ### Roadmap Evolution
 
@@ -546,8 +551,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T00:07:32.277Z
-Stopped at: Completed 22-07-PLAN.md
+Last session: 2026-08-26T00:34:11.262Z
+Stopped at: Completed 22-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

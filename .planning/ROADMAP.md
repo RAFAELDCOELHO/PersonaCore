@@ -429,7 +429,7 @@ CPU before a single second of M3 time is spent
 
 - [x] 22-07-PLAN.md — `checkpoint.py`'s `rng["mps"]` slot with `.get()` back-compat, V-15's
       bit-identical resumed ε, and DPSGD-07's LoRALinear key-set stability
-- [ ] 22-08-PLAN.md — the additive `fact_bin=` data seam routing to `get_batch_fact_aligned`, with the
+- [x] 22-08-PLAN.md — the additive `fact_bin=` data seam routing to `get_batch_fact_aligned`, with the
       accum-agreement refusal and the one-record-per-micro-step property
 - [ ] 22-09-PLAN.md — V-06 (`GOLDEN_EPSILON` re-derived from the ORACLE alone) and V-25 (D-18's
       three-site adjacency consistency check)
@@ -642,7 +642,7 @@ capacities — with every number in prose generated from a committed record rath
 | 16-19 | v3.0 | 54/54 | Complete | 2026-08-19 |
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
-| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 7/11 | In Progress | - |
+| 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 8/11 | In Progress | - |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 0/TBD | Not started | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
