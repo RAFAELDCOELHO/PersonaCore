@@ -29,14 +29,20 @@ Do NOT weaken any assertion to make these pass.
 
 import ast
 import itertools
+import os
 import pathlib
+import subprocess
 import sys
+from dataclasses import asdict
 
+import numpy as np
 import pytest
 import torch
 
 from personacore.config import ModelConfig, RuntimeConfig, TrainConfig
+from personacore.generation import undecodable_ids_mask
 from personacore.model import GPT
+from personacore.tokenizer import from_json
 from personacore.training import data as data_mod
 from personacore.training import loop as loop_mod
 from personacore.training.loop import train
@@ -690,3 +696,260 @@ def test_the_cli_does_not_use_argparse():
     }
     assert "argparse" not in attributes
     assert not hasattr(tp, "argparse")
+
+
+# ===================================================================================
+# ===== V-23 — the END-TO-END CPU run, through main(), writing NO scored artifact ====
+# ===================================================================================
+
+# Fixture sigma and C for the end-to-end run. **These are TEST FIXTURES, NOT A BUDGET.** They
+# exist so the no-default CLI contract can be exercised end to end and they are chosen here, in
+# the test, precisely so no value is committed anywhere Phase 23 could inherit it. Phase 23
+# supplies the operating values from `scripts/mitigation_budget.py` under Phase 20's Z boundary.
+_FIXTURE_SIGMA = 1.0
+_FIXTURE_CLIP = 1.0
+
+_E2E_CFG = ModelConfig(block_size=tp.BLOCK_SIZE, n_layer=1, n_head=2, n_embd=16)
+
+
+def _e2e_env(root, monkeypatch):
+    """Point every `teach_persona` input and output at `root`, at fixture scale, on CPU.
+
+    Scaling is done by monkeypatching the module's OWN shape constants — the same handles
+    `tests/test_phase14_teaching.py::test_recipe_constants` pins — rather than by a second
+    scaling mechanism. `block_size` is NOT scaled: the packer packs at `tp.BLOCK_SIZE` and the
+    aligned loader derives its window count from `model_cfg.block_size`, so a skew between them
+    would mis-attribute windows to privacy records.
+
+    `_REPO_ROOT` is read at CALL time by `arm_outputs`, so re-pointing it redirects the bin,
+    mask, fact-bin, csv, checkpoint and adapter targets in one line. `TOKENIZER_PATH` is resolved
+    at IMPORT time and is deliberately left alone: the run uses the real FROZEN tokenizer.
+    """
+    for sub in ("data", "checkpoints", "results"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(0)
+        base = GPT(_E2E_CFG)
+    convbase = root / "convbase.pt"
+    torch.save(
+        {
+            "model_config": asdict(_E2E_CFG),
+            "model": base.state_dict(),
+            "git_sha": "0" * 40,
+            "step": 7,
+            "val_loss": 1.234,
+        },
+        convbase,
+    )
+
+    # DECODABLE ids only. The frozen tokenizer decodes 547 of the model's 8192 ids, and
+    # `train_arm` scores its collateral-collapse sweep with `forbid_ids=undecodable_ids_mask(...)`;
+    # a dead target id would send the perplexity to inf and make the endpoint numbers unreadable.
+    live = torch.nonzero(~undecodable_ids_mask(from_json(tp.TOKENIZER_PATH), 8192)[0]).flatten()
+    rng = np.random.default_rng(0)
+
+    def _pair(stem, windows):
+        n = windows * tp.BLOCK_SIZE + 1  # + 1: get_batch_memmap_masked needs a shifted target
+        ids = rng.choice(live.numpy(), size=n).astype(np.uint16)
+        bin_path, mask_path = root / "data" / f"{stem}.bin", root / "data" / f"{stem}_mask.bin"
+        ids.tofile(bin_path)
+        np.ones(n, dtype=np.uint8).tofile(mask_path)
+        return bin_path, mask_path
+
+    report = root / "factset.md"
+    report.write_text("# fixture\n\n## Verdict\n\nGO\n", encoding="utf-8")
+
+    monkeypatch.setattr(tp, "_REPO_ROOT", root)
+    monkeypatch.setattr(tp, "FACTSET_REPORT", report)
+    monkeypatch.setattr(tp, "CONVBASE_BEST", convbase)
+    val_bin, val_mask = _pair("dialog_val", 3)
+    monkeypatch.setattr(tp, "DIALOG_VAL_BIN", val_bin)
+    monkeypatch.setattr(tp, "DIALOG_VAL_MASK", val_mask)
+    replay_bin, replay_mask = _pair("dialog_train", 4)
+    monkeypatch.setattr(tp, "DIALOG_TRAIN_BIN", replay_bin)
+    monkeypatch.setattr(tp, "DIALOG_TRAIN_MASK", replay_mask)
+
+    # TWO steps, not one, and the reason is a MEASUREMENT rather than caution. LoRA initialises
+    # `lora_B` to zeros and `dL/dA` carries a factor of `B`, so at step 0 every `lora_A` gradient
+    # is exactly 0.0 and AdamW leaves it where it was — `train_arm`'s canary then correctly raises
+    # "[canary] trainable ... did not move". Watched: the DP arm passes that canary at ONE step
+    # and the non-DP arm does not, because the DP path adds noise to EVERY parameter's gradient,
+    # so `lora_A` moves on pure noise. Two steps makes both arms legitimate for the same reason.
+    monkeypatch.setattr(tp, "MAX_STEPS", 2)
+    monkeypatch.setattr(tp, "WARMUP_STEPS", 1)
+    monkeypatch.setattr(tp, "BATCH_SIZE", 1)
+    monkeypatch.setattr(tp, "EVAL_INTERVAL", 1)
+    monkeypatch.setattr(tp, "CHECKPOINT_INTERVAL", 1)
+
+    # CPU, explicitly. `preflight_device(strict=True)` returns MPS on the dev box and RAISES on a
+    # CPU-only CI runner, so both are replaced: this test must run identically on both.
+    monkeypatch.setattr(
+        tp,
+        "preflight_device",
+        lambda strict=True: {"device": "cpu", "cc": None, "torch": torch.__version__},
+    )
+    monkeypatch.setattr(tp, "RuntimeConfig", lambda: RuntimeConfig(device="cpu"))
+
+
+def _results_state():
+    """The two fingerprints of the REAL `results/` tree — listing plus git's own view."""
+    listing = sorted(os.listdir(_ROOT / "results"))
+    porcelain = subprocess.run(
+        ["git", "status", "--porcelain", "results/"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return listing, porcelain
+
+
+def test_end_to_end_writes_no_scored_artifact(tmp_path, monkeypatch):
+    """V-23: `main(['dp_n8', '--sigma=…', '--clip-norm=…'])` completes and `results/` is untouched.
+
+    **Why this test exists at all (D-08's load-bearing reason).** Phase 23's FIRST ACT IS A
+    MEASUREMENT. If the four wirings landed there, its first executed run would simultaneously be
+    the first test of four never-executed integration paths, and a wiring bug and a DP-correctness
+    bug would arrive in the same artifact, indistinguishable — destroying DPSGD-06's purpose.
+
+    **Why each wiring gets its OWN observation.** A test that only asserted "it did not crash"
+    would pass with three of four paths silently unwired, which is precisely the Phase-21 IN-04
+    failure this plan exists to prevent. So: a delegating spy on the loader, the `grad_accum_steps`
+    read off the `TrainConfig` that was actually constructed, `replay_windows` compared against
+    `replay_window_budget` rather than against a literal, and `dp_fn._records` read after the run.
+
+    **On `results/`.** D-08's boundary is that Phase 22 writes NO scored artifact. This is also
+    why `results/phase22_*` was deliberately NOT added to `V4_ARTIFACT_GLOBS` (plan 22-02): arming
+    a prefix that never matches ships a guard vacuous by construction.
+    """
+    before = _results_state()
+    assert before[0], "results/ is empty — the byte-identity assertion below would be vacuous"
+
+    _e2e_env(tmp_path, monkeypatch)
+    loader = _Spy()
+    monkeypatch.setattr(loop_mod, "get_batch_fact_aligned", loader)
+
+    seen = {}
+    real_train = tp.train
+
+    def _spy_train(**kwargs):
+        seen.update(kwargs)
+        return real_train(**kwargs)
+
+    monkeypatch.setattr(tp, "train", _spy_train)
+
+    tp.main(["dp_n8", f"{tp.SIGMA_FLAG}{_FIXTURE_SIGMA}", f"{tp.CLIP_FLAG}{_FIXTURE_CLIP}"])
+
+    # ---- 1. results/ is byte-identical, by BOTH fingerprints -------------------------------
+    assert _results_state() == before
+
+    # ---- 2. the run COMPLETED ---------------------------------------------------------------
+    paths = tp.arm_outputs("dp_n8", prefix="phase21")
+    assert paths["checkpoint"].exists() and paths["adapter"].exists()
+    csv_rows = paths["csv"].read_text(encoding="utf-8").strip().splitlines()
+    assert len(csv_rows) > 1, csv_rows  # a header alone is a run that logged nothing
+    # ...and the bins really are the three-bin aligned pack, under tmp_path and nowhere else.
+    assert tp.fact_bin_path(paths["bin"]).exists()
+    assert tmp_path in paths["adapter"].parents
+
+    # ---- 3. all FOUR paths executed, each by its own observation ----------------------------
+    n_facts = len(tp.arm_spec("dp_n8")[0])
+    assert n_facts > 1, "a one-record arm makes the accum observation below meaningless"
+
+    # (1) fact-aligned routing: the REAL loader fired, once per record per OPTIMIZER STEP, each
+    #     accumulation window covering every record exactly once. Both counts are read from the
+    #     module's own constants, so a future scale change cannot make this assertion vacuous.
+    assert loader.calls == tp.MAX_STEPS * n_facts, f"{loader.calls} calls, {n_facts} records"
+    for window in range(tp.MAX_STEPS):
+        drawn = loader.indices[window * n_facts : (window + 1) * n_facts]
+        assert sorted(drawn) == list(range(n_facts)), (window, drawn)
+    assert len(set(loader.steps)) == loader.calls, "the step counter collapsed onto one lot"
+
+    # (2) grad_accum_steps, read off the TrainConfig train() was actually handed — not asserted
+    #     of the constant, which would pass with the kwarg never reaching the constructor.
+    assert seen["train_config"].grad_accum_steps == n_facts
+    assert TrainConfig().grad_accum_steps == 1  # the default the caller would otherwise inherit
+    assert seen["n_facts"] == n_facts
+    assert pathlib.Path(seen["fact_bin"]) == tp.fact_bin_path(paths["bin"])
+
+    # (3) the replay seam: a positive budget, equal to the ONE function that computes it.
+    expected_windows = tp.replay_window_budget(n_facts) // tp.BLOCK_SIZE
+    assert seen["replay_windows"] == expected_windows > 0
+    assert (seen["replay_bin"], seen["replay_mask_bin"]) == (
+        tp.DIALOG_TRAIN_BIN,
+        tp.DIALOG_TRAIN_MASK,
+    )
+
+    # (4) V-13: D-16's invariants fired inside a PRODUCTION-CALLER run, not only in unit tests.
+    dp_fn = seen["dp_fn"]
+    assert dp_fn is not None
+    assert dp_fn._records == n_facts > 0  # per-step counter: the last lot absorbed every record
+    assert (dp_fn.sigma, dp_fn.C) == (_FIXTURE_SIGMA, _FIXTURE_CLIP)  # sigma/C came from the CLI
+
+
+def test_a_non_dp_arm_reaches_train_with_NONE_of_the_four_wirings(tmp_path, monkeypatch):
+    """T-22-48 INVERTED, and it ships because a mutation probe measured the gap.
+
+    Watched: flipping `dp_kwargs`' guard from `if is_dp` to `if True` — so every v2.0/v3.0 arm
+    gets the fact bin, the replay seam and the DP lot size — left the ENTIRE suite green (62
+    passed). `test_non_dp_arm_cli_is_unchanged` stubs `train_arm` out, so it proves the CLI
+    branch did not narrow and nothing more; no test looked at a non-DP arm's `train()` call at
+    all. A non-DP arm silently becoming a DP one is the exact mirror of the threat this plan is
+    built around, and it had no guard.
+
+    So this runs a REAL non-DP arm end to end at fixture scale and reads the kwargs `train()` was
+    handed. `grad_accum_steps` is asserted equal to `TrainConfig`'s own default, resolved from
+    the dataclass rather than re-spelled as `1`.
+    """
+    arm = next(a for a in tp.ARMS if a not in tp.DP_ARMS and a != "real")
+    _e2e_env(tmp_path, monkeypatch)
+
+    loader = _Spy()
+    monkeypatch.setattr(loop_mod, "get_batch_fact_aligned", loader)
+    seen = {}
+    real_train = tp.train
+
+    def _spy_train(**kwargs):
+        seen.update(kwargs)
+        return real_train(**kwargs)
+
+    monkeypatch.setattr(tp, "train", _spy_train)
+    tp.main([arm])
+
+    assert seen, f"train() was never reached for {arm!r} — this control would be vacuous"
+    for absent in ("fact_bin", "n_facts", "replay_bin", "replay_mask_bin", "replay_windows"):
+        assert absent not in seen, f"{arm!r} was handed {absent}={seen[absent]!r}"
+    assert seen.get("dp_fn") is None
+    assert seen["train_config"].grad_accum_steps == TrainConfig().grad_accum_steps
+    assert loader.calls == 0, "the fact-aligned loader must never be reached on a non-DP arm"
+
+
+def test_end_to_end_mismatched_accum_is_refused_through_the_real_caller(tmp_path, monkeypatch):
+    """The accum-agreement refusal fires through `main()`, not only in a direct `train()` call.
+
+    A guard proven only against a hand-built `train()` call is a guard nobody has watched bite on
+    the path that actually runs. The mismatch is injected at the LAST possible moment — the
+    `TrainConfig` `train_arm` built is bumped by one just before `train()` receives it — so
+    everything upstream (the CLI, the packer, the DP construction) is the real production path.
+    """
+    _e2e_env(tmp_path, monkeypatch)
+    real_train = tp.train
+
+    def _skew(**kwargs):
+        kwargs["train_config"].grad_accum_steps += 1
+        return real_train(**kwargs)
+
+    monkeypatch.setattr(tp, "train", _skew)
+
+    with pytest.raises(ValueError, match="disagrees with") as excinfo:
+        tp.main(["dp_n8", f"{tp.SIGMA_FLAG}{_FIXTURE_SIGMA}", f"{tp.CLIP_FLAG}{_FIXTURE_CLIP}"])
+    message = str(excinfo.value)
+    assert f"n_facts={len(tp.arm_spec('dp_n8')[0])}" in message
+    assert "one micro-step IS one privacy record" in message.replace("ONE", "one")
+
+    # Nothing scored was produced: the refusal fires before train() opens a file, so no adapter
+    # and no checkpoint exist even though the bins (recorded evidence) were already written.
+    paths = tp.arm_outputs("dp_n8", prefix="phase21")
+    assert not paths["adapter"].exists() and not paths["checkpoint"].exists()
+    assert paths["bin"].exists()  # the positive control: the run really did get that far
