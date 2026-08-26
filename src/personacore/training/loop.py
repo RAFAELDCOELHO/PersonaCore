@@ -49,7 +49,13 @@ from personacore.config import ModelConfig, RuntimeConfig
 from personacore.logging import CSVLogger
 from personacore.provenance import git_sha
 
-from .data import get_batch, get_batch_memmap, get_batch_memmap_masked, load_split
+from .data import (
+    get_batch,
+    get_batch_fact_aligned,
+    get_batch_memmap,
+    get_batch_memmap_masked,
+    load_split,
+)
 from .loss import assemble_loss
 from .schedule import build_scheduler
 
@@ -240,6 +246,8 @@ def train(
     replay_bin=None,
     replay_mask_bin=None,
     replay_windows=None,
+    fact_bin=None,
+    n_facts=None,
     eos_id=8184,
     fixed_batch=None,
     scaler=None,
@@ -343,6 +351,48 @@ def train(
             reopened (2)**: under D-24 the replay window count is ``4 * n_facts``, fully public,
             so that rejection's premise had EXPIRED. The separate-pass shape was then chosen on
             its own merits rather than inherited from a reason that no longer held.
+        fact_bin: Phase-21 fact-aligned DATA seam (D-08) — the THIRD ``uint16`` ``.bin`` PATH,
+            element-aligned to ``train_bin``/``train_mask_bin``, carrying the id of the fact
+            that owns each token. When set, ``batch_fn`` draws via
+            :func:`~personacore.training.data.get_batch_fact_aligned` instead of
+            ``get_batch_memmap_masked``, so ONE micro-step is ONE privacy record. Requires
+            ``n_facts``, ``train_bin`` and ``train_mask_bin``; None reproduces v1.0 bit-for-bit.
+
+            **What this seam DOES claim.** ROUTING, and nothing beyond it.
+            ``get_batch_fact_aligned`` is reused UNCHANGED — it already refuses across the
+            three bins (a length skew, an unopenable fact bin, a declared ``n_facts`` the bin
+            does not carry, a bin that is not ``n_windows * block_size + 1``) and already
+            raises on an IMPURE window, and this seam copies none of that. What it adds on top
+            is a per-optimizer-step refusal that the ``fact_index`` values actually drawn are
+            the ``n_facts`` records EACH EXACTLY ONCE (Phase 21 D-02) — the run-time form of
+            SC2's "one micro-step = one privacy record", which is the claim that makes an
+            ORDINARY backward hand back the PER-RECORD gradient ``dp_fn`` then clips to ``C``.
+
+            **What it does NOT claim.** It does not make the corpus aligned — that is the
+            BUILD's job (``teach_persona._build_aligned_bins``), and pointing this kwarg at a
+            flat v3.0 bin RAISES rather than degrading silently. It does not choose
+            ``grad_accum_steps`` either; it REFUSES a disagreement (see ``n_facts``).
+
+            **The measured state it replaces.** Before Phase 22 this file had ZERO hits for
+            ``fact_bin`` / ``fact_aligned`` / ``align_facts``: ``get_batch_fact_aligned`` had
+            no path through :func:`train` AT ALL, and its only non-test caller was
+            ``scripts/phase21_unit_record.py``, the REPORTING driver. A CLI-reachable ``dp_*``
+            arm therefore built the correct three-bin aligned corpus and then trained it
+            through the flat random-window loader UNIT-01 exists to indict.
+        n_facts: the number of privacy RECORDS in ``fact_bin`` — the lot size. Required with
+            ``fact_bin`` and deliberately NOT derived here: the count is a property of the
+            corpus BUILD, so inferring it from the bin would make a TRUNCATED bin look like a
+            smaller corpus instead of an error. :func:`train` refuses unless
+            ``max(1, grad_accum_steps) == n_facts``.
+
+            The ``step=`` value handed to the loader is a **GLOBAL MICRO-STEP index**
+            (``optimizer_step * n_facts + micro``), NOT the optimizer step, because
+            ``get_batch_fact_aligned`` selects its record with ``fact_index = step % n_facts``
+            and its reference caller advances ``step`` once per MICRO-step. Feeding it one
+            value per OPTIMIZER step makes every micro-step in the window draw the SAME
+            record: at ``accum == n_facts`` one record is clipped and summed ``n_facts`` times,
+            so the true per-record sensitivity is ``n_facts*C`` while the accountant is told
+            ``C`` — and every D-16 invariant stays green through it.
         eos_id: document separator id for the doc-level split (no-leakage, TRAIN-03).
         fixed_batch: ``(xb, yb)`` reused every step — the overfit gate (TRAIN-05).
         scaler: an injectable GradScaler-shaped object (the AMP-ordering spy hook); defaults to a
@@ -455,6 +505,44 @@ def train(
             "block_size windows drawn per OPTIMIZER STEP (D-24 is window-quantized precisely so "
             "this is a whole number and needs no truncation step)."
         )
+    # --- The D-08 fact-aligned seam's three refusals: companions, type, accum agreement ------
+    # Gated on the FACT half only. A four-way all-or-none over the same dict would raise on
+    # every pre-existing mask-seam caller (train_bin + train_mask_bin set, fact_bin/n_facts
+    # absent -> two of four missing), which is why the group is keyed on `fact_bin`/`n_facts`.
+    _fact = {"fact_bin": fact_bin, "n_facts": n_facts}
+    if any(value is not None for value in _fact.values()):
+        _companions = {**_fact, "train_bin": train_bin, "train_mask_bin": train_mask_bin}
+        _missing = sorted(name for name, value in _companions.items() if value is None)
+        if _missing:
+            raise ValueError(
+                f"the D-08 fact-aligned seam needs all four of {sorted(_companions)} together, "
+                f"or none of {sorted(_fact)} — missing {_missing}. get_batch_fact_aligned draws "
+                "across THREE element-aligned bins, so the token and mask paths are companions "
+                "of the fact bin rather than optional; and n_facts CANNOT be defaulted — the "
+                "fact count is a property of the CORPUS BUILD, and inferring it from the bin "
+                "would make a TRUNCATED bin look like a smaller corpus rather than an error."
+            )
+        if isinstance(n_facts, bool) or not (isinstance(n_facts, int) and n_facts > 0):
+            raise ValueError(
+                f"n_facts={n_facts!r} — the fact count is a positive int: the number of privacy "
+                "RECORDS one optimizer step covers. It is the lot size the accountant is told "
+                "and the N in D-02's final divide, so a float, a bool or a value <= 0 is not a "
+                "lot this loop can release."
+            )
+        if max(1, train_config.grad_accum_steps) != n_facts:
+            raise ValueError(
+                f"grad_accum_steps={train_config.grad_accum_steps!r} disagrees with "
+                f"n_facts={n_facts} — under the fact-aligned seam ONE micro-step IS one privacy "
+                "record (SC2), so the accumulation window must cover every record exactly once. "
+                "MEASURED, and the reason this is a refusal rather than a derivation: "
+                "'grad_accum_steps' appears 9 times in scripts/teach_persona.py PROSE and 0 "
+                "times in its CODE, so the TrainConfig(...) built there inherits the default 1 "
+                "(TrainConfig.grad_accum_steps in config.py) and the aligned three-bin corpus "
+                "was trained at a LOT SIZE OF ONE with SC2 true only in prose. Under dp_fn, "
+                "accum is the N in D-02's final divide, so a disagreement silently changes the "
+                "sensitivity story: the accountant would be told a lot of n_facts records while "
+                "the loop released a lot of grad_accum_steps."
+            )
     runtime = runtime_config if runtime_config is not None else RuntimeConfig()
     model_cfg = model_config if model_config is not None else ModelConfig()
     if model is None:
@@ -486,6 +574,10 @@ def train(
     #     is generated once from a fixed generator, then SLICED into micro-batches — so
     #     grad_accum_steps=N over micro-batches is provably the SAME data as one N×-bigger batch,
     #     which is exactly what test_grad_accum_equivalent_to_big_batch asserts.
+    # The D-08 fact seam's carrier: the OPTIMIZER-STEP half of the loader's global micro-step
+    # counter, plus the fact indices drawn in the CURRENT accumulation window. None on every
+    # other path — same shape as `replay_fn = None` below.
+    _fact_cursor = {"step": 0, "seen": []} if fact_bin is not None else None
     if fixed_batch is not None:
         fx, fy = fixed_batch
         fx, fy = fx.to(runtime.device), fy.to(runtime.device)
@@ -500,7 +592,51 @@ def train(
         # (a str/PathLike, NOT an array) so estimate_loss (Seam 2) routes to get_batch_memmap.
         train_ids, val_ids = train_bin, val_bin
 
-        if train_mask_bin is not None:
+        if fact_bin is not None:
+            # D-08's fact-aligned branch, taking PRECEDENCE over the mask branch below: the
+            # aligned draw is masked too (it applies -100 itself), so routing here is not a
+            # choice between masking and alignment. get_batch_fact_aligned is reused UNCHANGED.
+            def batch_fn(micro):
+                # THE `step=` VALUE IS A GLOBAL MICRO-STEP INDEX, ASSEMBLED FROM TWO HALVES.
+                #
+                # (1) Why an explicit cell rather than a bare closure over `step`. A closure
+                #     WOULD work — Python captures the CELL, not the value, so a read of
+                #     `train()`'s `step` local resolves at CALL time even though it is assigned
+                #     below this def (measured: [0, 1, 2] over three iterations). The cell is
+                #     chosen for two other reasons. `seen` needs a mutable carrier the `while`
+                #     loop can clear anyway, so the dict costs no extra object; and an explicit
+                #     `_fact_cursor["step"] = step` written immediately before _optimizer_step
+                #     makes "which optimizer step is this accumulation window" greppable at the
+                #     loop instead of an implicit read of a local defined a hundred lines away.
+                #
+                # (2) Why `* n_facts + micro` and NOT the bare optimizer step. The loader picks
+                #     its record with `fact_index = step % n_facts` (data.py), and its reference
+                #     caller scripts/phase21_unit_record.py advances `step` once per MICRO-step.
+                #     Hand it the optimizer step alone and `fact_index` is CONSTANT across the
+                #     whole `for micro in range(accum)` window: at accum == n_facts ONE record
+                #     is clipped and summed n_facts times per optimizer step, so the true
+                #     per-record sensitivity becomes n_facts*C while the accountant is told C —
+                #     DPSGD-04's wrong-sensitivity fake arriving from the WIRING, and INVISIBLE
+                #     to all four D-16 invariants: each drawn record is still individually
+                #     clipped to C, the drain still fires, the write count is still 1, and the
+                #     generator still advances. With `* n_facts + micro`, fact_index == micro
+                #     and the window covers exactly set(range(n_facts)).
+                x, y, fact_index = get_batch_fact_aligned(
+                    train_bin,
+                    train_mask_bin,
+                    fact_bin,
+                    model_cfg.block_size,
+                    runtime.device,
+                    step=_fact_cursor["step"] * n_facts + micro,
+                    n_facts=n_facts,
+                )
+                _fact_cursor["seen"].append(int(fact_index))
+                # TWO values, never three. _optimizer_step does `xb, yb = batch_fn(micro)` and
+                # every other branch returns a pair; widening that contract for one branch would
+                # touch four call sites for no gain. The third value rides the cursor instead.
+                return x, y
+
+        elif train_mask_bin is not None:
             # Phase-12 mask seam: identical draw, but user-turn targets carry -100 so the
             # CE scores assistant tokens only (TUNE-01; -100 semantics live in data.py).
             def batch_fn(_micro):
@@ -616,6 +752,11 @@ def train(
     step = start_step
     try:
         while step < target_steps:
+            if _fact_cursor is not None:
+                # The optimizer-step half of the loader's counter, written BEFORE the window
+                # opens; `seen` is the per-window fact-index record the refusal below reads.
+                _fact_cursor["step"] = step
+                _fact_cursor["seen"].clear()
             train_loss = _optimizer_step(
                 model,
                 optimizer,
@@ -628,6 +769,33 @@ def train(
                 replay_fn,
                 dp_fn,
             )
+            if _fact_cursor is not None:
+                # Phase 21 D-02, turned from prose into a RUNTIME property at the cost of one
+                # list append per micro-step: one micro-step IS one privacy record under ragged
+                # fact-aligned accumulation, and THAT claim is what makes an ordinary backward
+                # hand back the per-record gradient dp_fn clips to C.
+                #
+                # `sorted(...) == list(range(n_facts))` is the MULTISET form, deliberately
+                # stronger than set equality: set equality passes a window that drew record 0
+                # twice and record 3 never, which is the exact shape a broken counter produces.
+                #
+                # Under this loop's own counter the property holds BY CONSTRUCTION — which is
+                # the point. The check is not here to catch the counter (test_phase22_wiring's
+                # step-counter test does that); it is here to catch the LOADER returning
+                # something else: a mis-built bin, a fact map whose ids are not 0..n_facts-1,
+                # or a future edit to get_batch_fact_aligned.
+                _seen = _fact_cursor["seen"]
+                if sorted(_seen) != list(range(n_facts)):
+                    raise ValueError(
+                        f"optimizer step {step} drew fact indices {_seen} — one micro-step is "
+                        f"NOT one privacy record (Phase 21 D-02). The {n_facts} micro-steps of "
+                        f"this accumulation window must contribute records 0..{n_facts - 1}, "
+                        "each EXACTLY ONCE; anything else means the lot the accountant is told "
+                        "about is not the lot that was released. The seam's own counter makes "
+                        "this true by construction, so a failure here is the LOADER returning "
+                        "something else — a mis-built fact bin, a fact map whose ids are not "
+                        f"0..{n_facts - 1}, or an edit to get_batch_fact_aligned."
+                    )
             final_loss = train_loss
             step += 1
             tokens = step * tokens_per_step
