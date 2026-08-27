@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: 23-17-PLAN.md INCOMPLETE (plan 17 of 19) — the 5-seed run was harness-killed at 3/5; NO matched record exists. D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED; 23-18/23-19 now have no input
+stopped_at: Completed 23-20-PLAN.md (plan 20 of 20) — 23-17's harness-killed run was CONTINUED under a new pin and completed detached at 5/5; results/phase23_matched_control.json exists with floor 0.0267857142857143 (27/1008) over FIVE readings. D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED; 23-18/23-19 now UNBLOCKED — no verdict rendered here
 last_updated: "2026-08-27T17:50:00.000Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
-  total_plans: 66
-  completed_plans: 59
+  total_plans: 67
+  completed_plans: 60
   percent: 33
 ---
 

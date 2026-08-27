@@ -586,7 +586,7 @@ Phase 20 (K and the promotion rule are already committed)
      scored — serving as both the frontier's lower-left floor and the relearning reference, so it is
      scheduled once and consumed twice. (CTRL-03)
 
-**Plans**: 19 plans across 13 waves *(14 planned 2026-08-26; plans 23-15…23-19 added 2026-08-27 as GAP CLOSURE for the D-04 halt at 23-10 — waves 9–13)*
+**Plans**: 20 plans across 13 waves *(14 planned 2026-08-26; plans 23-15…23-19 added 2026-08-27 as GAP CLOSURE for the D-04 halt at 23-10 — waves 9–13; 23-20 added 2026-08-27 to COMPLETE 23-17's harness-killed matched run — a separate round for a separate cause, not part of that gap closure, and it adds no wave)*
 
 Plans:
 **Wave 1**
@@ -665,6 +665,7 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11)*
 
+- [x] 23-20-PLAN.md — complete 23-17's harness-killed matched run: a NEW pin beside the frozen one (`scripts/phase23_resume_prereg.py`, admitting the continuation from the record's WRITE-ORDERING alone), both one-attempt rules wired by branch on `not scored` so the frozen refusal stays reachable, seed 2025's reading-less partial bytes discarded in a visible commit, and seeds 2025 + 1339 run DETACHED to the five-seed record and the re-reduced floor *(the recomputed DAG places this BEFORE 23-18, which now `depends_on: ["23-17", "23-20"]`)*
 - [ ] 23-18-PLAN.md — pin `MATCHED_CONTROL_NOISE_FLOOR` beside the original in `scripts/mitigation_budget.py`, purely additive (zero deletions), zero imports, original re-scoped by dated continuation
 
 **Wave 13** *(blocked on Wave 12)*
@@ -835,7 +836,7 @@ capacities — with every number in prose generated from a committed record rath
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
-| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 13/19 | HALTED (D-04) — 23-17's production run INCOMPLETE (3/5 seeds, no record); 23-18/23-19 have no input | -          |
+| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 14/20 | HALTED (D-04) — 23-11..23-14 still BLOCKED. 23-17's run was CONTINUED by 23-20 and completed at 5/5: `results/phase23_matched_control.json` EXISTS, floor 0.0267857142857143 (27/1008) over five readings, so 23-18 (re-pin) and 23-19 (verdict) are UNBLOCKED. No verdict rendered yet. | -          |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |
