@@ -2499,12 +2499,281 @@ def matched():
     )
 
 
+# =================================================================================================
+# ===== (f3) THE RE-TEST — THE D-04 DECISION, AGAINST THE COMPARATOR THAT IS FINALLY THE RIGHT ONE
+# =================================================================================================
+
+# The FOUR scored tiers, under the key names BOTH records already carry them by. Named once so the
+# verdict record's `secondary_readings` block is built by READING each source block — see THE
+# READ-THE-DENOMINATOR RULE inside `matched_verdict`, which governs every k and n it writes.
+_SCORED_TIERS = ("primary", "heldout_on", "taught_off", "heldout_off")
+
+
+def matched_verdict():
+    """23-19 — re-run the D-04 decision against the PROTOCOL-MATCHED comparator.
+
+    THE DRIVER COMPARES NOTHING. ``phase23_prereg.sigma_zero_verdict`` is CALLED with the matched
+    comparator's readings, the σ=0 arm's reading READ BACK out of its committed record, the floor
+    READ from ``mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR`` and that pin's provenance dict. The
+    rule re-derives the floor from the readings it is handed and REFUSES a floor that does not
+    match. ``deviation`` below is REPORTED for the record; the DECISION is the rule's and only the
+    rule's. There is no override flag and no warning branch, and ``scripts/phase23_prereg.py`` is
+    byte-identical to its blind birth commit ``c7de5d4`` — the corrected comparator is a new INPUT
+    to that rule, never a change to it.
+
+    THE σ=0 ARM IS NOT RE-RUN. Its PROTOCOL never changed; only its comparator did. Its reading is
+    read back from ``results/phase23_sigma_zero.json`` and re-derived from that record's own
+    ``primary.k / primary.n`` before use.
+
+    ON A ``SystemExit`` FROM THE RULE — D-04 firing a second time — the record is STILL WRITTEN,
+    carrying ``verdict: "HALT"`` and the raised message VERBATIM, and the sweep stays halted with
+    zero noised points. That branch re-runs nothing, re-seeds nothing, widens nothing and tunes
+    nothing. Either way the verdict IS the deliverable.
+    """
+    path = _ROOT / mp.MATCHED_VERDICT_RECORD
+    _prove(
+        not path.exists(),
+        f"{path} already exists — it is recorded evidence and there is no force flag",
+    )
+
+    matched_path = _ROOT / mp.MATCHED_CONTROL_RECORD
+    sigma_zero_path = _ROOT / SIGMA_ZERO_RECORD
+    matched = json.loads(matched_path.read_text(encoding="utf-8"))
+    sigma_zero = json.loads(sigma_zero_path.read_text(encoding="utf-8"))
+    matched_first = matched["per_seed"][0]
+
+    # Both stored summaries must still agree with their OWN evidence. The debug session re-derived
+    # this by hand once; asserting it here makes it permanent, and it is the SAME assertion on both
+    # sides because a `rate` that drifted from its own denominator is the same defect either way.
+    for label, block in (
+        (SIGMA_ZERO_RECORD, sigma_zero["primary"]),
+        (mp.MATCHED_CONTROL_RECORD, matched_first["primary"]),
+    ):
+        _prove(
+            block["rate"] == block["k"] / block["n"],
+            f"{label}'s recorded primary rate is {block['rate']!r} but its own counts give "
+            f"{block['k']}/{block['n']} = {block['k'] / block['n']!r}. The stored summary has "
+            "DRIFTED from the evidence it summarises, and the verdict below would be a judgement "
+            "of the summary rather than of the reading",
+        )
+
+    _prove(
+        matched["central_reading_seed"] == sigma_zero["seed"],
+        f"the comparator's CENTRAL reading — the one `sigma_zero_verdict` pins as "
+        f"`control_readings[0]` — is seed {matched['central_reading_seed']} while the σ=0 arm ran "
+        f"at seed {sigma_zero['seed']}. The diagnostic compares this arm against THAT reading, so "
+        "a different seed here would compare two different draws and call the difference DP",
+    )
+    _prove(
+        sigma_zero["clip_bind_count"] == 0,
+        f"the recorded σ=0 run bound its clip on {sigma_zero['clip_bind_count']} record(s) — the "
+        "diagnostic is confounded by clipping rather than by the DP arithmetic. CARRIED FORWARD "
+        "from the record rather than re-derived, so a σ=0 record whose non-binding proof was lost "
+        "cannot reach a second verdict on the strength of the first one's",
+    )
+    _prove(
+        mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR == matched["floor"],
+        "`mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR` is "
+        f"{mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR!r} while {mp.MATCHED_CONTROL_RECORD} "
+        f"records {matched['floor']!r}. `sigma_zero_verdict`'s own refusal 2 would also catch this "
+        "— naming BOTH sides here is what tells an operator WHICH of the two moved",
+    )
+
+    # The THREE AST gates, RE-RUN against live source. A `loop.py` or `teach_persona.py` edit
+    # landing between 23-16 and now would silently un-match the comparator, and a verdict rendered
+    # over an un-matched comparator is the exact defect this whole gap closure exists to correct.
+    census = prove_matched_protocol()
+
+    reading = sigma_zero["reading"]
+    floor_value = mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR
+    floor_provenance = mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE
+    control_readings = matched["readings"]
+    central = control_readings[0]
+
+    halt_message = None
+    try:
+        verdict = sigma_zero_verdict(
+            control_readings=control_readings,
+            sigma_zero_reading=reading,
+            floor=floor_value,
+            floor_provenance=floor_provenance,
+        )
+    except SystemExit as halt:
+        # D-04 FIRING A SECOND TIME. Not caught to soften it — caught so the record that names the
+        # halt gets written and committed. No retry, no widened band, no override flag.
+        verdict, halt_message = "HALT", str(halt)
+
+    deviation = abs(reading - central)
+
+    # The FIRST verdict's direction, re-derived from the σ=0 record's OWN two readings with
+    # `sigma_zero_verdict`'s own expression, then CHECKED against the message that record already
+    # carries — so the superseded block below quotes a decided outcome rather than restating one.
+    superseded_direction = "BEATS" if reading > sigma_zero["control_central_reading"] else "misses"
+    superseded_halt = sigma_zero["halt_message"]
+    _prove(
+        isinstance(superseded_halt, str) and superseded_direction in superseded_halt,
+        f"the σ=0 record's own halt message does not contain {superseded_direction!r}: "
+        f"{superseded_halt!r}. The superseded block quotes the FIRST verdict, so its direction has "
+        "to come from that verdict's own message and not from this driver's recollection of it",
+    )
+
+    # ===== THE READ-THE-DENOMINATOR RULE, WHICH GOVERNS THE WHOLE BLOCK BELOW =====
+    # Every `k` and every `n` this record carries is READ from its source record's own tier block.
+    # NO DENOMINATOR IS TYPED HERE — not the taught set's, not the held-out set's, and nothing
+    # carried forward from a docstring, a SUMMARY or a plan's prose. This is not fussiness:
+    # 23-19-PLAN's first draft stated the σ=0 arm's taught-OFF tier as `0/648` when the record says
+    # `0/1008`, and in a phase whose entire subject is *"was this compared against the right
+    # denominator"*, a wrong denominator in a committed evidence artifact is disqualifying.
+    # Read the block. Do not retype it. `taught_off` in particular is scored over the TAUGHT
+    # question set, which is why it does NOT share the held-out tiers' denominator.
+    #
+    # `reduced: False` on EVERY tier, primary included: each number here is a RAW per-seed k/n, not
+    # an aggregate. The only reduction in this phase is `noise_floor` over the five seeds' taught-ON
+    # readings, and it lives in `floor` / `control_readings`, not in this block.
+    secondary_readings = {
+        source: {
+            tier: {
+                "k": blob[tier]["k"],
+                "n": blob[tier]["n"],
+                "rate": blob[tier]["rate"],
+                "reduced": False,
+            }
+            for tier in _SCORED_TIERS
+        }
+        for source, blob in (("sigma_zero", sigma_zero), ("matched_control", matched_first))
+    }
+
+    record = {
+        "record": mp.MATCHED_VERDICT_RECORD,
+        # ===== THE VERDICT, AS THE RULE RETURNED IT =====
+        "verdict": verdict,
+        "verdict_rule": "phase23_prereg.sigma_zero_verdict",
+        "halt_message": halt_message,
+        # ===== THE σ=0 ARM: READ BACK, NEVER RE-MEASURED =====
+        "reading": reading,
+        "reading_source": _rel(sigma_zero_path),
+        "sigma_zero_record_file_sha256": _sha256(sigma_zero_path),
+        "sigma_zero_seed": sigma_zero["seed"],
+        "sigma_zero_clip_bind_count": sigma_zero["clip_bind_count"],
+        "sigma_zero_composed_steps": sigma_zero["composed_steps"],
+        "sigma_zero_was_re_run": False,
+        "sigma_zero_was_re_run_reason": (
+            "the σ=0 arm's PROTOCOL never changed — only its comparator did — so its reading is "
+            "read back from its committed record and re-derived from that record's own "
+            "primary.k / primary.n, and no arm was re-run to obtain a different number"
+        ),
+        # ===== THE COMPARATOR =====
+        "control_readings": control_readings,
+        "control_record": _rel(matched_path),
+        "control_record_file_sha256": _sha256(matched_path),
+        "control_seeds": matched["seeds"],
+        "central_reading": central,
+        "central_reading_seed": matched["central_reading_seed"],
+        # REPORTED, not decided: `sigma_zero_verdict` owns the comparison and this driver runs none.
+        "deviation": deviation,
+        "deviation_over_floor": deviation / floor_value,
+        "floor": floor_value,
+        "floor_pin_module": "mitigation_budget",
+        "floor_pin_symbol": "MATCHED_CONTROL_NOISE_FLOOR",
+        "floor_provenance_symbol": "MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE",
+        "floor_provenance": dict(floor_provenance),
+        # ===== THE DISCLOSURE — a REQUIRED FIELD, refused below if absent or not True =====
+        "sigma_zero_was_visible": True,
+        "sigma_zero_visibility_disclosure": mp.SIGMA_ZERO_VISIBILITY_DISCLOSURE,
+        "declared_differences": mp.MATCHED_DIFFERENCES,
+        "equalised_mechanisms": matched["equalised_mechanisms"],
+        "dp_fn_branch_census": [
+            {"function": function, "condition": condition, "count": count}
+            for (function, condition), count in sorted(census.items())
+        ],
+        # ===== THE FIRST VERDICT, QUOTED FROM ITS OWN RECORD RATHER THAN RETYPED =====
+        "superseded_verdict": {
+            "record": sigma_zero["record"],
+            "verdict": sigma_zero["verdict"],
+            "halt_message": superseded_halt,
+            "floor": sigma_zero["floor"],
+            "floor_pin_symbol": sigma_zero["floor_pin_symbol"],
+            "central_reading": sigma_zero["control_central_reading"],
+            "central_reading_seed": sigma_zero["control_central_reading_seed"],
+            "control_record": sigma_zero["control_record"],
+            "control_readings": sigma_zero["control_readings"],
+            "deviation": sigma_zero["deviation"],
+            "deviation_over_floor": sigma_zero["deviation"] / sigma_zero["floor"],
+            "direction": superseded_direction,
+            "it_was_not_wrong": (
+                "THE FIRST VERDICT WAS NOT WRONG. It correctly measured this arm against a "
+                "DIFFERENT TRAINING PROTOCOL: `is_dp = arm in DP_ARMS` switched the packer, the "
+                "lot size and the gradient clip together, so the old control differed from the σ=0 "
+                "arm by three measured mechanisms as well as by the DP seam. What is superseded is "
+                "its COMPARATOR, not its arithmetic — every figure above still re-derives from "
+                "that record, which is left byte-unchanged beside this one"
+            ),
+        },
+        # ===== THE FOUR SCORED TIERS OF BOTH ARMS, EACH WITH ITS OWN DENOMINATOR =====
+        "secondary_readings": secondary_readings,
+        "secondary_readings_denominators_source": {
+            "sigma_zero": f"{_rel(sigma_zero_path)} -> the record's own top-level tier blocks",
+            "matched_control": f"{_rel(matched_path)} -> per_seed[0]'s own tier blocks",
+            "rule": (
+                "every k and n above is a SUBSCRIPT READ of the named block, never a literal. Both "
+                "paths are named here so a reader can check every denominator against its origin "
+                "without leaving this file. `taught_off` is scored over the TAUGHT question set "
+                "and therefore does NOT share the held-out tiers' denominator"
+            ),
+        },
+        "governs": (
+            "WHETHER THE D-04 HALT SURVIVES A PROTOCOL-MATCHED COMPARATOR, and nothing else. The "
+            "quantity judged is the TAUGHT RECALL RATE WITH THE ADAPTER ON (primary.k / primary.n, "
+            "a count over QUESTIONS) — the same quantity both floors declare they govern. THIS "
+            "RECORD DOES NOT UNBLOCK ANYTHING. Plans 23-11, 23-12, 23-13 and 23-14 remain BLOCKED "
+            "whatever the verdict says; unblocking them is a separate, later act taken by a human "
+            "who has READ this record, not a consequence of this driver's exit code"
+        ),
+        **provenance(),
+    }
+
+    # Checks the WHOLE `VERDICT_REQUIRED_KEYS` tuple, not only the two visibility keys, so an
+    # omission anywhere in the blind-pinned set refuses the write rather than the review.
+    mp.prove_verdict_record_declares_visibility(record)
+
+    path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+
+    block = sigma_zero["primary"]
+    print(
+        f"[phase23_run] σ=0 reading (READ BACK, not re-run): {block['k']}/{block['n']} = "
+        f"{reading!r} over {block['questions']} questions x {block['draws_per_question']} draws"
+    )
+    matched_block = matched_first["primary"]
+    print(
+        f"[phase23_run] matched central: {matched_block['k']}/{matched_block['n']} = {central!r} "
+        f"(seed {matched['central_reading_seed']}) | deviation {deviation!r} | floor "
+        f"{floor_value!r} = mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR"
+    )
+    print(f"[phase23_run] wrote {mp.MATCHED_VERDICT_RECORD}: verdict {verdict!r}")
+    if halt_message is not None:
+        print(halt_message)
+        raise SystemExit(
+            "[phase23_run] D-04 HALT RE-CONFIRMED and recorded at "
+            f"{mp.MATCHED_VERDICT_RECORD}. THE SWEEP REMAINS HALTED WITH ZERO NOISED POINTS. The "
+            "comparator was PROTOCOL-MATCHED on all three measured mechanisms — lot volume, "
+            "teaching loss weight and gradient clip — and the breach survived it. THERE IS NO "
+            "SECOND COMPARATOR: commit this record, and do NOT re-run, re-seed, widen or tune this "
+            "arm to get a different number. 23-11..23-14 stay BLOCKED."
+        )
+    print(
+        "[phase23_run] 23-11 / 23-12 / 23-13 / 23-14 REMAIN BLOCKED. This exit code unblocks "
+        "NOTHING: unblocking them is a separate, later act taken by a human who has read "
+        f"{mp.MATCHED_VERDICT_RECORD}, not a consequence of this driver returning normally."
+    )
+
+
 _TABLE = {
     "cost": cost,
     "schedule": schedule,
     "floor": floor,
     "sigma-zero": sigma_zero,
     "matched": matched,
+    "matched-verdict": matched_verdict,
 }
 
 USAGE = (
@@ -2528,6 +2797,15 @@ USAGE = (
     "              NO VERDICT — 23-18 re-pins the floor and 23-19 calls the rule. ONE ATTEMPT:\n"
     "              `phase23_matched_prereg.prove_first_attempt` plus a scored-seed refusal over\n"
     "              data/phase23_run_state.json, and there is no force flag on either.\n"
+    "  matched-verdict\n"
+    "              RE-RUN THE D-04 DECISION against the protocol-matched comparator. Pure\n"
+    "              arithmetic over two COMMITTED records — trains nothing, scores nothing, and\n"
+    "              does NOT re-run the sigma=0 arm: its reading is READ BACK from\n"
+    "              results/phase23_sigma_zero.json. Calls `phase23_prereg.sigma_zero_verdict`\n"
+    "              with the matched readings and `mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR`.\n"
+    "              Writes results/phase23_matched_verdict.json on BOTH outcomes. A second breach\n"
+    "              HALTS again — no second comparator, no override flag. 23-11..23-14 stay\n"
+    "              BLOCKED either way.\n"
 )
 
 
