@@ -1,0 +1,69 @@
+SESSION pid=23851 pgid=23851 sid=23851
+[phase23_run] CONTINUATION of a killed run ADMITTED by phase23_resume_prereg.prove_killed_run_continuation: scored [1337, 1338, 2024], trained [1337, 1338, 2024], HEAD agrees at [1337, 1338, 2024], 3 tracked per-seed curve(s)
+[phase23_run] matched preflight: 7 dp_fn branch(es), 21 production train() keyword(s), 19 on the comparator (= production - {resume_from, dp_fn}) — all three AST gates GREEN
+[phase23_run] matched seed 1337: trained, adapter digest verified — reusing
+[phase23_run] matched seed 2024: trained, adapter digest verified — reusing
+[phase23_run] matched seed 1338: trained, adapter digest verified — reusing
+[phase23_run] matched: training matched_control_seed2025
+[phase23_run] matched_control_seed2025: 3 dp_n8 bin(s) verified against 23-07's digests (already present) — SAME BYTES as the σ=0 arm
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase23_run] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase23_run] matched_control_seed2025: 200 clip call(s), pre-clip norms in [0.353072, 2.26006] against C = 1000000.0 — C is OBSERVED non-binding, before any reading exists
+[phase23_run] matched_control_seed2025: wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase23_matched_control_seed2025_adapter.pt (1.35 MB) in 166.8s
+[phase23_run] matched: scoring matched_control_seed2025
+[teach_persona] matched_control_seed2025: scoring 112 taught + 72 held-out questions x 9 draws, adapter ON then OFF
+  [matched_control_seed2025 taught ON] 20/112 questions, running 171/180 = 0.9500
+  [matched_control_seed2025 taught ON] 40/112 questions, running 334/360 = 0.9278
+  [matched_control_seed2025 taught ON] 60/112 questions, running 506/540 = 0.9370
+  [matched_control_seed2025 taught ON] 80/112 questions, running 628/720 = 0.8722
+  [matched_control_seed2025 taught ON] 100/112 questions, running 716/900 = 0.7956
+[teach_persona] matched_control_seed2025 taught ON: 763/1008 = 0.7569 (F1 0.8278, F2 0.7833, F6 0.6354)
+  [matched_control_seed2025 held-out ON] 20/72 questions, running 132/180 = 0.7333
+  [matched_control_seed2025 held-out ON] 40/72 questions, running 260/360 = 0.7222
+  [matched_control_seed2025 held-out ON] 60/72 questions, running 322/540 = 0.5963
+[teach_persona] matched_control_seed2025 held-out ON: 349/648 = 0.5386 (F3 0.6065, F7 0.5324, F8 0.4769)
+  [matched_control_seed2025 taught OFF] 20/112 questions, running 0/180 = 0.0000
+  [matched_control_seed2025 taught OFF] 40/112 questions, running 0/360 = 0.0000
+  [matched_control_seed2025 taught OFF] 60/112 questions, running 0/540 = 0.0000
+  [matched_control_seed2025 taught OFF] 80/112 questions, running 0/720 = 0.0000
+  [matched_control_seed2025 taught OFF] 100/112 questions, running 0/900 = 0.0000
+[teach_persona] matched_control_seed2025 taught OFF: 0/1008 = 0.0000 (F1 0.0000, F2 0.0000, F6 0.0000)
+  [matched_control_seed2025 held-out OFF] 20/72 questions, running 0/180 = 0.0000
+  [matched_control_seed2025 held-out OFF] 40/72 questions, running 0/360 = 0.0000
+  [matched_control_seed2025 held-out OFF] 60/72 questions, running 0/540 = 0.0000
+[teach_persona] matched_control_seed2025 held-out OFF: 0/648 = 0.0000 (F3 0.0000, F7 0.0000, F8 0.0000)
+[teach_persona] matched_control_seed2025: per-family gain {'F1': 0.8278, 'F2': 0.7833, 'F6': 0.6354}, held-out per-family std 0.0531
+[phase23_run] matched: training matched_control_seed1339
+[phase23_run] matched_control_seed1339: 3 dp_n8 bin(s) verified against 23-07's digests (already present) — SAME BYTES as the σ=0 arm
+[phase23_run] matched_control_seed1339: 200 clip call(s), pre-clip norms in [0.353012, 2.30167] against C = 1000000.0 — C is OBSERVED non-binding, before any reading exists
+[phase23_run] matched_control_seed1339: wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase23_matched_control_seed1339_adapter.pt (1.35 MB) in 155.7s
+[phase23_run] matched: scoring matched_control_seed1339
+[teach_persona] matched_control_seed1339: scoring 112 taught + 72 held-out questions x 9 draws, adapter ON then OFF
+  [matched_control_seed1339 taught ON] 20/112 questions, running 163/180 = 0.9056
+  [matched_control_seed1339 taught ON] 40/112 questions, running 330/360 = 0.9167
+  [matched_control_seed1339 taught ON] 60/112 questions, running 502/540 = 0.9296
+  [matched_control_seed1339 taught ON] 80/112 questions, running 629/720 = 0.8736
+  [matched_control_seed1339 taught ON] 100/112 questions, running 723/900 = 0.8033
+[teach_persona] matched_control_seed1339 taught ON: 773/1008 = 0.7669 (F1 0.8222, F2 0.8000, F6 0.6562)
+  [matched_control_seed1339 held-out ON] 20/72 questions, running 121/180 = 0.6722
+  [matched_control_seed1339 held-out ON] 40/72 questions, running 258/360 = 0.7167
+  [matched_control_seed1339 held-out ON] 60/72 questions, running 321/540 = 0.5944
+[teach_persona] matched_control_seed1339 held-out ON: 346/648 = 0.5340 (F3 0.6065, F7 0.4907, F8 0.5046)
+  [matched_control_seed1339 taught OFF] 20/112 questions, running 0/180 = 0.0000
+  [matched_control_seed1339 taught OFF] 40/112 questions, running 0/360 = 0.0000
+  [matched_control_seed1339 taught OFF] 60/112 questions, running 0/540 = 0.0000
+  [matched_control_seed1339 taught OFF] 80/112 questions, running 0/720 = 0.0000
+  [matched_control_seed1339 taught OFF] 100/112 questions, running 0/900 = 0.0000
+[teach_persona] matched_control_seed1339 taught OFF: 0/1008 = 0.0000 (F1 0.0000, F2 0.0000, F6 0.0000)
+  [matched_control_seed1339 held-out OFF] 20/72 questions, running 0/180 = 0.0000
+  [matched_control_seed1339 held-out OFF] 40/72 questions, running 0/360 = 0.0000
+  [matched_control_seed1339 held-out OFF] 60/72 questions, running 0/540 = 0.0000
+[teach_persona] matched_control_seed1339 held-out OFF: 0/648 = 0.0000 (F3 0.0000, F7 0.0000, F8 0.0000)
+[teach_persona] matched_control_seed1339: per-family gain {'F1': 0.8222, 'F2': 0.8, 'F6': 0.6562}, held-out per-family std 0.0516
+[phase23_run] per-seed primary readings (taught recall ON, k/n over questions):
+  seed 1337: 790/1008 = 0.7837301587301587 over 112 questions x 9 draws
+  seed 2024: 774/1008 = 0.7678571428571429 over 112 questions x 9 draws
+  seed 1338: 778/1008 = 0.7718253968253969 over 112 questions x 9 draws
+  seed 2025: 763/1008 = 0.7569444444444444 over 112 questions x 9 draws
+  seed 1339: 773/1008 = 0.7668650793650794 over 112 questions x 9 draws
+[phase23_run] wrote results/phase23_matched_control.json: floor 0.0267857142857143 = phase23_prereg.noise_floor over 5 readings

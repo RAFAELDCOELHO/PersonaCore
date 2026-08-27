@@ -1,0 +1,741 @@
+{
+  "attempt": "continuation",
+  "central_reading": 0.7837301587301587,
+  "central_reading_seed": 1337,
+  "continuation_discrimination": "results/phase23_matched_control.json is written as `phase23_run.matched`'s LAST act, after every seed in `SEED_LADDER` has scored, so a COMPLETED attempt necessarily leaves five scored seeds and fewer than five is a state the completion path CANNOT PRODUCE. That write-ordering \u2014 and not any reading \u2014 is what tells a harness-killed run apart from a deleted-and-re-run one.",
+  "continuation_fingerprint": {
+    "committed_scored_seeds": [
+      1337,
+      1338,
+      2024
+    ],
+    "ladder": [
+      1337,
+      2024,
+      1338,
+      2025,
+      1339
+    ],
+    "record_exists": false,
+    "scored_seeds": [
+      1337,
+      1338,
+      2024
+    ],
+    "tracked": [
+      "results/phase23_matched_control_seed1337/run.csv",
+      "results/phase23_matched_control_seed1338/run.csv",
+      "results/phase23_matched_control_seed2024/run.csv"
+    ],
+    "trained_seeds": [
+      1337,
+      1338,
+      2024
+    ]
+  },
+  "continuation_rule": "phase23_resume_prereg.prove_killed_run_continuation",
+  "continuation_scope": "THE SCOPE OF THE CONTINUATION RULE, STATED AT ITS TRUE STRENGTH \u2014 FIVE CLAUSES, AND THE FIFTH IS\nABOUT THIS MODULE ITSELF.\n\n  (1) IT BINDS ON COMMITTED STATE PLUS THE WORKING TREE, AND ONLY THERE. Conjunct 5 compares the\n      working tree's scored set against the one `git show HEAD:` records. An operator with a dirty\n      tree and no commit is OUTSIDE this rule exactly as clause (1) of\n      `phase23_matched_prereg.prove_first_attempt` describes its own uncommitted window. This rule\n      narrows that window; it does not close it.\n\n  (2) IT CANNOT DISTINGUISH A HARNESS KILL FROM A SIGKILL AN OPERATOR SENT \u2014 nor does it need to.\n      Both leave the SAME partial state, and neither produced a reading that was then discarded:\n      the discrimination is the write-ordering, not the intent behind the kill.\n\n  (3) IT DOES NOT RE-ESTABLISH BLINDNESS. The blindness is SPENT. Readings from the killed attempt\n      are on screen and this rule does not pretend otherwise. All it says is that the continuation\n      is the SAME attempt \u2014 never that it is a blind one.\n\n  (4) IT IS SCOPED TO ONE FILENAME GLOB AND ONE SEED LADDER. A comparator under any other name is\n      NOT REFUSED by this function, exactly as clause (4) of the frozen rule records for itself.\n\n  (5) THIS MODULE IS NOT FROZEN, AND NOTHING FREEZES IT. `scripts/phase23_matched_prereg.py` is\n      held EDIT-ONCE by `tests/test_phase23_matched_prereg.py`'s `_assert_ordering_holds` against\n      `MATCHED_ARTIFACT_GLOB`. THIS MODULE CANNOT BE REGISTERED AGAINST THAT SAME GLOB: `adds[-1]`\n      for that glob is `d99d2aa`, which PRECEDES any commit of this file, so the ancestry conjunct\n      (`merge-base --is-ancestor prereg first_add`) can NEVER hold for it. What stands in for a\n      freeze is strictly weaker and is named so: `test_the_resume_pin_has_exactly_one_commit`\n      asserts this file has exactly ONE commit, so a second edit reddens the suite VISIBLY. That is\n      DETECTION AFTER THE FACT, NOT PREVENTION, and it is not the ancestry guarantee the frozen pin\n      carries. There is no override flag, no force flag and no warning branch here, and none is to\n      be added regardless of how the run turns out.\n",
+  "declared_differences": [
+    {
+      "difference": "the `dp_noise_rng` checkpoint slot",
+      "disposition": "declared-difference",
+      "evidence": "`_dp_extra` at loop.py:709 (branch 5 of the ledger). Checkpoint CONTENT, written downstream of every gradient, so it cannot move a reading.",
+      "matched_quantity": "none \u2014 the comparator constructs no DPSGD, so it has no slot to write"
+    },
+    {
+      "difference": "the arm NAME, and therefore the csv / checkpoint / adapter paths",
+      "disposition": "declared-difference",
+      "evidence": "two arms sharing a path would overwrite each other's evidence. The csv lands inside MATCHED_ARTIFACT_GLOB by construction, which is what puts it under the ancestry guard; the adapter lands in gitignored `checkpoints/`, which is why (i) is scoped as it is.",
+      "matched_quantity": "none \u2014 `matched_arm(seed)` is deliberately distinct from `dp_n8`"
+    },
+    {
+      "difference": "the DP seam's own object graph \u2014 DPSGD constructed on one side, None on the other",
+      "disposition": "declared-difference",
+      "evidence": "PROBE 2 falsifies this as an ARITHMETIC difference (72/72 LoRA tensors agree to 2.178e-07 relative at \u03c3=0 with non-binding C), and residual difference #4's premise \u2014 '\u03c3=0 is not the control computation with a zero added to it' \u2014 is TRUE of the CODE PATH and FALSE of the ARITHMETIC. The code path is therefore declared, not equalised: the comparator cannot reach it without becoming a DP arm.",
+      "matched_quantity": "the ARITHMETIC, which is falsified as a difference by measurement"
+    },
+    {
+      "difference": "the two end-of-run `masked_perplexity` sweeps, and the six per-seed diagnostic fields they produce",
+      "disposition": "declared-difference",
+      "evidence": "those sweeps live in `teach_persona.train_arm` (:1705 and :1709), so they do NOT run for a comparator that calls `tp.train` directly. `ppl_adapter_on`, `ppl_adapter_off`, `ppl_scored_targets`, `teaching_tokens`, `replay_tokens` and `replay_ratio` are therefore absent where the OLD control record carries them. They are diagnostics measured AFTER training ends, downstream of every weight the reading depends on, so they cannot move a reading \u2014 and adding them would spend scoring time the 23-17 budget does not hold. Declared here so their absence is a pinned expectation rather than a surprise a later reader reads as a truncated run.",
+      "matched_quantity": "none \u2014 ABSENT from the comparator's per-seed block"
+    }
+  ],
+  "device": "mps",
+  "dp_fn_branch_census": [
+    {
+      "condition": "dp_fn is None",
+      "count": 1,
+      "function": "_dp_extra"
+    },
+    {
+      "condition": "dp_fn is None",
+      "count": 1,
+      "function": "_optimizer_step"
+    },
+    {
+      "condition": "dp_fn is not None",
+      "count": 3,
+      "function": "_optimizer_step"
+    },
+    {
+      "condition": "dp_fn is None and ckpt.get('dp_noise_rng') is not None",
+      "count": 1,
+      "function": "train"
+    },
+    {
+      "condition": "dp_fn is not None and ckpt.get('dp_noise_rng') is not None",
+      "count": 1,
+      "function": "train"
+    }
+  ],
+  "draws_per_question": 9,
+  "equalised_mechanisms": [
+    {
+      "measured": "DP lot = 33 teaching + 32 replay = 65 windows; control lot = 8 windows (8.125x). Measured TEACHING-token exposure over the run: 1,689,600 vs 196,867 = 8.58x.",
+      "mechanism": "lot volume"
+    },
+    {
+      "measured": "the DP arm's fact-aligned packer returns EVERY window of one fact (fact_index = step % n_facts, deterministic full coverage), so teaching enters the gradient at weight 1.0. The control draws 8 RANDOM windows from a bin that is 51.94% replay, so masked-CE puts weight p = 2719/6262 = 0.4342 on teaching. 1/0.4342 = 2.30x, on top of drastically lower gradient variance that AdamW compounds over 200 steps.",
+      "mechanism": "teaching loss weight"
+    },
+    {
+      "measured": "binding on 19 of the control's first 25 steps, mean shrink 0.8071, against DP norms of 1.538-2.278 never clipped. Equalised by MATCHED_GRAD_CLIP = 1e6.",
+      "mechanism": "grad_clip"
+    }
+  ],
+  "estimator": "the RANGE max(readings) - min(readings) over the N per-seed PRIMARY readings, committed BLIND in 23-03 and CALLED here \u2014 never re-implemented",
+  "floor": 0.0267857142857143,
+  "git_sha": "d8f42639f1d71ae36c277cd48baa422e24ae5104",
+  "governs": "the TAUGHT RECALL RATE WITH THE ADAPTER ON (per_seed[].primary.k / .n, a count over QUESTIONS) and NOTHING ELSE. This floor describes the PROTOCOL-MATCHED comparator: the same quantity results/phase23_control_floor.json's floor describes, reduced over an arm that equalises the three mechanisms that record's `residual_differences` did not. Every other reading here is secondary, carries its own denominator and was NOT reduced. This record renders NO verdict: `phase23_prereg.sigma_zero_verdict` is 23-19's to call, against the floor 23-18 re-pins from this number",
+  "grad_clip_evidence": {
+    "1337": {
+      "bound_count": 0,
+      "calls": 200,
+      "checked_before_scoring": true,
+      "max_pre_clip_norm": 2.277066469192505,
+      "min_pre_clip_norm": 0.33590200543403625
+    },
+    "1338": {
+      "bound_count": 0,
+      "calls": 200,
+      "checked_before_scoring": true,
+      "max_pre_clip_norm": 2.2020719051361084,
+      "min_pre_clip_norm": 0.34236836433410645
+    },
+    "1339": {
+      "bound_count": 0,
+      "calls": 200,
+      "checked_before_scoring": true,
+      "max_pre_clip_norm": 2.301671266555786,
+      "min_pre_clip_norm": 0.3530121147632599
+    },
+    "2024": {
+      "bound_count": 0,
+      "calls": 200,
+      "checked_before_scoring": true,
+      "max_pre_clip_norm": 2.290142774581909,
+      "min_pre_clip_norm": 0.34846240282058716
+    },
+    "2025": {
+      "bound_count": 0,
+      "calls": 200,
+      "checked_before_scoring": true,
+      "max_pre_clip_norm": 2.260063886642456,
+      "min_pre_clip_norm": 0.35307204723358154
+    }
+  },
+  "matched_glob_at_start": [
+    "results/phase23_matched_control_seed1337/run.csv",
+    "results/phase23_matched_control_seed1338/run.csv",
+    "results/phase23_matched_control_seed2024/run.csv"
+  ],
+  "n_seeds": 5,
+  "omitted_fields": {
+    "fields": {
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_scored_targets": null,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "teaching_tokens": null
+    },
+    "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+    "vs_old_control_record": "results/phase23_control_floor.json's per_seed carries these six as FLOATS. They are absent here because that record's arms ran through `teach_persona.train_arm` and this comparator calls `tp.train` directly. Recorded as explicit None with a reason rather than dropped: a None with a reason is an honest record, a missing key is a reader's guess. Declared blind in phase23_matched_prereg.MATCHED_DIFFERENCES"
+  },
+  "one_attempt_rule": "phase23_matched_prereg.prove_first_attempt",
+  "one_attempt_scope": "FOUR CLAUSES, recording the WEAKEST TRUE guarantee rather than the strongest sayable one.\n  (1) THE RULE BINDS ACROSS COMMITS. Once a matched artifact is TRACKED, a second protocol cannot be attempted without a VISIBLE DELETION in git history.\n  (2) INSIDE THE UNCOMMITTED WINDOW between this run and its commit it does not bind: `.gitignore:17` ignores `data/` and `.gitignore:14` ignores `checkpoints/`. There, `prior_scored_seeds_at_start` refuses ONLY a delete that leaves `data/phase23_run_state.json`'s `matched` section INTACT.\n  (3) A DELETE THAT ALSO REMOVES THAT SECTION IS PREVENTED BY NOTHING in real time. `prior` reads {}, `scored` reads [], and the case is INDISTINGUISHABLE FROM A FIRST ATTEMPT at run time; both recorded lists read [] either way, so this record discloses nothing about which it was.\n  (4) THAT SAME CASE IS AUDITABLE AFTER THE FACT rather than invisible \u2014 and only FROM THE SAME-SESSION COMMIT ONWARD. `data/phase23_run_state.json` is TRACKED as of `cfa2c87` with a committed baseline carrying NO `matched` section, and it is committed WITH this record, so a later deletion of that section is a VISIBLE DIFF against that commit. TRACKING IS NOT RETROACTIVE: before that commit a `git checkout -- data/phase23_run_state.json` reverts the working tree and leaves NO HISTORY AT ALL. The same-session commit is therefore what CONVERTS this residual from INVISIBLE to AUDITABLE rather than being its only bound. It remains a DISCIPLINE, NOT A MECHANISM, this is not 'closed', and there is no force flag.",
+  "per_seed": [
+    {
+      "adapter": "checkpoints/phase23_matched_control_seed1337_adapter.pt",
+      "adapter_bytes": 1352601,
+      "adapter_sha256": "0b64c1f501ca8eba93dde7e4696322d53ced01c82424bb9a12c5ea9cf31e9580",
+      "arm": "matched_control_seed1337",
+      "base_fingerprint": {
+        "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+        "step": 4000,
+        "val_loss": 1.5235939979553224
+      },
+      "batch_size": 8,
+      "block_size": 256,
+      "corpus_sha256": {
+        "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+        "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+        "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+      },
+      "csv": "results/phase23_matched_control_seed1337/run.csv",
+      "dp_seam_active": false,
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.06036620284430683,
+      "grad_accum_steps": 8,
+      "grad_clip": 1000000.0,
+      "grad_clip_bound_count": 0,
+      "grad_clip_calls": 200,
+      "grad_clip_checked_before_scoring": true,
+      "grad_clip_max_pre_clip_norm": 2.277066469192505,
+      "grad_clip_min_pre_clip_norm": 0.33590200543403625,
+      "heldout_family_std": 0.04933446717020304,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 346,
+        "n": 648,
+        "per_family": {
+          "F3": 0.6018518518518519,
+          "F7": 0.5138888888888888,
+          "F8": 0.4861111111111111
+        },
+        "questions": 72,
+        "rate": 0.5339506172839507
+      },
+      "max_steps": 200,
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.8444444444444444,
+        "F2": 0.8222222222222222,
+        "F6": 0.6597222222222222
+      },
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+      "ppl_scored_targets": null,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 790,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.8444444444444444,
+          "F2": 0.8222222222222222,
+          "F6": 0.6597222222222222
+        },
+        "questions": 112,
+        "rate": 0.7837301587301587
+      },
+      "replay_micro_batches_per_step": 4,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "replay_windows_per_step": 32,
+      "scoring_seconds": 972.7926467498764,
+      "seed": 1337,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": null,
+      "training_seconds": 154.20959608256817
+    },
+    {
+      "adapter": "checkpoints/phase23_matched_control_seed2024_adapter.pt",
+      "adapter_bytes": 1352601,
+      "adapter_sha256": "e2eda9d02738496b20f60348c6434cc2bd094d9d0e76aa27ffa9b71a9a45a7cb",
+      "arm": "matched_control_seed2024",
+      "base_fingerprint": {
+        "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+        "step": 4000,
+        "val_loss": 1.5235939979553224
+      },
+      "batch_size": 8,
+      "block_size": 256,
+      "corpus_sha256": {
+        "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+        "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+        "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+      },
+      "csv": "results/phase23_matched_control_seed2024/run.csv",
+      "dp_seam_active": false,
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.06060187518596649,
+      "grad_accum_steps": 8,
+      "grad_clip": 1000000.0,
+      "grad_clip_bound_count": 0,
+      "grad_clip_calls": 200,
+      "grad_clip_checked_before_scoring": true,
+      "grad_clip_max_pre_clip_norm": 2.290142774581909,
+      "grad_clip_min_pre_clip_norm": 0.34846240282058716,
+      "heldout_family_std": 0.056868906705828046,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 320,
+        "n": 648,
+        "per_family": {
+          "F3": 0.5601851851851852,
+          "F7": 0.5,
+          "F8": 0.4212962962962963
+        },
+        "questions": 72,
+        "rate": 0.49382716049382713
+      },
+      "max_steps": 200,
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.8222222222222222,
+        "F2": 0.8027777777777778,
+        "F6": 0.65625
+      },
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+      "ppl_scored_targets": null,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 774,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.8222222222222222,
+          "F2": 0.8027777777777778,
+          "F6": 0.65625
+        },
+        "questions": 112,
+        "rate": 0.7678571428571429
+      },
+      "replay_micro_batches_per_step": 4,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "replay_windows_per_step": 32,
+      "scoring_seconds": 990.2879575425759,
+      "seed": 2024,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": null,
+      "training_seconds": 165.79027429129928
+    },
+    {
+      "adapter": "checkpoints/phase23_matched_control_seed1338_adapter.pt",
+      "adapter_bytes": 1352601,
+      "adapter_sha256": "41379fdf6db70af6fed38020837c052d32bd98e2ffde31cac442ebbdea2f31df",
+      "arm": "matched_control_seed1338",
+      "base_fingerprint": {
+        "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+        "step": 4000,
+        "val_loss": 1.5235939979553224
+      },
+      "batch_size": 8,
+      "block_size": 256,
+      "corpus_sha256": {
+        "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+        "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+        "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+      },
+      "csv": "results/phase23_matched_control_seed1338/run.csv",
+      "dp_seam_active": false,
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.05773052270524204,
+      "grad_accum_steps": 8,
+      "grad_clip": 1000000.0,
+      "grad_clip_bound_count": 0,
+      "grad_clip_calls": 200,
+      "grad_clip_checked_before_scoring": true,
+      "grad_clip_max_pre_clip_norm": 2.2020719051361084,
+      "grad_clip_min_pre_clip_norm": 0.34236836433410645,
+      "heldout_family_std": 0.06459398005079119,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 333,
+        "n": 648,
+        "per_family": {
+          "F3": 0.5972222222222222,
+          "F7": 0.5046296296296297,
+          "F8": 0.4398148148148148
+        },
+        "questions": 72,
+        "rate": 0.5138888888888888
+      },
+      "max_steps": 200,
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.8305555555555556,
+        "F2": 0.8111111111111111,
+        "F6": 0.6493055555555556
+      },
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+      "ppl_scored_targets": null,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 778,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.8305555555555556,
+          "F2": 0.8111111111111111,
+          "F6": 0.6493055555555556
+        },
+        "questions": 112,
+        "rate": 0.7718253968253969
+      },
+      "replay_micro_batches_per_step": 4,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "replay_windows_per_step": 32,
+      "scoring_seconds": 1109.2366038747132,
+      "seed": 1338,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": null,
+      "training_seconds": 163.19990462530404
+    },
+    {
+      "adapter": "checkpoints/phase23_matched_control_seed2025_adapter.pt",
+      "adapter_bytes": 1352601,
+      "adapter_sha256": "739c66f18dae2f96b6e8e53d8faf2509260fe4ea799e050b7c179e9099369d97",
+      "arm": "matched_control_seed2025",
+      "base_fingerprint": {
+        "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+        "step": 4000,
+        "val_loss": 1.5235939979553224
+      },
+      "batch_size": 8,
+      "block_size": 256,
+      "corpus_sha256": {
+        "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+        "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+        "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+      },
+      "csv": "results/phase23_matched_control_seed2025/run.csv",
+      "dp_seam_active": false,
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.06126792193390429,
+      "grad_accum_steps": 8,
+      "grad_clip": 1000000.0,
+      "grad_clip_bound_count": 0,
+      "grad_clip_calls": 200,
+      "grad_clip_checked_before_scoring": true,
+      "grad_clip_max_pre_clip_norm": 2.260063886642456,
+      "grad_clip_min_pre_clip_norm": 0.35307204723358154,
+      "heldout_family_std": 0.053100773253349554,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 349,
+        "n": 648,
+        "per_family": {
+          "F3": 0.6064814814814815,
+          "F7": 0.5324074074074074,
+          "F8": 0.47685185185185186
+        },
+        "questions": 72,
+        "rate": 0.5385802469135802
+      },
+      "max_steps": 200,
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.8277777777777777,
+        "F2": 0.7833333333333333,
+        "F6": 0.6354166666666666
+      },
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+      "ppl_scored_targets": null,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 763,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.8277777777777777,
+          "F2": 0.7833333333333333,
+          "F6": 0.6354166666666666
+        },
+        "questions": 112,
+        "rate": 0.7569444444444444
+      },
+      "replay_micro_batches_per_step": 4,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "replay_windows_per_step": 32,
+      "scoring_seconds": 973.6248081671074,
+      "seed": 2025,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": null,
+      "training_seconds": 166.7529121255502
+    },
+    {
+      "adapter": "checkpoints/phase23_matched_control_seed1339_adapter.pt",
+      "adapter_bytes": 1352601,
+      "adapter_sha256": "327f3253b8f4d389b16df3cfffcc3eef646f2214d3329630ce8b173c6d4885b9",
+      "arm": "matched_control_seed1339",
+      "base_fingerprint": {
+        "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+        "step": 4000,
+        "val_loss": 1.5235939979553224
+      },
+      "batch_size": 8,
+      "block_size": 256,
+      "corpus_sha256": {
+        "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+        "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+        "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+      },
+      "csv": "results/phase23_matched_control_seed1339/run.csv",
+      "dp_seam_active": false,
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.06249918136745691,
+      "grad_accum_steps": 8,
+      "grad_clip": 1000000.0,
+      "grad_clip_bound_count": 0,
+      "grad_clip_calls": 200,
+      "grad_clip_checked_before_scoring": true,
+      "grad_clip_max_pre_clip_norm": 2.301671266555786,
+      "grad_clip_min_pre_clip_norm": 0.3530121147632599,
+      "heldout_family_std": 0.051599547831174354,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 346,
+        "n": 648,
+        "per_family": {
+          "F3": 0.6064814814814815,
+          "F7": 0.49074074074074076,
+          "F8": 0.5046296296296297
+        },
+        "questions": 72,
+        "rate": 0.5339506172839507
+      },
+      "max_steps": 200,
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.8222222222222222,
+        "F2": 0.8,
+        "F6": 0.65625
+      },
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+      "ppl_scored_targets": null,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 773,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.8222222222222222,
+          "F2": 0.8,
+          "F6": 0.65625
+        },
+        "questions": 112,
+        "rate": 0.7668650793650794
+      },
+      "replay_micro_batches_per_step": 4,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "replay_windows_per_step": 32,
+      "scoring_seconds": 971.8207930000499,
+      "seed": 1339,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": null,
+      "training_seconds": 155.66733387485147
+    }
+  ],
+  "primary_reading": "taught recall rate, adapter ON, over QUESTIONS",
+  "prior_scored_seeds_at_start": [
+    "1337",
+    "1338",
+    "2024"
+  ],
+  "protocol": {
+    "arm_prefix": "phase23",
+    "base_checkpoint": "checkpoints/convbase_best.pt",
+    "batch_size": 8,
+    "block_size": 256,
+    "budget_constants": {
+      "teach_persona.BATCH_SIZE": 8,
+      "teach_persona.BLOCK_SIZE": 256,
+      "teach_persona.LR": 0.0003,
+      "teach_persona.MAX_STEPS": 200,
+      "teach_persona.WARMUP_STEPS": 20,
+      "teach_persona.WEIGHT_DECAY": 0.0
+    },
+    "corpus_is_the_sigma_zero_arms_own_bins": true,
+    "corpus_sha256": {
+      "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+      "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+      "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+    },
+    "dp_seam_active": false,
+    "grad_accum_steps": 8,
+    "grad_clip": 1000000.0,
+    "grad_clip_symbol": "phase23_matched_prereg.MATCHED_GRAD_CLIP",
+    "lora_config": {
+      "alpha": 16.0,
+      "dropout": 0.0,
+      "r": 8,
+      "targets": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "c_proj",
+        "fc_in",
+        "fc_out"
+      ]
+    },
+    "max_steps": 200,
+    "n_facts": 8,
+    "replay_micro_batches_per_step": 4,
+    "replay_windows_per_step": 32
+  },
+  "python_version": "3.11.15",
+  "questions_heldout": 72,
+  "questions_taught": 112,
+  "readings": [
+    0.7837301587301587,
+    0.7678571428571429,
+    0.7718253968253969,
+    0.7569444444444444,
+    0.7668650793650794
+  ],
+  "record": "results/phase23_matched_control.json",
+  "record_sha256": "5bb4216f7ea15611847b5a46613f990cadc028f0a8680337385c7d1fbcf7dd85",
+  "reduction": "phase23_prereg.noise_floor",
+  "scoring_seconds_per_seed": {
+    "1337": 972.7926467498764,
+    "1338": 1109.2366038747132,
+    "1339": 971.8207930000499,
+    "2024": 990.2879575425759,
+    "2025": 973.6248081671074
+  },
+  "seeds": [
+    1337,
+    2024,
+    1338,
+    2025,
+    1339
+  ],
+  "sigma_zero_visibility_disclosure": "THE \u03c3=0 READING WAS ALREADY VISIBLE WHEN THIS COMPARATOR'S PROTOCOL WAS DESIGNED.\n\n`results/phase23_sigma_zero.json` was committed BEFORE this protocol existed, and its reading\n0.7837301587301587 (790/1008, seed 1337) was on screen throughout the design of the protocol this\nrecord reports. That is disclosed here rather than inferred later.\n\nWHAT REMAINS BLIND, all pinned at `c7de5d4` and byte-unchanged since:\n  * the reduction            \u2014 `phase23_prereg.noise_floor` (the range, max - min)\n  * the central-reading pin  \u2014 `control_readings[0]`, the reading at the FIRST recorded seed\n  * the verdict              \u2014 `phase23_prereg.sigma_zero_verdict`, no warning branch, no override\n  * the seed ladder          \u2014 `phase23_run.SEED_LADDER`\n\nWHAT IS **NOT** BLIND: the choice of WHICH MECHANISMS TO EQUALISE. That choice was made with the\n\u03c3=0 number visible, and it is the last remaining degree of freedom in this comparison. It is pinned\nin `scripts/phase23_matched_prereg.py`, committed while `git ls-files 'results/phase23_matched_*'`\nreturned NOTHING \u2014 which is what converts \"not tuned to the number\" from a claim in a paragraph\ninto a fact about git's object graph.\n\nAND THAT FACT IS LIMITED, IN EXACTLY FOUR WAYS (`prove_first_attempt`, restated in full because a\ndisclosure that omits a scope clause is the overclaim it exists to prevent):\n\n  (1) THE UNCOMMITTED WINDOW. The one-attempt rule binds ACROSS COMMITS only. Between 23-17's run\n      and 23-17's commit it does not bind at all: `.gitignore:17` ignores `data/` and\n      `.gitignore:14` ignores `checkpoints/`.\n\n  (2) THE FULL-DELETE CASE IS PREVENTED BY NOTHING IN REAL TIME. 23-17's\n      `prior_scored_seeds_at_start` refuses a delete that leaves the state file's `matched` section\n      INTACT. A delete that ALSO removes that section reads `prior = {}` and `scored = []`, and is\n      INDISTINGUISHABLE FROM A FIRST ATTEMPT at run time.\n\n  (3) THAT SAME CASE IS AUDITABLE AFTER THE FACT \u2014 BUT ONLY FROM THE SAME-SESSION COMMIT ONWARD.\n      `data/phase23_run_state.json` is tracked as of `cfa2c87` with a baseline carrying NO\n      `matched` section, so a later deletion of that section is a VISIBLE DIFF against the commit\n      that landed it. TRACKING IS NOT RETROACTIVE: before that commit a `git checkout --` leaves no\n      history at all. So the same-session commit is what CONVERTS this residual from invisible to\n      auditable \u2014 it is a DISCIPLINE, NOT A MECHANISM, and this is not \"closed\".\n\n  (4) ONE GLOB. A comparator renamed to `results/phase23_rematch_*` is not refused. The edit-once\n      property raises its cost to \"arrive with a NEW pre-registration\", which is VISIBLE, not\n      REFUSED.\n",
+  "sigma_zero_was_visible": true,
+  "superseded_ledger": "phase23_run.residual_differences (23-08) \u2014 four entries, and it did NOT enumerate grad_clip. That omission is why this comparator exists: a ledger drawn BY HAND did not know what it excluded. It still stands in results/phase23_control_floor.json, unedited, so a reader sees both; this record's `declared_differences` is read out of `phase23_matched_prereg.MATCHED_DIFFERENCES` and its `dp_fn_branch_census` off LIVE source, so neither can silently go short again",
+  "timestamp": "2026-08-27T22:11:32Z",
+  "torch_version": "2.7.1",
+  "training_seconds_per_seed": {
+    "1337": 154.20959608256817,
+    "1338": 163.19990462530404,
+    "1339": 155.66733387485147,
+    "2024": 165.79027429129928,
+    "2025": 166.7529121255502
+  }
+}
