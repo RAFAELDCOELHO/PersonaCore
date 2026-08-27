@@ -1,6 +1,6 @@
 ---
 slug: sigma-zero-beats-control
-status: root-caused
+status: resolved
 trigger: "Phase 23 D-04 HALT: the σ=0 arm BEATS the unmitigated control by 0.2222222222222222 (4.15× the 0.05357142857142849 floor). Split the hypothesis between (A) INVALID COMPARATOR — the control was trained under a different data-exposure protocol than the DP arm, leading suspicion the OLD random-window loader vs the NEW fact-aligned path — and (B) REAL DP-PATH DEFECT. Task 1: independently re-derive the headline numbers from the raw artifacts. Task 2: recover and systematically check all four residual differences 23-08 enumerated in advance, not only the 8× token difference. Only then decide whether the fix is a pre-registered comparator (own phase) or a localized DP-mechanism correction; if it touches a frozen file, use the dated-continuation discipline, never an in-place edit of a closed pin."
 created: 2026-08-27
 updated: 2026-08-27
@@ -56,6 +56,15 @@ updated: 2026-08-27
   protocol-matched comparator (equalising lot volume, teaching loss weight and `grad_clip`),
   re-reduce the floor on that comparator's seeds, then re-run the D-04 verdict. 23-11/12/13/14
   stay BLOCKED. **The halt stands and is better understood — that is the intended outcome.**
+- **next_action (2026-08-27, appended — the line above is left as it was written):** that new phase
+  was scheduled and executed as gap-closure plans 23-15…23-20, and the re-test HAS NOW RUN.
+  `phase23_prereg.sigma_zero_verdict` — unedited, byte-identical to `c7de5d4` — was called once
+  against the protocol-matched comparator and returned **`"proceed"`** with a deviation of exactly
+  **`0.0`** against a floor of `0.0267857142857143`. **"Await user decision" is discharged.** What
+  is now awaited is narrower and is not this record's to take: 23-11 / 23-12 / 23-13 / 23-14 are
+  **still BLOCKED** and are now **unblockABLE** — unblocking them is a separate, later human act
+  taken after reading `results/phase23_matched_verdict.json`, not a consequence of a driver exiting
+  0. See `### THE PROTOCOL-MATCHED COMPARATOR` at the end of this file.
 
 ## Evidence
 
@@ -321,3 +330,139 @@ ARITHMETIC. Branch (B) is excluded.
     "*Matched:* the replay TOKEN volume".
   - `.planning/debug/sigma-zero-beats-control.md` — this file.
   - **No source file changed.** No `results/` artifact touched.
+
+### THE PROTOCOL-MATCHED COMPARATOR (2026-08-27, plans 23-15…23-19)
+
+**A DATED CONTINUATION, NOT A REWRITE.** Every section above stands exactly as it was recorded and
+none of it is retracted — the measurements were right, and so was the first verdict. What follows is
+what was built to correct the COMPARATOR, and what the re-test returned. Every figure below is read
+out of `results/phase23_matched_verdict.json` and its two source records, not retyped from prose.
+
+**What was built.**
+
+- **A BLIND protocol pre-registration** at `scripts/phase23_matched_prereg.py`, committed at
+  `c100388` while `git ls-files 'results/phase23_matched_*'` returned nothing, and **still exactly
+  one commit** — the phase-20 ancestry guard makes a second one permanently unrecoverable, which is
+  why 23-20's continuation rule had to arrive as a NEW file (`scripts/phase23_resume_prereg.py`,
+  also one commit) rather than as an edit to it.
+- **The three mechanisms equalised**, each with the magnitude measured in TASK 2 above:
+  **lot volume** (DP lot 33 teaching + 32 replay = 65 windows vs the old control's 8 — 8.125x per
+  step, 1,689,600 vs 196,867 teaching tokens over the run = 8.58x); **teaching loss weight**
+  (fact-aligned deterministic full coverage puts teaching at weight 1.0 against the old control's
+  `p = 2719/6262 = 0.4342` — 2.30x); and **`grad_clip`** (bound on 19 of the old control's first 25
+  steps at mean shrink 0.8071, against DP norms of 1.538–2.278 never clipped — equalised to
+  `MATCHED_GRAD_CLIP = 1e6` and PROVEN non-binding at run time on all five seeds, 200/200 clip calls
+  and 0 binding on each).
+- **THREE AST CENSUSES replaced hand enumeration**, and they are re-run against LIVE source before
+  every verdict rather than trusted from 23-16. Observed this session, verbatim from the run:
+  `7 dp_fn branch(es), 21 production train() keyword(s), 19 on the comparator (= production -
+  {resume_from, dp_fn}) — all three AST gates GREEN`. The seven `dp_fn` branches are
+  `_optimizer_step` ×4 (3 on `dp_fn is not None`, 1 on `dp_fn is None`), `_dp_extra` ×1 and `train`
+  ×2; the seven wiring keys are `DP_KWARGS_KEYS` (6: `dp_fn`, `fact_bin`, `n_facts`, `replay_bin`,
+  `replay_mask_bin`, `replay_windows`) plus `DP_TRAIN_KEYS` (1: `grad_accum_steps`, the 8.125x
+  lot-volume lever, which rides the `TrainConfig` CONSTRUCTOR where the key-set subtraction cannot
+  see it). **This is the 23-08 failure shape closed one level up: a ledger drawn BY HAND did not
+  know what it excluded.**
+- **`DP_ARMS` WAS NOT WIDENED** — `grep -c "DP_ARMS" scripts/teach_persona.py` is still **9**, and
+  `scripts/teach_persona.py` and `src/personacore/training/loop.py` are byte-unchanged across all
+  five plans. The obstacle this record's `fix:` direction flagged — *"a valid control needs the
+  fact-aligned packer … so this needs a new arm-to-packer coupling"* — **dissolved on measurement**:
+  `train()`'s fact-aligned seam is keyed on `fact_bin`/`n_facts` (`loop.py:512`,
+  `_fact = {"fact_bin": fact_bin, "n_facts": n_facts}` — re-measured today, exact) and its replay
+  pass on `replay_windows is not None` (`loop.py:683` — re-measured today, exact). **Neither is
+  keyed on `dp_fn`.** A non-DP arm can therefore reach the DP arm's data wiring by passing kwargs,
+  with no widened predicate and no source edit at all.
+
+**The re-test, with every denominator the record carries.**
+
+The comparator ran on the σ=0 arm's OWN bins at the same five-seed ladder, in ladder order
+`(1337, 2024, 1338, 2025, 1339)` — never sorted, because `sigma_zero_verdict` pins the central
+reading to `control_readings[0]`.
+
+| seed | taught ON (primary) | held-out ON | taught OFF | held-out OFF |
+|---|---|---|---|---|
+| **1337** | **790/1008 = 0.7837301587301587** | 346/648 | 0/1008 | 0/648 |
+| 2024 | 774/1008 = 0.7678571428571429 | 320/648 | — | — |
+| 1338 | 778/1008 = 0.7718253968253969 | 333/648 | — | — |
+| 2025 | 763/1008 = 0.7569444444444444 | 349/648 | — | — |
+| 1339 | 773/1008 = 0.7668650793650794 | 346/648 | — | — |
+
+`phase23_prereg.noise_floor` CALLED over those five gives the floor **`0.0267857142857143`**, as
+counts **`790/1008 − 763/1008 = 27/1008`**, pinned at `mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR`
+BESIDE the original (153 insertions, 0 deletions; `CONTROL_NOISE_FLOOR = 0.05357142857142849` is
+byte-unchanged and still re-derives from its own record — it was never falsified, only re-scoped).
+
+**THE VERDICT: `"proceed"`.** Rendered by `phase23_prereg.sigma_zero_verdict`, byte-identical to its
+blind birth commit `c7de5d4` throughout, called exactly once with no override parameter and no
+warning branch:
+
+|  | σ=0 arm | protocol-matched comparator |
+|---|---|---|
+| taught ON | **790/1008 = 0.7837301587301587** | **790/1008 = 0.7837301587301587** |
+| held-out ON | 346/648 = 0.5339506172839507 | 346/648 = 0.5339506172839507 |
+| taught OFF | 0/1008 | 0/1008 |
+| held-out OFF | 0/648 | 0/648 |
+
+**deviation `0.0` against floor `0.0267857142857143` — ratio `0.0`.** Not "inside the floor":
+**IDENTICAL**, on all four scored tiers, at the same seed. Note the taught-OFF denominator is
+**1008**, the TAUGHT question set's — not the held-out set's 648. It is read from each record's own
+block by `matched_verdict`, and `test_matched_verdict_secondary_denominators_are_the_records_own`
+checks every one of the eight against its source.
+
+**The superseded verdict, quoted from its own record and NOT retracted:** central
+`0.5615079365079365`, floor `0.05357142857142849`, deviation `0.2222222222222222`, **4.1481x**,
+direction **BEATS**. It was not wrong. It correctly measured this arm against a DIFFERENT TRAINING
+PROTOCOL. `results/phase23_sigma_zero.json` and `results/phase23_control_floor.json` are left
+byte-unchanged beside the new record so a reader sees both.
+
+**What this resolves, and what it does not.**
+
+- **Branch (A) INVALID COMPARATOR is confirmed as the WHOLE cause.** Branch (B) was already
+  falsified by direct measurement (72/72 LoRA tensors to 2.178e-07 relative); the deviation now
+  collapsing from `0.2222222222222222` to exactly `0.0` the moment the three mechanisms are
+  equalised leaves no residual for anything else to explain. The halt is **resolved by comparator
+  correction**, exactly as this record's `fix:` direction predicted, and with no DP-mechanism change
+  of any kind: not one line of `dpsgd.py`, `loop.py` or `teach_persona.py` was edited.
+- **23-11 / 23-12 / 23-13 / 23-14 REMAIN BLOCKED.** They are now **unblockABLE** — the precondition
+  they were waiting on exists — but unblocking them is a separate, later act taken by a human who
+  has read `results/phase23_matched_verdict.json`. It is NOT a consequence of a driver exiting 0,
+  and the record says so in its own `governs` field. `git ls-files 'results/phase23_noised_*'`
+  returns **0**, unchanged, and a committed guard (`test_no_noised_point_exists`) holds it there
+  regardless of the verdict.
+- **NO requirement was ticked by this wave.** `DPSGD-06` was closed by 23-10 and records that the
+  diagnostic FIRED; CAL-01, CAL-02, CAL-05 and CTRL-03 stay OPEN and belong to the blocked plans.
+  Making a valid comparator exist is a precondition, not a delivery.
+
+**The one-attempt rule, at FULL strength — five clauses, none dropped.**
+
+(1) It binds **ACROSS COMMITS**: once a matched artifact is TRACKED, a second protocol cannot be
+attempted without a visible deletion in git history. (2) Inside the **UNCOMMITTED WINDOW** it does
+not bind — `.gitignore:17` ignores `data/`, `:14` ignores `checkpoints/` — and 23-17's
+`prior_scored_seeds_at_start` refuses only a delete that leaves `data/phase23_run_state.json`'s
+`matched` section **INTACT**. (3) A delete that **ALSO removes that section is PREVENTED BY
+NOTHING** in real time: `prior` reads `{}`, `scored` reads `[]`, and the case is indistinguishable
+from a first attempt at run time. (4) That same case is nonetheless **AUDITABLE AFTER THE FACT** —
+`data/phase23_run_state.json` is TRACKED as of `cfa2c87` with a `matched`-free baseline and 23-20
+committed it together with the record at `04cdb21`, so a later deletion of that section is a visible
+diff — **but only FROM that commit onward**, because tracking is not retroactive and the
+same-session commit that starts it is a **DISCIPLINE, NOT A MECHANISM**. It is not "closed".
+(5) A comparator **RENAMED** out of the glob (`results/phase23_rematch_*`) is **VISIBLE, NOT
+REFUSED**; what raises its cost is that the pin is edit-once, so a second one must arrive with a new
+pre-registration. This record is the project's memory: it carries the honest scope or it carries an
+overclaim, and this particular claim has already been retracted twice for being stated at three
+clauses.
+
+**Disclosure, because it is a required field of the verdict record and not a footnote.** The σ=0
+reading `0.7837301587301587` was **ALREADY VISIBLE** when the matched comparator's protocol was
+designed. What remains blind (all `c7de5d4`, byte-unchanged): the reduction `noise_floor`, the
+central-reading pin `control_readings[0]`, the verdict `sigma_zero_verdict`, and the seed ladder.
+What is **NOT** blind: the choice of which mechanisms to equalise — pinned at `c100388` while
+`git ls-files 'results/phase23_matched_*'` returned nothing, which converts "not tuned to the
+number" from a paragraph into a fact about git's object graph, bounded by the five clauses above.
+
+**Verification of this continuation.** `scripts/phase23_prereg.py` byte-identical to `c7de5d4`
+(`git diff --stat c7de5d4 HEAD`, empty); `scripts/phase23_matched_prereg.py` byte-identical to
+`c100388` and still one commit; `scripts/phase23_resume_prereg.py` still one commit;
+`results/phase23_sigma_zero.json`, `results/phase23_control_floor.json` and
+`results/phase23_matched_control.json` all `git diff --exit-code` clean; full suite
+**`1549 passed, 1 skipped`**; `ruff` clean over 219 files.

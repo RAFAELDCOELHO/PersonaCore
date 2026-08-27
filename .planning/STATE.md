@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-18-PLAN.md (plan 18 of 20) — MATCHED_CONTROL_NOISE_FLOOR = 0.0267857142857143 pinned BESIDE the original, which is byte-unchanged (153 insertions / 0 deletions, needle still unique, zero imports added). D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED; NO verdict rendered — that is 23-19's
-last_updated: "2026-08-27T22:47:54.210Z"
+stopped_at: Completed 23-19-PLAN.md (plan 19 of 20) — the D-04 re-test. phase23_prereg.sigma_zero_verdict (unedited, byte-identical to c7de5d4) was CALLED once against the protocol-matched comparator and returned "proceed", deviation exactly 0.0 against floor 0.0267857142857143. results/phase23_matched_verdict.json committed. THE HALT IS RESOLVED BY COMPARATOR CORRECTION. 23-11..23-14 remain BLOCKED (now unblockABLE — a human act, not this exit code); 23-17 remains INCOMPLETE on purpose; NO requirement ticked; results/phase23_noised_* still empty
+last_updated: "2026-08-27T23:12:00.000Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 67
-  completed_plans: 61
+  completed_plans: 62
   percent: 33
 ---
 
@@ -25,8 +25,59 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING GAP CLOSURE 23-15…23-20
-Plan: 18 of 20 — **23-18 COMPLETE at `9eb792f` + `3f9de69`** (23-11..23-14 remain BLOCKED)
+Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — GAP CLOSURE 23-15…23-20 COMPLETE
+Plan: 19 of 20 — **23-19 COMPLETE at `c86a224` + `0a275c9` + `beb2e53`** — **15 of 20 plans ticked**
+(23-01…23-10, 23-15, 23-16, 23-18, 23-19, 23-20). **23-11 / 23-12 / 23-13 / 23-14 remain BLOCKED**
+and **23-17 remains INCOMPLETE** — its run was harness-killed at 3/5 and wrote no record; 23-20 is
+what completed it, under a SEPARATE continuation pre-registration. It was not left unfinished by
+choice; what IS deliberate is that its box stays **UNTICKED**, because the plan whose run never
+produced a record did not complete. `roadmap.update-plan-progress` keys on SUMMARY EXISTENCE and
+falsely ticked 23-17 during 23-18; it was reverted by hand then and was NOT re-ticked here.
+
+**THE D-04 HALT IS RESOLVED — BY COMPARATOR CORRECTION, AND THE RULE THAT RESOLVED IT WAS NEVER
+EDITED.** 23-19 called `phase23_prereg.sigma_zero_verdict` — byte-identical to its blind birth
+commit `c7de5d4`, no override parameter, no warning branch — exactly once, with the
+protocol-matched comparator's five readings in ladder order `(1337, 2024, 1338, 2025, 1339)`, the
+σ=0 arm's reading **READ BACK** from `results/phase23_sigma_zero.json` (never re-run), and
+`mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR = 0.0267857142857143` with its provenance.
+
+**IT RETURNED `"proceed"`. Deviation exactly `0.0`, ratio `0.0` against the floor.** The matched
+comparator reproduces the σ=0 arm **IDENTICALLY** at seed 1337 on all four scored tiers — taught ON
+`790/1008 = 0.7837301587301587` on both, held-out ON `346/648` on both, taught OFF `0/1008` on both
+(the TAUGHT set's denominator, not the held-out set's 648), held-out OFF `0/648` on both. Not
+"inside the floor": identical. `results/phase23_matched_verdict.json` is committed at `0a275c9`.
+
+**SUPERSEDED, quoted from its own record and NOT retracted:** central `0.5615079365079365`, floor
+`0.05357142857142849`, deviation `0.2222222222222222`, **4.1481x**, direction **BEATS**. That
+verdict was NOT wrong — it correctly measured this arm against a DIFFERENT TRAINING PROTOCOL.
+`results/phase23_sigma_zero.json` and `results/phase23_control_floor.json` are byte-unchanged beside
+the new record so a reader sees both. **Branch (A) INVALID COMPARATOR is confirmed as the WHOLE
+cause**; branch (B) was already falsified (72/72 LoRA tensors to 2.178e-07). Not one line of
+`dpsgd.py`, `loop.py` or `teach_persona.py` was edited across the five gap plans; `DP_ARMS` was NOT
+widened (`grep -c` still **9**), because `train()`'s fact-aligned seam is keyed on
+`fact_bin`/`n_facts` (`loop.py:512`) and its replay pass on `replay_windows is not None`
+(`loop.py:683`) — neither on `dp_fn`.
+
+**WHAT `"proceed"` DOES NOT DO.** It does not unblock 23-11 / 23-12 / 23-13 / 23-14. They are now
+**unblockABLE** — the precondition they waited on exists — and they are **STILL BLOCKED**;
+unblocking them is a separate, later act taken by a human who has read the verdict record, not a
+consequence of a driver exiting 0. The record says so in its own `governs` field, and
+`test_no_noised_point_exists` holds `git ls-files 'results/phase23_noised_*'` at **0**
+unconditionally on the verdict. **NO requirement was ticked** — DPSGD-06 was closed by 23-10 and
+records that the diagnostic FIRED; CAL-01, CAL-02, CAL-05 and CTRL-03 stay OPEN and belong to the
+BLOCKED plans. Making a valid comparator exist is a precondition, not a delivery.
+
+**The one-attempt rule, at FULL strength — FIVE clauses, none dropped.** (1) It binds ACROSS
+COMMITS only. (2) In the uncommitted window `prior_scored_seeds_at_start` refuses only a delete
+leaving `data/phase23_run_state.json`'s `matched` section INTACT. (3) A delete that ALSO removes
+that section is **PREVENTED BY NOTHING** in real time. (4) That case is **AUDITABLE AFTER THE FACT
+and only that** — tracked at `cfa2c87` with a `matched`-free baseline, committed with the record at
+`04cdb21`, and only FROM that commit onward, because tracking is not retroactive: a DISCIPLINE, NOT
+A MECHANISM, and not "closed". (5) A comparator RENAMED out of the glob is **VISIBLE, NOT REFUSED**.
+This plan wrote neither a new comparator nor a new reading, so none of the three binds it beyond
+disclosure. Suite **`1549 passed, 1 skipped`** (1543 + 6 new guards); `ruff` clean over 219 files.
+The dated continuation is at `.planning/debug/sigma-zero-beats-control.md` — **1 deletion measured
+by `--numstat`, and it is the frontmatter `status:` line moving `root-caused` -> `resolved`.**
 
 **23-17's INDEX TRAP IS RESOLVED — the record it was blocked on now exists.** 23-20 continued the
 harness-killed run under a NEW pre-registration (`scripts/phase23_resume_prereg.py`, one commit)
