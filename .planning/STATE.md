@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-08-PLAN.md (plan 8 of 14)
-last_updated: 2026-08-27T05:54:17.772Z
+stopped_at: Completed 23-09-PLAN.md (plan 9 of 14)
+last_updated: 2026-08-27T06:16:14.160Z
 last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 55
+  completed_plans: 56
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 9 of 14
+Plan: 10 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -149,6 +149,7 @@ Last activity: 2026-08-27
 | Phase 23 P06 | 50min | 3 tasks | 2 files |
 | Phase 23 P07 | 55min | 3 tasks | 2 files |
 | Phase 23 P08 | 185min | 3 tasks | 5 files |
+| Phase 23 P09 | 25 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -531,6 +532,12 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-08: CTRL-03's never-taught arm is TRAINED (5 distinct seeds, adapters exported) but NOT scored, and CTRL-03 stays UNTICKED — its own text requires it to serve as frontier floor and relearning reference, and neither duty has been served. 23-14 scores it at 23-13's K
 - [Phase 23] 23-08: the ordering guards, MEASURED before and after rather than claimed. `test_the_prereg_rule_precedes_every_phase23_result` was ALREADY live at 23-04 and its checked-pair count moves 1 x 1 -> 1 x 13 tracked `results/phase23_*` artifacts. `test_control_precedes_sigma_zero` and `test_sigma_zero_precedes_every_noised_point` are BOTH STILL VACUOUS after this plan — each binds on `tracked = git ls-files <artifact_glob>` and both globs (`results/phase23_sigma_zero.json`, `results/phase23_noised_*`) still match NOTHING. What 23-08 lands is guard 2's PIN side, which the guard reads only once something is tracked. So ZERO guards went live here; the plan brief's "their endpoints land in 23-08 and 23-10" is true of the pin, not of the activation. `test_every_noised_sweep_point_is_under_the_noised_glob` scans 1 -> 3 tracked json records.
 - [Phase 23] 23-08: gsd-sdk hazards, SEVENTEENTH session in a row; the 23-04/23-07 `completed_plans` mode returned AGAIN. `state.advance-plan` had CORRECT counters (Plan 8 of 14 -> 9 of 14), advanced `stopped_at` correctly, but `completed_plans` FAILED TO INCREMENT (stayed 54, hand-set to 55), it flattened the body `Status:` to "Ready to execute", and returned `last_updated` QUOTED. `state.update-progress` returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped and re-quoted `last_updated`. `state.record-metric` and `state.add-decision` both REFUSED positional args and needed flags; with flags the metric row was CLEAN and all three decisions came back labelled `- [Phase ?]: `. `state.record-session --flag` was CLEAN. `roadmap.update-plan-progress 23` MANGLED the row's trailing cells to `| In Progress|  |` for the FIFTH session running AND left the row at 7/14 because it counts SUMMARY files on disk and the SUMMARY did not exist yet; the 23-08 checkbox was also left unticked. Six corruptions hand-repaired 1-line-for-1-line against a pre-call snapshot; `git diff .planning/` read after EVERY call; STATE.md 692 -> 698 and ROADMAP.md 804 -> 804 verified.
+- [Phase 23] 23-09: D-03's floor `0.05357142857142849` is PINNED as a literal in `scripts/mitigation_budget.py` — zero imports, literal assignments only (AST body is `['Expr', 'Assign', 'Assign']`), with `CONTROL_NOISE_FLOOR_PROVENANCE` as a SIBLING CONSTANT carrying all eight `phase23_prereg.FLOOR_PROVENANCE_KEYS`. The value was READ from `results/phase23_control_floor.json` and recomputed by CALLING `phase23_prereg.noise_floor` on the record's own `k`/`n` counts — never retyped, never re-implemented. Landed while `git ls-files results/phase23_sigma_zero.json` returns NOTHING, so D-03's ordering is a fact about git rather than an intention.
+- [Phase 23] 23-09: the module is DELIBERATELY NOT a `prereg_artifact=` — protected (it joins `_GATE_MODULES`, so the import ceiling polices it) but NOT frozen, because 23-13 must still write the Z values into it and a freeze is irrevocable from the first matching artifact. `test_the_budget_module_is_protected_but_not_frozen` makes both halves checked properties via an AST census over `tests/test_phase20_prereg.py`'s `prereg_artifact=` call sites, with a non-vacuity meta-guard.
+- [Phase 23] 23-09: PLAN DEFECT, measured. The plan's acceptance criterion said the record's `record_sha256` is the sha256 of the record FILE. It is not: `scripts/phase23_run.py:967-969` sets it to `sha256(json.dumps(per_seed, sort_keys=True, default=str))`, an INPUTS digest (`c62d7322...`), while the file's bytes hash to `201cc58e...`. A file cannot contain its own digest. BOTH are now carried under distinct names (`record_sha256` keeps its name because `FLOOR_PROVENANCE_KEYS` requires that exact key) and BOTH are checked live.
+- [Phase 23] 23-09: the `mitigation_*.py` import ceiling is re-measured and asserted by EQUALITY, not subset — `imported == {"erasure_gate", "pathlib", "sys"}`. Watched RED in BOTH directions: a stray `import json` grows the union to `['erasure_gate', 'json', 'pathlib', 'sys']`, and removing the gate from the register shrinks it to `[]`. The SHRINK is the case a subset assertion cannot see, and it would silently hand a future sibling an import budget the ceiling block says does not exist. All five new guards were watched RED by monkeypatching the REAL committed test functions' path/register constants, so what was observed failing is the code CI runs.
+- [Phase 23] 23-09: CAL-02 is NOT ticked, for the fourth plan running, and the reason is its text — *"Z ... is set **from** those measurements"*. The SECOND half is now closed (the separate module exists; the separation is enforced statically by the import-graph guard and transitively by 23-02's out-of-process probe, both green with the real module on disk). The FIRST half is not: 23-11 measures the per-point cost and 23-13 writes Z. `requirements mark-complete` was not called.
+- [Phase 23] 23-09: gsd-sdk hazards, EIGHTEENTH session in a row. `state.advance-plan` counters CORRECT (Plan 9 of 14 -> 10 of 14) but `completed_plans` FAILED TO INCREMENT for the third session in four (stayed 55, hand-set to 56), it flattened the body `Status:` to "Ready to execute", left `stopped_at` stale, and returned `last_updated` QUOTED. `state.update-progress` returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped and re-quoted `last_updated`. `state.record-metric` REFUSED positional args and needed flags; with flags the row was CLEAN. `state.record-session --flag` was CLEAN and corrected the stale `stopped_at` as a side effect. `state.add-decision` was NOT CALLED (23-07's measured practice — it has mislabelled every decision `- [Phase ?]: ` since 22-16 and reverts `completed_plans` from a stale read); these six entries are hand-written. `roadmap.update-plan-progress 23` ticked the 23-09 checkbox and moved the row to 9/14 CORRECTLY — the SUMMARY was written BEFORE the call, which is what 23-07/23-08 found it needs — and MANGLED the row's trailing cells to `| In Progress|  |` for the SIXTH session running. Four corruptions hand-repaired 1-line-for-1-line against a pre-call snapshot; `git diff .planning/` read after EVERY call; STATE.md 698 -> 699 (the one added metric row) and ROADMAP.md 804 -> 804 verified.
 
 ### Roadmap Evolution
 
@@ -663,8 +670,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T05:54:17.763Z
-Stopped at: Completed 23-08-PLAN.md (plan 8 of 14)
+Last session: 2026-08-27T06:16:14.150Z
+Stopped at: Completed 23-09-PLAN.md (plan 9 of 14)
 Resume file: None
 
 ## Operator Next Steps

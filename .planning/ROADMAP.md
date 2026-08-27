@@ -608,7 +608,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 23-09-PLAN.md — pin the floor in `scripts/mitigation_budget.py`, literal-only and zero-import, with its `_PROVENANCE` sibling
+- [x] 23-09-PLAN.md — pin the floor in `scripts/mitigation_budget.py`, literal-only and zero-import, with its `_PROVENANCE` sibling
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -791,7 +791,7 @@ capacities — with every number in prose generated from a committed record rath
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
-| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 8/14 | In Progress | -          |
+| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 9/14 | In Progress | -          |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |
