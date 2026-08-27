@@ -662,6 +662,28 @@ is to say so and record the DP figures separately. A 16-point sweep's training l
 `masked_perplexity` sweeps. **CAL-01 must confirm against one real `train_arm` run**; this research
 gives the plan a sized expectation, not a substitute.
 
+> **RETRACTED IN PLACE, 2026-08-27 (plan 23-10) — the `dp_n8` row's 227.6 s ≈ 3.79 min is NOT a
+> lower bound; it is an OVER-estimate.** Measured on the first real `train_arm` run at that exact
+> shape (`results/phase23_sigma_zero.json`, `training.seconds_total`, MPS / torch 2.7.1 / seed 1337,
+> `torch.mps.synchronize()` at both boundaries, 200 of 200 optimizer steps timed, none discarded):
+>
+> | quantity | projected here | MEASURED (23-10) |
+> |---|---:|---:|
+> | scope | the 200-step loop ONLY | the WHOLE `train_arm` call |
+> | total | 227.6 s | **205.44225783273578 s** |
+> | per optimizer step | 1138.0 ms | **1027.2 ms** |
+>
+> The measured figure covers strictly MORE work than the projection's scope — it includes every one
+> of the five components the paragraph above lists as excluded — and is still **22.2 s (−9.8%)
+> shorter**. So the loop-only quantity the projection actually names is below 1027.2 ms/step, and
+> the projection over-states it by **at least 10.8%**. The synthetic micro-benchmark
+> (`89.37 + 6.21` ms/micro-batch × 12 micro-batches/step) does not reproduce the real loop, which is
+> the direction that matters least for safety and most for honesty: a lower bound that is not one
+> cannot be cited as one. **The `dp_n64` row (1798.6 s ≈ 29.98 min) is UNMEASURED and inherits the
+> same doubt** — it is the same arithmetic at accum=64 and nothing in this phase has run it. The
+> qualitative finding below is untouched: `dp_n8` training is still ~10× the non-DP arm and
+> evaluation is still the binding constraint at every capacity.
+
 ### R3.B — CAL-05: generation throughput, and the floor↔ceiling bracket
 
 ### The measurement
@@ -1274,8 +1296,14 @@ BLOCK_SIZE=256`, real `GPT(ModelConfig())` + real `inject_lora` + real `DPSGD`):
 | Arm | Measured training | eval(4.77 h) ÷ training | Claim holds? |
 |---|---:|---:|---|
 | non-DP (accum=1) | 20.4 s | 843× | ✅ — this is where "~17 s" and "~1,010×" come from |
-| `dp_n8` (accum=8 + 4 replay micro) | 227.6 s ≈ 3.79 min | 75× | ❌ |
-| `dp_n64` (accum=64 + 32 replay micro) | 1798.6 s ≈ 29.98 min | **9.5×** | ❌ — one order of magnitude, not three |
+| `dp_n8` (accum=8 + 4 replay micro) | ~~227.6 s ≈ 3.79 min~~ → **205.44 s** MEASURED | 83× | ❌ |
+| `dp_n64` (accum=64 + 32 replay micro) | 1798.6 s ≈ 29.98 min (PROJECTED, unmeasured) | **9.5×** | ❌ — one order of magnitude, not three |
+
+> **CORRECTED IN PLACE, 2026-08-27 (plan 23-10).** The `dp_n8` row was a PROJECTION from a synthetic
+> micro-benchmark, not a measurement, and the first real `train_arm` run at that shape measured
+> **205.44225783273578 s** for the whole call — 9.8% below the projection despite covering five
+> components the projection excluded. See §R3.A's retraction block for the full comparison. The
+> `dp_n64` row remains an unmeasured projection and inherits the same doubt.
 
 **Root cause, not a discrepancy:** `scripts/teach_persona.py:1352` sets
 `grad_accum_steps = stats["n_facts"]` — one micro-batch per privacy record — and

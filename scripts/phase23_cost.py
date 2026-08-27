@@ -77,7 +77,15 @@ def _prove(condition, message):
 # is that training is budgeted per CAPACITY, not per "arm": `scripts/teach_persona.py:1352` sets
 # `grad_accum_steps = n_facts`, so ONE optimizer step costs `n_facts` backward passes PLUS
 # `ceil(4 * n_facts / batch_size)` replay micro-batches. A record carrying only "seconds per arm"
-# cannot show why 20.4 s (non-DP) becomes 3.79 min (dp_n8) and 29.98 min (dp_n64).
+# cannot show why 20.4 s (non-DP) becomes minutes on a DP arm.
+#
+# CORRECTED IN PLACE, 2026-08-27 (plan 23-10): this line used to cite "3.79 min (dp_n8) and
+# 29.98 min (dp_n64)" as if both were measurements. Both were PROJECTIONS from a synthetic
+# micro-benchmark (23-RESEARCH §R3.A), and the first real `train_arm` run at the dp_n8 production
+# shape measured 205.44225783273578 s — 9.8% BELOW the 227.6 s the projection called a lower bound,
+# despite the bracket covering five components the projection excluded
+# (`results/phase23_sigma_zero.json`, `training.seconds_total`). The dp_n64 figure is still
+# unmeasured. The reason these keys exist is unchanged; only the numbers were never measurements.
 TRAINING_RECORD_KEYS = (
     "arm",
     "capacity_n_facts",
