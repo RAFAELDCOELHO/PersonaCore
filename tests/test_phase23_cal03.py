@@ -53,8 +53,9 @@ with no double-rounding for a tolerance to absorb, and any tolerance would admit
 wiring leak the check exists to catch. Phase 22 rejected this reasoning once already in DPSGD-05
 (`src/personacore/lora/inject.py:113-118`: *"a tolerance would only weaken this"*), and 23-03
 committed the same refusal BLIND as `phase23_prereg.n64_leg_is_committable` — whose own
-parametrized case pins ``math.nextafter(1.25, math.inf)`` as NOT committable. That ULP case is
-what a tolerance actually hides.
+parametrized case pins ``math.nextafter(1.25, math.inf)`` as NOT committable. That ULP case is what
+a tolerance actually hides; see `test_an_n_leak_into_t_is_detected`, which measures how large a
+one-step leak really is and declines to overstate it.
 
 The T assertion adds NO detection power — ε is monotone in T at fixed σ, so ε equality already
 implies T equality. It is here to name WHERE a leak lives when one fires.
@@ -73,7 +74,7 @@ import numpy as np
 import pytest
 
 from personacore.config import RuntimeConfig, TrainConfig
-from personacore.privacy.accountant import epsilon_for
+from personacore.privacy.accountant import ROUND_TRIP_REL_TOL, epsilon_for
 from personacore.training.loop import train
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -201,9 +202,16 @@ def _write_replay_source(directory):
     return bin_path, mask_path
 
 
-def _run_capacity(n_facts, *, sigma, device, replay, workdir):
-    """ONE capacity arm. Returns ``_Arm(t, epsilon)`` with T counted from the MECHANISM."""
-    steps = _PROBE_STEPS
+def _run_capacity(n_facts, *, sigma, device, replay, workdir, leak_divisor=None):
+    """ONE capacity arm. Returns ``_Arm(t, epsilon)`` with T counted from the MECHANISM.
+
+    ``leak_divisor`` is the synthetic N-leak (None on every honest arm): the caller derives
+    ``n_facts // leak_divisor`` EXTRA optimizer steps, so T becomes a function of N. See
+    `test_an_n_leak_into_t_is_detected` for why the leak is modelled in the CALLER'S WIRING at the
+    step count rather than as an extra ``finalize`` inside the seam.
+    """
+    extra = 0 if leak_divisor is None else n_facts // leak_divisor
+    steps = _PROBE_STEPS + extra
     replay_bin, replay_mask_bin = replay
 
     model = _tiny_lora_model(device=device)
@@ -379,3 +387,197 @@ def test_the_verdict_uses_the_blind_committed_rule():
         f"{_PREREG_SOURCE}. A same-named local shadow would make 'the rule was committed blind' "
         "true of a function this file never calls"
     )
+
+
+# =================================================================================================
+# THE POSITIVE CONTROL. A green comparison that could never fail is not evidence (T-23-18).
+# =================================================================================================
+
+# The two leak sizes, each a DIVISOR of n_facts producing `n_facts // divisor` extra optimizer
+# steps, and the T pair each is expected to produce. The expected pair is asserted so a leak that
+# fired at the wrong size — or not at all — cannot satisfy `t_n8 != t_n64` for the wrong reason.
+_LEAKS = (
+    pytest.param(8, (5, 12), id="gross"),
+    pytest.param(64, (4, 5), id="one-step"),
+)
+
+
+@pytest.mark.parametrize(("leak_divisor", "expected_t"), _LEAKS)
+def test_an_n_leak_into_t_is_detected(_replay_source, tmp_path, leak_divisor, expected_t):
+    """BOTH detectors watched reddening under a synthetic N-leak, at two leak sizes.
+
+    **WHERE THE LEAK LIVES, AND WHY NOT WHERE THE PLAN PROPOSED.** 23-04-PLAN.md asked for a
+    ``_LeakySeam`` wrapping ``DPSGD`` and composing an extra ``finalize`` per k records. MEASURED,
+    the seam REFUSES that: a second ``finalize`` inside one optimizer step raises
+    ``[dp-invariant:single-write] 24 writes for 12 trainable parameters``, watched at
+    `test_a_seam_level_extra_finalize_is_refused_by_the_single_write_invariant` below. So the leak
+    is modelled where the plan's own reasoning puts it — **in the CALLER'S WIRING, not in
+    dpsgd.py** — as a caller deriving its optimizer-step count from ``n_facts``, which is both
+    legal and the single most common way N reaches T in a training script.
+
+    THE TWO DETECTORS ARE GENUINELY INDEPENDENT: T is a count of mechanism invocations, ε is a
+    function evaluated on that count. `tests/test_phase22_fakes.py`'s ledger discipline is that a
+    fake with one detector is one rename away from vacuous, and it applies here.
+
+    **THE ONE-STEP CASE, AND A CORRECTION TO THE CLAIM IT WAS ASKED TO SUPPORT.** 23-04-PLAN.md
+    says a one-step difference would vanish under any plausible relative tolerance. MEASURED, it
+    does not:
+    at T = 4 → 5 the relative ε difference is **0.16372433057359725** — 16.4%, some 1.6e11 times
+    `accountant.ROUND_TRIP_REL_TOL`. It stays large at production scale (T = 200 → 201 moves ε by
+    0.004427647757928591, still 4.4e9 times that tolerance). ε is a deterministic function of T, so
+    ANY integer change in T moves ε far above float noise; the ε detector is coarse-but-certain.
+    What a tolerance actually admits is the sub-ULP case, and `phase23_prereg`'s own parametrized
+    ``math.nextafter(1.25, math.inf)`` case is what pins that. Asserted here rather than described.
+    """
+    arms = {
+        n: _run_capacity(
+            n,
+            sigma=_SIGMA,
+            device="cpu",
+            replay=_replay_source,
+            workdir=tmp_path,
+            leak_divisor=leak_divisor,
+        )
+        for n in _CAPACITIES
+    }
+    t_n8, t_n64 = arms[_N8].t, arms[_N64].t
+
+    # META-GUARD: the leak fired at the intended SIZE. Without this a leak that failed to apply, or
+    # one that applied to both arms equally, could still satisfy an inequality below by accident.
+    assert (t_n8, t_n64) == expected_t, (
+        f"the synthetic leak produced T = {(t_n8, t_n64)}, not {expected_t}. The control is "
+        "measuring something other than the leak it declares"
+    )
+
+    # DETECTOR 1 — the composed step count.
+    assert t_n8 != t_n64, "the T detector did NOT redden under a leak that made T a function of N"
+
+    # DETECTOR 2 — ε, evaluated on that count. Independent of detector 1 in what it reads.
+    epsilon_n8, epsilon_n64 = arms[_N8].epsilon, arms[_N64].epsilon
+    relative_difference = abs(epsilon_n64 - epsilon_n8) / abs(epsilon_n8)
+    assert epsilon_n8 != epsilon_n64, (
+        f"the ε detector did NOT redden while T differed ({t_n8} against {t_n64}) — ε is monotone "
+        "in T at fixed σ, so this is impossible unless ε stopped being computed from the counted T"
+    )
+    assert relative_difference > ROUND_TRIP_REL_TOL, (
+        f"a leak of {t_n64 - t_n8} step(s) moved ε by a relative {relative_difference!r}, which is "
+        f"at or below this module's published round-trip tolerance {ROUND_TRIP_REL_TOL!r}. The "
+        "recorded reading for the one-step case is 0.16372433057359725 (T = 4 -> 5); a value near "
+        "the tolerance would mean ε had stopped tracking T"
+    )
+
+    # DETECTOR 3 — the blind-committed rule agrees the leg is not committable.
+    assert _verdict(**_pair(arms)) is False, (
+        f"D-06's rule returned committable on a leaked pair: ε {epsilon_n8!r}/{epsilon_n64!r}, "
+        f"T {t_n8}/{t_n64}. The rule was committed blind in 23-03 precisely so this cannot be "
+        "argued after the fact"
+    )
+
+
+def test_a_seam_level_extra_finalize_is_refused_by_the_single_write_invariant(
+    _replay_source, tmp_path
+):
+    """The MEASURED reason the leak above lives at the step count and not inside the seam.
+
+    23-04-PLAN.md's ``_LeakySeam`` shape — an extra ``finalize`` per optimizer step — is not a leak
+    this codebase can express: ``DPSGD._write_once`` counts writes per step and refuses a second
+    combining write, because *"a second write re-releases private data the accountant charged for
+    once"*. Recording that as a watched refusal rather than as a sentence in a SUMMARY is what
+    makes the deviation checkable.
+    """
+
+    class _LeakySeam:
+        """Delegates everything to a REAL ``DPSGD`` and composes ONE extra ``finalize`` per step."""
+
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def finalize(self, accum):
+            out = self._inner.finalize(accum)
+            self._inner.finalize(accum)  # the extra composition the plan asked for
+            return out
+
+    replay_bin, replay_mask_bin = _replay_source
+    model = _tiny_lora_model()
+    dp = _seam(model, _SIGMA, _DP_SEED, "cpu")
+
+    with pytest.raises(RuntimeError, match=r"dp-invariant:single-write"):
+        train(
+            train_config=TrainConfig(
+                lr=1e-3,
+                warmup_steps=0,
+                max_steps=_PROBE_STEPS,
+                batch_size=_MICRO_BS,
+                grad_accum_steps=_N8,
+            ),
+            runtime_config=RuntimeConfig(device="cpu"),
+            model=model,
+            model_config=_TINY,
+            fixed_batch=_BATCH,
+            dp_fn=_LeakySeam(dp),
+            replay_bin=replay_bin,
+            replay_mask_bin=replay_mask_bin,
+            replay_windows=REPLAY_WINDOWS_PER_FACT * _N8,
+            checkpoint_path=tmp_path / "leaky_seam.pt",
+            max_steps_override=_PROBE_STEPS,
+        )
+
+
+# The node ids OBSERVED reddening when each leak shape is applied, per distinct detector. These are
+# the anchors 23-04-SUMMARY.md's ledger cites, and a ledger citing a renamed guard is this
+# repository's most recurring defect class — `tests/test_phase22_fakes.py:740-744` records seven
+# stale anchors measured across 22-02/22-03.
+_WATCHED_RED = {
+    "gross N-leak (T 4 -> 12 at n=64)": (
+        "tests/test_phase23_cal03.py::test_composed_step_count_is_equal_across_capacity[cpu]",
+        "tests/test_phase23_cal03.py::test_epsilon_is_bit_identical_across_capacity[cpu]",
+    ),
+    "one-step N-leak (T 4 -> 5 at n=64)": (
+        "tests/test_phase23_cal03.py::test_composed_step_count_is_equal_across_capacity[cpu]",
+        "tests/test_phase23_cal03.py::test_epsilon_is_bit_identical_across_capacity[cpu]",
+    ),
+    "seam-level extra finalize (refused, not a leak this codebase can express)": (
+        "tests/test_phase23_cal03.py::"
+        "test_a_seam_level_extra_finalize_is_refused_by_the_single_write_invariant",
+    ),
+}
+
+# NAMED RATHER THAN COUNTED AS TWO WINS: the two leak sizes redden the SAME two node ids. That is a
+# COVERAGE FACT, not a doubled detector — both leaks are the same defect at two magnitudes, and the
+# thing that separates them is the recorded relative ε difference, not a distinct guard.
+
+
+def test_watched_red_node_ids_resolve():
+    """Every node id the SUMMARY's ledger cites still names a real, collectable test.
+
+    `tests/test_phase22_fakes.py:809-840`'s shape. The parameter id inside ``[...]`` is not
+    resolved (that needs a collection pass); what is asserted is that the function exists, is
+    callable, and is parametrized exactly when the cited id claims a parameter — including the
+    fixture-driven ``[cpu]`` / ``[mps]`` axis, which reaches these tests through a params-fixture
+    rather than through a `parametrize` mark.
+    """
+    import importlib
+
+    assert _WATCHED_RED, "no watched RED node ids recorded — this guard checks nothing"
+    for leak, node_ids in _WATCHED_RED.items():
+        for node_id in node_ids:
+            path, _, name = node_id.partition("::")
+            parametrized = name.endswith("]")
+            if parametrized:
+                name = name[: name.index("[")]
+            module = importlib.import_module(pathlib.Path(path).stem)
+            func = getattr(module, name, None)
+            assert callable(func), (
+                f"{leak}'s ledger cites {node_id}, but {name!r} is not a callable in {path} — the "
+                "RED capture in the SUMMARY is then unattributable"
+            )
+            marks = {mark.name for mark in getattr(func, "pytestmark", ())}
+            takes_device = "honest_pair" in inspect.signature(func).parameters
+            assert parametrized == ("parametrize" in marks or takes_device), (
+                f"{leak}'s ledger cites {node_id}, whose parametrization does not match the "
+                f"shipped test (marks: {sorted(marks)}, device-parametrized: {takes_device}). A "
+                "cited node id that cannot be run is a citation nobody can check"
+            )
