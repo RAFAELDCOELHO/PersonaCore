@@ -29,6 +29,9 @@ so the phase gate asserts ``M == 0`` in ``N passed, M skipped`` on the M3 and th
 as a literal in the plan SUMMARY.
 """
 
+import pathlib
+import re
+
 import pytest
 import torch
 
@@ -37,6 +40,20 @@ from personacore.lora.config import LoRAConfig
 from personacore.lora.inject import inject_lora, mark_only_lora_trainable
 from personacore.model.gpt import GPT
 from personacore.privacy.dpsgd import DPSGD
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# 23-06's SUMMARY -- the venue-transfer ledger. Defined HERE, in the phase's register file, and
+# IMPORTED by `tests/test_phase22_fakes.py`, for the same reason `_DEVICES` is: two copies of a
+# path drift, and a drifted path is how an assertion quietly stops reading the file it was written
+# to read.
+_VENUE_SUMMARY_PATH = (
+    _ROOT
+    / ".planning"
+    / "phases"
+    / "23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio"
+    / "23-06-SUMMARY.md"
+)
 
 # --- The shared register. ONE definition; `tests/test_phase22_*` import it rather than re-spell it.
 
@@ -255,3 +272,193 @@ def test_mps_generator_state_round_trips_fresh_and_midstream(tmp_path):
             "so the restore did not put the stream back where it was — which is the only thing "
             "D-07's resume seam actually needs from it"
         )
+
+
+# =================================================================================================
+# THE VENUE-TRANSFER LEDGER (23-06 / D-02). What did and did not cross CPU -> MPS, as a RECORD.
+#
+# D-02's obligation is not "the probes were re-run" — it is that the CROSSING is stated by
+# measurement, per probe, with Phase 22's CPU-only result named as such. Prose in a SUMMARY that
+# nothing asserts against can silently lose its honest half between one plan and the next, and
+# 22-07-SUMMARY.md is the cautionary case in this very repository: its comparison table prints
+# `5,056 bytes` in BOTH columns because both runs were CPU, so the divergence the whole checkpoint
+# boundary rests on is invisible in the artifact that documents it. These two tests are what make
+# repeating that impossible here.
+# =================================================================================================
+
+_VENUE_PROBES = ("V-15", "FAKE 1", "FAKE 2", "FAKE 3", "FAKE 4")
+
+# The phrase D-02 REQUIRES about the Phase-22 record, and the framing it FORBIDS. The forbidden
+# phrase is checked case-insensitively and must not appear even inside a denial: a reader grepping
+# the artifact cannot tell a quoted prohibition from a claim.
+_REQUIRED_TRANSFER_PHRASE = "not transferred to MPS"
+_FORBIDDEN_TRANSFER_PHRASE = "assumed equivalent"
+
+# The four re-measured readings and their two deltas — required as LITERALS so a summary cannot
+# report "the constants held" without publishing the numbers that would let a reader disagree.
+_REQUIRED_CONSTANT_LITERALS = (
+    "1.7344813665273022",  # FAKE 1, cpu
+    "1.734481393949083",  # FAKE 1, mps
+    "2.742e-08",  # FAKE 1, |delta|
+    "3.9999861813196698",  # FAKE 3, cpu
+    "3.9999995238454056",  # FAKE 3, mps
+    "1.334e-05",  # FAKE 3, |delta|
+)
+
+# The junit `testsuite` attributes, which is where the skip count is OBSERVED. pytest OMITS a zero
+# skip count from its terminal line, so the ABSENCE of the word "skipped" there is not evidence —
+# 23-01 measured exactly that. This shape is discriminating enough that the full suite's unrelated
+# `1 skipped` cannot satisfy it by accident.
+_JUNIT_ATTRS = re.compile(
+    r"tests\s+(\d+)\s+failures\s+(\d+)\s+errors\s+(\d+)\s+skipped\s+(\d+)", re.IGNORECASE
+)
+
+# The four files whose combined run produces that count. Named in the SUMMARY so the number is
+# attributable to a command a reader can re-run, rather than to an unspecified invocation.
+_SKIP_COUNT_COMMAND_FILES = (
+    "test_phase22_checkpoint.py",
+    "test_phase22_dpsgd.py",
+    "test_phase22_fakes.py",
+    "test_phase23_mps_venue.py",
+)
+
+
+def _venue_summary_text():
+    """23-06's SUMMARY, or ``None`` before it is written.
+
+    Same shape as ``tests/test_phase22_fakes.py::_summary_text``: skip gracefully only in the
+    window between this file's commit and the plan's metadata commit, then assert hard. A ledger
+    that can silently go missing is not a ledger.
+    """
+    if not _VENUE_SUMMARY_PATH.exists():
+        return None
+    return _VENUE_SUMMARY_PATH.read_text(encoding="utf-8")
+
+
+def test_venue_transfer_ledger_is_recorded():
+    """Every half of the venue transfer is in the artifact, each as its OWN assertion.
+
+    One assertion per required item deliberately, so a failure names WHICH half went missing. A
+    single "the ledger is complete" check would report only that something is wrong, and the thing
+    most likely to be dropped by a future edit is the honest half — the phrase about Phase 22's
+    CPU-only result, or the blind spots, or the skip count — never the greens.
+    """
+    text = _venue_summary_text()
+    if text is None:
+        pytest.skip(
+            f"{_VENUE_SUMMARY_PATH.name} is not written yet — it lands with this plan's commit"
+        )
+
+    # 1. Phase 22's CPU-only result, named as such and NEVER inherited.
+    assert _REQUIRED_TRANSFER_PHRASE in text, (
+        f"{_VENUE_SUMMARY_PATH.name} never says {_REQUIRED_TRANSFER_PHRASE!r}. D-02 requires "
+        "Phase 22's CPU-only result to be recorded as a result that has NOT crossed to this "
+        "venue, beside the MPS observations that did. Without the phrase the artifact reads as if "
+        "one battery ran everywhere"
+    )
+    assert _FORBIDDEN_TRANSFER_PHRASE not in text.lower(), (
+        f"{_VENUE_SUMMARY_PATH.name} contains {_FORBIDDEN_TRANSFER_PHRASE!r}. That is the exact "
+        "framing D-02 forbids — and it is forbidden even as a quoted denial, because a reader "
+        "grepping this artifact cannot distinguish the two"
+    )
+
+    # 2. A per-probe row for each of the five things D-02 re-watches, each naming its device.
+    for probe in _VENUE_PROBES:
+        rows = [
+            line
+            for line in text.splitlines()
+            if line.lstrip().startswith("|") and probe in line and "mps" in line.lower()
+        ]
+        assert rows, (
+            f"{_VENUE_SUMMARY_PATH.name} has no table row naming both {probe!r} and its device. "
+            "The ledger is per-probe BY DESIGN: a single aggregate 'all probes pass on MPS' line "
+            "is the claim D-02 exists to stop anyone from making"
+        )
+
+    # 3. The exemption, stated with its measured count rather than inferred from an absence.
+    for literal in ("AST half", "device-invariant"):
+        assert literal in text, (
+            f"{_VENUE_SUMMARY_PATH.name} never says {literal!r}, so the halves that were NOT "
+            "re-run on MPS are recorded nowhere. An exemption inferred from an absence is "
+            "indistinguishable from an oversight"
+        )
+    assert re.search(r"\b53 of (?:the )?\d+\b", text), (
+        f"{_VENUE_SUMMARY_PATH.name} does not state the exemption's measured count as '53 of N'. "
+        "The count is what makes the exemption checkable — 53 tests out of a named surface, not "
+        "'the AST parts'"
+    )
+
+    # 4. The skip count, attributable to a command a reader can re-run.
+    assert _JUNIT_ATTRS.search(text), (
+        f"{_VENUE_SUMMARY_PATH.name} records no observed skip count. pytest omits a zero skip "
+        "count from its terminal line, so the count must come from the junit `testsuite` "
+        "attributes — a pass count with no skip count beside it is 23-RESEARCH.md's Pitfall 1"
+    )
+    for filename in _SKIP_COUNT_COMMAND_FILES:
+        assert filename in text, (
+            f"{_VENUE_SUMMARY_PATH.name} does not name {filename!r} in the command that produced "
+            "the recorded counts. A number nobody can regenerate is not a measurement"
+        )
+
+    # 5. Both re-measured fitted constants, both readings each, and the deltas.
+    for literal in _REQUIRED_CONSTANT_LITERALS:
+        assert literal in text, (
+            f"{_VENUE_SUMMARY_PATH.name} does not contain {literal!r}. Both fitted constants must "
+            "be published with BOTH readings and the delta: 23-RESEARCH.md A1 pre-committed to "
+            "re-recording rather than widening, and a re-record that omits one of the two "
+            "readings is a widening with extra steps"
+        )
+
+    # 6. The 5,056 B / 44 B divergence with both devices named ON THE SAME ROW.
+    divergence_rows = [
+        line
+        for line in text.splitlines()
+        if ("5,056" in line or "5056" in line)
+        and "44" in line
+        and "cpu" in line.lower()
+        and "mps" in line.lower()
+    ]
+    assert divergence_rows, (
+        f"{_VENUE_SUMMARY_PATH.name} does not state the 5,056 B / 44 B generator-state divergence "
+        "with BOTH devices named on the same line. 22-07-SUMMARY.md prints 5,056 in both columns "
+        "because both of its runs were CPU; this assertion exists so that table is not repeated"
+    )
+
+
+def test_the_ledger_states_a_skip_count_of_zero():
+    """The recorded skip count is parsed and asserted to be ZERO on this venue.
+
+    **A non-zero skip count here is not a smaller pass — it is the exact failure mode D-02 exists
+    to prevent.** Every MPS leg in this phase is ``skipif``-gated so CI can stay green on a
+    CPU-only wheel, which means a suite that skipped all of them looks identical to one that ran
+    all of them apart from a number pytest does not even print by default. The M3 run is the ONLY
+    place that number can be non-zero for a real reason, so it is the only place worth asserting
+    it, and the assertion is on the OBSERVED junit attribute rather than on the terminal line.
+
+    ``failures`` and ``errors`` are asserted too. A recorded ``skipped 0`` beside a non-zero
+    failure count would be a green venue claim resting on a red run.
+    """
+    text = _venue_summary_text()
+    if text is None:
+        pytest.skip(
+            f"{_VENUE_SUMMARY_PATH.name} is not written yet — it lands with this plan's commit"
+        )
+
+    matches = _JUNIT_ATTRS.findall(text)
+    assert len(matches) == 1, (
+        f"{_VENUE_SUMMARY_PATH.name} records {len(matches)} junit attribute lines, not exactly "
+        "one. Two would leave a reader to guess which run the phase gate is about"
+    )
+    tests, failures, errors, skipped = (int(v) for v in matches[0])
+
+    assert skipped == 0, (
+        f"the recorded venue run skipped {skipped} test(s) of {tests}. Every Phase-23 MPS leg is "
+        "skipif-gated, so a non-zero skip count on the M3 means the venue evidence was never "
+        "produced — the suite reported green for the legs it did not run. This is the specific "
+        "shape of Pitfall 1, and it is why the number is asserted rather than quoted"
+    )
+    assert failures == 0 and errors == 0, (
+        f"the recorded venue run had {failures} failure(s) and {errors} error(s). A skip count of "
+        "zero beside a red run is not evidence of a venue pass"
+    )
+    assert tests > 0, "the recorded venue run collected no tests at all"

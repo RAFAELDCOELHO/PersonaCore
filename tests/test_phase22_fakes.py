@@ -61,8 +61,14 @@ from test_phase22_dpsgd import (  # noqa: E402  (tests/ is not a package)
 )
 
 # The phase's SINGLE device register, IMPORTED rather than re-spelled: two copies of a device gate
-# drift, and a drifted gate is how an MPS leg stops being counted (23-01).
-from test_phase23_mps_venue import _DEVICES, _MPS_SKIP  # noqa: E402
+# drift, and a drifted gate is how an MPS leg stops being counted (23-01). `_VENUE_SUMMARY_PATH` is
+# imported for the same reason -- a drifted path is how an assertion quietly stops reading the file
+# it was written to read.
+from test_phase23_mps_venue import (  # noqa: E402
+    _DEVICES,
+    _MPS_SKIP,
+    _VENUE_SUMMARY_PATH,
+)
 
 # The real mechanism's path, captured from the AST module at import time so the mutated-copy
 # monkeypatching below cannot make this read the mutation back.
@@ -76,16 +82,9 @@ _SUMMARY_PATH = (
     / "22-11-SUMMARY.md"
 )
 
-# 23-06's own SUMMARY -- the venue-transfer ledger. The two facts this phase measured are recorded
-# THERE and asserted from here, so a Phase-23 finding never becomes a reason to edit a closed
-# Phase-22 artifact.
-_VENUE_SUMMARY_PATH = (
-    _ROOT
-    / ".planning"
-    / "phases"
-    / "23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio"
-    / "23-06-SUMMARY.md"
-)
+# `_VENUE_SUMMARY_PATH` (23-06's own SUMMARY, the venue-transfer ledger) is imported from
+# `test_phase23_mps_venue` above. The two facts this phase measured are recorded THERE and asserted
+# from here, so a Phase-23 finding never becomes a reason to edit a closed Phase-22 artifact.
 
 # Test-local arithmetic vectors, NOT a budget (D-08 / Phase 20's Z boundary), in exactly the sense
 # `tests/test_phase22_dpsgd.py` draws its own.
