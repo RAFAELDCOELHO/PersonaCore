@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-06-PLAN.md (plan 6 of 14)
-last_updated: 2026-08-27T01:53:07.079Z
+stopped_at: Completed 23-07-PLAN.md (plan 7 of 14)
+last_updated: 2026-08-27T02:53:44.803Z
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 53
+  completed_plans: 54
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 7 of 14
+Plan: 8 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -147,6 +147,7 @@ Last activity: 2026-08-26
 | Phase 23 P04 | 50min | 3 tasks | 3 files |
 | Phase 23 P05 | 35min | 2 tasks | 2 files |
 | Phase 23 P06 | 50min | 3 tasks | 2 files |
+| Phase 23 P07 | 55min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -515,6 +516,15 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-06: `_DISTINCT_RED_SIGNATURES` stays 9 while `_WATCHED_RED_NODE_IDS` grows to 13 device-qualified `(node_id, observed_on)` entries. A venue transfer is the same fake tripping the same invariant with the same message on a second device — a new OBSERVATION, not a new SIGNATURE — so folding the four mps rows into the total would report a 44% coverage rise that bought no detection. Counted separately by `_MPS_OBSERVATIONS_PER_FAKE`, required to be exactly one per fake.
 - [Phase 23] 23-06: `_LEDGER_SIGN_OFF_ITEMS` rows now carry the SUMMARY each is checked against. Asserting this phase's two new facts against the closed 22-11-SUMMARY.md would be RED forever, and the only way to green it would be editing a closed Phase-22 artifact so a Phase-23 test could pass. The `rng["mps"]` disclosure was REWRITTEN (exercised on the M3, still unexercised in CPU-only CI), not deleted.
 - [Phase 23] 23-06: gsd-sdk hazards, FIFTEENTH session in a row; the profile matched 23-05's with one item DROPPING OFF. `state.advance-plan` did NOT regress `stopped_at` backwards this time (it left it stale at 23-05 instead, which `state.record-session` then corrected as a side effect), but it still flattened the body `Status:` to "Ready to execute" and advanced `last_activity` to the UTC date 2026-08-27 while every commit and the SUMMARY carry the local 2026-08-26 — the same rollover 23-05 saw. The `Phase:`/`Plan:` counters were CORRECT (6 of 14 -> 7 of 14) and `completed_plans` incremented 52 -> 53 and was NOT reverted by the four `add-decision` calls. `state.update-progress` again returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped `last_updated`. `state.record-metric` and `state.add-decision` both REFUSED positional args and needed flags; with flags the metric row was CLEAN (`| Phase 23 P06 | 50min | 3 tasks | 2 files |`) and all four decisions came back labelled `- [Phase ?]: `. `last_updated` came back QUOTED from three handlers. `roadmap.update-plan-progress 23` flipped the 23-06 checkbox correctly (6/14) and mangled the row's trailing cells to `| In Progress|  |`, dropping the `-` date placeholder. Six corruptions hand-repaired 1-line-for-1-line against a snapshot taken before the first call, `git diff .planning/` read after EVERY call.
+- [Phase 23] 23-07: `resume_from` is threaded into `build_arm_bins` as well as `train_arm`, which the plan's `<action>` explicitly forbade. `build_arm_bins` is the SECOND caller of `arm_bin_targets`, so with the bins required PRESENT on a resume it refuses on their presence three lines after `train_arm`'s guard let them through — the seam would have been dead on arrival at every resume. The plan's own `key_links` entry asks for exactly this ("both callers of `arm_bin_targets` cannot drift"), so its prose and its links contradict each other and the code decided.
+- [Phase 23] 23-07: on a resume `build_arm_bins` REBUILDS the three bins and raises `SystemExit` naming both digests if any byte moved, rather than skipping the rebuild. Requiring the bins present proves they exist, not that they are the same corpus (T-23-35); the pack is deterministic in (facts, family_ids, second_person, replay_ratio, seed), so a byte-identical rebuild PROVES it. Measured identical across four independent builds this session. It also keeps `n_facts` coming from the packer's own record count instead of a second derivation read off the fact bin.
+- [Phase 23] 23-07: the cross-device refusal derives the recorded device from `dp_noise_rng.numel()`, because THE CHECKPOINT CARRIES NO DEVICE FIELD AT ALL — `save_checkpoint` writes none, `rng['mps']` records only that the saving MACHINE had MPS (true on the M3 even for a `device='cpu'` run), and `TrainConfig` has no device. The generator state is the only device-typed thing in the blob and is exactly the tensor torch refuses. Candidate lengths are PROBED via `torch.Generator(device=d).get_state().numel()`, never hardcoded, so 5,056/44 cannot go stale. Scoped to DP arms: a non-DP resume has no such tensor and no epsilon to protect.
+- [Phase 23] 23-07: an absent `dp_noise_rng` is REFUSED at `train_arm` while `training/loop.py` deliberately TOLERATES it (its branch 2, pinned by two committed guards). The asymmetry reddens nothing — both guards drive `train()` directly, never `train_arm` — and it is the point: at the loop level the absence means "no DP run wrote this, seed fresh"; at the driver level, where a DP ARM asked to continue it, it means the epsilon prefix this resume claims to continue never existed.
+- [Phase 23] 23-07: the negative control is NOT the plan's "resume with a different DP seed". Epsilon is a function of (sigma, T, delta) and is structurally blind to the seed, and so is T, so a different seed diverges neither; and `train_arm(seed=)` also seeds the BINS build, so a different seed there is caught first by the byte-drift refusal. What carries the evidence instead: the resumed seam is CONSTRUCTED at seed 999 (injected at the DPSGD constructor) with its birth state asserted != the kill checkpoint's slot; the draw is asserted POSITION-SENSITIVE (the kill half's seam must not match the run-to-4 seam); and the stripped-slot control is unreachable through this driver by design, staying watched at the loop level on both cpu and mps.
+- [Phase 23] 23-07: MEASURED — killing by monkeypatching `MAX_STEPS` is a SHORTER RUN, not a kill. `MAX_STEPS` is `TrainConfig.max_steps`, the cosine schedule's HORIZON, so the killed half took its step-2 update at lr 2.9999999999999997e-05 (end of its own 2-step cosine) against the control's 0.00023249999999999999, and the curves diverged from row 3 on. A resume test whose kill silently reparameterises the schedule proves nothing about resuming. The kill is now a raise from inside `loop.save_checkpoint` with `max_steps` intact, after which all four CSV rows match exactly.
+- [Phase 23] 23-07: MEASURED — reading `tp.DPSGD` inside a probe installer that runs three times in one test NESTS the factories, so every later run's `finalize` increments every earlier run's counter. It reported composed steps (8, 4, 2) for a (4, 2, 2) run — a T wrong in the PESSIMISTIC direction, exactly the accounting error a green test would carry into a published epsilon. Bound to `_REAL_DPSGD` at import instead.
+- [Phase 23] 23-07: DPSGD-06 was NOT ticked. It reads "the sigma=0 point is the DP arm's FIRST executed run"; this plan ran sigma=1.0 and is the DISCLOSED EXCEPTION to that ordering, not its satisfaction. 23-10 is the plan that can tick it. Disclosed in both places it can be — `test_production_resume_epsilon_bit_identical`'s docstring and 23-07-SUMMARY.md — because the probe commits zero `results/phase23_*` records and is therefore invisible to all three of 23-03's committed-record ancestry guards.
+- [Phase 23] 23-07: gsd-sdk hazards, SIXTEENTH session in a row, and a 23-04 mode RETURNED after skipping 23-06. `state.advance-plan` had CORRECT counters (Plan 7 of 14 -> 8 of 14) and left `stopped_at` STALE at 23-06 rather than regressing it backwards, but `completed_plans` FAILED TO INCREMENT (stayed 53, hand-set to 54) — the 23-04 failure mode, which had NOT reproduced in 23-06 — and it flattened the body `Status:` to "Ready to execute", returned `last_updated` QUOTED, and advanced `last_activity` and the body `Last activity:` to the UTC date 2026-08-27 against a local 2026-08-26 that every commit carries. `state.record-metric --flag` CLEAN (`| Phase 23 P07 | 55min | 3 tasks | 2 files |`, no unit doubling, `completed_phases` 3 and `percent` 33 untouched). `state.record-session --flag` CLEAN and corrected the stale `stopped_at` as a side effect. `roadmap.update-plan-progress 23` MANGLED the row's trailing cells to `| In Progress|  |` for the fourth session running, and could not tick the 23-07 checkbox or move the row past 6/14 because it counts SUMMARY files on disk and the SUMMARY did not exist yet — both hand-set. `state.update-progress` and `state.add-decision` were NOT CALLED, following 22-17/22-18's measured conclusion; these decisions and the position are hand-written. Five corruptions hand-repaired 1-line-for-1-line against a pre-call snapshot.
 
 ### Roadmap Evolution
 
@@ -647,8 +657,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T01:53:07.070Z
-Stopped at: Completed 23-06-PLAN.md (plan 6 of 14)
+Last session: 2026-08-27T02:53:44.794Z
+Stopped at: Completed 23-07-PLAN.md (plan 7 of 14)
 Resume file: None
 
 ## Operator Next Steps
