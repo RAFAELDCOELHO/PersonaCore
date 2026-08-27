@@ -67,6 +67,9 @@ _TRAIN_ARM_CALL_SITES = (
     # Plan 23-08's control scheduling. A NON-DP arm and NO resume, like every other production
     # site, so `resume_from`'s `None` sentinel keeps it byte-identical to the pre-23-07 driver.
     ("scripts/phase23_run.py", "call", "train_control"),
+    # Plan 23-10's σ=0 diagnostic — the FIRST PRODUCTION CONSUMER of the seam this file built. It
+    # DOES pass `resume_from`, and `_RESUME_PASSERS` below is what admits it by name.
+    ("scripts/phase23_run.py", "call", "train_sigma_zero"),
     ("scripts/teach_persona.py", "call", "main"),
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
@@ -83,6 +86,25 @@ _TRAIN_ARM_CALL_SITES = (
 # This file's own name, resolved once so the "eight PRE-EXISTING call sites" arithmetic below
 # subtracts the right thing.
 _THIS_FILE = "tests/test_phase23_resume.py"
+
+# WHO MAY PASS `resume_from`, AND HOW MANY TIMES. Enumerated, with counts, because the guard below
+# used to say "this file only" and skip itself unchecked — which was right while the seam had no
+# production consumer and wrong the moment it got one.
+#
+# THE TEETH ARE UNCHANGED IN THE DIRECTION THAT MATTERS. What T-23-37 asserts is that the additive
+# kwarg did not change any PRE-EXISTING call: every one of the eight sites that existed before 23-07
+# must still be byte-identical to its pre-23-07 form, and every one of them is absent from this map
+# and therefore pinned at ZERO passers. Widening it to a named production consumer is the opposite
+# of weakening — this file's own register already records that "a seam nothing exercises is IN-04
+# again", and a COUNT rather than a boolean means a SECOND passer in an admitted file still reddens.
+_RESUME_PASSERS = {
+    # `_resume_call` (the refusal probes) and `_run` (the production MPS kill->resume probe).
+    _THIS_FILE: 2,
+    # Plan 23-10's `train_sigma_zero`: a killed σ=0 run resumes from its OWN checkpoint instead of
+    # restarting 200 steps. `train_control` in the same file passes NOTHING, which is why this is a
+    # count and not a file-level exemption.
+    "scripts/phase23_run.py": 1,
+}
 
 # The DP generator's state is **5,056 bytes on CPU and 44 bytes on MPS** (measured, torch 2.7.1 —
 # `personacore.checkpoint`'s two-slot register and `DPSGD.noise_rng_state`'s docstring both record
@@ -188,14 +210,18 @@ def test_resume_from_none_is_inert():
         found[path] = found.get(path, 0) + 1
     assert found == registered, f"per-file driver hit counts drifted: {found} != {registered}"
     # EIGHT at 23-07, when the sentinel landed; NINE from 23-08, which added
-    # `phase23_run.train_control`. The literal is a tripwire against a site vanishing unnoticed,
-    # so it is BUMPED with its reason rather than derived from the register — deriving it would
-    # make the check restate the register instead of pinning a count against it. Both numbers are
+    # `phase23_run.train_control`; TEN from 23-10, which added `phase23_run.train_sigma_zero` — the
+    # seam's first production consumer. The literal is a tripwire against a site vanishing
+    # unnoticed, so it is BUMPED with its reason rather than derived from the register — that would
+    # make the check restate the register instead of pinning a count against it. Every number is
     # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8 + 1
-    ), "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling"
+        == 8 + 1 + 1
+    ), (
+        "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling "
+        "plus 23-10's σ=0 diagnostic"
+    )
 
     # ...and the AST agrees with the register about which of them are real CALLS.
     for path in registered:
@@ -217,12 +243,17 @@ def test_resume_from_none_is_inert():
         assert len(calls) == expected_calls, (
             f"{path}: {len(calls)} AST calls, register says {expected_calls}"
         )
-        if path == _THIS_FILE:
-            continue  # this file is the ONE that must pass the kwarg
+        # EVERY file is checked now, including this one: the old `continue` skipped the only file
+        # that was allowed to pass the kwarg, so a passer VANISHING from here — the seam going
+        # unexercised, IN-04 again — was invisible. The allow-set carries counts for exactly that.
         passers = [c.lineno for c in calls if any(k.arg == "resume_from" for k in c.keywords)]
-        assert passers == [], (
-            f"{path}:{passers} passes `resume_from` — every pre-existing call site must be "
-            "byte-identical to its pre-23-07 form"
+        allowed = _RESUME_PASSERS.get(path, 0)
+        assert len(passers) == allowed, (
+            f"{path}:{passers} passes `resume_from` {len(passers)} time(s); `_RESUME_PASSERS` "
+            f"admits {allowed}. Every PRE-EXISTING call site is pinned at ZERO by its absence from "
+            "that map and must stay byte-identical to its pre-23-07 form; an admitted file is "
+            "pinned at a COUNT, so a second passer there reddens too — and so does a passer "
+            "disappearing, which would mean the seam is exercised by nothing"
         )
 
     import inspect
