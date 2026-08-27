@@ -32,6 +32,9 @@ _TESTS = str(_ROOT / "tests")
 if _TESTS not in sys.path:
     sys.path.insert(0, _TESTS)
 
+# The PIN, imported so the σ=0 record's floor is compared against the constant itself rather than
+# against a copy of it. Zero imports of its own (23-09's ceiling), so this stays a torch-free file.
+import mitigation_budget  # noqa: E402  (needs the sys.path insert above)
 from phase23_prereg import (  # noqa: E402  (needs the sys.path insert above)
     CONTROL_FLOOR_RECORD,
     FLOOR_PROVENANCE_KEYS,
@@ -659,4 +662,177 @@ def test_every_noised_sweep_point_is_under_the_noised_glob():
     )
     assert not _prove_noised_record_is_under_the_glob(
         "results/phase23_cal03_wiring.json", {"sigma": 1.0, "sweep_point": False}
+    )
+
+
+# =================================================================================================
+# ===== THE RECORD-LEVEL GUARDS (23-10) — DPSGD-06's ordering and D-04's verdict, RE-CHECKED =====
+#
+# Everything above judges the RULES. These four judge the COMMITTED RECORDS the rules produced, so
+# DPSGD-06's claim and D-04's verdict are properties the suite re-establishes on every run rather
+# than sentences in a SUMMARY nobody re-reads.
+# =================================================================================================
+
+
+def _record(relpath):
+    """One committed Phase-23 record, read from disk."""
+    path = _ROOT / relpath
+    assert path.exists(), (
+        f"{relpath} is missing. Every guard below judges a COMMITTED record, and a missing one "
+        "is a guard reading nothing rather than a guard passing"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_the_sigma_zero_record_is_the_dp_arms_first_run():
+    """DPSGD-06: the σ=0 record is TRACKED, declares σ = 0.0, and no noised point precedes it.
+
+    The ordering half is `_ordering_guard` — the guard 23-03 wrote, called rather than copied. What
+    this test adds is the half that guard cannot supply on its own: that the record it names as the
+    PIN actually exists in git, and that it declares the σ it claims to. A pin nobody committed is
+    an ordering over one endpoint, and `_ordering_guard` is green in exactly that case.
+    """
+    tracked = _git("ls-files", SIGMA_ZERO_RECORD).split()
+    assert tracked == [SIGMA_ZERO_RECORD], (
+        f"`git ls-files {SIGMA_ZERO_RECORD}` returned {tracked!r}. DPSGD-06's ordering pins every "
+        "noised sweep point behind THIS record, and an untracked pin pins nothing"
+    )
+    record = _record(SIGMA_ZERO_RECORD)
+    assert record["sigma"] == 0.0, (
+        f"the σ=0 record declares sigma={record['sigma']!r}. A record filed as the σ=0 diagnostic "
+        "that ran at some other σ is a noised sweep point wearing the diagnostic's name — and it "
+        "would then be the thing the DPSGD-06 ordering is supposed to be measuring against"
+    )
+    _ordering_guard(prereg_artifact=SIGMA_ZERO_RECORD, artifact_glob=NOISED_RECORD_GLOB)
+
+
+def test_the_sigma_zero_verdict_re_derives():
+    """D-04: the STORED verdict is what the rule returns TODAY, re-run on the record's own values.
+
+    `test_budget_constants_re_derive` gives the floor this property; this gives the verdict it. **A
+    stored verdict that no longer re-derives is a record that has drifted from its own rule** — and
+    the drift is invisible, because both the record and the rule would still look right alone.
+
+    BOTH BRANCHES ARE HANDLED, and the HALT branch is the one that matters: `sigma_zero_verdict`
+    raises rather than returning on a breach, so a test that only compared return values would be
+    an ERROR rather than a failure on the very outcome D-04 exists to produce. The raised message is
+    compared VERBATIM against the one the record stored, so a halt cannot be quietly re-described.
+    """
+    record = _record(SIGMA_ZERO_RECORD)
+    control = _record(CONTROL_FLOOR_RECORD)
+    arguments = {
+        "control_readings": control["readings"],
+        "sigma_zero_reading": record["reading"],
+        "floor": record["floor"],
+        "floor_provenance": record["floor_provenance"],
+    }
+
+    # The reading is a COUNT OVER ITS DENOMINATOR, not a free-floating rate.
+    primary = record["primary"]
+    assert record["reading"] == primary["k"] / primary["n"] == primary["rate"], (
+        f"the record's judged reading is {record['reading']!r} but its primary block is "
+        f"{primary['k']}/{primary['n']} = {primary['k'] / primary['n']!r} (rate field "
+        f"{primary['rate']!r}). The quantity the floor governs is that count over that "
+        "denominator, so a reading that is not it is a different quantity being judged"
+    )
+    assert record["deviation"] == abs(record["reading"] - control["readings"][0]), (
+        "the recorded deviation is not |reading - control_readings[0]|. The central reading is "
+        "PINNED to the FIRST recorded seed, and a deviation measured from anything else is a "
+        "different comparison than the one the rule ran"
+    )
+
+    if record["verdict"] == "proceed":
+        assert sigma_zero_verdict(**arguments) == "proceed", (
+            "the record stores 'proceed' but the rule does not return it today — the record has "
+            "drifted from the rule that produced it"
+        )
+        assert record["halt_message"] is None, (
+            "the record stores 'proceed' AND a halt message. One of the two is describing a run "
+            "that did not happen"
+        )
+        return
+
+    assert record["verdict"] == "HALT", (
+        f"the record stores verdict {record['verdict']!r}. D-04 has exactly two outcomes — the "
+        "string 'proceed' and a halt — and there is no warning branch and no override flag"
+    )
+    with pytest.raises(SystemExit) as halt:
+        sigma_zero_verdict(**arguments)
+    assert str(halt.value) == record["halt_message"], (
+        "the halt the rule raises today is not the message the record stored VERBATIM.\n"
+        f"stored: {record['halt_message']}\ntoday : {halt.value}"
+    )
+
+
+def test_the_sigma_zero_record_used_the_pinned_floor():
+    """T-23-51: the floor was READ from the pin, not recomputed at run time.
+
+    Exact `==` on the constant AND on its provenance dict. A floor recomputed at run time is a floor
+    that could move; the pin exists so it cannot, and `mitigation_budget`'s own
+    `test_budget_constants_re_derive` then binds that constant to the committed control record. This
+    is the link that closes the chain at the CONSUMER end.
+
+    The provenance comparison is made after a JSON round-trip of the pin, deliberately: the record
+    went through one (`seeds` is a tuple in the module and a list in the file), so normalizing both
+    sides compares the VALUES rather than the container types json.dump had no choice about.
+    """
+    record = _record(SIGMA_ZERO_RECORD)
+    assert record["floor"] == mitigation_budget.CONTROL_NOISE_FLOOR, (
+        f"the σ=0 record was judged against floor {record['floor']!r} but the pin is "
+        f"{mitigation_budget.CONTROL_NOISE_FLOOR!r}. The floor is READ from the pin and never "
+        "recomputed at run time — a recomputed floor is one that could have moved to fit the "
+        "reading it judges"
+    )
+    normalized = json.loads(json.dumps(mitigation_budget.CONTROL_NOISE_FLOOR_PROVENANCE))
+    assert record["floor_provenance"] == normalized, (
+        "the σ=0 record's `floor_provenance` is not `mitigation_budget."
+        "CONTROL_NOISE_FLOOR_PROVENANCE` copied verbatim. `sigma_zero_verdict` REFUSES a floor "
+        "whose artifact, commit, device, seeds or reduction is unstated, so a provenance dict "
+        "assembled at the call site could satisfy the rule while describing a different floor.\n"
+        f"record: {record['floor_provenance']}\npin   : {normalized}"
+    )
+    missing = [key for key in FLOOR_PROVENANCE_KEYS if key not in record["floor_provenance"]]
+    assert missing == [], f"the recorded floor provenance is missing {missing!r}"
+
+
+def test_the_clip_was_non_binding_at_sigma_zero():
+    """The diagnostic measured the DP ARITHMETIC, not clipping — `_clip_bind_count` is ZERO.
+
+    At σ=0 the noise term is exactly zero, so the only thing C can still do is CLIP. A σ=0 arm whose
+    clip bound differs from the control by clipping rather than by the DP arithmetic, and D-04's
+    verdict would then be reading a confounded quantity — a halt or a proceed, either way about the
+    wrong thing. `dpsgd.DPSGD` refuses `math.inf`, so "C = infinity" is represented as a finite
+    bound PROVEN not to bind, and this counter is what makes "proven" literal rather than hopeful.
+    """
+    record = _record(SIGMA_ZERO_RECORD)
+    assert record["clip_bind_count"] == 0, (
+        f"the σ=0 arm's clip BOUND on {record['clip_bind_count']} record(s) at C = "
+        f"{record['clip_norm']!r}. The arm then differs from the control by CLIPPING rather "
+        "than by the DP arithmetic and the diagnostic is confounded"
+    )
+    assert record["clip_is_non_binding"] is True
+    assert record["clip_checked_before_scoring"] is True, (
+        "the record does not declare that the clip count was checked BEFORE scoring. The ordering "
+        "is the content of the claim: a check run afterwards is a check run with the reading on "
+        "screen"
+    )
+    covered = record["clip_bind_count_covers_steps"]
+    assert covered == record["training"]["timed_iterations"], (
+        f"the clip counter covers {covered} step(s) but the timed leg ran "
+        f"{record['training']['timed_iterations']}. `_clip_bind_count` is run-lifetime on ONE seam "
+        "instance, so a resumed run's counter covers the resumed leg only and the record must say "
+        "which"
+    )
+    assert record["records_per_lot"] == record["training"]["grad_accum_steps"], (
+        f"the seam's last lot held {record['records_per_lot']} record(s) against a configured "
+        f"accum of {record['training']['grad_accum_steps']}. SC2's 'one micro-step = one privacy "
+        "record' is false at that point and the sensitivity the noise was scaled to is not the one "
+        "that ran"
+    )
+    timed = record["training"]["timed_iterations"]
+    assert record["composed_steps"] == timed, (
+        f"T is {record['composed_steps']} composed step(s) against {timed} "
+        "timed iterations. T is COUNTED off real `DPSGD.finalize` invocations "
+        f"({record['t_source']}), never read off a checkpoint field a `start_step` defect leaves "
+        "correct-looking AND optimistic"
     )
