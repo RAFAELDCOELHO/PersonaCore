@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-15-PLAN.md (plan 15 of 19) — D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
-last_updated: "2026-08-27T15:29:26.911Z"
+stopped_at: Completed 23-16-PLAN.md (plan 16 of 19) — D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
+last_updated: "2026-08-27T15:58:40.746Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 66
-  completed_plans: 58
+  completed_plans: 59
   percent: 33
 ---
 
@@ -26,7 +26,29 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING GAP CLOSURE 23-15…23-19
-Plan: 16 of 19 — **23-15 COMPLETE at `c100388`** (23-11..23-14 remain BLOCKED)
+Plan: 17 of 19 — **23-16 COMPLETE at `5ae34b0` + `e7a9ca0`** (23-11..23-14 remain BLOCKED)
+
+**23-16 built the protocol-matched comparator's training leg and proved everything provable on CPU
+BEFORE any GPU second.** The obstacle the planning brief flagged — "a non-DP arm cannot reach the
+`dp_kwargs` seam" — DISSOLVED, and it was verified against live source rather than accepted:
+`loop.py:512` keys the fact-aligned seam on `_fact = {"fact_bin": fact_bin, "n_facts": n_facts}` and
+`loop.py:683` gates the replay pass on `replay_windows is not None`, so **neither is keyed on
+`dp_fn`**. `DP_ARMS` was NOT widened (`grep -c` still **9**) and `teach_persona.py` /
+`training/loop.py` are BYTE-UNCHANGED. `matched_control_call` derives every protocol value from the
+σ=0 arm's own symbols — measured `grad_accum_steps=8`, `grad_clip=1e6`, `n_facts=8`,
+`replay_windows=32` — and `prove_matched_protocol` runs 23-15's THREE AST gates against live source
+at zero cost: **7** `dp_fn` branches, **21** production `train()` keywords, **19** on the comparator
+under exact set equality with `TRAIN_CALL_KEYS - {resume_from, dp_fn}`. `captured_grad_clip` shadows
+`clip_grad_norm_` so "non-binding" will be an OBSERVATION of the PRE-clip norms, checked BEFORE any
+reading exists, exactly as `clip_bind_count == 0` was. Three findings from the work itself:
+`rebuild_arm_bins_verifying_sha256` is UNUSABLE here (it opens with `prove_bins_match`, which refuses
+a MISSING file, so it cannot recreate an absent bin — the gate is build-then-prove); a PARTIAL corpus
+needed a refusal the plan did not spell; and `float(norm)` costs a per-step host sync recorded as a
+declared TIMING difference. The six fields `train_arm`'s post-training sweeps would have produced are
+explicit `None` with `ppl_omitted_reason`. Suite **`1509 passed, 1 skipped`** — exactly 1500 + 9.
+**`train_matched_control` was WRITTEN AND NEVER CALLED**; the 5-seed run is 23-17's.
+`git ls-files 'results/phase23_matched_*'` still returns **0**. **NO requirement ticked** — DPSGD-06
+remains open.
 
 **23-15 landed the BLIND protocol pre-registration.** `scripts/phase23_matched_prereg.py` +
 `tests/test_phase23_matched_prereg.py` were committed while `git ls-files
@@ -183,6 +205,7 @@ Last activity: 2026-08-27
 | Phase 23 P09 | 25 min | 2 tasks | 2 files |
 | Phase 23 P10 | 95min | 3 tasks | 7 files |
 | Phase 23 P15 | 65min | 2 tasks | 3 files |
+| Phase 23 P16 | 55min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -711,8 +734,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T15:29:26.901Z
-Stopped at: Completed 23-15-PLAN.md (plan 15 of 19) — D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
+Last session: 2026-08-27T15:58:40.736Z
+Stopped at: Completed 23-16-PLAN.md (plan 16 of 19) — D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
 Resume file: None
 
 ## Operator Next Steps
@@ -728,6 +751,15 @@ Resume file: None
   training tokens over the same 200 optimizer steps (3,276,800 vs 409,600). Clipping is already
   excluded by measurement (`clip_bind_count == 0`). Evidence: `results/phase23_sigma_zero.json`;
   starting list: `results/phase23_control_floor.json`'s four `residual_differences`.
+
+- **23-17 IS THE FIRST PLAN IN THIS PHASE THAT SPENDS GPU TIME SINCE THE HALT, AND IT IS BOUND BY A
+  ONE-ATTEMPT RULE.** `phase23_run.train_matched_control(seed)` exists as of `5ae34b0` and was
+  deliberately NEVER CALLED — 23-16 wrote the leg, 23-17 runs it across `SEED_LADDER`. Before the
+  first seed: call `prove_matched_protocol()` once (free, and its refusal must arrive before any GPU
+  second) and `phase23_matched_prereg.prove_first_attempt(git ls-files MATCHED_ARTIFACT_GLOB)`.
+  `scripts/phase23_matched_prereg.py` becomes EDIT-ONCE at 23-17's first matched artifact — derive
+  from what is there; a key needed later cannot be added. `_TABLE` / `USAGE` still lack the matched
+  sub-mode and the record writer: both are 23-17's, left out of 23-16 on purpose.
 
 - **Phase 20 is complete and its ordering guarantee is now IRREVERSIBLE.** `scripts/mitigation_gate.py`
   was committed and pushed before `results/phase20_retention_floor.json`'s first add (`abf9072` is an
