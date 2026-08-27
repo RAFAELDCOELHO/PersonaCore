@@ -406,6 +406,299 @@
     "timestamp": "2026-08-27T03:35:26Z",
     "torch_version": "2.7.1"
   },
+  "matched": {
+    "1337": {
+      "adapter": "checkpoints/phase23_matched_control_seed1337_adapter.pt",
+      "adapter_bytes": 1352601,
+      "adapter_sha256": "0b64c1f501ca8eba93dde7e4696322d53ced01c82424bb9a12c5ea9cf31e9580",
+      "arm": "matched_control_seed1337",
+      "base_fingerprint": {
+        "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+        "step": 4000,
+        "val_loss": 1.5235939979553224
+      },
+      "batch_size": 8,
+      "block_size": 256,
+      "corpus_sha256": {
+        "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+        "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+        "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+      },
+      "csv": "results/phase23_matched_control_seed1337/run.csv",
+      "dp_seam_active": false,
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.06036620284430683,
+      "grad_accum_steps": 8,
+      "grad_clip": 1000000.0,
+      "grad_clip_bound_count": 0,
+      "grad_clip_calls": 200,
+      "grad_clip_checked_before_scoring": true,
+      "grad_clip_max_pre_clip_norm": 2.277066469192505,
+      "grad_clip_min_pre_clip_norm": 0.33590200543403625,
+      "heldout_family_std": 0.04933446717020304,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 346,
+        "n": 648,
+        "per_family": {
+          "F3": 0.6018518518518519,
+          "F7": 0.5138888888888888,
+          "F8": 0.4861111111111111
+        },
+        "questions": 72,
+        "rate": 0.5339506172839507
+      },
+      "max_steps": 200,
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.8444444444444444,
+        "F2": 0.8222222222222222,
+        "F6": 0.6597222222222222
+      },
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+      "ppl_scored_targets": null,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 790,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.8444444444444444,
+          "F2": 0.8222222222222222,
+          "F6": 0.6597222222222222
+        },
+        "questions": 112,
+        "rate": 0.7837301587301587
+      },
+      "replay_micro_batches_per_step": 4,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "replay_windows_per_step": 32,
+      "scoring_seconds": 972.7926467498764,
+      "seed": 1337,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": null,
+      "training_seconds": 154.20959608256817
+    },
+    "1338": {
+      "adapter": "checkpoints/phase23_matched_control_seed1338_adapter.pt",
+      "adapter_bytes": 1352601,
+      "adapter_sha256": "41379fdf6db70af6fed38020837c052d32bd98e2ffde31cac442ebbdea2f31df",
+      "arm": "matched_control_seed1338",
+      "base_fingerprint": {
+        "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+        "step": 4000,
+        "val_loss": 1.5235939979553224
+      },
+      "batch_size": 8,
+      "block_size": 256,
+      "corpus_sha256": {
+        "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+        "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+        "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+      },
+      "csv": "results/phase23_matched_control_seed1338/run.csv",
+      "dp_seam_active": false,
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.05773052270524204,
+      "grad_accum_steps": 8,
+      "grad_clip": 1000000.0,
+      "grad_clip_bound_count": 0,
+      "grad_clip_calls": 200,
+      "grad_clip_checked_before_scoring": true,
+      "grad_clip_max_pre_clip_norm": 2.2020719051361084,
+      "grad_clip_min_pre_clip_norm": 0.34236836433410645,
+      "heldout_family_std": 0.06459398005079119,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 333,
+        "n": 648,
+        "per_family": {
+          "F3": 0.5972222222222222,
+          "F7": 0.5046296296296297,
+          "F8": 0.4398148148148148
+        },
+        "questions": 72,
+        "rate": 0.5138888888888888
+      },
+      "max_steps": 200,
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.8305555555555556,
+        "F2": 0.8111111111111111,
+        "F6": 0.6493055555555556
+      },
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+      "ppl_scored_targets": null,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 778,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.8305555555555556,
+          "F2": 0.8111111111111111,
+          "F6": 0.6493055555555556
+        },
+        "questions": 112,
+        "rate": 0.7718253968253969
+      },
+      "replay_micro_batches_per_step": 4,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "replay_windows_per_step": 32,
+      "scoring_seconds": 1109.2366038747132,
+      "seed": 1338,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": null,
+      "training_seconds": 163.19990462530404
+    },
+    "2024": {
+      "adapter": "checkpoints/phase23_matched_control_seed2024_adapter.pt",
+      "adapter_bytes": 1352601,
+      "adapter_sha256": "e2eda9d02738496b20f60348c6434cc2bd094d9d0e76aa27ffa9b71a9a45a7cb",
+      "arm": "matched_control_seed2024",
+      "base_fingerprint": {
+        "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+        "step": 4000,
+        "val_loss": 1.5235939979553224
+      },
+      "batch_size": 8,
+      "block_size": 256,
+      "corpus_sha256": {
+        "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+        "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+        "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+      },
+      "csv": "results/phase23_matched_control_seed2024/run.csv",
+      "dp_seam_active": false,
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.06060187518596649,
+      "grad_accum_steps": 8,
+      "grad_clip": 1000000.0,
+      "grad_clip_bound_count": 0,
+      "grad_clip_calls": 200,
+      "grad_clip_checked_before_scoring": true,
+      "grad_clip_max_pre_clip_norm": 2.290142774581909,
+      "grad_clip_min_pre_clip_norm": 0.34846240282058716,
+      "heldout_family_std": 0.056868906705828046,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 320,
+        "n": 648,
+        "per_family": {
+          "F3": 0.5601851851851852,
+          "F7": 0.5,
+          "F8": 0.4212962962962963
+        },
+        "questions": 72,
+        "rate": 0.49382716049382713
+      },
+      "max_steps": 200,
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.8222222222222222,
+        "F2": 0.8027777777777778,
+        "F6": 0.65625
+      },
+      "ppl_adapter_off": null,
+      "ppl_adapter_on": null,
+      "ppl_omitted_reason": "train() called directly; train_arm's two masked_perplexity sweeps (teach_persona.py:1705,1709) do not run, so these six fields the OLD control record carries are structurally absent here. They are post-training diagnostics and cannot move a reading; adding them would spend scoring time the 23-17 budget does not hold.",
+      "ppl_scored_targets": null,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 774,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.8222222222222222,
+          "F2": 0.8027777777777778,
+          "F6": 0.65625
+        },
+        "questions": 112,
+        "rate": 0.7678571428571429
+      },
+      "replay_micro_batches_per_step": 4,
+      "replay_ratio": null,
+      "replay_tokens": null,
+      "replay_windows_per_step": 32,
+      "scoring_seconds": 990.2879575425759,
+      "seed": 2024,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": null,
+      "training_seconds": 165.79027429129928
+    }
+  },
   "never_taught": {
     "1337": {
       "adapter": "checkpoints/phase23_never_taught_seed1337_adapter.pt",
