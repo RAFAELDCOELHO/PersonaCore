@@ -20,6 +20,8 @@ gap closure exists to correct.
 CPU-only, GPU-free, no network, no training.
 """
 
+import ast
+import collections
 import json
 import pathlib
 import sys
@@ -34,6 +36,7 @@ if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
 import phase23_matched_prereg as mp  # noqa: E402  (needs the sys.path insert above)
+import phase23_prereg  # noqa: E402  (same reason)
 import phase23_run  # noqa: E402  (same reason)
 import teach_persona as tp  # noqa: E402  (same reason)
 
@@ -41,6 +44,9 @@ from personacore.config import TrainConfig  # noqa: E402
 
 _TEACH = _ROOT / "scripts" / "teach_persona.py"
 _SIGMA_ZERO_RECORD = _ROOT / "results" / "phase23_sigma_zero.json"
+_RUN_SOURCE = _ROOT / "scripts" / "phase23_run.py"
+_LOOP = _ROOT / "src" / "personacore" / "training" / "loop.py"
+_MATCHED_RECORD = _ROOT / mp.MATCHED_CONTROL_RECORD
 
 # The seed every check below builds the call at. `SEED_LADDER[0]` rather than a literal: it is the
 # ladder's first entry, the same seed the σ=0 record was measured at, and it is what
@@ -336,4 +342,274 @@ def test_the_matched_preflight_runs_against_live_source():
     assert sum(census.values()) == len(mp.DP_FN_BRANCH_DISPOSITIONS), (
         "every counted branch must carry a disposition, or the ledger names a difference between "
         "the comparator and the σ=0 arm that nobody dispositioned"
+    )
+
+
+# ---------------------------------------------------------------------------------------------
+# TESTS 10-18 — THE RECORD'S STRUCTURAL GUARDS, written BEFORE the run so they are live the
+# moment it lands.
+#
+# THERE IS NO SKIP OF ANY FORM IN THIS FILE, and the plan's acceptance gate proves that by AST
+# rather than by grep — a grep would be reddened by this very sentence. A silently-skipped guard
+# is the "declared invariant quietly becomes false" defect this project keeps naming, so the
+# vacuity shape below ASSERTS SOMETHING in the absent-record case: that the sub-mode which writes
+# the record is registered, named in its own message.
+# ---------------------------------------------------------------------------------------------
+
+
+def _record():
+    """The REAL matched record, or ``None`` after asserting the writer that produces it exists."""
+    if not _MATCHED_RECORD.exists():
+        assert "matched" in phase23_run._TABLE, (
+            f"{mp.MATCHED_CONTROL_RECORD} has not been written yet AND `phase23_run._TABLE` "
+            "carries no `matched` sub-mode, so nothing in this repository can ever produce it. "
+            "This is the vacuity branch of the record guards and it deliberately asserts rather "
+            "than passing quietly"
+        )
+        return None
+    return json.loads(_MATCHED_RECORD.read_text(encoding="utf-8"))
+
+
+def test_matched_record_floor_re_derives():
+    """The floor re-derives from the record's OWN counts through the blind reduction.
+
+    Counts, not rates: ``k/n`` recomputed here is what the record claims its readings ARE, so a
+    ``rate`` that drifted from its own denominator is caught in the same assertion.
+    """
+    record = _record()
+    if record is None:
+        return
+    rates = [entry["primary"]["k"] / entry["primary"]["n"] for entry in record["per_seed"]]
+    for entry, rate in zip(record["per_seed"], rates):
+        assert entry["primary"]["rate"] == rate, (
+            f"seed {entry['seed']}'s recorded rate {entry['primary']['rate']!r} is not "
+            f"{entry['primary']['k']}/{entry['primary']['n']} = {rate!r} — the reading and its own "
+            "denominator disagree"
+        )
+    assert record["readings"] == rates
+    assert record["floor"] == phase23_prereg.noise_floor(rates), (
+        f"the recorded floor {record['floor']!r} is not `phase23_prereg.noise_floor` over the "
+        f"record's own counts ({phase23_prereg.noise_floor(rates)!r}). A floor that does not "
+        "re-derive from its own artifact is a number whose provenance is a claim"
+    )
+
+
+def test_matched_record_carries_every_floor_provenance_key():
+    """All EIGHT ``FLOOR_PROVENANCE_KEYS`` at the top level — an unlabelled number is borrowed."""
+    record = _record()
+    if record is None:
+        return
+    missing = [key for key in phase23_prereg.FLOOR_PROVENANCE_KEYS if key not in record]
+    assert not missing, (
+        f"{mp.MATCHED_CONTROL_RECORD} is missing {missing!r} from FLOOR_PROVENANCE_KEYS. "
+        "`sigma_zero_verdict` refuses a floor whose artifact, commit, device, seeds or reduction "
+        "is unstated and never defaults it"
+    )
+    assert record["reduction"] == "phase23_prereg.noise_floor"
+
+
+def test_matched_record_grad_clip_was_non_binding_on_every_seed():
+    """Every seed: zero binding clips, a full call count, and a margin under C.
+
+    The CALL COUNT is the half that is easy to lose. ``bound_count == 0`` is also what a branch
+    that was NEVER TAKEN reports, so without ``calls == MAX_STEPS`` a comparator whose clip
+    equalisation never ran at all would pass as a comparator whose clip never bound.
+    """
+    record = _record()
+    if record is None:
+        return
+    evidence = record["grad_clip_evidence"]
+    assert len(evidence) == record["n_seeds"], (
+        f"grad-clip evidence covers {len(evidence)} seed(s) against {record['n_seeds']} readings"
+    )
+    for seed, block in sorted(evidence.items()):
+        assert block["bound_count"] == 0, (
+            f"seed {seed} bound its clip on {block['bound_count']} step(s) — the comparator "
+            "differs from the σ=0 arm by CLIPPING rather than by protocol"
+        )
+        assert block["calls"] == tp.MAX_STEPS, (
+            f"seed {seed} recorded {block['calls']} clip call(s) over a {tp.MAX_STEPS}-step run. "
+            "`loop.py` fires the clip once per optimizer step IFF `dp_fn is None`, so a lower "
+            "count means the branch was never taken and the equalisation never applied"
+        )
+        assert block["max_pre_clip_norm"] < mp.MATCHED_GRAD_CLIP, (
+            f"seed {seed}'s largest pre-clip norm {block['max_pre_clip_norm']!r} reaches C = "
+            f"{mp.MATCHED_GRAD_CLIP!r}"
+        )
+        assert block["checked_before_scoring"] is True
+
+
+def test_matched_record_declares_the_branch_census():
+    """The recorded census equals a LIVE census of ``loop.py`` — not a copy free to go stale."""
+    record = _record()
+    if record is None:
+        return
+    live = mp.dp_fn_branch_census(_LOOP.read_text(encoding="utf-8"))
+    recorded = collections.Counter(
+        {
+            (entry["function"], entry["condition"]): entry["count"]
+            for entry in record["dp_fn_branch_census"]
+        }
+    )
+    assert sum(recorded.values()) == sum(mp.DP_FN_BRANCH_COUNTS.values()), (
+        f"the recorded census sums to {sum(recorded.values())} against the blind ledger's "
+        f"{sum(mp.DP_FN_BRANCH_COUNTS.values())}"
+    )
+    assert recorded == live, (
+        "the census in the record and a live census of `loop.py` disagree.\n"
+        f"  recorded: {sorted(recorded.items())}\n"
+        f"  live:     {sorted(live.items())}"
+    )
+
+
+def test_matched_record_declares_the_visibility():
+    """The disclosure TRAVELS WITH THIS ARTIFACT, not only with the verdict four plans downstream.
+
+    Driven with the REAL record through the pin's own refusal, because a reader who opens the
+    control record and never opens the verdict record would otherwise get the protocol with no
+    disclosure at all.
+    """
+    record = _record()
+    if record is None:
+        return
+    assert mp.prove_control_record_declares_visibility(record) is True
+    assert record["sigma_zero_was_visible"] is True
+    assert record["sigma_zero_visibility_disclosure"] == mp.SIGMA_ZERO_VISIBILITY_DISCLOSURE, (
+        "the record's disclosure is not `phase23_matched_prereg.SIGMA_ZERO_VISIBILITY_DISCLOSURE` "
+        "VERBATIM. A paraphrase is a second source for one statement, free to soften it"
+    )
+
+
+def test_matched_record_records_the_attempt_state():
+    """Both refusals' INPUTS are recorded, and the scope is stated at its TRUE strength.
+
+    FOUR clauses, not three. A test checking only three passes against a scope naming three of
+    four — which is exactly how the overclaim survived a revision — so clauses (3) and (4) are
+    asserted BY NAME here, and (4) in BOTH halves: the auditability AND its non-retroactive start
+    point. An auditability claim without its start point is the same overclaim in new clothes.
+    """
+    record = _record()
+    if record is None:
+        return
+    assert record["matched_glob_at_start"] == [], (
+        f"the record says a matched artifact was ALREADY TRACKED at run start: "
+        f"{record['matched_glob_at_start']!r}"
+    )
+    assert record["prior_scored_seeds_at_start"] == [], (
+        f"the record says the state file already held SCORED matched seeds at run start: "
+        f"{record['prior_scored_seeds_at_start']!r}"
+    )
+    assert record["one_attempt_rule"] == "phase23_matched_prereg.prove_first_attempt"
+
+    scope = record["one_attempt_scope"].upper()
+    for clause in (
+        "ACROSS COMMITS",  # (1)
+        "UNCOMMITTED WINDOW",  # (2)
+        "PREVENTED BY NOTHING",  # (3) — the full-delete case, refused by nothing in real time
+        "AUDITABLE AFTER THE FACT",  # (4a) — what the same-session commit buys
+        "NOT RETROACTIVE",  # (4b) — and where that auditability BEGINS
+        "DISCIPLINE, NOT A MECHANISM",
+    ):
+        assert clause in scope, (
+            f"the recorded one-attempt scope omits {clause!r}. A rule whose recorded scope "
+            "overclaims is the defect this record exists to prevent"
+        )
+    assert "NOT 'CLOSED'" in scope, (
+        "the scope no longer says the residual is not 'closed'. That word is the whole difference "
+        "between the weakest true guarantee and the strongest sayable one"
+    )
+
+
+def test_matched_record_names_its_omitted_fields():
+    """The six absent diagnostics are DECLARED in the record, with the reason beside them."""
+    record = _record()
+    if record is None:
+        return
+    omitted = record["omitted_fields"]
+    for name in (
+        "ppl_adapter_on",
+        "ppl_adapter_off",
+        "ppl_scored_targets",
+        "teaching_tokens",
+        "replay_tokens",
+        "replay_ratio",
+    ):
+        assert name in omitted["fields"], (
+            f"{name!r} is absent from the comparator's per-seed block AND from `omitted_fields`, "
+            "so a reader diffing this record against the old control record's `per_seed` finds "
+            "the difference and no explanation"
+        )
+        assert omitted["fields"][name] is None
+    assert "masked_perplexity" in omitted["ppl_omitted_reason"], (
+        "the omission reason does not name `masked_perplexity`, which is the sweep whose absence "
+        f"causes it: {omitted['ppl_omitted_reason']!r}"
+    )
+
+
+def _matched_writer():
+    """The ``matched`` sub-mode's own AST node, from live source."""
+    tree = ast.parse(_RUN_SOURCE.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "matched":
+            return node
+    raise AssertionError(f"no `def matched` in {_RUN_SOURCE} — the record writer has no writer")
+
+
+def test_the_matched_writer_does_not_inline_the_reduction():
+    """The writer CALLS the blind reduction; it never types a spread of its own.
+
+    ``scripts/phase19_floor.py``'s property 2: a reduction chosen in the artifact writer is a
+    reduction chosen with the numbers already visible. This test is what makes that structural
+    rather than a matter of care.
+    """
+    node = _matched_writer()
+    walked = list(ast.walk(node))
+    calls = [item for item in walked if isinstance(item, ast.Call)]
+    assert calls, "META: the AST walk found no Call nodes at all — the scan is broken, not clean"
+
+    def _spread(item):
+        if not isinstance(item, ast.Call):
+            return None
+        if isinstance(item.func, ast.Name) and item.func.id in {"max", "min"}:
+            return item.func.id
+        if isinstance(item.func, ast.Attribute) and item.func.attr in {"max", "min"}:
+            return item.func.attr
+        return None
+
+    inlined = [(_spread(item), item.lineno) for item in calls if _spread(item)]
+    assert not inlined, (
+        f"`matched` calls {inlined} — the spread is typed in the writer instead of being CALLED "
+        "out of `phase23_prereg.noise_floor`"
+    )
+    subtractions = [
+        item.lineno
+        for item in walked
+        if isinstance(item, ast.BinOp)
+        and isinstance(item.op, ast.Sub)
+        and (_spread(item.left) or _spread(item.right))
+    ]
+    assert not subtractions, (
+        f"`matched` subtracts one spread from another at line(s) {subtractions}"
+    )
+
+    called = [
+        item.func.id
+        for item in calls
+        if isinstance(item.func, ast.Name) and item.func.id == "noise_floor"
+    ]
+    assert called, (
+        "`matched` never calls `noise_floor`. With no spread typed either, the writer would be "
+        "reducing nothing — which is how this guard could pass while measuring nothing"
+    )
+
+
+def test_matched_record_names_the_superseded_ledger():
+    """The OLD hand-drawn ledger is cited BY NAME, together with the entry it missed."""
+    record = _record()
+    if record is None:
+        return
+    superseded = record["superseded_ledger"]
+    assert "residual_differences" in superseded and "grad_clip" in superseded, (
+        "the record does not name both `residual_differences` and the `grad_clip` entry that "
+        f"ledger omitted: {superseded!r}"
     )

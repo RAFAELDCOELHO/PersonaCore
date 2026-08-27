@@ -2101,11 +2101,317 @@ def sigma_zero():
         )
 
 
+# =================================================================================================
+# ===== (f2) THE PROTOCOL-MATCHED COMPARATOR'S SUB-MODE, AND ITS RECORD =====
+# =================================================================================================
+
+# The six per-seed fields the OLD control record carries as floats and this one STRUCTURALLY cannot.
+# Named here so the record can DECLARE them rather than leave a reader diffing the two records to
+# infer the reason from an absence. Their values are read from the training block, never retyped.
+_MATCHED_OMITTED_FIELDS = (
+    "ppl_adapter_on",
+    "ppl_adapter_off",
+    "ppl_scored_targets",
+    "teaching_tokens",
+    "replay_tokens",
+    "replay_ratio",
+)
+
+
+def matched():
+    """23-17 — train and score the PROTOCOL-MATCHED comparator at five seeds, and RE-REDUCE.
+
+    ``floor()``'s register throughout: the reduction is CALLED out of the blind pin, the record
+    names the SYMBOL and never the formula, and every provenance key is proved present BEFORE the
+    write. What is new here is the ONE-ATTEMPT gate, and it is in TWO PARTS because one is not
+    enough — see the two blocks below and ``one_attempt_scope`` in the record.
+
+    RUNS NO σ=0 ARM AND RENDERS NO VERDICT. It writes ``results/phase23_matched_control.json`` and
+    nothing else under ``results/``; ``phase23_prereg.sigma_zero_verdict`` is 23-19's to call.
+    """
+    _preconditions()
+
+    # ===== (2a) THE ONE-ATTEMPT GATE, ACROSS COMMITS =====
+    # `_prove_no_noised_record_exists`'s subprocess shape, at the matched glob.
+    # `prove_first_attempt` runs no subprocess of its own — it takes THIS result, which is why the
+    # call is here.
+    matched_glob_at_start = subprocess.run(
+        ["git", "ls-files", mp.MATCHED_ARTIFACT_GLOB],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    mp.prove_first_attempt(matched_glob_at_start)
+    print(f"[phase23_run] git ls-files {mp.MATCHED_ARTIFACT_GLOB}: EMPTY — first attempt")
+
+    # ===== (2b) THE HALF OF THE UNCOMMITTED WINDOW THAT (2a) STRUCTURALLY CANNOT SEE =====
+    # `.gitignore:17` ignores `data/` and `:14` ignores `checkpoints/`, so between this run writing
+    # the record and 23-17's commit landing it, a second attempt is available with no TRACKED
+    # residue: delete the record, the per-seed result dirs, the seed checkpoints and this state
+    # file's `matched` section, and (2a) sees an empty `git ls-files`, the refuse-if-exists below
+    # sees nothing, and `_state_record`'s overwrite refusal is DEFEATED BY the deletion rather than
+    # triggered by it. This narrows that window; it does not close it.
+    #
+    # THE PREDICATE IS "SCORED", NOT "TRAINED", and the difference is load-bearing: a training leg
+    # killed mid-run and resumed is LEGITIMATE and must stay legitimate. Only a seed that already
+    # produced a READING is evidence of a completed prior attempt.
+    #
+    # WHAT THIS REFUSAL DOES **NOT** DO, stated here because the next reader will assume otherwise:
+    # it refuses a delete that leaves the `matched` section INTACT. A delete that ALSO removes that
+    # section is PREVENTED BY NOTHING — `prior` reads {}, `scored` reads [], `not scored` is True
+    # and this `_prove` PASSES. That case is INDISTINGUISHABLE FROM A FIRST ATTEMPT AT RUN TIME, and
+    # both recorded lists read [] either way. It is bounded only AFTER THE FACT: this state file is
+    # TRACKED (`cfa2c87`) with a committed baseline carrying NO `matched` section, so once the
+    # same-session commit lands the section a later deletion of it is a VISIBLE DIFF. See
+    # `one_attempt_scope`, which records all four clauses at exactly that strength.
+    prior = _state_load().get("matched", {})
+    prior_scored_seeds_at_start = sorted(s for s, b in prior.items() if "primary" in b)
+    _prove(
+        not prior_scored_seeds_at_start or (_ROOT / mp.MATCHED_CONTROL_RECORD).exists(),
+        f"{STATE_PATH} records SCORED matched seeds {prior_scored_seeds_at_start} while "
+        f"{mp.MATCHED_CONTROL_RECORD} is absent. That is exactly the state a deleted-and-re-run "
+        "first attempt leaves behind, and there is no force flag.",
+    )
+
+    # ===== THE THREE AST GATES, BEFORE A SINGLE GPU SECOND IS SPENT =====
+    census = prove_matched_protocol()
+
+    path = _ROOT / mp.MATCHED_CONTROL_RECORD
+    _prove(
+        not path.exists(),
+        f"{path} already exists — it is recorded evidence and there is no force flag",
+    )
+
+    # ===== THE SEED SET IS INHERITED, NOT RE-CHOSEN =====
+    # `choose_n_seeds` already selected a PREFIX of this ladder at N=5 on a measured 996.27 s
+    # scoring cost, and the scoring instrument here is byte-identical (`score_adapter`, one
+    # function, now three callers). Re-measuring its cost would move nothing and would spend a seed
+    # to learn it. A drift between this list and the `cost` block would compare two different
+    # denominators, which is why the agreement is PROVED rather than assumed.
+    seeds = list(SEED_LADDER)
+    state = _state_load()
+    _prove(
+        "cost" in state,
+        f"{STATE_PATH} carries no `cost` block — run `python scripts/phase23_run.py cost` first. "
+        "The comparator INHERITS that block's seed list; without it there is nothing to inherit "
+        "from and N would be chosen here, with the σ=0 reading already on screen",
+    )
+    _prove(
+        seeds == [int(s) for s in state["cost"]["seeds"]],
+        f"the comparator is about to run at {seeds} while the `cost` block recorded "
+        f"{state['cost']['seeds']}. The old control's floor was reduced over THAT set; a "
+        "comparator reduced over a different one would be compared against a denominator it does "
+        "not share",
+    )
+
+    for seed in seeds:
+        if not _already_trained("matched", seed):
+            print(f"[phase23_run] matched: training {mp.matched_arm(seed)}")
+            _state_record("matched", seed, train_matched_control(seed))
+        block = _state_load()["matched"][str(seed)]
+
+        # ===== THE GRAD-CLIP NON-BINDING PROOF, **BEFORE THIS SEED IS SCORED** =====
+        # Re-asserted here from the RECORDED block — not only inside `train_matched_control` —
+        # because a resumed seed reuses an adapter trained in an earlier process, and the evidence
+        # that reached the state file is the evidence the record will publish.
+        _prove(
+            block["grad_clip_calls"] == tp.MAX_STEPS
+            and block["grad_clip_bound_count"] == 0
+            and block["grad_clip_max_pre_clip_norm"] < mp.MATCHED_GRAD_CLIP,
+            f"matched seed {seed} recorded {block['grad_clip_calls']} clip call(s) against "
+            f"{tp.MAX_STEPS} steps, {block['grad_clip_bound_count']} binding, largest pre-clip "
+            f"norm {block['grad_clip_max_pre_clip_norm']!r} against C = "
+            f"{mp.MATCHED_GRAD_CLIP!r}. A seed whose clip BOUND differs from the σ=0 arm by "
+            "CLIPPING rather than by protocol — the exact confound this comparator exists to "
+            "remove. A call count BELOW MAX_STEPS is worse: it means `loop.py`'s "
+            "`dp_fn is None` branch was NEVER TAKEN, so the equalisation was never applied at all "
+            "and nothing else would show it. This runs BEFORE scoring for the same reason "
+            "`train_sigma_zero`'s `clip_bind_count == 0` does: afterwards it would be a check made "
+            "with the reading already visible",
+        )
+
+        if "primary" not in block:
+            print(f"[phase23_run] matched: scoring {mp.matched_arm(seed)}")
+            _state_record(
+                "matched",
+                seed,
+                score_adapter(mp.matched_arm(seed), _ROOT / block["adapter"], seed=seed),
+            )
+
+    state = _state_load()
+    per_seed = [state["matched"][str(seed)] for seed in seeds]
+    readings = [entry["primary"]["rate"] for entry in per_seed]
+    # THE REDUCTION IS CALLED, NEVER INLINED. No `max`, no `min`, no spread expression is typed
+    # in this function; `test_the_matched_writer_does_not_inline_the_reduction` proves that by AST.
+    measured_floor = noise_floor(readings)
+
+    inputs_sha256 = hashlib.sha256(
+        json.dumps(per_seed, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    first = per_seed[0]
+    record = {
+        "record": mp.MATCHED_CONTROL_RECORD,
+        "record_sha256": inputs_sha256,
+        "floor": measured_floor,
+        "reduction": "phase23_prereg.noise_floor",
+        "estimator": "the RANGE max(readings) - min(readings) over the N per-seed PRIMARY "
+        "readings, committed BLIND in 23-03 and CALLED here — never re-implemented",
+        "governs": (
+            "the TAUGHT RECALL RATE WITH THE ADAPTER ON (per_seed[].primary.k / .n, a count over "
+            "QUESTIONS) and NOTHING ELSE. This floor describes the PROTOCOL-MATCHED comparator: "
+            f"the same quantity {CONTROL_FLOOR_RECORD}'s floor describes, reduced over an arm that "
+            "equalises the three mechanisms that record's `residual_differences` did not. Every "
+            "other reading here is secondary, carries its own denominator and was NOT reduced. "
+            "This record renders NO verdict: `phase23_prereg.sigma_zero_verdict` is 23-19's to "
+            "call, against the floor 23-18 re-pins from this number"
+        ),
+        "primary_reading": "taught recall rate, adapter ON, over QUESTIONS",
+        "seeds": seeds,
+        "n_seeds": len(seeds),
+        "central_reading": readings[0],
+        "central_reading_seed": seeds[0],
+        "readings": readings,
+        "per_seed": per_seed,
+        "questions_taught": first["primary"]["questions"],
+        "questions_heldout": first["heldout_on"]["questions"],
+        "draws_per_question": first["primary"]["draws_per_question"],
+        "scoring_seconds_per_seed": {
+            str(entry["seed"]): entry["scoring_seconds"] for entry in per_seed
+        },
+        "training_seconds_per_seed": {
+            str(entry["seed"]): entry["training_seconds"] for entry in per_seed
+        },
+        # ===== THE ATTEMPT STATE — a rule whose inputs go unrecorded is a rule taken on trust ===
+        "matched_glob_at_start": matched_glob_at_start,
+        "prior_scored_seeds_at_start": prior_scored_seeds_at_start,
+        "one_attempt_rule": "phase23_matched_prereg.prove_first_attempt",
+        "one_attempt_scope": (
+            "FOUR CLAUSES, recording the WEAKEST TRUE guarantee rather than the strongest sayable "
+            "one.\n"
+            "  (1) THE RULE BINDS ACROSS COMMITS. Once a matched artifact is TRACKED, a second "
+            "protocol cannot be attempted without a VISIBLE DELETION in git history.\n"
+            "  (2) INSIDE THE UNCOMMITTED WINDOW between this run and its commit it does not bind: "
+            "`.gitignore:17` ignores `data/` and `.gitignore:14` ignores `checkpoints/`. There, "
+            "`prior_scored_seeds_at_start` refuses ONLY a delete that leaves "
+            "`data/phase23_run_state.json`'s `matched` section INTACT.\n"
+            "  (3) A DELETE THAT ALSO REMOVES THAT SECTION IS PREVENTED BY NOTHING in real time. "
+            "`prior` reads {}, `scored` reads [], and the case is INDISTINGUISHABLE FROM A FIRST "
+            "ATTEMPT at run time; both recorded lists read [] either way, so this record discloses "
+            "nothing about which it was.\n"
+            "  (4) THAT SAME CASE IS AUDITABLE AFTER THE FACT rather than invisible — and only "
+            "FROM THE SAME-SESSION COMMIT ONWARD. `data/phase23_run_state.json` is TRACKED as of "
+            "`cfa2c87` with a committed baseline carrying NO `matched` section, and it is "
+            "committed WITH this record, so a later deletion of that section is a VISIBLE DIFF "
+            "against that commit. TRACKING IS NOT RETROACTIVE: before that commit a "
+            "`git checkout -- data/phase23_run_state.json` reverts the working tree and leaves NO "
+            "HISTORY AT ALL. The same-session commit is therefore what CONVERTS this residual from "
+            "INVISIBLE to AUDITABLE rather than being its only bound. It remains a DISCIPLINE, NOT "
+            "A MECHANISM, this is not 'closed', and there is no force flag."
+        ),
+        # ===== THE VISIBILITY DISCLOSURE, TRAVELLING WITH THE ARTIFACT IT IS ABOUT =====
+        "sigma_zero_was_visible": True,
+        "sigma_zero_visibility_disclosure": mp.SIGMA_ZERO_VISIBILITY_DISCLOSURE,
+        "protocol": {
+            "arm_prefix": mp.MATCHED_ARM_PREFIX,
+            "n_facts": first["n_facts"],
+            "grad_accum_steps": first["grad_accum_steps"],
+            "grad_clip": first["grad_clip"],
+            "grad_clip_symbol": "phase23_matched_prereg.MATCHED_GRAD_CLIP",
+            "replay_windows_per_step": first["replay_windows_per_step"],
+            "replay_micro_batches_per_step": first["replay_micro_batches_per_step"],
+            "max_steps": first["max_steps"],
+            "batch_size": first["batch_size"],
+            "block_size": first["block_size"],
+            "dp_seam_active": first["dp_seam_active"],
+            "corpus_sha256": {_rel(p): digest for p, digest in DP_N8_BIN_SHA256.items()},
+            "corpus_is_the_sigma_zero_arms_own_bins": True,
+            "budget_constants": {
+                "teach_persona.LR": tp.LR,
+                "teach_persona.WARMUP_STEPS": tp.WARMUP_STEPS,
+                "teach_persona.MAX_STEPS": tp.MAX_STEPS,
+                "teach_persona.BATCH_SIZE": tp.BATCH_SIZE,
+                "teach_persona.WEIGHT_DECAY": tp.WEIGHT_DECAY,
+                "teach_persona.BLOCK_SIZE": tp.BLOCK_SIZE,
+            },
+            "lora_config": asdict(tp.LORA_CFG),
+            "base_checkpoint": _rel(tp.CONVBASE_BEST),
+        },
+        # ===== THE DISCLOSURE BLOCKS — differences carried BY CONSTRUCTION, not by hand =====
+        "equalised_mechanisms": mp.MATCHED_EQUALISED,
+        "declared_differences": mp.MATCHED_DIFFERENCES,
+        "superseded_ledger": (
+            "phase23_run.residual_differences (23-08) — four entries, and it did NOT enumerate "
+            "grad_clip. That omission is why this comparator exists: a ledger drawn BY HAND did "
+            f"not know what it excluded. It still stands in {CONTROL_FLOOR_RECORD}, unedited, so a "
+            "reader sees both; this record's `declared_differences` is read out of "
+            "`phase23_matched_prereg.MATCHED_DIFFERENCES` and its `dp_fn_branch_census` off LIVE "
+            "source, so neither can silently go short again"
+        ),
+        "omitted_fields": {
+            "fields": {name: first[name] for name in _MATCHED_OMITTED_FIELDS},
+            "ppl_omitted_reason": first["ppl_omitted_reason"],
+            "vs_old_control_record": (
+                f"{CONTROL_FLOOR_RECORD}'s per_seed carries these six as FLOATS. They are absent "
+                "here because that record's arms ran through `teach_persona.train_arm` and this "
+                "comparator calls `tp.train` directly. Recorded as explicit None with a reason "
+                "rather than dropped: a None with a reason is an honest record, a missing key is a "
+                "reader's guess. Declared blind in phase23_matched_prereg.MATCHED_DIFFERENCES"
+            ),
+        },
+        "dp_fn_branch_census": [
+            {"function": function, "condition": condition, "count": count}
+            for (function, condition), count in sorted(census.items())
+        ],
+        "grad_clip_evidence": {
+            str(entry["seed"]): {
+                "calls": entry["grad_clip_calls"],
+                "max_pre_clip_norm": entry["grad_clip_max_pre_clip_norm"],
+                "min_pre_clip_norm": entry["grad_clip_min_pre_clip_norm"],
+                "bound_count": entry["grad_clip_bound_count"],
+                "checked_before_scoring": entry["grad_clip_checked_before_scoring"],
+            }
+            for entry in per_seed
+        },
+        **provenance(),
+    }
+
+    missing = [key for key in FLOOR_PROVENANCE_KEYS if key not in record]
+    _prove(
+        not missing,
+        f"the protocol-matched control record is MISSING {missing!r} from "
+        "phase23_prereg.FLOOR_PROVENANCE_KEYS. `sigma_zero_verdict` REFUSES a floor whose "
+        "artifact, commit, device, seeds or reduction is unstated and never defaults it: an "
+        "unlabelled number is indistinguishable from a borrowed one",
+    )
+    _prove(
+        record["floor"]
+        == noise_floor([e["primary"]["k"] / e["primary"]["n"] for e in record["per_seed"]]),
+        "the recorded floor does not re-derive from the recorded per-seed COUNTS — the record and "
+        "its own reduction disagree before it has even been written",
+    )
+    mp.prove_control_record_declares_visibility(record)
+
+    path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+    print("[phase23_run] per-seed primary readings (taught recall ON, k/n over questions):")
+    for entry in per_seed:
+        block = entry["primary"]
+        print(
+            f"  seed {entry['seed']}: {block['k']}/{block['n']} = {block['rate']!r} "
+            f"over {block['questions']} questions x {block['draws_per_question']} draws"
+        )
+    print(
+        f"[phase23_run] wrote {mp.MATCHED_CONTROL_RECORD}: floor {measured_floor!r} "
+        f"= phase23_prereg.noise_floor over {len(readings)} readings"
+    )
+
+
 _TABLE = {
     "cost": cost,
     "schedule": schedule,
     "floor": floor,
     "sigma-zero": sigma_zero,
+    "matched": matched,
 }
 
 USAGE = (
@@ -2123,6 +2429,12 @@ USAGE = (
     "              judged by `phase23_prereg.sigma_zero_verdict` against the floor pinned in\n"
     "              `mitigation_budget.CONTROL_NOISE_FLOOR`. Writes\n"
     "              results/phase23_sigma_zero.json. A breach HALTS the sweep — no override flag.\n"
+    "  matched     train AND score the PROTOCOL-MATCHED comparator at all five seeds, then\n"
+    "              re-reduce the floor over ITS readings through `phase23_prereg.noise_floor`.\n"
+    "              Writes results/phase23_matched_control.json. RUNS NO sigma=0 ARM and RENDERS\n"
+    "              NO VERDICT — 23-18 re-pins the floor and 23-19 calls the rule. ONE ATTEMPT:\n"
+    "              `phase23_matched_prereg.prove_first_attempt` plus a scored-seed refusal over\n"
+    "              data/phase23_run_state.json, and there is no force flag on either.\n"
 )
 
 
