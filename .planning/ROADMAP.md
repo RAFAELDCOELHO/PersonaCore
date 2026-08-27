@@ -586,7 +586,7 @@ Phase 20 (K and the promotion rule are already committed)
      scored — serving as both the frontier's lower-left floor and the relearning reference, so it is
      scheduled once and consumed twice. (CTRL-03)
 
-**Plans**: 14 plans across 8 waves
+**Plans**: 19 plans across 13 waves *(14 planned 2026-08-26; plans 23-15…23-19 added 2026-08-27 as GAP CLOSURE for the D-04 halt at 23-10 — waves 9–13)*
 
 Plans:
 **Wave 1**
@@ -633,6 +633,43 @@ Plans:
 **Wave 8** *(BLOCKED by the D-04 halt at 23-10)*
 
 - [ ] 23-14-PLAN.md — CTRL-03: score the never-taught adapters at the pinned K; the record the frozen gate accepts
+
+> **GAP CLOSURE, PLANNED 2026-08-27 (plans 23-15…23-19).** `.planning/debug/sigma-zero-beats-control.md`
+> (status `root-caused`, commit `263f5f8`) attributed the halt to branch **(A) INVALID COMPARATOR**
+> and **FALSIFIED branch (B)** by direct measurement — at σ=0 with a proven non-binding `C=1e6` the
+> DP seam reproduces the ordinary grad-accum gradient across all 72 LoRA tensors to a worst relative
+> difference of `2.178e-07`. ONE predicate, `teach_persona.py:1389` `is_dp = arm in DP_ARMS`,
+> switches the packer, the lot size AND the gradient clip together, so σ=0 measured a DIFFERENT
+> TRAINING PROTOCOL. The five plans below build a PROTOCOL-MATCHED comparator equalising all three
+> mechanisms — lot volume (65 vs 8 windows; teaching-token exposure 1,689,600 vs 196,867 = 8.58×),
+> teaching loss weight (1.0 vs `2719/6262 = 0.4342` = 2.30×) and `grad_clip` (bound on 19/25 control
+> steps at mean shrink `0.8071`, structurally absent from the DP arm) — then re-reduce the floor over
+> its seeds and re-run the D-04 verdict. **`DP_ARMS` is NOT widened**: `train()`'s fact-aligned seam
+> is keyed on `fact_bin`/`n_facts` (`loop.py:512`) and its replay seam on `replay_windows`, neither on
+> `dp_fn`, so a non-DP arm reaches them through a direct `train()` call — the register
+> `phase23_run.train_never_taught` already established. **`scripts/phase23_prereg.py` is NOT edited**
+> — the new comparator is a new INPUT to `sigma_zero_verdict`, not a rule change. **23-11…23-14 stay
+> BLOCKED** regardless of the re-test's outcome; unblocking them is a separate human act.
+
+**Wave 9** *(gap closure — the blind pin, landing while `git ls-files 'results/phase23_matched_*'` is empty)*
+
+- [ ] 23-15-PLAN.md — the BLIND protocol pre-registration: `scripts/phase23_matched_prereg.py`, its artifact register, `MATCHED_GRAD_CLIP`, the seven-branch `loop.py` AST census, the seven-key `dp_kwargs` census, the ONE-ATTEMPT rule and the σ=0-visibility disclosure, with an ancestry guard and five refusals watched RED
+
+**Wave 10** *(blocked on Wave 9)*
+
+- [ ] 23-16-PLAN.md — the comparator's `train()` call, the `clip_grad_norm_` capture bracket and the training leg, with both AST completeness gates proven on CPU before a single GPU second
+
+**Wave 11** *(blocked on Wave 10)*
+
+- [ ] 23-17-PLAN.md — the `matched` sub-mode: train + score five protocol-matched arms on the σ=0 arm's OWN bins and re-reduce the floor through `phase23_prereg.noise_floor` (≤103 min MPS, sized from the committed 205.44 s / 1026.87 s legs)
+
+**Wave 12** *(blocked on Wave 11)*
+
+- [ ] 23-18-PLAN.md — pin `MATCHED_CONTROL_NOISE_FLOOR` beside the original in `scripts/mitigation_budget.py`, purely additive (zero deletions), zero imports, original re-scoped by dated continuation
+
+**Wave 13** *(blocked on Wave 12)*
+
+- [ ] 23-19-PLAN.md — the re-test: `sigma_zero_verdict` called with the matched readings and the new floor against the σ=0 reading READ back (never re-run), the record written on BOTH branches, and the debug/STATE/ROADMAP continuation
 
 ### Phase 24: Adversarial Extraction-Aware Training + the Held-Out Attack Family
 
