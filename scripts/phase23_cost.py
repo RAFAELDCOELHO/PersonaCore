@@ -288,9 +288,12 @@ def size_sweep(*, generation_record, sweep_points, k):
     only direction the ratchet permits, and the floor is reported BESIDE the projection as
     disclosure rather than as an alternative to it.
 
-    ``validate_record`` runs FIRST, so a floor-only record raises before any arithmetic happens.
-    The refusal is the point: falling back to the floor when the ceiling is absent is precisely the
-    failure CAL-05 names, and it would be invisible in the output.
+    A floor-only record raises before any arithmetic happens. The refusal is the point: falling
+    back to the floor when the ceiling is absent is precisely the failure CAL-05 names, and it
+    would be invisible in the output. The MISSING CEILING gets its own refusal ahead of
+    ``validate_record``'s generic missing-key list, because it is the one absence whose consequence
+    a reader must be told: every other missing key costs a label, this one costs the budget in the
+    direction the ratchet cannot undo.
 
     **THE K SCALING, AND ITS ONE ASSUMPTION, STATED.** ``draws_per_point`` is NOT ``questions * k``:
     the Phase-18 shape mixes K-scaled attack families with a fixed-draw family zero. So the draw
@@ -305,6 +308,16 @@ def size_sweep(*, generation_record, sweep_points, k):
     generation is a per-token Python loop at batch 1 and wall clock is close to linear in draws at
     fixed prefill (``23-RESEARCH.md`` §R3.B).
     """
+    _prove(
+        hasattr(generation_record, "keys") and "h_per_point_ceiling" in generation_record,
+        "the generation record has no h_per_point_ceiling, so this sizing REFUSES rather than "
+        "falling back to h_per_point_floor. The K ratchet at `scripts/mitigation_gate.py:918` "
+        "(`ratchet_k`, over the closed menu `K_RUNGS` at `:254`) only lets a selected rung "
+        "INCREASE, never decrease — so a sweep sized against the floor and then found too "
+        "expensive has NO rescue in the cheap direction, and the under-budgeting would be "
+        "invisible in this function's output. A floor read as a mean is exactly what CAL-05 "
+        "exists to prevent",
+    )
     validate_record(generation_record, kind="generation")
 
     for name, value in (("sweep_points", sweep_points), ("k", k)):
