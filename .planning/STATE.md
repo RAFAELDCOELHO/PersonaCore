@@ -10,7 +10,7 @@ progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 66
-  completed_plans: 60
+  completed_plans: 59
   percent: 33
 ---
 
@@ -27,6 +27,18 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING GAP CLOSURE 23-15…23-19
 Plan: 17 of 19 — **23-17 INCOMPLETE at `cec1bd8` + `d99d2aa` + `39513dd`** (23-11..23-14 remain BLOCKED)
+
+**⚠ INDEX TRAP — DO NOT RE-RUN `/gsd:execute-phase 23 --gaps-only` BLIND.** `phase-plan-index`
+keys completion on the EXISTENCE of `23-17-SUMMARY.md`, not on its `status: INCOMPLETE`, so it
+reports `23-17 has_summary: True` and omits it from `incomplete`. A blind re-run therefore SKIPS
+23-17 and dispatches **23-18, which has no input** — `results/phase23_matched_control.json` does
+not exist. 23-18 and 23-19 stay blocked until the matched record is written.
+
+**NEXT: 23-20** — narrow `prove_first_attempt` on the structural fingerprint (3-scored +
+2-never-trained is impossible for a completed-and-deleted attempt, because the record is only
+written after all five score), through the adversarial checker cycle. ONLY THEN resume seeds
+2025 + 1339 (~40 min). Mechanism analysis, governing nothing: `23-MECHANISM-ASSESSMENT.md` —
+branch (A) INVALID COMPARATOR confirmed empirically at seed 1337, which does **not** reopen N=5.
 
 **23-17's PRODUCTION RUN DID NOT COMPLETE, AND NOTHING WAS RETRIED TO MAKE IT LOOK LIKE IT DID.**
 The `matched` sub-mode, its record writer, both one-attempt refusals and nine record guards landed
