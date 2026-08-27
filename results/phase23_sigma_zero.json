@@ -1,0 +1,230 @@
+{
+  "clip_bind_count": 0,
+  "clip_bind_count_covers_steps": 200,
+  "clip_checked_before_scoring": true,
+  "clip_is_non_binding": true,
+  "clip_norm": 1000000.0,
+  "composed_lot_sizes": [
+    8
+  ],
+  "composed_steps": 200,
+  "control_central_reading": 0.5615079365079365,
+  "control_central_reading_seed": 1337,
+  "control_readings": [
+    0.5615079365079365,
+    0.5257936507936508,
+    0.5704365079365079,
+    0.5267857142857143,
+    0.5168650793650794
+  ],
+  "control_record": "results/phase23_control_floor.json",
+  "control_seeds": [
+    1337,
+    2024,
+    1338,
+    2025,
+    1339
+  ],
+  "deviation": 0.2222222222222222,
+  "device": "mps",
+  "draws_per_question": 9,
+  "draws_this_leg": 3312,
+  "floor": 0.05357142857142849,
+  "floor_pin_module": "scripts/mitigation_budget.py",
+  "floor_pin_symbol": "CONTROL_NOISE_FLOOR",
+  "floor_provenance": {
+    "device": "mps",
+    "git_sha": "0fb596dcbb147952ce6ae11144c9cfe7cf57330c",
+    "governs": "the TAUGHT RECALL RATE WITH THE ADAPTER ON (per_seed[].primary.k / .n, a count over QUESTIONS). `phase23_prereg.sigma_zero_verdict` reads this floor in 23-10 against the same quantity measured on the \u03c3=0 arm and recorded at results/phase23_sigma_zero.json; a deviation larger than this floor HALTS the whole sweep (D-04) and there is no warning branch and no override flag. It governs THAT quantity and nothing else: every other reading in this record is secondary, recorded with its own denominator and NOT reduced.",
+    "record": "results/phase23_control_floor.json",
+    "record_file_sha256": "201cc58e574074df875513c32ee0237e143ecb356469a79581be511748a75a59",
+    "record_sha256": "c62d732283a3f15375de7b2ba9180c56acfcd75109b12912c17c9f083afdf0eb",
+    "reduction": "phase23_prereg.noise_floor",
+    "seeds": [
+      1337,
+      2024,
+      1338,
+      2025,
+      1339
+    ],
+    "torch_version": "2.7.1"
+  },
+  "floor_provenance_symbol": "CONTROL_NOISE_FLOOR_PROVENANCE",
+  "git_sha": "9ed2370f78732aa36e0041499290abd924e013ac",
+  "governs": "WHETHER ANY NOISED SWEEP POINT MAY RUN AT ALL. `proceed` unblocks the first noised run of the milestone; `HALT` blocks every noised point until the cause is root-caused and fixed, and there is no warning branch and no override flag (D-04). The quantity judged is the TAUGHT RECALL RATE WITH THE ADAPTER ON (primary.k / primary.n, a count over QUESTIONS) \u2014 the same quantity `results/phase23_control_floor.json` declares its floor governs, and nothing else.",
+  "halt_message": "[phase23_prereg] D-04 HALT \u2014 THE SWEEP IS HALTED: zero noised points will run.\n  \u03c3=0 reading      : 0.7837301587301587 (BEATS the control)\n  control central  : 0.5615079365079365 (reading at the FIRST recorded seed)\n  deviation        : 0.2222222222222222\n  noise floor      : 0.05357142857142849\n  floor record     : results/phase23_control_floor.json\n  \u03c3=0 must reproduce the unmitigated control inside the seed-to-seed floor. It does not. The cause must be ROOT-CAUSED AND FIXED before any noised point runs \u2014 this is not a warning and there is no override flag. Every correctness bug in this class IMPROVES utility, which is why a \u03c3=0 that BEATS the control is the signal rather than noise. Stop-and-fix is reversible; publish-compromised is not.",
+  "heldout_family_std": 0.04933446717020304,
+  "heldout_off": {
+    "draws_per_question": 9,
+    "k": 0,
+    "n": 648,
+    "per_family": {
+      "F3": 0.0,
+      "F7": 0.0,
+      "F8": 0.0
+    },
+    "questions": 72,
+    "rate": 0.0
+  },
+  "heldout_on": {
+    "draws_per_question": 9,
+    "k": 346,
+    "n": 648,
+    "per_family": {
+      "F3": 0.6018518518518519,
+      "F7": 0.5138888888888888,
+      "F8": 0.4861111111111111
+    },
+    "questions": 72,
+    "rate": 0.5339506172839507
+  },
+  "per_family_gain": {
+    "F1": 0.8444444444444444,
+    "F2": 0.8222222222222222,
+    "F6": 0.6597222222222222
+  },
+  "ppl_adapter_off": 4.573349214207799,
+  "ppl_adapter_on": 4.708399666491714,
+  "ppl_scored_targets": 270203,
+  "primary": {
+    "draws_per_question": 9,
+    "k": 790,
+    "n": 1008,
+    "per_family": {
+      "F1": 0.8444444444444444,
+      "F2": 0.8222222222222222,
+      "F6": 0.6597222222222222
+    },
+    "questions": 112,
+    "rate": 0.7837301587301587
+  },
+  "primary_reading": "taught recall rate, adapter ON, over QUESTIONS",
+  "python_version": "3.11.15",
+  "questions_heldout": 72,
+  "questions_taught": 112,
+  "reading": 0.7837301587301587,
+  "recipe": {
+    "adapter": "checkpoints/phase23_sigma0_dp_n8_adapter.pt",
+    "adapter_sha256": "0a897d23974742ac15963f949b10d6eed411626a83006299dec20ca9e60c6c64",
+    "arm": "dp_n8",
+    "base_checkpoint": "checkpoints/convbase_best.pt",
+    "budget_constants": {
+      "teach_persona.BATCH_SIZE": 8,
+      "teach_persona.BLOCK_SIZE": 256,
+      "teach_persona.LR": 0.0003,
+      "teach_persona.MAX_STEPS": 200,
+      "teach_persona.WARMUP_STEPS": 20,
+      "teach_persona.WEIGHT_DECAY": 0.0
+    },
+    "corpus": [
+      "data/persona_dp_n8_train.bin",
+      "data/persona_dp_n8_train_fact.bin",
+      "data/persona_dp_n8_train_mask.bin"
+    ],
+    "corpus_digest_source": "23-07-SUMMARY.md \u2014 the dp_n8 triple the resume probe recorded",
+    "corpus_sha256": {
+      "data/persona_dp_n8_train.bin": "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735",
+      "data/persona_dp_n8_train_fact.bin": "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2",
+      "data/persona_dp_n8_train_mask.bin": "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+    },
+    "facts": "phase14_factset.LOCKED_FACTS",
+    "family_ids": [
+      "F1",
+      "F2",
+      "F4",
+      "F5",
+      "F6"
+    ],
+    "lora_config": {
+      "alpha": 16.0,
+      "dropout": 0.0,
+      "r": 8,
+      "targets": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "c_proj",
+        "fc_in",
+        "fc_out"
+      ]
+    },
+    "n_facts": 8,
+    "prefix": "phase23_sigma0",
+    "replay_ratio_in_bin": 0.0,
+    "second_person": false
+  },
+  "record": "results/phase23_sigma_zero.json",
+  "records_per_lot": 8,
+  "residual_differences": [
+    {
+      "difference": "replay lives IN the teaching bin here; it is drawn at TRAIN time on the DP path",
+      "matched_quantity": "the replay TOKEN volume, which IS matched and recorded as a number in `recipe.replay`",
+      "why_not_eliminable": "D-10/D-24 put replay outside the teaching bin for DP arms, and `train()`'s replay seam (`replay_bin`/`replay_mask_bin`/`replay_windows`) is wired at `teach_persona.py`'s `dp_kwargs`, gated on `is_dp`. A non-DP arm cannot reach it without widening `DP_ARMS`, which would make the control a DP arm and require a sigma."
+    },
+    {
+      "difference": "grad_accum_steps is 1 here and `n_facts` on the DP path",
+      "matched_quantity": null,
+      "why_not_eliminable": "`dp_accum = dict(grad_accum_steps=stats['n_facts']) if is_dp else {}` \u2014 the same `is_dp` predicate. The control's lot is one micro-batch; the DP arm's lot is one privacy record per micro-step (SC2)."
+    },
+    {
+      "difference": "the flat v3.0 pack here; the ragged fact-aligned three-bin pack there",
+      "matched_quantity": "the fact set (`phase14_factset.LOCKED_FACTS`, n=8) and the taught family ids, which ARE identical",
+      "why_not_eliminable": "the arm NAME is what couples an arm to its packer \u2014 `build_arm_bins` reads `DP_ARMS` and nothing else. A control that packed ragged would be a DP arm by name and would need a sigma."
+    },
+    {
+      "difference": "the DP arithmetic itself \u2014 per-record clip at C, a summed accumulator, and the division by N last",
+      "matched_quantity": null,
+      "why_not_eliminable": "`DPSGD` is constructed only when `is_dp`. At \u03c3=0 the noise term is exactly zero but the CLIP and the accumulate-then-divide remain, so \u03c3=0 is not the control computation with a zero added to it."
+    }
+  ],
+  "scoring_seconds": 952.0680559994653,
+  "seed": 1337,
+  "sigma": 0.0,
+  "t_source": "_count_composed_steps",
+  "taught_off": {
+    "draws_per_question": 9,
+    "k": 0,
+    "n": 1008,
+    "per_family": {
+      "F1": 0.0,
+      "F2": 0.0,
+      "F6": 0.0
+    },
+    "questions": 112,
+    "rate": 0.0
+  },
+  "timestamp": "2026-08-27T06:52:26Z",
+  "torch_version": "2.7.1",
+  "training": {
+    "adapter": "checkpoints/phase23_sigma0_dp_n8_adapter.pt",
+    "adapter_bytes": 1351601,
+    "adapter_sha256": "0a897d23974742ac15963f949b10d6eed411626a83006299dec20ca9e60c6c64",
+    "arm": "dp_n8",
+    "arm_run_prefix": "phase23_sigma0",
+    "batch_size": 8,
+    "block_size": 256,
+    "bracket_covers": "the whole train_arm call: build_arm_bins + base load + the max_steps-step loop (in-loop evals, checkpoint writes, replay memmap I/O) + both end-of-run masked_perplexity sweeps",
+    "capacity_n_facts": 8,
+    "csv": "results/phase23_sigma0_dp_n8/run.csv",
+    "device": "mps",
+    "dp_seam_active": true,
+    "final_train_loss": 0.0603661946952343,
+    "git_sha": "9ed2370f78732aa36e0041499290abd924e013ac",
+    "grad_accum_steps": 8,
+    "max_steps": 200,
+    "python_version": "3.11.15",
+    "replay_micro_batches_per_step": 4,
+    "replay_windows_per_step": 32,
+    "resumed_from_step": 0,
+    "seconds_per_optimizer_step": 1.0272112891636789,
+    "seconds_total": 205.44225783273578,
+    "seed": 1337,
+    "timed_iterations": 200,
+    "timestamp": "2026-08-27T06:52:26Z",
+    "timing_is_uninterrupted": true,
+    "torch_version": "2.7.1",
+    "warmup_iterations_discarded": 0
+  },
+  "verdict": "HALT",
+  "verdict_rule": "phase23_prereg.sigma_zero_verdict"
+}
