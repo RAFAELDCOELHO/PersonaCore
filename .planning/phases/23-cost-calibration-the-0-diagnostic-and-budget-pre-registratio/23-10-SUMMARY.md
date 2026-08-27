@@ -201,6 +201,13 @@ differences, verbatim from `results/phase23_control_floor.json`, which is where 
    *Matched:* the replay TOKEN volume (8,192, recorded as a number). *Not eliminable:* D-10/D-24 put
    replay outside the teaching bin for DP arms and `train()`'s replay seam is gated on `is_dp`; a
    non-DP arm cannot reach it without widening `DP_ARMS`, which would make the control a DP arm.
+
+   > **CORRECTED 2026-08-27** — debug session `sigma-zero-beats-control`, TASK 2. *"Matched: the
+   > replay TOKEN volume"* holds PER OPTIMIZER STEP only. Run totals: control ≈ **212,733** replay
+   > tokens against the DP arm's **1,638,400** — **7.70×**, because `replay_windows=32` is a
+   > **per-step** budget (`loop.py:306`) while the control's 8,192 are a one-time bin volume.
+   > What is genuinely matched is the per-lot COMPOSITION (48.06/51.94 vs 50.77/49.23). See
+   > 23-08-SUMMARY's dated retraction for the full derivation.
 2. **"grad_accum_steps is 1 here and `n_facts` on the DP path."** *Matched:* nothing. *Not
    eliminable:* the same `is_dp` predicate. The control's lot is one micro-batch; the DP arm's lot is
    one privacy record per micro-step (SC2).

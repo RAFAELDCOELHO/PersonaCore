@@ -130,6 +130,24 @@ never-taught arm in **34.4–36.4 s**, against a ~996 s scoring leg. N was decid
 `replay_tokens == 8192`, the same public token volume the DP path draws at train time. The measured
 `teaching_tokens = 7,581` reproduces `teach_persona.py`'s own D-24 comment exactly.
 
+> **PARTIALLY RETRACTED 2026-08-27** — debug session `sigma-zero-beats-control`, TASK 2.
+> The sentence *"the same public token volume the DP path draws at train time"* is TRUE PER
+> OPTIMIZER STEP and **FALSE AS A RUN TOTAL**, and the two readings differ by 7.70×.
+> `train(replay_windows=)` is documented at `src/personacore/training/loop.py:306` as windows drawn
+> **per OPTIMIZER STEP**, and `train_arm` passes `replay_window_budget(8) // 256 = 32`. So the DP
+> arm draws 8,192 replay tokens **every step** — 200 × 32 × 256 = **1,638,400** over the run —
+> while the control's 8,192 sit in its bin ONCE and are re-sampled, giving an expected
+> 200 × 8 × 256 × 8192/15773 ≈ **212,733** replay tokens over the run. Measured from
+> `data/persona_control_seed1337_train{,_mask}.bin` and `data/persona_dp_n8_train{,_mask,_fact}.bin`.
+>
+> **What IS matched is the per-lot COMPOSITION, which is what D-24's table sized.** Control lot:
+> 8 random windows from a bin that is 51.94% replay by token → 48.06% teaching / 51.94% replay.
+> DP lot: 33 teaching + 32 replay windows → 50.77% / **49.23%**, reproducing D-24's
+> "4 windows → 49.23% share of the padded bin" row to four figures. The ABSOLUTE lot volume is not
+> matched: 65 windows vs 8, a ratio of **8.125×** — the same ~8× that appears in every other column.
+> Read `matched: true` in `results/phase23_control_floor.json` → `recipe.replay` as a COMPOSITION
+> match. It is not a volume match, and this SUMMARY claimed one.
+
 ### CTRL-03's scheduling
 
 `results/phase23_never_taught_training.json`: `arm` = `"never-taught"` READ from the FROZEN
