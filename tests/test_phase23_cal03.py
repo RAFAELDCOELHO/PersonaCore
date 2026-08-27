@@ -65,16 +65,20 @@ CPU by default; the ε/T pair is measured on BOTH devices in the phase's `_DEVIC
 
 import ast
 import inspect
+import json
 import math
 import pathlib
 import sys
 from collections import namedtuple
+from dataclasses import asdict
 
 import numpy as np
 import pytest
+import torch
 
 from personacore.config import RuntimeConfig, TrainConfig
 from personacore.privacy.accountant import ROUND_TRIP_REL_TOL, epsilon_for
+from personacore.provenance import git_sha
 from personacore.training.loop import train
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -83,8 +87,10 @@ for _extra_path in (_ROOT / "tests", _ROOT / "scripts"):
     if str(_extra_path) not in sys.path:
         sys.path.insert(0, str(_extra_path))
 
-# The BLIND rule, RESOLVED from 23-03's edit-once module and never re-implemented at a call site.
-from phase23_prereg import n64_leg_is_committable  # noqa: E402
+# The BLIND rule and the artifact path, both RESOLVED from 23-03's edit-once module and never
+# retyped at a call site. That module is what `test_the_prereg_rule_precedes_every_phase23_result`
+# binds on, and this file's record is the FIRST artifact that makes the binding non-vacuous.
+from phase23_prereg import CAL03_WIRING_RECORD, n64_leg_is_committable  # noqa: E402
 
 # `REPLAY_WINDOWS_PER_FACT` from the production module rather than a literal 4: the second path N
 # travels is only rehearsed here if the multiplier is the one production uses.
@@ -98,6 +104,7 @@ from test_phase22_checkpoint import (  # noqa: E402
     _DELTA,
     _DP_SEED,
     _MICRO_BS,
+    _NON_BINDING_CLIP,
     _TINY,
     _TOTAL_STEPS,
     _count_composed_steps,
@@ -581,3 +588,174 @@ def test_watched_red_node_ids_resolve():
                 f"shipped test (marks: {sorted(marks)}, device-parametrized: {takes_device}). A "
                 "cited node id that cannot be run is a citation nobody can check"
             )
+
+
+# =================================================================================================
+# THE RECORD. Emitted by the `__main__` block below, from the SAME `_run_capacity` the assertions
+# above run on; validated here as a committed artifact.
+# =================================================================================================
+
+_RECORD_PROVENANCE_KEYS = (
+    "git_sha",
+    "device",
+    "torch_version",
+    "python_version",
+    "model_config",
+    "max_steps_override",
+    "batch_size",
+    "clip_norm",
+    "n_facts_arms",
+    "replay_windows_arms",
+    "t_source",
+)
+_RECORD_SCOPE_KEYS = ("sweep_point", "exports_adapter", "scope", "governs")
+_RECORD_VALUE_KEYS = _PAIR_KEYS + ("verdict", "sigma", "delta")
+_RECORD_KEYS = _RECORD_PROVENANCE_KEYS + _RECORD_SCOPE_KEYS + _RECORD_VALUE_KEYS
+
+
+def _prove_record_complete(record):
+    """Every required key PRESENT — REFUSED if missing, never defaulted.
+
+    Presence, not truthiness: ``verdict``, ``sweep_point`` and ``exports_adapter`` are legitimately
+    ``False``, so a truthiness check would reject exactly the outcomes D-06 pre-registered.
+    `mitigation_gate`'s D-14(a) reasoning — an unlabelled number is indistinguishable from a
+    borrowed one — with the ``is None`` half kept separate so the message says which failure it is.
+    """
+    missing = [key for key in _RECORD_KEYS if key not in record]
+    assert not missing, (
+        f"the CAL-03 record is missing {missing}. Provenance is REFUSED rather than defaulted: a "
+        "record whose device, commit, torch version or step count is unstated cannot be told apart "
+        "from one borrowed off another run"
+    )
+    unset = [key for key in _RECORD_KEYS if record[key] is None]
+    assert not unset, f"the CAL-03 record carries a null for {unset} — present but unstated"
+
+
+def test_the_cal03_record_is_complete_and_declares_its_scope():
+    """The committed verdict: complete, self-declaring, and RE-DERIVED from its own stored values.
+
+    Three things are checked and the third is the binding one:
+
+      1. **The path is `phase23_prereg.CAL03_WIRING_RECORD`**, resolved from the edit-once module.
+         A record at any other path under `results/` is invisible to
+         `tests/test_phase20_prereg.py:332` and to every ordering guard in
+         `tests/test_phase23_prereg.py` — not merely unwatched, structurally invisible.
+      2. **It declares its own scope**: ``sweep_point: false`` and ``exports_adapter: false``.
+         That declaration is what exempts it from DPSGD-06's σ=0 ordering, and
+         `test_every_noised_sweep_point_is_under_the_noised_glob` reads exactly this key. Silence
+         would be a refusal there, not a third exemption.
+      3. **Its numbers re-derive.** ``epsilon_for(sigma, t, delta)`` on the record's OWN stored
+         σ/T/δ must reproduce the stored ε under exact ``==``, and D-06's rule re-evaluated on the
+         stored four must reproduce the stored verdict. This is pure arithmetic — it needs no GPU
+         and no training — so CI re-checks the published number on every run rather than trusting
+         the emitter that wrote it.
+    """
+    path = _ROOT / CAL03_WIRING_RECORD
+    assert path.exists(), (
+        f"{CAL03_WIRING_RECORD} is not on disk. It is emitted by "
+        f"`python {_THIS_FILE.relative_to(_ROOT)}` and COMMITTED — 23-13 reads this file rather "
+        "than re-deriving the verdict"
+    )
+    record = json.loads(path.read_text(encoding="utf-8"))
+    _prove_record_complete(record)
+
+    assert record["sweep_point"] is False and record["exports_adapter"] is False, (
+        "the wiring record does not declare itself a non-sweep-point. Read as a sweep point it "
+        "would sit before σ=0 in git and falsify DPSGD-06's 'σ=0 is the DP arm's first executed "
+        "run' without anyone editing a number"
+    )
+    assert record["t_source"] == _T_SOURCE, (
+        f"T was sourced from {record['t_source']!r}, not from {_T_SOURCE!r}. A checkpoint field "
+        "reports a composition that may never have run (measured: `step` said 4 while 6 composed)"
+    )
+
+    for arm, t_key, epsilon_key in ((_N8, "t_n8", "epsilon_n8"), (_N64, "t_n64", "epsilon_n64")):
+        re_derived = epsilon_for(record["sigma"], record[t_key], record["delta"])
+        assert re_derived == record[epsilon_key], (
+            f"the n={arm} arm records ε = {record[epsilon_key]!r}, but "
+            f"epsilon_for({record['sigma']!r}, {record[t_key]!r}, {record['delta']!r}) returns "
+            f"{re_derived!r}. The published ε is not the accountant's answer on the published "
+            "(σ, T, δ) — one of the four was edited after the run"
+        )
+        assert math.isfinite(record[epsilon_key])
+
+    assert record["verdict"] == _verdict(**{key: record[key] for key in _PAIR_KEYS}), (
+        f"the record's verdict is {record['verdict']!r}, but D-06's blind-committed rule "
+        "re-evaluated on the record's OWN stored ε and T disagrees. The verdict is then a claim "
+        "about something other than the numbers beside it"
+    )
+
+
+# =================================================================================================
+# THE EMITTER — `scripts/`' register, so the artifact's numbers come from the SAME code path the
+# assertions above run on. The JSON is NEVER hand-written.
+# =================================================================================================
+
+if __name__ == "__main__":  # pragma: no cover - artifact emitter, not a test
+    import platform
+    import tempfile
+
+    from personacore.preflight import preflight_device
+
+    # strict=False so the emitter also runs on a CPU-only box; D-01 makes MPS the venue that
+    # produces this milestone's published numbers, and `preflight_device` resolves CUDA -> MPS ->
+    # CPU, so the device this actually ran on is RECORDED rather than assumed.
+    _env = preflight_device(strict=False)
+    _device = "cpu" if _env["device"] not in ("mps", "cpu") else _env["device"]
+
+    with tempfile.TemporaryDirectory() as _tmp:
+        _work = pathlib.Path(_tmp)
+        _replay = _write_replay_source(_work)
+        _arms = {
+            n: _run_capacity(n, sigma=_SIGMA, device=_device, replay=_replay, workdir=_work)
+            for n in _CAPACITIES
+        }
+
+    _values = _pair(_arms)
+    _record = {
+        **_values,
+        "verdict": _verdict(**_values),
+        "sigma": _SIGMA,
+        "delta": _DELTA,
+        # --- scope: this is a WIRING PROBE, and it says so structurally and in words -----------
+        "sweep_point": False,
+        "exports_adapter": False,
+        "scope": (
+            "WIRING PROBE, NOT A SWEEP POINT. Runs a toy ModelConfig under max_steps_override on a "
+            "fixed_batch, exports no adapter and scores no question, so it sits outside "
+            "phase23_prereg.NOISED_RECORD_GLOB by design and does not precede DPSGD-06's sigma=0 "
+            "run in any sense that matters. It tests the WIRING (whether n_facts leaks into the "
+            "composed step count T), NOT the accountant's mathematics: epsilon_for takes no N "
+            "parameter, so epsilon is independent of N by construction and this run cannot test "
+            "that."
+        ),
+        "governs": (
+            "CAL-03 / D-06: whether the n=64 leg is COMMITTED in the Phase-23 budget "
+            "(scripts/mitigation_budget.py). Consumer: plan 23-13, which reads this verdict rather "
+            "than re-deriving it. verdict=false WITHDRAWS the n=64 leg with this record as the "
+            "withdrawing measurement; the n=8 leg stays intact and publishable either way, because "
+            "a data-path wiring bug does not indict the DP mechanism itself."
+        ),
+        # --- provenance: every key REFUSED if missing (see `_prove_record_complete`) ------------
+        "git_sha": git_sha(),
+        "device": _device,
+        "torch_version": torch.__version__,
+        "python_version": platform.python_version(),
+        "model_config": asdict(_TINY),
+        "max_steps_override": _PROBE_STEPS,
+        "batch_size": _MICRO_BS,
+        "clip_norm": _NON_BINDING_CLIP,
+        "n_facts_arms": list(_CAPACITIES),
+        "replay_windows_arms": [REPLAY_WINDOWS_PER_FACT * n for n in _CAPACITIES],
+        "t_source": _T_SOURCE,
+    }
+    _prove_record_complete(_record)
+
+    _out = _ROOT / CAL03_WIRING_RECORD
+    _out.parent.mkdir(parents=True, exist_ok=True)
+    _out.write_text(json.dumps(_record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(
+        f"[cal03] {CAL03_WIRING_RECORD}: verdict={_record['verdict']} "
+        f"T={_record['t_n8']}/{_record['t_n64']} "
+        f"eps={_record['epsilon_n8']!r}/{_record['epsilon_n64']!r} on {_device}"
+    )

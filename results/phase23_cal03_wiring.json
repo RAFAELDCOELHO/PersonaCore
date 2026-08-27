@@ -1,0 +1,40 @@
+{
+  "batch_size": 2,
+  "clip_norm": 1000000.0,
+  "delta": 1e-05,
+  "device": "mps",
+  "epsilon_n64": 24.38161088311366,
+  "epsilon_n8": 24.38161088311366,
+  "exports_adapter": false,
+  "git_sha": "5faaec4ead49d088fffb8e3ba3f461bafa91bf2f",
+  "governs": "CAL-03 / D-06: whether the n=64 leg is COMMITTED in the Phase-23 budget (scripts/mitigation_budget.py). Consumer: plan 23-13, which reads this verdict rather than re-deriving it. verdict=false WITHDRAWS the n=64 leg with this record as the withdrawing measurement; the n=8 leg stays intact and publishable either way, because a data-path wiring bug does not indict the DP mechanism itself.",
+  "max_steps_override": 4,
+  "model_config": {
+    "block_size": 32,
+    "dropout": 0.0,
+    "eos_id": 8184,
+    "n_embd": 16,
+    "n_head": 2,
+    "n_layer": 1,
+    "use_pos_emb": true,
+    "vocab_size": 8192,
+    "weight_tying": true
+  },
+  "n_facts_arms": [
+    8,
+    64
+  ],
+  "python_version": "3.11.15",
+  "replay_windows_arms": [
+    32,
+    256
+  ],
+  "scope": "WIRING PROBE, NOT A SWEEP POINT. Runs a toy ModelConfig under max_steps_override on a fixed_batch, exports no adapter and scores no question, so it sits outside phase23_prereg.NOISED_RECORD_GLOB by design and does not precede DPSGD-06's sigma=0 run in any sense that matters. It tests the WIRING (whether n_facts leaks into the composed step count T), NOT the accountant's mathematics: epsilon_for takes no N parameter, so epsilon is independent of N by construction and this run cannot test that.",
+  "sigma": 0.5,
+  "sweep_point": false,
+  "t_n64": 4,
+  "t_n8": 4,
+  "t_source": "_count_composed_steps",
+  "torch_version": "2.7.1",
+  "verdict": true
+}
