@@ -1,0 +1,212 @@
+{
+  "central_reading": 0.7837301587301587,
+  "central_reading_seed": 1337,
+  "control_readings": [
+    0.7837301587301587,
+    0.7678571428571429,
+    0.7718253968253969,
+    0.7569444444444444,
+    0.7668650793650794
+  ],
+  "control_record": "results/phase23_matched_control.json",
+  "control_record_file_sha256": "4478005fa5480646d830ac56d615ab361b1e1a7b8becfd6d887bec33deba504c",
+  "control_seeds": [
+    1337,
+    2024,
+    1338,
+    2025,
+    1339
+  ],
+  "declared_differences": [
+    {
+      "difference": "the `dp_noise_rng` checkpoint slot",
+      "disposition": "declared-difference",
+      "evidence": "`_dp_extra` at loop.py:709 (branch 5 of the ledger). Checkpoint CONTENT, written downstream of every gradient, so it cannot move a reading.",
+      "matched_quantity": "none \u2014 the comparator constructs no DPSGD, so it has no slot to write"
+    },
+    {
+      "difference": "the arm NAME, and therefore the csv / checkpoint / adapter paths",
+      "disposition": "declared-difference",
+      "evidence": "two arms sharing a path would overwrite each other's evidence. The csv lands inside MATCHED_ARTIFACT_GLOB by construction, which is what puts it under the ancestry guard; the adapter lands in gitignored `checkpoints/`, which is why (i) is scoped as it is.",
+      "matched_quantity": "none \u2014 `matched_arm(seed)` is deliberately distinct from `dp_n8`"
+    },
+    {
+      "difference": "the DP seam's own object graph \u2014 DPSGD constructed on one side, None on the other",
+      "disposition": "declared-difference",
+      "evidence": "PROBE 2 falsifies this as an ARITHMETIC difference (72/72 LoRA tensors agree to 2.178e-07 relative at \u03c3=0 with non-binding C), and residual difference #4's premise \u2014 '\u03c3=0 is not the control computation with a zero added to it' \u2014 is TRUE of the CODE PATH and FALSE of the ARITHMETIC. The code path is therefore declared, not equalised: the comparator cannot reach it without becoming a DP arm.",
+      "matched_quantity": "the ARITHMETIC, which is falsified as a difference by measurement"
+    },
+    {
+      "difference": "the two end-of-run `masked_perplexity` sweeps, and the six per-seed diagnostic fields they produce",
+      "disposition": "declared-difference",
+      "evidence": "those sweeps live in `teach_persona.train_arm` (:1705 and :1709), so they do NOT run for a comparator that calls `tp.train` directly. `ppl_adapter_on`, `ppl_adapter_off`, `ppl_scored_targets`, `teaching_tokens`, `replay_tokens` and `replay_ratio` are therefore absent where the OLD control record carries them. They are diagnostics measured AFTER training ends, downstream of every weight the reading depends on, so they cannot move a reading \u2014 and adding them would spend scoring time the 23-17 budget does not hold. Declared here so their absence is a pinned expectation rather than a surprise a later reader reads as a truncated run.",
+      "matched_quantity": "none \u2014 ABSENT from the comparator's per-seed block"
+    }
+  ],
+  "deviation": 0.0,
+  "deviation_over_floor": 0.0,
+  "device": "mps",
+  "dp_fn_branch_census": [
+    {
+      "condition": "dp_fn is None",
+      "count": 1,
+      "function": "_dp_extra"
+    },
+    {
+      "condition": "dp_fn is None",
+      "count": 1,
+      "function": "_optimizer_step"
+    },
+    {
+      "condition": "dp_fn is not None",
+      "count": 3,
+      "function": "_optimizer_step"
+    },
+    {
+      "condition": "dp_fn is None and ckpt.get('dp_noise_rng') is not None",
+      "count": 1,
+      "function": "train"
+    },
+    {
+      "condition": "dp_fn is not None and ckpt.get('dp_noise_rng') is not None",
+      "count": 1,
+      "function": "train"
+    }
+  ],
+  "equalised_mechanisms": [
+    {
+      "measured": "DP lot = 33 teaching + 32 replay = 65 windows; control lot = 8 windows (8.125x). Measured TEACHING-token exposure over the run: 1,689,600 vs 196,867 = 8.58x.",
+      "mechanism": "lot volume"
+    },
+    {
+      "measured": "the DP arm's fact-aligned packer returns EVERY window of one fact (fact_index = step % n_facts, deterministic full coverage), so teaching enters the gradient at weight 1.0. The control draws 8 RANDOM windows from a bin that is 51.94% replay, so masked-CE puts weight p = 2719/6262 = 0.4342 on teaching. 1/0.4342 = 2.30x, on top of drastically lower gradient variance that AdamW compounds over 200 steps.",
+      "mechanism": "teaching loss weight"
+    },
+    {
+      "measured": "binding on 19 of the control's first 25 steps, mean shrink 0.8071, against DP norms of 1.538-2.278 never clipped. Equalised by MATCHED_GRAD_CLIP = 1e6.",
+      "mechanism": "grad_clip"
+    }
+  ],
+  "floor": 0.0267857142857143,
+  "floor_pin_module": "mitigation_budget",
+  "floor_pin_symbol": "MATCHED_CONTROL_NOISE_FLOOR",
+  "floor_provenance": {
+    "device": "mps",
+    "git_sha": "d8f42639f1d71ae36c277cd48baa422e24ae5104",
+    "governs": "the TAUGHT RECALL RATE WITH THE ADAPTER ON (per_seed[].primary.k / .n, a count over QUESTIONS) and NOTHING ELSE. This floor describes the PROTOCOL-MATCHED comparator: the same quantity results/phase23_control_floor.json's floor describes, reduced over an arm that equalises the three mechanisms that record's `residual_differences` did not. Every other reading here is secondary, carries its own denominator and was NOT reduced. This record renders NO verdict: `phase23_prereg.sigma_zero_verdict` is 23-19's to call, against the floor 23-18 re-pins from this number",
+    "protocol": "phase23_matched_prereg",
+    "record": "results/phase23_matched_control.json",
+    "record_file_sha256": "4478005fa5480646d830ac56d615ab361b1e1a7b8becfd6d887bec33deba504c",
+    "record_sha256": "5bb4216f7ea15611847b5a46613f990cadc028f0a8680337385c7d1fbcf7dd85",
+    "reduction": "phase23_prereg.noise_floor",
+    "seeds": [
+      1337,
+      2024,
+      1338,
+      2025,
+      1339
+    ],
+    "sigma_zero_was_visible": true,
+    "torch_version": "2.7.1"
+  },
+  "floor_provenance_symbol": "MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE",
+  "git_sha": "c86a224b3480d1f15ddacc9fa51ff03a0f4a9c17",
+  "governs": "WHETHER THE D-04 HALT SURVIVES A PROTOCOL-MATCHED COMPARATOR, and nothing else. The quantity judged is the TAUGHT RECALL RATE WITH THE ADAPTER ON (primary.k / primary.n, a count over QUESTIONS) \u2014 the same quantity both floors declare they govern. THIS RECORD DOES NOT UNBLOCK ANYTHING. Plans 23-11, 23-12, 23-13 and 23-14 remain BLOCKED whatever the verdict says; unblocking them is a separate, later act taken by a human who has READ this record, not a consequence of this driver's exit code",
+  "halt_message": null,
+  "python_version": "3.11.15",
+  "reading": 0.7837301587301587,
+  "reading_source": "results/phase23_sigma_zero.json",
+  "record": "results/phase23_matched_verdict.json",
+  "secondary_readings": {
+    "matched_control": {
+      "heldout_off": {
+        "k": 0,
+        "n": 648,
+        "rate": 0.0,
+        "reduced": false
+      },
+      "heldout_on": {
+        "k": 346,
+        "n": 648,
+        "rate": 0.5339506172839507,
+        "reduced": false
+      },
+      "primary": {
+        "k": 790,
+        "n": 1008,
+        "rate": 0.7837301587301587,
+        "reduced": false
+      },
+      "taught_off": {
+        "k": 0,
+        "n": 1008,
+        "rate": 0.0,
+        "reduced": false
+      }
+    },
+    "sigma_zero": {
+      "heldout_off": {
+        "k": 0,
+        "n": 648,
+        "rate": 0.0,
+        "reduced": false
+      },
+      "heldout_on": {
+        "k": 346,
+        "n": 648,
+        "rate": 0.5339506172839507,
+        "reduced": false
+      },
+      "primary": {
+        "k": 790,
+        "n": 1008,
+        "rate": 0.7837301587301587,
+        "reduced": false
+      },
+      "taught_off": {
+        "k": 0,
+        "n": 1008,
+        "rate": 0.0,
+        "reduced": false
+      }
+    }
+  },
+  "secondary_readings_denominators_source": {
+    "matched_control": "results/phase23_matched_control.json -> per_seed[0]'s own tier blocks",
+    "rule": "every k and n above is a SUBSCRIPT READ of the named block, never a literal. Both paths are named here so a reader can check every denominator against its origin without leaving this file. `taught_off` is scored over the TAUGHT question set and therefore does NOT share the held-out tiers' denominator",
+    "sigma_zero": "results/phase23_sigma_zero.json -> the record's own top-level tier blocks"
+  },
+  "sigma_zero_clip_bind_count": 0,
+  "sigma_zero_composed_steps": 200,
+  "sigma_zero_record_file_sha256": "dd34e51398b87d54c4e83dcfd192a0e7abead7c73d143aeb28b11cfa07e85d36",
+  "sigma_zero_seed": 1337,
+  "sigma_zero_visibility_disclosure": "THE \u03c3=0 READING WAS ALREADY VISIBLE WHEN THIS COMPARATOR'S PROTOCOL WAS DESIGNED.\n\n`results/phase23_sigma_zero.json` was committed BEFORE this protocol existed, and its reading\n0.7837301587301587 (790/1008, seed 1337) was on screen throughout the design of the protocol this\nrecord reports. That is disclosed here rather than inferred later.\n\nWHAT REMAINS BLIND, all pinned at `c7de5d4` and byte-unchanged since:\n  * the reduction            \u2014 `phase23_prereg.noise_floor` (the range, max - min)\n  * the central-reading pin  \u2014 `control_readings[0]`, the reading at the FIRST recorded seed\n  * the verdict              \u2014 `phase23_prereg.sigma_zero_verdict`, no warning branch, no override\n  * the seed ladder          \u2014 `phase23_run.SEED_LADDER`\n\nWHAT IS **NOT** BLIND: the choice of WHICH MECHANISMS TO EQUALISE. That choice was made with the\n\u03c3=0 number visible, and it is the last remaining degree of freedom in this comparison. It is pinned\nin `scripts/phase23_matched_prereg.py`, committed while `git ls-files 'results/phase23_matched_*'`\nreturned NOTHING \u2014 which is what converts \"not tuned to the number\" from a claim in a paragraph\ninto a fact about git's object graph.\n\nAND THAT FACT IS LIMITED, IN EXACTLY FOUR WAYS (`prove_first_attempt`, restated in full because a\ndisclosure that omits a scope clause is the overclaim it exists to prevent):\n\n  (1) THE UNCOMMITTED WINDOW. The one-attempt rule binds ACROSS COMMITS only. Between 23-17's run\n      and 23-17's commit it does not bind at all: `.gitignore:17` ignores `data/` and\n      `.gitignore:14` ignores `checkpoints/`.\n\n  (2) THE FULL-DELETE CASE IS PREVENTED BY NOTHING IN REAL TIME. 23-17's\n      `prior_scored_seeds_at_start` refuses a delete that leaves the state file's `matched` section\n      INTACT. A delete that ALSO removes that section reads `prior = {}` and `scored = []`, and is\n      INDISTINGUISHABLE FROM A FIRST ATTEMPT at run time.\n\n  (3) THAT SAME CASE IS AUDITABLE AFTER THE FACT \u2014 BUT ONLY FROM THE SAME-SESSION COMMIT ONWARD.\n      `data/phase23_run_state.json` is tracked as of `cfa2c87` with a baseline carrying NO\n      `matched` section, so a later deletion of that section is a VISIBLE DIFF against the commit\n      that landed it. TRACKING IS NOT RETROACTIVE: before that commit a `git checkout --` leaves no\n      history at all. So the same-session commit is what CONVERTS this residual from invisible to\n      auditable \u2014 it is a DISCIPLINE, NOT A MECHANISM, and this is not \"closed\".\n\n  (4) ONE GLOB. A comparator renamed to `results/phase23_rematch_*` is not refused. The edit-once\n      property raises its cost to \"arrive with a NEW pre-registration\", which is VISIBLE, not\n      REFUSED.\n",
+  "sigma_zero_was_re_run": false,
+  "sigma_zero_was_re_run_reason": "the \u03c3=0 arm's PROTOCOL never changed \u2014 only its comparator did \u2014 so its reading is read back from its committed record and re-derived from that record's own primary.k / primary.n, and no arm was re-run to obtain a different number",
+  "sigma_zero_was_visible": true,
+  "superseded_verdict": {
+    "central_reading": 0.5615079365079365,
+    "central_reading_seed": 1337,
+    "control_readings": [
+      0.5615079365079365,
+      0.5257936507936508,
+      0.5704365079365079,
+      0.5267857142857143,
+      0.5168650793650794
+    ],
+    "control_record": "results/phase23_control_floor.json",
+    "deviation": 0.2222222222222222,
+    "deviation_over_floor": 4.148148148148154,
+    "direction": "BEATS",
+    "floor": 0.05357142857142849,
+    "floor_pin_symbol": "CONTROL_NOISE_FLOOR",
+    "halt_message": "[phase23_prereg] D-04 HALT \u2014 THE SWEEP IS HALTED: zero noised points will run.\n  \u03c3=0 reading      : 0.7837301587301587 (BEATS the control)\n  control central  : 0.5615079365079365 (reading at the FIRST recorded seed)\n  deviation        : 0.2222222222222222\n  noise floor      : 0.05357142857142849\n  floor record     : results/phase23_control_floor.json\n  \u03c3=0 must reproduce the unmitigated control inside the seed-to-seed floor. It does not. The cause must be ROOT-CAUSED AND FIXED before any noised point runs \u2014 this is not a warning and there is no override flag. Every correctness bug in this class IMPROVES utility, which is why a \u03c3=0 that BEATS the control is the signal rather than noise. Stop-and-fix is reversible; publish-compromised is not.",
+    "it_was_not_wrong": "THE FIRST VERDICT WAS NOT WRONG. It correctly measured this arm against a DIFFERENT TRAINING PROTOCOL: `is_dp = arm in DP_ARMS` switched the packer, the lot size and the gradient clip together, so the old control differed from the \u03c3=0 arm by three measured mechanisms as well as by the DP seam. What is superseded is its COMPARATOR, not its arithmetic \u2014 every figure above still re-derives from that record, which is left byte-unchanged beside this one",
+    "record": "results/phase23_sigma_zero.json",
+    "verdict": "HALT"
+  },
+  "timestamp": "2026-08-27T22:59:10Z",
+  "torch_version": "2.7.1",
+  "verdict": "proceed",
+  "verdict_rule": "phase23_prereg.sigma_zero_verdict"
+}
