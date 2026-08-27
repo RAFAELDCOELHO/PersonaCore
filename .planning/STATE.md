@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-10-PLAN.md (plan 10 of 14) — D-04 HALT; 23-11..23-14 BLOCKED
-last_updated: 2026-08-27T07:12:00.000Z
+stopped_at: Completed 23-15-PLAN.md (plan 15 of 19) — D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
+last_updated: "2026-08-27T15:29:26.911Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
-  total_plans: 61
-  completed_plans: 57
+  total_plans: 66
+  completed_plans: 58
   percent: 33
 ---
 
@@ -25,8 +25,25 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — HALTED (D-04)
-Plan: 11 of 14 — BLOCKED
+Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING GAP CLOSURE 23-15…23-19
+Plan: 16 of 19 — **23-15 COMPLETE at `c100388`** (23-11..23-14 remain BLOCKED)
+
+**23-15 landed the BLIND protocol pre-registration.** `scripts/phase23_matched_prereg.py` +
+`tests/test_phase23_matched_prereg.py` were committed while `git ls-files
+'results/phase23_matched_*'` returned **nothing** — verified 0 immediately before AND after the
+commit, which is what makes "the comparator was not tuned to the σ=0 reading already on screen" a
+fact about git's object graph rather than a paragraph. The module is EDIT-ONCE from 23-17's first
+matched artifact, so it carries every constant the four downstream gap plans consume ahead of need
+(both record paths, `MATCHED_GRAD_CLIP = 1e6`, the full 14-name `VERDICT_REQUIRED_KEYS`). Three AST
+censuses replace 23-08's hand enumeration and all three reproduce the planned counts exactly: **7**
+`dp_fn` branches in `loop.py`, **7** `dp_accum`/`dp_kwargs` keys, **21** names in the production
+`train(...)` call. The one-attempt rule is stated in FOUR scope clauses including the full-delete
+case **nothing prevents in real time** and the non-retroactive start of its auditability. The
+grad-clip inertness claim was RE-MEASURED on this M3 rather than inherited: the plan's figure
+reproduced, plus a finding it did not record — **an on-device bitwise check cannot see the MPS
+subnormal flush**, because the comparison operator flushes its own operands too. Suite `1500 passed,
+1 skipped`. All four frozen pre-registrations byte-unchanged. **NO requirement ticked** — this makes
+a valid comparator possible, it delivers none of CAL-01/CAL-02/CAL-05/CTRL-03.
 Status: **D-04 FIRED AT 23-10. ZERO NOISED SWEEP POINTS MAY RUN.** The σ=0 diagnostic read
 `0.7837301587301587` against the control's pinned central `0.5615079365079365` — deviation
 `0.2222222222222222` against a floor of `0.05357142857142849`, **4.15× the floor**, in the **BEATS**
@@ -165,6 +182,7 @@ Last activity: 2026-08-27
 | Phase 23 P08 | 185min | 3 tasks | 5 files |
 | Phase 23 P09 | 25 min | 2 tasks | 2 files |
 | Phase 23 P10 | 95min | 3 tasks | 7 files |
+| Phase 23 P15 | 65min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -693,8 +711,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T07:12:00.000Z
-Stopped at: Completed 23-10-PLAN.md (plan 10 of 14) — D-04 HALT; 23-11..23-14 BLOCKED
+Last session: 2026-08-27T15:29:26.901Z
+Stopped at: Completed 23-15-PLAN.md (plan 15 of 19) — D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
 Resume file: None
 
 ## Operator Next Steps

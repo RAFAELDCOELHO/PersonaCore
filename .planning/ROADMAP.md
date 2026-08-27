@@ -653,7 +653,7 @@ Plans:
 
 **Wave 9** *(gap closure — the blind pin, landing while `git ls-files 'results/phase23_matched_*'` is empty)*
 
-- [ ] 23-15-PLAN.md — the BLIND protocol pre-registration: `scripts/phase23_matched_prereg.py`, its artifact register, `MATCHED_GRAD_CLIP`, the THREE AST censuses (seven `dp_fn` branches in `loop.py`, seven `dp_kwargs`/`dp_accum` keys, and the 21-name production `train(...)` call set), the ONE-ATTEMPT rule stated at its true strength — three limits, one of them a case NOTHING refuses — and the σ=0-visibility disclosure, with an ancestry guard and seven refusals watched RED
+- [x] 23-15-PLAN.md — the BLIND protocol pre-registration: `scripts/phase23_matched_prereg.py`, its artifact register, `MATCHED_GRAD_CLIP`, the THREE AST censuses (seven `dp_fn` branches in `loop.py`, seven `dp_kwargs`/`dp_accum` keys, and the 21-name production `train(...)` call set), the ONE-ATTEMPT rule stated at its true strength — three limits, one of them a case NOTHING refuses — and the σ=0-visibility disclosure, with an ancestry guard and seven refusals watched RED
 
 **Wave 10** *(blocked on Wave 9)*
 
@@ -835,7 +835,7 @@ capacities — with every number in prose generated from a committed record rath
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
-| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 10/19 | HALTED (D-04) | -          |
+| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 11/19 | HALTED (D-04) — gap closure 23-15..23-19 in progress | -          |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |
