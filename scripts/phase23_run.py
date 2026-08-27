@@ -90,6 +90,12 @@ import mitigation_budget  # noqa: E402
 import mitigation_gate  # noqa: E402
 import phase14_factset as fs  # noqa: E402
 import phase23_cost  # noqa: E402
+
+# 23-15's BLIND protocol pin, CONSUMED and never edited. It carries every constant the
+# protocol-matched comparator below is built from — `MATCHED_GRAD_CLIP`, `matched_arm`,
+# `MATCHED_ARM_PREFIX` and the three AST completeness censuses. It is EDIT-ONCE from 23-17's first
+# matched artifact and has NO SAFETY VALVE, so nothing here writes to it.
+import phase23_matched_prereg as mp  # noqa: E402
 import teach_persona as tp  # noqa: E402
 from phase23_prereg import (  # noqa: E402
     CONTROL_FLOOR_RECORD,
@@ -1014,6 +1020,443 @@ def train_sigma_zero(seed):
         "adapter_bytes": adapter.stat().st_size,
         "csv": _rel(record["paths"]["csv"]),
         "corpus_sha256": {_rel(path): digest for path, digest in DP_N8_BIN_SHA256.items()},
+    }
+
+
+# =================================================================================================
+# ===== (e2) THE PROTOCOL-MATCHED COMPARATOR — its call, its clip capture, its training leg =====
+#
+# THE OBSTACLE THE PLANNING BRIEF FLAGGED, AND WHY IT DISSOLVES. The brief warns that a non-DP arm
+# "cannot reach the `dp_kwargs` seam today — `build_arm_bins` reads `DP_ARMS` and nothing else".
+# That is TRUE of `build_arm_bins` and FALSE of `train()`. MEASURED against live source:
+# `loop.py:512` keys the fact-aligned seam's three refusals on `_fact = {"fact_bin": fact_bin,
+# "n_facts": n_facts}` — its own comment says *"Gated on the FACT half only"* — and `loop.py:683`
+# gates the replay pass on `replay_windows is not None`. **NEITHER mentions `dp_fn`.** So a
+# `dp_fn`-absent call carrying the same six data kwargs reaches the identical loader, the identical
+# lot size and the identical replay pass. `DP_ARMS` is NOT widened and `teach_persona.py` is NOT
+# edited; the comparator calls `tp.train(...)` directly, exactly as `train_never_taught` above
+# already does for an arm `build_arm_bins` cannot express.
+# =================================================================================================
+
+
+def matched_control_call(seed):
+    """The comparator's ``(train_config_fields, train_kwargs)``, DERIVED from the DP arm's symbols.
+
+    Returns two plain dicts so both halves are inspectable at ZERO GPU cost — that is what lets
+    :func:`prove_matched_protocol` and ``tests/test_phase23_matched.py`` check the protocol match
+    by construction rather than by reading a 100-minute run afterwards.
+
+    **NOTHING HERE IS RETYPED.** ``n_facts`` comes from ``len(tp.arm_spec(SIGMA_ZERO_ARM)[0])``,
+    ``replay_windows`` from ``tp.replay_window_budget(n_facts) // tp.BLOCK_SIZE``, the fact bin
+    from ``tp.fact_bin_path(...)``, and the budget from ``tp.LR`` / ``tp.WARMUP_STEPS`` /
+    ``tp.MAX_STEPS`` / ``tp.BATCH_SIZE`` / ``tp.WEIGHT_DECAY``. A retyped constant is a second
+    source for one fact, free to disagree with the arm it is supposed to match — and
+    retyped-vs-derived is this phase's own subject.
+
+    THE THREE MECHANISMS THIS CALL EQUALISES, each with the magnitude it was MEASURED at
+    (``phase23_matched_prereg.MATCHED_EQUALISED`` is the record; these are its figures):
+
+    1. **LOT VOLUME.** The DP lot is 33 teaching + 32 replay = **65 windows**; the old control's was
+       **8**. That is 8.125x per step, and 1,689,600 vs 196,867 = **8.58x** TEACHING-token exposure
+       over the run. Reached here by ``fact_bin``/``n_facts`` (the fact-aligned packer) plus
+       ``replay_bin``/``replay_mask_bin``/``replay_windows`` (the train-time replay pass), with
+       ``grad_accum_steps = n_facts`` on the ``TrainConfig`` half.
+    2. **TEACHING LOSS WEIGHT.** The fact-aligned packer returns every window of one fact, so
+       teaching enters the gradient at weight **1.0**. The old control drew 8 RANDOM windows from a
+       bin that is 51.94% replay, so masked-CE put weight p = 2719/6262 = **0.4342** on teaching —
+       1/0.4342 = **2.30x**, on top of drastically lower gradient variance AdamW compounds over 200
+       steps. Equalised by the same ``fact_bin`` wiring.
+    3. **GRAD CLIP.** ``config.py:105`` defaults ``grad_clip`` to 1.0 and ``loop.py:220-221``
+       applies ``clip_grad_norm_`` IFF ``dp_fn is None``, so at the default this comparator would
+       be clipped where the DP arm structurally is not. MEASURED: the old control's clip BOUND on 19
+       of its first 25 steps** at mean shrink **0.8071**, against DP pre-clip norms of 1.538-2.278
+       that were never clipped at all. Equalised to ``mp.MATCHED_GRAD_CLIP``, and PROVEN
+       non-binding at run time by :func:`captured_grad_clip`.
+
+    **MATCHING TOKEN COUNT ALONE IS EXPLICITLY INSUFFICIENT, and that is the whole finding.** The
+    old control matched the DP arm's replay TOKEN volume exactly — `control_replay_ratio` above
+    solves for the ratio and `train_control` proves the built bin carries the target count as a
+    NUMBER. It still differed by all three mechanisms above, because token count says nothing about
+    how those tokens are grouped into a lot, what weight they carry in the loss, or whether the
+    resulting gradient is clipped.
+
+    ``dp_fn`` IS DELIBERATELY ABSENT. ``train()``'s own default is ``None`` (verified against the
+    live signature), so passing ``dp_fn=None`` explicitly would be arithmetically equivalent and
+    would put a ``dp_fn`` key in the diff for no reason — while making the comparator's key set
+    read as though it reached the DP seam.
+
+    ``resume_from`` IS ALSO DELIBERATELY ABSENT. This scheduling resumes nothing, which is exactly
+    why ``phase23_matched_prereg.DP_FN_BRANCH_DISPOSITIONS`` items 6 and 7 — the two ``train``
+    branches keyed on ``ckpt.get('dp_noise_rng')`` — are dispositioned ``unreached``.
+    """
+    n_facts = len(tp.arm_spec(SIGMA_ZERO_ARM)[0])
+    arm = mp.matched_arm(seed)
+    paths = tp.arm_outputs(arm, prefix=mp.MATCHED_ARM_PREFIX)
+    # THE BIN PATHS ONLY. `arm_outputs`' documented non-widening is that `bin`/`mask` carry NO
+    # prefix, so ANY prefix argument yields the same `data/persona_dp_n8_train{,_mask}.bin`; this
+    # driver's own `PREFIX` is passed because it is the value in hand, not because it selects them.
+    dp_paths = tp.arm_outputs(SIGMA_ZERO_ARM, prefix=PREFIX)
+
+    train_config_fields = dict(
+        lr=tp.LR,
+        warmup_steps=tp.WARMUP_STEPS,
+        max_steps=tp.MAX_STEPS,
+        batch_size=tp.BATCH_SIZE,
+        weight_decay=tp.WEIGHT_DECAY,
+        seed=seed,
+        # `loop.py:531` REFUSES unless `max(1, grad_accum_steps) == n_facts` under the fact-aligned
+        # seam, so this agreement is satisfied BY CONSTRUCTION rather than by care.
+        grad_accum_steps=n_facts,
+        grad_clip=mp.MATCHED_GRAD_CLIP,
+    )
+    train_kwargs = dict(
+        train_bin=dp_paths["bin"],
+        train_mask_bin=dp_paths["mask"],
+        fact_bin=tp.fact_bin_path(dp_paths["bin"]),
+        n_facts=n_facts,
+        replay_bin=tp.DIALOG_TRAIN_BIN,
+        replay_mask_bin=tp.DIALOG_TRAIN_MASK,
+        replay_windows=tp.replay_window_budget(n_facts) // tp.BLOCK_SIZE,
+        val_bin=tp.DIALOG_VAL_BIN,
+        val_mask_bin=tp.DIALOG_VAL_MASK,
+        penalty_fn=None,
+        log_path=paths["csv"],
+        checkpoint_path=paths["checkpoint"],
+        eval_interval=tp.EVAL_INTERVAL,
+        checkpoint_interval=tp.CHECKPOINT_INTERVAL,
+        return_final_loss=True,
+    )
+    return train_config_fields, train_kwargs
+
+
+def prove_matched_protocol():
+    """THE ZERO-COST PREFLIGHT: all three of 23-15's AST gates, plus the key-set subtraction.
+
+    Runs against LIVE source read off disk, and runs BEFORE the first GPU second is spent — so an
+    undeclared ``dp_fn`` branch, a dropped ``dp_kwargs`` key, or a NEW keyword on the production
+    ``train(...)`` call refuses at zero cost instead of after 100 minutes of training.
+
+    The third gate is the one the other two cannot cover. ``prove_branch_ledger_complete`` sees
+    ``dp_fn``-conditioned branches; ``prove_dp_wiring_keys`` sees the two DP dicts. NEITHER sees the
+    other 15 keywords, so a future ``extra_eval_fns=`` added at the production call site would
+    silently un-match this comparator with both of them GREEN — the 23-08 failure shape one level
+    up: a hand-drawn boundary that did not know what it excluded.
+
+    Returns the ``dp_fn`` branch census (a ``Counter`` summing to 7) for the record.
+    """
+    loop_source = (_ROOT / "src" / "personacore" / "training" / "loop.py").read_text(
+        encoding="utf-8"
+    )
+    teach_source = (_ROOT / "scripts" / "teach_persona.py").read_text(encoding="utf-8")
+
+    census = mp.prove_branch_ledger_complete(loop_source)
+    mp.prove_dp_wiring_keys(teach_source)
+    production = mp.prove_train_call_keys(teach_source)
+
+    fields, kwargs = matched_control_call(SEED_LADDER[0])
+    seen = {"train_config", "runtime_config", "model", "model_config"} | set(kwargs)
+    expected = set(production) - {"resume_from", "dp_fn"}
+    _prove(
+        seen == expected,
+        "the matched comparator's train(...) keyword set is NOT the production set minus "
+        "{resume_from, dp_fn}.\n"
+        f"  EXTRA   (the comparator passes, production does not): {sorted(seen - expected)}\n"
+        f"  MISSING (production passes, the comparator does not): {sorted(expected - seen)}\n"
+        "Both directions are printed because both are fatal and they fail differently. A DROPPED "
+        "data kwarg silently returns this comparator to the OLD RANDOM-WINDOW PROTOCOL — drop "
+        "`fact_bin`/`n_facts` and `train()` falls back to the flat masked loader at 8 random "
+        "windows per lot; drop `replay_windows` and the train-time replay pass never runs. That is "
+        "the EXACT defect this whole gap closure exists to correct, and it would produce a "
+        "perfectly well-formed 100-minute run whose reading answers a different question. An EXTRA "
+        "kwarg is equally fatal in the other direction: the comparator would differ from the σ=0 "
+        "arm by something nobody declared",
+    )
+    _prove(
+        "dp_fn" not in kwargs,
+        "the matched comparator passes `dp_fn`. Its ABSENCE is the one thing that makes this a "
+        "NON-DP arm reaching the DP arm's data wiring — `train()`'s own default is None, so "
+        "passing it explicitly buys nothing and passing anything else makes this a second DP arm "
+        "rather than a comparator for one",
+    )
+    _prove(
+        "resume_from" not in kwargs,
+        "the matched comparator passes `resume_from`. This scheduling resumes NOTHING, and its "
+        "absence is precisely why `phase23_matched_prereg.DP_FN_BRANCH_DISPOSITIONS` items 6 and "
+        "7 — the two `train` branches keyed on `ckpt.get('dp_noise_rng')` — are dispositioned "
+        "`unreached`. A resume here would reach two branches the blind ledger declared unreachable",
+    )
+    for name in mp.DP_TRAIN_KEYS:
+        _prove(
+            name in fields,
+            f"`{name}` is in DP_TRAIN_KEYS but not in the comparator's TrainConfig fields. These "
+            "ride on the TrainConfig CONSTRUCTOR, not on the train() call, so the key-set "
+            "subtraction above cannot see them — and `grad_accum_steps` is the 8.125x lot-volume "
+            "lever, the single largest per-step difference the comparator exists to equalise",
+        )
+
+    print(
+        f"[phase23_run] matched preflight: {sum(census.values())} dp_fn branch(es), "
+        f"{len(production)} production train() keyword(s), {len(seen)} on the comparator "
+        "(= production - {resume_from, dp_fn}) — all three AST gates GREEN"
+    )
+    return census
+
+
+@contextlib.contextmanager
+def captured_grad_clip():
+    """Shadow ``torch.nn.utils.clip_grad_norm_`` and record every PRE-clip global norm it returns.
+
+    :func:`captured_dp_seam`'s register, at a different seam: capture the real callable, install a
+    wrapper, restore in ``finally``. Yields ``box = {"norms": [...]}``.
+
+    **WHY A MODULE-ATTRIBUTE SHADOW IS VISIBLE WITHOUT EDITING `loop.py`.** ``loop.py:221`` spells
+    ``torch.nn.utils.clip_grad_norm_(...)`` — an ATTRIBUTE resolved at CALL time on the shared
+    ``torch.nn.utils`` module object, not a name bound at import. Rebinding that attribute is
+    therefore seen by the live loop, and ``tp.torch`` reaches the same singleton module.
+
+    **WHY THE CAPTURED LIST IS EXACTLY THE QUANTITY PROBE 1 MEASURED.** ``clip_grad_norm_`` RETURNS
+    the PRE-clip global norm (it computes ``total_norm``, then scales by
+    ``min(1, max_norm/(total_norm+1e-6))`` and returns ``total_norm`` unmodified). So the recorded
+    values are the norms BEFORE any shrink — the same quantity that measured the old control
+    binding on 19 of its first 25 steps at mean shrink 0.8071.
+
+    **THIS IS WHAT TURNS "NON-BINDING" FROM AN ASSUMPTION INTO AN OBSERVATION.** `MATCHED_GRAD_CLIP`
+    equalises the clip by CONSTANT; only this bracket can say the constant did not bind on the run
+    that actually happened. Same discipline that produced `clip_bind_count == 0` for the σ=0 arm
+    before any reading existed.
+
+    DECLARED COST, recorded rather than left to be noticed: ``float(norm)`` forces a host sync per
+    optimizer step that the σ=0 arm did not have. That is a difference in the TIMING leg only —
+    it moves no float in the gradient path — and the comparator's wall clock should be read with
+    it in mind.
+    """
+    box = {"norms": []}
+    real = tp.torch.nn.utils.clip_grad_norm_
+
+    def capturing(*args, **kwargs):
+        norm = real(*args, **kwargs)
+        box["norms"].append(float(norm))
+        return norm
+
+    tp.torch.nn.utils.clip_grad_norm_ = capturing
+    try:
+        yield box
+    finally:
+        tp.torch.nn.utils.clip_grad_norm_ = real
+
+
+def train_matched_control(seed):
+    """Train ONE protocol-matched comparator arm: the σ=0 arm's protocol, without the DP seam.
+
+    ``train()`` is called DIRECTLY, on ``train_never_taught``'s register — same
+    ``refuse_if_exists`` on the three non-bin targets, same load-before-inject ordering, same
+    ``n_wrapped`` and trainable-census refusals, same ``snapshot_params`` canary, same
+    ``export_adapter`` with a base fingerprint READ from the checkpoint rather than recomputed.
+
+    IT TRAINS ON THE SAME BYTES AS THE σ=0 ARM, not on an equivalent rebuild.
+    ``prove_bins_match(DP_N8_BIN_SHA256)`` pins ``data/persona_dp_n8_train{,_mask,_fact}.bin`` to
+    23-07's recorded digests before a single step runs. Bin IDENTITY, not bin equivalence — and it
+    BUILDS no bins of its own, which is what "protocol-matched" means here.
+
+    NOTE WHAT THE RETURNED BLOCK DOES NOT CARRY, and why it says so explicitly: a direct ``train()``
+    caller runs neither of the two end-of-run ``masked_perplexity`` sweeps that live in
+    ``teach_persona.py`` at :1705 and :1709, so six fields the OLD control record carries are
+    STRUCTURALLY absent here. They are recorded as ``None`` with a stated reason
+    (``ppl_omitted_reason``) rather than dropped: a ``None`` with a reason is an honest record, a
+    missing key is a reader's guess. Declared blind in
+    ``phase23_matched_prereg.MATCHED_DIFFERENCES``.
+    """
+    arm = mp.matched_arm(seed)
+    paths = tp.arm_outputs(arm, prefix=mp.MATCHED_ARM_PREFIX)
+    # The dp_n8 bins are INPUTS here, not targets — this arm builds none, so they are deliberately
+    # NOT passed to `refuse_if_exists`. Passing them would refuse on the corpus this arm REQUIRES.
+    tp.refuse_if_exists([paths["csv"], paths["checkpoint"], paths["adapter"]])
+
+    # ===== THE BIN GATE, IN THE ONLY ORDER THAT WORKS =====
+    # `rebuild_arm_bins_verifying_sha256` is deliberately NOT called: it OPENS with
+    # `_prove(prove_bins_match(...) > 0, ...)` (:266-271 as written, :289-294 as it now sits) and
+    # `prove_bins_match` REFUSES A MISSING FILE (:234-249). It proves byte-identity of bins that are
+    # already present; it CANNOT recreate an absent one. So the recovery order is: build only if
+    # something is missing, then prove — never prove-then-build.
+    absent = sorted(path for path in DP_N8_BIN_SHA256 if not pathlib.Path(path).exists())
+    if absent:
+        _prove(
+            len(absent) == len(DP_N8_BIN_SHA256),
+            f"the dp_n8 corpus is PARTIAL — {len(absent)} of {len(DP_N8_BIN_SHA256)} bins are "
+            f"missing: {absent}. `build_arm_bins` refuses when any target already exists, so a "
+            "partial corpus cannot be completed in place, and deleting the survivors here would "
+            "destroy the only evidence of how it went partial. Delete all three in a reviewed step "
+            "and re-run, so the rebuild is proved against 23-07's digests from a clean start",
+        )
+        # `second_person` and `replay_ratio` are DERIVED from `arm_spec`, never typed — they are
+        # properties OF the arm, and this phase's own subject is retyped-vs-derived. Measured today
+        # they are `(False, 0.0)`; that pair is an EXPECTATION TO CHECK AGAINST, not a source to
+        # copy from, which is why the names and not the literals are passed below.
+        facts, second_person, replay_ratio = tp.arm_spec(SIGMA_ZERO_ARM)
+        tp.build_arm_bins(
+            SIGMA_ZERO_ARM,
+            facts,
+            fs.TAUGHT_FAMILY_IDS,
+            second_person=second_person,
+            replay_ratio=replay_ratio,
+            # THE BUILD SEED IS `SEED_LADDER[0]`, **NOT** THE PER-ARM `seed`. These bins are the σ=0
+            # arm's corpus and must be byte-identical at every comparator seed; only the model init
+            # and the data order vary with `seed`. This is the ONE place a seed could silently
+            # change the corpus, and `prove_bins_match` below is what catches it if it ever does.
+            seed=SEED_LADDER[0],
+            prefix=PREFIX,
+        )
+    proved = prove_bins_match(DP_N8_BIN_SHA256)
+    _prove(
+        proved == len(DP_N8_BIN_SHA256),
+        f"the corpus gate proved {proved} bin(s) against {len(DP_N8_BIN_SHA256)} recorded digests. "
+        "A gate that checked fewer files than it was given reports success having verified less "
+        "than the corpus this arm is about to train on",
+    )
+    print(
+        f"[phase23_run] {arm}: {proved} dp_n8 bin(s) verified against 23-07's digests "
+        f"({'rebuilt' if absent else 'already present'}) — SAME BYTES as the σ=0 arm"
+    )
+
+    runtime = tp.RuntimeConfig()
+    blob = tp.torch.load(tp.CONVBASE_BEST, weights_only=False)  # our OWN checkpoint (T-14-04)
+    model_cfg = tp.ModelConfig(**blob["model_config"])
+
+    tp.seed_everything(seed)
+    model = tp.GPT(model_cfg)
+    model.load_state_dict(blob["model"])  # LOAD BEFORE INJECT — the load-bearing ordering
+    n_wrapped = tp.inject_lora(model, tp.LORA_CFG)
+    _prove(
+        n_wrapped == 6 * model_cfg.n_layer,
+        f"inject_lora wrapped {n_wrapped} projections, expected 6 * n_layer = "
+        f"{6 * model_cfg.n_layer}",
+    )
+    tp.mark_only_lora_trainable(model)
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    expected_trainable = tp.LORA_CFG.r * model_cfg.n_layer * 18 * model_cfg.n_embd
+    _prove(
+        trainable == expected_trainable,
+        f"trainable census {trainable} != r*n_layer*18*n_embd = {expected_trainable}",
+    )
+    model.to(runtime.device)
+    before = tp.snapshot_params(model)
+    paths["csv"].parent.mkdir(parents=True, exist_ok=True)
+    paths["checkpoint"].parent.mkdir(parents=True, exist_ok=True)
+
+    fields, kwargs = matched_control_call(seed)
+    box = {}
+    with captured_grad_clip() as clip_box:
+        with synchronized_seconds(box):
+            final = tp.train(
+                train_config=tp.TrainConfig(**fields),
+                runtime_config=runtime,
+                model=model,
+                model_config=model_cfg,
+                **kwargs,
+            )
+
+    # ===== THE NON-BINDING PROOF, **BEFORE ANY READING EXISTS** =====
+    # Same ordering, and for the same reason, as `train_sigma_zero`'s `clip_bind_count == 0`: a
+    # check run after the scoring pass is a check run with the reading already on screen.
+    norms = clip_box["norms"]
+    _prove(
+        len(norms) == tp.MAX_STEPS,
+        f"`clip_grad_norm_` was called {len(norms)} time(s) over a {tp.MAX_STEPS}-step run. "
+        "`loop.py` has exactly ONE reachable call site and it fires once per optimizer step IFF "
+        "`dp_fn is None`, so a different count means the branch was NOT taken and the grad_clip "
+        "equalisation was never applied at all — the comparator would differ from the σ=0 arm by "
+        "the very mechanism this constant exists to remove, and nothing else would show it",
+    )
+    _prove(
+        max(norms) < mp.MATCHED_GRAD_CLIP,
+        f"the comparator's largest PRE-clip global norm was {max(norms)!r}, at or above C = "
+        f"{mp.MATCHED_GRAD_CLIP!r}. A binding clip makes this arm differ from the σ=0 arm by "
+        "CLIPPING rather than by protocol — which is the exact confound the old control carried "
+        "(bound on 19 of its first 25 steps, mean shrink 0.8071) and the reason this comparator "
+        "exists. This refusal runs BEFORE scoring for the same reason `train_sigma_zero`'s "
+        "`clip_bind_count == 0` does: afterwards it would be a check made with the reading visible",
+    )
+    print(
+        f"[phase23_run] {arm}: {len(norms)} clip call(s), pre-clip norms in "
+        f"[{min(norms):.6g}, {max(norms):.6g}] against C = {mp.MATCHED_GRAD_CLIP!r} — C is "
+        "OBSERVED non-binding, before any reading exists"
+    )
+
+    # The same canary `train_never_taught` runs: every trainable moved, every frozen base param
+    # bit-identical.
+    _prove(
+        tp.math.isfinite(float(final)),
+        f"non-finite final loss {final!r} on {arm} (PITFALLS P5)",
+    )
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            _prove(
+                not tp.torch.equal(param, before[name]),
+                f"[canary] trainable {name} did not move on {arm} — silent training failure (P5)",
+            )
+        else:
+            _prove(
+                tp.torch.equal(param, before[name]),
+                f"[canary] frozen base param {name} changed on {arm} — grad isolation broken",
+            )
+
+    base_fingerprint = {
+        "git_sha": blob["git_sha"],
+        "step": blob["step"],
+        "val_loss": blob["val_loss"],
+    }
+    tp.export_adapter(
+        paths["adapter"],
+        adapter=tp.lora_state_dict(model),
+        lora_config=asdict(tp.LORA_CFG),
+        base_fingerprint=base_fingerprint,  # READ from the base checkpoint, never recomputed
+    )
+    del model
+    replay_windows = kwargs["replay_windows"]
+    print(
+        f"[phase23_run] {arm}: wrote {paths['adapter']} "
+        f"({paths['adapter'].stat().st_size / 1e6:.2f} MB) in {box['seconds']:.1f}s"
+    )
+    return {
+        "seed": seed,
+        "arm": arm,
+        "training_seconds": box["seconds"],
+        "final_train_loss": float(final),
+        "adapter": _rel(paths["adapter"]),
+        "adapter_sha256": _sha256(paths["adapter"]),
+        "adapter_bytes": paths["adapter"].stat().st_size,
+        "csv": _rel(paths["csv"]),
+        "base_fingerprint": base_fingerprint,
+        # THE PROTOCOL, as the fields the σ=0 record carries under the same names.
+        "n_facts": kwargs["n_facts"],
+        "grad_accum_steps": fields["grad_accum_steps"],
+        "grad_clip": fields["grad_clip"],
+        "replay_windows_per_step": replay_windows,
+        "replay_micro_batches_per_step": math.ceil(replay_windows / tp.BATCH_SIZE),
+        "max_steps": fields["max_steps"],
+        "batch_size": fields["batch_size"],
+        "block_size": tp.BLOCK_SIZE,
+        "dp_seam_active": False,
+        # THE CLIP OBSERVATION, carried as numbers so it cannot be a claim.
+        "grad_clip_calls": len(norms),
+        "grad_clip_max_pre_clip_norm": max(norms),
+        "grad_clip_min_pre_clip_norm": min(norms),
+        "grad_clip_bound_count": sum(1 for norm in norms if norm > mp.MATCHED_GRAD_CLIP),
+        "grad_clip_checked_before_scoring": True,
+        "corpus_sha256": {_rel(path): digest for path, digest in DP_N8_BIN_SHA256.items()},
+        # ===== THE DECLARED OMISSION, RECORDED RATHER THAN LEFT TO BE NOTICED =====
+        "ppl_adapter_on": None,
+        "ppl_adapter_off": None,
+        "ppl_scored_targets": None,
+        "teaching_tokens": None,
+        "replay_tokens": None,
+        "replay_ratio": None,
+        "ppl_omitted_reason": (
+            "train() called directly; train_arm's two masked_perplexity sweeps "
+            "(teach_persona.py:1705,1709) do not run, so these six fields the OLD control record "
+            "carries are structurally absent here. They are post-training diagnostics and cannot "
+            "move a reading; adding them would spend scoring time the 23-17 budget does not hold."
+        ),
     }
 
 

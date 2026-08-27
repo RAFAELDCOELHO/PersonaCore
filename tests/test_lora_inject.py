@@ -271,6 +271,13 @@ INJECT_LORA_PRODUCERS = (
     # stronger here: CTRL-03 requires this arm to share the taught arms' budget exactly, and a
     # local `LoRAConfig()` would be a second definition free to drift from the one it mirrors.
     ("scripts/phase23_run.py", "train_never_taught"),
+    # Plan 23-16's protocol-matched comparator. Same producer form and the same reason: it exports
+    # an adapter carrying `asdict(tp.LORA_CFG)`, and it passes `teach_persona.LORA_CFG` rather than
+    # a second bare `LoRAConfig()`. STRICTLY stronger here than a local call would be — this arm's
+    # whole purpose is to differ from the σ=0 DP arm by PROTOCOL and by nothing else, so a second
+    # config definition free to drift from the one it mirrors would put a rank-or-scale difference
+    # inside the one comparison the phase's D-04 halt turns on.
+    ("scripts/phase23_run.py", "train_matched_control"),
     ("scripts/teach_persona.py", "train_arm"),
     ("scripts/train_adapter_smoke.py", "main"),
 )
