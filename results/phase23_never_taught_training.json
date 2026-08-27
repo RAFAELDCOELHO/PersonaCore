@@ -1,0 +1,269 @@
+{
+  "adapters": [
+    {
+      "bytes": 1352303,
+      "path": "checkpoints/phase23_never_taught_seed1337_adapter.pt",
+      "seed": 1337,
+      "sha256": "8da8c2c25bd2b7c951a28ca80b11d38478269a45408aafa9276f9aaa8da1a9e7"
+    },
+    {
+      "bytes": 1352303,
+      "path": "checkpoints/phase23_never_taught_seed2024_adapter.pt",
+      "seed": 2024,
+      "sha256": "da9ac275929314605d126d8a7a028c51e687fa8d3974431f75a94886f0f4e04a"
+    },
+    {
+      "bytes": 1352303,
+      "path": "checkpoints/phase23_never_taught_seed1338_adapter.pt",
+      "seed": 1338,
+      "sha256": "8edff1e229a052b331d3fd9a85539cf8f7d505501bd35f51dd9634dae20ff12d"
+    },
+    {
+      "bytes": 1352303,
+      "path": "checkpoints/phase23_never_taught_seed2025_adapter.pt",
+      "seed": 2025,
+      "sha256": "ed838985b42c115fbb2073145f431d7a865f743734274501f53b918e83e24ab2"
+    },
+    {
+      "bytes": 1352303,
+      "path": "checkpoints/phase23_never_taught_seed1339_adapter.pt",
+      "seed": 1339,
+      "sha256": "d88b6647e71421d658e75cd92f6ab80e37143067adc0d0aa59cbeb35aaa25809"
+    }
+  ],
+  "arm": "never-taught",
+  "batch_size": 8,
+  "block_size": 256,
+  "capacity_n_facts": 0,
+  "consumers": [
+    "frontier lower-left floor",
+    "relearning reference"
+  ],
+  "device": "mps",
+  "distinct_seeds": 5,
+  "dp_seam_active": false,
+  "frozen_gate_min_seeds": 2,
+  "frozen_gate_provenance_keys": [
+    "arm",
+    "seeds"
+  ],
+  "git_sha": "5303819632646f156b90fcfec850cebdfb5d1275",
+  "grad_accum_steps": 1,
+  "max_steps": 200,
+  "n_seeds": 5,
+  "per_seed": [
+    {
+      "adapter": "checkpoints/phase23_never_taught_seed1337_adapter.pt",
+      "adapter_bytes": 1352303,
+      "adapter_sha256": "8da8c2c25bd2b7c951a28ca80b11d38478269a45408aafa9276f9aaa8da1a9e7",
+      "arm": "never-taught",
+      "arm_run_name": "never_taught_seed1337",
+      "batch_size": 8,
+      "block_size": 256,
+      "capacity_n_facts": 0,
+      "csv": "results/phase23_never_taught_seed1337/run.csv",
+      "device": "mps",
+      "dp_seam_active": false,
+      "final_train_loss": 1.3549760580062866,
+      "git_sha": "5303819632646f156b90fcfec850cebdfb5d1275",
+      "grad_accum_steps": 1,
+      "max_steps": 200,
+      "python_version": "3.11.15",
+      "replay_micro_batches_per_step": 0,
+      "seconds_per_optimizer_step": 0.17405700270552188,
+      "seconds_total": 34.811400541104376,
+      "seed": 1337,
+      "timed_iterations": 200,
+      "timestamp": "2026-08-27T03:50:37Z",
+      "torch_version": "2.7.1",
+      "warmup_iterations_discarded": 0
+    },
+    {
+      "adapter": "checkpoints/phase23_never_taught_seed2024_adapter.pt",
+      "adapter_bytes": 1352303,
+      "adapter_sha256": "da9ac275929314605d126d8a7a028c51e687fa8d3974431f75a94886f0f4e04a",
+      "arm": "never-taught",
+      "arm_run_name": "never_taught_seed2024",
+      "batch_size": 8,
+      "block_size": 256,
+      "capacity_n_facts": 0,
+      "csv": "results/phase23_never_taught_seed2024/run.csv",
+      "device": "mps",
+      "dp_seam_active": false,
+      "final_train_loss": 1.4742487668991089,
+      "git_sha": "5303819632646f156b90fcfec850cebdfb5d1275",
+      "grad_accum_steps": 1,
+      "max_steps": 200,
+      "python_version": "3.11.15",
+      "replay_micro_batches_per_step": 0,
+      "seconds_per_optimizer_step": 0.17326243166346103,
+      "seconds_total": 34.652486332692206,
+      "seed": 2024,
+      "timed_iterations": 200,
+      "timestamp": "2026-08-27T03:50:37Z",
+      "torch_version": "2.7.1",
+      "warmup_iterations_discarded": 0
+    },
+    {
+      "adapter": "checkpoints/phase23_never_taught_seed1338_adapter.pt",
+      "adapter_bytes": 1352303,
+      "adapter_sha256": "8edff1e229a052b331d3fd9a85539cf8f7d505501bd35f51dd9634dae20ff12d",
+      "arm": "never-taught",
+      "arm_run_name": "never_taught_seed1338",
+      "batch_size": 8,
+      "block_size": 256,
+      "capacity_n_facts": 0,
+      "csv": "results/phase23_never_taught_seed1338/run.csv",
+      "device": "mps",
+      "dp_seam_active": false,
+      "final_train_loss": 1.6982495784759521,
+      "git_sha": "5303819632646f156b90fcfec850cebdfb5d1275",
+      "grad_accum_steps": 1,
+      "max_steps": 200,
+      "python_version": "3.11.15",
+      "replay_micro_batches_per_step": 0,
+      "seconds_per_optimizer_step": 0.17204464145936071,
+      "seconds_total": 34.408928291872144,
+      "seed": 1338,
+      "timed_iterations": 200,
+      "timestamp": "2026-08-27T03:50:37Z",
+      "torch_version": "2.7.1",
+      "warmup_iterations_discarded": 0
+    },
+    {
+      "adapter": "checkpoints/phase23_never_taught_seed2025_adapter.pt",
+      "adapter_bytes": 1352303,
+      "adapter_sha256": "ed838985b42c115fbb2073145f431d7a865f743734274501f53b918e83e24ab2",
+      "arm": "never-taught",
+      "arm_run_name": "never_taught_seed2025",
+      "batch_size": 8,
+      "block_size": 256,
+      "capacity_n_facts": 0,
+      "csv": "results/phase23_never_taught_seed2025/run.csv",
+      "device": "mps",
+      "dp_seam_active": false,
+      "final_train_loss": 1.4656336307525635,
+      "git_sha": "5303819632646f156b90fcfec850cebdfb5d1275",
+      "grad_accum_steps": 1,
+      "max_steps": 200,
+      "python_version": "3.11.15",
+      "replay_micro_batches_per_step": 0,
+      "seconds_per_optimizer_step": 0.18215335916727782,
+      "seconds_total": 36.43067183345556,
+      "seed": 2025,
+      "timed_iterations": 200,
+      "timestamp": "2026-08-27T03:50:37Z",
+      "torch_version": "2.7.1",
+      "warmup_iterations_discarded": 0
+    },
+    {
+      "adapter": "checkpoints/phase23_never_taught_seed1339_adapter.pt",
+      "adapter_bytes": 1352303,
+      "adapter_sha256": "d88b6647e71421d658e75cd92f6ab80e37143067adc0d0aa59cbeb35aaa25809",
+      "arm": "never-taught",
+      "arm_run_name": "never_taught_seed1339",
+      "batch_size": 8,
+      "block_size": 256,
+      "capacity_n_facts": 0,
+      "csv": "results/phase23_never_taught_seed1339/run.csv",
+      "device": "mps",
+      "dp_seam_active": false,
+      "final_train_loss": 1.4057494401931763,
+      "git_sha": "5303819632646f156b90fcfec850cebdfb5d1275",
+      "grad_accum_steps": 1,
+      "max_steps": 200,
+      "python_version": "3.11.15",
+      "replay_micro_batches_per_step": 0,
+      "seconds_per_optimizer_step": 0.1820291299978271,
+      "seconds_total": 36.40582599956542,
+      "seed": 1339,
+      "timed_iterations": 200,
+      "timestamp": "2026-08-27T03:50:37Z",
+      "torch_version": "2.7.1",
+      "warmup_iterations_discarded": 0
+    }
+  ],
+  "python_version": "3.11.15",
+  "recipe": {
+    "base_checkpoint": "checkpoints/convbase_best.pt",
+    "base_fingerprint": {
+      "git_sha": "04e724c67033f9a2ed8b705a07ad025c867a18c5",
+      "step": 4000,
+      "val_loss": 1.5235939979553224
+    },
+    "budget_constants": {
+      "teach_persona.BATCH_SIZE": 8,
+      "teach_persona.BLOCK_SIZE": 256,
+      "teach_persona.CHECKPOINT_INTERVAL": 50,
+      "teach_persona.EVAL_INTERVAL": 10,
+      "teach_persona.LR": 0.0003,
+      "teach_persona.MAX_STEPS": 200,
+      "teach_persona.WARMUP_STEPS": 20,
+      "teach_persona.WEIGHT_DECAY": 0.0
+    },
+    "budget_constants_are_imported_symbols": true,
+    "corpus": [
+      "data/dialog_train.bin",
+      "data/dialog_train_mask.bin"
+    ],
+    "corpus_sha256": {
+      "data/dialog_train.bin": "bd33afc9d978ff8725c073cc3749d1490b7f8fe6bb63e4a91370767585f631c2",
+      "data/dialog_train_mask.bin": "b157ba77c619b3db4d41730ad3764b2601a9094d51caa0cb2db3fae309c56c97"
+    },
+    "lora_config": {
+      "alpha": 16.0,
+      "dropout": 0.0,
+      "r": 8,
+      "targets": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "c_proj",
+        "fc_in",
+        "fc_out"
+      ]
+    },
+    "persona_facts_seen": 0,
+    "rejected_alternative": {
+      "alternative": "an UNTRAINED random-init LoRA adapter",
+      "why_rejected": "CTRL-03 says the never-taught arm is trained AT IDENTICAL BUDGET, which implies training happened. An untrained adapter measures the base model plus an initialization draw, not a model that was optimized for the same number of steps and simply never shown a privacy record."
+    },
+    "val_corpus": [
+      "data/dialog_val.bin",
+      "data/dialog_val_mask.bin"
+    ]
+  },
+  "replay_micro_batches_per_step": 0,
+  "scored_here": false,
+  "scoring_deferred_to": "23-14, at the K that 23-13 selects",
+  "seconds_per_optimizer_step": 0.17670931299868972,
+  "seconds_total": 176.7093129986897,
+  "seed": [
+    1337,
+    2024,
+    1338,
+    2025,
+    1339
+  ],
+  "seeds": [
+    1337,
+    2024,
+    1338,
+    2025,
+    1339
+  ],
+  "timed_iterations": 1000,
+  "timestamp": "2026-08-27T03:50:37Z",
+  "torch_version": "2.7.1",
+  "training_seconds_max": 36.43067183345556,
+  "training_seconds_min": 34.408928291872144,
+  "training_seconds_per_seed": {
+    "1337": 34.811400541104376,
+    "1338": 34.408928291872144,
+    "1339": 36.40582599956542,
+    "2024": 34.652486332692206,
+    "2025": 36.43067183345556
+  },
+  "training_seconds_total": 176.7093129986897,
+  "warmup_iterations_discarded": 0
+}

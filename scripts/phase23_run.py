@@ -403,6 +403,38 @@ def provenance():
     }
 
 
+def _already_trained(section, seed):
+    """True when this arm is ALREADY trained — and PROVED so, never assumed.
+
+    23-07 made a killed run resumable; this is the same discipline one level up. An arm whose
+    exported adapter is on disk and hashes to the digest the working state recorded is REUSED, and
+    the reuse is a proof rather than a skip: a re-train would produce a SECOND measurement while
+    every timing figure recorded beside it still described the first.
+
+    The guard has teeth in both directions — a recorded entry whose adapter has VANISHED or whose
+    bytes have MOVED is a refusal, not a silent re-train.
+    """
+    entry = _state_load().get(section, {}).get(str(seed))
+    if entry is None or "adapter_sha256" not in entry:
+        return False
+    path = _ROOT / entry["adapter"]
+    _prove(
+        path.exists(),
+        f"the working state records {section}[{seed}] as trained, exporting {entry['adapter']}, "
+        "but that file is GONE. Refusing rather than re-training: the timing and the loss recorded "
+        "beside it describe a run whose artifact no longer exists, and a fresh run under the same "
+        "name would publish the old numbers over new weights",
+    )
+    digest = _sha256(path)
+    _prove(
+        digest == entry["adapter_sha256"],
+        f"{entry['adapter']} hashes to {digest} but the working state recorded "
+        f"{entry['adapter_sha256']}. The adapter on disk is NOT the one this scheduling exported",
+    )
+    print(f"[phase23_run] {section} seed {seed}: trained, adapter digest verified — reusing")
+    return True
+
+
 def _preconditions():
     """The four files every leg of this plan needs, checked BEFORE any run (23-08 environment)."""
     for path in (
@@ -749,13 +781,16 @@ def schedule():
     )
 
     for seed in seeds[1:]:
+        if _already_trained("control", seed):
+            continue
         print(f"[phase23_run] schedule: control seed {seed}")
         _state_record("control", seed, train_control(seed))
-    never_taught = {}
     for seed in seeds:
+        if _already_trained("never_taught", seed):
+            continue
         print(f"[phase23_run] schedule: never-taught seed {seed}")
-        never_taught[str(seed)] = train_never_taught(seed)
-        _state_record("never_taught", seed, never_taught[str(seed)])
+        _state_record("never_taught", seed, train_never_taught(seed))
+    never_taught = _state_load()["never_taught"]
 
     per_seed = []
     for seed in seeds:
@@ -794,6 +829,20 @@ def schedule():
         # READ from the FROZEN gate, never retyped — `extraction_ceiling` `_prove`s this exact
         # string two phases from now and a hand-typed copy would be free to drift from it.
         "arm": mitigation_gate.NEVER_TAUGHT_ARM,
+        # The `TRAINING_RECORD_KEYS` SHAPE keys, at the level of the whole scheduling. Every one is
+        # genuinely a property of all N arms — they share one recipe — so none is a filler, and
+        # `seed` carries the FULL seed list because this record is a multi-seed SCHEDULING and the
+        # schema's singular key has no other honest filling. `seeds` is the canonical one the frozen
+        # gate reads; both are present so neither a schema consumer nor the gate has to guess.
+        "seed": seeds,
+        "capacity_n_facts": 0,
+        "grad_accum_steps": 1,
+        "replay_micro_batches_per_step": 0,
+        "max_steps": tp.MAX_STEPS,
+        "batch_size": tp.BATCH_SIZE,
+        "block_size": tp.BLOCK_SIZE,
+        "dp_seam_active": False,
+        "warmup_iterations_discarded": 0,
         "seeds": seeds,
         "n_seeds": len(seeds),
         "distinct_seeds": len(set(seeds)),
@@ -813,6 +862,10 @@ def schedule():
         "training_seconds_total": sum(seconds),
         "training_seconds_min": min(seconds),
         "training_seconds_max": max(seconds),
+        # The scheduling's own denominators: N arms x MAX_STEPS optimizer steps, none discarded.
+        "seconds_total": sum(seconds),
+        "timed_iterations": len(seeds) * tp.MAX_STEPS,
+        "seconds_per_optimizer_step": sum(seconds) / (len(seeds) * tp.MAX_STEPS),
         "recipe": {
             "corpus": [_rel(tp.DIALOG_TRAIN_BIN), _rel(tp.DIALOG_TRAIN_MASK)],
             "corpus_sha256": {
@@ -850,10 +903,11 @@ def schedule():
         "scoring_deferred_to": "23-14, at the K that 23-13 selects",
         **provenance(),
     }
-    # The top-level `seed` key is the FULL seed list: this record is a multi-seed SCHEDULING and
-    # the schema's singular key has no other honest filling. `seeds` is the canonical one the
-    # frozen gate reads; both are present so neither a schema consumer nor the gate has to guess.
-    phase23_cost.validate_record({**record, "seed": seeds}, kind="training")
+    # Validated at BOTH levels: each per-seed entry is a genuine single-arm training record, and
+    # the scheduling as a whole carries the same required shape. `validate_record` REFUSES a
+    # missing key rather than defaulting it — measured, on this very record: the first draft of
+    # this block omitted the shared shape keys at the top level and the refusal named all eleven.
+    phase23_cost.validate_record(record, kind="training")
     path = _ROOT / NEVER_TAUGHT_TRAINING_RECORD
     _prove(
         not path.exists(),
