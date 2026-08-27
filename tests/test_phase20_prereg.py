@@ -351,6 +351,15 @@ def test_phase22_prereg_is_frozen_before_every_phase23_result():
     checked` over a working-tree glob is RED from the pin's first commit until an artifact lands —
     inverting the very ordering this discipline exists to establish.
 
+    **SUPERSEDED 2026-08-26 (plan 23-04). THIS GUARD IS NO LONGER VACUOUS**, and the paragraph
+    above is left standing as the record of the state it was written in rather than edited to read
+    as though it always bit. `results/phase23_cal03_wiring.json` — CAL-03's wiring verdict, the
+    FIRST `results/phase23_*` artifact — landed at commit `bd81b44`. MEASURED at that commit:
+    `git ls-files 'results/phase23_*'` returns 1 path against 0 before it, `checked` is 1 against
+    0, and the accountant pin's single commit is a strict ancestor of the artifact's earliest add.
+    The design the paragraph above describes is exactly what carried the transition; what changed
+    is only that it now compares something.
+
     **The pin precedes the first epsilon-bearing artifact by a WHOLE PHASE**, which is the widest
     margin any pre-registration in this repository has had: `scripts/mitigation_accountant.py`
     lands in Phase 22 and the first `results/phase23_*` file cannot exist before Phase 23. That is
