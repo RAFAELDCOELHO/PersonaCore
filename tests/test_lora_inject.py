@@ -265,6 +265,12 @@ INJECT_LORA_CONSUMERS = (
 )
 
 INJECT_LORA_PRODUCERS = (
+    # Plan 23-08's never-taught arm. It DEFINES the config its exported adapter carries
+    # (`export_adapter(lora_config=asdict(tp.LORA_CFG))`), so it is a producer — and it passes
+    # `teach_persona.LORA_CFG` rather than a second bare `LoRAConfig()`, which is STRICTLY
+    # stronger here: CTRL-03 requires this arm to share the taught arms' budget exactly, and a
+    # local `LoRAConfig()` would be a second definition free to drift from the one it mirrors.
+    ("scripts/phase23_run.py", "train_never_taught"),
     ("scripts/teach_persona.py", "train_arm"),
     ("scripts/train_adapter_smoke.py", "main"),
 )
@@ -319,6 +325,56 @@ def _reads_artifact_config(node):
     )
 
 
+def _module_bindings(tree):
+    """Every top-level ``NAME = <expr>`` in one module, as ``{name: expr}``."""
+    return {
+        target.id: node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+
+def _module_aliases(tree):
+    """``{alias: module}`` for every top-level ``import X`` / ``import X as Y`` in one module."""
+    return {
+        (name.asname or name.name): name.name
+        for node in tree.body
+        if isinstance(node, ast.Import)
+        for name in node.names
+    }
+
+
+def _resolve(config, bindings, aliases):
+    """Resolve a config REFERENCE to the expression it names — locally, or across one import.
+
+    Two forms, and both must resolve or the site lands in the unclassified bucket:
+
+    * ``LORA_CFG`` — a bare ``ast.Name``, resolved through this module's own top-level assignments.
+      Both original producers pass a module constant rather than an inline call.
+    * ``tp.LORA_CFG`` — a module ATTRIBUTE, resolved through the ALIASED module's top-level
+      assignments. Plan 23-08's driver imports ``teach_persona``'s anchor instead of re-spelling
+      ``LoRAConfig()``, which is the stronger form: it CANNOT drift from the producer it mirrors,
+      where a second bare call could. Resolving it keeps this guard's teeth either way — rebind
+      ``teach_persona.LORA_CFG`` to ``LoRAConfig(alpha=32.0)`` and the site stops classifying as a
+      producer, which is exactly the D-20 anchor movement this test exists to catch.
+    """
+    if isinstance(config, ast.Name):
+        return bindings.get(config.id, config)
+    if isinstance(config, ast.Attribute) and isinstance(config.value, ast.Name):
+        module = aliases.get(config.value.id)
+        if module is None:
+            return config
+        source = _REPO_ROOT / "scripts" / f"{module}.py"
+        if not source.exists():
+            return config
+        return _module_bindings(ast.parse(source.read_text(encoding="utf-8"))).get(
+            config.attr, config
+        )
+    return config
+
+
 def _classify_inject_lora_sites():
     """Every ``inject_lora(model, cfg)`` in the scanned set, bucketed by what ``cfg`` is.
 
@@ -332,13 +388,8 @@ def _classify_inject_lora_sites():
         file = path.relative_to(_REPO_ROOT).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8"))
         enclosing = _enclosing_functions(tree)
-        bindings = {
-            target.id: node.value
-            for node in tree.body
-            if isinstance(node, ast.Assign)
-            for target in node.targets
-            if isinstance(target, ast.Name)
-        }
+        bindings = _module_bindings(tree)
+        aliases = _module_aliases(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -350,8 +401,7 @@ def _classify_inject_lora_sites():
             owner = enclosing[node]
             site = (file, "<module>" if owner is None else owner.name)
             config = node.args[1] if len(node.args) > 1 else None
-            if isinstance(config, ast.Name):
-                config = bindings.get(config.id, config)
+            config = _resolve(config, bindings, aliases)
             if _reads_artifact_config(config):
                 consumers.add(site)
             elif _is_bare_lora_config(config):

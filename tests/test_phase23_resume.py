@@ -64,6 +64,9 @@ _TRAIN_ARM_CALL_SITES = (
     ("scripts/phase19_erasure.py", "call", "_cmd_retrain"),
     ("scripts/phase19_run.py", "call", "retrain_train"),
     ("scripts/phase19_run.py", "prose", "retrain_train docstring"),
+    # Plan 23-08's control scheduling. A NON-DP arm and NO resume, like every other production
+    # site, so `resume_from`'s `None` sentinel keeps it byte-identical to the pre-23-07 driver.
+    ("scripts/phase23_run.py", "call", "train_control"),
     ("scripts/teach_persona.py", "call", "main"),
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
@@ -184,10 +187,15 @@ def test_resume_from_none_is_inert():
         path = hit.split(":", 1)[0]
         found[path] = found.get(path, 0) + 1
     assert found == registered, f"per-file driver hit counts drifted: {found} != {registered}"
+    # EIGHT at 23-07, when the sentinel landed; NINE from 23-08, which added
+    # `phase23_run.train_control`. The literal is a tripwire against a site vanishing unnoticed,
+    # so it is BUMPED with its reason rather than derived from the register — deriving it would
+    # make the check restate the register instead of pinning a count against it. Both numbers are
+    # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8
-    ), "the register no longer holds exactly the EIGHT pre-existing call sites"
+        == 8 + 1
+    ), "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling"
 
     # ...and the AST agrees with the register about which of them are real CALLS.
     for path in registered:
