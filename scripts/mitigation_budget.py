@@ -8,6 +8,11 @@ seed-to-seed noise floor of the control arm. The Z values (the per-point compute
 placeholders, because a placeholder is a literal with no evidence and this file's whole discipline
 is that a literal carries its evidence.
 
+CONTINUED 2026-08-27 (plan 23-18): that is now TWO numbers. ``MATCHED_CONTROL_NOISE_FLOOR`` below
+pins the SAME quantity over the PROTOCOL-MATCHED comparator (23-17's protocol, 23-20's run). The
+sentence above is left verbatim because it was true when it was written; this line is what stops it
+going stale.
+
 WHAT THIS FILE IS **NOT**
 -------------------------
 It is not an OUTCOME threshold. Outcome thresholds live in ``scripts/mitigation_gate.py``, which is
@@ -145,4 +150,152 @@ CONTROL_NOISE_FLOOR_PROVENANCE = {
         "quantity and nothing else: every other reading in this record is secondary, recorded "
         "with its own denominator and NOT reduced."
     ),
+}
+
+# RE-SCOPED IN PLACE 2026-08-27 (plan 23-18).
+#
+# THE CONSTANT ABOVE IS NOT FALSIFIED, AND IT IS NOT SUPERSEDED AS A MEASUREMENT. It correctly
+# measures the OLD control protocol, and it still re-derives from
+# `results/phase23_control_floor.json` on every suite run (`test_budget_constants_re_derive`). What
+# changed is its SCOPE, not its truth.
+#
+# WHAT RE-SCOPED IT. `.planning/debug/sigma-zero-beats-control.md` split the D-04 HALT between
+# (A) INVALID COMPARATOR and (B) REAL DP-PATH DEFECT, attributed it to (A), and FALSIFIED (B): over
+# identical materialised batches at σ=0 with a non-binding `C = 1e6`, all 72 LoRA tensors agree with
+# an ordinary grad-accum reference to 2.178e-07 relative. The DP seam does no arithmetic plain
+# accumulation does not, so the defect is in what the σ=0 arm was compared AGAINST.
+#
+# THE THREE MECHANISMS THAT MADE THE OLD CONTROL A DIFFERENT PROTOCOL, with their measured
+# magnitudes (`phase23_matched_prereg.MATCHED_EQUALISED`, restated in the matched record's
+# `equalised_mechanisms` field):
+#
+#   lot volume            the DP lot is 33 teaching + 32 replay = 65 windows; the control lot is 8.
+#                         Measured TEACHING-token exposure over the run: 1,689,600 vs 196,867,
+#                         = 8.58x.
+#   teaching loss weight  the DP arm's fact-aligned packer returns EVERY window of one fact, so
+#                         teaching enters the gradient at weight 1.0. The control draws 8 RANDOM
+#                         windows from a bin that is 51.94% replay, so masked-CE puts weight
+#                         p = 2719/6262 = 0.4342 on teaching. 1/0.4342 = 2.30x.
+#   grad_clip             `grad_clip = 1.0` was applied to the control and is STRUCTURALLY ABSENT
+#                         from the DP arm: `src/personacore/training/loop.py:220-228` gates the
+#                         legacy clip on `dp_fn is None`, so that clip and `finalize()` are the two
+#                         arms of ONE if/else. Measured binding on 19 of the control's first 25
+#                         steps, mean shrink 0.8071.
+#
+# SO: the constant above governs the OLD protocol, and `MATCHED_CONTROL_NOISE_FLOOR` below governs
+# the CORRECTED comparator. 23-19 consumes the MATCHED one. Nothing consumes the original for the
+# σ=0 adjudication any more — and it is not deleted for that.
+#
+# IT IS LEFT STANDING because deleting a true measurement to make a later one look tidy is the
+# opposite of the discipline this file exists to hold. A reader who opens this file sees BOTH floors
+# and what separates them, which is strictly more than a reader who sees only the survivor.
+#
+# HANDED FORWARD TO THE NEXT EDITOR OF THIS FILE. The original's LITERAL ASSIGNMENT STRING — its
+# name, a space, an equals sign, a space, its value — must occur EXACTLY ONCE in this file.
+# `test_a_hand_edited_floor_is_detected` builds that string as a needle, asserts
+# `source.count(needle) == 1`, and then rewrites it under `tmp_path`. A SECOND occurrence turns that
+# committed green guard RED, and there are two ways to make one: quoting the assignment in prose,
+# and a longer identifier ENDING in the same name whose value shares the same `repr`. Refer to the
+# constant BY NAME; never re-type its assignment. `test_the_original_needle_is_still_unique` is the
+# named guard for this property.
+
+
+# =================================================================================================
+# ===== THE PROTOCOL-MATCHED CONTROL ARM'S SEED-TO-SEED NOISE FLOOR (23-17 protocol, 23-20 run) ====
+# =================================================================================================
+
+# THE MEASURED FLOOR OF THE CORRECTED COMPARATOR. The RANGE `max(readings) - min(readings)` over the
+# FIVE per-seed primary readings of the PROTOCOL-MATCHED control arm — the arm that equalises the
+# three mechanisms named in the continuation above.
+#
+#   input    : the taught recall rate with the adapter ON, one reading per seed, each a COUNT over
+#              its own denominator of 1008 draws (112 questions x 9 draws per question), in the
+#              RECORDED SEED ORDER, which is the LADDER order and is NOT sorted order:
+#                  seed 1337  790/1008 = 0.7837301587301587   <- max, and the pinned central reading
+#                  seed 2024  774/1008 = 0.7678571428571429
+#                  seed 1338  778/1008 = 0.7718253968253969
+#                  seed 2025  763/1008 = 0.7569444444444444   <- min
+#                  seed 1339  773/1008 = 0.7668650793650794
+#              5040 scored draws in total, on `mps`, torch 2.7.1, python 3.11.15
+#   rule     : `phase23_prereg.noise_floor`, committed BLIND in 23-03 at `c7de5d4` while
+#              `git ls-files 'results/phase23_*'` was still EMPTY — and CALLED by 23-17's writer
+#              (`phase23_run.matched`, run to completion by 23-20's continuation) rather than
+#              re-implemented there, which is why the record's `reduction` field names the symbol
+#              instead of restating the formula
+#   output   : 0.7837301587301587 - 0.7569444444444444, which as counts is 790/1008 - 763/1008
+#   evidence : `results/phase23_matched_control.json` (the committed record: every per-seed reading
+#              with its k, its n and its exported adapter's sha256)
+#
+# WHAT IT GOVERNS, AND WHAT IT DOES NOT. Exactly what the original governs, over a DIFFERENT arm:
+# the TAUGHT RECALL RATE WITH THE ADAPTER ON and NOTHING ELSE — the record's own `governs` field,
+# restated verbatim in the provenance dict below and asserted equal to it. Every other reading in
+# that record (held-out recall, per-family gains, final train loss, wall clock) is secondary,
+# carries its own denominator, and was NOT reduced. A floor borrowed across quantities is the defect
+# D-06 corrected for v4.0.
+#
+# WHAT ORDERING THIS PIN DOES AND DOES NOT BUY — AND IT BUYS LESS THAN THE ORIGINAL'S DID.
+# The original landed while `git ls-files results/phase23_sigma_zero.json` returned NOTHING. THIS
+# ONE DOES NOT. `results/phase23_sigma_zero.json` is already committed and its reading
+# 0.7837301587301587 was on screen throughout the design of the protocol this floor reduces over.
+# That is the disclosure, stated here rather than left to be inferred from a date.
+#
+#   STILL BLIND, all pinned at `c7de5d4` and byte-unchanged since: the reduction
+#   (`phase23_prereg.noise_floor`), the central-reading rule (`control_readings[0]`), the verdict
+#   function (`phase23_prereg.sigma_zero_verdict`) and the seed ladder.
+#   ALSO PINNED BEFORE ANY READING EXISTED: the comparator's PROTOCOL, in
+#   `scripts/phase23_matched_prereg.py`, committed while `git ls-files 'results/phase23_matched_*'`
+#   returned NOTHING — a fact about git's object graph rather than a claim in a paragraph.
+#   NOT BLIND: WHICH MECHANISMS TO EQUALISE. That choice was made with the σ=0 number visible, and
+#   it is the last remaining degree of freedom in this comparison.
+#
+# THE BOUND ON THAT IS `phase23_matched_prereg.SIGMA_ZERO_VISIBILITY_DISCLOSURE` AND ITS ONE-ATTEMPT
+# RULE — AND THAT RULE HAS FOUR CLAUSES, NOT THREE. Stated at its true strength because this file is
+# pre-registration-adjacent and a three-clause version of it would be the third printing of the same
+# overclaim:
+#
+#   (1) it binds ACROSS COMMITS only. Inside the uncommitted window it does not bind at all:
+#       `.gitignore` ignores `data/` and `checkpoints/`.
+#   (2) inside that window, 23-17's `prior_scored_seeds_at_start` refuses only a delete that leaves
+#       the `matched` section of `data/phase23_run_state.json` INTACT.
+#   (3) a delete that ALSO removes that section reads as a FIRST ATTEMPT at run time and is
+#       PREVENTED BY NOTHING.
+#   (4) that same case is AUDITABLE AFTER THE FACT rather than invisible, and only that. The state
+#       ledger is TRACKED as of `cfa2c87` with a baseline carrying NO `matched` section, and the
+#       run's own session committed it together with the record at `04cdb21`, so a later deletion
+#       of that section is a VISIBLE DIFF. But only FROM that commit onward: tracking is NOT
+#       retroactive, and before it a `git checkout --` left no history at all. The same-session
+#       commit is what converts this residual from invisible to auditable. It is a DISCIPLINE, NOT
+#       A MECHANISM, and it is not "closed".
+MATCHED_CONTROL_NOISE_FLOOR = 0.0267857142857143
+
+# The matched floor's provenance, in the SAME shape as the original's: the eight
+# `phase23_prereg.FLOOR_PROVENANCE_KEYS`, plus `record_file_sha256` for the same reason the original
+# carries it (the record's own `record_sha256` is an INPUTS digest over `per_seed`, and a file
+# cannot contain its own hash), plus TWO matched-specific keys. 23-19 passes this dict straight into
+# `phase23_prereg.sigma_zero_verdict`, which REFUSES a floor whose artifact, commit, device, seeds,
+# reduction or scope is unstated.
+MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE = {
+    "record": "results/phase23_matched_control.json",
+    "record_sha256": "5bb4216f7ea15611847b5a46613f990cadc028f0a8680337385c7d1fbcf7dd85",
+    "record_file_sha256": "4478005fa5480646d830ac56d615ab361b1e1a7b8becfd6d887bec33deba504c",
+    "git_sha": "d8f42639f1d71ae36c277cd48baa422e24ae5104",
+    "device": "mps",
+    "torch_version": "2.7.1",
+    "seeds": (1337, 2024, 1338, 2025, 1339),
+    "reduction": "phase23_prereg.noise_floor",
+    "governs": (
+        "the TAUGHT RECALL RATE WITH THE ADAPTER ON (per_seed[].primary.k / .n, a count over "
+        "QUESTIONS) and NOTHING ELSE. This floor describes the PROTOCOL-MATCHED comparator: the "
+        "same quantity results/phase23_control_floor.json's floor describes, reduced over an arm "
+        "that equalises the three mechanisms that record's `residual_differences` did not. Every "
+        "other reading here is secondary, carries its own denominator and was NOT reduced. This "
+        "record renders NO verdict: `phase23_prereg.sigma_zero_verdict` is 23-19's to call, "
+        "against the floor 23-18 re-pins from this number"
+    ),
+    # Neither key is a `FLOOR_PROVENANCE_KEY`. Both are carried because a matched floor read
+    # without them is indistinguishable from the original: `protocol` names the pin the arm was
+    # run under, and `sigma_zero_was_visible` is the disclosure that separates this pin's ordering
+    # claim from the original's.
+    "protocol": "phase23_matched_prereg",
+    "sigma_zero_was_visible": True,
 }
