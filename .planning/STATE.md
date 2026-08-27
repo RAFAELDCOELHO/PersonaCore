@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-04-PLAN.md (plan 4 of 14)
-last_updated: 2026-08-27T00:35:00.000Z
+stopped_at: Completed 23-05-PLAN.md (plan 5 of 14)
+last_updated: 2026-08-27T01:04:10.565Z
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 51
+  completed_plans: 52
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 5 of 14
+Plan: 6 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -145,6 +145,7 @@ Last activity: 2026-08-26
 | Phase 23 P02 | 19min | 2 tasks | 1 files |
 | Phase 23 P03 | 28min | 3 tasks | 2 files |
 | Phase 23 P04 | 50min | 3 tasks | 3 files |
+| Phase 23 P05 | 35min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -503,6 +504,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-04: sigma = 0.5 pinned with a reason resolvable FROM CODE — mu_eff = sqrt(T)/sigma = 4.0 at T=4, far from both the erfc-subnormal band and EPSILON_OVERFLOW_REGIME's sigma in {0.30,0.40} / T=200 rows, plus it is a value already written into tests/test_phase23_prereg.py:467 before any CAL-03 number existed. NOT justified by the plan's 'sigma >= 0.42' citation: that sentence was RETRACTED IN PLACE on 2026-08-26 at tests/fixtures/phase22_reference.py:243-269. One sigma, chosen before the run, never retried (T-23-22).
 - [Phase 23] 23-04: the first results/phase23_* artifact armed the guards — MEASURED before/after, git ls-files 'results/phase23_*' 0 -> 1 path. test_phase20_prereg.py:332 went 0 -> 1 ordering pair and test_the_prereg_rule_precedes_every_phase23_result went checked 0 -> 1; the CONTENT guard now scans 1 record and ADMITS it through its own sweep_point:false. But only ONE of the three Phase-23 ordering guards went live — control_precedes_sigma_zero and sigma_zero_precedes_every_noised_point stay vacuous BY DESIGN because their endpoints do not exist yet, so 'the three guards went live' would have been a coverage over-claim. scripts/phase23_prereg.py is now PERMANENTLY EDIT-ONCE.
 - [Phase 23] 23-04: gsd-sdk hazards, THIRTEENTH session in a row, and the profile shifted AGAIN. `state.advance-plan` had CORRECT counters (Plan 4 of 14 -> 5 of 14) and did NOT regress stopped_at, but `completed_plans` FAILED TO INCREMENT (stayed 50, hand-set to 51) after working in 23-02, it flattened the body Status: prose to 'Ready to execute', and it returned last_updated QUOTED. `state.update-progress` returned the same {"updated": false, "reason": "Progress field not found in STATE.md"} it has since 22-12 and its CLAIMED NO-OP still re-stamped and re-quoted last_updated. `state.record-metric` refused positional args and was CLEAN with flags. `state.add-decision` — NEW FAILURE MODE: a SILENT TOTAL NO-OP. Six positional calls returned without error and wrote NOTHING; prior sessions corrupted the label to '- [Phase ?]: ', which was at least visible. All six hand-appended. `state.record-session` updated the body Last session but LEFT stopped_at at 23-03 (it set both in 23-02). `roadmap.update-plan-progress 23` mangled the row's trailing cells to '| In Progress|  |' again, dropping the '-' placeholder. `requirements.mark-complete CAL-03` ticked the checkbox but left the traceability row EMPTY; hand-filled. Every diff read after EVERY call against a pre-call snapshot; STATE.md 662 -> 669, ROADMAP.md 804 -> 804.
+- [Phase 23] 23-05: size_sweep's missing-ceiling refusal names the RATCHET, not just the field. validate_record's generic missing-key message lists the absent key; a missing h_per_point_ceiling is the one absence whose consequence must be stated, because mitigation_gate.ratchet_k (:918, menu :254) only lets K INCREASE — every other missing key costs a label, this one costs the budget in the direction nothing can undo.
+- [Phase 23] 23-05: the K scaling is AFFINE and derived from the record's own keys — draws_at_k = draws_per_point + questions * (k - k_per_question) — not draws_per_point * k / k_per_question. Purely-linear scaling is WRONG here because the Phase-18 shape mixes K-scaled attack families with a fixed-draw family zero. The affine form reproduces .planning/REQUIREMENTS.md:177-182 EXACTLY at every K_RUNGS entry (42480 / 21744 / 14832 / 7920 at K = 48 / 24 / 16 / 8); the linear form misses three of four.
+- [Phase 23] 23-05: CAL-01 and CAL-05 NOT ticked. This plan built the record's SHAPE and its refusals; both requirements are MEASUREMENTS (23-10 / 23-11) that have not happened. Ticking a requirement whose run has not occurred is the defect the phase's own ordering discipline exists to prevent.
+- [Phase 23] 23-05: the plan cited scripts/mitigation_gate.py::_prove_retention_floor as the refusal shape to mirror; that function does not exist there — it is at scripts/phase20_gate_coverage.py:413. Code wins, and the module cites the real location. Ninth straight plan in this repository naming an artifact the code does not have.
+- [Phase 23] 23-05: gsd-sdk hazards, FOURTEENTH session in a row; the profile matched 23-01's almost exactly. state.advance-plan advanced Plan 5->6 CORRECTLY and left stopped_at un-advanced (not regressed backwards this time), flattened the body Status: to 'Ready to execute', and returned last_updated QUOTED. state.update-progress returned {"updated": false, "reason": "Progress field not found in STATE.md"} — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped last_updated and last_activity; completed_plans stayed at 51 and had to be hand-incremented to 52. state.record-metric and state.add-decision both REFUSED positional args and needed flags; add-decision then wrote '- [Phase ?]: ' on all five calls. state.record-session was CLEAN and CORRECTED advance-plan's un-advanced stopped_at as a side effect. last_activity came back as 2026-08-27 (UTC-shifted) from three handlers against a local date of 2026-08-26. All hand-repaired line-exactly against a snapshot taken before the first call; git diff .planning/ read after EVERY call; wc -l 670 -> 676 accounted for (1 metric row + 5 decisions). NEW THIS SESSION AND NOT IN ANY PRIOR ENTRY: state.add-decision REVERTED progress.completed_plans from a hand-repaired 52 back to 51 — it rewrites the whole frontmatter from a stale read, so a repair made BEFORE it runs is silently undone. Re-repair AFTER the last add-decision call, not before.
 
 ### Roadmap Evolution
 
@@ -635,8 +641,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T00:29:31.481Z
-Stopped at: Completed 23-04-PLAN.md (plan 4 of 14)
+Last session: 2026-08-27T01:03:19.455Z
+Stopped at: Completed 23-05-PLAN.md (plan 5 of 14)
 Resume file: None
 
 ## Operator Next Steps
