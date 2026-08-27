@@ -81,6 +81,18 @@ _TRAIN_ARM_CALL_SITES = (
     ("tests/test_phase23_resume.py", "call", "_resume_call (the refusal probes)"),
     ("tests/test_phase23_resume.py", "call", "_run (the production MPS probe)"),
     ("tests/test_phase23_resume.py", "prose", "the grep pattern in the register probe"),
+    # Plan 23-15's matched-comparator pre-registration. A FOURTH kind, `fixture`: these hits are
+    # driver-named `def` lines INSIDE SYNTHETIC PYTHON SOURCE STRINGS that
+    # `phase23_matched_prereg.prove_train_call_keys` parses with `ast` — the census finds the
+    # production call by `FunctionDef.name == "train_arm"`, so its fixtures must carry that name.
+    # They are NOT call sites and NOT this repository's `train_arm`: the AST of these two files
+    # contains ZERO `ast.Call` nodes named `train_arm` (the text lives in a `Constant`), so the
+    # per-file AST check below still reads 0 for both and every tooth of this guard is unmoved.
+    # Registered rather than dodged — writing `train_arm (` to slip the grep would leave the count
+    # wrong in the other direction, and this register exists precisely to be updated.
+    ("scripts/phase23_matched_prereg.py", "fixture", "the seven-branch synthetic source"),
+    ("scripts/phase23_matched_prereg.py", "fixture", "the extra-keyword synthetic source"),
+    ("tests/test_phase23_matched_prereg.py", "fixture", "_teach_shaped's source builder"),
 )
 
 # This file's own name, resolved once so the "eight PRE-EXISTING call sites" arithmetic below
