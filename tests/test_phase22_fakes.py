@@ -26,7 +26,17 @@ directions (sigma = 0 at any lot size, and accum = 1 at any sigma), and asserts 
 that DO work: the sigma > 0 / accum > 1 magnitude differential, and the statement-order structural
 check.
 
-CPU-only, GPU-free.
+**THE RUNTIME HALVES RUN ON BOTH CPU AND MPS (23-06 / D-02).** DPSGD-04's deliverable was never
+"the tests pass" -- it was the OBSERVED RED against the real mutated module, and that observation
+was made on CPU while D-01 puts this milestone's published epsilon on the M3. Each of the four
+probes below is therefore parametrized over ``_DEVICES`` (imported from
+``tests/test_phase23_mps_venue.py``, this phase's SINGLE device register) and re-applies its
+mutation, re-watches its refusal and re-confirms the restore on the venue that ships. Phase 22's
+CPU-only result is recorded as *not transferred to MPS* and then transferred by measurement; it is
+never inherited. **The AST halves are EXEMPT and the exemption is APPLIED AT THE POINT OF USE**
+(``_AST_HALF_RUNS_ON``) rather than silently inherited -- see ``_DEVICE_INVARIANT_HALVES``.
+
+GPU-free (no CUDA); the MPS legs are ``skipif``-gated so CI stays green on a CPU-only wheel.
 """
 
 import pathlib
@@ -49,6 +59,10 @@ from test_phase22_dpsgd import (  # noqa: E402  (tests/ is not a package)
     _model,
 )
 
+# The phase's SINGLE device register, IMPORTED rather than re-spelled: two copies of a device gate
+# drift, and a drifted gate is how an MPS leg stops being counted (23-01).
+from test_phase23_mps_venue import _DEVICES, _MPS_SKIP  # noqa: E402
+
 # The real mechanism's path, captured from the AST module at import time so the mutated-copy
 # monkeypatching below cannot make this read the mutation back.
 _REAL_DPSGD_PATH = ast_guards._DPSGD_PATH
@@ -66,6 +80,14 @@ _SUMMARY_PATH = (
 _SIGMA = 1.0
 _CLIP = 1.0
 _NON_BINDING_CLIP = 1e6
+
+# D-02's exemption, APPLIED AT THE POINT OF USE. The four probes' AST halves feed SOURCE TEXT to
+# `ast.parse`; there is no tensor, no generator and no device for a result to depend on, so an
+# `[mps]` leg re-running them would execute byte-identical code under a node id CLAIMING a device
+# pass it did not perform -- T-23-28, the exact defect D-02 exists to prevent. They run on the
+# `cpu` leg only, and the exemption is recorded with its measured count in
+# `_DEVICE_INVARIANT_HALVES` rather than inferred from the absence of an mps run.
+_AST_HALF_RUNS_ON = "cpu"
 
 
 def _real_source():
@@ -106,8 +128,45 @@ def _run_live_guard(monkeypatch, tmp_path, source, guard, **kwargs):
     guard(**kwargs)
 
 
-def _params_of(model):
-    return [p for name, p in model.named_parameters() if p.requires_grad and "lora_" in name]
+def _params_of(model, device=None):
+    """The trainable LoRA parameters, ASSERTED to be on the device the node id claims.
+
+    ``device`` is the parametrization's own string, and this is the ONE place that ties it to
+    reality: everything below reads the device off the model, so without this assertion an
+    ``[mps]`` leg whose ``_model(device=...)`` silently fell back to CPU would be a second CPU
+    measurement wearing an mps id -- T-23-28. Default ``None`` keeps the Phase-22 call shape.
+    """
+    params = [p for name, p in model.named_parameters() if p.requires_grad and "lora_" in name]
+    if device is not None:
+        assert params and all(p.device.type == device for p in params), (
+            f"the fixture's trainable parameters are on "
+            f"{sorted({p.device.type for p in params})}, not {device!r}. This probe's node id "
+            "claims a device it is not running on, which is exactly the repudiation D-02 forbids"
+        )
+    return params
+
+
+def _seam_on(seam_cls, model, **kwargs):
+    """Build ``seam_cls`` over ``model``, ASSERTING the seam really landed on the model's device.
+
+    The device is READ off the model rather than passed, the same discipline ``_record`` uses, so
+    no call site can pass it wrong. ``DPSGD.__init__`` allocates ``_accum`` with
+    ``torch.zeros_like(p)`` and derives its generator device from ``params[0].device`` (D-14), so
+    both are checked: a CPU generator drawing the noise for an "MPS" probe would make FAKE 3's and
+    FAKE 4's device legs vacuous while still reporting green.
+    """
+    dp = seam_cls(model, **kwargs)
+    device = next(p.device.type for p in model.parameters() if p.requires_grad)
+    assert dp._g.device.type == device, (
+        f"the seam's dedicated generator is on {dp._g.device!r} while the model is on {device!r}. "
+        "FAKE 3's differential and FAKE 4's continuity check are both properties of the DRAWN "
+        "values, so a CPU generator here would make this leg a CPU observation with an mps label"
+    )
+    assert all(buf.device.type == device for buf in dp._accum), (
+        f"the seam's accumulator is on {sorted({b.device.type for b in dp._accum})}, not "
+        f"{device!r} -- the lot sum this probe measures would not be the one the venue computes"
+    )
+    return dp
 
 
 def _clear_grads(params):
@@ -152,6 +211,92 @@ def _record(params, seed):
         )
         drawn.append(g_dev)
     return drawn
+
+
+# -------------------------------------------------------------------------------------------------
+# THE PREMISE BOTH FITTED CONSTANTS REST ON, MEASURED ON THE VENUE RATHER THAN INHERITED (23-06).
+#
+# 23-RESEARCH.md §R1.3 records `_global_norm` over a 72-tensor LoRA-shaped fixture as
+# **BIT-IDENTICAL** across cpu and mps at `0.4707888662815094`. **THAT VALUE IS NOT THIS FILE'S
+# FIXTURE AND THE BIT-IDENTITY DOES NOT HOLD HERE.** Measured on the fixture the two fitted
+# constants ACTUALLY rest on -- `_record(_params_of(_model(device=...)), 1)`, 72 tensors -- the two
+# devices DIVERGE in the last float32 ULP:
+#
+#     cpu 0.5771376490592957    mps 0.5771377086639404    relative 1.033e-07
+#
+# Recorded as a finding rather than smoothed: fp32 reductions differ by REDUCTION ORDER, and
+# `_global_norm` is a reduction of reductions (`vector_norm` per tensor, then `vector_norm` over the
+# stack). The draw itself is byte-identical -- `_record` keeps the CPU generator and moves only the
+# tensor -- so this is the whole of the cross-device numeric divergence in FAKE 1 and FAKE 2, and
+# the assertion below BOUNDS it instead of leaving it as those probes' unstated premise.
+# -------------------------------------------------------------------------------------------------
+_GLOBAL_NORM_ON_CPU = 0.5771376490592957
+_GLOBAL_NORM_ON_MPS = 0.5771377086639404
+
+# One float32 ULP at this magnitude is ~1.19e-07, so the measured 1.033e-07 divergence is a single
+# rounding step. The bound is set an order of magnitude above it and is still 2,500x INSIDE the
+# tighter of the two bands it protects -- the non-vacuity is asserted, not asserted-by-comment.
+_CROSS_DEVICE_NORM_REL_BOUND = 1e-6
+_CROSS_DEVICE_BOUND_REQUIRED_HEADROOM = 100.0
+
+
+@_MPS_SKIP
+def test_global_norm_across_devices_diverges_far_below_the_fitted_bands():
+    """``_global_norm`` on cpu vs mps: NOT bit-identical, and bounded ORDERS below both bands.
+
+    **THE HONEST BOUND, stated first: this is ONE FIXTURE, NOT A PROOF.** Fp32 reductions can
+    differ in the last ULPs by reduction order, and reduction order is a backend's choice -- a
+    torch release, a different tensor count or a different magnitude distribution could move it.
+    What makes the result usable anyway is the RATIO of scales rather than the measurement itself:
+    the divergence measured here is ``1.03e-07`` relative, while the two probes that depend on
+    float agreement across devices carry relative bands of ``1.15e-02`` (FAKE 1) and ``2.50e-03``
+    (FAKE 3) -- four orders of magnitude of headroom. The assertion below therefore checks BOTH
+    halves, because either alone would be misleading: that the divergence is inside a named bound,
+    AND that the named bound is far inside the bands whose validity it is being used to argue for.
+
+    This test exists because 23-RESEARCH.md's bit-identity row was carried into the plan as an
+    assumption to re-assert. It does not hold on this file's fixture, and a probe that asserted
+    ``torch.equal`` here would have gone RED -- correctly. The measured divergence is published in
+    its place; the two fitted constants are byte-unchanged because the measurement supports them,
+    not because the check was relaxed to fit.
+    """
+    norms = {}
+    for device in ("cpu", "mps"):
+        model = _model(device=device)
+        params = _params_of(model, device)
+        _clear_grads(params)
+        drawn = _record(params, 1)
+        assert len(drawn) == 72, f"the fixture is {len(drawn)} tensors, not the recorded 72"
+        # THE MECHANISM'S OWN reduction, off a real seam on the real device -- not a re-spelling.
+        seam = _seam_on(DPSGD, model, sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=101)
+        norms[device] = seam._global_norm(drawn)
+        _clear_grads(params)
+
+    relative = abs(norms["mps"] - norms["cpu"]) / abs(norms["cpu"])
+    assert relative <= _CROSS_DEVICE_NORM_REL_BOUND, (
+        f"_global_norm diverges by {relative:.3e} relative between cpu ({norms['cpu']!r}) and mps "
+        f"({norms['mps']!r}), above the recorded bound {_CROSS_DEVICE_NORM_REL_BOUND:.1e}. FAKE 1 "
+        "and FAKE 3 both assert fitted constants across both devices; re-measure and RE-RECORD "
+        "both readings with the device named on each -- 23-RESEARCH.md A1 forbids widening a band "
+        "to absorb this"
+    )
+    for device, recorded in (("cpu", _GLOBAL_NORM_ON_CPU), ("mps", _GLOBAL_NORM_ON_MPS)):
+        assert abs(norms[device] - recorded) / abs(recorded) <= _CROSS_DEVICE_NORM_REL_BOUND, (
+            f"the {device} reduction is {norms[device]!r}, not the recorded {recorded!r}. The "
+            "fixture itself has moved, so the cross-device comparison above is between two "
+            "quantities neither of which is the one this file's constants were fitted to"
+        )
+
+    # NON-VACUITY: the bound is only evidence for the two constants while it is far inside them.
+    tightest = min(
+        _FAKE1_LEAK_BAND / _FAKE1_LEAK_RATIO, _FAKE3_STD_RATIO_BAND / _FAKE3_STD_RATIO_AT_N4
+    )
+    assert _CROSS_DEVICE_NORM_REL_BOUND * _CROSS_DEVICE_BOUND_REQUIRED_HEADROOM <= tightest, (
+        f"the cross-device bound {_CROSS_DEVICE_NORM_REL_BOUND:.1e} is within "
+        f"{_CROSS_DEVICE_BOUND_REQUIRED_HEADROOM}x of the tightest fitted relative band "
+        f"{tightest:.3e}, so it no longer shows that the device divergence CANNOT reach either "
+        "band. A bound that large is a warning about the constants, not a reassurance about them"
+    )
 
 
 # =================================================================================================
@@ -200,7 +345,7 @@ _FAKE1_LEAK_BAND = 0.02
 def _lot_sum(seam_cls, model, params, *, clip_norm, record_seeds):
     """The clipped SUM a lot releases, under ``seam_cls``. Returns ``(buffers, seam)``."""
     _clear_grads(params)
-    dp = seam_cls(model, sigma=0.0, clip_norm=clip_norm, seed=101)
+    dp = _seam_on(seam_cls, model, sigma=0.0, clip_norm=clip_norm, seed=101)
     dp.begin_step()
     for seed in record_seeds:
         _record(params, seed)
@@ -210,7 +355,8 @@ def _lot_sum(seam_cls, model, params, *, clip_norm, record_seeds):
     return buffers, dp
 
 
-def test_fake_averaged_gradient(tmp_path):
+@pytest.mark.parametrize("device", _DEVICES)
+def test_fake_averaged_gradient(device, tmp_path):
     """V-18 / FAKE 1: drop the drain, watch D-16 invariant 1 refuse, and MEASURE what it prevents.
 
     **The refusal.** ``backward()`` ACCUMULATES, so without the per-micro-step drain record *i*'s
@@ -233,10 +379,20 @@ def test_fake_averaged_gradient(tmp_path):
     "the accumulated norm after two records exceeds C" -- does NOT discriminate**: the honest
     accumulator holds the SUM, so its norm legitimately reaches ``N*C``. The neighbouring-lot
     difference is the quantity that separates the two, and it is what is asserted.
+
+    **ON MPS (23-06 / D-02), and the expectation is stated BEFORE the measurement.** ``_record``
+    keeps its CPU draw and moves only the tensor, so the gradients entering this probe are
+    byte-identical on both devices and the EXPECTATION was bit-identity. **MEASURED: it is not
+    bit-identical.** cpu ``1.7344813665273022`` against mps ``1.734481393949083``, a difference of
+    ``2.74e-08`` (relative ``1.6e-08``). The draw is identical; the fp32 REDUCTION inside
+    ``_global_norm`` is not, and every ratio here is a quotient of two such reductions. The
+    divergence is ~5 orders of magnitude inside the ``0.02`` band, and
+    ``test_global_norm_across_devices_diverges_far_below_the_fitted_bands`` measures that
+    divergence directly instead of leaving it as this probe's unstated premise.
     """
-    model = _model()
-    params = _params_of(model)
-    honest = DPSGD(model, sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=101)
+    model = _model(device=device)
+    params = _params_of(model, device)
+    honest = _seam_on(DPSGD, model, sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=101)
 
     _clear_grads(params)
     g1 = _record(params, 1)
@@ -247,7 +403,7 @@ def test_fake_averaged_gradient(tmp_path):
 
     # ---- The refusal, watched. --------------------------------------------------------------
     _clear_grads(params)
-    fake = _DrainDropped(model, sigma=0.0, clip_norm=clip_norm, seed=101)
+    fake = _seam_on(_DrainDropped, model, sigma=0.0, clip_norm=clip_norm, seed=101)
     fake.begin_step()
     _record(params, 1)
     fake.absorb_record()
@@ -300,11 +456,15 @@ def test_fake_averaged_gradient(tmp_path):
     # ---- The mutated MODULE's own RED is in the SUMMARY; this is its structural stand-in. ----
     # Deleting the drain lines from the source leaves `_drained` false, which is the same state
     # the subclass above reconstructs. Asserted here so the two halves are provably about one edit.
-    source = _real_source()
-    assert source.count("p.grad = None  # D-01's per-micro-step drain") == 1, (
-        "the drain line the SUMMARY's FAKE 1 hunk deletes is no longer where it was; the mutated "
-        "-module capture and this in-process probe would then be about two different edits"
-    )
+    # SOURCE TEXT -> `_AST_HALF_RUNS_ON` only: re-reading the same bytes under an `[mps]` id would
+    # claim a device pass it did not perform.
+    if device == _AST_HALF_RUNS_ON:
+        source = _real_source()
+        assert source.count("p.grad = None  # D-01's per-micro-step drain") == 1, (
+            "the drain line the SUMMARY's FAKE 1 hunk deletes is no longer where it was; the "
+            "mutated-module capture and this in-process probe would then be about two different "
+            "edits"
+        )
     assert tmp_path.exists()  # the fixture is requested for symmetry with the AST probes
 
 
@@ -343,7 +503,8 @@ class _ClipsToAHalfConstant(DPSGD):
         return real * 2.0 if self._norm_calls % 2 == 1 else real
 
 
-def test_fake_wrong_sensitivity(monkeypatch, tmp_path):
+@pytest.mark.parametrize("device", _DEVICES)
+def test_fake_wrong_sensitivity(device, monkeypatch, tmp_path):
     """V-19 / FAKE 2: a second clip constant, watched reddening the AST guard AND the runtime check.
 
     **Both halves are required and NEITHER is redundant, because the runtime check is ONE-SIDED.**
@@ -359,45 +520,55 @@ def test_fake_wrong_sensitivity(monkeypatch, tmp_path):
     Measured on this fixture: ``C = 0.1442844122648239`` (a quarter of the record's norm, so the
     clip binds), the honest accumulated norm is ``C`` exactly, and the fake's clipped norm is
     ``0.2885688245296478`` -- exactly ``2C`` -- which the refusal message quotes.
+
+    **ON MPS (23-06 / D-02): the lowest-risk of the four, and measured rather than assumed.** No
+    generator is involved (``sigma = 0`` throughout) and both assertions are RATIOS of quantities
+    that scale together, so both come back EXACTLY ``0.0`` deviation on MPS as on CPU. The absolute
+    numbers do move with the device's fp32 reduction order -- ``C`` is ``0.1442844122648239`` on cpu
+    against ``0.1442844271659851`` on mps, and the fake's clipped norm ``0.2885688245296478``
+    against ``0.2885688543319702`` -- which is precisely why the assertions are written as ratios
+    and why the docstring's literals are labelled with the device that produced them.
     """
     real_source = _real_source()
 
     # ---- AST half, over the LIVE guard: a second constant introduced as a source mutation. ---
-    mutated = _mutate(
-        real_source,
-        "        self.C = float(clip_norm)  # SINGLE source of truth -- the clip AND the noise "
-        "read this.",
-        "        self.C = float(clip_norm)  # SINGLE source of truth -- the clip AND the noise "
-        "read this.\n        self._c2 = 2.0 * self.C  # FAKE 2's positive insertion.",
-    )
-    mutated = _mutate(
-        mutated, "            coef = self.C / norm", "            coef = self._c2 / norm"
-    )
-
-    with pytest.raises(AssertionError, match=r"clip constants"):
-        _run_live_guard(
-            monkeypatch,
-            tmp_path,
-            mutated,
-            ast_guards.test_dpsgd_has_exactly_one_clip_constant,
+    # `_AST_HALF_RUNS_ON` ONLY -- `ast.parse` over source text has no device (see the constant).
+    if device == _AST_HALF_RUNS_ON:
+        mutated = _mutate(
+            real_source,
+            "        self.C = float(clip_norm)  # SINGLE source of truth -- the clip AND the noise "
+            "read this.",
+            "        self.C = float(clip_norm)  # SINGLE source of truth -- the clip AND the noise "
+            "read this.\n        self._c2 = 2.0 * self.C  # FAKE 2's positive insertion.",
+        )
+        mutated = _mutate(
+            mutated, "            coef = self.C / norm", "            coef = self._c2 / norm"
         )
 
-    # UNMUTATED CONTROL, through the identical harness: the same guard over the same temp-copy
-    # mechanism passes, so the AssertionError above is the mutation and not the repointing.
-    _run_live_guard(
-        monkeypatch, tmp_path, real_source, ast_guards.test_dpsgd_has_exactly_one_clip_constant
-    )
+        with pytest.raises(AssertionError, match=r"clip constants"):
+            _run_live_guard(
+                monkeypatch,
+                tmp_path,
+                mutated,
+                ast_guards.test_dpsgd_has_exactly_one_clip_constant,
+            )
+
+        # UNMUTATED CONTROL, through the identical harness: the same guard over the same temp-copy
+        # mechanism passes, so the AssertionError above is the mutation and not the repointing.
+        _run_live_guard(
+            monkeypatch, tmp_path, real_source, ast_guards.test_dpsgd_has_exactly_one_clip_constant
+        )
 
     # ---- Runtime half: the dangerous direction, refused. -------------------------------------
-    model = _model()
-    params = _params_of(model)
-    honest = DPSGD(model, sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=5)
+    model = _model(device=device)
+    params = _params_of(model, device)
+    honest = _seam_on(DPSGD, model, sigma=0.0, clip_norm=_NON_BINDING_CLIP, seed=5)
     _clear_grads(params)
     record_norm = honest._global_norm(_record(params, 1))
     _clear_grads(params)
     clip_norm = record_norm / 4.0  # the fake's 2C bound still binds, so the fake really clips
 
-    control = DPSGD(model, sigma=0.0, clip_norm=clip_norm, seed=5)
+    control = _seam_on(DPSGD, model, sigma=0.0, clip_norm=clip_norm, seed=5)
     control.begin_step()
     _record(params, 1)
     control.absorb_record()
@@ -409,7 +580,7 @@ def test_fake_wrong_sensitivity(monkeypatch, tmp_path):
     )
     _clear_grads(params)
 
-    fake = _ClipsToASecondConstant(model, sigma=0.0, clip_norm=clip_norm, seed=5)
+    fake = _seam_on(_ClipsToASecondConstant, model, sigma=0.0, clip_norm=clip_norm, seed=5)
     fake.begin_step()
     _record(params, 1)
     with pytest.raises(RuntimeError, match=r"dp-invariant:sensitivity"):
@@ -421,7 +592,7 @@ def test_fake_wrong_sensitivity(monkeypatch, tmp_path):
     _clear_grads(params)
 
     # ---- Runtime half, the OTHER direction: measured GREEN. That is the one-sidedness. -------
-    lenient = _ClipsToAHalfConstant(model, sigma=0.0, clip_norm=clip_norm, seed=5)
+    lenient = _seam_on(_ClipsToAHalfConstant, model, sigma=0.0, clip_norm=clip_norm, seed=5)
     lenient.begin_step()
     _record(params, 1)
     lenient.absorb_record()  # NO refusal -- this is the documented limitation, measured
@@ -433,20 +604,23 @@ def test_fake_wrong_sensitivity(monkeypatch, tmp_path):
     _clear_grads(params)
 
     # ... and the AST guard, which never looks at a number, catches that direction too.
-    smaller = _mutate(
-        real_source,
-        "        self.C = float(clip_norm)  # SINGLE source of truth -- the clip AND the noise "
-        "read this.",
-        "        self.C = float(clip_norm)  # SINGLE source of truth -- the clip AND the noise "
-        "read this.\n        self._c2 = 0.5 * self.C  # FAKE 2, the direction runtime cannot see.",
-    )
-    smaller = _mutate(
-        smaller, "            coef = self.C / norm", "            coef = self._c2 / norm"
-    )
-    with pytest.raises(AssertionError, match=r"clip constants"):
-        _run_live_guard(
-            monkeypatch, tmp_path, smaller, ast_guards.test_dpsgd_has_exactly_one_clip_constant
+    # `_AST_HALF_RUNS_ON` ONLY, for the same reason as the half above.
+    if device == _AST_HALF_RUNS_ON:
+        smaller = _mutate(
+            real_source,
+            "        self.C = float(clip_norm)  # SINGLE source of truth -- the clip AND the noise "
+            "read this.",
+            "        self.C = float(clip_norm)  # SINGLE source of truth -- the clip AND the noise "
+            "read this.\n        self._c2 = 0.5 * self.C  # FAKE 2, the direction runtime cannot "
+            "see.",
         )
+        smaller = _mutate(
+            smaller, "            coef = self.C / norm", "            coef = self._c2 / norm"
+        )
+        with pytest.raises(AssertionError, match=r"clip constants"):
+            _run_live_guard(
+                monkeypatch, tmp_path, smaller, ast_guards.test_dpsgd_has_exactly_one_clip_constant
+            )
 
 
 # =================================================================================================
@@ -487,8 +661,20 @@ _FAKE3_DIFFERENTIAL_SEES = {
 
 # Measured at sigma = 1.0, C = 1.0, N = 4 over all 331,776 released elements: the honest release
 # has std 0.2501736283302307 and the fake's 1.0006910562515259 -- a ratio of 3.999986, i.e. N.
+#
+# RE-MEASURED ON MPS (23-06 / D-02) and the constant is BYTE-UNCHANGED, because the MPS reading
+# lands INSIDE the recorded band:
+#     cpu 3.9999861813196698   mps 3.9999995238454056   |delta| = 1.334e-05   band 0.01
+# This is the single numeric constant most worth watching on this venue: unlike FAKE 1's, FAKE 3's
+# differential is a property of the DRAWN values, and on MPS those come off an MPS generator, so
+# the noise vectors are genuinely different numbers -- not the same numbers reduced differently.
+# The ratio survives because it is STRUCTURAL (it is N, not a fit), which is what research §R1.4
+# predicted and this measurement confirms. The band was NOT widened and could not have been:
+# 23-RESEARCH.md Assumption A1 committed the disposition -- re-record BOTH readings, never widen --
+# before the number was seen.
 _FAKE3_STD_RATIO_AT_N4 = 3.999986
 _FAKE3_STD_RATIO_BAND = 0.01
+_FAKE3_STD_RATIO_AT_N4_ON_MPS = 3.9999995238454056
 
 
 def _released(seam_cls, model, params, *, sigma, n_records):
@@ -499,7 +685,7 @@ def _released(seam_cls, model, params, *, sigma, n_records):
     state and the ONLY difference between them is where the divide happens.
     """
     _clear_grads(params)
-    dp = seam_cls(model, sigma=sigma, clip_norm=_CLIP, seed=61)
+    dp = _seam_on(seam_cls, model, sigma=sigma, clip_norm=_CLIP, seed=61)
     dp.begin_step()
     for k in range(n_records):
         _record(params, 200 + k)
@@ -530,7 +716,8 @@ def _released(seam_cls, model, params, *, sigma, n_records):
 # RUNTIME halves do not, and 23-06 performs the watched RED for those on MPS.
 # -------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize(("sigma", "n_records"), sorted(_FAKE3_DIFFERENTIAL_SEES))
-def test_fake_noise_after_averaging(sigma, n_records):
+@pytest.mark.parametrize("device", _DEVICES)
+def test_fake_noise_after_averaging(device, sigma, n_records):
     """V-20 / FAKE 3, with its two BLIND SPOTS measured rather than glossed.
 
     **D-17's assigned detector does not work and this asserts why.** The table says *"build
@@ -548,10 +735,18 @@ def test_fake_noise_after_averaging(sigma, n_records):
     ``sigma > 0`` AND ``accum > 1``: released std ``0.2501736283302307`` honest against
     ``1.0006910562515259`` mutated, a ratio of ``3.999986`` -- a factor of N. (ii) The
     statement-order structural check, which reads text and therefore covers ALL FOUR cells,
-    including the three the differential cannot see. It is asserted in every parametrization.
+    including the three the differential cannot see. It is asserted in every parametrization
+    the source half runs in (``_AST_HALF_RUNS_ON``).
+
+    **ON MPS (23-06 / D-02).** All three recorded BLIND SPOTS transfer -- ``(0.0, 1)``, ``(0.0, 4)``
+    and ``(1.0, 1)`` come back ``torch.equal`` on MPS exactly as on CPU, which matters because a
+    blind spot that quietly stopped being blind would be a finding, not a pass. The one live cell's
+    ratio is ``3.9999995238454056`` on mps against ``3.9999861813196698`` on cpu -- a delta of
+    ``1.334e-05`` against a band of ``0.01``, so the constant is byte-unchanged. The MPS reading is
+    the CLOSER of the two to the structural value ``N = 4``.
     """
-    model = _model()
-    params = _params_of(model)
+    model = _model(device=device)
+    params = _params_of(model, device)
 
     honest = _released(DPSGD, model, params, sigma=sigma, n_records=n_records)
     fake = _released(_DivideBeforeNoise, model, params, sigma=sigma, n_records=n_records)
@@ -584,6 +779,9 @@ def test_fake_noise_after_averaging(sigma, n_records):
 
     # THE DETECTOR THAT COVERS THIS CELL WHATEVER THE DIFFERENTIAL DID -- statement order, over
     # text, through the same function `test_dpsgd_draws_the_noise_before_it_divides` runs live.
+    # `_AST_HALF_RUNS_ON` ONLY: it is a pure source-text property (see the constant).
+    if device != _AST_HALF_RUNS_ON:
+        return
     real_source = _real_source()
     ast_guards._assert_noise_precedes_divide(real_source, class_name="DPSGD")  # GREEN control
 
@@ -632,7 +830,7 @@ class _ReseedsInStepUnguarded(_ReseedsInStep):
 def _two_steps(seam_cls, model, params):
     """Two optimizer steps over IDENTICAL record gradients, returning both released lots."""
     _clear_grads(params)
-    dp = seam_cls(model, sigma=_SIGMA, clip_norm=_NON_BINDING_CLIP, seed=13)
+    dp = _seam_on(seam_cls, model, sigma=_SIGMA, clip_norm=_NON_BINDING_CLIP, seed=13)
     lots = []
     for _ in range(2):
         dp.begin_step()
@@ -645,7 +843,8 @@ def _two_steps(seam_cls, model, params):
     return lots
 
 
-def test_fake_rng_reuse(monkeypatch, tmp_path):
+@pytest.mark.parametrize("device", _DEVICES)
+def test_fake_rng_reuse(device, monkeypatch, tmp_path):
     """V-21 / FAKE 4: an in-step ``manual_seed``, watched reddening the AST guards AND invariant 4.
 
     **AST half.** The re-seed is inserted into ``finalize`` as a source mutation and fed to the two
@@ -662,43 +861,55 @@ def test_fake_rng_reuse(monkeypatch, tmp_path):
     released gradients are ``torch.equal`` over all 331,776 elements from identical records --
     the same noise vector released twice, while the accountant charges for T INDEPENDENT
     compositions.
+
+    **ON MPS (23-06 / D-02).** This is the probe that touches the generator most directly, and the
+    5,056 B (cpu) / 44 B (mps) state divergence is exactly why it had to be re-watched rather than
+    inherited: the continuity check is ``torch.equal(pre, post)`` over those states. Both halves
+    transfer -- the honest seam's two steps still differ, the unguarded re-seeder still releases
+    ``torch.equal`` lots, and ``[dp-invariant:generator]`` still refuses on step 2 -- and they
+    transfer over the 44-byte MPS state, which is a different tensor shape entirely from the one
+    Phase 22 watched. Both states are resident ON CPU whatever the generator's device, which is why
+    ``dpsgd.py``'s ``torch.equal`` needs no device plumbing and none was added.
     """
     real_source = _real_source()
-    mutated = _mutate(
-        real_source,
-        "        lot = int(accum)",
-        "        self._g.manual_seed(1234)  # FAKE 4's positive insertion.\n"
-        "        lot = int(accum)",
-    )
-
-    with pytest.raises(AssertionError, match=r"seed/state call sites"):
-        _run_live_guard(
-            monkeypatch, tmp_path, mutated, ast_guards.test_dpsgd_never_reseeds_its_generator
+    # AST half -> `_AST_HALF_RUNS_ON` ONLY: these guards feed source TEXT to `ast.parse` and import
+    # no torch runtime, so an `[mps]` re-run would execute byte-identical code (see the constant).
+    if device == _AST_HALF_RUNS_ON:
+        mutated = _mutate(
+            real_source,
+            "        lot = int(accum)",
+            "        self._g.manual_seed(1234)  # FAKE 4's positive insertion.\n"
+            "        lot = int(accum)",
         )
-    with pytest.raises(AssertionError, match=r"'finalize': \['manual_seed'\]"):
+
+        with pytest.raises(AssertionError, match=r"seed/state call sites"):
+            _run_live_guard(
+                monkeypatch, tmp_path, mutated, ast_guards.test_dpsgd_never_reseeds_its_generator
+            )
+        with pytest.raises(AssertionError, match=r"'finalize': \['manual_seed'\]"):
+            _run_live_guard(
+                monkeypatch,
+                tmp_path,
+                mutated,
+                ast_guards.test_dpsgd_step_reaches_no_forbidden_call,
+                entry="finalize",
+            )
+
+        # UNMUTATED CONTROLS through the identical harness.
+        _run_live_guard(
+            monkeypatch, tmp_path, real_source, ast_guards.test_dpsgd_never_reseeds_its_generator
+        )
         _run_live_guard(
             monkeypatch,
             tmp_path,
-            mutated,
+            real_source,
             ast_guards.test_dpsgd_step_reaches_no_forbidden_call,
             entry="finalize",
         )
 
-    # UNMUTATED CONTROLS through the identical harness.
-    _run_live_guard(
-        monkeypatch, tmp_path, real_source, ast_guards.test_dpsgd_never_reseeds_its_generator
-    )
-    _run_live_guard(
-        monkeypatch,
-        tmp_path,
-        real_source,
-        ast_guards.test_dpsgd_step_reaches_no_forbidden_call,
-        entry="finalize",
-    )
-
     # ---- Runtime control: the honest mechanism's two steps DIFFER from identical records. ----
-    model = _model()
-    params = _params_of(model)
+    model = _model(device=device)
+    params = _params_of(model, device)
     first, second = _two_steps(DPSGD, model, params)
     assert not any(torch.equal(a, b) for a, b in zip(first, second)), (
         "the honest mechanism released identical gradients on two consecutive steps from "
@@ -716,7 +927,7 @@ def test_fake_rng_reuse(monkeypatch, tmp_path):
 
     # ---- The refusal, watched: invariant 4 bites on step 2. ----------------------------------
     _clear_grads(params)
-    dp = _ReseedsInStep(model, sigma=_SIGMA, clip_norm=_NON_BINDING_CLIP, seed=13)
+    dp = _seam_on(_ReseedsInStep, model, sigma=_SIGMA, clip_norm=_NON_BINDING_CLIP, seed=13)
     dp.begin_step()
     _record(params, 1)
     dp.absorb_record()
