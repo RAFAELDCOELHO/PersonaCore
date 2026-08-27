@@ -11,14 +11,16 @@ pre-registered rule this driver consumes — ``noise_floor``, ``choose_n_seeds``
 ``H_PER_POINT_FLOOR_SECONDS`` — is IMPORTED from the edit-once ``scripts/phase23_prereg.py``, whose
 ``test_the_prereg_rule_precedes_every_phase23_result`` binds it blind.
 
-THE THREE SUB-MODES, and why the split is not cosmetic::
+THE SUB-MODES, and why the split is not cosmetic::
 
-    python scripts/phase23_run.py cost      # train + score control seed 1, cost the SCORING leg,
-                                            #   apply the blind seed rule -> N          (23-08 T1)
-    python scripts/phase23_run.py schedule  # ONE invocation: the remaining control arms AND every
-                                            #   never-taught arm, at the same seed list (23-08 T2)
-    python scripts/phase23_run.py floor     # score the remaining control arms, reduce the floor
-                                            #   through `phase23_prereg.noise_floor`   (23-08 T3)
+    python scripts/phase23_run.py cost        # train + score control seed 1, cost the SCORING leg,
+                                              #   apply the blind seed rule -> N        (23-08 T1)
+    python scripts/phase23_run.py schedule    # ONE invocation: the remaining control arms AND every
+                                              #   never-taught arm, at the same seed list (23-08 T2)
+    python scripts/phase23_run.py floor       # score the remaining control arms, reduce the floor
+                                              #   through `phase23_prereg.noise_floor`  (23-08 T3)
+    python scripts/phase23_run.py sigma-zero  # the DP arm's FIRST executed run at sigma = 0, then
+                                              #   `phase23_prereg.sigma_zero_verdict`   (23-10)
 
 ``cost`` MUST run first and it MUST train a control arm, because N is a function of the scoring
 cost and the scoring cost is not knowable without a scored arm. That control arm is the FIRST
@@ -44,8 +46,10 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 import contextlib  # noqa: E402
 import hashlib  # noqa: E402
 import json  # noqa: E402
+import math  # noqa: E402
 import pathlib  # noqa: E402
 import platform  # noqa: E402
+import subprocess  # noqa: E402
 import sys  # noqa: E402
 import time  # noqa: E402
 from dataclasses import asdict  # noqa: E402
@@ -54,7 +58,13 @@ _SCRIPTS = str(pathlib.Path(__file__).resolve().parent)
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-import mitigation_gate  # noqa: E402  READ-ONLY — FROZEN. Imported so `arm` is READ, never retyped.
+# READ-ONLY, both of them. `mitigation_gate` is FROZEN; `mitigation_budget` is the PIN — the floor
+# is READ from it and never recomputed here. Importing the budget in THIS module is not the import
+# the ceiling forbids: 23-02's guards bind on what `scripts/mitigation_*.py` modules import (and on
+# what the frozen gate transitively loads), and a driver reading the pin is the direction the pin
+# exists for.
+import mitigation_budget  # noqa: E402
+import mitigation_gate  # noqa: E402
 import phase14_factset as fs  # noqa: E402
 import phase23_cost  # noqa: E402
 import teach_persona as tp  # noqa: E402
@@ -63,9 +73,11 @@ from phase23_prereg import (  # noqa: E402
     FLOOR_PROVENANCE_KEYS,
     H_PER_POINT_FLOOR_SECONDS,
     NEVER_TAUGHT_TRAINING_RECORD,
+    NOISED_RECORD_GLOB,
     SIGMA_ZERO_RECORD,
     choose_n_seeds,
     noise_floor,
+    sigma_zero_verdict,
 )
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -96,6 +108,58 @@ PREFIX = "phase23"
 SEED_LADDER = (1337, 2024, 1338, 2025, 1339)
 
 SCORING_TIER_LABELS = ("taught ON", "held-out ON", "taught OFF", "held-out OFF")
+
+# =================================================================================================
+# THE σ=0 DIAGNOSTIC'S PARAMETERS (DPSGD-06 / D-04). σ and C are Phase-23 RESOURCE parameters and
+# Phase 22 deliberately names neither anywhere in its tree, so they are named HERE, with their
+# reasons, at the driver that runs them.
+# =================================================================================================
+
+SIGMA_ZERO_ARM = "dp_n8"
+
+# `arm_outputs(arm, prefix=)` renders `{prefix}_{arm}`, so this yields
+# `results/phase23_sigma0_dp_n8/run.csv` and `checkpoints/phase23_sigma0_dp_n8_adapter.pt`. The
+# `phase23_` head is load-bearing: `scripts/phase23_prereg.py`'s module docstring records that
+# anything outside that prefix falls outside the Phase-23 ancestry guards ENTIRELY.
+SIGMA_ZERO_PREFIX = "phase23_sigma0"
+
+# σ IS EXACTLY ZERO. Not "small" — the noise term is the identity and the mechanism runs through
+# the SAME code path (`dpsgd.py`: no branch skips the draw at σ=0, and torch.normal(std=0.0)
+# returns exact zeros while still advancing the generator, watched GREEN on MPS in 23-01).
+SIGMA_ZERO_SIGMA = 0.0
+
+# C, THE CLIP BOUND — chosen to be NON-BINDING, and the choice is checked rather than trusted.
+#
+# WHY IT MUST NOT BIND. At σ=0 the only thing C can still do is clip. A σ=0 arm whose clip BOUND
+# differs from the control by clipping, not by the DP arithmetic — and D-04's verdict would then be
+# reading a confounded quantity. `dpsgd.DPSGD` refuses `math.inf` outright (its own measurement:
+# `0.0 * math.inf` is `nan` and `torch.normal(std=nan)` raises), so "C = infinity" is represented as
+# a FINITE BOUND PROVEN NOT TO BIND — the seam's own words — and `_clip_bind_count == 0` is the
+# OBSERVATION that makes "proven" literal. This driver asserts that count is zero BEFORE any utility
+# reading is produced.
+#
+# WHY 1e6 SPECIFICALLY. It is this repository's established non-binding bound, already spelled
+# `_NON_BINDING_CLIP = 1e6` in `tests/test_phase22_checkpoint.py:97` and
+# `tests/test_phase22_fakes.py:93` and consumed by 23-04's CAL-03 wiring record. Reusing it means
+# the σ=0 arm's C is the value the seam's own identity tests were watched non-binding at, rather
+# than a number chosen here for this run.
+SIGMA_ZERO_CLIP_NORM = 1e6
+
+# 23-07's RECORDED dp_n8 corpus digests (`23-07-SUMMARY.md`, "identical across four independent
+# builds"). The keys are absolute paths so the refusal is independent of the caller's cwd, and this
+# mapping is passed WHOLE to `prove_bins_match` — its keys ARE the paths, which is why that guard
+# takes one parameter and not two.
+DP_N8_BIN_SHA256 = {
+    str(_ROOT / "data" / "persona_dp_n8_train.bin"): (
+        "e14517954f56fa2d3ff55b63096a86dec08535e62ea7d3f77903afb4a3e80735"
+    ),
+    str(_ROOT / "data" / "persona_dp_n8_train_mask.bin"): (
+        "732223f3844299f3c4eadff7b05f9a2ba077c48e6792880d89fc6929abd74045"
+    ),
+    str(_ROOT / "data" / "persona_dp_n8_train_fact.bin"): (
+        "34d04ac76adf0ed802d3305eb77cb47270311f8f93aee89581f89e33c3f6f2c2"
+    ),
+}
 
 
 def _prove(condition, message):
@@ -626,17 +690,18 @@ def train_never_taught(seed):
     }
 
 
-def score_control(seed):
-    """Score ONE control arm (adapter ON and OFF) and return every reading with its denominator."""
+def score_adapter(arm, adapter, *, seed):
+    """Score ONE exported adapter (ON and OFF) and return every reading with its denominator.
+
+    **ONE scoring function, two callers, and that is the whole point.** The σ=0 diagnostic is a
+    COMPARISON against the control, so a σ=0 reading produced by a second scoring path would not be
+    comparable to the control's however carefully the second path was written. `tp.score_arm` is
+    called at the identical shape for both — same `fs.LOCKED_FACTS`, same
+    `calibration_items(facts, fs.TAUGHT_FAMILY_IDS)` question set, same per-question seeds, adapter
+    ON then OFF in ONE process on ONE set of weights.
+    """
     import phase14_recall as pr  # LAZY — teach_persona's own register for this pair
 
-    arm = control_arm(seed)
-    adapter = tp.arm_outputs(arm, prefix=PREFIX)["adapter"]
-    _prove(
-        adapter.exists(),
-        f"{adapter} is MISSING — control seed {seed} has not been trained. Run "
-        "`python scripts/phase23_run.py cost` (seed 1) and `... schedule` (the rest) first",
-    )
     box = {}
     with synchronized_seconds(box):
         scored = tp.score_arm(arm, fs.LOCKED_FACTS, adapter, device())
@@ -670,8 +735,267 @@ def score_control(seed):
     }
 
 
+def score_control(seed):
+    """Score ONE control arm — :func:`score_adapter` at the control's arm name and adapter."""
+    arm = control_arm(seed)
+    adapter = tp.arm_outputs(arm, prefix=PREFIX)["adapter"]
+    _prove(
+        adapter.exists(),
+        f"{adapter} is MISSING — control seed {seed} has not been trained. Run "
+        "`python scripts/phase23_run.py cost` (seed 1) and `... schedule` (the rest) first",
+    )
+    return score_adapter(arm, adapter, seed=seed)
+
+
 # =================================================================================================
-# ===== (e) THE SUB-MODES =====
+# ===== (e) THE σ=0 TRAINING LEG, AND THE SEAM COUNTERS IT HAS TO CAPTURE =====
+# =================================================================================================
+
+
+def _count_composed_steps(dp):
+    """Count the optimizer steps a seam ACTUALLY composed, by shadowing ``finalize``.
+
+    ``tests/test_phase22_checkpoint.py:387``'s helper, RESTATED here rather than imported: a
+    production driver importing from ``tests/`` would make running this phase depend on the test
+    tree being importable, and ``tests/`` is not a package. The contract is four lines long —
+    append to a list on every ``finalize`` — and it is asserted against ``max_steps`` at the call
+    site, so a drifted copy cannot pass silently.
+
+    WHY THE COUNT AND NOT ``ckpt["step"]``, measured in that file: with ``start_step`` mutated to 0
+    a resumed run composes MORE steps than its checkpoint records, and a T read off the field is
+    then identical across both arms AND optimistic. T is the mechanism's own count or it is not T.
+    """
+    calls = []
+    real = dp.finalize
+
+    def counting(accum):
+        calls.append(accum)
+        return real(accum)
+
+    dp.finalize = counting  # per-INSTANCE shadow; the class method is untouched.
+    return calls
+
+
+@contextlib.contextmanager
+def captured_dp_seam():
+    """Hand back the ``DPSGD`` instance ``train_arm`` CONSTRUCTS, with ``finalize`` shadowed.
+
+    ``train_arm`` builds the seam internally and returns paths and losses, not the seam — but
+    ``_clip_bind_count`` and ``_records`` live ON the seam and this plan's whole diagnostic turns on
+    reading them. ``tests/test_phase23_resume.py::_install_dp_probe`` solves the same problem the
+    same way: shadow at the CONSTRUCTOR, because that is the only place the driver's instance is
+    reachable from outside.
+
+    The real class is captured at entry and restored in ``finally``, and a SECOND construction
+    inside one bracket is REFUSED — two seams would mean two noise streams and the counters read
+    afterwards would describe whichever one happened to be last.
+    """
+    box = {"seam": None, "composed": None}
+    real = tp.DPSGD
+
+    def factory(model, **kwargs):
+        _prove(
+            box["seam"] is None,
+            "a SECOND DPSGD was constructed inside one captured bracket. The counters read after "
+            "this run would describe whichever seam was constructed last, while the reading beside "
+            "them described a composition spread across two",
+        )
+        seam = real(model, **kwargs)
+        box["seam"] = seam
+        box["composed"] = _count_composed_steps(seam)
+        return seam
+
+    tp.DPSGD = factory
+    try:
+        yield box
+    finally:
+        tp.DPSGD = real
+
+
+def _prove_no_noised_record_exists():
+    """DPSGD-06 / T-23-53, asserted AT RUN TIME: no noised sweep point is tracked yet.
+
+    The committed ordering guard (`test_sigma_zero_precedes_every_noised_point`) proves this about
+    git history afterwards. This proves it at the moment it matters — before the σ=0 arm trains —
+    because "σ=0 is the DP arm's FIRST executed run" is a claim about what has RUN, and a run is
+    what this function is standing in front of.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", NOISED_RECORD_GLOB],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    _prove(
+        not tracked,
+        f"`git ls-files {NOISED_RECORD_GLOB}` already matches {tracked!r}. DPSGD-06 requires "
+        "σ=0 to be the DP arm's FIRST executed run: a noised sweep point that already exists "
+        "means this diagnostic would be read with sweep results in hand, which is the peek it "
+        "exists to forbid. Running it now would produce a number that cannot carry its own claim",
+    )
+    print(f"[phase23_run] git ls-files {NOISED_RECORD_GLOB}: EMPTY — σ=0 runs first")
+    return tracked
+
+
+def train_sigma_zero(seed):
+    """Train the σ=0 DP arm at the FULL production shape, and capture the seam's own counters.
+
+    `MAX_STEPS` is UNMONKEYPATCHED — this is the run 23-07's SUMMARY names as the one that
+    exercises the full 200-step path for real, at the production `dp_n8` shape, on MPS (D-01).
+
+    23-07's resume seam is DRIVEN rather than described: a checkpoint on disk with no adapter beside
+    it is a killed run, and this resumes it from its OWN `latest.pt` instead of restarting 200
+    steps. The bins are then NOT deleted (a resume requires them present and `build_arm_bins`
+    re-proves them byte-identical); on a fresh run they are deleted, rebuilt and proved.
+
+    The wall clock is bracketed by :func:`synchronized_seconds`, whose `torch.mps.synchronize()`
+    at both boundaries is not optional here: training has NO per-step host sync on MPS, so an
+    unsynchronized bracket would time submission rather than completed work.
+    """
+    arm = SIGMA_ZERO_ARM
+    paths = tp.arm_outputs(arm, prefix=SIGMA_ZERO_PREFIX)
+    facts, second_person, replay_ratio = tp.arm_spec(arm)
+    _prove(
+        replay_ratio == 0.0,
+        f"arm_spec({arm!r}) returns replay_ratio {replay_ratio!r}, not 0.0. Under D-10 replay "
+        "LEAVES the teaching bin on a DP arm and is drawn at train time; a non-zero ratio here "
+        "would bake ~30 replay windows in beside 33 fact windows and falsify grad_accum_steps = "
+        "n_facts by ~7.9x",
+    )
+
+    resume_from, resumed_from_step = None, 0
+    if paths["checkpoint"].exists() and not paths["adapter"].exists():
+        resume_from = paths["checkpoint"]
+        resumed_from_step = int(tp.torch.load(resume_from, weights_only=False)["step"])
+        print(
+            f"[phase23_run] sigma-zero: RESUMING {arm} from {resume_from} at step "
+            f"{resumed_from_step} (23-07's seam). The timing leg below therefore covers "
+            f"{tp.MAX_STEPS - resumed_from_step} of {tp.MAX_STEPS} steps and says so in the record"
+        )
+        proved = prove_bins_match(DP_N8_BIN_SHA256)
+        print(f"[phase23_run] {arm}: {proved} bin(s) verified against 23-07's digests (resume)")
+    else:
+        # THE NAMED T-23-55 MITIGATION: delete, rebuild, and PROVE the rebuild is byte-identical to
+        # 23-07's recorded triple — so this arm and the resume probe provably trained on one corpus.
+        rebuild_arm_bins_verifying_sha256(
+            arm,
+            facts=facts,
+            family_ids=fs.TAUGHT_FAMILY_IDS,
+            seed=seed,
+            expected_sha256=DP_N8_BIN_SHA256,
+        )
+        # ...AND THEN DELETE THEM AGAIN. Measured, not anticipated: `train_arm`'s five-target
+        # `refuse_if_exists` treats a bin on disk as recorded evidence, so a fresh run REFUSES
+        # against the bins the helper just rebuilt. `train_arm` builds them itself from the SAME
+        # deterministic `(facts, family_ids, second_person, replay_ratio, seed)`, and the
+        # `prove_bins_match` after the run below binds the proof to the bins it ACTUALLY trained on
+        # rather than to a rehearsal that was thrown away.
+        for path in sorted(DP_N8_BIN_SHA256):
+            pathlib.Path(path).unlink()
+
+    box = {}
+    with captured_dp_seam() as seam_box:
+        with synchronized_seconds(box):
+            record = tp.train_arm(
+                arm,
+                facts=facts,
+                family_ids=fs.TAUGHT_FAMILY_IDS,
+                second_person=second_person,
+                replay_ratio=replay_ratio,
+                seed=seed,
+                prefix=SIGMA_ZERO_PREFIX,
+                dp_sigma=SIGMA_ZERO_SIGMA,
+                dp_clip_norm=SIGMA_ZERO_CLIP_NORM,
+                resume_from=resume_from,
+            )
+    # THE BINS THIS RUN ACTUALLY TRAINED ON, proved against 23-07's digests. Nothing writes a
+    # teaching bin during training, so proving them here proves what the 200 steps consumed.
+    proved = prove_bins_match(DP_N8_BIN_SHA256)
+    print(f"[phase23_run] {arm}: trained on {proved} bin(s) matching 23-07's recorded digests")
+
+    seam, composed = seam_box["seam"], seam_box["composed"]
+    _prove(
+        seam is not None,
+        f"no DPSGD was constructed during the {arm!r} run. The seam is gated on "
+        f"`arm in DP_ARMS` and a run that constructed none is not a DP run at all — every counter "
+        "this diagnostic reads would be missing rather than zero",
+    )
+
+    # ===== C IS PROVEN NON-BINDING **BEFORE** ANY UTILITY READING EXISTS =====
+    # The ordering is the content of the claim, not a code-layout preference: a check run after the
+    # scoring pass would be a check run with the reading already on screen.
+    _prove(
+        seam._clip_bind_count == 0,
+        f"the σ=0 arm's clip BOUND on {seam._clip_bind_count} record(s) at C = "
+        f"{SIGMA_ZERO_CLIP_NORM!r}. At σ=0 the only thing C can do is clip, so a binding C makes "
+        "this arm differ from the control by CLIPPING rather than by the DP arithmetic and the "
+        "diagnostic is confounded. Re-run at a larger C and record BOTH attempts, in order: the "
+        "attempts are a property of the MECHANISM checked before any utility reading exists, which "
+        "is what separates this from tuning a constant after seeing a number",
+    )
+    print(
+        f"[phase23_run] {arm}: clip_bind_count = {seam._clip_bind_count} at C = "
+        f"{SIGMA_ZERO_CLIP_NORM!r} — C is PROVEN non-binding, before any reading exists"
+    )
+
+    stats = record["stats"]
+    replay_windows = tp.replay_window_budget(stats["n_facts"]) // tp.BLOCK_SIZE
+    timed = tp.MAX_STEPS - resumed_from_step
+    _prove(
+        len(composed) == timed,
+        f"the seam composed {len(composed)} optimizer step(s) but the timed leg covers {timed} "
+        f"(MAX_STEPS {tp.MAX_STEPS} - resumed_from_step {resumed_from_step}). T is COUNTED off "
+        "real `DPSGD.finalize` invocations and a disagreement with the loop's own step budget "
+        "means one of the two is describing a run that did not happen",
+    )
+    adapter = record["paths"]["adapter"]
+    return {
+        "seed": seed,
+        "arm": arm,
+        "arm_run_prefix": SIGMA_ZERO_PREFIX,
+        "sigma": SIGMA_ZERO_SIGMA,
+        "clip_norm": SIGMA_ZERO_CLIP_NORM,
+        # THE THREE SEAM COUNTERS. `_clip_bind_count` is RUN-LIFETIME (`begin_step` deliberately
+        # does not reset it), so it reports whether C bound AT ALL across the whole run; `_records`
+        # is per-step and is therefore the LAST lot's size, which must equal the configured accum.
+        "clip_bind_count": seam._clip_bind_count,
+        # A resumed run's seam is FRESH, so its run-lifetime counter covers the resumed leg only.
+        # Recorded rather than glossed: on an uninterrupted run this equals `max_steps`.
+        "clip_bind_count_covers_steps": timed,
+        "records_per_lot": seam._records,
+        "composed_steps": len(composed),
+        "composed_lot_sizes": sorted(set(composed)),
+        "t_source": "_count_composed_steps",
+        # CAL-01's denominators, every one of them.
+        "capacity_n_facts": stats["n_facts"],
+        "grad_accum_steps": stats["n_facts"],
+        "replay_windows_per_step": replay_windows,
+        "replay_micro_batches_per_step": math.ceil(replay_windows / tp.BATCH_SIZE),
+        "max_steps": tp.MAX_STEPS,
+        "batch_size": tp.BATCH_SIZE,
+        "block_size": tp.BLOCK_SIZE,
+        "seconds_total": box["seconds"],
+        "seconds_per_optimizer_step": box["seconds"] / timed,
+        "warmup_iterations_discarded": 0,
+        "timed_iterations": timed,
+        "resumed_from_step": resumed_from_step,
+        "timing_is_uninterrupted": resume_from is None,
+        "dp_seam_active": True,
+        "final_train_loss": record["final_train_loss"],
+        "ppl_adapter_on": record["ppl_adapter_on"],
+        "ppl_adapter_off": record["ppl_adapter_off"],
+        "ppl_scored_targets": record["scored_targets"],
+        "adapter": _rel(adapter),
+        "adapter_sha256": _sha256(adapter),
+        "adapter_bytes": adapter.stat().st_size,
+        "csv": _rel(record["paths"]["csv"]),
+        "corpus_sha256": {_rel(path): digest for path, digest in DP_N8_BIN_SHA256.items()},
+    }
+
+
+# =================================================================================================
+# ===== (f) THE SUB-MODES =====
 # =================================================================================================
 
 
@@ -1069,23 +1393,270 @@ def floor():
     )
 
 
+def sigma_zero():
+    """23-10 — the DP arm's FIRST executed run, judged by the rule 23-03 committed BLIND.
+
+    THE DRIVER COMPARES NOTHING. ``phase23_prereg.sigma_zero_verdict`` is CALLED with the control's
+    readings, this arm's reading, the floor READ from ``mitigation_budget.CONTROL_NOISE_FLOOR`` and
+    that pin's provenance dict. The rule re-derives the floor from the readings it is handed and
+    REFUSES a floor that does not match, so a run-time recomputation cannot quietly replace the pin.
+    ``deviation`` below is REPORTED for the record; the DECISION is the rule's and only the rule's.
+
+    ON A ``SystemExit`` FROM THE RULE — D-04 firing — the record is still written, carrying
+    ``verdict: "HALT"`` and the raised message VERBATIM, and the sweep stops with zero noised
+    points. That branch does not re-run anything, does not adjust the floor and does not adjust C.
+    """
+    _preconditions()
+    _prove_no_noised_record_exists()
+    path = _ROOT / SIGMA_ZERO_RECORD
+    _prove(
+        not path.exists(),
+        f"{path} already exists — it is recorded evidence and there is no force flag",
+    )
+    control = json.loads((_ROOT / CONTROL_FLOOR_RECORD).read_text(encoding="utf-8"))
+
+    seed = SEED_LADDER[0]
+    _prove(
+        seed == control["central_reading_seed"],
+        f"the σ=0 arm is about to run at seed {seed} while the control's CENTRAL reading — the one "
+        f"`sigma_zero_verdict` pins as `control_readings[0]` — is seed "
+        f"{control['central_reading_seed']}. The diagnostic compares this arm against THAT "
+        "reading, so a different seed here would compare two different draws and call the "
+        "difference DP",
+    )
+    if not _already_trained("sigma_zero", seed):
+        print(f"[phase23_run] sigma-zero: training {SIGMA_ZERO_ARM} at sigma={SIGMA_ZERO_SIGMA!r}")
+        _state_record("sigma_zero", seed, train_sigma_zero(seed))
+    trained = _state_load()["sigma_zero"][str(seed)]
+    _prove(
+        trained["clip_bind_count"] == 0,
+        f"the recorded σ=0 run bound its clip on {trained['clip_bind_count']} record(s) — the "
+        "diagnostic is confounded by clipping rather than by the DP arithmetic",
+    )
+
+    if "primary" not in trained:
+        print(f"[phase23_run] sigma-zero: scoring {trained['adapter']}")
+        trained = _state_record(
+            "sigma_zero",
+            seed,
+            score_adapter(SIGMA_ZERO_ARM, _ROOT / trained["adapter"], seed=seed),
+        )["sigma_zero"][str(seed)]
+
+    reading = trained["primary"]["rate"]
+    floor_value = mitigation_budget.CONTROL_NOISE_FLOOR
+    floor_provenance = mitigation_budget.CONTROL_NOISE_FLOOR_PROVENANCE
+    control_readings = control["readings"]
+    central = control_readings[0]
+
+    halt_message = None
+    try:
+        verdict = sigma_zero_verdict(
+            control_readings=control_readings,
+            sigma_zero_reading=reading,
+            floor=floor_value,
+            floor_provenance=floor_provenance,
+        )
+    except SystemExit as halt:
+        # D-04 FIRING. Not caught to soften it — caught so the record that names the halt gets
+        # written and committed. There is no retry, no widened band and no override flag.
+        verdict, halt_message = "HALT", str(halt)
+
+    training = {
+        # `mitigation_gate` is not consulted here: the σ=0 arm is a SWEEP arm, not the never-taught
+        # arm the frozen gate names, so its `arm` field is the production arm name it actually ran.
+        "arm": trained["arm"],
+        "arm_run_prefix": trained["arm_run_prefix"],
+        "capacity_n_facts": trained["capacity_n_facts"],
+        "grad_accum_steps": trained["grad_accum_steps"],
+        "replay_micro_batches_per_step": trained["replay_micro_batches_per_step"],
+        "replay_windows_per_step": trained["replay_windows_per_step"],
+        "max_steps": trained["max_steps"],
+        "batch_size": trained["batch_size"],
+        "block_size": trained["block_size"],
+        "seconds_total": trained["seconds_total"],
+        "seconds_per_optimizer_step": trained["seconds_per_optimizer_step"],
+        "warmup_iterations_discarded": trained["warmup_iterations_discarded"],
+        "timed_iterations": trained["timed_iterations"],
+        "timing_is_uninterrupted": trained["timing_is_uninterrupted"],
+        "resumed_from_step": trained["resumed_from_step"],
+        # WHAT THE BRACKET COVERS, stated because the figure is unreadable without it: the whole
+        # `train_arm` call — `build_arm_bins`, the base-checkpoint load, the 200-step loop with its
+        # 20 in-loop evals and 4 checkpoint writes, the replay pass's memmap I/O, and BOTH
+        # end-of-run `masked_perplexity` sweeps. The 23-RESEARCH projection of 3.79 min excludes
+        # every one of those and is a LOWER BOUND on this quantity, not a prediction of it.
+        "bracket_covers": "the whole train_arm call: build_arm_bins + base load + the "
+        "max_steps-step loop (in-loop evals, checkpoint writes, replay memmap I/O) + both "
+        "end-of-run masked_perplexity sweeps",
+        "seed": trained["seed"],
+        "dp_seam_active": True,
+        "final_train_loss": trained["final_train_loss"],
+        "adapter": trained["adapter"],
+        "adapter_sha256": trained["adapter_sha256"],
+        "adapter_bytes": trained["adapter_bytes"],
+        "csv": trained["csv"],
+        **provenance(),
+    }
+    # REFUSED, never defaulted — CAL-01's rule, applied to this plan's own training measurement.
+    phase23_cost.validate_record(training, kind="training")
+
+    record = {
+        "record": SIGMA_ZERO_RECORD,
+        "sigma": trained["sigma"],
+        "clip_norm": trained["clip_norm"],
+        "clip_bind_count": trained["clip_bind_count"],
+        "clip_bind_count_covers_steps": trained["clip_bind_count_covers_steps"],
+        "clip_is_non_binding": trained["clip_bind_count"] == 0,
+        "clip_checked_before_scoring": True,
+        "records_per_lot": trained["records_per_lot"],
+        "composed_steps": trained["composed_steps"],
+        "composed_lot_sizes": trained["composed_lot_sizes"],
+        # T IS THE MECHANISM'S OWN COUNT, off real `DPSGD.finalize` invocations — never `ckpt`'s
+        # `step` field, which a `start_step` defect leaves correct-looking AND optimistic.
+        "t_source": trained["t_source"],
+        # ===== THE READINGS. The primary carries the QUESTION denominator `governs` names; every
+        # secondary carries its OWN denominator and is NOT reduced. Schema field for field with
+        # `results/phase23_control_floor.json`'s per-seed entries, because the whole diagnostic is a
+        # comparison and a differently-shaped record is a differently-produced number. =====
+        "primary_reading": "taught recall rate, adapter ON, over QUESTIONS",
+        "reading": reading,
+        "primary": trained["primary"],
+        "heldout_on": trained["heldout_on"],
+        "taught_off": trained["taught_off"],
+        "heldout_off": trained["heldout_off"],
+        "per_family_gain": trained["per_family_gain"],
+        "heldout_family_std": trained["heldout_family_std"],
+        "questions_taught": trained["primary"]["questions"],
+        "questions_heldout": trained["heldout_on"]["questions"],
+        "draws_per_question": trained["primary"]["draws_per_question"],
+        "draws_this_leg": trained["draws_this_leg"],
+        "scoring_seconds": trained["scoring_seconds"],
+        "ppl_adapter_on": trained["ppl_adapter_on"],
+        "ppl_adapter_off": trained["ppl_adapter_off"],
+        "ppl_scored_targets": trained["ppl_scored_targets"],
+        # ===== THE VERDICT, AND EVERYTHING IT WAS TAKEN AGAINST =====
+        "verdict": verdict,
+        "verdict_rule": "phase23_prereg.sigma_zero_verdict",
+        "halt_message": halt_message,
+        # REPORTED, not decided: `sigma_zero_verdict` owns the comparison and this driver runs none.
+        "deviation": abs(reading - central),
+        "floor": floor_value,
+        "floor_provenance": dict(floor_provenance),
+        "floor_pin_module": "scripts/mitigation_budget.py",
+        "floor_pin_symbol": "CONTROL_NOISE_FLOOR",
+        "floor_provenance_symbol": "CONTROL_NOISE_FLOOR_PROVENANCE",
+        "control_record": CONTROL_FLOOR_RECORD,
+        "control_readings": control_readings,
+        "control_central_reading": central,
+        "control_central_reading_seed": control["central_reading_seed"],
+        "control_seeds": control["seeds"],
+        "training": training,
+        "recipe": {
+            "arm": SIGMA_ZERO_ARM,
+            "prefix": SIGMA_ZERO_PREFIX,
+            "facts": "phase14_factset.LOCKED_FACTS",
+            "n_facts": len(fs.LOCKED_FACTS),
+            "family_ids": sorted(fs.TAUGHT_FAMILY_IDS),
+            "second_person": False,
+            "replay_ratio_in_bin": 0.0,
+            "corpus": sorted(trained["corpus_sha256"]),
+            "corpus_sha256": trained["corpus_sha256"],
+            "corpus_digest_source": "23-07-SUMMARY.md — the dp_n8 triple the resume probe recorded",
+            "budget_constants": {
+                "teach_persona.LR": tp.LR,
+                "teach_persona.WARMUP_STEPS": tp.WARMUP_STEPS,
+                "teach_persona.MAX_STEPS": tp.MAX_STEPS,
+                "teach_persona.BATCH_SIZE": tp.BATCH_SIZE,
+                "teach_persona.WEIGHT_DECAY": tp.WEIGHT_DECAY,
+                "teach_persona.BLOCK_SIZE": tp.BLOCK_SIZE,
+            },
+            "lora_config": asdict(tp.LORA_CFG),
+            "base_checkpoint": _rel(tp.CONVBASE_BEST),
+            "adapter": trained["adapter"],
+            "adapter_sha256": trained["adapter_sha256"],
+        },
+        # DISCLOSURE, not hedging. On a `proceed` this is the statement that the comparison had
+        # KNOWN structural residuals; on a HALT it is the first place the root-cause hunt looks.
+        "residual_differences": residual_differences(),
+        "governs": (
+            "WHETHER ANY NOISED SWEEP POINT MAY RUN AT ALL. `proceed` unblocks the first noised "
+            "run of the milestone; `HALT` blocks every noised point until the cause is root-caused "
+            "and fixed, and there is no warning branch and no override flag (D-04). The quantity "
+            "judged is the TAUGHT RECALL RATE WITH THE ADAPTER ON (primary.k / primary.n, a count "
+            "over QUESTIONS) — the same quantity `results/phase23_control_floor.json` declares its "
+            "floor governs, and nothing else."
+        ),
+        "seed": seed,
+        **provenance(),
+    }
+    missing = [
+        key
+        for key in (
+            "git_sha",
+            "device",
+            "torch_version",
+            "python_version",
+            "seed",
+            "timestamp",
+            "verdict",
+            "deviation",
+            "floor",
+            "floor_provenance",
+            "clip_bind_count",
+            "recipe",
+        )
+        if key not in record
+    ]
+    _prove(
+        not missing,
+        f"the σ=0 record is MISSING {missing!r}. A record missing a provenance key is REFUSED and "
+        "never defaulted: an unlabelled number is indistinguishable from a borrowed one, and this "
+        "one decides whether the whole sweep runs",
+    )
+    path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+
+    block = trained["primary"]
+    print(
+        f"[phase23_run] σ=0 primary reading: {block['k']}/{block['n']} = {reading!r} over "
+        f"{block['questions']} questions x {block['draws_per_question']} draws"
+    )
+    print(
+        f"[phase23_run] control central: {central!r} (seed "
+        f"{control['central_reading_seed']}) | deviation {record['deviation']!r} | floor "
+        f"{floor_value!r} ({SIGMA_ZERO_PREFIX})"
+    )
+    print(f"[phase23_run] wrote {SIGMA_ZERO_RECORD}: verdict {verdict!r}")
+    if halt_message is not None:
+        print(halt_message)
+        raise SystemExit(
+            "[phase23_run] D-04 HALT recorded at "
+            f"{SIGMA_ZERO_RECORD}. The sweep is halted with ZERO noised points. Commit the record, "
+            "root-cause the difference — start at the control record's `residual_differences` — "
+            "and do not re-run this arm to get a different number."
+        )
+
+
 _TABLE = {
     "cost": cost,
     "schedule": schedule,
     "floor": floor,
+    "sigma-zero": sigma_zero,
 }
 
 USAGE = (
     f"usage: python scripts/phase23_run.py {{{'|'.join(_TABLE)}}}\n"
     "\n"
-    "  cost      train + score control seed 1, cost the SCORING leg, apply the BLIND seed rule\n"
-    "            `phase23_prereg.choose_n_seeds` -> N. Must run FIRST: N is a function of a\n"
-    "            measured scoring cost and there is no default N anywhere.\n"
-    "  schedule  ONE invocation — the remaining control arms AND every never-taught arm, at the\n"
-    "            same seed list. Writes results/phase23_never_taught_training.json. Scores\n"
-    "            nothing: the never-taught scoring budget is a function of 23-13's K.\n"
-    "  floor     score the remaining control arms and reduce the floor through\n"
-    "            `phase23_prereg.noise_floor`. Writes results/phase23_control_floor.json.\n"
+    "  cost        train + score control seed 1, cost the SCORING leg, apply the BLIND seed rule\n"
+    "              `phase23_prereg.choose_n_seeds` -> N. Must run FIRST: N is a function of a\n"
+    "              measured scoring cost and there is no default N anywhere.\n"
+    "  schedule    ONE invocation — the remaining control arms AND every never-taught arm, at the\n"
+    "              same seed list. Writes results/phase23_never_taught_training.json. Scores\n"
+    "              nothing: the never-taught scoring budget is a function of 23-13's K.\n"
+    "  floor       score the remaining control arms and reduce the floor through\n"
+    "              `phase23_prereg.noise_floor`. Writes results/phase23_control_floor.json.\n"
+    "  sigma-zero  the DP arm's FIRST executed run, at sigma = 0 and the full production shape,\n"
+    "              judged by `phase23_prereg.sigma_zero_verdict` against the floor pinned in\n"
+    "              `mitigation_budget.CONTROL_NOISE_FLOOR`. Writes\n"
+    "              results/phase23_sigma_zero.json. A breach HALTS the sweep — no override flag.\n"
 )
 
 
