@@ -61,6 +61,12 @@ if _SCRIPTS not in sys.path:
 # of process at all — `torch` is already loaded here from sibling tests.)
 import mitigation_budget  # noqa: E402  (needs the sys.path insert above)
 import mitigation_gate  # noqa: E402  (needs the sys.path insert above)
+
+# The matched comparator's PATH REGISTER, imported so no test in this file holds the record path as
+# a string literal. This repository has shipped plans naming paths the code refuses, so every
+# Phase-23 artifact path resolves from the module that declares it. Importing it HERE is free: the
+# zero-headroom ceiling is a property of `scripts/mitigation_*.py`, not of this test file.
+import phase23_matched_prereg  # noqa: E402  (needs the sys.path insert above)
 import phase23_prereg  # noqa: E402  (needs the sys.path insert above)
 
 # `tests/` is not a package either, so this is the same register as
@@ -268,6 +274,33 @@ def _control_readings(record):
     already performed by the writer. Both are asserted equal in
     ``test_budget_constants_re_derive``, and the reduction is driven from the counts — so a record
     whose stored rate drifted from its own counts is caught rather than trusted.
+    """
+    return [entry["primary"]["k"] / entry["primary"]["n"] for entry in record["per_seed"]]
+
+
+def _matched_record():
+    """The committed PROTOCOL-MATCHED comparator record, parsed. `_control_record`'s sibling.
+
+    The path resolves from ``phase23_matched_prereg.MATCHED_CONTROL_RECORD`` — the pin that
+    declares it — rather than from a string literal here, exactly as ``_control_record`` resolves
+    from ``phase23_prereg.CONTROL_FLOOR_RECORD``.
+    """
+    path = _ROOT / phase23_matched_prereg.MATCHED_CONTROL_RECORD
+    return path, json.loads(path.read_text(encoding="utf-8"))
+
+
+def _matched_readings(record):
+    """The five matched per-seed primary readings, RECOMPUTED FROM THEIR COUNTS, not read as rates.
+
+    ``_control_readings``'s sibling, and the same reason for existing: ``k / n`` is the raw evidence
+    with its denominator attached, ``primary.rate`` is that division already performed by the
+    writer, and driving the reduction from the counts is what catches a stored rate that drifted
+    from its own evidence.
+
+    The order is the record's own ``per_seed`` order, which is LADDER order
+    ``(1337, 2024, 1338, 2025, 1339)`` and NOT sorted order. The reduction is a range and is
+    order-insensitive, but ``control_readings[0]`` — the central-reading rule pinned at ``c7de5d4``
+    — is not, so this list is never sorted.
     """
     return [entry["primary"]["k"] / entry["primary"]["n"] for entry in record["per_seed"]]
 
@@ -507,6 +540,14 @@ def test_the_import_ceiling_still_has_zero_headroom():
     The allow-set is restated as a literal here, and that restatement is safe for a reason worth
     naming: if the committed guard's allow-set ever widens, THIS equality goes red and names the
     new union. Divergence between the two sets is loud, not silent.
+
+    RE-MEASURED 2026-08-27 (plan 23-18), and the assertion below is UNCHANGED. 23-18 added TWO
+    constants to `scripts/mitigation_budget.py` — `MATCHED_CONTROL_NOISE_FLOOR` and its provenance
+    sibling — and ZERO imports, because the new pin is literal assignments and comments only. The
+    measured union is still exactly `{erasure_gate, pathlib, sys}`, so the ceiling still has zero
+    headroom after the first phase to write to this module since 23-09 created it. That is the
+    point of asserting equality rather than subset: a purely additive edit that DID sneak an import
+    in would be caught here even though the subset guard's allow-set never moved.
     """
     assert _MITIGATION_BUDGET_PATH in _GATE_MODULES and len(_GATE_MODULES) >= 4, (
         f"the register is {[p.name for p in _GATE_MODULES]} — the union below would be measured "
@@ -587,4 +628,323 @@ def test_a_hand_edited_floor_is_detected(tmp_path):
     assert "re-derives" in str(halt.value), (
         f"the nudged floor was refused, but not by the re-derivation check — the halt says "
         f"{str(halt.value)!r}. A refusal for some other reason would leave the ULP case unproven"
+    )
+
+
+# =================================================================================================
+# ===== PLAN 23-18: THE PROTOCOL-MATCHED FLOOR, PINNED BESIDE THE ORIGINAL =====
+#
+# The original above is NOT edited and NOT deleted. It correctly measures the OLD control protocol
+# and still re-derives from its own record on every run; what changed is its SCOPE. So the three
+# properties `scripts/phase19_floor.py` carries are applied a SECOND time, to the matched pin, and
+# two further guards protect the ORIGINAL from the act of adding one beside it.
+# =================================================================================================
+
+
+def test_matched_floor_re_derives():
+    """The MATCHED floor RE-DERIVES from its artifact, through the BLIND rule, under exact `==`.
+
+    `test_budget_constants_re_derive`'s sibling, in the same order, for the same reason: this is
+    the property that lets a measured number live outside the closed pre-registration at all.
+
+    **THE REDUCTION IS NEVER READ BACK OUT OF THE ARTIFACT AS A PRE-REDUCED SCALAR.** The floor is
+    recomputed by CALLING `phase23_prereg.noise_floor` — the function committed BLIND in 23-03 at
+    `c7de5d4` and byte-unchanged since — on the record's own per-seed counts. The record's own
+    `floor` field is cross-checked against that recomputation LAST, as evidence that 23-17's writer
+    called the blind rule too, and never as the source of the pin.
+    """
+    _path, record = _matched_record()
+    readings = _matched_readings(record)
+
+    for entry, reading in zip(record["per_seed"], readings, strict=True):
+        assert reading == entry["primary"]["rate"], (
+            f"matched seed {entry['seed']} records rate {entry['primary']['rate']!r} but its own "
+            f"counts {entry['primary']['k']}/{entry['primary']['n']} divide to {reading!r}. The "
+            "stored rate has drifted from the evidence it summarises"
+        )
+
+    re_derived = phase23_prereg.noise_floor(readings)
+    assert mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR == re_derived, (
+        f"{_MITIGATION_BUDGET_REL} pins MATCHED_CONTROL_NOISE_FLOOR = "
+        f"{mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR!r}, but phase23_prereg.noise_floor on the "
+        f"{len(readings)} per-seed counts committed in "
+        f"{phase23_matched_prereg.MATCHED_CONTROL_RECORD} re-derives {re_derived!r}. Exact `==`, "
+        "so a hand-edited number cannot reach 23-19's verdict"
+    )
+    assert record["floor"] == re_derived, (
+        f"the matched record's own `floor` field is {record['floor']!r} but the blind reduction "
+        f"over its own per-seed counts returns {re_derived!r} — the writer did not call the pinned "
+        "rule"
+    )
+
+    # THE TWO FLOORS ARE DIFFERENT NUMBERS, and that is worth asserting rather than assuming. If a
+    # future edit ever made them equal, `MATCHED_CONTROL_NOISE_FLOOR = <repr>` would CONTAIN the
+    # original's needle as a substring and `test_a_hand_edited_floor_is_detected` would go red for
+    # a reason that has nothing to do with a hand edit. `test_the_original_needle_is_still_unique`
+    # is what actually catches that; this names the mechanism where a reader will meet it.
+    assert mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR != mitigation_budget.CONTROL_NOISE_FLOOR, (
+        "the matched and original floors are now the SAME float, so the matched assignment line "
+        "contains the original's needle as a substring. The sanctioned repair is to line-anchor "
+        "`test_a_hand_edited_floor_is_detected`'s needle (a tightening), NOT to rename the "
+        "constant, round the value or weaken the guard"
+    )
+
+
+def test_matched_floor_provenance_is_complete():
+    """The matched provenance carries everything `sigma_zero_verdict` REFUSES a floor for lacking.
+
+    23-19 passes this dict straight into `phase23_prereg.sigma_zero_verdict`, which refuses a floor
+    whose artifact, commit, device, seeds, reduction or scope is unstated. A missing key would
+    surface for the first time in 23-19, against a comparator that already cost two GPU sessions.
+
+    Every restated field is asserted against the record it was copied from: a restatement with no
+    test agreeing it is a copy waiting to drift.
+    """
+    path, record = _matched_record()
+    provenance = mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE
+
+    assert set(provenance) >= set(phase23_prereg.FLOOR_PROVENANCE_KEYS), (
+        f"the matched provenance is missing "
+        f"{sorted(set(phase23_prereg.FLOOR_PROVENANCE_KEYS) - set(provenance))} — 23-19 could not "
+        "reach a verdict with this dict"
+    )
+    for key in ("record", "record_sha256", "git_sha", "device", "torch_version", "governs"):
+        assert provenance[key] == record[key], (
+            f"the matched provenance records {key} = {provenance[key]!r} but "
+            f"{phase23_matched_prereg.MATCHED_CONTROL_RECORD} records {record[key]!r}"
+        )
+    assert provenance["seeds"] == tuple(record["seeds"]), (
+        f"the matched provenance names seeds {provenance['seeds']!r}, the record "
+        f"{record['seeds']!r}. Both must be LADDER order (1337, 2024, 1338, 2025, 1339) and never "
+        "sorted order — `control_readings[0]` indexes this ordering"
+    )
+    assert isinstance(provenance["seeds"], tuple), (
+        f"the matched provenance's `seeds` is a {type(provenance['seeds']).__name__}, not a tuple. "
+        "The original's is a tuple, this file holds literal constants, and a mutable default in a "
+        "pinned provenance is a value a consumer could edit in place"
+    )
+    assert provenance["record"] == phase23_matched_prereg.MATCHED_CONTROL_RECORD, (
+        f"the matched provenance names {provenance['record']!r} but the pin declares "
+        f"{phase23_matched_prereg.MATCHED_CONTROL_RECORD!r}"
+    )
+
+    # The INPUTS digest (the record's own field, asserted above) and the FILE digest are different
+    # things — the same distinction spelled out at the original constant. This is the one that pins
+    # the committed BYTES, and it is checked live.
+    assert provenance["record_file_sha256"] == hashlib.sha256(path.read_bytes()).hexdigest(), (
+        f"the matched provenance pins record_file_sha256 = {provenance['record_file_sha256']!r} "
+        f"but {phase23_matched_prereg.MATCHED_CONTROL_RECORD} hashes to "
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()!r} today — the artifact this floor was "
+        "derived from is not the artifact on disk"
+    )
+
+    # `reduction` names a SYMBOL, resolved rather than string-matched, so the pin cannot cite a
+    # rule other than the one that produced it.
+    assert provenance["reduction"] == "phase23_prereg.noise_floor", (
+        f"the matched provenance names reduction {provenance['reduction']!r}"
+    )
+    module_name, _, attribute = provenance["reduction"].partition(".")
+    assert module_name == phase23_prereg.__name__, (
+        f"the reduction names module {module_name!r}, not {phase23_prereg.__name__!r}"
+    )
+    assert getattr(phase23_prereg, attribute) is phase23_prereg.noise_floor, (
+        f"the reduction {provenance['reduction']!r} does not resolve to the function "
+        "`test_matched_floor_re_derives` re-derives the floor through"
+    )
+
+    # THE DISCLOSURE, carried as DATA rather than only as prose. This pin's ordering claim is
+    # strictly weaker than the original's — the σ=0 reading was already committed when the
+    # comparator's protocol was designed — and a consumer that reads only the dict has to be able
+    # to learn that.
+    assert provenance["sigma_zero_was_visible"] is True, (
+        "the matched provenance does not declare `sigma_zero_was_visible: True`. It WAS visible "
+        "(results/phase23_sigma_zero.json was committed before the matched protocol existed), and "
+        "a pin that omits the disclosure claims an ordering it does not have"
+    )
+    assert provenance["sigma_zero_was_visible"] is record["sigma_zero_was_visible"], (
+        "the matched provenance and its record disagree about σ=0 visibility"
+    )
+    assert provenance["protocol"] == "phase23_matched_prereg", (
+        f"the matched provenance names protocol {provenance['protocol']!r}, so a reader cannot "
+        "resolve which pin the comparator arm was run under"
+    )
+
+    # THROUGH THE CONSUMER THAT WILL ACTUALLY READ IT IN 23-19. The σ=0 reading passed here is
+    # SYNTHETIC — the matched arm's own central reading, so the deviation is exactly zero. This
+    # asserts NOTHING about the verdict 23-19 will reach; it proves only that the pinned floor and
+    # its provenance are ACCEPTED rather than refused, and that the three extra keys do not offend
+    # the frozen consumer.
+    readings = _matched_readings(record)
+    verdict = phase23_prereg.sigma_zero_verdict(
+        control_readings=readings,
+        sigma_zero_reading=readings[0],
+        floor=mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR,
+        floor_provenance=provenance,
+    )
+    assert verdict == "proceed", (
+        f"the matched floor and its provenance reached {verdict!r} against a zero deviation — "
+        "23-19 could not use this pin at all"
+    )
+
+
+def test_a_hand_edited_matched_floor_is_detected(tmp_path):
+    """WATCHED RED, PERMANENTLY: a ONE-ULP nudge to the MATCHED floor is observed being refused.
+
+    `test_a_hand_edited_floor_is_detected`'s sibling. A guard nobody has watched fail is not
+    evidence, and Phase 20 MEASURED this exact case defeating a float comparison at GATE-02, so it
+    is the concrete nudge rather than a hypothetical one. `math.nextafter` is called HERE, in the
+    test — never in the module, which holds literal assignments and has no import budget to call it
+    with.
+
+    THE NEEDLE IS LINE-ANCHORED FROM THE START, unlike the original's. A bare
+    `"MATCHED_CONTROL_NOISE_FLOOR = <repr>"` would be reachable by any longer identifier ending in
+    that name, which is exactly the substring trap the original's needle fell into the moment this
+    constant was added beside it. The leading newline makes it match only a line-initial assignment
+    — and it is carried into the REPLACEMENT too, or the edit would silently swallow a line break
+    and the scratch copy would stop being a faithful copy of the module.
+    """
+    _path, record = _matched_record()
+    readings = _matched_readings(record)
+    original = mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR
+    nudged = math.nextafter(original, math.inf)
+    assert nudged != original, "math.nextafter returned the same float — there is no nudge to make"
+
+    source = _MITIGATION_BUDGET_PATH.read_text(encoding="utf-8")
+    needle = f"\nMATCHED_CONTROL_NOISE_FLOOR = {original!r}"
+    assert source.count(needle) == 1, (
+        f"{_MITIGATION_BUDGET_REL} contains {source.count(needle)} occurrences of {needle!r}. The "
+        "edit below would land somewhere other than the pinned assignment, or nowhere at all"
+    )
+    copy = tmp_path / "mitigation_budget.py"
+    copy.write_text(
+        source.replace(needle, f"\nMATCHED_CONTROL_NOISE_FLOOR = {nudged!r}"), encoding="utf-8"
+    )
+
+    spec = importlib.util.spec_from_file_location("nudged_matched_budget", copy)
+    edited = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(edited)
+
+    # META-GUARD, before any verdict is read off it. A copy that failed to import, or one whose
+    # replacement missed, would fail every assertion below for a reason that has nothing to do with
+    # detection. The second half is what proves the newline was carried: had it been dropped, the
+    # ORIGINAL floor's assignment would have been welded onto the previous line and this module
+    # would either not parse or not carry it.
+    assert edited.MATCHED_CONTROL_NOISE_FLOOR == nudged, (
+        f"the scratch copy loaded with MATCHED_CONTROL_NOISE_FLOOR = "
+        f"{edited.MATCHED_CONTROL_NOISE_FLOOR!r}, not the nudged {nudged!r} — this test is not "
+        "observing what it claims to observe"
+    )
+    assert edited.CONTROL_NOISE_FLOOR == mitigation_budget.CONTROL_NOISE_FLOOR, (
+        "the scratch copy's ORIGINAL floor moved, so the line-anchored replacement did not leave "
+        "the rest of the module byte-identical"
+    )
+
+    re_derived = phase23_prereg.noise_floor(readings)
+    assert original == re_derived and edited.MATCHED_CONTROL_NOISE_FLOOR != re_derived, (
+        f"the committed matched floor {original!r} and the nudged one "
+        f"{edited.MATCHED_CONTROL_NOISE_FLOOR!r} both compare the same way against the re-derived "
+        f"{re_derived!r} — `test_matched_floor_re_derives` would stay GREEN against a hand-edited "
+        "number"
+    )
+
+    with pytest.raises(SystemExit) as halt:
+        phase23_prereg.sigma_zero_verdict(
+            control_readings=readings,
+            sigma_zero_reading=readings[0],
+            floor=edited.MATCHED_CONTROL_NOISE_FLOOR,
+            floor_provenance=edited.MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE,
+        )
+    assert "re-derives" in str(halt.value), (
+        f"the nudged matched floor was refused, but not by the re-derivation check — the halt says "
+        f"{str(halt.value)!r}. A refusal for some other reason would leave the ULP case unproven"
+    )
+
+
+def test_the_original_floor_is_left_standing_and_re_scoped():
+    """23-18 is an ADDITION, not a rewrite — the property `test_cost_claim_correction_is_additive`
+    is built around in 23-12, applied to this module.
+
+    The original floor is a CORRECT measurement of the OLD control protocol. It is not falsified by
+    the matched comparator; it is RE-SCOPED. Deleting it would destroy a true reading AND break
+    `test_budget_constants_re_derive`, which still recomputes it from
+    `results/phase23_control_floor.json` on every run.
+
+    So three things are asserted: the value is unmoved, the dated marker naming what re-scoped it is
+    present, and two DISTINCTIVE SENTENCES of the ORIGINAL comment block survive BYTE-IDENTICALLY.
+    The third is what stops a "continuation" quietly becoming a rewrite — a diff that deleted the
+    original's reasoning and re-typed it in the new register would pass the first two.
+    """
+    assert mitigation_budget.CONTROL_NOISE_FLOOR == 0.05357142857142849, (
+        f"the original floor is now {mitigation_budget.CONTROL_NOISE_FLOOR!r}. It measures the OLD "
+        "control protocol correctly and 23-18 re-scopes it WITHOUT editing it; the matched floor "
+        "lands BESIDE it as `MATCHED_CONTROL_NOISE_FLOOR`"
+    )
+
+    source = _MITIGATION_BUDGET_PATH.read_text(encoding="utf-8")
+    marker = "RE-SCOPED IN PLACE 2026-08-27 (plan 23-18)."
+    assert marker in source, (
+        f"{_MITIGATION_BUDGET_REL} no longer carries {marker!r}. The original constant is still "
+        "there, but nothing beside it now says WHICH protocol it governs — and a reader meeting "
+        "two floors with no continuation cannot tell which one 23-19 consumes"
+    )
+
+    # Byte-identical substrings of the PRE-23-18 comment block. Chosen because neither phrase is
+    # re-used anywhere in the appended continuation, so `count == 1` is a statement about the
+    # ORIGINAL text surviving rather than about the new text avoiding it.
+    for survivor in (
+        "THE ORDERING IS A FACT ABOUT GIT, NOT AN INTENTION.",
+        "when a Phase-12 full-fine-tune",
+    ):
+        assert source.count(survivor) == 1, (
+            f"{_MITIGATION_BUDGET_REL} contains {source.count(survivor)} occurrences of "
+            f"{survivor!r}, not 1. This sentence is part of the ORIGINAL floor's comment block. If "
+            "it is GONE, the dated continuation became a rewrite and a true measurement's "
+            "reasoning was deleted to make a later one look tidy. If it is DUPLICATED, the "
+            "continuation re-typed the original instead of appending to it"
+        )
+
+
+def test_the_original_needle_is_still_unique():
+    """`test_a_hand_edited_floor_is_detected`'s PRECONDITION, as its own named guard.
+
+    That test builds `needle = f"CONTROL_NOISE_FLOOR = {original!r}"` and asserts
+    `source.count(needle) == 1` before rewriting it under `tmp_path`. That assertion is buried
+    inside another test, so a future editor meets it as a confusing failure rather than as a rule.
+    Here it is a rule, with the two ways to break it named.
+
+    ROUTE 1 — PROSE. A comment or docstring line that QUOTES the original's literal assignment. This
+    is the natural thing to do when writing an evidence-rich continuation about the constant, and it
+    is why 23-18's continuation refers to the constant BY NAME and writes its value, where a value
+    is needed at all, with no `NAME = ` in front of it.
+
+    ROUTE 2 — SUBSTRING. A longer identifier ENDING in `CONTROL_NOISE_FLOOR` whose value shares the
+    original's `repr`. `MATCHED_CONTROL_NOISE_FLOOR = <repr>` CONTAINS the needle. 23-18's matched
+    floor is `0.0267857142857143` against the original's `0.05357142857142849`, so no collision
+    exists today — but the next constant added here could reintroduce one.
+
+    THE SANCTIONED REPAIR FOR ROUTE 2 IS TO LINE-ANCHOR THE NEEDLE — prefix it with `\\n` so it
+    matches only a line-initial assignment, and carry that `\\n` into the replacement too, or the
+    edit swallows a line break. That is a TIGHTENING. It is NOT a rename, NOT a rounded value, and
+    NOT a weakened guard.
+    """
+    source = _MITIGATION_BUDGET_PATH.read_text(encoding="utf-8")
+    needle = f"CONTROL_NOISE_FLOOR = {mitigation_budget.CONTROL_NOISE_FLOOR!r}"
+    count = source.count(needle)
+
+    # NON-VACUITY. A needle that matched nothing would make the equality below fail loudly, but a
+    # reader meeting `0 != 1` deserves to be told the pin itself has gone missing.
+    assert count >= 1, (
+        f"{_MITIGATION_BUDGET_REL} contains NO occurrence of {needle!r} — the original pin is gone "
+        "or its value moved, which `test_the_original_floor_is_left_standing_and_re_scoped` covers"
+    )
+    assert count == 1, (
+        f"{_MITIGATION_BUDGET_REL} contains {count} occurrences of {needle!r}, not 1, so "
+        "`test_a_hand_edited_floor_is_detected` is now RED. Two routes produce this. (1) PROSE: a "
+        "comment or docstring quoted the literal assignment — refer to the constant BY NAME "
+        "instead, and write a bare value with no `NAME = ` prefix. (2) SUBSTRING: a longer "
+        "identifier ending in CONTROL_NOISE_FLOOR (today, MATCHED_CONTROL_NOISE_FLOOR = "
+        f"{mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR!r}) now shares the original's repr. The "
+        "repair for (2) is to LINE-ANCHOR that test's needle with a leading newline, carried into "
+        "the replacement as well — a tightening. NOT a rename, NOT a rounded value, NOT a weakened "
+        "guard"
     )
