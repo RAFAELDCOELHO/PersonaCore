@@ -26,6 +26,7 @@ phase's SINGLE SOURCE OF DEVICE TRUTH. Do NOT re-derive the device axis here.
 import ast
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -33,14 +34,18 @@ import pytest
 import torch
 
 from personacore.config import RuntimeConfig
+from personacore.privacy.accountant import epsilon_for
+from personacore.training import loop as loop_mod
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "scripts"))
 sys.path.insert(0, str(_ROOT / "tests"))
 
-import teach_persona as tp  # noqa: E402  (scripts/ is not a package)
+import phase14_factset as fs  # noqa: E402  (scripts/ is not a package)
+import teach_persona as tp  # noqa: E402
 
-from test_phase22_wiring import _e2e_env  # noqa: E402  (tests/ is not one either)
+from test_phase22_checkpoint import _next_draw  # noqa: E402  (tests/ is not one either)
+from test_phase22_wiring import _e2e_env  # noqa: E402
 from test_phase23_mps_venue import _MPS_AVAILABLE, _MPS_SKIP  # noqa: E402
 
 # ---------------------------------------------------------------------------------------------
@@ -67,9 +72,14 @@ _TRAIN_ARM_CALL_SITES = (
     ("tests/test_phase22_wiring.py", "prose", "test_cli_names_no_sigma_or_clip_value comment"),
     # THIS file — the only place ALLOWED to pass `resume_from`, and the reason the assertion below
     # is scoped rather than global: a seam nothing exercises is IN-04 again.
-    ("tests/test_phase23_resume.py", "call", "_resume_call"),
+    ("tests/test_phase23_resume.py", "call", "_resume_call (the refusal probes)"),
+    ("tests/test_phase23_resume.py", "call", "_run (the production MPS probe)"),
     ("tests/test_phase23_resume.py", "prose", "the grep pattern in the register probe"),
 )
+
+# This file's own name, resolved once so the "eight PRE-EXISTING call sites" arithmetic below
+# subtracts the right thing.
+_THIS_FILE = "tests/test_phase23_resume.py"
 
 # The DP generator's state is **5,056 bytes on CPU and 44 bytes on MPS** (measured, torch 2.7.1 —
 # `personacore.checkpoint`'s two-slot register and `DPSGD.noise_rng_state`'s docstring both record
@@ -174,9 +184,10 @@ def test_resume_from_none_is_inert():
         path = hit.split(":", 1)[0]
         found[path] = found.get(path, 0) + 1
     assert found == registered, f"per-file driver hit counts drifted: {found} != {registered}"
-    assert sum(1 for _p, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call") == 9, (
-        "the register no longer holds the eight pre-existing call sites plus this file's one"
-    )
+    assert (
+        sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
+        == 8
+    ), "the register no longer holds exactly the EIGHT pre-existing call sites"
 
     # ...and the AST agrees with the register about which of them are real CALLS.
     for path in registered:
@@ -198,7 +209,7 @@ def test_resume_from_none_is_inert():
         assert len(calls) == expected_calls, (
             f"{path}: {len(calls)} AST calls, register says {expected_calls}"
         )
-        if path == "tests/test_phase23_resume.py":
+        if path == _THIS_FILE:
             continue  # this file is the ONE that must pass the kwarg
         passers = [c.lineno for c in calls if any(k.arg == "resume_from" for k in c.keywords)]
         assert passers == [], (
@@ -391,3 +402,372 @@ def test_a_checkpoint_without_a_device_record_is_refused(tmp_path, monkeypatch):
     assert "dp_noise_rng" in message
     assert arm in message and str(paths["checkpoint"]) in message
     assert "never privatised" in message
+
+
+# ---------------------------------------------------------------------------------------------
+# Task 3 — the production kill -> resume on the MPS venue
+# ---------------------------------------------------------------------------------------------
+
+_PROBE_ARM = "dp_n8"
+
+# PROBE VALUES, NOT A BUDGET. sigma and C are Phase 23 RESOURCE PARAMETERS under Phase 20's Z
+# boundary and are pre-registered by their own plans; nothing here may read as an operating
+# budget. These two exist only so the seam has a live DP mechanism to resume, and the AST guard
+# `test_cli_names_no_sigma_or_clip_value` scopes itself to `scripts/teach_persona.py` precisely so
+# a test fixture can name a value the driver never may (`tests/test_phase22_wiring.py`'s
+# `_FIXTURE_SIGMA` is the committed precedent).
+_PROBE_SIGMA = 1.0
+_PROBE_CLIP = 1.0
+_PROBE_DELTA = 1e-5
+
+# `tests/test_phase22_checkpoint.py`'s shape verbatim (`_TOTAL_STEPS = 4`, `_KILL_AT = 2`).
+_TOTAL_STEPS = 4
+_KILL_AT = 2
+# Deliberately NOT `tp.SEED`: the resumed seam must START somewhere else, so a matching stream
+# afterwards can only be the restore working rather than two objects that agreed to begin with.
+_RESUME_SEED = 999
+
+_PREFIX_A = "phase23_resume_probe_a"
+_PREFIX_B = "phase23_resume_probe_b"
+
+# Bound at IMPORT, before any monkeypatch can replace `tp.DPSGD`. See `_install_dp_probe`.
+_REAL_DPSGD = tp.DPSGD
+
+# The four production inputs `train_arm` refuses loudly without. A missing one skips THIS test and
+# nothing else — `tests/test_lora_artifact.py:238`'s register — and the reason= says what still
+# carries the guarantee.
+_PRODUCTION_INPUTS = (
+    tp.CONVBASE_BEST,
+    tp.DIALOG_TRAIN_BIN,
+    tp.DIALOG_TRAIN_MASK,
+    tp.DIALOG_VAL_BIN,
+    tp.DIALOG_VAL_MASK,
+)
+_INPUTS_SKIP = pytest.mark.skipif(
+    not all(path.exists() for path in _PRODUCTION_INPUTS),
+    reason=(
+        "the production base checkpoint and/or the PersonaChat dialogue pair are absent (they are "
+        "gitignored and never in CI), so no real arm can run here. What still carries the seam's "
+        "correctness wherever this skips: every refusal above, which runs at fixture scale on CPU."
+    ),
+)
+
+
+class _Killed(Exception):
+    """The kill. Raised from inside ``loop.save_checkpoint``, the instant the periodic checkpoint
+    at ``_KILL_AT`` has hit disk and before the loop can take another step — the on-disk state a
+    SIGKILL between two checkpoints leaves, and exactly the state the four-target inversion is
+    written for (checkpoint / csv / bins present, adapter absent)."""
+
+
+def _bin_digests():
+    paths = tp.arm_bin_targets(_PROBE_ARM, tp.arm_outputs(_PROBE_ARM))
+    return {path.name: tp._sha256(path) for path in paths if path.exists()}
+
+
+def _clear_bins():
+    """The three dp_n8 bins carry NO prefix (``arm_outputs``' own non-widening), so every run in
+    this test shares them and a FRESH run must start from their absence. They are rebuilt by each
+    fresh run and are left in place at the end — 23-10 and 23-11 delete and rebuild them and prove
+    byte-identity against the sha256 values this plan's SUMMARY records."""
+    for path in tp.arm_bin_targets(_PROBE_ARM, tp.arm_outputs(_PROBE_ARM)):
+        if path.exists():
+            path.unlink()
+
+
+def _scrub(prefix):
+    paths = tp.arm_outputs(_PROBE_ARM, prefix=prefix)
+    if paths["csv"].parent.exists():
+        shutil.rmtree(paths["csv"].parent)
+    for key in ("checkpoint", "adapter"):
+        if paths[key].exists():
+            paths[key].unlink()
+
+
+def _install_dp_probe(monkeypatch, composed, seams, births, *, seed_override=None):
+    """Shadow ``finalize`` on whatever seam ``train_arm`` CONSTRUCTS, and hand the instance back.
+
+    ``_count_composed_steps`` (``tests/test_phase22_checkpoint.py:387``) shadows an instance the
+    test owns. Here the production driver owns it, so the shadow is installed at the CONSTRUCTOR
+    instead. Counting real ``finalize`` invocations rather than reading the checkpoint's ``step``
+    field is load-bearing and was measured there: with ``start_step`` mutated to 0 the resumed run
+    composes MORE steps than its checkpoint records, and an epsilon read off the field is then
+    identical across both arms AND optimistic.
+
+    ``births`` records each seam's generator state AT CONSTRUCTION, before ``train()``'s
+    ``resume_from`` block can restore into it. That snapshot is the positive control for the whole
+    resume claim: paired with ``seed_override`` it proves the resumed seam STARTED somewhere else,
+    so a matching stream at the end is the restore firing rather than two objects that agreed to
+    begin with.
+
+    ``_REAL_DPSGD`` and never ``tp.DPSGD``, and the reason is a MEASURED bug rather than style:
+    this helper is installed three times in one test, so reading the CLASS off the module captures
+    the PREVIOUS factory and every later run's ``finalize`` increments every earlier run's counter
+    too. Watched: the first draft reported ``(8, 4, 2)`` composed steps for a ``(4, 2, 2)`` run —
+    a T that is WRONG IN THE PESSIMISTIC DIRECTION, which is exactly the kind of accounting error
+    a green test would have carried into a published ε.
+    """
+    real = _REAL_DPSGD
+
+    def factory(model, **kwargs):
+        if seed_override is not None:
+            kwargs["seed"] = seed_override
+        seam = real(model, **kwargs)
+        seams.append(seam)
+        births.append(seam.noise_rng_state().clone())
+        inner = seam.finalize
+
+        def counting(accum):
+            composed.append(accum)
+            return inner(accum)
+
+        seam.finalize = counting
+        return seam
+
+    monkeypatch.setattr(tp, "DPSGD", factory)
+
+
+def _run(prefix, *, resume_from=None):
+    facts, second_person, replay_ratio = tp.arm_spec(_PROBE_ARM)
+    return tp.train_arm(
+        _PROBE_ARM,
+        facts=facts,
+        family_ids=fs.TAUGHT_FAMILY_IDS,
+        second_person=second_person,
+        replay_ratio=replay_ratio,
+        prefix=prefix,
+        dp_sigma=_PROBE_SIGMA,
+        dp_clip_norm=_PROBE_CLIP,
+        resume_from=resume_from,
+    )
+
+
+@_MPS_SKIP
+@_INPUTS_SKIP
+def test_production_resume_epsilon_bit_identical(monkeypatch):
+    """**D-01 / WARNING-2.** A real `train_arm` kill -> resume on MPS reproduces the run.
+
+    THE VENUE IS THE POINT. D-01 makes MPS the venue that produces this milestone's published ε,
+    and the DP generator's state is 44 bytes there against 5,056 on CPU. Every Phase-22 resume
+    probe is CPU-only by design, so this property has to cross the boundary BY MEASUREMENT.
+
+    THE STEP BUDGET IS REDUCED, AND HERE IS THE REDUCTION AND ITS REASON. `tp.MAX_STEPS` is
+    monkeypatched from 200 to 4 and `tp.CHECKPOINT_INTERVAL` from 50 to 2, so a checkpoint lands
+    mid-run; `tp.EVAL_INTERVAL` goes to 1 so the CSV has a row per step to check continuity on,
+    and `tp.WARMUP_STEPS` to 1 so the 4-step run is not entirely inside a 20-step ramp. This probe
+    is about the resume PATH, not the step budget — at the production shape a `dp_n8` arm costs
+    ≈ 3.79 min and buys this assertion nothing extra. `test_resume_epsilon_bit_identical` already
+    uses exactly this shape (`_TOTAL_STEPS = 4`, `_KILL_AT = 2`). **Plan 23-10's σ=0 run is the one
+    that exercises the full 200-step path for real.**
+
+    THE DPSGD-06 EXCEPTION, DISCLOSED RATHER THAN HIDDEN. SC1 and DPSGD-06 say the σ=0 diagnostic
+    is the DP arm's FIRST executed run. This test breaks that LITERAL ordering: it runs the
+    PRODUCTION caller on the PRODUCTION `dp_n8` arm at σ > 0, in wave 2, three waves before 23-10's
+    σ=0 run. It is NOT a sweep point, and each reason is a property a reader can check: `MAX_STEPS`
+    is monkeypatched to 4, no question is scored, no utility reading is produced, the prefixed
+    adapter / CSV / checkpoint are deleted at the end, and **zero `results/phase23_*` records are
+    committed**. So it can inform neither the noise floor nor the D-04 verdict. That last property
+    is also exactly what makes it INVISIBLE to all three of 23-03's ancestry guards, which bind on
+    COMMITTED records: 23-04's wiring probe is auditable from the repo because it commits a record
+    declaring `sweep_point: false`, while this probe commits nothing at all. This docstring and the
+    plan SUMMARY are therefore the only two places the disclosure can live, which is why it is
+    written out in full here rather than left for a reader to reconstruct from wave numbers.
+
+    WHAT IS COMPARED, AND WITH WHICH BOUND. Arm A runs `_TOTAL_STEPS` uninterrupted. Arm B is
+    killed at `_KILL_AT` and resumed from its own checkpoint. Then, under EXACT `==` and never a
+    tolerance (the same call shape across two processes — `test_resume_epsilon_bit_identical`'s
+    register): the composed step counts, the reported ε, the two runs' CSV rows READ AS TEXT
+    row-for-row, and the next noise draw off each run's seam.
+    """
+    for path in _PRODUCTION_INPUTS:
+        assert path.exists(), f"missing production input {path}"
+    print(
+        "[23-07] production inputs: "
+        + ", ".join(f"{p.name}={p.stat().st_size:,}B" for p in _PRODUCTION_INPUTS)
+    )
+
+    monkeypatch.setattr(tp, "MAX_STEPS", _TOTAL_STEPS)
+    monkeypatch.setattr(tp, "CHECKPOINT_INTERVAL", _KILL_AT)
+    monkeypatch.setattr(tp, "EVAL_INTERVAL", 1)
+    monkeypatch.setattr(tp, "WARMUP_STEPS", 1)
+
+    evidence = {}
+    try:
+        # ---- Arm A: uninterrupted -------------------------------------------------------------
+        _clear_bins()
+        _scrub(_PREFIX_A)
+        composed_a, seams_a, births_a = [], [], []
+        _install_dp_probe(monkeypatch, composed_a, seams_a, births_a)
+        _run(_PREFIX_A)
+        paths_a = tp.arm_outputs(_PROBE_ARM, prefix=_PREFIX_A)
+        evidence["digests_a"] = _bin_digests()
+        evidence["step_a"] = torch.load(
+            paths_a["checkpoint"], map_location="cpu", weights_only=False
+        )["step"]
+        evidence["csv_a"] = paths_a["csv"].read_text(encoding="utf-8").splitlines()
+
+        # ---- Arm B, first half: KILLED mid-loop, right after the step-_KILL_AT checkpoint -------
+        #
+        # THE KILL IS AN INTERRUPT, NOT A SHORTER RUN, AND THE DIFFERENCE WAS MEASURED. The first
+        # draft killed by monkeypatching `tp.MAX_STEPS` to `_KILL_AT`. That changes
+        # `TrainConfig.max_steps`, which is the COSINE SCHEDULE'S HORIZON: at step 2 the killed
+        # half then sat at the END of its own 2-step cosine (lr 2.9999999999999997e-05) while the
+        # uninterrupted control was mid-schedule (lr 0.00023249999999999999). The two runs took
+        # genuinely different step-2 updates and the curves diverged from row 3 on. A resume test
+        # whose "kill" silently reparameterises the schedule proves nothing about resuming.
+        #
+        # So the kill is a raise from inside `loop.save_checkpoint`, immediately AFTER the in-loop
+        # periodic save at `_KILL_AT` has hit disk — the on-disk state a SIGKILL between two
+        # checkpoints leaves, with `max_steps` still `_TOTAL_STEPS` and the schedule untouched.
+        _clear_bins()
+        _scrub(_PREFIX_B)
+        composed_b, seams_b, births_b = [], [], []
+        _install_dp_probe(monkeypatch, composed_b, seams_b, births_b)
+        real_save = loop_mod.save_checkpoint
+
+        def _killing_save(path, **kwargs):
+            real_save(path, **kwargs)
+            if kwargs["step"] >= _KILL_AT:
+                raise _Killed
+
+        monkeypatch.setattr(loop_mod, "save_checkpoint", _killing_save)
+        with pytest.raises(_Killed):
+            _run(_PREFIX_B)
+        monkeypatch.setattr(loop_mod, "save_checkpoint", real_save)
+        paths_b = tp.arm_outputs(_PROBE_ARM, prefix=_PREFIX_B)
+        evidence["digests_b1"] = _bin_digests()
+        kill_blob = torch.load(paths_b["checkpoint"], map_location="cpu", weights_only=False)
+        evidence["step_kill"] = kill_blob["step"]
+        evidence["kill_state_bytes"] = int(kill_blob["dp_noise_rng"].numel())
+        assert not paths_b["adapter"].exists(), "the kill left an adapter — it was not a kill"
+
+        # ---- Arm B, second half: the RESUME through the production driver ----------------------
+        composed_c, seams_c, births_c = [], [], []
+        _install_dp_probe(monkeypatch, composed_c, seams_c, births_c, seed_override=_RESUME_SEED)
+        _run(_PREFIX_B, resume_from=paths_b["checkpoint"])
+        evidence["digests_b2"] = _bin_digests()
+        evidence["step_b"] = torch.load(
+            paths_b["checkpoint"], map_location="cpu", weights_only=False
+        )["step"]
+        evidence["csv_b"] = paths_b["csv"].read_text(encoding="utf-8").splitlines()
+
+        # POSITIVE CONTROL, read off live objects before the cleanup below: the resumed seam was
+        # BORN at _RESUME_SEED, somewhere else entirely, so a matching stream at the end can only
+        # be the restore firing.
+        evidence["born_elsewhere"] = not torch.equal(births_c[0], kill_blob["dp_noise_rng"])
+        evidence["birth_bytes"] = tuple(int(b[0].numel()) for b in (births_a, births_b, births_c))
+        device = seams_a[0]._g.device.type
+        evidence["device"] = device
+        evidence["draw_a"] = _next_draw(seams_a[0], device)
+        evidence["draw_b_killhalf"] = _next_draw(seams_b[0], device)
+        evidence["draw_c"] = _next_draw(seams_c[0], device)
+        evidence["composed"] = (len(composed_a), len(composed_b), len(composed_c))
+    finally:
+        _scrub(_PREFIX_A)
+        _scrub(_PREFIX_B)
+
+    # ---- results/ is untouched: this probe commits NOTHING ------------------------------------
+    porcelain = subprocess.run(
+        ["git", "status", "--porcelain", "results/"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert porcelain == "", f"the probe left artifacts in results/:\n{porcelain}"
+
+    # RAW EVIDENCE, printed rather than only asserted: every figure this plan's SUMMARY quotes is
+    # readable from a `-s` run of this one test, so the SUMMARY is transcribing a log rather than
+    # restating a claim.
+    print(f"[23-07] device={evidence['device']} composed={evidence['composed']}")
+    print(
+        f"[23-07] dp_noise_rng bytes: births={evidence['birth_bytes']} "
+        f"kill={evidence['kill_state_bytes']}"
+    )
+    for name, digest in sorted(evidence["digests_a"].items()):
+        print(f"[23-07] sha256 {name} {digest}")
+    for row in evidence["csv_a"]:
+        print(f"[23-07] csv_A {row}")
+    for row in evidence["csv_b"]:
+        print(f"[23-07] csv_B {row}")
+
+    # ---- 1. THE CORPUS. All three builds agree byte for byte (T-23-35) ------------------------
+    assert set(evidence["digests_a"]) == {
+        "persona_dp_n8_train.bin",
+        "persona_dp_n8_train_mask.bin",
+        "persona_dp_n8_train_fact.bin",
+    }, evidence["digests_a"]
+    assert evidence["digests_a"] == evidence["digests_b1"] == evidence["digests_b2"], (
+        "the dp_n8 corpus is not reproducible across builds: "
+        f"A={evidence['digests_a']} B1={evidence['digests_b1']} B2={evidence['digests_b2']}"
+    )
+
+    # ---- 2. T, COUNTED off real finalize invocations and pinned to the checkpoint field --------
+    steps_a, steps_b1, steps_b2 = evidence["composed"]
+    assert (steps_a, steps_b1, steps_b2) == (_TOTAL_STEPS, _KILL_AT, _TOTAL_STEPS - _KILL_AT)
+    t_a, t_b = steps_a, steps_b1 + steps_b2
+    assert evidence["step_a"] == t_a
+    assert evidence["step_kill"] == _KILL_AT
+    assert evidence["step_b"] == t_b, (
+        f"the resumed run REPORTS T = {evidence['step_b']} but composed {t_b} steps "
+        f"({steps_b1} before the kill + {steps_b2} after) — the published epsilon would then "
+        "describe a composition that never ran, and it would be optimistic"
+    )
+
+    # ---- 3. THE EPSILON, under EXACT `==` -----------------------------------------------------
+    epsilon_a = epsilon_for(_PROBE_SIGMA, t_a, _PROBE_DELTA)
+    epsilon_b = epsilon_for(_PROBE_SIGMA, t_b, _PROBE_DELTA)
+    assert epsilon_a == epsilon_b, f"epsilon diverged across the kill: {epsilon_a!r} {epsilon_b!r}"
+    # NON-DEGENERACY: epsilon genuinely MOVES with T, so the equality is not green over a quantity
+    # that never varies.
+    assert epsilon_for(_PROBE_SIGMA, _KILL_AT, _PROBE_DELTA) != epsilon_a
+    print(f"[23-07] T_A={t_a} T_B={t_b} epsilon_A={epsilon_a!r} epsilon_B={epsilon_b!r}")
+
+    # ---- 4. THE CSV: continuous across the kill, and equal to the control row for row ---------
+    header_a, rows_a = evidence["csv_a"][0], evidence["csv_a"][1:]
+    header_b, rows_b = evidence["csv_b"][0], evidence["csv_b"][1:]
+    assert header_a == header_b
+    fields = header_a.split(",")
+    step_col, token_col = fields.index("step"), fields.index("tokens")
+    steps = [int(row.split(",")[step_col]) for row in rows_b]
+    tokens = [int(row.split(",")[token_col]) for row in rows_b]
+    assert steps == list(range(1, _TOTAL_STEPS + 1)), (
+        f"the CSV is not continuous across the kill: {steps}. `train()` derives cumulative tokens "
+        "from the ABSOLUTE step precisely so it is; a gap or a repeat here means the resume "
+        "restarted the counter, and deleting the CSV to get past a refusal (T-23-33) is the "
+        "operator mistake that produces it"
+    )
+    assert tokens == sorted(tokens) and len(set(tokens)) == len(tokens), tokens
+    # THE REPRODUCTION CLAIM, at its strongest available bound: the resumed run's logged curve is
+    # the uninterrupted run's, READ AS TEXT. `wall_clock` is a step-derived logical clock exactly
+    # so this comparison is possible (loop.py's own note).
+    assert rows_b == rows_a, (
+        "the resumed curve is NOT the uninterrupted curve row for row:\n"
+        f"  uninterrupted: {rows_a}\n  resumed:       {rows_b}"
+    )
+
+    # ---- 5. THE RNG HALF, which epsilon is structurally blind to ------------------------------
+    assert evidence["device"] == "mps", evidence["device"]
+    assert evidence["birth_bytes"] == (_MPS_STATE_BYTES,) * 3, evidence["birth_bytes"]
+    assert evidence["kill_state_bytes"] == _MPS_STATE_BYTES
+    assert evidence["born_elsewhere"], (
+        f"the resumed seam was born at seed {_RESUME_SEED} yet already carried the killed run's "
+        "generator state — the equality below would then be an accident, not a restore"
+    )
+    draw_a, draw_c = evidence["draw_a"], evidence["draw_c"]
+    assert draw_a.abs().sum() > 0.0, "a degenerate probe draw would compare two zeros"
+    assert torch.equal(draw_a, draw_c), (
+        "the resumed seam's next noise draw differs from the uninterrupted run's, so the "
+        "production restore did not fire through train_arm -> train"
+    )
+    # NEGATIVE CONTROL: the draw is POSITION-SENSITIVE, so the equality above is not something two
+    # seams satisfy for free. The kill half's seam stopped at _KILL_AT and its next draw must NOT
+    # match the run that went all the way. (The OTHER negative control — a checkpoint with the
+    # dp_noise_rng slot stripped — is unreachable through this driver BY DESIGN: 23-07's own
+    # cross-device guard refuses it outright, and that refusal is pinned by
+    # `test_a_checkpoint_without_a_device_record_is_refused` above. `train()`'s tolerance of the
+    # same shape stays watched at the loop level by `test_resume_epsilon_bit_identical`.)
+    assert not torch.equal(draw_a, evidence["draw_b_killhalf"]), (
+        "a seam stopped at _KILL_AT produced the same next draw as one that ran to _TOTAL_STEPS — "
+        "the stream is not position-sensitive and every equality above proves nothing"
+    )
