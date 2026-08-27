@@ -39,6 +39,7 @@ never inherited. **The AST halves are EXEMPT and the exemption is APPLIED AT THE
 GPU-free (no CUDA); the MPS legs are ``skipif``-gated so CI stays green on a CPU-only wheel.
 """
 
+import ast
 import pathlib
 import sys
 
@@ -73,6 +74,17 @@ _SUMMARY_PATH = (
     / "phases"
     / "22-dp-sgd-core-accountant-and-the-correctness-battery"
     / "22-11-SUMMARY.md"
+)
+
+# 23-06's own SUMMARY -- the venue-transfer ledger. The two facts this phase measured are recorded
+# THERE and asserted from here, so a Phase-23 finding never becomes a reason to edit a closed
+# Phase-22 artifact.
+_VENUE_SUMMARY_PATH = (
+    _ROOT
+    / ".planning"
+    / "phases"
+    / "23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio"
+    / "23-06-SUMMARY.md"
 )
 
 # Test-local arithmetic vectors, NOT a budget (D-08 / Phase 20's Z boundary), in exactly the sense
@@ -696,25 +708,6 @@ def _released(seam_cls, model, params, *, sigma, n_records):
     return released
 
 
-# -------------------------------------------------------------------------------------------------
-# D-02's DEVICE-PARAMETRIZATION EXEMPTION, WRITTEN DOWN RATHER THAN SILENTLY SKIPPED.
-#
-# Two Phase-22 files are exempt from the CPU->MPS parametrization surface, and the exemption is
-# recorded HERE, in source, because *a probe that claims a device pass it did not perform is the
-# very defect D-02 exists to prevent*. An exemption inferred from an absence is indistinguishable
-# from an oversight.
-#
-#   * `tests/test_phase22_dpsgd_ast.py` -- 16 tests, pure `ast.parse` over source TEXT. It imports
-#     no torch runtime at all, so there is no tensor, no generator and no device for a result to
-#     depend on. Re-running it under `device="mps"` executes byte-identical code.
-#   * `tests/test_phase22_accountant.py` -- 37 tests, stdlib `math` only. Same argument.
-#
-# MEASURED: 16 + 37 = **53 of the 113 Phase-22 tests** (`grep -c '^def test_'` across
-# accountant 37 / checkpoint 9 / dpsgd_ast 16 / dpsgd 23 / fakes 8 / wiring 20), so the exemption
-# removes just under half the surface and is worth stating precisely rather than waving at.
-# The four fakes' AST halves in THIS file inherit the same exemption for the same reason; their
-# RUNTIME halves do not, and 23-06 performs the watched RED for those on MPS.
-# -------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize(("sigma", "n_records"), sorted(_FAKE3_DIFFERENTIAL_SEES))
 @pytest.mark.parametrize("device", _DEVICES)
 def test_fake_noise_after_averaging(device, sigma, n_records):
@@ -953,14 +946,34 @@ _LEDGER_FAKES = ("FAKE 1", "FAKE 2", "FAKE 3", "FAKE 4")
 # ledger citing a guard that has been renamed or deleted is this repository's most recurring
 # defect class -- seven stale anchors were measured across 22-02/22-03, and 22-09 recorded the
 # frozen pin's own by-symbol citation resolving only because a test was named to match it.
+# **EVERY ENTRY IS DEVICE-QUALIFIED (23-06 / D-02)**: `(node_id, observed_on)`. Before this the
+# register was a bare list of ids and the device its REDs were observed on lived nowhere -- which
+# is fine while a battery is CPU-only and is a repudiation risk the moment it is not. `observed_on`
+# is one of:
+#   * `"cpu"`  -- the RED was watched on CPU and only on CPU. Phase 22's original observation.
+#   * `"mps"`  -- the RED was watched on the M3, by THIS phase. One per fake, and each one is a
+#                 fakes-file probe id, because the fakes file is where the mutation is applied and
+#                 the refusal is watched in-process.
+#   * `"device-invariant"` -- the guard parses SOURCE TEXT and imports no torch runtime, so it has
+#                 no device to be observed on. Asserted, not asserted-by-comment: the resolver
+#                 below requires the cited file to be one `_DEVICE_INVARIANT_HALVES` names.
 _WATCHED_RED_NODE_IDS = {
     "FAKE 1": (
-        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_step_reaches_no_forbidden_call[absorb_record]",
-        "tests/test_phase22_dpsgd.py::test_drain_invariant_fires",
+        (
+            "tests/test_phase22_dpsgd_ast.py::"
+            "test_dpsgd_step_reaches_no_forbidden_call[absorb_record]",
+            "device-invariant",
+        ),
+        ("tests/test_phase22_dpsgd.py::test_drain_invariant_fires", "cpu"),
+        ("tests/test_phase22_fakes.py::test_fake_averaged_gradient[mps]", "mps"),
     ),
     "FAKE 2": (
-        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_has_exactly_one_clip_constant",
-        "tests/test_phase22_dpsgd.py::test_sensitivity_invariant_fires",
+        (
+            "tests/test_phase22_dpsgd_ast.py::test_dpsgd_has_exactly_one_clip_constant",
+            "device-invariant",
+        ),
+        ("tests/test_phase22_dpsgd.py::test_sensitivity_invariant_fires", "cpu"),
+        ("tests/test_phase22_fakes.py::test_fake_wrong_sensitivity[mps]", "mps"),
     ),
     "FAKE 3": (
         # `[4]` -> `[4-cpu]`, CORRECTED when 23-01 added the device axis to this test. The case is
@@ -969,26 +982,191 @@ _WATCHED_RED_NODE_IDS = {
         # `[4]` no longer collects ("no match in any of [<Module test_phase22_dpsgd.py>]"), which
         # is this repository's most recurring defect class -- a stale anchor -- and
         # `test_watched_red_node_ids_resolve` cannot catch it, because it deliberately does not
-        # resolve the part inside `[...]`.
-        "tests/test_phase22_dpsgd.py::"
-        "test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST[4-cpu]",
-        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_draws_the_noise_before_it_divides",
+        # resolve the part inside `[...]`. The `observed_on` column is what makes THAT correction
+        # mechanical instead of archaeological: the device is now data, not a comment.
+        (
+            "tests/test_phase22_dpsgd.py::"
+            "test_noise_is_scaled_by_the_lot_size_because_the_divide_comes_LAST[4-cpu]",
+            "cpu",
+        ),
+        (
+            "tests/test_phase22_dpsgd_ast.py::test_dpsgd_draws_the_noise_before_it_divides",
+            "device-invariant",
+        ),
+        # The live cell -- sigma > 0 AND accum > 1 -- because it is the only one where the runtime
+        # differential can bite at all. The three blind-spot cells transfer to MPS as blind spots.
+        ("tests/test_phase22_fakes.py::test_fake_noise_after_averaging[mps-1.0-4]", "mps"),
     ),
     "FAKE 4": (
-        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_never_reseeds_its_generator",
-        "tests/test_phase22_dpsgd_ast.py::test_dpsgd_step_reaches_no_forbidden_call[finalize]",
-        "tests/test_phase22_dpsgd.py::test_generator_advances_and_is_never_reseeded",
+        (
+            "tests/test_phase22_dpsgd_ast.py::test_dpsgd_never_reseeds_its_generator",
+            "device-invariant",
+        ),
+        (
+            "tests/test_phase22_dpsgd_ast.py::test_dpsgd_step_reaches_no_forbidden_call[finalize]",
+            "device-invariant",
+        ),
+        ("tests/test_phase22_dpsgd.py::test_generator_advances_and_is_never_reseeded", "cpu"),
+        ("tests/test_phase22_fakes.py::test_fake_rng_reuse[mps]", "mps"),
     ),
 }
 
 # MEASURED, and recorded because a shared signature would be a coverage gap rather than a double
-# win: the nine entries above produced NINE DISTINCT assertion messages over the real mutated
-# module. The one near-collision is named rather than glossed --
+# win: the nine SIGNATURE-BEARING entries above produced NINE DISTINCT assertion messages over the
+# real mutated module. The one near-collision is named rather than glossed --
 # `test_dpsgd_step_reaches_no_forbidden_call` catches BOTH FAKE 1 and FAKE 4, but at two different
 # parametrizations (`[absorb_record]` vs `[finalize]`) reporting two different offender dicts
 # (`{}` where the drain's `.grad=` write vanished, against `{'finalize': ['manual_seed'], ...}`
 # where the re-seed appeared). Same guard function, two node ids, two messages.
+#
+# **THE COUNT IS STILL 9 AFTER 23-06 ADDED FOUR mps ENTRIES, DELIBERATELY.** A venue transfer is
+# the SAME fake tripping the SAME invariant with the SAME message on a second device: it is a new
+# OBSERVATION, not a new SIGNATURE, and counting it as one would inflate the coverage claim by 44%
+# for no added detection. The `"mps"` rows are therefore excluded from this total and counted
+# separately by `_MPS_OBSERVATIONS_PER_FAKE`.
 _DISTINCT_RED_SIGNATURES = 9
+
+# Exactly one MPS re-observation per fake -- the deliverable D-02 asks this plan for. Asserted so a
+# future edit cannot quietly drop a fake's venue transfer while the file still reads as if it has
+# one; an absent row and a fake that was never re-watched look identical from outside.
+_MPS_OBSERVATIONS_PER_FAKE = 1
+
+_OBSERVATION_VENUES = ("cpu", "mps", "device-invariant")
+
+# -------------------------------------------------------------------------------------------------
+# D-02's DEVICE-PARAMETRIZATION EXEMPTION, RE-CHECKED RATHER THAN SILENTLY SKIPPED.
+#
+# Two Phase-22 files are exempt from the CPU->MPS parametrization surface, and the exemption is
+# recorded HERE, in source, because *a probe that claims a device pass it did not perform is the
+# very defect D-02 exists to prevent*. An exemption inferred from an absence is indistinguishable
+# from an oversight -- so `test_the_device_invariant_halves_are_named_and_still_device_free`
+# RE-MEASURES the property the exemption rests on instead of restating the sentence.
+#
+#   * `tests/test_phase22_dpsgd_ast.py` -- 16 tests, pure `ast.parse` over source TEXT. It imports
+#     no torch runtime at all, so there is no tensor, no generator and no device for a result to
+#     depend on. Re-running it under `device="mps"` executes byte-identical code.
+#   * `tests/test_phase22_accountant.py` -- 37 tests, stdlib `math` only. Same argument.
+#
+# MEASURED at this commit: 16 + 37 = **53 of the 115 Phase-22 tests** (`^def test_` across
+# accountant 37 / checkpoint 10 / dpsgd_ast 16 / dpsgd 23 / fakes 9 / wiring 20), so the exemption
+# removes just under half the surface and is worth stating precisely rather than waving at.
+# THE DENOMINATOR MOVED AND IS RE-RECORDED RATHER THAN LEFT AT ITS OLD VALUE: it read 113 at the
+# close of Phase 22 (checkpoint 9 / fakes 8); 23-01 added `test_cpu_written_dp_noise_rng_is_refused
+# _on_mps` and 23-06 added the cross-device `_global_norm` measurement, one each. The NUMERATOR is
+# unmoved and is the load-bearing half, so it is asserted exactly while the denominator is asserted
+# one-sidedly (it can only grow) -- a two-sided denominator assertion would redden on every future
+# Phase-22 test for no gain in what the exemption actually claims.
+#
+# The four fakes' AST halves in THIS file inherit the same exemption for the same reason and it is
+# APPLIED, not merely inherited: see `_AST_HALF_RUNS_ON`. Their RUNTIME halves are NOT exempt, and
+# 23-06 performs the watched RED for those on MPS -- the `"mps"` rows of the register above.
+# -------------------------------------------------------------------------------------------------
+_DEVICE_INVARIANT_HALVES = (
+    ("tests/test_phase22_dpsgd_ast.py", 16),
+    ("tests/test_phase22_accountant.py", 37),
+)
+_DEVICE_INVARIANT_TEST_COUNT = 53
+_PHASE22_TEST_FILES = (
+    "tests/test_phase22_accountant.py",
+    "tests/test_phase22_checkpoint.py",
+    "tests/test_phase22_dpsgd_ast.py",
+    "tests/test_phase22_dpsgd.py",
+    "tests/test_phase22_fakes.py",
+    "tests/test_phase22_wiring.py",
+)
+_PHASE22_TEST_COUNT_AT_PHASE22_CLOSE = 113
+
+
+def _module_scope_imports(tree):
+    """Every module name imported at MODULE SCOPE, roots only (``a.b.c`` -> ``a``)."""
+    roots = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            roots.add(node.module.split(".")[0])
+    return roots
+
+
+def test_the_device_invariant_halves_are_named_and_still_device_free():
+    """The exemption rests on a RE-CHECKED property, not on a sentence in a comment.
+
+    Three things are measured per exempt file, and the third is what keeps the first two honest:
+
+    1. **No torch at module scope.** Walked over ``ast.parse``'s top-level import nodes rather than
+       grepped, because both files discuss torch at length in prose and in string fixtures --
+       ``grep -c torch`` returns 10 and 5 respectively. A literal-token grep here would measure the
+       docstrings, which is the trap 23-01 recorded twice.
+    2. **No device literals.** Also over the AST, as string CONSTANTS equal to ``"cpu"``/``"mps"``,
+       for the same reason.
+    3. **The recorded per-file test count still holds**, so the ``53`` in the exemption is a
+       measurement that goes RED when it stops being true rather than a number nobody re-reads.
+
+    The denominator is asserted one-sidedly. It was 113 at the close of Phase 22 and is 115 here;
+    what the exemption claims -- that just under half the surface cannot differ by device -- is a
+    property of the numerator, and a two-sided assertion would turn every future Phase-22 test into
+    a failure in this file.
+    """
+    total = 0
+    for rel_path, recorded_count in _DEVICE_INVARIANT_HALVES:
+        path = _ROOT / rel_path
+        assert path.exists(), (
+            f"{rel_path} is named in the D-02 exemption but does not exist. The exemption then "
+            "excuses a file nobody can check, which is worse than no exemption at all"
+        )
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+
+        imported = _module_scope_imports(tree)
+        assert "torch" not in imported, (
+            f"{rel_path} imports torch at module scope (roots: {sorted(imported)}). The D-02 "
+            "exemption rests on this file having no tensor, no generator and no device; with a "
+            "torch import it is no longer device-invariant by construction and its tests belong "
+            "on the CPU->MPS parametrization surface"
+        )
+
+        literals = {
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and node.value in ("cpu", "mps")
+        }
+        assert not literals, (
+            f"{rel_path} contains the device literal(s) {sorted(literals)}. A file that names a "
+            "device is making a device-dependent claim, and the exemption says it makes none"
+        )
+
+        found = sum(
+            1
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+        )
+        assert found == recorded_count, (
+            f"{rel_path} defines {found} tests, not the recorded {recorded_count}. The exemption's "
+            f"count ({_DEVICE_INVARIANT_TEST_COUNT} of "
+            f"{_PHASE22_TEST_COUNT_AT_PHASE22_CLOSE}+) is a MEASUREMENT; re-measure and re-record "
+            "it rather than leaving a stale number standing in for one"
+        )
+        total += found
+
+    assert total == _DEVICE_INVARIANT_TEST_COUNT, (
+        f"the exempt files hold {total} tests against a recorded "
+        f"{_DEVICE_INVARIANT_TEST_COUNT}. This is the number the venue-transfer ledger publishes"
+    )
+
+    surface = 0
+    for rel_path in _PHASE22_TEST_FILES:
+        tree = ast.parse((_ROOT / rel_path).read_text(encoding="utf-8"))
+        surface += sum(
+            1
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+        )
+    assert surface >= _PHASE22_TEST_COUNT_AT_PHASE22_CLOSE, (
+        f"the Phase-22 battery is {surface} tests, BELOW the "
+        f"{_PHASE22_TEST_COUNT_AT_PHASE22_CLOSE} measured at that phase's close. Tests were "
+        "deleted rather than added, so the exemption's denominator is not the one it was written "
+        "against and the coverage it excuses may have shrunk"
+    )
+    assert total < surface, "the exemption cannot cover the whole surface -- nothing would be run"
 
 
 def test_every_fake_has_at_least_two_independent_detectors():
@@ -998,18 +1176,33 @@ def test_every_fake_has_at_least_two_independent_detectors():
     Measured over the real mutated module: FAKE 1 and FAKE 2 have a structural AND a runtime
     detector each, FAKE 3 has the statement-order check AND the magnitude guard, and FAKE 4 has two
     structural detectors AND the runtime generator-continuity check.
+
+    **The count is taken over SIGNATURE-BEARING rows only.** 23-06 added one ``"mps"`` row per fake
+    -- the same invariant refusing with the same message on a second device. That is a venue
+    transfer, not a fifth detector, and folding it into the total would report a 44% coverage
+    increase that bought no detection. The mps rows are counted separately, and required.
     """
     assert set(_WATCHED_RED_NODE_IDS) == set(_LEDGER_FAKES), (
         f"the watched-RED register covers {sorted(_WATCHED_RED_NODE_IDS)}, not all four fakes "
         f"{list(_LEDGER_FAKES)}. DPSGD-04 is about FOUR silent-non-privacy failures"
     )
-    for fake, node_ids in _WATCHED_RED_NODE_IDS.items():
-        assert len(node_ids) >= 2, (
-            f"{fake} has only {len(node_ids)} recorded detector(s): {node_ids}. One guard per fake "
-            "makes the claim one rename away from vacuous"
+    total = 0
+    for fake, entries in _WATCHED_RED_NODE_IDS.items():
+        node_ids = [node_id for node_id, _ in entries]
+        signatures = [node_id for node_id, venue in entries if venue != "mps"]
+        on_mps = [node_id for node_id, venue in entries if venue == "mps"]
+        assert len(signatures) >= 2, (
+            f"{fake} has only {len(signatures)} recorded detector(s): {signatures}. One guard per "
+            "fake makes the claim one rename away from vacuous"
         )
         assert len(set(node_ids)) == len(node_ids), f"{fake} lists a duplicate detector: {node_ids}"
-    total = sum(len(ids) for ids in _WATCHED_RED_NODE_IDS.values())
+        assert len(on_mps) == _MPS_OBSERVATIONS_PER_FAKE, (
+            f"{fake} records {len(on_mps)} MPS observation(s), not "
+            f"{_MPS_OBSERVATIONS_PER_FAKE}: {on_mps}. D-02 requires the RED to be re-watched on "
+            "the venue that produces the published epsilon, and a fake with no mps row is "
+            "indistinguishable from one whose venue transfer was never performed"
+        )
+        total += len(signatures)
     assert total == _DISTINCT_RED_SIGNATURES, (
         f"{total} detectors are registered against a recorded {_DISTINCT_RED_SIGNATURES} DISTINCT "
         "RED signatures. If two fakes ever trip the same guard with the same message that is a "
@@ -1026,15 +1219,28 @@ def test_watched_red_node_ids_resolve():
 
     The parameter id inside ``[...]`` is not resolved (that needs a collection pass); what is
     asserted is that the function exists, is callable, and carries a ``parametrize`` mark exactly
-    when the cited id claims a parameter.
+    when the cited id claims a parameter. **This blindness is why 23-01's ``[4]`` -> ``[4-cpu]``
+    correction had to be found by collection and not here, and it is unchanged** -- the
+    ``observed_on`` column below narrows it rather than closing it: a device-qualified row must
+    SPELL its device inside the brackets, so at least the device half of a parameter id is checked.
+
+    ``observed_on`` is itself checked, not trusted. A ``"device-invariant"`` row must cite a file
+    ``_DEVICE_INVARIANT_HALVES`` names, so the claim "this guard has no device" is resolved against
+    the register that re-measures it rather than asserted twice in two places.
     """
     import importlib
 
     assert _WATCHED_RED_NODE_IDS, "no watched RED node ids recorded -- this guard checks nothing"
-    for fake, node_ids in _WATCHED_RED_NODE_IDS.items():
-        for node_id in node_ids:
+    exempt_files = {rel_path for rel_path, _ in _DEVICE_INVARIANT_HALVES}
+    for fake, entries in _WATCHED_RED_NODE_IDS.items():
+        for node_id, observed_on in entries:
+            assert observed_on in _OBSERVATION_VENUES, (
+                f"{fake}'s ledger records {node_id} as observed on {observed_on!r}, which is not "
+                f"one of {list(_OBSERVATION_VENUES)}"
+            )
             path, _, name = node_id.partition("::")
             parametrized = name.endswith("]")
+            params = name[name.index("[") + 1 : -1] if parametrized else ""
             if parametrized:
                 name = name[: name.index("[")]
             module = importlib.import_module(pathlib.Path(path).stem)
@@ -1049,28 +1255,71 @@ def test_watched_red_node_ids_resolve():
                 f"shipped test (marks: {sorted(marks)}). A cited node id that cannot be run is a "
                 "citation nobody can check"
             )
+            if observed_on == "device-invariant":
+                assert path in exempt_files, (
+                    f"{fake}'s ledger records {node_id} as device-invariant, but {path} is not "
+                    f"one of the files _DEVICE_INVARIANT_HALVES re-measures ({sorted(exempt_files)}"
+                    "). A device-invariance claim nothing re-checks is the exemption-by-absence "
+                    "D-02 forbids"
+                )
+            elif parametrized:
+                assert observed_on in params.split("-"), (
+                    f"{fake}'s ledger records {node_id} as observed on {observed_on!r}, but that "
+                    f"device does not appear in the parameter id {params!r}. Either the row's "
+                    "device is wrong or the anchor is stale -- 23-01 measured exactly this when "
+                    "the device axis silently renamed `[4]` to `[4-cpu]`"
+                )
 
 
-# The sign-off's honest half, by name. A sign-off that lists only green is not a sign-off, so the
-# two measured blind spots and the one required-but-unexercised CI item are required literals.
+# The sign-off's honest half, by name: `(what it records, the required literal, which SUMMARY)`.
+# A sign-off that lists only green is not a sign-off, so the measured blind spots and the
+# required-but-unexercised CI item are required literals.
+#
+# **THE THIRD COLUMN IS 23-06's ADDITION AND IT IS NOT COSMETIC.** The two facts this venue
+# transfer produced are PHASE-23 facts; asserting them against 22-11-SUMMARY.md would either go RED
+# forever or force a closed Phase-22 artifact to be edited so a Phase-23 test could pass, which is
+# the pin-corrections-are-continuations defect class. Each row therefore names the SUMMARY that
+# actually carries it, and each row skips gracefully only while ITS OWN file is unwritten.
 _LEDGER_SIGN_OFF_ITEMS = (
-    ("FAKE 3 is invisible at a sigma of zero", "sigma = 0"),
-    ("FAKE 3 is invisible at a lot size of one", "accum = 1"),
-    ("the runtime C*(1+tol) sensitivity check is ONE-SIDED", "one-sided"),
-    ('rng["mps"] is required-but-UNEXERCISED in CPU-only CI', 'rng["mps"]'),
+    ("FAKE 3 is invisible at a sigma of zero", "sigma = 0", _SUMMARY_PATH),
+    ("FAKE 3 is invisible at a lot size of one", "accum = 1", _SUMMARY_PATH),
+    ("the runtime C*(1+tol) sensitivity check is ONE-SIDED", "one-sided", _SUMMARY_PATH),
+    # REWRITTEN by 23-06, NOT deleted. Phase 22 recorded this slot as required-but-unexercised
+    # because the whole battery was CPU-only. After 23-01 and 23-06 the mps legs ARE exercised --
+    # on the M3, with a skip count of zero -- and they remain unexercised in CI, which is
+    # `ubuntu-latest` on a CPU-only wheel. The honest disclosure is now PRECISE ABOUT CI
+    # SPECIFICALLY rather than about the suite; making a disclosure narrower as the evidence
+    # arrives is the opposite of dropping it, and the literal is unchanged so 22-11's own
+    # sign-off still has to carry it.
+    (
+        'rng["mps"] is exercised on the M3 and remains UNEXERCISED in CPU-only CI',
+        'rng["mps"]',
+        _SUMMARY_PATH,
+    ),
+    # The two facts 23-06 measured and must not lose, asserted against 23-06's own SUMMARY.
+    (
+        "the four fakes' AST halves were NOT re-run on MPS because they cannot differ by device",
+        "AST half",
+        _VENUE_SUMMARY_PATH,
+    ),
+    (
+        "_FAKE3_STD_RATIO_AT_N4 was re-measured on MPS and the band was NOT widened",
+        "3.9999995238454056",
+        _VENUE_SUMMARY_PATH,
+    ),
 )
 
 
-def _summary_text():
-    """The SUMMARY's text, or ``None`` before it has been written.
+def _summary_text(path=_SUMMARY_PATH):
+    """A SUMMARY's text, or ``None`` before it has been written.
 
-    **Skips gracefully only while the file does not exist**, which is the window between this
-    file's first commit and the plan's metadata commit. Once the SUMMARY is on disk the assertions
+    **Skips gracefully only while the file does not exist**, which is the window between a test
+    file's first commit and its plan's metadata commit. Once the SUMMARY is on disk the assertions
     below are hard: a ledger that can silently go missing is not a ledger.
     """
-    if not _SUMMARY_PATH.exists():
+    if not path.exists():
         return None
-    return _SUMMARY_PATH.read_text(encoding="utf-8")
+    return path.read_text(encoding="utf-8")
 
 
 def test_fakes_ledger_is_recorded():
@@ -1094,15 +1343,26 @@ def test_fakes_ledger_is_recorded():
 
 
 def test_fakes_ledger_names_its_blind_spots():
-    """The sign-off names what is NOT covered, not only what is green."""
-    text = _summary_text()
-    if text is None:
-        pytest.skip(f"{_SUMMARY_PATH.name} is not written yet -- it lands with this plan's commit")
+    """The sign-off names what is NOT covered, not only what is green.
 
-    for label, literal in _LEDGER_SIGN_OFF_ITEMS:
+    Each row is checked against the SUMMARY that actually carries it and skips only while THAT
+    file is unwritten, so 23-06's two venue facts cannot be discharged by a Phase-22 artifact and
+    Phase 22's three blind spots cannot be discharged by a Phase-23 one. A single shared path would
+    let either happen silently.
+    """
+    checked = 0
+    pending = []
+    for label, literal, path in _LEDGER_SIGN_OFF_ITEMS:
+        text = _summary_text(path)
+        if text is None:
+            pending.append(path.name)
+            continue
         assert literal in text, (
-            f"{_SUMMARY_PATH.name} does not contain {literal!r}, so it does not record that "
+            f"{path.name} does not contain {literal!r}, so it does not record that "
             f"{label}. A phase sign-off that lists only its greens is not a sign-off -- this "
             "phase's own recurring finding is that five plan-mandated guards were measured "
             "structurally incapable of catching what they existed for"
         )
+        checked += 1
+    if not checked:
+        pytest.skip(f"none of {sorted(set(pending))} is written yet -- they land with their plans")
