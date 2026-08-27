@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-05-PLAN.md (plan 5 of 14)
-last_updated: 2026-08-27T01:04:10.565Z
+stopped_at: Completed 23-06-PLAN.md (plan 6 of 14)
+last_updated: 2026-08-27T01:53:07.079Z
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 52
+  completed_plans: 53
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 6 of 14
+Plan: 7 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -146,6 +146,7 @@ Last activity: 2026-08-26
 | Phase 23 P03 | 28min | 3 tasks | 2 files |
 | Phase 23 P04 | 50min | 3 tasks | 3 files |
 | Phase 23 P05 | 35min | 2 tasks | 2 files |
+| Phase 23 P06 | 50min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -509,6 +510,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-05: CAL-01 and CAL-05 NOT ticked. This plan built the record's SHAPE and its refusals; both requirements are MEASUREMENTS (23-10 / 23-11) that have not happened. Ticking a requirement whose run has not occurred is the defect the phase's own ordering discipline exists to prevent.
 - [Phase 23] 23-05: the plan cited scripts/mitigation_gate.py::_prove_retention_floor as the refusal shape to mirror; that function does not exist there — it is at scripts/phase20_gate_coverage.py:413. Code wins, and the module cites the real location. Ninth straight plan in this repository naming an artifact the code does not have.
 - [Phase 23] 23-05: gsd-sdk hazards, FOURTEENTH session in a row; the profile matched 23-01's almost exactly. state.advance-plan advanced Plan 5->6 CORRECTLY and left stopped_at un-advanced (not regressed backwards this time), flattened the body Status: to 'Ready to execute', and returned last_updated QUOTED. state.update-progress returned {"updated": false, "reason": "Progress field not found in STATE.md"} — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped last_updated and last_activity; completed_plans stayed at 51 and had to be hand-incremented to 52. state.record-metric and state.add-decision both REFUSED positional args and needed flags; add-decision then wrote '- [Phase ?]: ' on all five calls. state.record-session was CLEAN and CORRECTED advance-plan's un-advanced stopped_at as a side effect. last_activity came back as 2026-08-27 (UTC-shifted) from three handlers against a local date of 2026-08-26. All hand-repaired line-exactly against a snapshot taken before the first call; git diff .planning/ read after EVERY call; wc -l 670 -> 676 accounted for (1 metric row + 5 decisions). NEW THIS SESSION AND NOT IN ANY PRIOR ENTRY: state.add-decision REVERTED progress.completed_plans from a hand-repaired 52 back to 51 — it rewrites the whole frontmatter from a stale read, so a repair made BEFORE it runs is silently undone. Re-repair AFTER the last add-decision call, not before.
+- [Phase 23] 23-06: research's BIT-IDENTICAL `_global_norm` row does NOT hold on this repository's fixture — cpu 0.5771376490592957 vs mps 0.5771377086639404 (1.033e-07 relative, ~1 float32 ULP). The planned `test_global_norm_is_bit_identical_across_devices` would have gone RED correctly; it ships as `test_global_norm_across_devices_diverges_far_below_the_fitted_bands`, asserting the measured bound AND its 2,500x headroom against the tighter fitted band. Both fitted constants are BYTE-UNCHANGED because the measurement supports them, not because a check was relaxed.
+- [Phase 23] 23-06: the four fakes' AST halves run on the `cpu` leg ONLY (`_AST_HALF_RUNS_ON`). The plan's Task 1 asks the mps leg to apply the source mutation via `_mutate`/`_run_live_guard` while Task 2(c) asks the sign-off to record those halves as NOT re-run on MPS — the two are the same act and cannot both hold. Resolved toward the exemption (stated twice in the must-haves, enforced by T-23-28): no source mutation occurs on the mps leg, and the ledger says so.
+- [Phase 23] 23-06: `_DISTINCT_RED_SIGNATURES` stays 9 while `_WATCHED_RED_NODE_IDS` grows to 13 device-qualified `(node_id, observed_on)` entries. A venue transfer is the same fake tripping the same invariant with the same message on a second device — a new OBSERVATION, not a new SIGNATURE — so folding the four mps rows into the total would report a 44% coverage rise that bought no detection. Counted separately by `_MPS_OBSERVATIONS_PER_FAKE`, required to be exactly one per fake.
+- [Phase 23] 23-06: `_LEDGER_SIGN_OFF_ITEMS` rows now carry the SUMMARY each is checked against. Asserting this phase's two new facts against the closed 22-11-SUMMARY.md would be RED forever, and the only way to green it would be editing a closed Phase-22 artifact so a Phase-23 test could pass. The `rng["mps"]` disclosure was REWRITTEN (exercised on the M3, still unexercised in CPU-only CI), not deleted.
+- [Phase 23] 23-06: gsd-sdk hazards, FIFTEENTH session in a row; the profile matched 23-05's with one item DROPPING OFF. `state.advance-plan` did NOT regress `stopped_at` backwards this time (it left it stale at 23-05 instead, which `state.record-session` then corrected as a side effect), but it still flattened the body `Status:` to "Ready to execute" and advanced `last_activity` to the UTC date 2026-08-27 while every commit and the SUMMARY carry the local 2026-08-26 — the same rollover 23-05 saw. The `Phase:`/`Plan:` counters were CORRECT (6 of 14 -> 7 of 14) and `completed_plans` incremented 52 -> 53 and was NOT reverted by the four `add-decision` calls. `state.update-progress` again returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped `last_updated`. `state.record-metric` and `state.add-decision` both REFUSED positional args and needed flags; with flags the metric row was CLEAN (`| Phase 23 P06 | 50min | 3 tasks | 2 files |`) and all four decisions came back labelled `- [Phase ?]: `. `last_updated` came back QUOTED from three handlers. `roadmap.update-plan-progress 23` flipped the 23-06 checkbox correctly (6/14) and mangled the row's trailing cells to `| In Progress|  |`, dropping the `-` date placeholder. Six corruptions hand-repaired 1-line-for-1-line against a snapshot taken before the first call, `git diff .planning/` read after EVERY call.
 
 ### Roadmap Evolution
 
@@ -641,8 +647,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T01:03:19.455Z
-Stopped at: Completed 23-05-PLAN.md (plan 5 of 14)
+Last session: 2026-08-27T01:53:07.070Z
+Stopped at: Completed 23-06-PLAN.md (plan 6 of 14)
 Resume file: None
 
 ## Operator Next Steps
