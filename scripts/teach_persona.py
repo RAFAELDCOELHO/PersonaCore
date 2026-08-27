@@ -367,14 +367,45 @@ def arm_bin_targets(arm, outputs):
     return paths
 
 
-def refuse_if_exists(paths):
+def refuse_if_exists(paths, *, expected=()):
     """Refuse-to-rerun: an arm's outputs are RECORDED evidence once written — a rerun on
-    drifted code or a drifted fact set would silently replace them. Fail loud, name the file."""
+    drifted code or a drifted fact set would silently replace them. Fail loud, name the file.
+
+    ``expected`` (D-07, plan 23-07) is the RESUME inversion, and it is a WIDENING OF THIS HELPER
+    rather than a branch at either call site. Semantics:
+
+    * every path in ``paths`` is refused if it EXISTS (unchanged, and ``expected=()`` is the
+      default, so all four pre-existing callers — ``build_arm_bins``, ``train_arm``,
+      ``phase21_golden_capture``, ``phase21_unit_record`` — are byte-identical to before);
+    * every path in ``expected`` is refused if it is ABSENT, naming the missing file and saying
+      that a resume requires it.
+
+    A resume does not BYPASS the refusal, it INVERTS it per target. On a resume the checkpoint IS
+    the resume source, the csv MUST be appended to (``CSVLogger`` is restart-safe and ``train()``
+    derives cumulative tokens from the ABSOLUTE step precisely so the logged curve is continuous
+    across a kill — ``training/loop.py``'s ``tokens_per_step`` comment), and the bins must be the
+    SAME corpus the killed half trained on. Only the adapter keeps the refuse-if-present sense:
+    the export is the LAST thing ``train_arm`` does, so an adapter on disk means the arm completed.
+
+    Widened here rather than branched at the call site for the reason ``arm_bin_targets``'
+    docstring already gives — two copies of a guard drift, and BOTH callers of ``arm_bin_targets``
+    have to invert together or a resume is refused by whichever one did not.
+    """
     for out in paths:
         if out.exists():
             raise SystemExit(
                 f"[teach_persona] {out} already exists — this arm is recorded evidence. "
                 f"Delete {' and '.join(str(p) for p in paths)} to re-run."
+            )
+    for want in expected:
+        if not want.exists():
+            raise SystemExit(
+                f"[teach_persona] {want} is MISSING and a resume requires it. A resume continues "
+                "a recorded run: the checkpoint is the resume source, the csv is appended to so "
+                "the logged curve stays continuous across the kill, and the bins must be the same "
+                "corpus the killed half trained on. Re-creating any of them would make the "
+                "resumed run a different run wearing the same paths. Resume from the run that "
+                f"wrote {want}, or start a fresh arm under a different prefix."
             )
 
 
@@ -901,8 +932,26 @@ def arm_spec(arm):
     raise SystemExit(f"[teach_persona] unknown arm {arm!r} — expected one of {ARMS}")
 
 
+def _sha256(path):
+    """sha256 of one file, for the resume corpus-identity proof. Streamed — the bins are small
+    today (a dp_n8 teaching bin is tens of KB) but a whole-file read is a needless ceiling."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def build_arm_bins(
-    arm, facts, family_ids, *, second_person=False, replay_ratio=0.0, seed=SEED, prefix="phase14"
+    arm,
+    facts,
+    family_ids,
+    *,
+    second_person=False,
+    replay_ratio=0.0,
+    seed=SEED,
+    prefix="phase14",
+    resume_from=None,
 ):
     """Render, encode, write and prove one arm's teaching bins; return ``(tok, stats, paths)``.
 
@@ -927,9 +976,29 @@ def build_arm_bins(
     argument away here would DISARM that guard: leaving it wired means the day someone sets a
     non-zero ratio on a DP arm, this function raises instead of quietly baking ~30 replay windows
     in beside 33 fact windows and falsifying ``grad_accum_steps = n_facts`` by ~7.9x (D-09).
+
+    ``resume_from`` (D-07, plan 23-07) is ``None`` for every non-resuming caller and then this
+    function is BYTE-IDENTICAL to before. It is threaded here — and not only into ``train_arm`` —
+    because this is the SECOND caller of ``arm_bin_targets``, and a resume that inverted only
+    ``train_arm``'s guard would be refused three lines later by THIS one. That is the seam being
+    dead on arrival, not a nicety.
+
+    On a resume the bins must EXIST (the inversion), and this function then REBUILDS them and
+    REFUSES if a single byte moved. Rebuild-and-compare rather than skip-the-rebuild, deliberately:
+    the pack is deterministic in ``(facts, family_ids, second_person, replay_ratio, seed)``, so a
+    byte-identical rebuild PROVES the resumed half trains on the corpus the killed half trained on
+    (T-23-35), while skipping the rebuild would only ASSUME it. ``n_facts`` also keeps coming from
+    the packer's own record count, which is the provenance ``train_arm``'s ``dp_accum`` comment
+    requires — a second derivation read back off the fact bin would be free to drift from it.
     """
     outputs = arm_outputs(arm, prefix=prefix)
-    refuse_if_exists(arm_bin_targets(arm, outputs))
+    targets = arm_bin_targets(arm, outputs)
+    if resume_from is None:
+        refuse_if_exists(targets)
+        before_digests = None
+    else:
+        refuse_if_exists([], expected=targets)
+        before_digests = {path: _sha256(path) for path in targets}
 
     seed_everything(seed)
     tok = from_json(TOKENIZER_PATH)  # FROZEN production artifact — never retrain
@@ -958,6 +1027,29 @@ def build_arm_bins(
         align_facts=pairs,
     )
     sanity_check(tok, arm, outputs["bin"], outputs["mask"], facts, stats)
+
+    if before_digests is not None:
+        drifted = {
+            path: (was, now)
+            for path, was in before_digests.items()
+            if (now := _sha256(path)) != was
+        }
+        if drifted:
+            raise SystemExit(
+                "[teach_persona] the resumed arm rebuilt a DIFFERENT corpus than the killed half "
+                "trained on: "
+                + "; ".join(
+                    f"{p} {was[:12]}... -> {now[:12]}..." for p, (was, now) in drifted.items()
+                )
+                + f". The pack is deterministic in (facts, family_ids, second_person, "
+                f"replay_ratio, seed={seed}), so a drifted byte means one of those inputs moved "
+                "between the kill and the resume. Continuing would publish an epsilon whose "
+                "prefix and suffix describe two different datasets."
+            )
+        print(
+            f"[teach_persona] resume: rebuilt bins are byte-identical to the killed half's "
+            f"({len(before_digests)} files, sha256 verified)"
+        )
 
     print(
         f"[teach_persona] {arm}: {stats['episodes']:,} episodes, {stats['tokens']:,} tokens "
@@ -1131,6 +1223,73 @@ EVAL_INTERVAL = 10  # 20 curve points over the run — the collateral-collapse t
 CHECKPOINT_INTERVAL = 50  # a killed run loses <= 50 steps; 200 steps needs no heavier cadence
 
 
+def _generator_state_bytes(device):
+    """Byte length of a FRESH ``torch.Generator``'s state on ``device`` — DERIVED, never a literal.
+
+    The two figures this project has measured are 5,056 (CPU) and 44 (MPS) under torch 2.7.1, and
+    they are recorded in ``personacore.checkpoint``'s two-slot register and in
+    ``DPSGD.noise_rng_state``'s docstring. They are NOT hardcoded here: a probe self-calibrates if
+    a torch release moves either number, and a guard that goes stale is worse than no guard.
+    """
+    return int(torch.Generator(device=device).get_state().numel())
+
+
+def _refuse_cross_device_resume(arm, resume_from, device):
+    """Refuse a DP resume whose ``dp_noise_rng`` was written on a DIFFERENT device (T-23-38).
+
+    Scoped to DP arms deliberately. The generator state is the ONLY device-typed thing in the
+    checkpoint — every other RNG slot round-trips as a CPU tensor on both devices, and
+    ``load_checkpoint`` passes ``map_location="cpu"`` — so a non-DP resume has nothing to refuse
+    and no epsilon to protect. That is also why the *missing-slot* case below is a refusal HERE
+    while ``training/loop.py`` deliberately TOLERATES it (its branch (2): a checkpoint without the
+    slot was written by a run with no DP seam, and a freshly seeded generator has released
+    nothing). The two are not in tension: at the LOOP level "no slot" means "not a DP run, seed
+    fresh"; at THIS level it means "you asked to resume a DP ARM from a checkpoint no DP run
+    wrote", and the epsilon prefix that resume claims to continue does not exist. Refusing here
+    reddens neither of the two committed guards that pin the loop's tolerance —
+    ``test_dp_noise_rng_round_trips_through_a_kill_and_resume`` and
+    ``test_resume_epsilon_bit_identical`` both drive ``train()`` directly, never ``train_arm``.
+
+    torch would refuse the mismatch on its own (``RuntimeError: RNG state is wrong size``), which
+    is why this is an upgrade rather than a necessity: that message names no arm, no file and no
+    phase. The operator mistake it stands for is a smoke run done on CPU and then "continued" on
+    the M3.
+    """
+    # weights_only=False: the FULL resume checkpoint carries pickled optimizer/RNG/numpy objects.
+    # TRUSTED-only read of the project's OWN checkpoint (T-14-04) — the same posture as the
+    # CONVBASE_BEST load below, and the file was written by this same driver minutes earlier.
+    ckpt = torch.load(resume_from, map_location="cpu", weights_only=False)
+    state = ckpt.get("dp_noise_rng")
+    if state is None:
+        raise SystemExit(
+            f"[teach_persona] arm {arm!r} asked to resume from {resume_from}, but that checkpoint "
+            "carries NO 'dp_noise_rng' key. All three save_checkpoint call sites in "
+            "training/loop.py::train splat **_dp_extra(), which is empty unless a DP seam is "
+            "live, so the key's ABSENCE is the provenance: no DP run wrote this file. There is "
+            "therefore no released-noise prefix for this resume to continue, and the epsilon it "
+            "would report would describe a composition whose first half was never privatised. "
+            "Resume a DP arm only from a checkpoint its own DP run wrote."
+        )
+    recorded_bytes = int(state.numel())
+    expected_bytes = _generator_state_bytes(device)
+    if recorded_bytes == expected_bytes:
+        return
+    probes = {_generator_state_bytes("cpu"): "cpu"}
+    if torch.backends.mps.is_available():
+        probes[_generator_state_bytes("mps")] = "mps"
+    if torch.cuda.is_available():
+        probes[_generator_state_bytes("cuda")] = "cuda"
+    recorded_device = probes.get(recorded_bytes, f"unrecognised ({recorded_bytes} bytes)")
+    raise SystemExit(
+        f"[teach_persona] arm {arm!r} asked to resume from {resume_from}, whose dp_noise_rng was "
+        f"written on {recorded_device} ({recorded_bytes} bytes), but this run resolved device "
+        f"{device!r} (a generator state there is {expected_bytes} bytes). A DP generator state "
+        "does not cross devices — torch refuses it as 'RNG state is wrong size' without naming "
+        "the arm or the file. Re-run the whole arm on one device: a run split across two has no "
+        "single noise stream, so the epsilon it would publish describes neither half."
+    )
+
+
 def train_arm(
     arm,
     *,
@@ -1142,6 +1301,7 @@ def train_arm(
     prefix="phase14",
     dp_sigma=None,
     dp_clip_norm=None,
+    resume_from=None,
 ):
     """Build one arm's bins, train ONLY its LoRA parameters on them, and export the adapter.
 
@@ -1173,6 +1333,56 @@ def train_arm(
     refusal instruction ("if either is ``None`` on a DP arm, refuse") presupposes. It names no
     sigma and no C, so the no-literal property the AST guard pins is unaffected: a DP arm without
     both values raises ``SystemExit`` below and never trains.
+
+    ``resume_from`` (D-07, plan 23-07) — THE ONE HOP THAT CLOSES WARNING-2
+    ----------------------------------------------------------------------
+    ``training/loop.py::train`` has implemented ``resume_from`` completely since v1.0 — full state
+    + RNG restore, ``start_step = ckpt["step"]``, and the three-branch DP-slot matrix WARNING-1 is
+    closed on. What was missing was this call: the ``train(...)`` below did not pass it, so a
+    killed DP arm could only be restarted from ZERO, and ``refuse_if_exists`` would not even allow
+    that without the operator deleting the CSV — which discontinuities the very curve
+    ``train()`` derives cumulative tokens from the absolute step to keep continuous. ``train()``
+    itself needs NOTHING; this is one hop above it.
+
+    ``None`` IS A SENTINEL HERE TOO, for the identical reason ``dp_sigma``/``dp_clip_norm`` are.
+    SEVEN production call sites outside this module already call ``train_arm`` —
+    ``phase17_isolation``, ``phase19_erasure`` (x3), ``phase19_run``, and :func:`run_calibration`
+    / :func:`main` here — and every one of them passes a NON-DP arm and no resume. A
+    truly-required parameter would make each a ``TypeError``. ``train_arm(resume_from=None)`` is
+    byte-identical to the pre-23-07 function at every one of them. (Enumerated by SYMBOL, not by
+    line number: a symbol's name survives edits, a line number survives none.)
+
+    THE GUARD INVERTS PER TARGET; IT IS NOT BYPASSED. Four rows, and this table is where the bug
+    would live:
+
+    ======================  ==========================  ============================================
+    target                  on a resume                 why
+    ======================  ==========================  ============================================
+    bins (2, or 3 on a DP)  REQUIRED PRESENT            regenerated bins are a DIFFERENT corpus
+                                                        (T-23-35); ``build_arm_bins`` rebuilds and
+                                                        refuses on any byte drift
+    ``csv``                 REQUIRED PRESENT            ``CSVLogger`` is restart-safe and the token
+                                                        column is derived from the ABSOLUTE step, so
+                                                        appending keeps the curve continuous; the
+                                                        operator deleting it to get past a refusal
+                                                        is the mistake (T-23-33)
+    ``checkpoint``          REQUIRED PRESENT            it IS the resume source
+    ``adapter``             STILL REFUSED IF PRESENT    the export is the LAST thing this function
+                                                        does, so an adapter on disk means the arm
+                                                        already completed
+    ======================  ==========================  ============================================
+
+    TWO REFUSALS THE SEAM ADDS, both ``SystemExit`` naming the arm and the file:
+
+    * CROSS-ARM. ``resume_from`` must resolve to THIS arm's own ``paths["checkpoint"]``. Resuming
+      arm A's DP run from arm B's checkpoint would publish an epsilon describing a composition
+      that spans two arms — the same defect class ``_count_composed_steps`` was written to catch.
+    * CROSS-DEVICE. The DP generator's state is 5,056 bytes on CPU and 44 bytes on MPS and the two
+      are MUTUALLY REFUSED by torch. The seam does not NEED a guard — torch already raises
+      ``RuntimeError: RNG state is wrong size`` — but that message names no arm, no file and no
+      phase, and a ``SystemExit`` naming all four (arm, file, recorded device, resolved device) is
+      a strictly better failure at the same cost. The warning sign it stands for is concrete: a
+      smoke run done on CPU and then "continued" on the M3.
     """
     # ONE boolean gates all FOUR D-08 wirings below, so the DP-vs-non-DP boundary is a single
     # readable predicate and a future reader cannot wire three of four by accident.
@@ -1199,14 +1409,34 @@ def train_arm(
     paths = arm_outputs(arm, prefix=prefix)
     # Refuse on EVERY target up front (five, or six once a DP arm's fact bin is counted),
     # before a single token is written: discovering a recorded checkpoint only after rebuilding
-    # the bins would already have clobbered them.
-    refuse_if_exists(
-        arm_bin_targets(arm, paths) + [paths["csv"], paths["checkpoint"], paths["adapter"]]
-    )
+    # the bins would already have clobbered them. On a RESUME the four-row table in the docstring
+    # applies: three targets move from "refused if present" to "refused if ABSENT", the adapter
+    # does not move, and the helper — not this call site — owns both senses.
+    if resume_from is None:
+        refuse_if_exists(
+            arm_bin_targets(arm, paths) + [paths["csv"], paths["checkpoint"], paths["adapter"]]
+        )
+    else:
+        refuse_if_exists(
+            [paths["adapter"]],
+            expected=arm_bin_targets(arm, paths) + [paths["csv"], paths["checkpoint"]],
+        )
+        resolved = pathlib.Path(resume_from).resolve()
+        if resolved != paths["checkpoint"].resolve():
+            raise SystemExit(
+                f"[teach_persona] arm {arm!r} was asked to resume from {resolved}, but its OWN "
+                f"checkpoint is {paths['checkpoint'].resolve()}. Refusing: a run that continues "
+                "one arm's optimizer/RNG state under another arm's name composes privacy across "
+                "TWO arms, and the epsilon it would publish describes a composition that never "
+                "ran on either — the same defect class _count_composed_steps was written to "
+                "catch. Resume each arm from its own latest.pt."
+            )
 
     summary = preflight_device(strict=True)  # CUDA-P100 -> MPS -> CPU raise, BEFORE the run
     print(f"[teach_persona] preflight: {summary}")
     runtime = RuntimeConfig()  # resolves the preflighted device (MPS on the M3, fp32, AMP off)
+    if resume_from is not None and is_dp:
+        _refuse_cross_device_resume(arm, resume_from, runtime.device)
 
     if not CONVBASE_BEST.exists():
         raise SystemExit(
@@ -1239,6 +1469,9 @@ def train_arm(
         replay_ratio=replay_ratio,
         seed=seed,
         prefix=prefix,
+        # Threaded, not defaulted: this is the SECOND caller of `arm_bin_targets`, and a resume
+        # that inverted only the guard above would be refused by that one instead.
+        resume_from=resume_from,
     )
     # weights_only=False: the FULL resume checkpoint carries pickled optimizer/RNG/numpy
     # objects. TRUSTED-only read of the project's OWN checkpoint (T-14-04) — never a foreign
@@ -1417,6 +1650,10 @@ def train_arm(
         eval_interval=EVAL_INTERVAL,
         checkpoint_path=paths["checkpoint"],
         checkpoint_interval=CHECKPOINT_INTERVAL,
+        # THE HOP THAT CLOSES WARNING-2. `train()` needed nothing: resume_from at loop.py:254 has
+        # been complete since v1.0 (full state + RNG restore, start_step = ckpt["step"], the
+        # three-branch DP-slot matrix). This one keyword is the entire wiring.
+        resume_from=resume_from,
         return_final_loss=True,
         **dp_kwargs,
     )
