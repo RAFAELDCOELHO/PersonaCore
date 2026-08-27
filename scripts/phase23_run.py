@@ -34,6 +34,29 @@ own working state between sub-modes. ``data/`` is wholly gitignored, and that is
 number in it is carried into one of the two COMMITTED records below, and a third tracked artifact
 under ``results/phase23_*`` would be a third thing the ordering guards have to watch for no gain.
 
+RETRACTION, 2026-08-27 — THE FILE IS NOW TRACKED. The paragraph above is kept verbatim because it
+is what the phase was built against, and its REASONING still holds: a third artifact *under*
+``results/phase23_*`` would indeed burden the ordering guards. It simply does not apply here.
+``data/phase23_run_state.json`` is not under that prefix, and neither guard glob matches it —
+``NOISED_RECORD_GLOB`` is ``results/phase23_noised_*`` and the ancestry guard binds
+``results/phase23_*``; both were checked against this path and both return False. Tracking it adds
+nothing to any guard's watch list, so the stated cost is not incurred.
+
+WHAT FORCED THE CHANGE. This file is the ONE-ATTEMPT rule's state, and untracked it left a
+delete-and-re-run with **zero residue anywhere** — ``git ls-files data/`` returned 0 and no state
+file had ever been committed in this repository. That is why 23-15/23-17 record the full-delete
+case as *refused by NOTHING*. It also inherited the wrong rule: ``.gitignore:13`` reads "Training /
+runtime outputs (memory lives in weights — never commit them)", written for the GB-scale ``uint16``
+corpora and ``.pt`` adapters. This is 16 KB of measurement ledger — a ``results/``-class artifact
+filed in a ``data/``-class directory.
+
+WHAT TRACKING DOES AND DOES NOT BUY. It is NOT real-time prevention, and it is not by itself
+retroactive: a working-tree revert after a run still leaves no history. It becomes retroactive only
+once a section reaches a COMMIT — which 23-17's same-session commit requirement now carries. Against
+that committed baseline a later deletion is a visible diff. The residual is therefore "not
+prevented, but auditable after the fact", not "closed" — and 23-15/23-17 must say the weaker true
+thing rather than the stronger false one.
+
 CPU-hostile: this driver trains and scores on the resolved device (MPS on the M3, D-01).
 """
 
