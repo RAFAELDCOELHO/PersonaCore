@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-07-PLAN.md (plan 7 of 14)
-last_updated: 2026-08-27T02:53:44.803Z
-last_activity: 2026-08-26
+stopped_at: Completed 23-08-PLAN.md (plan 8 of 14)
+last_updated: 2026-08-27T05:54:17.772Z
+last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 54
+  completed_plans: 55
   percent: 33
 ---
 
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 8 of 14
+Plan: 9 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
 EXECUTED — all five plans landed and every claim below is now a measured state rather than a plan. GAP 1 (GATE-06) closed at `20-14`: `coverage_verdict` carries a per-element `[0.0, 1.0]` `_prove` on BOTH Y legs, placed before `x_uppers` so no value reaches the axis loop unvalidated, and the range check subsumes NaN with no deletable special case; the success-count unit is enforced BY TYPE (`isinstance(k, int) and not isinstance(k, bool)`), which also refuses the module's own rate-space `SUPERSEDED_SWEEP_SENTINEL`. GAP 2 (GATE-02 / T-20-19) closed at `20-15`: `_prove_retention_floor` gained a fifth `_prove` bounding the floor's MAGNITUDE — `_MAX_ADMISSIBLE_RETENTION_FLOOR`, DERIVED from the governing floor times a separately-named `_RETENTION_FLOOR_RELATIVE_TOLERANCE` (measured `1e-09`) — placed AFTER the `!=` so the named-value refusal still fires first; the one-ULP nudge and `5.0` under clean provenance are both refused by MAGNITUDE and the governing floor `0.008681618994239138` is still ADMITTED, so the bound is one-sided and not vacuous. THE FINDING A FUTURE READER MOST NEEDS IS **D-41**: that bound refuses THIS REPOSITORY'S OWN committed fixtures at `retention_noise_floor: 0.009` inside the FROZEN pin, so the sanctioned route's test harness supplies the governing floor READ from `results/phase20_retention_floor.json` rather than the tolerance being widened to admit a value already in hand — and every published verdict is BIT-UNCHANGED under the substitution (all four `PASS`/`INCONCLUSIVE` readings identical, the governing cap `3.9085032379884783` strictly TIGHTER than the fixture's `3.90914`, so the rewire cannot buy a pass the fixture floor would have withheld). `20-16` published the second dated continuation additively (+152 / −0 via `append_addendum`, in its own commit) and corrected in place the one `REQUIREMENTS.md` sentence the verification measured FALSE. `20-17` re-closed `20-SECURITY.md` to `status: verified` / `threats_open: 0` at 84 distinct threat IDs with zero rows at Status `open`, in a commit distinct from `20-13`'s OPEN flip (D-39), gated on RE-APPLYING eight watched-RED breaks in its own process — all observed RED, all restored byte-identically, and ONE DIVERGED from its SUMMARY and was published rather than smoothed. Full suite `877 passed, 1 skipped`; both frozen pins `git diff --exit-code` 0. Confirmation is the ORCHESTRATOR's audit at `/gsd:verify-phase 20`, not this record. PRIOR ENTRY (2026-08-21, at dispatch, carried forward rather than deleted): The 2026-08-21 re-verification returned `gaps_found` at 5/6 must-haves, and both remaining gaps are the same defect class — a guard that refuses a NAME where the harm is a PROPERTY. GAP 1 (GATE-06 / ROADMAP SC3) — `coverage_verdict` length-checks both Y sweep legs and consumes their values raw, while the extraction axis on the same function gets three per-element `_prove` calls; measured, held-out `(0.30, 0.28)` is correctly flagged truncated but `(nan, 0.28)`, strictly MORE truncated, drops out of the truncated set entirely and reaches `PASS` — `nan >= criterion` is False, so the NaN is COUNTED as a failing point and actively manufactures the bracket. GAP 2 (GATE-02 / T-20-19) — `_prove_retention_floor` refuses the borrowed floor by float `!=`; measured, `0.06893 * (1 + 2**-50)` defeats it and returns a BIT-IDENTICAL `4.029`, and `retention_noise_floor=5.0` with clean adapter provenance needs no malformed input at all to reach `PASS` at cap `13.89114` against the governing `3.9085032379884783`. Both reproduced against HEAD before planning. THE PLANNED CLOSURE, per three escalation decisions taken at the gate: the magnitude bound lands BESIDE the `!=` (name refused by identity AND class refused by magnitude, which also moots the D-24 post-hoc question); T-20-19 flips OPEN / `threats_open: 1` as 20-13's FIRST act and returns to CLOSED only after the bound's tripwires are watched RED against both measured cases, in a separate commit; and the Y hole is NOT deferred to Phase 23. PLANNER FINDING, not in any source document: the bound refuses this repository's OWN committed fixtures — `retention_noise_floor: 0.009` at `scripts/mitigation_gate.py:1237`, annotated `# fabricated`, inside the FROZEN file — so landing it alone reddens 5 of 11 correction tests. Recorded as D-41 and closed by having the test harness read the governing floor from `results/phase20_retention_floor.json` rather than by widening the tolerance to admit a value already in hand. Verified by the plan-checker end to end: bound alone 5 failed / 6 passed, bound + harness 11 passed, all fixture verdicts bit-unchanged. NOT YET EXECUTED — no code has changed; `git diff --exit-code -- scripts/ tests/ results/` returns 0.
-Last activity: 2026-08-26
+Last activity: 2026-08-27
 
 ## Performance Metrics
 
@@ -148,6 +148,7 @@ Last activity: 2026-08-26
 | Phase 23 P05 | 35min | 2 tasks | 2 files |
 | Phase 23 P06 | 50min | 3 tasks | 2 files |
 | Phase 23 P07 | 55min | 3 tasks | 2 files |
+| Phase 23 P08 | 185min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -525,6 +526,11 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-07: MEASURED — reading `tp.DPSGD` inside a probe installer that runs three times in one test NESTS the factories, so every later run's `finalize` increments every earlier run's counter. It reported composed steps (8, 4, 2) for a (4, 2, 2) run — a T wrong in the PESSIMISTIC direction, exactly the accounting error a green test would carry into a published epsilon. Bound to `_REAL_DPSGD` at import instead.
 - [Phase 23] 23-07: DPSGD-06 was NOT ticked. It reads "the sigma=0 point is the DP arm's FIRST executed run"; this plan ran sigma=1.0 and is the DISCLOSED EXCEPTION to that ordering, not its satisfaction. 23-10 is the plan that can tick it. Disclosed in both places it can be — `test_production_resume_epsilon_bit_identical`'s docstring and 23-07-SUMMARY.md — because the probe commits zero `results/phase23_*` records and is therefore invisible to all three of 23-03's committed-record ancestry guards.
 - [Phase 23] 23-07: gsd-sdk hazards, SIXTEENTH session in a row, and a 23-04 mode RETURNED after skipping 23-06. `state.advance-plan` had CORRECT counters (Plan 7 of 14 -> 8 of 14) and left `stopped_at` STALE at 23-06 rather than regressing it backwards, but `completed_plans` FAILED TO INCREMENT (stayed 53, hand-set to 54) — the 23-04 failure mode, which had NOT reproduced in 23-06 — and it flattened the body `Status:` to "Ready to execute", returned `last_updated` QUOTED, and advanced `last_activity` and the body `Last activity:` to the UTC date 2026-08-27 against a local 2026-08-26 that every commit carries. `state.record-metric --flag` CLEAN (`| Phase 23 P07 | 55min | 3 tasks | 2 files |`, no unit doubling, `completed_phases` 3 and `percent` 33 untouched). `state.record-session --flag` CLEAN and corrected the stale `stopped_at` as a side effect. `roadmap.update-plan-progress 23` MANGLED the row's trailing cells to `| In Progress|  |` for the fourth session running, and could not tick the 23-07 checkbox or move the row past 6/14 because it counts SUMMARY files on disk and the SUMMARY did not exist yet — both hand-set. `state.update-progress` and `state.add-decision` were NOT CALLED, following 22-17/22-18's measured conclusion; these decisions and the position are hand-written. Five corruptions hand-repaired 1-line-for-1-line against a pre-call snapshot.
+- [Phase 23] 23-08: D-03's noise floor is MEASURED at 0.05357142857142849 (54/1008) — the RANGE over 5 per-seed taught-recall-ON readings, reduced by the blind phase23_prereg.noise_floor and committed while git ls-files results/phase23_sigma_zero.json was still empty
+- [Phase 23] 23-08: N=5 came from phase23_prereg.choose_n_seeds(996.2667346671224 s/seed) — 5 x 996.27 = 4,981.33 s against the 17,175 s H_PER_POINT_FLOOR_SECONDS bound. FITS; N is NOT the D-03 floor of 3 and there is no overrun
+- [Phase 23] 23-08: CTRL-03's never-taught arm is TRAINED (5 distinct seeds, adapters exported) but NOT scored, and CTRL-03 stays UNTICKED — its own text requires it to serve as frontier floor and relearning reference, and neither duty has been served. 23-14 scores it at 23-13's K
+- [Phase 23] 23-08: the ordering guards, MEASURED before and after rather than claimed. `test_the_prereg_rule_precedes_every_phase23_result` was ALREADY live at 23-04 and its checked-pair count moves 1 x 1 -> 1 x 13 tracked `results/phase23_*` artifacts. `test_control_precedes_sigma_zero` and `test_sigma_zero_precedes_every_noised_point` are BOTH STILL VACUOUS after this plan — each binds on `tracked = git ls-files <artifact_glob>` and both globs (`results/phase23_sigma_zero.json`, `results/phase23_noised_*`) still match NOTHING. What 23-08 lands is guard 2's PIN side, which the guard reads only once something is tracked. So ZERO guards went live here; the plan brief's "their endpoints land in 23-08 and 23-10" is true of the pin, not of the activation. `test_every_noised_sweep_point_is_under_the_noised_glob` scans 1 -> 3 tracked json records.
+- [Phase 23] 23-08: gsd-sdk hazards, SEVENTEENTH session in a row; the 23-04/23-07 `completed_plans` mode returned AGAIN. `state.advance-plan` had CORRECT counters (Plan 8 of 14 -> 9 of 14), advanced `stopped_at` correctly, but `completed_plans` FAILED TO INCREMENT (stayed 54, hand-set to 55), it flattened the body `Status:` to "Ready to execute", and returned `last_updated` QUOTED. `state.update-progress` returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped and re-quoted `last_updated`. `state.record-metric` and `state.add-decision` both REFUSED positional args and needed flags; with flags the metric row was CLEAN and all three decisions came back labelled `- [Phase ?]: `. `state.record-session --flag` was CLEAN. `roadmap.update-plan-progress 23` MANGLED the row's trailing cells to `| In Progress|  |` for the FIFTH session running AND left the row at 7/14 because it counts SUMMARY files on disk and the SUMMARY did not exist yet; the 23-08 checkbox was also left unticked. Six corruptions hand-repaired 1-line-for-1-line against a pre-call snapshot; `git diff .planning/` read after EVERY call; STATE.md 692 -> 698 and ROADMAP.md 804 -> 804 verified.
 
 ### Roadmap Evolution
 
@@ -657,8 +663,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T02:53:44.794Z
-Stopped at: Completed 23-07-PLAN.md (plan 7 of 14)
+Last session: 2026-08-27T05:54:17.763Z
+Stopped at: Completed 23-08-PLAN.md (plan 8 of 14)
 Resume file: None
 
 ## Operator Next Steps
