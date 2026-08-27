@@ -347,12 +347,19 @@ def _state_record(section, key, block):
     """
     doc = _state_load()
     entry = doc.setdefault(section, {}).setdefault(str(key), {})
-    clash = sorted(set(entry) & set(block))
+    # THE PREDICATE IS "WOULD THIS CHANGE A RECORDED VALUE", not "is this key already present".
+    # Measured, on this very run: the training leg and the scoring leg both carry the arm's `arm`
+    # and `seed` IDENTITY fields, with identical values, and a presence-only refusal threw away a
+    # completed 996-second scoring pass over two keys that were re-stating the same fact. A
+    # re-record at an identical value is a no-op; only a DIFFERENT value is the overwrite this
+    # refusal exists to stop, because that one publishes the second measurement under the first
+    # one's denominators.
+    changed = sorted(k for k in set(entry) & set(block) if entry[k] != block[k])
     _prove(
-        not clash,
-        f"{STATE_PATH} already carries {section}[{str(key)!r}] keys {clash} — they are recorded "
-        "measurements and there is no force flag. Delete the entry in a reviewed step to "
-        "re-measure it rather than overwriting a reading in place",
+        not changed,
+        f"{STATE_PATH} already carries {section}[{str(key)!r}] keys {changed} at DIFFERENT values "
+        "— they are recorded measurements and there is no force flag. Delete the entry in a "
+        "reviewed step to re-measure it rather than overwriting a reading in place",
     )
     entry.update(block)
     return _state_write(doc)
