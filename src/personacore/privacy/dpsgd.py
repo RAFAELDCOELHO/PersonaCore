@@ -600,6 +600,35 @@ class DPSGD:
              regime the mixed norm goes 0.436096 -> 0.436096, factor 1.000000, so it does not bind
              at ``grad_clip = 1.0``. Whether it binds on the REAL corpus at 200 overfit steps is
              UNMEASURED. Inert-by-accident is the definition of a convention.
+
+        RETRACTION, 2026-08-27 -- BOTH HALVES OF (3) ABOVE ARE MEASURED FALSE. The text is kept
+        verbatim because it is what the Phase-22 record was written against; this block names what
+        falsified it. Source: debug session ``sigma-zero-beats-control``, opened on Phase 23's D-04
+        halt and committed at ``263f5f8``.
+
+          (a) "inert BY ACCIDENT" is wrong about the MECHANISM, and understates the guarantee.
+              ``clip_grad_norm_`` is not weakly inert on the DP path -- it is STRUCTURALLY NEVER
+              CALLED there. ``training/loop.py:220-228`` gates it on ``dp_fn is None``, so the
+              legacy clip and ``finalize`` are the two arms of one ``if``/``else``. The property
+              (3) reaches for by measuring a norm is already true by call-graph inspection, which
+              is the basis ``loop.py``'s own D-03 comment claims. It is not a convention.
+
+          (b) "Whether it binds on the REAL corpus at 200 overfit steps is UNMEASURED" is no
+              longer true, and the measured answer is the OPPOSITE of the frozen-base reading
+              that (3) generalises from. On the real corpus the DP path's gradient norms ran
+              1.54--2.28, i.e. every one of the 25 sampled steps sits above ``grad_clip = 1.0``:
+              the clip would have bound on 25/25 steps HAD IT BEEN REACHABLE. The 1.000000 factor
+              in (3) is a frozen-base artefact and does not transfer.
+
+        WHY THIS MATTERS BEYOND THE DOCSTRING. The same ``if dp_fn is None`` that makes (a) true
+        also means the NON-DP arm is clipped while the DP arm is not -- measured binding on 19 of
+        25 control steps, mean shrink 0.807. That asymmetry is one of three mechanisms by which
+        the sigma=0 arm BEAT its unmitigated control by 4.15x the seed-to-seed noise floor,
+        tripping D-04. Phase 23's 23-08 enumerated four residual differences in advance and did
+        not enumerate this one. The defect is in the COMPARATOR, not in this method: over
+        identical materialised batches at sigma=0 with a non-binding C, all 72 LoRA tensors agree
+        with an ordinary grad-accum reference to 2.178e-07 relative -- the DP seam does no
+        arithmetic plain accumulation does not.
         """
         lot = int(accum)
         if lot < 1:
