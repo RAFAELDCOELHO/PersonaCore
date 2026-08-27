@@ -37,6 +37,7 @@ if _SCRIPTS not in sys.path:
 
 import phase23_matched_prereg as mp  # noqa: E402  (needs the sys.path insert above)
 import phase23_prereg  # noqa: E402  (same reason)
+import phase23_resume_prereg as rp  # noqa: E402  (same reason)
 import phase23_run  # noqa: E402  (same reason)
 import teach_persona as tp  # noqa: E402  (same reason)
 
@@ -491,14 +492,67 @@ def test_matched_record_records_the_attempt_state():
     record = _record()
     if record is None:
         return
-    assert record["matched_glob_at_start"] == [], (
-        f"the record says a matched artifact was ALREADY TRACKED at run start: "
-        f"{record['matched_glob_at_start']!r}"
+
+    # WIDENED, NOT DELETED, and the continuation branch's assertions are at least as hard as the
+    # first-attempt branch's. 23-17's run was harness-killed at 3 of 5 seeds, so the completion is
+    # a CONTINUATION: both lists below are legitimately non-empty and a bare `== []` would go RED
+    # against a correct record. What the two branches share is that the recorded attempt state must
+    # match the rule that actually governed the run.
+    attempt = record["attempt"]
+    assert attempt in ("first", "continuation"), (
+        f"the record declares attempt {attempt!r}, which is neither of the two branches "
+        "`phase23_run.matched` can take"
     )
-    assert record["prior_scored_seeds_at_start"] == [], (
-        f"the record says the state file already held SCORED matched seeds at run start: "
-        f"{record['prior_scored_seeds_at_start']!r}"
-    )
+    if attempt == "first":
+        assert record["matched_glob_at_start"] == [], (
+            f"the record says a matched artifact was ALREADY TRACKED at run start: "
+            f"{record['matched_glob_at_start']!r}"
+        )
+        assert record["prior_scored_seeds_at_start"] == [], (
+            f"the record says the state file already held SCORED matched seeds at run start: "
+            f"{record['prior_scored_seeds_at_start']!r}"
+        )
+        assert record["continuation_rule"] is None
+        assert record["continuation_fingerprint"] is None
+    else:
+        assert record["continuation_rule"] == (
+            "phase23_resume_prereg.prove_killed_run_continuation"
+        )
+        assert record["continuation_scope"] == rp.CONTINUATION_SCOPE, (
+            "the record's continuation scope is not `phase23_resume_prereg.CONTINUATION_SCOPE` "
+            "VERBATIM. A paraphrase is a second source for one statement, free to soften it"
+        )
+        fingerprint = record["continuation_fingerprint"]
+        assert fingerprint["record_exists"] is False
+        assert set(fingerprint["scored_seeds"]) == set(fingerprint["committed_scored_seeds"]), (
+            "the recorded fingerprint says the working tree and git history disagreed about which "
+            "seeds had scored, which conjunct 5 refuses — so this record cannot have been written"
+        )
+        assert len(fingerprint["scored_seeds"]) < len(phase23_run.SEED_LADDER), (
+            "the fingerprint records a FULL scored set, which is what a COMPLETED attempt leaves. "
+            "A continuation is by definition the completion of a run that never wrote its record"
+        )
+        # RE-ADMITTED under its own rule, PASSING ITS OWN `tracked` — with `tracked=[]` conjuncts 6
+        # and 7 would be satisfied vacuously and two of the seven would go silently untested
+        # forever. `ladder` is converted back with `tuple(...)` and NEVER sorted: conjuncts 3 and 4
+        # INDEX it, and `sorted(SEED_LADDER)` would make this re-admission REFUSE.
+        assert rp.prove_killed_run_continuation(
+            tracked=fingerprint["tracked"],
+            ladder=tuple(fingerprint["ladder"]),
+            trained_seeds=set(fingerprint["trained_seeds"]),
+            scored_seeds=set(fingerprint["scored_seeds"]),
+            committed_scored_seeds=set(fingerprint["committed_scored_seeds"]),
+            record_exists=fingerprint["record_exists"],
+        )
+        assert "WRITE-ORDERING" in record["continuation_discrimination"].upper() or (
+            "LAST act" in record["continuation_discrimination"]
+        ), (
+            "the record does not name the write-ordering that discriminates a killed run from a "
+            f"deleted-and-re-run one: {record['continuation_discrimination']!r}"
+        )
+
+    # THE FROZEN RULE STILL GOVERNS. The continuation is an exception that arrived BESIDE it, never
+    # a replacement for it, so this key and the whole scope block below are UNTOUCHED.
     assert record["one_attempt_rule"] == "phase23_matched_prereg.prove_first_attempt"
 
     scope = record["one_attempt_scope"].upper()
@@ -553,6 +607,81 @@ def _matched_writer():
         if isinstance(node, ast.FunctionDef) and node.name == "matched":
             return node
     raise AssertionError(f"no `def matched` in {_RUN_SOURCE} — the record writer has no writer")
+
+
+def _matched_branch():
+    """The ``if not scored:`` node that selects between the two one-attempt rules."""
+    guards = [
+        item
+        for item in ast.walk(_matched_writer())
+        if isinstance(item, ast.If)
+        and any(
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "prove_first_attempt"
+            for call in ast.walk(item)
+        )
+    ]
+    assert len(guards) == 1, (
+        f"`matched` has {len(guards)} branches reaching `prove_first_attempt`, not one — which "
+        "rule governs a run would then depend on which branch a reader happened to look at"
+    )
+    return guards[0]
+
+
+def _called_attrs(nodes):
+    return {
+        call.func.attr
+        for node in nodes
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+    }
+
+
+def test_both_one_attempt_rules_are_reachable_and_the_frozen_one_gets_an_unfiltered_argument():
+    """The branch is a MECHANISM, not a comment — and the frozen refusal stays REACHABLE.
+
+    ``if not matched_glob_at_start and not scored:`` would only ever call ``prove_first_attempt``
+    with an argument control flow had ALREADY PROVED EMPTY. That is filtering by control flow, and
+    it makes the frozen rule's refusal unreachable while leaving the call site looking correct.
+    ``not scored`` alone is one token shorter and strictly stronger. The B4 case below — a tracked
+    artifact beside an EMPTY scored set — is exactly the case the filtered predicate would have
+    made unreachable, and it is watched firing here.
+    """
+    branch = _matched_branch()
+    assert isinstance(branch.test, ast.UnaryOp) and isinstance(branch.test.op, ast.Not), (
+        f"the branch predicate is a {type(branch.test).__name__}, not `not <name>`. A `BoolOp` "
+        "here would hand the frozen rule an argument the branch had already proved empty"
+    )
+    assert isinstance(branch.test.operand, ast.Name), (
+        "the branch predicate is not `not <single name>`, so what it filters on is not readable "
+        f"from the call site: {ast.dump(branch.test.operand)}"
+    )
+    assert "prove_first_attempt" in _called_attrs(branch.body)
+    assert "prove_killed_run_continuation" in _called_attrs(branch.orelse)
+    assert "prove_killed_run_continuation" not in _called_attrs(branch.body)
+    assert "prove_first_attempt" not in _called_attrs(branch.orelse)
+
+    # B4 — WATCHED FIRING. A tracked artifact with an EMPTY scored set reaches the FROZEN rule with
+    # the real, non-empty list and raises its own refusal.
+    with pytest.raises(SystemExit) as refusal:
+        mp.prove_first_attempt([rp.seed_run_csv(phase23_run.SEED_LADDER[0])])
+    assert "ONE ATTEMPT — REFUSED" in str(refusal.value)
+
+    # And the other branch, against constructed state: a killed run is ADMITTED by the NEW rule.
+    ladder = phase23_run.SEED_LADDER
+    scored = set(ladder[:3])
+    assert (
+        rp.prove_killed_run_continuation(
+            tracked=sorted(rp.seed_run_csv(seed) for seed in [*sorted(scored), ladder[3]]),
+            ladder=ladder,
+            trained_seeds=scored,
+            scored_seeds=scored,
+            committed_scored_seeds=scored,
+            record_exists=False,
+        )
+        is True
+    )
 
 
 def test_the_matched_writer_does_not_inline_the_reduction():

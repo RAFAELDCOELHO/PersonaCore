@@ -96,6 +96,12 @@ import phase23_cost  # noqa: E402
 # `MATCHED_ARM_PREFIX` and the three AST completeness censuses. It is EDIT-ONCE from 23-17's first
 # matched artifact and has NO SAFETY VALVE, so nothing here writes to it.
 import phase23_matched_prereg as mp  # noqa: E402
+
+# 23-20's CONTINUATION pin — a SECOND rule that arrived in a NEW file rather than as an edit to the
+# frozen one above, because `git merge-base --is-ancestor HEAD d99d2aa` exits NON-ZERO and a second
+# commit touching `phase23_matched_prereg.py` would redden its ancestry guard PERMANENTLY. It admits
+# the continuation of a HARNESS-KILLED run and refuses every other shape of partial state.
+import phase23_resume_prereg as rp  # noqa: E402
 import teach_persona as tp  # noqa: E402
 from phase23_prereg import (  # noqa: E402
     CONTROL_FLOOR_RECORD,
@@ -2142,8 +2148,6 @@ def matched():
         text=True,
         check=True,
     ).stdout.split()
-    mp.prove_first_attempt(matched_glob_at_start)
-    print(f"[phase23_run] git ls-files {mp.MATCHED_ARTIFACT_GLOB}: EMPTY — first attempt")
 
     # ===== (2b) THE HALF OF THE UNCOMMITTED WINDOW THAT (2a) STRUCTURALLY CANNOT SEE =====
     # `.gitignore:17` ignores `data/` and `:14` ignores `checkpoints/`, so between this run writing
@@ -2167,12 +2171,86 @@ def matched():
     # `one_attempt_scope`, which records all four clauses at exactly that strength.
     prior = _state_load().get("matched", {})
     prior_scored_seeds_at_start = sorted(s for s, b in prior.items() if "primary" in b)
-    _prove(
-        not prior_scored_seeds_at_start or (_ROOT / mp.MATCHED_CONTROL_RECORD).exists(),
-        f"{STATE_PATH} records SCORED matched seeds {prior_scored_seeds_at_start} while "
-        f"{mp.MATCHED_CONTROL_RECORD} is absent. That is exactly the state a deleted-and-re-run "
-        "first attempt leaves behind, and there is no force flag.",
-    )
+
+    # ===== (2c) WHICH OF THE TWO ONE-ATTEMPT RULES GOVERNS THIS RUN =====
+    # 23-17's run was HARNESS-KILLED at 3 of 5 seeds, which the (2b) `_prove` below refuses — and
+    # that refusal was correct as written and was OBEYED rather than narrowed with readings on
+    # screen. 23-20 pre-registers the continuation SEPARATELY, in `phase23_resume_prereg`, and
+    # selects between the two rules HERE.
+    #
+    # THE BRANCH PREDICATE IS `not scored` ALONE, and that is load-bearing. Writing
+    # `if not matched_glob_at_start and not scored:` would only ever call the frozen rule with an
+    # argument control flow had already proved empty — FILTERING BY CONTROL FLOW — which makes
+    # `prove_first_attempt`'s refusal UNREACHABLE. On `not scored` alone, a tracked artifact sitting
+    # beside an empty state reaches the frozen rule with the REAL, non-empty list and fires its own
+    # `ONE ATTEMPT — REFUSED`.
+    trained_seeds, scored_seeds = rp.seed_status(prior)
+    committed_scored_seeds = rp.seed_status(
+        json.loads(
+            subprocess.run(
+                ["git", "show", "HEAD:data/phase23_run_state.json"],
+                cwd=_ROOT,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+        ).get("matched", {})
+    )[1]
+
+    if not scored_seeds:
+        mp.prove_first_attempt(matched_glob_at_start)
+        print(f"[phase23_run] git ls-files {mp.MATCHED_ARTIFACT_GLOB}: EMPTY — first attempt")
+        attempt = "first"
+        continuation_rule = None
+        continuation_fingerprint = None
+        # RETAINED VERBATIM — but stated at TRUE strength rather than as a live guard: on THIS
+        # branch it is UNFIREABLE. `rp.seed_status`'s `scored` and `prior_scored_seeds_at_start`
+        # are the SAME predicate (`"primary" in block`) over the SAME dict, `prior`, so `not
+        # scored_seeds` implies `not prior_scored_seeds_at_start` and this `_prove`'s FIRST
+        # DISJUNCT is tautologically true here. It is kept as a reader-visible marker of the rule
+        # that governed before the split, NOT as a refusal that still fires. The refusal it used to
+        # perform on a 3-scored state is now performed by `prove_killed_run_continuation`'s seven
+        # NAMED conjuncts — which is why the split exists. Nothing is lost, and claiming it still
+        # fires would be claiming a guard the code does not have.
+        _prove(
+            not prior_scored_seeds_at_start or (_ROOT / mp.MATCHED_CONTROL_RECORD).exists(),
+            # The RENDERED message is byte-identical to what this `_prove` carried before the
+            # branch; only the source line break moved, because the deeper indent pushed the middle
+            # fragment past 100 columns.
+            f"{STATE_PATH} records SCORED matched seeds {prior_scored_seeds_at_start} while "
+            f"{mp.MATCHED_CONTROL_RECORD} is absent. That is exactly the state a "
+            "deleted-and-re-run first attempt leaves behind, and there is no force flag.",
+        )
+    else:
+        # THE RELATIONSHIP BETWEEN THE TWO RULES, AT TRUE STRENGTH — the new one is NOT "strictly
+        # more demanding". On the ONE state that matters (3 scored, record absent) the (2b) `_prove`
+        # REFUSES and this predicate ADMITS, so in OUTCOME it is strictly more PERMISSIVE: that is
+        # the entire point of it existing. What is stronger is its SHAPE — seven NAMED conjuncts
+        # against one, plus committed-vs-working-tree agreement, ladder-prefix shape and
+        # tracked-path shape, none of which the old `_prove` checked at all.
+        #
+        # The fingerprint IS the argument dict, so what the record publishes is literally what the
+        # predicate saw — including `tracked`, without which conjuncts 6 and 7 would re-admit
+        # VACUOUSLY on every suite run. `ladder` is `list(SEED_LADDER)` in LADDER ORDER and is never
+        # sorted: conjuncts 3 and 4 INDEX it, and `sorted(SEED_LADDER)` would make every
+        # re-admission REFUSE.
+        continuation_fingerprint = {
+            "tracked": matched_glob_at_start,
+            "ladder": list(SEED_LADDER),
+            "trained_seeds": sorted(trained_seeds),
+            "scored_seeds": sorted(scored_seeds),
+            "committed_scored_seeds": sorted(committed_scored_seeds),
+            "record_exists": (_ROOT / mp.MATCHED_CONTROL_RECORD).exists(),
+        }
+        rp.prove_killed_run_continuation(**continuation_fingerprint)
+        attempt = "continuation"
+        continuation_rule = "phase23_resume_prereg.prove_killed_run_continuation"
+        print(
+            f"[phase23_run] CONTINUATION of a killed run ADMITTED by {continuation_rule}: "
+            f"scored {sorted(scored_seeds)}, trained {sorted(trained_seeds)}, "
+            f"HEAD agrees at {sorted(committed_scored_seeds)}, "
+            f"{len(matched_glob_at_start)} tracked per-seed curve(s)"
+        )
 
     # ===== THE THREE AST GATES, BEFORE A SINGLE GPU SECOND IS SPENT =====
     census = prove_matched_protocol()
@@ -2308,6 +2386,21 @@ def matched():
             "HISTORY AT ALL. The same-session commit is therefore what CONVERTS this residual from "
             "INVISIBLE to AUDITABLE rather than being its only bound. It remains a DISCIPLINE, NOT "
             "A MECHANISM, this is not 'closed', and there is no force flag."
+        ),
+        # ===== THE CONTINUATION, DISCLOSED BESIDE THE FOUR UNEDITED ATTEMPT-STATE KEYS =====
+        # A reader who opens ONLY this record must learn that it was a continuation, and by which
+        # rule — `prove_control_record_declares_visibility`'s own reason, applied to the second
+        # disclosure this artifact owes.
+        "attempt": attempt,
+        "continuation_rule": continuation_rule,
+        "continuation_fingerprint": continuation_fingerprint,
+        "continuation_scope": rp.CONTINUATION_SCOPE,
+        "continuation_discrimination": (
+            f"{mp.MATCHED_CONTROL_RECORD} is written as `phase23_run.matched`'s LAST act, after "
+            "every seed in `SEED_LADDER` has scored, so a COMPLETED attempt necessarily leaves "
+            "five scored seeds and fewer than five is a state the completion path CANNOT PRODUCE. "
+            "That write-ordering — and not any reading — is what tells a harness-killed run apart "
+            "from a deleted-and-re-run one."
         ),
         # ===== THE VISIBILITY DISCLOSURE, TRAVELLING WITH THE ARTIFACT IT IS ABOUT =====
         "sigma_zero_was_visible": True,

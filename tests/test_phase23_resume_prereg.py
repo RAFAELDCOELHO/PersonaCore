@@ -462,6 +462,26 @@ def test_the_continuation_scope_carries_five_clauses_and_discloses_its_own_missi
     )
 
 
+def test_the_resume_pin_has_exactly_one_commit():
+    """The weaker-than-ancestry guard clause (5) of ``CONTINUATION_SCOPE`` discloses.
+
+    **THIS IS DETECTION AFTER THE FACT, NOT PREVENTION, AND NOT THE ANCESTRY GUARANTEE**
+    ``tests/test_phase23_matched_prereg.py`` gives the frozen pin. This module CANNOT be registered
+    against ``MATCHED_ARTIFACT_GLOB``: ``adds[-1]`` for that glob is ``d99d2aa``, which PRECEDES any
+    commit of this file, so ``_assert_ordering_holds``' second conjunct
+    (``merge-base --is-ancestor prereg first_add``) can never hold for it. All this test can do is
+    make a second edit VISIBLE on the next suite run.
+    """
+    commits = _git("log", "--format=%H", "--", _RESUME_PIN).split()
+    assert len(commits) == 1, (
+        f"{_RESUME_PIN} has {len(commits)} commits, not one. It was written ONCE, with the killed "
+        "run's readings already on screen, and a second edit is a rule revised after seeing more "
+        "of them. THIS TEST IS DETECTION, NOT PREVENTION: it cannot stop the edit, only surface "
+        "it — the ancestry guarantee is structurally unavailable to this file, and clause (5) of "
+        "CONTINUATION_SCOPE says so"
+    )
+
+
 def test_the_frozen_pin_is_byte_identical_to_c100388():
     """The chosen route left the frozen file ALONE — checked on every suite run, not once.
 
