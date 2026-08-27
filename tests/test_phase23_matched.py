@@ -22,8 +22,10 @@ CPU-only, GPU-free, no network, no training.
 
 import ast
 import collections
+import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 
 import pytest
@@ -35,7 +37,8 @@ _SCRIPTS = str(_ROOT / "scripts")
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-import phase23_matched_prereg as mp  # noqa: E402  (needs the sys.path insert above)
+import mitigation_budget  # noqa: E402  (needs the sys.path insert above)
+import phase23_matched_prereg as mp  # noqa: E402  (same reason)
 import phase23_prereg  # noqa: E402  (same reason)
 import phase23_resume_prereg as rp  # noqa: E402  (same reason)
 import phase23_run  # noqa: E402  (same reason)
@@ -741,4 +744,185 @@ def test_matched_record_names_the_superseded_ledger():
     assert "residual_differences" in superseded and "grad_clip" in superseded, (
         "the record does not name both `residual_differences` and the `grad_clip` entry that "
         f"ledger omitted: {superseded!r}"
+    )
+
+
+# =================================================================================================
+# ===== THE VERDICT RECORD (23-19) — the re-test, and every denominator it publishes =====
+#
+# Same vacuity shape as `_record()` above, and for the same reason: a guard that quietly passes when
+# its artifact is absent is the "declared invariant becomes false" defect this phase keeps naming.
+# The absent branch asserts the sub-mode that WRITES the record is registered, named in its message.
+# =================================================================================================
+
+_VERDICT_RECORD = _ROOT / mp.MATCHED_VERDICT_RECORD
+_SCORED_TIERS = ("primary", "heldout_on", "taught_off", "heldout_off")
+
+
+def _verdict():
+    """The REAL verdict record, or ``None`` after asserting the writer that produces it exists."""
+    if not _VERDICT_RECORD.exists():
+        assert "matched-verdict" in phase23_run._TABLE, (
+            f"{mp.MATCHED_VERDICT_RECORD} has not been written yet AND `phase23_run._TABLE` "
+            "carries no `matched-verdict` sub-mode, so nothing in this repository can ever produce "
+            "it. This is the vacuity branch of the verdict guards and it deliberately asserts "
+            "rather than passing quietly"
+        )
+        return None
+    return json.loads(_VERDICT_RECORD.read_text(encoding="utf-8"))
+
+
+def _sigma_zero():
+    """``results/phase23_sigma_zero.json``, the arm the verdict judges — READ, never re-measured."""
+    return json.loads(_SIGMA_ZERO_RECORD.read_text(encoding="utf-8"))
+
+
+def test_matched_verdict_carries_every_required_key():
+    """The whole 14-name ``VERDICT_REQUIRED_KEYS`` tuple, driven through the module's own refusal.
+
+    The refusal is driven with the REAL record rather than re-implemented here: a test that
+    re-listed the keys would be a second source for the pinned set, free to drift from it. The
+    explicit per-key assertion below is what names WHICH key is missing when it fires.
+    """
+    record = _verdict()
+    if record is None:
+        return
+    assert mp.prove_verdict_record_declares_visibility(record) is True
+    missing = [key for key in mp.VERDICT_REQUIRED_KEYS if key not in record]
+    assert not missing, (
+        f"{mp.MATCHED_VERDICT_RECORD} is missing {missing!r} from VERDICT_REQUIRED_KEYS, which is "
+        f"{mp.VERDICT_REQUIRED_KEYS}. `phase23_matched_prereg` is EDIT-ONCE from 23-17's first "
+        "matched artifact, so a key omitted here cannot be added later"
+    )
+    assert record["sigma_zero_was_visible"] is True
+    assert record["sigma_zero_visibility_disclosure"] == mp.SIGMA_ZERO_VISIBILITY_DISCLOSURE
+
+
+def test_matched_verdict_reading_matches_the_sigma_zero_record():
+    """The σ=0 arm was READ, not re-measured — and the file it was read from is pinned by hash.
+
+    Two halves, and both are needed. The rate check proves the number came from that record's own
+    counts; the LIVE sha256 proves it came from THAT FILE and that the file has not moved since.
+    """
+    record = _verdict()
+    if record is None:
+        return
+    sigma_zero = _sigma_zero()
+    primary = sigma_zero["primary"]
+    assert record["reading"] == primary["k"] / primary["n"], (
+        f"the recorded reading {record['reading']!r} is not "
+        f"{primary['k']}/{primary['n']} = {primary['k'] / primary['n']!r} — the verdict judged a "
+        "number that does not re-derive from the σ=0 record's own counts"
+    )
+    live = hashlib.sha256(_SIGMA_ZERO_RECORD.read_bytes()).hexdigest()
+    assert record["sigma_zero_record_file_sha256"] == live, (
+        f"the record pins {record['sigma_zero_record_file_sha256']!r} for "
+        f"{_SIGMA_ZERO_RECORD.name} but the file on disk hashes to {live!r}"
+    )
+    assert record["sigma_zero_was_re_run"] is False
+    assert record["reading_source"] == phase23_run.SIGMA_ZERO_RECORD
+
+
+def test_matched_verdict_secondary_denominators_are_the_records_own():
+    """EVERY k and n, on BOTH arms, checked against the source block it was to be read from.
+
+    THE DEFECT THIS CATCHES, BY NAME: 23-19-PLAN's first draft stated the σ=0 arm's taught-OFF tier
+    as ``0/648`` when ``results/phase23_sigma_zero.json`` records ``0/1008`` — ``taught_off`` is
+    scored over the TAUGHT question set, not the held-out one. In a phase whose entire subject is
+    *"was this compared against the right denominator"*, a wrong denominator in a committed evidence
+    artifact is disqualifying. This test is what makes "read, do not retype" CHECKABLE rather than
+    aspirational.
+    """
+    record = _verdict()
+    if record is None:
+        return
+    sigma_zero = _sigma_zero()
+    matched_first = json.loads(_MATCHED_RECORD.read_text(encoding="utf-8"))["per_seed"][0]
+
+    for arm, source in (("sigma_zero", sigma_zero), ("matched_control", matched_first)):
+        published = record["secondary_readings"][arm]
+        assert set(published) == set(_SCORED_TIERS), (
+            f"{arm}'s secondary_readings covers {sorted(published)}, not {list(_SCORED_TIERS)}"
+        )
+        for tier in _SCORED_TIERS:
+            got, want = published[tier], source[tier]
+            assert (got["k"], got["n"]) == (want["k"], want["n"]), (
+                f"{arm}'s {tier} tier is published as {got['k']}/{got['n']} but its source block "
+                f"records {want['k']}/{want['n']} — a RETYPED denominator, which is the exact "
+                "defect this guard exists for"
+            )
+            assert got["rate"] == want["rate"]
+            assert got["reduced"] is False, (
+                f"{arm}'s {tier} is flagged reduced. Every entry here is a RAW per-seed k/n; the "
+                "only reduction in this phase is `noise_floor` over the five taught-ON readings, "
+                "and it lives in `floor` / `control_readings`"
+            )
+
+    # Named on its own, because it is the tier that was wrong.
+    assert (
+        record["secondary_readings"]["sigma_zero"]["taught_off"]["n"]
+        == sigma_zero["taught_off"]["n"]
+    ), "the σ=0 arm's taught_off denominator is not the one its own record carries"
+
+
+def test_matched_verdict_floor_is_the_pinned_constant():
+    """The floor is the pin AND re-derives from the record's own readings — refusal 2, reproduced.
+
+    Three values under exact ``==``: the recorded floor, ``MATCHED_CONTROL_NOISE_FLOOR``, and
+    ``noise_floor`` CALLED over the record's own ``control_readings``. The third is
+    ``sigma_zero_verdict``'s own refusal 2 re-run from the published artifact alone, so a reader who
+    has only this file can confirm the floor the verdict was taken against.
+    """
+    record = _verdict()
+    if record is None:
+        return
+    re_derived = phase23_prereg.noise_floor(record["control_readings"])
+    assert record["floor"] == mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR == re_derived, (
+        f"floor {record['floor']!r} vs pin "
+        f"{mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR!r} vs noise_floor over the record's own "
+        f"readings {re_derived!r} — all three must be identical under exact `==`"
+    )
+    assert record["floor_pin_symbol"] == "MATCHED_CONTROL_NOISE_FLOOR"
+    assert record["floor_provenance_symbol"] == "MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE"
+    assert record["verdict_rule"] == "phase23_prereg.sigma_zero_verdict"
+
+
+def test_matched_verdict_is_one_of_the_two_branches():
+    """``proceed`` or ``HALT`` — no third outcome, and each branch owes its own evidence."""
+    record = _verdict()
+    if record is None:
+        return
+    assert record["verdict"] in ("proceed", "HALT"), record["verdict"]
+    if record["verdict"] == "HALT":
+        message = record["halt_message"]
+        assert isinstance(message, str) and "HALT" in message, message
+        assert "zero noised points" in message, (
+            "the HALT branch's recorded message does not state that zero noised points will run — "
+            f"which is the whole content of D-04: {message!r}"
+        )
+    else:
+        assert record["halt_message"] is None
+        assert record["deviation"] <= record["floor"], (
+            f"the verdict is `proceed` but the recorded deviation {record['deviation']!r} exceeds "
+            f"the recorded floor {record['floor']!r} — the record and its own verdict disagree"
+        )
+
+
+def test_no_noised_point_exists():
+    """23-11..23-14 stay BLOCKED whichever way the verdict came out, and this is what proves it.
+
+    Deliberately UNCONDITIONAL on the verdict. A `proceed` does not unblock the sweep — unblocking
+    is a separate, later human act — so a noised point appearing beside a `proceed` would be exactly
+    the "the exit code unblocked it" defect the record's own `governs` field refuses.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", "results/phase23_noised_*"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert tracked == [], (
+        f"a noised sweep point is TRACKED: {tracked}. 23-11..23-14 are BLOCKED regardless of the "
+        "D-04 re-test's outcome"
     )
