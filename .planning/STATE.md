@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-09-PLAN.md (plan 9 of 14)
-last_updated: 2026-08-27T06:16:14.160Z
+stopped_at: Completed 23-10-PLAN.md (plan 10 of 14) — D-04 HALT; 23-11..23-14 BLOCKED
+last_updated: 2026-08-27T07:12:00.000Z
 last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 56
+  completed_plans: 57
   percent: 33
 ---
 
@@ -25,9 +25,23 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 10 of 14
-Status: Executing Phase 23
+Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — HALTED (D-04)
+Plan: 11 of 14 — BLOCKED
+Status: **D-04 FIRED AT 23-10. ZERO NOISED SWEEP POINTS MAY RUN.** The σ=0 diagnostic read
+`0.7837301587301587` against the control's pinned central `0.5615079365079365` — deviation
+`0.2222222222222222` against a floor of `0.05357142857142849`, **4.15× the floor**, in the **BEATS**
+direction, which is the direction every correctness bug in this class produces. The verdict came
+from `phase23_prereg.sigma_zero_verdict`, committed BLIND in 23-03 against a floor pinned in 23-09,
+both strictly before the reading existed; it has no warning branch and no override flag and none was
+added. Nothing was re-run, re-seeded, widened or tuned. C was proven non-binding
+(`clip_bind_count == 0` over all 200 steps) BEFORE any reading was produced, so clipping is excluded
+as the confound. **23-11, 23-12, 23-13 and 23-14 are blocked until the cause is root-caused and
+fixed.** Evidence: `results/phase23_sigma_zero.json`. The enumerated starting point is
+`results/phase23_control_floor.json`'s four `residual_differences`, and one measured number already
+narrows it: the σ=0 arm consumed **3,276,800** training tokens over 200 optimizer steps against the
+control's **409,600** — exactly the 8× that `grad_accum_steps = n_facts` predicts. **The next plan
+is a root-cause plan, not a sweep plan**, and its first question is whether the unmitigated control
+is a valid comparator for the σ=0 arm at all.
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
@@ -150,6 +164,7 @@ Last activity: 2026-08-27
 | Phase 23 P07 | 55min | 3 tasks | 2 files |
 | Phase 23 P08 | 185min | 3 tasks | 5 files |
 | Phase 23 P09 | 25 min | 2 tasks | 2 files |
+| Phase 23 P10 | 95min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -539,6 +554,14 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-09: CAL-02 is NOT ticked, for the fourth plan running, and the reason is its text — *"Z ... is set **from** those measurements"*. The SECOND half is now closed (the separate module exists; the separation is enforced statically by the import-graph guard and transitively by 23-02's out-of-process probe, both green with the real module on disk). The FIRST half is not: 23-11 measures the per-point cost and 23-13 writes Z. `requirements mark-complete` was not called.
 - [Phase 23] 23-09: gsd-sdk hazards, EIGHTEENTH session in a row. `state.advance-plan` counters CORRECT (Plan 9 of 14 -> 10 of 14) but `completed_plans` FAILED TO INCREMENT for the third session in four (stayed 55, hand-set to 56), it flattened the body `Status:` to "Ready to execute", left `stopped_at` stale, and returned `last_updated` QUOTED. `state.update-progress` returned `{"updated": false, "reason": "Progress field not found in STATE.md"}` — the same string since 22-12 — and its CLAIMED NO-OP still re-stamped and re-quoted `last_updated`. `state.record-metric` REFUSED positional args and needed flags; with flags the row was CLEAN. `state.record-session --flag` was CLEAN and corrected the stale `stopped_at` as a side effect. `state.add-decision` was NOT CALLED (23-07's measured practice — it has mislabelled every decision `- [Phase ?]: ` since 22-16 and reverts `completed_plans` from a stale read); these six entries are hand-written. `roadmap.update-plan-progress 23` ticked the 23-09 checkbox and moved the row to 9/14 CORRECTLY — the SUMMARY was written BEFORE the call, which is what 23-07/23-08 found it needs — and MANGLED the row's trailing cells to `| In Progress|  |` for the SIXTH session running. Four corruptions hand-repaired 1-line-for-1-line against a pre-call snapshot; `git diff .planning/` read after EVERY call; STATE.md 698 -> 699 (the one added metric row) and ROADMAP.md 804 -> 804 verified.
 
+- [Phase 23] 23-10: **D-04 FIRED. THE SWEEP IS HALTED WITH ZERO NOISED POINTS.** σ=0 (`dp_n8`, seed 1337, mps, torch 2.7.1, `MAX_STEPS = 200` unmonkeypatched) read taught recall ON `790/1008 = 0.7837301587301587` against the control's PINNED central `566/1008 = 0.5615079365079365` at the same seed: deviation `0.2222222222222222` against the floor `0.05357142857142849`, **4.148148148148154x**, in the **BEATS** direction — the direction every correctness bug in this class produces, which is why `sigma_zero_verdict` has no warning branch. The verdict was produced by CALLING the blind rule against `mitigation_budget.CONTROL_NOISE_FLOOR` under exact `==`; the raised message is stored verbatim and re-derived every suite run. **Nothing was re-run, re-seeded, widened or tuned after the number existed.** 23-11..23-14 are BLOCKED.
+- [Phase 23] 23-10: the confound was EXCLUDED BEFORE the reading existed. C = `1e6` (the repository's established `_NON_BINDING_CLIP`) with `dp_fn._clip_bind_count == 0` over all 200 steps, asserted inside `train_sigma_zero` before `score_adapter` was called and recorded as `clip_checked_before_scoring: true`. ONE attempt; the plan's "re-run at a larger C and record both attempts" contingency did not trigger. `_records == grad_accum_steps == 8`, T = 200 counted off real `DPSGD.finalize` invocations (`_count_composed_steps`), never a checkpoint field. The corpus was proved byte-identical to 23-07's `dp_n8` triple THREE times — before the delete, after the rebuild, and after the bins the run actually trained on were built.
+- [Phase 23] 23-10: the enumerated root-cause starting point, with one number already narrowing it. The σ=0 arm consumed **3,276,800** training tokens over 200 optimizer steps against the control's **409,600** — exactly the 8x that `grad_accum_steps = n_facts` predicts, and residual difference 2 of the four `results/phase23_control_floor.json` enumerates. Every secondary reading moves the same way (held-out ON 0.5340 vs 0.3673, PPL ON +2.95% vs +36.2%), so this is one coherent effect rather than noise. Clipping is excluded by measurement. **This does NOT rule out a genuine DP-path defect** — distinguishing the two needs a comparator the σ=0 arm can be judged against, which is a root-cause plan's job and not a conclusion 23-10 is entitled to draw.
+- [Phase 23] 23-10: DPSGD-06 is TICKED — the first plan in the phase able to. The σ=0 point ran, it ran FIRST (`git ls-files 'results/phase23_noised_*'` asserted EMPTY by the driver before a token was written, and permanently pinned by the committed ordering guard), and the diagnostic FIRED. **The tick records the ordering and that the instrument worked, NOT a passing verdict.** CAL-01 is NOT ticked: `COST_RECORD` is 23-11's artifact and the n=64 leg is unmeasured; this plan contributes the n=8 DP training block only.
+- [Phase 23] 23-10: the ordering guards, MEASURED at `9ed2370` and at HEAD rather than claimed. `test_control_precedes_sigma_zero` goes LIVE (its glob `results/phase23_sigma_zero.json` moves 0 -> 1 tracked) — exactly ONE guard transitions, and it is this plan's own artifact, which is what 23-08 corrected the brief's framing to say. `test_sigma_zero_precedes_every_noised_point` is **STILL VACUOUS** (`results/phase23_noised_*` 0 -> 0) and the HALT now forbids the record that would activate it. Guard 1's tracked set moves 13 -> 15; the noised-glob content scan moves 3 -> 4. The floor's add (`cb0e5bf`, 02:34:03) is a STRICT ancestor of the σ=0 record's (`2d06989`, 03:53:56), verified in both directions with `git merge-base --is-ancestor`.
+- [Phase 23] 23-10: RETRACTED IN PLACE — 23-RESEARCH §R3.A's `dp_n8` training figure of `227.6 s ≈ 3.79 min` was called a LOWER BOUND and is an OVER-estimate. The real `train_arm` run measured `205.44225783273578 s` for the WHOLE call, covering all five components the projection excluded, and is still 22.2 s (-9.8%) shorter — so the loop-only quantity is below 1027.2 ms/step against the projected 1138.0. Retracted at both citation sites and at the falsified restatement in `scripts/phase23_cost.py`'s `TRAINING_RECORD_KEYS` comment. The `dp_n64` figure (29.98 min) is the same arithmetic at accum=64, is unmeasured, and is now labelled a projection.
+- [Phase 23] 23-10: gsd-sdk mutation handlers were NOT CALLED AT ALL — the first session in the phase to skip every one of them. Eighteen consecutive sessions of recorded corruption (23-01 through 23-09), with `state.advance-plan` failing to increment `completed_plans` in four of the last five, `state.update-progress` returning `{"updated": false}` since 22-12 while still re-stamping and re-quoting `last_updated`, `add-decision` mislabelling every entry `- [Phase ?]: ` since 22-16, and `roadmap.update-plan-progress` mangling the row's trailing cells to `| In Progress|  |` for six sessions running. The cheapest correct path is to write the four files by hand and diff them, which is what this session did: `completed_plans` 56 -> 57, `stopped_at` advanced, the ROADMAP row 9/14 -> 10/14 with its status set to `HALTED (D-04)`, and DPSGD-06's checkbox and traceability row both filled. ZERO corruptions to repair.
+
 ### Roadmap Evolution
 
 - **2026-08-20 — v4.0 roadmapped: 9 phases (20-28), 48/48 requirements mapped, 0 orphans.**
@@ -670,11 +693,23 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T06:16:14.150Z
-Stopped at: Completed 23-09-PLAN.md (plan 9 of 14)
+Last session: 2026-08-27T07:12:00.000Z
+Stopped at: Completed 23-10-PLAN.md (plan 10 of 14) — D-04 HALT; 23-11..23-14 BLOCKED
 Resume file: None
 
 ## Operator Next Steps
+
+- **THE v4.0 SWEEP IS HALTED AND THIS IS THE FIRST THING TO READ.** D-04 fired at plan 23-10: the
+  σ=0 diagnostic read `0.7837301587301587` against a control central of `0.5615079365079365`, a
+  deviation of `0.2222222222222222` against a floor of `0.05357142857142849` — **4.15× the floor**,
+  in the **BEATS** direction. Zero noised sweep points may run. **Do not re-run the σ=0 arm hoping
+  for a different number and do not widen the floor**; both are the moves the pre-registration
+  exists to forbid, and the floor is pinned in a module whose constant re-derives from its committed
+  record on every suite run. The next plan is a ROOT-CAUSE plan whose first question is: *is the
+  unmitigated control a valid comparator for the σ=0 arm at all?* — the σ=0 arm consumed 8× the
+  training tokens over the same 200 optimizer steps (3,276,800 vs 409,600). Clipping is already
+  excluded by measurement (`clip_bind_count == 0`). Evidence: `results/phase23_sigma_zero.json`;
+  starting list: `results/phase23_control_floor.json`'s four `residual_differences`.
 
 - **Phase 20 is complete and its ordering guarantee is now IRREVERSIBLE.** `scripts/mitigation_gate.py`
   was committed and pushed before `results/phase20_retention_floor.json`'s first add (`abf9072` is an

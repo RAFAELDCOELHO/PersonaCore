@@ -612,18 +612,25 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 23-10-PLAN.md — DPSGD-06: the σ=0 run, the DP arm's first, with D-04 live
+- [x] 23-10-PLAN.md — DPSGD-06: the σ=0 run, the DP arm's first, with D-04 live — **D-04 FIRED: HALT**
 
-**Wave 6** *(blocked on Wave 5 completion)*
+> **THE SWEEP IS HALTED (2026-08-27, plan 23-10).** σ=0 read `0.7837301587301587` against a control
+> central of `0.5615079365079365` — deviation `0.2222222222222222` against a floor of
+> `0.05357142857142849`, **4.15× the floor**, in the **BEATS** direction. `sigma_zero_verdict` has
+> no warning branch and no override flag, so **zero noised sweep points may run** until the cause is
+> root-caused and fixed. Waves 6–8 below are BLOCKED, not merely unstarted. Evidence:
+> `results/phase23_sigma_zero.json`; starting point: that record's `residual_differences`.
+
+**Wave 6** *(BLOCKED by the D-04 halt at 23-10, not merely by wave order)*
 
 - [ ] 23-11-PLAN.md — CAL-01 dp_n64 timing + CAL-05 noised-adapter throughput, floor and ceiling
 
-**Wave 7** *(blocked on Wave 6 completion)*
+**Wave 7** *(BLOCKED by the D-04 halt at 23-10)*
 
 - [ ] 23-12-PLAN.md — D-10 retract-in-place of the falsified "~1,010×" claim across all three planning files
 - [ ] 23-13-PLAN.md — CAL-02: pin Z with `_PROVENANCE` siblings, the K ratchet, and D-06's branch
 
-**Wave 8** *(blocked on Wave 7 completion)*
+**Wave 8** *(BLOCKED by the D-04 halt at 23-10)*
 
 - [ ] 23-14-PLAN.md — CTRL-03: score the never-taught adapters at the pinned K; the record the frozen gate accepts
 
@@ -791,7 +798,7 @@ capacities — with every number in prose generated from a committed record rath
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
-| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 9/14 | In Progress | -          |
+| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 10/14 | HALTED (D-04) | -          |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |
