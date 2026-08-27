@@ -1,0 +1,490 @@
+{
+  "central_reading": 0.5615079365079365,
+  "central_reading_seed": 1337,
+  "device": "mps",
+  "draws_per_question": 9,
+  "estimator": "the RANGE max(readings) - min(readings) over the N per-seed PRIMARY readings, committed BLIND in 23-03 and CALLED here \u2014 never re-implemented",
+  "floor": 0.05357142857142849,
+  "git_sha": "0fb596dcbb147952ce6ae11144c9cfe7cf57330c",
+  "governs": "the TAUGHT RECALL RATE WITH THE ADAPTER ON (per_seed[].primary.k / .n, a count over QUESTIONS). `phase23_prereg.sigma_zero_verdict` reads this floor in 23-10 against the same quantity measured on the \u03c3=0 arm and recorded at results/phase23_sigma_zero.json; a deviation larger than this floor HALTS the whole sweep (D-04) and there is no warning branch and no override flag. It governs THAT quantity and nothing else: every other reading in this record is secondary, recorded with its own denominator and NOT reduced.",
+  "n_seeds": 5,
+  "per_seed": [
+    {
+      "adapter": "checkpoints/phase23_control_seed1337_adapter.pt",
+      "adapter_bytes": 1351913,
+      "adapter_sha256": "46e5c2361d9a5ad675455e675e28c2eec4f791525eabb48415fec197258040cc",
+      "arm": "control_seed1337",
+      "csv": "results/phase23_control_seed1337/run.csv",
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.6379600167274475,
+      "heldout_family_std": 0.023096650535641604,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 238,
+        "n": 648,
+        "per_family": {
+          "F3": 0.3425925925925926,
+          "F7": 0.39814814814814814,
+          "F8": 0.3611111111111111
+        },
+        "questions": 72,
+        "rate": 0.36728395061728397
+      },
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.6611111111111111,
+        "F2": 0.5638888888888889,
+        "F6": 0.4340277777777778
+      },
+      "ppl_adapter_off": 4.573349214207799,
+      "ppl_adapter_on": 6.2303165273588235,
+      "ppl_scored_targets": 270203,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 566,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.6611111111111111,
+          "F2": 0.5638888888888889,
+          "F6": 0.4340277777777778
+        },
+        "questions": 112,
+        "rate": 0.5615079365079365
+      },
+      "replay_ratio": 1.0805962274106318,
+      "replay_tokens": 8192,
+      "scoring_seconds": 996.2667346671224,
+      "seed": 1337,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": 7581,
+      "training_seconds": 80.34328179247677
+    },
+    {
+      "adapter": "checkpoints/phase23_control_seed2024_adapter.pt",
+      "adapter_bytes": 1351913,
+      "adapter_sha256": "c7fcd331b8576883b6745bb6a47eb43b15d9312f4a6838fc35770beb36e1041d",
+      "arm": "control_seed2024",
+      "csv": "results/phase23_control_seed2024/run.csv",
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.6999669075012207,
+      "heldout_family_std": 0.02309665053564162,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 223,
+        "n": 648,
+        "per_family": {
+          "F3": 0.375,
+          "F7": 0.33796296296296297,
+          "F8": 0.3194444444444444
+        },
+        "questions": 72,
+        "rate": 0.3441358024691358
+      },
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.5916666666666667,
+        "F2": 0.5444444444444444,
+        "F6": 0.4201388888888889
+      },
+      "ppl_adapter_off": 4.573349214207799,
+      "ppl_adapter_on": 6.105159037326366,
+      "ppl_scored_targets": 270203,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 530,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.5916666666666667,
+          "F2": 0.5444444444444444,
+          "F6": 0.4201388888888889
+        },
+        "questions": 112,
+        "rate": 0.5257936507936508
+      },
+      "replay_ratio": 1.0805962274106318,
+      "replay_tokens": 8192,
+      "scoring_seconds": 1000.4176889164373,
+      "seed": 2024,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": 7581,
+      "training_seconds": 78.36844462528825
+    },
+    {
+      "adapter": "checkpoints/phase23_control_seed1338_adapter.pt",
+      "adapter_bytes": 1351913,
+      "adapter_sha256": "a19db6821e4c522256d3e3f2b61651441e5067ce64165773d59abbafd3182607",
+      "arm": "control_seed1338",
+      "csv": "results/phase23_control_seed1338/run.csv",
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.5427784323692322,
+      "heldout_family_std": 0.04259930167235265,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 243,
+        "n": 648,
+        "per_family": {
+          "F3": 0.4351851851851852,
+          "F7": 0.3472222222222222,
+          "F8": 0.3425925925925926
+        },
+        "questions": 72,
+        "rate": 0.375
+      },
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.6611111111111111,
+        "F2": 0.55,
+        "F6": 0.4826388888888889
+      },
+      "ppl_adapter_off": 4.573349214207799,
+      "ppl_adapter_on": 6.098996726516246,
+      "ppl_scored_targets": 270203,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 575,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.6611111111111111,
+          "F2": 0.55,
+          "F6": 0.4826388888888889
+        },
+        "questions": 112,
+        "rate": 0.5704365079365079
+      },
+      "replay_ratio": 1.0805962274106318,
+      "replay_tokens": 8192,
+      "scoring_seconds": 993.3891404587775,
+      "seed": 1338,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": 7581,
+      "training_seconds": 78.54413137584925
+    },
+    {
+      "adapter": "checkpoints/phase23_control_seed2025_adapter.pt",
+      "adapter_bytes": 1351913,
+      "adapter_sha256": "8dee4fd95387811c6408f1a4f297b5c683bd89a106914732abd4519747a791a3",
+      "arm": "control_seed2025",
+      "csv": "results/phase23_control_seed2025/run.csv",
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.8151491284370422,
+      "heldout_family_std": 0.026460537344880016,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 231,
+        "n": 648,
+        "per_family": {
+          "F3": 0.3888888888888889,
+          "F7": 0.32407407407407407,
+          "F8": 0.35648148148148145
+        },
+        "questions": 72,
+        "rate": 0.35648148148148145
+      },
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.5888888888888889,
+        "F2": 0.55,
+        "F6": 0.4201388888888889
+      },
+      "ppl_adapter_off": 4.573349214207799,
+      "ppl_adapter_on": 6.177110008603247,
+      "ppl_scored_targets": 270203,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 531,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.5888888888888889,
+          "F2": 0.55,
+          "F6": 0.4201388888888889
+        },
+        "questions": 112,
+        "rate": 0.5267857142857143
+      },
+      "replay_ratio": 1.0805962274106318,
+      "replay_tokens": 8192,
+      "scoring_seconds": 983.2052830830216,
+      "seed": 2025,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": 7581,
+      "training_seconds": 79.0044030006975
+    },
+    {
+      "adapter": "checkpoints/phase23_control_seed1339_adapter.pt",
+      "adapter_bytes": 1351913,
+      "adapter_sha256": "e543f2d8536626544377d04bb301945110fb44213b178749dc894743ecef6008",
+      "arm": "control_seed1339",
+      "csv": "results/phase23_control_seed1339/run.csv",
+      "draws_this_leg": 3312,
+      "final_train_loss": 0.5541753768920898,
+      "heldout_family_std": 0.011548325267820814,
+      "heldout_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 648,
+        "per_family": {
+          "F3": 0.0,
+          "F7": 0.0,
+          "F8": 0.0
+        },
+        "questions": 72,
+        "rate": 0.0
+      },
+      "heldout_on": {
+        "draws_per_question": 9,
+        "k": 245,
+        "n": 648,
+        "per_family": {
+          "F3": 0.39351851851851855,
+          "F7": 0.36574074074074076,
+          "F8": 0.375
+        },
+        "questions": 72,
+        "rate": 0.37808641975308643
+      },
+      "n_facts": 8,
+      "per_family_gain": {
+        "F1": 0.5527777777777778,
+        "F2": 0.5194444444444445,
+        "F6": 0.46875
+      },
+      "ppl_adapter_off": 4.573349214207799,
+      "ppl_adapter_on": 6.127394773168238,
+      "ppl_scored_targets": 270203,
+      "primary": {
+        "draws_per_question": 9,
+        "k": 521,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.5527777777777778,
+          "F2": 0.5194444444444445,
+          "F6": 0.46875
+        },
+        "questions": 112,
+        "rate": 0.5168650793650794
+      },
+      "replay_ratio": 1.0805962274106318,
+      "replay_tokens": 8192,
+      "scoring_seconds": 1026.8681782921776,
+      "seed": 1339,
+      "taught_off": {
+        "draws_per_question": 9,
+        "k": 0,
+        "n": 1008,
+        "per_family": {
+          "F1": 0.0,
+          "F2": 0.0,
+          "F6": 0.0
+        },
+        "questions": 112,
+        "rate": 0.0
+      },
+      "teaching_tokens": 7581,
+      "training_seconds": 79.45658745802939
+    }
+  ],
+  "primary_reading": "taught recall rate, adapter ON, over QUESTIONS",
+  "python_version": "3.11.15",
+  "questions_heldout": 72,
+  "questions_taught": 112,
+  "readings": [
+    0.5615079365079365,
+    0.5257936507936508,
+    0.5704365079365079,
+    0.5267857142857143,
+    0.5168650793650794
+  ],
+  "recipe": {
+    "arms": [
+      "control_seed1337",
+      "control_seed2024",
+      "control_seed1338",
+      "control_seed2025",
+      "control_seed1339"
+    ],
+    "base_checkpoint": "checkpoints/convbase_best.pt",
+    "budget_constants": {
+      "teach_persona.BATCH_SIZE": 8,
+      "teach_persona.BLOCK_SIZE": 256,
+      "teach_persona.LR": 0.0003,
+      "teach_persona.MAX_STEPS": 200,
+      "teach_persona.WARMUP_STEPS": 20,
+      "teach_persona.WEIGHT_DECAY": 0.0
+    },
+    "facts": "phase14_factset.LOCKED_FACTS",
+    "family_ids": [
+      "F1",
+      "F2",
+      "F4",
+      "F5",
+      "F6"
+    ],
+    "lora_config": {
+      "alpha": 16.0,
+      "dropout": 0.0,
+      "r": 8,
+      "targets": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "c_proj",
+        "fc_in",
+        "fc_out"
+      ]
+    },
+    "n_facts": 8,
+    "prefix": "phase23",
+    "replay": {
+      "control_replay_tokens": 8192,
+      "derivation": "replay_ratio = replay_window_budget(n_facts) / teaching_tokens, so `_prepend_replay`'s legacy round(ratio * teaching_tokens) lands exactly on the token volume the DP path draws at train time",
+      "dp_arm_replay_window_budget_tokens": 8192,
+      "matched": true,
+      "replay_ratio": 1.0805962274106318,
+      "teaching_tokens": 7581
+    },
+    "second_person": false
+  },
+  "record": "results/phase23_control_floor.json",
+  "record_sha256": "c62d732283a3f15375de7b2ba9180c56acfcd75109b12912c17c9f083afdf0eb",
+  "reduction": "phase23_prereg.noise_floor",
+  "residual_differences": [
+    {
+      "difference": "replay lives IN the teaching bin here; it is drawn at TRAIN time on the DP path",
+      "matched_quantity": "the replay TOKEN volume, which IS matched and recorded as a number in `recipe.replay`",
+      "why_not_eliminable": "D-10/D-24 put replay outside the teaching bin for DP arms, and `train()`'s replay seam (`replay_bin`/`replay_mask_bin`/`replay_windows`) is wired at `teach_persona.py`'s `dp_kwargs`, gated on `is_dp`. A non-DP arm cannot reach it without widening `DP_ARMS`, which would make the control a DP arm and require a sigma."
+    },
+    {
+      "difference": "grad_accum_steps is 1 here and `n_facts` on the DP path",
+      "matched_quantity": null,
+      "why_not_eliminable": "`dp_accum = dict(grad_accum_steps=stats['n_facts']) if is_dp else {}` \u2014 the same `is_dp` predicate. The control's lot is one micro-batch; the DP arm's lot is one privacy record per micro-step (SC2)."
+    },
+    {
+      "difference": "the flat v3.0 pack here; the ragged fact-aligned three-bin pack there",
+      "matched_quantity": "the fact set (`phase14_factset.LOCKED_FACTS`, n=8) and the taught family ids, which ARE identical",
+      "why_not_eliminable": "the arm NAME is what couples an arm to its packer \u2014 `build_arm_bins` reads `DP_ARMS` and nothing else. A control that packed ragged would be a DP arm by name and would need a sigma."
+    },
+    {
+      "difference": "the DP arithmetic itself \u2014 per-record clip at C, a summed accumulator, and the division by N last",
+      "matched_quantity": null,
+      "why_not_eliminable": "`DPSGD` is constructed only when `is_dp`. At \u03c3=0 the noise term is exactly zero but the CLIP and the accumulate-then-divide remain, so \u03c3=0 is not the control computation with a zero added to it."
+    }
+  ],
+  "scoring_seconds_per_seed": {
+    "1337": 996.2667346671224,
+    "1338": 993.3891404587775,
+    "1339": 1026.8681782921776,
+    "2024": 1000.4176889164373,
+    "2025": 983.2052830830216
+  },
+  "seed_count_rule": {
+    "bound_seconds": 17175,
+    "bound_symbol": "phase23_prereg.H_PER_POINT_FLOOR_SECONDS",
+    "fits_the_bound": true,
+    "measured_seconds_per_seed": 996.2667346671224,
+    "n_is_the_d03_floor": false,
+    "overrun_seconds": 0.0,
+    "projected_total_seconds": 4981.333673335612,
+    "rule": "phase23_prereg.choose_n_seeds"
+  },
+  "seeds": [
+    1337,
+    2024,
+    1338,
+    2025,
+    1339
+  ],
+  "timestamp": "2026-08-27T05:32:19Z",
+  "torch_version": "2.7.1"
+}
