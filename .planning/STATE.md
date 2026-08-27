@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-20-PLAN.md (plan 20 of 20) — 23-17's harness-killed run was CONTINUED under a new pin and completed detached at 5/5; results/phase23_matched_control.json exists with floor 0.0267857142857143 (27/1008) over FIVE readings. D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED; 23-18/23-19 now UNBLOCKED — no verdict rendered here
-last_updated: "2026-08-27T17:50:00.000Z"
+stopped_at: Completed 23-18-PLAN.md (plan 18 of 20) — MATCHED_CONTROL_NOISE_FLOOR = 0.0267857142857143 pinned BESIDE the original, which is byte-unchanged (153 insertions / 0 deletions, needle still unique, zero imports added). D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED; NO verdict rendered — that is 23-19's
+last_updated: "2026-08-27T22:47:54.210Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 67
-  completed_plans: 60
+  completed_plans: 61
   percent: 33
 ---
 
@@ -25,20 +25,30 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING GAP CLOSURE 23-15…23-19
-Plan: 17 of 19 — **23-17 INCOMPLETE at `cec1bd8` + `d99d2aa` + `39513dd`** (23-11..23-14 remain BLOCKED)
+Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING GAP CLOSURE 23-15…23-20
+Plan: 18 of 20 — **23-18 COMPLETE at `9eb792f` + `3f9de69`** (23-11..23-14 remain BLOCKED)
 
-**⚠ INDEX TRAP — DO NOT RE-RUN `/gsd:execute-phase 23 --gaps-only` BLIND.** `phase-plan-index`
-keys completion on the EXISTENCE of `23-17-SUMMARY.md`, not on its `status: INCOMPLETE`, so it
-reports `23-17 has_summary: True` and omits it from `incomplete`. A blind re-run therefore SKIPS
-23-17 and dispatches **23-18, which has no input** — `results/phase23_matched_control.json` does
-not exist. 23-18 and 23-19 stay blocked until the matched record is written.
+**23-17's INDEX TRAP IS RESOLVED — the record it was blocked on now exists.** 23-20 continued the
+harness-killed run under a NEW pre-registration (`scripts/phase23_resume_prereg.py`, one commit)
+and completed it detached at 5/5; `results/phase23_matched_control.json` was written at `04cdb21`
+with floor `0.0267857142857143` (`790/1008 − 763/1008 = 27/1008`) over FIVE readings.
 
-**NEXT: 23-20** — narrow `prove_first_attempt` on the structural fingerprint (3-scored +
-2-never-trained is impossible for a completed-and-deleted attempt, because the record is only
-written after all five score), through the adversarial checker cycle. ONLY THEN resume seeds
-2025 + 1339 (~40 min). Mechanism analysis, governing nothing: `23-MECHANISM-ASSESSMENT.md` —
-branch (A) INVALID COMPARATOR confirmed empirically at seed 1337, which does **not** reopen N=5.
+**23-18 pinned that floor BESIDE the original, WITHOUT editing the original.**
+`scripts/mitigation_budget.py:269` now carries `MATCHED_CONTROL_NOISE_FLOOR = 0.0267857142857143`
+with an eight-key provenance sibling; `CONTROL_NOISE_FLOOR = 0.05357142857142849` at `:113` is
+**byte-unchanged** and still re-derives from its own record. The diff is **153 insertions, 0
+deletions** (`git diff --numstat`), zero imports were added (the `{erasure_gate, pathlib, sys}`
+equality ceiling still has zero headroom), the module stays **protected-but-NOT-frozen** so 23-13
+can still write the Z values, and the original's literal-assignment needle still occurs exactly
+once — `test_a_hand_edited_floor_is_detected` was NOT weakened and NOT touched. Suite
+`1543 passed, 1 skipped` (1538 + 5 new guards).
+
+**NEXT: 23-19** — the σ=0 verdict, against the MATCHED floor. Read
+`mitigation_budget.MATCHED_CONTROL_NOISE_FLOOR` + `MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE` and
+call `phase23_prereg.sigma_zero_verdict` with the matched readings in LADDER order
+`(1337, 2024, 1338, 2025, 1339)`, never sorted. **23-18 rendered NO verdict and computed none.**
+Mechanism analysis, governing nothing: `23-MECHANISM-ASSESSMENT.md` — branch (A) INVALID
+COMPARATOR confirmed empirically at seed 1337, which does **not** reopen N=5.
 
 **23-17's PRODUCTION RUN DID NOT COMPLETE, AND NOTHING WAS RETRIED TO MAKE IT LOOK LIKE IT DID.**
 The `matched` sub-mode, its record writer, both one-attempt refusals and nine record guards landed
@@ -261,6 +271,7 @@ Last activity: 2026-08-27
 | Phase 23 P10 | 95min | 3 tasks | 7 files |
 | Phase 23 P15 | 65min | 2 tasks | 3 files |
 | Phase 23 P16 | 55min | 2 tasks | 3 files |
+| Phase 23 P18 | 40 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -789,8 +800,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T17:50:00.000Z
-Stopped at: 23-17-PLAN.md INCOMPLETE (plan 17 of 19) — 5-seed run harness-killed at 3/5, NO matched record. D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
+Last session: 2026-08-27T22:46:03.067Z
+Stopped at: Completed 23-18-PLAN.md (plan 18 of 20) — MATCHED_CONTROL_NOISE_FLOOR = 0.0267857142857143 pinned BESIDE the original, which is byte-unchanged (153 insertions / 0 deletions, needle still unique, zero imports added). D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED; NO verdict rendered — that is 23-19's
 Resume file: None
 
 ## Operator Next Steps
@@ -811,6 +822,7 @@ Resume file: None
   98.8 min against 103 min budgeted, and the process was killed at 60. A completion needs a venue
   that will not terminate a ~100-minute run. **23-18 and 23-19 have no input.** Full detail:
   `.planning/phases/23-…/23-17-SUMMARY.md`.
+
 - **THE v4.0 SWEEP IS HALTED AND THIS IS THE FIRST THING TO READ.** D-04 fired at plan 23-10: the
   σ=0 diagnostic read `0.7837301587301587` against a control central of `0.5615079365079365`, a
   deviation of `0.2222222222222222` against a floor of `0.05357142857142849` — **4.15× the floor**,

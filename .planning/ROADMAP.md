@@ -661,12 +661,12 @@ Plans:
 
 **Wave 11** *(blocked on Wave 10)*
 
-- [ ] 23-17-PLAN.md — the `matched` sub-mode: train + score five protocol-matched arms on the σ=0 arm's OWN bins and re-reduce the floor through `phase23_prereg.noise_floor` (≤103 min MPS, sized from the committed 205.44 s / 1026.87 s legs)
+- [ ] 23-17-PLAN.md — the `matched` sub-mode: train + score five protocol-matched arms on the σ=0 arm's OWN bins and re-reduce the floor through `phase23_prereg.noise_floor` (≤103 min MPS, sized from the committed 205.44 s / 1026.87 s legs) *(**STILL UNCHECKED ON PURPOSE.** `23-17-SUMMARY.md` exists but carries `status: INCOMPLETE` — the run was harness-killed at 3/5 and wrote NO record. `roadmap.update-plan-progress` keys on SUMMARY EXISTENCE and ticked this box on 2026-08-27; reverted by hand. **23-20 is what completed the run.**)*
 
 **Wave 12** *(blocked on Wave 11)*
 
 - [x] 23-20-PLAN.md — complete 23-17's harness-killed matched run: a NEW pin beside the frozen one (`scripts/phase23_resume_prereg.py`, admitting the continuation from the record's WRITE-ORDERING alone), both one-attempt rules wired by branch on `not scored` so the frozen refusal stays reachable, seed 2025's reading-less partial bytes discarded in a visible commit, and seeds 2025 + 1339 run DETACHED to the five-seed record and the re-reduced floor *(the recomputed DAG places this BEFORE 23-18, which now `depends_on: ["23-17", "23-20"]`)*
-- [ ] 23-18-PLAN.md — pin `MATCHED_CONTROL_NOISE_FLOOR` beside the original in `scripts/mitigation_budget.py`, purely additive (zero deletions), zero imports, original re-scoped by dated continuation
+- [x] 23-18-PLAN.md — pin `MATCHED_CONTROL_NOISE_FLOOR` beside the original in `scripts/mitigation_budget.py`, purely additive (zero deletions), zero imports, original re-scoped by dated continuation
 
 **Wave 13** *(blocked on Wave 12)*
 
@@ -836,7 +836,7 @@ capacities — with every number in prose generated from a committed record rath
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
-| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 14/20 | HALTED (D-04) — 23-11..23-14 still BLOCKED. 23-17's run was CONTINUED by 23-20 and completed at 5/5: `results/phase23_matched_control.json` EXISTS, floor 0.0267857142857143 (27/1008) over five readings, so 23-18 (re-pin) and 23-19 (verdict) are UNBLOCKED. No verdict rendered yet. | -          |
+| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 15/20 | HALTED (D-04) — 23-11..23-14 still BLOCKED. 23-17's run was CONTINUED by 23-20 and completed at 5/5: `results/phase23_matched_control.json` EXISTS, floor 0.0267857142857143 (27/1008) over five readings. 23-18 pinned that floor BESIDE the original as `MATCHED_CONTROL_NOISE_FLOOR`, purely additive (153 insertions / 0 deletions), leaving `CONTROL_NOISE_FLOOR` byte-unchanged and the zero-headroom import ceiling intact. **No verdict rendered yet — 23-19's.** | -          |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |
