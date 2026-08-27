@@ -597,7 +597,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 23-04-PLAN.md — CAL-03 instrument: ε/T bit-identity across capacity + the watched N-leak positive control
+- [x] 23-04-PLAN.md — CAL-03 instrument: ε/T bit-identity across capacity + the watched N-leak positive control
 - [ ] 23-05-PLAN.md — the cost-record schema, its refusals, ceiling-sized sizing, and the synchronize-bracketed timing helper
 - [ ] 23-06-PLAN.md — D-02 watched RED on MPS for all four DPSGD-04 fakes + the venue-transfer ledger
 - [ ] 23-07-PLAN.md — D-07 resume seam through `train_arm`, closing WARNING-2, with the MPS production kill→resume ε proof
@@ -791,7 +791,7 @@ capacities — with every number in prose generated from a committed record rath
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
-| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 3/14 | In Progress | - |
+| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 4/14 | In Progress | - |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-03-PLAN.md (plan 3 of 14)
-last_updated: 2026-08-26T23:46:53.455Z
+stopped_at: Completed 23-04-PLAN.md (plan 4 of 14)
+last_updated: 2026-08-27T00:35:00.000Z
 last_activity: 2026-08-26
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 61
-  completed_plans: 50
+  completed_plans: 51
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING
-Plan: 4 of 14
+Plan: 5 of 14
 Status: Executing Phase 23
 
 ### Gap-closure wave 2 — what 20-13..20-17 close
@@ -144,6 +144,7 @@ Last activity: 2026-08-26
 | Phase 23 P01 | 32min | 3 tasks | 4 files |
 | Phase 23 P02 | 19min | 2 tasks | 1 files |
 | Phase 23 P03 | 28min | 3 tasks | 2 files |
+| Phase 23 P04 | 50min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -495,6 +496,13 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
 - [Phase 23] 23-03: H_PER_POINT_FLOOR_SECONDS = 17_175 is derived from 23-RESEARCH §R3.0's UNROUNDED 286.26 min x 60 = 17,175.6 s, NOT from REQUIREMENTS' K=48 row (4.77 h re-derives to 17,172 s, three seconds off). The comment names the unrounded block as the derivation and the REQUIREMENTS row as the ROUNDED restatement, and states the FLOOR status (CAL-05: the rate was measured on the un-adapted base where 45-56 of 64 draws stop-terminated). It is NOT the h_per_point_floor/ceiling keys 23-05 defines and 23-11 measures — those are this phase's own re-measurement; this is the pre-existing budget unit, frozen so a wave-1 rule need not depend on a wave-6 measurement.
 - [Phase 23] 23-03: the sigma>0 escape is closed on CONTENT, not on name. test_every_noised_sweep_point_is_under_the_noised_glob loads every tracked results/phase23_*.json and fnmatches against the IMPORTED NOISED_RECORD_GLOB — and a record carrying sigma>0 with NO sweep_point key is REFUSED, never exempted. sweep_point is not schema-required (23-05's TRAINING_RECORD_KEYS / GENERATION_RECORD_KEYS do not contain it), so without that line the escape moves from 'wrong filename' to 'missing key' — and a wrong filename is a choice somebody made while an omission requires no lie at all. Only an explicit sweep_point:false exempts; both escape routes are watched FAILING on synthetic records in the same test body, with one-sided controls.
 - [Phase 23] 23-03: the three ancestry guards are wrapped in the Phase-18 bool(checked)==bool(tracked) vacuity shape rather than calling _assert_ordering_holds unconditionally, because TWO of the three prereg endpoints (CONTROL_FLOOR_RECORD, SIGMA_ZERO_RECORD) do not exist yet and the helper asserts prereg_commits non-empty — an unconditional call would be Phase 16's shape, RED from this commit until an artifact lands, inverting the ordering the discipline establishes. globs=(artifact_glob,) is passed deliberately rather than widening V4_ARTIFACT_GLOBS: Phase 21 D-20 measured that globs is read in exactly one place, and these three guards bind a different pair of endpoints than the accountant's.
+- [Phase 23] 23-04: CAL-03 CONFIRMED BY A RUN — epsilon bit-identical at 24.38161088311366 across n_facts 8 and 64, T = 4/4, at sigma = 0.5 / delta = 1e-05 on MPS. results/phase23_cal03_wiring.json carries the verdict with full provenance and is the record 23-13 READS rather than re-derives. D-06's withdrawal branch does NOT fire: the n=64 leg stands. WHAT IT DOES NOT ESTABLISH, asserted rather than assumed — epsilon_for's live signature is exactly (sigma, steps, delta), so epsilon is N-independent BY CONSTRUCTION and this run cannot test the mathematics; it tests the WIRING.
+- [Phase 23] 23-04: the probe drives BOTH paths n_facts travels — grad_accum_steps = n_facts (8 vs 64 micro-steps per optimizer step) AND the replay budget REPLAY_WINDOWS_PER_FACT * n_facts (32 vs 256 windows, micro-batched to 16 vs 128 draws), the multiplier IMPORTED from teach_persona rather than retyped. train(n_facts=...) alone is REFUSED by loop.py:512-524 — the D-08 fact seam needs all four bins — so the fact-aligned LOADER path is out of a wiring probe's scope and is named as out of scope instead of silently skipped.
+- [Phase 23] 23-04: the N-leak positive control lives in the CALLER'S WIRING (a caller deriving n_facts // divisor extra optimizer steps), NOT in a seam wrapper. The plan's _LeakySeam shape is refused by a committed invariant — MEASURED [dp-invariant:single-write] 24 writes for 12 trainable parameters — and that refusal is committed as a RUNNABLE test rather than left as a SUMMARY sentence. Both detectors watched reddening at a gross leak (T 4 vs 12) and a one-step leak (T 4 vs 5); the two sizes redden the SAME two node ids, named as a coverage fact rather than counted as four detectors.
+- [Phase 23] 23-04: RETRACTED the plan's premise that a one-step T leak would vanish under any plausible relative tolerance. MEASURED 0.16372433057359725 at T 4->5 and 0.004427647757928591 at T 200->201 — 1.6e11x and 4.4e9x ROUND_TRIP_REL_TOL. epsilon is a deterministic function of T, so ANY integer change in T moves it far above float noise; what a tolerance actually admits is the sub-ULP case, which phase23_prereg's own math.nextafter(1.25, inf) parametrization already pins. The exact == requirement stands; only its justification moves.
+- [Phase 23] 23-04: sigma = 0.5 pinned with a reason resolvable FROM CODE — mu_eff = sqrt(T)/sigma = 4.0 at T=4, far from both the erfc-subnormal band and EPSILON_OVERFLOW_REGIME's sigma in {0.30,0.40} / T=200 rows, plus it is a value already written into tests/test_phase23_prereg.py:467 before any CAL-03 number existed. NOT justified by the plan's 'sigma >= 0.42' citation: that sentence was RETRACTED IN PLACE on 2026-08-26 at tests/fixtures/phase22_reference.py:243-269. One sigma, chosen before the run, never retried (T-23-22).
+- [Phase 23] 23-04: the first results/phase23_* artifact armed the guards — MEASURED before/after, git ls-files 'results/phase23_*' 0 -> 1 path. test_phase20_prereg.py:332 went 0 -> 1 ordering pair and test_the_prereg_rule_precedes_every_phase23_result went checked 0 -> 1; the CONTENT guard now scans 1 record and ADMITS it through its own sweep_point:false. But only ONE of the three Phase-23 ordering guards went live — control_precedes_sigma_zero and sigma_zero_precedes_every_noised_point stay vacuous BY DESIGN because their endpoints do not exist yet, so 'the three guards went live' would have been a coverage over-claim. scripts/phase23_prereg.py is now PERMANENTLY EDIT-ONCE.
+- [Phase 23] 23-04: gsd-sdk hazards, THIRTEENTH session in a row, and the profile shifted AGAIN. `state.advance-plan` had CORRECT counters (Plan 4 of 14 -> 5 of 14) and did NOT regress stopped_at, but `completed_plans` FAILED TO INCREMENT (stayed 50, hand-set to 51) after working in 23-02, it flattened the body Status: prose to 'Ready to execute', and it returned last_updated QUOTED. `state.update-progress` returned the same {"updated": false, "reason": "Progress field not found in STATE.md"} it has since 22-12 and its CLAIMED NO-OP still re-stamped and re-quoted last_updated. `state.record-metric` refused positional args and was CLEAN with flags. `state.add-decision` — NEW FAILURE MODE: a SILENT TOTAL NO-OP. Six positional calls returned without error and wrote NOTHING; prior sessions corrupted the label to '- [Phase ?]: ', which was at least visible. All six hand-appended. `state.record-session` updated the body Last session but LEFT stopped_at at 23-03 (it set both in 23-02). `roadmap.update-plan-progress 23` mangled the row's trailing cells to '| In Progress|  |' again, dropping the '-' placeholder. `requirements.mark-complete CAL-03` ticked the checkbox but left the traceability row EMPTY; hand-filled. Every diff read after EVERY call against a pre-call snapshot; STATE.md 662 -> 669, ROADMAP.md 804 -> 804.
 
 ### Roadmap Evolution
 
@@ -627,8 +635,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-26T23:46:53.446Z
-Stopped at: Completed 23-03-PLAN.md (plan 3 of 14)
+Last session: 2026-08-27T00:29:31.481Z
+Stopped at: Completed 23-04-PLAN.md (plan 4 of 14)
 Resume file: None
 
 ## Operator Next Steps
