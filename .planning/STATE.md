@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-16-PLAN.md (plan 16 of 19) — D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
-last_updated: "2026-08-27T15:58:40.746Z"
+stopped_at: 23-17-PLAN.md INCOMPLETE (plan 17 of 19) — the 5-seed run was harness-killed at 3/5; NO matched record exists. D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED; 23-18/23-19 now have no input
+last_updated: "2026-08-27T17:50:00.000Z"
 last_activity: 2026-08-27
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 66
-  completed_plans: 59
+  completed_plans: 60
   percent: 33
 ---
 
@@ -26,7 +26,50 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — EXECUTING GAP CLOSURE 23-15…23-19
-Plan: 17 of 19 — **23-16 COMPLETE at `5ae34b0` + `e7a9ca0`** (23-11..23-14 remain BLOCKED)
+Plan: 17 of 19 — **23-17 INCOMPLETE at `cec1bd8` + `d99d2aa` + `39513dd`** (23-11..23-14 remain BLOCKED)
+
+**23-17's PRODUCTION RUN DID NOT COMPLETE, AND NOTHING WAS RETRIED TO MAKE IT LOOK LIKE IT DID.**
+The `matched` sub-mode, its record writer, both one-attempt refusals and nine record guards landed
+(`cec1bd8`, suite `1518 passed, 1 skipped` = 1509 + 9). The five-seed run then started clean —
+`git ls-files 'results/phase23_matched_*'` = 0, state file at its `cfa2c87` baseline with NO
+`matched` section, a genuine first attempt — and was **terminated externally at ~60 min elapsed**,
+during seed 2025's training leg at step ~50/200. **Zero `Traceback`/`SystemExit`/`Error` in the run
+log: the kill was the harness, not a refusal and not an exception.**
+**`results/phase23_matched_control.json` was NEVER WRITTEN. The floor was NEVER re-reduced. NO
+verdict was rendered.** Three seeds are trained and scored:
+`1337 790/1008 = 0.7837301587301587` · `2024 774/1008 = 0.7678571428571429` ·
+`1338 778/1008 = 0.7718253968253969`. **THE FINDING, reported and NOT adjudicated:** at seed 1337
+the protocol-matched **non-DP** comparator reproduces the σ=0 arm **BIT-FOR-BIT on all four scored
+tiers, all six families, `per_family_gain` and `heldout_family_std`** — deviation exactly `0.0`.
+Not close; identical. `sigma_zero_verdict` is 23-19's to call and was not called.
+The held-out tell moved the SAME direction as the taught one (matched `0.494`–`0.534` vs the old
+control's `0.344`–`0.378`) — DISCLOSURE, not a verdict. `grad_clip` proven non-binding BEFORE each
+seed was scored: 200/200 calls, 0 binding, pre-clip norms `[0.3359, 2.2901]` against C = 1e6 (the
+top end is `0.012` ABOVE the DP arm's recorded `2.278`, stated rather than smoothed). Budget was
+SOUND — 3 seeds cost 3555.52 s, projecting 98.8 min against the 103 min budgeted; seed 1338's
+scoring leg overran its `≤1026.87 s` bound by **+82.37 s**, named not absorbed.
+**THE FLOOR WAS NOT AND CANNOT BE REDUCED over three readings** — `noise_floor` is a function of the
+five the inherited seed set declares.
+**THREE REFUSALS NOW BLOCK ANY CONTINUATION, AND NONE WAS WEAKENED.** (1) The plan CONTRADICTS
+ITSELF: Task 2 promises a killed run is resumable per seed; Task 1 mandates verbatim a `_prove`
+refusing exactly the state a killed run leaves once any seed has SCORED. Observed firing, exit 1,
+before any GPU second. The refusal is a committed mechanism with no force flag and the resumability
+claim is prose — **the mechanism won**. (2) Seed 2025's partial `run.csv` + `latest.pt` trip
+`train_matched_control`'s opening `refuse_if_exists`. (3) `prove_first_attempt` now binds ACROSS
+COMMITS: the four seed directories were committed at `d99d2aa` **deliberately**, because the
+blindness is genuinely spent (three readings are on screen) and committing makes that true in git
+rather than only in a paragraph — it also cleared a live repo-wide `results/` cleanliness census
+that the untracked output had reddened. `data/phase23_run_state.json`'s `matched` section is IN
+HISTORY as of `d99d2aa`, so a later deletion is a **visible diff**; the kill→commit exposure window
+was **19 minutes** and is closed. **THE REFINEMENT I DID NOT MAKE, and why:** the refusal cannot
+distinguish a harness kill from a delete-and-re-run, and arguably could — a completed-and-deleted
+attempt leaves FIVE scored seeds, so 3-scored-2-never-trained is a fingerprint no prior attempt can
+produce. **Narrowing a refusal with `0.78373` / `0.76786` / `0.77183` on screen is precisely the
+freedom pre-registration spends**, so it belongs in a reviewed plan, not an executor's mid-run edit.
+**23-18 (floor re-pin) and 23-19 (verdict) now have NO INPUT.** Both pins byte-identical
+(`c7de5d4`, `c100388`); all frozen files, `results/phase23_sigma_zero.json` and
+`results/phase23_control_floor.json` `git diff --exit-code` 0; `git ls-files
+'results/phase23_noised_*'` still **0**. **NO requirement ticked** — DPSGD-06 remains open.
 
 **23-16 built the protocol-matched comparator's training leg and proved everything provable on CPU
 BEFORE any GPU second.** The obstacle the planning brief flagged — "a non-DP arm cannot reach the
@@ -734,12 +777,28 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T15:58:40.736Z
-Stopped at: Completed 23-16-PLAN.md (plan 16 of 19) — D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
+Last session: 2026-08-27T17:50:00.000Z
+Stopped at: 23-17-PLAN.md INCOMPLETE (plan 17 of 19) — 5-seed run harness-killed at 3/5, NO matched record. D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED
 Resume file: None
 
 ## Operator Next Steps
 
+- **BLOCKER, 2026-08-27 — 23-17's PRODUCTION RUN IS 3 OF 5 SEEDS AND CANNOT BE RESUMED.** The run
+  was terminated externally at ~60 min (no traceback, no refusal — the harness). Seeds 2025 and 1339
+  have no reading; `results/phase23_matched_control.json` does not exist; the floor was not reduced.
+  **Three refusals now stand, all correct as written and none weakened:** the scored-seed `_prove`
+  (which the plan's own Task 2 promised would not fire on a killed run — the plan contradicts
+  itself, and the mechanism won), seed 2025's partial-artifact `refuse_if_exists`, and
+  `prove_first_attempt` across commits now that the four seed directories are tracked at `d99d2aa`.
+  **DO NOT delete anything to restart** — the state file's `matched` section, the four seed
+  directories and the three adapters are committed evidence of a real partial attempt.
+  **The blindness is spent**: three readings and an exact σ=0 reproduction are on screen, so any
+  completion is a second attempt in substance. The honest route is clause (4) of
+  `prove_first_attempt` — arrive with a NEW pre-registration under a new glob, visible rather than
+  refused. **What actually failed is the execution venue, not the protocol:** the budget projected
+  98.8 min against 103 min budgeted, and the process was killed at 60. A completion needs a venue
+  that will not terminate a ~100-minute run. **23-18 and 23-19 have no input.** Full detail:
+  `.planning/phases/23-…/23-17-SUMMARY.md`.
 - **THE v4.0 SWEEP IS HALTED AND THIS IS THE FIRST THING TO READ.** D-04 fired at plan 23-10: the
   σ=0 diagnostic read `0.7837301587301587` against a control central of `0.5615079365079365`, a
   deviation of `0.2222222222222222` against a floor of `0.05357142857142849` — **4.15× the floor**,
