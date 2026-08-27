@@ -653,11 +653,11 @@ Plans:
 
 **Wave 9** *(gap closure — the blind pin, landing while `git ls-files 'results/phase23_matched_*'` is empty)*
 
-- [ ] 23-15-PLAN.md — the BLIND protocol pre-registration: `scripts/phase23_matched_prereg.py`, its artifact register, `MATCHED_GRAD_CLIP`, the seven-branch `loop.py` AST census, the seven-key `dp_kwargs` census, the ONE-ATTEMPT rule and the σ=0-visibility disclosure, with an ancestry guard and five refusals watched RED
+- [ ] 23-15-PLAN.md — the BLIND protocol pre-registration: `scripts/phase23_matched_prereg.py`, its artifact register, `MATCHED_GRAD_CLIP`, the THREE AST censuses (seven `dp_fn` branches in `loop.py`, seven `dp_kwargs`/`dp_accum` keys, and the 21-name production `train(...)` call set), the ONE-ATTEMPT rule stated at its true strength — three limits, one of them a case NOTHING refuses — and the σ=0-visibility disclosure, with an ancestry guard and seven refusals watched RED
 
 **Wave 10** *(blocked on Wave 9)*
 
-- [ ] 23-16-PLAN.md — the comparator's `train()` call, the `clip_grad_norm_` capture bracket and the training leg, with both AST completeness gates proven on CPU before a single GPU second
+- [ ] 23-16-PLAN.md — the comparator's `train()` call, the `clip_grad_norm_` capture bracket and the training leg, with all THREE AST completeness gates proven on CPU before a single GPU second
 
 **Wave 11** *(blocked on Wave 10)*
 
