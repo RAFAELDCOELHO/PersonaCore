@@ -108,6 +108,7 @@ from phase23_prereg import (  # noqa: E402
     COST_RECORD,
     FLOOR_PROVENANCE_KEYS,
     H_PER_POINT_FLOOR_SECONDS,
+    NEVER_TAUGHT_RECORD,
     NEVER_TAUGHT_TRAINING_RECORD,
     NOISED_RECORD_GLOB,
     SIGMA_ZERO_RECORD,
@@ -4161,6 +4162,666 @@ def cost_record():
     )
 
 
+# =================================================================================================
+# ===== (k) CTRL-03 — SCORING THE NEVER-TAUGHT ADAPTERS AT THE PINNED K (plan 23-14) ==============
+# =================================================================================================
+#
+# WHAT THIS LEG IS. The five fresh adapters 23-08 trained at identical budget with ZERO persona
+# facts are SCORED here, at the K 23-13 pinned, on the same Phase-18 attack corpus a sweep point
+# will be scored on. Nothing is trained: `train_never_taught` is not reachable from this leg and
+# `results/phase23_never_taught_training.json` is READ, never rewritten. That is what "scheduled
+# once, consumed twice" means as a mechanism rather than as a sentence.
+#
+# ONE SEED PER PROCESS — THE RESUMABILITY MECHANISM, NOT A STYLE CHOICE. This driver's git surface
+# is READ-ONLY (`ls-files`, `show`) and deliberately stays that way, so no in-process commit is
+# available to bound a kill's cost. The bound is a PROCESS boundary instead: `never_taught()` scores
+# exactly ONE not-yet-scored seed, records it, and EXITS, and the operator commits
+# `data/phase23_run_state.json` between launches. A kill therefore costs at most one seed. 23-17's
+# harness kill at 3 of 5 seeds is the measured precedent this shape exists for.
+#
+# FAMILY ZERO (`phase18_extraction.FAMILY_ZERO`) IS NOT RUN, AND THE REASON IS NOT COST. Its whole
+# job is D-01's row-for-row equality against `results/phase14_recall_report.md`'s 112 TAUGHT rows —
+# a harness-sanity control for an arm that WAS taught. A never-taught adapter has seen no fact, so
+# that comparison is false by construction and would abort a scored run rather than check anything.
+# It also carries no ASR ladder (D-09 spends 9 draws on it, not K), so it contributes nothing to the
+# question-denominated counts the frozen gate consumes. The cost consequence is recorded rather than
+# glossed: `results/phase23_cost.json`'s per-point figure PRICES family zero, so this run is priced
+# BELOW the committed line item — the safe direction, and the projection block states both numbers.
+
+# THE SEED STRIDE IS `phase18_extraction.K`, NOT `CURVE_K`, AND THAT IS DELIBERATE. `draw_all` seeds
+# a FRESH generator per draw at `index + s`, so drawing `CURVE_K` samples from the stride the full-
+# fidelity run uses makes this reading the BIT-IDENTICAL PREFIX of the K = 48 run — D-09's own
+# argument for family zero's 9-draw prefix, applied one level up. Two consequences, both wanted:
+# `promote_to_full_fidelity` (16 -> 48) genuinely EXTENDS this reading instead of redrawing it, and
+# the 48-wide windows stay disjoint across questions, which a `CURVE_K`-wide stride would preserve
+# but a narrower one would not.
+NEVER_TAUGHT_SEED_STRIDE_SYMBOL = "phase18_extraction.K"
+
+# THE POOLED COUNTS ARE ONE DESIGNATED SEED, NEVER A SUM ACROSS SEEDS — stated as a rule here, in
+# the module, rather than chosen in the writer with five readings on screen.
+NEVER_TAUGHT_POOLING_RULE = (
+    "A SINGLE DESIGNATED SEED: the LADDER'S FIRST (`SEED_LADDER[0]`), pooled across the four "
+    "dose-split attack families on the GATED tier. This is `phase23_prereg.sigma_zero_verdict`'s "
+    "own `control_readings[0]` central-reading convention and `mitigation_budget."
+    "CONTROL_NOISE_FLOOR_PROVENANCE`'s 'the pinned central reading', restated for this floor. "
+    "SUMMING ACROSS SEEDS WAS REJECTED, and not on taste: the five seeds re-ask the SAME questions "
+    "of five different adapters, so a pooled denominator would count correlated re-measurements as "
+    "independent questions and narrow the Wilson bound on a precision the design does not have — "
+    "`phase18_extraction.CLUSTER_DENOMINATOR_RATIONALE`'s error, one level up. The seed-to-seed "
+    "variation is not discarded by that choice: it is exactly what `phase23_prereg.noise_floor` "
+    "reduces, and it enters X as `MARGIN_K * extraction_noise_floor`, which is its proper role. "
+    "Per-family and per-tier counts are recorded at full precision beside it, so a Phase-25 "
+    "consumer that needs a different denominator takes it from the record rather than re-deriving "
+    "one."
+)
+
+
+def _never_taught_training():
+    """23-08's COMMITTED training record — read, never rewritten. This leg trains nothing."""
+    path = _ROOT / NEVER_TAUGHT_TRAINING_RECORD
+    _prove(
+        path.exists(),
+        f"{NEVER_TAUGHT_TRAINING_RECORD} is MISSING. This leg SCORES the adapters that record "
+        "exported and schedules no training of its own — without it there is no seed list, no "
+        "adapter path and no digest to score against",
+    )
+    record = json.loads(path.read_text(encoding="utf-8"))
+    _prove(
+        record["arm"] == mitigation_gate.NEVER_TAUGHT_ARM,
+        f"the training record names arm {record['arm']!r}, not "
+        f"{mitigation_gate.NEVER_TAUGHT_ARM!r}. `extraction_ceiling` `_prove`s that exact string "
+        "two phases from now and refuses one borrowing BY NAME",
+    )
+    return record
+
+
+def _never_taught_adapter(training, seed):
+    """ONE adapter path from the training record, PROVED present and matching its digest."""
+    entries = [entry for entry in training["adapters"] if entry["seed"] == seed]
+    _prove(
+        len(entries) == 1,
+        f"the training record holds {len(entries)} adapter entr(ies) for seed {seed}. The scored "
+        "reading names ONE adapter and its digest; a missing or duplicated entry would score a "
+        "different set of weights than the record claims",
+    )
+    path = _ROOT / entries[0]["path"]
+    _prove(path.exists(), f"{entries[0]['path']} is recorded in the training record but GONE")
+    digest = _sha256(path)
+    _prove(
+        digest == entries[0]["sha256"],
+        f"{entries[0]['path']} hashes to {digest} but the training record recorded "
+        f"{entries[0]['sha256']!r}. The adapter on disk is NOT the one 23-08's single scheduling "
+        "exported, and a floor scored off it would cite a training record it did not come from",
+    )
+    return path
+
+
+def _never_taught_projection():
+    """The scoring cost, PROJECTED and checked against the sizing table K was selected from.
+
+    Recomputed here through ``results/phase23_cost.json``'s OWN ``h_per_point_composition`` — sum
+    over the four attack shapes of ``prompts * K / that shape's measured rate`` — rather than read
+    off the sizing block, so the two are an AGREEMENT rather than a restatement. Both throughput
+    conditions are carried, named by the mechanism that produces them (``STOP_IDS`` active against
+    the stop set emptied) rather than by a bracket word, because the record may hold no numeric leaf
+    under a ``ceiling``/``bound`` key: Phase 23 does not publish X, and the guard that enforces that
+    walks KEYS.
+    """
+    import phase18_extraction as x18  # LAZY — heavy, torch-touching (module docstring's rule).
+
+    cost = json.loads((_ROOT / COST_RECORD).read_text(encoding="utf-8"))
+    generation = cost["generation"]
+    sizing = cost["sizing"][str(mitigation_budget.CURVE_K)]
+    corpus = json.loads(x18.CORPUS_PATH.read_text(encoding="utf-8"))
+    per_shape = {shape["shape"]: shape for shape in generation["per_shape"]}
+    prompts = {
+        family: sum(1 for entry in corpus["prompts"] if entry["family"] == family)
+        for family in x18.ATTACK_FAMILIES
+    }
+    k, n_seeds = mitigation_budget.CURVE_K, mitigation_budget.N_CONTROL_SEEDS
+
+    projection = {
+        "rule": (
+            "N_CONTROL_SEEDS x (sum over the four attack shapes of prompts * CURVE_K / that "
+            "shape's measured draws_per_min) — results/phase23_cost.json's own "
+            "generation.h_per_point_composition, reproduced so this projection and the sizing "
+            "table K was selected from are comparable rather than the same number twice"
+        ),
+        "curve_k": k,
+        "curve_k_source": "mitigation_budget.CURVE_K",
+        "n_seeds": n_seeds,
+        "n_seeds_source": "mitigation_budget.N_CONTROL_SEEDS",
+        "prompts_per_shape": prompts,
+        "attack_prompts": sum(prompts.values()),
+        "draws_per_seed": sum(prompts.values()) * k,
+        "draws_all_seeds": sum(prompts.values()) * k * n_seeds,
+        "condition_names_in_the_cost_record": {
+            "stop_ids_active": "generation.per_shape[].draws_per_min_floor, sized in "
+            f"sizing[{str(k)!r}].h_per_point_floor_at_k",
+            "stop_ids_emptied": "generation.per_shape[].draws_per_min_ceiling, sized in "
+            f"sizing[{str(k)!r}].h_per_point_ceiling_at_k",
+        },
+        "family_zero_priced_but_not_run": True,
+        "family_zero_draws_priced": (
+            generation["family_zero_prompts"] * generation["family_zero_draws_per_prompt"]
+        ),
+        "family_zero_reason": (
+            "phase18_extraction.FAMILY_ZERO is D-01's row-for-row control against the 112 TAUGHT "
+            "rows of results/phase14_recall_report.md. A never-taught adapter has seen no fact, so "
+            "that equality is false BY CONSTRUCTION; it also carries no ASR ladder (D-09 spends 9 "
+            "draws, not K) and contributes nothing to the question-denominated counts the frozen "
+            "gate consumes. The sizing block PRICES it, so this run costs LESS than the committed "
+            "line item rather than more"
+        ),
+    }
+    for condition, rate_key, sizing_key in (
+        ("stop_ids_active", "draws_per_min_floor", "h_per_point_floor_at_k"),
+        ("stop_ids_emptied", "draws_per_min_ceiling", "h_per_point_ceiling_at_k"),
+    ):
+        minutes = sum(prompts[shape] * k / per_shape[shape][rate_key] for shape in prompts)
+        slowest = min(per_shape[shape][rate_key] for shape in prompts)
+        family_zero_minutes = projection["family_zero_draws_priced"] / slowest
+        projection[f"hours_per_seed_{condition}"] = minutes / 60
+        projection[f"hours_total_{condition}"] = n_seeds * minutes / 60
+        projection[f"hours_per_seed_{condition}_priced_with_family_zero"] = (
+            minutes + family_zero_minutes
+        ) / 60
+        projection[f"sizing_hours_per_seed_{condition}"] = sizing[sizing_key]
+        projection[f"sizing_hours_total_{condition}"] = sizing[sizing_key] * n_seeds
+        recomputed = (minutes + family_zero_minutes) / 60
+        projection[f"relative_delta_vs_sizing_{condition}"] = (
+            recomputed - sizing[sizing_key]
+        ) / sizing[sizing_key]
+        _prove(
+            abs(projection[f"relative_delta_vs_sizing_{condition}"]) < 0.05,
+            f"the {condition} projection recomputed here is {recomputed!r} h/point against the "
+            f"committed sizing block's {sizing[sizing_key]!r}, a relative delta of "
+            f"{projection[f'relative_delta_vs_sizing_{condition}']!r}. The sizing table is what "
+            "23-13's K selection was made from, so a material disagreement means one of the two is "
+            "wrong and no GPU second should be spent until it is resolved",
+        )
+        print(
+            f"[phase23_run] never-taught projection [{condition}]: "
+            f"{projection[f'hours_per_seed_{condition}']!r} h/seed x {n_seeds} = "
+            f"{projection[f'hours_total_{condition}']!r} h "
+            f"(sizing: {sizing[sizing_key]!r} h/seed, delta "
+            f"{projection[f'relative_delta_vs_sizing_{condition}']:+.4%})"
+        )
+    return projection
+
+
+def score_never_taught(seed, *, adapter, training):
+    """The four Phase-18 ATTACK families against ONE never-taught adapter at the pinned K.
+
+    **THE SUCCESS PREDICATE IS IMPORTED AND NEVER RE-IMPLEMENTED.** ``phase18_extraction`` is
+    ancestry-guarded and permanently uneditable, so the attack this arm is scored BY cannot silently
+    diverge from the attack a sweep point is scored by. Both the per-draw predicate
+    (``score_records`` -> ``phase14_recall.contains_value``) and the QUESTION-unit rollup
+    (``aggregate_questions``) are called out of it; a second copy of either is a second rule,
+    free to stop agreeing with the one every published Phase-18 rate came out of.
+
+    **THE UNIT IS QUESTIONS AND THE ERROR IS INVISIBLE WHEN IT IS NOT.**
+    ``mitigation_gate.extraction_ceiling`` refuses a non-question denominator, and a
+    draw-denominated count DEFLATES the rate and NARROWS the bound together — so nothing in the
+    output would look wrong. The identities are therefore asserted rather than commented:
+    ``sum(n_questions) == len(the cell)`` per cell, and ``total_draws == questions * CURVE_K``.
+
+    ``load_adapted_model`` is the same ``weights_only=True`` load-before-inject path a scored sweep
+    point uses, so a never-taught number and a sweep-point number come off ONE pipeline.
+    """
+    import phase14_recall as recall  # LAZY — teach_persona's own register for this pair.
+    import phase16_persistence as persistence  # LAZY — same rule.
+    import phase18_extraction as x18  # LAZY — heavy, torch-touching.
+
+    k = mitigation_budget.CURVE_K
+    corpus = json.loads(x18.CORPUS_PATH.read_text(encoding="utf-8"))
+    _prove(
+        corpus["entry_keys"] == list(x18.CORPUS_ENTRY_KEYS),
+        f"{x18.CORPUS_PATH.name} declares entry_keys {corpus['entry_keys']} against the pin's "
+        f"{list(x18.CORPUS_ENTRY_KEYS)}. Every field below would be read against a schema nobody "
+        "checked",
+    )
+    prompts = corpus["prompts"]
+    _prove(
+        sorted({entry["family"] for entry in prompts}) == sorted(x18.ATTACK_FAMILIES),
+        f"the corpus spans families {sorted({e['family'] for e in prompts})}, not the "
+        f"pre-registered {sorted(x18.ATTACK_FAMILIES)} — the floor would be reduced over a "
+        "different attack surface than the sweep points it is the floor FOR",
+    )
+    corpus_digest = x18.corpus_sha256(corpus)
+
+    # TWO `values` OBJECTS, TWO CONSUMERS, and they are deliberately not one. The clean-room guard
+    # takes a LIST of value strings; the scorer takes a `{fact_id: value}` MAPPING and aborts on a
+    # fact it was given no value for. `phase19_erasure.py:2814` builds the mapping exactly this way.
+    clean_room_values = [fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS]
+    values = {fact.id: fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS}
+
+    model, model_cfg, tok, forbid, artifact = recall.load_adapted_model(device(), adapter)
+    _, seam_digest = persistence.resolve_forbid(tok, model_cfg.vocab_size)
+    _prove(
+        persistence.forbid_digest(forbid) == seam_digest,
+        "the mask the loader threaded into this arm does not match `resolve_forbid`'s. The floor "
+        "would be measured under a different forbid set than the arms it bounds",
+    )
+    tp.seed_everything(recall.SEED)
+
+    draws, per_shape = [], []
+    for family in x18.ATTACK_FAMILIES:
+        cell = [entry for entry in prompts if entry["family"] == family]
+        box = {}
+        with synchronized_seconds(box):
+            for index, entry in enumerate(cell):
+                # PERS-06 — nothing draws unchecked, on the ids ACTUALLY dispatched. `run_arm`'s
+                # guard, reproduced because a run that trusts an artifact it did not check rests its
+                # clean-room claim on a file's provenance instead of on its bytes.
+                base_ids = x18._guarded_span(entry)
+                recall.assert_no_value_in_prompt(
+                    tok, tok.decode(base_ids), clean_room_values, prompt_ids=base_ids
+                )
+                is_a2 = entry["family"] == "A2"
+                realized = entry["realized_injection"]
+                prefix_text = tok.decode(entry["prompt_ids"][-realized:]) if is_a2 else None
+                completions, stopped = recall.draw_all(
+                    model,
+                    tok,
+                    entry["prompt_ids"],
+                    device(),
+                    forbid,
+                    entry["seed_index"] * x18.K,  # the PIN's stride — see the module-level note
+                    n_samples=k - 1,
+                )
+                _prove(
+                    len(completions) == k,
+                    f"question {entry['fact_id']!r}/{entry['seed_index']} in shape {family!r} drew "
+                    f"{len(completions)} completions against the pinned CURVE_K = {k}. Every rate "
+                    "below is over that budget, and a short draw set would publish it over fewer",
+                )
+                draws.append(
+                    {
+                        "family": entry["family"],
+                        "dose": entry["dose"],
+                        "fact_id": entry["fact_id"],
+                        "slot": entry["slot"],
+                        "tier": entry["tier"],
+                        # The adapter-on/adapter-off AXIS of `phase18_extraction`'s schema, which is
+                        # what `arm` means there. This adapter is loaded and ENABLED, so the axis
+                        # value is literally true; the TRAINING arm is `never-taught` and is
+                        # recorded under `arm` in the block below, where it is not this axis.
+                        "arm": x18.ARMS[0],
+                        "seed_index": entry["seed_index"],
+                        "prefix_text": prefix_text,
+                        "completions": completions,
+                        "stopped": stopped,
+                    }
+                )
+                if (index + 1) % 24 == 0 or index + 1 == len(cell):
+                    done = index + 1
+                    print(
+                        f"[phase23_run] never-taught seed {seed} {family}: "
+                        f"{done}/{len(cell)} prompts, {done * k} draws",
+                        flush=True,
+                    )
+        minutes = box["seconds"] / 60
+        _prove(minutes > 0, f"shape {family!r} timed a zero-width bracket")
+        per_shape.append(
+            {
+                "shape": family,
+                "prompts": len(cell),
+                "n_draws": len(cell) * k,
+                "minutes": minutes,
+                "rate_draws_per_min": len(cell) * k / minutes,
+                "stop_terminated_n": sum(
+                    sum(1 for flag in record["stopped"] if flag)
+                    for record in draws
+                    if record["family"] == family
+                ),
+            }
+        )
+        print(
+            f"[phase23_run] never-taught seed {seed} {family}: DONE — "
+            f"{per_shape[-1]['rate_draws_per_min']:.2f} draws/min over {minutes:.2f} min",
+            flush=True,
+        )
+    del model
+
+    # The recorded draws carry `stopped`, which is NOT a `DRAW_RECORD_KEYS` member; `score_records`
+    # requires the schema as a SUBSET and ignores the extra, exactly as `run_arm`'s records do.
+    scored = x18.score_records(draws, values)
+
+    per_cell = []
+    for family in x18.ATTACK_FAMILIES:
+        for tier in x18.CORPUS_TIERS:
+            cell = [r for r in scored if r["family"] == family and r["tier"] == tier]
+            rows = x18.aggregate_questions(cell, tier=tier)
+            # `aggregate_by_fact` keys by fact and does not carry the slot through, so the slot is
+            # recovered from the cell — and PROVED single per fact, `phase19_erasure.py:540`'s
+            # register: a fact appearing under two slots would attribute one fact's rate to another.
+            slot_of = {}
+            for record in cell:
+                _prove(
+                    slot_of.setdefault(record["fact_id"], record["slot"]) == record["slot"],
+                    f"fact {record['fact_id']!r} appears under two slots in {family!r}/{tier!r}",
+                )
+            successes = sum(row["n_answerable"] for row in rows.values())
+            questions = sum(row["n_questions"] for row in rows.values())
+            # THE UNIT ASSERTION. One scored record per question, so the aggregation's question
+            # count must equal the cell's record count. A draw-denominated count would be k times
+            # too large and cannot survive this comparison — `phase19_erasure.py:555`'s register.
+            _prove(
+                questions == len(cell),
+                f"cell {family!r}/{tier!r} aggregated {questions} questions over {len(cell)} "
+                "scored records. There is ONE record per question, so a disagreement means the "
+                "unit moved "
+                "between the record and the rate — and a draw denominator deflates the rate AND "
+                "narrows the bound in the same direction, so nothing downstream would look wrong",
+            )
+            for fact_id, row in rows.items():
+                _prove(
+                    row["n_draws"] == k * row["n_questions"],
+                    f"fact {fact_id!r} in {family!r}/{tier!r} carries {row['n_draws']} draws "
+                    f"against {k} x {row['n_questions']} questions — this cell was not drawn "
+                    "at the pinned budget its own record claims",
+                )
+            per_cell.append(
+                {
+                    "family": family,
+                    "tier": tier,
+                    "nontarget_successes": successes,
+                    "nontarget_questions": questions,
+                    "rate": successes / questions,
+                    "n_draws": sum(row["n_draws"] for row in rows.values()),
+                    "per_fact": {
+                        fact_id: {
+                            "slot": slot_of[fact_id],
+                            "n_answerable": row["n_answerable"],
+                            "n_questions": row["n_questions"],
+                            "rate": row["rate"],
+                            "draw_rate": row["draw_rate"],
+                            "n_draws": row["n_draws"],
+                        }
+                        for fact_id, row in sorted(rows.items())
+                    },
+                }
+            )
+
+    gated = [cell for cell in per_cell if cell["tier"] == x18.GATED_TIER]
+    nontarget_successes = sum(cell["nontarget_successes"] for cell in gated)
+    nontarget_questions = sum(cell["nontarget_questions"] for cell in gated)
+    total_draws = sum(cell["n_draws"] for cell in gated)
+    _prove(
+        0 <= nontarget_successes <= nontarget_questions,
+        f"{nontarget_successes} successes over {nontarget_questions} QUESTIONS is not a "
+        "proportion. `extraction_ceiling` raises on exactly this: the unit is questions, never "
+        "draws",
+    )
+    _prove(
+        nontarget_questions == len([r for r in scored if r["tier"] == x18.GATED_TIER]),
+        f"the gated denominator is {nontarget_questions} against "
+        f"{len([r for r in scored if r['tier'] == x18.GATED_TIER])} scored records on that tier",
+    )
+    _prove(
+        total_draws == nontarget_questions * k,
+        f"total_draws {total_draws} != nontarget_questions {nontarget_questions} x "
+        f"draws_per_question {k}. The two denominators describe the same cell and must agree, or "
+        "one of the two figures is in the other's unit",
+    )
+
+    block = {
+        "seed": seed,
+        "arm": training["arm"],
+        "draw_axis_arm": x18.ARMS[0],
+        "adapter": _rel(adapter),
+        "adapter_sha256": _sha256(adapter),
+        "artifact": {key: artifact[key] for key in sorted(artifact)} if artifact else None,
+        "gated_tier": x18.GATED_TIER,
+        "reported_tier": x18.REPORTED_TIER,
+        "draws_per_question": k,
+        "draws_per_question_source": "mitigation_budget.CURVE_K",
+        "seed_stride_symbol": NEVER_TAUGHT_SEED_STRIDE_SYMBOL,
+        "seed_stride": x18.K,
+        "nontarget_successes": nontarget_successes,
+        "nontarget_questions": nontarget_questions,
+        "rate": nontarget_successes / nontarget_questions,
+        "total_draws": total_draws,
+        "draws_dispatched": len(draws) * k,
+        "per_cell": per_cell,
+        "per_shape": per_shape,
+        "seconds": sum(shape["minutes"] for shape in per_shape) * 60,
+        "corpus": _rel(x18.CORPUS_PATH),
+        "corpus_sha256": corpus_digest,
+        "success_predicate": "phase18_extraction.score_records -> phase14_recall.contains_value",
+        "question_rollup": "phase18_extraction.aggregate_questions",
+        "families": list(x18.ATTACK_FAMILIES),
+        "family_zero_run": False,
+        **provenance(),
+    }
+    print(
+        f"[phase23_run] never-taught seed {seed}: {nontarget_successes}/{nontarget_questions} "
+        f"{x18.GATED_TIER} QUESTIONS extracted at least once = {block['rate']!r} "
+        f"({total_draws} draws at {k}/question)",
+        flush=True,
+    )
+    return block
+
+
+def _never_taught_record(training, seeds):
+    """Assemble and write ``results/phase23_never_taught.json`` once every seed is scored.
+
+    Pure arithmetic over the working state — no GPU second is spent here, which is why an assembly
+    bug costs nothing. The reduction is CALLED: no spread is typed in this file.
+    """
+    state = _state_load()["never_taught"]
+    per_seed = [state[str(seed)]["scoring"] for seed in seeds]
+    readings = [block["rate"] for block in per_seed]
+    # THE REDUCTION IS CALLED, NEVER INLINED — the same blind-committed function that reduced the
+    # control floor and the matched floor. No `max`, no `min`, no spread is typed here.
+    measured_floor = noise_floor(readings)
+
+    for key in ("gated_tier", "draws_per_question", "device", "torch_version", "arm"):
+        distinct = sorted({str(block[key]) for block in per_seed})
+        _prove(
+            len(distinct) == 1,
+            f"the per-seed blocks disagree on {key!r}: {distinct}. Five readings taken on "
+            "different instruments are not five readings of one quantity",
+        )
+    designated = per_seed[0]
+    _prove(
+        designated["seed"] == seeds[0] == SEED_LADDER[0],
+        f"the designated central reading is seed {designated['seed']!r} against the ladder's first "
+        f"{SEED_LADDER[0]!r}. The pooling rule names the ladder's FIRST seed, and a different one "
+        "would be a designation made with five readings visible",
+    )
+
+    inputs_sha256 = hashlib.sha256(
+        json.dumps(per_seed, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    governs = (
+        "the NEVER-TAUGHT EXTRACTION RATE over "
+        f"{designated['gated_tier']} QUESTIONS (per_seed[].nontarget_successes / "
+        ".nontarget_questions, a count over QUESTIONS and never draws), measured on the four "
+        "dose-split Phase-18 attack families at mitigation_budget.CURVE_K draws per question. "
+        "mitigation_gate.extraction_ceiling reads this floor in Phase 25 as the "
+        "`extraction_noise_floor` term of X. It governs THAT quantity and nothing else: the "
+        f"{designated['reported_tier']} tier and every per-family cell recorded here are "
+        "secondary, carry their own denominators and were NOT reduced. PHASE 23 DOES NOT PUBLISH "
+        "X — this record carries no bound and no ceiling value; Phase 25 computes it."
+    )
+    provenance_block = {
+        "arm": mitigation_gate.NEVER_TAUGHT_ARM,
+        "seeds": list(seeds),
+        "record": NEVER_TAUGHT_RECORD,
+        "record_sha256": inputs_sha256,
+        "git_sha": tp.git_sha(),
+        "git_sha_per_seed": {str(b["seed"]): b["git_sha"] for b in per_seed},
+        "device": designated["device"],
+        "torch_version": designated["torch_version"],
+        "reduction": "phase23_prereg.noise_floor",
+        "k": designated["draws_per_question"],
+        "questions": designated["nontarget_questions"],
+        "governs": governs,
+    }
+    required_keys = tuple(FLOOR_PROVENANCE_KEYS) + tuple(
+        mitigation_gate.EXTRACTION_FLOOR_PROVENANCE_KEYS
+    )
+    missing = [key for key in required_keys if key not in provenance_block]
+    _prove(
+        not missing,
+        f"the extraction floor's provenance is MISSING {missing!r}. `extraction_ceiling`'s "
+        "`_prove` calls are the ONE choke point at which a floor's provenance is checked, two "
+        "phases from "
+        "now, in a file with no correction path — a record missing a key is REFUSED, not defaulted",
+    )
+
+    record = {
+        "record": NEVER_TAUGHT_RECORD,
+        "record_sha256": inputs_sha256,
+        "arm": mitigation_gate.NEVER_TAUGHT_ARM,
+        "extraction_noise_floor": measured_floor,
+        "extraction_floor_provenance": provenance_block,
+        "reduction": "phase23_prereg.noise_floor",
+        "estimator": (
+            "the RANGE max(readings) - min(readings) over the N per-seed gated-tier extraction "
+            "rates, committed BLIND in 23-03 and CALLED here — never re-implemented"
+        ),
+        "readings": readings,
+        "governs": governs,
+        "seeds": list(seeds),
+        "n_seeds": len(seeds),
+        "distinct_seeds": len(set(seeds)),
+        "frozen_gate_min_seeds": mitigation_gate.EXTRACTION_FLOOR_MIN_SEEDS,
+        "frozen_gate_provenance_keys": list(mitigation_gate.EXTRACTION_FLOOR_PROVENANCE_KEYS),
+        "pooled": {
+            "nontarget_successes": designated["nontarget_successes"],
+            "nontarget_questions": designated["nontarget_questions"],
+            "rate": designated["rate"],
+            "total_draws": designated["total_draws"],
+            "draws_per_question": designated["draws_per_question"],
+            "seed": designated["seed"],
+            "tier": designated["gated_tier"],
+            "unit": "question",
+            "pooling_rule": NEVER_TAUGHT_POOLING_RULE,
+        },
+        "per_seed": per_seed,
+        "source_training_record": NEVER_TAUGHT_TRAINING_RECORD,
+        "source_training_record_sha256": _sha256(_ROOT / NEVER_TAUGHT_TRAINING_RECORD),
+        "consumers": training["consumers"],
+        "scheduled_once_consumed_twice": (
+            "23-08 trained these adapters ONCE and scored none of them (`scored_here: false`); "
+            "this record is the ONE scoring, and both consumers above read it. The claim is "
+            "CHECKED rather than asserted: source_training_record and its digest cite the "
+            "scheduling, consumers matches that record's list exactly, the seed lists are "
+            "identical in both, and 23-08's `test_never_taught_is_trained_once` AST census proves "
+            "exactly one `train_never_taught` definition and one call site exist under scripts/"
+        ),
+        "curve_k": mitigation_budget.CURVE_K,
+        "budget_constants": {
+            "mitigation_budget.CURVE_K": mitigation_budget.CURVE_K,
+            "mitigation_budget.N_CONTROL_SEEDS": mitigation_budget.N_CONTROL_SEEDS,
+            "mitigation_budget.FULL_FIDELITY_K": mitigation_budget.FULL_FIDELITY_K,
+            "mitigation_budget.SWEEP_POINTS": mitigation_budget.SWEEP_POINTS,
+        },
+        "budget_constants_source": (
+            "scripts/mitigation_budget.py (23-13's pin — READ, never written)"
+        ),
+        "projection": _never_taught_projection(),
+        "scoring_seconds_per_seed": {str(b["seed"]): b["seconds"] for b in per_seed},
+        "scoring_seconds_total": sum(b["seconds"] for b in per_seed),
+        "x_is_not_published_here": (
+            "mitigation_gate.extraction_ceiling is called from tests/test_phase23_ctrl.py ONLY, to "
+            "prove this record's provenance passes the frozen gate's refusals. Its return value is "
+            "not asserted on and appears in NO field of this record. D-13: the extraction floor "
+            "arrives at that gate as a required kwarg and X is never a literal — Phase 25 computes "
+            "it. The symbol is NAMED in provenance strings above and that is deliberate; storing a "
+            "NUMBER under it is the publication this forbids, which is why the guard walks KEYS "
+            "rather than matching text"
+        ),
+        **provenance(),
+    }
+    _prove(
+        record["extraction_noise_floor"]
+        == noise_floor([block["rate"] for block in record["per_seed"]]),
+        "the recorded floor does not re-derive from the recorded readings — the record and its own "
+        "reduction disagree before it has even been written",
+    )
+    path = _ROOT / NEVER_TAUGHT_RECORD
+    _prove(
+        not path.exists(),
+        f"{path} already exists — it is recorded evidence and there is no force flag",
+    )
+    path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+    print("[phase23_run] per-seed gated-tier readings (QUESTIONS extracted at least once):")
+    for block in per_seed:
+        print(
+            f"  seed {block['seed']}: {block['nontarget_successes']}/"
+            f"{block['nontarget_questions']} = {block['rate']!r} over "
+            f"{block['draws_per_question']} draws/question ({block['total_draws']} draws)"
+        )
+    print(
+        f"[phase23_run] wrote {NEVER_TAUGHT_RECORD}: extraction_noise_floor {measured_floor!r} "
+        f"= phase23_prereg.noise_floor over {len(readings)} readings"
+    )
+
+
+def never_taught():
+    """23-14 / CTRL-03 — score ONE not-yet-scored never-taught seed at the pinned K, then EXIT.
+
+    **THE PROCESS BOUNDARY IS THE COMMIT BOUNDARY.** This driver's git surface is READ-ONLY by
+    design, so "commit after every seed" cannot be an in-process act. It is delivered instead by
+    scoring exactly one unscored seed per invocation and exiting: the operator runs the detached
+    launch once per seed and commits ``data/phase23_run_state.json`` between launches, so a kill
+    costs at most ONE seed. Once every seed is scored, a final invocation spends no GPU second and
+    assembles ``results/phase23_never_taught.json``.
+
+    Trains nothing. The adapters come from 23-08's single scheduling, by path and by sha256.
+    """
+    _preconditions()
+    prove_d04_gate()
+    training = _never_taught_training()
+    seeds = [int(seed) for seed in training["seeds"]]
+    _prove(
+        seeds == list(SEED_LADDER)[: len(seeds)],
+        f"the training record's seeds {seeds} are not a prefix of the ladder {list(SEED_LADDER)}. "
+        "`noise_floor`'s readings are recorded in ladder order and the central reading is the "
+        "FIRST — a reordered list would designate a different seed",
+    )
+    _prove(
+        len(set(seeds)) == mitigation_budget.N_CONTROL_SEEDS,
+        f"the training record holds {len(set(seeds))} distinct seed(s) against the budget's pinned "
+        f"N_CONTROL_SEEDS = {mitigation_budget.N_CONTROL_SEEDS}. The floor is scored at the same N "
+        "the budget priced, or the sweep is short by the difference",
+    )
+
+    recorded = _state_load().get("never_taught", {})
+    todo = [seed for seed in seeds if "scoring" not in recorded.get(str(seed), {})]
+    print(
+        f"[phase23_run] never-taught: {len(seeds) - len(todo)}/{len(seeds)} seed(s) scored; "
+        f"remaining {todo}",
+        flush=True,
+    )
+    if not todo:
+        _never_taught_record(training, seeds)
+        return
+
+    _never_taught_projection()
+    seed = todo[0]
+    _prove(
+        _already_trained("never_taught", seed),
+        f"never-taught seed {seed} has no verified adapter in the working state. These adapters "
+        "are 23-08's and this leg trains none — re-run `schedule` rather than scoring a seed whose "
+        "weights nothing vouches for",
+    )
+    adapter = _never_taught_adapter(training, seed)
+    print(f"[phase23_run] never-taught: scoring seed {seed} from {_rel(adapter)}", flush=True)
+    block = score_never_taught(seed, adapter=adapter, training=training)
+    _state_record("never_taught", seed, {"scoring": block})
+    print(
+        f"[phase23_run] never-taught: seed {seed} RECORDED into {STATE_PATH}. "
+        f"COMMIT data/phase23_run_state.json NOW — {len(todo) - 1} seed(s) remain "
+        f"({todo[1:]}), and the next launch is what scores the next one",
+        flush=True,
+    )
+
+
 _TABLE = {
     "cost": cost,
     "schedule": schedule,
@@ -4171,6 +4832,7 @@ _TABLE = {
     "noised": noised,
     "throughput": throughput,
     "cost-record": cost_record,
+    "never-taught": never_taught,
 }
 
 USAGE = (
@@ -4217,6 +4879,20 @@ USAGE = (
     "              the floor condition, cross-validated per shape against\n"
     "              results/phase18_preflight_report.md. Writes the measurement into the\n"
     "              working state; never a bare mean. Same detached discipline as `noised`.\n"
+    "  never-taught\n"
+    "              CTRL-03 — score the never-taught adapters 23-08 trained, at the K 23-13 pinned\n"
+    "              (`mitigation_budget.CURVE_K`), on the four Phase-18 ATTACK families. Trains\n"
+    "              NOTHING: the adapters are consumed from\n"
+    "              results/phase23_never_taught_training.json by path and sha256.\n"
+    "              SCORES EXACTLY ONE NOT-YET-SCORED SEED AND EXITS. That is the resumability\n"
+    "              mechanism, not a limitation: this driver's git surface is READ-ONLY, so the\n"
+    "              per-seed commit boundary has to be a PROCESS boundary. Run the detached launch\n"
+    "              ONCE PER SEED and COMMIT data/phase23_run_state.json between launches — a kill\n"
+    "              then costs at most one seed (23-17 lost 3 of 5 to exactly this). A final\n"
+    "              invocation, once every seed is scored, spends no GPU second and writes\n"
+    "              results/phase23_never_taught.json with the floor reduced through\n"
+    "              `phase23_prereg.noise_floor`. Family zero is NOT run: D-01's row-for-row\n"
+    "              equality is against TAUGHT rows and is false by construction on this arm.\n"
     "  cost-record assemble results/phase23_cost.json — four training legs each NAMING its\n"
     "              protocol, the floor/ceiling generation bracket, all four eval/training ratios\n"
     "              and a K-rung sizing table that prices the never-taught floor. Pure arithmetic\n"
