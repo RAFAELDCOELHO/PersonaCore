@@ -505,3 +505,21 @@ None. The plan's `<threat_model>` assigned `mitigate` to T-23-57, -57b, -57c, -5
 -59, -60, -61, -62, -63, -63b; each mitigation is implemented and named above. No new network
 endpoint, auth path, file-access pattern or trust-boundary schema change was introduced — zero
 package installs, `pyproject.toml` byte-unchanged (RPT-03).
+
+---
+
+## Self-Check: PASSED
+
+Every claimed file exists on disk and every claimed commit resolves in `git log`:
+
+- `results/phase23_noised_dp_n64_sigma0p500000.json` — FOUND
+- `results/phase23_cost.json` — FOUND
+- `results/phase23_cost_run.log` — FOUND
+- `results/phase23_sweep1_dp_n64/run.csv` — FOUND
+- `.planning/phases/23-.../23-11-SUMMARY.md` — FOUND
+- commits `38f8e52`, `52fd49d`, `ab9d246`, `bcdfb71`, `8876b8c`, `c6e8673`, `21442f4` — all FOUND
+
+No file was created under the plan frontmatter's literal placeholder name
+`results/phase23_noised_dp_n64_sigma<σ>.json`; the real path was resolved by **calling**
+`phase23_prereg.noised_record_path("dp_n64", 0.5)`. The working tree is clean apart from the
+user's own pre-existing `.gitignore` modification, which this plan did not touch.
