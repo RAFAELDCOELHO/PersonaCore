@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-12-PLAN.md — D-10 RETRACT-IN-PLACE of the falsified "~1,010x" cost claim, in all three planning files. A dated RETRACTED IN PLACE 2026-08-28 (plan 23-12) continuation was APPENDED to .planning/REQUIREMENTS.md, .planning/ROADMAP.md and .planning/STATE.md; deletions are 0 / 0 apart from exactly FOUR lines in REQUIREMENTS.md (the CAL-01 and CAL-05 checkbox rows and their two traceability rows), and every original sentence and the h/point table stand byte-unchanged. Content READ from results/phase23_cost.json (sha256 f3ba4d9a02f3040752d93c0395821075d8450860a9bae194ac120e8db8a47637), never retyped - all eleven pre-registered figure paths at full stored precision, each training figure and each ratio naming its protocol, the two non-DP protocols side by side with the gap from the record's own wall_clock_gap_vs_superseded = 2.035849685343305. NO ARM AT ANY PROTOCOL IS ~1,010x - the four ceiling ratios are 410.006407009605 / 201.39326098648866 / 157.94846187604026 / 23.458286235587472 - but all EIGHT ratios still bind, so D-03's ordering, D-04's halt rule and the sizing decision are unchanged and only the margin moves. The h/point table is disclosed as a FLOOR beside h_per_point_ceiling 9.013691285839306 h and LEFT STANDING; the loop-only research projection is named as a THIRD thing corrected, by heading text, without its numerals. Guarded in BOTH directions by exact string containment over one pre-registered set, no allow-list (AST-asserted), watched REDding on 5 constructed defects on tmp_path. CAL-01 and CAL-05 TICKED. Zero gsd-sdk mutation handlers called. Suite 1571 passed, 1 skipped
-last_updated: "2026-08-28T21:05:00.000Z"
+stopped_at: Completed 23-13-PLAN.md — CAL-02: Z is pinned in scripts/mitigation_budget.py, APPEND-ONLY (306 insertions, 0 deletions), with a _PROVENANCE sibling per constant. THE CURVE_K RUNG AND THE SWEEP WIDTH WERE SELECTED BY THE USER at Task 1's blocking checkpoint:decision gate, not by the executor - CURVE_K = 16 and SWEEP_POINTS = 16, against a ceiling-side total of 66.09021780091668 h for one leg (16 x 3.1471532286150796 sweep + 5 x 3.1471532286150796 never-taught), with the reply recorded VERBATIM in CURVE_K_PROVENANCE.selected_reply_verbatim and persisted by the same write that consumed it. The plan named no default rung and invented no spend bound, because none exists in 23-CONTEXT.md D-01..D-10, in Claude's Discretion, in REQUIREMENTS.md or in ROADMAP.md. FULL_FIDELITY_K = 48, STEP_BUDGET = 200 and N_CONTROL_SEEDS = 5 are RULES, each verified against its live source (phase18_extraction.K, teach_persona.MAX_STEPS, phase23_never_taught_training.json n_seeds). D-06 resolved from a LIVE read (verdict true, both epsilons 24.38161088311366, both T 4) so N64_LEG_WITHDRAWN = False and the n=64 leg stands; the withdrawal branch is written and tested from a CONSTRUCTED one-ULP-falsified copy. Both floors byte-unchanged; module still literal-only and zero-import with all three guards green (literal-only, the SUBSET ceiling, and the EQUALITY ceiling with zero headroom in BOTH directions). Every constant re-derives from results/phase23_cost.json under exact == with a watched perturbation control; the ceiling-sizing is a re-derivation IDENTITY plus >= (never a strict >), and the degenerate floor==ceiling branch did NOT fire (1.9979696709667354 against 3.1471532286150796). sized_against carried by the three ceiling-side multiplicands and asserted ABSENT on the other three. CAL-02 TICKED by hand; zero gsd-sdk mutation handlers called; every changed REQUIREMENTS.md line names CAL-02 and none matches the requirement 23-04 closed. Suite 1578 passed, 1 skipped (1571 + 7 new); ruff clean. NEXT: 23-14 (CTRL-03). PREVIOUS: 23-12-PLAN.md — D-10 RETRACT-IN-PLACE of the falsified "~1,010x" cost claim, in all three planning files. A dated RETRACTED IN PLACE 2026-08-28 (plan 23-12) continuation was APPENDED to .planning/REQUIREMENTS.md, .planning/ROADMAP.md and .planning/STATE.md; deletions are 0 / 0 apart from exactly FOUR lines in REQUIREMENTS.md (the CAL-01 and CAL-05 checkbox rows and their two traceability rows), and every original sentence and the h/point table stand byte-unchanged. Content READ from results/phase23_cost.json (sha256 f3ba4d9a02f3040752d93c0395821075d8450860a9bae194ac120e8db8a47637), never retyped - all eleven pre-registered figure paths at full stored precision, each training figure and each ratio naming its protocol, the two non-DP protocols side by side with the gap from the record's own wall_clock_gap_vs_superseded = 2.035849685343305. NO ARM AT ANY PROTOCOL IS ~1,010x - the four ceiling ratios are 410.006407009605 / 201.39326098648866 / 157.94846187604026 / 23.458286235587472 - but all EIGHT ratios still bind, so D-03's ordering, D-04's halt rule and the sizing decision are unchanged and only the margin moves. The h/point table is disclosed as a FLOOR beside h_per_point_ceiling 9.013691285839306 h and LEFT STANDING; the loop-only research projection is named as a THIRD thing corrected, by heading text, without its numerals. Guarded in BOTH directions by exact string containment over one pre-registered set, no allow-list (AST-asserted), watched REDding on 5 constructed defects on tmp_path. CAL-01 and CAL-05 TICKED. Zero gsd-sdk mutation handlers called. Suite 1571 passed, 1 skipped
+last_updated: "2026-08-28T22:40:00.000Z"
 last_activity: 2026-08-28
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 67
-  completed_plans: 64
+  completed_plans: 65
   percent: 33
 ---
 
@@ -26,8 +26,55 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — GAP CLOSURE 23-15…23-20 COMPLETE
-Plan: 12 of 20 — **23-12 COMPLETE at `72ea546` + `81f0be2`** — **17 of 20 plans ticked**
-(23-01…23-12, 23-15, 23-16, 23-18, 23-19, 23-20).
+Plan: 13 of 20 — **23-13 COMPLETE at `0a23aca` + `bb2822d` + `810cad4`** — **18 of 20 plans ticked**
+(23-01…23-13, 23-15, 23-16, 23-18, 23-19, 23-20).
+
+**23-13 EXECUTED 2026-08-28 — Z IS PINNED, AND THE RUNG WAS THE USER'S, NOT THE EXECUTOR'S.**
+Task 1 computed the per-rung table live through `phase23_cost.size_sweep` at BOTH the ceiling and
+the floor, priced the never-taught term as its own column, PRESENTED it and **selected nothing** —
+no default rung, no recommendation, and no spend bound, because none exists in `23-CONTEXT.md`'s
+D-01…D-10, in its Claude's Discretion section, in `.planning/REQUIREMENTS.md` or in
+`.planning/ROADMAP.md`. **The user selected `CURVE_K = 16` and `SWEEP_POINTS = 16`**, against a
+ceiling-side total of **`66.09021780091668` h** for one leg (`16 × 3.1471532286150796` sweep +
+`5 × 3.1471532286150796` never-taught; the floor-derived pair is `31.967514735467766` +
+`9.989848354833677`). The reply is recorded VERBATIM in
+`CURVE_K_PROVENANCE.selected_reply_verbatim` / `SWEEP_POINTS_PROVENANCE` — **persisted by the same
+write that consumed it**, so a literal could not be pinned without its selection being recorded.
+The user's reason for the mid-menu rung: the ratchet guards against LOWERING K after a bad result,
+but not against never noticing the result was bad if the ASR ladder truncates where real signal
+would have shown. **A recorded note for a FUTURE decision, not acted on here:** leg count is a far
+larger cost lever than width (100.7 h between 4 legs and 2 at the same rung), so a later budget
+revision should target legs first, not `W`.
+
+`FULL_FIDELITY_K = 48`, `STEP_BUDGET = 200` and `N_CONTROL_SEEDS = 5` are **RULES, never options**,
+each verified against its live source (`phase18_extraction.K` at `:93`, `teach_persona.MAX_STEPS` at
+`:1220`, and `results/phase23_never_taught_training.json` → `n_seeds`) rather than transcribed.
+**D-06 resolved from a LIVE read** — `verdict: true`, `epsilon_n8 == epsilon_n64 ==
+24.38161088311366`, `t_n8 == t_n64 == 4` — so `N64_LEG_WITHDRAWN = False` and the n=64 leg stands;
+the withdrawal branch is written and tested from a CONSTRUCTED one-ULP-falsified copy, never by
+editing the committed artifact, so "confirmed" is distinguishable from "never checked".
+
+`scripts/mitigation_budget.py` is **306 insertions, 0 deletions** — the module's whole history stays
+additive, both pre-existing floors are byte-unchanged with their provenance siblings, and the AST
+walk lists the four original names FIRST. It is still literal-only and zero-import: all three guards
+green — the literal-only guard at `test_phase23_budget.py:308` (the one that actually binds this
+file), the SUBSET ceiling at `test_phase20_prereg.py:1190`, and the EQUALITY ceiling at
+`test_phase23_budget.py:565`, which has **zero headroom in BOTH directions**. Because the module
+cannot import the frozen gate, both Ks are restated literals and
+`test_selected_k_is_a_ratcheted_rung` imports `mitigation_gate` FROM THE TEST, asserts membership in
+`K_RUNGS`, calls `ratchet_k` and `promote_to_full_fidelity` with the pinned pair, and watches a
+decrease being refused. Every constant re-derives from `results/phase23_cost.json` under exact `==`
+with a watched perturbation control; the ceiling-sizing is proven by re-derivation IDENTITY plus
+`>=` (never a strict `>`, which this phase's own premise refutes) and the degenerate floor==ceiling
+branch did **not** fire here (`1.9979696709667354` against `3.1471532286150796`). `sized_against` is
+carried by exactly the three ceiling-side multiplicands and asserted ABSENT on the three constants
+no throughput figure feeds. **CAL-02 TICKED** — hand-edited, **zero `gsd-sdk` mutation handlers
+called**, every changed line in `.planning/REQUIREMENTS.md` names CAL-02 and none matches the
+requirement 23-04 closed. Suite **`1578 passed, 1 skipped`** (1571 + 7 new); `ruff` clean.
+
+**NEXT: 23-14 (CTRL-03)** — the last open requirement of `ROADMAP.md:562`'s six. It scores the five
+never-taught adapters this plan priced, at `CURVE_K = 16`. That rung is now the ratchet's FLOOR: K
+may only increase from here, with no override flag.
 **23-11 / 23-12 / 23-13 / 23-14 were UNBLOCKED
 2026-08-28** (see the dated unblock record below — evidence, not assumption)
 and **23-17 remains INCOMPLETE** — its run was harness-killed at 3/5 and wrote no record; 23-20 is
