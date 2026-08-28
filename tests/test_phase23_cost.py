@@ -802,14 +802,18 @@ def test_cost_claim_correction_is_additive(relative_path):
         "believed is the thing being preserved"
     )
 
-    marker = _MARKER.search(flat)
+    # Searched FROM the claim's position, so the assertion is "a dated 23-12 marker EXISTS after
+    # the claim" and not "the FIRST marker in the file is after it". The stricter reading has a
+    # measured false-RED channel and no extra teeth: `.planning/STATE.md`'s `stopped_at:`
+    # frontmatter legitimately summarises this correction at byte 258, far above the claim, and
+    # `.planning/ROADMAP.md`'s plan-list entry does the same. Refusing a file for describing its
+    # own correction in a status line proves nothing about whether the correction is additive.
+    where = flat.index(claim)
+    marker = _MARKER.search(flat, where)
     assert marker is not None, (
-        f"{relative_path} carries the claim but no `RETRACTED IN PLACE <date> (plan 23-12)` "
-        "marker. A correction landing in one of three files leaves two standing"
-    )
-    assert marker.start() > flat.index(claim), (
-        f"{relative_path}'s 23-12 marker at {marker.start()} precedes the claim at "
-        f"{flat.index(claim)}; the continuation is APPENDED to the text it corrects"
+        f"{relative_path} carries the claim at {where} with no `RETRACTED IN PLACE <date> "
+        "(plan 23-12)` marker anywhere after it. A correction landing in one of three files "
+        "leaves two standing, and one landing above the claim is not a continuation of it"
     )
 
     body = _prose.normalized(_continuation(text))
