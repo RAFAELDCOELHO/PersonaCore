@@ -921,9 +921,15 @@ def test_matched_verdict_is_one_of_the_two_branches():
 # on purpose so a reader sees both verdicts side by side), so a gate pointed at it can never open.
 # =================================================================================================
 
-# The distinctive phrase from `.planning/STATE.md`'s dated unblock record, resolved by TEXT and
-# never by line number — `tests/test_phase20_prereg.py:125-170` records this repository's own lesson
-# that a line number survives no edit.
+# THE GATE IS WRITTEN ONCE AND REUSED. The sentinel, the pin and the predicate live in
+# `scripts/phase23_run.py` — the DRIVER that has to run on the same gate this file asserts, because
+# a second copy of a gate is a second gate, free to drift. The direction is production -> test and
+# never the reverse: `phase23_run._count_composed_steps`' docstring records that a production driver
+# importing from `tests/` would make running this phase depend on the test tree being importable.
+#
+# The two literals below are RESTATED here rather than only imported, and each is bound to the
+# driver's by `test_the_unblock_gate_has_one_source` — the register `_MEASURED_DP_PRE_CLIP_MAX`
+# above already uses: a literal asserted equal to its production source is not a second source.
 _UNBLOCK_SENTINEL = (
     "UNBLOCKED 2026-08-28 — by the user, on evidence, after reading the verdict record"
 )
@@ -979,97 +985,31 @@ def _is_ancestor(older, newer):
 _A_DIFFERENT_ANCESTOR = _run_git("rev-parse", "HEAD").strip()
 
 
-def _unblock_act_is_committed(*, sentinel, sha, changed_paths):
-    """FIVE conjuncts over THREE CONSTRUCTED inputs. Returns ``(proven, reason, detail)``.
+# THE PREDICATE ITSELF IS THE DRIVER'S — imported, never re-implemented. `scripts/phase23_run.py`'s
+# `noised` sub-mode calls this exact function object through `prove_d04_gate`, so the branch this
+# file asserts and the gate that driver runs on cannot become two different gates.
+_unblock_act_is_committed = phase23_run.unblock_act_is_committed
 
-    The sentinel is the THIRD PARAMETER and deliberately not a module constant read from inside
-    this function: the tripwire's absent-sentinel case drives a scratch string, and a predicate that
-    closed over ``_UNBLOCK_SENTINEL`` internally would leave that case undrivable short of
-    monkeypatching this module — which tests the patch, not the guard.
 
-    Sentinel + ancestry + ``git show HEAD:`` alone is FORGEABLE: **any** commit that introduces the
-    phrase into ``.planning/STATE.md`` satisfies all three, and agent commits to that exact file are
-    routine in this phase. The sha pin and the act-shape check are what bind the act to a HUMAN, and
-    the ancestry and ``git show HEAD:`` checks are what stop an uncommitted or off-branch edit —
-    neither subsumes the other, so all five are conjoined.
+def test_the_unblock_gate_has_one_source():
+    """The two literals above are BOUND to the driver's, so neither is a second source for the act.
+
+    `_MEASURED_DP_PRE_CLIP_MAX`'s register, one gate over: a literal restated in a test and then
+    asserted equal to its production source is not a second source — it is a readable local name
+    with a check that it still means what it says.
     """
-    code_paths = sorted(p for p in changed_paths if p.startswith(("scripts/", "src/")))
-    detail = {
-        "sha": sha,
-        "sha_pinned": sha == _UNBLOCK_COMMIT,
-        "sentinel_shas": [],
-        "sentinel_shas_n": 0,
-        "sha_is_among_sentinel_shas": False,
-        "is_ancestor_of_head": False,
-        "sentinel_in_head_state": False,
-        "changed_paths": sorted(changed_paths),
-        "code_paths_in_act": code_paths,
-        "act_touches_no_code": not code_paths,
-        "date": None,
-    }
-
-    # (1) THE PIN — PROVENANCE. Checked first because it is the conjunct that binds the act to a
-    # human; every other conjunct is satisfiable by a routine agent commit.
-    if not detail["sha_pinned"]:
-        return (
-            False,
-            f"still blocked — PROVENANCE: {sha!r} is not the pinned human unblock act "
-            f"{_UNBLOCK_COMMIT!r}. A guard a downstream plan can satisfy as a side effect of "
-            "committing `.planning/STATE.md` is not a provenance guard",
-            detail,
-        )
-    detail["date"] = _run_git("log", "-1", "--format=%ad", sha).strip()
-
-    # (2) MEMBERSHIP — PRESENCE. Never a positional read; the returned set's size travels in the
-    # message and in `detail` so a set that GREW is visible rather than silently absorbed.
-    shas = _run_git("log", f"-S{sentinel}", "--format=%H", "--", ".planning/STATE.md").split()
-    detail["sentinel_shas"] = shas
-    detail["sentinel_shas_n"] = len(shas)
-    detail["sha_is_among_sentinel_shas"] = sha in shas
-    if not detail["sha_is_among_sentinel_shas"]:
-        return (
-            False,
-            f"still blocked — PRESENCE: no commit in `.planning/STATE.md`'s history introduces the "
-            f"sentinel {sentinel!r} at {sha!r}. `git log -S` returned {len(shas)} sha(s): {shas!r}",
-            detail,
-        )
-
-    # (3) ANCESTRY — an off-branch act does not release anything on this branch.
-    detail["is_ancestor_of_head"] = _is_ancestor(sha, "HEAD")
-    if not detail["is_ancestor_of_head"]:
-        return (
-            False,
-            f"still blocked — ANCESTRY: {sha!r} is not an ancestor of HEAD",
-            detail,
-        )
-
-    # (4) THE COMMITTED FILE, not the working tree — an uncommitted edit cannot open the branch.
-    detail["sentinel_in_head_state"] = sentinel in _run_git("show", "HEAD:.planning/STATE.md")
-    if not detail["sentinel_in_head_state"]:
-        return (
-            False,
-            "still blocked — COMMITTED STATE: the sentinel is absent from "
-            "`git show HEAD:.planning/STATE.md`, so any edit carrying it is uncommitted",
-            detail,
-        )
-
-    # (5) THE SHAPE OF THE ACT. A human unblock act is a DOCUMENTATION act; an agent's routine
-    # STATE.md commit carrying code alongside it is refused here even if the pin were satisfied.
-    if not detail["act_touches_no_code"]:
-        return (
-            False,
-            f"still blocked — ACT SHAPE: {sha!r} touched {code_paths!r} under `scripts/` or "
-            "`src/`. The human unblock act is a documentation act and touched four planning "
-            "documents and nothing else",
-            detail,
-        )
-
-    return (
-        True,
-        f"UNBLOCKED by {sha!r} ({detail['date']}), {len(detail['changed_paths'])} planning "
-        f"path(s), 0 under `scripts/` or `src/`; `git log -S<sentinel>` set size "
-        f"{detail['sentinel_shas_n']}",
-        detail,
+    assert _UNBLOCK_SENTINEL == phase23_run.UNBLOCK_SENTINEL, (
+        "this file's unblock sentinel has drifted from `phase23_run.UNBLOCK_SENTINEL`. Two "
+        "sentinels are two gates, and the driver runs on the other one"
+    )
+    assert _UNBLOCK_COMMIT == phase23_run.UNBLOCK_COMMIT, (
+        f"this file pins the human unblock act at {_UNBLOCK_COMMIT!r} while the driver pins "
+        f"{phase23_run.UNBLOCK_COMMIT!r}. The pin is the conjunct that binds the act to a HUMAN "
+        "and it must be ONE value"
+    )
+    assert _unblock_act_is_committed is phase23_run.unblock_act_is_committed, (
+        "the predicate this file drives is not the driver's function object — a second copy of a "
+        "gate is a second gate, free to drift"
     )
 
 

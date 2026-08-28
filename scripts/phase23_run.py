@@ -112,6 +112,7 @@ from phase23_prereg import (  # noqa: E402
     SIGMA_ZERO_RECORD,
     choose_n_seeds,
     noise_floor,
+    noised_record_path,
     sigma_zero_verdict,
 )
 
@@ -2767,6 +2768,608 @@ def matched_verdict():
     )
 
 
+# =================================================================================================
+# ===== (g) THE D-04 GATE — the MATCHED verdict AND the COMMITTED human unblock act =====
+#
+# TWO CONJUNCTS, NOT ONE. `results/phase23_matched_verdict.json`'s own `governs` field says *"THIS
+# RECORD DOES NOT UNBLOCK ANYTHING … unblocking them is a separate, later act taken by a human"*, so
+# the verdict alone is not the release condition. A gate reading only the verdict would contradict
+# the record it reads.
+#
+# THE GATE READS `results/phase23_matched_verdict.json` AND NEVER `results/phase23_sigma_zero.json`.
+# MEASURED: the σ=0 record carries `verdict == "HALT"` and 23-19 left it byte-unchanged ON PURPOSE
+# so a reader sees both verdicts side by side. It will never say `proceed`; a gate pointed at it can
+# never open, and a gate pointed at it and *made* to open would have to edit a frozen artifact.
+#
+# WRITTEN ONCE AND REUSED. `tests/test_phase23_matched.py` imports the sentinel, the pin and the
+# predicate FROM HERE rather than carrying a second copy — a second copy of a gate is a second gate,
+# free to drift. The direction is production -> test and not the reverse, for the reason
+# `_count_composed_steps`' docstring already records: a production driver importing from `tests/`
+# would make running this phase depend on the test tree being importable, and `tests/` is not a
+# package.
+# =================================================================================================
+
+# The distinctive phrase from `.planning/STATE.md`'s dated unblock record, resolved by TEXT and
+# never by line number — `tests/test_phase20_prereg.py:125-170` records this repository's own lesson
+# that a line number survives no edit.
+UNBLOCK_SENTINEL = (
+    "UNBLOCKED 2026-08-28 — by the user, on evidence, after reading the verdict record"
+)
+
+# THE SHA PIN. `git log -S<sentinel>` returns a SET, not a commit, and this phase's own work GROWS
+# it: 23-12 Task 1 lists `.planning/STATE.md` in its `<files>`, so a positional read would silently
+# bind a different commit once that lands. MEMBERSHIP is asserted against THIS constant instead, and
+# the ancestry and act-shape conjuncts are applied to THIS constant rather than to whichever sha the
+# search happened to list first.
+#
+# PROVENANCE: `746ecf6`, 2026-08-28, by THE USER —
+# `docs(23): pre-register CONTROL PROVENANCE, and unblock 23-11..23-14`. MEASURED: four paths, all
+# planning documents, ZERO under `scripts/` or `src/`.
+UNBLOCK_COMMIT = "746ecf699904e7c97bf73614e1c617a646da30ad"
+
+
+def _git(*args):
+    """``git`` in the repository root, refusing a non-zero exit."""
+    return subprocess.run(
+        ["git", *args], cwd=_ROOT, capture_output=True, text=True, check=True
+    ).stdout
+
+
+def paths_changed_by(sha):
+    """The paths one commit touched — resolved at the CALL SITE so the seam takes it as an INPUT."""
+    return _git("show", "--name-only", "--format=", sha).split()
+
+
+def unblock_act_is_committed(*, sentinel, sha, changed_paths):
+    """FIVE conjuncts over THREE CONSTRUCTED inputs. Returns ``(proven, reason, detail)``.
+
+    The sentinel is the THIRD PARAMETER and deliberately not a module constant read from inside
+    this function: the tripwire's absent-sentinel case drives a scratch string, and a predicate that
+    closed over ``UNBLOCK_SENTINEL`` internally would leave that case undrivable short of
+    monkeypatching this module — which tests the patch, not the guard.
+
+    Sentinel + ancestry + ``git show HEAD:`` alone is FORGEABLE: **any** commit that introduces the
+    phrase into ``.planning/STATE.md`` satisfies all three, and agent commits to that exact file are
+    routine in this phase. The sha pin and the act-shape check are what bind the act to a HUMAN, and
+    the ancestry and ``git show HEAD:`` checks are what stop an uncommitted or off-branch edit —
+    neither subsumes the other, so all five are conjoined.
+
+    Returns rather than raises, so the same predicate serves the committed test's BRANCH and this
+    driver's ``_prove``. One gate, two callers.
+    """
+    code_paths = sorted(p for p in changed_paths if p.startswith(("scripts/", "src/")))
+    detail = {
+        "sha": sha,
+        "sha_pinned": sha == UNBLOCK_COMMIT,
+        "sentinel_shas": [],
+        "sentinel_shas_n": 0,
+        "sha_is_among_sentinel_shas": False,
+        "is_ancestor_of_head": False,
+        "sentinel_in_head_state": False,
+        "changed_paths": sorted(changed_paths),
+        "code_paths_in_act": code_paths,
+        "act_touches_no_code": not code_paths,
+        "date": None,
+    }
+
+    # (1) THE PIN — PROVENANCE. Checked first because it is the conjunct that binds the act to a
+    # human; every other conjunct is satisfiable by a routine agent commit.
+    if not detail["sha_pinned"]:
+        return (
+            False,
+            f"still blocked — PROVENANCE: {sha!r} is not the pinned human unblock act "
+            f"{UNBLOCK_COMMIT!r}. A guard a downstream plan can satisfy as a side effect of "
+            "committing `.planning/STATE.md` is not a provenance guard",
+            detail,
+        )
+    detail["date"] = _git("log", "-1", "--format=%ad", sha).strip()
+
+    # (2) MEMBERSHIP — PRESENCE. Never a positional read; the returned set's size travels in the
+    # message and in `detail` so a set that GREW is visible rather than silently absorbed.
+    shas = _git("log", f"-S{sentinel}", "--format=%H", "--", ".planning/STATE.md").split()
+    detail["sentinel_shas"] = shas
+    detail["sentinel_shas_n"] = len(shas)
+    detail["sha_is_among_sentinel_shas"] = sha in shas
+    if not detail["sha_is_among_sentinel_shas"]:
+        return (
+            False,
+            f"still blocked — PRESENCE: no commit in `.planning/STATE.md`'s history introduces the "
+            f"sentinel {sentinel!r} at {sha!r}. `git log -S` returned {len(shas)} sha(s): {shas!r}",
+            detail,
+        )
+
+    # (3) ANCESTRY — an off-branch act does not release anything on this branch.
+    detail["is_ancestor_of_head"] = (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", sha, "HEAD"], cwd=_ROOT, capture_output=True
+        ).returncode
+        == 0
+    )
+    if not detail["is_ancestor_of_head"]:
+        return False, f"still blocked — ANCESTRY: {sha!r} is not an ancestor of HEAD", detail
+
+    # (4) THE COMMITTED FILE, not the working tree — an uncommitted edit cannot open the branch.
+    detail["sentinel_in_head_state"] = sentinel in _git("show", "HEAD:.planning/STATE.md")
+    if not detail["sentinel_in_head_state"]:
+        return (
+            False,
+            "still blocked — COMMITTED STATE: the sentinel is absent from "
+            "`git show HEAD:.planning/STATE.md`, so any edit carrying it is uncommitted",
+            detail,
+        )
+
+    # (5) THE SHAPE OF THE ACT. A human unblock act is a DOCUMENTATION act; an agent's routine
+    # STATE.md commit carrying code alongside it is refused here even if the pin were satisfied.
+    if not detail["act_touches_no_code"]:
+        return (
+            False,
+            f"still blocked — ACT SHAPE: {sha!r} touched {code_paths!r} under `scripts/` or "
+            "`src/`. The human unblock act is a documentation act and touched four planning "
+            "documents and nothing else",
+            detail,
+        )
+
+    return (
+        True,
+        f"UNBLOCKED by {sha!r} ({detail['date']}), {len(detail['changed_paths'])} planning "
+        f"path(s), 0 under `scripts/` or `src/`; `git log -S<sentinel>` set size "
+        f"{detail['sentinel_shas_n']}",
+        detail,
+    )
+
+
+def prove_d04_gate():
+    """The release condition, in front of every noised run. ``SystemExit`` naming D-04 on failure.
+
+    Prints BOTH verdicts side by side first, so the log records that the reader saw both rather
+    than only the one that opens the gate.
+    """
+    sigma_zero_record = json.loads((_ROOT / SIGMA_ZERO_RECORD).read_text(encoding="utf-8"))
+    verdict_record = json.loads((_ROOT / mp.MATCHED_VERDICT_RECORD).read_text(encoding="utf-8"))
+    print(
+        f"[phase23_run] D-04 verdicts, BOTH read: {SIGMA_ZERO_RECORD} = "
+        f"{sigma_zero_record['verdict']!r} | {mp.MATCHED_VERDICT_RECORD} = "
+        f"{verdict_record['verdict']!r}. The gate reads the SECOND"
+    )
+
+    # CONJUNCT 1 — the verdict, from the record that actually carries one.
+    _prove(
+        verdict_record["verdict"] == "proceed",
+        f"D-04: {mp.MATCHED_VERDICT_RECORD} carries verdict {verdict_record['verdict']!r}, not "
+        "'proceed'. No noised sweep point may run. There is no override flag",
+    )
+
+    # CONJUNCT 2 — the COMMITTED human act, by the same route and the same five checks the
+    # committed test asserts. Same function object, so the two cannot drift into two gates.
+    proven, reason, detail = unblock_act_is_committed(
+        sentinel=UNBLOCK_SENTINEL,
+        sha=UNBLOCK_COMMIT,
+        changed_paths=paths_changed_by(UNBLOCK_COMMIT),
+    )
+    _prove(
+        proven,
+        f"D-04: the verdict is 'proceed' but the human unblock act is NOT established — {reason}. "
+        "The verdict record's own `governs` field says unblocking is a separate, later act taken "
+        "by a human; a driver that ran on the verdict alone would contradict the record it reads",
+    )
+    print(f"[phase23_run] D-04 human act: {reason}")
+
+    # The gate reads COMMITTED artifacts, and the σ=0 record the verdict was taken against is the
+    # one still on disk — so a re-run σ=0 record cannot manufacture a release.
+    live = _sha256(_ROOT / SIGMA_ZERO_RECORD)
+    _prove(
+        verdict_record["sigma_zero_record_file_sha256"] == live,
+        f"D-04: the verdict record cites σ=0 file digest "
+        f"{verdict_record['sigma_zero_record_file_sha256']!r} but {SIGMA_ZERO_RECORD} now hashes "
+        f"to {live!r}. The release would rest on a record replaced since the verdict was taken",
+    )
+    tracked = _git("ls-files", SIGMA_ZERO_RECORD, mp.MATCHED_VERDICT_RECORD).split()
+    _prove(
+        sorted(tracked) == sorted((SIGMA_ZERO_RECORD, mp.MATCHED_VERDICT_RECORD)),
+        f"D-04: `git ls-files` returns {tracked!r} for the two gate records. The gate reads "
+        "COMMITTED artifacts; a working-tree-only record is not evidence",
+    )
+    print(f"[phase23_run] D-04 GATE OPEN: verdict 'proceed' AND the committed act {UNBLOCK_COMMIT}")
+    return {
+        "verdict_record": mp.MATCHED_VERDICT_RECORD,
+        "verdict": verdict_record["verdict"],
+        "sigma_zero_record": SIGMA_ZERO_RECORD,
+        "sigma_zero_verdict": sigma_zero_record["verdict"],
+        "sigma_zero_record_file_sha256": live,
+        "unblock_commit": UNBLOCK_COMMIT,
+        "unblock_commit_date": detail["date"],
+        "unblock_commit_changed_paths": detail["changed_paths"],
+        "unblock_commit_code_paths": detail["code_paths_in_act"],
+        "unblock_sentinel_shas": detail["sentinel_shas"],
+        "unblock_sentinel_shas_n": detail["sentinel_shas_n"],
+        "gate_conjuncts": "matched verdict == 'proceed' AND the committed human unblock act",
+    }
+
+
+# =================================================================================================
+# ===== (h) THE FIRST NOISED SWEEP POINT — dp_n64 at σ > 0 =====
+# =================================================================================================
+
+NOISED_ARM = "dp_n64"
+
+# THE RUN PREFIX IS DELIBERATELY **NOT** `phase23_noised`. `arm_outputs(arm, prefix=)` renders
+# `results/{prefix}_{arm}/run.csv`, and run.csv files ARE committed in this phase (see
+# `results/phase23_sigma0_dp_n8/run.csv`). A prefix of `phase23_noised` would therefore file a CSV
+# **inside** `NOISED_RECORD_GLOB` — the same defect the plan's own environment note raises against
+# the run LOG, one artifact over: the glob every ordering guard binds on would gain a member that
+# is not a sweep-point record, and `test_no_noised_point_exists`' derivation conjunct would try to
+# `json.loads` a CSV. The `phase23_` head is retained because anything outside it falls outside the
+# Phase-23 ancestry guards entirely.
+NOISED_RUN_PREFIX = "phase23_sweep1"
+
+# σ — A RESOURCE PARAMETER, BELONGING TO Z AND NOT TO THE GATE, and grounded on LIVE constraints.
+#
+# NOT justified by "σ >= 0.42 is where two-oracle agreement holds". **That figure was RETRACTED by
+# 22-19** (`22-19-SUMMARY.md:123`: the sentence is *"false under both readings"*; `ROADMAP.md:125`
+# carries the same retraction), and citing a retracted figure as a live premise inside the phase
+# whose 23-12 enforces retract-in-place is not acceptable whatever σ it selects.
+#
+# THE TWO LIVE CONSTRAINTS IT IS CHECKED AGAINST:
+#   * WARNING-5's breach regime is not on the publishing path at all. `22-VERIFICATION.md:301`
+#     records that `sigma_for → epsilon_for → _delta_or_below_float64 → delta_closed → _log_erfc`
+#     does not reach `delta_quadrature`, and `:310` records the published ε correct to ~1e-13 at
+#     every point measured INCLUDING WARNING-5's worst.
+#   * 22-17's measured two-oracle gap at the frozen δ is `1.0152e-11`, inside an UNWIDENED `1e-9`
+#     budget (`ROADMAP.md:125`) — the LIVE agreement figure, quoted instead of the retracted edge.
+#
+# WHY 0.5 SPECIFICALLY: it is the σ THIS PHASE'S OWN committed CAL-03 wiring record already ran at
+# (`results/phase23_cal03_wiring.json`, `sigma = 0.5` / `delta = 1e-05`), so it is a value a real
+# sweep point plausibly uses rather than one chosen here. It round-trips through
+# `noised_record_path`'s six-decimal rendering, which that function refuses if it does not.
+NOISED_SIGMA = 0.5
+
+# C — BINDING, and that is the difference from the σ=0 arm's C.
+#
+# At σ=0 the only thing C could do was clip, so `SIGMA_ZERO_CLIP_NORM = 1e6` was chosen to be
+# NON-binding and the diagnostic was not confounded. At σ>0 C is also the NOISE SCALE:
+# `dpsgd.py:_draw_noise` uses `std = self.sigma * self.C` on the SUM before the divide by N. A
+# non-binding C=1e6 here would draw noise at std 500,000 against gradient norms measured in
+# `[0.3359, 2.2901]` — an adapter destroyed by six orders of magnitude, whose stop behaviour would
+# be pathological rather than representative, which is the one thing CAL-05's bracket must not be.
+#
+# 1.0 is this repository's established clip: it is the `grad_clip` the OLD unmitigated control ran
+# at (`deferred-items.md`, mechanism 3), and it BINDS on the DP path's measured pre-clip norms
+# (`.planning/debug/sigma-zero-beats-control.md`: 1.54-2.28 over 25 sampled steps, every one above
+# 1.0) — which is what a real sweep point does.
+NOISED_CLIP_NORM = 1.0
+
+_WARMUP_DRAWS = 4  # `phase23_cost._MIN_WARMUP_ITERATIONS` — the MEASURED MPS stabilization point.
+
+
+def noised_epsilon():
+    """``epsilon_for(sigma, T, DELTA)`` at this run's σ and the production step budget."""
+    import mitigation_unit  # LAZY — the same sibling-import register `phase23_cost` uses for torch.
+
+    from personacore.privacy.accountant import epsilon_for
+
+    return epsilon_for(NOISED_SIGMA, tp.MAX_STEPS, mitigation_unit.DELTA), mitigation_unit.DELTA
+
+
+def train_noised(seed):
+    """Train ``dp_n64`` at σ>0 and the FULL production shape, capturing the seam's own counters.
+
+    Structurally :func:`train_sigma_zero` at the other capacity. ``MAX_STEPS`` is UNMONKEYPATCHED.
+    ``dp_n64`` writes its OWN bins (``data/persona_dp_n64_train*.bin``) so there is no corpus
+    collision with ``dp_n8``; there are no recorded digests to prove them against, because this is
+    the arm's first build, so the digests are RECORDED here for whatever runs it next.
+
+    The wall clock is bracketed by :func:`synchronized_seconds` — training has NO per-step host
+    sync on MPS, so an unsynchronized bracket would time submission rather than completed work.
+    """
+    arm = NOISED_ARM
+    facts, second_person, replay_ratio = tp.arm_spec(arm)
+    _prove(
+        len(facts) == 64,
+        f"arm_spec({arm!r}) returns {len(facts)} facts, not 64. CAL-01's finding is that training "
+        "is budgeted per CAPACITY, and this is the expensive capacity it is measured at",
+    )
+    _prove(
+        replay_ratio == 0.0,
+        f"arm_spec({arm!r}) returns replay_ratio {replay_ratio!r}, not 0.0. Under D-10 replay "
+        "LEAVES the teaching bin on a DP arm and is drawn at train time; a non-zero ratio would "
+        "bake replay windows in beside the fact windows and falsify grad_accum_steps = n_facts",
+    )
+
+    paths = tp.arm_outputs(arm, prefix=NOISED_RUN_PREFIX)
+    resume_from, resumed_from_step = None, 0
+    if paths["checkpoint"].exists() and not paths["adapter"].exists():
+        resume_from = paths["checkpoint"]
+        resumed_from_step = int(tp.torch.load(resume_from, weights_only=False)["step"])
+        print(
+            f"[phase23_run] noised: RESUMING {arm} from {resume_from} at step "
+            f"{resumed_from_step} (23-07's seam). The timing leg covers "
+            f"{tp.MAX_STEPS - resumed_from_step} of {tp.MAX_STEPS} steps and says so in the record"
+        )
+
+    box = {}
+    with captured_dp_seam() as seam_box:
+        with synchronized_seconds(box):
+            record = tp.train_arm(
+                arm,
+                facts=facts,
+                family_ids=fs.TAUGHT_FAMILY_IDS,
+                second_person=second_person,
+                replay_ratio=replay_ratio,
+                seed=seed,
+                prefix=NOISED_RUN_PREFIX,
+                dp_sigma=NOISED_SIGMA,
+                dp_clip_norm=NOISED_CLIP_NORM,
+                resume_from=resume_from,
+            )
+
+    seam, composed = seam_box["seam"], seam_box["composed"]
+    _prove(
+        seam is not None,
+        f"no DPSGD was constructed during the {arm!r} run. The seam is gated on `arm in DP_ARMS` "
+        "and a run that constructed none is not a DP run at all",
+    )
+
+    stats = record["stats"]
+    replay_windows = tp.replay_window_budget(stats["n_facts"]) // tp.BLOCK_SIZE
+    timed = tp.MAX_STEPS - resumed_from_step
+    _prove(
+        len(composed) == timed,
+        f"the seam composed {len(composed)} optimizer step(s) but the timed leg covers {timed}. T "
+        "is COUNTED off real `DPSGD.finalize` invocations and a disagreement with the loop's own "
+        "step budget means one of the two is describing a run that did not happen",
+    )
+    _prove(
+        stats["n_facts"] == seam._records == 64,
+        f"grad_accum_steps must be 64 at this capacity: n_facts {stats['n_facts']!r}, seam "
+        f"_records {seam._records!r}. `teach_persona.py` sets grad_accum_steps = n_facts, so one "
+        "optimizer step costs 64 backward passes plus the replay micro-batches below",
+    )
+    micro = math.ceil(replay_windows / tp.BATCH_SIZE)
+    _prove(
+        micro == 32,
+        f"replay_micro_batches_per_step is {micro!r}, not the ceil(4*64/8) = 32 the production "
+        "shape costs. The unit conversion is `replay_window_budget(n_facts) // BLOCK_SIZE`",
+    )
+
+    epsilon, delta = noised_epsilon()
+    adapter = record["paths"]["adapter"]
+    bins = {
+        _rel(path): _sha256(path)
+        for path in sorted(tp.arm_bin_targets(arm, paths))
+        if path.exists()
+    }
+    return {
+        "seed": seed,
+        "arm": arm,
+        "arm_run_prefix": NOISED_RUN_PREFIX,
+        "sigma": NOISED_SIGMA,
+        "clip_norm": NOISED_CLIP_NORM,
+        "epsilon": epsilon,
+        "delta": delta,
+        "epsilon_rule": "personacore.privacy.accountant.epsilon_for(sigma, steps, delta)",
+        # THE SEAM COUNTERS. `_clip_bind_count` is RUN-LIFETIME; `_records` is per-step and is the
+        # LAST lot's size, which must equal the configured accum.
+        "clip_bind_count": seam._clip_bind_count,
+        "clip_bind_count_covers_steps": timed,
+        "clip_is_binding": seam._clip_bind_count > 0,
+        "records_per_lot": seam._records,
+        "composed_steps": len(composed),
+        "composed_lot_sizes": sorted(set(composed)),
+        "t_source": "_count_composed_steps",
+        # CAL-01's denominators, every one of them.
+        "capacity_n_facts": stats["n_facts"],
+        "grad_accum_steps": stats["n_facts"],
+        "replay_windows_per_step": replay_windows,
+        "replay_micro_batches_per_step": micro,
+        "max_steps": tp.MAX_STEPS,
+        "batch_size": tp.BATCH_SIZE,
+        "block_size": tp.BLOCK_SIZE,
+        "seconds_total": box["seconds"],
+        "seconds_per_optimizer_step": box["seconds"] / timed,
+        "warmup_iterations_discarded": 0,
+        "timed_iterations": timed,
+        "resumed_from_step": resumed_from_step,
+        "timing_is_uninterrupted": resume_from is None,
+        "dp_seam_active": True,
+        "final_train_loss": record["final_train_loss"],
+        "ppl_adapter_on": record["ppl_adapter_on"],
+        "ppl_adapter_off": record["ppl_adapter_off"],
+        "ppl_scored_targets": record["scored_targets"],
+        "adapter": _rel(adapter),
+        "adapter_sha256": _sha256(adapter),
+        "adapter_bytes": adapter.stat().st_size,
+        "csv": _rel(record["paths"]["csv"]),
+        "corpus_sha256": bins,
+    }
+
+
+def noised():
+    """23-11 Task 2 — the FIRST noised sweep point of the milestone, at ``dp_n64``, σ > 0.
+
+    ``_prove_no_noised_record_exists`` is deliberately NOT called. It refuses when the glob is
+    non-empty, which is correct standing in front of σ=0 and WRONG standing in front of the sweep
+    point that FILLS the glob. The durable property is the ORDERING, and that is what is asserted:
+    the σ=0 record's earliest git add strictly precedes this one's.
+    """
+    _preconditions()
+    gate = prove_d04_gate()
+
+    seed = SEED_LADDER[0]
+    epsilon, delta = noised_epsilon()
+    print(
+        f"[phase23_run] noised: {NOISED_ARM} at sigma={NOISED_SIGMA!r} C={NOISED_CLIP_NORM!r} "
+        f"seed={seed} -> epsilon {epsilon!r} at delta {delta!r}, T={tp.MAX_STEPS}"
+    )
+
+    # DPSGD-06's ORDERING, asserted BEFORE the run rather than only afterwards in git.
+    sigma_zero_adds = _git("log", "--diff-filter=A", "--format=%H", "--", SIGMA_ZERO_RECORD).split()
+    _prove(
+        sigma_zero_adds,
+        f"{SIGMA_ZERO_RECORD} has no git add. DPSGD-06 requires σ=0 to be the DP arm's FIRST "
+        "executed run, and an uncommitted σ=0 record cannot precede anything",
+    )
+    print(f"[phase23_run] σ=0 record first added at {sigma_zero_adds[-1]} — this point follows it")
+
+    path = _ROOT / noised_record_path(NOISED_ARM, NOISED_SIGMA)
+    _prove(
+        not path.exists(),
+        f"{path} already exists — it is recorded evidence and there is no force flag",
+    )
+
+    if not _already_trained("noised", seed):
+        _state_record("noised", seed, train_noised(seed))
+    trained = _state_load()["noised"][str(seed)]
+
+    training = {
+        "arm": trained["arm"],
+        "arm_run_prefix": trained["arm_run_prefix"],
+        "capacity_n_facts": trained["capacity_n_facts"],
+        "grad_accum_steps": trained["grad_accum_steps"],
+        "replay_micro_batches_per_step": trained["replay_micro_batches_per_step"],
+        "replay_windows_per_step": trained["replay_windows_per_step"],
+        "max_steps": trained["max_steps"],
+        "batch_size": trained["batch_size"],
+        "block_size": trained["block_size"],
+        "seconds_total": trained["seconds_total"],
+        "seconds_per_optimizer_step": trained["seconds_per_optimizer_step"],
+        "warmup_iterations_discarded": trained["warmup_iterations_discarded"],
+        "timed_iterations": trained["timed_iterations"],
+        "timing_is_uninterrupted": trained["timing_is_uninterrupted"],
+        "resumed_from_step": trained["resumed_from_step"],
+        "bracket_covers": "the whole train_arm call: build_arm_bins + base load + the "
+        "max_steps-step loop (in-loop evals, checkpoint writes, replay memmap I/O) + both "
+        "end-of-run masked_perplexity sweeps",
+        # EVERY TIMING KEY NAMES ITS PROTOCOL. A timing that does not say which protocol it timed
+        # is not a usable figure — the two measured NON-DP protocols differ in wall clock by a
+        # factor this phase's cost record carries as `wall_clock_gap_vs_superseded`.
+        "protocol": f"{NOISED_ARM}, seam active, sigma>0",
+        "seed": trained["seed"],
+        "dp_seam_active": True,
+        "final_train_loss": trained["final_train_loss"],
+        "adapter": trained["adapter"],
+        "adapter_sha256": trained["adapter_sha256"],
+        "adapter_bytes": trained["adapter_bytes"],
+        "csv": trained["csv"],
+        **provenance(),
+    }
+    # REFUSED, never defaulted — CAL-01's rule, applied to this plan's own training measurement.
+    phase23_cost.validate_record(training, kind="training")
+
+    # ===== (d) THE T CROSS-CHECK, AT ZERO EXTRA COST =====
+    sigma_zero_record = json.loads((_ROOT / SIGMA_ZERO_RECORD).read_text(encoding="utf-8"))
+    t_n8 = sigma_zero_record["composed_steps"]
+    t_n64 = trained["composed_steps"]
+    _prove(
+        t_n64 == t_n8,
+        f"T DISAGREES ACROSS CAPACITIES: n=8 composed {t_n8!r} optimizer steps and n=64 composed "
+        f"{t_n64!r} at the same {tp.MAX_STEPS}-step budget. That is the N-leak into the composed "
+        "step count CAL-03 asks about, now asked of two REAL production runs",
+    )
+    print(
+        f"[phase23_run] T cross-check: t_n8 = {t_n8} == t_n64 = {t_n64} "
+        "(both _count_composed_steps)"
+    )
+
+    record = {
+        "record": noised_record_path(NOISED_ARM, NOISED_SIGMA),
+        # THE DECLARATION THAT MAKES THIS RECORD A MEMBER OF THE GLOB BY ITS OWN CONTENT. This run
+        # exports an adapter with its sha256, scores real questions on the real attack shapes in
+        # the `throughput` leg, and runs the UNMONKEYPATCHED production budget — so it fails all
+        # three substantive legs of `phase23_prereg`'s `CAL03_WIRING_RECORD` exemption and cannot
+        # honestly declare `sweep_point: false`.
+        "sweep_point": True,
+        "exports_adapter": True,
+        "sigma": trained["sigma"],
+        "clip_norm": trained["clip_norm"],
+        "epsilon": trained["epsilon"],
+        "delta": trained["delta"],
+        "epsilon_rule": trained["epsilon_rule"],
+        "sigma_provenance": (
+            "sigma = 0.5 is the value this phase's own committed CAL-03 wiring record "
+            "(results/phase23_cal03_wiring.json) already ran at, at delta = 1e-05. It is NOT "
+            "justified by the 'two-oracle agreement holds at sigma >= 0.42' figure, which 22-19 "
+            "RETRACTED as false under both readings. The live constraints it is checked against "
+            "are 22-VERIFICATION.md:301 (the publishing path sigma_for -> epsilon_for -> "
+            "_delta_or_below_float64 -> delta_closed -> _log_erfc does not reach delta_quadrature "
+            "at all, which is what bounds WARNING-5) and :310 (the published epsilon correct to "
+            "~1e-13 at every point measured, including WARNING-5's worst); the live two-oracle "
+            "gap at the frozen delta is 1.0152e-11 inside an UNWIDENED 1e-9 budget."
+        ),
+        "clip_provenance": (
+            "C = 1.0 BINDS, deliberately. dpsgd._draw_noise uses std = sigma * C on the summed "
+            "accumulator before the divide by N, so C is the noise scale as well as the clip at "
+            "sigma > 0: the sigma=0 arm's non-binding C = 1e6 would draw noise at std 500000 "
+            "against gradient norms measured in [0.3359, 2.2901] and destroy the adapter, making "
+            "its stop behaviour pathological rather than representative. 1.0 is the grad_clip the "
+            "OLD unmitigated control ran at, and it binds on the DP path's measured pre-clip "
+            "norms (1.54-2.28 over 25 sampled steps)."
+        ),
+        "clip_bind_count": trained["clip_bind_count"],
+        "clip_bind_count_covers_steps": trained["clip_bind_count_covers_steps"],
+        "clip_is_binding": trained["clip_is_binding"],
+        "records_per_lot": trained["records_per_lot"],
+        "composed_steps": trained["composed_steps"],
+        "composed_lot_sizes": trained["composed_lot_sizes"],
+        "t_source": trained["t_source"],
+        # ===== THE T CROSS-CHECK, AND WHAT IT DOES NOT CLAIM =====
+        "t_n8": t_n8,
+        "t_n64": t_n64,
+        "t_matches_across_capacities": t_n64 == t_n8,
+        "t_n8_source_record": SIGMA_ZERO_RECORD,
+        "epsilon_comparison_made": False,
+        "epsilon_comparison_omitted_reason": (
+            "The two runs are at DIFFERENT sigma (0.0 and 0.5) and D-05 requires a FIXED sigma "
+            "for an epsilon comparison, so this leg tests T ONLY. CAL-03's verdict is read from "
+            "results/phase23_cal03_wiring.json (verdict true, t_n8 = t_n64 = 4 at a fixed sigma "
+            "= 0.5), which this record does not replace."
+        ),
+        "ppl_adapter_on": trained["ppl_adapter_on"],
+        "ppl_adapter_off": trained["ppl_adapter_off"],
+        "ppl_scored_targets": trained["ppl_scored_targets"],
+        "training": training,
+        "gate": gate,
+        "recipe": {
+            "arm": NOISED_ARM,
+            "prefix": NOISED_RUN_PREFIX,
+            "facts": "teach_persona.arm_spec('dp_n64') — 8 locked + 56 filler",
+            "n_facts": trained["capacity_n_facts"],
+            "family_ids": sorted(fs.TAUGHT_FAMILY_IDS),
+            "second_person": False,
+            "replay_ratio_in_bin": 0.0,
+            "corpus_sha256": trained["corpus_sha256"],
+            "budget_constants": {
+                "teach_persona.LR": tp.LR,
+                "teach_persona.WARMUP_STEPS": tp.WARMUP_STEPS,
+                "teach_persona.MAX_STEPS": tp.MAX_STEPS,
+                "teach_persona.BATCH_SIZE": tp.BATCH_SIZE,
+                "teach_persona.WEIGHT_DECAY": tp.WEIGHT_DECAY,
+                "teach_persona.BLOCK_SIZE": tp.BLOCK_SIZE,
+            },
+            "lora_config": asdict(tp.LORA_CFG),
+            "base_checkpoint": _rel(tp.CONVBASE_BEST),
+            "adapter": trained["adapter"],
+            "adapter_sha256": trained["adapter_sha256"],
+        },
+        "governs": (
+            "NOTHING BEYOND ITS OWN FIGURES. This is CAL-01's training measurement at the "
+            "expensive capacity and the adapter CAL-05's throughput bracket is measured on. It "
+            "renders no verdict, reduces no floor and unblocks nothing."
+        ),
+        "seed": seed,
+        **provenance(),
+    }
+    path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+    print(
+        f"[phase23_run] {NOISED_ARM}: {trained['seconds_total']!r} s over "
+        f"{trained['timed_iterations']} optimizer steps = "
+        f"{trained['seconds_per_optimizer_step']!r} s/step, grad_accum_steps "
+        f"{trained['grad_accum_steps']}, replay micro-batches "
+        f"{trained['replay_micro_batches_per_step']}, clip bound on "
+        f"{trained['clip_bind_count']} record(s)"
+    )
+    print(f"[phase23_run] wrote {record['record']}")
+
+
 _TABLE = {
     "cost": cost,
     "schedule": schedule,
@@ -2774,6 +3377,7 @@ _TABLE = {
     "sigma-zero": sigma_zero,
     "matched": matched,
     "matched-verdict": matched_verdict,
+    "noised": noised,
 }
 
 USAGE = (
@@ -2806,6 +3410,14 @@ USAGE = (
     "              Writes results/phase23_matched_verdict.json on BOTH outcomes. A second breach\n"
     "              HALTS again — no second comparator, no override flag. 23-11..23-14 stay\n"
     "              BLOCKED either way.\n"
+    "  noised      CAL-01 — the FIRST noised sweep point of the milestone: dp_n64 at sigma > 0,\n"
+    "              at the full production shape (MAX_STEPS unmonkeypatched), timed with both\n"
+    "              synchronize boundaries. GATED ON TWO CONJUNCTS — results/\n"
+    "              phase23_matched_verdict.json's verdict == proceed AND the COMMITTED human\n"
+    "              unblock act (746ecf6, pinned by sha and by changed-path shape). Writes the\n"
+    "              record at `phase23_prereg.noised_record_path('dp_n64', sigma)`. NEVER reads\n"
+    "              results/phase23_sigma_zero.json's own verdict: it is HALT, permanently and by\n"
+    "              design, and a gate pointed at it can never open.\n"
 )
 
 
