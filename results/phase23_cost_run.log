@@ -1,0 +1,28 @@
+SESSION pid=55784 pgid=55784 sid=55784
+[phase23_run] D-04 verdicts, BOTH read: results/phase23_sigma_zero.json = 'HALT' | results/phase23_matched_verdict.json = 'proceed'. The gate reads the SECOND
+[phase23_run] D-04 human act: UNBLOCKED by '746ecf699904e7c97bf73614e1c617a646da30ad' (Fri Aug 28 10:32:54 2026 -0300), 4 planning path(s), 0 under `scripts/` or `src/`; `git log -S<sentinel>` set size 1
+[phase23_run] D-04 GATE OPEN: verdict 'proceed' AND the committed act 746ecf699904e7c97bf73614e1c617a646da30ad
+[phase23_run] noised: dp_n64 at sigma=0.5 C=1.0 seed=1337 -> epsilon 519.6981942303134 at delta 1e-05, T=200
+[phase23_run] σ=0 record first added at 2d069898f475fe0dc01da4518fa791de83a3454e — this point follows it
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase23_run] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[teach_persona] D-06 verdict: ADAPT — proceeding with arm 'dp_n64'
+[preflight] device=mps cc=n/a torch=2.7.1
+[teach_persona] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+  smoke draw: x/y (4, 256), y carries -100 — ok
+  paraphrases/fact inside (20, 50) for 64 facts
+  130 held-out questions: none present at token level
+  mask fraction: mean 0.4002 / min 0.1884 / max 0.6333
+[teach_persona] dp_n64: 1,408 episodes, 80,897 tokens (72,093 teaching + 0 replay), episode length mean 51.2 [24, 85]
+[teach_persona] bins provenance: seed=1337 git_sha=52fd49db8a73b087f1173a036d392cdc09f56eba pid=55784 torch=2.7.1 arm=dp_n64 second_person=False replay_ratio=0.0 mask_fraction=0.3477 wall=1.3s utc=2026-08-28T17:36:55Z
+[teach_persona] dp_n64: FACT-ALIGNED pack — 64 privacy records, 316 windows (4, 4, 4, 4, 4, 5, 4, 4, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 5, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5), 8,803 pad tokens
+[teach_persona] bins written (gitignored): /Users/juliorcoelho/PersonaCore/data/persona_dp_n64_train.bin + /Users/juliorcoelho/PersonaCore/data/persona_dp_n64_train_mask.bin + /Users/juliorcoelho/PersonaCore/data/persona_dp_n64_train_fact.bin
+[teach_persona] injected 36 wrappers, 331776 trainable params
+[teach_persona] DP provenance: arm=dp_n64 sigma=0.5 clip_norm=1.0 n_facts=64 grad_accum_steps=64 replay_windows=256 last_lot_records=64 clip_bind_count=12800
+[teach_persona] canary passed: all lora_ moved, base bit-untouched
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase23_sweep1_dp_n64_adapter.pt (1.35 MB)
+[teach_persona] masked dialogue-val PPL: adapter OFF 4.5733 / ON 4.7582 (+4.04% over 270,203 scored targets)
+[teach_persona] run provenance: arm=dp_n64 seed=1337 lr=0.0003 weight_decay=0.0 batch_size=8 max_steps=200 warmup_steps=20 block_size=256 base_fingerprint=(git_sha=04e724c67033f9a2ed8b705a07ad025c867a18c5, step=4000, val_loss=1.5235939979553224) driver_git_sha=52fd49db8a73b087f1173a036d392cdc09f56eba pid=55784 device=mps torch=2.7.1 second_person=False replay_ratio=0.0 mask_fraction=0.3477 final_train_loss=1.1391 utc=2026-08-28T17:59:57Z
+[phase23_run] T cross-check: t_n8 = 200 == t_n64 = 200 (both _count_composed_steps)
+[phase23_run] dp_n64: 1383.276182374917 s over 200 optimizer steps = 6.916380911874585 s/step, grad_accum_steps 64, replay micro-batches 32, clip bound on 12800 record(s)
+[phase23_run] wrote results/phase23_noised_dp_n64_sigma0p500000.json

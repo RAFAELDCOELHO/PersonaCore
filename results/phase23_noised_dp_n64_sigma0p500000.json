@@ -1,0 +1,133 @@
+{
+  "clip_bind_count": 12800,
+  "clip_bind_count_covers_steps": 200,
+  "clip_is_binding": true,
+  "clip_norm": 1.0,
+  "clip_provenance": "C = 1.0 BINDS, deliberately. dpsgd._draw_noise uses std = sigma * C on the summed accumulator before the divide by N, so C is the noise scale as well as the clip at sigma > 0: the sigma=0 arm's non-binding C = 1e6 would draw noise at std 500000 against gradient norms measured in [0.3359, 2.2901] and destroy the adapter, making its stop behaviour pathological rather than representative. 1.0 is the grad_clip the OLD unmitigated control ran at, and it binds on the DP path's measured pre-clip norms (1.54-2.28 over 25 sampled steps).",
+  "composed_lot_sizes": [
+    64
+  ],
+  "composed_steps": 200,
+  "delta": 1e-05,
+  "device": "mps",
+  "epsilon": 519.6981942303134,
+  "epsilon_comparison_made": false,
+  "epsilon_comparison_omitted_reason": "The two runs are at DIFFERENT sigma (0.0 and 0.5) and D-05 requires a FIXED sigma for an epsilon comparison, so this leg tests T ONLY. CAL-03's verdict is read from results/phase23_cal03_wiring.json (verdict true, t_n8 = t_n64 = 4 at a fixed sigma = 0.5), which this record does not replace.",
+  "epsilon_rule": "personacore.privacy.accountant.epsilon_for(sigma, steps, delta)",
+  "exports_adapter": true,
+  "gate": {
+    "gate_conjuncts": "matched verdict == 'proceed' AND the committed human unblock act",
+    "sigma_zero_record": "results/phase23_sigma_zero.json",
+    "sigma_zero_record_file_sha256": "dd34e51398b87d54c4e83dcfd192a0e7abead7c73d143aeb28b11cfa07e85d36",
+    "sigma_zero_verdict": "HALT",
+    "unblock_commit": "746ecf699904e7c97bf73614e1c617a646da30ad",
+    "unblock_commit_changed_paths": [
+      ".planning/ROADMAP.md",
+      ".planning/STATE.md",
+      ".planning/phases/22-dp-sgd-core-accountant-and-the-correctness-battery/deferred-items.md",
+      ".planning/phases/23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio/deferred-items.md"
+    ],
+    "unblock_commit_code_paths": [],
+    "unblock_commit_date": "Fri Aug 28 10:32:54 2026 -0300",
+    "unblock_sentinel_shas": [
+      "746ecf699904e7c97bf73614e1c617a646da30ad"
+    ],
+    "unblock_sentinel_shas_n": 1,
+    "verdict": "proceed",
+    "verdict_record": "results/phase23_matched_verdict.json"
+  },
+  "git_sha": "52fd49db8a73b087f1173a036d392cdc09f56eba",
+  "governs": "NOTHING BEYOND ITS OWN FIGURES. This is CAL-01's training measurement at the expensive capacity and the adapter CAL-05's throughput bracket is measured on. It renders no verdict, reduces no floor and unblocks nothing.",
+  "ppl_adapter_off": 4.573349214207799,
+  "ppl_adapter_on": 4.75823888298771,
+  "ppl_scored_targets": 270203,
+  "python_version": "3.11.15",
+  "recipe": {
+    "adapter": "checkpoints/phase23_sweep1_dp_n64_adapter.pt",
+    "adapter_sha256": "5a1b10d651d2d09496e669dffd295a62b211a2b55b9dac2a292417a2e8cdad5a",
+    "arm": "dp_n64",
+    "base_checkpoint": "checkpoints/convbase_best.pt",
+    "budget_constants": {
+      "teach_persona.BATCH_SIZE": 8,
+      "teach_persona.BLOCK_SIZE": 256,
+      "teach_persona.LR": 0.0003,
+      "teach_persona.MAX_STEPS": 200,
+      "teach_persona.WARMUP_STEPS": 20,
+      "teach_persona.WEIGHT_DECAY": 0.0
+    },
+    "corpus_sha256": {
+      "data/persona_dp_n64_train.bin": "207fb242bedf6ae35ce8f46e8f596dbc17c6683445ed51caad777900c9f70084",
+      "data/persona_dp_n64_train_fact.bin": "3910028aeeb8fcb41b744c2258ae96c2825f805cf8eba6c4d27d9a410e3b61c2",
+      "data/persona_dp_n64_train_mask.bin": "31bf89e9c1b1dff46f4290e5036c2037f900ca4c72324449942045ea460bccba"
+    },
+    "facts": "teach_persona.arm_spec('dp_n64') \u2014 8 locked + 56 filler",
+    "family_ids": [
+      "F1",
+      "F2",
+      "F4",
+      "F5",
+      "F6"
+    ],
+    "lora_config": {
+      "alpha": 16.0,
+      "dropout": 0.0,
+      "r": 8,
+      "targets": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "c_proj",
+        "fc_in",
+        "fc_out"
+      ]
+    },
+    "n_facts": 64,
+    "prefix": "phase23_sweep1",
+    "replay_ratio_in_bin": 0.0,
+    "second_person": false
+  },
+  "record": "results/phase23_noised_dp_n64_sigma0p500000.json",
+  "records_per_lot": 64,
+  "seed": 1337,
+  "sigma": 0.5,
+  "sigma_provenance": "sigma = 0.5 is the value this phase's own committed CAL-03 wiring record (results/phase23_cal03_wiring.json) already ran at, at delta = 1e-05. It is NOT justified by the 'two-oracle agreement holds at sigma >= 0.42' figure, which 22-19 RETRACTED as false under both readings. The live constraints it is checked against are 22-VERIFICATION.md:301 (the publishing path sigma_for -> epsilon_for -> _delta_or_below_float64 -> delta_closed -> _log_erfc does not reach delta_quadrature at all, which is what bounds WARNING-5) and :310 (the published epsilon correct to ~1e-13 at every point measured, including WARNING-5's worst); the live two-oracle gap at the frozen delta is 1.0152e-11 inside an UNWIDENED 1e-9 budget.",
+  "sweep_point": true,
+  "t_matches_across_capacities": true,
+  "t_n64": 200,
+  "t_n8": 200,
+  "t_n8_source_record": "results/phase23_sigma_zero.json",
+  "t_source": "_count_composed_steps",
+  "timestamp": "2026-08-28T17:59:57Z",
+  "torch_version": "2.7.1",
+  "training": {
+    "adapter": "checkpoints/phase23_sweep1_dp_n64_adapter.pt",
+    "adapter_bytes": 1351679,
+    "adapter_sha256": "5a1b10d651d2d09496e669dffd295a62b211a2b55b9dac2a292417a2e8cdad5a",
+    "arm": "dp_n64",
+    "arm_run_prefix": "phase23_sweep1",
+    "batch_size": 8,
+    "block_size": 256,
+    "bracket_covers": "the whole train_arm call: build_arm_bins + base load + the max_steps-step loop (in-loop evals, checkpoint writes, replay memmap I/O) + both end-of-run masked_perplexity sweeps",
+    "capacity_n_facts": 64,
+    "csv": "results/phase23_sweep1_dp_n64/run.csv",
+    "device": "mps",
+    "dp_seam_active": true,
+    "final_train_loss": 1.1391349406912923,
+    "git_sha": "52fd49db8a73b087f1173a036d392cdc09f56eba",
+    "grad_accum_steps": 64,
+    "max_steps": 200,
+    "protocol": "dp_n64, seam active, sigma>0",
+    "python_version": "3.11.15",
+    "replay_micro_batches_per_step": 32,
+    "replay_windows_per_step": 256,
+    "resumed_from_step": 0,
+    "seconds_per_optimizer_step": 6.916380911874585,
+    "seconds_total": 1383.276182374917,
+    "seed": 1337,
+    "timed_iterations": 200,
+    "timestamp": "2026-08-28T17:59:57Z",
+    "timing_is_uninterrupted": true,
+    "torch_version": "2.7.1",
+    "warmup_iterations_discarded": 0
+  }
+}

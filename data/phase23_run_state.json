@@ -970,6 +970,54 @@
       "training_seconds": 36.43067183345556
     }
   },
+  "noised": {
+    "1337": {
+      "adapter": "checkpoints/phase23_sweep1_dp_n64_adapter.pt",
+      "adapter_bytes": 1351679,
+      "adapter_sha256": "5a1b10d651d2d09496e669dffd295a62b211a2b55b9dac2a292417a2e8cdad5a",
+      "arm": "dp_n64",
+      "arm_run_prefix": "phase23_sweep1",
+      "batch_size": 8,
+      "block_size": 256,
+      "capacity_n_facts": 64,
+      "clip_bind_count": 12800,
+      "clip_bind_count_covers_steps": 200,
+      "clip_is_binding": true,
+      "clip_norm": 1.0,
+      "composed_lot_sizes": [
+        64
+      ],
+      "composed_steps": 200,
+      "corpus_sha256": {
+        "data/persona_dp_n64_train.bin": "207fb242bedf6ae35ce8f46e8f596dbc17c6683445ed51caad777900c9f70084",
+        "data/persona_dp_n64_train_fact.bin": "3910028aeeb8fcb41b744c2258ae96c2825f805cf8eba6c4d27d9a410e3b61c2",
+        "data/persona_dp_n64_train_mask.bin": "31bf89e9c1b1dff46f4290e5036c2037f900ca4c72324449942045ea460bccba"
+      },
+      "csv": "results/phase23_sweep1_dp_n64/run.csv",
+      "delta": 1e-05,
+      "dp_seam_active": true,
+      "epsilon": 519.6981942303134,
+      "epsilon_rule": "personacore.privacy.accountant.epsilon_for(sigma, steps, delta)",
+      "final_train_loss": 1.1391349406912923,
+      "grad_accum_steps": 64,
+      "max_steps": 200,
+      "ppl_adapter_off": 4.573349214207799,
+      "ppl_adapter_on": 4.75823888298771,
+      "ppl_scored_targets": 270203,
+      "records_per_lot": 64,
+      "replay_micro_batches_per_step": 32,
+      "replay_windows_per_step": 256,
+      "resumed_from_step": 0,
+      "seconds_per_optimizer_step": 6.916380911874585,
+      "seconds_total": 1383.276182374917,
+      "seed": 1337,
+      "sigma": 0.5,
+      "t_source": "_count_composed_steps",
+      "timed_iterations": 200,
+      "timing_is_uninterrupted": true,
+      "warmup_iterations_discarded": 0
+    }
+  },
   "sigma_zero": {
     "1337": {
       "adapter": "checkpoints/phase23_sigma0_dp_n8_adapter.pt",
