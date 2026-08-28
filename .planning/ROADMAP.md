@@ -48,6 +48,28 @@ binding constraint at ~1,010× training** — one sweep point at full Phase-18 f
 That is why CAL-04 pre-registers per-point K and the promotion rule, and why a phase that "just adds
 a few more sweep points" is expensive.
 
+<!-- 23-12-CONTINUATION-BEGIN -->
+**RETRACTED IN PLACE 2026-08-28 (plan 23-12).** The clause above — *"Evaluation is the binding
+constraint at ~1,010× training — one sweep point at full Phase-18 fidelity is 42,480 draws = 4.77 h
+against ~17 s of training"* — is left unamended as the record of what was believed when this
+roadmap was written, and its two figures were measured **FALSE** by plan 23-11. Read from
+`results/phase23_cost.json`, sha256
+`f3ba4d9a02f3040752d93c0395821075d8450860a9bae194ac120e8db8a47637`, at that record's own stored
+precision: the evaluation leg is a bracket, `generation.h_per_point_floor` = `5.7223403197590965` h
+to `generation.h_per_point_ceiling` = `9.013691285839306` h, whose **floor already exceeds** the
+`4.77` above; training is `161.12400419991462` s at the protocol-matched non-DP comparator
+(`training.non_dp.training_seconds_mean`), not ~17 s; and `eval ÷ training` at the ceiling is
+`201.39326098648866` on that same protocol, `410.006407009605` at the superseded non-DP protocol
+(`old unmitigated control (superseded as a comparator)`, the arm the record argues is the wrong
+comparator), `157.94846187604026` at `dp_n8, seam active, sigma=0` and `23.458286235587472` at
+`dp_n64, seam active, sigma>0`. **No arm at any protocol is `~1,010×`.** Evaluation still binds at
+every capacity, so the ordering argument this paragraph makes is unchanged — a 16-point sweep is
+still the expensive thing and CAL-04's pre-registration is still why. Only the margin moves, and it
+moves toward *more* wall clock, not less: the sweep is sized against `h_per_point_ceiling` because
+the K ratchet in `scripts/mitigation_gate.py` has no cheap direction. The full continuation, with
+all eleven pre-registered figure paths and the root cause, is in `.planning/REQUIREMENTS.md`.
+<!-- 23-12-CONTINUATION-END -->
+
 **The expected null is a deliverable, not a risk.** Research puts high prior probability on the DP
 arm being a pre-registered null — fact-level noise-to-signal is 72σ at L=8 facts, ε_fact ≤ 4 needs
 σ ≥ 15.3, and Secret Sharer Table 3 is the direct precedent (a once-inserted canary unextractable at

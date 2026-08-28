@@ -822,6 +822,26 @@ Key carry-forwards for v3.0 (locked before Phase 16 plans, do not re-litigate):
   4.77 h as a **floor for noised points, not a mean**, because the Phase-18 rate came from the
   un-adapted base where most draws terminated on a stop id.
 
+<!-- 23-12-CONTINUATION-BEGIN -->
+  **RETRACTED IN PLACE 2026-08-28 (plan 23-12).** Constraint **(3)** above — *"Evaluation binds at
+  ~1,010× training — 42,480 draws = 4.77 h per full-fidelity point against ~17 s of training"* — is
+  left unamended as the record of what was believed when v4.0 was roadmapped, and both of its
+  figures were measured **FALSE** by plan 23-11. From `results/phase23_cost.json`, sha256
+  `f3ba4d9a02f3040752d93c0395821075d8450860a9bae194ac120e8db8a47637`, at that record's own stored
+  precision: the evaluation leg is a bracket, `generation.h_per_point_floor` = `5.7223403197590965`
+  h to `generation.h_per_point_ceiling` = `9.013691285839306` h, whose floor **already exceeds** the
+  `4.77` above; training at the protocol-matched non-DP comparator
+  (`training.non_dp.training_seconds_mean`, `protocol` = protocol-matched non-DP comparator) is
+  `161.12400419991462` s, not ~17 s; and `eval ÷ training` at the ceiling is `201.39326098648866`
+  there, `410.006407009605` at the superseded non-DP protocol, `157.94846187604026` at `dp_n8, seam
+  active, sigma=0` and `23.458286235587472` at `dp_n64, seam active, sigma>0`. **No arm at any
+  protocol is `~1,010×`.** The *ordering* constraint (3) supports is untouched: evaluation still
+  binds at every capacity, Phase 23 still sizes Z from the measurement, and the sizing is now
+  against `h_per_point_ceiling` rather than the retracted figure. The full continuation, with all
+  eleven pre-registered figure paths, the two-protocol disclosure and the root cause, is in
+  `.planning/REQUIREMENTS.md`.
+<!-- 23-12-CONTINUATION-END -->
+
 - **Ordering decisions carried into the roadmap as constraints, not preferences.** DPSGD-05 (the MPS
   RNG checkpoint slot) is in Phase 22, before any long run — five lines now, a full sweep re-run
   later. DPSGD-06 (σ=0) is placed in Phase 23 as the DP arm's **first executed run**, because every
