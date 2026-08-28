@@ -1,4 +1,5 @@
 {
+  "arm": "dp_n64",
   "clip_bind_count": 12800,
   "clip_bind_count_covers_steps": 200,
   "clip_is_binding": true,
@@ -36,7 +37,7 @@
     "verdict": "proceed",
     "verdict_record": "results/phase23_matched_verdict.json"
   },
-  "git_sha": "52fd49db8a73b087f1173a036d392cdc09f56eba",
+  "git_sha": "ab9d246bdd1c697d2ad665af872a7a5868086ca3",
   "governs": "NOTHING BEYOND ITS OWN FIGURES. This is CAL-01's training measurement at the expensive capacity and the adapter CAL-05's throughput bracket is measured on. It renders no verdict, reduces no floor and unblocks nothing.",
   "ppl_adapter_off": 4.573349214207799,
   "ppl_adapter_on": 4.75823888298771,
@@ -97,7 +98,7 @@
   "t_n8": 200,
   "t_n8_source_record": "results/phase23_sigma_zero.json",
   "t_source": "_count_composed_steps",
-  "timestamp": "2026-08-28T17:59:57Z",
+  "timestamp": "2026-08-28T18:01:30Z",
   "torch_version": "2.7.1",
   "training": {
     "adapter": "checkpoints/phase23_sweep1_dp_n64_adapter.pt",
@@ -113,7 +114,7 @@
     "device": "mps",
     "dp_seam_active": true,
     "final_train_loss": 1.1391349406912923,
-    "git_sha": "52fd49db8a73b087f1173a036d392cdc09f56eba",
+    "git_sha": "ab9d246bdd1c697d2ad665af872a7a5868086ca3",
     "grad_accum_steps": 64,
     "max_steps": 200,
     "protocol": "dp_n64, seam active, sigma>0",
@@ -125,7 +126,7 @@
     "seconds_total": 1383.276182374917,
     "seed": 1337,
     "timed_iterations": 200,
-    "timestamp": "2026-08-28T17:59:57Z",
+    "timestamp": "2026-08-28T18:01:30Z",
     "timing_is_uninterrupted": true,
     "torch_version": "2.7.1",
     "warmup_iterations_discarded": 0
