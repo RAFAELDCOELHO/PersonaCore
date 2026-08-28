@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-19-PLAN.md (plan 19 of 20) — the D-04 re-test. phase23_prereg.sigma_zero_verdict (unedited, byte-identical to c7de5d4) was CALLED once against the protocol-matched comparator and returned "proceed", deviation exactly 0.0 against floor 0.0267857142857143. results/phase23_matched_verdict.json committed. THE HALT IS RESOLVED BY COMPARATOR CORRECTION. 23-11..23-14 UNBLOCKED 2026-08-28 by the user on measured evidence (no live caller of the gate control fields; all control values are explicitly-labelled fixtures), with the CONTROL PROVENANCE rule pre-registered in the phase deferred-items.md; 23-17 remains INCOMPLETE on purpose; NO requirement ticked; results/phase23_noised_* still empty
-last_updated: "2026-08-27T23:12:00.000Z"
-last_activity: 2026-08-27
+stopped_at: Completed 23-11-PLAN.md — CAL-01 + CAL-05, and THE MILESTONE'S FIRST NOISED SWEEP POINT. results/phase23_noised_dp_n64_sigma0p500000.json at sigma=0.5 / C=1.0 / epsilon=519.6981942303134, gated on TWO conjuncts (the MATCHED verdict's "proceed" AND the committed human unblock act 746ecf6, sha-pinned and shape-checked) and never on the sigma=0 record, which carries HALT by design. CAL-01: 1383.276182374917 s / 200 optimizer steps = 6.916380911874585 s/step at grad_accum_steps=64 + 32 replay micro-batches; T=200 on both capacities, no cross-sigma epsilon claim. CAL-05: h_per_point_floor 5.7223403197590965 -> h_per_point_ceiling 9.013691285839306, BOTH above the committed 4.77. results/phase23_cost.json carries four training legs each naming its protocol and all eleven pre-registered figure paths at full stored precision. test_no_noised_point_exists WIDENED (305 insertions, 0 deletions). NO requirement ticked and .planning/REQUIREMENTS.md is byte-unchanged — 23-12 owns the retract-in-place. Suite 1559 passed, 1 skipped
+last_updated: "2026-08-28T18:37:02.000Z"
+last_activity: 2026-08-28
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 67
-  completed_plans: 62
+  completed_plans: 63
   percent: 33
 ---
 
@@ -26,14 +26,68 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — GAP CLOSURE 23-15…23-20 COMPLETE
-Plan: 19 of 20 — **23-19 COMPLETE at `c86a224` + `0a275c9` + `beb2e53`** — **15 of 20 plans ticked**
-(23-01…23-10, 23-15, 23-16, 23-18, 23-19, 23-20). **23-11 / 23-12 / 23-13 / 23-14 were UNBLOCKED
+Plan: 11 of 20 — **23-11 COMPLETE at `38f8e52` + `52fd49d` + `ab9d246` + `bcdfb71` + `8876b8c` +
+`c6e8673`** — **16 of 20 plans ticked** (23-01…23-11, 23-15, 23-16, 23-18, 23-19, 23-20).
+**23-11 / 23-12 / 23-13 / 23-14 were UNBLOCKED
 2026-08-28** (see the dated unblock record below — evidence, not assumption)
 and **23-17 remains INCOMPLETE** — its run was harness-killed at 3/5 and wrote no record; 23-20 is
 what completed it, under a SEPARATE continuation pre-registration. It was not left unfinished by
 choice; what IS deliberate is that its box stays **UNTICKED**, because the plan whose run never
 produced a record did not complete. `roadmap.update-plan-progress` keys on SUMMARY EXISTENCE and
 falsely ticked 23-17 during 23-18; it was reverted by hand then and was NOT re-ticked here.
+
+**23-11 EXECUTED 2026-08-28 — THE MILESTONE'S FIRST NOISED SWEEP POINT RAN, AND `results/
+phase23_noised_*` IS NO LONGER EMPTY.** `git ls-files 'results/phase23_noised_*'` returns **1**:
+`results/phase23_noised_dp_n64_sigma0p500000.json`, at σ=`0.5`, C=`1.0`, ε=`519.6981942303134`
+(δ=1e-05, T=200), seed 1337. The path was **CALLED** out of `phase23_prereg.noised_record_path`,
+never retyped, and the record reproduces it from its own `arm` / `sigma`.
+
+**THE GATE WAS TWO CONJUNCTS AND IT READ THE RIGHT ARTIFACT.** `results/
+phase23_matched_verdict.json`'s `verdict == "proceed"` **AND** the COMMITTED human unblock act
+`746ecf699904e7c97bf73614e1c617a646da30ad` — sha-PINNED, asserted **AMONG** (never by position)
+the `git log -S<sentinel> -- .planning/STATE.md` set (**MEASURED size 1**), an ancestor of HEAD,
+present in `git show HEAD:.planning/STATE.md`, and touching **four planning paths with ZERO under
+`scripts/` or `src/`**. The σ=0 record's `verdict` was **never** the gate: it is `HALT`, it stays
+`HALT`, and both verdicts were printed side by side at the top of the run log.
+`test_no_noised_point_exists` was **WIDENED, not deleted** — `git diff --numstat` on its commit is
+**305 insertions, 0 deletions**, the original `tracked == []` assertion and its message stand
+byte-identical on the still-blocked branch, and a 3-case constructed-input tripwire
+(`absent sentinel` / `wrong sha` / `a scripts/ path in the act`) is watched REFUSING to open the
+new branch.
+
+**CAL-01, MEASURED ON THE DP PATH WITH THE SEAM ACTIVE, AT THE EXPENSIVE CAPACITY.**
+`1383.276182374917` s over **200** optimizer steps = `6.916380911874585` s/step, at
+`grad_accum_steps = 64` (proven against the seam's own `_records`) and
+`replay_micro_batches_per_step = 32` (proven against `replay_window_budget(64)//BLOCK_SIZE`).
+`clip_bind_count = 12800 = 200 × 64` — C=1.0 **BINDS on every record**, deliberately, because at
+σ>0 C is also the noise scale (`std = σ·C`). **T = 200 on BOTH capacities** (`t_n8 == t_n64`, both
+off `_count_composed_steps`) and **NO ε comparison is made across the two σ** — D-05 requires a
+fixed σ and the record says so. The roadmap's `16 × 17 s` pricing is **not** reproduced by any real
+arm; the correction of that row is 23-12's, and `.planning/REQUIREMENTS.md` is byte-unchanged here.
+
+**CAL-05 IS A BRACKET, NOT A MEAN, AND BOTH ENDS EXCEED THE COMMITTED FIGURE.**
+`h_per_point_floor` = `5.7223403197590965` h (stop ids ACTIVE) → `h_per_point_ceiling` =
+`9.013691285839306` h (stop set EMPTIED, **0/64 stop-terminated and mean exactly 48.0 tokens on
+every shape**). Pooled `wall_multiplier` `1.5816071135660466` and `token_multiplier`
+`1.6456408196062675`, against research's pre-sizing bracket of 1.536× / 1.751×. **The committed
+4.77 h/point is below the measured FLOOR**, which is the finding: it was measured on the un-adapted
+base. **THE CROSS-VALIDATION SAYS THE STACK HAS NOT MOVED:** the un-adapted base under the floor
+condition reproduces `results/phase18_preflight_report.md`'s stop-terminated table **EXACTLY** —
+56 / 45 / 56 / 51 of 64 — and its rates agree at **106.32% / 95.06% / 96.18% / 96.72%**.
+
+**`results/phase23_cost.json` CARRIES FOUR TRAINING LEGS, EACH NAMING ITS PROTOCOL**, the
+floor/ceiling bracket, all four `eval ÷ training` ratios and a K-rung sizing table that prices the
+never-taught floor at N=5. `training.non_dp` comes from `results/phase23_matched_control.json` and
+the argument is written INTO the record; the old control is recorded BESIDE it as
+`training.non_dp_superseded_protocol`, never deleted. The measured protocol gap is the **field**
+`training.non_dp.wall_clock_gap_vs_superseded` = `2.035849685343305`, COMPUTED at write time from
+the two `training_seconds_mean` fields and re-derived under exact `==` by a committed test —
+**and it is NOT 8.125, so it REFUTES the naive per-step-work equality** an earlier draft asserted;
+the conclusion survives on the measured gap alone. Scope stated honestly in the record:
+`deferred-items.md`'s CONTROL PROVENANCE rule governs the three UTILITY fields and **not** timing,
+so this decision was made here rather than inherited. Suite **`1559 passed, 1 skipped`** (1549 + 10
+new guards); `ruff` clean over 245 files; every frozen pin byte-identical and both one-commit pins
+still one commit.
 
 **THE D-04 HALT IS RESOLVED — BY COMPARATOR CORRECTION, AND THE RULE THAT RESOLVED IT WAS NEVER
 EDITED.** 23-19 called `phase23_prereg.sigma_zero_verdict` — byte-identical to its blind birth

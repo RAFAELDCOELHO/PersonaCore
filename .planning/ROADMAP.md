@@ -638,7 +638,7 @@ Plans:
 
 **Wave 6** *(UNBLOCKED 2026-08-28 — the D-04 halt at 23-10 is discharged)*
 
-- [ ] 23-11-PLAN.md — CAL-01 dp_n64 timing + CAL-05 noised-adapter throughput, floor and ceiling
+- [x] 23-11-PLAN.md — CAL-01 dp_n64 timing + CAL-05 noised-adapter throughput, floor and ceiling *(**THE MILESTONE'S FIRST NOISED SWEEP POINT RAN.** `results/phase23_noised_dp_n64_sigma0p500000.json` at σ=0.5 / C=1.0 / ε=`519.6981942303134`, gated on TWO conjuncts — the MATCHED verdict's `proceed` AND the committed human unblock act `746ecf6` — never on the σ=0 record, which carries `HALT` by design. CAL-01: `1383.276182374917` s over 200 optimizer steps = `6.916380911874585` s/step at `grad_accum_steps = 64` and 32 replay micro-batches; T = 200 on BOTH capacities with NO cross-σ ε claim. CAL-05: `h_per_point_floor` `5.7223403197590965` h → `h_per_point_ceiling` `9.013691285839306` h — **both ABOVE the committed 4.77 h/point**, which is the finding. Base-condition stop counts reproduce Phase 18's table EXACTLY (56/45/56/51 of 64); rates agree 95.06–106.32%. `results/phase23_cost.json` carries four training legs each NAMING its protocol and all eleven pre-registered figure paths at full stored precision. **NO requirement ticked** — CAL-01/CAL-05 are measured, and `.planning/REQUIREMENTS.md` is byte-unchanged because 23-12 owns the retract-in-place of the row's falsified "~1,010×" claim.)*
 
 **Wave 7** *(UNBLOCKED 2026-08-28 — the D-04 halt at 23-10 is discharged)*
 
