@@ -73,6 +73,14 @@ which ``test_a_hand_edited_floor_is_detected`` observes being refused rather tha
 refused. That is the property that lets a measured number live outside the closed pre-registration
 at all; ``scripts/phase19_floor.py``'s property 2, applied unchanged.
 
+CONTINUED 2026-08-28 (plan 23-13): the Z values the first paragraph says "arrive in 23-13" HAVE
+arrived — ``SWEEP_POINTS``, ``CURVE_K``, ``FULL_FIDELITY_K``, ``STEP_BUDGET``, ``N_CONTROL_SEEDS``
+and ``N64_LEG_WITHDRAWN``, at the bottom of this file. That also settles the parenthesis above:
+``CURVE_K`` and ``FULL_FIDELITY_K`` ARE the first restatements of a frozen ``mitigation_gate``
+constant in this file, and ``tests/test_phase23_budget.py::test_selected_k_is_a_ratcheted_rung`` is
+the test that holds them to it, by importing the gate FROM THE TEST. Both earlier paragraphs are
+left verbatim because each was true when it was written; this line is what stops them going stale.
+
 CPU-only, GPU-free, no torch, no network. Nothing here executes.
 """
 
@@ -298,4 +306,302 @@ MATCHED_CONTROL_NOISE_FLOOR_PROVENANCE = {
     # claim from the original's.
     "protocol": "phase23_matched_prereg",
     "sigma_zero_was_visible": True,
+}
+
+
+# =================================================================================================
+# ===== CAL-02: Z — THE SWEEP'S RESOURCE BUDGET, SET FROM 23-11'S MEASUREMENTS (plan 23-13) =======
+# =================================================================================================
+
+# ONE DIGEST NOTE, STATED ONCE HERE RATHER THAN SIX TIMES BELOW, BECAUSE THE KEY NAME IS REUSED
+# WITH A DIFFERENT MEANING. The two floors above carry `record_sha256` = the record's OWN
+# `record_sha256` field, an INPUTS digest over `per_seed`, and a SEPARATE `record_file_sha256` for
+# the committed bytes. NONE of the three records the Z constants cite carries an inputs digest of
+# its own, so on every Z provenance dict below `record_sha256` IS THE SHA256 OF THE COMMITTED
+# FILE'S BYTES. `test_budget_constants_re_derive` checks each one live against `read_bytes()`, so
+# the meaning is asserted rather than promised.
+#
+# THE CEILING, NOT THE FLOOR, AND THE REASON IS THE RATCHET. `mitigation_gate.ratchet_k` at
+# `scripts/mitigation_gate.py:917` calls `_prove(proposed_k >= fixed_k)`: once a rung is pinned, K
+# may only INCREASE. There is no cheap direction and no override flag, so a sweep sized against
+# `generation.h_per_point_floor` and then found too expensive has NO rescue. Every hours figure
+# quoted below is therefore sized against `generation.h_per_point_ceiling`, and the three constants
+# that are MULTIPLICANDS of that total — `SWEEP_POINTS`, `CURVE_K`, `N_CONTROL_SEEDS` — carry
+# `sized_against` to say so. The other three deliberately DO NOT carry it, and the field is ABSENT
+# rather than empty: no throughput figure participates in `STEP_BUDGET`, `FULL_FIDELITY_K` or
+# `N64_LEG_WITHDRAWN`, and a provenance field that lies is worse than one that is missing.
+# `test_z_was_sized_against_the_ceiling` asserts both halves, so neither an omission nor an
+# invention passes.
+#
+# WHO CHOSE WHAT, AND AGAINST WHAT. `CURVE_K` and `SWEEP_POINTS` were selected BY THE USER at plan
+# 23-13 Task 1's blocking `checkpoint:decision` gate, from a per-rung table computed live through
+# `phase23_cost.size_sweep` at BOTH the ceiling and the floor with the never-taught term priced as
+# its own column. The executor selected nothing and named no default: the ratchet is one-way, the
+# rungs span 5.36x in draws per point (42,480 at K=48 against 7,920 at K=8), and NO SPEND BOUND
+# EXISTS in any source artifact — not in `23-CONTEXT.md`'s D-01..D-10, not in its Claude's
+# Discretion section (which delegates Z as a DERIVATION rule and supplies no criterion to select
+# against), not in `.planning/REQUIREMENTS.md` and not in `.planning/ROADMAP.md`. None was invented.
+# The remaining three constants are RULES rather than options, were never presented as choices, and
+# each names the live source symbol it was read from.
+#
+# THE RUNG MENU IS FROZEN AND CANNOT BE IMPORTED HERE. `mitigation_gate.py:254` declares
+# `K_RUNGS = (48, 24, 16, 8)`, and both K constants below are members of it. This module may not
+# import that module: `tests/test_phase23_budget.py:308`'s literal-only guard refuses any
+# module-level node that is not an `ast.Assign` (an `import` is not one, and that is the guard that
+# actually binds this file), and TWO accumulated import ceilings bind the same
+# `scripts/mitigation_*.py` union — `tests/test_phase20_prereg.py:1190` asserts
+# `imported <= {pathlib, sys, erasure_gate}` (SUBSET) and `tests/test_phase23_budget.py:565`
+# asserts `imported == {erasure_gate, pathlib, sys}` (EQUALITY, zero headroom in BOTH directions).
+# So the rungs are RESTATED as literals here and the agreement is asserted by a test that imports
+# the frozen gate itself.
+
+# THE SWEEP WIDTH: frontier points per leg.
+#
+#   input    : `results/phase23_cost.json` -> `sweep_points_priced` = 16, whose sibling field
+#              `sweep_points_source` names `.planning/ROADMAP.md:47 /
+#              .planning/REQUIREMENTS.md:179` — the width this project published BEFORE any cost
+#              measurement existed, and the width every row of the table the user chose from was
+#              computed at
+#   rule     : `phase23_cost.size_sweep`, called with `sweep_points=16`
+#   output   : 16 points x 3.1471532286150796 h/point at the selected rung = 50.354451657841274 h
+#              of sweep, before the never-taught term below
+#   evidence : `results/phase23_cost.json`, `sizing["16"]`
+#
+# NO RECOMPUTATION WAS OWED BEFORE THIS PIN. Task 1's table was computed at 16 and the user's answer
+# is 16, so the totals the rung was chosen against ARE the totals recorded here. Had the answer been
+# some other width the table would have had to be recomputed and re-presented first, because the
+# sweep term scales linearly in width while the never-taught term does not.
+SWEEP_POINTS = 16
+
+SWEEP_POINTS_PROVENANCE = {
+    "record": "results/phase23_cost.json",
+    "record_sha256": "f3ba4d9a02f3040752d93c0395821075d8450860a9bae194ac120e8db8a47637",
+    "git_sha": "8876b8ce30427e08281f44b96a6a525dfd539a84",
+    "derivation": "phase23_cost.size_sweep",
+    "sized_against": "h_per_point_ceiling",
+    "selected_by": (
+        "THE USER, at plan 23-13 Task 1's blocking `checkpoint:decision` gate — not the executor, "
+        "and not a default. The width was already published at .planning/ROADMAP.md:47 and "
+        ".planning/REQUIREMENTS.md:179, which is the record's own `sweep_points_source`"
+    ),
+    "selected_value": 16,
+    "selected_reply_verbatim": (
+        "Confirma opção 1: W=16, o número já pré-registrado em ROADMAP.md:47 e "
+        "REQUIREMENTS.md:179. Nenhuma razão nomeada para desviar dele nesta checkpoint — desvio de "
+        "número já publicado exige justificativa científica explícita, não ajuste de conveniência "
+        "no momento de gastar o compute. Nota registrada para decisão futura, se aplicável: número "
+        "de pernas é alavanca de custo muito maior que largura (100,7h de diferença entre 4 e 2 "
+        "pernas no mesmo degrau) — qualquer revisão de orçamento total deveria mirar aí primeiro, "
+        "não em W."
+    ),
+    "governs": (
+        "the number of FRONTIER POINTS PER LEG the v4.0 sweep draws, and nothing else. It is a "
+        "RESOURCE parameter: it sizes the spend and decides no outcome. The user's recorded note "
+        "about LEG COUNT being a larger cost lever than width is a note for a FUTURE budget "
+        "decision and is NOT an instruction this pin acts on — the leg count is not pinned here"
+    ),
+}
+
+# THE PER-POINT DRAW BUDGET FOR CURVE POINTS.
+#
+#   input    : the per-rung table over `mitigation_gate.K_RUNGS`, every cell computed live through
+#              `phase23_cost.size_sweep` from `results/phase23_cost.json`'s `generation` block at
+#              both the ceiling and the floor. At this rung: 14,832 draws/point,
+#              3.1471532286150796 h/point at the ceiling against 1.9979696709667354 at the floor
+#   rule     : `phase23_cost.size_sweep`, over the closed menu `mitigation_gate.K_RUNGS`
+#   output   : the ceiling-side total for the whole leg, sweep plus never-taught floor scoring,
+#              66.09021780091668 h — the record's `sizing["16"]`
+#              `total_hours_ceiling_with_never_taught_floor`
+#   evidence : `results/phase23_cost.json`, `sizing["16"]`
+#
+# THE SELECTION IS THE USER'S AND IT IS ONE-WAY. `ratchet_k` accepts only an INCREASE from here, so
+# this rung is the floor of every future K in v4.0. The user's recorded reasoning, restated because
+# it is the reason a mid-menu rung was taken rather than the cheapest: the ratchet guards against
+# LOWERING K after seeing a bad result, but it does NOT guard against never noticing the result was
+# bad, if the ASR ladder truncates exactly where real signal would have revealed itself. This rung
+# preserves the ladder step that anchors to Phase 18's third rung, keeps `promote_to_full_fidelity`
+# meaningful (a real 3x promotion to `FULL_FIDELITY_K`), and avoids the "truncated curve read as a
+# null" risk that the cheapest rung specifically carries.
+CURVE_K = 16
+
+CURVE_K_PROVENANCE = {
+    "record": "results/phase23_cost.json",
+    "record_sha256": "f3ba4d9a02f3040752d93c0395821075d8450860a9bae194ac120e8db8a47637",
+    "git_sha": "8876b8ce30427e08281f44b96a6a525dfd539a84",
+    "derivation": "phase23_cost.size_sweep",
+    "sized_against": "h_per_point_ceiling",
+    "rung_menu": "mitigation_gate.K_RUNGS",
+    "selected_by": (
+        "THE USER, at plan 23-13 Task 1's blocking `checkpoint:decision` gate. NOT the executor: "
+        "`mitigation_gate.ratchet_k` calls `_prove(proposed_k >= fixed_k)` so the choice is "
+        "one-way, the rungs span 5.36x in draws per point, and NO spend bound exists in "
+        "23-CONTEXT.md's D-01..D-10, in its Claude's Discretion section, in "
+        ".planning/REQUIREMENTS.md or in .planning/ROADMAP.md. The plan presented the table, named "
+        "no default and made no recommendation"
+    ),
+    "selected_value": 16,
+    "selected_reply_verbatim": (
+        "Confirma opção 1: CURVE_K = 16. Correção registrada da minha posição anterior — o ratchet "
+        "protege contra reduzir K depois de ver resultado ruim, mas não protege contra nunca "
+        "perceber que o resultado ERA ruim se a escada truncar exatamente onde sinal real se "
+        "revelaria. K=16 preserva o degrau que ancora com Phase 18 step 3, mantém "
+        "promote_to_full_fidelity significativo (16→48), e evita o risco nomeado de 'curva "
+        "truncada lida como nulo' que K=8 especificamente carrega."
+    ),
+    "governs": (
+        "the DRAW BUDGET PER CURVE POINT, and nothing else. It is the `fixed_k` "
+        "`mitigation_gate.ratchet_k` ratchets from and the `curve_k` "
+        "`mitigation_gate.promote_to_full_fidelity` promotes from; it decides no outcome and sets "
+        "no threshold. It does NOT govern gate-candidate points, which are re-drawn at "
+        "FULL_FIDELITY_K"
+    ),
+}
+
+# THE DRAW BUDGET RESERVED FOR GATE-CANDIDATE POINTS.
+#
+#   input    : `scripts/phase18_extraction.py:93` — `K = 48`, the fidelity Phase 18 published at
+#   rule     : the ATK-03 / P18-4 pin, restated at `mitigation_gate.ratchet_k`'s docstring:
+#              reducing a full-fidelity K AFTER seeing a null is the weakening those two exist to
+#              prevent, because fewer draws is less power to observe extraction, i.e. an EASIER
+#              NULL — a reduction taken after a null buys the very result it reacts to
+#   output   : 48
+#   evidence : `scripts/phase18_extraction.py`, whose `ASR_RUNGS` reads the top rung off this same
+#              constant rather than retyping it
+#
+# THIS ONE WAS NEVER THE USER'S TO CHOOSE AND WAS NEVER PRESENTED AS AN OPTION. It is a RULE. It
+# carries no `sized_against`, because no throughput figure participates in it at all.
+FULL_FIDELITY_K = 48
+
+FULL_FIDELITY_K_PROVENANCE = {
+    "record": "scripts/phase18_extraction.py",
+    "record_sha256": None,
+    "git_sha": None,
+    "derivation": "phase18_extraction.K",
+    "selected_by": (
+        "NOBODY — it is a RULE, not a selection. Phase 18's published fidelity, held in place by "
+        "the ATK-03 / P18-4 pin. Presented to the user at Task 1's checkpoint as a fact of the "
+        "pre-registration rather than as an option"
+    ),
+    "governs": (
+        "the draw budget a GATE-CANDIDATE point is RE-DRAWN at — the `full_k` argument of "
+        "`mitigation_gate.promote_to_full_fidelity`, and nothing else. Curve points are drawn at "
+        "CURVE_K. `record_sha256` and `git_sha` are None BY CONSTRUCTION: the source is a live "
+        "SOURCE MODULE that this phase does not freeze, not a committed results artifact, so a "
+        "digest pinned here would go stale on any unrelated edit while asserting nothing. "
+        "`test_selected_k_is_a_ratcheted_rung` resolves the symbol live instead, which is the "
+        "check a digest would only approximate"
+    ),
+}
+
+# THE PER-ARM OPTIMIZER-STEP BUDGET.
+#
+#   input    : `scripts/teach_persona.py:1220` — `MAX_STEPS = 200`, the production teaching budget
+#              every Phase-23 arm already ran at (`results/phase23_cost.json` records
+#              `max_steps: 200` on both DP legs and both non-DP legs)
+#   rule     : restate-and-assert. The value is a literal here because this module has no import
+#              budget; `test_the_step_budget_agrees_with_the_production_constant` is the other half,
+#              and without it the restatement would be an unchecked copy
+#   output   : 200
+#   evidence : `scripts/teach_persona.py`
+#
+# NO `sized_against`: a step budget is a TRAINING quantity and no h/point figure feeds it.
+STEP_BUDGET = 200
+
+STEP_BUDGET_PROVENANCE = {
+    "record": "scripts/teach_persona.py",
+    "record_sha256": None,
+    "git_sha": None,
+    "derivation": "teach_persona.MAX_STEPS",
+    "selected_by": (
+        "NOBODY — it is a RESTATEMENT of the production constant every Phase-23 arm already ran "
+        "at, not a selection. Never presented at Task 1's checkpoint"
+    ),
+    "governs": (
+        "the per-arm OPTIMIZER-STEP budget, and nothing else. It is the T that the accountant's "
+        "epsilon composes over and the `max_steps` a sweep arm trains for; it prices no draws and "
+        "decides no outcome. `record_sha256` and `git_sha` are None for the same reason "
+        "FULL_FIDELITY_K's are: the source is a live source module, resolved by symbol in the test "
+        "rather than pinned by a digest that would go stale on an unrelated edit"
+    ),
+}
+
+# THE NUMBER OF NEVER-TAUGHT CONTROL SEEDS WHOSE SCORING THE BUDGET MUST PRICE.
+#
+#   input    : `results/phase23_never_taught_training.json` -> `n_seeds` = 5, over the LADDER seeds
+#              (1337, 2024, 1338, 2025, 1339). This record is the BINDING one because its seeds are
+#              the adapters 23-14 actually scores, and this constant exists to price THAT scoring.
+#              `results/phase23_control_floor.json` carries the same five by D-08's same-N rule —
+#              that agreement is the REASON the lists match, not a second source
+#   rule     : `results/phase23_cost.json`'s `sizing` block prices the never-taught term as
+#              `n_seeds x h_per_point_ceiling_at_k` at every rung, and names that source itself in
+#              `never_taught_seeds_source`
+#   output   : 5 seeds x 3.1471532286150796 h/point = 15.735766143075399 h at the selected rung
+#   evidence : `results/phase23_cost.json`, `sizing["16"]`
+#              `never_taught_floor_hours_ceiling`
+#
+# A BUDGET FOR 16 SWEEP POINTS THAT FORGETS N CONTROL POINTS IS SHORT BY N POINTS. That is why this
+# is a pinned constant rather than a number re-read at call time.
+N_CONTROL_SEEDS = 5
+
+N_CONTROL_SEEDS_PROVENANCE = {
+    "record": "results/phase23_never_taught_training.json",
+    "record_sha256": "b4ee3fc3640887982d31d4a52791bd61b8bdf6d293bad153297cb1cdd35f6bbe",
+    "git_sha": "5303819632646f156b90fcfec850cebdfb5d1275",
+    "derivation": "phase23_prereg.NEVER_TAUGHT_TRAINING_RECORD -> n_seeds",
+    "sized_against": "h_per_point_ceiling",
+    "seeds": (1337, 2024, 1338, 2025, 1339),
+    "selected_by": (
+        "NOBODY — it is a MEASURED count read from the never-taught training record, not a "
+        "selection. Never presented at Task 1's checkpoint"
+    ),
+    "governs": (
+        "the never-taught CONTROL term of the ceiling-side budget: the count of fresh adapters "
+        "23-14 scores, priced at the same per-point ceiling as a sweep point. It is independent of "
+        "SWEEP_POINTS — the sweep term scales linearly in width and this one does not — and it "
+        "decides no outcome"
+    ),
+}
+
+# D-06: IS THE n=64 LEG COMMITTABLE?
+#
+#   input    : `results/phase23_cal03_wiring.json`, READ LIVE rather than assumed — `verdict` is
+#              `true`, with `epsilon_n8` and `epsilon_n64` both 24.38161088311366 under exact `==`
+#              and `t_n8` and `t_n64` both 4
+#   rule     : `phase23_prereg.n64_leg_is_committable`, committed BLIND in 23-03 and strictly
+#              ancestral to the record's earliest add. NEVER a relative tolerance
+#   output   : the leg is committable, so it is NOT withdrawn
+#   evidence : `results/phase23_cal03_wiring.json`
+#
+# THE NEGATIVE CASE IS RECORDED TOO, WHICH IS WHY THIS CONSTANT EXISTS AT ALL. A confirmation
+# recorded only by the ABSENCE of a withdrawal is indistinguishable from never having checked. Both
+# branches are written and both are tested (`test_n64_leg_matches_the_cal03_verdict` drives the
+# inactive one from a CONSTRUCTED copy of the real record with its verdict flipped, never by
+# editing the committed artifact). Had the live read said otherwise, this would be True, every Z
+# constant above would describe the n=8 leg ONLY, and the n=8 leg would still stand: D-06's scope
+# withdraws the n=64 leg alone, and D-04's halt is a different rule for a different failure.
+#
+# NO `sized_against`: this is a verdict read, and no throughput figure participates in it.
+N64_LEG_WITHDRAWN = False
+
+N64_LEG_WITHDRAWN_PROVENANCE = {
+    "record": "results/phase23_cal03_wiring.json",
+    "record_sha256": "461d1d6556fb85c666b9a23f76bee2d3b8969a5a3f4145002c46ba9017dc81f9",
+    "git_sha": "5faaec4ead49d088fffb8e3ba3f461bafa91bf2f",
+    "derivation": "phase23_prereg.n64_leg_is_committable",
+    "verdict": True,
+    "epsilon_n8": 24.38161088311366,
+    "epsilon_n64": 24.38161088311366,
+    "t_n8": 4,
+    "t_n64": 4,
+    "selected_by": (
+        "NOBODY — it is a MEASUREMENT READ, not a decision, which is why it is pinned here rather "
+        "than asked at Task 1's checkpoint. The confirming branch fired because the committed "
+        "wiring record's verdict is true on a live read"
+    ),
+    "governs": (
+        "whether the v4.0 sweep's n=64 leg is committed, and nothing else. False here means the "
+        "leg stands and every Z constant above describes BOTH legs. It renders no privacy verdict "
+        "and sets no threshold: the epsilons quoted are the CAL-03 wiring calibration's, recorded "
+        "so a reader can see WHICH measurement this branch was taken on"
+    ),
 }
