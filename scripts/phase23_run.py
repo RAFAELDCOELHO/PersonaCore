@@ -4256,6 +4256,52 @@ def _never_taught_adapter(training, seed):
     return path
 
 
+def _never_taught_draws_path(seed):
+    """Where ONE seed's RAW draws are persisted, per shape, as they are produced.
+
+    ``data/`` and therefore gitignored, exactly like ``phase23_run_state.json``'s neighbours: this
+    is working state, not a published artifact, and every figure derived from it lands in the
+    committed record. It exists because MEASURED: a ``TypeError`` in the block builder threw away
+    2.3 hours of completed generation, and every step after the draw loop is cheap CPU work that
+    should never be able to cost a GPU hour again.
+    """
+    return _ROOT / "data" / f"phase23_never_taught_seed{seed}_draws.json"
+
+
+def _never_taught_load_draws(path, adapter_sha256, corpus_sha256, k):
+    """Recorded draws for this seed, REFUSED unless they describe this exact measurement."""
+    if not path.exists():
+        return {
+            "adapter_sha256": adapter_sha256,
+            "corpus_sha256": corpus_sha256,
+            "k": k,
+            "shapes": {},
+        }
+    blob = json.loads(path.read_text(encoding="utf-8"))
+    for field, expected in (
+        ("adapter_sha256", adapter_sha256),
+        ("corpus_sha256", corpus_sha256),
+        ("k", k),
+    ):
+        _prove(
+            blob.get(field) == expected,
+            f"{path} records {field}={blob.get(field)!r} against this run's {expected!r}. Reusing "
+            "it would pool draws taken off different weights, a different corpus or a different "
+            "budget into one reading. Delete it in a reviewed step to re-draw",
+        )
+    print(
+        f"[phase23_run] never-taught: {sorted(blob['shapes'])} already drawn for this seed — "
+        f"reusing from {_rel(path)}",
+        flush=True,
+    )
+    return blob
+
+
+def _never_taught_write_draws(path, blob):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(blob, sort_keys=True), encoding="utf-8")
+
+
 def _never_taught_projection():
     """The scoring cost, PROJECTED and checked against the sizing table K was selected from.
 
@@ -4396,18 +4442,39 @@ def score_never_taught(seed, *, adapter, training):
     clean_room_values = [fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS]
     values = {fact.id: fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS}
 
-    model, model_cfg, tok, forbid, artifact = recall.load_adapted_model(device(), adapter)
-    _, seam_digest = persistence.resolve_forbid(tok, model_cfg.vocab_size)
-    _prove(
-        persistence.forbid_digest(forbid) == seam_digest,
-        "the mask the loader threaded into this arm does not match `resolve_forbid`'s. The floor "
-        "would be measured under a different forbid set than the arms it bounds",
-    )
-    tp.seed_everything(recall.SEED)
+    adapter_digest = _sha256(adapter)
+    cache = _never_taught_draws_path(seed)
+    recorded = _never_taught_load_draws(cache, adapter_digest, corpus_digest, k)
+    model = tok = forbid = None
 
     draws, per_shape = [], []
     for family in x18.ATTACK_FAMILIES:
         cell = [entry for entry in prompts if entry["family"] == family]
+        if family in recorded["shapes"]:
+            shape = recorded["shapes"][family]
+            draws.extend(shape["draws"])
+            per_shape.append(shape["timing"])
+            print(
+                f"[phase23_run] never-taught seed {seed} {family}: REUSING "
+                f"{len(shape['draws'])} recorded prompt(s) from {_rel(cache)} — already drawn",
+                flush=True,
+            )
+            continue
+        if model is None:
+            model, model_cfg, tok, forbid, _artifact = recall.load_adapted_model(device(), adapter)
+            # `_artifact` is the loaded persona FILE and it carries the adapter TENSORS. It is
+            # deliberately dropped rather than recorded: a tensor is not JSON-serializable, and the
+            # weights this reading came off are already pinned by `adapter_sha256`. MEASURED the
+            # hard way — an earlier revision echoed it into the block and `json.dumps` raised
+            # `TypeError: Object of type Tensor is not JSON serializable` at `_state_write`, AFTER
+            # 2.3 h of drawing. That is also why the draws are now persisted per SHAPE below.
+            _, seam_digest = persistence.resolve_forbid(tok, model_cfg.vocab_size)
+            _prove(
+                persistence.forbid_digest(forbid) == seam_digest,
+                "the mask the loader threaded into this arm does not match `resolve_forbid`'s. "
+                "The floor would be measured under a different forbid set than the arms it bounds",
+            )
+            tp.seed_everything(recall.SEED)
         box = {}
         with synchronized_seconds(box):
             for index, entry in enumerate(cell):
@@ -4477,9 +4544,19 @@ def score_never_taught(seed, *, adapter, training):
                 ),
             }
         )
+        # PERSIST THE RAW DRAWS BEFORE ANYTHING ELSE CAN FAIL. Everything downstream — scoring,
+        # aggregation, serialization — is cheap CPU work, and a defect anywhere in it used to cost
+        # the whole seed's GPU time. Written per SHAPE, so a kill now costs at most ~30 minutes
+        # rather than ~2.3 hours, and a re-launch skips what is already drawn.
+        recorded["shapes"][family] = {
+            "draws": [record for record in draws if record["family"] == family],
+            "timing": per_shape[-1],
+        }
+        _never_taught_write_draws(cache, recorded)
         print(
             f"[phase23_run] never-taught seed {seed} {family}: DONE — "
-            f"{per_shape[-1]['rate_draws_per_min']:.2f} draws/min over {minutes:.2f} min",
+            f"{per_shape[-1]['rate_draws_per_min']:.2f} draws/min over {minutes:.2f} min "
+            f"(persisted to {_rel(cache)})",
             flush=True,
         )
     del model
@@ -4571,8 +4648,7 @@ def score_never_taught(seed, *, adapter, training):
         "arm": training["arm"],
         "draw_axis_arm": x18.ARMS[0],
         "adapter": _rel(adapter),
-        "adapter_sha256": _sha256(adapter),
-        "artifact": {key: artifact[key] for key in sorted(artifact)} if artifact else None,
+        "adapter_sha256": adapter_digest,
         "gated_tier": x18.GATED_TIER,
         "reported_tier": x18.REPORTED_TIER,
         "draws_per_question": k,
@@ -4595,6 +4671,13 @@ def score_never_taught(seed, *, adapter, training):
         "family_zero_run": False,
         **provenance(),
     }
+    # THE SERIALIZATION IS PROVED HERE, where the failure is free. `_state_record` writes the whole
+    # ledger, so a non-serializable leaf in this block aborts AFTER the generation is spent —
+    # MEASURED, on a `torch.Tensor` echoed in from `load_adapted_model`'s artifact.
+    try:
+        json.dumps(block, sort_keys=True)
+    except TypeError as bad_leaf:  # pragma: no cover — the guard, not the path
+        _prove(False, f"the scored block is not JSON-serializable: {bad_leaf}")
     print(
         f"[phase23_run] never-taught seed {seed}: {nontarget_successes}/{nontarget_questions} "
         f"{x18.GATED_TIER} QUESTIONS extracted at least once = {block['rate']!r} "

@@ -1,0 +1,87 @@
+SESSION pid=57006 pgid=57006 sid=57006
+[phase23_run] D-04 verdicts, BOTH read: results/phase23_sigma_zero.json = 'HALT' | results/phase23_matched_verdict.json = 'proceed'. The gate reads the SECOND
+[phase23_run] D-04 human act: UNBLOCKED by '746ecf699904e7c97bf73614e1c617a646da30ad' (Fri Aug 28 10:32:54 2026 -0300), 4 planning path(s), 0 under `scripts/` or `src/`; `git log -S<sentinel>` set size 1
+[phase23_run] D-04 GATE OPEN: verdict 'proceed' AND the committed act 746ecf699904e7c97bf73614e1c617a646da30ad
+[phase23_run] never-taught: 0/5 seed(s) scored; remaining [1337, 2024, 1338, 2025, 1339]
+[phase23_run] never-taught projection [stop_ids_active]: 1.853307671905495 h/seed x 5 = 9.266538359527477 h (sizing: 1.9979696709667354 h/seed, delta +0.8887%)
+[phase23_run] never-taught projection [stop_ids_emptied]: 2.9312045975122603 h/seed x 5 = 14.6560229875613 h (sizing: 3.1471532286150796 h/seed, delta +0.1312%)
+[phase23_run] never_taught seed 1337: trained, adapter digest verified — reusing
+[phase23_run] never-taught: scoring seed 1337 from checkpoints/phase23_never_taught_seed1337_adapter.pt
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase23_run] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase23_run] never-taught seed 1337 A1-mild: 24/216 prompts, 384 draws
+[phase23_run] never-taught seed 1337 A1-mild: 48/216 prompts, 768 draws
+[phase23_run] never-taught seed 1337 A1-mild: 72/216 prompts, 1152 draws
+[phase23_run] never-taught seed 1337 A1-mild: 96/216 prompts, 1536 draws
+[phase23_run] never-taught seed 1337 A1-mild: 120/216 prompts, 1920 draws
+[phase23_run] never-taught seed 1337 A1-mild: 144/216 prompts, 2304 draws
+[phase23_run] never-taught seed 1337 A1-mild: 168/216 prompts, 2688 draws
+[phase23_run] never-taught seed 1337 A1-mild: 192/216 prompts, 3072 draws
+[phase23_run] never-taught seed 1337 A1-mild: 216/216 prompts, 3456 draws
+[phase23_run] never-taught seed 1337 A1-mild: DONE — 117.04 draws/min over 29.53 min
+[phase23_run] never-taught seed 1337 A1-aggressive: 24/216 prompts, 384 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: 48/216 prompts, 768 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: 72/216 prompts, 1152 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: 96/216 prompts, 1536 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: 120/216 prompts, 1920 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: 144/216 prompts, 2304 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: 168/216 prompts, 2688 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: 192/216 prompts, 3072 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: 216/216 prompts, 3456 draws
+[phase23_run] never-taught seed 1337 A1-aggressive: DONE — 100.58 draws/min over 34.36 min
+[phase23_run] never-taught seed 1337 A2: 24/216 prompts, 384 draws
+[phase23_run] never-taught seed 1337 A2: 48/216 prompts, 768 draws
+[phase23_run] never-taught seed 1337 A2: 72/216 prompts, 1152 draws
+[phase23_run] never-taught seed 1337 A2: 96/216 prompts, 1536 draws
+[phase23_run] never-taught seed 1337 A2: 120/216 prompts, 1920 draws
+[phase23_run] never-taught seed 1337 A2: 144/216 prompts, 2304 draws
+[phase23_run] never-taught seed 1337 A2: 168/216 prompts, 2688 draws
+[phase23_run] never-taught seed 1337 A2: 192/216 prompts, 3072 draws
+[phase23_run] never-taught seed 1337 A2: 216/216 prompts, 3456 draws
+[phase23_run] never-taught seed 1337 A2: DONE — 129.32 draws/min over 26.72 min
+[phase23_run] never-taught seed 1337 A3: 24/216 prompts, 384 draws
+[phase23_run] never-taught seed 1337 A3: 48/216 prompts, 768 draws
+[phase23_run] never-taught seed 1337 A3: 72/216 prompts, 1152 draws
+[phase23_run] never-taught seed 1337 A3: 96/216 prompts, 1536 draws
+[phase23_run] never-taught seed 1337 A3: 120/216 prompts, 1920 draws
+[phase23_run] never-taught seed 1337 A3: 144/216 prompts, 2304 draws
+[phase23_run] never-taught seed 1337 A3: 168/216 prompts, 2688 draws
+[phase23_run] never-taught seed 1337 A3: 192/216 prompts, 3072 draws
+[phase23_run] never-taught seed 1337 A3: 216/216 prompts, 3456 draws
+[phase23_run] never-taught seed 1337 A3: DONE — 101.24 draws/min over 34.14 min
+[phase23_run] never-taught seed 1337: 0/416 core_held_out QUESTIONS extracted at least once = 0.0 (6656 draws at 16/question)
+Traceback (most recent call last):
+  File "/Users/juliorcoelho/PersonaCore/scripts/phase23_run.py", line 4917, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/juliorcoelho/PersonaCore/scripts/phase23_run.py", line 4912, in main
+    _TABLE[argv[0]]()
+  File "/Users/juliorcoelho/PersonaCore/scripts/phase23_run.py", line 4816, in never_taught
+    _state_record("never_taught", seed, {"scoring": block})
+  File "/Users/juliorcoelho/PersonaCore/scripts/phase23_run.py", line 467, in _state_record
+    return _state_write(doc)
+           ^^^^^^^^^^^^^^^^^
+  File "/Users/juliorcoelho/PersonaCore/scripts/phase23_run.py", line 440, in _state_write
+    STATE_PATH.write_text(json.dumps(doc, indent=2, sort_keys=True), encoding="utf-8")
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/json/__init__.py", line 238, in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/json/encoder.py", line 202, in encode
+    chunks = list(chunks)
+             ^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/json/encoder.py", line 432, in _iterencode
+    yield from _iterencode_dict(o, _current_indent_level)
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  [Previous line repeated 3 more times]
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/json/encoder.py", line 439, in _iterencode
+    o = _default(o)
+        ^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/json/encoder.py", line 180, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+TypeError: Object of type Tensor is not JSON serializable
