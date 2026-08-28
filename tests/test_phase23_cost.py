@@ -24,7 +24,12 @@ before its lazy import, which is itself part of what this file proves.
 """
 
 import ast
+import functools
+import hashlib
+import json
+import operator
 import pathlib
+import subprocess
 import sys
 
 import pytest
@@ -35,7 +40,8 @@ _SCRIPTS = str(_ROOT / "scripts")
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-import phase23_cost  # noqa: E402  (needs the sys.path insert above)
+import mitigation_gate  # noqa: E402  (needs the sys.path insert above)
+import phase23_cost  # noqa: E402  (same reason)
 import phase23_prereg  # noqa: E402
 
 _COST_MODULE_PATH = _ROOT / "scripts" / "phase23_cost.py"
@@ -424,3 +430,209 @@ def test_the_cost_record_path_comes_from_the_prereg_register():
         f"from phase23_prereg.COST_RECORD by attribute access, which involves no literal at all — "
         "so any occurrence here is a second copy with nothing keeping it in step"
     )
+
+
+# =================================================================================================
+# ===== 23-11 — THE COMMITTED COST RECORD ITSELF =====
+#
+# Everything above is about the SHAPE, provable before any number existed. Everything below binds on
+# `results/phase23_cost.json`, the artifact 23-11 measured — and `test_the_cost_record_is_committed`
+# is what stops the rest of them going quietly vacuous if that artifact ever leaves the index.
+# =================================================================================================
+
+
+def _cost():
+    """The committed cost record, or ``None`` before 23-11 wrote it."""
+    path = _ROOT / phase23_prereg.COST_RECORD
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_the_cost_record_is_committed():
+    """The other five tests below return early when the record is absent. This one does not.
+
+    A `return None` on a missing file is the right shape for a record that does not exist YET, and
+    the wrong shape for one that has been deleted. This test is the difference: once the artifact is
+    tracked it must STAY tracked, so a deletion is a RED here rather than five silent passes.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", phase23_prereg.COST_RECORD],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert tracked == [phase23_prereg.COST_RECORD], (
+        f"`git ls-files {phase23_prereg.COST_RECORD}` returned {tracked!r}. Every test below reads "
+        "that record and returns early when it is absent, so an untracked or deleted cost record "
+        "would leave five guards green and blind"
+    )
+
+
+def test_the_committed_cost_record_validates():
+    """W6 — ``validate_record`` against NAMED mappings, and the assembled blocks satisfy it.
+
+    ``validate_record(record, *, kind)`` takes a MAPPING and checks the register INSIDE it, so
+    "validate for both kinds" is not an instruction until the mappings are named. They are: the
+    four ``training.*`` blocks at ``kind="training"`` and the ``generation`` block at
+    ``kind="generation"``. ``ratios`` and ``sizing`` are DERIVED and are covered by the
+    re-derivation test below instead.
+    """
+    record = _cost()
+    if record is None:
+        return
+    for name, block in record["training"].items():
+        phase23_cost.validate_record(block, kind="training")
+        assert block, f"training.{name} is empty"
+    phase23_cost.validate_record(record["generation"], kind="generation")
+    assert sorted(record["training"]) == [
+        "dp_n64",
+        "dp_n8",
+        "non_dp",
+        "non_dp_superseded_protocol",
+    ], sorted(record["training"])
+
+
+def test_the_cost_record_ratios_re_derive():
+    """A stored ratio that no longer re-derives is a number nobody can check.
+
+    Asserted with ``==`` and never ``pytest.approx``: each field is written from exactly this
+    quotient in exactly this float order, so any inequality means it was TYPED rather than computed.
+
+    ``training.non_dp.wall_clock_gap_vs_superseded`` is covered HERE rather than in its own test
+    because it is the same shape — a quotient of two stored fields — and it is the field 23-12
+    quotes by path, so it is the one that most needs to be un-typeable.
+    """
+    record = _cost()
+    if record is None:
+        return
+    generation = record["generation"]
+
+    for name, block in record["ratios"].items():
+        seconds = block["training_seconds_per_point"]
+        source = block["training_seconds_per_point_source"]
+        # The named source field must actually be where the number came from.
+        assert source.startswith(f"training.{name}."), source
+        stored = functools.reduce(operator.getitem, source.split("."), record)
+        assert stored == seconds, (
+            f"ratios.{name}.training_seconds_per_point is {seconds!r} but its own named source "
+            f"{source} holds {stored!r}"
+        )
+        assert block["eval_over_training_ceiling"] == (
+            generation["h_per_point_ceiling"] * 3600 / seconds
+        ), f"ratios.{name}.eval_over_training_ceiling does not re-derive from the record's fields"
+        assert block["eval_over_training_floor"] == (
+            generation["h_per_point_floor"] * 3600 / seconds
+        ), f"ratios.{name}.eval_over_training_floor does not re-derive from the record's fields"
+
+    gap = record["training"]["non_dp"]["wall_clock_gap_vs_superseded"]
+    expected = (
+        record["training"]["non_dp"]["training_seconds_mean"]
+        / record["training"]["non_dp_superseded_protocol"]["training_seconds_mean"]
+    )
+    assert gap == expected, (
+        f"training.non_dp.wall_clock_gap_vs_superseded is {gap!r} but the quotient of the two "
+        f"stored training_seconds_mean fields is {expected!r}. This field exists precisely so the "
+        "measured protocol gap is a SCALAR LEAF that 23-12 can quote by path and any reader can "
+        "re-derive — a typed one would differ in the last digits without looking wrong"
+    )
+
+
+def test_borrowed_figures_cite_a_record_and_a_digest():
+    """Every figure sourced from another artifact names it AND its digest, checked against disk.
+
+    This is what stops a re-measured number silently replacing a cited one: the digest is recomputed
+    here from the file as it stands, so a source record edited after the cost record was assembled
+    reddens rather than passing on a stale citation.
+    """
+    record = _cost()
+    if record is None:
+        return
+    blocks = dict(record["training"])
+    assert blocks, "no training blocks to check — the walk found nothing"
+    for name, block in blocks.items():
+        source = block.get("source_record")
+        assert isinstance(source, str) and source, (
+            f"training.{name} carries no `source_record`. An unlabelled number is "
+            "indistinguishable from a borrowed one"
+        )
+        path = _ROOT / source
+        assert path.exists(), f"training.{name} cites {source}, which is not on disk"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        assert block.get("source_record_sha256") == digest, (
+            f"training.{name} cites {source} at digest "
+            f"{block.get('source_record_sha256')!r} but the file now hashes to {digest!r}"
+        )
+
+
+def test_every_timing_block_names_its_protocol():
+    """A timing that does not say which protocol it timed is not a usable figure.
+
+    A STRUCTURAL WALK over the record's own keys, never a hardcoded list — a fifth timing block
+    added later is then caught rather than missed, which is the whole difference between a guard
+    and a checklist.
+    """
+    record = _cost()
+    if record is None:
+        return
+    seen = 0
+    for name, block in record["training"].items():
+        protocol = block.get("protocol")
+        assert isinstance(protocol, str) and protocol.strip(), (
+            f"training.{name} carries protocol {protocol!r}. The two measured NON-DP protocols "
+            "differ in wall clock by training.non_dp.wall_clock_gap_vs_superseded, so a timing "
+            "that does not name its protocol cannot be compared against anything"
+        )
+        seen += 1
+    assert seen == len(record["training"]) and seen >= 4, (
+        f"walked {seen} of {len(record['training'])} training block(s) — a structural guard that "
+        "reads fewer blocks than exist is green and blind"
+    )
+
+    non_dp = record["training"]["non_dp"]
+    superseded = record["training"]["non_dp_superseded_protocol"]
+    assert non_dp["protocol"] != superseded["protocol"], (
+        "the matched comparator and the superseded control carry the SAME protocol string. They "
+        "are the two figures this record exists to keep apart"
+    )
+    assert non_dp["source_record"] != superseded["source_record"], (
+        f"both non-DP blocks cite {non_dp['source_record']!r}. The superseded protocol is RECORDED "
+        "BESIDE the matched one, never deleted and never merged into it"
+    )
+    assert non_dp["source_record"] == "results/phase23_matched_control.json", (
+        f"training.non_dp cites {non_dp['source_record']!r}. The provenance decision is the "
+        "protocol-matched comparator; a ratio is meaningless unless numerator and denominator "
+        "describe the same experiment"
+    )
+
+
+def test_the_sizing_table_prices_the_never_taught_floor():
+    """A sizing that prices 16 sweep points and forgets the N-seed control floor is short by N.
+
+    N is READ from ``results/phase23_never_taught_training.json`` rather than assumed, and the line
+    item is asserted at EVERY ``K_RUNGS`` entry — the ratchet only permits K to increase, so a rung
+    priced without the floor is a rung with no rescue in the cheap direction.
+    """
+    record = _cost()
+    if record is None:
+        return
+    never_taught = json.loads(
+        (_ROOT / phase23_prereg.NEVER_TAUGHT_TRAINING_RECORD).read_text(encoding="utf-8")
+    )
+    n_seeds = never_taught["n_seeds"]
+    assert record["k_rungs"] == list(mitigation_gate.K_RUNGS), record["k_rungs"]
+
+    for k in mitigation_gate.K_RUNGS:
+        row = record["sizing"][str(k)]
+        assert row["never_taught_seeds"] == n_seeds, (
+            f"K={k} prices {row['never_taught_seeds']!r} never-taught seeds against the committed "
+            f"record's {n_seeds!r}"
+        )
+        assert row["never_taught_floor_hours_ceiling"] == (
+            n_seeds * row["h_per_point_ceiling_at_k"]
+        ), f"K={k}'s never-taught floor line item does not re-derive from N x the ceiling at K"
+        assert row["total_hours_ceiling_with_never_taught_floor"] == (
+            row["projected_hours"] + row["never_taught_floor_hours_ceiling"]
+        ), f"K={k}'s total does not re-derive from the sweep projection plus the floor line item"
+        assert row["sized_against"] == "h_per_point_ceiling", row["sized_against"]

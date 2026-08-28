@@ -105,6 +105,7 @@ import phase23_resume_prereg as rp  # noqa: E402
 import teach_persona as tp  # noqa: E402
 from phase23_prereg import (  # noqa: E402
     CONTROL_FLOOR_RECORD,
+    COST_RECORD,
     FLOOR_PROVENANCE_KEYS,
     H_PER_POINT_FLOOR_SECONDS,
     NEVER_TAUGHT_TRAINING_RECORD,
@@ -3279,6 +3280,12 @@ def noised():
         # honestly declare `sweep_point: false`.
         "sweep_point": True,
         "exports_adapter": True,
+        # `arm` AND `sigma` AT TOP LEVEL, because that pair is what reproduces this record's OWN
+        # path: `test_no_noised_point_exists`' derivation conjunct calls
+        # `phase23_prereg.noised_record_path(payload["arm"], payload["sigma"])` on every tracked
+        # member of the glob and refuses a hand-typed sweep-point path. A record carrying its arm
+        # only under `training` or `recipe` is not self-describing at the level the guard reads.
+        "arm": trained["arm"],
         "sigma": trained["sigma"],
         "clip_norm": trained["clip_norm"],
         "epsilon": trained["epsilon"],
@@ -3370,6 +3377,769 @@ def noised():
     print(f"[phase23_run] wrote {record['record']}")
 
 
+# =================================================================================================
+# ===== (i) CAL-05 — THE THROUGHPUT BRACKET, floor to ceiling, on the REAL attack shapes =====
+#
+# THE COMMITTED 4.77 h/point FIGURE WAS MEASURED ON THE UN-ADAPTED BASE, where 45-56 of 64 draws
+# per shape terminated on a stop id (`results/phase18_preflight_report.md`). A noised adapter that
+# stops emitting EOS runs EVERY draw to the full `RECALL_MAX_NEW_TOKENS = 48`, and
+# `generation/core.py:79`'s per-token `int(next_id)` device->host sync makes wall clock close to
+# linear in tokens emitted — which is what makes floor-vs-ceiling a MEASURABLE question rather than
+# an unbounded worry. Both ends are measured here; neither is a mean.
+# =================================================================================================
+
+# `.planning/ROADMAP.md:47` / `.planning/REQUIREMENTS.md:179` — the sweep this record prices.
+_SWEEP_POINTS = 16
+
+_THROUGHPUT_CONDITIONS = ("noised_floor", "noised_ceiling", "base_floor")
+
+
+@contextlib.contextmanager
+def _captured_completion_lengths(recall):
+    """Shadow ``phase14_recall._complete`` to record the TOKEN COUNT of every draw.
+
+    ``draw_all`` returns decoded strings and a stop flag, not lengths, and ``mean_tokens_floor`` /
+    ``mean_tokens_ceiling`` are REQUIRED keys of ``phase23_cost.GENERATION_RECORD_KEYS``. The
+    shadow sits at the module global ``draw_all`` resolves through — the only place the per-draw id
+    list is reachable from outside without a SECOND copy of the draw loop, and a duplicated draw
+    loop is how two conditions silently stop being paired.
+    """
+    lengths = []
+    real = recall._complete
+
+    def counting(*args, **kwargs):
+        gen_ids, stopped = real(*args, **kwargs)
+        lengths.append(len(gen_ids))
+        return gen_ids, stopped
+
+    recall._complete = counting
+    try:
+        yield lengths
+    finally:
+        recall._complete = real
+
+
+@contextlib.contextmanager
+def _stop_ids_override(recall, value):
+    """THE CEILING CONDITION, as a two-line patch rather than a second generation path.
+
+    ``_complete`` reads ``STOP_IDS`` through a module-global lookup at CALL time
+    (``stop_ids=set(STOP_IDS)``), so emptying the module attribute empties the stop set for every
+    draw underneath — and ``len(gen) < RECALL_MAX_NEW_TOKENS`` then reports ``False`` on every
+    draw, which is the ceiling condition's own consistency check.
+    """
+    real = recall.STOP_IDS
+    recall.STOP_IDS = value
+    try:
+        yield
+    finally:
+        recall.STOP_IDS = real
+
+
+def _measure_condition(*, label, model, tok, forbid, by_family, values, stop_ids):
+    """One (model, stop-condition) pair over all four attack shapes. Returns a per-shape list.
+
+    ``>= 4`` warm-up draws are DISCARDED per shape before the bracket opens — the MEASURED MPS
+    stabilization point (``phase23_cost._MIN_WARMUP_ITERATIONS``): the first MPS kernels of a
+    process pay lazy compilation and allocator warm-up, and a shorter warm-up times that instead of
+    generation. The timed leg is then ``SMOKE_PROMPTS_PER_SHAPE * SMOKE_DRAWS_PER_PROMPT = 64``
+    draws, the same denominator ``results/phase18_preflight_report.md`` published its rates over,
+    on the SAME strided prompt sample — which is what makes the base-condition leg a
+    cross-validation rather than a second, differently-shaped measurement.
+    """
+    import phase14_recall as recall  # LAZY — teach_persona's own register for this pair.
+    import phase18_extraction as x18  # LAZY — same rule; it is a heavy, torch-touching module.
+
+    shapes = []
+    with _stop_ids_override(recall, stop_ids):
+        for family in x18.ATTACK_FAMILIES:
+            sample = x18._smoke_sample(by_family[family])
+            _prove(
+                len(sample) == x18.SMOKE_PROMPTS_PER_SHAPE,
+                f"shape {family!r} sampled {len(sample)} prompts against the pre-registered "
+                f"{x18.SMOKE_PROMPTS_PER_SHAPE}. Every per-shape rate below is over that "
+                "denominator, and a short sample would publish a throughput describing fewer "
+                "prompts than the record claims it covers",
+            )
+
+            # WARM-UP, DISCARDED. Untimed, and its lengths are thrown away with it.
+            with _captured_completion_lengths(recall):
+                recall.draw_all(
+                    model,
+                    tok,
+                    sample[0]["prompt_ids"],
+                    device(),
+                    forbid,
+                    sample[0]["seed_index"] * x18.K,
+                    n_samples=_WARMUP_DRAWS - 1,
+                )
+
+            stops, drawn_n = 0, 0
+            box = {}
+            with _captured_completion_lengths(recall) as lengths:
+                with synchronized_seconds(box):
+                    for entry in sample:
+                        # PERS-06 — nothing draws unchecked, on the ids about to be dispatched.
+                        # D-16's partition, recovered by `_guarded_span` rather than re-derived.
+                        base_ids = x18._guarded_span(entry)
+                        recall.assert_no_value_in_prompt(
+                            tok, tok.decode(base_ids), values, prompt_ids=base_ids
+                        )
+                        drawn, stopped = recall.draw_all(
+                            model,
+                            tok,
+                            entry["prompt_ids"],
+                            device(),
+                            forbid,
+                            entry["seed_index"] * x18.K,
+                            n_samples=x18.SMOKE_DRAWS_PER_PROMPT - 1,
+                        )
+                        stops += sum(1 for flag in stopped if flag)
+                        drawn_n += len(drawn)
+            _prove(
+                len(lengths) == drawn_n,
+                f"shape {family!r} captured {len(lengths)} completion length(s) for {drawn_n} "
+                "draw(s). `mean_tokens_*` is a rate over the draw count and the two denominators "
+                "must be the same number",
+            )
+            minutes = box["seconds"] / 60
+            _prove(
+                minutes > 0,
+                f"shape {family!r} timed {minutes!r} minutes. A zero-width bracket publishes an "
+                "infinite rate, which compares False against every budget bound",
+            )
+            shapes.append(
+                {
+                    "shape": family,
+                    "prompts": len(sample),
+                    "n_draws": drawn_n,
+                    "minutes": minutes,
+                    "rate_draws_per_min": drawn_n / minutes,
+                    "stop_terminated_n": stops,
+                    "mean_tokens": sum(lengths) / len(lengths),
+                    "total_tokens": sum(lengths),
+                    "max_tokens_possible": recall.RECALL_MAX_NEW_TOKENS,
+                }
+            )
+            print(
+                f"[phase23_run] throughput {label} {family}: "
+                f"{shapes[-1]['rate_draws_per_min']:.2f} draws/min, "
+                f"{stops}/{drawn_n} stop-terminated, mean {shapes[-1]['mean_tokens']:.2f} tokens"
+            )
+    return shapes
+
+
+def _committed_phase18_rates():
+    """The four committed per-shape rates, PARSED from the artifact — never retyped here.
+
+    ``results/phase18_preflight_report.md`` is the cross-validation target and it is a committed
+    file; a literal here would be a second source for a figure that already has one, free to stop
+    agreeing with it.
+    """
+    import re
+
+    report = (_ROOT / "results" / "phase18_preflight_report.md").read_text(encoding="utf-8")
+    rates = {
+        shape: float(rate)
+        for shape, rate in re.findall(
+            r"^- `([A-Za-z0-9-]+)`: ([0-9.]+) draws_per_min", report, flags=re.MULTILINE
+        )
+    }
+    _prove(
+        len(rates) == 4,
+        f"parsed {len(rates)} committed per-shape rate(s) from "
+        f"results/phase18_preflight_report.md: {rates!r}. The cross-validation needs all four, and "
+        "a parse that silently found fewer would report agreement over a shorter list",
+    )
+    return rates
+
+
+def throughput():
+    """23-11 Task 3 Part A — CAL-05's floor-to-ceiling bracket on the REAL noised adapter.
+
+    THREE CONDITIONS, and the third is what makes the first two interpretable:
+
+      * **FLOOR** — the noised adapter with ``STOP_IDS`` ACTIVE, the Phase-18 condition.
+      * **CEILING** — the noised adapter with the stop set EMPTIED, so every draw runs the full
+        ``RECALL_MAX_NEW_TOKENS``. This is the worst case a noised adapter that stops emitting EOS
+        produces, and measuring it is what turns the ceiling into a number rather than a worry.
+      * **BASE FLOOR** — the UN-ADAPTED base under the floor condition, cross-validated per shape
+        against ``results/phase18_preflight_report.md``'s committed rates. A large divergence means
+        the hardware or the stack moved and the committed cost artifact needs revisiting BEFORE Z
+        is sized on it.
+
+    Writes the measurement into the working state; ``cost-record`` assembles it. The split is
+    deliberate: Part B is pure arithmetic over committed records, and coupling it to this leg would
+    make an assembly bug cost a second GPU run.
+    """
+    import phase14_recall as recall  # LAZY — teach_persona's own register for this pair.
+    import phase16_persistence as persistence  # LAZY — same rule.
+    import phase17_persona_gate as base_gate  # LAZY — build_unadapted_base lives here.
+    import phase18_extraction as x18  # LAZY — same rule.
+
+    from personacore.tokenizer import from_json
+
+    _preconditions()
+    prove_d04_gate()
+
+    noised_record = json.loads(
+        (_ROOT / noised_record_path(NOISED_ARM, NOISED_SIGMA)).read_text(encoding="utf-8")
+    )
+    adapter = _ROOT / noised_record["training"]["adapter"]
+    _prove(
+        adapter.exists() and _sha256(adapter) == noised_record["training"]["adapter_sha256"],
+        f"{adapter} is missing or does not hash to the noised record's "
+        f"{noised_record['training']['adapter_sha256']!r}. CAL-05's bracket is a claim about THAT "
+        "adapter and a different one on disk would measure a different model",
+    )
+    print(f"[phase23_run] throughput: adapter {noised_record['training']['adapter']}")
+
+    tok = from_json(recall.TOKENIZER_PATH)  # FROZEN production artifact — never retrained.
+    corpus = x18.build_corpus(tok)
+    by_family = {}
+    for entry in corpus["prompts"]:
+        by_family.setdefault(entry["family"], []).append(entry)
+    values = [fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS]
+
+    # ===== THE NOISED ADAPTER, both stop conditions, in ONE process on ONE set of weights =====
+    model, _cfg, adapted_tok, adapted_forbid, _artifact = recall.load_adapted_model(
+        device(), adapter
+    )
+    floor_shapes = _measure_condition(
+        label="noised_floor",
+        model=model,
+        tok=adapted_tok,
+        forbid=adapted_forbid,
+        by_family=by_family,
+        values=values,
+        stop_ids=recall.STOP_IDS,
+    )
+    ceiling_shapes = _measure_condition(
+        label="noised_ceiling",
+        model=model,
+        tok=adapted_tok,
+        forbid=adapted_forbid,
+        by_family=by_family,
+        values=values,
+        stop_ids=frozenset(),
+    )
+    del model
+
+    # ===== THE UN-ADAPTED BASE, floor condition — Phase 18's own construction, reproduced =====
+    base_model, base_cfg, base_ckpt = base_gate.build_unadapted_base(device())
+    base_forbid, _digest = persistence.resolve_forbid(tok, base_cfg.vocab_size)
+    base_forbid = base_forbid.to(device())
+    print(f"[phase23_run] base fingerprint: sha={base_ckpt['git_sha']} step={base_ckpt['step']}")
+    base_shapes = _measure_condition(
+        label="base_floor",
+        model=base_model,
+        tok=tok,
+        forbid=base_forbid,
+        by_family=by_family,
+        values=values,
+        stop_ids=recall.STOP_IDS,
+    )
+    del base_model
+
+    # ===== THE DRAW GEOMETRY, COMPUTED FROM THE LIVE CORPUS — never retyped =====
+    questions = sum(len(by_family[family]) for family in x18.ATTACK_FAMILIES)
+    k_per_question = x18.K
+    sigma_zero_record = json.loads((_ROOT / SIGMA_ZERO_RECORD).read_text(encoding="utf-8"))
+    family_zero_prompts = sigma_zero_record["questions_taught"]
+    family_zero_draws = 1 + recall.N_SEEDED_SAMPLES
+    draws_per_point = questions * k_per_question + family_zero_prompts * family_zero_draws
+
+    def compose(shapes):
+        """Phase 18's OWN projection method, reproduced: per-shape minutes, summed.
+
+        Family zero is not one of the four measured shapes, so it is priced at the SLOWEST measured
+        rate — the conservative choice, and the one `results/phase18_preflight_report.md` states
+        rather than hides.
+        """
+        rate = {s["shape"]: s["rate_draws_per_min"] for s in shapes}
+        slowest = min(rate.values())
+        minutes = sum(
+            len(by_family[family]) * k_per_question / rate[family] for family in x18.ATTACK_FAMILIES
+        )
+        minutes += family_zero_prompts * family_zero_draws / slowest
+        return minutes, slowest
+
+    floor_minutes, floor_slowest = compose(floor_shapes)
+    ceiling_minutes, ceiling_slowest = compose(ceiling_shapes)
+
+    committed = _committed_phase18_rates()
+    cross_validation = []
+    for shape in base_shapes:
+        target = committed[shape["shape"]]
+        cross_validation.append(
+            {
+                "shape": shape["shape"],
+                "measured_rate_draws_per_min_floor": shape["rate_draws_per_min"],
+                "committed_rate_draws_per_min_floor": target,
+                "agreement_percent": 100.0 * shape["rate_draws_per_min"] / target,
+                "n_draws": shape["n_draws"],
+                "stop_terminated_n_floor": shape["stop_terminated_n"],
+                "mean_tokens_floor": shape["mean_tokens"],
+            }
+        )
+        print(
+            f"[phase23_run] cross-validation {shape['shape']}: measured "
+            f"{shape['rate_draws_per_min']:.2f} vs committed {target:.2f} draws/min = "
+            f"{cross_validation[-1]['agreement_percent']:.2f}%"
+        )
+
+    floor_total_draws = sum(s["n_draws"] for s in floor_shapes)
+    ceiling_total_draws = sum(s["n_draws"] for s in ceiling_shapes)
+    floor_total_minutes = sum(s["minutes"] for s in floor_shapes)
+    ceiling_total_minutes = sum(s["minutes"] for s in ceiling_shapes)
+    pooled_floor_rate = floor_total_draws / floor_total_minutes
+    pooled_ceiling_rate = ceiling_total_draws / ceiling_total_minutes
+    floor_tokens = sum(s["total_tokens"] for s in floor_shapes) / floor_total_draws
+    ceiling_tokens = sum(s["total_tokens"] for s in ceiling_shapes) / ceiling_total_draws
+
+    per_shape = []
+    for f, c, b in zip(floor_shapes, ceiling_shapes, base_shapes, strict=True):
+        _prove(
+            f["shape"] == c["shape"] == b["shape"],
+            f"the three conditions disagree on shape order: {f['shape']!r} / {c['shape']!r} / "
+            f"{b['shape']!r}. Every multiplier below is a per-shape ratio and a mis-zipped pair "
+            "would divide one shape's rate by another's",
+        )
+        per_shape.append(
+            {
+                "shape": f["shape"],
+                "prompts": f["prompts"],
+                "n_draws": f["n_draws"],
+                "draws_per_min_floor": f["rate_draws_per_min"],
+                "draws_per_min_ceiling": c["rate_draws_per_min"],
+                "draws_per_min_base_floor": b["rate_draws_per_min"],
+                "stop_terminated_n_floor": f["stop_terminated_n"],
+                "stop_terminated_n_ceiling": c["stop_terminated_n"],
+                "stop_terminated_n_base_floor": b["stop_terminated_n"],
+                "mean_tokens_floor": f["mean_tokens"],
+                "mean_tokens_ceiling": c["mean_tokens"],
+                "mean_tokens_base_floor": b["mean_tokens"],
+                "wall_multiplier": f["rate_draws_per_min"] / c["rate_draws_per_min"],
+                "token_multiplier": c["mean_tokens"] / f["mean_tokens"],
+                "minutes_floor": f["minutes"],
+                "minutes_ceiling": c["minutes"],
+            }
+        )
+
+    generation = {
+        # THE BRACKET. Two REQUIRED keys measured under two different stop conditions, and NO bare
+        # mean anywhere — `phase23_cost.validate_record` refuses one at any nesting depth.
+        "h_per_point_floor": floor_minutes / 60,
+        "h_per_point_ceiling": ceiling_minutes / 60,
+        "wall_multiplier": pooled_floor_rate / pooled_ceiling_rate,
+        "token_multiplier": ceiling_tokens / floor_tokens,
+        "draws_per_point": draws_per_point,
+        "k_per_question": k_per_question,
+        "questions": questions,
+        "n_draws_measured": floor_total_draws
+        + ceiling_total_draws
+        + sum(s["n_draws"] for s in base_shapes),
+        "stop_terminated_n_floor": sum(s["stop_terminated_n"] for s in floor_shapes),
+        "stop_terminated_n_ceiling": sum(s["stop_terminated_n"] for s in ceiling_shapes),
+        "mean_tokens_floor": floor_tokens,
+        "mean_tokens_ceiling": ceiling_tokens,
+        "attack_shapes": list(x18.ATTACK_FAMILIES),
+        "adapter_source": noised_record["training"]["adapter"],
+        "adapter_sha256": noised_record["training"]["adapter_sha256"],
+        "sigma": NOISED_SIGMA,
+        "protocol": (
+            f"{NOISED_ARM} adapter at sigma={NOISED_SIGMA}, {x18.SMOKE_PROMPTS_PER_SHAPE} strided "
+            f"prompts x {x18.SMOKE_DRAWS_PER_PROMPT} draws per shape per condition, "
+            f"{_WARMUP_DRAWS} warm-up draws discarded per shape, MPS fp32"
+        ),
+        # THE DENOMINATORS AND THE PROBE'S BOUNDS, stated rather than implied.
+        "per_shape": per_shape,
+        "pooled_draws_per_min_floor": pooled_floor_rate,
+        "pooled_draws_per_min_ceiling": pooled_ceiling_rate,
+        "slowest_draws_per_min_floor": floor_slowest,
+        "slowest_draws_per_min_ceiling": ceiling_slowest,
+        "family_zero_prompts": family_zero_prompts,
+        "family_zero_draws_per_prompt": family_zero_draws,
+        "family_zero_rate_source": "the SLOWEST measured shape rate, Phase 18's own convention",
+        "warmup_draws_discarded_per_shape": _WARMUP_DRAWS,
+        "timed_draws_per_shape_per_condition": floor_shapes[0]["n_draws"],
+        "h_per_point_composition": (
+            "sum over the four attack shapes of (prompts_in_shape * K / that shape's measured "
+            "rate), plus family zero's prompts * draws priced at the SLOWEST measured rate — "
+            "results/phase18_preflight_report.md's own projection method, reproduced so the two "
+            "figures are comparable"
+        ),
+        "cross_validation_vs_phase18": cross_validation,
+        "cross_validation_source_record": "results/phase18_preflight_report.md",
+        "probe_bounds": (
+            f"{len(x18.ATTACK_FAMILIES)} prompt shapes, "
+            f"{floor_shapes[0]['n_draws']} timed draws per shape per condition, ONE process, ONE "
+            f"adapter, ONE sigma ({NOISED_SIGMA}). The noised adapter's STOP RATE is the quantity "
+            "this bracket exists to capture and both extremes are recorded; nothing here claims a "
+            "value between them was measured."
+        ),
+        **provenance(),
+    }
+    phase23_cost.validate_record(generation, kind="generation")
+    _state_record("throughput", f"{NOISED_SIGMA:.6f}", generation)
+    print(
+        f"[phase23_run] CAL-05 bracket: h_per_point_floor {generation['h_per_point_floor']!r} -> "
+        f"h_per_point_ceiling {generation['h_per_point_ceiling']!r} over "
+        f"{draws_per_point} draws/point; wall x{generation['wall_multiplier']!r}, token "
+        f"x{generation['token_multiplier']!r}"
+    )
+
+
+# =================================================================================================
+# ===== (j) THE COST RECORD — four training legs, each naming its protocol, and the bracket =====
+# =================================================================================================
+
+
+def _aggregate_training_block(*, per_seed_timings, source_record, protocol, shape, extra):
+    """A FIVE-SEED aggregate that satisfies ``TRAINING_RECORD_KEYS``, by the COMMITTED convention.
+
+    The convention is NOT invented here. ``results/phase23_never_taught_training.json`` is itself a
+    five-seed aggregate that already satisfies those keys at top level, and MEASURED at HEAD its
+    convention is: ``seed`` is the LIST, ``seconds_total`` the SUM across seeds (never their mean),
+    ``timed_iterations`` the SUM of timed steps, ``seconds_per_optimizer_step`` their quotient, and
+    ``warmup_iterations_discarded`` 0. Followed exactly, for both borrowed non-DP blocks.
+
+    The per-seed list, mean, min and max ride BESIDE the required keys as extra fields — never
+    instead of them, and never under a ``FORBIDDEN_MEAN_KEYS`` name.
+    """
+    seeds = sorted(per_seed_timings)
+    seconds = [float(per_seed_timings[s]) for s in seeds]
+    timed = sum(shape["max_steps"] for _ in seeds)
+    block = {
+        "seconds_total": sum(seconds),
+        "timed_iterations": timed,
+        "seconds_per_optimizer_step": sum(seconds) / timed,
+        "warmup_iterations_discarded": 0,
+        "seed": [int(s) for s in seeds],
+        "n_seeds": len(seeds),
+        # THE PUBLISHED PER-POINT FIGURE. `training_seconds_mean` is a NEW name and is deliberately
+        # not one of `FORBIDDEN_MEAN_KEYS` — that register exists to stop a bare per-POINT cost
+        # standing in for the floor/ceiling bracket, not to stop a five-seed training mean riding
+        # beside `seconds_total` with its own denominator.
+        "training_seconds_mean": sum(seconds) / len(seconds),
+        "training_seconds_per_seed": {str(s): float(per_seed_timings[s]) for s in seeds},
+        "training_seconds_min": min(seconds),
+        "training_seconds_max": max(seconds),
+        "training_seconds_total": sum(seconds),
+        "protocol": protocol,
+        "source_record": source_record,
+        "source_record_sha256": _sha256(_ROOT / source_record),
+        **shape,
+        **extra,
+    }
+    phase23_cost.validate_record(block, kind="training")
+    return block
+
+
+def _borrowed_training_block(*, block, source_record, protocol, extra=None):
+    """A single-run block LIFTED WHOLE from a committed record, with its digest attached."""
+    out = {
+        **block,
+        "protocol": protocol,
+        "source_record": source_record,
+        "source_record_sha256": _sha256(_ROOT / source_record),
+        **(extra or {}),
+    }
+    phase23_cost.validate_record(out, kind="training")
+    return out
+
+
+def cost_record():
+    """23-11 Task 3 Part B — assemble and write ``results/phase23_cost.json``.
+
+    **EVERY FIGURE THIS RECORD PUBLISHES IS A NAMED NUMERIC FIELD AT FULL STORED PRECISION,
+    COMPUTED AND NEVER TYPED.** ``json.dump`` serialises floats through ``float.__repr__``, so the
+    bytes in this file and the string a reader gets from ``repr(json.load(...)[path])`` are the
+    SAME string — but only when the value was computed rather than hand-entered. A hand-typed digit
+    breaks 23-12's verbatim-containment guard, and breaks it as a RED on a figure that LOOKS
+    correct. Measured while drafting: a hand-typed ``1743.8820147753301`` round-tripped to
+    ``…302``. Nothing below is retyped from any plan's prose.
+
+    **THE ``training.non_dp`` PROVENANCE DECISION, MADE HERE AND ARGUED IN THE RECORD.** Three
+    non-DP figures exist and they disagree materially; ``training.non_dp`` comes from
+    ``results/phase23_matched_control.json``. See ``provenance_argument`` in the emitted record.
+    ``deferred-items.md``'s CONTROL PROVENANCE rule governs the formal gate's three UTILITY fields
+    and **not** timing, so this decision is made on its own merits rather than inherited.
+    """
+    path = _ROOT / COST_RECORD
+    _prove(
+        not path.exists(),
+        f"{path} already exists — it is recorded evidence and there is no force flag",
+    )
+
+    matched = json.loads((_ROOT / mp.MATCHED_CONTROL_RECORD).read_text(encoding="utf-8"))
+    old = json.loads((_ROOT / CONTROL_FLOOR_RECORD).read_text(encoding="utf-8"))
+    sigma_zero_record = json.loads((_ROOT / SIGMA_ZERO_RECORD).read_text(encoding="utf-8"))
+    noised = json.loads(
+        (_ROOT / noised_record_path(NOISED_ARM, NOISED_SIGMA)).read_text(encoding="utf-8")
+    )
+    never_taught = json.loads((_ROOT / NEVER_TAUGHT_TRAINING_RECORD).read_text(encoding="utf-8"))
+    generation = _state_load()["throughput"][f"{NOISED_SIGMA:.6f}"]
+    phase23_cost.validate_record(generation, kind="generation")
+
+    # ===== training.non_dp — the PROTOCOL-MATCHED comparator, ASSEMBLED from three levels =====
+    # MEASURED at HEAD: `results/phase23_matched_control.json` is missing ALL THIRTEEN of the
+    # `TRAINING_RECORD_KEYS` at top level. Every one is reachable, but from three different places.
+    ms = matched["per_seed"][0]
+    non_dp = _aggregate_training_block(
+        per_seed_timings={int(s): v for s, v in matched["training_seconds_per_seed"].items()},
+        source_record=mp.MATCHED_CONTROL_RECORD,
+        protocol="protocol-matched non-DP comparator",
+        # FROM `per_seed[i]` — the shape the seconds describe.
+        shape={
+            "arm": sorted({p["arm"] for p in matched["per_seed"]}),
+            "capacity_n_facts": ms["n_facts"],
+            "grad_accum_steps": ms["grad_accum_steps"],
+            "replay_micro_batches_per_step": ms["replay_micro_batches_per_step"],
+            "max_steps": ms["max_steps"],
+            "batch_size": ms["batch_size"],
+            "block_size": ms["block_size"],
+            "dp_seam_active": ms["dp_seam_active"],
+        },
+        # FROM THE TOP LEVEL — the venue.
+        extra={
+            "device": matched["device"],
+            "torch_version": matched["torch_version"],
+            "python_version": matched["python_version"],
+            "git_sha": matched["git_sha"],
+            "key_sources": (
+                "per_seed[i]: arm, capacity_n_facts (n_facts), grad_accum_steps, "
+                "replay_micro_batches_per_step, max_steps, batch_size, block_size, "
+                "dp_seam_active. TOP LEVEL: device, torch_version, python_version, git_sha, "
+                "n_seeds, training_seconds_per_seed. COMPUTED: seconds_total (SUM), "
+                "timed_iterations (SUM), seconds_per_optimizer_step (their quotient), "
+                "warmup_iterations_discarded (0), seed (LIST) — the aggregate convention copied "
+                "from results/phase23_never_taught_training.json."
+            ),
+        },
+    )
+
+    # ===== training.non_dp_superseded_protocol — the OLD control, RECORDED BESIDE, never deleted ==
+    # THINNER STILL, AND THE GAP IS A FINDING RATHER THAN A DEFAULT. Three keys are absent as KEYS
+    # while the record STATES their values in its own `residual_differences` prose — and reading a
+    # value out of a record's own prose is SOURCING, while writing the same value with no citation
+    # is INVENTING. The citation is the difference, so it travels in the record.
+    residual = old["residual_differences"]
+    old_budget = old["recipe"]["budget_constants"]
+    superseded = _aggregate_training_block(
+        per_seed_timings={int(p["seed"]): p["training_seconds"] for p in old["per_seed"]},
+        source_record=CONTROL_FLOOR_RECORD,
+        protocol="old unmitigated control (superseded as a comparator)",
+        shape={
+            "arm": sorted({p["arm"] for p in old["per_seed"]}),
+            "capacity_n_facts": old["per_seed"][0]["n_facts"],
+            "grad_accum_steps": 1,
+            "replay_micro_batches_per_step": 0,
+            "max_steps": old_budget["teach_persona.MAX_STEPS"],
+            "batch_size": old_budget["teach_persona.BATCH_SIZE"],
+            "block_size": old_budget["teach_persona.BLOCK_SIZE"],
+            "dp_seam_active": False,
+        },
+        extra={
+            "device": old["device"],
+            "torch_version": old["torch_version"],
+            "python_version": old["python_version"],
+            "git_sha": old["git_sha"],
+            "key_sources": (
+                "per_seed[i]: arm, capacity_n_facts (n_facts), training_seconds. "
+                "recipe.budget_constants: max_steps, batch_size, block_size. TOP LEVEL: device, "
+                "torch_version, python_version, git_sha, n_seeds. THE RECORD'S OWN PROSE, cited "
+                "by index: grad_accum_steps = 1 from residual_differences[1].difference "
+                '("grad_accum_steps is 1 here and `n_facts` on the DP path"); '
+                "replay_micro_batches_per_step = 0 from residual_differences[0].difference "
+                '("replay lives IN the teaching bin here; it is drawn at TRAIN time on the DP '
+                'path" — this protocol has no separate replay pass, so the per-optimizer-step '
+                "count is zero); dp_seam_active = False from "
+                'residual_differences[3].why_not_eliminable ("`DPSGD` is constructed only when '
+                '`is_dp`", and this arm is the non-DP control). COMPUTED: seconds_total (SUM), '
+                "timed_iterations (SUM), seconds_per_optimizer_step, "
+                "warmup_iterations_discarded (0), seed (LIST)."
+            ),
+            "prose_sourced_keys": {
+                "grad_accum_steps": {
+                    "value": 1,
+                    "residual_differences_index": 1,
+                    "quote": residual[1]["difference"],
+                },
+                "replay_micro_batches_per_step": {
+                    "value": 0,
+                    "residual_differences_index": 0,
+                    "quote": residual[0]["difference"],
+                },
+                "dp_seam_active": {
+                    "value": False,
+                    "residual_differences_index": 3,
+                    "quote": residual[3]["why_not_eliminable"],
+                },
+            },
+        },
+    )
+
+    # THE ONE NUMERIC CLAIM OF THE PROVENANCE ARGUMENT, CARRIED BY A NAMED FIELD AND COMPUTED AT
+    # WRITE TIME. It previously existed only inside a prose paragraph, where it is not a scalar
+    # leaf, cannot be quoted by path and cannot be re-derived by any test.
+    non_dp["wall_clock_gap_vs_superseded"] = (
+        non_dp["training_seconds_mean"] / superseded["training_seconds_mean"]
+    )
+    non_dp["wall_clock_gap_vs_superseded_rule"] = (
+        "training.non_dp.training_seconds_mean / "
+        "training.non_dp_superseded_protocol.training_seconds_mean"
+    )
+    non_dp["provenance_argument"] = (
+        "training.non_dp COMES FROM results/phase23_matched_control.json. Three non-DP figures "
+        "exist and they disagree materially: 23-RESEARCH.md:637-641's 20.4 s (research's own "
+        "rounding of an accum=1 LOOP-ONLY PROJECTION that was never a real run, quoted here as "
+        "the thing being characterised and never as a figure), the old control's mean, and the "
+        "protocol-matched comparator's mean. (1) IT IS A REFERENCE QUANTITY, BY USE: its only "
+        "consumers in this phase are the `ratios` block and 23-12's retraction, both of which "
+        "compare non-DP against DP, and a ratio is meaningless unless numerator and denominator "
+        "describe the same experiment. (2) THE THREE MECHANISMS THAT INVALIDATED THE OLD CONTROL "
+        "AS A COMPARATOR — teaching loss weight 1.0 vs 0.4342, 8.125x the lot volume, and a "
+        "grad_clip that bound on the control and structurally never on the DP arm — ARE WALL-CLOCK "
+        "MECHANISMS TOO, and the size of the effect is MEASURED rather than predicted: the field "
+        "training.non_dp.wall_clock_gap_vs_superseded. Note what that measurement does NOT say: "
+        "it is NOT 8.125, so it REFUTES the naive per-step-work equality rather than supporting "
+        "it. The conclusion needs only the measured gap and survives without the equality — the "
+        "two protocols do not time the same work, so they cannot share a ratio denominator. "
+        "(3) THE CONSEQUENCE IS THE FINDING. Against the old control the DP/non-DP training "
+        "multiple is training.dp_n8.seconds_total divided by "
+        "training.non_dp_superseded_protocol.training_seconds_mean; against the matched comparator "
+        "it is training.dp_n8.seconds_total divided by training.non_dp.training_seconds_mean. Both "
+        "are computable from this record's own fields, so they are named that way and a reader "
+        "divides. Publishing the first as if it were the DP seam's cost would attribute to 'the DP "
+        "seam' a factor that is mostly the packer and lot difference the comparator equalises — "
+        "precisely the error .planning/debug/sigma-zero-beats-control.md root-caused. "
+        "SCOPE, STATED HONESTLY AND NOT OVERSTATED: deferred-items.md's CONTROL PROVENANCE rule "
+        "governs the formal gate's three UTILITY fields (control_taught_recall, "
+        "control_heldout_recall, control_gap) and requires them to come from the matched record. "
+        "TIMING IS NOT ONE OF THOSE THREE. This decision is made and argued here on its own "
+        "merits; it is not inherited from that rule."
+    )
+    non_dp["superseded_protocol_block"] = "training.non_dp_superseded_protocol"
+
+    training = {
+        "non_dp": non_dp,
+        "non_dp_superseded_protocol": superseded,
+        "dp_n8": _borrowed_training_block(
+            block=sigma_zero_record["training"],
+            source_record=SIGMA_ZERO_RECORD,
+            protocol="dp_n8, seam active, sigma=0",
+            extra={"sigma": sigma_zero_record["sigma"]},
+        ),
+        "dp_n64": _borrowed_training_block(
+            block=noised["training"],
+            source_record=noised["record"],
+            protocol=noised["training"]["protocol"],
+            extra={"sigma": noised["sigma"], "epsilon": noised["epsilon"]},
+        ),
+    }
+
+    # ===== THE RATIOS — eval hours over PER-POINT training hours, all four, re-derivable =====
+    # The per-point training cost is `seconds_total` for the two SINGLE runs and
+    # `training_seconds_mean` for the two five-seed AGGREGATES (whose `seconds_total` is five
+    # points' worth by the committed aggregate convention). The field each one came from travels
+    # beside it, so the choice is visible in the data rather than argued in prose.
+    per_point_source = {
+        "non_dp": "training_seconds_mean",
+        "non_dp_superseded_protocol": "training_seconds_mean",
+        "dp_n8": "seconds_total",
+        "dp_n64": "seconds_total",
+    }
+    ratios = {}
+    for name, block in training.items():
+        field = per_point_source[name]
+        seconds = block[field]
+        ratios[name] = {
+            "training_seconds_per_point": seconds,
+            "training_seconds_per_point_source": f"training.{name}.{field}",
+            "protocol": block["protocol"],
+            # NEVER the pinned `H_PER_POINT_FLOOR_SECONDS` — that pin is the floor-side REFERENCE,
+            # not a measurement. The MEASURED ceiling exceeds the pin, so every ceiling-derived
+            # ratio comes out SMALLER than a pin-derived one; that is expected, not a defect.
+            "eval_over_training_ceiling": generation["h_per_point_ceiling"] * 3600 / seconds,
+            "eval_over_training_floor": generation["h_per_point_floor"] * 3600 / seconds,
+            "rule": (f"generation.h_per_point_{{ceiling,floor}} * 3600 / training.{name}.{field}"),
+        }
+
+    # ===== THE SIZING TABLE — at every K rung, and it PRICES THE NEVER-TAUGHT FLOOR =====
+    # A sizing that prices 16 sweep points and forgets the N-seed control floor is short by N
+    # points. N is READ from the never-taught record rather than assumed.
+    n_never_taught_seeds = never_taught["n_seeds"]
+    sizing = {}
+    for k in mitigation_gate.K_RUNGS:
+        projected = phase23_cost.size_sweep(
+            generation_record=generation, sweep_points=_SWEEP_POINTS, k=k
+        )
+        projected["never_taught_seeds"] = n_never_taught_seeds
+        projected["never_taught_floor_hours_ceiling"] = (
+            n_never_taught_seeds * projected["h_per_point_ceiling_at_k"]
+        )
+        projected["never_taught_floor_hours_floor"] = (
+            n_never_taught_seeds * projected["h_per_point_floor_at_k"]
+        )
+        projected["never_taught_seeds_source"] = f"{NEVER_TAUGHT_TRAINING_RECORD} -> n_seeds"
+        projected["total_hours_ceiling_with_never_taught_floor"] = (
+            projected["projected_hours"] + projected["never_taught_floor_hours_ceiling"]
+        )
+        sizing[str(k)] = projected
+
+    record = {
+        "record": COST_RECORD,
+        "governs": (
+            "CAL-01 and CAL-05's measured figures, and nothing else. It selects no K, sizes no Z "
+            "and renders no verdict — 23-13 selects a rung from the `sizing` table below."
+        ),
+        "sigma": NOISED_SIGMA,
+        "sweep_points_priced": _SWEEP_POINTS,
+        "sweep_points_source": ".planning/ROADMAP.md:47 / .planning/REQUIREMENTS.md:179",
+        "k_rungs": list(mitigation_gate.K_RUNGS),
+        "k_rungs_source": "mitigation_gate.K_RUNGS",
+        "training": training,
+        "generation": generation,
+        "ratios": ratios,
+        "sizing": sizing,
+        "published_figure_paths": [
+            "training.non_dp.training_seconds_mean",
+            "training.non_dp_superseded_protocol.training_seconds_mean",
+            "training.non_dp.wall_clock_gap_vs_superseded",
+            "training.dp_n8.seconds_total",
+            "training.dp_n64.seconds_total",
+            "generation.h_per_point_floor",
+            "generation.h_per_point_ceiling",
+            "ratios.non_dp.eval_over_training_ceiling",
+            "ratios.non_dp_superseded_protocol.eval_over_training_ceiling",
+            "ratios.dp_n8.eval_over_training_ceiling",
+            "ratios.dp_n64.eval_over_training_ceiling",
+        ],
+        "published_figure_rule": (
+            "Every path above is a SCALAR LEAF written by json.dump from a COMPUTED float, at full "
+            "stored precision. A rounding is not a figure this phase publishes."
+        ),
+        "projection_not_published": (
+            "23-RESEARCH.md:637-641's 20.4 s non-DP figure is a LOOP-ONLY PROJECTION at accum=1, "
+            "never a train_arm measurement, and 23-10 retracted the same projection method's "
+            "lower-bound status after it over-stated the dp_n8 figure by at least 10.8%. It is "
+            "characterised in training.non_dp.provenance_argument and appears in NO numeric field."
+        ),
+        **provenance(),
+    }
+    path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+    print(f"[phase23_run] wrote {COST_RECORD}")
+    for name in sorted(training):
+        print(
+            f"[phase23_run]   training.{name}: protocol {training[name]['protocol']!r}, "
+            f"eval/training ceiling {ratios[name]['eval_over_training_ceiling']!r}"
+        )
+    print(
+        f"[phase23_run]   wall_clock_gap_vs_superseded = {non_dp['wall_clock_gap_vs_superseded']!r}"
+    )
+
+
 _TABLE = {
     "cost": cost,
     "schedule": schedule,
@@ -3378,6 +4148,8 @@ _TABLE = {
     "matched": matched,
     "matched-verdict": matched_verdict,
     "noised": noised,
+    "throughput": throughput,
+    "cost-record": cost_record,
 }
 
 USAGE = (
@@ -3418,6 +4190,17 @@ USAGE = (
     "              record at `phase23_prereg.noised_record_path('dp_n64', sigma)`. NEVER reads\n"
     "              results/phase23_sigma_zero.json's own verdict: it is HALT, permanently and by\n"
     "              design, and a gate pointed at it can never open.\n"
+    "  throughput  CAL-05 — the per-point cost BRACKET, measured on the REAL noised adapter\n"
+    "              across the four Phase-18 attack shapes under BOTH stop conditions (stop ids\n"
+    "              active = FLOOR, stop set emptied = CEILING), plus the un-adapted base under\n"
+    "              the floor condition, cross-validated per shape against\n"
+    "              results/phase18_preflight_report.md. Writes the measurement into the\n"
+    "              working state; never a bare mean. Same detached discipline as `noised`.\n"
+    "  cost-record assemble results/phase23_cost.json — four training legs each NAMING its\n"
+    "              protocol, the floor/ceiling generation bracket, all four eval/training ratios\n"
+    "              and a K-rung sizing table that prices the never-taught floor. Pure arithmetic\n"
+    "              over committed records plus the `throughput` measurement; trains and scores\n"
+    "              nothing, so an assembly bug costs no GPU second.\n"
 )
 
 

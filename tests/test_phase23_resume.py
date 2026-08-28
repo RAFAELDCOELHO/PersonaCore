@@ -70,6 +70,10 @@ _TRAIN_ARM_CALL_SITES = (
     # Plan 23-10's σ=0 diagnostic — the FIRST PRODUCTION CONSUMER of the seam this file built. It
     # DOES pass `resume_from`, and `_RESUME_PASSERS` below is what admits it by name.
     ("scripts/phase23_run.py", "call", "train_sigma_zero"),
+    # Plan 23-11's first NOISED sweep point, `dp_n64` at σ>0 — the SECOND production consumer, and
+    # the reason `_RESUME_PASSERS` is a COUNT rather than a file-level exemption: it also passes
+    # `resume_from`, so admitting the file once would have let a third passer in unnoticed.
+    ("scripts/phase23_run.py", "call", "train_noised"),
     ("scripts/teach_persona.py", "call", "main"),
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
@@ -112,10 +116,11 @@ _THIS_FILE = "tests/test_phase23_resume.py"
 _RESUME_PASSERS = {
     # `_resume_call` (the refusal probes) and `_run` (the production MPS kill->resume probe).
     _THIS_FILE: 2,
-    # Plan 23-10's `train_sigma_zero`: a killed σ=0 run resumes from its OWN checkpoint instead of
-    # restarting 200 steps. `train_control` in the same file passes NOTHING, which is why this is a
-    # count and not a file-level exemption.
-    "scripts/phase23_run.py": 1,
+    # Plan 23-10's `train_sigma_zero` and plan 23-11's `train_noised`: a killed DP run resumes from
+    # its OWN checkpoint instead of restarting 200 steps. `train_control` in the same file passes
+    # NOTHING, which is why this is a count and not a file-level exemption — and the count moving
+    # 1 -> 2 when 23-11 landed is that distinction doing its job.
+    "scripts/phase23_run.py": 2,
 }
 
 # The DP generator's state is **5,056 bytes on CPU and 44 bytes on MPS** (measured, torch 2.7.1 —
@@ -223,16 +228,18 @@ def test_resume_from_none_is_inert():
     assert found == registered, f"per-file driver hit counts drifted: {found} != {registered}"
     # EIGHT at 23-07, when the sentinel landed; NINE from 23-08, which added
     # `phase23_run.train_control`; TEN from 23-10, which added `phase23_run.train_sigma_zero` — the
-    # seam's first production consumer. The literal is a tripwire against a site vanishing
+    # seam's first production consumer; ELEVEN from 23-11, which added `phase23_run.train_noised`,
+    # the milestone's first NOISED sweep point (`dp_n64` at σ>0) and the seam's SECOND production
+    # consumer. The literal is a tripwire against a site vanishing
     # unnoticed, so it is BUMPED with its reason rather than derived from the register — that would
     # make the check restate the register instead of pinning a count against it. Every number is
     # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8 + 1 + 1
+        == 8 + 1 + 1 + 1
     ), (
         "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling "
-        "plus 23-10's σ=0 diagnostic"
+        "plus 23-10's σ=0 diagnostic plus 23-11's noised sweep point"
     )
 
     # ...and the AST agrees with the register about which of them are real CALLS.

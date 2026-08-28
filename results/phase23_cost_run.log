@@ -26,3 +26,28 @@ SESSION pid=55784 pgid=55784 sid=55784
 [phase23_run] T cross-check: t_n8 = 200 == t_n64 = 200 (both _count_composed_steps)
 [phase23_run] dp_n64: 1383.276182374917 s over 200 optimizer steps = 6.916380911874585 s/step, grad_accum_steps 64, replay micro-batches 32, clip bound on 12800 record(s)
 [phase23_run] wrote results/phase23_noised_dp_n64_sigma0p500000.json
+SESSION pid=62745 pgid=62745 sid=62745
+[phase23_run] D-04 verdicts, BOTH read: results/phase23_sigma_zero.json = 'HALT' | results/phase23_matched_verdict.json = 'proceed'. The gate reads the SECOND
+[phase23_run] D-04 human act: UNBLOCKED by '746ecf699904e7c97bf73614e1c617a646da30ad' (Fri Aug 28 10:32:54 2026 -0300), 4 planning path(s), 0 under `scripts/` or `src/`; `git log -S<sentinel>` set size 1
+[phase23_run] D-04 GATE OPEN: verdict 'proceed' AND the committed act 746ecf699904e7c97bf73614e1c617a646da30ad
+[phase23_run] throughput: adapter checkpoints/phase23_sweep1_dp_n64_adapter.pt
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase23_run] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase23_run] throughput noised_floor A1-mild: 146.18 draws/min, 62/64 stop-terminated, mean 25.23 tokens
+[phase23_run] throughput noised_floor A1-aggressive: 109.29 draws/min, 57/64 stop-terminated, mean 32.84 tokens
+[phase23_run] throughput noised_floor A2: 153.44 draws/min, 57/64 stop-terminated, mean 25.39 tokens
+[phase23_run] throughput noised_floor A3: 103.44 draws/min, 56/64 stop-terminated, mean 33.20 tokens
+[phase23_run] throughput noised_ceiling A1-mild: 76.34 draws/min, 0/64 stop-terminated, mean 48.00 tokens
+[phase23_run] throughput noised_ceiling A1-aggressive: 79.40 draws/min, 0/64 stop-terminated, mean 48.00 tokens
+[phase23_run] throughput noised_ceiling A2: 79.91 draws/min, 0/64 stop-terminated, mean 48.00 tokens
+[phase23_run] throughput noised_ceiling A3: 78.87 draws/min, 0/64 stop-terminated, mean 48.00 tokens
+[phase23_run] base fingerprint: sha=04e724c67033f9a2ed8b705a07ad025c867a18c5 step=4000
+[phase23_run] throughput base_floor A1-mild: 154.18 draws/min, 56/64 stop-terminated, mean 33.00 tokens
+[phase23_run] throughput base_floor A1-aggressive: 127.89 draws/min, 45/64 stop-terminated, mean 37.97 tokens
+[phase23_run] throughput base_floor A2: 176.21 draws/min, 56/64 stop-terminated, mean 29.31 tokens
+[phase23_run] throughput base_floor A3: 136.22 draws/min, 51/64 stop-terminated, mean 35.25 tokens
+[phase23_run] cross-validation A1-mild: measured 154.18 vs committed 145.01 draws/min = 106.32%
+[phase23_run] cross-validation A1-aggressive: measured 127.89 vs committed 134.54 draws/min = 95.06%
+[phase23_run] cross-validation A2: measured 176.21 vs committed 183.20 draws/min = 96.18%
+[phase23_run] cross-validation A3: measured 136.22 vs committed 140.85 draws/min = 96.72%
+[phase23_run] CAL-05 bracket: h_per_point_floor 5.7223403197590965 -> h_per_point_ceiling 9.013691285839306 over 42480 draws/point; wall x1.5816071135660466, token x1.6456408196062675
