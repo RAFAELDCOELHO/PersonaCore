@@ -4095,6 +4095,27 @@ def cost_record():
             "and renders no verdict — 23-13 selects a rung from the `sizing` table below."
         ),
         "sigma": NOISED_SIGMA,
+        # THE DECLARATION `tests/test_phase23_prereg.py::_prove_noised_record_is_under_the_glob`
+        # REQUIRES OF ANY RECORD CARRYING A POSITIVE TOP-LEVEL σ. That rule leaves exactly two
+        # doors and no third: a σ>0 record either lives under `NOISED_RECORD_GLOB` or declares
+        # `sweep_point: false` and says why — and SILENCE is a refusal, not an exemption, because
+        # `sweep_point` is not schema-required and omitting it would exempt a real sweep point
+        # with no false statement at all. This record takes the second door HONESTLY: it carries
+        # σ only to name WHICH sweep point's adapter the generation bracket was measured on, and
+        # it fails none of the substantive legs by exporting an adapter or scoring a question —
+        # it exports nothing, scores nothing, and trains nothing. The RUN that does all three is
+        # `results/phase23_noised_dp_n64_sigma0p500000.json`, which is under the glob and declares
+        # `sweep_point: true`.
+        "sweep_point": False,
+        "sweep_point_false_reason": (
+            "This is the COST record (phase23_prereg.COST_RECORD), not a sweep point. It trains "
+            "nothing, scores nothing and exports no adapter: it is arithmetic over committed "
+            "records plus the `throughput` measurement. Its top-level `sigma` names WHICH sweep "
+            "point's adapter the generation bracket was measured on; the sweep point itself is "
+            "the record named in `sweep_point_record`, which IS under NOISED_RECORD_GLOB and "
+            "declares `sweep_point: true`."
+        ),
+        "sweep_point_record": noised["record"],
         "sweep_points_priced": _SWEEP_POINTS,
         "sweep_points_source": ".planning/ROADMAP.md:47 / .planning/REQUIREMENTS.md:179",
         "k_rungs": list(mitigation_gate.K_RUNGS),

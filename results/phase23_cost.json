@@ -153,7 +153,7 @@
     "wall_multiplier": 1.5816071135660466,
     "warmup_draws_discarded_per_shape": 4
   },
-  "git_sha": "bcdfb714ec3d34d54f7c128a1a51a90e97824208",
+  "git_sha": "8876b8ce30427e08281f44b96a6a525dfd539a84",
   "governs": "CAL-01 and CAL-05's measured figures, and nothing else. It selects no K, sizes no Z and renders no verdict \u2014 23-13 selects a rung from the `sizing` table below.",
   "k_rungs": [
     48,
@@ -276,9 +276,12 @@
       "total_hours_ceiling_with_never_taught_floor": 35.29089300048949
     }
   },
+  "sweep_point": false,
+  "sweep_point_false_reason": "This is the COST record (phase23_prereg.COST_RECORD), not a sweep point. It trains nothing, scores nothing and exports no adapter: it is arithmetic over committed records plus the `throughput` measurement. Its top-level `sigma` names WHICH sweep point's adapter the generation bracket was measured on; the sweep point itself is the record named in `sweep_point_record`, which IS under NOISED_RECORD_GLOB and declares `sweep_point: true`.",
+  "sweep_point_record": "results/phase23_noised_dp_n64_sigma0p500000.json",
   "sweep_points_priced": 16,
   "sweep_points_source": ".planning/ROADMAP.md:47 / .planning/REQUIREMENTS.md:179",
-  "timestamp": "2026-08-28T18:10:07Z",
+  "timestamp": "2026-08-28T18:28:10Z",
   "torch_version": "2.7.1",
   "training": {
     "dp_n64": {
