@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-19-PLAN.md (plan 19 of 20) — the D-04 re-test. phase23_prereg.sigma_zero_verdict (unedited, byte-identical to c7de5d4) was CALLED once against the protocol-matched comparator and returned "proceed", deviation exactly 0.0 against floor 0.0267857142857143. results/phase23_matched_verdict.json committed. THE HALT IS RESOLVED BY COMPARATOR CORRECTION. 23-11..23-14 remain BLOCKED (now unblockABLE — a human act, not this exit code); 23-17 remains INCOMPLETE on purpose; NO requirement ticked; results/phase23_noised_* still empty
+stopped_at: Completed 23-19-PLAN.md (plan 19 of 20) — the D-04 re-test. phase23_prereg.sigma_zero_verdict (unedited, byte-identical to c7de5d4) was CALLED once against the protocol-matched comparator and returned "proceed", deviation exactly 0.0 against floor 0.0267857142857143. results/phase23_matched_verdict.json committed. THE HALT IS RESOLVED BY COMPARATOR CORRECTION. 23-11..23-14 UNBLOCKED 2026-08-28 by the user on measured evidence (no live caller of the gate control fields; all control values are explicitly-labelled fixtures), with the CONTROL PROVENANCE rule pre-registered in the phase deferred-items.md; 23-17 remains INCOMPLETE on purpose; NO requirement ticked; results/phase23_noised_* still empty
 last_updated: "2026-08-27T23:12:00.000Z"
 last_activity: 2026-08-27
 progress:
@@ -27,7 +27,8 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — GAP CLOSURE 23-15…23-20 COMPLETE
 Plan: 19 of 20 — **23-19 COMPLETE at `c86a224` + `0a275c9` + `beb2e53`** — **15 of 20 plans ticked**
-(23-01…23-10, 23-15, 23-16, 23-18, 23-19, 23-20). **23-11 / 23-12 / 23-13 / 23-14 remain BLOCKED**
+(23-01…23-10, 23-15, 23-16, 23-18, 23-19, 23-20). **23-11 / 23-12 / 23-13 / 23-14 were UNBLOCKED
+2026-08-28** (see the dated unblock record below — evidence, not assumption)
 and **23-17 remains INCOMPLETE** — its run was harness-killed at 3/5 and wrote no record; 23-20 is
 what completed it, under a SEPARATE continuation pre-registration. It was not left unfinished by
 choice; what IS deliberate is that its box stays **UNTICKED**, because the plan whose run never
@@ -58,14 +59,46 @@ widened (`grep -c` still **9**), because `train()`'s fact-aligned seam is keyed 
 `fact_bin`/`n_facts` (`loop.py:512`) and its replay pass on `replay_windows is not None`
 (`loop.py:683`) — neither on `dp_fn`.
 
-**WHAT `"proceed"` DOES NOT DO.** It does not unblock 23-11 / 23-12 / 23-13 / 23-14. They are now
-**unblockABLE** — the precondition they waited on exists — and they are **STILL BLOCKED**;
-unblocking them is a separate, later act taken by a human who has read the verdict record, not a
-consequence of a driver exiting 0. The record says so in its own `governs` field, and
-`test_no_noised_point_exists` holds `git ls-files 'results/phase23_noised_*'` at **0**
-unconditionally on the verdict. **NO requirement was ticked** — DPSGD-06 was closed by 23-10 and
-records that the diagnostic FIRED; CAL-01, CAL-02, CAL-05 and CTRL-03 stay OPEN and belong to the
-BLOCKED plans. Making a valid comparator exist is a precondition, not a delivery.
+**WHAT `"proceed"` DID NOT DO — and the separate human act that followed it.** The verdict did not
+unblock 23-11 / 23-12 / 23-13 / 23-14. It made them **unblockABLE**; unblocking was always a
+separate act by a human who had read the verdict record, never a consequence of a driver exiting 0.
+The record says so in its own `governs` field, and `test_no_noised_point_exists` holds
+`git ls-files 'results/phase23_noised_*'` at **0** unconditionally on the verdict. **NO requirement
+was ticked by 23-19** — DPSGD-06 was closed by 23-10 and records that the diagnostic FIRED;
+CAL-01, CAL-02, CAL-05 and CTRL-03 stay OPEN and belong to those four plans. Making a valid
+comparator exist is a precondition, not a delivery.
+
+**UNBLOCKED 2026-08-28 — by the user, on evidence, after reading the verdict record.**
+23-11 / 23-12 / 23-13 / 23-14 are **NO LONGER BLOCKED**. The D-04 halt is discharged on its own
+terms: 23-10's halt text said *"blocked until the cause is root-caused and fixed"*, the cause was
+root-caused to branch (A) INVALID COMPARATOR, and it was fixed by building a valid comparator.
+
+The residual risk that justified holding them even after the verdict was that a **live** caller
+might already be feeding the formal gate from the old control's numbers. That was **measured, not
+assumed**, and found **not materialized**:
+
+- **No live caller exists.** `tests/test_phase20_correction.py::test_mitigation_point_verdict_has_no_caller_outside_this_module`
+  is an AST census over `scripts/` and `src/` that also catches aliased imports and `getattr`
+  access. Every non-test call is `mitigation_gate.py`'s own self-check over `FIXTURE_*`, plus the
+  one sanctioned route at `scripts/phase20_gate_coverage.py:660`.
+- **Every control value in the tree is an explicitly-labelled fixture** — `FIXTURE_CLEARING_POINT`
+  headed *"SYNTHETIC THROUGHOUT, and labelled so"*, `FIXTURE_DESTROYED_MODEL` headed *"EVERY OTHER
+  FIELD IS FABRICATED"*, and both recall fields carrying inline `# fabricated`
+  (`scripts/mitigation_gate.py:1224-1225`, `:1260-1261`). Root reason: **no v4.0 arm exists (D-13)**.
+- One nuance recorded rather than glossed: `control_gap` at `:1234` is NOT fabricated — it is
+  computed from published `results/phase19_arm_erased.json`. Still a fixture, but it is the control
+  field most likely to be quietly promoted into a live call.
+
+**The forward rule this leaves behind** is pre-registered at
+`.planning/phases/23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio/deferred-items.md`
+(**CONTROL PROVENANCE**, cross-linked from Phase 22's `deferred-items.md` beside WARNING-2): the
+first real caller of `control_taught_recall` / `control_heldout_recall` / `control_gap` MUST read
+`results/phase23_matched_control.json`, NEVER `results/phase23_sigma_zero.json`'s `control_*`
+section. The three mechanisms that invalidated the old control — teaching loss weight, lot volume,
+one-sided `grad_clip` — are protocol differences, so they corrupt ANY utility comparison against
+it, not merely the σ=0 diagnostic that exposed them.
+
+CAL-01, CAL-02, CAL-05 and CTRL-03 remain OPEN and are now **workable**.
 
 **The one-attempt rule, at FULL strength — FIVE clauses, none dropped.** (1) It binds ACROSS
 COMMITS only. (2) In the uncommitted window `prior_scored_seeds_at_start` refuses only a delete

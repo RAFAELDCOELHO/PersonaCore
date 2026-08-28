@@ -621,16 +621,31 @@ Plans:
 > root-caused and fixed. Waves 6–8 below are BLOCKED, not merely unstarted. Evidence:
 > `results/phase23_sigma_zero.json`; starting point: that record's `residual_differences`.
 
-**Wave 6** *(BLOCKED by the D-04 halt at 23-10, not merely by wave order)*
+> **HALT DISCHARGED, AND WAVES 6–8 UNBLOCKED (2026-08-28).** The halt text above set its own
+> release condition — *"until the cause is root-caused and fixed"*. The cause was root-caused to
+> branch **(A) INVALID COMPARATOR** (`.planning/debug/sigma-zero-beats-control.md`, `status:
+> resolved`) and **fixed** by building a protocol-matched comparator: plans 23-15…23-20 produced
+> `results/phase23_matched_control.json` (five seeds, floor `0.0267857142857143`), and 23-19 called
+> the **unedited** `phase23_prereg.sigma_zero_verdict` (byte-identical to `c7de5d4`, no override
+> parameter) once against it — returning **`proceed`, deviation exactly `0.0`**, on a floor HALF the
+> old one. The verdict alone made these plans *unblockABLE*; the user unblocked them on
+> 2026-08-28 after verifying the one residual risk was **not materialized** — there is no live
+> caller of the gate's control fields (AST census
+> `test_mitigation_point_verdict_has_no_caller_outside_this_module`) and every control value in the
+> tree is an explicitly-labelled fixture. **Forward rule, pre-registered:** see **CONTROL
+> PROVENANCE** in `.planning/phases/23-…/deferred-items.md`. The halt paragraph above is left
+> VERBATIM — it was correct when written and is not retracted.
+
+**Wave 6** *(UNBLOCKED 2026-08-28 — the D-04 halt at 23-10 is discharged)*
 
 - [ ] 23-11-PLAN.md — CAL-01 dp_n64 timing + CAL-05 noised-adapter throughput, floor and ceiling
 
-**Wave 7** *(BLOCKED by the D-04 halt at 23-10)*
+**Wave 7** *(UNBLOCKED 2026-08-28 — the D-04 halt at 23-10 is discharged)*
 
 - [ ] 23-12-PLAN.md — D-10 retract-in-place of the falsified "~1,010×" claim across all three planning files
 - [ ] 23-13-PLAN.md — CAL-02: pin Z with `_PROVENANCE` siblings, the K ratchet, and D-06's branch
 
-**Wave 8** *(BLOCKED by the D-04 halt at 23-10)*
+**Wave 8** *(UNBLOCKED 2026-08-28 — the D-04 halt at 23-10 is discharged)*
 
 - [ ] 23-14-PLAN.md — CTRL-03: score the never-taught adapters at the pinned K; the record the frozen gate accepts
 
@@ -836,7 +851,7 @@ capacities — with every number in prose generated from a committed record rath
 | 20. Pre-Registration — The Three-Condition Gate | v4.0 | 17/17 | Complete | 7/7 on 2026-08-21 |
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
-| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 15/20 | HALTED (D-04) — 23-11..23-14 still BLOCKED. 23-17's run was CONTINUED by 23-20 and completed at 5/5: `results/phase23_matched_control.json` EXISTS, floor 0.0267857142857143 (27/1008) over five readings. 23-18 pinned that floor BESIDE the original as `MATCHED_CONTROL_NOISE_FLOOR`, purely additive (153 insertions / 0 deletions), leaving `CONTROL_NOISE_FLOOR` byte-unchanged and the zero-headroom import ceiling intact. **2026-08-27, plans 23-15…23-19 — THE D-04 HALT IS RESOLVED BY COMPARATOR CORRECTION.** 23-19 called `phase23_prereg.sigma_zero_verdict` (unedited, byte-identical to `c7de5d4`) once against the protocol-matched comparator; it returned **`"proceed"`** with a deviation of exactly **`0.0`** against the floor `0.0267857142857143` — the comparator reproduces the σ=0 arm 790/1008 on taught-ON and 346/648 on held-out-ON, IDENTICALLY, at seed 1337. Branch (A) INVALID COMPARATOR is confirmed as the whole cause; branch (B) was already falsified. `results/phase23_matched_verdict.json` committed. **23-11..23-14 remain BLOCKED** — now unblockABLE, but unblocking them is a separate human act, not a consequence of this exit code; `git ls-files 'results/phase23_noised_*'` is still 0 and a committed guard holds it there. NO requirement ticked. *(The 15/20 count is now accurate: it read 15 while only 14 boxes were ticked, and 23-19's tick closes that off-by-one.)* | -          |
+| 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 15/20 | IN PROGRESS — **D-04 HALT DISCHARGED; 23-11..23-14 UNBLOCKED 2026-08-28** by the user on measured evidence (no live caller of the gate control fields; all control values explicitly-labelled fixtures), with the **CONTROL PROVENANCE** rule pre-registered in the phase `deferred-items.md`. 23-17's run was CONTINUED by 23-20 and completed at 5/5: `results/phase23_matched_control.json` EXISTS, floor 0.0267857142857143 (27/1008) over five readings. 23-18 pinned that floor BESIDE the original as `MATCHED_CONTROL_NOISE_FLOOR`, purely additive (153 insertions / 0 deletions), leaving `CONTROL_NOISE_FLOOR` byte-unchanged and the zero-headroom import ceiling intact. **2026-08-27, plans 23-15…23-19 — THE D-04 HALT IS RESOLVED BY COMPARATOR CORRECTION.** 23-19 called `phase23_prereg.sigma_zero_verdict` (unedited, byte-identical to `c7de5d4`) once against the protocol-matched comparator; it returned **`"proceed"`** with a deviation of exactly **`0.0`** against the floor `0.0267857142857143` — the comparator reproduces the σ=0 arm 790/1008 on taught-ON and 346/648 on held-out-ON, IDENTICALLY, at seed 1337. Branch (A) INVALID COMPARATOR is confirmed as the whole cause; branch (B) was already falsified. `results/phase23_matched_verdict.json` committed. **23-11..23-14 remain BLOCKED** — now unblockABLE, but unblocking them is a separate human act, not a consequence of this exit code; `git ls-files 'results/phase23_noised_*'` is still 0 and a committed guard holds it there. NO requirement ticked. *(The 15/20 count is now accurate: it read 15 while only 14 boxes were ticked, and 23-19's tick closes that off-by-one.)* | -          |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 0/TBD | Not started | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |

@@ -145,6 +145,17 @@ full suite, with exactly one distinct RED.
 that dies must restart from step 0 — expensive, but never a wrong privacy number. The dangerous
 version (resuming it *without* the seam) is the one 22-13 already refuses.
 
+### CLOSED 2026-08-27 in Phase 23, and what took its place
+
+WARNING-2 was closed by plan `23-07`, which gave `scripts/teach_persona.py::train_arm` a real
+`resume_from` path. Phase 23 leaves ONE item behind in its stead, recorded at
+`.planning/phases/23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio/deferred-items.md`:
+**CONTROL PROVENANCE** — when a real caller first feeds `control_taught_recall`,
+`control_heldout_recall` or `control_gap` into the formal gate, the source must be
+`results/phase23_matched_control.json` (the protocol-matched comparator), never
+`results/phase23_sigma_zero.json`'s `control_*` section (the old protocol, measured invalid as a
+comparator for the same reasons that invalidate any utility comparison against it).
+
 ## WARNING-1 was CLOSED, not deferred
 
 Recorded here in one place so the pair is not read as two open warnings. `22-VERIFICATION.md`'s
