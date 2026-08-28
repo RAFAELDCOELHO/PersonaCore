@@ -66,6 +66,7 @@ import mitigation_gate  # noqa: E402  (needs the sys.path insert above)
 # a string literal. This repository has shipped plans naming paths the code refuses, so every
 # Phase-23 artifact path resolves from the module that declares it. Importing it HERE is free: the
 # zero-headroom ceiling is a property of `scripts/mitigation_*.py`, not of this test file.
+import phase23_cost  # noqa: E402  (needs the sys.path insert above)
 import phase23_matched_prereg  # noqa: E402  (needs the sys.path insert above)
 import phase23_prereg  # noqa: E402  (needs the sys.path insert above)
 
@@ -305,6 +306,127 @@ def _matched_readings(record):
     return [entry["primary"]["k"] / entry["primary"]["n"] for entry in record["per_seed"]]
 
 
+# =================================================================================================
+# PLAN 23-13: Z'S RECORD HELPERS AND ITS CONSTANT REGISTER
+#
+# EVERY STRUCTURAL CHECK BELOW IS AN AST WALK OR A KEY LOOKUP, NEVER A GREP.
+# `MATCHED_CONTROL_NOISE_FLOOR` CONTAINS `CONTROL_NOISE_FLOOR` as a substring, and this file's own
+# docstrings name `h_per_point_ceiling`, `K_RUNGS` and `N64_LEG_WITHDRAWN` in prose — a grep
+# criterion over either file would match itself and report a pass.
+# =================================================================================================
+
+# The Z constants, in the order `scripts/mitigation_budget.py` declares them. Asserted against an
+# AST walk in `test_z_was_sized_against_the_ceiling`, so a seventh constant added without being
+# registered here cannot slip past the loops that iterate this tuple.
+_Z_CONSTANTS = (
+    "SWEEP_POINTS",
+    "CURVE_K",
+    "FULL_FIDELITY_K",
+    "STEP_BUDGET",
+    "N_CONTROL_SEEDS",
+    "N64_LEG_WITHDRAWN",
+)
+
+# The two constants that predate 23-13 — subtracted from the AST walk so the register check above
+# is a statement about the NEW constants rather than about the whole module.
+_PRE_23_13_CONSTANTS = ("CONTROL_NOISE_FLOOR", "MATCHED_CONTROL_NOISE_FLOOR")
+
+# THE THREE MULTIPLICANDS OF THE CEILING-SIDE TOTAL. `SWEEP_POINTS x h_ceiling(CURVE_K)` plus
+# `N_CONTROL_SEEDS x h_ceiling(CURVE_K)` — so each was genuinely sized against
+# `h_per_point_ceiling` and each is a place a floor-sized number could hide. The other three carry
+# no throughput figure at all, and `test_z_was_sized_against_the_ceiling` asserts the field ABSENT
+# on them: requiring it universally would have written a provenance field that lies.
+_Z_SIZED_AGAINST_THE_CEILING = ("SWEEP_POINTS", "CURVE_K", "N_CONTROL_SEEDS")
+
+# Which artifact register entry backs each record-backed constant. The NAME of the register
+# attribute, never the path — every Phase-23 path resolves from the module that declares it.
+_Z_RECORD_BACKED = {
+    "SWEEP_POINTS": "COST_RECORD",
+    "CURVE_K": "COST_RECORD",
+    "N_CONTROL_SEEDS": "NEVER_TAUGHT_TRAINING_RECORD",
+    "N64_LEG_WITHDRAWN": "CAL03_WIRING_RECORD",
+}
+
+# The two constants whose source is a live SOURCE MODULE rather than a committed results artifact.
+# Both carry `record_sha256: None` and `git_sha: None` by construction — see the else-branch of the
+# provenance loop in `test_budget_constants_re_derive` for why that absence is asserted.
+_Z_SOURCE_MODULE_BACKED = {
+    "FULL_FIDELITY_K": "scripts/phase18_extraction.py",
+    "STEP_BUDGET": "scripts/teach_persona.py",
+}
+
+
+def _cost_record():
+    """The committed cost record, parsed. `_control_record`'s sibling, same resolution rule."""
+    path = _ROOT / phase23_prereg.COST_RECORD
+    return path, json.loads(path.read_text(encoding="utf-8"))
+
+
+def _never_taught_record():
+    """The never-taught TRAINING record — the binding source for `N_CONTROL_SEEDS`.
+
+    Its seeds are the adapters 23-14 actually scores, and that constant exists to price THAT
+    scoring. `results/phase23_control_floor.json` carries the same five seeds by D-08's same-N
+    rule; the agreement is the REASON the lists match and is not a second source.
+    """
+    path = _ROOT / phase23_prereg.NEVER_TAUGHT_TRAINING_RECORD
+    return path, json.loads(path.read_text(encoding="utf-8"))
+
+
+def _cal03_record():
+    """The committed CAL-03 wiring record — D-06's evidence, read LIVE rather than assumed."""
+    path = _ROOT / phase23_prereg.CAL03_WIRING_RECORD
+    return path, json.loads(path.read_text(encoding="utf-8"))
+
+
+def _z_provenance(name):
+    """The `_PROVENANCE` sibling of a Z constant. One reader, so no test spells the suffix twice."""
+    return getattr(mitigation_budget, name + "_PROVENANCE")
+
+
+def _resolve_derivation(name):
+    """Resolve a Z constant's `derivation` to the LIVE object it names — never string-matched.
+
+    Two shapes are in use and both are handled here: ``module.SYMBOL``, and
+    ``module.SYMBOL -> key`` where the symbol is a record PATH in the artifact register and ``key``
+    is the field read out of it. Resolving rather than matching is what makes `derivation` a
+    CHECKED REFERENCE instead of decoration — a provenance that cites a symbol which does not exist
+    fails here rather than reading plausibly forever.
+    """
+    symbol, _, key = _z_provenance(name)["derivation"].partition(" -> ")
+    module_name, _, attribute = symbol.partition(".")
+    resolved = getattr(importlib.import_module(module_name), attribute)
+    if not key:
+        return resolved
+    return json.loads((_ROOT / resolved).read_text(encoding="utf-8"))[key]
+
+
+def _withdrawal_implied_by(record):
+    """D-06's branch, computed from a record through the BLIND rule rather than read off a field.
+
+    ``phase23_prereg.n64_leg_is_committable`` was committed in 23-03 and is strictly ancestral to
+    the wiring record's earliest add, so it could not have been written around the numbers it
+    judges. It is NEVER a relative tolerance: ε and T must be bit-identical between the two arms.
+    """
+    return not phase23_prereg.n64_leg_is_committable(
+        epsilon_n8=record["epsilon_n8"],
+        epsilon_n64=record["epsilon_n64"],
+        t_n8=record["t_n8"],
+        t_n64=record["t_n64"],
+    )
+
+
+def _module_level_constant_names():
+    """`scripts/mitigation_budget.py`'s module-level assignment targets, BY AST.
+
+    Never by grep, for the reason recorded at the top of this section: one constant name contains
+    another as a substring, and this file's prose names all of them.
+    """
+    tree = ast.parse(_MITIGATION_BUDGET_PATH.read_text(encoding="utf-8"))
+    assigns = [node for node in tree.body if isinstance(node, ast.Assign)]
+    return [target.id for node in assigns for target in node.targets]
+
+
 def test_budget_holds_only_literal_constants():
     """``scripts/mitigation_budget.py`` holds LITERAL ASSIGNMENTS AND NOTHING ELSE.
 
@@ -467,6 +589,137 @@ def test_budget_constants_re_derive():
     assert verdict == "proceed", (
         f"the pinned floor and its provenance reached {verdict!r} against a zero deviation — 23-10 "
         "could not use this pin at all"
+    )
+
+    # =============================================================================================
+    # EXTENDED 2026-08-28 (plan 23-13): THE Z CONSTANTS.
+    #
+    # The floor cases above belong to 23-09 and 23-18 and are UNTOUCHED. Same property applied a
+    # third time, to every Z constant: recomputed from its CITED record through its CITED
+    # derivation symbol, under exact `==`. A constant whose provenance names a record it cannot be
+    # recomputed from is a number nobody can check.
+    # =============================================================================================
+    cost_path, cost = _cost_record()
+    generation = cost["generation"]
+    committed = cost["sizing"][str(mitigation_budget.CURVE_K)]
+
+    # SWEEP_POINTS AND CURVE_K TOGETHER. `size_sweep` called with the PINNED PAIR must reproduce
+    # the committed `sizing` block for that rung KEY FOR KEY under exact `==`. That is what makes
+    # the pair checkable rather than self-agreeing: a perturbed width or a perturbed rung
+    # reproduces a DIFFERENT block, which `test_a_z_constant_that_does_not_re_derive_is_detected`
+    # watches happening rather than asserting would happen.
+    live = phase23_cost.size_sweep(
+        generation_record=generation,
+        sweep_points=mitigation_budget.SWEEP_POINTS,
+        k=mitigation_budget.CURVE_K,
+    )
+    assert live == {key: committed[key] for key in live}, (
+        f"`phase23_cost.size_sweep` at the pinned pair (SWEEP_POINTS = "
+        f"{mitigation_budget.SWEEP_POINTS!r}, CURVE_K = {mitigation_budget.CURVE_K!r}) returns "
+        f"{live!r}, but {phase23_prereg.COST_RECORD}'s committed sizing block for that rung is "
+        f"{ {key: committed[key] for key in live}!r}. The pinned Z does not re-derive from the "
+        "record its provenance names"
+    )
+
+    # THE WIDTH IS ALSO AN INDEPENDENT FIELD, written by 23-11 BEFORE any rung was selected. The
+    # block comparison above passes the width in, so on its own it could agree with itself; this is
+    # what pins it to a number the record already carried.
+    assert mitigation_budget.SWEEP_POINTS == cost["sweep_points_priced"], (
+        f"SWEEP_POINTS is {mitigation_budget.SWEEP_POINTS!r} but {phase23_prereg.COST_RECORD} "
+        f"priced {cost['sweep_points_priced']!r} points (its `sweep_points_source` names "
+        f"{cost['sweep_points_source']!r}). The pin and the sizing describe different sweeps"
+    )
+    assert mitigation_budget.CURVE_K in cost["k_rungs"], (
+        f"CURVE_K is {mitigation_budget.CURVE_K!r}, which is not among the rungs "
+        f"{cost['k_rungs']!r} the cost record costed. A rung with no h/point beside it in the "
+        "record is a budget nobody priced"
+    )
+
+    # THE THREE RULE-CONSTANTS, EACH RESOLVED THROUGH THE SYMBOL ITS PROVENANCE NAMES — never
+    # string-matched, so a `derivation` field is a checked reference instead of decoration.
+    for name, expected in (
+        ("FULL_FIDELITY_K", _resolve_derivation("FULL_FIDELITY_K")),
+        ("STEP_BUDGET", _resolve_derivation("STEP_BUDGET")),
+    ):
+        assert getattr(mitigation_budget, name) == expected, (
+            f"{_MITIGATION_BUDGET_REL} pins {name} = {getattr(mitigation_budget, name)!r} but "
+            f"{_z_provenance(name)['derivation']} resolves to {expected!r} today. This module has "
+            "no import budget, so the value is a RESTATEMENT — and a restatement with no test "
+            "agreeing it is a copy waiting to drift"
+        )
+
+    never_taught_path, never_taught = _never_taught_record()
+    assert mitigation_budget.N_CONTROL_SEEDS == _resolve_derivation("N_CONTROL_SEEDS"), (
+        f"N_CONTROL_SEEDS is {mitigation_budget.N_CONTROL_SEEDS!r} but "
+        f"{phase23_prereg.NEVER_TAUGHT_TRAINING_RECORD} records n_seeds = "
+        f"{never_taught['n_seeds']!r}. That record is the BINDING one: its seeds are the adapters "
+        "23-14 actually scores, and this constant exists to price THAT scoring"
+    )
+
+    _cal03_path, wiring = _cal03_record()
+    assert mitigation_budget.N64_LEG_WITHDRAWN is _withdrawal_implied_by(wiring), (
+        f"N64_LEG_WITHDRAWN is {mitigation_budget.N64_LEG_WITHDRAWN!r} but "
+        f"{phase23_prereg.CAL03_WIRING_RECORD} read live through "
+        f"`phase23_prereg.n64_leg_is_committable` implies "
+        f"{_withdrawal_implied_by(wiring)!r}. The pinned branch and the measurement disagree"
+    )
+
+    # THE SHARED PROVENANCE SHAPE, over every Z constant at once. `record` resolves from the path
+    # REGISTER rather than matching a string (this repository has shipped plans naming paths the
+    # code refuses), `record_sha256` is checked LIVE against the committed bytes, and `git_sha`
+    # against the record's own field.
+    for name in _Z_CONSTANTS:
+        provenance = _z_provenance(name)
+        for key in ("record", "record_sha256", "git_sha", "derivation", "governs"):
+            assert key in provenance, (
+                f"{name}_PROVENANCE is missing {key!r}. An unlabelled number is indistinguishable "
+                "from a borrowed one, which is the defect D-06 corrected for v4.0"
+            )
+        assert isinstance(provenance["governs"], str) and provenance["governs"], (
+            f"{name}_PROVENANCE's `governs` is {provenance['governs']!r} — a scope that states "
+            "nothing is a scope a reader cannot check the constant against"
+        )
+
+        if name in _Z_RECORD_BACKED:
+            record_path = _ROOT / getattr(phase23_prereg, _Z_RECORD_BACKED[name])
+            backing = json.loads(record_path.read_text(encoding="utf-8"))
+            assert provenance["record"] == getattr(phase23_prereg, _Z_RECORD_BACKED[name]), (
+                f"{name}_PROVENANCE names record {provenance['record']!r} but the edit-once "
+                f"artifact register declares "
+                f"{getattr(phase23_prereg, _Z_RECORD_BACKED[name])!r}"
+            )
+            # UNLIKE THE TWO FLOORS ABOVE, this `record_sha256` is the FILE-BYTES digest: none of
+            # the three records the Z constants cite carries an inputs digest of its own. The Z
+            # banner in `scripts/mitigation_budget.py` says so once; this is what asserts it.
+            live_digest = hashlib.sha256(record_path.read_bytes()).hexdigest()
+            assert provenance["record_sha256"] == live_digest, (
+                f"{name}_PROVENANCE pins record_sha256 = {provenance['record_sha256']!r} but "
+                f"{provenance['record']} hashes to {live_digest!r} today — the artifact this "
+                "constant was derived from is not the artifact on disk"
+            )
+            assert provenance["git_sha"] == backing["git_sha"], (
+                f"{name}_PROVENANCE records git_sha = {provenance['git_sha']!r} but "
+                f"{provenance['record']} records {backing['git_sha']!r}"
+            )
+        else:
+            # THE TWO SOURCE-MODULE-BACKED CONSTANTS carry None for both digests BY CONSTRUCTION,
+            # and the absence is asserted rather than tolerated: their source is a live source
+            # module this phase does not freeze, so a digest pinned here would go stale on any
+            # unrelated edit while asserting nothing. `_resolve_derivation` is the real check.
+            assert provenance["record"] == _Z_SOURCE_MODULE_BACKED[name], (
+                f"{name}_PROVENANCE names record {provenance['record']!r}, not the source module "
+                f"{_Z_SOURCE_MODULE_BACKED[name]!r} its derivation symbol lives in"
+            )
+            assert provenance["record_sha256"] is None and provenance["git_sha"] is None, (
+                f"{name}_PROVENANCE pins record_sha256 = {provenance['record_sha256']!r} and "
+                f"git_sha = {provenance['git_sha']!r} against a live SOURCE MODULE. A digest over "
+                "a file this phase does not freeze goes stale on an unrelated edit and asserts "
+                "nothing; the sanctioned check is resolving the symbol, which this test does"
+            )
+
+    assert cost_path.exists() and never_taught_path.exists(), (
+        "a Z record resolved to a path that does not exist — every assertion above ran against "
+        "something other than the committed artifacts"
     )
 
 
@@ -947,4 +1200,351 @@ def test_the_original_needle_is_still_unique():
         "repair for (2) is to LINE-ANCHOR that test's needle with a leading newline, carried into "
         "the replacement as well — a tightening. NOT a rename, NOT a rounded value, NOT a weakened "
         "guard"
+    )
+
+
+# =================================================================================================
+# ===== PLAN 23-13: Z — THE RATCHET, THE CEILING-SIZING, D-06's TWO BRANCHES, AND THE CONTROL =====
+# =================================================================================================
+
+
+def test_selected_k_is_a_ratcheted_rung():
+    """The restated rungs and the FROZEN gate agree — checked by IMPORTING the gate, from here.
+
+    `scripts/mitigation_budget.py` cannot import `scripts/mitigation_gate.py`: its literal-only
+    guard refuses any module-level node that is not an `ast.Assign`, and two accumulated ceilings
+    bind the same `scripts/mitigation_*.py` union with zero headroom in both directions. So the
+    rungs are RESTATED there as literals, and a copy is free to stop matching — unless a test holds
+    it. This is that test, and the frozen constants are IMPORTED rather than retyped: a second
+    hand-typed `(48, 24, 16, 8)` here would be a second copy with the same failure mode.
+
+    The two functions are CALLED rather than reasoned about. `ratchet_k` is what makes the
+    selection one-way (`_prove(proposed_k >= fixed_k)`), and `promote_to_full_fidelity` is the rule
+    that re-draws a gate candidate at the reserved fidelity — it calls `ratchet_k` itself, so a
+    full-fidelity K below the curve K aborts through the same implementation D-19 committed.
+    """
+    curve_k = mitigation_budget.CURVE_K
+    full_k = mitigation_budget.FULL_FIDELITY_K
+
+    for name, value in (("CURVE_K", curve_k), ("FULL_FIDELITY_K", full_k)):
+        assert value in mitigation_gate.K_RUNGS, (
+            f"{_MITIGATION_BUDGET_REL} pins {name} = {value!r}, which is not a member of the "
+            f"FROZEN closed menu mitigation_gate.K_RUNGS {mitigation_gate.K_RUNGS}. The menu was "
+            "committed with its measured cost table, so an off-menu K is a draw budget with no "
+            "h/point beside it and no rung to ratchet from"
+        )
+
+    assert mitigation_gate.ratchet_k(fixed_k=curve_k, proposed_k=full_k) == full_k, (
+        f"the ratchet did not return the proposed rung for the pinned pair "
+        f"({curve_k!r} -> {full_k!r})"
+    )
+
+    promote, reason = mitigation_gate.promote_to_full_fidelity(
+        verdict="PASS", reasons=(), curve_k=curve_k, full_k=full_k
+    )
+    assert promote is True and str(full_k) in reason, (
+        f"`promote_to_full_fidelity` refused the pinned pair or did not name the full-fidelity "
+        f"rung in its reason: {(promote, reason)!r}. A curve K the promotion rule cannot promote "
+        "FROM is a budget the gate cannot spend"
+    )
+
+    # THE RATCHET'S DIRECTION, OBSERVED RATHER THAN ASSERTED IN PROSE. This is the property that
+    # made Task 1 a checkpoint rather than an executor choice, so it is watched firing here.
+    cheaper = [rung for rung in mitigation_gate.K_RUNGS if rung < curve_k]
+    assert cheaper, (
+        f"CURVE_K = {curve_k!r} is the cheapest rung in {mitigation_gate.K_RUNGS}, so there is no "
+        "decrease to watch being refused and the assertion below would prove nothing"
+    )
+    with pytest.raises(SystemExit):
+        mitigation_gate.ratchet_k(fixed_k=curve_k, proposed_k=max(cheaper))
+
+
+def test_the_step_budget_agrees_with_the_production_constant():
+    """`STEP_BUDGET` is a RESTATEMENT of `teach_persona.MAX_STEPS`; this is its other half.
+
+    The budget module has no import budget, so the value is retyped there beside a provenance
+    comment naming the symbol. Without this assertion that restatement is an unchecked copy — the
+    exact shape the sanctioned restate-and-assert route exists to close.
+
+    `teach_persona` is imported HERE rather than at module scope: it is needed by one test and this
+    file otherwise collects without touching the training stack.
+    """
+    import teach_persona
+
+    assert mitigation_budget.STEP_BUDGET == teach_persona.MAX_STEPS, (
+        f"{_MITIGATION_BUDGET_REL} pins STEP_BUDGET = {mitigation_budget.STEP_BUDGET!r} but "
+        f"`teach_persona.MAX_STEPS` is {teach_persona.MAX_STEPS!r} today. Every Phase-23 arm ran "
+        "at the production constant, so a drifted restatement would price a sweep nobody trains"
+    )
+
+    # The cost record's own training legs ran at that same budget. A third witness, from the
+    # artifact side rather than the source side.
+    _path, cost = _cost_record()
+    for leg, block in cost["training"].items():
+        assert block["max_steps"] == mitigation_budget.STEP_BUDGET, (
+            f"{phase23_prereg.COST_RECORD}'s training leg {leg!r} ran at max_steps = "
+            f"{block['max_steps']!r}, not the pinned STEP_BUDGET "
+            f"{mitigation_budget.STEP_BUDGET!r}"
+        )
+
+
+def test_z_was_sized_against_the_ceiling():
+    """Z is sized against `h_per_point_ceiling`, proved by RE-DERIVATION IDENTITY, not by a label.
+
+    The ratchet has no cheap direction, so a sweep sized against the floor and found too expensive
+    cannot be rescued. The label `sized_against` is carried by exactly the three multiplicands of
+    the ceiling-side total and is asserted ABSENT on the three constants no throughput figure feeds
+    — a provenance field that lies is worse than one that is missing.
+
+    **THE INEQUALITY IS `>=`, NOT `>`, AND THAT IS DELIBERATE.** The reason the ceiling exists is
+    that a noised adapter which stops emitting EOS runs every draw to the full token budget. In
+    that regime no draw stop-terminates, the floor condition and the ceiling condition measure the
+    same thing, and the two h/point figures are EQUAL — so a strict `>` would fail against a
+    perfectly correct measurement. The discriminating check is the IDENTITY: the committed total
+    re-derives from the ceiling field and not from the floor field, which holds in both regimes.
+
+    **EQUALITY MUST BE EARNED.** If the two figures do come out equal, the record has to DISCLOSE
+    the measurement that makes them equal — zero stop-terminated draws in the ceiling condition,
+    and per-shape stop counts equal between the two conditions — so a degenerate bracket has to
+    come from the measurement rather than from one field being copied into the other.
+    """
+    # THE REGISTER IS NON-VACUOUS AND COMPLETE, by AST rather than by grep. A seventh Z constant
+    # added without being registered would otherwise be skipped by every loop in this file.
+    discovered = [
+        name
+        for name in _module_level_constant_names()
+        if not name.endswith("_PROVENANCE") and name not in _PRE_23_13_CONSTANTS
+    ]
+    assert tuple(discovered) == _Z_CONSTANTS, (
+        f"the AST walk over {_MITIGATION_BUDGET_REL} finds Z constants {discovered!r} but this "
+        f"file's register is {list(_Z_CONSTANTS)!r}. An unregistered constant is skipped by every "
+        "loop here, so it would ship with no re-derivation and no provenance check"
+    )
+
+    for name in _Z_CONSTANTS:
+        provenance = _z_provenance(name)
+        if name in _Z_SIZED_AGAINST_THE_CEILING:
+            assert provenance.get("sized_against") == "h_per_point_ceiling", (
+                f"{name}_PROVENANCE carries sized_against = "
+                f"{provenance.get('sized_against')!r}. It is a MULTIPLICAND of the ceiling-side "
+                "total, so a floor-sized number could hide in it and the ratchet could not rescue "
+                "the sweep afterwards"
+            )
+        else:
+            assert "sized_against" not in provenance, (
+                f"{name}_PROVENANCE carries sized_against = "
+                f"{provenance['sized_against']!r}, but NO throughput figure participates in this "
+                "constant — it is derived from "
+                f"{provenance['derivation']!r}. The field would be FALSE here, and a provenance "
+                "field that lies is worse than one that is absent"
+            )
+
+    _path, cost = _cost_record()
+    generation = cost["generation"]
+    committed = cost["sizing"][str(mitigation_budget.CURVE_K)]
+    scale = committed["draws_per_point_at_k"] / generation["draws_per_point"]
+    points = mitigation_budget.SWEEP_POINTS
+    controls = mitigation_budget.N_CONTROL_SEEDS
+
+    # THE IDENTITY. Both totals are formed the way the writer formed them — sweep term PLUS
+    # never-taught term, never `(points + controls) * h`, because float addition is not
+    # associative and the committed number is the first form.
+    ceiling_at_k = generation["h_per_point_ceiling"] * scale
+    floor_at_k = generation["h_per_point_floor"] * scale
+    ceiling_total = points * ceiling_at_k + controls * ceiling_at_k
+    floor_total = points * floor_at_k + controls * floor_at_k
+
+    assert ceiling_total == committed["total_hours_ceiling_with_never_taught_floor"], (
+        f"the pinned Z re-derives a ceiling-side total of {ceiling_total!r} from "
+        f"`generation.h_per_point_ceiling`, but {phase23_prereg.COST_RECORD} committed "
+        f"{committed['total_hours_ceiling_with_never_taught_floor']!r}. Exact `==`: the budget "
+        "this project spends against is not the budget the record priced"
+    )
+    assert ceiling_total != floor_total or ceiling_at_k == floor_at_k, (
+        "the ceiling-derived and floor-derived totals are equal while the per-point figures are "
+        "not — the arithmetic above is not reading the two fields it names"
+    )
+    assert ceiling_total >= floor_total, (
+        f"the ceiling-derived total {ceiling_total!r} is BELOW the floor-derived {floor_total!r}. "
+        "The ceiling is the slower bound by construction, so this means the two fields are "
+        "swapped and Z was sized against the cheap one the ratchet cannot rescue"
+    )
+
+    if ceiling_at_k == floor_at_k:
+        # EARNED, NOT TOLERATED. The record must show WHY they coincide.
+        assert generation["stop_terminated_n_ceiling"] == 0, (
+            "the floor and ceiling h/point figures are equal but the ceiling condition records "
+            f"{generation['stop_terminated_n_ceiling']!r} stop-terminated draws. A degenerate "
+            "bracket has to come from the measurement, not from a copy of one field into the other"
+        )
+        for shape in generation["per_shape"]:
+            assert shape["stop_terminated_n_floor"] == shape["stop_terminated_n_ceiling"], (
+                f"shape {shape['shape']!r} records different stop counts between the floor and "
+                "ceiling conditions, so the two conditions did NOT measure the same thing and "
+                "their equal h/point figures are not earned"
+            )
+
+
+@pytest.mark.parametrize("falsify", (False, True))
+def test_n64_leg_matches_the_cal03_verdict(falsify):
+    """D-06, BOTH BRANCHES — so "confirmed" and "never checked" are distinguishable.
+
+    A negative recorded only by ABSENCE cannot be told apart from never having looked. So the
+    branch is computed from a record through `phase23_prereg.n64_leg_is_committable` twice: once
+    from the COMMITTED artifact, which is what the pinned constant must match, and once from a
+    CONSTRUCTED copy with its ε falsified by one ULP — never by editing the committed artifact,
+    which is frozen.
+
+    The falsified case is what proves the selector DISCRIMINATES. Without it, a pinned `False`
+    would be indistinguishable from a constant that could only ever say `False`.
+    """
+    _path, record = _cal03_record()
+
+    if falsify:
+        record = dict(record)
+        record["epsilon_n64"] = math.nextafter(record["epsilon_n64"], math.inf)
+        assert record["epsilon_n64"] != _cal03_record()[1]["epsilon_n64"], (
+            "the constructed copy is identical to the committed record — there is nothing to "
+            "falsify and this case observes nothing"
+        )
+        assert _withdrawal_implied_by(record) is True, (
+            "a record whose two epsilons DISAGREE did not imply a withdrawal. "
+            "`n64_leg_is_committable` has acquired a tolerance, and the one-ULP leak it exists to "
+            "catch would now pass"
+        )
+        assert mitigation_budget.N64_LEG_WITHDRAWN is False, (
+            f"N64_LEG_WITHDRAWN is {mitigation_budget.N64_LEG_WITHDRAWN!r}. The LIVE record is not "
+            "the falsified copy built here, so the pinned branch is the confirming one — see the "
+            "un-falsified case for the assertion against the committed artifact"
+        )
+        return
+
+    implied = _withdrawal_implied_by(record)
+    assert mitigation_budget.N64_LEG_WITHDRAWN is implied, (
+        f"N64_LEG_WITHDRAWN is {mitigation_budget.N64_LEG_WITHDRAWN!r} but "
+        f"{phase23_prereg.CAL03_WIRING_RECORD}, read live through "
+        f"`phase23_prereg.n64_leg_is_committable`, implies {implied!r}"
+    )
+    assert implied is not record["verdict"], (
+        f"the record's own `verdict` field {record['verdict']!r} and the withdrawal implied by "
+        f"re-running the blind rule over its own numbers {implied!r} are not complements — the "
+        "writer did not call the pinned rule"
+    )
+
+    provenance = mitigation_budget.N64_LEG_WITHDRAWN_PROVENANCE
+    assert provenance["record"] == phase23_prereg.CAL03_WIRING_RECORD, (
+        f"the withdrawal provenance names {provenance['record']!r}, not the register's "
+        f"{phase23_prereg.CAL03_WIRING_RECORD!r}"
+    )
+    for key in ("verdict", "epsilon_n8", "epsilon_n64", "t_n8", "t_n64"):
+        assert provenance[key] == record[key], (
+            f"the withdrawal provenance records {key} = {provenance[key]!r} but "
+            f"{phase23_prereg.CAL03_WIRING_RECORD} records {record[key]!r} — the branch cites a "
+            "measurement other than the one it was taken on"
+        )
+
+
+def test_the_never_taught_floor_is_priced_in_z():
+    """A budget for N sweep points that forgets N control points is short by N points.
+
+    `N_CONTROL_SEEDS` is asserted against `results/phase23_never_taught_training.json` — the record
+    whose adapters 23-14 actually scores — and the never-taught term is recomputed at EVERY rung,
+    not only the selected one, so a rung change cannot silently drop the control cost.
+    """
+    _path, never_taught = _never_taught_record()
+    distinct = len(set(never_taught["seeds"]))
+
+    assert mitigation_budget.N_CONTROL_SEEDS == distinct == never_taught["n_seeds"], (
+        f"N_CONTROL_SEEDS is {mitigation_budget.N_CONTROL_SEEDS!r} against "
+        f"{distinct!r} DISTINCT seeds and a recorded n_seeds of {never_taught['n_seeds']!r} in "
+        f"{phase23_prereg.NEVER_TAUGHT_TRAINING_RECORD}"
+    )
+    assert mitigation_budget.N_CONTROL_SEEDS_PROVENANCE["seeds"] == tuple(never_taught["seeds"]), (
+        f"the provenance names seeds "
+        f"{mitigation_budget.N_CONTROL_SEEDS_PROVENANCE['seeds']!r}, the record "
+        f"{never_taught['seeds']!r}. Both must be LADDER order and never sorted order"
+    )
+
+    _cost_path, cost = _cost_record()
+    generation = cost["generation"]
+    assert len(cost["sizing"]) == len(mitigation_gate.K_RUNGS), (
+        f"{phase23_prereg.COST_RECORD} sizes {sorted(cost['sizing'])} but the frozen menu is "
+        f"{mitigation_gate.K_RUNGS} — a rung with no priced control term is a rung this project "
+        "could select and under-budget"
+    )
+    for rung in mitigation_gate.K_RUNGS:
+        block = cost["sizing"][str(rung)]
+        scale = block["draws_per_point_at_k"] / generation["draws_per_point"]
+        term = mitigation_budget.N_CONTROL_SEEDS * (generation["h_per_point_ceiling"] * scale)
+        assert term == block["never_taught_floor_hours_ceiling"], (
+            f"at K={rung} the never-taught term recomputes to {term!r} from the pinned "
+            f"N_CONTROL_SEEDS, but the record committed "
+            f"{block['never_taught_floor_hours_ceiling']!r}"
+        )
+        assert block["never_taught_seeds"] == mitigation_budget.N_CONTROL_SEEDS, (
+            f"at K={rung} the record priced {block['never_taught_seeds']!r} control seeds against "
+            f"the pinned {mitigation_budget.N_CONTROL_SEEDS!r}"
+        )
+
+
+def test_a_z_constant_that_does_not_re_derive_is_detected(tmp_path):
+    """WATCHED RED, PERMANENTLY: a Z constant perturbed by ONE is observed being caught.
+
+    `test_a_hand_edited_matched_floor_is_detected`'s shape, for the same reason — a guard nobody
+    has watched fail is not evidence. `SWEEP_POINTS` is the perturbed one because it is an integer
+    count where a one-off is the plausible human error, and because it is a MULTIPLICAND of the
+    ceiling-side total, so the detection runs through the same identity
+    `test_z_was_sized_against_the_ceiling` relies on.
+
+    THE NEEDLE IS LINE-ANCHORED, and the newline is carried into the replacement too or the edit
+    swallows a line break and the scratch copy stops being a faithful copy. This is not optional
+    here: the pinned width also appears inside `SWEEP_POINTS_PROVENANCE` and in the user's
+    verbatim checkpoint reply, so a bare needle would be ambiguous by construction.
+    """
+    original = mitigation_budget.SWEEP_POINTS
+    perturbed = original + 1
+
+    source = _MITIGATION_BUDGET_PATH.read_text(encoding="utf-8")
+    needle = f"\nSWEEP_POINTS = {original!r}"
+    assert source.count(needle) == 1, (
+        f"{_MITIGATION_BUDGET_REL} contains {source.count(needle)} occurrences of {needle!r}. The "
+        "edit below would land somewhere other than the pinned assignment, or nowhere at all"
+    )
+    copy = tmp_path / "mitigation_budget.py"
+    copy.write_text(source.replace(needle, f"\nSWEEP_POINTS = {perturbed!r}"), encoding="utf-8")
+
+    spec = importlib.util.spec_from_file_location("perturbed_budget", copy)
+    edited = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(edited)
+
+    # META-GUARD, before any verdict is read off it. A copy that failed to import, or one whose
+    # replacement missed, would fail everything below for a reason unrelated to detection. The
+    # second half proves the newline was carried: had it been dropped, the preceding line would
+    # have been welded onto this assignment.
+    assert edited.SWEEP_POINTS == perturbed, (
+        f"the scratch copy loaded with SWEEP_POINTS = {edited.SWEEP_POINTS!r}, not the perturbed "
+        f"{perturbed!r} — this test is not observing what it claims to observe"
+    )
+    assert edited.CURVE_K == mitigation_budget.CURVE_K, (
+        "the scratch copy's CURVE_K moved, so the line-anchored replacement did not leave the rest "
+        "of the module byte-identical"
+    )
+
+    _path, cost = _cost_record()
+    generation = cost["generation"]
+    committed = cost["sizing"][str(mitigation_budget.CURVE_K)]
+
+    def _projected(module):
+        return phase23_cost.size_sweep(
+            generation_record=generation, sweep_points=module.SWEEP_POINTS, k=module.CURVE_K
+        )["projected_hours"]
+
+    assert _projected(mitigation_budget) == committed["projected_hours"], (
+        "the COMMITTED constants stopped re-deriving, so the comparison below would fail for both "
+        "modules and this control would prove nothing"
+    )
+    assert _projected(edited) != committed["projected_hours"], (
+        f"the perturbed SWEEP_POINTS = {perturbed!r} still re-derives "
+        f"{committed['projected_hours']!r} — `test_budget_constants_re_derive` would stay GREEN "
+        "against a hand-edited Z constant"
     )
