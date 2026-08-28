@@ -908,12 +908,194 @@ def test_matched_verdict_is_one_of_the_two_branches():
         )
 
 
+# =================================================================================================
+# ===== THE D-04 GATE — the MATCHED verdict AND the COMMITTED human unblock act =====
+#
+# `results/phase23_matched_verdict.json`'s own `governs` field says *"THIS RECORD DOES NOT UNBLOCK
+# ANYTHING … unblocking them is a separate, later act taken by a human"*. So the verdict is only ONE
+# conjunct of the release condition; the other is the human act, and this is where it is named. A
+# gate reading only the verdict would contradict the record it reads.
+#
+# The gate reads `results/phase23_matched_verdict.json`, NEVER `results/phase23_sigma_zero.json` —
+# the σ=0 record carries `verdict == "HALT"` permanently and by design (23-19 left it byte-unchanged
+# on purpose so a reader sees both verdicts side by side), so a gate pointed at it can never open.
+# =================================================================================================
+
+# The distinctive phrase from `.planning/STATE.md`'s dated unblock record, resolved by TEXT and
+# never by line number — `tests/test_phase20_prereg.py:125-170` records this repository's own lesson
+# that a line number survives no edit.
+_UNBLOCK_SENTINEL = (
+    "UNBLOCKED 2026-08-28 — by the user, on evidence, after reading the verdict record"
+)
+
+# THE SHA PIN — the human act, named. `git log -S<sentinel>` returns a SET, not a commit, and this
+# phase's own work GROWS it: 23-12 Task 1 lists `.planning/STATE.md` in its `<files>` and appends a
+# continuation quoting that record, so a positional `[0]`-style read would silently bind a different
+# commit the moment it lands. Membership is asserted against THIS constant instead, and the ancestry
+# and act-shape conjuncts are applied to THIS constant rather than to whichever sha the search
+# happened to list first.
+#
+# PROVENANCE: `746ecf6`, 2026-08-28, by THE USER —
+# `docs(23): pre-register CONTROL PROVENANCE, and unblock 23-11..23-14`. MEASURED: four paths, all
+# planning documents (`.planning/ROADMAP.md`, `.planning/STATE.md`, and two phase
+# `deferred-items.md`), ZERO under `scripts/` or `src/`.
+#
+# Restating a frozen identity as a pin is the route this repository already uses for
+# `scripts/phase23_prereg.py == c7de5d4`. It fails loudly if history is ever rewritten under it,
+# which is the correct behaviour for a release gate.
+_UNBLOCK_COMMIT = "746ecf699904e7c97bf73614e1c617a646da30ad"
+
+
+def _run_git(*args):
+    """``git`` in the repository root, refusing a non-zero exit."""
+    return subprocess.run(
+        ["git", *args], cwd=_ROOT, capture_output=True, text=True, check=True
+    ).stdout
+
+
+def _paths_changed_by(sha):
+    """The paths one commit touched — resolved at the CALL SITE so the seam takes it as an INPUT."""
+    return _run_git("show", "--name-only", "--format=", sha).split()
+
+
+def _first_add_commit(pathspec):
+    """The EARLIEST commit that added ``pathspec``, or ``None`` when nothing under it is tracked."""
+    adds = _run_git("log", "--diff-filter=A", "--format=%H", "--", pathspec).split()
+    return adds[-1] if adds else None
+
+
+def _is_ancestor(older, newer):
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", older, newer], cwd=_ROOT, capture_output=True
+        ).returncode
+        == 0
+    )
+
+
+# A REAL, ancestor, sentinel-FREE commit, for the tripwire's PROVENANCE case. Resolved rather than
+# typed so it stays a real commit as history grows; it can only collide with the pin if history is
+# rewound onto the act itself, which every conjunct below is meant to notice loudly.
+_A_DIFFERENT_ANCESTOR = _run_git("rev-parse", "HEAD").strip()
+
+
+def _unblock_act_is_committed(*, sentinel, sha, changed_paths):
+    """FIVE conjuncts over THREE CONSTRUCTED inputs. Returns ``(proven, reason, detail)``.
+
+    The sentinel is the THIRD PARAMETER and deliberately not a module constant read from inside
+    this function: the tripwire's absent-sentinel case drives a scratch string, and a predicate that
+    closed over ``_UNBLOCK_SENTINEL`` internally would leave that case undrivable short of
+    monkeypatching this module — which tests the patch, not the guard.
+
+    Sentinel + ancestry + ``git show HEAD:`` alone is FORGEABLE: **any** commit that introduces the
+    phrase into ``.planning/STATE.md`` satisfies all three, and agent commits to that exact file are
+    routine in this phase. The sha pin and the act-shape check are what bind the act to a HUMAN, and
+    the ancestry and ``git show HEAD:`` checks are what stop an uncommitted or off-branch edit —
+    neither subsumes the other, so all five are conjoined.
+    """
+    code_paths = sorted(p for p in changed_paths if p.startswith(("scripts/", "src/")))
+    detail = {
+        "sha": sha,
+        "sha_pinned": sha == _UNBLOCK_COMMIT,
+        "sentinel_shas": [],
+        "sentinel_shas_n": 0,
+        "sha_is_among_sentinel_shas": False,
+        "is_ancestor_of_head": False,
+        "sentinel_in_head_state": False,
+        "changed_paths": sorted(changed_paths),
+        "code_paths_in_act": code_paths,
+        "act_touches_no_code": not code_paths,
+        "date": None,
+    }
+
+    # (1) THE PIN — PROVENANCE. Checked first because it is the conjunct that binds the act to a
+    # human; every other conjunct is satisfiable by a routine agent commit.
+    if not detail["sha_pinned"]:
+        return (
+            False,
+            f"still blocked — PROVENANCE: {sha!r} is not the pinned human unblock act "
+            f"{_UNBLOCK_COMMIT!r}. A guard a downstream plan can satisfy as a side effect of "
+            "committing `.planning/STATE.md` is not a provenance guard",
+            detail,
+        )
+    detail["date"] = _run_git("log", "-1", "--format=%ad", sha).strip()
+
+    # (2) MEMBERSHIP — PRESENCE. Never a positional read; the returned set's size travels in the
+    # message and in `detail` so a set that GREW is visible rather than silently absorbed.
+    shas = _run_git("log", f"-S{sentinel}", "--format=%H", "--", ".planning/STATE.md").split()
+    detail["sentinel_shas"] = shas
+    detail["sentinel_shas_n"] = len(shas)
+    detail["sha_is_among_sentinel_shas"] = sha in shas
+    if not detail["sha_is_among_sentinel_shas"]:
+        return (
+            False,
+            f"still blocked — PRESENCE: no commit in `.planning/STATE.md`'s history introduces the "
+            f"sentinel {sentinel!r} at {sha!r}. `git log -S` returned {len(shas)} sha(s): {shas!r}",
+            detail,
+        )
+
+    # (3) ANCESTRY — an off-branch act does not release anything on this branch.
+    detail["is_ancestor_of_head"] = _is_ancestor(sha, "HEAD")
+    if not detail["is_ancestor_of_head"]:
+        return (
+            False,
+            f"still blocked — ANCESTRY: {sha!r} is not an ancestor of HEAD",
+            detail,
+        )
+
+    # (4) THE COMMITTED FILE, not the working tree — an uncommitted edit cannot open the branch.
+    detail["sentinel_in_head_state"] = sentinel in _run_git("show", "HEAD:.planning/STATE.md")
+    if not detail["sentinel_in_head_state"]:
+        return (
+            False,
+            "still blocked — COMMITTED STATE: the sentinel is absent from "
+            "`git show HEAD:.planning/STATE.md`, so any edit carrying it is uncommitted",
+            detail,
+        )
+
+    # (5) THE SHAPE OF THE ACT. A human unblock act is a DOCUMENTATION act; an agent's routine
+    # STATE.md commit carrying code alongside it is refused here even if the pin were satisfied.
+    if not detail["act_touches_no_code"]:
+        return (
+            False,
+            f"still blocked — ACT SHAPE: {sha!r} touched {code_paths!r} under `scripts/` or "
+            "`src/`. The human unblock act is a documentation act and touched four planning "
+            "documents and nothing else",
+            detail,
+        )
+
+    return (
+        True,
+        f"UNBLOCKED by {sha!r} ({detail['date']}), {len(detail['changed_paths'])} planning "
+        f"path(s), 0 under `scripts/` or `src/`; `git log -S<sentinel>` set size "
+        f"{detail['sentinel_shas_n']}",
+        detail,
+    )
+
+
 def test_no_noised_point_exists():
     """23-11..23-14 stay BLOCKED whichever way the verdict came out, and this is what proves it.
 
     Deliberately UNCONDITIONAL on the verdict. A `proceed` does not unblock the sweep — unblocking
     is a separate, later human act — so a noised point appearing beside a `proceed` would be exactly
     the "the exit code unblocked it" defect the record's own `governs` field refuses.
+
+    WIDENED 2026-08-28 (plan 23-11), NOT deleted and NOT weakened — the precedent is 23-20's own on
+    a non-pin test: *"One pre-existing test was widened, not deleted."*
+
+      * WHAT CHANGED: the premise above — *"unblocking is a separate, later human act"* — is now
+        SATISFIED. It was a statement about something that had not happened yet, and it has now
+        happened.
+      * WHO CHANGED IT: **the user**, on 2026-08-28, in commit `746ecf6`
+        (`docs(23): pre-register CONTROL PROVENANCE, and unblock 23-11..23-14`) — four planning
+        documents, zero source files.
+      * WHAT WAS RETAINED: the original `git ls-files` call and the original `tracked == []`
+        assertion stand **verbatim** below, on the still-blocked branch, with their original message
+        unchanged. The docstring above is unedited; this block is appended beneath it. A silent
+        deletion would have destroyed the record of what was believed while it was believed.
+
+    The branch predicate is the COMMITTED HUMAN ACT, never the verdict — see
+    `_unblock_act_is_committed` for the five conjuncts and why three of them are not enough.
     """
     tracked = subprocess.run(
         ["git", "ls-files", "results/phase23_noised_*"],
@@ -922,7 +1104,130 @@ def test_no_noised_point_exists():
         text=True,
         check=True,
     ).stdout.split()
+    proven, reason, detail = _unblock_act_is_committed(
+        sentinel=_UNBLOCK_SENTINEL,
+        sha=_UNBLOCK_COMMIT,
+        changed_paths=_paths_changed_by(_UNBLOCK_COMMIT),
+    )
+    if proven:
+        # ===== THE UNBLOCKED BRANCH — five conjuncts, strictly MORE than `== []` asserted =====
+        # (1) THE HUMAN ACT, named and bound. All five sub-checks, not just the sentinel search.
+        assert (
+            detail["sha_pinned"]
+            and detail["sha_is_among_sentinel_shas"]
+            and detail["is_ancestor_of_head"]
+            and detail["sentinel_in_head_state"]
+            and detail["act_touches_no_code"]
+        ), (
+            f"the unblock act does not hold up: {detail!r}. It is pinned to {_UNBLOCK_COMMIT!r} "
+            f"({detail['date']}), must be an ancestor of HEAD, must be AMONG the "
+            f"{detail['sentinel_shas_n']} sha(s) `git log -S<sentinel>` returns "
+            f"({detail['sentinel_shas']!r} — never read by position), must have its sentinel in "
+            "the COMMITTED `.planning/STATE.md`, and must touch no path under `scripts/` or `src/`"
+        )
+
+        # (2) THE EVIDENCE THE HUMAN READ — from the MATCHED verdict record, whose own `governs`
+        # field says the verdict alone unblocks nothing. NEVER `results/phase23_sigma_zero.json`,
+        # which carries `HALT` permanently.
+        verdict_record = json.loads((_ROOT / mp.MATCHED_VERDICT_RECORD).read_text(encoding="utf-8"))
+        assert verdict_record["verdict"] == "proceed", (
+            f"{mp.MATCHED_VERDICT_RECORD} carries verdict "
+            f"{verdict_record['verdict']!r}, not 'proceed'. The human act and the verdict are TWO "
+            "conjuncts of one release condition and this one does not hold"
+        )
+
+        # (3) THE σ=0 RECORD THE VERDICT WAS TAKEN AGAINST is the one still on disk — so a re-run
+        # σ=0 record cannot manufacture a release.
+        live_sigma_zero = hashlib.sha256(
+            (_ROOT / phase23_prereg.SIGMA_ZERO_RECORD).read_bytes()
+        ).hexdigest()
+        assert verdict_record["sigma_zero_record_file_sha256"] == live_sigma_zero, (
+            f"the verdict record cites σ=0 file digest "
+            f"{verdict_record['sigma_zero_record_file_sha256']!r} but "
+            f"{phase23_prereg.SIGMA_ZERO_RECORD} now hashes to {live_sigma_zero!r}. The release "
+            "would be resting on a record that has been replaced since the verdict was taken"
+        )
+
+        # (4) EVERY tracked noised path is REPRODUCED by the derivation function from that
+        # record's OWN `arm` and `sigma` — a hand-typed sweep-point path is refused.
+        mistyped = []
+        for path in tracked:
+            payload = json.loads((_ROOT / path).read_text(encoding="utf-8"))
+            derived = phase23_prereg.noised_record_path(payload["arm"], payload["sigma"])
+            if derived != path:
+                mistyped.append((path, derived))
+        assert mistyped == [], (
+            f"tracked noised record(s) whose path is NOT what "
+            f"`phase23_prereg.noised_record_path(arm, sigma)` returns for their own fields: "
+            f"{mistyped!r}. A hand-typed sweep-point path escapes the glob every ordering guard "
+            "binds on"
+        )
+
+        # (5) DPSGD-06's ORDERING, re-asserted at the one moment it can FIRST be violated: the σ=0
+        # record's earliest git add strictly precedes every noised record's earliest git add.
+        sigma_zero_add = _first_add_commit(phase23_prereg.SIGMA_ZERO_RECORD)
+        out_of_order = [
+            path
+            for path in tracked
+            if not (
+                sigma_zero_add is not None
+                and _first_add_commit(path) != sigma_zero_add
+                and _is_ancestor(sigma_zero_add, _first_add_commit(path))
+            )
+        ]
+        assert out_of_order == [], (
+            f"noised record(s) {out_of_order!r} were added at or before "
+            f"{phase23_prereg.SIGMA_ZERO_RECORD}'s first add ({sigma_zero_add!r}). DPSGD-06 "
+            "requires σ=0 to be the DP arm's FIRST executed run"
+        )
+        print(f"[test_no_noised_point_exists] {reason}; {len(tracked)} noised record(s) checked")
+        return
     assert tracked == [], (
         f"a noised sweep point is TRACKED: {tracked}. 23-11..23-14 are BLOCKED regardless of the "
         "D-04 re-test's outcome"
     )
+
+
+@pytest.mark.parametrize(
+    "case,sentinel,sha,extra_paths,expected",
+    [
+        # (1) ABSENT SENTINEL — sensitivity to PRESENCE.
+        (
+            "absent-sentinel",
+            "PHASE23-SCRATCH-STRING-THAT-IS-IN-NO-COMMIT",
+            _UNBLOCK_COMMIT,
+            (),
+            "PRESENCE",
+        ),
+        # (2) A DIFFERENT, REAL, ANCESTOR COMMIT — sensitivity to PROVENANCE, which case 1 does not
+        # test at all. An absent-sentinel drive proves the guard notices a MISSING phrase and says
+        # nothing about whether some OTHER commit could supply it.
+        ("wrong-sha", _UNBLOCK_SENTINEL, _A_DIFFERENT_ANCESTOR, (), "PROVENANCE"),
+        # (3) A `scripts/` PATH IN THE ACT — the act-shape conjunct, which the other two leave
+        # entirely unwatched.
+        (
+            "code-in-act",
+            _UNBLOCK_SENTINEL,
+            _UNBLOCK_COMMIT,
+            ("scripts/phase23_run.py",),
+            "ACT SHAPE",
+        ),
+    ],
+)
+def test_the_unblock_branch_needs_the_committed_act(case, sentinel, sha, extra_paths, expected):
+    """THE WATCHED RED. Three CONSTRUCTED inputs, none of them a repository state.
+
+    Nothing here deletes, edits or renames the real unblock record — 23-20's whole-block
+    substitution control, same shape and same reason: a branch nobody has watched REFUSE is a branch
+    nobody has tested. The seam takes three arguments precisely so all three cases are inputs.
+    """
+    proven, reason, _detail = _unblock_act_is_committed(
+        sentinel=sentinel,
+        sha=sha,
+        changed_paths=[*_paths_changed_by(_UNBLOCK_COMMIT), *extra_paths],
+    )
+    assert not proven, (
+        f"case {case!r} OPENED the unblock branch. It must report `still blocked`: the gate is the "
+        "pinned human act, and each of these three inputs breaks exactly one of its conjuncts"
+    )
+    assert expected in reason, f"case {case!r} refused for the wrong reason: {reason!r}"
