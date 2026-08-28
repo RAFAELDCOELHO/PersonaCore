@@ -29,6 +29,7 @@ import hashlib
 import json
 import operator
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -40,7 +41,8 @@ _SCRIPTS = str(_ROOT / "scripts")
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-import mitigation_gate  # noqa: E402  (needs the sys.path insert above)
+import _prose  # noqa: E402  (needs the sys.path insert above)
+import mitigation_gate  # noqa: E402  (same reason)
 import phase23_cost  # noqa: E402  (same reason)
 import phase23_prereg  # noqa: E402
 
@@ -636,3 +638,387 @@ def test_the_sizing_table_prices_the_never_taught_floor():
             row["projected_hours"] + row["never_taught_floor_hours_ceiling"]
         ), f"K={k}'s total does not re-derive from the sweep projection plus the floor line item"
         assert row["sized_against"] == "h_per_point_ceiling", row["sized_against"]
+
+
+# ---------------------------------------------------------------------------------------------
+# 23-12 — the retract-in-place guard: additive, complete across three files, faithful to the record
+# ---------------------------------------------------------------------------------------------
+
+# The falsified claim, in the ONE form that survives all three phrasings. `.planning/ROADMAP.md`
+# also mentions the bare numeral `1,010` on its plan-list line for 23-12 itself; that line carries
+# no claim, and matching this longer text rather than the numeral is what keeps the completeness
+# scan from demanding a retraction marker beside a plan description.
+_CLAIM_TEXT = "~1,010× training"
+
+_BEGIN_SENTINEL = "<!-- 23-12-CONTINUATION-BEGIN -->"
+_END_SENTINEL = "<!-- 23-12-CONTINUATION-END -->"
+
+# The marker shape, asserted with its date and the plan that wrote it. `.planning/STATE.md` already
+# carried four earlier `RETRACTED IN PLACE` markers before 23-12 ran, so a bare substring search
+# would find one of those and pass without this plan's correction existing at all.
+_MARKER = re.compile(r"RETRACTED IN PLACE (\d{4}-\d{2}-\d{2}) \(plan 23-12\)")
+
+_CORRECTED_FILES = (
+    ".planning/REQUIREMENTS.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+)
+
+# The file whose continuation is REQUIRED to publish the full pre-registered set. The other two
+# carry the record, its digest, the ceiling and whichever figures their own claim needs — see
+# `test_the_correction_quotes_the_cost_record_faithfully`'s docstring for why the split is not
+# symmetric.
+_FULL_SET_FILE = ".planning/REQUIREMENTS.md"
+
+# 23-11 Part B pins these under the heading *THE PUBLISHED FIGURES ARE PRE-REGISTERED FIELD PATHS*;
+# this is the SAME list and the two must not drift. NOT an allow-list — the polarity is the proof:
+# every member must be PRESENT (half one) and nothing long may be present that is not a member
+# (half two), so adding an entry makes the guard demand strictly more, never less.
+REQUIRED_FIGURE_PATHS = [
+    "training.non_dp.training_seconds_mean",
+    "training.non_dp_superseded_protocol.training_seconds_mean",
+    "training.non_dp.wall_clock_gap_vs_superseded",
+    "training.dp_n8.seconds_total",
+    "training.dp_n64.seconds_total",
+    "generation.h_per_point_floor",
+    "generation.h_per_point_ceiling",
+    "ratios.non_dp.eval_over_training_ceiling",
+    "ratios.non_dp_superseded_protocol.eval_over_training_ceiling",
+    "ratios.dp_n8.eval_over_training_ceiling",
+    "ratios.dp_n64.eval_over_training_ceiling",
+]
+
+# WHY 8, MEASURED RATHER THAN ASSUMED. Every float leaf of the four source records this phase reads
+# (`phase23_matched_control`, `phase23_control_floor`, `phase23_sigma_zero`,
+# `phase23_never_taught_training`) was histogrammed by fractional-digit count. The distribution is
+# BIMODAL with an EMPTY separating band and the threshold sits inside it: 1-5 digits -> 130 leaves
+# (exact rationals: recall rates k/n, `0.0`, the `0.0003` LR); 6-11 digits -> **0 leaves**; 12-18
+# digits -> 259 leaves (every measured continuous quantity). Below the threshold sit all the
+# numerals the prose legitimately carries: dates, plan ids, `D-03`, `CAL-05`, `SC2`, line citations,
+# the quoted `1,010` and `17`, and the h/point table's `4.77` / `2.45` / `1.67` / `0.90`. The
+# longest fractional rendering this repository produces structurally is 6, from
+# `phase23_prereg.noised_record_path`'s six-decimal sigma, which the threshold clears.
+MIN_FRACTIONAL_DIGITS = 8
+
+# BUILT FROM the constant, never written beside it: re-binding `MIN_FRACTIONAL_DIGITS` retunes the
+# guard, so the name is load-bearing rather than decorative. A sha256 digest is excluded
+# STRUCTURALLY and not by exemption — hex digests carry long digit runs but never a `.` immediately
+# preceded by a digit, so this pattern cannot match inside one.
+LONG_FIGURE = re.compile(rf"\d[\d,]*\.\d{{{MIN_FRACTIONAL_DIGITS},}}(?:[eE][+-]?\d+)?")
+
+
+def _figure(record, path):
+    """The ``repr()`` of the leaf at a dotted ``path``, byte-identical to the record's own text.
+
+    23-11 writes ``results/phase23_cost.json`` with ``json.dump``, which serialises floats through
+    ``float.__repr__``, so this string is what the record file itself carries. No formatting, no
+    rounding, no thousands separators.
+    """
+    node = record
+    for key in path.split("."):
+        node = node[key]
+    return repr(node)
+
+
+def _continuation(text):
+    """The text strictly between the two sentinels, with their placement asserted.
+
+    Counted with ``str.count`` and NOT with a line-based tool. ``grep -c`` counts LINES, so two
+    BEGIN sentinels emitted on ONE line satisfy a ``grep -c ... = 1`` check while the split below
+    then scans only the first span and the second goes unguarded. That defect is live in this
+    repository: `.planning/REQUIREMENTS.md` carries two `RETRACTED IN PLACE` markers on a single
+    line and `grep -c` returns 1 for it.
+    """
+    for sentinel in (_BEGIN_SENTINEL, _END_SENTINEL):
+        found = text.count(sentinel)
+        assert found == 1, (
+            f"{sentinel} occurs {found} time(s); exactly one is required. A missing or duplicated "
+            "sentinel makes the guard scan the wrong text, which is how a guard passes vacuously"
+        )
+    assert text.index(_BEGIN_SENTINEL) < text.index(_END_SENTINEL), (
+        "the END sentinel precedes the BEGIN sentinel, so the continuation slice is empty or "
+        "inverted"
+    )
+    return text.split(_BEGIN_SENTINEL, 1)[1].split(_END_SENTINEL, 1)[0]
+
+
+def _required_figures_missing(text, record):
+    """HALF ONE, record -> continuation: every pre-registered rendering, present VERBATIM.
+
+    Catches an OMITTED figure and any ROUNDING of a required one — a rounding leaves the required
+    full-precision string simply absent. Does NOT catch an invented extra figure; that is half
+    two's direction and neither half implies the other.
+    """
+    return [
+        f"{path} -> {_figure(record, path)}"
+        for path in REQUIRED_FIGURE_PATHS
+        if _figure(record, path) not in text
+    ]
+
+
+def _long_figures_not_sourced(text, record):
+    """HALF TWO, continuation -> record: nothing long that is not one of the eleven renderings.
+
+    That is the entire rule. Nothing is dropped, nothing is classified, no span is captured and no
+    token is exempted — so a figure inside backticks is scanned exactly like one in prose, a figure
+    on the marker line is in scope, and a figure carrying a thousands separator is CAUGHT rather
+    than laundered, all by construction rather than by a patch.
+
+    STATED RESIDUALS, disclosed rather than mechanised away. (a) An invented SHORT numeral is not
+    caught: shape cannot separate it from the dates, plan ids and quoted falsified figures the
+    prose legitimately carries, and it is bounded by half one, which asserts every required figure
+    present at full precision so a short invention can only ever be ADDITIONAL. (b) A SIGN FLIP is
+    not caught — the pattern has no sign class, so ``-2.035849685343305`` matches as the required
+    rendering and passes both halves. ``[-−]?`` is deliberately NOT added: it makes a
+    legitimate figure in a hyphenated range (``79-161.1239542257311``) match as a negative and
+    FALSE-RED a correct continuation, and all eleven published quantities are positive so a
+    negative rendering is nonsense a reader catches. (c) A NON-ASCII DECIMAL SEPARATOR is not
+    caught: ``\\.`` matches only U+002E. The asymmetry is the useful half — Unicode DIGITS around an
+    ASCII point ARE caught, since ``\\d`` is Unicode-aware by default.
+    """
+    sourced = {_figure(record, path) for path in REQUIRED_FIGURE_PATHS}
+    return [match for match in LONG_FIGURE.findall(text) if match not in sourced]
+
+
+@pytest.mark.parametrize("relative_path", _CORRECTED_FILES)
+def test_cost_claim_correction_is_additive(relative_path):
+    """The original claim SURVIVES, and a dated 23-12 marker sits after it, in all three files.
+
+    The claim is matched through ``scripts/_prose.normalized`` rather than a bare ``in`` check:
+    `.planning/STATE.md` line-wraps it as ``"~1,010×\\n  training"`` and a naive containment
+    test reports a FALSE absence on it. The normalizer is IMPORTED, never re-written — a second
+    copy of a matcher is a second matcher, free to stop matching.
+    """
+    record = _cost()
+    if record is None:
+        return
+    text = (_ROOT / relative_path).read_text(encoding="utf-8")
+    flat = _prose.normalized(text)
+
+    claim = _prose.normalized(_CLAIM_TEXT)
+    assert claim in flat, (
+        f"{relative_path} no longer carries the original claim {_CLAIM_TEXT!r}. A correction that "
+        "removes the sentence it corrects is a rewrite, not a retraction: the record of what was "
+        "believed is the thing being preserved"
+    )
+
+    marker = _MARKER.search(flat)
+    assert marker is not None, (
+        f"{relative_path} carries the claim but no `RETRACTED IN PLACE <date> (plan 23-12)` "
+        "marker. A correction landing in one of three files leaves two standing"
+    )
+    assert marker.start() > flat.index(claim), (
+        f"{relative_path}'s 23-12 marker at {marker.start()} precedes the claim at "
+        f"{flat.index(claim)}; the continuation is APPENDED to the text it corrects"
+    )
+
+    body = _prose.normalized(_continuation(text))
+    assert phase23_prereg.COST_RECORD in body, (
+        f"{relative_path}'s continuation does not name {phase23_prereg.COST_RECORD}. Every figure "
+        "it publishes must be re-derivable from the artifact that measured them"
+    )
+    digest = hashlib.sha256((_ROOT / phase23_prereg.COST_RECORD).read_bytes()).hexdigest()
+    assert digest in body, (
+        f"{relative_path}'s continuation does not quote the live sha256 {digest} of "
+        f"{phase23_prereg.COST_RECORD}"
+    )
+
+    # Every non-DP figure the continuation quotes must carry the `protocol` of the block it came
+    # from. The acceptable strings are DERIVED from the record, never hardcoded here: a retyped
+    # protocol label is a second label, free to drift away from the one the artifact carries.
+    labelled = 0
+    for key, block in record["training"].items():
+        if not key.startswith("non_dp"):
+            continue
+        rendering = _figure(record, f"training.{key}.training_seconds_mean")
+        if rendering not in body:
+            continue
+        labelled += 1
+        assert _prose.normalized(block["protocol"]) in body, (
+            f"{relative_path}'s continuation quotes training.{key}'s {rendering} without naming "
+            f"its protocol {block['protocol']!r}. Two measured non-DP protocols disagree by "
+            "training.non_dp.wall_clock_gap_vs_superseded, so an arm name alone identifies no "
+            "number"
+        )
+    assert labelled, (
+        f"{relative_path}'s continuation quotes NEITHER non-DP training mean, so the protocol "
+        "check above passed vacuously"
+    )
+
+
+def test_the_correction_quotes_the_cost_record_faithfully():
+    """HALF ONE — all eleven pre-registered renderings present in the REQUIREMENTS continuation.
+
+    Bound on `.planning/REQUIREMENTS.md` ONLY, and the asymmetry with half two is deliberate. That
+    is the file whose continuation is required to publish the full set; demanding all eleven inside
+    the `.planning/ROADMAP.md` milestone preamble and the `.planning/STATE.md` status line would
+    force those two documents to become copies of the first, which is not what a correction to a
+    preamble or a status line should look like. Half two binds on all three, because an invented
+    figure is just as false in a status line as in a requirements preamble.
+    """
+    record = _cost()
+    if record is None:
+        return
+    body = _continuation((_ROOT / _FULL_SET_FILE).read_text(encoding="utf-8"))
+    missing = _required_figures_missing(body, record)
+    assert missing == [], (
+        f"{_FULL_SET_FILE}'s continuation omits {len(missing)} pre-registered figure(s): "
+        f"{missing}. A ROUNDING lands here too — the required full-precision string is then simply "
+        "absent, which is the defect `2.04` for `2.035849685343305` would produce"
+    )
+
+
+def test_the_continuation_invents_no_figure():
+    """HALF TWO — no long numeral in any of the three continuations that the record did not measure.
+
+    The headline guard. Bound on ALL THREE slices, never on whole files: `.planning/REQUIREMENTS.md`
+    `.planning/ROADMAP.md` and `.planning/STATE.md` already carried 69 / 25 / 98 literals with 8+
+    fractional digits before 23-12 wrote a line — committed measurements from earlier phases, none
+    of them leaves of the cost record — so a whole-file scan would RED on every one of them.
+    """
+    record = _cost()
+    if record is None:
+        return
+    for relative_path in _CORRECTED_FILES:
+        body = _continuation((_ROOT / relative_path).read_text(encoding="utf-8"))
+        invented = _long_figures_not_sourced(body, record)
+        assert invented == [], (
+            f"{relative_path}'s continuation publishes {len(invented)} long figure(s) that are not "
+            f"among the eleven pre-registered renderings: {invented}. 'Present somewhere in the "
+            "record' is NOT the criterion — a floor-side ratio or a per-seed timing is a real leaf "
+            "at full precision and is still refused here"
+        )
+
+
+_INVENTED_FIGURE = "37.51234567890123"
+_ROUNDED_PATH = "training.non_dp.wall_clock_gap_vs_superseded"
+_OMITTED_PATH = "generation.h_per_point_ceiling"
+
+
+def _construct_defect(case, text, record):
+    """Mutate ONLY the sentinel slice, so each constructed defect lands where the guard looks."""
+    head, rest = text.split(_BEGIN_SENTINEL, 1)
+    body, tail = rest.split(_END_SENTINEL, 1)
+
+    if case == "invention-bare":
+        body = f"{body}\nAn unmeasured figure: {_INVENTED_FIGURE}\n"
+    elif case == "invention-backticked":
+        body = f"{body}\nAn unmeasured figure: `{_INVENTED_FIGURE}`\n"
+    elif case == "invention-on-the-marker-line":
+        lines = body.split("\n")
+        index = next(i for i, line in enumerate(lines) if "RETRACTED IN PLACE" in line)
+        lines[index] = f"{lines[index]} {_INVENTED_FIGURE}"
+        body = "\n".join(lines)
+    elif case == "rounding":
+        body = body.replace(_figure(record, _ROUNDED_PATH), "2.04")
+    elif case == "omission":
+        body = body.replace(_figure(record, _OMITTED_PATH), "")
+    else:  # pragma: no cover - a case id with no construction is a test-authoring defect
+        raise AssertionError(f"no construction for case {case!r}")
+
+    return head + _BEGIN_SENTINEL + body + _END_SENTINEL + tail
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "invention-bare",
+        "invention-backticked",
+        "invention-on-the-marker-line",
+        "rounding",
+        "omission",
+    ),
+)
+def test_the_guard_catches_a_constructed_defect(tmp_path, case):
+    """Both halves watched REDDENING on a ``tmp_path`` COPY, never on the committed file.
+
+    The three invention channels are covered BY CONSTRUCTION rather than by three patches: nothing
+    is dropped and no span is captured, so backticks and the marker line are not special. The
+    rounding and omission cases drive half one, which is the only half that sees them.
+    """
+    record = _cost()
+    if record is None:
+        return
+    original = (_ROOT / _FULL_SET_FILE).read_text(encoding="utf-8")
+    copy = tmp_path / "REQUIREMENTS.md"
+    copy.write_text(_construct_defect(case, original, record), encoding="utf-8")
+    body = _continuation(copy.read_text(encoding="utf-8"))
+
+    if case.startswith("invention"):
+        invented = _long_figures_not_sourced(body, record)
+        assert invented == [_INVENTED_FIGURE], (
+            f"case {case!r} was written into the slice and half two returned {invented!r}; the "
+            "invented figure must be caught in every writing channel"
+        )
+        assert _required_figures_missing(body, record) == [], (
+            f"case {case!r} displaced a required figure, so it does not isolate the invention half"
+        )
+    else:
+        expected = _ROUNDED_PATH if case == "rounding" else _OMITTED_PATH
+        missing = _required_figures_missing(body, record)
+        assert missing == [f"{expected} -> {_figure(record, expected)}"], (
+            f"case {case!r} was written into the slice and half one returned {missing!r}"
+        )
+
+
+def test_no_file_carrying_the_claim_was_left_uncorrected():
+    """Every `.planning/*.md` carrying the claim also carries the dated 23-12 marker.
+
+    Scanned over the DIRECTORY rather than a hand-listed tuple, so a fourth copy appearing at
+    `.planning/` top level later is caught rather than missed.
+
+    THE SCOPE IS PINNED AT ONE LEVEL, DELIBERATELY, AND THIS IS WHY. Made recursive, the same scan
+    sweeps `.planning/phases/**` and reaches the artifacts that quote the claim as the record of
+    what was believed WHEN THEY WERE WRITTEN — the phase's CONTEXT, RESEARCH, VALIDATION and
+    several PLAN documents — and would demand a retraction marker inside each. Phase artifacts are
+    dated records of a phase's own reasoning; retro-editing them is the opposite of
+    retract-in-place, and `23-RESEARCH.md` is where the falsifying measurement is recorded in the
+    first place. The documents a reader consults for what is CURRENTLY believed are exactly
+    `.planning/*.md`. Do not "fix" this scope by widening it.
+
+    The scan matches the normalized CLAIM TEXT and never the bare numeral: `.planning/ROADMAP.md`'s
+    plan-list line for 23-12 mentions `1,010` while carrying no claim, and a numeral-matching scan
+    would demand a retraction marker beside a plan description.
+    """
+    claim = _prose.normalized(_CLAIM_TEXT)
+    carriers = []
+    for path in sorted((_ROOT / ".planning").glob("*.md")):
+        flat = _prose.normalized(path.read_text(encoding="utf-8"))
+        if claim not in flat:
+            continue
+        carriers.append(path.name)
+        assert _MARKER.search(flat) is not None, (
+            f".planning/{path.name} carries the claim {_CLAIM_TEXT!r} with no "
+            "`RETRACTED IN PLACE <date> (plan 23-12)` marker. The claim lives in more than one "
+            "planning document and a correction landing in one leaves the others standing"
+        )
+    assert set(carriers) == {pathlib.Path(p).name for p in _CORRECTED_FILES}, (
+        f"the set of `.planning/*.md` files carrying the claim is {carriers}, which is not the "
+        "three this plan corrected. A new carrier needs its own continuation; a vanished one means "
+        "the claim was deleted somewhere instead of retracted in place"
+    )
+
+
+def test_the_h_per_point_table_is_disclosed_as_a_floor():
+    """The ceiling is published beside the table, and the table's `4.77` row still stands.
+
+    A corrected ratio sitting beside an uncorrected floor-valued h/point table would reproduce
+    exactly the defect CAL-05 exists to prevent, so the disclosure is asserted rather than assumed.
+    """
+    record = _cost()
+    if record is None:
+        return
+    text = (_ROOT / _FULL_SET_FILE).read_text(encoding="utf-8")
+    body = _continuation(text)
+    assert "h_per_point_ceiling" in body, (
+        "the REQUIREMENTS continuation does not name `h_per_point_ceiling`, so the h/point table's "
+        "floor status is corrected without saying what the ceiling is"
+    )
+    ceiling = _figure(record, "generation.h_per_point_ceiling")
+    assert ceiling in body, f"the continuation does not quote the measured ceiling {ceiling}"
+
+    row = "| 48 (Phase 18 fidelity) | 42,480 | 4.77 | 76.3 h = 3.2 days | (1, 4, 16, 48) |"
+    assert _prose.normalized(row) in _prose.normalized(text), (
+        "the original `4.77` h/point row is gone. The table is LEFT STANDING and disclosed as a "
+        "floor; deleting it destroys the record of what was believed"
+    )
