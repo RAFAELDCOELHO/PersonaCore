@@ -4687,14 +4687,85 @@ def score_never_taught(seed, *, adapter, training):
     return block
 
 
+def _never_taught_evidence(seed, block):
+    """RE-SCORE one seed from its RETAINED RAW DRAWS, and prove the recorded counts re-derive.
+
+    Two things at once, and the second is why this exists rather than a field copied at scoring
+    time. It emits the RAW PER-ITEM LOG — one row per QUESTION, the unit every figure here is in,
+    carrying how many of its own draws contained the value — so the published count is
+    recomputable from the committed record alone rather than only from a gitignored ledger. And it
+    RE-DERIVES the recorded counts through the same imported predicate, on a different day, in a
+    different process, from the bytes the generation actually produced. A disagreement means the
+    block and its own evidence describe different runs, and the write aborts.
+
+    The raw completion TEXT itself stays in ``data/`` — it is ~1 MB of model output per seed, not a
+    measurement — with its digest pinned into the record so the retained file is identifiable.
+    """
+    import phase18_extraction as x18  # LAZY — heavy, torch-touching.
+
+    cache = _never_taught_draws_path(seed)
+    _prove(
+        cache.exists(),
+        f"{cache} is GONE. It is the raw evidence behind seed {seed}'s published count, and the "
+        "record is not written over readings whose draws cannot be re-scored",
+    )
+    blob = json.loads(cache.read_text(encoding="utf-8"))
+    _prove(
+        blob["adapter_sha256"] == block["adapter_sha256"]
+        and blob["k"] == block["draws_per_question"],
+        f"the retained draws for seed {seed} describe adapter {blob['adapter_sha256']!r} at k="
+        f"{blob['k']!r} against the recorded {block['adapter_sha256']!r} at "
+        f"{block['draws_per_question']!r}",
+    )
+    values = {fact.id: fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS}
+    draws = [record for shape in x18.ATTACK_FAMILIES for record in blob["shapes"][shape]["draws"]]
+    scored = x18.score_records(draws, values)
+
+    gated = [record for record in scored if record["tier"] == block["gated_tier"]]
+    successes = sum(1 for record in gated if any(record["hits"]))
+    _prove(
+        (successes, len(gated)) == (block["nontarget_successes"], block["nontarget_questions"]),
+        f"seed {seed} re-scores to {successes}/{len(gated)} from its retained draws but the "
+        f"recorded reading is {block['nontarget_successes']}/{block['nontarget_questions']}. The "
+        "published count and the evidence behind it describe different runs",
+    )
+    return {
+        "seed": seed,
+        "raw_draws_retained_at": _rel(cache),
+        "raw_draws_sha256": _sha256(cache),
+        "raw_draws_not_committed": (
+            "the ~1 MB of raw generated TEXT per seed lives in gitignored `data/` and is not a "
+            "committed artifact; its digest is pinned here so the retained file is identifiable. "
+            "Every MEASUREMENT taken off it IS committed — the rows below are one per question, "
+            "and `per_seed[].per_cell[].per_fact` carries the counts with their denominators"
+        ),
+        "re_derived_successes": successes,
+        "re_derived_questions": len(gated),
+        "per_question": [
+            {
+                "family": record["family"],
+                "tier": record["tier"],
+                "fact_id": record["fact_id"],
+                "slot": record["slot"],
+                "seed_index": record["seed_index"],
+                "hits": sum(record["hits"]),
+                "n_draws": record["n_draws"],
+            }
+            for record in scored
+        ],
+    }
+
+
 def _never_taught_record(training, seeds):
     """Assemble and write ``results/phase23_never_taught.json`` once every seed is scored.
 
-    Pure arithmetic over the working state — no GPU second is spent here, which is why an assembly
-    bug costs nothing. The reduction is CALLED: no spread is typed in this file.
+    Pure arithmetic plus a CPU re-score over the working state and the retained draws — no GPU
+    second is spent here, which is why an assembly bug costs nothing. The reduction is CALLED: no
+    spread is typed in this file.
     """
     state = _state_load()["never_taught"]
     per_seed = [state[str(seed)]["scoring"] for seed in seeds]
+    evidence = [_never_taught_evidence(seed, block) for seed, block in zip(seeds, per_seed)]
     readings = [block["rate"] for block in per_seed]
     # THE REDUCTION IS CALLED, NEVER INLINED — the same blind-committed function that reduced the
     # control floor and the matched floor. No `max`, no `min`, no spread is typed here.
@@ -4785,6 +4856,14 @@ def _never_taught_record(training, seeds):
             "pooling_rule": NEVER_TAUGHT_POOLING_RULE,
         },
         "per_seed": per_seed,
+        "evidence": evidence,
+        "evidence_rule": (
+            "every per-seed reading above was RE-SCORED from its retained raw draws through the "
+            "same imported `phase18_extraction.score_records`, in this process, and asserted equal "
+            "to the recorded count before this file was written. `evidence[].per_question` is the "
+            "raw per-item log at the QUESTION unit, so `pooled.nontarget_successes` is the number "
+            "of gated rows with `hits > 0` and recomputes from this record alone"
+        ),
         "source_training_record": NEVER_TAUGHT_TRAINING_RECORD,
         "source_training_record_sha256": _sha256(_ROOT / NEVER_TAUGHT_TRAINING_RECORD),
         "consumers": training["consumers"],
