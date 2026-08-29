@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: executing
-stopped_at: "Completed 23-14-PLAN.md — CTRL-03 CLOSED, and with it ALL SIX of ROADMAP.md:562's requirements. The five never-taught adapters 23-08 trained were SCORED (never retrained; consumed by path and sha256) on the four dose-split Phase-18 attack families at mitigation_budget.CURVE_K = 16, and returned 0 of 416 core_held_out QUESTIONS extracted at least once at EVERY seed. 69,120 draws dispatched, 33,280 gated, 10.137392909281836 h of MPS generation over six detached launches with pid==pgid==sid probed before every GPU second. results/phase23_never_taught.json committed; the frozen mitigation_gate.extraction_ceiling ACCEPTS it on its real code path and all FIVE of its refusals were watched firing on degraded COPIES, the count re-read from source by AST. Counts are QUESTION-denominated with total_draws == questions x k asserted; the success predicate and the question rollup are IMPORTED from the ancestry-guarded phase18_extraction. The floor is phase23_prereg.noise_floor CALLED over five readings and re-derives under exact ==. THE FLOOR IS EXACTLY 0.0 — real, but over a DEGENERATE reading set: it records the absence of leakage, not a measured spread, and its consequence for Phase 25 is STRICTER not looser (MARGIN_K x 0.0 = 0, so X reduces to wilson_upper_bound(0, 416) alone). Phase 23 does NOT publish X. Per-seed commit discipline held: run_state commits 5 -> 10, one per scored seed, each between launches. ONE DEVIATION, recorded not hidden: the first launch drew all 13,824 completions and died in _state_write on a torch.Tensor echoed in from load_adapted_model's artifact; the traceback is committed in the run log, the field was dropped, and raw draws are now persisted PER SHAPE so no post-draw defect can cost a GPU hour again. Suite 1589 passed, 1 skipped (1578 + 11 new); ruff clean; every frozen pin byte-unchanged; zero gsd-sdk mutation handlers called."
-last_updated: "2026-08-29T14:20:00.000Z"
+status: ready_to_plan
+stopped_at: "Phase 23 CLOSED 2026-08-29 at 19 of 20 plans (23-17 deliberately unticked; 23-20 completed its work). All six requirements closed — CAL-01/CAL-05/CAL-02/CAL-03/DPSGD-06/CTRL-03. Verification 5/5 must-haves; both human_needed items ruled on and closed the same day (DPSGD-06 stale row retracted in place at 7296b31; never-taught positive control landed and watched RED at 17c28c8). 23-SECURITY.md threats_open 0 over 113 distinct threat IDs. Suite 1591 passed, 1 skipped. Ready to discuss Phase 24."
+last_updated: "2026-08-29T15:35:10.868Z"
 last_activity: 2026-08-29
 progress:
   total_phases: 9
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 67
   completed_plans: 66
-  percent: 33
+  percent: 44
 ---
 
 # Project State
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
-**Current focus:** Phase 23 — cost calibration, the σ=0 diagnostic, and budget pre registration
+**Current focus:** Phase 24 — adversarial extraction aware training + the held out attack family
 
 ## Current Position
 
-Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — **ALL SIX REQUIREMENTS CLOSED**
-Plan: 14 of 20 — **23-14 COMPLETE** (11 commits, `92b48a9`…`87f6f2e`) — **19 of 20 plans ticked**
+Phase: 24 (adversarial extraction-aware training + the held-out attack family) — NOT STARTED
+Plan: none yet. Phase 23 CLOSED 2026-08-29 — **19 of 20 plans ticked**
 (23-01…23-16, 23-18, 23-19, 23-20). The one remaining unticked box is **23-17**, deliberately: its
 run was harness-killed and produced no record, and 23-20 completed the work under a separate
 continuation pre-registration.
@@ -391,7 +391,7 @@ reproduced, plus a finding it did not record — **an on-device bitwise check ca
 subnormal flush**, because the comparison operator flushes its own operands too. Suite `1500 passed,
 1 skipped`. All four frozen pre-registrations byte-unchanged. **NO requirement ticked** — this makes
 a valid comparator possible, it delivers none of CAL-01/CAL-02/CAL-05/CTRL-03.
-Status: **D-04 FIRED AT 23-10. ZERO NOISED SWEEP POINTS MAY RUN.** The σ=0 diagnostic read
+Status: **D-04 FIRED AT 23-10 (historical record — RESOLVED at 23-19).** The σ=0 diagnostic read
 `0.7837301587301587` against the control's pinned central `0.5615079365079365` — deviation
 `0.2222222222222222` against a floor of `0.05357142857142849`, **4.15× the floor**, in the **BEATS**
 direction, which is the direction every correctness bug in this class produces. The verdict came
@@ -410,7 +410,7 @@ is a valid comparator for the σ=0 arm at all.
 ### Gap-closure wave 2 — what 20-13..20-17 close
 
 EXECUTED — all five plans landed and every claim below is now a measured state rather than a plan. GAP 1 (GATE-06) closed at `20-14`: `coverage_verdict` carries a per-element `[0.0, 1.0]` `_prove` on BOTH Y legs, placed before `x_uppers` so no value reaches the axis loop unvalidated, and the range check subsumes NaN with no deletable special case; the success-count unit is enforced BY TYPE (`isinstance(k, int) and not isinstance(k, bool)`), which also refuses the module's own rate-space `SUPERSEDED_SWEEP_SENTINEL`. GAP 2 (GATE-02 / T-20-19) closed at `20-15`: `_prove_retention_floor` gained a fifth `_prove` bounding the floor's MAGNITUDE — `_MAX_ADMISSIBLE_RETENTION_FLOOR`, DERIVED from the governing floor times a separately-named `_RETENTION_FLOOR_RELATIVE_TOLERANCE` (measured `1e-09`) — placed AFTER the `!=` so the named-value refusal still fires first; the one-ULP nudge and `5.0` under clean provenance are both refused by MAGNITUDE and the governing floor `0.008681618994239138` is still ADMITTED, so the bound is one-sided and not vacuous. THE FINDING A FUTURE READER MOST NEEDS IS **D-41**: that bound refuses THIS REPOSITORY'S OWN committed fixtures at `retention_noise_floor: 0.009` inside the FROZEN pin, so the sanctioned route's test harness supplies the governing floor READ from `results/phase20_retention_floor.json` rather than the tolerance being widened to admit a value already in hand — and every published verdict is BIT-UNCHANGED under the substitution (all four `PASS`/`INCONCLUSIVE` readings identical, the governing cap `3.9085032379884783` strictly TIGHTER than the fixture's `3.90914`, so the rewire cannot buy a pass the fixture floor would have withheld). `20-16` published the second dated continuation additively (+152 / −0 via `append_addendum`, in its own commit) and corrected in place the one `REQUIREMENTS.md` sentence the verification measured FALSE. `20-17` re-closed `20-SECURITY.md` to `status: verified` / `threats_open: 0` at 84 distinct threat IDs with zero rows at Status `open`, in a commit distinct from `20-13`'s OPEN flip (D-39), gated on RE-APPLYING eight watched-RED breaks in its own process — all observed RED, all restored byte-identically, and ONE DIVERGED from its SUMMARY and was published rather than smoothed. Full suite `877 passed, 1 skipped`; both frozen pins `git diff --exit-code` 0. Confirmation is the ORCHESTRATOR's audit at `/gsd:verify-phase 20`, not this record. PRIOR ENTRY (2026-08-21, at dispatch, carried forward rather than deleted): The 2026-08-21 re-verification returned `gaps_found` at 5/6 must-haves, and both remaining gaps are the same defect class — a guard that refuses a NAME where the harm is a PROPERTY. GAP 1 (GATE-06 / ROADMAP SC3) — `coverage_verdict` length-checks both Y sweep legs and consumes their values raw, while the extraction axis on the same function gets three per-element `_prove` calls; measured, held-out `(0.30, 0.28)` is correctly flagged truncated but `(nan, 0.28)`, strictly MORE truncated, drops out of the truncated set entirely and reaches `PASS` — `nan >= criterion` is False, so the NaN is COUNTED as a failing point and actively manufactures the bracket. GAP 2 (GATE-02 / T-20-19) — `_prove_retention_floor` refuses the borrowed floor by float `!=`; measured, `0.06893 * (1 + 2**-50)` defeats it and returns a BIT-IDENTICAL `4.029`, and `retention_noise_floor=5.0` with clean adapter provenance needs no malformed input at all to reach `PASS` at cap `13.89114` against the governing `3.9085032379884783`. Both reproduced against HEAD before planning. THE PLANNED CLOSURE, per three escalation decisions taken at the gate: the magnitude bound lands BESIDE the `!=` (name refused by identity AND class refused by magnitude, which also moots the D-24 post-hoc question); T-20-19 flips OPEN / `threats_open: 1` as 20-13's FIRST act and returns to CLOSED only after the bound's tripwires are watched RED against both measured cases, in a separate commit; and the Y hole is NOT deferred to Phase 23. PLANNER FINDING, not in any source document: the bound refuses this repository's OWN committed fixtures — `retention_noise_floor: 0.009` at `scripts/mitigation_gate.py:1237`, annotated `# fabricated`, inside the FROZEN file — so landing it alone reddens 5 of 11 correction tests. Recorded as D-41 and closed by having the test harness read the governing floor from `results/phase20_retention_floor.json` rather than by widening the tolerance to admit a value already in hand. Verified by the plan-checker end to end: bound alone 5 failed / 6 passed, bound + harness 11 passed, all fixture verdicts bit-unchanged. NOT YET EXECUTED — no code has changed; `git diff --exit-code -- scripts/ tests/ results/` returns 0.
-Last activity: 2026-08-27
+Last activity: 2026-08-29
 
 ## Performance Metrics
 
@@ -434,6 +434,7 @@ Last activity: 2026-08-27
 | 20 | 17 | - | - |
 | 21 | 11 | - | - |
 | 22 | 19 | - | - |
+| 23 | 20 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 | Phase 12 P01 | 14min | 3 tasks | 3 files |
