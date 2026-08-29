@@ -248,3 +248,32 @@ project's own discipline closes rather than carries.
 
 _Verified: 2026-08-29T11:03:56Z at HEAD `3820c4e5`_
 _Verifier: Claude (gsd-verifier) — goal-backward, adversarial stance_
+
+---
+
+## Dated continuation — 2026-08-29, both human items CLOSED
+
+The `status: human_needed` verdict above is a point-in-time record of the audit at HEAD `3820c4e5`
+and is **left standing, not rewritten**. What follows is what happened after it.
+
+Both `human_verification` items were ruled on by the developer the same day and **closed by doing
+the work**, not by deferring it:
+
+| Item | Ruling | Closed at |
+|------|--------|-----------|
+| W-01 — DPSGD-06 stale record | Same dated retract-in-place treatment 23-12 used; a false claim is not treated differently for having been found later | `7296b31` |
+| W-02 — never-taught positive control | Build the standing guard now, not deferred — `extraction_noise_floor = 0.0` forces X to its tightest point in two later phases | `17c28c8` |
+
+The three code-review criticals (CR-01/02/03) remain **deliberately deferred to Phase 25**, per this
+report's own ruling that they are forward-looking and mis-attribute nothing at one noised point.
+
+Measured after both closures, by the orchestrator rather than quoted from an agent:
+suite `1591 passed, 1 skipped`; `ruff check` clean over 219 files; the new control watched RED
+(degrading `phase14_recall.contains_value` to `return False` reddened both tests with the correct
+assertion, restored byte-identically, green again); frozen pins still `git diff --exit-code` 0.
+`23-SECURITY.md` subsequently closed the gate at `threats_open: 0` over 113 distinct threat IDs.
+
+**The phase was marked complete on this basis.** This continuation is NOT a re-verification: no
+verifier agent re-ran against the current HEAD. If a formal `passed` verdict at the new HEAD is
+wanted, run `/gsd:verify-phase 23` — it would audit the two closures above, which this report
+requested but did not itself check.
