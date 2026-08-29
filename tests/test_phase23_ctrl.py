@@ -41,6 +41,7 @@ import phase23_run  # noqa: E402
 from phase23_prereg import (  # noqa: E402
     CONTROL_FLOOR_RECORD,
     FLOOR_PROVENANCE_KEYS,
+    NEVER_TAUGHT_RECORD,
     NEVER_TAUGHT_TRAINING_RECORD,
     noise_floor,
 )
@@ -353,3 +354,279 @@ def test_the_driver_defines_no_pre_registration_of_its_own():
             f"the driver contains the literal {literal!r} outside a comment. The bound comes from "
             "`H_PER_POINT_FLOOR_SECONDS`; a retyped copy would be free to drift from it"
         )
+
+
+# =================================================================================================
+# ===== PLAN 23-14 — THE SCORED RECORD, AGAINST THE FROZEN GATE'S REAL CODE PATH ==================
+# =================================================================================================
+#
+# MEASURED BY AST AT `scripts/mitigation_gate.py`, re-counted from the source rather than trusted:
+# `extraction_ceiling` (lines 352-446) contains FIVE refusals — 2 `raise` at :405 and :410, and 3
+# `_prove` at :417, :425 and :436. `_DEGRADATIONS` below is exactly those five, and
+# `test_the_refusal_census_is_complete` re-runs the count so a sixth refusal added upstream turns
+# this file RED rather than passing over a case nobody wrote.
+
+
+def _gate_kwargs(record):
+    """The record's OWN values, in ``extraction_ceiling``'s parameter names."""
+    return {
+        "nontarget_successes": record["pooled"]["nontarget_successes"],
+        "nontarget_questions": record["pooled"]["nontarget_questions"],
+        "extraction_noise_floor": record["extraction_noise_floor"],
+        "extraction_floor_provenance": dict(record["extraction_floor_provenance"]),
+    }
+
+
+def _degrade_zero_questions(kwargs):
+    kwargs["nontarget_questions"] = 0
+
+
+def _degrade_successes_exceed_questions(kwargs):
+    kwargs["nontarget_successes"] = kwargs["nontarget_questions"] + 1
+
+
+def _degrade_drop_arm(kwargs):
+    kwargs["extraction_floor_provenance"].pop("arm")
+
+
+def _degrade_wrong_arm(kwargs):
+    kwargs["extraction_floor_provenance"]["arm"] = "phase19-nontarget"
+
+
+def _degrade_single_seed(kwargs):
+    seeds = list(kwargs["extraction_floor_provenance"]["seeds"])
+    kwargs["extraction_floor_provenance"]["seeds"] = [seeds[0]] * len(seeds)
+
+
+# (id, mutation, expected exception, a fragment of the refusal's OWN message).
+_DEGRADATIONS = (
+    ("zero-questions", _degrade_zero_questions, ValueError, "never draws"),
+    ("successes-exceed-questions", _degrade_successes_exceed_questions, ValueError, "outside"),
+    ("arm-key-dropped", _degrade_drop_arm, SystemExit, "arm and seeds are unstated"),
+    ("wrong-arm", _degrade_wrong_arm, SystemExit, "D-12 refuses one borrowing BY NAME"),
+    ("single-seed", _degrade_single_seed, SystemExit, "it is ONE DRAW"),
+)
+
+
+def test_the_refusal_census_is_complete():
+    """The five cases below ARE ``extraction_ceiling``'s refusals — re-counted from the source.
+
+    An AST census rather than a grep: this module's own docstrings name ``_prove`` and
+    ``extraction_ceiling``, so a text match would count its own prose. If a sixth refusal ever
+    lands upstream, this reddens instead of the parametrization quietly covering five of six.
+    """
+    tree = ast.parse((_ROOT / "scripts" / "mitigation_gate.py").read_text(encoding="utf-8"))
+    function = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "extraction_ceiling"
+    )
+    raises = [n for n in ast.walk(function) if isinstance(n, ast.Raise)]
+    proves = [
+        n
+        for n in ast.walk(function)
+        if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "_prove"
+    ]
+    assert (len(raises), len(proves)) == (2, 3), (
+        f"`extraction_ceiling` holds {len(raises)} raise(s) and {len(proves)} _prove call(s), not "
+        "the 2 + 3 this file parametrizes over. The gate is FROZEN and cannot be relaxed, so a "
+        "refusal it grew that nothing here drives is a refusal this record was never tested against"
+    )
+    assert len(_DEGRADATIONS) == len(raises) + len(proves)
+
+
+def test_never_taught_provenance_satisfies_the_gate():
+    """The committed record is ACCEPTED by the frozen gate's real code path.
+
+    SCOPING, stated because it is easy to over-read: this test proves ACCEPTABILITY, not a
+    published X. The returned bound is deliberately NOT asserted on and NOT recorded anywhere —
+    D-13 has the extraction floor arriving at that gate as a required kwarg, and Phase 25 is the
+    phase that computes X from it. What is checked here is that the ``_prove`` calls at the one
+    choke point where a floor's provenance is examined do not fire on this artifact.
+    """
+    record = _record(NEVER_TAUGHT_RECORD)
+    mitigation_gate.extraction_ceiling(**_gate_kwargs(record))  # must not raise
+
+    provenance = record["extraction_floor_provenance"]
+    assert provenance["arm"] == mitigation_gate.NEVER_TAUGHT_ARM
+    assert set(provenance) >= set(mitigation_gate.EXTRACTION_FLOOR_PROVENANCE_KEYS)
+    assert set(provenance) >= set(FLOOR_PROVENANCE_KEYS), (
+        f"the provenance carries {sorted(provenance)} and is missing "
+        f"{sorted(set(FLOOR_PROVENANCE_KEYS) - set(provenance))} of "
+        "`phase23_prereg.FLOOR_PROVENANCE_KEYS`. The frozen gate needs two keys; this phase's own "
+        "floor register needs eight, and a floor is refused rather than defaulted"
+    )
+    assert len(set(provenance["seeds"])) >= mitigation_gate.EXTRACTION_FLOOR_MIN_SEEDS
+
+
+@pytest.mark.parametrize(
+    "mutate,expected,fragment",
+    [pytest.param(m, e, f, id=name) for name, m, e, f in _DEGRADATIONS],
+)
+def test_the_gate_refuses_a_degraded_version_of_this_record(mutate, expected, fragment):
+    """Every refusal WATCHED FIRING, on a COPY of the real record — never on the artifact.
+
+    ``tests/test_phase22_fakes.py``'s discipline: a guard nobody watched redden is a guard nobody
+    knows works. All five cases are degradations of THIS committed artifact rather than of a
+    synthetic one, so what is demonstrated is that the gate refuses corruptions of the floor Phase
+    25 will actually be handed.
+    """
+    kwargs = _gate_kwargs(_record(NEVER_TAUGHT_RECORD))
+    mutate(kwargs)
+    with pytest.raises(expected) as refusal:
+        mitigation_gate.extraction_ceiling(**kwargs)
+    assert fragment in str(refusal.value), (
+        f"the refusal fired but its message {str(refusal.value)!r} does not contain {fragment!r}. "
+        "The message is the part a reader acts on, so a refusal that fires for a different reason "
+        "than the one under test would pass a check written only on the exception type"
+    )
+
+
+def test_the_extraction_floor_re_derives():
+    """The floor is ``phase23_prereg.noise_floor`` over the recorded per-seed rates, exact ``==``.
+
+    ``scripts/phase19_floor.py``'s property 2: a number hand-edited in the artifact is a number
+    chosen with that artifact's own readings visible, and this reddens on a one-ULP nudge.
+    """
+    record = _record(NEVER_TAUGHT_RECORD)
+    readings = [block["rate"] for block in record["per_seed"]]
+    assert record["readings"] == readings, (
+        "the record's `readings` list disagrees with the per-seed rates it was reduced over"
+    )
+    assert record["extraction_noise_floor"] == noise_floor(readings), (
+        f"the record pins {record['extraction_noise_floor']!r} but "
+        f"`phase23_prereg.noise_floor({readings!r})` returns {noise_floor(readings)!r}"
+    )
+    assert record["reduction"] == "phase23_prereg.noise_floor"
+    assert record["extraction_floor_provenance"]["reduction"] == "phase23_prereg.noise_floor"
+    # Each per-seed rate is itself a QUESTION count over its own denominator, re-derived.
+    for block in record["per_seed"]:
+        assert block["rate"] == block["nontarget_successes"] / block["nontarget_questions"]
+
+
+def test_the_never_taught_record_cites_one_training_scheduling():
+    """ "Scheduled once, consumed twice" as a CHECKED property across both records.
+
+    Together with ``test_never_taught_is_trained_once``'s AST census (one ``train_never_taught``
+    definition, one call site under ``scripts/``) this is what makes the claim checkable rather
+    than asserted.
+    """
+    record = _record(NEVER_TAUGHT_RECORD)
+    training = _record(NEVER_TAUGHT_TRAINING_RECORD)
+
+    assert record["source_training_record"] == NEVER_TAUGHT_TRAINING_RECORD
+    live = hashlib.sha256((_ROOT / NEVER_TAUGHT_TRAINING_RECORD).read_bytes()).hexdigest()
+    cited = record["source_training_record_sha256"]
+    assert cited == live, (
+        f"the scored record cites the training record at {cited!r} but it hashes to {live!r}. "
+        "The scheduling this floor claims to come from is not the one on disk"
+    )
+    assert record["consumers"] == training["consumers"] == _EXPECTED_CONSUMERS
+    assert record["seeds"] == training["seeds"], (
+        f"the scored record covers seeds {record['seeds']!r} against the scheduling's "
+        f"{training['seeds']!r}. A floor over a different seed set is a floor over different "
+        "adapters than the record it cites exported"
+    )
+    assert [block["seed"] for block in record["per_seed"]] == record["seeds"]
+
+    # Every scored adapter is the one the scheduling exported, by digest, live off disk.
+    exported = {entry["seed"]: entry["sha256"] for entry in training["adapters"]}
+    for block in record["per_seed"]:
+        assert block["adapter_sha256"] == exported[block["seed"]], (
+            f"seed {block['seed']} was scored on an adapter hashing to "
+            f"{block['adapter_sha256']!r}, not the scheduling's {exported[block['seed']]!r}"
+        )
+        path = _ROOT / block["adapter"]
+        assert path.exists()
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == block["adapter_sha256"]
+
+
+def test_the_denominator_is_questions_not_draws():
+    """The unit error is INVISIBLE in the output, so it gets its own assertion.
+
+    A draw-denominated count both DEFLATES the rate and NARROWS the bound, in the same direction —
+    ``extraction_ceiling``'s own words. Nothing in a published figure would look wrong, which is
+    why the identity is asserted rather than reviewed.
+    """
+    record = _record(NEVER_TAUGHT_RECORD)
+    blocks = list(record["per_seed"]) + [record["pooled"]]
+    for block in blocks:
+        k = block["draws_per_question"]
+        assert k > 1, f"draws_per_question is {k!r}; the identities below are vacuous at k <= 1"
+        assert block["total_draws"] == block["nontarget_questions"] * k, (
+            f"total_draws {block['total_draws']!r} != nontarget_questions "
+            f"{block['nontarget_questions']!r} x draws_per_question {k!r}"
+        )
+        assert block["nontarget_questions"] != block["total_draws"], (
+            "the question count EQUALS the draw count — at k > 1 that is the draw denominator "
+            "wearing the question denominator's name, which is exactly the error the frozen gate "
+            "refuses and cannot see"
+        )
+        assert 0 <= block["nontarget_successes"] <= block["nontarget_questions"]
+    assert record["pooled"]["unit"] == "question"
+    assert record["curve_k"] == record["pooled"]["draws_per_question"], (
+        "the pooled counts were not taken at the pinned CURVE_K — the floor and the sweep points "
+        "would be two different instruments"
+    )
+
+
+def test_x_is_not_published_in_phase_23():
+    """A structural KEY WALK, and deliberately not a grep.
+
+    The record's own ``governs`` and ``x_is_not_published_here`` fields NAME
+    ``mitigation_gate.extraction_ceiling`` as the consuming symbol — that is provenance and it is
+    allowed. A text match would therefore fail a CORRECT record, the same false-RED class this
+    repository already hit with ``MATCHED_CONTROL_NOISE_FLOOR`` inside ``CONTROL_NOISE_FLOOR``.
+
+    TWO conjuncts, because the first alone misses the interesting case: (i) no KEY at any depth is
+    ``extraction_ceiling`` / ``extraction_bound`` / ``x``, and (ii) no NUMERIC leaf sits under a key
+    containing ``ceiling`` or ``bound``. Storing a number under such a key is the publication this
+    forbids; naming the symbol in a string VALUE is not.
+    """
+    banned = {"extraction_ceiling", "extraction_bound", "x"}
+    findings = []
+
+    def walk(node, path=()):
+        if hasattr(node, "keys"):
+            for key, value in node.items():
+                key = str(key)
+                here = path + (key,)
+                if key in banned:
+                    findings.append("KEY " + ".".join(here))
+                if (
+                    ("ceiling" in key or "bound" in key)
+                    and isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                ):
+                    findings.append("NUM " + ".".join(here))
+                walk(value, here)
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, path + (str(index),))
+
+    walk(_record(NEVER_TAUGHT_RECORD))
+    assert findings == [], (
+        f"the record publishes {findings}. Phase 23 measures the extraction FLOOR; Phase 25 "
+        "computes X from it at `mitigation_gate.extraction_ceiling`, where the floor arrives as a "
+        "required kwarg (D-13). A bound recorded here would pre-empt the gate that judges it"
+    )
+
+    # The meta-guard: the walk must actually reach leaves. A walker that silently stopped working
+    # would pass by finding nothing, which is `mitigation_budget`'s own literal-only guard register.
+    seen = []
+
+    def census(node, path=()):
+        if hasattr(node, "keys"):
+            for key, value in node.items():
+                seen.append(".".join(path + (str(key),)))
+                census(value, path + (str(key),))
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                census(value, path + (str(index),))
+
+    census(_record(NEVER_TAUGHT_RECORD))
+    assert len(seen) > 200, (
+        f"the key walk visited only {len(seen)} key(s) — a walk that stopped working passes this "
+        "test by finding nothing, so its own reach is asserted"
+    )
+    assert any(name.endswith("governs") for name in seen)
