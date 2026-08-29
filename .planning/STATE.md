@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Completed 23-13-PLAN.md — CAL-02: Z is pinned in scripts/mitigation_budget.py, APPEND-ONLY (306 insertions, 0 deletions), with a _PROVENANCE sibling per constant. THE CURVE_K RUNG AND THE SWEEP WIDTH WERE SELECTED BY THE USER at Task 1's blocking checkpoint:decision gate, not by the executor - CURVE_K = 16 and SWEEP_POINTS = 16, against a ceiling-side total of 66.09021780091668 h for one leg (16 x 3.1471532286150796 sweep + 5 x 3.1471532286150796 never-taught), with the reply recorded VERBATIM in CURVE_K_PROVENANCE.selected_reply_verbatim and persisted by the same write that consumed it. The plan named no default rung and invented no spend bound, because none exists in 23-CONTEXT.md D-01..D-10, in Claude's Discretion, in REQUIREMENTS.md or in ROADMAP.md. FULL_FIDELITY_K = 48, STEP_BUDGET = 200 and N_CONTROL_SEEDS = 5 are RULES, each verified against its live source (phase18_extraction.K, teach_persona.MAX_STEPS, phase23_never_taught_training.json n_seeds). D-06 resolved from a LIVE read (verdict true, both epsilons 24.38161088311366, both T 4) so N64_LEG_WITHDRAWN = False and the n=64 leg stands; the withdrawal branch is written and tested from a CONSTRUCTED one-ULP-falsified copy. Both floors byte-unchanged; module still literal-only and zero-import with all three guards green (literal-only, the SUBSET ceiling, and the EQUALITY ceiling with zero headroom in BOTH directions). Every constant re-derives from results/phase23_cost.json under exact == with a watched perturbation control; the ceiling-sizing is a re-derivation IDENTITY plus >= (never a strict >), and the degenerate floor==ceiling branch did NOT fire (1.9979696709667354 against 3.1471532286150796). sized_against carried by the three ceiling-side multiplicands and asserted ABSENT on the other three. CAL-02 TICKED by hand; zero gsd-sdk mutation handlers called; every changed REQUIREMENTS.md line names CAL-02 and none matches the requirement 23-04 closed. Suite 1578 passed, 1 skipped (1571 + 7 new); ruff clean. NEXT: 23-14 (CTRL-03). PREVIOUS: 23-12-PLAN.md — D-10 RETRACT-IN-PLACE of the falsified "~1,010x" cost claim, in all three planning files. A dated RETRACTED IN PLACE 2026-08-28 (plan 23-12) continuation was APPENDED to .planning/REQUIREMENTS.md, .planning/ROADMAP.md and .planning/STATE.md; deletions are 0 / 0 apart from exactly FOUR lines in REQUIREMENTS.md (the CAL-01 and CAL-05 checkbox rows and their two traceability rows), and every original sentence and the h/point table stand byte-unchanged. Content READ from results/phase23_cost.json (sha256 f3ba4d9a02f3040752d93c0395821075d8450860a9bae194ac120e8db8a47637), never retyped - all eleven pre-registered figure paths at full stored precision, each training figure and each ratio naming its protocol, the two non-DP protocols side by side with the gap from the record's own wall_clock_gap_vs_superseded = 2.035849685343305. NO ARM AT ANY PROTOCOL IS ~1,010x - the four ceiling ratios are 410.006407009605 / 201.39326098648866 / 157.94846187604026 / 23.458286235587472 - but all EIGHT ratios still bind, so D-03's ordering, D-04's halt rule and the sizing decision are unchanged and only the margin moves. The h/point table is disclosed as a FLOOR beside h_per_point_ceiling 9.013691285839306 h and LEFT STANDING; the loop-only research projection is named as a THIRD thing corrected, by heading text, without its numerals. Guarded in BOTH directions by exact string containment over one pre-registered set, no allow-list (AST-asserted), watched REDding on 5 constructed defects on tmp_path. CAL-01 and CAL-05 TICKED. Zero gsd-sdk mutation handlers called. Suite 1571 passed, 1 skipped
-last_updated: "2026-08-28T22:40:00.000Z"
-last_activity: 2026-08-28
+stopped_at: "Completed 23-14-PLAN.md — CTRL-03 CLOSED, and with it ALL SIX of ROADMAP.md:562's requirements. The five never-taught adapters 23-08 trained were SCORED (never retrained; consumed by path and sha256) on the four dose-split Phase-18 attack families at mitigation_budget.CURVE_K = 16, and returned 0 of 416 core_held_out QUESTIONS extracted at least once at EVERY seed. 69,120 draws dispatched, 33,280 gated, 10.137392909281836 h of MPS generation over six detached launches with pid==pgid==sid probed before every GPU second. results/phase23_never_taught.json committed; the frozen mitigation_gate.extraction_ceiling ACCEPTS it on its real code path and all FIVE of its refusals were watched firing on degraded COPIES, the count re-read from source by AST. Counts are QUESTION-denominated with total_draws == questions x k asserted; the success predicate and the question rollup are IMPORTED from the ancestry-guarded phase18_extraction. The floor is phase23_prereg.noise_floor CALLED over five readings and re-derives under exact ==. THE FLOOR IS EXACTLY 0.0 — real, but over a DEGENERATE reading set: it records the absence of leakage, not a measured spread, and its consequence for Phase 25 is STRICTER not looser (MARGIN_K x 0.0 = 0, so X reduces to wilson_upper_bound(0, 416) alone). Phase 23 does NOT publish X. Per-seed commit discipline held: run_state commits 5 -> 10, one per scored seed, each between launches. ONE DEVIATION, recorded not hidden: the first launch drew all 13,824 completions and died in _state_write on a torch.Tensor echoed in from load_adapted_model's artifact; the traceback is committed in the run log, the field was dropped, and raw draws are now persisted PER SHAPE so no post-draw defect can cost a GPU hour again. Suite 1589 passed, 1 skipped (1578 + 11 new); ruff clean; every frozen pin byte-unchanged; zero gsd-sdk mutation handlers called."
+last_updated: "2026-08-29T14:20:00.000Z"
+last_activity: 2026-08-29
 progress:
   total_phases: 9
   completed_phases: 3
   total_plans: 67
-  completed_plans: 65
+  completed_plans: 66
   percent: 33
 ---
 
@@ -25,9 +25,84 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — GAP CLOSURE 23-15…23-20 COMPLETE
-Plan: 13 of 20 — **23-13 COMPLETE at `0a23aca` + `bb2822d` + `810cad4`** — **18 of 20 plans ticked**
-(23-01…23-13, 23-15, 23-16, 23-18, 23-19, 23-20).
+Phase: 23 (cost calibration, σ=0 diagnostic, budget pre-registration) — **ALL SIX REQUIREMENTS CLOSED**
+Plan: 14 of 20 — **23-14 COMPLETE** (11 commits, `92b48a9`…`87f6f2e`) — **19 of 20 plans ticked**
+(23-01…23-16, 23-18, 23-19, 23-20). The one remaining unticked box is **23-17**, deliberately: its
+run was harness-killed and produced no record, and 23-20 completed the work under a separate
+continuation pre-registration.
+
+**CTRL-03 IS TICKED, AND IT WAS THE PHASE'S LAST OPEN REQUIREMENT.** All six of `ROADMAP.md:562`'s
+are now `[x]`: CAL-01 + CAL-05 (23-12), CAL-02 (23-13), CAL-03 (23-04), DPSGD-06 (23-10), CTRL-03
+(23-08 trained, 23-14 scored).
+
+**23-14 EXECUTED 2026-08-29 — THE NEVER-TAUGHT EXTRACTION FLOOR IS MEASURED, AND IT IS ZERO.**
+The five adapters 23-08 trained were **SCORED, never retrained** — consumed from
+`results/phase23_never_taught_training.json` by path and sha256, with
+`git diff --exit-code` on that record clean throughout — on the four dose-split Phase-18 attack
+families at `mitigation_budget.CURVE_K = 16`. **Every seed returned `0 / 416` `core_held_out`
+QUESTIONS extracted at least once.** 69,120 draws dispatched, 33,280 on the gated tier,
+`10.137392909281836` h of MPS generation (~2.03 h/seed, rates 119–121 / 105–106 / 130–134 / 101–103
+draws/min across A1-mild / A1-aggressive / A2 / A3).
+
+**THE PROJECTION WAS RECORDED BEFORE ANY GPU SECOND AND CHECKED AGAINST THE SIZING TABLE K WAS
+CHOSEN FROM.** Recomputed through `results/phase23_cost.json`'s OWN `h_per_point_composition`
+rather than read off the block, so the two are an agreement: `9.266538359527477` h (stop ids active)
+and `14.6560229875613` h (stop set emptied) against the block's `9.989848354833677` /
+`15.735766143075399` — relative deltas **+0.8887%** and **+0.1312%**, well inside the driver's own
+5% refusal. **Measured actual `10.137392909281836` h** sits between the two bracket ends, where a
+normally-terminating adapter belongs.
+
+**THE RECORD IS ACCEPTED BY THE FROZEN GATE'S REAL CODE PATH, AND EVERY REFUSAL WAS WATCHED FIRING.**
+`mitigation_gate.extraction_ceiling` is called with `results/phase23_never_taught.json`'s own values
+and does not raise; its **five** refusals — MEASURED by AST, 2 `raise` at `:405`/`:410` and 3
+`_prove` at `:417`/`:425`/`:436`, re-counted on every suite run — are each driven from a **COPY** of
+that same record and message-checked, so a refusal firing for the wrong reason cannot pass. The
+committed artifact is byte-unchanged after the cases run. Counts are **QUESTION-denominated** with
+`total_draws == nontarget_questions × draws_per_question` asserted in the driver AND in its own
+test; the success predicate and the question-unit rollup are **IMPORTED** from the ancestry-guarded
+`phase18_extraction` (`score_records` → `contains_value`, `aggregate_questions`), verified by AST
+over the driver's import nodes. `pooled` is **one DESIGNATED seed** at n=416 — the ladder's first,
+`sigma_zero_verdict`'s own `control_readings[0]` convention — with the rejected sum-across-seeds
+alternative recorded and its reason given. **Phase 23 does NOT publish X:** `extraction_ceiling` is
+called from a TEST only, its return value appears in no field, and the guard is a structural KEY
+walk, because the record's own `governs` string names the symbol and a grep would fail a correct
+record.
+
+**THE FLOOR IS EXACTLY `0.0`, AND THE CAVEAT IS CARRIED RATHER THAN BURIED.** The five readings are
+identical, so `phase23_prereg.noise_floor` — CALLED, never inlined, re-deriving under exact `==` —
+returns zero. That is a real measurement (nothing leaked, on any family, at any seed) and both the
+blind reduction and the frozen gate accept it, but it is a floor over a **DEGENERATE reading set**:
+it records the *absence of leakage*, not a *measured spread*, and says less about run-to-run
+variance than a non-zero range would. Its consequence for Phase 25 is **STRICTER, not looser** —
+`MARGIN_K × 0.0 = 0`, so X reduces to `wilson_upper_bound(0, 416)` alone, which is the regime
+`extraction_ceiling`'s own docstring names, where the criterion clears ONLY on a perfect erasure.
+`tolerance_report` publishes which regime a given X landed in.
+
+**THE PER-SEED COMMIT DISCIPLINE HELD, AND IT IS A MECHANISM.** The driver's git surface is
+read-only, so the sub-mode scores exactly ONE unscored seed and **exits**; the commit is the
+operator's act at the process boundary. `git log -- data/phase23_run_state.json` went **5 → 10**,
+one commit per scored seed, each made between launches. Six detached launches (23-20's recipe
+verbatim: `os.setsid()`, `os.execv`, pid from the LOG never `$!`, probed with `os.getsid()`,
+`caffeinate -is -w`), each with `pid == pgid == sid` quoted before any GPU second.
+
+**ONE DEVIATION, RECORDED RATHER THAN HIDDEN — hence six launches for five seeds.** The FIRST
+launch drew all 13,824 completions over 2h22m and then died in `_state_write`:
+`TypeError: Object of type Tensor is not JSON serializable`, from `load_adapted_model`'s artifact
+(the loaded persona file, which carries the adapter tensors) being echoed into the block. The
+traceback is **committed verbatim** in `results/phase23_never_taught_run.log` and the restart is not
+presented as a first attempt. The field was dropped rather than repaired — the weights are already
+pinned by `adapter_sha256`. The real fix: raw draws are now persisted **per shape**, so a kill costs
+at most one shape (~30 min) instead of one seed, and every post-draw step costs seconds if it fails.
+The record's assembly additionally **re-scores every seed from its retained draws** and asserts
+equality with the recorded count; all five re-derived `0/416`.
+
+Suite **`1589 passed, 1 skipped`** (1578 + 11 new — zero failures, zero new skips); `ruff` clean
+over 245 files; every frozen pin byte-unchanged against this plan's start commit `920dbe3`
+(`mitigation_gate`, `mitigation_accountant`, `phase23_prereg`, `phase23_matched_prereg`,
+`phase23_resume_prereg`, `mitigation_budget`, `phase18_extraction`, `pyproject.toml`);
+`git ls-files 'results/phase23_noised_*'` still **1**; `phase23_matched_prereg.py` still **1**
+commit. **Zero `gsd-sdk` mutation handlers called** — `REQUIREMENTS.md`, `STATE.md` and
+`ROADMAP.md` were all hand-edited and diffed.
 
 **23-13 EXECUTED 2026-08-28 — Z IS PINNED, AND THE RUNG WAS THE USER'S, NOT THE EXECUTOR'S.**
 Task 1 computed the per-rung table live through `phase23_cost.size_sweep` at BOTH the ceiling and
@@ -72,9 +147,9 @@ no throughput figure feeds. **CAL-02 TICKED** — hand-edited, **zero `gsd-sdk` 
 called**, every changed line in `.planning/REQUIREMENTS.md` names CAL-02 and none matches the
 requirement 23-04 closed. Suite **`1578 passed, 1 skipped`** (1571 + 7 new); `ruff` clean.
 
-**NEXT: 23-14 (CTRL-03)** — the last open requirement of `ROADMAP.md:562`'s six. It scores the five
-never-taught adapters this plan priced, at `CURVE_K = 16`. That rung is now the ratchet's FLOOR: K
-may only increase from here, with no override flag.
+**23-14 (CTRL-03) IS DONE — see the entry above.** It scored the five never-taught adapters this
+plan priced, at `CURVE_K = 16`. That rung is now the ratchet's FLOOR: K may only increase from here,
+with no override flag.
 **23-11 / 23-12 / 23-13 / 23-14 were UNBLOCKED
 2026-08-28** (see the dated unblock record below — evidence, not assumption)
 and **23-17 remains INCOMPLETE** — its run was harness-killed at 3/5 and wrote no record; 23-20 is
