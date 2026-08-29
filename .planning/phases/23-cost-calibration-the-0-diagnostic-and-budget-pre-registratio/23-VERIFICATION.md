@@ -277,3 +277,38 @@ assertion, restored byte-identically, green again); frozen pins still `git diff 
 verifier agent re-ran against the current HEAD. If a formal `passed` verdict at the new HEAD is
 wanted, run `/gsd:verify-phase 23` — it would audit the two closures above, which this report
 requested but did not itself check.
+
+---
+
+## Acknowledged Gaps
+
+**Recorded 2026-08-29 by `/gsd:verify-work 23`, at the artifact-check gate.** The developer was
+shown the one open item this scan found — this report's own `status: human_needed` — and ruled:
+**acknowledge and proceed.** The frontmatter above is **NOT** rewritten. It stays `human_needed`
+as the honest point-in-time record it declares itself to be; a status field edited after the fact
+would claim a verdict no verifier rendered, which is the exact in-place-rewrite hazard plan 23-12
+spent itself avoiding in this same phase.
+
+### What is acknowledged, and where it was closed
+
+| Item | Disposition | Evidence |
+|------|-------------|----------|
+| **W-01** — DPSGD-06's stale traceability record | **CLOSED by doing the work.** Dated retract-in-place continuation appended to `.planning/REQUIREMENTS.md`; the two false sentences retracted, originals left standing — the same treatment plan 23-12 gave this file. | `7296b31` |
+| **W-02** — no standing positive control for the never-taught scorer | **CLOSED by doing the work.** `tests/test_phase23_ctrl.py` gained `test_the_never_taught_scorer_registers_a_constructed_success` and `test_the_retained_draws_move_the_gated_reading_from_zero_to_one`; watched RED by degrading `phase14_recall.contains_value` to `return False`, restored byte-identically. | `17c28c8` |
+| **CR-01 / CR-02 / CR-03** — work-destroying failure paths and σ-less noised state keying | **DEFERRED to Phase 25, deliberately**, per this report's own ruling that they are forward-looking and mis-attribute nothing at one noised point. CR-03 goes live the moment a second σ runs at the same seed. | this report, Anti-Patterns table |
+
+### What this note does NOT claim
+
+It is not a re-verification. No verifier agent re-ran against the current HEAD, so the two closures
+above remain **audited by the orchestrator, not by a verifier**. `/gsd:verify-phase 23` is still the
+route to a formal `passed` verdict at the new HEAD, and the sentence saying so above stands.
+
+### The UAT that produced this note
+
+`23-UAT.md` — **10 of 10 passed, 0 issues, 0 skipped, 0 blocked** (commit `2bf1013`). The ten tests
+cover all five ROADMAP success criteria plus both W-item closures, each with a runnable
+reproduction and figures read off disk rather than quoted from a SUMMARY. Phase 23 was already
+`Complete` in ROADMAP.md (`19/20`, 2026-08-29) and STATE.md before this run; the auto-transition
+was **deliberately not re-run**, because `5a72670` had to hand-repair four `phase.complete`
+regressions — including one that wrote `20/20` and re-ticked the deliberately-unticked 23-17 — and
+re-running it would re-introduce them for no gain.
