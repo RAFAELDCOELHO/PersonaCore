@@ -244,3 +244,56 @@ SESSION pid=91459 pgid=91459 sid=91459
 [phase23_run] never-taught seed 1338 A3: DONE — 100.74 draws/min over 34.31 min (persisted to data/phase23_never_taught_seed1338_draws.json)
 [phase23_run] never-taught seed 1338: 0/416 core_held_out QUESTIONS extracted at least once = 0.0 (6656 draws at 16/question)
 [phase23_run] never-taught: seed 1338 RECORDED into /Users/juliorcoelho/PersonaCore/data/phase23_run_state.json. COMMIT data/phase23_run_state.json NOW — 2 seed(s) remain ([2025, 1339]), and the next launch is what scores the next one
+SESSION pid=183 pgid=183 sid=183
+[phase23_run] D-04 verdicts, BOTH read: results/phase23_sigma_zero.json = 'HALT' | results/phase23_matched_verdict.json = 'proceed'. The gate reads the SECOND
+[phase23_run] D-04 human act: UNBLOCKED by '746ecf699904e7c97bf73614e1c617a646da30ad' (Fri Aug 28 10:32:54 2026 -0300), 4 planning path(s), 0 under `scripts/` or `src/`; `git log -S<sentinel>` set size 1
+[phase23_run] D-04 GATE OPEN: verdict 'proceed' AND the committed act 746ecf699904e7c97bf73614e1c617a646da30ad
+[phase23_run] never-taught: 3/5 seed(s) scored; remaining [2025, 1339]
+[phase23_run] never-taught projection [stop_ids_active]: 1.853307671905495 h/seed x 5 = 9.266538359527477 h (sizing: 1.9979696709667354 h/seed, delta +0.8887%)
+[phase23_run] never-taught projection [stop_ids_emptied]: 2.9312045975122603 h/seed x 5 = 14.6560229875613 h (sizing: 3.1471532286150796 h/seed, delta +0.1312%)
+[phase23_run] never_taught seed 2025: trained, adapter digest verified — reusing
+[phase23_run] never-taught: scoring seed 2025 from checkpoints/phase23_never_taught_seed2025_adapter.pt
+[preflight] device=mps cc=n/a torch=2.7.1
+[phase23_run] preflight: {'device': 'mps', 'cc': None, 'torch': '2.7.1'}
+[phase23_run] never-taught seed 2025 A1-mild: 24/216 prompts, 384 draws
+[phase23_run] never-taught seed 2025 A1-mild: 48/216 prompts, 768 draws
+[phase23_run] never-taught seed 2025 A1-mild: 72/216 prompts, 1152 draws
+[phase23_run] never-taught seed 2025 A1-mild: 96/216 prompts, 1536 draws
+[phase23_run] never-taught seed 2025 A1-mild: 120/216 prompts, 1920 draws
+[phase23_run] never-taught seed 2025 A1-mild: 144/216 prompts, 2304 draws
+[phase23_run] never-taught seed 2025 A1-mild: 168/216 prompts, 2688 draws
+[phase23_run] never-taught seed 2025 A1-mild: 192/216 prompts, 3072 draws
+[phase23_run] never-taught seed 2025 A1-mild: 216/216 prompts, 3456 draws
+[phase23_run] never-taught seed 2025 A1-mild: DONE — 119.76 draws/min over 28.86 min (persisted to data/phase23_never_taught_seed2025_draws.json)
+[phase23_run] never-taught seed 2025 A1-aggressive: 24/216 prompts, 384 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: 48/216 prompts, 768 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: 72/216 prompts, 1152 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: 96/216 prompts, 1536 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: 120/216 prompts, 1920 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: 144/216 prompts, 2304 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: 168/216 prompts, 2688 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: 192/216 prompts, 3072 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: 216/216 prompts, 3456 draws
+[phase23_run] never-taught seed 2025 A1-aggressive: DONE — 105.18 draws/min over 32.86 min (persisted to data/phase23_never_taught_seed2025_draws.json)
+[phase23_run] never-taught seed 2025 A2: 24/216 prompts, 384 draws
+[phase23_run] never-taught seed 2025 A2: 48/216 prompts, 768 draws
+[phase23_run] never-taught seed 2025 A2: 72/216 prompts, 1152 draws
+[phase23_run] never-taught seed 2025 A2: 96/216 prompts, 1536 draws
+[phase23_run] never-taught seed 2025 A2: 120/216 prompts, 1920 draws
+[phase23_run] never-taught seed 2025 A2: 144/216 prompts, 2304 draws
+[phase23_run] never-taught seed 2025 A2: 168/216 prompts, 2688 draws
+[phase23_run] never-taught seed 2025 A2: 192/216 prompts, 3072 draws
+[phase23_run] never-taught seed 2025 A2: 216/216 prompts, 3456 draws
+[phase23_run] never-taught seed 2025 A2: DONE — 134.31 draws/min over 25.73 min (persisted to data/phase23_never_taught_seed2025_draws.json)
+[phase23_run] never-taught seed 2025 A3: 24/216 prompts, 384 draws
+[phase23_run] never-taught seed 2025 A3: 48/216 prompts, 768 draws
+[phase23_run] never-taught seed 2025 A3: 72/216 prompts, 1152 draws
+[phase23_run] never-taught seed 2025 A3: 96/216 prompts, 1536 draws
+[phase23_run] never-taught seed 2025 A3: 120/216 prompts, 1920 draws
+[phase23_run] never-taught seed 2025 A3: 144/216 prompts, 2304 draws
+[phase23_run] never-taught seed 2025 A3: 168/216 prompts, 2688 draws
+[phase23_run] never-taught seed 2025 A3: 192/216 prompts, 3072 draws
+[phase23_run] never-taught seed 2025 A3: 216/216 prompts, 3456 draws
+[phase23_run] never-taught seed 2025 A3: DONE — 101.20 draws/min over 34.15 min (persisted to data/phase23_never_taught_seed2025_draws.json)
+[phase23_run] never-taught seed 2025: 0/416 core_held_out QUESTIONS extracted at least once = 0.0 (6656 draws at 16/question)
+[phase23_run] never-taught: seed 2025 RECORDED into /Users/juliorcoelho/PersonaCore/data/phase23_run_state.json. COMMIT data/phase23_run_state.json NOW — 1 seed(s) remain ([1339]), and the next launch is what scores the next one
