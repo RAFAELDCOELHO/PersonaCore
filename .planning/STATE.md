@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: executing
-stopped_at: "Phase 24 EXECUTION COMPLETE (2026-08-30) — all 7 plans in 4 waves done, sequential on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). 24-01 (c09d37c), 24-02 (4ecf5bc), 24-03 (fd6ba46 + 217c531), 24-04 (d121cf7 + 2ba4292), 24-05 (c10d017 + c2b71f7), 24-06 (d274dfb + 75d2d6d), 24-07 (6c1327b + 5aed70f + 7075951 + 8fd67eb) — WAVE 4 AND THE PHASE ARE DONE. ADVT-02 and ADVT-03 TICKED in REQUIREMENTS.md (the first requirement movement of the whole phase, after six plans deliberately declined); ADVT-01 stays OPEN because no adapter has been trained — Phase 25 runs the sweep. The ROADMAP continuation survived the final tick: all four sentinel counts still 1, SC2 claim text still exactly once, tests/test_phase24_correction.py still 4 passed. The phase-CLOSE step still owns the ROADMAP phase-heading checkbox, the progress row Status cell, and frontmatter status/completed_phases/percent (see 5a72670 for the phase-23 precedent). 24-08 GAP CLOSURE (2026-08-30, no PLAN.md) then closed 24-REVIEW's THREE blockers — CR-01 d4ed1f8, CR-02 ba2787f, CR-03 e518a4e, plus e86cb33 registering two PROSE `train_arm(` census hits the first three left RED — each blocker with a full RED -> GREEN -> mutated-RED cycle. Suite 1646/1/0. The 8 warnings and 6 info findings from the review are UNTOUCHED and remain open. 24-09 UAT CLOSURE (2026-08-30, no PLAN.md) then closed HUMAN-UAT item 4 under closure (a): the missing `provenance.module_sha256` freshness guard landed FIRST and was watched RED against the tree's own pre-existing drift (`46f07d5` — \"2 of 5 provenance digests no longer match the files on disk\", naming `phase24_adversarial.py` 8f884fd7->b679c6f6 and `teach_persona.py` e2709e54->82da6c3a with both digests in full), then `results/phase24_token_budget.json` was re-emitted through the emitter's own sanctioned delete-and-re-run route so all four pins are true (`aaea029`). EVERY substantive figure came out byte-identical, proved three independent ways: non-provenance remainder sha256 739658923d00 on both sides, a recursive walk over 529 leaf scalars (317 numeric) differing in 0, and a git diff of exactly 4 lines all inside provenance. 24-VERIFICATION's reason 4 (\"re-emitting is blocked anyway\") was MEASURED FALSE and corrected in the UAT item: _PUBLICATION_PATHSPEC excludes .gitignore and .planning/ by 24-07's deliberate narrowing, so the scoped git status was empty and refuse_if_dirty never fired. Suite 1647/1/0. UAT items 2 and 3 remain pending; ADVT-01 still UNTICKED."
-last_updated: "2026-08-30T21:15:00.000Z"
+status: ready_to_plan
+stopped_at: "Phase 24 COMPLETE (2026-08-30) — 9 plans executed (7 planned in 4 waves, then 24-08 gap closure and 24-09 UAT closure), sequential on the main tree. Verification `passed`, 4/4 SC disposed after three passes. ADVT-02 + ADVT-03 ticked; **ADVT-01 deliberately UNTICKED** — no adapter has been trained; Phase 25 owns it (added to ROADMAP:814 this session, span recorded additively under REQUIREMENTS Traceability). 24-REVIEW's 3 blockers closed by 24-08 (CR-01 the CLI refused adv_* before arm_spec/train_arm; CR-02 the D-02 scan widened to 22 tier-derived values covering every REFUSAL_SLOT_NOUNS slot; CR-03 an empty refusal template member now raises instead of matching every completion). 24-09 added the missing provenance freshness guard, watched RED on the tree's own drift, and re-emitted the record with every substantive figure byte-identical (529 leaves, 317 numeric, 0 differing). Its 8 warnings + 6 info findings remain OPEN. HUMAN-UAT items 1 and 4 resolved; 2 (ADVT-02 wording, INFO) and 3 (24-04's instrumentation unconsumed until Phase 25, WARNING) carried forward. Suite 1647 passed, 1 skipped. NOTE: `phase.complete` again wrote a wrong plan count (9/7) and this time TICKED ADVT-01, plus clobbered the D-04 historical line for the second time this session — all reverted by hand. Ready to discuss Phase 25."
+last_updated: 2026-08-30T21:31:41.094Z
 last_activity: 2026-08-30
 progress:
   total_phases: 9
-  completed_phases: 4
-  total_plans: 74
-  completed_plans: 73
-  percent: 44
+  completed_phases: 5
+  total_plans: 76
+  completed_plans: 75
+  percent: 55
 ---
 
 # Project State
@@ -21,14 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
-**Current focus:** Phase 24 — adversarial extraction aware training + the held out attack family
+**Current focus:** Phase 25 — frontier sweep and the existence gate verdict
 
 ## Current Position
 
-Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 7 of 7 (wave 4 of 4) + 24-08 GAP CLOSURE + 24-09 UAT CLOSURE — sequential, main tree.
-ALL FOUR WAVES COMPLETE; 24-REVIEW's three blockers are CLOSED; HUMAN-UAT items 1 and 4 are
-RESOLVED (2 and 3 pending); the phase awaits the phase-close step.
+Phase: 25 (frontier sweep and the existence-gate verdict) — NOT STARTED
+Plan: none yet. Phase 24 CLOSED 2026-08-30 — 9/9 plans, verification `passed`.
+HUMAN-UAT items 2 and 3 remain open and are carried into Phase 25; neither blocks it.
 
 **24-09 EXECUTED 2026-08-30 — UAT ITEM 4 CLOSED: THE PROVENANCE PIN IS NOW GUARDED AND
 TRUE.** No PLAN.md; the UAT-closure prompt was the plan. The defect was not a wrong number, it was
@@ -880,6 +879,7 @@ Last activity: 2026-08-30
 | 21 | 11 | - | - |
 | 22 | 19 | - | - |
 | 23 | 20 | - | - |
+| 24 | 9 | - | - |
 
 *v1.0 per-plan history archived in milestones/v1.0-phases/ SUMMARY frontmatter.*
 | Phase 12 P01 | 14min | 3 tasks | 3 files |
