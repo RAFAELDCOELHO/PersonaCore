@@ -441,6 +441,17 @@ Deferred to a later milestone, recorded rather than dropped.
 Every REQ-ID maps to exactly one phase. **48/48 mapped, 0 orphans, 0 duplicates**
 (verified 2026-08-20 at roadmap creation).
 
+**AMENDED 2026-08-30 (phase 24 close).** ADVT-01 now appears in TWO phase `**Requirements**` lines
+and the "0 duplicates" count above is superseded for that one ID — recorded here rather than by
+editing the dated 2026-08-20 line, per this project's additive-correction doctrine. Reason: the
+requirement's subject is *the adapter trained*, which Phase 24 structurally could not produce.
+Phase 24 BUILT the seam (`build_bins(..., adversarial_ratio=)`, the 336-episode attack pool, the
+pinned grid, the four-corner band clearance) and declared ADVT-01 unsatisfied in its own row below;
+Phase 25 TRAINS the adapter and sweeps intensity, which its SC2 already names verbatim. Before this
+amendment ADVT-01 was mapped ONLY to Phase 24, so no phase in the roadmap could ever tick it — the
+hole was found by `24-VERIFICATION.md` (status `human_needed`) and closed by the developer's
+decision on 2026-08-30. The span is deliberate: 24 builds, 25 satisfies.
+
 | REQ-ID | Phase | Note |
 |--------|-------|------|
 | GATE-01 | Phase 20 | `mitigation_point_verdict` returns the three-name `V4_VERDICTS` domain, proved at import by the module-scope `_prove_verdict_domain()`, with four condition reason strings observed rendering. Guarded by `test_verdict_domain_stays_exactly_three` and by `test_every_gate_function_is_keyword_only_with_no_defaults`, whose AST walk covers ALL public functions in the module rather than the verdict one alone. |

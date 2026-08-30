@@ -811,7 +811,7 @@ Plans:
 **Goal**: Both mitigation arms on one measured-privacy × measured-utility plane at both capacities,
 judged by importing the rule Phase 20 committed — with the pre-registered null a named verdict
 **Depends on**: Phases 20, 21, 22, 23, 24
-**Requirements**: CTRL-01, CTRL-02, FRONT-01, FRONT-02, FRONT-03, FRONT-04
+**Requirements**: CTRL-01, CTRL-02, FRONT-01, FRONT-02, FRONT-03, FRONT-04, ADVT-01
 **Success Criteria** (what must be TRUE):
 
   1. The **retrained unmitigated control runs first**, realised as a sweep point at
