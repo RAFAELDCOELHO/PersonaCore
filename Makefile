@@ -10,10 +10,10 @@ install:
 	pip install -e ".[cpu,dev,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
 
 test:
-	pytest -q
+	.venv/bin/pytest -q
 
 lint:
-	ruff check . && ruff format --check .
+	.venv/bin/ruff check . && .venv/bin/ruff format --check .
 
 # isort runs first; ruff (format, then check --fix with rule I) has the final
 # word so the end state always matches `make lint` (ruff-canonical imports).
