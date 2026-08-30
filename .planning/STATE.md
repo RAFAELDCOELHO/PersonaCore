@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc), 24-03 COMPLETE (fd6ba46 + 217c531), 24-04 COMPLETE (d121cf7 + 2ba4292), 24-05 COMPLETE (c10d017 + c2b71f7) — WAVES 1 AND 2 ARE DONE; next up 24-06 (wave 3). The ROADMAP continuation survived 24-05's tick: all four sentinel counts still 1, SC2's claim text still occurs exactly once, tests/test_phase24_correction.py still 4 passed."
-last_updated: "2026-08-30T17:54:46.000Z"
+stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc), 24-03 COMPLETE (fd6ba46 + 217c531), 24-04 COMPLETE (d121cf7 + 2ba4292), 24-05 COMPLETE (c10d017 + c2b71f7), 24-06 COMPLETE (d274dfb + 75d2d6d) — WAVES 1, 2 AND 3 ARE DONE; next up 24-07 (wave 4, the last). The ROADMAP continuation survived 24-06's tick too: all four sentinel counts still 1, SC2's claim text still occurs exactly once, tests/test_phase24_correction.py still 4 passed."
+last_updated: "2026-08-30T18:30:37.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 74
-  completed_plans: 71
+  completed_plans: 72
   percent: 44
 ---
 
@@ -26,7 +26,66 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 6 of 7 (wave 3 of 4) — sequential, main tree. WAVES 1 AND 2 COMPLETE.
+Plan: 7 of 7 (wave 4 of 4) — sequential, main tree. WAVES 1, 2 AND 3 COMPLETE.
+
+**24-06 EXECUTED 2026-08-30 — THE MIXTURE SEAM EXISTS, IS PROVED READ, AND IS BYTE-IDENTICAL AT ITS
+DEFAULT.** `build_bins` gained two keyword-only parameters, `adversarial_ratio=0.0` and `seed=SEED`,
+both inert at their defaults. The dangerous half was handled first: a byte-identity assertion over a
+kwarg nobody reads is a tautology, so `tests/test_phase24_bins.py` was written BEFORE
+`scripts/teach_persona.py` was touched and **watched RED at 10 failed / 0 passed**, every one of the
+six functions dying on `TypeError: build_bins() got an unexpected keyword argument
+'adversarial_ratio'` — including the byte-identity test itself, since Python raises on the explicit
+kwarg before any assertion in it runs. The observable pre-wiring half is the no-kwarg build, whose
+digests are the baseline the identity claim is measured against: token `f146d426...` / mask
+`a2c4771f...`, 176 episodes, 7,581 tokens, mask fraction 0.35866.
+
+**D-06 IS ENFORCED BY CONSTRUCTION AND PROVED BY AST.** `n_want = int(round(adversarial_ratio *
+len(episodes)))` — the EPISODE unit. An AST walk over `_mix_adversarial`'s own body confirms
+`teaching_tokens` is not a `Name` in it, so the side channel
+`tests/test_phase21_replay_volume.py::test_replay_constant_is_not_derived_from_the_corpus` polices on
+the replay seam has no route onto this one; that test is untouched (`git diff` empty) as a live
+tripwire. The paired behavioural test builds the same 176 episodes with every answer duplicated —
+same count, larger token total — and asserts the selected episode count is identical.
+
+**D-08's PERMUTATION IS A PURE FUNCTION OF THE EXISTING SEED, PROVED IN THREE DIRECTIONS.** A private
+`random.Random(seed)` over an index list applied to both shard lists together — AST-proved: no
+`np.random`, no global `random.shuffle`/`seed`/`randint`, and `Random` present. Same seed →
+identical bins; different seeds → different bins (so `seed` is not accepted and ignored); ratio 0.0
+with two different seeds → identical bins (so the seam is inert at the default). The consequence
+that made this load-bearing is Phase 23's D-07 resume path, which rebuilds the bins and refuses on
+any byte change; `tests/test_phase23_resume.py` is green and the resume determinism message now
+names `adversarial_ratio` in its tuple.
+
+**EVERY NON-ZERO GRID POINT TRAINS ALL THREE FAMILIES WITHIN 1 — ASSERTED AT THE SELECTED PREFIX,
+WHICH IS WHERE IT CAN ACTUALLY BREAK.** Measured from `stats["adversarial_family_counts"]` at n=8:
+0.25 → 15/15/14, 0.5 → 30/29/29, 1.0 → 59/59/58, 1.5 → 88/88/88, 1.909 → 112/112/112; multiplicities
+0.131 / 0.262 / 0.524 / 0.786 / 1.0. **What holds that is the committed corpus's ROW ORDER**,
+re-derived independently as a strict 3-cycle `[A1-mild, A1-aggressive, A3] * 112`. 24-05's full-pool
+balance assertion cannot see a reorder: the selection is `(pool * ceil(n_want/len(pool)))[:n_want]`,
+so a family-grouped corpus would train ONE family at every point below ratio ~0.64 while that
+assertion stayed green. `scripts/phase24_adversarial.py` gained `adversarial_episode_families(tok)`
+as a second view onto ONE pass (`_adversarial_pool` returns `(episodes, families)`), so the pairing
+is a property of one loop rather than of two readers agreeing; `adversarial_episodes`' pinned return
+shape is unchanged and all six 24-05 tests pass untouched.
+
+**BOTH ADVERSARIAL ARMS EXIST AND PACK FLAT.** `adv_n8` / `adv_n64` APPENDED to `ARMS` (appended, not
+inserted — `tests/test_phase22_wiring.py:887` selects the first non-DP non-`real` arm by iteration
+order) and deliberately OUTSIDE `DP_ARMS`, which closes 24-CONTEXT's declared residue 2 on the
+mechanism: `aligned = arm in DP_ARMS` is membership in a literal closed 2-tuple with no prefix
+matching. Both return `replay_ratio = 0.0`, load-bearing because 24-RESEARCH's whole mask-fraction
+headroom table is computed there. `_refuse_ambiguous_aligned_input` was widened and watched firing on
+aligned + adversarial. **A real `adv_n8` build at the upper extreme passed all six `sanity_check`
+proofs**: 512 episodes, 40,733 tokens, `mask_fraction` **0.2410**, 130 held-out questions absent from
+the written bin at token level, `teaching_tokens` still 7,581 (clean-only). Recorded for 24-07:
+`mask_fraction_min` is 0.1111, below the 0.15 band floor, but the gate is on the AGGREGATE and
+nothing trips; the n=64 column is UNMEASURED.
+
+**Full suite 1633 passed / 1 skipped**, 0 failed, exactly +14 over the 1619/1 baseline — +10 this
+module, +4 from `tests/test_phase14_teaching.py`'s two `@parametrize("arm", tp.ARMS)` tests times two
+new arms. `ruff` clean over 227 files. **ADVT-01 and ADVT-03 deliberately NOT ticked** — this plan
+builds the seam, 24-07 commits the ADVT-03 record and Phase 25 runs the sweep;
+`.planning/REQUIREMENTS.md` stays byte-unchanged for the whole phase. Zero `gsd-sdk` mutation
+handlers called.
 
 **24-05 EXECUTED 2026-08-30 — THE TRAINED ATTACK POOL EXISTS, AND EVERY ONE OF ITS 336 PROMPTS IS
 PROVED BYTE-EQUAL TO THE COMMITTED ROW IT CAME FROM.** `scripts/phase24_adversarial.py` gained
@@ -1372,8 +1431,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-30T18:26:00.000Z
-Stopped at: Completed 24-04-PLAN.md (plan 4 of 7) — WAVE 1 COMPLETE. D-04's `contains_refusal`/`score_refusal` ship as `contains_value`/`score_question`'s pointwise mirror in the module that owns the scoring normalizer (no third copy; `phase24_adversarial` absent from module-level imports by AST), and D-11's two clean-frame probe populations are pinned as returned data — 8 locked and 56 filler facts over one family set `("F1","F2","F6")`, both 112 distinct questions, disjoint, 0 of 10 published values across all 224. Full suite 1613 passed / 1 skipped. ADVT-01 still deliberately unticked in REQUIREMENTS.md. Next: 24-05 (wave 2)
+Last session: 2026-08-30T18:30:37.000Z
+Stopped at: Completed 24-06-PLAN.md (plan 6 of 7) — WAVE 3 COMPLETE. `build_bins` gained `adversarial_ratio=0.0` and `seed=SEED`, byte-identical at their defaults against a pre-wiring no-kwarg baseline of token `f146d426...` / mask `a2c4771f...`; the wiring sibling was watched RED first at 10 failed / 0 passed on `TypeError: ... unexpected keyword argument 'adversarial_ratio'`, so the identity half is not vacuous. D-06 sizes from `len(episodes)` (AST: `teaching_tokens` is not read in `_mix_adversarial`); D-08 permutes with a private `random.Random(seed)`, proved in three directions. Every non-zero grid point trains all three families within 1 at the SELECTED prefix (15/15/14 … 112/112/112). `adv_n8`/`adv_n64` appended outside `DP_ARMS`, both flat; a real `adv_n8` build at the upper extreme passed all six `sanity_check` proofs at `mask_fraction` 0.2410. Full suite 1633 passed / 1 skipped. ADVT-01 and ADVT-03 still deliberately unticked in REQUIREMENTS.md. Next: 24-07 (wave 4, the last)
 Resume file: None
 
 ## Operator Next Steps

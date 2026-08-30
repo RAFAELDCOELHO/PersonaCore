@@ -800,7 +800,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 24-06-PLAN.md — the `build_bins(..., adversarial_ratio=0.0)` seam with a seed-derived interleave, byte-identical at its default, wiring sibling watched RED first
+- [x] 24-06-PLAN.md — the `build_bins(..., adversarial_ratio=0.0)` seam with a seed-derived interleave, byte-identical at its default, wiring sibling watched RED first *(the wiring sibling was written FIRST and watched RED — **10 failed, 0 passed**, every one `TypeError: build_bins() got an unexpected keyword argument 'adversarial_ratio'` — so the byte-identity half is not a tautology over an unread kwarg; the pre-wiring no-kwarg baseline the identity is measured against is token `f146d426…` / mask `a2c4771f…`, 176 episodes / 7,581 tokens. D-06: `n_want = round(ratio * len(episodes))`, and an AST walk over `_mix_adversarial` proves `teaching_tokens` is not a Name in its body. D-08: a private `random.Random(seed)`, proved in three directions (same seed identical, different seed different, inert at 0.0) — AST-proved no `np.random` and no global `random.shuffle`. **Every non-zero grid point trains all three families within 1**, asserted from `stats["adversarial_family_counts"]` at the SELECTED prefix: 15/15/14, 30/29/29, 59/59/58, 88/88/88, 112/112/112. `adv_n8`/`adv_n64` appended OUTSIDE `DP_ARMS` so both pack flat; a real `adv_n8` build at the upper extreme passed all six `sanity_check` proofs — 512 episodes, 40,733 tokens, **`mask_fraction` 0.2410**, 130 held-out questions absent at token level. Full suite **1633 passed, 1 skipped**, 0 failed, exactly +14 over the 1619/1 baseline: +10 this module, +4 from two `tp.ARMS` parametrizations × two new arms)*
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -942,7 +942,7 @@ capacities — with every number in prose generated from a committed record rath
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 19/20 | Complete    | 2026-08-29 — **all six requirements closed:** CAL-01 + CAL-05 (23-11/23-12), CAL-02 (23-13), CAL-03 (23-04), DPSGD-06 (23-10), CTRL-03 (23-08 trained, 23-14 scored). Verification `23-VERIFICATION.md` 5/5 must-haves; both `human_needed` items ruled on and CLOSED by the developer the same day — DPSGD-06's stale row retracted in place at `7296b31`, the never-taught positive control landed and watched RED at `17c28c8`. `23-SECURITY.md` at `threats_open: 0` over **113 distinct threat IDs**. Suite `1591 passed, 1 skipped`. *(**19/20, not 20/20** — `phase.complete` wrote 20/20 and re-ticked 23-17; both reverted by hand. **23-17 stays deliberately unticked**: its run was harness-killed at 3/5 and wrote no record, and 23-20 completed the work under a separate continuation pre-registration.)* |
-| 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 5/7 | In progress | - |
+| 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 6/7 | In progress | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |
 | 27. Relearning Attack | v4.0 | 0/TBD | Not started | - |
