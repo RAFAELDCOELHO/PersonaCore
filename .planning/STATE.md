@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc); next up 24-03."
-last_updated: "2026-08-30T16:31:47.000Z"
+stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc), 24-03 COMPLETE (fd6ba46 + 217c531 — the ROADMAP continuation is IN, so the clobber risk named above is now a live thing to protect); next up 24-04."
+last_updated: "2026-08-30T17:01:48.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 74
-  completed_plans: 68
+  completed_plans: 69
   percent: 44
 ---
 
@@ -26,7 +26,72 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 3 of 7 (wave 1 of 4) — sequential, main tree
+Plan: 4 of 7 (wave 1 of 4) — sequential, main tree
+
+**24-03 EXECUTED 2026-08-30 — SC2'S OVERLAP KEY IS MEASURED UNSATISFIABLE AND SUPERSEDED IN PLACE,
+WITH THE ORIGINAL SENTENCE STANDING BYTE-IDENTICAL.** `.planning/ROADMAP.md` gained a dated
+continuation between fresh `<!-- 24-03-CONTINUATION-BEGIN/END -->` sentinels — **48 insertions / 0
+deletions** — appended after SC2 and before SC3. The `23-12-CONTINUATION-*` pair (`:51`/`:71`, NOT
+the `:44-75` the plan cited) is undisturbed; all four sentinel counts are 1. The tick and the 2/7 to
+3/7 progress row landed in a SEPARATE commit (2 insertions / 2 deletions) so the continuation's
+zero-deletion property is legible in its own diff.
+
+**THE UNSATISFIABILITY IS A RUNNING MEASUREMENT ON BOTH READINGS OF THE KEY, NOT PROSE.** The plan
+and 24-CONTEXT quote only the three-field figure; SC2's sentence names TWO fields, so both were
+counted out of `results/phase18_corpus.json` (path from `phase18_extraction.CORPUS_PATH`, never a
+literal, and never a `build_corpus` rebuild — SC2 says *read from* the committed artifact).
+**864 rows = 4 x 216.** On `(fact_id, seed_index, tier)`: **216** distinct triples per family, all
+four sets EQUAL, every pairwise overlap **216 of 216** (`A1-aggressive & A1-mild`, `& A2`, `& A3`,
+`A1-mild & A2`, `& A3`, `A2 & A3` — each counted separately). On the two-field
+`(fact_id, seed_index)` key SC2 literally names: **140** distinct pairs per family, trained-union
+intersect held-out-union **140 of 140** (76 questions are asked in both tiers, which is the only
+thing `tier` separates). A zero-overlap check is RED under either reading, and the corpus is a full
+cross product BY CONSTRUCTION — "one prompt object dispatched twice" is what makes the two arms
+comparable at all.
+
+**ADVT-02'S ACTUAL PROPERTY SHIPS AS TWO ASSERTIONS THAT CANNOT BE READ AS EACH OTHER.**
+`tests/test_phase24_split.py` (3 tests): `..._disjoint_on_family` is ADVT-02 directly — trained
+{A1-mild, A1-aggressive, A3} against held-out {A2}, empty intersection, with the union asserted to
+**PARTITION** the families present so a fifth family landing unassigned is red rather than ignored;
+`..._disjoint_on_source_family` is the D-03 corollary (paraphrase generalization, a DISTINCT
+property) — taught {F1 160, F2 160, F6 128} vs held-out {F3 96, F7 96, F8 96, `reserved` 128},
+sets DERIVED from the corpus *and* checked against a hard equality, `reserved` resolved from
+`p18.RESERVED_SOURCE_FAMILY`. No `issubset` and no membership relation anywhere in the file.
+**F4 and F5 are ABSENT from the corpus entirely**, so D-03 reduces operationally to "core_taught
+only" and there is no F4/F5 exclusion code to hunt for.
+
+**EIGHT PROBES WATCHED RED, EVERY ONE LINE-ANCHORED AFTER 24-02'S FALSE GREEN.** Each probe printed
+its line number and post-edit line text before the run. Split: A2 planted into `TRAINED_FAMILIES`
+(:63), A3 dropped so the split stops partitioning (:63), F6 dropped from the taught equality (:148),
+the 140 census nudged to 141 (:208). ROADMAP: SC2's clause removed (:726 — `numstat` went to
+`49 2`), the marker's plan id broken to `(plan 24-3)` (:731), a duplicate BEGIN sentinel on the SAME
+line (:729), a node id renamed to a function that does not exist (:754). **The `grep -c` hazard was
+MEASURED before being written into a docstring:** two same-line sentinels give `grep -c` = **1** (a
+`== 1` acceptance check PASSES) while `str.count` = **2** and the guard refuses. Every restore was a
+targeted inverse write; no blanket working-tree restore was used, and `git diff --numstat` was
+re-checked back to `48 0` after each one.
+
+**TWO PLAN DEFECTS CORRECTED IN FLIGHT.** (1) The plan specified only the three-field figure; the
+two-field key SC2 names was added (Rule 2) so the supersession measures the claim rather than a
+near-neighbour of it. (2) The plan's and 24-CONTEXT:324's `PITFALLS P18-1` citation **does not
+resolve** — `.planning/research/PITFALLS.md` has no `P18-1`; the continuation cites
+`scripts/phase18_extraction.py:683-688` and `.planning/milestones/v3.0-research/PITFALLS.md:357`
+instead, both read at HEAD (Rule 1). The plan's ROADMAP line numbers for Phase 24 (`712`, `725-728`,
+`730`) happened to still hold; its 23-12 citation did not.
+
+**ADVT-02 IS DELIBERATELY STILL UNTICKED** and `.planning/REQUIREMENTS.md` is **byte-unchanged**.
+This plan ships the structural half — split committed, held-out family named before training,
+disjointness a running measurement — but ADVT-02 also needs the mixture to actually train against
+that split, which is 24-05 and 24-06. **Zero `gsd-sdk` mutation handlers called**; `STATE.md` and
+`ROADMAP.md` hand-edited and diffed line by line. Suite **`1608 passed, 1 skipped`**, 0 failed
+(370.5 s) against 24-02's `1601 passed, 1 skipped` — **exactly 7 are this plan's** (3 + 4), an exact
+match with no collateral. `ruff` clean over 224 files. `git diff scripts/phase18_extraction.py
+scripts/mitigation_gate.py` EMPTY.
+
+**A LIVE TRIPWIRE NOW SITS ON `.planning/ROADMAP.md`.** Any later plan that rewraps or reflows SC2's
+bullet, renames a `tests/test_phase24_split.py` test, or touches the 24-03 sentinel pair turns
+`tests/test_phase24_correction.py` RED. That is the intent. Correct it the way this plan did —
+additively, never in place.
 
 **24-02 EXECUTED 2026-08-30 — D-09'S GRID EXTREMES ARE PINNED AS LITERALS AND BOTH RE-DERIVE FROM
 COMMITTED ARTIFACTS.** `mitigation_budget.ADVERSARIAL_RATIO_GRID = (0.0, 0.25, 0.5, 1.0, 1.5,
@@ -1186,8 +1251,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-27T22:46:03.067Z
-Stopped at: Completed 23-18-PLAN.md (plan 18 of 20) — MATCHED_CONTROL_NOISE_FLOOR = 0.0267857142857143 pinned BESIDE the original, which is byte-unchanged (153 insertions / 0 deletions, needle still unique, zero imports added). D-04 HALT STILL IN FORCE; 23-11..23-14 BLOCKED; NO verdict rendered — that is 23-19's
+Last session: 2026-08-30T17:01:48.000Z
+Stopped at: Completed 24-03-PLAN.md (plan 3 of 7, wave 1) — SC2's `(fact_id, seed_index)` overlap key MEASURED UNSATISFIABLE (140 of 140 two-field keys and 216 of 216 three-field triples overlap pairwise, complete) and SUPERSEDED by a dated additive ROADMAP continuation between fresh `24-03-CONTINUATION-*` sentinels, 48 insertions / 0 deletions, SC2's own sentence byte-identical. ADVT-02 deliberately still unticked
 Resume file: None
 
 ## Operator Next Steps
