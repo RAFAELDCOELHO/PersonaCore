@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTION COMPLETE (2026-08-30) — all 7 plans in 4 waves done, sequential on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). 24-01 (c09d37c), 24-02 (4ecf5bc), 24-03 (fd6ba46 + 217c531), 24-04 (d121cf7 + 2ba4292), 24-05 (c10d017 + c2b71f7), 24-06 (d274dfb + 75d2d6d), 24-07 (6c1327b + 5aed70f + 7075951 + 8fd67eb) — WAVE 4 AND THE PHASE ARE DONE. ADVT-02 and ADVT-03 TICKED in REQUIREMENTS.md (the first requirement movement of the whole phase, after six plans deliberately declined); ADVT-01 stays OPEN because no adapter has been trained — Phase 25 runs the sweep. The ROADMAP continuation survived the final tick: all four sentinel counts still 1, SC2 claim text still exactly once, tests/test_phase24_correction.py still 4 passed. The phase-CLOSE step still owns the ROADMAP phase-heading checkbox, the progress row Status cell, and frontmatter status/completed_phases/percent (see 5a72670 for the phase-23 precedent)."
-last_updated: "2026-08-30T18:59:10.000Z"
+stopped_at: "Phase 24 EXECUTION COMPLETE (2026-08-30) — all 7 plans in 4 waves done, sequential on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). 24-01 (c09d37c), 24-02 (4ecf5bc), 24-03 (fd6ba46 + 217c531), 24-04 (d121cf7 + 2ba4292), 24-05 (c10d017 + c2b71f7), 24-06 (d274dfb + 75d2d6d), 24-07 (6c1327b + 5aed70f + 7075951 + 8fd67eb) — WAVE 4 AND THE PHASE ARE DONE. ADVT-02 and ADVT-03 TICKED in REQUIREMENTS.md (the first requirement movement of the whole phase, after six plans deliberately declined); ADVT-01 stays OPEN because no adapter has been trained — Phase 25 runs the sweep. The ROADMAP continuation survived the final tick: all four sentinel counts still 1, SC2 claim text still exactly once, tests/test_phase24_correction.py still 4 passed. The phase-CLOSE step still owns the ROADMAP phase-heading checkbox, the progress row Status cell, and frontmatter status/completed_phases/percent (see 5a72670 for the phase-23 precedent). 24-08 GAP CLOSURE (2026-08-30, no PLAN.md) then closed 24-REVIEW's THREE blockers — CR-01 d4ed1f8, CR-02 ba2787f, CR-03 e518a4e, plus e86cb33 registering two PROSE `train_arm(` census hits the first three left RED — each blocker with a full RED -> GREEN -> mutated-RED cycle. Suite 1646/1/0. The 8 warnings and 6 info findings from the review are UNTOUCHED and remain open."
+last_updated: "2026-08-30T20:20:00.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
@@ -26,8 +26,28 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 7 of 7 (wave 4 of 4) — sequential, main tree. ALL FOUR WAVES COMPLETE; the phase's plan
-work is done and awaits the phase-close step.
+Plan: 7 of 7 (wave 4 of 4) + 24-08 GAP CLOSURE — sequential, main tree. ALL FOUR WAVES COMPLETE;
+24-REVIEW's three blockers are CLOSED; the phase awaits the phase-close step.
+
+**24-08 EXECUTED 2026-08-30 — 24-REVIEW's THREE BLOCKERS CLOSED, EACH WITH RED → GREEN →
+MUTATED-RED.** No PLAN.md; the gap-closure prompt was the plan. **CR-01:** `ADV_ARMS` +
+`main()`'s refusal — `python scripts/teach_persona.py adv_n8` no longer trains the ratio-0.0
+control under an "adversarial" name. The refusal is on the CLI and deliberately NOT on
+`train_arm`, INVERTING the DP precedent: `adversarial_ratio=0.0` IS `ADVERSARIAL_RATIO_GRID[0]`,
+the sweep's own control, and `phase24_record` builds twelve rows through it. The `:270-274`
+comment's `len(argv) != 1` defense was FALSE and is corrected in place. **CR-02:** the D-02 scan
+is now bound by a COVERAGE assertion over `REFUSAL_SLOT_NOUNS` rather than a chosen vocabulary —
+20 → 22 values, every one derived from the factset's tiers, no literals. RED quoted the two
+uncovered pairs by name. **CR-03:** `contains_refusal` refuses a template normalizing to the
+empty string; the mutation reproduced the pre-fix behaviour digit for digit (`[True, True, True,
+True]` and `(3, 3)`). Guard in the shared predicate only, residue named. Commits `d4ed1f8`,
+`ba2787f`, `e518a4e`, plus `e86cb33` closing a RED HEAD the first three left at
+`test_phase23_resume::test_resume_from_none_is_inert` (a `train_arm(` prose census two phases
+away). Full suite **1646 passed / 1 skipped / 0 failed**, +1 over 1645/1 — the one new test.
+The orchestrator's harness still prints CR-02 BROKEN: its probe hand-copies the PRE-FIX
+expression `LOCKED_VALUES | GATE_REJECTED_CANDIDATES` and no correct fix can satisfy it (see
+24-08-SUMMARY.md for the measurement and the one-line probe correction). The 8 warnings and 6
+info findings are untouched and are the natural next pass.
 
 **24-07 EXECUTED 2026-08-30 — ALL FOUR D-05 CORNERS ARE MEASURED, THE ADVT-03 RECORD IS
 COMMITTED, AND THE PHASE'S FIRST TWO REQUIREMENT TICKS LANDED.** `tests/test_phase24_band.py`
@@ -1485,8 +1505,26 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-30T18:59:10.000Z
-Stopped at: Completed 24-07-PLAN.md (plan 7 of 7) — WAVE 4 AND ALL PLAN WORK IN PHASE 24 COMPLETE. All four D-05 corners measured in 2.22 s before any sweep point exists: `adv_n8` 0.358660 -> 0.241009, `adv_n64` 0.390163 -> 0.251734 (the n=64 column MEASURED, never carried across); binding corner `(adv_n8, upper)` clears `0.15 + MASK_FRACTION_MARGIN` by 0.041009 and the ordering is asserted rather than assumed. 24-06's open question DECIDED: no per-episode fraction gate — the 0.1111 minimum is an A3 episode at 18 scored tokens in 162, every adversarial episode measures 18-23 against a floor of 15, and the CLEAN pool's shortest answer is 11 and has never been gated. `results/phase24_token_budget.json` committed with 12 rows of integer scored-token counts, denominators, and D-07 multiplicity in the same row (8.0x at adv_n64's upper extreme); 3.73x cross-family kept distinct from ADVT-03's 1.40x; SC4's inflation obligation discharged explicitly. Both refusals watched firing with no bytes landing, and the emitter committed BEFORE its artifact so provenance.git_sha 5aed70f contains it. Full suite 1645 passed / 1 skipped, +12 over 1633/1. ADVT-02 and ADVT-03 TICKED; ADVT-01 open for Phase 25. Next: the phase-CLOSE step, which owns the ROADMAP phase-heading checkbox, the progress-row Status cell and frontmatter status/completed_phases/percent
+Last session: 2026-08-30T20:20:00.000Z
+Stopped at: Completed 24-08 GAP CLOSURE (no PLAN.md — 24-REVIEW's three blockers). CR-01 closed by
+`ADV_ARMS` + a CLI refusal that names the programmatic route (`train_arm(..., adversarial_ratio=)`)
+and by correcting the false `len(argv) != 1` defense; the refusal is deliberately NOT on `train_arm`
+because ratio 0.0 is the grid's own control. CR-02 closed by a COVERAGE assertion over
+`REFUSAL_SLOT_NOUNS` — the swept set went 20 → 22, derived from the factset's tiers, and the
+module docstring that called 20 "the wider lexicon" is corrected. CR-03 closed by one `_prove` in
+`contains_refusal` (not `score_refusal`, not a new validator — the wrapper routes through the
+predicate), with the zero-completions residue named in the docstring. Each carries the full
+three-state proof with the mutation line-anchored, occurrence-counted, post-edit line printed and
+the file sha256 compared before/after restore — no `git checkout --`. Commits `d4ed1f8`,
+`ba2787f`, `e518a4e`, `e86cb33`. Suite 1646/1/0 (+1). Two findings recorded in the SUMMARY rather
+than smoothed: the first three commits left `test_phase23_resume::test_resume_from_none_is_inert`
+RED (a hard-equality `train_arm(` census caught two PROSE mentions), and the orchestrator's repro
+harness cannot observe CR-02's fix because its probe hand-copies the pre-fix expression — making it
+print FIXED would require putting a taught soft-tier value into `LOCKED_VALUES` or into the
+GATE-REJECTED pool, the first of which an existing test refuses. Next: the phase-CLOSE step, which
+owns the ROADMAP phase-heading checkbox, the progress-row Status cell and frontmatter
+status/completed_phases/percent
+Superseded stop record (24-07): Completed 24-07-PLAN.md (plan 7 of 7) — WAVE 4 AND ALL PLAN WORK IN PHASE 24 COMPLETE. All four D-05 corners measured in 2.22 s before any sweep point exists: `adv_n8` 0.358660 -> 0.241009, `adv_n64` 0.390163 -> 0.251734 (the n=64 column MEASURED, never carried across); binding corner `(adv_n8, upper)` clears `0.15 + MASK_FRACTION_MARGIN` by 0.041009 and the ordering is asserted rather than assumed. 24-06's open question DECIDED: no per-episode fraction gate — the 0.1111 minimum is an A3 episode at 18 scored tokens in 162, every adversarial episode measures 18-23 against a floor of 15, and the CLEAN pool's shortest answer is 11 and has never been gated. `results/phase24_token_budget.json` committed with 12 rows of integer scored-token counts, denominators, and D-07 multiplicity in the same row (8.0x at adv_n64's upper extreme); 3.73x cross-family kept distinct from ADVT-03's 1.40x; SC4's inflation obligation discharged explicitly. Both refusals watched firing with no bytes landing, and the emitter committed BEFORE its artifact so provenance.git_sha 5aed70f contains it. Full suite 1645 passed / 1 skipped, +12 over 1633/1. ADVT-02 and ADVT-03 TICKED; ADVT-01 open for Phase 25. Next: the phase-CLOSE step, which owns the ROADMAP phase-heading checkbox, the progress-row Status cell and frontmatter status/completed_phases/percent
 Resume file: None
 
 ## Operator Next Steps
