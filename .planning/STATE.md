@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc), 24-03 COMPLETE (fd6ba46 + 217c531), 24-04 COMPLETE (d121cf7 + 2ba4292), 24-05 COMPLETE (c10d017 + c2b71f7), 24-06 COMPLETE (d274dfb + 75d2d6d) — WAVES 1, 2 AND 3 ARE DONE; next up 24-07 (wave 4, the last). The ROADMAP continuation survived 24-06's tick too: all four sentinel counts still 1, SC2's claim text still occurs exactly once, tests/test_phase24_correction.py still 4 passed."
-last_updated: "2026-08-30T18:30:37.000Z"
+stopped_at: "Phase 24 EXECUTION COMPLETE (2026-08-30) — all 7 plans in 4 waves done, sequential on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). 24-01 (c09d37c), 24-02 (4ecf5bc), 24-03 (fd6ba46 + 217c531), 24-04 (d121cf7 + 2ba4292), 24-05 (c10d017 + c2b71f7), 24-06 (d274dfb + 75d2d6d), 24-07 (6c1327b + 5aed70f + 7075951 + 8fd67eb) — WAVE 4 AND THE PHASE ARE DONE. ADVT-02 and ADVT-03 TICKED in REQUIREMENTS.md (the first requirement movement of the whole phase, after six plans deliberately declined); ADVT-01 stays OPEN because no adapter has been trained — Phase 25 runs the sweep. The ROADMAP continuation survived the final tick: all four sentinel counts still 1, SC2 claim text still exactly once, tests/test_phase24_correction.py still 4 passed. The phase-CLOSE step still owns the ROADMAP phase-heading checkbox, the progress row Status cell, and frontmatter status/completed_phases/percent (see 5a72670 for the phase-23 precedent)."
+last_updated: "2026-08-30T18:59:10.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 74
-  completed_plans: 72
+  completed_plans: 73
   percent: 44
 ---
 
@@ -26,7 +26,61 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 7 of 7 (wave 4 of 4) — sequential, main tree. WAVES 1, 2 AND 3 COMPLETE.
+Plan: 7 of 7 (wave 4 of 4) — sequential, main tree. ALL FOUR WAVES COMPLETE; the phase's plan
+work is done and awaits the phase-close step.
+
+**24-07 EXECUTED 2026-08-30 — ALL FOUR D-05 CORNERS ARE MEASURED, THE ADVT-03 RECORD IS
+COMMITTED, AND THE PHASE'S FIRST TWO REQUIREMENT TICKS LANDED.** `tests/test_phase24_band.py`
+builds `{adv_n8, adv_n64} x {0.0, 1.9090909090909092}` in **2.22 s** (binding corner alone
+**0.75 s**), converting a post-compute build-time `SystemExit` into a CPU test that runs before
+any sweep point exists. **The n=64 column was MEASURED, not carried across from n=8:** `adv_n8`
+0.358660 -> **0.241009**, `adv_n64` 0.390163 -> **0.251734**. The control corners reproduce the
+flat operating point to six decimals, with the two trap sets (aligned 0.321813/0.347701, v3.0 CAL
+0.3426/0.3854/0.3778) named in the test's own docstring as non-substitutable. The binding corner
+is `(adv_n8, upper)` — 0.241009 < 0.251734, asserted as a measured ORDERING rather than assumed —
+and it clears `0.15 + MASK_FRACTION_MARGIN` by **0.041009**. The band's ceiling is asserted at
+every corner too, so "only the floor binds" is checked and not merely argued.
+
+**24-06'S OPEN QUESTION IS DECIDED, AND THE DECISION IS A TEST RATHER THAN A PARAGRAPH.**
+`mask_fraction_min = 0.1111` gets NO per-episode gate. Measured: the minimum is an **A3** episode
+at **18 scored tokens in 162**, so the per-episode FRACTION moves with the attack PROMPT's length
+— which D-10 trains on deliberately — and not with the refusal's. The per-episode quantity that
+IS well defined is the scored-token COUNT, and it already has a floor: every one of the 336
+adversarial episodes measures **18-23** against `MIN_REFUSAL_SCORED_TOKENS = 15`, while the CLEAN
+teaching pool's shortest answer is **11** and has never been gated per-episode in this
+repository's history. An adversarial-only fraction floor would gate the population that needs it
+least. `test_the_per_episode_floor_is_a_scored_token_count_and_not_a_fraction` asserts both
+halves, so a future inversion is red.
+
+**`results/phase24_token_budget.json` IS COMMITTED — 12 ROWS, COUNTS NEVER RATES.** Every row's
+`scored_tokens` is `int(np.fromfile(mask_bin, dtype=np.uint8).sum())` off the bin actually
+written, never `mask_fraction * total_tokens`, and carries its own `*_denominator` / `*_source`.
+D-07 multiplicity travels in the SAME ROW as its point (Phase 25 SC3 needs it in the same
+sentence as epsilon) — and reaches **8.0x at `adv_n64`'s upper extreme**, so n=64 repeats the
+whole 336-episode pool eight times where n=8 passes it once, and even n=64's SMALLEST non-zero
+point is already 1.0476. The token-budget confound is disclosed with both figures kept distinct:
+**3.73x** cross-family (A3 mean 118.52 / A2 mean 31.77 prompt tokens, 112 rows each, counted live)
+against ADVT-03's **1.40x** single-sentence figure, plus a **1.59x** leave-one-out token spread at
+an invariant 336-episode count — D-06's reason for sweeping episodes and reporting tokens. SC4's
+inflation-report obligation is discharged EXPLICITLY (`new_attack_corpus: false` plus a written
+discharge string), not by silence.
+
+**BOTH REFUSALS WATCHED FIRING, AND THE COMMIT ORDER IS THE GUARD'S CONSEQUENCE.** The dirty
+guard fired on a `scripts/` scratch file with **no bytes landing**, naming the untracked emitter
+alongside it — which is exactly why `scripts/phase24_record.py` (`5aed70f`) was committed BEFORE
+`results/phase24_token_budget.json` (`7075951`); `git cat-file -e 5aed70f:scripts/phase24_record.py`
+confirms the recorded SHA contains its own emitter, so 21-REVIEW CR-02's defect is CHECKED rather
+than trusted. `phase21_unit_record.refuse_dirty_publication` was deliberately NOT used —
+`is_publication_target` compares against two phase-21 paths and returns `None` for a phase-24 one,
+so it would have been green and blind. A one-digit hand edit of a committed `scored_tokens` was
+watched going RED in **two independent tests**, then restored under a sha256 equality check with
+`git diff --exit-code` clean.
+
+**Full suite 1645 passed / 1 skipped**, 0 failed in 381.79 s, exit 0 — exactly **+12** over the
+1633/1 baseline (7 band tests + 5 record tests, nothing else moved). `ruff` clean over 230 files.
+**ADVT-02 and ADVT-03 TICKED — `.planning/REQUIREMENTS.md` moves for the first time this phase.**
+ADVT-01 stays open on purpose: its subject is *the adapter trained*, and none has been. Zero
+`gsd-sdk` mutation handlers called.
 
 **24-06 EXECUTED 2026-08-30 — THE MIXTURE SEAM EXISTS, IS PROVED READ, AND IS BYTE-IDENTICAL AT ITS
 DEFAULT.** `build_bins` gained two keyword-only parameters, `adversarial_ratio=0.0` and `seed=SEED`,
@@ -1431,8 +1485,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-30T18:30:37.000Z
-Stopped at: Completed 24-06-PLAN.md (plan 6 of 7) — WAVE 3 COMPLETE. `build_bins` gained `adversarial_ratio=0.0` and `seed=SEED`, byte-identical at their defaults against a pre-wiring no-kwarg baseline of token `f146d426...` / mask `a2c4771f...`; the wiring sibling was watched RED first at 10 failed / 0 passed on `TypeError: ... unexpected keyword argument 'adversarial_ratio'`, so the identity half is not vacuous. D-06 sizes from `len(episodes)` (AST: `teaching_tokens` is not read in `_mix_adversarial`); D-08 permutes with a private `random.Random(seed)`, proved in three directions. Every non-zero grid point trains all three families within 1 at the SELECTED prefix (15/15/14 … 112/112/112). `adv_n8`/`adv_n64` appended outside `DP_ARMS`, both flat; a real `adv_n8` build at the upper extreme passed all six `sanity_check` proofs at `mask_fraction` 0.2410. Full suite 1633 passed / 1 skipped. ADVT-01 and ADVT-03 still deliberately unticked in REQUIREMENTS.md. Next: 24-07 (wave 4, the last)
+Last session: 2026-08-30T18:59:10.000Z
+Stopped at: Completed 24-07-PLAN.md (plan 7 of 7) — WAVE 4 AND ALL PLAN WORK IN PHASE 24 COMPLETE. All four D-05 corners measured in 2.22 s before any sweep point exists: `adv_n8` 0.358660 -> 0.241009, `adv_n64` 0.390163 -> 0.251734 (the n=64 column MEASURED, never carried across); binding corner `(adv_n8, upper)` clears `0.15 + MASK_FRACTION_MARGIN` by 0.041009 and the ordering is asserted rather than assumed. 24-06's open question DECIDED: no per-episode fraction gate — the 0.1111 minimum is an A3 episode at 18 scored tokens in 162, every adversarial episode measures 18-23 against a floor of 15, and the CLEAN pool's shortest answer is 11 and has never been gated. `results/phase24_token_budget.json` committed with 12 rows of integer scored-token counts, denominators, and D-07 multiplicity in the same row (8.0x at adv_n64's upper extreme); 3.73x cross-family kept distinct from ADVT-03's 1.40x; SC4's inflation obligation discharged explicitly. Both refusals watched firing with no bytes landing, and the emitter committed BEFORE its artifact so provenance.git_sha 5aed70f contains it. Full suite 1645 passed / 1 skipped, +12 over 1633/1. ADVT-02 and ADVT-03 TICKED; ADVT-01 open for Phase 25. Next: the phase-CLOSE step, which owns the ROADMAP phase-heading checkbox, the progress-row Status cell and frontmatter status/completed_phases/percent
 Resume file: None
 
 ## Operator Next Steps
