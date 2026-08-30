@@ -78,6 +78,14 @@ _TRAIN_ARM_CALL_SITES = (
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
     ("scripts/teach_persona.py", "prose", "the resume_from sentinel paragraph"),
+    # 24-REVIEW CR-01's CLI refusal. TWO new `prose` hits, both STRING CONSTANTS naming the
+    # PROGRAMMATIC route the refused `adv_*` arms must take: the USAGE line and the refusal
+    # message itself. Neither is a call — the per-file AST check below still reads 4 real calls
+    # for this file — and the `== 8 + 1 + 1 + 1` call census above is untouched, which is exactly
+    # what the kind field is for. Registered rather than reworded to slip the grep: a refusal that
+    # cannot name `train_arm(..., adversarial_ratio=...)` cannot tell the operator where to go.
+    ("scripts/teach_persona.py", "prose", "the USAGE programmatic-only line (24-08)"),
+    ("scripts/teach_persona.py", "prose", "main()'s adv_* refusal message (24-08)"),
     ("tests/test_phase22_wiring.py", "call", "test_the_dp_refusal_also_fires_at_train_arm..."),
     ("tests/test_phase22_wiring.py", "prose", "test_cli_names_no_sigma_or_clip_value comment"),
     # THIS file — the only place ALLOWED to pass `resume_from`, and the reason the assertion below
@@ -85,6 +93,11 @@ _TRAIN_ARM_CALL_SITES = (
     ("tests/test_phase23_resume.py", "call", "_resume_call (the refusal probes)"),
     ("tests/test_phase23_resume.py", "call", "_run (the production MPS probe)"),
     ("tests/test_phase23_resume.py", "prose", "the grep pattern in the register probe"),
+    # ...and the note above, which names the refused CLI's redirect target in full and therefore
+    # matches the grep itself. Registered for the reason the fixture entries give: rewording it to
+    # slip the pattern would leave the count wrong in the other direction, and a register whose
+    # own prose has to dodge its own probe is not a register.
+    ("tests/test_phase23_resume.py", "prose", "this register's note on the 24-08 CLI sites"),
     # Plan 23-15's matched-comparator pre-registration. A FOURTH kind, `fixture`: these hits are
     # driver-named `def` lines INSIDE SYNTHETIC PYTHON SOURCE STRINGS that
     # `phase23_matched_prereg.prove_train_call_keys` parses with `ast` — the census finds the
