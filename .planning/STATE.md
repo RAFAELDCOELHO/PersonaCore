@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc), 24-03 COMPLETE (fd6ba46 + 217c531), 24-04 COMPLETE (d121cf7 + 2ba4292) — WAVE 1 IS DONE; next up 24-05 (wave 2). The ROADMAP continuation survived 24-04's tick: all four sentinel counts still 1, SC2's claim text still occurs exactly once, tests/test_phase24_correction.py still 4 passed."
-last_updated: "2026-08-30T18:26:00.000Z"
+stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc), 24-03 COMPLETE (fd6ba46 + 217c531), 24-04 COMPLETE (d121cf7 + 2ba4292), 24-05 COMPLETE (c10d017 + c2b71f7) — WAVES 1 AND 2 ARE DONE; next up 24-06 (wave 3). The ROADMAP continuation survived 24-05's tick: all four sentinel counts still 1, SC2's claim text still occurs exactly once, tests/test_phase24_correction.py still 4 passed."
+last_updated: "2026-08-30T17:54:46.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 74
-  completed_plans: 70
+  completed_plans: 71
   percent: 44
 ---
 
@@ -26,7 +26,70 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 5 of 7 (wave 2 of 4) — sequential, main tree. WAVE 1 COMPLETE.
+Plan: 6 of 7 (wave 3 of 4) — sequential, main tree. WAVES 1 AND 2 COMPLETE.
+
+**24-05 EXECUTED 2026-08-30 — THE TRAINED ATTACK POOL EXISTS, AND EVERY ONE OF ITS 336 PROMPTS IS
+PROVED BYTE-EQUAL TO THE COMMITTED ROW IT CAME FROM.** `scripts/phase24_adversarial.py` gained
+`adversarial_episodes(tok)` / `attack_prompt_ids` / `adversarial_pool_size` plus `TRAINED_TIER`,
+`TRAINED_FAMILIES`, `HELD_OUT_FAMILY` — **+217 lines appended below 24-01's refusal half** (147 -> 367),
+which is byte-unchanged apart from one corrected scope sentence (+5 / -2, see below). **Measured: 336
+episodes = 3 families x 112, per-family 112/112/112**, so the pool is family-independent at the
+episode unit; `adversarial_pool_size` returns the same number through the same derivation, and the
+literal is never typed — `len(TRAINED_FAMILIES) * len(fixture["questions"]["core_taught"])` is the
+only place the count comes from. `results/phase18_corpus.json` is read READ-ONLY through
+`p18.CORPUS_PATH`; **`build_corpus` is never called** (AST: 3 prose mentions, **0 calls** — the
+plan's own `grep -n "build_corpus"` criterion matched only the comments saying it is never called,
+hazard #2 exactly, so it was replaced with an AST call-walk and recorded as a substitution).
+
+**SC4 IS NOW A HARD EQUALITY ON EVERY EPISODE, CHECKED TWICE BY TWO DIFFERENT READERS.** The
+builder re-renders each question through the FROZEN builders — `p18.apply_a1(question, dose=...)`
+with `persona=()` for the two A1 doses, the raw question with `persona=(p18.A3_ROLE_INSTRUCTION,)`
+for A3 — never by decoding `prompt_ids`, and compares `== row["prompt_ids"]` under list equality,
+`SystemExit` on mismatch naming family / fact_id / seed_index / both lengths / first differing
+index. `tests/test_phase24_adversarial.py` then re-proves the same 336 from OUTSIDE, driving
+`build_recall_prompt` **directly** rather than the builder's own helper, with the comparison count
+asserted equal to the pool size so a loop that iterated nothing cannot pass. **336 of 336 equal, 0
+mismatches**, measured before a line of it was committed.
+
+**A2 IS REFUSED, NOT DROPPED, AND THE REFUSAL WAS WATCHED FIRING.** The D-10 filter keeps A2 out;
+the belt-and-braces `SystemExit` beside it fires if an A2 row ever survives, quoting D-12's
+containment reason (`build_a2_prompt` appends leading ids OF THE PRIVATE VALUE past
+`<|assistant|>`, assistant content is mask=1, so an A2 TARGET would be a 25% value prefix + a
+refusal, and `contains_value` needs the WHOLE value — the leak would score ZERO, not score low).
+Test 3 widens `TRAINED_FAMILIES` by monkeypatch and asserts the raised message names the family
+**and all four reasons**, so a raise for any other cause is red; observed firing on
+`fact_id='cand_person_quillon', seed_index=0`, the third corpus row. Paired with the positive half,
+which runs first.
+
+**THE FOURTH `PERSONA_ALLOWLIST` ENTRY LANDED IN THE SAME COMMIT AS ITS CALL SITE — `c10d017` —
+AND THE GUARD WAS WATCHED RED WITHOUT IT.** The RED was taken in the file's NATURAL intermediate
+state (call site present, entry absent) rather than by planting and reverting a probe, so no
+inverse edit was needed: `AssertionError: ... Left contains one more item:
+('scripts/phase24_adversarial.py', 'attack_prompt_ids')`, `1 failed in 0.95s`. `attack_prompt_ids`
+is the ONE `persona=` call site in the module — **counted by AST (exactly 1 `Call`), never by
+`grep -c "persona="`**, which would have counted the docstring lines the justification is written
+in. `PERSONA_ALLOWLIST` is one assignment with four entries, the three incumbents byte-unchanged.
+No line added under `tests/` carries `== 10` / `!= 10`, so the twelve-member SC5 wall census stayed
+green without an edit this time.
+
+**ONE 24-01 SENTENCE WAS CORRECTED, DELIBERATELY, AGAINST THE PLAN'S "DO NOT REWORD" RULE.** The
+module docstring said *"Scope: the refusal half only. Plan 24-05 adds the corpus-to-episode builder
+to this same module."* — false the instant the builder landed, and the D-02 static scan reads
+docstrings, so a stale scope note is live text a future reader trusts. Replaced with the accurate
+scope plus the lazy-import note; `json`, `phase18_extraction` and `personacore.dialogue` are ALL
+imported inside function bodies, so the module's import graph is still stdlib + `phase14_factset`
+for every existing consumer.
+
+**FROZEN THINGS STAYED FROZEN.** `git diff` on `scripts/phase18_extraction.py` and
+`scripts/mitigation_gate.py` **empty**; `git status --porcelain results/phase18_corpus.json`
+**empty**. `scripts/phase14_recall.py` untouched and its module-level imports AST-verified to still
+exclude `phase24_adversarial` — the lazy-import boundary 24-04 established holds.
+`.planning/REQUIREMENTS.md` still byte-unchanged for the whole phase; ADVT-01/02/03 all remain
+deliberately unticked (24-06 and 24-07 still carry them). ROADMAP tripwire re-run after the tick:
+`tests/test_phase24_correction.py` **4 passed**, all four sentinel counts 1, SC2's claim text
+occurring exactly once. **Full suite `1619 passed, 1 skipped, 0 failed` in 376.52 s — delta +6
+against the 1613/1 baseline, exactly this plan's six tests** (`test_phase14_scoring.py` gained an
+allowlist entry, not a test function). `ruff check .` / `ruff format --check .` clean, 226 files.
 
 **24-04 EXECUTED 2026-08-30 — D-04'S REFUSAL COLUMN AND D-11'S PROBE POPULATIONS ARE IN, AND
 WAVE 1 IS COMPLETE.** `scripts/phase14_recall.py` gained **174 insertions / 0 deletions**, all
