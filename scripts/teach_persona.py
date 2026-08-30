@@ -267,11 +267,19 @@ ARMS = (
     # fact-aligned layout. That closes 24-CONTEXT's declared residue 2 on the mechanism rather
     # than by inference.
     #
-    # NO CLI FLAG carries `adversarial_ratio`, and that is a choice rather than an omission:
-    # `main()`'s non-DP path still enforces `len(argv) != 1`. Phase 25's sweep driver calls
-    # `train_arm` PROGRAMMATICALLY, exactly as `scripts/phase17_isolation.py`,
-    # `scripts/phase19_run.py` and `scripts/phase19_erasure.py` already do — a grid sweep is not
-    # something an operator types one ratio at a time.
+    # NO CLI FLAG carries `adversarial_ratio`, so `main()` REFUSES both arms outright — see
+    # `ADV_ARMS` below. Phase 25's sweep driver calls `train_arm` PROGRAMMATICALLY, exactly as
+    # `scripts/phase17_isolation.py`, `scripts/phase19_run.py` and `scripts/phase19_erasure.py`
+    # already do — a grid sweep is not something an operator types one ratio at a time.
+    #
+    # CORRECTED 2026-08-30 (24-REVIEW CR-01). This comment read: "that is a choice rather than an
+    # omission: `main()`'s non-DP path still enforces `len(argv) != 1`". The defense was FALSE.
+    # `len(argv) != 1` rejects EXTRA tokens (`adv_n8 0.5`); it never rejected the bare arm, which
+    # is the only form an operator would type. Measured: `python scripts/teach_persona.py adv_n8`
+    # ran a full 200-step training run and wrote `data/phase14_adv_n8*.bin`, a checkpoint and
+    # `phase14_adv_n8_adapter.pt` — every one named "adversarial", every one holding ZERO
+    # adversarial episodes over a corpus byte-identical to the `real` arm's, with the ratio
+    # recorded nowhere. The choice is real; the enforcement was missing, and is now below.
     "adv_n8",
     "adv_n64",
 )
@@ -284,6 +292,22 @@ ARMS = (
 # `get_batch_fact_aligned` at the result failed only much later with "the fact bin
 # data/persona_dp_n8_train_fact.bin could not be opened".
 DP_ARMS = ("dp_n8", "dp_n64")
+
+# The subset of ``ARMS`` whose DEFINING parameter cannot be expressed on this CLI (24-REVIEW
+# CR-01). ``DP_ARMS``' name coupling on the other axis: there the arm NAME picks the PACKER, here
+# it makes `main()` refuse rather than silently train the ratio-0.0 control under an
+# "adversarial" name. Same lesson, same mechanism — an arm whose defining input has no way in is
+# refused BY NAME, not left to a check that happens to be nearby.
+#
+# The refusal lives HERE and deliberately NOT on ``train_arm``, which is the opposite of where
+# the DP arms' ``Z boundary`` refusal lives. The two are not inconsistent: no sigma is NEVER a
+# valid DP run, but ``adversarial_ratio=0.0`` IS a pre-registered grid point — it is
+# ``mitigation_budget.ADVERSARIAL_RATIO_GRID[0]``, the sweep's own control — so a mechanism-level
+# refusal would refuse the control arm the record is built from
+# (``scripts/phase24_record.py`` calls ``build_bins`` at exactly that ratio). What has no
+# legitimate caller is a ratio that was never CHOSEN, and the CLI is the only entry point that
+# cannot express one.
+ADV_ARMS = ("adv_n8", "adv_n64")
 
 
 def _require_go_verdict(report_path):
@@ -1272,7 +1296,8 @@ def build_arm_bins(
     print(
         f"[teach_persona] bins provenance: seed={seed} git_sha={git_sha()} pid={os.getpid()} "
         f"torch={torch.__version__} arm={arm} second_person={second_person} "
-        f"replay_ratio={replay_ratio} mask_fraction={stats['mask_fraction']:.4f} "
+        f"replay_ratio={replay_ratio} adversarial_ratio={adversarial_ratio} "
+        f"mask_fraction={stats['mask_fraction']:.4f} "
         f"wall={time.time() - started:.1f}s "
         f"utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
     )
@@ -1302,6 +1327,9 @@ USAGE = (
     f"{SIGMA_FLAG}<float> {CLIP_FLAG}<float>\n"
     "       python scripts/teach_persona.py --calibration [--force]\n"
     "       python scripts/teach_persona.py --rewrite-report [--force]\n"
+    f"\n{'|'.join(ADV_ARMS)} are PROGRAMMATIC-ONLY and are refused here: no flag carries\n"
+    "adversarial_ratio, so a CLI run would train the ratio-0.0 control under an 'adversarial'\n"
+    "name. Call train_arm(..., adversarial_ratio=...) from a sweep driver instead.\n"
     f"\n{SIGMA_FLAG} and {CLIP_FLAG} are REQUIRED on the DP arms and have NO DEFAULT anywhere.\n"
     "sigma (the unitless noise multiplier) and C (the per-record L2 bound) are Phase 23 resource\n"
     "parameters under Phase 20's Z boundary; Phase 22 names no value in its tree, so there is\n"
@@ -1376,6 +1404,17 @@ def main(argv=None):
     # token, so no v2.0/v3.0 invocation changes. Only a DP arm reaches the two-flag branch.
     if arm in DP_ARMS:
         dp_sigma, dp_clip_norm = _parse_dp_flags(argv[1:])
+    elif arm in ADV_ARMS:
+        raise SystemExit(
+            f"[teach_persona] {arm} carries NO adversarial_ratio from this CLI, so running it "
+            "here would train at the 0.0 default and write bins, a checkpoint and an adapter all "
+            "named 'adversarial' over a corpus holding ZERO adversarial episodes — with the "
+            "ratio recorded nowhere, and `refuse_if_exists` then treating those bins as recorded "
+            "evidence against the real sweep. Phase 25's sweep driver calls "
+            "`train_arm(..., adversarial_ratio=...)` PROGRAMMATICALLY over "
+            "`mitigation_budget.ADVERSARIAL_RATIO_GRID`; `scripts/phase24_record.py` is the "
+            "worked example. A grid sweep is not something an operator types one ratio at a time."
+        )
     else:
         dp_sigma = dp_clip_norm = None
         if len(argv) != 1:
@@ -1941,6 +1980,7 @@ def train_arm(
         f"val_loss={blob['val_loss']}) driver_git_sha={git_sha()} pid={os.getpid()} "
         f"device={runtime.device} torch={torch.__version__} "
         f"second_person={second_person} replay_ratio={replay_ratio} "
+        f"adversarial_ratio={adversarial_ratio} "
         f"mask_fraction={stats['mask_fraction']:.4f} final_train_loss={float(final):.4f} "
         f"utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
     )

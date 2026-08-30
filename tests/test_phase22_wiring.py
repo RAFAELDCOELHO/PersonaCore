@@ -555,9 +555,18 @@ def test_non_dp_arm_cli_is_unchanged(monkeypatch):
     A non-DP arm is accepted with exactly one token and still rejected with two — the same shape
     `len(argv) != 1` enforced before plan 22-10 — and it reaches `train_arm` with both DP
     parameters `None`, so nothing about its `train()` call can differ.
+
+    NARROWED 2026-08-30 (24-REVIEW CR-01): `tp.ADV_ARMS` is excluded alongside `tp.DP_ARMS`.
+    Phase 24 added `adv_n8`/`adv_n64` to `ARMS`, and they silently joined THIS population — so
+    this control was, unintentionally, the assertion that the CLI must keep accepting an arm that
+    trains at `adversarial_ratio=0.0` under an "adversarial" name. The population it was written
+    for is the arms that existed when it was written (the pre-22-10 v2.0/v3.0 path); the
+    adversarial arms' own CLI contract is
+    `tests/test_phase24_bins.py::test_the_cli_refuses_the_adversarial_arms`, which asserts the
+    refusal and re-asserts this control's positive half from the other side.
     """
-    non_dp = [arm for arm in tp.ARMS if arm not in tp.DP_ARMS]
-    assert non_dp, "ARMS carries no non-DP arm — this control would be vacuous"
+    non_dp = [arm for arm in tp.ARMS if arm not in tp.DP_ARMS and arm not in tp.ADV_ARMS]
+    assert non_dp, "ARMS carries no plain arm — this control would be vacuous"
 
     seen = []
     monkeypatch.setattr(tp, "train_arm", lambda arm, **kw: seen.append((arm, kw)))

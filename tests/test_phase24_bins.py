@@ -290,3 +290,65 @@ def test_every_grid_point_trains_all_three_families_in_balance(tmp_path, ratio):
     # The ceiling repetition is what makes every point above ratio 1.909 reuse pool rows; below
     # it the selection is a strict prefix. Both are covered by the equality above.
     assert n_want <= math.ceil(ratio * len(episodes))
+
+
+# =============================================================================================
+# ===== 7. THE CLI SEAM (24-REVIEW CR-01) =====================================================
+# =============================================================================================
+
+
+def test_the_cli_refuses_the_adversarial_arms(monkeypatch):
+    """CR-01 — no CLI invocation may write an ``adv_*`` artifact holding ZERO adversarial episodes.
+
+    ``adv_n8``/``adv_n64`` are in ``ARMS``, so ``main()`` accepted them; ``arm_spec`` returns a
+    3-tuple carrying no ratio, so ``train_arm``'s ``adversarial_ratio=0.0`` default applied.
+    ``python scripts/teach_persona.py adv_n8`` therefore ran a full 200-step training run and
+    wrote bins, a checkpoint and an adapter all named "adversarial" over a corpus byte-identical
+    to the ``real`` arm's, with the ratio recorded nowhere.
+
+    The comment that defended this pointed at ``main()``'s ``len(argv) != 1`` check. That check
+    rejects EXTRA tokens (``adv_n8 0.5``); it never rejects the bare arm, which is the only form
+    an operator would type. This test drives the bare form.
+
+    The fix is ``DP_ARMS``' name coupling on the other axis: there the arm NAME picks the packer,
+    here it says the arm's defining parameter cannot be expressed on this CLI. The refusal lives
+    on the CLI and NOT on ``train_arm`` — unlike the DP arms' ``Z boundary`` refusal — because
+    ``adversarial_ratio=0.0`` IS a pre-registered grid point (``ADVERSARIAL_RATIO_GRID[0]``, the
+    control), so a mechanism-level refusal would refuse the sweep's own control arm. What is
+    unrecoverable is a ratio that was never CHOSEN, and that is exactly what the CLI cannot express.
+    """
+    adv = tuple(arm for arm in tp.ARMS if arm.startswith("adv_"))
+    assert adv, "ARMS carries no adv_* arm — this test would be vacuous"
+
+    reached = []
+    monkeypatch.setattr(tp, "train_arm", lambda arm, **kw: reached.append((arm, kw)))
+
+    for arm in adv:
+        with pytest.raises(SystemExit) as excinfo:
+            tp.main([arm])  # the BARE form — the one `len(argv) != 1` never rejected
+        message = str(excinfo.value)
+        assert "adversarial_ratio" in message, (arm, message)
+        assert "train_arm" in message, (
+            arm,
+            message,
+        )  # names the programmatic route it is redirecting to
+    assert reached == [], (
+        f"the CLI reached train_arm for {[arm for arm, _kw in reached]} — that call trains at "
+        "the adversarial_ratio=0.0 default and writes an adapter named 'adversarial' over a "
+        "corpus containing none"
+    )
+
+    # The coupling is by NAME and covers EVERY adv_* arm in ARMS, so a third capacity added to
+    # ARMS without an ADV_ARMS entry fails here rather than shipping the hole again.
+    assert tuple(tp.ADV_ARMS) == adv, (
+        f"ADV_ARMS is {tp.ADV_ARMS} against the adv_* arms in ARMS {adv} — the refusal is keyed "
+        "on ADV_ARMS, so an arm missing from it reaches train_arm at ratio 0.0"
+    )
+
+    # THE CONTROL: the refusal is scoped to the adversarial arms and did not narrow the
+    # pre-existing single-token path. Without this every raise above could be a blanket refusal.
+    control = [arm for arm in tp.ARMS if arm not in tp.DP_ARMS and arm not in adv]
+    assert control, "ARMS carries no plain arm — the control below would be vacuous"
+    monkeypatch.setattr(tp, "arm_spec", lambda arm: ([], False, 0.0))
+    tp.main([control[0]])  # must NOT raise
+    assert [arm for arm, _kw in reached] == [control[0]]
