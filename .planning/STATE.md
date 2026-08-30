@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: ready_to_execute
-stopped_at: "Phase 24 PLANNED 2026-08-30 — 7 plans in 4 waves, all autonomous. Research answered the one open question and corrected its premise: teach_persona.py:2225 is structurally unreachable for any v4.0 arm (it renders CAL_ARMS only), so the v4.0 flat-pack mask-fraction operating point was measured two independent ways — 0.358660 at n=8, 0.390163 at n=64; the old v3.0 figures 0.3426/0.3854/0.3778 were excluded, not substituted. D-05's grid has FOUR corners, not two, and n=8 is the binding one. Two revision passes closed 3 blockers + 17 warnings/info; final check 0 blockers. 13/13 decisions and ADVT-01/02/03 covered, 7/7 threat models, no same-wave write collisions. Ready to execute Phase 24."
-last_updated: "2026-08-30T00:00:00.000Z"
+status: executing
+stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. No plan completed yet."
+last_updated: "2026-08-30T15:53:24.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
@@ -25,8 +25,10 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 24 (adversarial extraction-aware training + the held-out attack family) — NOT STARTED
-Plan: none yet. Phase 23 CLOSED 2026-08-29 — **19 of 20 plans ticked**
+Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
+Plan: 1 of 7 (wave 1 of 4) — sequential, main tree
+
+Phase 23 CLOSED 2026-08-29 — **19 of 20 plans ticked**
 (23-01…23-16, 23-18, 23-19, 23-20). The one remaining unticked box is **23-17**, deliberately: its
 run was harness-killed and produced no record, and 23-20 completed the work under a separate
 continuation pre-registration.
