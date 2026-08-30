@@ -331,6 +331,20 @@ _Z_CONSTANTS = (
 # is a statement about the NEW constants rather than about the whole module.
 _PRE_23_13_CONSTANTS = ("CONTROL_NOISE_FLOOR", "MATCHED_CONTROL_NOISE_FLOOR")
 
+# The constants a LATER phase pinned into the same module — subtracted for the MIRROR of the reason
+# above, and mapped to the test that covers each one so the exclusion has to EARN itself.
+# `test_z_was_sized_against_the_ceiling` asserts the covering file exists and that an AST walk over
+# it genuinely READS the constant. Without that half this register would become the very hole it
+# was built to prevent: a name added here would silence the completeness check while shipping with
+# no re-derivation at all.
+_POST_23_13_CONSTANTS = {
+    # Plan 24-02, D-09's adversarial sweep grid. NOT a Z constant: no throughput figure feeds it,
+    # it is backed by TWO records rather than one, and it sizes the ADVERSARIAL sweep rather than
+    # the noise sweep. Registering it as a Z constant would have made every loop below assert a
+    # single-record provenance shape it does not have.
+    "ADVERSARIAL_RATIO_GRID": "test_phase24_grid.py",
+}
+
 # THE THREE MULTIPLICANDS OF THE CEILING-SIDE TOTAL. `SWEEP_POINTS x h_ceiling(CURVE_K)` plus
 # `N_CONTROL_SEEDS x h_ceiling(CURVE_K)` — so each was genuinely sized against
 # `h_per_point_ceiling` and each is a place a floor-sized number could hide. The other three carry
@@ -1307,13 +1321,42 @@ def test_z_was_sized_against_the_ceiling():
     the measurement that makes them equal — zero stop-terminated draws in the ceiling condition,
     and per-shape stop counts equal between the two conditions — so a degenerate bracket has to
     come from the measurement rather than from one field being copied into the other.
+
+    CONTINUED 2026-08-30 (plan 24-02): a LATER phase now pins a non-Z constant into the same
+    module (`ADVERSARIAL_RATIO_GRID`, D-09's adversarial sweep grid). The completeness assertion
+    below would have gone red on it, correctly — an unregistered constant IS the defect it names.
+    It is subtracted through `_POST_23_13_CONSTANTS` rather than registered as a Z constant,
+    because no throughput figure feeds it and it is backed by two records rather than one; and the
+    subtraction is preceded by a check that its covering test really reads it, so the exclusion is
+    not a quieter version of the hole.
     """
+    # EVERY LATER-PHASE EXCLUSION EARNS ITSELF FIRST. The subtraction below is only safe while the
+    # named test actually reads the constant it excuses — checked by AST, never by grep, because
+    # this file's own prose names all of them.
+    for excluded, covering in _POST_23_13_CONSTANTS.items():
+        covering_path = _ROOT / "tests" / covering
+        assert covering_path.exists(), (
+            f"{excluded} is excused from the register below because tests/{covering} is said to "
+            "cover it, and that file does not exist. The exclusion is a hole"
+        )
+        read = {
+            node.attr
+            for node in ast.walk(ast.parse(covering_path.read_text(encoding="utf-8")))
+            if isinstance(node, ast.Attribute)
+        }
+        assert excluded in read, (
+            f"tests/{covering} never reads {excluded}, so excusing it here ships a constant in "
+            f"{_MITIGATION_BUDGET_REL} with no re-derivation and no provenance check anywhere"
+        )
+
     # THE REGISTER IS NON-VACUOUS AND COMPLETE, by AST rather than by grep. A seventh Z constant
     # added without being registered would otherwise be skipped by every loop in this file.
     discovered = [
         name
         for name in _module_level_constant_names()
-        if not name.endswith("_PROVENANCE") and name not in _PRE_23_13_CONSTANTS
+        if not name.endswith("_PROVENANCE")
+        and name not in _PRE_23_13_CONSTANTS
+        and name not in _POST_23_13_CONSTANTS
     ]
     assert tuple(discovered) == _Z_CONSTANTS, (
         f"the AST walk over {_MITIGATION_BUDGET_REL} finds Z constants {discovered!r} but this "

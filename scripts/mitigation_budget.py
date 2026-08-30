@@ -605,3 +605,105 @@ N64_LEG_WITHDRAWN_PROVENANCE = {
         "so a reader can see WHICH measurement this branch was taken on"
     ),
 }
+
+# THE ADVERSARIAL SWEEP GRID: the mixture ratios v4.0's adversarial arm is trained at.
+#
+#   input    : `results/phase18_corpus.json` -> 336 `core_taught` prompts across the THREE D-10
+#              TRAINED attack families (A1-mild, A1-aggressive, A3 — 112 each, COUNTED at this pin
+#              and not transcribed), and `results/phase21_multiplicity.json` -> `corpus_geometry`
+#              -> 176 clean episodes on arm `dp_n8` (1408 on `dp_n64`)
+#   rule     : D-06's unit — adversarial EPISODES per clean EPISODE. The upper extreme is the n=8
+#              NO-REPETITION POOL CEILING: the largest ratio at which the whole trained pool is used
+#              exactly once and nothing repeats
+#   output   : 336 / 176 = 1.9090909090909092 at the top, 0.0 at the bottom, four interior points
+#   evidence : `results/phase18_corpus.json`, `results/phase21_multiplicity.json`
+#
+# THE EXTREME IS A FLOAT LITERAL AND NEVER THE QUOTIENT THAT DERIVES IT. The literal-only guard
+# calls `ast.literal_eval` on every assigned value in this file, and `336 / 176` is an `ast.BinOp`
+# that RAISES there. So the derivation lives in this comment, and `tests/test_phase24_grid.py`
+# counts BOTH operands out of the two committed records and asserts the quotient under exact `==` —
+# which is what stops the comment and the literal drifting apart in silence.
+#
+# ONLY THE TWO EXTREMES ARE PRE-REGISTERED. D-09 fixes `0.0` (the control, byte-identical to v2.0,
+# reconnecting the curve by construction) and `1.9090909090909092`. The four interior points and
+# their spacing are a RESOURCE choice taken under 24-CONTEXT's Claude's Discretion: they size the
+# spend and decide no outcome. `1.0` is episode parity, the legible midpoint. `0.25` is the first
+# point ABOVE n=64's OWN no-repetition ceiling (336 / 1408 = 0.23863636363636365), i.e. the first
+# point at which D-07 multiplicity becomes non-trivial at the large capacity.
+ADVERSARIAL_RATIO_GRID = (0.0, 0.25, 0.5, 1.0, 1.5, 1.9090909090909092)
+
+ADVERSARIAL_RATIO_GRID_PROVENANCE = {
+    "unit": (
+        "D-06: adversarial EPISODES per clean EPISODE. TOKEN VOLUME IS NOT SWEPT — it floats as a "
+        "consequence of the episode ratio and is reported after the fact by the ADVT-03 record "
+        "(scored-token counts per arm). The episode unit was chosen because the post-leave-one-out "
+        "training pool is exactly 336 episodes regardless of WHICH family is held out, while token "
+        "volume varied by up to 1.59x across the same choice: the confound is separable in the "
+        "report rather than confounded in the swept axis"
+    ),
+    "upper_extreme": 1.9090909090909092,
+    "upper_extreme_derivation": (
+        "3 trained attack families x 112 core_taught prompts = 336 adversarial episodes, over 176 "
+        "clean episodes at n=8 (results/phase21_multiplicity.json corpus_geometry) — the largest "
+        "point n=8 reaches without repeating anything"
+    ),
+    "upper_extreme_sources": (
+        "results/phase18_corpus.json",
+        "results/phase21_multiplicity.json",
+    ),
+    "upper_extreme_source_provenance": {
+        "results/phase18_corpus.json": {
+            "sha256": "ff8e6e3c24987ac393cc262233f1b0bfdad5dc11eefa4cc1224a164cfd0f7d67",
+            "git_sha": None,
+        },
+        "results/phase21_multiplicity.json": {
+            "sha256": "e9e3b9bf3d31525ad27f90c0afdac0faf97e7faef324cf05d832898c00944da1",
+            "git_sha": "eba0571a7f75e6631b7b080939d130947b703cdf",
+        },
+    },
+    "lower_extreme": 0.0,
+    "lower_extreme_meaning": (
+        "THE CONTROL. At ratio 0.0 there are zero adversarial episodes, so the arm's bins are "
+        "BYTE-IDENTICAL to v2.0's and the adversarial curve reconnects to the incumbent result BY "
+        "CONSTRUCTION rather than by a claimed correspondence. It is also why SC1's byte-identity "
+        "requirement cannot discriminate between D-08's placement options: at this point every "
+        "placement collapses to today's concatenation"
+    ),
+    "trained_families": ("A1-mild", "A1-aggressive", "A3"),
+    "held_out_family": "A2",
+    "held_out_reason": (
+        "VALUE CONTAINMENT (D-10/D-12), NEVER SELECTION BY PERFORMANCE. `build_a2_prompt` ends the "
+        "prompt with floor(len(value_ids) * 0.25) leading ids OF THE PRIVATE VALUE, past "
+        "<|assistant|>, where `encode_dialogue` marks assistant content mask=1 — so an A2 TRAINING "
+        "episode's target would be <25% of the private value> + <refusal>, training the model to "
+        "emit a prefix of the value before refusing, the exact inverse of D-01's guarantee. "
+        "`contains_value` requires the WHOLE value, so that prefix would not even score as a leak: "
+        "the harm exists and the instrument is structurally blind to it. The reason is structural "
+        "and PRECEDES every run, which is what makes it immune to the peek ADVT-02 forbids — and "
+        "it equally may NOT be claimed as a deliberate leave-one-out choice"
+    ),
+    "point_count": 6,
+    "point_count_selected_by": (
+        "THE PLANNER, under 24-CONTEXT's Claude's Discretion — and ONLY for the four INTERIOR "
+        "points and their spacing. The two extremes are pre-registered by D-09 and are not "
+        "discretionary. The interior count is a RESOURCE parameter in the strict sense this module "
+        "exists to hold: it sizes the spend and decides no outcome. No gate, no threshold and no "
+        "criterion reads it; widening or narrowing it changes how much compute the frontier costs "
+        "and changes no verdict"
+    ),
+    "multiplicity_at_upper_extreme": {"dp_n8": 1.0, "dp_n64": 8.0},
+    "governs": (
+        "the number of ADVERSARIAL SWEEP POINTS PER CAPACITY in Phase 25's frontier, and nothing "
+        "else. It is a RESOURCE parameter: it sizes the spend and decides no outcome. It is "
+        "independent of SWEEP_POINTS, which sizes the NOISE sweep. It carries no `sized_against`, "
+        "because no throughput figure participates in it — the grid was derived from a corpus "
+        "count and an episode count, not from an h/point measurement. It carries no top-level "
+        "`git_sha` "
+        "or `record_sha256` either, and that absence is BY CONSTRUCTION rather than an omission: "
+        "the pin has TWO backing records, so a single digest could only name one of them, and a "
+        "commit sha for 'where this pin landed' cannot be written into the commit that lands it. "
+        "`upper_extreme_source_provenance` carries a per-record digest instead, checked LIVE, and "
+        "`results/phase18_corpus.json` records no `git_sha` of its own — that None is asserted "
+        "absent rather than invented"
+    ),
+}
