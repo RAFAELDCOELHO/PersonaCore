@@ -237,8 +237,14 @@ def attack_prompt_ids(tok, question, persona):
     return list(build_recall_prompt(tok, question, persona=persona))
 
 
-def adversarial_episodes(tok):
-    """The trained attack pool as ``(persona, question, answer)`` triples — parity-proved, A2-free.
+def _adversarial_pool(tok):
+    """The ONE pass over the corpus: ``(episodes, families)``, POSITIONALLY PAIRED by construction.
+
+    ``episodes`` is the trained attack pool as ``(persona, question, answer)`` triples —
+    parity-proved, A2-free. ``families`` is that same list's per-episode ``family`` column, appended
+    in the same loop iteration, so the two are aligned because they are BUILT together and not
+    because a second reader re-derived the join and happened to agree. :func:`adversarial_episodes`
+    and :func:`adversarial_episode_families` are thin views onto this; neither re-filters.
 
     One episode per committed corpus row that survives the D-03 tier cut and the D-10 family cut.
     The question is RE-RENDERED through ``phase18_extraction``'s own frozen builders and never
@@ -286,7 +292,7 @@ def adversarial_episodes(tok):
         if row["tier"] == TRAINED_TIER and row["family"] in TRAINED_FAMILIES
     ]
 
-    episodes = []
+    episodes, families = [], []
     for row in rows:
         # BELT AND BRACES beside the filter above, not instead of it. A filter that silently drops
         # and a filter that silently keeps are indistinguishable from their output, and the thing
@@ -342,6 +348,7 @@ def adversarial_episodes(tok):
             )
 
         episodes.append((persona, attacked, refusal_for(row["slot"])))
+        families.append(row["family"])
 
     # DERIVED from the filtered fixture, never the literal — the count is what the artifacts say it
     # is, and typing it here would make a shrunken corpus agree with a stale number.
@@ -355,7 +362,46 @@ def adversarial_episodes(tok):
             "carries this as its denominator, so a short pool would publish a number nothing in "
             "the artifacts contradicts."
         )
-    return episodes
+
+    # The families column is what 24-06 reports per grid point, so it is CHECKED here rather than
+    # trusted: an equal TOTAL is satisfied by a corpus that lost every A3 row and gained as many
+    # A1-mild ones. Per-family equality is what makes "family-independent at the episode unit" a
+    # measurement. The length comparison is the alignment proof — each label is appended in the
+    # same loop iteration as its episode, so a mismatch means that loop itself drifted.
+    per_family = {family: families.count(family) for family in TRAINED_FAMILIES}
+    fixture_rows = len(fixture["questions"][TRAINED_TIER])
+    if len(families) != len(episodes) or set(per_family.values()) != {fixture_rows}:
+        raise SystemExit(
+            f"[phase24_adversarial] the pool is {per_family} against {fixture_rows} "
+            f"{TRAINED_TIER} fixture rows per family ({len(families)} family labels for "
+            f"{len(episodes)} episodes). D-10 trains exactly {TRAINED_FAMILIES} and 24-06 sizes "
+            "and reports the mixture per family, so an unbalanced pool would publish per-family "
+            "rates whose denominators are not the ones the record names."
+        )
+    return episodes, families
+
+
+def adversarial_episodes(tok):
+    """The trained attack pool: ``list[tuple[tuple[str, ...], str, str]]`` = (persona, q, a).
+
+    PINNED return shape — ``teach_persona.build_bins`` and ``tests/test_phase24_adversarial.py``
+    both read it positionally. The per-episode family travels in the SIBLING view below rather
+    than as a fourth member, so widening the report never widens this tuple.
+    """
+    return _adversarial_pool(tok)[0]
+
+
+def adversarial_episode_families(tok):
+    """The per-episode ``family`` label, in :func:`adversarial_episodes`' EXACT order.
+
+    Built in the same pass as the episodes (see :func:`_adversarial_pool`), so the pairing is a
+    property of ONE loop rather than of two readers agreeing. ``teach_persona._mix_adversarial``
+    reports the SELECTED prefix's per-family counts from this, and that report is the only thing
+    that can see a corpus ROW REORDER: the selection is a prefix of ``pool * ceil(...)``, so a
+    family-grouped order would train one family at every small ratio while the full-pool balance
+    assertion in ``tests/test_phase24_adversarial.py`` stayed green.
+    """
+    return _adversarial_pool(tok)[1]
 
 
 def adversarial_pool_size(tok):

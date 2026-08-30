@@ -49,6 +49,7 @@ import json
 import math
 import os
 import pathlib
+import random
 import re
 import statistics
 import subprocess
@@ -464,7 +465,17 @@ def render_episodes(facts, family_ids, *, second_person=False):
     return episodes
 
 
-def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0, align_facts=None):
+def build_bins(
+    tok,
+    episodes,
+    bin_path,
+    mask_path,
+    *,
+    replay_ratio=0.0,
+    align_facts=None,
+    adversarial_ratio=0.0,
+    seed=SEED,
+):
     """Encode every episode into an aligned token/mask bin pair; return the measured stats.
 
     Every episode goes through ``encode_dialogue`` with an EMPTY persona — the bare
@@ -478,9 +489,32 @@ def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0, align_fa
     rather than argued: the shard loop, the ``np.concatenate`` order and all twelve stats keys
     below are untouched, and the five additive keys appear ONLY on the aligned branch. See
     :func:`_build_aligned_bins` for the pinned shape of the argument.
+
+    ``adversarial_ratio`` (Phase 24, ADVT-01) mixes ``round(adversarial_ratio * len(episodes))``
+    adversarial refusal episodes IN AMONG the clean ones — the ``replay_ratio`` shape reused, a
+    mixture baked into the BIN rather than into the loop, so ``train()`` is untouched and the ratio
+    is an auditable committed number. **When it is ``0.0`` this function is BYTE-IDENTICAL to the
+    no-kwarg call**, which
+    ``tests/test_phase24_bins.py::test_the_default_path_is_byte_identical_to_the_no_kwarg_call``
+    and ``tests/test_phase21_aligned_bins.py``'s
+    ``test_build_bins_byte_identity_default_matches_the_v2_golden``
+    prove rather than argue. That identity is worth nothing on its own — a kwarg nobody reads
+    satisfies it trivially — so ``tests/test_phase24_bins.py::test_adversarial_ratio_is_wired`` is
+    the LOAD-BEARING half and was watched RED before this parameter existed.
+
+    The nine additive stats keys appear ONLY on the non-zero branch, for the same reason the
+    aligned branch's five do: ``tests/test_phase21_aligned_bins.py:226`` asserts
+    ``repr(stats) == GOLDEN["stats_repr"]``, so a new key on the default path reddens SC1's own
+    guard without moving a single bin byte.
+
+    ``seed`` is read ONLY inside that branch. D-08's interleave permutation must be a PURE FUNCTION
+    of the run's EXISTING seed — the Phase 23 D-07 resume path rebuilds these bins and refuses on
+    any byte change — and this function had no access to one.
     """
     if align_facts is not None:
-        return _build_aligned_bins(tok, episodes, bin_path, mask_path, replay_ratio, align_facts)
+        return _build_aligned_bins(
+            tok, episodes, bin_path, mask_path, replay_ratio, align_facts, adversarial_ratio
+        )
 
     id_shards, mask_shards, lengths, fractions = [], [], [], []
     for question, answer in episodes:
@@ -491,6 +525,16 @@ def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0, align_fa
         fractions.append(float(np.mean(mask)))
 
     teaching_tokens = int(sum(lengths))
+    # BEFORE the replay block and AFTER teaching_tokens, deliberately on both counts:
+    # `teaching_tokens` stays CLEAN-ONLY (D-06 — it must never become a sizing input for the
+    # mixture), and `_prepend_replay` keeps inserting replay at index 0, outside the teaching
+    # content rather than shuffled into it.
+    adversarial = None
+    if adversarial_ratio > 0:
+        adversarial = _mix_adversarial(
+            tok, id_shards, mask_shards, lengths, fractions, adversarial_ratio, len(episodes), seed
+        )
+
     replay_tokens = 0
     if replay_ratio > 0:
         replay_tokens = _prepend_replay(id_shards, mask_shards, replay_ratio, teaching_tokens)
@@ -509,7 +553,7 @@ def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0, align_fa
 
     frac = _prove_floor_and_band(ids_all, mask_all)
 
-    return {
+    stats = {
         "episodes": len(episodes),
         "tokens": int(len(ids_all)),
         "teaching_tokens": teaching_tokens,
@@ -523,6 +567,24 @@ def build_bins(tok, episodes, bin_path, mask_path, *, replay_ratio=0.0, align_fa
         "mask_fraction_min": float(min(fractions)),
         "mask_fraction_max": float(max(fractions)),
     }
+    if adversarial is not None:
+        stats.update(
+            {
+                "adversarial_ratio": adversarial_ratio,
+                "clean_episodes": len(episodes),
+                "adversarial_episodes": adversarial["episodes"],
+                "adversarial_pool_size": adversarial["pool_size"],
+                "adversarial_multiplicity": adversarial["multiplicity"],
+                "adversarial_family_counts": adversarial["family_counts"],
+                "adversarial_tokens": adversarial["tokens"],
+                "adversarial_scored_tokens": adversarial["scored_tokens"],
+                "adversarial_permutation_seed": seed,
+                # OVERRIDES the clean count above: `episodes` names what is IN the bin, and every
+                # downstream reader (sanity_check's print, the arm record) reads it as that.
+                "episodes": len(episodes) + adversarial["episodes"],
+            }
+        )
+    return stats
 
 
 def _prove_floor_and_band(ids_all, mask_all):
@@ -557,7 +619,7 @@ def _prove_floor_and_band(ids_all, mask_all):
     return frac
 
 
-def _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts):
+def _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts, adversarial_ratio=0.0):
     """Every way the aligned branch can be called with two sources of truth for one bin."""
     if not align_facts:
         raise SystemExit(
@@ -604,9 +666,20 @@ def _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts):
             "data/dialog_train.bin — so baking it in here would add ~30 replay windows to 33 "
             "fact windows and falsify grad_accum_steps = n_facts by ~7.9x (D-09)."
         )
+    if adversarial_ratio:
+        raise SystemExit(
+            f"[teach_persona] build_bins got adversarial_ratio={adversarial_ratio} alongside "
+            f"{len(align_facts):,} align_facts pairs. The adversarial arm packs FLAT by the "
+            "DP_ARMS name rule and makes no formal privacy claim (Phase 25 SC4 pins "
+            "accounting: null on it), so it has no home in the ragged fact-aligned layout: a "
+            "fact-independent refusal episode has no fact shard, and giving it one would put a "
+            "record in the accounting for a privacy record that does not exist."
+        )
 
 
-def _build_aligned_bins(tok, episodes, bin_path, mask_path, replay_ratio, align_facts):
+def _build_aligned_bins(
+    tok, episodes, bin_path, mask_path, replay_ratio, align_facts, adversarial_ratio=0.0
+):
     """The RAGGED fact-aligned packer (D-01 / D-05): three 1:1 bins, one privacy record per fact.
 
     ``align_facts`` is a list of ``(fact, episodes)`` PAIRS whose second member is that fact's
@@ -630,7 +703,7 @@ def _build_aligned_bins(tok, episodes, bin_path, mask_path, replay_ratio, align_
     the right asymmetry, because it weights by PRIVACY RECORD rather than by how text happens to
     pack into ``block_size``.
     """
-    _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts)
+    _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts, adversarial_ratio)
 
     id_shards, mask_shards, fact_shards = [], [], []
     lengths, fractions, windows_per_fact = [], [], []
@@ -745,6 +818,102 @@ def _build_aligned_bins(tok, episodes, bin_path, mask_path, replay_ratio, align_
         "windows_per_fact": tuple(windows_per_fact),
         "pad_tokens": int(pad_tokens),
         "n_facts": len(align_facts),
+    }
+
+
+def _mix_adversarial(
+    tok, id_shards, mask_shards, lengths, fractions, adversarial_ratio, n_clean, seed
+):
+    """Mix adversarial refusal episodes IN AMONG the clean shards; return the counts (ADVT-01).
+
+    ``_prepend_replay``'s shape: mutates the shard lists IN PLACE, returns what it did, and
+    ``SystemExit``s with the sizing formula spelled out rather than a bare number.
+
+    **D-06 — the unit is EPISODES, never TOKENS.** ``n_want = round(ratio * n_clean)`` where
+    ``n_clean`` is ``len(episodes)``. ``teaching_tokens`` is not read here and must never become an
+    input: a volume derived from the private corpus's SIZE is the side channel
+    ``tests/test_phase21_replay_volume.py::test_replay_constant_is_not_derived_from_the_corpus``
+    exists to police on the replay seam, and that test is left untouched as a live tripwire.
+    ``tests/test_phase24_bins.py::test_the_mixture_is_sized_from_episode_count_not_teaching_tokens``
+    holds the episode count fixed while varying the token total, so a dependence would show.
+
+    **D-07 — repetition is permitted and REPORTED.** The same nominal grid runs at both capacities,
+    so ``n_want`` exceeds the pool above ratio ``pool / n_clean``; the selection is
+    ``(pool * ceil(n_want / pool_size))[:n_want]`` — deterministic, in pool order — and
+    ``multiplicity = n_want / pool_size`` travels in the stats dict so Phase 25 SC3 can report it
+    in the same sentence as the point.
+
+    **D-08 — the permutation is a PURE FUNCTION of ``seed``.** A private ``random.Random(seed)``,
+    never the ambient global RNG: by the time this runs, the global stream has already been
+    consumed by the tokenizer load and by rendering, so a global draw would depend on how much
+    work happened earlier. The Phase 23 D-07 resume path REBUILDS these bins and refuses on any
+    byte change, so a fresh runtime RNG would not merely be untidy — it would make every resumed
+    adversarial arm abort.
+    """
+    import phase24_adversarial as pa  # LAZY — `arm_spec`'s phase21_filler precedent.
+
+    pool = pa.adversarial_episodes(tok)
+    families = pa.adversarial_episode_families(tok)
+    pool_size = len(pool)
+    if len(families) != pool_size:
+        raise SystemExit(
+            f"[teach_persona] the adversarial pool is {pool_size} episodes against "
+            f"{len(families)} family labels. These two views are read POSITIONALLY and paired by "
+            "index, so a length mismatch means the per-family counts reported below would name "
+            "the wrong episodes."
+        )
+
+    n_want = int(round(adversarial_ratio * n_clean))
+    if n_want < 1:
+        raise SystemExit(
+            f"[teach_persona] adversarial_ratio={adversarial_ratio} over {n_clean:,} clean "
+            f"episodes gives round({adversarial_ratio} * {n_clean}) = {n_want} adversarial "
+            "episodes — a non-zero ratio that places nothing. That is a silently INERT sweep "
+            f"point, indistinguishable in the results from the ratio-0.0 control. The smallest "
+            f"ratio that places one episode here is {0.5 / n_clean:.6f}; pass 0.0 for the control."
+        )
+
+    repeats = math.ceil(n_want / pool_size)
+    selected = (pool * repeats)[:n_want]
+    selected_families = (families * repeats)[:n_want]
+
+    tokens = 0
+    scored = 0
+    for persona, question, answer in selected:
+        # The episode's OWN persona (D-10): A3 carries the value-free role scaffold in the
+        # <|system|> span at mask=0, the two A1 doses carry the empty tuple. The CLEAN loop in
+        # build_bins keeps passing [] and stays byte-identical.
+        ids, mask = encode_dialogue(tok, persona, [(question, answer)])
+        id_shards.append(np.asarray(ids, dtype=np.uint16))
+        mask_shards.append(np.asarray(mask, dtype=np.uint8))
+        lengths.append(len(ids))
+        fractions.append(float(np.mean(mask)))
+        tokens += len(ids)
+        scored += int(np.sum(mask))
+
+    # D-08. A PRIVATE Random instance over an index list, applied to both shard lists TOGETHER —
+    # the bins are 1:1 element-aligned and proof 1 in build_bins checks the totals, not the pairing.
+    rng = random.Random(seed)
+    order = list(range(len(id_shards)))
+    rng.shuffle(order)
+    id_shards[:] = [id_shards[i] for i in order]
+    mask_shards[:] = [mask_shards[i] for i in order]
+
+    # D-10 AT THE SELECTED PREFIX. The full pool is 3-way balanced and 24-05 asserts that, but the
+    # selection above is a PREFIX of `pool * ceil(...)`, so the balance of what actually trains is
+    # a property of the COMMITTED CORPUS'S ROW ORDER, not of this code. Measured at HEAD
+    # 2026-08-30 that order is a strict 3-cycle [A1-mild, A1-aggressive, A3] * 112 and every grid
+    # point lands 15/15/14 or better. Nothing asserts that ordering — so if a rebuild ever grouped
+    # the rows by family, every point below ratio ~0.64 would train ONE family while D-10's
+    # "three families train" truth stayed green. Reporting the counts is what lets a test see it.
+    family_counts = {family: selected_families.count(family) for family in pa.TRAINED_FAMILIES}
+    return {
+        "episodes": n_want,
+        "pool_size": pool_size,
+        "multiplicity": n_want / pool_size,
+        "family_counts": family_counts,
+        "tokens": tokens,
+        "scored_tokens": scored,
     }
 
 
