@@ -3,7 +3,7 @@ status: partial
 phase: 24-adversarial-extraction-aware-training-the-held-out-attack-fa
 source: [24-VERIFICATION.md]
 started: 2026-08-30T19:23:45Z
-updated: 2026-08-30T20:48:58Z
+updated: 2026-08-30T21:10:00Z
 ---
 
 ## Current Test
@@ -49,7 +49,7 @@ contract.
 why_human: An unconsumed instrument is how a planned measurement quietly never gets taken.
 result: [pending]
 
-### 4. Decide how to close the stale provenance pins in results/phase24_token_budget.json
+### 4. Decide how to close the stale provenance pins in results/phase24_token_budget.json  [RESOLVED]
 expected: `provenance.module_sha256` matches the live modules, and drift is caught by a test.
 Measured 2026-08-30 at HEAD: 2 of 4 pins are STALE — `scripts/phase24_adversarial.py`
 (recorded 8f884fd7… / live b679c6f6…) and `scripts/teach_persona.py` (recorded e2709e54… /
@@ -67,14 +67,31 @@ unaffected), or (b) keep the pins as a historical "produced by these module vers
 add a guard asserting drift is DECLARED rather than absent.
 why_human: This changes a committed result artifact's provenance semantics. (a) and (b) mean
 different things about what the pin promises.
-result: [pending]
+RESOLVED 2026-08-30 by plan 24-09 — closure (a), developer decision. The guard landed first and was
+watched RED against the REAL drift (`46f07d5`, disclosed one-commit RED window): *"2 of 5 provenance
+digests no longer match the files on disk"*, naming both modules with recorded and live in full. The
+record was then re-emitted through the emitter's own sanctioned route — the write-once refusal's
+"Delete … to re-run", which `_PUBLICATION_PATHSPEC`'s record exclusion exists to make reachable —
+and all four pins now match live (`aaea029`). **Every substantive figure came out byte-identical,
+proved three ways** and not eyeballed: remainder sha256 `739658923d00…` on both sides after
+excluding only `module_sha256` / `git_sha` / `written_utc`; a recursive walk over 529 leaf scalars
+(317 numeric) differing in 0; `git diff` = 4 lines, all inside `provenance`. The guard covers
+`tokenizer_sha256` too — it was unguarded for the same reason and is one line.
+CORRECTION to this item's own reasoning, measured rather than assumed: 24-VERIFICATION's reason 4
+("re-emitting is blocked anyway: `refuse_if_dirty` counts untracked files as dirty and the tree
+carries `M .gitignore` and `?? .planning/todos/`") is FALSE. `_PUBLICATION_PATHSPEC` is
+`(scripts, src, results, artifacts, :(exclude)<record>)` — 24-07 deliberately narrowed it from `.`
+for exactly these two paths — so
+`git status --porcelain -- scripts src results artifacts ':(exclude)results/phase24_token_budget.json'`
+was EMPTY and the guard never fired. Nothing was blocked; the option was open all along.
+result: resolved (developer decision 2026-08-30, closure (a); commits 46f07d5, aaea029)
 
 ## Summary
 
 total: 4
-passed: 1
+passed: 2
 issues: 0
-pending: 3
+pending: 2
 skipped: 0
 blocked: 0
 

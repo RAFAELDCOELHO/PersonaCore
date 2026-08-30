@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTION COMPLETE (2026-08-30) — all 7 plans in 4 waves done, sequential on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). 24-01 (c09d37c), 24-02 (4ecf5bc), 24-03 (fd6ba46 + 217c531), 24-04 (d121cf7 + 2ba4292), 24-05 (c10d017 + c2b71f7), 24-06 (d274dfb + 75d2d6d), 24-07 (6c1327b + 5aed70f + 7075951 + 8fd67eb) — WAVE 4 AND THE PHASE ARE DONE. ADVT-02 and ADVT-03 TICKED in REQUIREMENTS.md (the first requirement movement of the whole phase, after six plans deliberately declined); ADVT-01 stays OPEN because no adapter has been trained — Phase 25 runs the sweep. The ROADMAP continuation survived the final tick: all four sentinel counts still 1, SC2 claim text still exactly once, tests/test_phase24_correction.py still 4 passed. The phase-CLOSE step still owns the ROADMAP phase-heading checkbox, the progress row Status cell, and frontmatter status/completed_phases/percent (see 5a72670 for the phase-23 precedent). 24-08 GAP CLOSURE (2026-08-30, no PLAN.md) then closed 24-REVIEW's THREE blockers — CR-01 d4ed1f8, CR-02 ba2787f, CR-03 e518a4e, plus e86cb33 registering two PROSE `train_arm(` census hits the first three left RED — each blocker with a full RED -> GREEN -> mutated-RED cycle. Suite 1646/1/0. The 8 warnings and 6 info findings from the review are UNTOUCHED and remain open."
-last_updated: "2026-08-30T20:20:00.000Z"
+stopped_at: "Phase 24 EXECUTION COMPLETE (2026-08-30) — all 7 plans in 4 waves done, sequential on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). 24-01 (c09d37c), 24-02 (4ecf5bc), 24-03 (fd6ba46 + 217c531), 24-04 (d121cf7 + 2ba4292), 24-05 (c10d017 + c2b71f7), 24-06 (d274dfb + 75d2d6d), 24-07 (6c1327b + 5aed70f + 7075951 + 8fd67eb) — WAVE 4 AND THE PHASE ARE DONE. ADVT-02 and ADVT-03 TICKED in REQUIREMENTS.md (the first requirement movement of the whole phase, after six plans deliberately declined); ADVT-01 stays OPEN because no adapter has been trained — Phase 25 runs the sweep. The ROADMAP continuation survived the final tick: all four sentinel counts still 1, SC2 claim text still exactly once, tests/test_phase24_correction.py still 4 passed. The phase-CLOSE step still owns the ROADMAP phase-heading checkbox, the progress row Status cell, and frontmatter status/completed_phases/percent (see 5a72670 for the phase-23 precedent). 24-08 GAP CLOSURE (2026-08-30, no PLAN.md) then closed 24-REVIEW's THREE blockers — CR-01 d4ed1f8, CR-02 ba2787f, CR-03 e518a4e, plus e86cb33 registering two PROSE `train_arm(` census hits the first three left RED — each blocker with a full RED -> GREEN -> mutated-RED cycle. Suite 1646/1/0. The 8 warnings and 6 info findings from the review are UNTOUCHED and remain open. 24-09 UAT CLOSURE (2026-08-30, no PLAN.md) then closed HUMAN-UAT item 4 under closure (a): the missing `provenance.module_sha256` freshness guard landed FIRST and was watched RED against the tree's own pre-existing drift (`46f07d5` — \"2 of 5 provenance digests no longer match the files on disk\", naming `phase24_adversarial.py` 8f884fd7->b679c6f6 and `teach_persona.py` e2709e54->82da6c3a with both digests in full), then `results/phase24_token_budget.json` was re-emitted through the emitter's own sanctioned delete-and-re-run route so all four pins are true (`aaea029`). EVERY substantive figure came out byte-identical, proved three independent ways: non-provenance remainder sha256 739658923d00 on both sides, a recursive walk over 529 leaf scalars (317 numeric) differing in 0, and a git diff of exactly 4 lines all inside provenance. 24-VERIFICATION's reason 4 (\"re-emitting is blocked anyway\") was MEASURED FALSE and corrected in the UAT item: _PUBLICATION_PATHSPEC excludes .gitignore and .planning/ by 24-07's deliberate narrowing, so the scoped git status was empty and refuse_if_dirty never fired. Suite 1647/1/0. UAT items 2 and 3 remain pending; ADVT-01 still UNTICKED."
+last_updated: "2026-08-30T21:15:00.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
@@ -26,8 +26,34 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 7 of 7 (wave 4 of 4) + 24-08 GAP CLOSURE — sequential, main tree. ALL FOUR WAVES COMPLETE;
-24-REVIEW's three blockers are CLOSED; the phase awaits the phase-close step.
+Plan: 7 of 7 (wave 4 of 4) + 24-08 GAP CLOSURE + 24-09 UAT CLOSURE — sequential, main tree.
+ALL FOUR WAVES COMPLETE; 24-REVIEW's three blockers are CLOSED; HUMAN-UAT items 1 and 4 are
+RESOLVED (2 and 3 pending); the phase awaits the phase-close step.
+
+**24-09 EXECUTED 2026-08-30 — UAT ITEM 4 CLOSED: THE PROVENANCE PIN IS NOW GUARDED AND
+TRUE.** No PLAN.md; the UAT-closure prompt was the plan. The defect was not a wrong number, it was
+an INVISIBLE one: `results/phase24_token_budget.json`'s `provenance.module_sha256` had gone stale
+for 2 of 4 modules under 24-08's own fixes, and `grep -rn "module_sha256" tests/` returned NOTHING
+while `corpus_sha256` was checked against live at `test_phase24_record.py:274` — the suite stayed
+green at 1646 while the pin rotted. **The guard landed first and its RED was FREE:** the drift was
+already in the tree, so no mutation was needed and none of a planted RED's hazards apply. It fails
+naming ALL drifted modules with recorded and live in full (`2 of 5 provenance digests no longer
+match the files on disk`), because a per-item assert would name the first and let a reader conclude
+one file. Digests are recomputed from BYTES in the test, never through the emitter's own `_sha256`,
+which would agree by construction; `tokenizer_sha256` is covered too (Rule 2 — unguarded for the
+same reason, three lines). **The record was then re-emitted and EVERY substantive figure came out
+byte-identical**, proved three ways rather than eyeballed: remainder sha256 `739658923d00` on both
+sides after excluding only `module_sha256`/`git_sha`/`written_utc`; a recursive walk over 529 leaf
+scalars (317 numeric) differing in **0**; `git diff` of exactly 4 lines, all inside `provenance`.
+Had any figure moved, the plan would have halted — a changed number would have contradicted the
+re-verification. **A stated premise was measured and found FALSE:** 24-VERIFICATION's reason 4 said
+re-emission was blocked by `refuse_if_dirty` on `M .gitignore` / `?? .planning/todos/`, but
+`_PUBLICATION_PATHSPEC` is `(scripts, src, results, artifacts, :(exclude)<record>)` — 24-07 narrowed
+it from `.` for exactly those two paths — so the scoped `git status` was EMPTY and the guard never
+fired. Commits `46f07d5` (test, RED by design and disclosed) and `aaea029` (fix, GREEN). Full suite
+**1647 passed / 1 skipped / 0 failed**, +1 over 1646/1 — the one new guard. No source file was
+touched (`git diff df8c3c2..HEAD -- scripts/ src/` empty), so SC1 byte-identity is untouched and was
+re-confirmed anyway (`f146d426` / `a2c4771f`). ADVT-01 remains UNTICKED; no adapter has been trained.
 
 **24-08 EXECUTED 2026-08-30 — 24-REVIEW's THREE BLOCKERS CLOSED, EACH WITH RED → GREEN →
 MUTATED-RED.** No PLAN.md; the gap-closure prompt was the plan. **CR-01:** `ADV_ARMS` +
@@ -1505,8 +1531,24 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-30T20:20:00.000Z
-Stopped at: Completed 24-08 GAP CLOSURE (no PLAN.md — 24-REVIEW's three blockers). CR-01 closed by
+Last session: 2026-08-30T21:15:00.000Z
+Stopped at: Completed 24-09 UAT CLOSURE (no PLAN.md — HUMAN-UAT item 4). The stale
+`provenance.module_sha256` pin on `results/phase24_token_budget.json` is closed under option (a):
+guard AND re-emit. The guard (`tests/test_phase24_record.py::test_the_provenance_pins_match_the_live_module_bytes`) mirrors the live `corpus_sha256`
+check at `:274` that was the file's only enforced pin, collects ALL drift before asserting so one
+failure names every module with recorded vs live, recomputes from BYTES rather than through the
+emitter's `_sha256`, and covers `tokenizer_sha256` too. It was watched RED in the tree's NATURAL
+state — the drift was pre-existing, so no mutation was needed — and that RED is committed at
+`46f07d5` as a disclosed one-commit window. The re-emission used the emitter's own sanctioned route
+(the write-once refusal's "Delete ... to re-run", which `_PUBLICATION_PATHSPEC`'s record exclusion
+exists to make reachable), and every substantive figure came out byte-identical under three
+independent instruments. 24-VERIFICATION's reason 4 was measured FALSE and is corrected in the UAT
+item. Commits `46f07d5`, `aaea029`. Suite 1647/1/0 (+1). `.planning/ROADMAP.md` and
+`.planning/REQUIREMENTS.md` deliberately UNTOUCHED — a UAT-closure plan moves no plan count and no
+requirement (24-08's precedent `669343e`). Next: the phase-CLOSE step, which owns the ROADMAP
+phase-heading checkbox, the progress-row Status cell and frontmatter
+status/completed_phases/percent
+Superseded stop record (24-08): Completed 24-08 GAP CLOSURE (no PLAN.md — 24-REVIEW's three blockers). CR-01 closed by
 `ADV_ARMS` + a CLI refusal that names the programmatic route (`train_arm(..., adversarial_ratio=)`)
 and by correcting the false `len(argv) != 1` defense; the refusal is deliberately NOT on `train_arm`
 because ratio 0.0 is the grid's own control. CR-02 closed by a COVERAGE assertion over
