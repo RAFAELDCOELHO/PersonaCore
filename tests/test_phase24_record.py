@@ -14,6 +14,7 @@ a deliberate one-digit hand edit before it was allowed to be green.
 CPU-only, GPU/MPS-free, no training. The rebuild lands under ``tmp_path``, never ``data/``.
 """
 
+import hashlib
 import json
 import pathlib
 import sys
@@ -276,4 +277,62 @@ def test_the_token_budget_confound_keeps_both_figures_distinct():
         f"the record names corpus sha256 {corpus_block['sha256']} against the live "
         f"{live} — the attack corpus has moved since the record was written, so every per-family "
         "token figure in it describes a corpus that no longer exists."
+    )
+
+
+# =============================================================================================
+# ===== 5. THE PROVENANCE PINS, AGAINST THE LIVE BYTES ========================================
+# =============================================================================================
+
+
+def test_the_provenance_pins_match_the_live_module_bytes():
+    """Every ``provenance.module_sha256`` entry (and ``tokenizer_sha256``) equals the file on disk.
+
+    The sibling of the ``corpus_sha256`` check above, and it exists because that asymmetry was a
+    real defect: 24-VERIFICATION found `corpus_sha256` guarded and `module_sha256` NOT, so two of
+    the four pins rotted through a whole plan while this suite stayed green. That is the
+    "green guard, unenforced invariant" shape this repository keeps re-finding.
+
+    ``scripts/phase24_record.py:418`` calls a non-matching digest "visible in the record itself" —
+    but visible to WHOM? Nothing looked. This test is what looks.
+
+    Digests are recomputed from BYTES here (``tests/test_package.py:36``'s rule) rather than
+    through the emitter's own ``_sha256``: a pin re-derived by the function that wrote it would
+    agree with it by construction even if that function started hashing text.
+
+    ALL drifted modules are collected before asserting, so one failure names every one of them
+    with both digests — a bare ``assert recorded == live`` inside the loop would name the first
+    and hide the rest, which is a worse guard than none where the reader concludes "one file".
+    """
+    pins = dict(_record()["provenance"]["module_sha256"])
+    assert pins, "provenance.module_sha256 is empty — this assertion would be vacuous"
+
+    # The emitter must pin ITSELF, or the record cannot claim its own reproducibility.
+    emitter = str(pathlib.Path(rec.__file__).resolve().relative_to(_ROOT))
+    assert emitter in pins, (
+        f"{emitter} is not among the pinned modules {sorted(pins)} — the record does not name the "
+        "bytes that wrote it, so no digest in it can establish that HEAD regenerates it."
+    )
+    pins[str(tp.TOKENIZER_PATH.relative_to(_ROOT))] = _record()["provenance"]["tokenizer_sha256"]
+
+    drifted = []
+    for name, recorded in pins.items():
+        path = _ROOT / name
+        assert path.is_file(), f"provenance pins {name}, which does not exist at {path}"
+        live = hashlib.sha256(path.read_bytes()).hexdigest()
+        if live != recorded:
+            drifted.append((name, recorded, live))
+
+    assert not drifted, (
+        f"{len(drifted)} of {len(pins)} provenance digests no longer match the files on disk:\n"
+        + "".join(
+            f"    {name}\n      recorded {rec_}\n      live     {liv}\n"
+            for name, rec_, liv in drifted
+        )
+        + "  provenance.module_sha256 claims these bytes regenerate this record. They no longer "
+        "do. The record's NUMBERS may still be correct — check them separately — but the pin is "
+        "no longer evidence of anything. Re-emit: delete "
+        f"{rec.TOKEN_BUDGET_RECORD.relative_to(_ROOT)} at a clean tree and run "
+        "`python scripts/phase24_record.py`, then confirm every substantive figure came out "
+        "byte-identical before committing."
     )
