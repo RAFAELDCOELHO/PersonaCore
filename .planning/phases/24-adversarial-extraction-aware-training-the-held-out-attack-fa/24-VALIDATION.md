@@ -1,9 +1,9 @@
 ---
 phase: 24
 slug: adversarial-extraction-aware-training-the-held-out-attack-fa
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: planned
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-08-30
 ---
 
@@ -41,11 +41,27 @@ Every assertion anchors to a module that already exists and already runs in CI.
 
 ## Per-Task Verification Map
 
-*Populated by the planner — one row per task, keyed to the plan IDs it emits.*
+*Populated by the planner 2026-08-30 — 17 tasks across 7 plans in 4 waves.*
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| *pending* | — | — | — | — | — | — | — | — | ⬜ pending |
+| 24-01-T1 | 24-01 | 1 | ADVT-01 | T-24-01/03 | refusal table is per-slot, value-free, key-parity enforced at import | unit | `pytest -q tests/test_phase24_refusal.py` | `scripts/phase24_adversarial.py` | ⬜ pending |
+| 24-01-T2 | 24-01 | 1 | ADVT-01 | T-24-03/05 | every refusal clears MIN_REFUSAL_SCORED_TOKENS through the frozen tokenizer | unit | `pytest -q tests/test_phase24_refusal.py` | `tests/test_phase24_refusal.py` | ⬜ pending |
+| 24-01-T3 | 24-01 | 1 | ADVT-01 | T-24-01/02/04 | no published value in any refusal string, docstrings included — watched RED first | static/AST | `pytest -q tests/test_phase14_scoring.py` | `tests/test_phase14_scoring.py` | ⬜ pending |
+| 24-02-T1 | 24-02 | 1 | ADVT-01, ADVT-03 | T-24-07/08 | grid is literal assignments only; zero imports, zero branches | static/AST | `pytest -q tests/test_phase23_budget.py` | `scripts/mitigation_budget.py` | ⬜ pending |
+| 24-02-T2 | 24-02 | 1 | ADVT-03 | T-24-06/09 | both extremes re-derive from committed artifacts under exact == | re-derivation | `pytest -q tests/test_phase24_grid.py` | `tests/test_phase24_grid.py` | ⬜ pending |
+| 24-03-T1 | 24-03 | 1 | ADVT-02 | T-24-12/13 | trained ∩ held-out = ∅ on `family`; taught vs held-out disjoint on `source_family`; old key measured unsatisfiable | artifact read | `pytest -q tests/test_phase24_split.py` | `tests/test_phase24_split.py` | ⬜ pending |
+| 24-03-T2 | 24-03 | 1 | ADVT-02 | T-24-11/15/16 | original SC2 clause stands, superseded by a dated 24-03 continuation; node ids resolved by AST | doc guard | `pytest -q tests/test_phase24_correction.py` | `.planning/ROADMAP.md` | ⬜ pending |
+| 24-04-T1 | 24-04 | 1 | ADVT-01 | T-24-17/21 | contains_refusal reuses the ONE scoring normalizer; frozen gate untouched | unit | `pytest -q tests/test_phase14_scoring.py` | `scripts/phase14_recall.py` | ⬜ pending |
+| 24-04-T2 | 24-04 | 1 | ADVT-01 | T-24-18/19/20 | pointwise mirror agreement with contains_value; D-11 populations disjoint and pinned | unit | `pytest -q tests/test_phase24_refusal_rate.py` | `tests/test_phase24_refusal_rate.py` | ⬜ pending |
+| 24-05-T1 | 24-05 | 2 | ADVT-01, ADVT-02 | T-24-23/24/26/27/28 | 336 deterministic episodes, core_taught only, A2 refused, every prompt byte-equal to its committed row | integration | `pytest -q tests/test_phase16_prereg.py tests/test_phase18_corpus.py` | `scripts/phase24_adversarial.py` | ⬜ pending |
+| 24-05-T2 | 24-05 | 2 | ADVT-01, ADVT-02 | T-24-25/29 | fourth PERSONA_ALLOWLIST entry lands with its call site; D-21 hard equality green | static/AST | `pytest -q tests/test_phase24_adversarial.py tests/test_phase14_scoring.py` | `tests/test_phase24_adversarial.py` | ⬜ pending |
+| 24-06-T1 | 24-06 | 3 | ADVT-01 | T-24-30 | the wiring sibling is WATCHED RED before the kwarg exists | watched-RED | `pytest -q tests/test_phase21_aligned_bins.py tests/test_phase21_replay_volume.py` | `tests/test_phase24_bins.py` | ⬜ pending |
+| 24-06-T2 | 24-06 | 3 | ADVT-01 | T-24-31/32/33/37 | adversarial_ratio=0.0 byte-identical; permutation pure in seed; sizing from episode count | golden + property | `pytest -q tests/test_phase24_bins.py tests/test_phase21_aligned_bins.py` | `scripts/teach_persona.py` | ⬜ pending |
+| 24-06-T3 | 24-06 | 3 | ADVT-01, ADVT-03 | T-24-34/36 | adv_n8/adv_n64 pack FLAT; ratio reaches build_bins from train_arm; sanity_check proof 6 passes | integration | `pytest -q tests/test_phase14_teaching.py tests/test_phase22_wiring.py tests/test_phase23_resume.py` | `scripts/teach_persona.py` | ⬜ pending |
+| 24-07-T1 | 24-07 | 4 | ADVT-01 | T-24-39/40 | all four D-05 corners clear the floor with MASK_FRACTION_MARGIN; control corner = the flat operating point | build-only | `pytest -q tests/test_phase24_band.py` | `tests/test_phase24_band.py` | ⬜ pending |
+| 24-07-T2 | 24-07 | 4 | ADVT-03 | T-24-38/42/43/44 | per-arm scored-token counts persisted with denominators, multiplicity, corpus sha256 and SC4 discharge | artifact write | `pytest -q tests/test_phase24_record.py` | `results/phase24_token_budget.json` | ⬜ pending |
+| 24-07-T3 | 24-07 | 4 | ADVT-02, ADVT-03 | T-24-38/41 | record covers every grid point; counts re-derive from a rebuild under exact == | re-derivation | `pytest -q tests/test_phase24_record.py tests/test_phase24_band.py` | `tests/test_phase24_record.py` | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

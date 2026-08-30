@@ -736,7 +736,16 @@ committed sweep grid)
      permanently uneditable), so the attack trained against and the attack scored by cannot silently
      drift apart, and an inflation report ships with every new corpus. (ADVT-01, ADVT-02)
 
-**Plans**: TBD
+**Plans**: 7 plans in 4 waves
+
+Plans:
+- [ ] 24-01-PLAN.md — D-01's per-slot value-free refusal table and D-02's containment guard, watched RED then GREEN
+- [ ] 24-02-PLAN.md — D-09's adversarial sweep grid pinned as literals in `scripts/mitigation_budget.py`, both extremes re-derived from committed artifacts
+- [ ] 24-03-PLAN.md — ADVT-02's split as TWO separately-named assertions (`family`, `source_family`) plus the dated 24-03 continuation superseding SC2's unsatisfiable key
+- [ ] 24-04-PLAN.md — D-04's `contains_refusal` beside `contains_value`, and D-11's clean-frame probe populations pinned before any run
+- [ ] 24-05-PLAN.md — the corpus-joined episode builder: `core_taught` only, three families, every prompt proved byte-equal to its committed row, plus the fourth `PERSONA_ALLOWLIST` entry
+- [ ] 24-06-PLAN.md — the `build_bins(..., adversarial_ratio=0.0)` seam with a seed-derived interleave, byte-identical at its default, wiring sibling watched RED first
+- [ ] 24-07-PLAN.md — D-05's four-corner band check and the committed ADVT-03 per-arm scored-token record
 
 ### Phase 25: Frontier Sweep and the Existence-Gate Verdict
 
