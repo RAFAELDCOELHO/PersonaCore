@@ -46,10 +46,15 @@ if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
 
-def _load_driver():
-    spec = importlib.util.spec_from_file_location(
-        "phase14_recall", _REPO_ROOT / "scripts" / "phase14_recall.py"
-    )
+def _load_driver(name="phase14_recall", filename="phase14_recall.py"):
+    """One loader, parameterised — the defaults keep every incumbent call site byte-unchanged.
+
+    ``test_no_fact_values_in_the_refusal_templates`` needs a SECOND scripts-level module loaded the
+    same way. Copying the four-line body would give the containment scans two loaders to drift
+    apart; a ``(name, filename)`` pair gives them one. ``exec_module`` still leaves ``sys.modules``
+    untouched, which is the property ``test_no_fact_strings_at_import`` measures.
+    """
+    spec = importlib.util.spec_from_file_location(name, _REPO_ROOT / "scripts" / filename)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -404,6 +409,56 @@ def test_no_fact_strings_at_import():
     forbidden = tuple(f.value for f in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS)
     assert len(forbidden) == 10  # all 8 locked + both soft — no tier is exempt from the scan
     assert embedded_fact_values(driver, forbidden) == []
+
+
+def test_no_fact_values_in_the_refusal_templates():
+    """D-02 — the same scan, aimed at the adversarial arm's refusal table over the WIDER lexicon.
+
+    This is a SIBLING of the test above, never an edit to it. That test's vocabulary and its own
+    count assertion are byte-unchanged; widening a passing guard in place would have swept a
+    different set while destroying the record of what the narrower one proved.
+
+    **What is being proven, and about what.** D-01's containment argument is a claim about the
+    TEMPLATE TEXT: ``phase14_recall.contains_value`` is substring containment, so a refusal that
+    cites no value cannot be scored as an extraction — for any value, at any threshold. Prose in
+    ``scripts/phase24_adversarial.py`` cannot keep that true across a later rewrite; this scan can.
+    The module is deliberately NOT frozen (D-05 has to be free to re-tune the wording for length),
+    so this guard is the only thing binding it.
+
+    **Why the wider vocabulary.** D-10's lexicon is ``LOCKED_VALUES`` plus every candidate the
+    Phase-14 gate rejected — a competing same-slot value is exactly the shape a refusal template
+    would plausibly reach for while trying to be concrete ("not my dog's name, which is ..."), and
+    the rejected candidates are precisely a committed, auditable bank of those.
+
+    **Watched RED before it was allowed to be green.** One member of ``forbidden`` was pasted
+    verbatim into the refusal module's docstring — the leak shape ``RECONCILIATION_A`` actually
+    produced — and this test reported the value and its count before the edit was reverted.
+    """
+    refusal = _load_driver("phase24_adversarial", "phase24_adversarial.py")
+    fs = _load_driver("phase14_factset", "phase14_factset.py")
+
+    # D-10's contradiction-detector lexicon: 8 locked values + 12 gate-rejected candidates,
+    # `scripts/phase14_factset.py:424-425,446`. This count is pinned SEPARATELY from the
+    # untouched ten-value count in `test_no_fact_strings_at_import`, which sweeps the narrower
+    # locked+soft vocabulary and stays exactly as it was.
+    forbidden = sorted(set(fs.LOCKED_VALUES) | {f.value for f in fs.GATE_REJECTED_CANDIDATES})
+    assert len(forbidden) == 20
+
+    # Non-vacuity, both halves. A scan over zero strings and a scan against zero values are each
+    # green and blind at once, and neither would announce itself.
+    scanned = list(_module_strings(refusal))
+    assert scanned, "the refusal module holds no strings — the scan below would be vacuous"
+    assert forbidden, "the D-10 lexicon is empty — the scan below would be vacuous"
+    assert refusal.REFUSAL_SLOT_NOUNS, "the refusal table is empty — nothing to contain"
+
+    hits = embedded_fact_values(refusal, forbidden)
+    assert hits == [], (
+        f"scripts/phase24_adversarial.py embeds published fact values {hits} (value, count). "
+        "D-01 requires every refusal to name the SLOT and never the VALUE: a template citing a "
+        "value is scored as an extraction by phase14_recall.contains_value, so the adversarial "
+        "arm would be teaching the model to leak while declining. Docstrings count — they are "
+        "live str objects for the whole life of the process."
+    )
 
 
 # --- D-21: the structural guards below scan a FILE SET, never one hard-coded path --------------
