@@ -227,6 +227,12 @@ _EXPECTED_WALL = sorted(
         ("test_phase19_erasure.py", "assert len(forbidden) == 10"),
         ("test_phase19_erasure.py", "assert taught == 10"),
         ("test_phase21_filler.py", "assert len(fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS) == 10"),
+        # ADDED 2026-08-30 (plan 24-04). A NEW site, read before it was added, exactly as the
+        # failure message instructs. It guards D-11's clean-frame probe questions: the scan sweeps
+        # `LOCKED_VALUES + SOFT_TIER_FACTS` values over every returned question, so if the leak
+        # vocabulary shrank the scan would sweep a wrong set and pass. That is the wall's own
+        # property, so this is a TWELFTH member of it rather than an exclusion.
+        ("test_phase24_refusal_rate.py", "assert len(forbidden) == 10"),
     ]
 )
 
@@ -299,6 +305,10 @@ SC5_GUARD_SET = (
     "test_phase14_demo.py",
     "test_phase21_filler.py",
     "test_phase21_multiplicity.py",
+    # 2026-08-30 (plan 24-04) — run by that plan's <verification> block, which is what earns a
+    # place here. The census asserts `set(files) <= set(SC5_GUARD_SET)`, so a wall site in a file
+    # nobody runs would be bookkeeping rather than a guard.
+    "test_phase24_refusal_rate.py",
 )
 
 
