@@ -437,12 +437,23 @@ def test_no_fact_values_in_the_refusal_templates():
     refusal = _load_driver("phase24_adversarial", "phase24_adversarial.py")
     fs = _load_driver("phase14_factset", "phase14_factset.py")
 
-    # D-10's contradiction-detector lexicon: 8 locked values + 12 gate-rejected candidates,
-    # `scripts/phase14_factset.py:424-425,446`. This count is pinned SEPARATELY from the
+    # D-10's contradiction-detector lexicon PLUS the soft tier: 8 locked + 12 gate-rejected + 2
+    # soft, `scripts/phase14_factset.py:390-446`. This count is pinned SEPARATELY from the
     # untouched ten-value count in `test_no_fact_strings_at_import`, which sweeps the narrower
     # locked+soft vocabulary and stays exactly as it was.
-    forbidden = sorted(set(fs.LOCKED_VALUES) | {f.value for f in fs.GATE_REJECTED_CANDIDATES})
-    assert len(forbidden) == 20
+    #
+    # WIDENED 2026-08-30 (24-REVIEW CR-02). It was locked|gate = 20 and the module docstring
+    # called that "the wider D-10 lexicon". Measured, it was not wider in the direction that
+    # matters: the two SOFT values were in NEITHER set, and they are the `favorite_color` and
+    # `favorite_food` values — two of the three slots the runtime scan structurally cannot reach.
+    # The coverage assertion below is what now decides this set's width, so the count is a record
+    # of what was proven rather than the thing doing the proving.
+    forbidden = sorted(
+        set(fs.LOCKED_VALUES)
+        | {f.value for f in fs.GATE_REJECTED_CANDIDATES}
+        | {f.value for f in fs.SOFT_TIER_FACTS}
+    )
+    assert len(forbidden) == 22
 
     # Non-vacuity, both halves. A scan over zero strings and a scan against zero values are each
     # green and blind at once, and neither would announce itself.
@@ -450,6 +461,35 @@ def test_no_fact_values_in_the_refusal_templates():
     assert scanned, "the refusal module holds no strings — the scan below would be vacuous"
     assert forbidden, "the D-10 lexicon is empty — the scan below would be vacuous"
     assert refusal.REFUSAL_SLOT_NOUNS, "the refusal table is empty — nothing to contain"
+
+    # COVERAGE (24-REVIEW CR-02). The scan is only as wide as the values it sweeps, and this
+    # module writes a refusal for ELEVEN slots. Every committed value that any of those slots can
+    # take must be IN `forbidden`, or a template citing it is scored as an extraction by
+    # `contains_value` and passes here. The set is DERIVED from the factset's own tiers — never
+    # spelled as literals, or the coverage lapses the moment a value changes.
+    #
+    # The runtime companion cannot close this: `tests/test_phase24_adversarial.py`'s
+    # `test_every_answer_is_a_slot_refusal_and_never_a_value` sweeps the full lexicon but only
+    # over the answers the corpus RENDERS, and the trained `core_taught` rows carry 8 slots.
+    # `favorite_color`, `favorite_food` and `favorite_drink` are never rendered there — precisely
+    # the slots whose values this static scan under-covered.
+    tiers = fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS + fs.GATE_REJECTED_CANDIDATES
+    assert {f.slot for f in tiers} >= set(refusal.REFUSAL_SLOT_NOUNS), (
+        "a slot with a refusal has NO committed value in any factset tier, so the coverage "
+        "assertion below is vacuously true for it: "
+        f"{sorted(set(refusal.REFUSAL_SLOT_NOUNS) - {f.slot for f in tiers})}"
+    )
+    uncovered = sorted(
+        (f.slot, f.value)
+        for f in tiers
+        if f.slot in refusal.REFUSAL_SLOT_NOUNS and f.value not in set(forbidden)
+    )
+    assert uncovered == [], (
+        f"the scan sweeps {len(forbidden)} values and misses {uncovered} (slot, value) — each is "
+        "a committed value of a slot this module writes a refusal for. A refusal edited to cite "
+        "one would pass this scan, and `contains_value` is substring containment, so the "
+        "adversarial arm would be teaching the model to leak while declining."
+    )
 
     hits = embedded_fact_values(refusal, forbidden)
     assert hits == [], (

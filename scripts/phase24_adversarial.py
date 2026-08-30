@@ -13,9 +13,17 @@ trained model behaves, it is a claim about the strings in this module.
 rewrite, so the property is bound by a static scan rather than by this paragraph:
 ``tests/test_phase14_scoring.py::test_no_fact_values_in_the_refusal_templates`` sweeps every string
 this module holds — attributes, strings nested in its dicts, and DOCSTRINGS, this one included —
-against the wider D-10 lexicon (``set(LOCKED_VALUES) | {f.value for f in
-GATE_REJECTED_CANDIDATES}``).
+against every committed value of every slot ``REFUSAL_SLOT_NOUNS`` names: D-10's lexicon
+(``LOCKED_VALUES`` | ``GATE_REJECTED_CANDIDATES``) UNION the SOFT tier.
 It was watched RED on a deliberately planted published value before it was allowed to be green.
+
+CORRECTED 2026-08-30 (24-REVIEW CR-02). This paragraph called D-10's lexicon "the wider" one and
+stopped there. It was not wider in the direction that matters: the two SOFT values were in neither
+tier of it, and they belong to ``favorite_color`` and ``favorite_food`` — two of the three slots
+that have a refusal here but are never rendered by the trained corpus, so the runtime scan in
+``tests/test_phase24_adversarial.py`` could not cover them either. The scan is now bound by a
+COVERAGE assertion over ``REFUSAL_SLOT_NOUNS`` rather than by a chosen vocabulary, so a slot
+gaining a refusal here drags its values into the sweep instead of quietly widening the hole.
 
 **This module is NOT frozen, and that is deliberate.** D-05 calibrates refusal LENGTH against
 ``teach_persona.MASK_FRACTION_BAND``, so the wording has to stay editable — a frozen template could
