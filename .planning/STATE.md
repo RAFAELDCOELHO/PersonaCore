@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc), 24-03 COMPLETE (fd6ba46 + 217c531 — the ROADMAP continuation is IN, so the clobber risk named above is now a live thing to protect); next up 24-04."
-last_updated: "2026-08-30T17:01:48.000Z"
+stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc), 24-03 COMPLETE (fd6ba46 + 217c531), 24-04 COMPLETE (d121cf7 + 2ba4292) — WAVE 1 IS DONE; next up 24-05 (wave 2). The ROADMAP continuation survived 24-04's tick: all four sentinel counts still 1, SC2's claim text still occurs exactly once, tests/test_phase24_correction.py still 4 passed."
+last_updated: "2026-08-30T18:26:00.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 74
-  completed_plans: 69
+  completed_plans: 70
   percent: 44
 ---
 
@@ -26,7 +26,64 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 4 of 7 (wave 1 of 4) — sequential, main tree
+Plan: 5 of 7 (wave 2 of 4) — sequential, main tree. WAVE 1 COMPLETE.
+
+**24-04 EXECUTED 2026-08-30 — D-04'S REFUSAL COLUMN AND D-11'S PROBE POPULATIONS ARE IN, AND
+WAVE 1 IS COMPLETE.** `scripts/phase14_recall.py` gained **174 insertions / 0 deletions**, all
+additive after `score_question`. `contains_refusal(completion, templates)` is
+`any(normalize(t) in normalize(completion) for t in templates)` — the SAME `normalize` object, the
+same substring direction, `contains_value`'s pointwise mirror, asserted as such on every one of the
+normalizer's four behaviours. `score_refusal` returns `(k, n)` ints. Templates are a CALLER
+argument, so the module still imports no template table: **`phase24_adversarial` is absent from
+`phase14_recall`'s module-level imports, verified by `ast.parse` over `tree.body` rather than by
+grep**, and both new imports (`phase14_factset`, `phase21_filler`) are lazy inside the function
+body. `src.count("def normalize")` is still **1** — no third copy of the scoring normalizer exists.
+
+**THE TWO D-11 POPULATIONS ARE PINNED, BUDGET-MATCHED, AND VALUE-FREE — BEFORE ANY SWEEP POINT
+EXISTS.** `CLEAN_FRAME_PROBE_FAMILY_IDS = ("F1","F2","F6")` — the taught set MINUS F4/F5, which
+`_render_family`'s docstring (`scripts/phase14_factset.py:694-695`, reached from `render_family:833`)
+says name the value inside the question. One tuple builds BOTH populations and comes back as DATA
+(`family_ids`), because a comparison across two family sets would measure the frames as much as the
+facts. Measured at HEAD: **locked = 8 facts -> 112 distinct questions**, **filler = 56 facts -> 784
+(fact, question) rows collapsing 7:1 onto 112 distinct questions** — a clean-frame question is
+SLOT-determined, which is exactly the F1/F2/F6 property, and filler sits 7 facts per slot over 8
+slots. The collapse is DISCLOSED and the dedup is deliberate: `fact_ids` still covers all 56, and
+the two sides come out **budget-matched at 112 vs 112**, so D-11 compares rates and not sample
+sizes. Question sets disjoint; **0 of the 10 published values** found across all 224 questions.
+`{F1,F2,F6}` was re-derived INDEPENDENTLY as `core_taught`'s `source_family` set in the 864-row
+`results/phase18_corpus.json` (F1 160, F2 160, F6 128) — agreement by measurement, not assumption.
+Two runtime `_prove` refusals ship as the companion the module-level D-02 scan structurally cannot
+be, since these strings exist only in a function's RETURN.
+
+**SEVEN PROBES WATCHED; SIX RED AND ONE PUBLISHED FALSE GREEN.** Every probe line-anchored, each
+printing its line number and post-edit line, each restored by writing back the saved original with
+a **sha256 equality check** (never `git checkout --`). RED: `F5` appended to the family tuple
+(`:388` — the containment refusal named three real values); the filler population rebuilt from
+`fs.LOCKED_FACTS` (`:439` — collision refusal); `normalize` dropped from `contains_refusal`
+(`:358`); `score_refusal` returning a rate (`:367`); `family_ids` widened back to the taught set
+(`:494`). **THE FALSE GREEN IS RECORDED RATHER THAN QUIETLY RE-RUN:** removing `fact-keyed` from
+ONE line of the reading rule (`:480`) left the test correctly PASSING, because the token occurs
+**twice** (measured `rule.lower().count("fact-keyed") == 2`, source at `:480` and `:483`). The
+probe was under-powered, not the test; removing both went RED. Same class as 24-02's
+`replace(..., 1)`, this time in a probe of the executor's own writing.
+
+**ONE UNPLANNED GUARD BIT, AND IT WAS RIGHT.** The new test's `assert len(forbidden) == 10` is a
+`== 10` leak-vocabulary site, and `tests/test_phase21_sc5.py::test_wall_census_is_the_measured_set`
+censuses every such site under `tests/`. It went RED on the plan's own verify command. Read, then
+registered as a **TWELFTH wall member** in `_EXPECTED_WALL` plus `SC5_GUARD_SET` — NOT excluded via
+`_NOT_WALL_SITES`, which would have been a quieter version of the hole. Committed in the same
+commit as the test file so no commit in history leaves the census red.
+
+**FROZEN THINGS STAYED FROZEN.** `scripts/mitigation_gate.py` sha256
+`86db479876ebeb2ba5b23c3b95da0ab20f13a3fbccf655b697280421b1997e14` — identical at HEAD and HEAD~2.
+`scripts/phase18_extraction.py` untouched. `.planning/REQUIREMENTS.md` still byte-unchanged for the
+whole phase (last commit `7296b31`, Phase 23); ADVT-01/02/03 all remain deliberately unticked.
+ROADMAP tripwire re-run after the tick: `tests/test_phase24_correction.py` **4 passed**, all four
+sentinel counts 1, SC2's claim text occurring exactly once, diff `2 insertions / 2 deletions`.
+**Full suite `1613 passed, 1 skipped, 0 failed` in 369.69 s — delta +5 against the 1608/1 baseline,
+exactly this plan's five tests.** NOTE: `make test` is unusable from a non-activated shell — its
+bare `pytest` resolves to pyenv 3.12, which has no torch, giving 97 collection errors in 1.8 s.
+Run `.venv/bin/python -m pytest -q`.
 
 **24-03 EXECUTED 2026-08-30 — SC2'S OVERLAP KEY IS MEASURED UNSATISFIABLE AND SUPERSEDED IN PLACE,
 WITH THE ORIGINAL SENTENCE STANDING BYTE-IDENTICAL.** `.planning/ROADMAP.md` gained a dated
@@ -699,6 +756,7 @@ Last activity: 2026-08-30
 | Phase 23 P15 | 65min | 2 tasks | 3 files |
 | Phase 23 P16 | 55min | 2 tasks | 3 files |
 | Phase 23 P18 | 40 min | 2 tasks | 2 files |
+| Phase 24 P04 | 42min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -1251,8 +1309,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-08-30T17:01:48.000Z
-Stopped at: Completed 24-03-PLAN.md (plan 3 of 7, wave 1) — SC2's `(fact_id, seed_index)` overlap key MEASURED UNSATISFIABLE (140 of 140 two-field keys and 216 of 216 three-field triples overlap pairwise, complete) and SUPERSEDED by a dated additive ROADMAP continuation between fresh `24-03-CONTINUATION-*` sentinels, 48 insertions / 0 deletions, SC2's own sentence byte-identical. ADVT-02 deliberately still unticked
+Last session: 2026-08-30T18:26:00.000Z
+Stopped at: Completed 24-04-PLAN.md (plan 4 of 7) — WAVE 1 COMPLETE. D-04's `contains_refusal`/`score_refusal` ship as `contains_value`/`score_question`'s pointwise mirror in the module that owns the scoring normalizer (no third copy; `phase24_adversarial` absent from module-level imports by AST), and D-11's two clean-frame probe populations are pinned as returned data — 8 locked and 56 filler facts over one family set `("F1","F2","F6")`, both 112 distinct questions, disjoint, 0 of 10 published values across all 224. Full suite 1613 passed / 1 skipped. ADVT-01 still deliberately unticked in REQUIREMENTS.md. Next: 24-05 (wave 2)
 Resume file: None
 
 ## Operator Next Steps
