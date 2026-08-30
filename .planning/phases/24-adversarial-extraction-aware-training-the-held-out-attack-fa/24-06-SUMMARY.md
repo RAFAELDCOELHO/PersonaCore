@@ -52,7 +52,7 @@ patterns-established:
 requirements-completed: []
 
 # Metrics
-duration: 32min
+duration: 24min
 completed: 2026-08-30
 ---
 
@@ -67,8 +67,9 @@ parameter existed.**
 
 ## Performance
 
-- **Duration:** 32 min (18:07:17Z start → 18:39Z)
+- **Duration:** 24 min (18:07:17Z start → 18:31:03Z, the metadata commit's own timestamp)
 - **Started:** 2026-08-30T18:07:17Z
+- **Task commits:** 18:16:00Z (`d274dfb`) and 18:20:01Z (`75d2d6d`)
 - **Tasks:** 3 of 3 (Tasks 1 and 2 in one commit — see Deviations)
 - **Files modified:** 3 (1 created, 2 extended)
 
