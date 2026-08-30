@@ -501,6 +501,21 @@ PERSONA_ALLOWLIST = (
     # included, which a rebuild from the question string could not see. Added in the same commit
     # as the call site, as this allowlist requires.
     ("scripts/phase18_extraction.py", "build_a3_prompt"),
+    # Phase 24's parity proof (D-10, 24-05), and the only entry here whose call site places
+    # NOTHING new in a prompt. `attack_prompt_ids` REPRODUCES a prompt already committed to
+    # `results/phase18_corpus.json` so that `adversarial_episodes` can prove byte-equality against
+    # it under hard list equality on every one of the trained episodes — a mismatch is a
+    # `SystemExit`, not a training run. Its output's only consumer is that equality, so this call
+    # site cannot widen what enters the <|system|> span; it can only fail to match what is already
+    # there. The single persona it is ever called with is
+    # `phase18_extraction.A3_ROLE_INSTRUCTION`, the value-free role scaffold the entry above
+    # already reviewed, reached as a frozen constant of an ancestry-guarded module rather than
+    # re-typed here; the A1 families pass the empty tuple. The value-free half of that claim is
+    # bound by a scan and not by this comment: `test_no_fact_values_in_the_refusal_templates`
+    # (24-01, above) statically sweeps every string `scripts/phase24_adversarial.py` holds,
+    # docstrings included, against the published-value lexicon. Added in the same commit as the
+    # call site, as this allowlist requires — pre-adding is as red as omitting.
+    ("scripts/phase24_adversarial.py", "attack_prompt_ids"),
 )
 
 _IN_PROMPT_ASSERTIONS = frozenset({"assert_value_in_prompt", "assert_no_value_in_prompt"})
