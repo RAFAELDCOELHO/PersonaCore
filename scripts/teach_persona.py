@@ -259,6 +259,21 @@ ARMS = (
     # RECORDED bins.
     "dp_n8",
     "dp_n64",
+    # Phase 24's two adversarial capacities (ADVT-01). DELIBERATELY NOT in `DP_ARMS`:
+    # `aligned = arm in DP_ARMS` in `build_arm_bins` is membership in a literal closed 2-tuple
+    # with NO prefix matching, so any other name packs FLAT — which is correct here. The
+    # adversarial arm makes no formal privacy claim (Phase 25 SC4 pins `accounting: null` on it)
+    # and a fact-INDEPENDENT refusal episode has no fact shard, so it has no home in the ragged
+    # fact-aligned layout. That closes 24-CONTEXT's declared residue 2 on the mechanism rather
+    # than by inference.
+    #
+    # NO CLI FLAG carries `adversarial_ratio`, and that is a choice rather than an omission:
+    # `main()`'s non-DP path still enforces `len(argv) != 1`. Phase 25's sweep driver calls
+    # `train_arm` PROGRAMMATICALLY, exactly as `scripts/phase17_isolation.py`,
+    # `scripts/phase19_run.py` and `scripts/phase19_erasure.py` already do — a grid sweep is not
+    # something an operator types one ratio at a time.
+    "adv_n8",
+    "adv_n64",
 )
 
 # The subset of ``ARMS`` that packs the RAGGED FACT-ALIGNED three-bin path instead of the flat
@@ -1098,6 +1113,21 @@ def arm_spec(arm):
         import phase21_filler
 
         return fs.LOCKED_FACTS + phase21_filler.FILLER_FACTS, False, 0.0
+    if arm == "adv_n8":
+        # `replay_ratio = 0.0` is LOAD-BEARING here for a DIFFERENT reason than on the DP arms:
+        # 24-RESEARCH's entire mask-fraction headroom table — every number D-05 pins
+        # MIN_REFUSAL_SCORED_TOKENS against — was computed at `replay_ratio = 0.0`. A non-zero
+        # ratio moves the measured fraction from 0.359 to 0.403 on the `real` arm, so it would
+        # invalidate the calibration the refusal length was chosen from.
+        return fs.LOCKED_FACTS, False, 0.0
+    if arm == "adv_n64":
+        # Same LAZY import, same reason as `dp_n64` above: it keeps `teach_persona`'s import
+        # graph unchanged for every existing consumer, and `phase21_filler`'s import-time
+        # collision refusal still runs unconditionally in CI.
+        import phase21_filler
+
+        # `replay_ratio = 0.0` load-bearing, as for `adv_n8`.
+        return fs.LOCKED_FACTS + phase21_filler.FILLER_FACTS, False, 0.0
     raise SystemExit(f"[teach_persona] unknown arm {arm!r} — expected one of {ARMS}")
 
 
@@ -1118,6 +1148,7 @@ def build_arm_bins(
     *,
     second_person=False,
     replay_ratio=0.0,
+    adversarial_ratio=0.0,
     seed=SEED,
     prefix="phase14",
     resume_from=None,
@@ -1145,6 +1176,15 @@ def build_arm_bins(
     argument away here would DISARM that guard: leaving it wired means the day someone sets a
     non-zero ratio on a DP arm, this function raises instead of quietly baking ~30 replay windows
     in beside 33 fact windows and falsifying ``grad_accum_steps = n_facts`` by ~7.9x (D-09).
+
+    ``adversarial_ratio`` (Phase 24, ADVT-01) is ``0.0`` for every existing caller — ``arm_spec``
+    never returns it and only Phase 25's sweep driver passes one — and then this function is
+    BYTE-IDENTICAL to before. It is threaded UNCHANGED on BOTH branches for the same reason
+    ``replay_ratio`` is: special-casing it away on the aligned branch would DISARM the widened
+    ``_refuse_ambiguous_aligned_input``, so the day someone sets a non-zero ratio on a ``dp_*`` arm
+    this raises instead of quietly building a bin whose fact-aligned accounting counts records that
+    do not exist. ``seed`` is passed through to ``build_bins`` too, so D-08's interleave permutation
+    and this function's ``seed_everything`` agree by construction rather than by coincidence.
 
     ``resume_from`` (D-07, plan 23-07) is ``None`` for every non-resuming caller and then this
     function is BYTE-IDENTICAL to before. It is threaded here — and not only into ``train_arm`` —
@@ -1194,6 +1234,8 @@ def build_arm_bins(
         outputs["mask"],
         replay_ratio=replay_ratio,
         align_facts=pairs,
+        adversarial_ratio=adversarial_ratio,
+        seed=seed,
     )
     sanity_check(tok, arm, outputs["bin"], outputs["mask"], facts, stats)
 
@@ -1211,7 +1253,8 @@ def build_arm_bins(
                     f"{p} {was[:12]}... -> {now[:12]}..." for p, (was, now) in drifted.items()
                 )
                 + f". The pack is deterministic in (facts, family_ids, second_person, "
-                f"replay_ratio, seed={seed}), so a drifted byte means one of those inputs moved "
+                f"replay_ratio, adversarial_ratio={adversarial_ratio}, seed={seed}), so a "
+                "drifted byte means one of those inputs moved "
                 "between the kill and the resume. Continuing would publish an epsilon whose "
                 "prefix and suffix describe two different datasets."
             )
@@ -1466,6 +1509,7 @@ def train_arm(
     family_ids,
     second_person=False,
     replay_ratio=0.0,
+    adversarial_ratio=0.0,
     seed=SEED,
     prefix="phase14",
     dp_sigma=None,
@@ -1636,6 +1680,7 @@ def train_arm(
         family_ids,
         second_person=second_person,
         replay_ratio=replay_ratio,
+        adversarial_ratio=adversarial_ratio,
         seed=seed,
         prefix=prefix,
         # Threaded, not defaulted: this is the SECOND caller of `arm_bin_targets`, and a resume
