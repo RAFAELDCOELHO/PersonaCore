@@ -3,7 +3,7 @@ status: partial
 phase: 24-adversarial-extraction-aware-training-the-held-out-attack-fa
 source: [24-VERIFICATION.md]
 started: 2026-08-30T19:23:45Z
-updated: 2026-08-30T19:23:45Z
+updated: 2026-08-30T20:36:24Z
 ---
 
 ## Current Test
@@ -12,7 +12,7 @@ updated: 2026-08-30T19:23:45Z
 
 ## Tests
 
-### 1. Give ADVT-01 an owning phase in ROADMAP.md
+### 1. Give ADVT-01 an owning phase in ROADMAP.md  [RESOLVED]
 expected: ADVT-01 has a phase that formally claims it. Today REQUIREMENTS.md:476 maps it to
 Phase 24; Phase 24's own `**Requirements**` line (ROADMAP.md:718) claims it and its traceability
 row correctly declares it unsatisfiable ("no adapter has been trained"). Phase 25 — which actually
@@ -21,9 +21,12 @@ NOT list it: ROADMAP.md:814 reads `CTRL-01, CTRL-02, FRONT-01, FRONT-02, FRONT-0
 Verified by the orchestrator: `grep -n "ADVT-01" .planning/ROADMAP.md` returns hits only inside
 Phase 24's block (718, 723, 785, 807). The requirement is currently unownable by the process.
 Suggested fix: append `, ADVT-01` to ROADMAP.md:814.
+RESOLVED 2026-08-30 at commit e5a2474 — ROADMAP.md:814 now carries ADVT-01, and the resulting
+two-phase span (24 builds, 25 satisfies) is recorded as a dated additive amendment under
+REQUIREMENTS.md's Traceability heading rather than by editing the dated 2026-08-20 count.
 why_human: Editing the roadmap's requirement mapping is a planning decision. The verifier can
 observe the hole but must not silently reassign a requirement.
-result: [pending]
+result: resolved (developer decision 2026-08-30; commit e5a2474)
 
 ### 2. Decide ADVT-02's ticked wording vs the actual mechanism
 expected: The requirement prose says A2 "is REFUSED at the episode builder, not dropped". The
@@ -49,9 +52,9 @@ result: [pending]
 ## Summary
 
 total: 3
-passed: 0
+passed: 1
 issues: 0
-pending: 3
+pending: 2
 skipped: 0
 blocked: 0
 
