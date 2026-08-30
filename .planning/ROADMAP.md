@@ -727,6 +727,54 @@ committed sweep grid)
      read from `results/phase18_corpus.json` — choosing the held-out family after seeing which the
      defense handles worst is the peek this project's discipline forbids. (ADVT-02)
 
+     <!-- 24-03-CONTINUATION-BEGIN -->
+     **SUPERSEDED IN PLACE 2026-08-30 (plan 24-03).** The clause above — *"a
+     zero-`(fact_id, seed_index)`-overlap structural check"* — is left standing as the record of
+     what was believed when this roadmap was written, and it is **UNSATISFIABLE**. Measured off the
+     committed corpus and independently re-verified 2026-08-30: the artifact holds exactly **216**
+     distinct `(fact_id, seed_index, tier)` triples and **each of the four families covers all
+     216**, so pairwise overlap is **216 of 216** — complete. On the two-field key the clause
+     literally names, the figure is **140 of 140**, the same result; `tier` is only what separates a
+     question asked in both tiers. A zero-overlap check on that key can therefore only ever be RED.
+
+     **That is not a bug, and "fixing" the corpus would destroy the comparison the clause depends
+     on.** The corpus is a full cross product BY CONSTRUCTION: one prompt object built once and
+     dispatched twice is the only structural defence against the adapter-on and adapter-off arms
+     silently diverging (`scripts/phase18_extraction.py:683-688`, PITFALLS §P18-1 at
+     `.planning/milestones/v3.0-research/PITFALLS.md:357`). Every attack family must meet the same
+     question set for the two arms to be comparable at all. The key was wrong in the text; the
+     property this criterion always intended was family disjointness.
+
+     **What replaces it — TWO separately-named assertions, on the two keys that ARE disjoint.**
+     Neither may ever be read as the other; they measure different generalizations.
+
+     - `tests/test_phase24_split.py::test_trained_and_held_out_attack_families_are_disjoint_on_family`
+       — key `family`. Trained {A1-mild, A1-aggressive, A3} against held-out {A2}. This is ADVT-02,
+       verified directly: **attack-family** generalization.
+     - `tests/test_phase24_split.py::test_taught_and_held_out_source_families_are_disjoint_on_source_family`
+       — key `source_family`. Taught {F1, F2, F6} against held-out {F3, F7, F8, `reserved`}. This is
+       the D-03 corollary: **paraphrase** generalization, a DISTINCT property. Green here says
+       nothing about attack families, and green there says nothing about paraphrases.
+
+     The evidence for this supersession is itself a running test rather than this paragraph —
+     `tests/test_phase24_split.py::test_the_superseded_fact_id_seed_index_key_is_unsatisfiable`
+     re-measures the overlap on both readings of the old key on every suite run. If it ever goes
+     green, the corpus stopped being a full cross product and this continuation must be revisited
+     before anything downstream is believed.
+
+     **The held-out family is A2, so ADVT-02's peek prohibition is satisfied structurally.** A2 is
+     held out as a MECHANICAL CONSEQUENCE of D-10's value-containment exclusion: `build_a2_prompt`
+     appends `floor(len(value_ids) * 0.25)` leading ids of the private value past `<|assistant|>`,
+     which `encode_dialogue` marks mask=1, so an A2 *training* episode's target would be a prefix of
+     the secret followed by a refusal — and `contains_value` requires the whole value, so that harm
+     would not even score as a leak. The family was therefore named before any training run existed,
+     for a structural reason, and never by seeing which family the defense handles worst. It equally
+     may not be claimed as a deliberate leave-one-out choice.
+
+     The original clause is left standing above, unamended and visible, because it is the record of
+     what was believed. This continuation is the thing that stops it going stale.
+     <!-- 24-03-CONTINUATION-END -->
+
   3. Attack intensity is disclosed as **also a token-budget axis**, reported as scored-token counts
      per arm, because through the frozen 547-live-id tokenizer the same 51-character sentence is 35
      tokens clean, 49 uppercased (1.40×) and 1.17× role-play framed — so an intensity effect and a
