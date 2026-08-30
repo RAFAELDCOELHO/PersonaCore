@@ -1,17 +1,31 @@
 ---
 phase: 24-adversarial-extraction-aware-training-the-held-out-attack-fa
-verified: 2026-08-30T19:20:14Z
-head: 84ef11f
+verified: 2026-08-30T20:45:29Z
+head: 904772d
 status: human_needed
-score: 3/4 success criteria fully verified, 1 partial (deferred half covered by Phase 25)
+score: 3/4 success criteria fully verified, 1 partial (deferred half covered by Phase 25); 3/3 24-REVIEW blockers independently confirmed closed
 overrides_applied: 0
+re_verification:
+  previous_status: human_needed
+  previous_head: 84ef11f
+  previous_score: 3/4
+  gaps_closed:
+    - "24-REVIEW CR-01 — `main()` no longer reaches `arm_spec`/`train_arm` for `adv_n8`/`adv_n64`; the false `len(argv) != 1` defense is deleted, not supplemented"
+    - "24-REVIEW CR-02 — the D-02 scan sweeps 22 tier-derived values with a non-vacuous coverage assertion over all 11 `REFUSAL_SLOT_NOUNS` slots; the planted-`chartreuse` leak reproduces RED"
+    - "24-REVIEW CR-03 — `contains_refusal`/`score_refusal` refuse a degenerate template member at the boundary through both entry points"
+    - "UAT item 1 — ADVT-01 given an owning phase (ROADMAP.md:814), span recorded additively under REQUIREMENTS.md `## Traceability`"
+  gaps_remaining: []
+  regressions:
+    - "results/phase24_token_budget.json `provenance.module_sha256` is now STALE for 2 of 4 pinned modules (`phase24_adversarial.py`, `teach_persona.py`) — the record's NUMBERS are unchanged and still re-derive, but the initial report's claim that all four digests match HEAD no longer holds. WARNING, not a blocker. See re-verification section."
+
 deferred:
   - truth: "SC1/ADVT-01 second half — *the adapter trained* against the Phase 18 attack suite, with attack intensity swept as an axis"
     addressed_in: "Phase 25"
     evidence: "Phase 25 SC2: 'Both arms carry a full curve at both capacities (n=8 and n=64) — ε for DP-SGD, intensity for adversarial — swept to the never-taught floor and to σ→0 so the curve reconnects to the control at both ends.'"
     note: "Phase 24's own goal is a BUILD goal ('The second mitigation arm, BUILT as a data-mixture ratio'). The seam half of SC1 is fully verified; the trained-adapter half was never in scope."
 human_verification:
-  - test: "Add ADVT-01 to Phase 25's `**Requirements**:` line in .planning/ROADMAP.md (currently CTRL-01, CTRL-02, FRONT-01..04)."
+  - status: RESOLVED 2026-08-30 at commit e5a2474 — ROADMAP.md:814 now reads `CTRL-01, CTRL-02, FRONT-01..04, ADVT-01`; the two-phase span is a dated additive amendment under REQUIREMENTS.md `## Traceability`, and the dated 2026-08-20 "0 duplicates" line is byte-unchanged. Re-verified at HEAD 904772d.
+    test: "Add ADVT-01 to Phase 25's `**Requirements**:` line in .planning/ROADMAP.md (currently CTRL-01, CTRL-02, FRONT-01..04)."
     expected: "ADVT-01 has a phase that formally claims it. Today it is mapped to Phase 24 in the REQUIREMENTS.md traceability table, Phase 24 correctly declares it unsatisfiable, and Phase 25 — which does the work — does not list the ID. The requirement currently falls between two phases and can never be ticked by the process as written."
     why_human: "Editing the ROADMAP's requirement mapping is a planning decision, not a code fix. The verifier can observe the hole but must not silently reassign a requirement."
   - test: "Decide whether ADVT-02's ticked wording 'A2 is REFUSED at the episode builder, not dropped' should be softened to 'filtered out AND refused behind the filter'."
@@ -20,6 +34,10 @@ human_verification:
   - test: "Confirm that 24-04's instrumentation (contains_refusal / score_refusal / clean_frame_probe_populations in scripts/phase14_recall.py) having no production caller is intended for Phase 25 consumption."
     expected: "Phase 25's sweep driver calls them. Today they are exercised only by tests/test_phase24_refusal_rate.py — verified correct in isolation, but not consumed by any running pipeline."
     why_human: "No ROADMAP SC requires them to be wired during Phase 24, so this is not a gap against the contract — but an unconsumed instrument is how a measurement quietly never gets taken."
+    status: STILL OPEN at HEAD 904772d. Phase 25 now formally owns ADVT-01, but its Success Criteria name the intensity sweep only and never name the refusal-rate column, so there is no roadmap evidence to defer this against. Kept as a human item rather than reclassified.
+  - test: "Decide whether to re-emit results/phase24_token_budget.json at a clean HEAD, or to accept its stale provenance pin with a written note."
+    expected: "provenance.module_sha256 describes the bytes that can regenerate the record. At HEAD 904772d two of its four pinned digests no longer match: scripts/phase24_adversarial.py recorded 8f884fd7… / live b679c6f6… (changed by ba2787f, docstring only) and scripts/teach_persona.py recorded e2709e54… / live 82da6c3a… (changed by d4ed1f8). phase24_record.py and mitigation_budget.py still match."
+    why_human: "NEW at this re-verification — introduced by 24-08's own blocker fixes. The record's numbers are unaffected and re-derive exactly, and phase24_record.py:418 declares a non-matching digest to be the designed visible signal, so this is not a false claim in the artifact. But re-emit vs. accept is a judgment about what the committed record is for, and re-emitting is currently blocked anyway: refuse_if_dirty counts untracked files as dirty and the tree carries `M .gitignore` + `?? .planning/todos/`. No test guards this — tests/test_phase24_record.py:274-276 checks corpus_sha256 against live but never module_sha256."
 ---
 
 # Phase 24: Adversarial Extraction-Aware Training + the Held-Out Attack Family — Verification Report
@@ -223,3 +241,121 @@ escalation.
 
 _Verified: 2026-08-30T19:20:14Z at HEAD 84ef11f_
 _Verifier: Claude (gsd-verifier) — all figures re-measured in-process; no SUMMARY.md claim accepted as evidence_
+
+---
+
+## Re-verification 2026-08-30 (post gap closure)
+
+**Re-verified:** 2026-08-30T20:45:29Z at HEAD `904772d` (was `84ef11f`)
+**Ruling:** `human_needed` — NOT `passed`
+**Scope:** the three 24-REVIEW blockers, regression on the load-bearing invariants, and the final
+status call. Everything above this line stands as written at `84ef11f`; this section corrects it
+additively where HEAD has moved.
+
+Every figure below was re-measured by this verifier in its own process. 24-08-SUMMARY.md's
+RED → GREEN → mutated-RED narrative was treated as a claim and independently reproduced, not read.
+
+### The three blockers
+
+| Blocker | Independent check | Result |
+|---------|-------------------|--------|
+| **CR-01** — `main()` trains `adv_n8`/`adv_n64` at ratio 0.0 under an "adversarial" name | Monkey-poisoned `arm_spec` **and** `train_arm` to raise on entry, then called `main(["adv_n8"])` and `main(["adv_n64"])` | **CLOSED.** Both raise `SystemExit` (616 / 617 chars, naming `adversarial_ratio`); **neither poisoned callable ran** — `poisoned == []`. The refusal is an `elif arm in ADV_ARMS` branch in the `DP_ARMS` dispatch at `teach_persona.py:1407`, structurally ahead of `arm_spec(arm)` at `:1421`. `ADV_ARMS = ("adv_n8", "adv_n64")` at `:1309`. |
+| **CR-01** — programmatic path must be unchanged | `inspect.signature` + source scan of the threading chain | **INTACT.** `train_arm(adversarial_ratio=0.0)`, `build_arm_bins(adversarial_ratio=0.0)`, `build_bins(adversarial_ratio=0.0)` all present; `train_arm` forwards to `build_arm_bins` forwards to `build_bins`. Both provenance prints now interpolate `adversarial_ratio=`. |
+| **CR-01** — the FALSE comment at ~`:270` | `git diff 84ef11f..HEAD -- scripts/teach_persona.py` | **CORRECTED, not supplemented.** The hunk **deletes** *"that is a choice rather than an omission: `main()`'s non-DP path still enforces `len(argv) != 1`"* and replaces it with *"so `main()` REFUSES both arms outright"*, followed by a dated `CORRECTED 2026-08-30 (24-REVIEW CR-01)` block that names the old text as FALSE and says why. The false sentence is gone from the file. |
+| **CR-02** — the D-02 scan must cover every value of every `REFUSAL_SLOT_NOUNS` slot, tier-derived | Recomputed the swept set and the coverage predicate in-process | **CLOSED.** Set is `LOCKED_VALUES ∪ {f.value for GATE_REJECTED_CANDIDATES} ∪ {f.value for SOFT_TIER_FACTS}` = **22 values**, zero literals. Over `tiers = LOCKED_FACTS + SOFT_TIER_FACTS + GATE_REJECTED_CANDIDATES` filtered to the 11 `REFUSAL_SLOT_NOUNS` slots: **0 uncovered `(slot, value)` pairs**, and **0 slots with no committed value in any tier** — so the coverage assertion is not vacuously true. `chartreuse` and `marzipan` both present; the old 20-value set is exactly those two short. |
+| **CR-02** — is the widened scan load-bearing? | **Mutation.** Planted `chartreuse` inside the live `favorite_color` refusal on a scratch copy and ran the real `tests/test_phase14_scoring.embedded_fact_values` against both sets | **The fix bites.** OLD(20) → `[]` (green — the CR-02 defect reproduced in my process). NEW(22) → `[('chartreuse', 1)]` (RED). Unmutated HEAD module under NEW(22) → `[]`. A first mutation attempt that added a new slot key was rejected by `refuse_undeclared_slots()`, so that guard is live too. |
+| **CR-03** — degenerate template member | Called both entry points with `""`, `"   "`, `"..."`, `"!!!"`, singly and in a MIXED table behind a legitimate matching template | **CLOSED.** All 8 single cases and the mixed case raise `SystemExit` carrying `EMPTY STRING`. `contains_refusal(anything, [""])` and `score_refusal(['a','b','c'], [''])` — the two exact pre-fix reproductions — now both raise instead of returning `True` / `(3,3)`. |
+| **CR-03** — no collateral damage | Non-degenerate and edge inputs | **CLEAN.** Hit `True`, miss `False`, `score_refusal` `(1,2)`. An empty **completion** still scores rather than raising (`False`, `(0,2)`) — the guard is about the template, never the measurement. The documented residue holds: `score_refusal([], t) == (0,0)`. |
+
+### Regression on the load-bearing invariants
+
+| Invariant | Re-measured at HEAD | Result |
+|-----------|--------------------|--------|
+| **SC1 byte identity** | Fresh build, 176 clean `dp_n8` episodes, `seed_everything(SEED)` | **INTACT.** no-kwarg and `adversarial_ratio=0.0` both give token sha `f146d42637c69e9eb1e7ac2248c9056a7966aed48f6498fa9cdb6d3db02d147b` and mask sha `a2c4771f92aa4e03127e451b1de880b9386bee5164ee512d291467c1eb1e59a2` — the exact pre-edit pair 24-06 recorded — with identical `repr(stats)` and **zero** `adversarial*` keys. |
+| **SC1 non-vacuity** | Same build at ratio `1.9090909090909092` | **INTACT.** Both shas move; `adversarial_episodes == 336 == round(ratio × 176)`; families `{A1-mild: 112, A1-aggressive: 112, A3: 112}`. |
+| **D-08 seed purity** | Same seed twice, then `seed_everything(SEED+1)` before the same build | **INTACT.** Same seed → byte-identical. Perturbed **global** seed → still byte-identical, which is the purity property: `_mix_adversarial` draws from `random.Random(seed)` and never the global stream. |
+| **v2.0 golden** | `test_build_bins_byte_identity_default_matches_the_v2_golden` | **PASS** (inside the 124 below). |
+| **AST surface** | Own `ast.walk` at HEAD | **INTACT.** `phase24_adversarial` module-level imports exactly `pathlib, phase14_factset, sys`; `phase14_recall` has no module-level `phase24_adversarial`; **0** integer `336` literals in either; **0** `build_corpus` calls in either. |
+| **`results/phase24_token_budget.json`** numbers | Own cross-sum pass over all 12 rows + comparison to the initial report | **INTACT.** `git log 84ef11f..HEAD -- results/` is empty — 24-08 did not touch the artifact. 12 rows; `total−teaching == adversarial`, `total_episodes == clean + adversarial`, `sum(family_counts) == adversarial_episodes` all pass on every row. `adv_n8` scored tokens 2719 → 9817, `adv_n64` 28128 → 84912 — identical to the initial verification. `test_scored_tokens_re_derive_from_a_rebuild` passes. |
+| **Suite at HEAD** | `.venv/bin/python -m pytest tests/test_phase24_*.py tests/test_phase14_scoring.py <v2.0 golden> tests/test_phase23_resume.py tests/test_phase22_wiring.py -q` | **124 passed, 0 failed, 123 s, exit 0.** The last two files are exactly what 24-08's disclosed two-commit RED window touched (`test_resume_from_none_is_inert` and the `train_arm(` prose census) — both green at HEAD. The intermediate redness is closed. |
+
+### NEW finding — WR: stale provenance pin on the committed record
+
+**This is the one thing 24-08 broke, and it is a correction to the report above.** The initial
+verification stated: *"All four `provenance.module_sha256` values match the current files exactly —
+the record is not stale."* That was TRUE at `84ef11f`. It is **FALSE at `904772d`**:
+
+| Pinned module | Recorded in the artifact | Live at HEAD | |
+|---|---|---|---|
+| `scripts/phase24_record.py` | `f2267e14…` | `f2267e14…` | match |
+| `scripts/mitigation_budget.py` | `2e5adc91…` | `2e5adc91…` | match |
+| `scripts/phase24_adversarial.py` | `8f884fd7…` | `b679c6f6…` | **STALE** (`ba2787f`, docstring only) |
+| `scripts/teach_persona.py` | `e2709e54…` | `82da6c3a…` | **STALE** (`d4ed1f8`, the CLI refusal) |
+
+**Severity: WARNING, not BLOCKER.** Four reasons, each checked rather than assumed:
+
+1. The artifact makes no false claim. `scripts/phase24_record.py:418` declares this exact behaviour
+   as the designed signal — *"an artifact written against an edited module carries a digest that
+   does not match — visible in the record itself."* The record's statement is historical (*these
+   bytes produced these numbers at `5aed70f`*) and remains true. What is now false is the inference
+   that HEAD regenerates the same provenance block.
+2. The **numbers** are unaffected and I proved it, not assumed it: the two edits are a docstring and
+   a CLI guard plus two stdout `print` interpolations, none of which can move a token count, and the
+   full byte-identity re-derivation above lands on the same two shas.
+3. No ROADMAP Success Criterion requires digest freshness. SC3's contract is scored-token counts
+   with denominators, and those hold exactly.
+4. Re-emitting is blocked anyway right now: `refuse_if_dirty` counts untracked files as dirty
+   (`src/personacore/provenance.py:62-65`) and the working tree carries `M .gitignore` and
+   `?? .planning/todos/`.
+
+**But it is genuinely unguarded.** `tests/test_phase24_record.py:274-276` checks `corpus_sha256`
+against the live corpus and **never** checks `module_sha256`. So the suite is green at 1646 while
+the pin drifts — the same *"green guard, unenforced invariant"* shape 24-REVIEW named three times.
+Routed to human decision as item 4: re-emit at a clean HEAD, or accept the pin with a written note
+(and, either way, consider a freshness assertion so the next drift announces itself).
+
+### ADVT-01 is still correctly UNTICKED — no over-claim in the tree
+
+Checked specifically, because giving a requirement an owning phase is exactly the move that could
+be mistaken for satisfying it:
+
+- `.planning/REQUIREMENTS.md:304` — `- [ ] **ADVT-01**`. **Unticked.**
+- `.planning/REQUIREMENTS.md:487` — traceability row still reads *"**NOT SATISFIED — deliberately,
+  and Phase 24 was never going to satisfy it.**"* Unchanged.
+- The 2026-08-30 amendment is future-tense about Phase 25 (*"Phase 25 TRAINS the adapter"*) and
+  claims no satisfaction. The dated 2026-08-20 *"48/48 mapped, 0 orphans, 0 duplicates"* line is
+  **byte-unchanged**; the supersession is recorded additively above it.
+- `.planning/STATE.md` says *"ADVT-01 stays OPEN because no adapter has been trained"* throughout.
+- `results/` still holds only `phase24_token_budget.json` — no adapter, no swept curve.
+
+**Nothing in the tree implies ADVT-01 is satisfied.** The initial report's ruling stands.
+
+**One INFO, no action required:** the traceability table's `Phase` column for ADVT-01 still reads
+`Phase 24` alone. The two-phase span lives only in the prose amendment ~40 lines above the row. A
+reader who greps the table row in isolation still will not find Phase 25. This is consistent with
+the project's additive-correction doctrine (the amendment is the dated record and sits under the
+same `## Traceability` heading), but the row is the thing people grep.
+
+### Status ruling: `human_needed`, not `passed`
+
+The three blockers are closed and no load-bearing invariant regressed, so nothing holds this phase
+at `gaps_found`. It does not reach `passed` either, for one structural reason and one substantive
+one:
+
+- **Structural.** `passed` is only valid when the human-verification section is empty. UAT item 1 is
+  resolved, but items 2 and 3 remain open and a fourth was opened by this pass.
+- **Substantive.** Item 3 is *not* deferrable, and I checked rather than assumed. Phase 25 now
+  formally owns ADVT-01, which is the natural place to defer 24-04's unconsumed instrumentation —
+  but Phase 25's Success Criteria name the **intensity sweep** only (`ROADMAP.md:824`) and never
+  name the refusal-rate column. With no roadmap text to point at, deferring it would be softening,
+  so it stays a human item. Item 2 (ADVT-02's *"REFUSED, not dropped"* wording) is an editorial call
+  on already-ticked requirement prose that a verifier must not make. Item 4 is new and is a judgment
+  about what the committed record is for.
+
+None of the three open items blocks Phase 25. The recommendation is to dispose of them as a
+documentation pass, not to reopen execution.
+
+---
+
+_Re-verified: 2026-08-30T20:45:29Z at HEAD `904772d`_
+_Verifier: Claude (gsd-verifier) — blockers reproduced and re-measured in-process; 24-08-SUMMARY.md's evidence treated as a claim throughout_

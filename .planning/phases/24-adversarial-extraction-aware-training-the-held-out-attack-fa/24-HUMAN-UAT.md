@@ -3,7 +3,7 @@ status: partial
 phase: 24-adversarial-extraction-aware-training-the-held-out-attack-fa
 source: [24-VERIFICATION.md]
 started: 2026-08-30T19:23:45Z
-updated: 2026-08-30T20:36:24Z
+updated: 2026-08-30T20:48:58Z
 ---
 
 ## Current Test
@@ -49,12 +49,32 @@ contract.
 why_human: An unconsumed instrument is how a planned measurement quietly never gets taken.
 result: [pending]
 
+### 4. Decide how to close the stale provenance pins in results/phase24_token_budget.json
+expected: `provenance.module_sha256` matches the live modules, and drift is caught by a test.
+Measured 2026-08-30 at HEAD: 2 of 4 pins are STALE — `scripts/phase24_adversarial.py`
+(recorded 8f884fd7… / live b679c6f6…) and `scripts/teach_persona.py` (recorded e2709e54… /
+live 82da6c3a…). Both drifted because plan 24-08's blocker fixes edited those modules AFTER the
+record was emitted. The committed NUMBERS are unaffected — re-verification re-derived every figure
+and all 12 cross-sums intact — and the emitter's docstring declares a non-matching digest to be the
+designed visible signal.
+The defect is that the signal is INVISIBLE: `grep -rn "module_sha256" tests/` returns nothing, while
+`corpus_sha256` IS checked against live at tests/test_phase24_record.py:274. So the suite stays
+green while the pin drifts — the green-but-blind mode this project names as its most recurring
+defect, and which .github/workflows/ci.yml's own comment calls out by name.
+Two candidate closures: (a) add a guard asserting module_sha256 == live AND re-emit the record so
+the pins are true again (the numbers should be byte-identical; re-verification proved they are
+unaffected), or (b) keep the pins as a historical "produced by these module versions" record and
+add a guard asserting drift is DECLARED rather than absent.
+why_human: This changes a committed result artifact's provenance semantics. (a) and (b) mean
+different things about what the pin promises.
+result: [pending]
+
 ## Summary
 
-total: 3
+total: 4
 passed: 1
 issues: 0
-pending: 2
+pending: 3
 skipped: 0
 blocked: 0
 
