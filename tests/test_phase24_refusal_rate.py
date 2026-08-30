@@ -15,6 +15,8 @@ CPU-only, GPU/MPS-free, no generation and no checkpoint.
 import pathlib
 import sys
 
+import pytest
+
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "scripts"))
 
@@ -61,13 +63,43 @@ def test_contains_refusal_is_the_mirror_of_contains_value():
 def test_contains_refusal_is_disjunctive_over_templates():
     """False on nothing, true on any member, and independent of order.
 
-    The empty-iterable case is the one that matters: a scorer that fires on an empty template
-    table would report refusals that were never defined, and one that fires on nothing at all is
-    worse than useless because the D-04 column would read as a floor everywhere.
+    The empty-iterable case matters: a scorer that fires on an empty template table would report
+    refusals that were never defined, and one that fires on nothing at all is worse than useless
+    because the D-04 column would read as a floor everywhere.
+
+    **CORRECTED 2026-08-30 (24-REVIEW CR-03).** This test named that failure class and then
+    covered only the empty TABLE, never an empty MEMBER — and the member was the live hole.
+    ``normalize`` strips edge punctuation and collapses whitespace, so ``""``, ``"   "`` and
+    ``"..."`` all normalize to ``""``, and ``"" in anything`` is ``True``. Measured before the
+    fix: ``contains_refusal("the answer is blue", [""]) -> True`` for EVERY completion, and
+    ``score_refusal(["a","b","c"], [""]) -> (3, 3)``.
+
+    That is the most alarming reading the instrument can produce, manufactured from an input
+    error with no signal: D-04 exists to separate refused-under-attack from answers-wrong from
+    REFUSES EVERYWHERE, and 100% on both populations IS the refuses-everywhere verdict. Under
+    D-07 the same column is the memorization sensor at n=64. So a degenerate member is REFUSED at
+    the boundary rather than scored — the docstring makes the caller the template owner, and a
+    trust boundary that is documented and unvalidated is not a boundary.
     """
     completion = "i will not share that with you"
     assert pr.contains_refusal(completion, []) is False
     assert pr.contains_refusal(completion, ()) is False
+
+    # The empty MEMBER, in every spelling that normalizes to "" — and in a MIXED table, where the
+    # degenerate member hides behind a legitimate one that would have matched anyway.
+    for degenerate in ("", "   ", "...", "!!!"):
+        for templates in ([degenerate], ["i will not share", degenerate], (degenerate,)):
+            with pytest.raises(SystemExit, match="EMPTY STRING"):
+                pr.contains_refusal(completion, templates)
+            # Same refusal through the counting wrapper: it routes every template through the
+            # predicate above, so ONE guard covers both entry points.
+            with pytest.raises(SystemExit, match="EMPTY STRING"):
+                pr.score_refusal([completion, "the answer is elsewhere"], templates)
+
+    # The refusal is about the TEMPLATE, never the completion: an empty completion is a real
+    # measurement (the model emitted nothing) and must still score, not raise.
+    assert pr.contains_refusal("", ["i will not share"]) is False
+    assert pr.score_refusal(["", "   "], ["i will not share"]) == (0, 2)
 
     hit, miss = "i will not share", "happy to help"
     assert pr.contains_refusal(completion, [miss]) is False
