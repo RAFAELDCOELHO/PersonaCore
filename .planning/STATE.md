@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. No plan completed yet."
-last_updated: "2026-08-30T15:53:24.000Z"
+stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c); next up 24-02."
+last_updated: "2026-08-30T16:02:46.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 74
-  completed_plans: 66
+  completed_plans: 67
   percent: 44
 ---
 
@@ -26,7 +26,49 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 1 of 7 (wave 1 of 4) — sequential, main tree
+Plan: 2 of 7 (wave 1 of 4) — sequential, main tree
+
+**24-01 EXECUTED 2026-08-30 — THE D-01 REFUSAL TABLE EXISTS AND ITS CONTAINMENT IS A STATIC SCAN,
+NOT A PARAGRAPH.** `scripts/phase24_adversarial.py` declares **11** first-person, value-free slot
+noun phrases in hard key parity with `phase14_factset.SLOT_FORMS` — equality in BOTH directions,
+never `issubset` — proven **at import** on `scripts/phase21_filler.py:443`'s precedent, and watched
+firing on a deliberately deleted key before the file was restored byte-identical (sha256 match).
+`refusal_for` raises `SystemExit` naming the slot and both grammars, never a bare `KeyError`.
+
+**THE D-02 GUARD WAS WATCHED RED, AND THE OUTPUT IS QUOTED IN THE SUMMARY.**
+`tests/test_phase14_scoring.py::test_no_fact_values_in_the_refusal_templates` is a **SIBLING**, not
+an edit: it sweeps the refusal module — docstrings included — against the WIDER 20-value D-10
+lexicon (`set(LOCKED_VALUES) | {f.value for f in GATE_REJECTED_CANDIDATES}`, MEASURED at 8 + 12) and
+pins that count separately. `zorp` planted verbatim in the module docstring produced
+`[('zorp', 1), ('zorp', 1)]` (twice, at count 1 each, because `_module_strings` reaches `__doc__` by
+two routes — pre-existing helper behaviour); the probe was reverted by a targeted inverse edit,
+`git diff --exit-code` came back clean, and GREEN was re-observed at `c09d37c`. The incumbent
+ten-value assertion is **AST-proved byte-identical** against HEAD (2,087 chars) and is still exactly
+one line; `tests/test_phase21_sc5.py::test_wall_census_is_the_measured_set` is green because **zero**
+lines this plan added to `tests/` match `(?:==|!=)\s*10(?![0-9_])`, comments included.
+
+**THE D-05 PRECONDITION IS MEASURED, NOT ASSUMED, AND EVERY INPUT WAS RE-DERIVED AT HEAD.**
+Through the FROZEN production tokenizer, counted exactly as `encode_dialogue` counts
+(`len(encode(detokenize(answer))) + 1` for the mask=1 eos), the eleven refusals span
+**18–26 scored tokens**, minimum `person_name` at **18** against `MIN_REFUSAL_SCORED_TOKENS = 15`.
+The four calibration inputs were re-counted rather than transcribed: **336** trained-pool episodes /
+**26,054** prompt tokens off `results/phase18_corpus.json` (`core_taught` × {A1-mild, A1-aggressive,
+A3}), and **176 / 7,581 / 2,719** off a live `teach_persona.build_bins(..., replay_ratio=0.0)` on
+arm `dp_n8` (`mask_fraction = 0.35865980741327`). At the worst corner
+(n=8, ratio `1.9090909090909092`) `frac(18) = 8767/39683 = 0.2209` — **0.0709 above the 0.15 floor**,
+1.4× the `MASK_FRACTION_MARGIN = 0.05` the constant is spent as. The single-clause template was kept
+because the measurement did not ask for a second clause; two longer candidates (40–48 and 48–56
+tokens) were measured and discarded.
+
+**ADVT-01 IS DELIBERATELY NOT TICKED.** Six of this phase's seven plans carry it and this one ships
+only the refusal half; `.planning/REQUIREMENTS.md` is **byte-unchanged**. **Zero `gsd-sdk` mutation
+handlers called** — `STATE.md` and `ROADMAP.md` were hand-edited and diffed (ROADMAP: 2 insertions,
+2 deletions, both the intended tick and progress row). `git diff` vs the plan's start commit
+`f05655a` touches **exactly three paths**; `scripts/phase18_extraction.py` and
+`scripts/mitigation_gate.py` are **empty** (SC4 frozen). Suite **`1596 passed, 1 skipped`**, 0 failed
+(1597 collected; **exactly 5 are this plan's** — 4 new + `test_phase14_scoring.py` 28 → 29 test
+functions — against ROADMAP's recorded `1591 passed, 1 skipped` baseline; STATE's older `1589` was
+the 23-14 figure, two plans stale). `ruff` clean over 221 files.
 
 Phase 23 CLOSED 2026-08-29 — **19 of 20 plans ticked**
 (23-01…23-16, 23-18, 23-19, 23-20). The one remaining unticked box is **23-17**, deliberately: its
