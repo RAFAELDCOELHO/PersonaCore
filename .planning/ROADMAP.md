@@ -742,7 +742,7 @@ Plans:
 **Wave 1**
 
 - [x] 24-01-PLAN.md — D-01's per-slot value-free refusal table and D-02's containment guard, watched RED then GREEN *(11 slots, key-parity refused at import; every refusal measures 18–26 scored tokens through the frozen tokenizer against a floor of 15; the sibling guard was watched RED on a planted `zorp` — `[('zorp', 1), ('zorp', 1)]` — and the incumbent ten-value assertion is AST-proved byte-identical)*
-- [ ] 24-02-PLAN.md — D-09's adversarial sweep grid pinned as literals in `scripts/mitigation_budget.py`, both extremes re-derived from committed artifacts
+- [x] 24-02-PLAN.md — D-09's adversarial sweep grid pinned as literals in `scripts/mitigation_budget.py`, both extremes re-derived from committed artifacts *(`(0.0, 0.25, 0.5, 1.0, 1.5, 1.9090909090909092)`; 336 and 176 COUNTED out of `results/phase18_corpus.json` and `results/phase21_multiplicity.json`, quotient exact; a one-ULP nudge watched refused by three assertions and kept as a permanent control; 102 insertions / 0 deletions, still literal-only, zero-import and not frozen)*
 - [ ] 24-03-PLAN.md — ADVT-02's split as TWO separately-named assertions (`family`, `source_family`) plus the dated 24-03 continuation superseding SC2's unsatisfiable key
 - [ ] 24-04-PLAN.md — D-04's `contains_refusal` beside `contains_value`, and D-11's clean-frame probe populations pinned before any run
 
@@ -894,7 +894,7 @@ capacities — with every number in prose generated from a committed record rath
 | 21. The Privacy Unit, the DP Data Path, and the n=64 Corpus | v4.0 | 11/11 | Complete    | 2026-08-25 |
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 19/20 | Complete    | 2026-08-29 — **all six requirements closed:** CAL-01 + CAL-05 (23-11/23-12), CAL-02 (23-13), CAL-03 (23-04), DPSGD-06 (23-10), CTRL-03 (23-08 trained, 23-14 scored). Verification `23-VERIFICATION.md` 5/5 must-haves; both `human_needed` items ruled on and CLOSED by the developer the same day — DPSGD-06's stale row retracted in place at `7296b31`, the never-taught positive control landed and watched RED at `17c28c8`. `23-SECURITY.md` at `threats_open: 0` over **113 distinct threat IDs**. Suite `1591 passed, 1 skipped`. *(**19/20, not 20/20** — `phase.complete` wrote 20/20 and re-ticked 23-17; both reverted by hand. **23-17 stays deliberately unticked**: its run was harness-killed at 3/5 and wrote no record, and 23-20 completed the work under a separate continuation pre-registration.)* |
-| 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 1/7 | In progress | - |
+| 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 2/7 | In progress | - |
 | 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |
 | 27. Relearning Attack | v4.0 | 0/TBD | Not started | - |

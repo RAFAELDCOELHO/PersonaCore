@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c); next up 24-02."
-last_updated: "2026-08-30T16:02:46.000Z"
+stopped_at: "Phase 24 EXECUTING (started 2026-08-30) — 7 plans in 4 waves, all autonomous, running SEQUENTIALLY on the main tree (worktree isolation deliberately disabled: parallelization is off, and the worktree merge path restores ROADMAP.md from backup, which would silently clobber 24-03's dated continuation block). Wave 1 = 24-01..24-04, wave 2 = 24-05, wave 3 = 24-06, wave 4 = 24-07. 24-01 COMPLETE (c09d37c), 24-02 COMPLETE (4ecf5bc); next up 24-03."
+last_updated: "2026-08-30T16:31:47.000Z"
 last_activity: 2026-08-30
 progress:
   total_phases: 9
   completed_phases: 4
   total_plans: 74
-  completed_plans: 67
+  completed_plans: 68
   percent: 44
 ---
 
@@ -26,7 +26,64 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 24 (adversarial extraction-aware training + the held-out attack family) — EXECUTING
-Plan: 2 of 7 (wave 1 of 4) — sequential, main tree
+Plan: 3 of 7 (wave 1 of 4) — sequential, main tree
+
+**24-02 EXECUTED 2026-08-30 — D-09'S GRID EXTREMES ARE PINNED AS LITERALS AND BOTH RE-DERIVE FROM
+COMMITTED ARTIFACTS.** `mitigation_budget.ADVERSARIAL_RATIO_GRID = (0.0, 0.25, 0.5, 1.0, 1.5,
+1.9090909090909092)`, appended **102 insertions / 0 deletions** — the module's history stays
+additive, still literal-only, still **zero-import** (the `{erasure_gate, pathlib, sys}` equality
+ceiling is unmoved) and still **protected but NOT frozen** (no `prereg_artifact=` added; that freeze
+would be irrevocable). The extreme is a FLOAT LITERAL, never `336 / 176` — an `ast.BinOp` raises
+inside the literal-only guard's `ast.literal_eval` at `tests/test_phase23_budget.py:463`.
+
+**BOTH OPERANDS WERE COUNTED AT HEAD, NOT TRANSCRIBED.** `tests/test_phase24_grid.py` (5 tests)
+counts **336** `core_taught` rows across the three D-10 trained families out of
+`results/phase18_corpus.json` (resolved from `phase18_extraction.CORPUS_PATH`, never a test-local
+string) and reads **176** clean episodes off `results/phase21_multiplicity.json`'s `corpus_geometry`
+row `dp_n8` (resolved from `phase21_unit_record.ARTIFACTS`), then asserts the quotient under exact
+`==`. Corpus census recorded so non-vacuity is checkable: **864 prompts = 4 x 216**, tier split
+**448 `core_taught` / 416 `core_held_out`**, so the filter selects 336 and genuinely EXCLUDES the
+216 A2 rows. Multiplicity re-derives too — `dp_n8: 1.0`, `dp_n64: 8.0` — which is what Phase 25 SC3
+needs travelling in the same sentence as the point. n=64's own ceiling is `0.23863636363636365`,
+which is why `0.25` is the first interior point.
+
+**THE ONE-ULP NUDGE WAS WATCHED RED AND THE FIRST ATTEMPT'S FALSE GREEN IS RECORDED RATHER THAN
+HIDDEN.** Nudging the constant to `1.9090909090909094` was refused by **three** assertions
+(re-derivation, the permanent control, and the `dp_n8` multiplicity at `1.0000000000000002`). The
+FIRST probe replaced occurrence 1 of 4 — a COMMENT line at `:618`, not the constant — and returned a
+meaningless `5 passed`; the digits appear four times in the module (`:618`, `:628` comments; `:633`
+tuple; `:644` provenance) and any future probe must anchor on the full assignment line. Both nudges
+were reverted by **targeted inverse edits**; a blanket working-tree restore of the budget module was
+attempted as the revert and **correctly refused by the destructive-command gate** — it would have
+destroyed all 102 uncommitted insertions.
+
+**ONE RULE-3 DEVIATION, AND THE GUARD THAT FIRED WAS CORRECT.** The plan's `<interfaces>` block
+named three guards on this file; a FOURTH,
+`tests/test_phase23_budget.py::test_z_was_sized_against_the_ceiling`, asserts
+`tuple(discovered) == _Z_CONSTANTS` over an AST walk of every non-`_PROVENANCE` module-level name
+and turned RED on the new constant. It is subtracted through a new `_POST_23_13_CONSTANTS` rather
+than declared a Z constant (no throughput figure feeds it; it is backed by TWO records, so the
+`_Z_RECORD_BACKED` single-record shape does not fit), and **the exclusion earns itself**: the test
+now asserts the covering file exists and AST-reads the excluded name — watched biting before
+`tests/test_phase24_grid.py` existed. **Tasks 1 and 2 therefore landed in ONE commit** (`4ecf5bc`),
+because a Task-1-only commit would have left HEAD RED.
+
+**THE PLAN'S `git_sha` FIELD WAS NOT WRITTEN, BECAUSE IT IS IMPOSSIBLE.** A commit cannot contain
+its own sha, and this pin has two backing records so one top-level string could name at most one.
+Per-record `upper_extreme_source_provenance` carries `sha256` (checked LIVE) and `git_sha` instead;
+`results/phase18_corpus.json` records none of its own, so its entry is `None` and the test asserts
+that None is **structural**, going red if the record ever grows one.
+
+**ADVT-01 AND ADVT-03 ARE BOTH DELIBERATELY NOT TICKED** — `.planning/REQUIREMENTS.md` is
+**byte-unchanged**. ADVT-01 is carried by six of seven plans; ADVT-03's record is 24-07's to emit,
+and this plan only names it in the provenance's `unit` field. **Zero `gsd-sdk` mutation handlers
+called** — `STATE.md` and `ROADMAP.md` hand-edited and diffed line by line (ROADMAP: 2 insertions,
+2 deletions, exactly the tick and the progress row). Suite **`1601 passed, 1 skipped`**, 0 failed
+(375 s) against 24-01's measured `1596 passed, 1 skipped` — **exactly 5 are this plan's**, all in
+`tests/test_phase24_grid.py`. One transient pre-commit failure,
+`test_the_closed_preregistrations_are_untouched`, was a working-tree-cleanliness check
+(it requires the budget module to have no uncommitted modification), not a freeze, and cleared on
+commit. `ruff` clean over 222 files.
 
 **24-01 EXECUTED 2026-08-30 — THE D-01 REFUSAL TABLE EXISTS AND ITS CONTAINMENT IS A STATIC SCAN,
 NOT A PARAGRAPH.** `scripts/phase24_adversarial.py` declares **11** first-person, value-free slot
