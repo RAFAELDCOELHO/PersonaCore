@@ -821,6 +821,35 @@ judged by importing the rule Phase 20 committed — with the pre-registered null
      the sweep **stops**, because the fact-aligned recipe changed something and every later point is
      uninterpretable. Its non-bit-identity to the seam-off path is recorded **in advance** as expected
      floating-point non-associativity, so nobody later "fixes" it. (CTRL-01, CTRL-02)
+     <!-- 25-07-CONTINUATION-SC1-COMPARATOR-BEGIN -->
+     **SUPERSEDED IN PLACE 2026-08-31 (plan 25-07).** The clause above — *"if its recall does not
+     land in a defensible neighbourhood of v2.0's 0.4921 / 0.3483 the sweep stops"* — is left
+     standing, unamended, as the record of what was believed when this roadmap was written. **SC1
+     remains an ACTIVE stop rule; only its binding comparator moves** (D-02).
+
+     **THE BINDING COMPARATOR IS THE PHASE 23 MATCHED CONTROL.** Its taught recall is
+     `0.7837301587301587` (`results/phase23_matched_control.json`, `central_reading`), against the
+     floor `MATCHED_CONTROL_NOISE_FLOOR = 0.0267857142857143` pinned in
+     `scripts/mitigation_budget.py` and re-read by `results/phase23_matched_verdict.json`, which
+     records `verdict: proceed` at `deviation: 0.0`.
+
+     **WHY IT BINDS AND v2.0'S NUMBER DOES NOT.** The matched control is the only comparator
+     differing from a real DP point by **exactly the two DP parameters** — the property this very
+     criterion demands of the control, and a property v2.0's 0.4921 never had. Four named recipe
+     deltas separate the two: held-out denominator **936 → 648**, **8×** teaching-token exposure,
+     replay-in-lot, and fact-aligned bins. A stop rule read against a comparator differing in four
+     other ways cannot tell "the recipe changed" from "the comparator was wrong" — which is the
+     exact confusion Phase 23's D-04 halt was root-caused to.
+
+     **A THIRD READING, QUOTED SO THE SPREAD IS VISIBLE RATHER THAN TAKEN ON TRUST.** The
+     fact-aligned *unmatched* control reads `0.5615079365079365` at floor `0.05357142857142849`
+     (`results/phase23_control_floor.json`). Three comparators, three distinct numbers: publishing
+     all three is what lets a reader see how far the substitution moves the reference.
+
+     **v2.0's 0.4921 / 0.3483 IS RETAINED AS A DISCLOSED HISTORICAL REFERENCE, NOT DELETED.** It is
+     reported beside the matched control wherever SC1 is evaluated, so the supersession is visible
+     rather than silent, and the clause above stays as the record of what it was once asked to do.
+     <!-- 25-07-CONTINUATION-SC1-COMPARATOR-END -->
 
   2. Both arms carry a full curve at **both capacities** (n=8 and n=64) — ε for DP-SGD, intensity for
      adversarial — swept to the never-taught floor and to σ→0 so the curve reconnects to the control
@@ -837,6 +866,19 @@ judged by importing the rule Phase 20 committed — with the pre-registered null
      equality on write, `accounting: null` on the adversarial arm as the structural statement that it
      makes no formal claim, and the gate/budget module sha256s travelling in the artifact. Every
      figure is drawn **only** from it. (FRONT-03)
+     <!-- 25-07-CONTINUATION-SC4-ARTIFACT-PATH-BEGIN -->
+     **SUPERSEDED IN PLACE 2026-08-31 (plan 25-07).** `results/phase2X_frontier.json` above is a
+     **PLACEHOLDER, NOT A FILENAME** — the `X` is a stand-in written before the phase number was
+     settled, and no file at that path will ever exist. It is left standing, unamended, as the
+     record of what was written. The artifact this phase emits is **`results/phase25_frontier.json`**
+     (D-31), and every criterion above applies to it unchanged.
+
+     **THE PATH IS RESOLVED FROM CODE, NEVER FROM THIS PROSE.** Every plan, test and figure in
+     Phase 25 takes the artifact path from the module constant `FRONTIER_RECORD` in
+     `scripts/phase25_record.py` — the write-once emitter plan 25-08 creates — rather than by
+     retyping a filename out of planning text. That is this milestone's import-never-retype rule
+     applied to a path: a placeholder can reach an `open()` call, and a constant cannot.
+     <!-- 25-07-CONTINUATION-SC4-ARTIFACT-PATH-END -->
 
   5. The verdict is computed by **importing** the gate module's constants, never by retyping a
      threshold in prose — and "no DP point clears Y at either capacity" is a named, pre-registered

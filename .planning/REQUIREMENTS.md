@@ -342,6 +342,40 @@ control's position and the never-taught floor are known.
       so it differs from every DP point by exactly the two DP parameters. Recorded explicitly: it is
       *not* bit-identical to the seam-off path (floating-point non-associativity), and chasing that
       identity would be a mistake.
+      <!-- 25-07-CONTINUATION-CTRL02-CLIP-DOMAIN-BEGIN -->
+      **SUPERSEDED IN PLACE 2026-08-31 (plan 25-07).** The parenthetical above —
+      *"(`clip_norm=inf, noise_multiplier=0`)"* — is left standing, unamended, as the record of what
+      was believed when this requirement was written, and **the code REFUSES it**. The requirement's
+      *intent* — a control differing from every DP point by exactly the two DP parameters — is
+      unchanged and satisfied. Only the literal `inf` is superseded.
+
+      **THE REFUSAL IS EXECUTABLE, NOT ADVISORY.** `DPSGD.__init__` in
+      `src/personacore/privacy/dpsgd.py` requires `clip_norm` **finite and strictly positive** and
+      raises `ValueError` tagged `[dp-refusal:clip-domain]` on `math.inf` — and equally on `0.0`,
+      `-1.0` and `nan`. Measured live at HEAD: all four raise, and all four carry that same tag. The
+      two checks sit in **PRE-PASS 1**, the caller-supplied numeric domain, which runs **before** the
+      model audit — so even a bare parameterless `torch.nn.Module` triggers the refusal, as measured.
+
+      **THE FORCING MECHANISM.** The noise standard deviation is `self.sigma * self.C`, computed at a
+      **single** `torch.normal` draw site with **no `sigma == 0` branch** (D-07 forbids one, so the
+      identity path and the private path are the same code). Under torch 2.7.1 `0.0 * math.inf` is
+      `nan`, and the draw then raises
+      `RuntimeError: normal expects std >= 0.0, but found std nan`. An infinite `C` would therefore
+      crash at exactly the σ=0 control this requirement describes.
+
+      **HOW C = ∞ IS ACTUALLY REPRESENTED: A FINITE BOUND PROVEN NOT TO BIND.** Phase 23 ran the
+      control at `clip_norm = 1000000.0` with `clip_bind_count = 0` over all 200 steps
+      (`results/phase23_sigma_zero.json`), so the per-record scale is exactly `1.0` and `x * 1.0` is
+      bit-identical in IEEE-754 for finite `x`. Phase 25's control reuses that same `1e6`, which is
+      why D-01's bit-level reproduction stays reachable. "Proven not to bind" is an **observation** —
+      a counter read off the run — never an argument from the constant's size.
+
+      **CITATION CORRECTION.** The constructor's domain checks and the single draw site are resolved
+      **by symbol** — `DPSGD.__init__`'s PRE-PASS 1, and the `torch.normal(...)` call whose `std=`
+      argument reads `self.sigma * self.C` — never by line range. The `:52-80` range 25-CONTEXT
+      cites is the module **docstring**, which *discusses* these checks rather than performing them:
+      the prose-versus-code confusion RPT-02 exists to close.
+      <!-- 25-07-CONTINUATION-CTRL02-CLIP-DOMAIN-END -->
 - [x] **CTRL-03**: A **never-taught fresh adapter** at identical budget and seed, serving double duty
       as frontier floor and relearning reference. Depends on nothing; scheduled early.
 
@@ -350,6 +384,31 @@ control's position and the never-taught floor are known.
 - [ ] **FRONT-01**: A privacy/utility curve for both arms at **both capacities** (n=8 and n=64) — ε
       for DP-SGD, intensity for adversarial — swept to the never-taught floor and to σ→0 so the curve
       reconnects to the control at both ends.
+      <!-- 25-07-CONTINUATION-FRONT01-SCOPE-BEGIN -->
+      **SUPERSEDED IN PLACE 2026-08-31 (plan 25-07).** The clause above — *"swept to the
+      never-taught floor and to σ→0"* — is left standing, unamended, as the record of what was
+      believed when this requirement was written. What is superseded is its **SCOPE**: *"swept to
+      the never-taught floor"* is a **DP-ARM PROPERTY**, not a property both arms can have (D-19).
+      **The σ→0 half of the sentence is unaffected** and still binds the DP arm at its low-noise end.
+
+      **WHY THE TWO ARMS TERMINATE DIFFERENTLY.** The DP axis has a physical mechanism driving
+      utility toward zero under high noise, so it can be swept *to* a floor. The adversarial axis has
+      no such mechanism: it terminates at its **POOL CEILING** by construction —
+      `1.9090909090909092`, the largest ratio at which the whole trained pool is used exactly once,
+      pinned as the upper extreme of `ADVERSARIAL_RATIO_GRID` in `scripts/mitigation_budget.py`
+      (3 trained attack families × 112 `core_taught` prompts = 336 adversarial episodes over 176
+      clean episodes at n=8). Past that ratio the sweep repeats episodes instead of reaching
+      anything new, so no attainable intensity drives the adversarial arm to a floor.
+
+      **THIS IS A NAMED STRUCTURAL ASYMMETRY, NOT A DEFICIT.** It is a fact about what the two
+      mechanisms are, recorded here in advance so an adversarial curve that stops short of the floor
+      can never be re-read afterwards as an incomplete sweep.
+
+      **BOTH ARMS ARE READ AGAINST THE SAME ALREADY-MEASURED NEVER-TAUGHT FLOOR** — 0/416 at 5
+      seeds, `results/phase23_never_taught.json` — as the plane's shared lower-left reference. No
+      adversarial point needs to reach that floor personally: the floor is a coordinate on the
+      plane both arms are read against, not a destination each arm must arrive at.
+      <!-- 25-07-CONTINUATION-FRONT01-SCOPE-END -->
 - [ ] **FRONT-02**: Dual ε reporting — example-level **and** fact-level — so an example-level ε can
       never be read as if it bounded fact leakage.
 - [ ] **FRONT-03**: A committed frontier JSON artifact carrying counts (not rates), ordered point

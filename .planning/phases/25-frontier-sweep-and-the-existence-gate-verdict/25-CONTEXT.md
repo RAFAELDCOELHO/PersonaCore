@@ -333,6 +333,42 @@ them rather than re-open them.
   lines — its 21 kwargs are all counts, recalls, perplexities and floors. X, Y and (c) never depended on
   ε; only the formal accounting does, and `capacity_comparison` is the sole ε-dependent function
   (already scoped by D-23). **Nothing to fix.**
+<!-- 25-07-CONTINUATION-D35-CONDITION-C-BEGIN -->
+  **SUPERSEDED IN PLACE 2026-08-31 (plan 25-07).** D-35's text above is left standing, unamended, as
+  the record of what was believed. **ITS ε-SCOPING CLAIM IS CORRECT AND UNCHANGED** — re-measured at
+  HEAD: `mitigation_point_verdict` contains **zero** `epsilon` occurrences and **zero** `accounting`
+  occurrences, its signature carries exactly **21** keyword parameters, and `capacity_comparison`
+  remains the sole ε-dependent function (already scoped by D-23). Nothing in the arm-agnostic
+  reading moves.
+
+  **WHAT IS SUPERSEDED IS ONLY ITS CLOSING "Nothing to fix" (D-51).** The 21 kwargs are indeed
+  *"counts, recalls, perplexities and floors"* — and **the perplexities had no producer**. Seven of
+  the 21 had **zero** producers across all 20 committed plans, and **six of the seven are condition
+  (c)**: `point_dialogue_ppl_on`, `point_dialogue_ppl_off`, `control_gap`, `gap_noise_floor`,
+  `point_retention_ppl` and `retention_noise_floor`. The **seventh** is `zero_extraction_has_nll`,
+  GATE-05's teacher-forced NLL flag.
+
+  **THE VERDICT WAS UNCOMPUTABLE, NOT MERELY UNWRITTEN.** No Phase 23 point record carries
+  `dialogue_ppl`, `retention_ppl`, `ppl_on` or `ppl_off`. A missing kwarg cannot be filled from an
+  artifact that never held the quantity, so condition (c) had no input anywhere in the 20-plan set.
+  That is why "Nothing to fix" read as true from inside the gate module and false from outside it:
+  the module is arm-agnostic, and the plan set had no producer.
+
+  **THE PRODUCERS.** Plan **25-21** produces the six condition-(c) inputs; plan **25-22** produces
+  the seventh, `zero_extraction_has_nll`. D-45 through D-50 are the decisions they implement.
+
+  **THE CORRECTION IS ADDITIVE, AND ROUTED THROUGH THE MECHANISM THAT HAS ALREADY SHIPPED TWICE.**
+  D-35's original text stays standing above as the record of what was believed. This continuation is
+  a sentinel-bounded dated block guarded through `scripts/_prose.py::normalized`, the shape plans
+  23-12 and 24-03 shipped — **never `_addendum`**, which was measured this session to have **zero**
+  call sites against `.planning/*.md`, to succeed on an accidental `PENDING` substring in a copy of
+  `REQUIREMENTS.md`, and whose verdict-preservation proof compares `None` to `None` on planning
+  markdown because `_verdict.recorded_verdict` returns `None` there.
+
+  **COUNTING.** This is the phase's **fourth** dated continuation in CONTEXT's own counting and it
+  **counts toward RPT-02's discharge**, making the register **four instances in three guard files** —
+  23-12, 24-03, and plan 25-07's ROADMAP/REQUIREMENTS sweep plus this 25-CONTEXT sweep.
+<!-- 25-07-CONTINUATION-D35-CONDITION-C-END -->
 
 - **D-36: A2's held-out generalization lives INSIDE the frontier artifact, per-point plus a re-derivable
   aggregate.** Every point record carries per-family counts **including A2** alongside the three trained
