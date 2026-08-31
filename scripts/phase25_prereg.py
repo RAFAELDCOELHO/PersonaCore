@@ -534,12 +534,18 @@ CANARY_RESERVATIONS = {
 
 # ----- (c.4) D-04 — THE TRIPWIRE'S TARGET SET -----
 
-# THE ASSERTION NAMES. Their co-occurrence in ONE function body with BOTH a sigma=0 marker and a
-# seam-off marker is what constitutes an assertion of BIT-IDENTITY between the sigma=0 point and
-# the seam-off path. These are IDENTIFIERS, not phrases: the tripwire resolves them by AST over
-# `ast.Name.id`, `ast.Attribute.attr` and `ast.keyword.arg`, never by grep — a grep over files
-# whose own docstrings discuss `torch.equal` goes FALSE-RED on its own prose, a class this
-# repository hit four times in Phase 20 alone.
+# THE ASSERTION NAMES, MATCHED **EXACTLY**. Their co-occurrence in ONE function body with BOTH a
+# sigma=0 marker and a seam-off marker is what constitutes an assertion of BIT-IDENTITY between the
+# sigma=0 point and the seam-off path. These are IDENTIFIERS, not phrases: the tripwire resolves
+# them by AST over `ast.Name.id`, `ast.Attribute.attr` and `ast.keyword.arg`, never by grep — a
+# grep over files whose own docstrings discuss `torch.equal` goes FALSE-RED on its own prose, a
+# class this repository hit four times in Phase 20 alone.
+#
+# EXACT for these, SUBSTRING for the two marker sets below, and the asymmetry is measured rather
+# than stylistic. These six are CALL names and appear as themselves (`torch.equal`, `.hexdigest`);
+# widening them to substrings would catch an identifier named `equality`. The markers are CONTEXT
+# and appear inside compound identifiers (`sigma_zero_adapter`, `seam_off_adapter`), so an exact
+# match there would miss the natural spelling of the very violation being forbidden.
 BIT_IDENTITY_FORBIDDEN_ASSERTIONS = (
     "equal",
     "assert_close",
@@ -549,17 +555,28 @@ BIT_IDENTITY_FORBIDDEN_ASSERTIONS = (
     "hexdigest",
 )
 
-# THE PAIRING MARKERS. One from EACH side is required, which is what keeps the tripwire from firing
-# on the many honest functions that compare tensors for unrelated reasons. Measured over the tree
-# at COMMITTED: 2,689 function bodies scanned, ZERO full hits and NINE two-of-three near misses —
-# among them `tests/test_phase22_dpsgd.py::_identity_run`, which already carries `equal` and
-# `dp_fn` and is one sigma=0 name away from being exactly the assertion D-04 forbids.
+# THE PAIRING MARKERS, MATCHED AS SUBSTRINGS OF AN IDENTIFIER. One from EACH side is required,
+# which is what keeps the tripwire from firing on the many honest functions that compare tensors
+# for unrelated reasons.
+#
+# MEASURED OVER THE TREE AT COMMITTED, both sets tuned against that measurement rather than
+# guessed: 2,697 function bodies scanned, **ZERO** full hits and **ELEVEN** two-of-three near
+# misses — among them `tests/test_phase22_dpsgd.py::_identity_run`, which already carries `equal`
+# and `dp_fn` and is one sigma=0 name away from being exactly the assertion D-04 forbids. A guard
+# with zero hits and eleven near misses is armed and discriminating; one with zero of both would
+# be decoration.
+#
+# `matched_arm` WAS DEPOSITED AND THEN REMOVED, and the reason is recorded rather than silently
+# dropped: with it in the seam set the tripwire fired on `phase23_run.train_matched_control` (a
+# `torch.equal` TRAINING CANARY comparing a parameter with its own pre-step snapshot) and on
+# `phase23_run.matched` (a `sha256` of a per-seed block). Neither asserts anything about sigma=0
+# against the seam-off path. Phase 25's seam-off comparator gets its OWN arm name under D-06, so
+# `dp_fn` and `seam_off` are the identifiers that actually name that path; `matched_arm` named a
+# Phase-23 driver and cost two false positives to keep.
 BIT_IDENTITY_SIGMA_ZERO_MARKERS = (
     "sigma_zero",
     "sigma0",
     "SIGMA_ZERO",
-    "SIGMA_ZERO_RECORD",
-    "SIGMA_ZERO_CLIP_NORM",
 )
 
 BIT_IDENTITY_SEAM_OFF_MARKERS = (
@@ -567,7 +584,6 @@ BIT_IDENTITY_SEAM_OFF_MARKERS = (
     "seamoff",
     "dp_fn",
     "DP_FN",
-    "matched_arm",
 )
 
 # WHAT THE CORRECT ASSERTION LOOKS LIKE. Phase 23 MEASURED the n=8 relationship and it is not
