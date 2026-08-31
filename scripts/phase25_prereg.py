@@ -25,8 +25,12 @@ EDIT-ONCE and already spent, so the text cannot be widened. D-10's per-point rul
 own function here, written in that function's register (four scope clauses, none softened) with
 Phase 25's own glob in its own text. **This module imports nothing from the spent one.**
 
-**WHAT THIS MODULE IS ALLOWED TO IMPORT.** Stdlib only, in wave-1 discipline: it must never
-import a driver, a scorer or anything that touches a device.
+**WHAT THIS MODULE IS ALLOWED TO IMPORT.** Stdlib, plus `scripts/mitigation_budget.py` — a
+literal-only constants module with zero imports of its own, so taking it drags in no torch, no
+numpy, no device and no network. `PROMOTION_RULE` reads `CURVE_K` and `FULL_FIDELITY_K` from it
+rather than retyping 16 and 48, because a retyped pin is a pin free to drift from the one
+`mitigation_gate.ratchet_k` actually enforces. Wave-1 discipline otherwise: it must never import a
+driver, a scorer or anything that touches a device.
 
 CPU-only, GPU-free, no torch, no network.
 """
@@ -34,8 +38,15 @@ CPU-only, GPU-free, no torch, no network.
 import hashlib
 import json
 import pathlib
+import sys
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+_SCRIPTS = str(_REPO_ROOT / "scripts")
+if _SCRIPTS not in sys.path:
+    sys.path.insert(0, _SCRIPTS)
+
+import mitigation_budget  # noqa: E402  (needs the sys.path insert above)
 
 # The date this file was committed, and the property that date certifies. Every rule below is
 # dated by it: at this commit `git ls-files 'results/phase25_point_*.json'` returned NOTHING, so
@@ -332,3 +343,242 @@ def prove_first_attempt(tracked, *, point_key):
         "THE FINDING IS THE DELIVERABLE.",
     )
     return True
+
+
+# =================================================================================================
+# ===== (c) THE FOUR RULES THAT MUST EXIST BEFORE ANY POINT DOES =====
+#
+# All four were committed on COMMITTED, while `git ls-files 'results/phase25_point_*.json'`
+# returned NOTHING — POINT_RECORDS_AT_COMMIT == 0. That emptiness IS the property this section
+# buys, and it is the only property that cannot be bought later: each rule below decides something
+# whose entire value is destroyed the moment the numbers it governs become visible.
+# =================================================================================================
+
+
+# ----- (c.1) D-11 — PROMOTION AND REPLICATION, LAZY AND CANDIDATE-TRIGGERED -----
+
+PROMOTION_RULE = {
+    "committed": COMMITTED,
+    "point_records_at_commit": POINT_RECORDS_AT_COMMIT,
+    # IMPORTED, NEVER RETYPED. 16 and 48 live in `mitigation_budget`; a retyped pin is a pin free
+    # to drift from the one `mitigation_gate.ratchet_k` actually enforces, and the drift would be
+    # invisible because both copies would still look like numbers somebody chose on purpose.
+    "curve_k": mitigation_budget.CURVE_K,
+    "full_k": mitigation_budget.FULL_FIDELITY_K,
+    "order": (
+        "ALL 44 curve points are drawn at CURVE_K first — 16 DP points (SWEEP_POINTS x 2 "
+        "capacities) and 12 adversarial points (ADVERSARIAL_RATIO_GRID x 2 capacities), whichever "
+        "way they come out. No point is promoted before the curve exists, because a promotion "
+        "decided mid-curve is a promotion decided with a partial ranking visible"
+    ),
+    "promotion": (
+        "ONLY points clearing all three conditions are promoted to FULL_FIDELITY_K. The promotion "
+        "itself is `mitigation_gate.promote_to_full_fidelity`, called — never re-implemented — so "
+        "a PASS and a GATE-CANDIDATE INCONCLUSIVE are told apart by REPLICATION_PENDING_MARKER "
+        "rather than by a second hand-typed spelling of the same sentence"
+    ),
+    "replication": (
+        "A promoted point is ALSO replicated at a SECOND SEED, and the replication is drawn at "
+        "FULL_FIDELITY_K — never at a lower power than the claim it replicates. "
+        "`mitigation_gate.ratchet_k` is one-way, so a cheaper replication is not merely weak, it "
+        "is unreachable through the sanctioned door: fewer draws is less power to observe "
+        "extraction, i.e. an EASIER null, and a null bought that way buys the very result it "
+        "reacts to"
+    ),
+    # THE TAIL RULE, WHICH IS THE WHOLE REASON THIS CONSTANT IS DATED. Written after the curve, a
+    # budget-driven "we could only afford the best two" is indistinguishable from a subset chosen
+    # by looking. Written here, it is neither.
+    "tail_rule": (
+        "if more candidates clear than the budget holds, promote and replicate ALL of them — never "
+        "a subset chosen after seeing which cleared"
+    ),
+    "empty_frontier_cost": (
+        "An EMPTY frontier — the pre-registered null, live given epsilon = 519.698 at sigma = 0.5 "
+        "— means EXACTLY ZERO tail cost. Nothing clears, nothing is promoted, nothing is "
+        "replicated, and that outcome is published rather than treated as a failed sweep"
+    ),
+    "governs": (
+        "WHICH points are re-drawn at full fidelity and WHICH are replicated, and nothing else. It "
+        "sets no threshold, reads no epsilon and decides no verdict: the three conditions are "
+        "`mitigation_gate.mitigation_point_verdict`'s and this rule only consumes their output"
+    ),
+    "does_not_govern": (
+        "the curve itself. All 44 points run as pinned (D-08); this rule cannot withdraw a point, "
+        "shorten a leg or re-open SWEEP_POINTS at the moment of spending"
+    ),
+}
+
+
+# ----- (c.2) D-40 — THE PUBLICATION OBLIGATION. Phase 28 executes it; Phase 25 commits it. -----
+
+PUBLICATION_OBLIGATION_SCOPE = (
+    "PHASE 25 DOES NOT WRITE THE REPORT — PHASE 28 DOES (RPT-01). What Phase 25 commits, before a "
+    "single point exists, is exactly WHICH STRINGS the report must carry. Each entry below is a "
+    "(field_path, why) pair addressing a path INTO `results/phase25_frontier.json`, so the report "
+    "writer READS A VALUE rather than paraphrases a sentence: a number in prose that was authored "
+    "rather than generated is a number nobody can re-derive. THIS CONSTANT IS THE CONTRACT, NOT "
+    "THE PROSE. A field_path that does not resolve against the assembled artifact is a RED test in "
+    "Phase 28 — never a licence to paraphrase around it."
+)
+
+PUBLICATION_OBLIGATION = (
+    (
+        "verdicts.arm_existentials.dp",
+        "the DP arm's existential WITH ITS DENOMINATOR — `exists_clearing_point`'s own "
+        "'N of M point(s) examined returned PASS' string, carried verbatim. A bare 'no point "
+        "cleared' hides the size of the set that was searched, and an existential's strength IS "
+        "that size: 'no point cleared' and 'no point was scored' are different findings and only "
+        "one of them has a denominator",
+    ),
+    (
+        "verdicts.arm_existentials.adversarial",
+        "the adversarial arm's existential with its denominator, published SEPARATELY for "
+        "GATE-07's reason: a DP clear carries a FORMAL (epsilon, delta) claim and an adversarial "
+        "clear carries evidence about the attacks actually run at the budget they were run at. The "
+        "report must never union them, because the union publishes the stronger claim on the "
+        "weaker evidence",
+    ),
+    (
+        "verdicts.capacity_branch",
+        "the capacity branch NAME, which must be a member of `mitigation_gate.CAPACITY_BRANCHES`. "
+        "The report quotes the branch the gate's own dispatch reached — including "
+        "'null-at-both-capacities', the pre-registered expected outcome — rather than a phrase "
+        "describing it",
+    ),
+    (
+        "epsilon_report.curve_total_epsilon",
+        "the CURVE-TOTAL epsilon by basic composition over the noised DP points actually "
+        "PUBLISHED, at total delta = k x delta, with its summand list so the total re-derives from "
+        "its own rows. It CROSSES BOTH LEGS: the 8 locked facts appear at n=8 AND n=64, and a "
+        "per-leg split would hide exactly the cumulative exposure that matters most",
+    ),
+    (
+        "epsilon_report.selection_accounted",
+        "`false`, WITH ITS REASON, published beside the total rather than below it. Choosing a "
+        "best point after seeing results would be unaccounted adaptive selection, and a total "
+        "quoted without this flag reads as a bound over a process that it does not bound",
+    ),
+    (
+        "verdicts.adversarial_capacity_rule_absent",
+        "LIMITATION 1 (D-23): NO COMMITTED CAPACITY RULE EXISTS FOR THE ADVERSARIAL ARM. "
+        "`capacity_comparison` takes no `arm` argument and proves all four MECHANISM_KEYS present "
+        "and exactly equal; the adversarial arm has no sigma/delta/q. The two adversarial "
+        "capacities are therefore reported side by side DESCRIPTIVELY, and the absence is named in "
+        "the report rather than left for a reader to trip over",
+    ),
+    (
+        "epsilon_report.control_has_no_epsilon",
+        "LIMITATION 2 (D-29): THE CURVE TOTAL IS UNBOUNDED ONCE THE sigma=0 CONTROL IS PUBLISHED. "
+        "The control records `epsilon: None` and is an adapter trained on the same facts with no "
+        "privacy at all, so once it is published NO JOINT BOUND OVER ALL PUBLISHED ARTIFACTS "
+        "EXISTS. The report states that; it does not quote the curve total as if it covered "
+        "everything shipped",
+    ),
+)
+
+
+# ----- (c.3) D-37 — THREE RESERVATIONS FOR PHASE 26'S AUDIT, free now, expensive later -----
+
+# THE DISK PRECHECK, SIZED AGAINST WHAT THE SWEEP ACTUALLY WRITES.
+#
+# D-37's own figure — 44 adapters x 1.35 MB ~= 59 MB — is RIGHT ABOUT THE ADAPTER AND WRONG ABOUT
+# THE POINT. Measured on this machine: an exported LoRA adapter is 1,352,069 B, but
+# `teach_persona.arm_outputs` also names `checkpoints/{prefix}_{arm}_latest.pt` at 59,691,603 B,
+# and that resume checkpoint is what makes a killed point resumable at all. Per point the real
+# figure is 1,352,069 + 59,691,603 = 61,043,672 B, so 44 points need ~= 2,685,921,568 B ~= 2.7 GB
+# — a 42x under-estimate corrected here, BEFORE the sweep fills a disk at point 30 (T-25-06).
+#
+# Pinned at 5 GB: the 44 adapters, the 44 resume checkpoints, and headroom for the draw caches and
+# per-point records that land beside them. A precheck that is too large costs a false refusal a
+# human can override in seconds; one that is too small costs a sweep that dies mid-point.
+DISK_PRECHECK_BYTES = 5000000000
+
+CANARY_RESERVATIONS = {
+    "committed": COMMITTED,
+    "point_records_at_commit": POINT_RECORDS_AT_COMMIT,
+    "adapter_retention": (
+        "EVERY point's adapter is RETAINED on local disk with its sha256 recorded INSIDE "
+        "`results/phase25_frontier.json`. `checkpoints/` and `*.pt` are gitignored "
+        "(`.gitignore:14-15`), so nothing about an adapter is visible to git: without this "
+        "reservation Phase 26's audit has nothing to run against, and a deleted adapter CANNOT be "
+        "re-derived without re-running the point it came from. Free now, and at 44 points the "
+        "price of forgetting is the sweep itself. The digest travels in the artifact rather than "
+        "beside it so the audit can prove it is auditing the adapter the frontier reports"
+    ),
+    "canary_population_rule": (
+        "The in/out canary population is recorded PER POINT, and it is not symmetric: at n=8 the "
+        "56 unscored filler facts are OUT of the corpus, and at n=64 all 64 (8 scored + 56 filler) "
+        "are IN. So ONLY n=8 POINTS HAVE OUT-OF-CORPUS CANARIES AT ALL. That is a STRUCTURAL "
+        "constraint on what Phase 26 can measure, written down before the sweep rather than "
+        "discovered after it: an audit design that assumes both capacities offer a held-out "
+        "population would be measuring nothing at n=64"
+    ),
+    "audit_target_rule": (
+        "WHICH point Phase 26 audits, decided here so it cannot be chosen after seeing the data. "
+        "Resolve against `results/phase25_frontier.json` in order, and it yields EXACTLY ONE point "
+        "key in every case: (1) restrict to n=8 points, because only they have out-of-corpus "
+        "canaries at all (the rule above); (2) among those, take the FIRST in `point_keys` order "
+        "whose verdict is PASS; (3) if NO n=8 point returned PASS — the pre-registered null — take "
+        "the FIRST n=8 point in `point_keys` order. `point_keys` is itself a committed ordered pin "
+        "asserted under hard equality at the artifact's single write, so 'first' is not a "
+        "re-orderable word. No branch of this rule admits a choice made by a human holding the "
+        "numbers"
+    ),
+    "disk_precheck_bytes": DISK_PRECHECK_BYTES,
+    "disk_precheck_derivation": (
+        "44 x (1,352,069 B adapter + 59,691,603 B resume checkpoint) = 2,685,921,568 B ~= 2.7 GB, "
+        "plus headroom. Both figures are measured file sizes on this machine, not estimates"
+    ),
+}
+
+
+# ----- (c.4) D-04 — THE TRIPWIRE'S TARGET SET -----
+
+# THE ASSERTION NAMES. Their co-occurrence in ONE function body with BOTH a sigma=0 marker and a
+# seam-off marker is what constitutes an assertion of BIT-IDENTITY between the sigma=0 point and
+# the seam-off path. These are IDENTIFIERS, not phrases: the tripwire resolves them by AST over
+# `ast.Name.id`, `ast.Attribute.attr` and `ast.keyword.arg`, never by grep — a grep over files
+# whose own docstrings discuss `torch.equal` goes FALSE-RED on its own prose, a class this
+# repository hit four times in Phase 20 alone.
+BIT_IDENTITY_FORBIDDEN_ASSERTIONS = (
+    "equal",
+    "assert_close",
+    "assert_allclose",
+    "allclose",
+    "sha256",
+    "hexdigest",
+)
+
+# THE PAIRING MARKERS. One from EACH side is required, which is what keeps the tripwire from firing
+# on the many honest functions that compare tensors for unrelated reasons. Measured over the tree
+# at COMMITTED: 2,689 function bodies scanned, ZERO full hits and NINE two-of-three near misses —
+# among them `tests/test_phase22_dpsgd.py::_identity_run`, which already carries `equal` and
+# `dp_fn` and is one sigma=0 name away from being exactly the assertion D-04 forbids.
+BIT_IDENTITY_SIGMA_ZERO_MARKERS = (
+    "sigma_zero",
+    "sigma0",
+    "SIGMA_ZERO",
+    "SIGMA_ZERO_RECORD",
+    "SIGMA_ZERO_CLIP_NORM",
+)
+
+BIT_IDENTITY_SEAM_OFF_MARKERS = (
+    "seam_off",
+    "seamoff",
+    "dp_fn",
+    "DP_FN",
+    "matched_arm",
+)
+
+# WHAT THE CORRECT ASSERTION LOOKS LIKE. Phase 23 MEASURED the n=8 relationship and it is not
+# equality; the tripwire's failure message quotes this so a reader who trips it is told what to
+# write instead of only what not to write.
+BIT_IDENTITY_EXPECTED_DISAGREEMENT = (
+    "BOUNDED DISAGREEMENT, NEVER EQUALITY. Phase 23's PROBE 2 measured 72/72 LoRA tensors agreeing "
+    "to 2.178e-07 RELATIVE at sigma=0 with a non-binding C — agreement to a bound, not bit "
+    "identity. The distinction is the record itself: declared difference #3 states that 'sigma=0 "
+    "is not the control computation with a zero added to it' is TRUE OF THE CODE PATH and FALSE OF "
+    "THE ARITHMETIC. An equality assertion would overwrite that measured floating-point "
+    "non-associativity record with a claim the measurement does not support, and the next person "
+    "to see the two paths disagree would read a real property as a regression"
+)
