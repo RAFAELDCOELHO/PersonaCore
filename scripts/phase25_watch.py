@@ -193,6 +193,15 @@ N_DERIVATION = {
     },
     "dp_n8_training_minutes": 3.4240376305455964,
     "dp_n64_training_minutes": 23.05460303958195,
+    "dp_n64_training_minutes_two_decimal_note": (
+        "23.05, NOT 23.06. 25-CONTEXT.md (D-14), 25-VALIDATION.md and 25-05-PLAN.md all quote "
+        "'1383.3 s = 23.06 min': the seconds were rounded to 1383.3 FIRST, and 1383.3 / 60 = "
+        "23.055 rounds up. From the record's own full-precision leaf, 1383.276182374917 / 60 = "
+        "23.0546, which rounds to 23.05. `results/phase23_cost.json` states the governing rule in "
+        "its own words — 'A rounding is not a figure this phase publishes' — so the field above "
+        "carries the full float and nothing in this module quotes a two-decimal 23.06. The "
+        "difference is 0.6 s and changes no conclusion: N = 5 sits far below either reading"
+    ),
     # -----------------------------------------------------------------------------------------
     # THE CONCLUSION, AS A FIELD RATHER THAN A PARAGRAPH.
     # -----------------------------------------------------------------------------------------
