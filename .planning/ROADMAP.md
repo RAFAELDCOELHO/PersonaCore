@@ -903,13 +903,13 @@ measurements that supersede that row's premise.
 Plans:
 **Wave 1**
 
-- [ ] 25-01-PLAN.md — Phase-25 pre-registration: the reproduction HALT (D-07), the per-point one-attempt refusal (D-10), D-04's armed tripwire, and the promotion / publication / canary rules committed before any point exists
-- [ ] 25-03-PLAN.md — the ε helper with three required kwargs (D-30) and its AST gate, demonstrated grep-RED / AST-GREEN on the frozen gate; both multiplicities named (D-28)
-- [ ] 25-04-PLAN.md — D-41's four WR repairs in `teach_persona.py`, each watched RED; WR-02/03/07 deferred with their unreachability recorded in source
-- [ ] 25-05-PLAN.md — D-16's detect-never-act stall watcher, N = 5 min derived from measurement, both halves watched
-- [ ] 25-07-PLAN.md — eight dated sentinel continuations (Task 1: D-02's SC1 comparator, D-31's SC4 artifact path, D-19's FRONT-01 scope, CTRL-02's `inf` clip domain, D-51's condition-(c) routing; Task 2: D-38's RPT-02 span, row and duplicate-count), guarded through `_prose.normalized`
-- [ ] 25-21-PLAN.md — condition (c)'s six producers (D-45), both floors imported with the refusal disclosed (D-48), `control_gap` per capacity (D-47), and D-49's binding observation pre-registered before any point runs
-- [ ] 25-22-PLAN.md — GATE-05's teacher-forced NLL over the 8 locked facts at both capacities (D-46), the plain-bool flag, and both pre-`reasons` early returns watched firing
+- [x] 25-01-PLAN.md — Phase-25 pre-registration: the reproduction HALT (D-07), the per-point one-attempt refusal (D-10), D-04's armed tripwire, and the promotion / publication / canary rules committed before any point exists
+- [x] 25-03-PLAN.md — the ε helper with three required kwargs (D-30) and its AST gate, demonstrated grep-RED / AST-GREEN on the frozen gate; both multiplicities named (D-28)
+- [x] 25-04-PLAN.md — D-41's four WR repairs in `teach_persona.py`, each watched RED; WR-02/03/07 deferred with their unreachability recorded in source
+- [x] 25-05-PLAN.md — D-16's detect-never-act stall watcher, N = 5 min derived from measurement, both halves watched
+- [x] 25-07-PLAN.md — eight dated sentinel continuations (Task 1: D-02's SC1 comparator, D-31's SC4 artifact path, D-19's FRONT-01 scope, CTRL-02's `inf` clip domain, D-51's condition-(c) routing; Task 2: D-38's RPT-02 span, row and duplicate-count), guarded through `_prose.normalized`
+- [x] 25-21-PLAN.md — condition (c)'s six producers (D-45), both floors imported with the refusal disclosed (D-48), `control_gap` per capacity (D-47), and D-49's binding observation pre-registered before any point runs
+- [x] 25-22-PLAN.md — GATE-05's teacher-forced NLL over the 8 locked facts at both capacities (D-46), the plain-bool flag, and both pre-`reasons` early returns watched firing
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
