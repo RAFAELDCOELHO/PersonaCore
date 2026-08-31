@@ -641,8 +641,6 @@ def build_bins(
 
     ids_all = np.concatenate(id_shards)
     mask_all = np.concatenate(mask_shards)
-    ids_all.tofile(bin_path)
-    mask_all.tofile(mask_path)
 
     # --- proof 1: the two bins must be 1:1 element-aligned ---
     if len(ids_all) != len(mask_all):
@@ -652,6 +650,19 @@ def build_bins(
         )
 
     frac = _prove_floor_and_band(ids_all, mask_all)
+
+    # === WR-08 (D-41): THE PROOFS RUN BEFORE THE BYTES LAND. ===
+    #
+    # These two writes used to sit above proof 1, so a build that the 1:1 check or the floor/band
+    # check REFUSED had already left both bins on disk. Same arrays, same paths, same order
+    # relative to each other — only the position moved. Two collisions this closes:
+    #   * `refuse_if_exists` — a re-run finds bytes that a FAILED build left behind and refuses,
+    #     reading a never-validated corpus as recorded evidence.
+    #   * D-10, whose unit is the SWEEP POINT: a point killed before any reading landed may be
+    #     resumed as the SAME attempt, and "no reading landed" has to be checkable rather than
+    #     asserted. Bins on disk from a refused build muddy exactly that check.
+    ids_all.tofile(bin_path)
+    mask_all.tofile(mask_path)
 
     stats = {
         "episodes": len(episodes),
@@ -844,9 +855,6 @@ def _build_aligned_bins(
     mask_all = np.concatenate(mask_shards)
     facts_all = np.concatenate(fact_shards)
     fact_path = fact_bin_path(bin_path)
-    ids_all.tofile(bin_path)
-    mask_all.tofile(mask_path)
-    facts_all.tofile(fact_path)
 
     # --- proof 1 (D-06's build-time half): all THREE bins must be 1:1 element-aligned ---
     if not len(ids_all) == len(mask_all) == len(facts_all):
@@ -857,6 +865,18 @@ def _build_aligned_bins(
         )
 
     frac = _prove_floor_and_band(ids_all, mask_all)
+
+    # === WR-08 (D-41): the IDENTICAL move on the aligned twin — proofs before bytes. ===
+    #
+    # The same inversion lived here and closes the same two collisions (`refuse_if_exists` and
+    # D-10's one-attempt rule — see the flat branch's note). Proof 7 below is deliberately LEFT
+    # after the writes and is not part of the move: it re-reads the bins FROM DISK on purpose, so
+    # that a check re-deriving boundaries from the packer's own arithmetic cannot share the
+    # packer's defect. A read-back proof cannot run before the write it reads. The two proofs
+    # moved above the writes are exactly the two that operate on the in-memory arrays.
+    ids_all.tofile(bin_path)
+    mask_all.tofile(mask_path)
+    facts_all.tofile(fact_path)
 
     # --- proof 7: window purity, read BACK FROM DISK, in BOTH spaces ---
     # np.fromfile, never the packer's own arithmetic: a check that re-derives boundaries from
@@ -956,17 +976,40 @@ def _mix_adversarial(
     """
     import phase24_adversarial as pa  # LAZY — `arm_spec`'s phase21_filler precedent.
 
-    pool = pa.adversarial_episodes(tok)
-    families = pa.adversarial_episode_families(tok)
+    # === WR-06 (D-41): ONE read, PAIRED AT THE SOURCE. ===
+    #
+    # This was two independent calls — `pa.adversarial_episodes(tok)` and
+    # `pa.adversarial_episode_families(tok)` — zipped by index with only a `len()` check between
+    # them. Both are thin views onto `_adversarial_pool`, so taking the pair directly makes the
+    # pairing a property of ONE read instead of two readers happening to agree. Why it matters
+    # concretely: the two views are paired BY INDEX, and D-36 computes `held_out_generalization`
+    # from the per-family counts carried by all 44 point records. A one-off pairing would mislabel
+    # every family count in the artifact — reporting A3's episodes under A1-mild — while the
+    # length check stayed green and no downstream assertion had a field to fire on.
+    pool, families = pa._adversarial_pool(tok)
     pool_size = len(pool)
+    # Kept as a DEFENSIVE `_prove`, with its claim rewritten: it no longer asserts that two
+    # independent readers agree, because there is only one reader. It asserts an invariant INSIDE
+    # `_adversarial_pool` — that its two return columns are appended in the same loop iteration.
     if len(families) != pool_size:
         raise SystemExit(
-            f"[teach_persona] the adversarial pool is {pool_size} episodes against "
-            f"{len(families)} family labels. These two views are read POSITIONALLY and paired by "
-            "index, so a length mismatch means the per-family counts reported below would name "
-            "the wrong episodes."
+            f"[teach_persona] `phase24_adversarial._adversarial_pool` returned {pool_size} "
+            f"episodes against {len(families)} family labels IN ONE READ. These two columns are "
+            "appended in the same loop iteration and consumed POSITIONALLY here, so unequal "
+            "lengths mean that single pass is internally inconsistent and the per-family counts "
+            "reported below would name the wrong episodes."
         )
 
+    # WR-02 / WR-03 (D-41) are DEFERRED, and their unreachability is RECORDED HERE rather than
+    # silenced: `n_want` and the `n_want < 1` refusal below are left exactly as 24-06 shipped
+    # them. The refusal cannot fire at either swept capacity, because the smallest NON-ZERO entry
+    # of `mitigation_budget.ADVERSARIAL_RATIO_GRID` is 0.25 and the two clean-episode counts are
+    # 176 (n=8) and 1,408 (n=64):
+    #   round(0.25 * 176) = 44 adversarial episodes at n=8
+    #   round(0.25 * 1408) = 352 adversarial episodes at n=64
+    # Both are far above 1, so no grid point reaches the branch. The arithmetic travels with the
+    # deferral so the claim carries its own evidence — a shrunken corpus or a new smaller grid
+    # entry makes these two products false and the deferral re-openable on sight.
     n_want = int(round(adversarial_ratio * n_clean))
     if n_want < 1:
         raise SystemExit(
@@ -1010,6 +1053,9 @@ def _mix_adversarial(
     # point lands 15/15/14 or better. Nothing asserts that ordering — so if a rebuild ever grouped
     # the rows by family, every point below ratio ~0.64 would train ONE family while D-10's
     # "three families train" truth stayed green. Reporting the counts is what lets a test see it.
+    # WR-07 (D-41) is DEFERRED, not fixed: a test re-declares this trained/held-out split as
+    # literals instead of importing `pa.TRAINED_FAMILIES` / `pa.HELD_OUT_FAMILY`. Hygiene only —
+    # it moves no sweep number, and this production boundary already imports the split.
     family_counts = {family: selected_families.count(family) for family in pa.TRAINED_FAMILIES}
     return {
         "episodes": n_want,
