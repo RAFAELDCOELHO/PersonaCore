@@ -52,6 +52,12 @@ phase because five of them contradict text a planner would otherwise take litera
 9. **The suite's MPS legs are `skipif`-gated on `mps.is_available()`, which is TRUE during the sweep**,
    so they will run and contend rather than skip. See D-44.
 
+10. **Condition (c) had NO measured inputs in the 20-plan set, and D-35's "Nothing to fix" rested on a
+   premise measurement falsifies.** `mitigation_point_verdict` requires 21 kwargs; seven had zero
+   producers across all 20 plans. Six are condition (c). **No Phase 23 point record carries
+   `dialogue_ppl` / `retention_ppl` / `ppl_on` / `ppl_off`** — the existing scoring path never
+   measured them, so the verdict was uncomputable. Reopened 2026-08-31; see Area 7 (D-45…D-51).
+
 </domain>
 
 <decisions>
@@ -59,6 +65,12 @@ phase because five of them contradict text a planner would otherwise take litera
 
 **Forty-four decisions across six areas. Every one is LOCKED** — the researcher and planner act on
 them rather than re-open them.
+
+> **AMENDED 2026-08-31 (condition-(c) reopening).** The count above is the original reading and is
+> left standing. It is now **fifty-one decisions across seven areas** — Area 7 (D-45…D-51) was added
+> after measurement showed condition (c) had no producer in the plan set. D-51 supersedes D-35's
+> closing "Nothing to fix"; D-35's ε-scoping claim is unchanged and still correct. Every decision,
+> original and added, is LOCKED.
 
 ### Area 1 — The control point and SC1's stop rule (CTRL-01, CTRL-02)
 
@@ -407,6 +419,81 @@ them rather than re-open them.
   and contend. **A contention failure can then never be mistaken for a genuine one**, and the skip
   reason names why rather than vanishing into a count.
 
+### Area 7 — Condition (c), GATE-05 and the retention squeeze (REOPENED 2026-08-31)
+
+**This area exists because a LOCKED decision was measured and found to rest on a false premise.**
+D-35 read "Nothing to fix" about the three-condition reading. It is correct that condition (c) never
+depended on ε — but it does depend on six per-point kwargs that **nothing in this phase produced**.
+The correction is additive: D-35's original text stays standing and is superseded by D-51.
+
+- **D-45: Condition (c) is MEASURED FOR ALL 44 POINTS, and the cost was measured before the decision,
+  not estimated after.** Timed at HEAD on `checkpoints/persona_adapter.pt`, MPS:
+  `dialogue_ppl_pair` (ON+OFF) **43.5 s**, `retention_perplexity` **43.9 s** — **87.4 s per point**,
+  **1.07 h** over 44, or **0.80 h** measuring the OFF leg once (it is the base model;
+  `phase19_noise_floors.dialogue_ppl_noise_floor.adapter_off_identical_across_seeds` is `true`).
+  That is **0.7–1.0% of the 107–150 h budget**, so cost no longer argues for a subset — and
+  measuring only the points that clear (a) and (b) would be **a reduction chosen after seeing
+  results**, which this milestone forbids everywhere else. **The measurement path reproduces
+  Phase 19's committed record EXACTLY** — `adapter_on 5.815445876712191`,
+  `adapter_off 4.573349214207799`, `retention 4.219759892336485`, denominators 270203 and 1000285 —
+  so condition (c) arrives with a free bit-level reproduction check of D-01's shape.
+
+- **D-46: GATE-05's teacher-forced NLL gates on the 8 LOCKED facts at BOTH capacities; the full
+  taught set is reported BESIDE it and never enters a verdict.** Forced by the gate's own text: at
+  `point_extraction_successes == 0 and not zero_extraction_has_nll` it early-returns INCONCLUSIVE
+  with *"cannot distinguish 'the fact is absent' from 'the probe was too weak'"* — **before**
+  `reasons = []`, so such a point never reaches (a), (b) or (c). **The pre-registered null IS zero
+  extraction under high noise**, so without this producer the DP arm's entire high-noise end reads
+  "we could not tell" exactly where the expected result should appear. The 8 locked facts are the
+  shared privacy unit present in n=8 **and** n=64, making one comparable quantity across capacities
+  — D-29's own reason for crossing both legs. The full taught set (8 at n=8, **64** at n=64, per
+  D-37's in/out population) is dispatched and reported as diagnostic information only: **D-39's
+  architecture** (measure the mechanism, keep it outside the gate) and **D-05's** (both tiers
+  dispatched, one tier gates). Cost: one extra forward pass over the 56 filler facts at n=64.
+
+- **D-47: `control_gap` is PER CAPACITY, from each capacity's own σ=0 control.** It sets both edges
+  of (c)'s dialogue band (`lo = F_C × control_gap`, `hi = control_gap + MARGIN_K × gap_noise_floor`),
+  so a borrowed value would silently move the admissible band at the capacity that did not produce
+  it. D-01 already runs the control at both capacities, so this is free. **Same rule D-03 applied to
+  the n=64 matched floor: no borrowed reference, no capacity asymmetry to disclose.**
+
+- **D-48: BOTH noise floors are IMPORTED AS-IS, with the recipe mismatch disclosed via dated
+  continuation — and the magnitude was CHECKED before the precedent was accepted.**
+  `gap_noise_floor = 0.005214448168350039` was measured at `n_facts=10, replay_ratio=1.0,
+  arm_spec="real", second_person=false`, seeds 1337/2024 — a **v3.0 recipe matching no v4.0 sweep
+  point**; `retention_noise_floor = 0.068930` is `erasure_gate.V20_RETENTION_NOISE_FLOOR`, a
+  **Phase 12** seed-to-seed constant, older still. **Measured sensitivity, dialogue leg:** the floor
+  contributes **1.65%** of the band width (`[0.621048, 1.252526]`, width `0.631477`); a **10×** error
+  moves the ceiling by only **14.86%** of the band, because `F_C = 0.5` makes `control_gap` dominate
+  both edges. The mismatch is immaterial **as measured**, not as argued from precedent.
+
+- **D-49: (c)'s RETENTION LEG IS BINDING AT THE ANCHOR, and that is PRE-REGISTERED BEFORE ANY POINT
+  RUNS.** Measured: `retention_cap = 3.89114 + 2 × 0.068930 = 4.029000` while the v3.0 taught
+  adapter reads **4.219760** — it **FAILS by +0.190760**, and the floor would need to be **2.38×**
+  larger to admit it. Phase 19 recorded this itself (`adapter_on_above_cap: true`,
+  `adapter_on_headroom: -0.1907598923364855`) and **no plan in the 20-plan set surfaced it**. This is
+  the instrument working, not a broken floor: DP noise degrades teaching, so high-noise points
+  degrade retention less and clear (c) while failing (b)'s recall, and low-noise points do the
+  reverse — **that squeeze is the frontier**. But the window where a point clears both may be narrow
+  or empty, so the observation is committed **in advance**, quoting the headroom figure and the 2.38×
+  factor, so **an empty or narrow frontier can never be re-argued afterwards as a mis-set floor, and
+  the floor can never be loosened after seeing results.**
+
+- **D-50: Every point record carries the COUNTERFACTUAL retention reading under a v4.0-recipe floor.**
+  Computed from the sweep's **own seed-to-seed spread** once it exists — **no new run, no extra
+  compute, one added field plus a write-time assertion**. This is **FRONT-02's strongest form applied
+  to (c)**: it shows the SIZE of the error the recipe mismatch could make rather than only asserting
+  it is small — the same standard D-28 sets for the two multiplicities.
+
+- **D-51: D-35 is SUPERSEDED BY DATED CONTINUATION, original left standing.** D-35's ε-scoping claim
+  is **correct and unchanged** — `mitigation_point_verdict` genuinely contains zero `epsilon` /
+  `accounting` occurrences, and `capacity_comparison` remains the sole ε-dependent function. What is
+  superseded is only its closing **"Nothing to fix"**: the 21 kwargs are indeed "counts, recalls,
+  perplexities and floors", and **the perplexities had no producer**. Routed through the
+  sentinel + `scripts/_prose.normalized` mechanism (23-12 / 24-03), **never `_addendum`** — which has
+  zero call sites against `.planning/*.md` and was measured accepting an accidental `PENDING`
+  substring. This continuation is the phase's fourth, and it counts toward RPT-02's discharge.
+
 ### Claude's Discretion
 
 - The exact σ literals on the ε ladder (D-17) and the concrete ε rungs — outputs of the D-18 probe and
@@ -510,6 +597,29 @@ them rather than re-open them.
 - `results/phase23_noised_dp_n64_sigma0p500000.json` — the only noised point in the repo:
   σ=0.5, C=1.0, `clip_bind_count 12800`, ε 519.698. D-24's counter-example.
 
+### Condition (c), GATE-05 and the retention squeeze (Area 7, added 2026-08-31)
+- `scripts/mitigation_gate.py` — `dialogue_gap_band(control_gap=, gap_noise_floor=)`,
+  `retention_cap(retention_noise_floor=)`, `superseded_dialogue_cap`, `F_C = 0.5`, `MARGIN_K = 2`,
+  `V20_EWC_RETENTION_PPL = 3.89114`. **The GATE-05 early return** — `point_extraction_successes == 0
+  and not zero_extraction_has_nll` → INCONCLUSIVE **before `reasons = []`** — is the line D-46 exists
+  for. FROZEN; imported, never edited.
+- `scripts/phase19_erasure.py:2704` — `dialogue_ppl_pair(model, device, forbid)`, returning
+  `{adapter_on, adapter_off, n_targets}` and `_prove`-ing both arms share a denominator. **The
+  producer D-45 wires**, over `tp.DIALOG_VAL_BIN` / `tp.DIALOG_VAL_MASK`.
+- `src/personacore/evaluation/perplexity.py:148` — `retention_perplexity(model, val_bin_path,
+  block_size, device, tokenizer, batch_size=32)`, returning `(ppl, total_tokens)`. Policy **FROZEN
+  (DEBT-02)**: the dead-id mask the generation path applies; the unmasked v1.0 `perplexity` is **not**
+  a substitute. Reads `data/retention_val.bin`.
+- `scripts/erasure_gate.py:77` — `V20_RETENTION_NOISE_FLOOR = 0.068930` (Phase 12 seed-to-seed).
+  D-48 imports it; D-49 pre-registers that it binds.
+- `results/phase19_noise_floors.json` — `dialogue_ppl_noise_floor.value = 0.005214448168350039` with
+  its `recipe` block (`n_facts: 10`, `replay_ratio: 1.0`, `arm_spec: "real"`) — **the recipe mismatch
+  D-48 discloses** — and `adapter_off_identical_across_seeds: true`, which is why D-45 measures the
+  OFF leg once. Also `retention_ppl_pre_erasure` with `adapter_on_above_cap: true` and
+  `adapter_on_headroom: -0.1907598923364855` — **D-49's quoted evidence**.
+- `results/phase19_arm_erased.json` — `dialogue_ppl` and `retention_ppl` in their committed shapes;
+  the record D-45's measurement reproduced exactly (denominators 270203 and 1000285).
+
 ### Planning documents
 - `.planning/ROADMAP.md` §Phase 25 (`:809-843`) — the five Success Criteria. **`phase2X_frontier.json`
   at `:834` is a placeholder (D-31); the `**Requirements**` line needs RPT-02 (D-38).**
@@ -612,6 +722,17 @@ a cost-convenience adjustment. It governed D-08, D-20 and D-42.
   `total_draws 6656` on the gated tier.
 - `phase23_never_taught.json` = 1.1 MB for 4,320 `per_question` rows (~254 B/row);
   `phase18_arm_adapter-on.json` = 2.7 MB already committed.
+
+**Measurements taken in the 2026-08-31 condition-(c) reopening** (reproduce before relying on them):
+- `dialogue_ppl_pair` ON+OFF = **43.5 s**; `retention_perplexity` = **43.9 s**; total **87.4 s/point**
+  on MPS at HEAD. ×44 = **1.07 h**; **0.80 h** with the OFF leg measured once.
+- All four figures reproduce `results/phase19_arm_erased.json` **exactly**, denominators included.
+- `control_gap` = `5.815445876712191 − 4.573349214207799` = **1.242096663**; band
+  `[0.621048, 1.252526]`, width `0.631477`; `MARGIN_K × gap_noise_floor = 0.010429` = **1.65%** of it.
+- `retention_cap` = **4.029000**; taught-adapter retention = **4.219760**; excess **+0.190760**;
+  floor required to admit = **0.164310** = **2.38×** the pinned `0.068930`.
+- `mitigation_point_verdict` has **21** kwargs; **7** had zero producers across all 20 plans;
+  `condition (c)` appeared **0** times in the plan set.
 
 </specifics>
 

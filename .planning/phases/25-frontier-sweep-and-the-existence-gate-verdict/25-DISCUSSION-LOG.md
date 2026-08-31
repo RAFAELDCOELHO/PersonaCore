@@ -549,3 +549,79 @@ its 198 lines (D-35).
 
 See `25-CONTEXT.md` `<deferred>`: WR-02 / WR-03 / WR-07, 24-09's six INFO findings, Phase 24 HUMAN-UAT
 item 2, Phase 22's WARNING-4 and WARNING-5, and the Phase 26 / 27 / 28 scope boundaries.
+
+---
+
+# Session 2 — Condition (c) reopening (2026-08-31)
+
+**Why reopened.** Plan-check iteration 2 found that condition (c) of the three-condition gate had
+**no measured inputs anywhere in the 20-plan set**: 7 of `mitigation_point_verdict`'s 21 required
+kwargs had zero producers, six of them condition (c), and `condition (c)` appeared 0 times across the
+plans. D-35 had declared "Nothing to fix" about the three-condition reading. The user stopped the
+plan-revision loop and routed the correction through discussion — *"essa correção de decisão travada
+precisa do mesmo processo de discussão que produziu as 44 decisões originais, não correção silenciosa
+dentro do ciclo de revisão de planos."*
+
+## Areas presented
+
+Four; the user selected 1–3 and settled 4 from the cost figures alone.
+
+### Area 4 — Scope (settled without discussion)
+**User:** all 44 points. *"0.7-1.0% kills the only argument for a subset, and post-hoc selection is
+forbidden by the same discipline governing everything else."* → **D-45**
+
+### Area 1 — GATE-05 / teacher-forced NLL
+- **Options:** (1) 8 locked facts at both capacities · (2) full taught set per capacity ·
+  (3) both, locked set gating
+- **User chose (3)**, having stated the position first: the NLL must be measured per point and not
+  deferred, *"since without it the pre-registered null (zero extraction under high noise) is
+  structurally unreachable by the gate's own INCONCLUSIVE early-return."*
+- **Reasoning recorded:** 8 locked facts gate at both capacities (comparable quantity, D-29's
+  crossing reasoning); full taught set reported beside as diagnostic, never a verdict input —
+  D-39's architecture and D-05's. → **D-46**
+
+### Area 2 — the two noise floors' recipe mismatch
+- **User's stated position, with a premise to check first:** D-02's treatment (import as-is, disclose
+  via dated continuation) *"unless the magnitude of mismatch is large enough to argue for
+  re-measurement — needs checking before accepting precedent, same discipline that verified every
+  prior analogous case."*
+- **The check was run, and it split the two legs:**
+  - **Dialogue:** floor contributes **1.65%** of the band width; a 10× error moves the ceiling by
+    14.86% of the band, because `F_C = 0.5` makes `control_gap` dominate. **Immaterial as measured.**
+  - **Retention:** the floor is the entire margin — and the v3.0 taught adapter **already FAILS** the
+    cap by **+0.190760** (`4.219760` vs `4.029000`), needing a **2.38×** larger floor to be admitted.
+    Phase 19 recorded this itself (`adapter_on_headroom: -0.1907598923364855`); no plan surfaced it.
+- **Options:** (1) import + pre-register the squeeze · (2) re-measure the retention floor at the v4.0
+  recipe · (3) import + pre-register + report the counterfactual
+- **User chose (3).** Re-measuring was rejected on D-42's grounds — an outcome-affecting threshold
+  re-derived inside the phase that runs the sweep. → **D-48, D-49, D-50**
+
+### Area 3 — `control_gap` per capacity or shared
+- **User chose per-capacity** before options were presented, on D-03's precedent: *"never borrowing a
+  floor across capacities — each capacity gets its own control_gap from its own already-running σ=0
+  control (D-01)."* Free, since D-01 already runs the control at both capacities. → **D-47**
+
+## Measurements taken during this session
+
+| Quantity | Value |
+|---|---|
+| `dialogue_ppl_pair` (ON+OFF) | 43.5 s |
+| `retention_perplexity` | 43.9 s |
+| condition (c) per point | **87.4 s** → 1.07 h over 44; 0.80 h with OFF measured once |
+| share of the 107–150 h budget | **0.7–1.0%** |
+| reproduction vs `phase19_arm_erased.json` | **exact**, all four figures + both denominators |
+| dialogue band | `[0.621048, 1.252526]`, width `0.631477`; floor term `0.010429` = **1.65%** |
+| retention cap vs taught adapter | `4.029000` vs `4.219760` → excess **+0.190760**, **2.38×** |
+
+## Scope creep
+
+None raised. The reopening stayed inside condition (c) and its immediate neighbours; the other 43
+decisions were not re-litigated.
+
+## Claude's discretion (recorded)
+
+- The per-point record field names for the (c) legs and the D-50 counterfactual, provided the
+  write-time assertion proves the counterfactual re-derives from the sweep's own seed-to-seed spread.
+- Whether the OFF leg is measured once per capacity or once per sweep (it is base-model identical
+  either way; `adapter_off_identical_across_seeds` is `true`).
+- Where the teacher-forced NLL producer lives — inside the point loop or as a sibling scorer.
