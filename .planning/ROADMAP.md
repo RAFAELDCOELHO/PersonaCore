@@ -841,7 +841,7 @@ judged by importing the rule Phase 20 committed — with the pre-registered null
      threshold in prose — and "no DP point clears Y at either capacity" is a named, pre-registered
      verdict rather than a failure to produce a result. (FRONT-04)
 
-**Plans**: 20 plans in 13 waves
+**Plans**: 22 plans in 13 waves
 
 Plans:
 - [ ] 25-01-PLAN.md — Phase-25 pre-registration: the reproduction HALT (D-07), the per-point one-attempt refusal (D-10), D-04's armed tripwire, and the promotion / publication / canary rules committed before any point exists
@@ -864,6 +864,8 @@ Plans:
 - [ ] 25-18-PLAN.md — the CPU-only curve verdict pass and D-11's lazy candidate-triggered promotion, applied byte-identically to its pre-registration
 - [ ] 25-19-PLAN.md — the write-once assembly of `results/phase25_frontier.json` (D-31, D-36, D-28, D-29) and the figures drawn only from it
 - [ ] 25-20-PLAN.md — D-13's committed revert executed and verified, D-37/D-40 discharged, §O1's exception closed, and eight requirements ticked against named evidence — blocking human checkpoint
+- [ ] 25-21-PLAN.md — condition (c)'s six producers (D-45), both floors imported with the refusal disclosed (D-48), `control_gap` per capacity (D-47), and D-49's binding observation pre-registered before any point runs
+- [ ] 25-22-PLAN.md — GATE-05's teacher-forced NLL over the 8 locked facts at both capacities (D-46), the plain-bool flag, and both pre-`reasons` early returns watched firing
 
 ### Phase 26: Empirical Privacy Audit (Canary)
 
