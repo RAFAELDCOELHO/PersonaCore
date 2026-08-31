@@ -812,7 +812,21 @@ Plans:
 **Goal**: Both mitigation arms on one measured-privacy × measured-utility plane at both capacities,
 judged by importing the rule Phase 20 committed — with the pre-registered null a named verdict
 **Depends on**: Phases 20, 21, 22, 23, 24
-**Requirements**: CTRL-01, CTRL-02, FRONT-01, FRONT-02, FRONT-03, FRONT-04, ADVT-01
+**Requirements**: CTRL-01, CTRL-02, FRONT-01, FRONT-02, FRONT-03, FRONT-04, ADVT-01, RPT-02
+
+<!-- 25-07-CONTINUATION-RPT02-SPAN-BEGIN -->
+**ADDED 2026-08-31 (plan 25-07, D-38).** `RPT-02` was appended to the Requirements line above. It
+now stands on **TWO** phase Requirements lines — Phase 20's and Phase 25's — making it a **two-phase
+requirement** rather than a moved one. This is the same repair `ADVT-01` needed at Phase 24 close,
+in the same shape: the line changes, and the reason is recorded **additively** under Traceability in
+`.planning/REQUIREMENTS.md` rather than by editing anything already written there. Phase 20 shipped
+the helper (`scripts/_prose.py::normalized`, plan `20-03`); Phase 25 discharges the second half by
+routing its correction sweeps through it — under the requirement's own regulation, not beside it.
+Before this line changed, RPT-02 was mapped only to Phase 20 while its traceability row still read
+`DEFERRED`, so no phase in this roadmap could tick it. See RPT-02's own row for the three
+measurements that supersede that row's premise.
+<!-- 25-07-CONTINUATION-RPT02-SPAN-END -->
+
 **Success Criteria** (what must be TRUE):
 
   1. The **retrained unmitigated control runs first**, realised as a sweep point at
