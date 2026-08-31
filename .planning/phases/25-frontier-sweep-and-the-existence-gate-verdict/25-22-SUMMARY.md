@@ -304,3 +304,13 @@ boundary. It reads two frozen sources and one committed JSON record, and calls a
 
 All seven of `mitigation_point_verdict`'s producerless kwargs are now closed: six by
 `scripts/phase25_condition_c.py` (25-21) and the seventh here.
+
+## Self-Check: PASSED
+
+- `scripts/phase25_gate05.py` — FOUND
+- `tests/test_phase25_gate05.py` — FOUND
+- `.planning/phases/25-frontier-sweep-and-the-existence-gate-verdict/25-22-SUMMARY.md` — FOUND
+- commits `2a4291f`, `72d5c82`, `3839da4` — all FOUND in `git log --all`
+- `.planning/STATE.md`, `.planning/ROADMAP.md`, `.planning/REQUIREMENTS.md` — UNTOUCHED (the
+  orchestrator owns those writes); no planning-state file appears in any of this plan's three commits
+- working tree carries only the pre-existing, unrelated `M .gitignore`
