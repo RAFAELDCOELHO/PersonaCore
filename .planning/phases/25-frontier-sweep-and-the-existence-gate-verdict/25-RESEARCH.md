@@ -703,13 +703,40 @@ Phase-26 reservations.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All five were open when this research landed and are **closed by the plan set**. The original
+> question text is preserved verbatim; each carries the plan that resolves it. Nothing else in this
+> document has been altered — the Source Verification Ledger and every measured figure stand as
+> recorded.
 
 1. **The driver's git surface during an unattended run.** §O1. Two resolutions, both with a cost; CONTEXT resolves neither and it is not clearly discretionary. **Ask.**
+   **RESOLVED — plan 25-10 Task 2 + 25-01 Task 2.** The surface is exactly `{add, commit}` over one
+   resolved path, `shell=True` forbidden, no wildcard staging, enforced by the §O1 AST gate in 25-10
+   Task 3 with a planted `git push` as its RED. The deliberate abandonment of the read-only-git-surface
+   discipline is a named constant, `GIT_SURFACE_EXCEPTION`, in `scripts/phase25_prereg.py`, and plan
+   25-20 Task 3 asserts it is closed at phase end.
 2. **One `C` or two?** D-01 needs the control at `1e6` (bit-level reproduction against `phase23_sigma_zero`); D-24 calibrates a different `C` for the noised points. `mitigation_budget.py` must hold either two pinned clip constants or one plus a named control exception. Not resolved in CONTEXT.
+   **RESOLVED — TWO constants, plans 25-11 Task 1 then 25-12 Task 2.** 25-11 measures the per-record
+   gradient-norm distribution at both capacities and derives the noised-point `C` from a recorded rule;
+   25-12 pins that candidate beside `control_clip_norm = 1000000.0`, kept as its own constant so D-01's
+   bit-level reproduction stays reachable. The clip-domain refusal that bounds both is asserted in
+   wave 1 by plan 25-01 Task 3(d).
 3. **Does the control point record `"epsilon": null` or omit the key?** §C5 — there is no precedent to inherit, and D-29's cited one does not exist. A decision, not a lookup.
+   **RESOLVED — explicit `"epsilon": null` plus an `epsilon_omitted_reason`, never an absent key.**
+   Plan 25-08 Task 1 fixes the schema; 25-15 Task 1's criteria assert `'epsilon' in b and b['epsilon']
+   is None and b['epsilon_omitted_reason']` on both controls, and 25-16 asserts the same for every
+   adversarial record. An absent key and a null value are distinguishable, and the null is the claim.
 4. **The RPT-02 traceability row's disposition.** §C4 — the checkbox is `[x]` and the row says DEFERRED. Repair the row additively (naming 23-12 and 24-03) and add Phase 25's third instance, or does the user want the row rewritten? Additive is this project's default; confirm.
+   **RESOLVED — additive, plan 25-07 Task 2.** The DEFERRED row is not rewritten; a dated
+   sentinel-bounded continuation tagged `RPT02-ROW` is appended naming plans 23-12 and 24-03, both
+   guard files, and the word `premise`. `REQUIREMENTS.md` stays insertions-only; the single permitted
+   `ROADMAP.md` deletion is the `**Requirements**` line append, proved line-for-line against a pre-edit
+   snapshot.
 5. **Exact skip count under D-44.** 47 node ids carry "mps"; 7 files touch the device; 5 ids are name-only. The stated-in-advance skip count depends on which set the flag covers. Recommend: the 7 device-touching files only; state the resulting number before the sweep.
+   **RESOLVED — plan 25-06 Tasks 2 and 3.** The flag covers the device-touching composition points
+   only; the skip is loud (named reason, counted), and 25-06 Task 3 pins the expected skip count **in
+   advance** and asserts it, so a silently-lost MPS leg is distinguishable from a deliberate skip.
 
 ---
 

@@ -111,7 +111,7 @@ before any point runs.
 
 | Property | Expensive form | Cheap proxy that must exist first | Cost |
 |---|---|---|---|
-| `clip_norm=inf` refused (CTRL-02) | discovering it mid-sweep | `DPSGD(nn.Module(), sigma=0.0, clip_norm=math.inf)` → `ValueError[dp-refusal:clip-domain]` — domain check is pre-pass, no model needed | **ms** |
+| `clip_norm=inf` refused (CTRL-02) | discovering it mid-sweep | `DPSGD(None, sigma=0.0, clip_norm=math.inf)` → `ValueError[dp-refusal:clip-domain]`. **Measured 2026-08-31: `model=None` is enough** — PRE-PASS 1 validates the caller-supplied numeric domain before the model is read, and all four bad values (`inf`, `nan`, `0.0`, `-1.0`) refuse in **0.01 ms**; `C=1e6` clears the pre-pass and fails later on the `None` model, so the check is not vacuous. Delivered in **wave 1** by `tests/test_phase25_prereg.py::test_clip_domain_is_refused` | **ms** |
 | gate's null branch reachable (D-32 / FRONT-04) | running 44 points | `capacity_comparison(small_cleared=False, large_cleared=False, …)` → `'null-at-both-capacities'` | **ms** |
 | extra mechanism keys ignored (D-25) | a silently-incomparable capacity verdict | live `capacity_comparison` with divergent `clip_norm` passes; caller-side `_prove` refuses | **ms** |
 | condition (a) is zero-tolerance (D-42) | reading it off a published verdict | `tolerance_report(ceiling=X, n_questions=416)` → `(0, 0.0, "ZERO TOLERANCE…")` | **ms** |
@@ -151,7 +151,8 @@ a post-compute `SystemExit` into a 2.2-second CPU test.
 
 | Req / D | Behaviour asserted | Type | Command | Exists? |
 |---|---|---|---|---|
-| CTRL-02 / D-01 | `clip_norm=math.inf` raises `[dp-refusal:clip-domain]`; `C=1e6` gives `clip_bind_count == 0` | unit (CPU) | `pytest tests/test_phase25_control.py -k clip_domain -x` | ❌ W0 |
+| CTRL-02 / D-01 | `clip_norm` in {`inf`, `nan`, `0.0`, `-1.0`} raises `[dp-refusal:clip-domain]` with `model=None`; `C=1e6` clears the domain pre-pass | unit (CPU, ms) | `pytest tests/test_phase25_prereg.py -k clip_domain -x` | ❌ **W1 — plan 25-01 Task 3(d)**, the first wave, before every GPU-spending plan |
+| CTRL-02 / D-01 | `C=1e6` gives `clip_bind_count == 0` on the real control adapters | artifact (post-compute) | `pytest tests/test_phase25_control.py -k reproduction -x` | ❌ W8 — plan 25-15; this half needs the trained control and cannot precede compute |
 | CTRL-01 / D-07 | `prove_reproduction(790, 1008)` passes; any miss HALTS with the ratio-0.0 / declared-differences message | unit, both branches | `pytest tests/test_phase25_prereg.py -k reproduction -x` | ❌ W0 |
 | CTRL-01 / D-04 | tripwire fires if any later plan asserts σ=0 ≡ seam-off bit-identity | structural (AST) | `pytest tests/test_phase25_prereg.py -k bit_identity_tripwire -x` | ❌ W0 |
 | FRONT-01 / D-17 | `epsilon_for(SIGMA_LADDER[i], STEP_BUDGET, DELTA) == EPSILON_LADDER[i]` exact `==`; ladder len == `SWEEP_POINTS` | unit | `pytest tests/test_phase25_grid.py -x` | ❌ W0 |
@@ -224,7 +225,11 @@ a post-compute `SystemExit` into a 2.2-second CPU test.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
+- [ ] All tasks have `<automated>` verify or Wave 0 dependencies — **no task's `<automated>` may name a
+      test file a LATER task in the same plan creates**; `pytest` exits 4 ("file or directory not
+      found") on such a task, so it has no working verify at all. Where the guard file arrives later,
+      the `<automated>` is an inline `.venv/bin/python -c` drawn from that task's own acceptance
+      criteria — the convention Phase 24 used at 24-01 / 24-02 / 24-04 Task 1
 - [ ] Sampling continuity: no 3 consecutive tasks without automated verify
 - [ ] Wave 0 covers all ❌ MISSING references above
 - [ ] No watch-mode flags

@@ -850,7 +850,7 @@ Plans:
 - [ ] 25-04-PLAN.md — D-41's four WR repairs in `teach_persona.py`, each watched RED; WR-02/03/07 deferred with their unreachability recorded in source
 - [ ] 25-05-PLAN.md — D-16's detect-never-act stall watcher, N = 5 min derived from measurement, both halves watched
 - [ ] 25-06-PLAN.md — D-44's sweep-active MPS skip at its two composition points, and D-13's `pmset` revert committed as verifiable argv data
-- [ ] 25-07-PLAN.md — four dated sentinel continuations (D-02, D-19, CTRL-02's `inf`, D-31's path) plus D-38's RPT-02 repair, guarded through `_prose.normalized`
+- [ ] 25-07-PLAN.md — seven dated sentinel continuations (Task 1: D-02's SC1 comparator, D-31's SC4 artifact path, D-19's FRONT-01 scope, CTRL-02's `inf` clip domain; Task 2: D-38's RPT-02 span, row and duplicate-count), guarded through `_prose.normalized`
 - [ ] 25-08-PLAN.md — the per-point record: D-34's five-field live halt, D-39's refusal counts, D-21's inline k, D-37's carriage
 - [ ] 25-09-PLAN.md — `scripts/plot_phase25.py` and D-33's retargeted figure guard, three parts ported plus the authored artifact allow-list
 - [ ] 25-10-PLAN.md — the driver: D-09's resume port with an ATOMIC block write, the wall-clock heartbeat, and §O1's `{add, commit}` git surface proved by AST
