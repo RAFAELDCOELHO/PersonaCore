@@ -271,3 +271,10 @@ The module reads three committed JSON records and one checkpoint, all already in
 `scripts/mitigation_unit.py`, `scripts/phase18_extraction.py`, `scripts/phase19_erasure.py`,
 `src/personacore/evaluation/perplexity.py` and `pyproject.toml`. Zero installs; no runtime
 dependency added (RPT-03 intact).
+
+## Self-Check: PASSED
+
+All four created files exist on disk; all five commits (`498d425`, `852b29d`, `e2d8bfc`, `a0ec2d5`,
+`188d0f7`) resolve in `git log`. `.planning/STATE.md` and `.planning/ROADMAP.md` are untouched — the
+orchestrator owns those writes. The only uncommitted change in the working tree is the pre-existing
+`.gitignore` modification, which is not this plan's.
