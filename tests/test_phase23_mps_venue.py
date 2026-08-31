@@ -35,6 +35,7 @@ import re
 import pytest
 import torch
 
+from conftest import sweep_is_active
 from personacore.config import ModelConfig, RuntimeConfig
 from personacore.lora.config import LoRAConfig
 from personacore.lora.inject import inject_lora, mark_only_lora_trainable
@@ -57,23 +58,82 @@ _VENUE_SUMMARY_PATH = (
 
 # --- The shared register. ONE definition; `tests/test_phase22_*` import it rather than re-spell it.
 
-_MPS_AVAILABLE = torch.backends.mps.is_available()
+_MPS_PRESENT = torch.backends.mps.is_available()
+
+# D-44. `_MPS_AVAILABLE` is the VALUE the flag flips, not merely the mark — TRAP 1. Five files
+# import from this register and `tests/test_phase23_resume.py:414` uses `_MPS_AVAILABLE` as a
+# BRANCH VALUE (`if _MPS_AVAILABLE: ... tp._generator_state_bytes("mps")`), which allocates on the
+# device. Flipping only `_MPS_SKIP` would leave that branch touching a saturated MPS during the
+# sweep, so the conjunction lives HERE, in the one place every consumer already reads.
+_SWEEP_ACTIVE = sweep_is_active()
+_MPS_AVAILABLE = _MPS_PRESENT and not _SWEEP_ACTIVE
+
+# TRAP 2: `reason` is a fixed string, and D-44 requires the reason to NAME THE SWEEP. So the mark
+# is built from TWO reasons chosen conditionally. Both are module constants because
+# `tests/test_phase25_venue.py` asserts they are DISTINCT — a two-reason construction that
+# collapsed to one string would satisfy every other check in this file.
+_MPS_ABSENT_REASON = (
+    "MPS is unavailable here and CI is `ubuntu-latest` on a CPU-only torch wheel "
+    "(.github/workflows/ci.yml:6,36), so this leg CANNOT run there and is gated rather than "
+    "deleted. D-01 makes MPS the venue that produces this milestone's PUBLISHED ε, so the leg "
+    "is not optional on the M3: the phase gate asserts a skip count of ZERO there and quotes "
+    "the literal `N passed, M skipped` line, because a green CPU suite read as a green venue "
+    "pass is 23-RESEARCH.md's Pitfall 1. What still carries each property wherever this skips "
+    "is the non-skipping `cpu` leg of the SAME parametrized test — the σ=0 generator "
+    "advance, the state round-trip and every Phase-22 probe hold on CPU unconditionally; what "
+    "the MPS leg adds is the DEVICE TRANSFER, which is the only thing lost in CI and the only "
+    "thing this phase re-watches."
+)
+
+_SWEEP_ACTIVE_REASON = (
+    "PERSONACORE_SWEEP_ACTIVE is set: the v4.0 FRONTIER SWEEP is running on this machine and it "
+    "owns the MPS device. MPS is genuinely AVAILABLE right now — that is the whole problem. The "
+    "44-point sweep saturates the device for 4.5-6.3 days, so this leg would RUN and CONTEND with "
+    "it, and a contention failure is INDISTINGUISHABLE FROM A GENUINE ONE: the same red, the same "
+    "traceback, a cause nobody can separate from a real regression six days into an unrepeatable "
+    "run. D-44 therefore makes the skip LOUD rather than letting the leg quietly fail or quietly "
+    "vanish — the leg stays a countable `pytest.param(..., marks=...)`, the reason names the "
+    "sweep, and `tests/test_phase25_venue.py::"
+    "test_the_sweep_active_skip_count_is_the_number_stated_in_advance` asserts the resulting skip "
+    "count against a literal committed BEFORE the sweep launched. Unset PERSONACORE_SWEEP_ACTIVE "
+    "to run this leg — but only when the sweep is not holding the device."
+)
 
 _MPS_SKIP = pytest.mark.skipif(
     not _MPS_AVAILABLE,
-    reason=(
-        "MPS is unavailable here and CI is `ubuntu-latest` on a CPU-only torch wheel "
-        "(.github/workflows/ci.yml:6,36), so this leg CANNOT run there and is gated rather than "
-        "deleted. D-01 makes MPS the venue that produces this milestone's PUBLISHED ε, so the leg "
-        "is not optional on the M3: the phase gate asserts a skip count of ZERO there and quotes "
-        "the literal `N passed, M skipped` line, because a green CPU suite read as a green venue "
-        "pass is 23-RESEARCH.md's Pitfall 1. What still carries each property wherever this skips "
-        "is the non-skipping `cpu` leg of the SAME parametrized test — the σ=0 generator "
-        "advance, the state round-trip and every Phase-22 probe hold on CPU unconditionally; what "
-        "the MPS leg adds is the DEVICE TRANSFER, which is the only thing lost in CI and the only "
-        "thing this phase re-watches."
-    ),
+    reason=_SWEEP_ACTIVE_REASON if (_SWEEP_ACTIVE and _MPS_PRESENT) else _MPS_ABSENT_REASON,
 )
+
+# =================================================================================================
+# WHAT D-44 COVERS FOR FREE, WHAT NEEDS NO WORK, AND WHAT IS DELIBERATELY LEFT RUNNING.
+#
+# An exemption inferred from an absence is indistinguishable from an oversight, so all three
+# classes are STATED here rather than left to be re-derived from the next reader's grep.
+#
+# COVERED FOR FREE, through the import of `_MPS_AVAILABLE` / `_MPS_SKIP` / `_DEVICES`:
+#   * `tests/test_phase22_fakes.py`    — 7 `_DEVICES` params + 1 bare `@_MPS_SKIP`
+#   * `tests/test_phase23_cal03.py`    — 2 `_DEVICES` params (a module-scope fixture)
+#   * `tests/test_phase23_resume.py`   — 2 bare `@_MPS_SKIP` legs AND the branch-value use at
+#                                        line 414, which is why the flag flips the VALUE (trap 1)
+#
+# NOT MPS-GATED AT ALL, so nothing here changes them — 25-CONTEXT.md names both as D-44 targets
+# and both were read to confirm no separate work is needed:
+#   * `tests/test_phase22_checkpoint.py` — its module-level gate is `_REAL_FULL is None`, i.e.
+#     ARTIFACT PRESENCE, not device availability. It does import `_DEVICES` and `_MPS_SKIP`, and
+#     those 3 legs are covered for free like the rest; the artifact gate is simply orthogonal.
+#   * `tests/test_phase22_dpsgd.py` — its module gate is a `(system, machine, torch.__version__)`
+#     PLATFORM TUPLE compared against `_CAPTURE_PLATFORM`. Also imports `_DEVICES`, so its 9 mps
+#     params are covered for free; the platform tuple is orthogonal.
+#
+# DELIBERATELY LEFT RUNNING — five NAME-ONLY node ids that mention `mps` and touch no device:
+#   * `tests/test_lr_schedule.py::test_warmup_ramps_from_zero_toward_one`      (pure arithmetic)
+#   * `tests/test_phase22_accountant.py::test_quadrature_budgets_the_simpson_sum_not_one_term`
+#   * `tests/test_preflight.py::test_mps_ok_when_strict`   (monkeypatches `is_available`)
+#   * `tests/test_config.py::test_amp_off_on_mps`          `RuntimeConfig(device="mps")` dataclass
+#   * `tests/test_config.py::test_mps_no_fp16_amp`         — construction only, NO allocation
+#   Skipping them would inflate the count for zero contention benefit and blur the phase-gate skip
+#   audit: the number would stop being attributable to device-touching legs.
+# =================================================================================================
 
 # `pytest.param("mps", marks=_MPS_SKIP)` deliberately, NOT a list that shrinks when MPS is absent.
 # See the module docstring: a vanished parametrization cannot be counted, a skipped one can.

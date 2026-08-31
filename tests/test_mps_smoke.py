@@ -14,22 +14,28 @@ fixed batch. Two asserts encode the D-01a gate:
 
 If this NaNs or fails to overfit on the M3 while the CPU overfit gate passes, the calibration
 checkpoint (Task 4) falls back to ``device=cpu`` for the long run.
+
+D-44 (2026-08-31): THE AVAILABILITY VALUE IS NO LONGER RE-SPELLED HERE. This module used to carry
+its own ``torch.backends.mps.is_available()`` call, which made it a SECOND definition of the device
+gate — and a second definition is one the sweep-active flag can miss. It now imports the register's
+``_MPS_SKIP`` from ``tests/test_phase23_mps_venue.py``, so there is exactly ONE definition of both
+the value and the two-reason text, and this module inherits D-44's sweep-naming reason for free.
 """
 
 import math
 
-import pytest
 import torch
 
 from personacore.config import ModelConfig, TrainConfig
 from personacore.model import GPT
 from personacore.seeding import seed_everything
 from personacore.training.loop import train
+from test_phase23_mps_venue import _MPS_SKIP  # noqa: E402  (tests/ is not a package)
 
-# Guard the WHOLE module: only the real M3 (MPS) runs it; CPU-only CI SKIPS (not ERRORS).
-pytestmark = pytest.mark.skipif(
-    not torch.backends.mps.is_available(), reason="MPS not available (CPU-only CI)"
-)
+# Guard the WHOLE module: only the real M3 (MPS) runs it; CPU-only CI SKIPS (not ERRORS), and a
+# live frontier sweep SKIPS with a reason naming the sweep (D-44). One mark, two reasons, one
+# definition — see the register's `_MPS_ABSENT_REASON` / `_SWEEP_ACTIVE_REASON`.
+pytestmark = _MPS_SKIP
 
 UNIFORM_BOUND = math.log(8192)  # ~9.0 — the random-init CE ceiling the loop must beat on MPS.
 
