@@ -108,9 +108,19 @@ N_DERIVATION = {
     # This is the regime D-16's words point at, and it is what N is set above.
     # -----------------------------------------------------------------------------------------
     "measured_seed1337": {
-        "record": "data/phase23_never_taught_seed1337_draws.json",
-        "path": "shapes[*].timing",
+        # THE TRACKED RECORD, DELIBERATELY. `data/phase23_never_taught_seed1337_draws.json` is the
+        # original and carries the same numbers, but `data/` is gitignored (`.gitignore:17`), so a
+        # test reading it would pass on this laptop and ERROR on ubuntu-latest CI and on any fresh
+        # clone. `results/phase23_never_taught.json` mirrors the same four `timing` blocks under
+        # the same `adapter_sha256` and `corpus_sha256` at the same `draws_per_question: 16`, and
+        # it is committed. Verified identical on all four shapes' `minutes` and `prompts`.
+        "record": "results/phase23_never_taught.json",
+        "path": "per_seed[0].per_shape[*]",
+        "record_gitignored_original": "data/phase23_never_taught_seed1337_draws.json",
+        "record_gitignored_original_path": "shapes[*].timing",
+        "seed": 1337,
         "k": 16,
+        "k_path": "per_seed[0].draws_per_question",
         "prompts_per_shape": 216,
         "shape_minutes": {
             "A3": 34.03443515971303,
