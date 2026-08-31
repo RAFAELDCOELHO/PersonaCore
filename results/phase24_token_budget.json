@@ -648,8 +648,8 @@
     "inflation_report_discharge": "SC4's inflation-report obligation attaches to a NEW attack corpus, and this phase creates none. It reuses results/phase18_corpus.json VERBATIM and READ-ONLY \u2014 phase18_extraction.build_corpus is never called from phase24_adversarial (AST: zero calls), every trained prompt is proved byte-equal to its committed prompt_ids under hard list equality, and the digest above travels in this record so the corpus a future report names is checkable against the corpus that was trained on. The obligation is therefore discharged by non-creation, stated here so a reader cannot mistake the absence of an inflation report for an omission."
   },
   "provenance": {
-    "git_sha": "46f07d5fe49ba44df053e5b75fbaf34fa749b559",
-    "written_utc": "2026-08-30T21:00:43Z",
+    "git_sha": "e42be579d2349c37bd1ffe037c53a639f89e2c82",
+    "written_utc": "2026-08-31T18:42:53Z",
     "python": "3.11.15",
     "seed": 1337,
     "device": "cpu (build-only; no training, no GPU, no MPS)",
@@ -659,7 +659,7 @@
       "scripts/phase24_record.py": "f2267e14ab766e4e48d0ea00152aa16b9539f0e1684caee6c3046ba3169c2809",
       "scripts/phase24_adversarial.py": "b679c6f6b20657f48d2e8c7cde36d3b7e4221ed7af7782fc02f0b0b29d5fdf22",
       "scripts/mitigation_budget.py": "2e5adc916702bab00209432d2fe7a83dbb8e90b99fa9311bda7061949d4591ae",
-      "scripts/teach_persona.py": "82da6c3aa5a8bcc809b70bcda75e2e45d9ddf230716fe787527df0231b32e29c"
+      "scripts/teach_persona.py": "3c1e6c5523fdf8e8db4f800b95796253809aa3c50fcd48267da1c0af64e618d1"
     },
     "epsilon_computed": false,
     "epsilon_note": "NO EPSILON IS COMPUTED HERE. This record holds the token BUDGET the adversarial arm trains under. The accountant that would consume it is Phase 25, and D-07 requires multiplicity in the same sentence as epsilon \u2014 which is why adversarial_multiplicity travels in the same ROW as its grid point rather than in a sibling table."
