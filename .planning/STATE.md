@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
-status: ready_to_execute
+status: executing
 stopped_at: "Phase 25 REPLANNED AND VERIFIED (2026-08-31) — 22 plans / 55 tasks / 13 waves, READY TO EXECUTE. AREA 7 FOLDED IN: 25-21 (condition (c) six producers, control_gap per capacity, both floors, D-49 pre-registration, D-50 counterfactual) and 25-22 (GATE-05 teacher-forced NLL over the 8 LOCKED facts at both capacities), both wave 1; 25-02/25-08/25-19 edited surgically to carry the seven Area-7 kwargs into the verdict surface, the point record and the artifact. ALL BLOCKERS CLOSED, each REPRODUCED by the checker rather than accepted: NEW-3 (25-07 T1 no working verify), NEW-2 (25-18 asserted ZERO TOLERANCE on all 44 while two early returns fire first), B1-NEW (25-20 deletion budget unsatisfiable -> 7+23 toggles, 1 declared row modification, residue 0), B2 (25-21 retention-floor provenance: results/phase20_retention_floor.json has NO regime key so _prove_retention_floor refused it; now built as {regime: ADAPTER_REGIME, seeds: record[seeds]}), B3, B4. Plan-check ran 3 iterations: 4B+7W -> 1B+7W -> 1B+1W, monotonically decreasing, no stall. D-48/D-49 CORRECTED BY DATED CONTINUATION (user-authorised): CONTEXT named erasure_gate.V20_RETENTION_NOISE_FLOOR=0.068930 / cap 4.029000, but results/phase20_retention_floor.json — the record this phase's goal commits it to IMPORT from — labels those borrowed_floor/borrowed_cap, and phase20_gate_coverage._prove_retention_floor REFUSES the borrowed value by name and regime (Phase 12 full-fine-tune pair, 7.939763314393305x the adapter-regime floor). GOVERNING: 0.008681618994239138 / cap 3.9085032379884783. D-49 SURVIVES STRICTLY STRONGER — headroom -0.3112566543480071 not -0.1907598923364855, admit factor 18.926187186661135x not 2.383721836185154x; the window NARROWS, nothing loosened. Landed as 25-D48-CONTINUATION, 56 insertions / 0 deletions, via sentinel + scripts/_prose.normalized NEVER _addendum, originals standing, picked up by 25-07 Task 3(a) as a NINTH guarded case. RECURSION BLOCKER (survived the first check and two revision passes): 25-06 T3's two tests subprocess-ran the whole tests/ tree from a file inside it — reproduced recursing to DEPTH 5; pyproject.toml has no addopts and is asserted byte-unchanged phase-wide so 'mark it slow' was inert. Fixed by argv EXCLUSION (_SUITE_TARGETS + a single _run_inner_suite funnel), not a skipif guard, because a guard inflates the child's skip count and 25-17 compares that number against 25-06's literal. 25-17's sweep-time argv now carries the same --ignore: without it the OUTER run collects the venue file, whose flag-unset test POPS the flag and runs 42 MPS legs on the device the sweep is saturating — D-44 violated exactly where it exists to protect; sweep-time cost ~3x -> ~1x. 25-06 moved to wave 2 (depends_on 25-21/25-22) so its SWEEP_ACTIVE_EXPECTED_SKIPS literal is measured over a complete suite; only 25-14 (wave 7) depends on it, nothing cascaded, phase stays at 13 waves. VERIFIED: 8/8 requirements; D-01..D-51 51/51 in must_haves (derived INDEPENDENTLY — gsd-sdk check.decision-coverage-plan returns no-trackable-decisions and passes by SKIPPING, a false negative); 22/22 threat models; 55/55 tasks with read_first + acceptance_criteria; acyclic, wave==max(dep)+1 for all 22, zero same-wave files_modified overlap; 217 python -c snippets compile, 0 syntax failures, 0 literal-backslash-n. WARNING FOR THE NEXT SESSION: gsd-sdk state.planned-phase CORRUPTED THIS FILE AGAIN — it reported updating only {Status, Last Activity} but also set status=executing, total_plans 76->96, completed_plans 75->76, reverted stopped_at to the PRIOR session text, and OVERWROTE the Phase-23 D-04 historical record at :839 with a literal 'Status: Ready to execute'. All hand-repaired. Next: /gsd-execute-phase 25."
-last_updated: "2026-08-31T15:59:58.964Z"
+last_updated: "2026-08-31T17:40:39.897Z"
 last_activity: 2026-08-31
 progress:
   total_phases: 9
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** Personalization lives in the weights, not a prompt or a store — and the from-scratch implementation must be correct enough to prove it. v1.0 shipped the correct from-scratch base LM; v2.0 **demonstrated** the weight-based memory (LoRA + EWC) under pre-registered gates; v3.0 **measured** what that memory does and does not guarantee, and published both answers against the project's own claim.
-**Current focus:** Phase 25 — frontier sweep and the existence gate verdict
+**Current focus:** Phase 25 — frontier-sweep-and-the-existence-gate-verdict
 
 ## Current Position
 
-Phase: 25 (frontier sweep and the existence-gate verdict) — PLANNED AND VERIFIED, READY TO EXECUTE
-Plan: 22 plans / 55 tasks / 13 waves on disk — Area 7 (D-45..D-51) covered by 25-21 and 25-22; all blockers closed.
+Phase: 25 (frontier-sweep-and-the-existence-gate-verdict) — EXECUTING
+Plan: 1 of 22
 Condition (c) RESOLVED in discussion 2026-08-31; 3 blockers + 5 warnings remain from plan-check iteration 2. Phase 24 CLOSED 2026-08-30 — 9/9 plans, verification `passed`.
 HUMAN-UAT items 2 and 3 remain open and are carried into Phase 25; neither blocks it.
 
