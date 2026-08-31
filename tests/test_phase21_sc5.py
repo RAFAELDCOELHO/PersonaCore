@@ -210,6 +210,22 @@ _NOT_WALL_SITES = {
     ("test_phase21_multiplicity.py", "assert len(TEN_SCHEMA_KEYS) == 10"): "row-schema keys",
     # a docstring naming the wall, not an assertion on it
     ("test_phase21_filler.py", '"""This file joins the `== 10'): "docstring",
+    # plan 25-21's two sites, both found by the BROAD third pattern and neither a leak-vocabulary
+    # assertion. The first pins `n_facts` in the v3.0 dialogue-noise-floor RECIPE read from
+    # `results/phase19_noise_floors.json` — it is D-48's recipe-mismatch disclosure, an assertion
+    # about a committed record's provenance block, not about `LOCKED_FACTS + SOFT_TIER_FACTS`.
+    # Stated rather than glossed, because the coincidence is real and a future reader will notice
+    # it: that v3.0 arm did teach ten facts, so the NUMBER matches the wall. What makes it an
+    # exclusion is that nothing here reads the fact set — shrink the leak vocabulary tomorrow and
+    # this assertion is unmoved, which is precisely the property a wall site must NOT have.
+    ("test_phase25_condition_c.py", 'assert recipe["n_facts"] == 10'): "v3.0 recipe provenance",
+    # The second is the 10x-floor-error MULTIPLIER in D-48's sensitivity arithmetic: the assertion
+    # is that the ceiling move is `9 x MARGIN_K x floor` and NOT ten times the floor's share of the
+    # band. The 10 is a scale factor on a noise floor; it counts no facts at all.
+    (
+        "test_phase25_condition_c.py",
+        'assert sensitivity["ten_x_error_share_of_band"] != 10',
+    ): "10x floor-error multiplier",
 }
 
 # MEASURED at this commit by `_census()` — see the module comment above for why it is a multiset
