@@ -240,3 +240,12 @@ the NaN-disagreement test, T-25-17 by the flat-branch pair refusal naming D-34, 
 census plus the permutation companion, T-25-19 by the proofs-before-bytes move asserted on both
 branches, and T-25-20 by the re-measured `f146d426…` / `a2c4771f…` digests and the green
 `tests/test_phase24_*` battery. T-25-SC holds: zero installs, `pyproject.toml` byte-unchanged.
+
+## Self-Check: PASSED
+
+All four artifact paths exist on disk (`scripts/teach_persona.py`,
+`tests/test_phase25_wr.py`, `results/phase24_token_budget.json`,
+`25-04-SUMMARY.md`) and all five commit hashes resolve in `git log`
+(`61b6060`, `e42be57`, `f968c39`, `f91bd61`, `22a67ff`). `.planning/STATE.md`
+and `.planning/ROADMAP.md` are byte-unchanged; the only working-tree
+modification is the pre-existing, untouched `.gitignore`.
