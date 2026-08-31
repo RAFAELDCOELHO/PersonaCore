@@ -9,11 +9,29 @@ verdict was uncomputable. D-35's closing *"Nothing to fix"* rested on that false
 
 WHY ALL 44 POINTS, AND WHY THE COST WAS MEASURED BEFORE THE DECISION RATHER THAN ESTIMATED AFTER IT
 ---------------------------------------------------------------------------------------------------
-Timed at HEAD on `checkpoints/persona_adapter.pt`, MPS: `dialogue_ppl_pair` (ON+OFF) 43.5 s and
+D-45's DISCUSSION-TIME READING, recorded as written. Timed at HEAD on
+`checkpoints/persona_adapter.pt`, MPS: `dialogue_ppl_pair` (ON+OFF) 43.5 s and
 `retention_perplexity` 43.9 s — 87.4 s per point, 1.07 h over 44, or 0.80 h with the OFF leg
 measured once. That is 0.7-1.0% of the 107-150 h sweep budget, so cost cannot argue for a subset;
 and measuring only the points that clear (a) and (b) would be a reduction chosen AFTER seeing
 results, the exact move this milestone forbids everywhere else (D-45).
+
+RE-MEASURED 2026-08-31 WHEN THIS MODULE WAS BUILT, AND THE READING IS 2.4x-4.8x SLOWER. Both
+readings are published; neither is hidden and neither is edited away. Same M3, same adapter, same
+frozen bins, isolated and uncontended: `preflight` 0.0 s, `load_adapted_model` 0.3 s,
+`dialogue_ppl_pair` 80.4 s (1.85x the reference), `retention_perplexity` 133.0 s (3.03x) —
+213.4 s for the two calls, 213.8 s end to end. The SAME work inside a full `pytest` run measured
+420.6 s end to end with the MPS lock UNCONTENDED, so the spread is real rather than contention.
+MODEL LOADING IS NOT THE EXPLANATION: it is 0.3-1.0 s of the total, so the gap is in the forward
+passes themselves.
+
+WHAT THAT DOES AND DOES NOT CHANGE. Over 44 points the cost is 2.61 h (isolated) to 5.14 h
+(in-suite) rather than 1.07 h — 1.7-4.8% of the 107-150 h budget rather than 0.7-1.0%. **D-45's
+CONCLUSION SURVIVES A FORTIORI**: at the WORST measured rate condition (c) still costs under 5% of
+the sweep, so cost still cannot argue for a subset, and a subset chosen after seeing which points
+clear (a) and (b) is still the reduction-after-the-fact this milestone forbids. Only the FIGURE
+moves, and it moves in the direction that makes the argument harder rather than easier — which is
+why it is corrected here rather than quietly inherited.
 
 TWO THINGS ARRIVE FREE WITH IT
 ------------------------------
@@ -167,9 +185,13 @@ def measure_condition_c(model, tok, device, *, forbid, adapter_off_reading=None)
     `dialogue_ppl_pair` carries its own shared-denominator `_prove` and `retention_perplexity`'s
     dead-id-mask policy is FROZEN under DEBT-02.
 
-    MEASURED PER-CALL COST (HEAD, `checkpoints/persona_adapter.pt`, MPS): dialogue pair 43.5 s,
-    retention 43.9 s — 87.4 s per point, 1.07 h over 44 points, or 0.80 h with the OFF leg measured
-    once, against a 107-150 h sweep budget (0.7-1.0%). D-45 spends it on ALL 44.
+    PER-CALL COST, BOTH READINGS (see the module docstring for the full correction).
+    D-45's discussion-time reading: dialogue pair 43.5 s, retention 43.9 s — 87.4 s per point,
+    1.07 h over 44, 0.80 h with the OFF leg measured once, 0.7-1.0% of a 107-150 h budget.
+    RE-MEASURED 2026-08-31 on the same M3, isolated: dialogue pair 80.4 s, retention 133.0 s —
+    213.4 s per point, and 420.6 s end to end inside a full `pytest` run with the MPS lock
+    uncontended. That is 2.61-5.14 h over 44 points, 1.7-4.8% of the budget. D-45 spends it on
+    ALL 44 either way: at the worst measured rate the cost still cannot argue for a subset.
 
     ``adapter_off_reading`` IS VERIFIED, NEVER SUBSTITUTED. D-45's OFF-leg-once optimisation is
     licensed by `results/phase19_noise_floors.json`'s
