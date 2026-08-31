@@ -550,9 +550,70 @@ def build_bins(
     of the run's EXISTING seed — the Phase 23 D-07 resume path rebuilds these bins and refuses on
     any byte change — and this function had no access to one.
     """
+    # === WR-01 (D-41): ONE domain check, BEFORE either branch dispatches. ===
+    #
+    # The class Phase 20 recorded twice: THE GUARD REFUSES A NAME WHERE THE HARM IS A PROPERTY.
+    # The flat branch dispatches on `adversarial_ratio > 0` while the aligned branch refused on
+    # `if adversarial_ratio:` — two spellings that disagree on exactly one value, because
+    # `float("nan") > 0` is False and `bool(float("nan"))` is True. MEASURED at HEAD before this
+    # check existed: `build_bins(..., adversarial_ratio=float("nan"))` on the flat branch returned
+    # a token bin whose digest is f146d426…, BYTE-IDENTICAL TO THE CONTROL, while the same value
+    # on the aligned branch raised. An `adv_n8` / `adv_n64` point could therefore publish the
+    # CONTROL under an adversarial arm name, and nothing downstream could see it: the additive
+    # `adversarial_*` stats keys appear only on the non-zero branch, so no reader has a field to
+    # check. `math.isfinite` catches NaN and ±inf together; neither `> 0` nor truthiness catches
+    # both. The negative case is the same harm reached by a different value.
+    import mitigation_budget as mbudget  # LAZY — `_mix_adversarial`'s phase24_adversarial precedent
+
+    grid_lo = min(mbudget.ADVERSARIAL_RATIO_GRID)
+    grid_hi = max(mbudget.ADVERSARIAL_RATIO_GRID)
+    for ratio_name, ratio_value in (
+        ("adversarial_ratio", adversarial_ratio),
+        ("replay_ratio", replay_ratio),
+    ):
+        if not math.isfinite(ratio_value) or ratio_value < 0:
+            raise SystemExit(
+                f"[teach_persona] build_bins got {ratio_name}={ratio_value!r} — not a finite "
+                "ratio at or above zero. The pinned legal domain is the closed range of "
+                f"mitigation_budget.ADVERSARIAL_RATIO_GRID, [{grid_lo}, {grid_hi}]. This check "
+                "refuses the half that is silently INERT rather than loud: a negative or NaN "
+                "ratio fails `> 0`, so the mixer never runs and the CONTROL is built under an "
+                "adv_n8 / adv_n64 arm name (measured: token digest f146d426…, byte-identical to "
+                "ratio 0.0), while the aligned branch's truthiness test was TRUE for NaN and "
+                "refused it — the same value, two verdicts. The guard was refusing a NAME where "
+                "the harm is a PROPERTY (WR-01, D-41). Pass a grid ratio; 0.0 is the control."
+            )
+
     if align_facts is not None:
         return _build_aligned_bins(
             tok, episodes, bin_path, mask_path, replay_ratio, align_facts, adversarial_ratio
+        )
+
+    # === WR-04 (D-41): the FLAT branch refuses replay and adversarial together. ===
+    #
+    # The aligned twin already refuses the pair — see `_refuse_ambiguous_aligned_input`, which
+    # names D-10 and the fact-derived accumulation identity in full and is the ONE place that
+    # identity is spelled (repeating it here would move the live prose-vs-code count that
+    # `loop.py`'s accum refusal states to a user debugging a privacy claim, for no new
+    # information: `tests/test_phase22_wiring.py::test_the_prose_vs_code_measurement_is_still_true`
+    # measures exactly that). The flat branch ran `_mix_adversarial` and THEN
+    # `_prepend_replay`, so after both, `replay_ratio` no longer describes the bin. Measured at
+    # HEAD before this refusal: `replay_ratio=0.5, adversarial_ratio=0.25` recorded
+    # `replay_ratio: 0.5` over a bin that is 3,790 replay tokens of 15,477 = 0.2449.
+    if replay_ratio > 0 and adversarial_ratio > 0:
+        raise SystemExit(
+            f"[teach_persona] build_bins got replay_ratio={replay_ratio} AND "
+            f"adversarial_ratio={adversarial_ratio} on the flat branch. `_mix_adversarial` runs "
+            "first and `_prepend_replay` sizes itself from the CLEAN `teaching_tokens`, so after "
+            "both mixers the recorded `replay_ratio` no longer describes the bin. D-34 is what "
+            "makes that expensive: every point record carries `records_per_lot`, "
+            "`composed_lot_sizes`, `composed_steps`, `q` and `clip_norm` read LIVE at write time "
+            "and asserted against the pin under EXACT equality, so a bin whose composition the "
+            "recorded ratio does not describe either halts the whole sweep late or, worse, "
+            "publishes an epsilon that does not describe what happened. No sweep point in this "
+            "phase sets both — `arm_spec` gives the DP arms a replay ratio and the adversarial "
+            "arms an adversarial ratio — so this refusal costs nothing and closes the one "
+            "combination that would be silently wrong (WR-04, D-41)."
         )
 
     id_shards, mask_shards, lengths, fractions = [], [], [], []
@@ -697,7 +758,11 @@ def _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts, adversa
             "Callers on the aligned branch pass episodes=[]; the flat list is never silently "
             "ignored and never merged with the pairs."
         )
-    if replay_ratio:
+    # WR-01 (D-41): `> 0`, never truthiness. `build_bins` refuses non-finite and negative ratios
+    # before this function is reached, so the two branches now test the SAME comparison on the
+    # same domain — the NaN disagreement that let the flat branch build the control under an
+    # adversarial arm name cannot re-open from either side.
+    if replay_ratio > 0:
         raise SystemExit(
             f"[teach_persona] build_bins got replay_ratio={replay_ratio} alongside "
             f"{len(align_facts):,} align_facts pairs. D-10 puts replay OUTSIDE the teaching "
@@ -705,7 +770,7 @@ def _refuse_ambiguous_aligned_input(episodes, replay_ratio, align_facts, adversa
             "data/dialog_train.bin — so baking it in here would add ~30 replay windows to 33 "
             "fact windows and falsify grad_accum_steps = n_facts by ~7.9x (D-09)."
         )
-    if adversarial_ratio:
+    if adversarial_ratio > 0:  # WR-01 (D-41) — `> 0`, never truthiness; see the note above.
         raise SystemExit(
             f"[teach_persona] build_bins got adversarial_ratio={adversarial_ratio} alongside "
             f"{len(align_facts):,} align_facts pairs. The adversarial arm packs FLAT by the "
