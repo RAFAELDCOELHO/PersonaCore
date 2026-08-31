@@ -751,6 +751,7 @@ committed sweep grid)
      - `tests/test_phase24_split.py::test_trained_and_held_out_attack_families_are_disjoint_on_family`
        — key `family`. Trained {A1-mild, A1-aggressive, A3} against held-out {A2}. This is ADVT-02,
        verified directly: **attack-family** generalization.
+
      - `tests/test_phase24_split.py::test_taught_and_held_out_source_families_are_disjoint_on_source_family`
        — key `source_family`. Taught {F1, F2, F6} against held-out {F3, F7, F8, `reserved`}. This is
        the D-03 corollary: **paraphrase** generalization, a DISTINCT property. Green here says
@@ -844,28 +845,66 @@ judged by importing the rule Phase 20 committed — with the pre-registered null
 **Plans**: 22 plans in 13 waves
 
 Plans:
+**Wave 1**
+
 - [ ] 25-01-PLAN.md — Phase-25 pre-registration: the reproduction HALT (D-07), the per-point one-attempt refusal (D-10), D-04's armed tripwire, and the promotion / publication / canary rules committed before any point exists
-- [ ] 25-02-PLAN.md — the CPU-only verdict surface: D-42's ZERO-TOLERANCE reading, D-32's null branch reached live, D-23's DP-only scoping, and D-25's caller-side `clip_norm` prove
 - [ ] 25-03-PLAN.md — the ε helper with three required kwargs (D-30) and its AST gate, demonstrated grep-RED / AST-GREEN on the frozen gate; both multiplicities named (D-28)
 - [ ] 25-04-PLAN.md — D-41's four WR repairs in `teach_persona.py`, each watched RED; WR-02/03/07 deferred with their unreachability recorded in source
 - [ ] 25-05-PLAN.md — D-16's detect-never-act stall watcher, N = 5 min derived from measurement, both halves watched
-- [ ] 25-06-PLAN.md — D-44's sweep-active MPS skip at its two composition points, and D-13's `pmset` revert committed as verifiable argv data
 - [ ] 25-07-PLAN.md — seven dated sentinel continuations (Task 1: D-02's SC1 comparator, D-31's SC4 artifact path, D-19's FRONT-01 scope, CTRL-02's `inf` clip domain; Task 2: D-38's RPT-02 span, row and duplicate-count), guarded through `_prose.normalized`
-- [ ] 25-08-PLAN.md — the per-point record: D-34's five-field live halt, D-39's refusal counts, D-21's inline k, D-37's carriage
-- [ ] 25-09-PLAN.md — `scripts/plot_phase25.py` and D-33's retargeted figure guard, three parts ported plus the authored artifact allow-list
-- [ ] 25-10-PLAN.md — the driver: D-09's resume port with an ATOMIC block write, the wall-clock heartbeat, and §O1's `{add, commit}` git surface proved by AST
-- [ ] 25-11-PLAN.md — D-24's per-record norm calibration at both capacities and D-14's 768-draw throughput probe at both adversarial extremes
-- [ ] 25-12-PLAN.md — D-18's σ_hi probe, then the σ/ε ladder and the two clip constants pinned (D-17, D-20, D-24), the budget register's natural RED watched, and WR-05 corrected additively
-- [ ] 25-13-PLAN.md — D-04's PROBE 2 at BOTH capacities before any sweep point, and D-06's prefix-only control separation
-- [ ] 25-14-PLAN.md — the venue: two LaunchAgents with `KeepAlive` false (D-12), `caffeinate -dims`, D-13's `pmset` applied, D-43's corrected assertion read-back — blocking human checkpoint
-- [ ] 25-15-PLAN.md — D-01's controls at both capacities with the reproduction gate fired, and D-03's n=64 matched floor at five seeds
-- [ ] 25-16-PLAN.md — D-15's eight extremes, interleaved across the four legs; ADVT-01's first trained adversarial adapters
-- [ ] 25-17-PLAN.md — the 36 interior points as pinned (D-08), with every kill, resume and stall record transcribed
-- [ ] 25-18-PLAN.md — the CPU-only curve verdict pass and D-11's lazy candidate-triggered promotion, applied byte-identically to its pre-registration
-- [ ] 25-19-PLAN.md — the write-once assembly of `results/phase25_frontier.json` (D-31, D-36, D-28, D-29) and the figures drawn only from it
-- [ ] 25-20-PLAN.md — D-13's committed revert executed and verified, D-37/D-40 discharged, §O1's exception closed, and eight requirements ticked against named evidence — blocking human checkpoint
 - [ ] 25-21-PLAN.md — condition (c)'s six producers (D-45), both floors imported with the refusal disclosed (D-48), `control_gap` per capacity (D-47), and D-49's binding observation pre-registered before any point runs
 - [ ] 25-22-PLAN.md — GATE-05's teacher-forced NLL over the 8 locked facts at both capacities (D-46), the plain-bool flag, and both pre-`reasons` early returns watched firing
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 25-02-PLAN.md — the CPU-only verdict surface: D-42's ZERO-TOLERANCE reading, D-32's null branch reached live, D-23's DP-only scoping, and D-25's caller-side `clip_norm` prove
+- [ ] 25-06-PLAN.md — D-44's sweep-active MPS skip at its two composition points, and D-13's `pmset` revert committed as verifiable argv data
+- [ ] 25-08-PLAN.md — the per-point record: D-34's five-field live halt, D-39's refusal counts, D-21's inline k, D-37's carriage
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 25-09-PLAN.md — `scripts/plot_phase25.py` and D-33's retargeted figure guard, three parts ported plus the authored artifact allow-list
+- [ ] 25-10-PLAN.md — the driver: D-09's resume port with an ATOMIC block write, the wall-clock heartbeat, and §O1's `{add, commit}` git surface proved by AST
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 25-11-PLAN.md — D-24's per-record norm calibration at both capacities and D-14's 768-draw throughput probe at both adversarial extremes
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 25-12-PLAN.md — D-18's σ_hi probe, then the σ/ε ladder and the two clip constants pinned (D-17, D-20, D-24), the budget register's natural RED watched, and WR-05 corrected additively
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 25-13-PLAN.md — D-04's PROBE 2 at BOTH capacities before any sweep point, and D-06's prefix-only control separation
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 25-14-PLAN.md — the venue: two LaunchAgents with `KeepAlive` false (D-12), `caffeinate -dims`, D-13's `pmset` applied, D-43's corrected assertion read-back — blocking human checkpoint
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 25-15-PLAN.md — D-01's controls at both capacities with the reproduction gate fired, and D-03's n=64 matched floor at five seeds
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 25-16-PLAN.md — D-15's eight extremes, interleaved across the four legs; ADVT-01's first trained adversarial adapters
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 25-17-PLAN.md — the 36 interior points as pinned (D-08), with every kill, resume and stall record transcribed
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 25-18-PLAN.md — the CPU-only curve verdict pass and D-11's lazy candidate-triggered promotion, applied byte-identically to its pre-registration
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 25-19-PLAN.md — the write-once assembly of `results/phase25_frontier.json` (D-31, D-36, D-28, D-29) and the figures drawn only from it
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 25-20-PLAN.md — D-13's committed revert executed and verified, D-37/D-40 discharged, §O1's exception closed, and eight requirements ticked against named evidence — blocking human checkpoint
 
 ### Phase 26: Empirical Privacy Audit (Canary)
 

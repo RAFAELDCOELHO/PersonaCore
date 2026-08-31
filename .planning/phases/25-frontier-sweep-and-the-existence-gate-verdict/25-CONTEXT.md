@@ -478,6 +478,51 @@ The correction is additive: D-35's original text stays standing and is supersede
   or empty, so the observation is committed **in advance**, quoting the headroom figure and the 2.38×
   factor, so **an empty or narrow frontier can never be re-argued afterwards as a mis-set floor, and
   the floor can never be loosened after seeing results.**
+<!-- 25-D48-CONTINUATION-BEGIN -->
+  **SUPERSEDED IN PLACE 2026-08-31 (Phase-25 planning).** D-48's and D-49's ARITHMETIC IS CORRECT
+  AND IS NOT RETRACTED. What is superseded is the CITATION — WHICH FLOOR THE v4.0 GATE ACTUALLY
+  READS. Both readings are published here; the text above is left standing, unamended, as the record
+  of what was believed when it was written. Same dated treatment D-51 applies to D-35, and 23-12 /
+  24-03 applied before it. **This block is written during PLANNING, by no plan**, so it sits on
+  neither of the phase's two counters: it is not an RPT-02 register instance (the register's
+  four instances are 23-12, 24-03 and plan 25-07's two guarded sweeps, in three guard files),
+  and it is not one of the eight sentinel pairs plan 25-07 writes. Plan 25-07 Task 3(a) picks
+  this pair up as a ninth guarded case, so it does not ship unguarded.
+
+  **THE CITATION ERROR.** D-48 names `erasure_gate.V20_RETENTION_NOISE_FLOOR = 0.068930` as the
+  retention floor to import "as-is", and D-49 builds `retention_cap = 3.89114 + 2 × 0.068930 =
+  4.029000` on it. But `results/phase20_retention_floor.json` — the record this phase's own goal
+  commits it to **import the rule from** — labels that value `borrowed_floor: 0.06893` /
+  `borrowed_cap: 4.029`, and its `governs` field reads *"the MEASURED adapter-regime floor above is
+  what the v4.0 gate reads: it is the `retention_noise_floor` keyword argument of
+  `scripts/mitigation_gate.py::retention_cap`, which has NO default"*. MEASURED at planning time:
+  `scripts/phase20_gate_coverage.py::_prove_retention_floor` **REFUSES** the borrowed value by name
+  and by regime — a Phase 12 FULL-FINE-TUNE seed pair, wrong regime for an adapter verdict, and
+  `7.939763314393305×` larger than the measured adapter-regime floor. **"Imported as-is" was never
+  executable for the retention leg.**
+
+  **THE GOVERNING READING.** `retention_ppl_noise_floor = 0.008681618994239138`; `cap =
+  3.9085032379884783`; `cap_derivation = "3.89114 + 2 x 0.008681618994239138
+  (scripts/erasure_gate.py:246)"`. The record's `cap`, `borrowed_cap` and `borrowed_floor_ratio` were
+  each checked `==` the module's `_GOVERNING_CAP`, `_BORROWED_CAP` and `_BORROWED_FLOOR_RATIO` rather
+  than retyped.
+
+  **D-49'S CONCLUSION SURVIVES AND IS STRICTLY STRONGER.** The retention leg still binds at the
+  anchor — harder. Against the governing cap the v3.0 taught adapter (`4.219759892336485`) fails by
+  **`-0.3112566543480071`** rather than `-0.1907598923364855`, and the floor would need to be
+  **`18.926187186661135×`** larger to admit it, not `2.383721836185154×`. D-49's quoted
+  `-0.1907598923364855` is CORRECT for the borrowed cap and matches Phase 19's own recorded
+  `adapter_on_headroom` exactly — it is the cap it was measured against that is superseded, never the
+  measurement. **Nothing is loosened.** The admissible window NARROWS, so D-49's pre-registration —
+  that an empty or narrow frontier can never be re-argued afterwards as a mis-set floor — holds a
+  fortiori, and the floor still cannot be loosened after seeing results.
+
+  **WHAT IS NOT RETRACTED.** D-48's dialogue-leg half is unchanged and still true at HEAD:
+  `gap_noise_floor = 0.005214448168350039`, its v3.0-recipe mismatch, and the measured sensitivity
+  (**1.65%** of the band width `0.631477`; a **10×** error moving the ceiling **14.86%**) all stand.
+  D-50's counterfactual obligation is unaffected. Every Phase-25 plan reads the governing floor from
+  `results/phase20_retention_floor.json` and publishes BOTH readings.
+<!-- 25-D48-CONTINUATION-END -->
 
 - **D-50: Every point record carries the COUNTERFACTUAL retention reading under a v4.0-recipe floor.**
   Computed from the sweep's **own seed-to-seed spread** once it exists — **no new run, no extra
@@ -612,6 +657,17 @@ The correction is additive: D-35's original text stays standing and is supersede
   a substitute. Reads `data/retention_val.bin`.
 - `scripts/erasure_gate.py:77` — `V20_RETENTION_NOISE_FLOOR = 0.068930` (Phase 12 seed-to-seed).
   D-48 imports it; D-49 pre-registers that it binds.
+  **SUPERSEDED 2026-08-31 — see the `25-D48-CONTINUATION` block in Area 7.** D-48 does NOT import
+  this constant: `phase20_gate_coverage._prove_retention_floor` REFUSES it by name and by regime.
+  It is the `borrowed_floor`; the governing v4.0 floor is the next entry. The sentence above is left
+  standing as written.
+- `results/phase20_retention_floor.json` — **THE GOVERNING RETENTION FLOOR AND CAP**, and the record
+  this phase's goal commits it to import the rule from. Carries `retention_ppl_noise_floor =
+  0.008681618994239138`, `cap = 3.9085032379884783`, `cap_derivation`, `seeds [1337, 2024]`, and the
+  `borrowed_floor` / `borrowed_cap` / `borrowed_floor_ratio` triple that names the superseded reading
+  as superseded. Has **no `regime` key**, so `_prove_retention_floor` needs the provenance mapping
+  built as `{'regime': phase20_gate_coverage.ADAPTER_REGIME, 'seeds': record['seeds']}` — resolved by
+  import, never typed.
 - `results/phase19_noise_floors.json` — `dialogue_ppl_noise_floor.value = 0.005214448168350039` with
   its `recipe` block (`n_facts: 10`, `replay_ratio: 1.0`, `arm_spec: "real"`) — **the recipe mismatch
   D-48 discloses** — and `adapter_off_identical_across_seeds: true`, which is why D-45 measures the
