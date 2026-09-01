@@ -438,6 +438,8 @@ _REQUIRED_BLOCKS = (
     "## 1. The before-state: `pmset -g`",
     "## 2. The assertion owners, by owning process",
     "## 3. Disk headroom against `DISK_PRECHECK_BYTES`",
+    "## 5. The stall record, and that no action was taken",
+    "## 6. The session boundary",
     "## 7. The revert obligation",
     "## 8. §O1 — the driver's git surface",
     "## 9. The deliberate change from 23-20",
@@ -448,10 +450,24 @@ _REQUIRED_BLOCKS = (
 # Blocks whose figures can only be produced at the blocking human checkpoint. Each must be PRESENT,
 # must say PENDING, and must be registered in §11 — so a half-finished note cannot read as a
 # finished one, which is the failure mode an operational note has.
-_PENDING_BLOCKS = (
-    "## 4. The launch identity, read before any GPU second",
-    "## 5. The stall record, and that no action was taken",
-    "## 6. The session boundary",
+#
+# §5 and §6 WERE here and were performed on 2026-09-01, so they moved up into `_REQUIRED_BLOCKS`.
+# Their coverage did not evaporate with the move: leaving them here would assert the opposite of
+# what the note now says, so `_MEASURED_AT_THE_CHECKPOINT` below replaces "says PENDING" with the
+# stronger obligation — carry the figure the measurement produced, and say which way it came out.
+_PENDING_BLOCKS = ("## 4. The launch identity, read before any GPU second",)
+
+# A block that leaves §11 must arrive with its evidence. Each entry is (heading, tokens that can
+# only be present if the measurement was actually taken and transcribed).
+_MEASURED_AT_THE_CHECKPOINT = (
+    (
+        "## 5. The stall record, and that no action was taken",
+        ('action_taken: "none"', "data/phase25_stall.jsonl", "71 of 71"),
+    ),
+    (
+        "## 6. The session boundary",
+        ("runs = 0", "last exit code = (never exited)", "kern.boottime", "does not survive"),
+    ),
 )
 
 
@@ -472,6 +488,18 @@ def test_every_unmeasured_block_says_so_and_is_registered(note, heading):
     assert _prose.normalized(heading) in note, heading
     body = _NOTE.read_text(encoding="utf-8").split(heading, 1)[1].split("\n## ", 1)[0]
     assert "PENDING" in body, heading
+
+
+@pytest.mark.parametrize("heading,tokens", _MEASURED_AT_THE_CHECKPOINT)
+def test_a_block_that_left_the_pending_table_carries_its_evidence(heading, tokens):
+    """The note's own rule, enforced instead of stated: a block that moves out of §11 without a
+    quoted command output beside it is a defect in the note, not a measurement. These two left the
+    table on 2026-09-01, so each must still say PENDING nowhere and carry the reading that let it
+    leave."""
+    body = _NOTE.read_text(encoding="utf-8").split(heading, 1)[1].split("\n## ", 1)[0]
+    assert "PENDING" not in body, heading
+    for token in tokens:
+        assert token in body, (heading, token)
 
 
 def test_the_note_records_the_revert_obligation_and_names_its_verifier(note):

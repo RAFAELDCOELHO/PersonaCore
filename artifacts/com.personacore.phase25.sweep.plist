@@ -110,6 +110,14 @@
          the driver shells out to `git` for §O1's add/commit. `/usr/bin/git` is on this path. -->
     <key>PATH</key>
     <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <!-- MEASURED 2026-09-01, the logout observation (operational note §6): a killed agent loses
+         whatever Python had not flushed. The rehearsal's 4th run never wrote its `rehearsing the
+         beat` line because it was SIGKILLed with the line still in the block buffer, and 4 of the
+         5 `print(` sites in `scripts/phase25_run.py` carry no `flush=True`. Over a 4.5-6.3 day
+         unattended run these logs ARE the diagnosis, so the last block of output must not be the
+         part an abrupt kill takes. -->
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
   </dict>
 </dict>
 </plist>

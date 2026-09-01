@@ -214,16 +214,63 @@ process itself knows its own pid.
 
 ---
 
-## 5. The stall record, and that no action was taken
+## 5. The stall record, and that no action was taken — MEASURED 2026-09-01, D-16 CONFIRMED
 
-**PENDING — see §11.** D-16's detect-never-act contract has **never been observed live**. Its
-detect half is unit-tested; its *never-act* half is enforced by an AST walk over
-`scripts/phase25_watch.py` (`FORBIDDEN_ACTIONS`), which proves the module contains no action — not
-that launchd, the plist and the watcher together take none.
+D-16's detect-never-act contract had **never been observed live**. Its detect half was unit-tested;
+its *never-act* half was enforced by an AST walk over `scripts/phase25_watch.py`
+(`FORBIDDEN_ACTIONS` = `kill, terminate, Popen, run, launchctl, unlink, rmtree, remove`), which
+proves the **module** contains no action — not that launchd, the plist and the watcher together
+take none. That gap is now closed by observation.
 
-`artifacts/com.personacore.phase25.rehearsal.plist` exists to make that observation possible: it
-runs the production heartbeat thread for a bounded 300 s and then **exits on purpose**, so the beat
-goes stale on a schedule and the watcher can be watched firing without anything being killed.
+`artifacts/com.personacore.phase25.rehearsal.plist` exists to make it possible: it runs the
+production heartbeat thread for a bounded interval and then **exits on purpose**, so the beat goes
+stale on a schedule and the watcher can be watched firing without anything being killed. It fired
+twice — once on the bounded expiry it was built for, and once on the logout kill of §6, which was
+not planned and is the more informative of the two.
+
+Read at **14:28:56**, with the second episode still running:
+
+```
+$ wc -l < data/phase25_stall.jsonl
+      71
+$ grep -c '"action_taken": "none"' data/phase25_stall.jsonl
+71
+$ grep -c STALL logs/phase25_watch.out
+71
+```
+
+**71 detections, `action_taken: "none"` in 71 of 71.** First and last record:
+
+```
+$ head -1 data/phase25_stall.jsonl   # detected_utc, silence_minutes, threshold
+2026-09-01T15:25:46.218121+00:00   5.108524266666667   5
+$ tail -1 data/phase25_stall.jsonl   # detected_utc, silence_minutes, last_beat
+2026-09-01T17:27:57.606746+00:00   63.20029924999999   2026-09-01T16:24:45.588791+00:00
+```
+
+It detected at **5.11 minutes past a 5-minute threshold** — one sampling period, exactly the
+worst-case latency the 60 s `StartInterval` was chosen for — and it was still reporting the same
+silence **63.20 minutes** later without escalating, retrying or changing behaviour. Every record
+carries the reason in full rather than as a flag:
+
+```
+"action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart
+would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a
+supervisor — not a person — the thing that violates D-10's one-attempt rule. […] Correcting a stall
+is a human act, taken after reading this record."
+```
+
+**The never-act half is proved by what is still standing**, not by the watcher's own testimony:
+
+| Would have happened under an acting supervisor | Actual reading |
+|---|---|
+| the stalled agent relaunched | `rehearsal` reads `runs = 0`, `state = not running` (§6) — nothing restarted it |
+| the stale heartbeat cleaned up or rotated | `wc -l < data/phase25_heartbeat.jsonl` → `39`; the last beat is intact and is still the one all 71 records cite |
+| the process killed | the watcher does not import `subprocess` at all (threat T-25-21) |
+
+The stall file only ever grew. **This is the one rehearsal outcome that is better for having been
+unplanned:** the second episode was caused by a real kill of a real agent, not by the bounded exit
+the plist was designed to produce, and the watcher treated the two identically.
 
 ---
 
@@ -335,15 +382,41 @@ killed and its block-buffered line was discarded. **This is not rehearsal-only:*
 ```
 $ grep -n "print(" scripts/phase25_run.py | grep -vc "flush=True"
 4
-$ grep -l PYTHONUNBUFFERED ~/Library/LaunchAgents/com.personacore.phase25.*.plist | wc -l
+$ grep -l PYTHONUNBUFFERED ~/Library/LaunchAgents/com.personacore.phase25.*.plist | wc -l   # 14:19
        0
 ```
 
-Four of the driver's five `print(` sites are unflushed and no plist sets `PYTHONUNBUFFERED`. Over a
-4.5–6.3 day unattended run whose only diagnostics are these files, an abrupt kill therefore loses
-the last block of driver output — including whatever it was doing when it died.
-`<key>PYTHONUNBUFFERED</key><string>1</string>` in the three plists' existing `EnvironmentVariables`
-dict is the whole fix. **Named, not applied:** the plists are 25-14 artifacts behind the human gate.
+Four of the driver's five `print(` sites are unflushed, and at 14:19 no plist set
+`PYTHONUNBUFFERED`. Over a 4.5–6.3 day unattended run whose only diagnostics are these files, an
+abrupt kill therefore loses the last block of driver output — including whatever it was doing when
+it died.
+
+**FIXED, not left as a named residual.** `<key>PYTHONUNBUFFERED</key><string>1</string>` now sits in
+all three agents' existing `EnvironmentVariables` dict, in the committed artifacts and in the loaded
+jobs:
+
+```
+$ for b in rehearsal sweep watch; do plutil -extract EnvironmentVariables.PYTHONUNBUFFERED raw artifacts/com.personacore.phase25.$b.plist; done
+1
+1
+1
+$ for b in sweep watch rehearsal; do launchctl print gui/501/com.personacore.phase25.$b | grep PYTHONUNBUFFERED; done
+		PYTHONUNBUFFERED => 1
+		PYTHONUNBUFFERED => 1
+		PYTHONUNBUFFERED => 1
+```
+
+`launchctl print` is the verification that matters, because editing a plist is not loading one: the
+value has to appear in the **resolved** environment of the job as launchd holds it, not merely in
+the file. `plutil -lint` passes on all three, and `tests/test_phase25_launch.py` — which reads the
+committed artifacts, never the installed copies — stays green.
+
+**One divergence is named rather than repaired.** The installed copies under
+`~/Library/LaunchAgents/` were rewritten at 14:24:57 outside this repository and came back
+**normalized**: every explanatory comment stripped, keys re-sorted, and the rehearsal agent's
+`--seconds` reading `3600` against the committed `300`. The committed artifacts remain the source of
+truth and are what the tests assert against. Reinstalling from them would restore the comments but
+would also silently revert that `3600` — an operator setting — so it is **not** done here.
 
 ### The mitigations, and exactly how far each one goes
 
@@ -390,20 +463,35 @@ $ defaults read /Library/Preferences/com.apple.SoftwareUpdate RecommendedUpdates
 
 Only the third restarts the machine. Installing any of them during the run ends the run.
 
-### 6b. A THIRD obligation — and its target state is NOT known
+### 6b. A THIRD obligation — target state DECLARED 2026-09-01
 
 Flipping those three flags to 0 is a persistent, system-wide change to the author's own machine, in
-the same class as `PMSET_APPLY`. Unlike §7, **its pre-change values were not recorded**: a grep over
-the whole repository returns nothing for `AutomaticallyInstallMacOSUpdates`, and `defaults` keeps no
-history. §7 already says why that matters — *a revert to macOS's shipped defaults would be a second
-unrequested system change wearing the word "revert"*. The obligation is therefore recorded **with
-the gap in it**, not with a guessed target:
+the same class as `PMSET_APPLY`, so it carries a revert obligation of the same kind as §7 and §7b.
+
+**Its provenance is weaker than §7's, and that is stated rather than smoothed over.** §7's three
+`pmset` numbers are a *measured* prior state — three independent agreeing live readings. These three
+are not: no `defaults read` of this domain was captured before the change, `defaults` keeps no
+history, and a search of every session transcript for this project (54 files) finds the key
+`AutomaticallyInstallMacOSUpdates` in one file only — this session's — where every reading is
+post-change and reads `0`. **There is no command output to quote here, and none is invented.**
+
+What closes the gap is the thing this section asked for in the first place: an explicit operator
+declaration, made on 2026-09-01 and recorded **before** the run rather than reconstructed after it.
 
 | | |
 |---|---|
 | Owner | **plan 25-20**, in the same step as `PMSET_REVERT` and §7b's collector keep-awake |
-| Action | restore the three flags, and decide the three pending updates, to the state the **operator declares** |
-| Forbidden | inferring the target from macOS's shipped defaults — there is no measured prior reading to appeal to |
+| Target state — **operator-declared** | `AutomaticDownload` = **true**, `AutomaticallyInstallMacOSUpdates` = **true**, `CriticalUpdateInstall` = **true** |
+| Provenance | operator declaration, 2026-09-01 — **not** a measured pre-change reading, and **not** a macOS default |
+| Untouched | `ConfigDataInstall`, at `1` throughout, is not part of the revert |
+| The revert argv | `sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate <key> -bool true`, once per key |
+| Verified by | a `defaults read` of the domain after the write, quoted here the way §7's `prove_reverted()` output is |
+| Also at revert time | the three updates of §6(3) stop being deliberately deferred — installing them becomes a normal operator decision again |
+
+The distinction worth keeping: **§7's target can be checked against the machine's own history and
+this one cannot.** If the declaration is wrong, nothing in this repository will catch it. That is the
+residual — and it is smaller than the state this section was in before the declaration, which was an
+obligation with no target at all.
 
 ---
 
@@ -559,8 +647,8 @@ Measured, not assumed: §6. The launchd domain is destroyed at logout and the ag
 re-bootstrapped but not running, with `runs = 0` — indistinguishable at a glance from a clean
 finish, which is R4's ambiguity arriving by a second route. The mitigations are one human
 commitment (no logout for 4.5–6.3 days) and three `SoftwareUpdate` flags at 0; neither is enforced
-by anything on the machine. The flags carry their own revert obligation with an **unknown target
-state** — §6b.
+by anything on the machine. The flags carry their own revert obligation, whose target state is
+**operator-declared rather than measured** — §6b.
 
 ---
 
@@ -575,11 +663,12 @@ appears anywhere above.**
 | 1 | the **after** `pmset -g` reading `sleep 0` / `disksleep 0` / `powernap 0` | `sudo pmset -a` is privileged; nothing in this repository elevates |
 | 2 | the post-clearing `pgrep -x caffeinate` (must be empty) and the post-launch owner list | booting out a launchd job and killing live processes is machine state, not a test |
 | 4 | `launch_identity()`'s output, quoted before any GPU second | requires a live launched process under the wrapper |
-| 5 | the stall record with `action_taken: "none"`, and the statement that nothing was relaunched, killed or deleted | requires the watcher to be watched, live, past its own threshold |
 
-**Row 6 was performed on 2026-09-01 and has left this table.** Its outputs are transcribed
-verbatim in §6, and the answer was negative: the LaunchAgent did **not** survive the boundary.
-D-12's scope is corrected there rather than here.
+**Rows 5 and 6 were performed on 2026-09-01 and have left this table**, each with its command
+output transcribed verbatim beside it in the section that owed it. Row 6 came back **negative** —
+the LaunchAgent did not survive the boundary, and D-12's scope is corrected in §6 rather than here.
+Row 5 came back **positive**: 71 stall detections, `action_taken: "none"` in 71 of 71, nothing
+relaunched, killed or deleted (§5). Rows 1, 2 and 4 remain outstanding and still gate the launch.
 
 When those are performed, their outputs are transcribed here **verbatim** and this section shrinks
 to the ones still outstanding. A block that moves out of this table without a quoted command output
