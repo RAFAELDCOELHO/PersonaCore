@@ -80,6 +80,7 @@ if _SRC not in sys.path:
 
 import phase25_prereg  # noqa: E402  (needs the sys.path insert; scripts/ is not a package)
 import phase25_record  # noqa: E402  (same)
+import phase25_venue  # noqa: E402  (same) — the launch banner's ONE producer
 
 # `phase18_extraction` is NOT imported here. It is heavy and torch-touching, and `phase23_run.py`
 # imports it lazily for exactly that reason (`phase23_run.py:4316`). A module-scope import would
@@ -853,6 +854,17 @@ def build_parser():
 
 
 def main(argv=None):
+    """Run the requested points. The FIRST thing it emits is its own launch identity.
+
+    **THE BANNER IS 23-20's DISCIPLINE, AND IT IS EMITTED HERE BECAUSE ONLY THIS PROCESS KNOWS ITS
+    OWN PID.** Under D-12 the sweep runs as a LaunchAgent wrapped in `caffeinate -dims`, so the pid
+    `launchctl print` reports is the WRAPPER's and a shell's `$!` does not exist at all. The pid is
+    therefore read FROM THE LOG — 23-20's rule, which held across six real launches — and
+    `phase25_venue.launch_identity()` probes it back with `os.getpgid`/`os.getsid` before any GPU
+    second. `flush=True` because the identity has to be readable while the run is alive, not after
+    a six-day buffer drains.
+    """
+    print(phase25_venue.launch_banner(), flush=True)
     args = build_parser().parse_args(argv)
     points = phase25_record.ORDERED_POINT_KEYS() if args.points is None else tuple(args.points)
     for point in points:

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  THE REHEARSAL AGENT — EVERY MECHANISM OF THE SWEEP AGENT, AND STRUCTURALLY UNABLE TO RUN A POINT.
+
+  WHY THIS FILE EXISTS, MEASURED RATHER THAN ASSUMED. The human checkpoint has to watch four things
+  live before 87.86-149.45 h of GPU work begins: the beat landing every 60 s THROUGH A LAUNCHAGENT,
+  the wrapper holding its own assertion, the launch identity relation, and D-16's watcher writing a
+  stall record and taking no action. The obvious way to get those — start the sweep agent in
+  dry-run mode — DOES NOT PRODUCE THEM. `phase25_run.run_point`'s dry-run branch returns before
+  `start_heartbeat` is ever called: it emits exactly ONE beat per point and exits in well under a
+  second, so a 44-point dry run writes 44 beats in a burst and then nothing. There is no 60-second
+  cadence to watch and nothing to go stale on a schedule. This agent runs the driver's REAL
+  `start_heartbeat` thread — the production `_heartbeat_loop` over `Event.wait`, the same code the
+  sweep runs — for a bounded 300 s, and then exits.
+
+  AND WHY IT IS A COMMITTED FILE RATHER THAN A `sed` OF THE SWEEP AGENT. The alternative is asking
+  an operator to derive a rehearsal by editing the installed sweep plist. A substitution that
+  silently fails to match leaves them kickstarting THE REAL 44-POINT SWEEP, which is 4.5-6.3 days of
+  GPU work and, under D-10, an attempt spent. This agent CANNOT do that: `phase25_run.py` appears
+  nowhere in its `ProgramArguments`, so there is no edit-free path from kickstarting it to running a
+  point. `tests/test_phase25_launch.py::test_the_rehearsal_agent_cannot_run_a_sweep_point` asserts
+  exactly that.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.personacore.phase25.rehearsal</string>
+
+  <!-- FALSE for the same D-10 reason the sweep agent states at length, and for one more: this job
+       exits on purpose after 300 s so the heartbeat goes stale on a schedule and the watcher can be
+       WATCHED firing. Under `KeepAlive` true launchd would restart it, the beat would never go
+       stale, and D-16's detect-never-act half would stay unobserved — which is the state it has
+       been in since it was written. -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- The SAME wrapper the sweep agent uses, deliberately: the rehearsal is only evidence about the
+       sweep if the thing being rehearsed is identical. `launch_identity()` and
+       `prove_only_our_caffeinate()` are exercised against this agent's own wrapper pid. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-dims</string>
+    <string>/Users/juliorcoelho/PersonaCore/.venv/bin/python</string>
+    <string>/Users/juliorcoelho/PersonaCore/scripts/phase25_venue.py</string>
+    <string>--rehearse-heartbeat</string>
+    <string>--heartbeat</string>
+    <string>/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl</string>
+    <string>--seconds</string>
+    <string>300</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/juliorcoelho/PersonaCore</string>
+
+  <!-- Its own log, and it carries the launch identity banner `launch_identity()` reads the pid back
+       out of. The pid comes FROM THE LOG and never from `launchctl` output or a shell's `$!` —
+       23-20's discipline, which held across six real launches. -->
+  <key>StandardOutPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_rehearsal.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_rehearsal.err</string>
+
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PERSONACORE_SWEEP_ACTIVE</key>
+    <string>1</string>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>

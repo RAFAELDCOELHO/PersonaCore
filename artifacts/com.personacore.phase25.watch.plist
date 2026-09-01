@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  D-16'S STALL WATCHER, AS A SECOND LAUNCHAGENT. It reads the sweep's heartbeat on an interval and,
+  on silence past `phase25_watch.STALL_THRESHOLD_MINUTES`, appends ONE stall record and stops.
+
+  IT CANNOT ACT, AND THAT IS ENFORCED IN THE MODULE RATHER THAN HERE.
+  `scripts/phase25_watch.py::FORBIDDEN_ACTIONS` is checked by an AST walk in
+  `tests/test_phase25_watch.py::test_the_watcher_takes_no_action`: no `kill`, `Popen`, `launchctl`,
+  `unlink` or `rmtree` may appear in a call position anywhere in that module. Detection and
+  correction stay in different processes operated by different agents, one of them a human — which
+  is the only reason a watcher is compatible with D-10 at all.
+
+  IT IS A SEPARATE AGENT ON PURPOSE. Folded into the sweep it would die with the thing it watches.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.personacore.phase25.watch</string>
+
+  <!-- The watcher is a one-shot check that exits 0 whether or not it found a stall (a detected
+       stall is a SUCCESSFUL run — a non-zero exit would make a LaunchAgent-managed watcher look
+       like a crashing job and invite exactly the automatic remediation D-16 forbids). launchd
+       re-runs it on `StartInterval`; `KeepAlive` true would instead spin it in a tight restart
+       loop for six days. -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <!-- Loading is not starting, here too: the first check lands one interval after the agent is
+       kickstarted, and the operator starts it beside the sweep rather than at login. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!--
+    60 SECONDS — AT OR BELOW THE WATCHER'S OWN THRESHOLD, WHICH IS THE PROPERTY THAT MATTERS.
+
+    `STALL_THRESHOLD_MINUTES` is 5, so the sampling period must not exceed 300 s or the watcher
+    could sleep through the very window it defines and report a stall an interval late (or, at a
+    coarser period still, miss a bounded silence entirely). 60 s matches
+    `phase25_watch.HEARTBEAT_SECONDS`, so the watcher samples once per beat and the worst-case
+    detection latency is the threshold plus one period.
+    `tests/test_phase25_launch.py::test_the_watcher_samples_at_or_below_its_own_threshold` asserts
+    this against the module's constant rather than against a repeated literal.
+  -->
+  <key>StartInterval</key>
+  <integer>60</integer>
+
+  <!--
+    BOTH PATHS PASSED EXPLICITLY, NO DEFAULTS.
+
+    The heartbeat and stall-record arguments are `required=True` in the watcher's parser, but
+    the point of spelling them here is stronger than satisfying argparse: the sweep agent names the
+    heartbeat path in its own `ProgramArguments`, so the two agents cannot silently disagree about
+    which file the beat lives in. A default resolved independently in two processes is a drift
+    surface; a literal asserted equal across two plists is not.
+  -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/juliorcoelho/PersonaCore/.venv/bin/python</string>
+    <string>/Users/juliorcoelho/PersonaCore/scripts/phase25_watch.py</string>
+    <string>--heartbeat</string>
+    <string>/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl</string>
+    <string>--stall-record</string>
+    <string>/Users/juliorcoelho/PersonaCore/data/phase25_stall.jsonl</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/juliorcoelho/PersonaCore</string>
+
+  <!-- Its own stdout/stderr, never the sweep's: a watcher writing into the sweep's log would put
+       its 8,640 "alive" lines in front of the traceback the sweep's log exists to preserve. -->
+  <key>StandardOutPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_watch.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_watch.err</string>
+
+  <!-- `Background` is right HERE and wrong for the sweep: this job is a sub-second stdlib file read
+       once a minute beside a saturated GPU, and it should cost nothing and yield to the run. -->
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>

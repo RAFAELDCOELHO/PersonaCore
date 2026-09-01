@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  D-12'S SWEEP LAUNCHAGENT. It survives session end, compaction and logout; a harness background
+  child does not, and the last production run on this machine was killed externally at 60 minutes.
+
+  THIS FILE IS COMMITTED AND THE INSTALLED COPY IS A COPY. `~/Library/LaunchAgents` is not tracked
+  by anything, so an agent that lived only there would be un-reviewable and un-reproducible. The
+  operator copies this file in; the copy is the disposable artefact and this is the record.
+
+  IT DOES NOT START ITSELF. `RunAtLoad` is false and `KeepAlive` is false, so loading this agent
+  starts nothing at all: the sweep begins only when an operator runs `launchctl kickstart`, and it
+  ends for good when the driver exits. Both flags are asserted from the parsed plist by
+  `tests/test_phase25_launch.py` AND read back from `launchctl print` at the human checkpoint,
+  because "as written" and "as loaded" are different claims.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.personacore.phase25.sweep</string>
+
+  <!--
+    KEEPALIVE IS FALSE AND THIS IS THE SINGLE MOST IMPORTANT LINE IN THE FILE.
+
+    D-10 gives every sweep point ONE attempt, and the driver's `run_point` spends that attempt
+    deliberately: `prove_first_attempt` reads the TRACKED point records before a GPU second is
+    spent, and step 7 is what makes a record tracked. An automatic restart would re-enter a point
+    WITHOUT passing that resume logic, so the thing violating D-10's one-attempt rule would be a
+    supervisor rather than a person. `scripts/phase25_watch.py` exists precisely because the
+    correct response to a dead sweep is a human reading a stall record, not launchd relaunching it.
+
+    A crash here is meant to look like a stopped job. That is not a gap in the design; it is the
+    design.
+  -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <!-- The operator starts the sweep deliberately, with `launchctl kickstart`. Loading is not
+       starting: this agent is installed and loaded well before the run, and it must not begin
+       87.86-149.45 h of GPU work as a side effect of a `bootstrap` or of the next login. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!--
+    D-12'S WRAPPER, AND THE DELIBERATE CHANGE FROM 23-20.
+
+    `caffeinate -dims <utility>` runs the utility as its CHILD and holds its OWN display, idle,
+    system and disk assertions for as long as that child lives. 23-20's recipe was
+    `caffeinate -is -w <pid>`, which WATCHES a pid it does not own and releases when that pid
+    exits; the watching form leaves a window where the wake claim belongs to a process the sweep
+    does not control. This is an escalation of that recipe, not the same one, and the identity
+    consequence is named rather than glossed: under `-w` the driver itself was the session leader
+    (`os.setsid()` then `os.execv`, so `pid == pgid == sid` held OF THE DRIVER), while under the
+    wrapping form the LEADER IS THE WRAPPER and the driver is a member of its group and session.
+    `scripts/phase25_venue.py::launch_identity` checks the wrapping form's version of that triple.
+
+    Measured hazard this exists against: `pmset -g` reads `sleep 1` on AC and on battery, and a
+    macOS compute process holds no idle-sleep assertion on its own. D-13's `sudo pmset -a` change
+    is the INDEPENDENT SECOND LAYER, not a substitute for this one.
+  -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-dims</string>
+    <string>/Users/juliorcoelho/PersonaCore/.venv/bin/python</string>
+    <string>/Users/juliorcoelho/PersonaCore/scripts/phase25_run.py</string>
+    <string>--heartbeat</string>
+    <string>/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl</string>
+  </array>
+
+  <!-- NO POINT LIST IS SPELLED HERE. The driver resolves the full pre-registered 44-key set
+       itself; a list repeated in this file would be a second, un-asserted copy of the sweep's own
+       definition, free to drift from the one the pre-registration pins. -->
+
+  <!--
+    THE REPOSITORY ROOT, AND §O1 DEPENDS ON IT.
+
+    The driver's git surface is `{add, commit}` over ONE point-record path, resolved as the
+    repo-relative `results/phase25_point_*.json`. That resolution — and `results/`, `data/` and
+    `checkpoints/` generally — only lands where the phase expects if the process starts here.
+    `tests/test_phase25_launch.py::test_the_working_directory_is_the_repo_root` asserts every
+    repo path in this file is anchored on it.
+  -->
+  <key>WorkingDirectory</key>
+  <string>/Users/juliorcoelho/PersonaCore</string>
+
+  <!-- Both under `logs/`, which is gitignored: six days of driver stdout is a diagnostic, not an
+       artifact. `scripts/phase25_venue.py::LOG_ROTATION` carries the size bound and the measured
+       reason no rotation step exists. The directory must exist before `bootstrap` — launchd
+       creates the FILE, never the parent. -->
+  <key>StandardOutPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_sweep.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_sweep.err</string>
+
+  <!-- `Interactive` is the one ProcessType macOS never throttles. `Background` — the default
+       reading for an agent with no controlling terminal — gets throttled CPU and I/O bands, which
+       on a 44-point MPS sweep is a silent multiplier on a wall clock this phase measures. -->
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- D-44: any `pytest` run started during the sweep skips the MPS-touching legs LOUDLY, with a
+         reason naming the sweep, instead of contending for the device the sweep is saturating.
+         `tests/test_phase25_venue.py` pins the resulting count at SWEEP_ACTIVE_EXPECTED_SKIPS. -->
+    <key>PERSONACORE_SWEEP_ACTIVE</key>
+    <string>1</string>
+    <!-- Spelled out rather than inherited: launchd hands a job a minimal default environment, and
+         the driver shells out to `git` for §O1's add/commit. `/usr/bin/git` is on this path. -->
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>
