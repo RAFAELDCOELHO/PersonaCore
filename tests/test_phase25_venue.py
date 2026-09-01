@@ -70,6 +70,7 @@ import phase25_venue as venue  # noqa: E402  (needs the sys.path insert; scripts
 
 from test_phase23_mps_venue import (  # noqa: E402  (tests/ is not a package)
     _MPS_ABSENT_REASON,
+    _MPS_PRESENT,
     _SWEEP_ACTIVE_REASON,
 )
 
@@ -147,7 +148,11 @@ def _counts(completed):
 # ===== (a) THE SKIP COUNT, STATED IN ADVANCE =====
 # =================================================================================================
 
-# MEASURED 2026-08-31 at HEAD fd90055 over the COMPLETE suite:
+# TWO MACHINES, TWO LITERALS. CI is ubuntu-latest on a CPU-only torch wheel; the sweep venue is
+# the M3. A single pair cannot describe both: on the M3 the MPS legs RUN unless the flag is set
+# (delta = D-44), and on ubuntu they SKIP because MPS is absent (the flag is a no-op).
+#
+# M3, measured 2026-08-31 at HEAD fd90055 over the COMPLETE suite:
 #
 #     $ PERSONACORE_SWEEP_ACTIVE=1 .venv/bin/python -m pytest tests/ -rs -q
 #     1759 passed, 36 skipped, 83 warnings in 243.28s (0:04:03)
@@ -171,8 +176,23 @@ def _counts(completed):
 #       That lock is irrelevant to the COUNT; it is why the flag-UNSET run below does not have the
 #       two of them contending on the M3.
 #    1  PRE-EXISTING and NOT D-44's: `tests/test_train_loop.py:81` — "fp16 AMP smoke needs a CUDA
-#       GPU". This is the SAME single skip the flag-unset baseline reports, so
-#       `SWEEP_ACTIVE_EXPECTED_SKIPS - FLAG_UNSET_EXPECTED_SKIPS = 35` is exactly what D-44 buys.
+#       GPU". This is the SAME single skip the flag-unset baseline reports on the M3, so
+#       `SWEEP_ACTIVE_EXPECTED_SKIPS - FLAG_UNSET_EXPECTED_SKIPS = 35` is exactly what D-44 buys
+#       THERE.
+#
+# ubuntu-latest (CI, CPU-only wheel, no gitignored artifacts). The flag does not add skips —
+# every MPS / wave-1 leg already skips because the device is absent. Measured after the CI-green
+# fix (groups 1–4) over the inner suite (`--ignore=tests/test_phase25_venue.py`):
+#
+#   33  the same seven DEVICE-TOUCHING files as above
+#    2  the two WAVE-1 legs (skipif `not _MPS_AVAILABLE`, fires without the flag)
+#    1  CUDA AMP smoke (`tests/test_train_loop.py:81`)
+#    2  never-taught adapter on-disk hash (tests/test_phase23_ctrl.py; gitignored `*.pt`)
+#   14  other artifact / golden-platform skips that a fresh clone always takes
+#        (slim/lora/forbid_ids, phase14 demo x2, phase15 plots, phase22 checkpoint
+#        old-on-disk + 3 v3 cases, phase23 retained draws, two golden-trajectory
+#        platform gates)
+#  = 52  flag-set AND flag-unset. Re-measure before bumping; do not derive at import.
 #
 # DELIBERATELY OUTSIDE the number: the five NAME-ONLY node ids that mention `mps` and touch no
 # device (`test_lr_schedule.py`, `test_phase22_accountant.py`, `test_preflight.py` and the two
@@ -181,12 +201,19 @@ def _counts(completed):
 # THE LITERAL STAYS A LITERAL. It is stated in advance of the sweep 25-14 launches at wave 7, and
 # this plan's wave-2 position exists only so it could be measured over a COMPLETE suite. Do not
 # soften it into a computed expression, a lower bound, or a value derived at import from a
-# collection pass — the equality assert against a pinned integer IS the mechanism.
-SWEEP_ACTIVE_EXPECTED_SKIPS = 36
+# collection pass — the equality assert against a pinned integer IS the mechanism. The platform
+# split is two pinned integers, not a formula.
+_M3_SWEEP_ACTIVE_EXPECTED_SKIPS = 36
+_M3_FLAG_UNSET_EXPECTED_SKIPS = 1
+_UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS = 52
+_UBUNTU_FLAG_UNSET_EXPECTED_SKIPS = 52
 
-# The `8dd6415` baseline's skip half, which the flag must leave alone. The PASS half has
-# legitimately moved (25-21 and 25-22 landed in wave 1); only this number is the invariant.
-FLAG_UNSET_EXPECTED_SKIPS = 1
+SWEEP_ACTIVE_EXPECTED_SKIPS = (
+    _M3_SWEEP_ACTIVE_EXPECTED_SKIPS if _MPS_PRESENT else _UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS
+)
+FLAG_UNSET_EXPECTED_SKIPS = (
+    _M3_FLAG_UNSET_EXPECTED_SKIPS if _MPS_PRESENT else _UBUNTU_FLAG_UNSET_EXPECTED_SKIPS
+)
 
 # The two register files, and what they contribute to the sum above. Used by the cheap companion
 # test so a fast signal exists per task commit without paying for a full inner suite.
@@ -388,28 +415,43 @@ def test_with_the_flag_unset_the_baseline_is_unchanged():
 
 
 def test_the_skip_reason_names_the_sweep():
-    """Every SKIPPED reason under the flag names the sweep AND the flag that produced it.
+    """SKIPPED reasons under the flag name the sweep IFF the flag is what produced them.
 
-    Explicit filenames rather than ``tests/``, so this is cheap and cannot recurse — but it still
-    goes through ``_run_inner_suite`` like every other spawn here, which the AST criterion above
-    enforces.
+    On the M3 with MPS present, D-44's skip is the one that fires, and every reason must name
+    the sweep and the flag. On ubuntu-latest MPS is absent, so the register files skip with
+    ``_MPS_ABSENT_REASON`` even when the flag is set — requiring ``sweep`` there would be a
+    false-RED on the reason ``test_the_skip_reason_is_different_when_mps_is_simply_absent``
+    exists to keep distinct. Explicit filenames rather than ``tests/``, so this is cheap and
+    cannot recurse — but it still goes through ``_run_inner_suite`` like every other spawn here,
+    which the AST criterion above enforces.
     """
     completed = _run_inner_suite(
         env_overrides={_SWEEP_ENV_VAR: "1"}, targets=_REGISTER_FILES + ["-rs"]
     )
     reasons = [line for line in completed.stdout.splitlines() if line.startswith("SKIPPED [")]
     assert reasons, f"no SKIPPED reason lines at all:\n{completed.stdout[-2000:]}"
-    for line in reasons:
-        assert "sweep" in line.lower(), (
-            f"a skip reason does not name the sweep: {line[:200]!r}. D-44's whole requirement is "
-            "that the skip is LOUD — a reason a reader cannot trace back to the sweep is a leg "
-            "lost inside a green count"
-        )
-        assert _SWEEP_ENV_VAR in line, (
-            f"a skip reason does not name {_SWEEP_ENV_VAR}: {line[:200]!r}. Naming the flag is "
-            "what makes the skip reproducible — without it a reader knows something was skipped "
-            "but not how to unskip it"
-        )
+    if _MPS_PRESENT:
+        for line in reasons:
+            assert "sweep" in line.lower(), (
+                f"a skip reason does not name the sweep: {line[:200]!r}. D-44's whole requirement "
+                "is that the skip is LOUD — a reason a reader cannot trace back to the sweep is a "
+                "leg lost inside a green count"
+            )
+            assert _SWEEP_ENV_VAR in line, (
+                f"a skip reason does not name {_SWEEP_ENV_VAR}: {line[:200]!r}. Naming the flag "
+                "is what makes the skip reproducible — without it a reader knows something was "
+                "skipped but not how to unskip it"
+            )
+    else:
+        for line in reasons:
+            assert "ubuntu-latest" in line, (
+                f"a skip reason on CPU-only CI is not the MPS-absent reason: {line[:200]!r}. "
+                "The flag cannot produce a sweep-named skip when MPS is not present"
+            )
+            assert _SWEEP_ENV_VAR not in line, (
+                f"a skip reason on CPU-only CI names {_SWEEP_ENV_VAR}: {line[:200]!r}. That is "
+                "the sweep reason wearing an MPS-absent skip, which is Trap 2"
+            )
 
 
 def test_the_skip_reason_is_different_when_mps_is_simply_absent():

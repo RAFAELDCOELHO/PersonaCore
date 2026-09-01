@@ -27,6 +27,7 @@ import pathlib
 import subprocess
 import sys
 
+import numpy as np
 import pytest
 
 from personacore.provenance import refuse_if_dirty
@@ -437,7 +438,7 @@ def test_the_dirty_guard_is_scoped_to_the_published_paths(tmp_path):
     assert r.refuse_dirty_publication(decoy) is None
 
 
-def test_driver_refuses_to_rerun(tmp_path):
+def test_driver_refuses_to_rerun(tmp_path, monkeypatch):
     """A second write into the same path aborts, naming the file — recorded evidence is not
     silently replaced by a rerun on drifted code.
 
@@ -445,7 +446,22 @@ def test_driver_refuses_to_rerun(tmp_path):
     refuse-to-rerun in this repository and not two. The privacy-unit emitter is the one exercised
     here because it is the cheap one; both emitters route their write through the same guarded
     ``_write``.
+
+    The first write still has to MEASURE: ``emit_privacy_unit`` builds the n=8 replay-in-bin row
+    through ``tp.build_bins(..., replay_ratio=1.0)``, which refuses unless ``DIALOG_TRAIN_BIN``
+    exists. ``data/`` is gitignored and never in CI, so a synthetic replay pair is monkeypatched
+    here — the same pattern as ``tests/test_phase21_replay_volume.py::replay_source``. This test
+    is about refuse-to-rerun, not about the real PersonaChat memmap.
     """
+    n = 20_000  # > dp_n8's legacy replay slice (~7.5k teaching tokens)
+    replay_bin = tmp_path / "synthetic_dialog_train.bin"
+    replay_mask = tmp_path / "synthetic_dialog_train_mask.bin"
+    rng = np.random.default_rng(1337)
+    rng.integers(0, 8184, size=n, dtype=np.uint16).tofile(replay_bin)
+    np.ones(n, dtype=np.uint8).tofile(replay_mask)
+    monkeypatch.setattr(tp, "DIALOG_TRAIN_BIN", replay_bin)
+    monkeypatch.setattr(tp, "DIALOG_TRAIN_MASK", replay_mask)
+
     target = tmp_path / "phase21_privacy_unit.json"
     r.emit_privacy_unit(path=target, workdir=tmp_path)
     assert target.exists()

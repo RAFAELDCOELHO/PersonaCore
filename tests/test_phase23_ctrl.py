@@ -132,7 +132,22 @@ def test_never_taught_seed_count_satisfies_the_frozen_gate():
             "from a floor whose arm and seeds are unstated"
         )
 
-    # Every adapter exists locally and hashes to the digest recorded beside it.
+    # Every adapter exists locally and hashes to the digest recorded beside it. `checkpoints/`
+    # and `*.pt` are gitignored, so CI / a fresh clone never have these files — skip ONLY the
+    # on-disk half, after the JSON/gate assertions above have already run. Same register as
+    # `tests/test_phase22_checkpoint.py:205` and this file's own retained-draws skip.
+    missing = [
+        entry["path"] for entry in record["adapters"] if not (_ROOT / entry["path"]).exists()
+    ]
+    if missing:
+        pytest.skip(
+            f"{missing[0]} is recorded in the artifact but absent on disk — `checkpoints/` and "
+            "`*.pt` are gitignored (.gitignore:14-15) so CI and a fresh clone never have the "
+            "never-taught adapters. The seed-count and frozen-gate assertions above still ran "
+            "against the committed JSON. test_never_taught_is_trained_once carries the "
+            "once-trained claim from AST; test_never_taught_provenance_satisfies_the_gate "
+            "carries gate acceptability."
+        )
     for entry in record["adapters"]:
         path = _ROOT / entry["path"]
         assert path.exists(), f"{entry['path']} is recorded in the artifact but absent on disk"
@@ -530,13 +545,27 @@ def test_the_never_taught_record_cites_one_training_scheduling():
     )
     assert [block["seed"] for block in record["per_seed"]] == record["seeds"]
 
-    # Every scored adapter is the one the scheduling exported, by digest, live off disk.
+    # Every scored adapter is the one the scheduling exported, by digest. The sha256
+    # correspondence is a property of the two committed JSON records and always runs. The
+    # live-off-disk half skips when `checkpoints/` is empty (CI / fresh clone) — same reason
+    # as test_never_taught_seed_count_satisfies_the_frozen_gate.
     exported = {entry["seed"]: entry["sha256"] for entry in training["adapters"]}
     for block in record["per_seed"]:
         assert block["adapter_sha256"] == exported[block["seed"]], (
             f"seed {block['seed']} was scored on an adapter hashing to "
             f"{block['adapter_sha256']!r}, not the scheduling's {exported[block['seed']]!r}"
         )
+    missing = [
+        block["adapter"] for block in record["per_seed"] if not (_ROOT / block["adapter"]).exists()
+    ]
+    if missing:
+        pytest.skip(
+            f"{missing[0]} is recorded in the artifact but absent on disk — `checkpoints/` and "
+            "`*.pt` are gitignored so CI and a fresh clone never have the never-taught adapters. "
+            "The citation, consumer, seed-set, and digest-correspondence assertions above still "
+            "ran against the committed JSON."
+        )
+    for block in record["per_seed"]:
         path = _ROOT / block["adapter"]
         assert path.exists()
         assert hashlib.sha256(path.read_bytes()).hexdigest() == block["adapter_sha256"]
