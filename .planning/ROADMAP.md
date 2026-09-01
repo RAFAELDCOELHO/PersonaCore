@@ -919,8 +919,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 25-09-PLAN.md — `scripts/plot_phase25.py` and D-33's retargeted figure guard, three parts ported plus the authored artifact allow-list
-- [ ] 25-10-PLAN.md — the driver: D-09's resume port with an ATOMIC block write, the wall-clock heartbeat, and §O1's `{add, commit}` git surface proved by AST
+- [x] 25-09-PLAN.md — `scripts/plot_phase25.py` and D-33's retargeted figure guard, three parts ported plus the authored artifact allow-list
+- [x] 25-10-PLAN.md — the driver: D-09's resume port with an ATOMIC block write, the wall-clock heartbeat, and §O1's `{add, commit}` git surface proved by AST
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
