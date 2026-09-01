@@ -290,8 +290,20 @@ def read_last_beat(heartbeat_path):
 
     Returns ``None`` when no complete beat exists yet — an empty heartbeat is the normal state
     between the LaunchAgent starting and the driver's first beat, so it is not a stall.
+
+    **AND A HEARTBEAT THAT DOES NOT EXIST YET IS THE SAME STATE, ONE STEP EARLIER.** Measured while
+    building the two LaunchAgents in plan 25-14: the watcher is bootstrapped BEFORE the sweep, it
+    runs on a 60-second `StartInterval` from that moment, and `data/phase25_heartbeat.jsonl` is not
+    created until the driver's first beat. Without the guard below this function raised
+    `FileNotFoundError` on every tick of that window — the watcher crash-looping, writing a
+    traceback a minute into `logs/phase25_watch.err`, in exactly the state the paragraph above
+    calls normal. A watcher whose job is to make a kill diagnosable must not be the loudest thing
+    in the log before the run has started.
     """
-    text = pathlib.Path(heartbeat_path).read_text(encoding="utf-8")
+    path = pathlib.Path(heartbeat_path)
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8")
     for line in reversed(text.splitlines()):
         line = line.strip()
         if not line:

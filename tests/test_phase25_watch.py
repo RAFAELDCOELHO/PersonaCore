@@ -189,6 +189,28 @@ def test_an_empty_heartbeat_is_not_a_stall(tmp_path):
     assert not stall.exists()
 
 
+def test_an_absent_heartbeat_is_not_a_stall_either(tmp_path):
+    """THE WINDOW BETWEEN BOOTSTRAPPING THE WATCHER AND THE SWEEP'S FIRST BEAT.
+
+    `artifacts/com.personacore.phase25.watch.plist` runs this module every 60 s from the moment it
+    is bootstrapped, and the operator bootstraps it BEFORE kickstarting the sweep — so for that
+    whole window `data/phase25_heartbeat.jsonl` does not exist yet. Measured in plan 25-14: without
+    the guard this raised `FileNotFoundError` once a minute and filled `logs/phase25_watch.err`
+    with tracebacks in the state the module's own docstring calls normal.
+
+    It is the SAME state as the empty file above, one step earlier, and it must read the same: no
+    beat, no stall, no record, exit 0.
+    """
+    heartbeat = tmp_path / "never-written.jsonl"
+    stall = tmp_path / "stall.jsonl"
+    assert not heartbeat.exists()
+
+    assert phase25_watch.read_last_beat(heartbeat) is None
+    assert phase25_watch.check(heartbeat, stall_record_path=stall, now=_at(600)) is None
+    assert not stall.exists()
+    assert phase25_watch.main(["--heartbeat", str(heartbeat), "--stall-record", str(stall)]) == 0
+
+
 def test_repeated_checks_append_rather_than_overwrite(tmp_path):
     """A SIX-DAY SILENCE MUST BE A HISTORY, NOT A SINGLE POINT (threat T-25-22).
 
