@@ -1,0 +1,172 @@
+"""One-click public demo bootstrap: download helper + Makefile wiring.
+
+CPU-only, GPU-free, and network-free in the default suite. The helper is tested with an
+injected ``fetch`` callable so CI never hits GitHub and never downloads the 55.6 MB
+``model_slim.pt`` release asset. Gradio is never launched.
+
+House convention (``tests/test_demo_callback.py``): this file does not import ``gradio`` and
+does not import ``scripts/`` as a package. The helper is loaded by path via ``importlib``.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import pathlib
+import re
+
+import pytest
+
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_HELPER = _REPO_ROOT / "scripts" / "fetch_demo_checkpoint.py"
+_MAKEFILE = _REPO_ROOT / "Makefile"
+_PUBLIC_ASSET = (
+    "https://github.com/RAFAELDCOELHO/PersonaCore/releases/download/m1-demo-v1/model_slim.pt"
+)
+
+
+def _load_helper():
+    spec = importlib.util.spec_from_file_location("fetch_demo_checkpoint", _HELPER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _makefile() -> str:
+    return _MAKEFILE.read_text(encoding="utf-8")
+
+
+def _demo_recipe(text: str) -> str:
+    """The ``demo`` target's recipe lines, stopping at the next unindented target."""
+    match = re.search(r"^demo:.*\n((?:[ \t].*\n|\n)*)", text, re.M)
+    assert match, "Makefile has no `demo` target recipe"
+    return match.group(1)
+
+
+def _recording_fetch(payload: bytes, calls: list):
+    """Write ``payload`` to the destination path the helper passes in."""
+
+    def fetch(url: str, dest: pathlib.Path) -> None:
+        calls.append((url, pathlib.Path(dest)))
+        pathlib.Path(dest).parent.mkdir(parents=True, exist_ok=True)
+        pathlib.Path(dest).write_bytes(payload)
+
+    return fetch
+
+
+def test_importing_helper_does_not_hit_the_network():
+    """Loading the module must not download anything — no module-level fetch."""
+    helper = _load_helper()
+    assert callable(helper.ensure_slim_checkpoint)
+
+
+def test_public_release_url_is_the_unguessable_asset_not_gh_cli():
+    helper = _load_helper()
+    assert helper.DEFAULT_URL == _PUBLIC_ASSET
+    assert "api.github.com" not in helper.DEFAULT_URL
+    assert "gh release" not in helper.DEFAULT_URL
+
+
+def test_skips_fetch_when_checkpoint_already_present(tmp_path):
+    helper = _load_helper()
+    dest = tmp_path / "checkpoints" / "model_slim.pt"
+    dest.parent.mkdir()
+    dest.write_bytes(b"already-here")
+    calls: list = []
+
+    returned = helper.ensure_slim_checkpoint(
+        dest, url=_PUBLIC_ASSET, fetch=_recording_fetch(b"fresh", calls)
+    )
+
+    assert returned == dest
+    assert dest.read_bytes() == b"already-here"
+    assert calls == []
+
+
+def test_downloads_when_checkpoint_is_missing(tmp_path):
+    helper = _load_helper()
+    dest = tmp_path / "checkpoints" / "model_slim.pt"
+    calls: list = []
+
+    returned = helper.ensure_slim_checkpoint(
+        dest, url=_PUBLIC_ASSET, fetch=_recording_fetch(b"slim-bytes", calls)
+    )
+
+    assert returned == dest
+    assert dest.read_bytes() == b"slim-bytes"
+    assert len(calls) == 1
+    url, written = calls[0]
+    assert url == _PUBLIC_ASSET
+    # Helper may stream into a temp path then rename; the committed dest is what matters.
+    assert dest.exists()
+
+
+def test_empty_file_is_treated_as_absent(tmp_path):
+    """A zero-byte leftover from a killed curl must not block a retry."""
+    helper = _load_helper()
+    dest = tmp_path / "model_slim.pt"
+    dest.write_bytes(b"")
+    calls: list = []
+
+    helper.ensure_slim_checkpoint(dest, url=_PUBLIC_ASSET, fetch=_recording_fetch(b"ok", calls))
+
+    assert dest.read_bytes() == b"ok"
+    assert len(calls) == 1
+
+
+def test_failed_fetch_does_not_leave_a_partial_dest(tmp_path):
+    helper = _load_helper()
+    dest = tmp_path / "checkpoints" / "model_slim.pt"
+
+    def boom(url, path):
+        pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+        pathlib.Path(path).write_bytes(b"partial")
+        raise OSError("network down")
+
+    with pytest.raises(OSError, match="network down"):
+        helper.ensure_slim_checkpoint(dest, url=_PUBLIC_ASSET, fetch=boom)
+
+    assert not dest.exists()
+
+
+def test_makefile_demo_is_phony_and_the_one_human_command():
+    text = _makefile()
+    phony = re.search(r"^\.PHONY:\s*(.+)$", text, re.M)
+    assert phony, "Makefile lost its .PHONY line"
+    assert "demo" in phony.group(1).split()
+    assert re.search(r"^demo:", text, re.M)
+
+
+def test_makefile_demo_launches_story_demo_not_personalize():
+    recipe = _demo_recipe(_makefile())
+    assert "scripts/demo_app.py" in recipe
+    assert "personalize_demo.py" not in recipe
+    assert "gradio" not in recipe.lower() or "demo_app.py" in recipe
+
+
+def test_makefile_demo_fetches_checkpoint_via_the_helper():
+    recipe = _demo_recipe(_makefile())
+    assert "fetch_demo_checkpoint" in recipe
+
+
+_DEMO_PIP_INSTALL = (
+    'pip install -e ".[cpu,demo]" --extra-index-url https://download.pytorch.org/whl/cpu'
+)
+
+
+def test_makefile_demo_uses_venv_and_cpu_demo_extras():
+    text = _makefile()
+    recipe = _demo_recipe(text)
+    assert "python3.11" in text
+    assert ".venv" in text
+    # Exact public-clone install: demo extras, not CI's [cpu,dev,demo].
+    assert _DEMO_PIP_INSTALL in recipe
+    assert "-m pip" not in recipe
+    assert "[cpu,dev,demo]" not in recipe
+    # Existing install path for tests/CI is unchanged.
+    assert '".[cpu,dev,demo]"' in text
+    assert "NEVER run `make install` on Kaggle" in text
+
+
+def test_makefile_demo_does_not_use_gh_auth():
+    text = _makefile()
+    assert "gh release" not in text

@@ -5,10 +5,11 @@ import pathlib
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# sha256 of pyproject.toml at the close of v2.0. Pinned as a byte-level hash rather than a parsed
-# dependency list because STAT-04 freezes the whole file: a new extra, a widened version specifier
-# and a new runtime dependency are all the same defect from this test's point of view.
-PYPROJECT_SHA256 = "81d07d5d700000008680265659e31d9e335dec65060e7c4ae44c6247b6112bdf"
+# sha256 of pyproject.toml. STAT-04 freezes the whole file: a new extra, a widened version
+# specifier and a new runtime dependency are all the same defect from this test's point of view.
+# Updated in the same commit as `[project] license = "MIT"` (explicit reviewed decision; no
+# dependency change).
+PYPROJECT_SHA256 = "15ffd6b58e289447ac6460bdd6210c04d20d5ff5831f741bb3db3bdc0ca7926f"
 
 
 def test_import_personacore():

@@ -1,5 +1,18 @@
 # PersonaCore
 
+**TLDR.** A from-scratch GPT that runs on a laptop CPU. Personalization is in the weights, not a
+database.
+
+```bash
+make demo
+```
+
+`make demo` creates `.venv` if needed, installs the CPU Gradio extras, downloads
+`checkpoints/model_slim.pt` from the public `m1-demo-v1` release when that file is
+absent, and launches the TinyStories story demo at http://127.0.0.1:7860. A second
+run does not re-download a present checkpoint. Story demo only: the teach-then-recall
+app needs locally produced checkpoints that are not in that release.
+
 PersonaCore is a from-scratch, on-device research system for studying parametric
 personalization. It first demonstrated that synthetic profile values could be recalled from
 LoRA weights without prompt-side facts. A subsequent adversarial audit found that 88.5% of
@@ -98,28 +111,26 @@ Every component is hand-implemented in pure PyTorch:
 
 ## Run the demo
 
-After the install and the weights download, the demo itself makes zero network calls — it
-works with Wi-Fi off.
+After `make demo` has installed extras and downloaded weights, the demo itself makes
+zero network calls — it works with Wi-Fi off.
 
 ```bash
-# 1. Get the code
 git clone https://github.com/RAFAELDCOELHO/PersonaCore.git
 cd PersonaCore
+make demo
+# -> http://127.0.0.1:7860
+```
 
-# 2. Environment (Python 3.11)
+That is the default path. Optional fallback if you want to drive the steps by hand:
+
+```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[cpu,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
-
-# 3. Weights — slim inference checkpoint (~55.6 MB) from the m1-demo-v1 release
-gh release download m1-demo-v1 --pattern model_slim.pt --dir checkpoints
-# or download model_slim.pt from
-#   https://github.com/RAFAELDCOELHO/PersonaCore/releases/tag/m1-demo-v1
-# and place it at checkpoints/model_slim.pt
-
-# 4. Launch
+mkdir -p checkpoints
+curl -L -o checkpoints/model_slim.pt \
+  https://github.com/RAFAELDCOELHO/PersonaCore/releases/download/m1-demo-v1/model_slim.pt
 python scripts/demo_app.py
-# -> http://127.0.0.1:7860
 ```
 
 The artifact loads with `torch.load(..., weights_only=True)` — plain tensors and containers
