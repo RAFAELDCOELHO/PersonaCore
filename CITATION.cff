@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using these metadata.
+type: software
+title: PersonaCore
+authors:
+  - family-names: Coelho
+    given-names: Rafael D.
+    email: rafael.d.cooelho@gmail.com
+license: MIT
+repository-code: "https://github.com/RAFAELDCOELHO/PersonaCore"
+url: "https://github.com/RAFAELDCOELHO/PersonaCore/releases/tag/m1-demo-v1"
+abstract: >-
+  PersonaCore is a from-scratch, on-device research system for studying
+  parametric personalization. The project therefore studies both the
+  capabilities and the privacy costs of weight-based memory, including a
+  subsequent adversarial audit of extraction from LoRA weights.
+keywords:
+  - from-scratch
+  - on-device
+  - GPT
+  - parametric personalization
+  - LoRA
+  - weight-based memory
+  - adversarial audit
+  - privacy
+  - PyTorch
+date-released: 2026-06-10
