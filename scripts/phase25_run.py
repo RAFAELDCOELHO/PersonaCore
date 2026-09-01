@@ -399,6 +399,41 @@ def head_sha():
     return completed.stdout.strip()
 
 
+_DEVICE = None
+
+
+def device():
+    """The preflighted device, resolved once per process (CUDA-P100 -> MPS -> CPU).
+
+    **THE DRAW LOOP'S MISSING RESOLVER.** MEASURED at HEAD in plan 25-11, the first plan in this
+    phase that actually draws: :func:`_draw_one_shape` called ``tp.device()`` twice and
+    ``teach_persona`` has **no** ``device`` attribute, so both raised
+    ``AttributeError: module 'teach_persona' has no attribute 'device'``. The driver's ENTIRE draw
+    loop was unreachable — it would have raised on the FIRST draw of the FIRST sweep point, AFTER
+    that point's training leg had already spent up to 23.05 minutes. No committed test reached it
+    because every driver test in ``tests/test_phase25_driver.py`` exercises the ``--dry-run``
+    branch, where :func:`draw_point_shapes` returns before :func:`_draw_one_shape` is called.
+
+    Owned HERE and not added to ``teach_persona``: this is the Phase-25 driver and the Phase-25
+    draw loop is its own. ``scripts/teach_persona.py`` is pinned by
+    ``results/phase24_token_budget.json``'s ``provenance.module_sha256``, so a resolver added there
+    would move a committed Phase-24 record's digest to fix a Phase-25 defect. And it is not
+    imported from ``phase23_run`` — Phase 25 PORTS from that module and never imports it (25-10),
+    which is why ``atomic_write_json`` and the cache helpers were ported rather than imported.
+    ``phase23_run.device()`` keeps its own copy: it caches its own global and prints under its own
+    prefix, and rewriting a Phase-23 module would move a recorded run's log lines for no gain.
+
+    Imported lazily inside the function for the same reason every torch-touching import in this
+    module is: ``--dry-run`` and the whole test battery must never build a ``RuntimeConfig``.
+    """
+    global _DEVICE
+    if _DEVICE is None:
+        from personacore.config import RuntimeConfig
+
+        _DEVICE = RuntimeConfig().device
+    return _DEVICE
+
+
 def disk_precheck(target=None):
     """Refuse to start a point without `phase25_prereg.DISK_PRECHECK_BYTES` free.
 
@@ -516,7 +551,7 @@ def _draw_one_shape(point_key, family, *, adapter, corpus, k, state):
     cell = [entry for entry in corpus["prompts"] if entry["family"] == family]
     _prove(cell, f"shape {family!r} has no prompts in the corpus — the block would be empty")
 
-    model, model_cfg, tok, forbid, _artifact = recall.load_adapted_model(tp.device(), adapter)
+    model, model_cfg, tok, forbid, _artifact = recall.load_adapted_model(device(), adapter)
     # `_artifact` carries the adapter TENSORS and is deliberately dropped: a tensor is not
     # JSON-serialisable, and the weights this reading came off are already pinned by
     # `adapter_sha256`. `phase23_run.py:4470` records the 2.3-hour cost of learning that.
@@ -538,7 +573,7 @@ def _draw_one_shape(point_key, family, *, adapter, corpus, k, state):
             model,
             tok,
             entry["prompt_ids"],
-            tp.device(),
+            device(),
             forbid,
             entry["seed_index"] * x18.K,
             n_samples=k - 1,

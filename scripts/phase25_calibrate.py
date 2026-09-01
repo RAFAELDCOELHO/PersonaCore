@@ -1061,7 +1061,6 @@ def probe_extreme_throughput(paths):
     import phase17_persona_gate as base_gate
     import phase18_extraction as x18
     import phase23_run
-    import teach_persona as tp
 
     from personacore.tokenizer import from_json
 
@@ -1073,11 +1072,11 @@ def probe_extreme_throughput(paths):
     values = [fact.value for fact in fs.LOCKED_FACTS + fs.SOFT_TIER_FACTS]
 
     adapted_model, _cfg, adapted_tok, adapted_forbid, _artifact = recall.load_adapted_model(
-        tp.device(), paths["adapter"]
+        phase25_run.device(), paths["adapter"]
     )
-    base_model, base_cfg, _base_ckpt = base_gate.build_unadapted_base(tp.device())
+    base_model, base_cfg, _base_ckpt = base_gate.build_unadapted_base(phase25_run.device())
     base_forbid, _digest = persistence.resolve_forbid(tok, base_cfg.vocab_size)
-    base_forbid = base_forbid.to(tp.device())
+    base_forbid = base_forbid.to(phase25_run.device())
 
     by_condition = {}
     for label, model, condition_tok, forbid, stop_ids in _probe_conditions(

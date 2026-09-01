@@ -81,6 +81,14 @@ _TRAIN_ARM_CALL_SITES = (
     # and D-10 counts that resumption as the SAME attempt. `_RESUME_PASSERS` admits it by name
     # below, at a count of 1.
     ("scripts/phase25_run.py", "call", "train_point"),
+    # Plan 25-11's two CALIBRATION call sites. Both run under `phase25_calibrate.CALIBRATION_PREFIX`
+    # and are EXCLUDED from the sweep's point set, so neither is a sweep point and neither passes
+    # `resume_from`: `measure_per_record_norms` drives one DP pass to read per-record gradient
+    # norms out of the mechanism's own accounting (D-24), and `train_extreme` trains one `adv_n8`
+    # adapter per adversarial extreme for the throughput probe (D-14). `_RESUME_PASSERS` therefore
+    # names no count for `phase25_calibrate.py` — a resume appearing there would redden here.
+    ("scripts/phase25_calibrate.py", "call", "measure_per_record_norms"),
+    ("scripts/phase25_calibrate.py", "call", "train_extreme"),
     ("scripts/teach_persona.py", "call", "main"),
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
@@ -256,17 +264,22 @@ def test_resume_from_none_is_inert():
     # the milestone's first NOISED sweep point (`dp_n64` at σ>0) and the seam's SECOND production
     # consumer; TWELVE from 25-10, which added `phase25_run.train_point`, the 44-point frontier
     # driver and the seam's THIRD production consumer — the first one outside `phase23_run.py`.
-    # The literal is a tripwire against a site vanishing
+    # FOURTEEN from 25-11, which added `phase25_calibrate.measure_per_record_norms` and
+    # `phase25_calibrate.train_extreme`. Those two are the first NON-SWEEP production consumers:
+    # both run under `phase25_calibrate.CALIBRATION_PREFIX` and are excluded from the point set, so
+    # the ledger now distinguishes a consumer that produces a sweep point from one that produces a
+    # calibration measurement — and it distinguishes them by SPELLING BOTH rather than by exempting
+    # the calibration pair. The literal is a tripwire against a site vanishing
     # unnoticed, so it is BUMPED with its reason rather than derived from the register — that would
     # make the check restate the register instead of pinning a count against it. Every number is
     # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8 + 1 + 1 + 1 + 1
+        == 8 + 1 + 1 + 1 + 1 + 2
     ), (
         "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling "
         "plus 23-10's σ=0 diagnostic plus 23-11's noised sweep point plus 25-10's 44-point "
-        "frontier driver"
+        "frontier driver plus 25-11's two calibration probes"
     )
 
     # ...and the AST agrees with the register about which of them are real CALLS.
