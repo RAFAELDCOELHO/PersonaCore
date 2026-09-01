@@ -913,9 +913,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 25-02-PLAN.md — the CPU-only verdict surface: D-42's ZERO-TOLERANCE reading, D-32's null branch reached live, D-23's DP-only scoping, and D-25's caller-side `clip_norm` prove
-- [ ] 25-06-PLAN.md — D-44's sweep-active MPS skip at its two composition points, and D-13's `pmset` revert committed as verifiable argv data
-- [ ] 25-08-PLAN.md — the per-point record: D-34's five-field live halt, D-39's refusal counts, D-21's inline k, D-37's carriage
+- [x] 25-02-PLAN.md — the CPU-only verdict surface: D-42's ZERO-TOLERANCE reading, D-32's null branch reached live, D-23's DP-only scoping, and D-25's caller-side `clip_norm` prove
+- [x] 25-06-PLAN.md — D-44's sweep-active MPS skip at its two composition points, and D-13's `pmset` revert committed as verifiable argv data
+- [x] 25-08-PLAN.md — the per-point record: D-34's five-field live halt, D-39's refusal counts, D-21's inline k, D-37's carriage
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

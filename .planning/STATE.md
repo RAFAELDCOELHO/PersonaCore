@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 25 (frontier-sweep-and-the-existence-gate-verdict) — EXECUTING
-Plan: 7 of 22 — wave 1 of 13 COMPLETE (25-01, 25-03, 25-04, 25-05, 25-07, 25-21, 25-22). Suite 1778 passed / 1 skipped, zero regressions. Next: wave 2 (25-02, 25-06, 25-08).
+Plan: 10 of 22 — waves 1-2 of 13 COMPLETE. W1: 25-01/03/04/05/07/21/22. W2: 25-02/06/08. Suite 1847 passed / 1 skipped, zero regressions. SWEEP_ACTIVE_EXPECTED_SKIPS=36 measured; pmset priors sleep 1/disksleep 10/powernap 1. 12+ false plan-time figures found and published beside originals; no conclusion moved. Next: wave 3 (25-09, 25-10).
 Condition (c) RESOLVED in discussion 2026-08-31; 3 blockers + 5 warnings remain from plan-check iteration 2. Phase 24 CLOSED 2026-08-30 — 9/9 plans, verification `passed`.
 HUMAN-UAT items 2 and 3 remain open and are carried into Phase 25; neither blocks it.
 
