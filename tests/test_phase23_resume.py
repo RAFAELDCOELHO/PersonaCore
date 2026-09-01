@@ -98,6 +98,18 @@ _TRAIN_ARM_CALL_SITES = (
     # would redden. It lives in its own module rather than in `phase25_calibrate.py` because that
     # module's sha256 is pinned inside two committed calibration records.
     ("scripts/phase25_sigma_hi.py", "call", "probe_candidate"),
+    # Plan 25-13's D-04 PROBE 2. A FOURTH non-sweep production consumer, and the third KIND of
+    # calibration: `train_control_path` trains ONE sigma=0 control adapter per capacity at
+    # `mitigation_budget.CONTROL_CLIP_NORM`, so that the per-tensor residual against the seam-off
+    # comparator can be measured and committed as a PREDICTION before any sweep point exists. It
+    # runs under the same `phase25_calibrate.CALIBRATION_PREFIX` and is likewise EXCLUDED from the
+    # point set, so it is NOT a sweep point and it passes NO `resume_from` — `_RESUME_PASSERS`
+    # names no count for this file, so a resume appearing here would redden. The comparator half
+    # of the probe deliberately does NOT appear here: it calls `tp.train(...)` directly with the
+    # DP seam absent, which is what makes it the seam-off path. Same reason as
+    # `phase25_sigma_hi.py`, it lives in its OWN module rather than in `phase25_calibrate.py`:
+    # that module's sha256 is pinned inside two committed calibration records.
+    ("scripts/phase25_probe2.py", "call", "train_control_path"),
     ("scripts/teach_persona.py", "call", "main"),
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
@@ -283,17 +295,24 @@ def test_resume_from_none_is_inert():
     # 25-11's two measure a resource (gradient norms, throughput) while this one measures a
     # COVERAGE reading (taught recall at a candidate sigma) that decides where the sigma ladder
     # tops out. Same calibration prefix, same exclusion from the point set, still no `resume_from`.
+    # SIXTEEN from 25-13, which added `phase25_probe2.train_control_path` — D-04's PROBE 2, the
+    # fourth non-sweep consumer and the third KIND of calibration: it measures an AGREEMENT
+    # reading (the per-tensor residual between the sigma=0 DP path and the seam-off path at both
+    # capacities) committed as a prediction before any point exists. Only the CONTROL half is a
+    # `train_arm` call; the comparator half calls `tp.train(...)` directly with the DP seam
+    # absent, which is precisely what makes it the seam-off path and why it is not a hit here.
     # The literal is a tripwire against a site vanishing
     # unnoticed, so it is BUMPED with its reason rather than derived from the register — that would
     # make the check restate the register instead of pinning a count against it. Every number is
     # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8 + 1 + 1 + 1 + 1 + 2 + 1
+        == 8 + 1 + 1 + 1 + 1 + 2 + 1 + 1
     ), (
         "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling "
         "plus 23-10's σ=0 diagnostic plus 23-11's noised sweep point plus 25-10's 44-point "
-        "frontier driver plus 25-11's two calibration probes plus 25-12's anchor probe"
+        "frontier driver plus 25-11's two calibration probes plus 25-12's anchor probe plus "
+        "25-13's PROBE 2 control leg"
     )
 
     # ...and the AST agrees with the register about which of them are real CALLS.

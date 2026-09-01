@@ -278,6 +278,14 @@ INJECT_LORA_PRODUCERS = (
     # config definition free to drift from the one it mirrors would put a rank-or-scale difference
     # inside the one comparison the phase's D-04 halt turns on.
     ("scripts/phase23_run.py", "train_matched_control"),
+    # Plan 25-13's D-04 PROBE 2 comparator. Producer for the same reason and in the same form as
+    # the two `phase23_run.py` entries above: it exports an adapter carrying
+    # `asdict(tp.LORA_CFG)`, and it passes `teach_persona.LORA_CFG` rather than a second bare
+    # `LoRAConfig()`. STRICTLY stronger here than a local call would be — this comparator's whole
+    # purpose is to differ from the sigma=0 DP arm by the DP SEAM and by nothing else, so a
+    # second config definition free to drift from the one it mirrors would put a rank-or-scale
+    # difference inside the per-tensor residual the phase commits as its prediction.
+    ("scripts/phase25_probe2.py", "train_comparator_path"),
     ("scripts/teach_persona.py", "train_arm"),
     ("scripts/train_adapter_smoke.py", "main"),
 )
@@ -344,13 +352,32 @@ def _module_bindings(tree):
 
 
 def _module_aliases(tree):
-    """``{alias: module}`` for every top-level ``import X`` / ``import X as Y`` in one module."""
-    return {
+    """``{alias: module}`` for every ``import X`` / ``import X as Y``, top level FIRST.
+
+    **FUNCTION-SCOPED IMPORTS ARE COLLECTED TOO, AND THE WIDENING IS STRICTLY STRENGTHENING.**
+    Phase 25's calibration and probe modules are CPU-SAFE AT IMPORT by construction — they import
+    ``teach_persona`` INSIDE the functions that need it, so the whole test battery reads their
+    records without touching a GPU. A resolver that only read ``tree.body`` could not see the
+    ``tp`` in ``tp.inject_lora(model, tp.LORA_CFG)`` there, so a perfectly well-formed PRODUCER
+    landed in the ``unclassified`` bucket: a FALSE finding, not a real one, and one no allowlist
+    entry could clear because classification happens before the allowlist is consulted.
+
+    Top-level bindings WIN on a collision (``setdefault``), so no site that classifies today can
+    stop classifying: this only moves sites OUT of ``unclassified``, and every one it moves must
+    then be spelled in ``INJECT_LORA_CONSUMERS`` or ``INJECT_LORA_PRODUCERS`` as one visible line
+    under the same hard equality as before.
+    """
+    aliases = {
         (name.asname or name.name): name.name
         for node in tree.body
         if isinstance(node, ast.Import)
         for name in node.names
     }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for name in node.names:
+                aliases.setdefault(name.asname or name.name, name.name)
+    return aliases
 
 
 def _resolve(config, bindings, aliases):
