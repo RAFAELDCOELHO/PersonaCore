@@ -924,7 +924,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 25-11-PLAN.md — D-24's per-record norm calibration at both capacities and D-14's 768-draw throughput probe at both adversarial extremes
+- [x] 25-11-PLAN.md — D-24's per-record norm calibration at both capacities and D-14's 768-draw throughput probe at both adversarial extremes
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
