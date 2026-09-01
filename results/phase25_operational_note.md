@@ -274,6 +274,25 @@ matters operationally:
   `tests/test_phase25_launch.py::test_the_working_directory_is_the_repo_root` asserts every
   repo path in all three plists is anchored on it.
 
+### The minimal environment was checked, because §O1 runs inside it
+
+launchd hands an agent a minimal environment, and the sweep's 44 commits are made by a process that
+never sees the operator's shell. Both halves were verified read-only under exactly the `PATH` the
+plists declare:
+
+```
+$ env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=$HOME /usr/bin/git -C /Users/juliorcoelho/PersonaCore var GIT_COMMITTER_IDENT
+Rafael <rafael.d.cooelho@gmail.com> 1788255173 -0300
+
+$ env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=$HOME /usr/bin/git -C /Users/juliorcoelho/PersonaCore ls-files 'results/phase25_point_*.json' | wc -l
+       0
+```
+
+`git` resolves at `/usr/bin/git`, the commit identity resolves from `$HOME`, and D-10's
+`prove_first_attempt` read returns the same empty list it returns from a shell. A missing identity
+would have failed the **commit** — step 7 of `run_point`, after the point's whole GPU cost had
+already been spent.
+
 ---
 
 ## 9. The deliberate change from 23-20 — a wrap, not a watch
