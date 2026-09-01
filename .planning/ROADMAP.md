@@ -928,7 +928,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 25-12-PLAN.md — D-18's σ_hi probe, then the σ/ε ladder and the two clip constants pinned (D-17, D-20, D-24), the budget register's natural RED watched, and WR-05 corrected additively
+- [x] 25-12-PLAN.md — D-18's σ_hi probe, then the σ/ε ladder and the two clip constants pinned (D-17, D-20, D-24), the budget register's natural RED watched, and WR-05 corrected additively
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
