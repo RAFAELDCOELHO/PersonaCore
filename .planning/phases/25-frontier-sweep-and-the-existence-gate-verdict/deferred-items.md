@@ -87,3 +87,44 @@ the same `recall.draw_all` primitive 1,536 times through `phase23_run._measure_c
 is why the defect surfaced here, but `phase25_run._draw_one_shape` itself is still only covered on
 its dry-run branch. A single non-dry-run smoke over one shape at `k=2` would close it; that is
 plan 25-14/25-15's call, not 25-11's.
+
+---
+
+### 25-14: the launch gate was reached with the live draw loop still uncovered
+
+**Found during:** plan 25-14, Task 1 (authoring the LaunchAgents that start the sweep).
+
+This is not a new defect — it is the **residual** recorded in the entry above, reaching the point
+where it stops being deferrable. 25-14 builds the agents that launch an **87.86–149.45 h**
+unattended run, and at that gate `scripts/phase25_run.py::_draw_one_shape` is still covered only on
+its `--dry-run` branch by every committed driver test. The instance is fixed (`6df1eba`); the
+**coverage class is not**, and the failure mode it belongs to fires *after* up to 23.05 minutes of a
+point's training has already been spent.
+
+Recorded as **R1** in `results/phase25_operational_note.md` §10 and asserted present by
+`tests/test_phase25_launch.py::test_the_note_carries_the_untested_draw_loop_as_an_open_risk`, so the
+risk cannot be dropped from the note silently.
+
+**What would close it:** one non-dry-run smoke over a single shape at `k=2` — the previous entry's
+own prescription. 25-14 does not run it: this plan runs **no GPU point** by its own environment
+contract (`git ls-files 'results/phase25_point_*.json'` must still be empty at its end), and a
+first-point smoke is plan 25-15's scope.
+
+### 25-14: `com.personacore.caffeinate` is a launchd job with no plist anywhere
+
+**Found during:** plan 25-14's read-only before-state inspection.
+
+`launchctl list` reports `58309  0  com.personacore.caffeinate`, a `launchctl submit`-created job
+(`type = Submitted`, `path = (submitted by launchctl[58308])`, `ppid 1`) running
+`/usr/bin/caffeinate -ims` and asserting **forever** for `416:31:41`. **No plist for it exists in
+`~/Library/LaunchAgents` and none exists in this repository** — it was created imperatively in an
+earlier session and outlived it.
+
+It is D-43's residue hazard realised: it holds `PreventUserIdleSystemSleep`, `PreventSystemSleep`
+and `PreventDiskIdle`, nearly the set `caffeinate -dims` takes, so a sweep launched beside it would
+appear protected while a 17-day-old process is what genuinely holds the machine awake.
+
+**Deferred because clearing it is machine state, not code**: it is step (c) of 25-14's blocking
+human checkpoint. Recorded here because the *lesson* outlives the act — an imperatively-submitted
+launchd job leaves no reviewable artifact, which is exactly why this phase's two agents are
+committed plists under `artifacts/` and the installed copies are treated as disposable.
