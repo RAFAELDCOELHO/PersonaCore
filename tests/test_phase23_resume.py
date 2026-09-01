@@ -74,6 +74,13 @@ _TRAIN_ARM_CALL_SITES = (
     # the reason `_RESUME_PASSERS` is a COUNT rather than a file-level exemption: it also passes
     # `resume_from`, so admitting the file once would have let a third passer in unnoticed.
     ("scripts/phase23_run.py", "call", "train_noised"),
+    # Plan 25-10's 44-point frontier driver — the THIRD production consumer of the resume seam,
+    # and the first outside `phase23_run.py`. `phase25_run.train_point` threads `resume_from`
+    # through to `train_arm` because D-09's unit is the sweep POINT: a point killed mid-training
+    # over a 4.5-6.3-day unattended run must resume its own 200 steps rather than restart them,
+    # and D-10 counts that resumption as the SAME attempt. `_RESUME_PASSERS` admits it by name
+    # below, at a count of 1.
+    ("scripts/phase25_run.py", "call", "train_point"),
     ("scripts/teach_persona.py", "call", "main"),
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
@@ -134,6 +141,10 @@ _RESUME_PASSERS = {
     # NOTHING, which is why this is a count and not a file-level exemption — and the count moving
     # 1 -> 2 when 23-11 landed is that distinction doing its job.
     "scripts/phase23_run.py": 2,
+    # Plan 25-10's `train_point`. ONE passer: the 44-point driver has a single `train_arm` call
+    # site, threaded from `run_point`, so a second one appearing here reddens exactly as it would
+    # in `phase23_run.py`.
+    "scripts/phase25_run.py": 1,
 }
 
 # The DP generator's state is **5,056 bytes on CPU and 44 bytes on MPS** (measured, torch 2.7.1 —
@@ -243,16 +254,19 @@ def test_resume_from_none_is_inert():
     # `phase23_run.train_control`; TEN from 23-10, which added `phase23_run.train_sigma_zero` — the
     # seam's first production consumer; ELEVEN from 23-11, which added `phase23_run.train_noised`,
     # the milestone's first NOISED sweep point (`dp_n64` at σ>0) and the seam's SECOND production
-    # consumer. The literal is a tripwire against a site vanishing
+    # consumer; TWELVE from 25-10, which added `phase25_run.train_point`, the 44-point frontier
+    # driver and the seam's THIRD production consumer — the first one outside `phase23_run.py`.
+    # The literal is a tripwire against a site vanishing
     # unnoticed, so it is BUMPED with its reason rather than derived from the register — that would
     # make the check restate the register instead of pinning a count against it. Every number is
     # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8 + 1 + 1 + 1
+        == 8 + 1 + 1 + 1 + 1
     ), (
         "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling "
-        "plus 23-10's σ=0 diagnostic plus 23-11's noised sweep point"
+        "plus 23-10's σ=0 diagnostic plus 23-11's noised sweep point plus 25-10's 44-point "
+        "frontier driver"
     )
 
     # ...and the AST agrees with the register about which of them are real CALLS.
