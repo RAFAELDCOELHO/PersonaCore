@@ -259,7 +259,7 @@ A second natural RED was taken from the file's own intermediate state: `test_no_
 Created files, verified present:
 - `scripts/phase25_calibrate.py` — FOUND
 - `tests/test_phase25_calibrate.py` — FOUND
-- `results/phase25_clip_calibration.json` — FOUND (591,637 B)
+- `results/phase25_clip_calibration.json` — FOUND (587,582 B)
 - `results/phase25_adversarial_throughput.json` — FOUND
 
 Commits, verified in `git log`:
