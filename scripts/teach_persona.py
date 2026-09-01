@@ -341,32 +341,6 @@ def _require_go_verdict(report_path):
     return verdict
 
 
-_DEVICE = None
-
-
-def device():
-    """The preflighted device, resolved once per process (CUDA-P100 -> MPS -> CPU).
-
-    ``scripts/phase23_run.py:473``'s resolver, moved to the module five call sites already
-    assumed owned it. MEASURED at HEAD before this function existed: ``scripts/phase25_run.py``'s
-    ``_draw_one_shape`` calls ``tp.device()`` twice (``:519`` and ``:541``) and
-    ``scripts/phase25_calibrate.py``'s throughput probe three times, and every one of them raised
-    ``AttributeError: module 'teach_persona' has no attribute 'device'``. The Phase 25 driver's
-    whole draw loop was therefore unreachable — it would have raised on the FIRST draw of the
-    FIRST sweep point, AFTER that point's training leg had already spent up to 23.05 minutes, and
-    no test reached it because every committed driver test exercises the ``--dry-run`` path.
-
-    Added HERE and not patched at each caller: five callers all assumed this name, so the missing
-    piece is the name, not the calls. ``phase23_run.device()`` stays as it is — it caches its own
-    global and prints under its own prefix, and rewriting a Phase-23 module to import this one
-    would move a recorded run's log lines for no gain.
-    """
-    global _DEVICE
-    if _DEVICE is None:
-        _DEVICE = RuntimeConfig().device
-    return _DEVICE
-
-
 def arm_outputs(arm, *, prefix="phase14"):
     """Name-scoped write targets for one arm — no two arms ever share a path.
 
