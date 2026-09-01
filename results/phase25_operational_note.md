@@ -252,6 +252,36 @@ the author's own machine. **Its revert does not depend on anyone remembering it.
 A revert to macOS's shipped defaults would be a second unrequested system change wearing the word
 "revert". These three numbers are what was actually there.
 
+### 7b. A SECOND revert obligation, incurred 2026-09-01 — restore the polymarket-bot keep-awake
+
+Clearing the strays before launch removed **two** assertion holders, and only one of them was
+Phase-25 residue.
+
+| | |
+|---|---|
+| `com.personacore.caffeinate` (pid 58309) | a `launchctl submit` job, `ppid 1`, `caffeinate -ims`, asserting continuously since 2026-08-14 (~17 days) with **no plist on disk and none in this repo**. Booted out. **Nothing to restore** — it is unowned cruft and it is exactly what D-43's masking hazard looks like. |
+| pid 7591 — `caffeinate -s -i -w 7584` | **NOT Phase-23 residue.** Its watched pid 7584 was and remains **LIVE**: `collect_negrisk_books.py --service --interval 900`, an unrelated polymarket-bot collector. This was a legitimate active keep-awake for another project and it was killed on a misreading. |
+
+**Obligation:** restore the polymarket-bot keep-awake as part of plan 25-20's revert step, executed
+together with `PMSET_REVERT` and verified in the same breath as `prove_reverted()`.
+
+```bash
+# 25-20, immediately after PMSET_REVERT restores sleep 1 / disksleep 10 / powernap 1:
+PMPID=$(pgrep -f 'collect_negrisk_books.py --service')   # re-resolve; 7584 may have been restarted
+[ -n "$PMPID" ] && nohup caffeinate -s -i -w "$PMPID" >/dev/null 2>&1 &
+pmset -g assertions | sed -n '/Listed by owning process:/,/Kernel Assertions:/p' | grep caffeinate
+```
+
+Deferred deliberately, not forgotten: while the sweep runs, `pmset -a sleep 0` holds the machine
+awake system-wide, so the collector is protected **redundantly** and the assertion would only add a
+non-Phase-25 owner that §2's "the sweep holds its OWN assertion" read-back must then explain away.
+The protection lapses at the moment `PMSET_REVERT` lands, which is why the restore belongs in the
+same step and not later. Operator decision, 2026-09-01.
+
+Do NOT restore the 58309 job. Re-resolve the collector's pid at revert time rather than reusing
+`7584` — a service restarted during a 4.5-6.3 day run will carry a different pid, and
+`caffeinate -w` against a dead pid exits immediately and silently, which would look like success.
+
 ---
 
 ## 8. §O1 — the driver's git surface, restated here because the plist is what makes it resolve

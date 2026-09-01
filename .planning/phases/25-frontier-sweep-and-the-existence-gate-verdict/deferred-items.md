@@ -128,3 +128,20 @@ appear protected while a 17-day-old process is what genuinely holds the machine 
 human checkpoint. Recorded here because the *lesson* outlives the act — an imperatively-submitted
 launchd job leaves no reviewable artifact, which is exactly why this phase's two agents are
 committed plists under `artifacts/` and the installed copies are treated as disposable.
+
+## D-25-20-RESTORE — restore the polymarket-bot keep-awake at revert time
+
+**Incurred:** 2026-09-01, clearing the strays before the 25-14 launch gate.
+**Discharged by:** plan 25-20, in the same step as `PMSET_REVERT`.
+
+pid 7591 (`caffeinate -s -i -w 7584`) was reported in the 25-14 checkpoint as Phase-23 residue and
+killed on that basis. It was not: pid 7584 is LIVE and unrelated to PersonaCore —
+`collect_negrisk_books.py --service --interval 900` (polymarket-bot). The keep-awake was legitimate.
+
+While the sweep runs, `pmset -a sleep 0` protects that collector redundantly, so the operator chose
+to defer the restore rather than add a non-Phase-25 assertion owner that the sweep's own-assertion
+read-back would have to explain away. **The protection lapses the instant `PMSET_REVERT` lands** —
+restore in that same step. Full procedure and the pid-reresolution trap: `results/phase25_operational_note.md` §7b.
+
+By contrast `com.personacore.caffeinate` (pid 58309, ~17 days, no plist anywhere) is unowned cruft.
+Booted out; **nothing to restore.**
