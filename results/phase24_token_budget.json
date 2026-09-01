@@ -41,6 +41,11 @@
         "dp_n8": 1.0,
         "dp_n64": 8.0
       },
+      "multiplicity_at_upper_extreme_corrected": {
+        "adv_n8": 1.0,
+        "adv_n64": 8.0
+      },
+      "multiplicity_key_correction": "2026-09-01, PLAN 25-12, closing 24-REVIEW WR-05 under D-41. `multiplicity_at_upper_extreme` above keys on dp_n8/dp_n64, which are the arm names results/phase21_multiplicity.json's corpus_geometry carries; but the ADVERSARIAL sweep this grid sizes runs on adv_n8/adv_n64, and every measured row in results/phase24_token_budget.json keys on those. Measured at the upper extreme: adv_n8 clean_episodes 176 / adversarial_episodes 336 / adversarial_multiplicity 1.0, and adv_n64 clean_episodes 1408 / adversarial_episodes 2688 / adversarial_multiplicity 8.0 \u2014 identical values, disagreeing arm names. THE ORIGINAL KEY STAYS STANDING: this module is append-only, the figure it carries is correct, and erasing a believed figure would destroy the record of what was believed. The corrected sibling above is the key a consumer joining against a measured adversarial row should read",
       "governs": "the number of ADVERSARIAL SWEEP POINTS PER CAPACITY in Phase 25's frontier, and nothing else. It is a RESOURCE parameter: it sizes the spend and decides no outcome. It is independent of SWEEP_POINTS, which sizes the NOISE sweep. It carries no `sized_against`, because no throughput figure participates in it \u2014 the grid was derived from a corpus count and an episode count, not from an h/point measurement. It carries no top-level `git_sha` or `record_sha256` either, and that absence is BY CONSTRUCTION rather than an omission: the pin has TWO backing records, so a single digest could only name one of them, and a commit sha for 'where this pin landed' cannot be written into the commit that lands it. `upper_extreme_source_provenance` carries a per-record digest instead, checked LIVE, and `results/phase18_corpus.json` records no `git_sha` of its own \u2014 that None is asserted absent rather than invented"
     },
     "source": "scripts/mitigation_budget.ADVERSARIAL_RATIO_GRID \u2014 imported, never retyped"
@@ -648,8 +653,8 @@
     "inflation_report_discharge": "SC4's inflation-report obligation attaches to a NEW attack corpus, and this phase creates none. It reuses results/phase18_corpus.json VERBATIM and READ-ONLY \u2014 phase18_extraction.build_corpus is never called from phase24_adversarial (AST: zero calls), every trained prompt is proved byte-equal to its committed prompt_ids under hard list equality, and the digest above travels in this record so the corpus a future report names is checkable against the corpus that was trained on. The obligation is therefore discharged by non-creation, stated here so a reader cannot mistake the absence of an inflation report for an omission."
   },
   "provenance": {
-    "git_sha": "e42be579d2349c37bd1ffe037c53a639f89e2c82",
-    "written_utc": "2026-08-31T18:42:53Z",
+    "git_sha": "049a6bbfaac6012820f2683c1da67ce11657efbe",
+    "written_utc": "2026-09-01T06:48:26Z",
     "python": "3.11.15",
     "seed": 1337,
     "device": "cpu (build-only; no training, no GPU, no MPS)",
@@ -658,7 +663,7 @@
     "module_sha256": {
       "scripts/phase24_record.py": "f2267e14ab766e4e48d0ea00152aa16b9539f0e1684caee6c3046ba3169c2809",
       "scripts/phase24_adversarial.py": "b679c6f6b20657f48d2e8c7cde36d3b7e4221ed7af7782fc02f0b0b29d5fdf22",
-      "scripts/mitigation_budget.py": "2e5adc916702bab00209432d2fe7a83dbb8e90b99fa9311bda7061949d4591ae",
+      "scripts/mitigation_budget.py": "1b35aa8853524d0554ff052375294ea72d455ea125fb0ec0f1a4d1218ad9ed51",
       "scripts/teach_persona.py": "3c1e6c5523fdf8e8db4f800b95796253809aa3c50fcd48267da1c0af64e618d1"
     },
     "epsilon_computed": false,
