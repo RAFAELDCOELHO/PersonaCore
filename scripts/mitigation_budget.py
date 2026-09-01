@@ -692,6 +692,29 @@ ADVERSARIAL_RATIO_GRID_PROVENANCE = {
         "and changes no verdict"
     ),
     "multiplicity_at_upper_extreme": {"dp_n8": 1.0, "dp_n64": 8.0},
+    # ---------------------------------------------------------------------------------------
+    # WR-05 CORRECTION, ADDED 2026-09-01 BY PLAN 25-12. ADDITIVE, NEVER AN EDIT.
+    # The key ABOVE keys on `dp_n8`/`dp_n64`. Every MEASURED row in
+    # results/phase24_token_budget.json keys on `adv_n8`/`adv_n64`, and those rows record
+    # `adversarial_multiplicity` 1.0 at adv_n8 and 8.0 at adv_n64 at this same upper extreme —
+    # the identical values under the arm names the measurement actually used. The original key
+    # is LEFT STANDING because this module is append-only and because it is what was believed;
+    # the correction is a sibling.
+    # ---------------------------------------------------------------------------------------
+    "multiplicity_at_upper_extreme_corrected": {"adv_n8": 1.0, "adv_n64": 8.0},
+    "multiplicity_key_correction": (
+        "2026-09-01, PLAN 25-12, closing 24-REVIEW WR-05 under D-41. `multiplicity_at_upper_"
+        "extreme` above keys on dp_n8/dp_n64, which are the arm names "
+        "results/phase21_multiplicity.json's corpus_geometry carries; but the ADVERSARIAL sweep "
+        "this grid sizes runs on adv_n8/adv_n64, and every measured row in "
+        "results/phase24_token_budget.json keys on those. Measured at the upper extreme: adv_n8 "
+        "clean_episodes 176 / adversarial_episodes 336 / adversarial_multiplicity 1.0, and "
+        "adv_n64 clean_episodes 1408 / adversarial_episodes 2688 / adversarial_multiplicity 8.0 — "
+        "identical values, disagreeing arm names. THE ORIGINAL KEY STAYS STANDING: this module is "
+        "append-only, the figure it carries is correct, and erasing a believed figure would "
+        "destroy the record of what was believed. The corrected sibling above is the key a "
+        "consumer joining against a measured adversarial row should read"
+    ),
     "governs": (
         "the number of ADVERSARIAL SWEEP POINTS PER CAPACITY in Phase 25's frontier, and nothing "
         "else. It is a RESOURCE parameter: it sizes the spend and decides no outcome. It is "
@@ -705,5 +728,289 @@ ADVERSARIAL_RATIO_GRID_PROVENANCE = {
         "`upper_extreme_source_provenance` carries a per-record digest instead, checked LIVE, and "
         "`results/phase18_corpus.json` records no `git_sha` of its own — that None is asserted "
         "absent rather than invented"
+    ),
+}
+
+
+# =================================================================================================
+# PLAN 25-12: THE NOISE AXIS — sigma, its epsilon, and the TWO clip constants.
+#
+# NONE OF THE FOUR IS A Z CONSTANT and none carries `sized_against`. No throughput figure feeds
+# any of them: they size the NOISE axis, not the spend. They are subtracted from
+# `tests/test_phase23_budget.py`'s Z register through `_POST_23_13_CONSTANTS`, each mapped to
+# `tests/test_phase25_grid.py`, which re-derives every one of them LIVE.
+#
+# LITERALS, AND THAT IS FORCED RATHER THAN STYLISTIC. This module's guard
+# (`test_budget_holds_only_literal_constants`) requires the body to be a docstring plus
+# `ast.Assign` only and runs `ast.literal_eval` on every assigned value, so a `sigma_for(...)`
+# call, an `epsilon_for(...)` call and a division are all `ast` nodes it refuses. Every epsilon
+# below is TRANSCRIBED from what `personacore.privacy.accountant.epsilon_for` returned; nothing
+# here is computed.
+# =================================================================================================
+
+# THE SIGMA LADDER (D-17, D-18, D-20).
+#
+#   input    : the measured epsilon(sigma) curve at T = STEP_BUDGET, delta = mitigation_unit.DELTA,
+#              and the probed high anchor in results/phase25_sigma_hi_probe.json
+#   rule     : a geometric span in sigma from the repository's ONLY committed noised point
+#              (sigma 0.5, results/phase23_noised_dp_n64_sigma0p500000.json) up to the PROBED
+#              anchor, in ROUND sigma values. Slot 0 is the sigma=0 CONTROL, which D-20 places
+#              INSIDE SWEEP_POINTS, leaving 15 noised rungs per leg
+#   output   : the 16 float literals below
+#   evidence : results/phase25_sigma_hi_probe.json (the anchor), and
+#              results/phase25_clip_calibration.json (the C the anchor was probed at)
+#
+# ROUND SIGMA AND NOT ROUND EPSILON, AND THE REASON IS MEASURED. `sigma_for` is a numerical
+# inverse whose round trip is exact to about one ULP and NOT exact:
+# `sigma_for(8, 200, 1e-5) = 8.488520944343772` gives `epsilon_for` back 7.9999999999999964, not
+# 8. Pinning round-number epsilon targets would therefore be unsatisfiable under the `==` that
+# `tests/test_phase25_grid.py` checks the correspondence with. Round sigma with the FULL-PRECISION
+# epsilon transcribed beside it is the only ==-satisfiable formulation, and it is
+# `tests/test_phase24_grid.py`'s own literal-pinned-plus-live-derivation shape.
+SIGMA_LADDER = (
+    0.0,
+    0.5,
+    0.7,
+    1.0,
+    1.5,
+    2.0,
+    3.0,
+    4.0,
+    6.0,
+    8.0,
+    12.0,
+    16.0,
+    24.0,
+    32.0,
+    50.0,
+    80.0,
+)
+
+SIGMA_LADDER_PROVENANCE = {
+    "record": "results/phase25_sigma_hi_probe.json",
+    "record_sha256": "b5c979d69a181e319840ec30565198f02589ce75c1d6f8f32367d8624b0d9d10",
+    "git_sha": "79e6431ff7fdd5cd5c56f25ac62a34f61e64a4ab",
+    "derivation": (
+        "a geometric span in sigma from the repository's only committed noised point (sigma 0.5, "
+        "results/phase23_noised_dp_n64_sigma0p500000.json, epsilon 519.6981942303134) up to the "
+        "PROBED high anchor, in round sigma values; slot 0 is the sigma=0 control"
+    ),
+    "anchor": 80.0,
+    "anchor_probed_not_presumed": (
+        "D-18. results/phase25_sigma_hi_probe.json trained dp_n64 at sigma "
+        "80.0 and C 1.3254119157791138, scored it RECALL-ONLY, and read "
+        "taught recall 0/"
+        "1008 against the same run's adapter-OFF "
+        "0/"
+        "1008. The record was committed BEFORE "
+        "this literal existed and tests/test_phase25_grid.py::"
+        "test_the_ratchet_rule_is_committed_before_the_ladder asserts that order from `git log` "
+        "rather than trusting it"
+    ),
+    "anchor_selection_rule": (
+        "the SMALLEST ROUND sigma whose epsilon at T=200, delta=1e-5 falls below 1 — the only "
+        "pre-existing landmark on this axis that is not this project's own preference. sigma 50.0 "
+        "reads 1.060789755417757 (above 1) and sigma 80.0 reads 0.6339783761989397 (below 1)"
+    ),
+    "extension_rule": (
+        "RATCHET-SHAPED, and it lives in full in results/phase25_sigma_hi_probe.json's "
+        "RATCHET_EXTENSION_RULE. If the high extreme's FULL extraction read still misses the "
+        "never-taught floor, the ladder EXTENDS UPWARD by a pre-registered rung whose epsilon is "
+        "HALF the current top rung's. It never shifts and never shrinks, so it has no cheap "
+        "direction"
+    ),
+    "control_slot": 0,
+    "control_slot_reason": (
+        "D-20 puts sigma=0 INSIDE SWEEP_POINTS = 16 rather than beside it: CTRL-02 makes the "
+        "control a REAL sweep point and phase23_cost.sizing['16'] prices 16 points plus the "
+        "never-taught floor as a SEPARATE term, reserving nothing for a 17th. 15 noised rungs per "
+        "DP leg, and the phase total stays 44"
+    ),
+    "reused_at_both_capacities": True,
+    "reused_at_both_capacities_reason": (
+        "ONE ladder serves dp_n8 AND dp_n64, and that is forced twice over. "
+        "mitigation_gate.capacity_comparison compares the two legs' mechanisms under EXACT "
+        "equality on every key of MECHANISM_KEYS, of which sigma is one — so reusing a single set "
+        "of literals satisfies that check BY CONSTRUCTION rather than by two ladders happening to "
+        "agree. And this module is literal-only, so a per-capacity ladder derived from a shared "
+        "one could not be written here at all. There is no per-capacity variant name in this "
+        "module and tests/test_phase25_grid.py::test_one_ladder_serves_both_capacities asserts "
+        "that absence"
+    ),
+    "governs": (
+        "the NOISE COORDINATE of every DP sweep point in Phase 25's frontier, at both capacities, "
+        "and nothing else. It is a RESOURCE/COVERAGE parameter in this module's strict sense: it "
+        "decides WHERE the curve is sampled, not what any reading of it means. No gate, no "
+        "threshold and no criterion reads it. It carries no `sized_against` because NO THROUGHPUT "
+        "FIGURE PARTICIPATES IN IT — the ladder was derived from an epsilon curve and a recall "
+        "probe, never from an h/point measurement"
+    ),
+}
+
+# THE EPSILON LADDER — `epsilon_for(SIGMA_LADDER[i], STEP_BUDGET, mitigation_unit.DELTA)`,
+# TRANSCRIBED AT FULL PRECISION.
+#
+# INDEX 0 IS `None`, AND THREE INDEPENDENT REASONS AGREE ON IT: `epsilon_for(0.0, ...)` returns
+# `math.inf`; `inf` is not `ast.literal_eval`-able so this module could not hold it even if it
+# wanted to; and D-29 states that the sigma=0 control carries NO epsilon at all. All three are
+# asserted in `tests/test_phase25_grid.py::test_the_control_rung_carries_no_epsilon`, so the
+# `None` is proved FORCED rather than chosen.
+#
+# Entry 1 is 519.6981942303134, which is BIT-IDENTICAL to the epsilon already committed in
+# results/phase23_noised_dp_n64_sigma0p500000.json — the ladder's low end reconnects to the one
+# noised point the repository has actually run, rather than to a fresh computation.
+EPSILON_LADDER = (
+    None,
+    519.6981942303134,
+    289.33863705009264,
+    159.44148628736576,
+    83.8305906128762,
+    54.37663901498563,
+    30.50627999271221,
+    20.675508046994032,
+    12.262332118205716,
+    8.595865790470416,
+    5.299979064701441,
+    3.7965357228934966,
+    2.3957449097512216,
+    1.7369988136430536,
+    1.060789755417757,
+    0.6339783761989397,
+)
+
+EPSILON_LADDER_PROVENANCE = {
+    "record": "results/phase23_noised_dp_n64_sigma0p500000.json",
+    "record_sha256": "99d70adb4ac02543c0c93df42b2947de4a037758704ecc09206332267f2a85f7",
+    "git_sha": None,
+    "derivation": (
+        "personacore.privacy.accountant.epsilon_for(SIGMA_LADDER[i], STEP_BUDGET, "
+        "mitigation_unit.DELTA) for i in 1..15, transcribed at full precision. Index 0 is None. "
+        "The cited record is the ONE committed point this ladder can be checked against without "
+        "recomputing it: its epsilon field is 519.6981942303134 and EPSILON_LADDER[1] is the same "
+        "double. `git_sha` is None because this ladder is not derived FROM that record — the "
+        "record is a bit-level cross-check on one entry of a ladder computed from the accountant"
+    ),
+    "delta": 1e-05,
+    "delta_source": "mitigation_unit.DELTA, read live by tests/test_phase25_grid.py",
+    "steps": 200,
+    "steps_source": (
+        "STEP_BUDGET, pinned above. D-27: it is the SAME T at both capacities, measured rather "
+        "than inferred — phase23_sigma_zero and phase23_noised_dp_n64 both record composed_steps "
+        "200 with t_matches_across_capacities true — which is what lets ONE epsilon ladder serve "
+        "both legs, since epsilon_for reads T and T does not move with capacity"
+    ),
+    "checked_under": (
+        "EXACT `==`, no tolerance, in tests/test_phase25_grid.py::"
+        "test_each_noised_rung_lands_on_its_pinned_epsilon over all 15 noised rungs"
+    ),
+    "governs": (
+        "the PUBLISHED per-point epsilon of each noised DP sweep point, and nothing else. It "
+        "carries no `sized_against`: no throughput figure participates in it"
+    ),
+}
+
+# THE CLIP CONSTANT FOR THE NOISED POINTS (D-24).
+#
+#   input    : the PER-RECORD gradient-norm distribution on the DP path, measured value by value
+#              at both capacities over the full MAX_STEPS = 200
+#   rule     : `sorted(per_record_norms['dp_n64']['values'])[6399]` —
+#              the order statistic at quantile 0.5 with NO interpolation, so the
+#              candidate IS one of the measured values and re-derives from them BY INDEX under
+#              exact equality. The quantile was fixed BEFORE the number
+#   output   : the float literal below
+#   evidence : results/phase25_clip_calibration.json
+#
+# WHY NOT C = 1.0. results/phase23_noised_dp_n64_sigma0p500000.json recorded
+# `clip_bind_count` 12800 of 12800 at C = 1.0 — 100% binding. At fixed sigma epsilon does not
+# depend on C, so a C below every record's norm is pure clipping bias bought for nothing. The
+# measurement confirms the counter-example is real rather than an artifact of one run:
+# 12508 of
+# 12800 measured
+# dp_n64 records exceed 1.0.
+CLIP_NORM = 1.3254119157791138
+
+CLIP_NORM_PROVENANCE = {
+    "record": "results/phase25_clip_calibration.json",
+    "record_sha256": "54dc7bd17190a9c712423627273b4ba800644674612b4d7641f897ad99e4d797",
+    "git_sha": "6df1ebac406745f3854eebcdcb8ac589e377d81c",
+    "derivation": (
+        "clip_norm_rule in the cited record: the order statistic "
+        "sorted(per_record_norms[capacity]['values'])[ceil(q * n) - 1] at q = 0.5 over the "
+        "BINDING capacity's own distribution, taken WITHOUT interpolation. "
+        "tests/test_phase25_grid.py::test_clip_norm_re_derives_from_the_committed_measurement "
+        "recomputes it from the recorded per-record values and asserts exact equality"
+    ),
+    "rule_capacity": "dp_n64",
+    "rule_quantile": 0.5,
+    "rule_index": 6399,
+    "n_records": 12800,
+    "governs": (
+        "every NOISED DP sweep point, at BOTH capacities. It does NOT govern the sigma=0 control, "
+        "which runs at CONTROL_CLIP_NORM below. It is a RESOURCE parameter: it sizes the noise "
+        "(std = sigma * C at dpsgd.py's one draw site) and decides no outcome. It carries no "
+        "`sized_against`: no throughput figure participates in it"
+    ),
+    "why_two_constants": (
+        "D-01's reproduction of the sigma=0 control is BIT-LEVEL against "
+        "results/phase23_sigma_zero.json, which ran at 1000000.0. Applying this calibrated "
+        "value to the control would break that reproduction, and 25-CONTEXT resolves the pair "
+        "nowhere — so TWO constants are pinned and each names the points it governs"
+    ),
+    "not_a_mechanism_key": (
+        "C CANNOT JOIN mitigation_gate.MECHANISM_KEYS and does not need to (D-25). The gate is "
+        "FROZEN and ancestry-guarded: any commit to scripts/mitigation_gate.py after "
+        "results/phase20_* exists reddens the guard permanently, and the guard takes adds[-1] — "
+        "the EARLIEST add — so a `git rm` plus a re-add cannot launder it. The gap is closed "
+        "CALLER-SIDE instead: clip_norm travels in the mechanism dicts and the Phase 25 driver "
+        "proves equality on it BEFORE calling the gate. This single literal makes that true by "
+        "construction"
+    ),
+    "extra_keys_are_ignored_measured": (
+        "MEASURED LIVE ON THE FROZEN GATE, 2026-09-01, not argued: capacity_comparison's check is "
+        "`missing = [key for key in MECHANISM_KEYS if key not in ...]`, so EXTRA keys are ignored "
+        "rather than refused. Called with the two mechanism mappings agreeing on all four "
+        "MECHANISM_KEYS and differing only in clip_norm at exactly this pin's own pair "
+        "(1.3254119157791138 against 1000000.0, a ratio of 754482.4277607104), it returned branch "
+        "'recovery-at-both-capacities' and NOT ONE of its reason strings mentioned clip. That "
+        "silence is why the equality is proved caller-side"
+    ),
+}
+
+# THE CLIP CONSTANT FOR THE CONTROL (D-01, D-25).
+#
+#   input    : results/phase23_sigma_zero.json's own `clip_norm`, read live rather than retyped
+#   rule     : the sigma=0 control REUSES Phase 23's value UNCHANGED, or D-01's reproduction is
+#              not bit-level
+#   output   : the float literal below
+#   evidence : results/phase23_sigma_zero.json — which ran at this value and recorded
+#              `clip_bind_count` 0 over the whole run, so the bound is PROVEN not to bind rather
+#              than assumed not to
+CONTROL_CLIP_NORM = 1000000.0
+
+CONTROL_CLIP_NORM_PROVENANCE = {
+    "record": "results/phase23_sigma_zero.json",
+    "record_sha256": "dd34e51398b87d54c4e83dcfd192a0e7abead7c73d143aeb28b11cfa07e85d36",
+    "git_sha": "9ed2370f78732aa36e0041499290abd924e013ac",
+    "derivation": (
+        "read live from the cited record's own `clip_norm` field, never retyped. "
+        "tests/test_phase25_grid.py::test_the_control_clip_norm_matches_phase_23 re-reads it from "
+        "that record on every suite run"
+    ),
+    "clip_bind_count_at_this_value": 0,
+    "non_binding_is_observed_not_assumed": (
+        "the cited record ran the full 200 steps at this value and recorded clip_bind_count 0, so "
+        "'non-binding' is an observation over "
+        "200 step(s) rather than a property claimed of a "
+        "large number"
+    ),
+    "governs": (
+        "the sigma=0 CONTROL point only, at both capacities. Every noised point runs at CLIP_NORM "
+        "above. It is a RESOURCE parameter and carries no `sized_against`: no throughput figure "
+        "participates in it"
+    ),
+    "why_not_the_calibrated_value": (
+        "D-01's reproduction of the control is BIT-LEVEL. The control must reuse Phase 23's bound "
+        "UNCHANGED or the reproduction is not bit-level, so the calibrated CLIP_NORM must never be "
+        "applied to the control point"
     ),
 }

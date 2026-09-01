@@ -343,6 +343,18 @@ _POST_23_13_CONSTANTS = {
     # the noise sweep. Registering it as a Z constant would have made every loop below assert a
     # single-record provenance shape it does not have.
     "ADVERSARIAL_RATIO_GRID": "test_phase24_grid.py",
+    # Plan 25-12, D-17/D-18/D-24/D-25's NOISE AXIS: the sigma ladder, its epsilon ladder and the
+    # TWO clip constants. NOT Z constants, and the reason is the one above in a different key —
+    # NO THROUGHPUT FIGURE FEEDS ANY OF THEM. They are pinned from a measured per-record norm
+    # distribution (`results/phase25_clip_calibration.json`) and a PROBED high anchor
+    # (`results/phase25_sigma_hi_probe.json`), and they size the NOISE AXIS rather than the SPEND:
+    # they decide WHERE the curve is sampled, not how much compute it costs. Registering them as Z
+    # constants would have made the loop below demand `sized_against: h_per_point_ceiling` on all
+    # four, and that field would be FALSE on every one of them.
+    "SIGMA_LADDER": "test_phase25_grid.py",
+    "EPSILON_LADDER": "test_phase25_grid.py",
+    "CLIP_NORM": "test_phase25_grid.py",
+    "CONTROL_CLIP_NORM": "test_phase25_grid.py",
 }
 
 # THE THREE MULTIPLICANDS OF THE CEILING-SIDE TOTAL. `SWEEP_POINTS x h_ceiling(CURVE_K)` plus
