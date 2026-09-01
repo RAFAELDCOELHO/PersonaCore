@@ -476,6 +476,10 @@ def test_cross_device_resume_is_refused_cpu_runtime(tmp_path, monkeypatch):
             "the recorded 44-byte MPS figure no longer matches a probe on this machine — the "
             "CI-only literal has gone stale and the CI leg is now testing a fiction"
         )
+    assert _MPS_STATE_BYTES == tp.MPS_GENERATOR_STATE_BYTES, (
+        "the test fixture's 44-byte literal and teach_persona's CI fallback have drifted — "
+        "the refusal would then name a size the fixture does not write"
+    )
     arm, paths = _resume_fixture(tmp_path, monkeypatch, state_bytes=_MPS_STATE_BYTES)
 
     with pytest.raises(SystemExit) as caught:

@@ -66,6 +66,17 @@ _REGISTERED = ("SIGMA_LADDER", "EPSILON_LADDER", "CLIP_NORM", "CONTROL_CLIP_NORM
 
 _NOISED_RUNGS = tuple(range(1, 16))
 
+# Two rungs whose M3/macOS-libm transcription (the published EPSILON_LADDER pin) disagrees
+# with the live glibc accountant on ubuntu-latest. Measured on this project's CI (Actions run
+# 33543052928) and re-derived here: 4 float64 ULPs, not 1 — the last displayed decimal moves
+# but the bit distance is 4. EPSILON_LADDER is the PUBLISHED figure and is not rewritten.
+# Exact `==` against the pin OR the recorded glibc twin; never pytest.approx / isclose. A live
+# value that is neither is a real accountant drift, not libm noise.
+_EPSILON_LADDER_GLIBC_TWINS = {
+    9: 8.595865790470423,
+    14: 1.060789755417756,
+}
+
 
 def _git(*args):
     """One git invocation from the repo root, stdout as text. `check=True` — a failure is a bug."""
@@ -135,23 +146,32 @@ def test_the_ladder_has_sweep_points_entries_with_the_control_at_slot_one():
 
 @pytest.mark.parametrize("index", _NOISED_RUNGS)
 def test_each_noised_rung_lands_on_its_pinned_epsilon(index):
-    """`epsilon_for(sigma, STEP_BUDGET, DELTA) == EPSILON_LADDER[i]`, EXACT, NO TOLERANCE.
+    """`epsilon_for(sigma, STEP_BUDGET, DELTA)` re-derives `EPSILON_LADDER[i]`, EXACT, NO TOLERANCE.
 
     Never `pytest.approx`. The pin was transcribed at full double precision from what the
     accountant returned, so an approximate comparison here would accept exactly the hand-edited
     digit this assertion exists to refuse. `T` and `delta` are read from their own pins rather than
     spelled, so this correspondence is between the module's constants and the accountant, not
     between two hand-typed numbers.
+
+    Two rungs (9 and 14) disagree by 4 float64 ULPs between the M3/macOS-libm transcription
+    (the published pin) and glibc on ubuntu-latest. Those twins are recorded in
+    ``_EPSILON_LADDER_GLIBC_TWINS`` rather than rewriting the published figure or loosening
+    the comparison. Every other rung is still pin == live with nothing else accepted.
     """
     sigma = mitigation_budget.SIGMA_LADDER[index]
     pinned = mitigation_budget.EPSILON_LADDER[index]
     live = epsilon_for(sigma, mitigation_budget.STEP_BUDGET, mitigation_unit.DELTA)
+    glibc_twin = _EPSILON_LADDER_GLIBC_TWINS.get(index)
 
-    assert pinned == live, (
+    assert pinned == live or glibc_twin == live, (
         f"rung {index} pins sigma {sigma!r} against epsilon {pinned!r}, but "
         f"epsilon_for({sigma!r}, {mitigation_budget.STEP_BUDGET!r}, {mitigation_unit.DELTA!r}) "
-        f"returns {live!r}. Exact `==`: a rung whose epsilon does not re-derive is a published "
-        "privacy figure that no longer describes the mechanism it is filed under"
+        f"returns {live!r}"
+        + (f" (recorded glibc twin {glibc_twin!r})" if glibc_twin is not None else "")
+        + ". Exact `==` against the published pin or a recorded platform twin: a rung whose "
+        "epsilon does not re-derive is a published privacy figure that no longer describes "
+        "the mechanism it is filed under"
     )
     assert math.isfinite(pinned) and pinned > 0.0, (
         f"rung {index}'s epsilon is {pinned!r} — a non-finite or non-positive epsilon is not a "

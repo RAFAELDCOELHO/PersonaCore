@@ -1585,14 +1585,27 @@ EVAL_INTERVAL = 10  # 20 curve points over the run — the collateral-collapse t
 CHECKPOINT_INTERVAL = 50  # a killed run loses <= 50 steps; 200 steps needs no heavier cadence
 
 
-def _generator_state_bytes(device):
-    """Byte length of a FRESH ``torch.Generator``'s state on ``device`` — DERIVED, never a literal.
+# Documented torch 2.7.1 MPS generator-state length. Used ONLY when MPS cannot be constructed —
+# CI is ubuntu-latest on a CPU-only wheel, so ``torch.Generator(device="mps")`` is unreachable
+# there, and without this figure a 44-byte checkpoint is named ``unrecognised (44 bytes)`` instead
+# of ``mps``. On a machine that HAS MPS, ``_generator_state_bytes`` probes live and
+# ``tests/test_phase23_resume.py::test_cross_device_resume_is_refused_cpu_runtime`` asserts the
+# live figure equals this literal, so a stale fallback reddens on the M3 rather than silently.
+MPS_GENERATOR_STATE_BYTES = 44
 
-    The two figures this project has measured are 5,056 (CPU) and 44 (MPS) under torch 2.7.1, and
-    they are recorded in ``personacore.checkpoint``'s two-slot register and in
-    ``DPSGD.noise_rng_state``'s docstring. They are NOT hardcoded here: a probe self-calibrates if
-    a torch release moves either number, and a guard that goes stale is worse than no guard.
+
+def _generator_state_bytes(device):
+    """Byte length of a FRESH ``torch.Generator``'s state on ``device``.
+
+    When the device exists this is DERIVED from a live probe (self-calibrates if a torch release
+    moves the number). When it does not — CI cannot construct an MPS generator — the documented
+    ``MPS_GENERATOR_STATE_BYTES`` figure is returned so a cross-device refusal can still NAME the
+    recorded device. The two figures this project has measured are 5,056 (CPU) and 44 (MPS) under
+    torch 2.7.1, recorded in ``personacore.checkpoint``'s two-slot register and in
+    ``DPSGD.noise_rng_state``'s docstring.
     """
+    if device == "mps" and not torch.backends.mps.is_available():
+        return MPS_GENERATOR_STATE_BYTES
     return int(torch.Generator(device=device).get_state().numel())
 
 
@@ -1636,9 +1649,12 @@ def _refuse_cross_device_resume(arm, resume_from, device):
     expected_bytes = _generator_state_bytes(device)
     if recorded_bytes == expected_bytes:
         return
-    probes = {_generator_state_bytes("cpu"): "cpu"}
-    if torch.backends.mps.is_available():
-        probes[_generator_state_bytes("mps")] = "mps"
+    # Always name MPS from the documented 44-byte figure, even on a CPU-only wheel: that is the
+    # whole point of ``MPS_GENERATOR_STATE_BYTES``. A live probe overwrites if MPS is available.
+    probes = {
+        _generator_state_bytes("cpu"): "cpu",
+        _generator_state_bytes("mps"): "mps",
+    }
     if torch.cuda.is_available():
         probes[_generator_state_bytes("cuda")] = "cuda"
     recorded_device = probes.get(recorded_bytes, f"unrecognised ({recorded_bytes} bytes)")
