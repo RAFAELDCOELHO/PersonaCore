@@ -227,11 +227,183 @@ goes stale on a schedule and the watcher can be watched firing without anything 
 
 ---
 
-## 6. The session boundary
+## 6. The session boundary — MEASURED 2026-09-01, and D-12's scope is narrower than D-12 states
 
-**PENDING — see §11.** The two `logs/phase25_rehearsal.out` sizes across a real logout/login are
-the **only** observation that distinguishes a LaunchAgent from a harness background child, which is
-the whole content of D-12. It cannot be inferred from the plist.
+**Named before launch, not discovered mid-run.** This is D-49's discipline applied to the venue:
+the limitation is written down while it can still change the operating plan, rather than
+reconstructed afterwards from a dead run.
+
+### D-12, corrected scope
+
+A `gui/<uid>` LaunchAgent **does not survive an explicit logout of the graphical session.** The
+whole launchd domain is destroyed at logout and a **new** one is created at the next login. The
+plists are re-bootstrapped into the new domain — `launchctl list` still shows all three jobs — but
+the processes are gone and the per-job counters start again from zero. Re-bootstrapping is not
+resumption: `KeepAlive` is false by design (D-10; §10 R4), so nothing restarts itself.
+
+| | |
+|---|---|
+| **Verified and covered** — 23-17's original scope | system sleep, disk sleep, closing the terminal, ending the SSH session |
+| **Follows structurally, not separately measured** | harness compaction and Claude-session end — the agent is `ppid 1` and has no parent in the harness, which is a plist-level fact rather than an observation |
+| **NOT covered** | manual or forced logout of the account (and, a fortiori, restart and shutdown) |
+
+`25-14-PLAN.md`'s D-12 line — *"It survives session end, compaction and logout"* — **stands as
+written**; this is a dated correction to its scope, not an edit of it. The clause that is false is
+`and logout`. Everything else D-12 claims held.
+
+### The observation, verbatim
+
+The boundary was a real logout from the Apple menu followed by a real login. The machine was **not**
+rebooted, which is what makes the domain loss attributable to the logout alone:
+
+```
+$ sysctl -n kern.boottime
+{ sec = 1780966300, usec = 950491 } Mon Jun  8 21:51:40 2026
+```
+
+The rehearsal agent was live and beating when the logout happened — its last beat and
+`loginwindow`'s restart share the same second (16:24:45 UTC is 13:24:45 −0300):
+
+```
+$ tail -1 data/phase25_heartbeat.jsonl
+{"draw_index": null, "point": "rehearsal", "shape": null, "stage": "start", "utc": "2026-09-01T16:24:45.588791+00:00"}
+
+$ ps -p $(pgrep -x loginwindow | head -1) -o pid=,lstart=
+78738 ter  1 set 13:24:45 2026
+
+$ who | grep console
+juliorcoelho     console       1 set 13:41
+```
+
+Read back at **14:12, fifty minutes past the boundary**:
+
+```
+$ for j in sweep watch rehearsal; do printf "%s: " "$j"; launchctl print gui/501/com.personacore.phase25.$j | grep -E "^\s+(runs|state) ="; done
+sweep:      state = not running   runs = 0
+watch:      state = not running   runs = 31
+rehearsal:  state = not running   runs = 0
+
+$ launchctl print gui/501/com.personacore.phase25.rehearsal | grep -E "runs|last exit"
+	runs = 0
+	last exit code = (never exited)
+```
+
+**`runs = 0` is the whole proof, and it needs no before-reading to be conclusive.** That job's own
+stdout log holds four completed launch banners from this boot:
+
+```
+$ grep -c '^\[phase25_launch\]' logs/phase25_rehearsal.out
+4
+```
+
+A counter reading 0 for a job that has demonstrably run four times since 8 June is not the counter
+that counted them: the domain those four runs lived in no longer exists. `watch` corroborates from
+the other side — its `StartInterval` is 60 s, so `runs = 31` at 14:12 dates its domain to ≈13:41,
+the **login**, not the boot 85 days earlier.
+
+And §11's row 6, the measurement this section owed — the two `logs/phase25_rehearsal.out` sizes
+across a real logout/login:
+
+```
+$ stat -f '%N size=%z mtime=%Sm' -t '%F %T' logs/phase25_rehearsal.out
+logs/phase25_rehearsal.out size=748 mtime=2026-09-01 13:22:45
+```
+
+**748 bytes before, 748 bytes after, mtime unmoved at 13:22:45** — the last write predates the
+13:24:45 logout and nothing was written in the fifty minutes after the login. The agent did not
+resume; it was re-bootstrapped and left not running.
+
+The operator also read a **new `asid` and a new launchd socket** across the boundary. That is
+recorded as the operator's direct reading rather than as a quoted before/after pair, because the
+pre-logout values were not captured; the current domain's are `asid = 123933` and
+`SSH_AUTH_SOCK => /var/run/com.apple.launchd.7BAjbFHX6e/Listeners`.
+
+### Corollary — a killed agent loses its unflushed stdout
+
+Run 4's banner has no `rehearsing the beat` line after it, while runs 1–3 have one. The cause is in
+the source, not in launchd:
+
+```
+$ sed -n '699,700p' scripts/phase25_venue.py
+        print(launch_banner(), flush=True)
+        print(f"[phase25_venue] rehearsing the beat for {args.seconds}s -> {args.heartbeat}")
+```
+
+Line 699 flushes, line 700 does not. Runs 1–3 exited cleanly and Python flushed at exit; run 4 was
+killed and its block-buffered line was discarded. **This is not rehearsal-only:**
+
+```
+$ grep -n "print(" scripts/phase25_run.py | grep -vc "flush=True"
+4
+$ grep -l PYTHONUNBUFFERED ~/Library/LaunchAgents/com.personacore.phase25.*.plist | wc -l
+       0
+```
+
+Four of the driver's five `print(` sites are unflushed and no plist sets `PYTHONUNBUFFERED`. Over a
+4.5–6.3 day unattended run whose only diagnostics are these files, an abrupt kill therefore loses
+the last block of driver output — including whatever it was doing when it died.
+`<key>PYTHONUNBUFFERED</key><string>1</string>` in the three plists' existing `EnvironmentVariables`
+dict is the whole fix. **Named, not applied:** the plists are 25-14 artifacts behind the human gate.
+
+### The mitigations, and exactly how far each one goes
+
+**(1) Operational discipline — no logout for the 4.5–6.3 days of the run.** The only mitigation that
+addresses the named limitation directly, and it is a *human commitment, not a control*: nothing on
+the machine enforces it. Screen lock, closing the lid, sleep, quitting the terminal and dropping SSH
+are all inside the covered scope. Only "Log Out" and its forced variants are not.
+
+**(2) Automatic macOS update install and download are OFF**, removing the most likely
+*unintentional* restart trigger. Read live from the system domain:
+
+```
+$ defaults read /Library/Preferences/com.apple.SoftwareUpdate
+    AutomaticDownload = 0;
+    AutomaticallyInstallMacOSUpdates = 0;
+    CriticalUpdateInstall = 0;
+    ConfigDataInstall = 1;
+```
+
+`ConfigDataInstall = 1` is left on deliberately — XProtect/config-data updates do not restart the
+machine. Two neighbouring keys in the same domain are named rather than glossed:
+
+```
+    AutoInstallProductKeys = ( "MSU_UPDATE_25F71_patch_26.5_major" );
+    DDMPersistedErrorKey = { count = 299; reason = "Software update failed."; timestamp = "2026-09-01T13:06:48-03:00"; };
+```
+
+A stale auto-install product key for **26.5** is still listed while the pending update is **26.6.2**,
+and a declarative-management update has failed **299 times**, most recently 13:06 today. Neither
+should fire with all three flags at 0 — but they are evidence that something on this machine keeps
+*trying* to install, so those flags are the thing holding it off and they must not be flipped back
+mid-run.
+
+**(3) Three updates are detected, pending, and deliberately not installed** until the run ends:
+
+```
+$ defaults read /Library/Preferences/com.apple.SoftwareUpdate LastRecommendedUpdatesAvailable
+3
+$ defaults read /Library/Preferences/com.apple.SoftwareUpdate RecommendedUpdates
+  "Command Line Tools for Xcode 26.6"   Product Key 140-17812
+  "Command Line Tools for Xcode 26.5"   Product Key 047-91568
+  "macOS Tahoe 26.6.2"                  MSU_UPDATE_25G83_patch_26.6.2_minor, MobileSoftwareUpdate = 1
+```
+
+Only the third restarts the machine. Installing any of them during the run ends the run.
+
+### 6b. A THIRD obligation — and its target state is NOT known
+
+Flipping those three flags to 0 is a persistent, system-wide change to the author's own machine, in
+the same class as `PMSET_APPLY`. Unlike §7, **its pre-change values were not recorded**: a grep over
+the whole repository returns nothing for `AutomaticallyInstallMacOSUpdates`, and `defaults` keeps no
+history. §7 already says why that matters — *a revert to macOS's shipped defaults would be a second
+unrequested system change wearing the word "revert"*. The obligation is therefore recorded **with
+the gap in it**, not with a guessed target:
+
+| | |
+|---|---|
+| Owner | **plan 25-20**, in the same step as `PMSET_REVERT` and §7b's collector keep-awake |
+| Action | restore the three flags, and decide the three pending updates, to the state the **operator declares** |
+| Forbidden | inferring the target from macOS's shipped defaults — there is no measured prior reading to appeal to |
 
 ---
 
@@ -382,6 +554,14 @@ design (an automatic restart would re-enter a point outside the driver's deliber
 violate D-10), and the stall watcher is the compensating control. It is also why §5's live
 observation matters more than it looks.
 
+**R5 — an unintended logout or restart ends the run silently, and D-12 does not protect against it.**
+Measured, not assumed: §6. The launchd domain is destroyed at logout and the agents come back
+re-bootstrapped but not running, with `runs = 0` — indistinguishable at a glance from a clean
+finish, which is R4's ambiguity arriving by a second route. The mitigations are one human
+commitment (no logout for 4.5–6.3 days) and three `SoftwareUpdate` flags at 0; neither is enforced
+by anything on the machine. The flags carry their own revert obligation with an **unknown target
+state** — §6b.
+
 ---
 
 ## 11. Pending measurements — what this note does NOT yet claim
@@ -396,7 +576,10 @@ appears anywhere above.**
 | 2 | the post-clearing `pgrep -x caffeinate` (must be empty) and the post-launch owner list | booting out a launchd job and killing live processes is machine state, not a test |
 | 4 | `launch_identity()`'s output, quoted before any GPU second | requires a live launched process under the wrapper |
 | 5 | the stall record with `action_taken: "none"`, and the statement that nothing was relaunched, killed or deleted | requires the watcher to be watched, live, past its own threshold |
-| 6 | the two `logs/phase25_rehearsal.out` sizes across a real logout/login | requires a real session boundary |
+
+**Row 6 was performed on 2026-09-01 and has left this table.** Its outputs are transcribed
+verbatim in §6, and the answer was negative: the LaunchAgent did **not** survive the boundary.
+D-12's scope is corrected there rather than here.
 
 When those are performed, their outputs are transcribed here **verbatim** and this section shrinks
 to the ones still outstanding. A block that moves out of this table without a quoted command output
