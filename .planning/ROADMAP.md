@@ -932,7 +932,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 25-13-PLAN.md — D-04's PROBE 2 at BOTH capacities before any sweep point, and D-06's prefix-only control separation
+- [x] 25-13-PLAN.md — D-04's PROBE 2 at BOTH capacities before any sweep point, and D-06's prefix-only control separation
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
