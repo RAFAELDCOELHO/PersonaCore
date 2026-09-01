@@ -148,11 +148,20 @@ def test_makefile_demo_fetches_checkpoint_via_the_helper():
     assert "fetch_demo_checkpoint" in recipe
 
 
+_DEMO_PIP_INSTALL = (
+    'pip install -e ".[cpu,demo]" --extra-index-url https://download.pytorch.org/whl/cpu'
+)
+
+
 def test_makefile_demo_uses_venv_and_cpu_demo_extras():
     text = _makefile()
+    recipe = _demo_recipe(text)
     assert "python3.11" in text
     assert ".venv" in text
-    assert '".[cpu,demo]"' in text
+    # Exact public-clone install: demo extras, not CI's [cpu,dev,demo].
+    assert _DEMO_PIP_INSTALL in recipe
+    assert "-m pip" not in recipe
+    assert "[cpu,dev,demo]" not in recipe
     # Existing install path for tests/CI is unchanged.
     assert '".[cpu,dev,demo]"' in text
     assert "NEVER run `make install` on Kaggle" in text

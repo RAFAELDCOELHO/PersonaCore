@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "personacore"
 version = "0.1.0"
 description = "A from-scratch on-device conversational AI whose memory lives in the model weights."
+license = "MIT"
 requires-python = ">=3.10,<3.12"
 dependencies = [
   "numpy~=2.4",

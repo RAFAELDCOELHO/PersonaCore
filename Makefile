@@ -36,7 +36,7 @@ $(VENV_PY):
 	$(PYTHON) -m venv $(VENV)
 
 demo: $(VENV_PY)
-	$(VENV_PY) -m pip install -e ".[cpu,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
+	$(VENV)/bin/pip install -e ".[cpu,demo]" --extra-index-url https://download.pytorch.org/whl/cpu
 	$(VENV_PY) scripts/fetch_demo_checkpoint.py
 	$(VENV_PY) scripts/demo_app.py
 
