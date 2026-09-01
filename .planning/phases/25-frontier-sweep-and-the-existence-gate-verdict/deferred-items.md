@@ -42,3 +42,48 @@ here because it costs ~27 min per repetition and the finding is out of 25-21's s
 
 **Do not "fix" this by loosening the bit-identity assertion.** It is a resume-correctness
 proof; a flaky proof is a diagnosis to make, not a tolerance to widen.
+
+---
+
+## FIXED, not deferred — recorded here because a later plan would otherwise re-discover it
+
+### `scripts/phase25_run.py::_draw_one_shape` called `tp.device()`, which did not exist
+
+**Found during:** plan 25-11, Task 2 (the first plan in this phase to actually draw).
+
+**Measured at HEAD before the fix:** `scripts/teach_persona.py` had no `device` attribute, yet
+five call sites assumed one:
+
+| File | Line | Call |
+|------|------|------|
+| `scripts/phase25_run.py` | 519 | `recall.load_adapted_model(tp.device(), adapter)` |
+| `scripts/phase25_run.py` | 541 | `recall.draw_all(..., tp.device(), ...)` |
+| `scripts/phase25_calibrate.py` | x3 | the throughput probe's model/base loads |
+
+Every one raised `AttributeError: module 'teach_persona' has no attribute 'device'`.
+
+**Why no test caught it.** `_draw_one_shape` is reached only from `draw_point_shapes` when
+`dry_run` is false, and every committed driver test in `tests/test_phase25_driver.py` exercises
+the `--dry-run` path. The failure is therefore latent until the first real draw — which happens
+**after** that point's training leg, i.e. after up to **23.05 minutes** of spent GPU time on a
+`dp_n64` point. It would have fired on the FIRST draw of the FIRST sweep point.
+
+**Fix (commit `6df1eba`):** `device()` added to `scripts/phase25_run.py` — the Phase-25 driver
+owns the Phase-25 draw loop — and both its call sites repointed at it.
+`scripts/phase25_calibrate.py` calls `phase25_run.device()`, an intra-phase dependency it already
+had for `atomic_write_json`.
+
+**A first attempt put it in `scripts/teach_persona.py` (`849657d`) and was REVERTED (`28ed553`).**
+Measured reason: `teach_persona.py` is pinned by
+`results/phase24_token_budget.json`'s `provenance.module_sha256`, and
+`tests/test_phase24_record.py::test_the_provenance_pins_match_the_live_module_bytes` went RED —
+a resolver added there moves a committed **Phase-24** record's digest to fix a **Phase-25**
+defect. `phase23_run.device()` was also rejected as the source: Phase 25 PORTS from that module
+and never imports it (25-10), which is why `atomic_write_json` and the cache helpers were ported
+rather than imported.
+
+**Residual, genuinely deferred:** the draw loop still has no test that reaches it. 25-11 exercised
+the same `recall.draw_all` primitive 1,536 times through `phase23_run._measure_condition`, which
+is why the defect surfaced here, but `phase25_run._draw_one_shape` itself is still only covered on
+its dry-run branch. A single non-dry-run smoke over one shape at `k=2` would close it; that is
+plan 25-14/25-15's call, not 25-11's.
