@@ -1,6 +1,6 @@
 .PHONY: install test lint format demo
 
-# Prefer the project's Python 3.11; fall back to python3 on boxes that only have that.
+# Prefer python3.11 (the project target). If it is missing, use python3.
 PYTHON ?= $(shell command -v python3.11 2>/dev/null || command -v python3)
 VENV := .venv
 VENV_PY := $(VENV)/bin/python
@@ -27,9 +27,9 @@ format:
 	.venv/bin/ruff format .
 	.venv/bin/ruff check --fix .
 
-# Laptop / public-clone only. NEVER run `make demo` on Kaggle — it creates a local
-# `.venv` and installs a CPU torch wheel, which would fight the Pascal-compatible
-# Kaggle torch. Story Gradio only (`scripts/demo_app.py`); the teach-then-recall
+# Laptop / public-clone only. NEVER run `make demo` on Kaggle: it creates a local
+# `.venv` and installs a CPU torch wheel, which would replace the Pascal-compatible
+# Kaggle torch. Story Gradio only (`scripts/demo_app.py`). The teach-then-recall
 # demo needs checkpoints that are not in the m1-demo-v1 release.
 $(VENV_PY):
 	@test -n "$(PYTHON)" || (echo "Need python3.11 or python3 on PATH"; exit 1)

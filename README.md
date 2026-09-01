@@ -1,17 +1,17 @@
 # PersonaCore
 
-**TLDR:** a from-scratch GPT that runs on a laptop CPU. Personalization lives in the
-weights, not a database. One command:
+**TLDR.** A from-scratch GPT that runs on a laptop CPU. Personalization is in the weights, not a
+database.
 
 ```bash
 make demo
 ```
 
-That creates `.venv` if needed, installs the CPU Gradio extras, downloads
-`checkpoints/model_slim.pt` from the public `m1-demo-v1` release when the file is
+`make demo` creates `.venv` if needed, installs the CPU Gradio extras, downloads
+`checkpoints/model_slim.pt` from the public `m1-demo-v1` release when that file is
 absent, and launches the TinyStories story demo at http://127.0.0.1:7860. A second
-run does not re-download a present checkpoint. (Story demo only — the teach-then-recall
-app needs locally produced checkpoints that are not in that release.)
+run does not re-download a present checkpoint. Story demo only: the teach-then-recall
+app needs locally produced checkpoints that are not in that release.
 
 PersonaCore is a from-scratch, on-device research system for studying parametric
 personalization. It first demonstrated that synthetic profile values could be recalled from
