@@ -8,7 +8,7 @@ authors:
     email: rafael.d.cooelho@gmail.com
 license: MIT
 repository-code: "https://github.com/RAFAELDCOELHO/PersonaCore"
-url: "https://github.com/RAFAELDCOELHO/PersonaCore/releases/tag/m1-demo-v1"
+url: "https://github.com/RAFAELDCOELHO/PersonaCore"
 abstract: >-
   PersonaCore is a from-scratch, on-device research system for studying
   parametric personalization. The project therefore studies both the
