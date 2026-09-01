@@ -598,3 +598,69 @@ BIT_IDENTITY_EXPECTED_DISAGREEMENT = (
     "non-associativity record with a claim the measurement does not support, and the next person "
     "to see the two paths disagree would read a real property as a regression"
 )
+
+
+# =================================================================================================
+# ===== (g) §O1 — THE READ-ONLY-GIT-SURFACE DISCIPLINE, ABANDONED FOR THIS PHASE ONLY =====
+#
+# APPENDED AFTER THE PRE-REGISTRATION COMMIT, DELIBERATELY, AND THAT IS DISCLOSED RATHER THAN
+# HIDDEN. Nothing in section (c) is touched: this constant decides no threshold, judges no reading
+# and renders no verdict, so its arrival after the rules above cannot buy the freedom a
+# pre-registration exists to spend. It is filed HERE, in the module whose whole job is to name
+# a phase's rules before they are convenient, precisely so the exception cannot drift into an
+# unrecorded habit — which is what T-25-115 is.
+# =================================================================================================
+
+GIT_SURFACE_EXCEPTION = (
+    "THE DRIVER'S GIT SURFACE IS `{add, commit}` OVER ONE POINT-RECORD PATH, FOR THIS PHASE ONLY.\n"
+    "\n"
+    "WHAT IS BEING ABANDONED, IN ITS OWN WORDS. `.planning/STATE.md` records the Phase-23 "
+    "mechanism: 'THE PER-SEED COMMIT DISCIPLINE HELD, AND IT IS A MECHANISM. The driver's git "
+    "surface is read-only, so the sub-mode scores exactly ONE unscored seed and exits; the commit "
+    "is the operator's act at the process boundary.' `scripts/phase23_run.py` holds to it "
+    "literally — its entire git surface is four READ-ONLY call sites (`ls-files` twice, `show`, "
+    "`merge-base`) and ZERO `add` or `commit`. `scripts/phase25_run.py` breaks that, and this "
+    "constant is the record of the decision rather than its excuse.\n"
+    "\n"
+    "THE THREE REASONS, EACH CHECKABLE:\n"
+    "\n"
+    "  (1) D-12'S UNATTENDED RUN HAS NO OPERATOR AT THE PROCESS BOUNDARY, 44 TIMES. The sweep "
+    "runs 4.5-6.3 days as a user LaunchAgent with `KeepAlive` FALSE. 'The commit is the operator's "
+    "act' presumes an operator is there when the process exits; across 44 points spread over six "
+    "days, that presumption is simply false, and a discipline that depends on it silently "
+    "degrades into 43 uncommitted records.\n"
+    "\n"
+    "  (2) D-10 NEEDS THE COMMITTED RECORD AS REAL-TIME ONE-ATTEMPT EVIDENCE. "
+    "`prove_first_attempt` reads `git ls-files " + POINT_RECORD_GLOB + "` — TRACKED records, not "
+    "files on disk. A record that exists but is uncommitted is invisible to the rule, so a point "
+    "re-entered before the operator's next commit would be refused by NOTHING. The one-attempt "
+    "rule is only real at the granularity at which records become tracked, and under an unattended "
+    "run that granularity has to be the point.\n"
+    "\n"
+    "  (3) D-31'S ASSEMBLY REQUIRES A CLEAN TREE OVER `results/`. The write-once frontier emitter "
+    "calls `refuse_if_dirty` across `scripts`, `src`, `results` and `artifacts`. Forty-three "
+    "uncommitted point records under `results/` would refuse that assembly outright — so the "
+    "read-only discipline and the phase's own publication step are not jointly satisfiable.\n"
+    "\n"
+    "THE SCOPE, AT ITS TRUE STRENGTH AND NO STRONGER:\n"
+    "\n"
+    "  * THE EXCEPTION IS TWO SUBCOMMANDS AND ONE PATH. `phase25_run.ALLOWED_GIT_ACTIONS` is "
+    "`('add', 'commit')`; the path is resolved from `point_record_path(point_key)` and refused "
+    "unless it is under `results/` and already exists. No glob, no `-A`, no `.`, no `shell=True`.\n"
+    "\n"
+    "  * IT IS A STRUCTURAL GUARANTEE, NOT THIS PARAGRAPH. "
+    "`tests/test_phase25_driver.py::test_the_drivers_executable_git_actions_are_exactly_add_and_"
+    "commit` walks the driver's AST, resolves the first argv element after 'git' at every "
+    "subprocess call site, and refuses any subcommand outside `ALLOWED_GIT_ACTIONS` plus "
+    "`READ_ONLY_GIT_ACTIONS`. It is watched failing on a planted `git push` in `tmp_path`. AST and "
+    "never grep: the driver's own docstrings name `git push` and `git rm` on purpose.\n"
+    "\n"
+    "  * THE COMMITS LAND ON `main`. `config.json` sets `branching_strategy: none`. That is a "
+    "CONSEQUENCE of this exception, named here rather than discovered, and the scoping above is "
+    "its mitigation.\n"
+    "\n"
+    "  * IT ENDS WITH THIS PHASE. The read-only discipline resumes at the phase close, which is "
+    "required to state so explicitly (T-25-115). An exception that is recorded and time-boxed is a "
+    "decision; the same exception left unrecorded is how a six-day unattended process quietly "
+    "acquires a wider surface than anyone chose to give it."
+)
