@@ -16,11 +16,13 @@ PREFLIGHT: ``preflight_device(strict=True)`` gates the long run on a usable acce
 the M3) and the LOCAL ``data/*.bin`` corpus — it does NOT reference the Kaggle dataset-mount
 constant (this is the local primary path, not the Kaggle P100 fallback).
 
-CALIBRATION (Task 4): the LR / batch_size / grad_accum_steps / max_steps / eval_interval /
-checkpoint-every-K / sample-every-S constants below are MEASURED on the real M3 by the calibration
-smoke (D-01a). The placeholders here are clearly marked TODO(calibration) — they are intentionally
-NOT final numbers; the calibration task fills them from measured tokens/sec, the largest stable
-batch, and the highest non-diverging LR.
+CALIBRATION (Task 4, D-01a): the LR / batch_size / grad_accum_steps / max_steps / eval_interval /
+checkpoint-every-K / sample-every-S constants below were measured on the real M3 by the
+calibration smoke and are the values the shipped 50k-step run used — ``results/run.csv`` logs
+200 evaluations at every 250 steps up to step 50,000, 32 sequences per step, LR peaking at 3e-4
+and cosine-decaying to 3e-5 (``docs/REPORT.md``, "Training curve"). They are FINAL for the
+``best.pt`` that every later phase builds on; changing one here produces a different model, not a
+re-run of this one.
 """
 
 import math
@@ -48,12 +50,12 @@ LOG_PATH = _REPO_ROOT / "logs" / "run.csv"  # gitignored (logs/)
 CKPT_PATH = _REPO_ROOT / "checkpoints" / "latest.pt"  # gitignored (*.pt / checkpoints/)
 BEST_PATH = _REPO_ROOT / "checkpoints" / "best.pt"  # gitignored — the shipped best-val checkpoint
 
-# --- Calibration constants (Task 4 MEASURES these on the real M3 — do NOT invent final numbers) ---
-LR = 3e-4  # TODO(calibration): highest non-diverging LR from the Stage-2 LR sweep.
-BATCH_SIZE = 32  # TODO(calibration): largest stable (no-OOM, finite-loss) batch from Stage 1.
-GRAD_ACCUM_STEPS = 1  # TODO(calibration): set so the effective batch is healthy.
-MAX_STEPS = 50_000  # TODO(calibration): size from measured tokens/sec (quality-first, D-04).
-EVAL_INTERVAL = 250  # TODO(calibration): eval/log cadence.
+# --- Calibration constants (measured on the real M3, Task 4 / D-01a; the shipped run's values) ---
+LR = 3e-4  # peak LR: highest non-diverging LR from the Stage-2 sweep (run.csv: 2.9999e-4 at 250).
+BATCH_SIZE = 32  # largest stable (no-OOM, finite-loss) batch from Stage 1 (run.csv: 32 seq/step).
+GRAD_ACCUM_STEPS = 1  # effective batch == BATCH_SIZE; no accumulation was needed at this size.
+MAX_STEPS = 50_000  # sized from measured tokens/sec (quality-first, D-04); run.csv ends at 50000.
+EVAL_INTERVAL = 250  # eval/log cadence: 200 rows in run.csv, one per 250 steps.
 CHECKPOINT_INTERVAL = 250  # K: in-loop latest.pt cadence (a kill loses <= K steps).
 SAMPLE_INTERVAL = 1_000  # S: qualitative coherence-check sample cadence (D-06).
 SAMPLE_MAX_NEW_TOKENS = 200  # length of each periodic coherence sample.
