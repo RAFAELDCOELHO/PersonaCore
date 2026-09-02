@@ -53,8 +53,9 @@ install hint instead of building a `.venv` that pip then refuses.
 
 ### At a glance
 
-| **Model** | 13.9M-parameter GPT decoder: 6 layers, 6 heads, 384-dim embeddings, 256-token context |
+| Property | Value |
 | :-- | :-- |
+| **Model** | 13.9M-parameter GPT decoder: 6 layers, 6 heads, 384-dim embeddings, 256-token context |
 | **Memory mechanism** | From-scratch LoRA (rank 8, 331,776 trainable parameters) written into the weights; from-scratch EWC guards retention during dialogue fine-tuning |
 | **Runs on** | A laptop CPU at ~100 tok/s streaming, with zero network calls once installed |
 | **Trained on** | Apple Silicon (fp32 / MPS): zero external compute, zero budget |
