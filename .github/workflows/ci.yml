@@ -1,5 +1,12 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # Link rot does not wait for a push. The demo-asset job below is the only thing that can
+  # notice the public release asset going missing, so give it a heartbeat of its own.
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
 
 jobs:
   test:
@@ -38,3 +45,28 @@ jobs:
         run: ruff check . && ruff format --check .
       - name: Test
         run: pytest -q
+
+  demo-asset:
+    # `make demo` is the README's headline command, and its first real step for every stranger
+    # is `scripts/fetch_demo_checkpoint.py` downloading the public m1-demo-v1 asset. The suite
+    # in `test` injects a fake `fetch` — correctly, so CI does not pull 55.6 MB in every job —
+    # which means NOTHING in it can tell whether that asset is still downloadable or still
+    # hashes to DEFAULT_SHA256. `test_default_pin_is_the_release_digest` compares the pin
+    # against a second hand-written copy of the same digest, so it catches a typo and cannot
+    # catch a re-uploaded release: two spellings of a stale value agree perfectly.
+    #
+    # That is the green-but-blind shape this project keeps naming — a guard that cannot fail
+    # for the reason it exists. This job runs the real helper against the real release over
+    # the same anonymous URL a stranger uses, so link rot, a re-uploaded asset, or a pin that
+    # was never updated turns CI red here instead of turning up in a stranger's terminal.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Deliberately NO `pip install`: the helper is stdlib-only (hashlib/pathlib/urllib), and
+      # keeping it that way is what lets `make demo` fetch weights before the venv is usable.
+      # If this job ever needs an install to run, that property has been lost.
+      - name: Download the public m1-demo-v1 asset and verify its pinned sha256
+        run: python scripts/fetch_demo_checkpoint.py

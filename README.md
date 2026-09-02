@@ -14,6 +14,11 @@ before installing it), and launches the TinyStories story demo at http://127.0.0
 A second run does not re-download a present checkpoint. Story demo only: the teach-then-recall
 app needs locally produced checkpoints that are not in that release.
 
+It needs **Python 3.10 or 3.11** on `PATH` — the range `pyproject.toml` declares in
+`requires-python`. `make demo` picks the first candidate that *reports* a supported version
+rather than the first one named `python3`, so a box whose `python3` is 3.12+ stops with an
+install hint instead of building a `.venv` that pip then refuses.
+
 PersonaCore is a from-scratch, on-device research system for studying parametric
 personalization. It first demonstrated that synthetic profile values could be recalled from
 LoRA weights without prompt-side facts. A subsequent adversarial audit found that 88.5% of
