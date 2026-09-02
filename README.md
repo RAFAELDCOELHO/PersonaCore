@@ -320,3 +320,19 @@ the evidence that the miscount was ever published.
 **Nothing moves.** The verdict of record is still `FAILURE`, the ship decision of record is still
 **DO NOT SHIP** and still withholds exactly one claim, no defect is added or withdrawn, and no
 number above changes.
+
+## Repository status (recorded 2026-09-02)
+
+**Appended, not edited.** Everything above stands as written. The "~400 CPU-only tests" figure
+under *What is this?* was true when v1.0 shipped and is left standing; as of this note the suite
+is **2013 passed, 1 skipped** on the M3 (full run, 21 minutes, 2026-09-02), and CI runs two jobs on
+every push: `test` (the same suite on ubuntu-latest with the CPU-only torch wheel) and
+`demo-asset`, which downloads the public `m1-demo-v1` `model_slim.pt` over the anonymous release
+URL and verifies it against the sha256 pinned in `scripts/fetch_demo_checkpoint.py` — a download
+that does not hash to the pin is refused, never installed. `make demo` (PRs #2 and #4) is the
+one-command public path. The repository carries an MIT `LICENSE` and a `CITATION.cff`.
+
+v4.0 — *Leakage Mitigation and Relearning Validation* — is in progress: Phase 25's frontier sweep
+(44 points, DP-SGD and adversarial arms at two adapter capacities) is built and calibrated and
+waits at an operator checkpoint before its 88–150 hour M3 run. No adapter from that sweep exists
+yet, so no number above changes.
