@@ -1,11 +1,41 @@
+<div align="center">
+
 # PersonaCore
 
-**TLDR.** A from-scratch GPT that runs on a laptop CPU. Personalization is in the weights, not a
-database.
+**A from-scratch GPT that runs on a laptop CPU. Personalization is in the weights, not a database.**
+
+[![ci](https://github.com/RAFAELDCOELHO/PersonaCore/actions/workflows/ci.yml/badge.svg)](https://github.com/RAFAELDCOELHO/PersonaCore/actions/workflows/ci.yml)
+[![demo weights](https://img.shields.io/github/v/release/RAFAELDCOELHO/PersonaCore?label=demo%20weights&color=blue)](https://github.com/RAFAELDCOELHO/PersonaCore/releases/tag/m1-demo-v1)
+![python](https://img.shields.io/badge/python-3.10%20%7C%203.11-3776AB?logo=python&logoColor=white)
+![pytorch](https://img.shields.io/badge/PyTorch-from%20scratch-EE4C2C?logo=pytorch&logoColor=white)
+![on-device](https://img.shields.io/badge/runs%20on-a%20laptop%20CPU-555)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+[Quick start](#quick-start) · [Results](#results-at-a-glance) · [How it works](#what-is-this) · [Evidence](#evidence) · [Technical report](docs/REPORT.md) · [Notebook](demo.ipynb)
+
+![Gradio chat demo streaming a TinyStories completion token-by-token on a laptop CPU](assets/demo.gif)
+
+</div>
+
+PersonaCore is a from-scratch, on-device research system for studying parametric
+personalization. It first demonstrated that synthetic profile values could be recalled from
+LoRA weights without prompt-side facts. A subsequent adversarial audit found that 88.5% of
+held-out questions were extractable under the strongest of four tested black-box attack
+families, against a no-adapter control of exactly 0/104 — and that selective erasure of a
+single fact destroyed 77.6% of the model's dialogue adaptation while failing to protect any
+of seven non-target facts. The project therefore studies both the capabilities and the
+privacy costs of weight-based memory.
+
+### Quick start
 
 ```bash
-make demo
+git clone https://github.com/RAFAELDCOELHO/PersonaCore.git
+cd PersonaCore
+make demo        # -> http://127.0.0.1:7860
 ```
+
+<details>
+<summary><b>What <code>make demo</code> does, and what it needs</b></summary>
 
 `make demo` creates `.venv` if needed, installs the CPU Gradio extras, downloads
 `checkpoints/model_slim.pt` from the public `m1-demo-v1` release when that file is
@@ -19,16 +49,29 @@ It needs **Python 3.10 or 3.11** on `PATH` — the range `pyproject.toml` declar
 rather than the first one named `python3`, so a box whose `python3` is 3.12+ stops with an
 install hint instead of building a `.venv` that pip then refuses.
 
-PersonaCore is a from-scratch, on-device research system for studying parametric
-personalization. It first demonstrated that synthetic profile values could be recalled from
-LoRA weights without prompt-side facts. A subsequent adversarial audit found that 88.5% of
-held-out questions were extractable under the strongest of four tested black-box attack
-families, against a no-adapter control of exactly 0/104 — and that selective erasure of a
-single fact destroyed 77.6% of the model's dialogue adaptation while failing to protect any
-of seven non-target facts. The project therefore studies both the capabilities and the
-privacy costs of weight-based memory.
+</details>
 
-![Gradio chat demo streaming a TinyStories completion token-by-token on a laptop CPU](assets/demo.gif)
+### At a glance
+
+| | |
+| :-- | :-- |
+| **Model** | 13.9M-parameter GPT decoder: 6 layers, 6 heads, 384-dim embeddings, 256-token context |
+| **Memory mechanism** | From-scratch LoRA (rank 8, 331,776 trainable parameters) written into the weights; from-scratch EWC guards retention during dialogue fine-tuning |
+| **Runs on** | A laptop CPU at ~100 tok/s streaming, with zero network calls once installed |
+| **Trained on** | Apple Silicon (fp32 / MPS): zero external compute, zero budget |
+| **Built with** | Pure PyTorch, no HuggingFace model code anywhere in the runtime |
+| **Verified by** | 2,000+ CPU-only pytest tests, two CI jobs on every push, pre-registered gates for every headline number |
+| **Audited for** | Black-box extraction of taught facts and selective erasure, with the negative results published in full below |
+
+### How it fits together
+
+```mermaid
+flowchart LR
+    T["Byte-level BPE tokenizer<br/>(from scratch)"] --> B["GPT decoder, 13.9M params<br/>pretrained on TinyStories"]
+    B -->|"dialogue fine-tune<br/>+ EWC anchor"| C["Conversational base"]
+    C -->|"teach facts through<br/>rank-8 LoRA, base frozen"| P["Persona adapter<br/>331,776 params"]
+    P --> D["Offline Gradio demo<br/>memory ON / OFF toggle"]
+```
 
 ## Results at a glance
 
@@ -336,3 +379,18 @@ v4.0 — *Leakage Mitigation and Relearning Validation* — is in progress: Phas
 (44 points, DP-SGD and adversarial arms at two adapter capacities) is built and calibrated and
 waits at an operator checkpoint before its 88–150 hour M3 run. No adapter from that sweep exists
 yet, so no number above changes.
+
+## License and citation
+
+PersonaCore is released under the [MIT License](LICENSE). To cite it, use GitHub's
+*Cite this repository* button (backed by [`CITATION.cff`](CITATION.cff)) or:
+
+```bibtex
+@software{coelho2026personacore,
+  author  = {Coelho, Rafael D.},
+  title   = {PersonaCore},
+  year    = {2026},
+  url     = {https://github.com/RAFAELDCOELHO/PersonaCore},
+  license = {MIT}
+}
+```
