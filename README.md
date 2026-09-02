@@ -9,8 +9,9 @@ make demo
 
 `make demo` creates `.venv` if needed, installs the CPU Gradio extras, downloads
 `checkpoints/model_slim.pt` from the public `m1-demo-v1` release when that file is
-absent, and launches the TinyStories story demo at http://127.0.0.1:7860. A second
-run does not re-download a present checkpoint. Story demo only: the teach-then-recall
+absent (verifying its sha256 against the pin in `scripts/fetch_demo_checkpoint.py`
+before installing it), and launches the TinyStories story demo at http://127.0.0.1:7860.
+A second run does not re-download a present checkpoint. Story demo only: the teach-then-recall
 app needs locally produced checkpoints that are not in that release.
 
 PersonaCore is a from-scratch, on-device research system for studying parametric

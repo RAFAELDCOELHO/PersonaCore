@@ -10,6 +10,7 @@ does not import ``scripts/`` as a package. The helper is loaded by path via ``im
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import pathlib
 import re
@@ -22,6 +23,15 @@ _MAKEFILE = _REPO_ROOT / "Makefile"
 _PUBLIC_ASSET = (
     "https://github.com/RAFAELDCOELHO/PersonaCore/releases/download/m1-demo-v1/model_slim.pt"
 )
+# The digest GitHub reports for the m1-demo-v1 asset (`gh release view m1-demo-v1 --json assets`,
+# 55,601,269 bytes), read 2026-09-02. Spelled here independently of the helper so a typo in either
+# copy is a RED, not a self-consistent pair.
+_RELEASE_SHA256 = "dd3bbb8f772e0b9556a0a31d535a1673d55f0d61d6d669c58a9aab6bb6247e24"
+_RELEASE_SIZE = 55_601_269
+
+
+def _sha(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _load_helper():
@@ -78,6 +88,9 @@ def test_skips_fetch_when_checkpoint_already_present(tmp_path):
     )
 
     assert returned == dest
+    # `b"already-here"` does NOT hash to the release pin and is still returned untouched: a
+    # present file is never re-hashed, because `scripts/export_slim.py` legitimately regenerates
+    # a different artifact locally. Only network-provided bytes are verified.
     assert dest.read_bytes() == b"already-here"
     assert calls == []
 
@@ -88,7 +101,10 @@ def test_downloads_when_checkpoint_is_missing(tmp_path):
     calls: list = []
 
     returned = helper.ensure_slim_checkpoint(
-        dest, url=_PUBLIC_ASSET, fetch=_recording_fetch(b"slim-bytes", calls)
+        dest,
+        url=_PUBLIC_ASSET,
+        sha256=_sha(b"slim-bytes"),
+        fetch=_recording_fetch(b"slim-bytes", calls),
     )
 
     assert returned == dest
@@ -107,7 +123,9 @@ def test_empty_file_is_treated_as_absent(tmp_path):
     dest.write_bytes(b"")
     calls: list = []
 
-    helper.ensure_slim_checkpoint(dest, url=_PUBLIC_ASSET, fetch=_recording_fetch(b"ok", calls))
+    helper.ensure_slim_checkpoint(
+        dest, url=_PUBLIC_ASSET, sha256=_sha(b"ok"), fetch=_recording_fetch(b"ok", calls)
+    )
 
     assert dest.read_bytes() == b"ok"
     assert len(calls) == 1
@@ -126,6 +144,58 @@ def test_failed_fetch_does_not_leave_a_partial_dest(tmp_path):
         helper.ensure_slim_checkpoint(dest, url=_PUBLIC_ASSET, fetch=boom)
 
     assert not dest.exists()
+
+
+def test_default_pin_is_the_release_digest():
+    """The helper's pin IS the digest GitHub reports for the m1-demo-v1 asset.
+
+    Two independent spellings (helper and test) must agree; when the gitignored local artifact
+    of the release's size is present it is hashed too, so an exported file that drifted from
+    the published one is caught on the machine that would publish it.
+    """
+    helper = _load_helper()
+    assert re.fullmatch(r"[0-9a-f]{64}", helper.DEFAULT_SHA256)
+    assert helper.DEFAULT_SHA256 == _RELEASE_SHA256
+    local = _REPO_ROOT / "checkpoints" / "model_slim.pt"
+    if not (local.is_file() and local.stat().st_size == _RELEASE_SIZE):
+        pytest.skip(
+            "checkpoints/model_slim.pt (the m1-demo-v1 export) is gitignored and absent, or not "
+            "the release's 55,601,269 bytes — the pin-vs-pin equality above still ran"
+        )
+    assert _sha(local.read_bytes()) == _RELEASE_SHA256
+
+
+def test_tampered_download_is_refused_and_leaves_nothing(tmp_path):
+    """Bytes that do not hash to the pin never become `model_slim.pt`, and no `.tmp` survives."""
+    helper = _load_helper()
+    dest = tmp_path / "checkpoints" / "model_slim.pt"
+    calls: list = []
+
+    with pytest.raises(RuntimeError) as caught:
+        helper.ensure_slim_checkpoint(
+            dest, url=_PUBLIC_ASSET, fetch=_recording_fetch(b"not-the-release", calls)
+        )
+
+    message = str(caught.value)
+    assert _PUBLIC_ASSET in message
+    assert helper.DEFAULT_SHA256 in message
+    assert _sha(b"not-the-release") in message
+    assert len(calls) == 1
+    assert not dest.exists()
+    assert not dest.with_name(dest.name + ".tmp").exists()
+
+
+def test_sha256_none_disables_verification(tmp_path):
+    """`sha256=None` is the explicit opt-out; the default is the pin, never None."""
+    helper = _load_helper()
+    dest = tmp_path / "model_slim.pt"
+
+    helper.ensure_slim_checkpoint(
+        dest, url=_PUBLIC_ASSET, sha256=None, fetch=_recording_fetch(b"unverified", [])
+    )
+
+    assert dest.read_bytes() == b"unverified"
+    assert helper.ensure_slim_checkpoint.__kwdefaults__["sha256"] == _RELEASE_SHA256
 
 
 def test_makefile_demo_is_phony_and_the_one_human_command():
