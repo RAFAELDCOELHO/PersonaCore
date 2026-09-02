@@ -13,7 +13,7 @@
 
 [Quick start](#quick-start) · [Results](#results-at-a-glance) · [How it works](#what-is-this) · [Evidence](#evidence) · [Repository map](#repository-map) · [Corrections](#record-of-corrections) · [Technical report](docs/REPORT.md) · [Notebook](demo.ipynb)
 
-![Teach-then-recall demo: the same question asked with the persona adapter on and off, the memory ON turn answering with the taught dog name and the memory OFF turn not, while the token-id panel shows an identical prompt](assets/demo_personachat.png)
+![Teach-then-recall demo: the same question asked with the persona adapter on and off, the memory ON turn answering with the taught dog name and the memory OFF turn not, while the token-id panel shows an identical prompt](assets/demo_personachat.webp)
 
 *One question, twice. The prompt token ids on the right are identical both times; only the 331,776 adapter parameters were switched off in between.*
 
