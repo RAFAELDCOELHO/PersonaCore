@@ -240,3 +240,63 @@ def test_makefile_demo_uses_venv_and_cpu_demo_extras():
 def test_makefile_demo_does_not_use_gh_auth():
     text = _makefile()
     assert "gh release" not in text
+
+
+def _assignment(text: str, name: str) -> str:
+    """The right-hand side of the Makefile's `name := ...` / `name ?= ...` line.
+
+    Anchored to the assignment rather than grepped from the whole file on purpose: the comment
+    block above these two lines discusses `python3`, `3.12` and the removed fallback BY NAME,
+    so any file-wide search for those strings answers a question about the prose instead of a
+    question about what `make demo` will actually run.
+    """
+    match = re.search(rf"^{re.escape(name)}\s*(?::=|\?=)\s*(.+)$", text, re.M)
+    assert match, f"Makefile lost its `{name}` assignment"
+    return match.group(1)
+
+
+def _requires_python() -> str:
+    spec = re.search(
+        r'^requires-python\s*=\s*"([^"]+)"',
+        (_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"),
+        re.M,
+    )
+    assert spec, "pyproject lost its requires-python"
+    return spec.group(1).replace(" ", "")
+
+
+def test_makefile_interpreter_bound_is_pyprojects_requires_python():
+    """`make demo` may only build .venv with an interpreter pip will accept afterwards.
+
+    The venv is created FIRST and installed into SECOND, so an interpreter the Makefile likes
+    and pyproject rejects fails after the directory already exists — and because .venv then
+    satisfies its own file prerequisite, every later `make demo` fails identically. Pinning the
+    two bounds equal is what stops that gap reopening when `requires-python` moves.
+    """
+    lower, upper = re.findall(r"\((\d+),\s*(\d+)\)", _assignment(_makefile(), "PY_SUPPORTED"))
+    spec = _requires_python()
+    assert f">={lower[0]}.{lower[1]}" in spec
+    assert f"<{upper[0]}.{upper[1]}" in spec
+
+
+def test_makefile_selects_the_interpreter_by_version_never_by_name():
+    """Every candidate is asked its version; none is trusted for being called `python3`.
+
+    The pinned regression: `command -v python3.11 || command -v python3`, which on any box
+    whose python3 is 3.12+ (the current macOS/Homebrew default) selected an interpreter pip
+    then refused with "Package 'personacore' requires a different Python".
+    """
+    line = _assignment(_makefile(), "PYTHON")
+    assert "$(PY_SUPPORTED)" in line
+    assert "command -v python3.11 2>/dev/null || command -v python3" not in line
+
+
+def test_makefile_demo_revalidates_an_already_present_venv_before_installing():
+    """A stale .venv satisfies the file prerequisite without being installable — recheck it.
+
+    Ordering is the assertion: the version check has to run BEFORE pip, or the user still gets
+    pip's error instead of the one sentence that tells them to delete the directory.
+    """
+    recipe = _demo_recipe(_makefile())
+    assert "$(PY_SUPPORTED)" in recipe
+    assert recipe.index("$(PY_SUPPORTED)") < recipe.index(_DEMO_PIP_INSTALL)
