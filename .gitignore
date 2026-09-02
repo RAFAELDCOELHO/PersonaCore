@@ -21,5 +21,8 @@ data/
 .ruff_cache/
 .gstack/
 
+# Obsidian UI state never belongs in the source repository
+.obsidian/
+
 # Claude Code agent worktrees (isolation="worktree") — never commit these
 .claude/worktrees/
