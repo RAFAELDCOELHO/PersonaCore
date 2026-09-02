@@ -11,7 +11,7 @@
 ![on-device](https://img.shields.io/badge/runs%20on-a%20laptop%20CPU-555)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[Quick start](#quick-start) · [Results](#results-at-a-glance) · [How it works](#what-is-this) · [Evidence](#evidence) · [Technical report](docs/REPORT.md) · [Notebook](demo.ipynb)
+[Quick start](#quick-start) · [Results](#results-at-a-glance) · [How it works](#what-is-this) · [Evidence](#evidence) · [Repository map](#repository-map) · [Corrections](#record-of-corrections) · [Technical report](docs/REPORT.md) · [Notebook](demo.ipynb)
 
 ![Gradio chat demo streaming a TinyStories completion token-by-token on a laptop CPU](assets/demo.gif)
 
@@ -53,9 +53,8 @@ install hint instead of building a `.venv` that pip then refuses.
 
 ### At a glance
 
-| | |
-| :-- | :-- |
 | **Model** | 13.9M-parameter GPT decoder: 6 layers, 6 heads, 384-dim embeddings, 256-token context |
+| :-- | :-- |
 | **Memory mechanism** | From-scratch LoRA (rank 8, 331,776 trainable parameters) written into the weights; from-scratch EWC guards retention during dialogue fine-tuning |
 | **Runs on** | A laptop CPU at ~100 tok/s streaming, with zero network calls once installed |
 | **Trained on** | Apple Silicon (fp32 / MPS): zero external compute, zero budget |
@@ -72,6 +71,37 @@ flowchart LR
     C -->|"teach facts through<br/>rank-8 LoRA, base frozen"| P["Persona adapter<br/>331,776 params"]
     P --> D["Offline Gradio demo<br/>memory ON / OFF toggle"]
 ```
+
+### Repository map
+
+| Path | What lives there |
+| :-- | :-- |
+| [`src/personacore/tokenizer/`](src/personacore/tokenizer) | Byte-level BPE from scratch: training, encode/decode, special tokens, schema-versioned freeze/reload |
+| [`src/personacore/model/`](src/personacore/model) | The GPT-2-style decoder (pre-norm blocks, causal attention, weight tying) and the bigram baseline that proved the harness |
+| [`src/personacore/training/`](src/personacore/training) | Hand-rolled loop, loss assembly (the EWC seam), warmup + cosine schedule, memmap data path |
+| [`src/personacore/lora/`](src/personacore/lora) | From-scratch `LoRALinear`, post-load injection, freeze discipline, key-audited adapter apply |
+| [`src/personacore/continual/`](src/personacore/continual) | From-scratch EWC: per-example diagonal Fisher and the Kirkpatrick quadratic penalty |
+| [`src/personacore/generation/`](src/personacore/generation) | The one shared `generate()`: greedy / temperature / top-k / top-p with EOS stop |
+| [`src/personacore/dialogue/`](src/personacore/dialogue) | Conversational data pipeline: stdlib episode parser, serialization, tokenizer-inflation metrics |
+| [`src/personacore/privacy/`](src/personacore/privacy) | DP-SGD for LoRA gradients and a from-scratch (ε, δ) accountant (v4.0, in progress) |
+| [`src/personacore/evaluation/`](src/personacore/evaluation) | Deterministic full-corpus perplexity with an auditable denominator |
+| [`scripts/`](scripts) | Thin entry points: pretraining, fine-tuning, teaching, the two demos, and every pre-registered phase gate |
+| [`tests/`](tests) | The CPU-only pytest suite, including the doc tests that lock the numbers on this page to their sources |
+| [`results/`](results) | Committed evaluation artifacts: training curves, ablation cohort, A/B and audit reports, figures |
+| [`docs/REPORT.md`](docs/REPORT.md) · [`demo.ipynb`](demo.ipynb) | The technical report and the executed results notebook |
+
+### Record of corrections
+
+Recorded text in this repository is never rewritten in place: a finding that changes what an
+earlier sentence means is appended as a dated section, and the earlier sentence stays where it
+was. The sections below are that record, newest last.
+
+| Recorded | Section | What it records |
+| :-- | :-- | :-- |
+| 2026-08-16 | [Claim correction — what the memory toggle demonstrates](#claim-correction--what-the-memory-toggle-demonstrates-recorded-2026-08-16) | The demo's memory ON/OFF toggle is availability, not authorization: it withholds the adapter's contribution from one process and is neither an access-control boundary nor erasure |
+| 2026-08-19 | [v3.0 audit results](#v30-audit-results-recorded-2026-08-19) | The black-box audit measured the opposite of the low extraction rate it had anticipated (`LEAKAGE_DEMONSTRATED`), and the selective-erasure phase closed with verdict `FAILURE` and a DO NOT SHIP decision |
+| 2026-08-19 | [Pin defect labels — the phase publishes five, A through E](#pin-defect-labels--the-phase-publishes-five-a-through-e-recorded-2026-08-19) | A labelling correction: the closed erasure pin publishes five defects, lettered A through E, and the earlier "four" undercounts when read as a complete enumeration |
+| 2026-09-02 | [Repository status](#repository-status-recorded-2026-09-02) | The test-suite figure is re-scoped by date, the two CI jobs and the digest-verified `make demo` path are named, and v4.0 is described as in progress |
 
 ## Results at a glance
 
