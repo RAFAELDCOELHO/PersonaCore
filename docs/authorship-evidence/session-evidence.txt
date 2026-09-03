@@ -1,0 +1,51 @@
+# Session-transcript evidence (counts only; no transcript content)
+
+Generated 2026-09-03 for docs/AUTHORSHIP.md §4.1. Transcripts live outside the repository under ~/.claude/projects/ and are not committed.
+
+## PersonaCore sessions (~/.claude/projects/-Users-juliorcoelho-PersonaCore/*.jsonl)
+files: 59
+
+### first-message date per transcript (count, date)
+   1 2026-08-02
+   4 2026-08-12
+   1 2026-08-13
+   3 2026-08-14
+   3 2026-08-15
+   1 2026-08-16
+   3 2026-08-17
+   1 2026-08-19
+   4 2026-08-20
+   4 2026-08-21
+   5 2026-08-22
+   1 2026-08-23
+   3 2026-08-25
+   2 2026-08-26
+   1 2026-08-27
+   1 2026-08-28
+   4 2026-08-29
+   5 2026-08-30
+   3 2026-08-31
+   1 2026-09-01
+   7 2026-09-02
+   1 2026-09-03
+
+### model ids seen in message records (count, id)
+11427 "model":"claude-opus-5"
+1139 "model":"claude-fable-5-1"
+  16 "model":"<synthetic>"
+
+## tensorforge session (~/.claude/projects/-Users-juliorcoelho-tensorforge/)
+files: 1
+first timestamp: "timestamp":"2026-07-28T10:43:57.389Z"
+last timestamp:  "timestamp":"2026-07-29T01:31:37.318Z"
+
+## Codex sessions (~/.codex/sessions, checked 2026-09-03)
+
+rollouts in the v4.0 window (2026-08-20 .. 2026-09-03) whose session_meta.cwd is /Users/juliorcoelho/PersonaCore: 70
+  of those, carrying `[external_agent_tool_call: ...]` markers and ZERO native function_call / reasoning / turn_context records: 70
+  of those, carrying native Codex tool or reasoning records: 0
+  originator on all 70: "Codex Desktop" (source: vscode); example spans: 122 messages stamped 04:15:45.294Z -> 04:15:45.298Z
+Reading: these are Codex Desktop's imports of Claude Code transcripts (the same /gsd-* command prompts
+appear in ~/.claude/projects/-Users-juliorcoelho-PersonaCore/), not Codex-generated work.
+One genuine Codex rollout in the window mentions PersonaCore (2026-08-31T09:56, cwd under
+~/Documents/Codex/2026-08-04/..., a `guardian` sub-agent; 3 reasoning records) — outside the repository.
