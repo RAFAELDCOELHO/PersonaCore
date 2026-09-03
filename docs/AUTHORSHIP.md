@@ -509,8 +509,8 @@ scripted; the recorded wall-clock on the same M3 is:
 **6. Who applied `sudo pmset`, and when.** Author: himself, around 1–2 September 2026, at step 3 of
 the twelve-step launch sequence, because Claude Code cannot run an interactive `sudo`; the prior
 reading `1/10/1` matched `PMSET_REVERT_TARGETS`. Verified in the session transcript `579afcbf`
-(started 2026-08-31 13:50 local): the author's message at 2026-09-01 10:38 local instructs the
-session to run the change and its read-back; the tool result at 10:43:59 local reads `=== STEP 3
+(started 2026-08-31 13:50 local): the author's instruction, relayed into the session at 2026-09-01 10:38 local, is
+to run the change and its read-back; the tool result at 10:43:59 local reads `=== STEP 3
 read-back — must be 0 / 0 / 0 === powernap 0 / disksleep 0 / sleep 0`. `PMSET_REVERT_TARGETS` was
 committed at `277109f` (2026-08-31, plan 25-06). One correction to the record rather than to the
 author: the operational note's §11 still lists the after-state as PENDING, and `STATE.md`'s 25-14
