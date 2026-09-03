@@ -1,7 +1,8 @@
 # PersonaCore v4.0: authorship record
 
-**Version 1.0, 2026-09-03.** Ten items marked `[SEM EVIDÊNCIA — confirmar com Rafael]` remain open; the author's written
-answers will be appended as dated additions, never merged into the text above them.
+**Version 1.1, 2026-09-03.** Ten items marked `[SEM EVIDÊNCIA — confirmar com Rafael]` were open in version 1.0;
+the author answered all ten the same day and the answers are recorded in §9, each beside what the
+artifacts confirm or correct. The inline markers and §8 are left as written.
 Reconstructed 2026-09-03 from repository artifacts only, at `main` HEAD `15dce85`. Nothing in this
 document was taken from memory or from conversation with the author. Every claim points to a commit,
 a file path, a planning document, a run log, or a session transcript. Where no artifact exists, the
@@ -457,3 +458,103 @@ committed. Answers go below this list as dated additions; nothing is filled in b
 8. §2.2: Phase 21 session 1 (privacy unit, ragged geometry, D-01…D-11) has no discussion log; confirm those decisions were the author's ratification of the research fork rather than adopted by default.
 9. §2.6 / §4.3: The magnitude check that preceded the condition-(c) reopening is attributed to the author only in the AI-written vault note; confirm.
 10. General: Age (16) and school context appear nowhere in the repository; this document does not assert them.
+
+---
+
+## 9. The author's answers (recorded 2026-09-03)
+
+Answers were given in writing, in Portuguese, on 2026-09-03 (this session's transcript,
+`~/.claude/projects/-Users-juliorcoelho-PersonaCore/22fb8cc0-….jsonl`). Each is recorded as the
+author's statement, then checked against artifacts; where the check disagrees with the statement,
+the disagreement is stated. Nothing in §1–§8 was edited.
+
+**1. Hand-typed code.** Author: no line was typed by hand; the architecture and the important
+decisions were the author's, and the AI wrote the code under that direction. Consistent with §3.3's
+default reading; no artifact contradicts it.
+
+**2. Codex.** Author: Codex wrote only a paper about the project and took no part in PersonaCore's
+architecture or code. Consistent with §4.1 (the 70 PersonaCore-cwd rollouts are imports, and the
+one genuine Codex session mentioning the repository, 2026-08-31, works on "the paper" under
+`~/Documents/Codex/`). The paper itself is outside this repository and is not described here.
+
+**3. The original tensorforge `engine.py`.** Author: does not know, and asked that the answer come
+from git rather than memory. `git log --follow --format='%h %an %ad %s' -- core/engine.py` in
+`~/tensorforge` returns one commit for the file's first add: `372dbb8 Rafael 2026-07-28 11:06:16
+-0300 v1.0: framework de deep learning do zero, paridade bit-exata com PersonaCore`. The identity is
+the author's; the file already contained `_prev = set(...)` when the only surviving session read it
+at 10:43 that day, so whether an agent or the author produced those lines is not recoverable from
+any artifact. Recorded as unknown.
+
+**4. The tensorforge attribution in §4.4.** Author: accepts it (detection mechanism human, diagnosis
+and fix AI, publication decision human).
+
+**5. Where the gitignored inputs are.** Author asked for the answer to come from the disk. Measured
+2026-09-03: everything exists on the author's machine and nowhere else that any artifact names:
+`checkpoints/convbase_best.pt` (278,026,567 B, 2026-08-01), `checkpoints/best.pt` (166,808,536 B,
+2026-06-05), 35 adapter files including `phase19_erase_dialogue_floor_seed{1337,2024}_adapter.pt`
+and `phase23_control_seed*_adapter.pt`, and 44 `.bin` corpora under `data/`; `checkpoints/` is
+7.8 GB and `data/` 4.8 GB. No archive, release or external copy is referenced anywhere in the
+repository. For a clean machine the reproduction path is therefore to retrain, and every step is
+scripted; the recorded wall-clock on the same M3 is:
+
+| Step | Script | Recorded time | Source |
+|---|---|---|---|
+| TinyStories download + BPE + encode | `scripts/train_tokenizer.py`, `scripts/encode_corpus.py` | not recorded as a figure (network: 2.23 GB) | `CLAUDE.md` data tooling |
+| v1.0 pretrain, 50,000 steps → `best.pt` | `scripts/pretrain_tinystories.py` | ~5 h elapsed, including the calibration gate | `.planning/milestones/v1.0-phases/05-tinystories-pretraining/05-02-SUMMARY.md:51,61` |
+| PersonaChat fetch + dialogue bins | `scripts/fetch_personachat.py`, `scripts/prepare_dialog_corpus.py` | not recorded as a figure | Phase 11 |
+| v2.0 conversational base, 4,000 steps → `convbase_best.pt` | `scripts/finetune_dialog.py` | 37.3 min wall | `.planning/milestones/v2.0-phases/12-stage-2-conversational-fine-tune/12-05-SUMMARY.md:61` |
+| v3.0 persona and Phase-19 adapters | `scripts/teach_persona.py`, `scripts/phase19_run.py` | ~38 min per 4,000-step arm | `.planning/PROJECT.md` ("v2.0 precedent") |
+| v4.0 arms | `scripts/phase23_run.py`, `scripts/phase25_run.py` | 161 s (non-DP), 205 s (`dp_n8`), 1383 s (`dp_n64`) per arm | `results/phase23_cost.json` |
+
+**6. Who applied `sudo pmset`, and when.** Author: himself, around 1–2 September 2026, at step 3 of
+the twelve-step launch sequence, because Claude Code cannot run an interactive `sudo`; the prior
+reading `1/10/1` matched `PMSET_REVERT_TARGETS`. Verified in the session transcript `579afcbf`
+(started 2026-08-31 13:50 local): the author's message at 2026-09-01 10:38 local instructs the
+session to run the change and its read-back; the tool result at 10:43:59 local reads `=== STEP 3
+read-back — must be 0 / 0 / 0 === powernap 0 / disksleep 0 / sleep 0`. `PMSET_REVERT_TARGETS` was
+committed at `277109f` (2026-08-31, plan 25-06). One correction to the record rather than to the
+author: the operational note's §11 still lists the after-state as PENDING, and `STATE.md`'s 25-14
+entry says "pmset still 1/10/1"; both were written before or without that read-back and were not
+updated afterwards. Applied: 2026-09-01, ~10:43 local, by the author, through the session.
+
+**7. The run "killed externally at 60 minutes".** Author: the first ladder run of Phase 16, cause
+never resolved, five hypotheses falsified, a sleep explanation asserted and retracted; the honest
+answer is "a mystery recorded as such". The artifacts split this into two events, and the author's
+answer names the wrong one for the sentence in `25-CONTEXT.md:20`:
+
+- The Phase 16 event is real and is recorded in `16-07-SUMMARY.md` (not 16-11): run 1 died at rung 5
+  after **50.3 min**, "Cause NOT identified", with five falsified hypotheses (jetsam/OOM, Python
+  crash, in-run leak, the 10-minute Bash timeout, macOS sleep, the last falsified by a 25 h
+  `NoIdleSleepAssertion`), an intermediate sleep attribution retracted, and "the harness task
+  lifecycle" named as the most consistent remaining explanation with no log to prove it.
+- The sentence in `25-CONTEXT.md:20` ("the machine's last production run was killed externally at
+  60 minutes") refers to the Phase 23 matched-control run of 2026-08-27: `23-17-SUMMARY.md:154-160`
+  records a 3,603 s window, "killed at ~60 min by the execution harness", three of five seeds done,
+  resumed later through the per-seed state file (`results/phase23_resume_run.log`). Its cause is
+  recorded, not open. The author's aside that 23-17 was "killed by the 600 s ceiling" does not match
+  that summary either; the Bash tool's 600 s limit is the hypothesis 16-07 falsified.
+
+**8. Phase 21 session 1.** Author: ratification, not default; the fact-level privacy unit came from
+the v4.0 scoping decision; the ragged geometry with mean-over-windows was the author's position
+stated before the options, kept after the system's measurements replaced its justification; an
+option to equalise the window count across the corpus was rejected because it would fix only the 56
+filler facts and leave the 8 `LOCKED_FACTS` exposed. What the artifacts show: `21-CONTEXT.md`
+D-01…D-04 record the ragged choice, the measured table (ragged 1.14× vs uniform 1.39×, 10.26% vs
+24% padding, `torch.stack` refusing the ragged batch) and the mean-over-windows rule with its named
+cost. They do not record the "equalise W across the corpus" option or the reason for rejecting it,
+and no 2026-08-22 transcript turn stating that position was found. That part stands as the author's
+statement.
+
+**9. The magnitude check before the condition-(c) reopening.** Author: required by him, as a
+position stated before the options ("D-02's treatment unless the magnitude argues otherwise; check
+before accepting precedent"). Verified: `25-CONTEXT.md` D-48 records that "the magnitude was CHECKED
+before the precedent was accepted", with the two results (dialogue floor 1.65% of the band width;
+retention: the v3.0 adapter fails the cap by +0.190760, so the floor would need to be 2.38× larger),
+and the session transcript `0b235c5e` carries the assistant's message of 2026-08-31 10:45 local
+quoting the author's conditional back: "Your conditional was the load-bearing part: 'D-02's
+treatment unless the magnitude argues otherwise — needs checking before accepting precedent'".
+§2.6's reliance on the vault note for this item is withdrawn; the CONTEXT file and the transcript
+carry it.
+
+**10. Age and school context.** Author: must not enter the document. Not added.
+
