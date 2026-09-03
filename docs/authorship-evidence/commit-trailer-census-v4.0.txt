@@ -1,0 +1,67 @@
+# Commit trailer census, v3.0..HEAD (2026-09-03)
+
+total commits: 603
+commits carrying a Claude-Session: trailer: 100
+distinct Claude-Session URLs: 6
+commits with Co-authored-by trailer: 7
+
+## author identities
+   7 Cursor Agent <cursoragent@cursor.com>
+ 592 Rafael <rafael.d.cooelho@gmail.com>
+   4 RAFAELDCOELHO <rafael.d.cooelho@gmail.com>
+
+## commits per day
+  52 2026-08-20
+  52 2026-08-21
+  12 2026-08-22
+  57 2026-08-23
+  19 2026-08-24
+  61 2026-08-25
+  80 2026-08-26
+  50 2026-08-27
+  22 2026-08-28
+  19 2026-08-29
+  50 2026-08-30
+  70 2026-08-31
+  37 2026-09-01
+  22 2026-09-02
+
+## Claude-Session trailers by session (count, url)
+  73 Claude-Session: https://claude.ai/code/session_01LuqvgEYfv485D2keKnwMke
+   8 Claude-Session: https://claude.ai/code/session_01FJiW8HZXxXMyaFTzoV5xd7
+   7 Claude-Session: https://claude.ai/code/session_01PNhguTxBUaVmGiTPFvRyA9
+   6 Claude-Session: https://claude.ai/code/session_01R84XwigKJEgHa6urRtNQ1e
+   4 Claude-Session: https://claude.ai/code/session_01RFk7at7KKYFd9C8eiS1xvz
+   2 Claude-Session: https://claude.ai/code/session_018VcJWpDGv4DxwWqcyKdDCM
+
+## Cursor Agent commits
+49415f2 2026-09-01 22:09:23 +0000 docs: point CITATION.cff url at the GitHub repository
+ac3e9b2 2026-09-01 22:06:48 +0000 docs: add CITATION.cff so GitHub can cite the repository
+8875b0d 2026-09-01 20:51:43 +0000 docs: dry the new README TLDR and make demo comments
+5065bc5 2026-09-01 20:50:11 +0000 fix: pin make demo to [cpu,demo] pip line and declare MIT in pyproject
+f98c52f 2026-09-01 20:27:03 +0000 feat: one-command public demo via make demo
+e1e1ca9 2026-09-01 19:15:22 +0000 fix(ci): assert cross-device resume without editing teach_persona.py
+a97b9ff 2026-09-01 19:07:50 +0000 fix(ci): make ubuntu-latest pytest green without hiding the 9 failures
+
+## merge commits
+7837ea7 2026-09-02 11:22:05 -0300 Merge pull request #4 from RAFAELDCOELHO/fix/demo-interpreter-and-release-guard
+2a5784f 2026-09-02 10:56:00 -0300 Merge origin/main into fix/demo-interpreter-and-release-guard
+971a48d 2026-09-01 19:34:02 -0300 docs: add CITATION.cff for GitHub Cite this repository
+3dd5cdb 2026-09-01 18:16:58 -0300 Merge pull request #2 from RAFAELDCOELHO/cursor/one-click-demo-artifact-766b
+467bccd 2026-09-01 16:40:20 -0300 Merge pull request #1 from RAFAELDCOELHO/cursor/ci-pytest-green-8cc3
+9aeb043 2026-08-25 09:52:00 -0300 chore: merge gap-closure worktree (ledger)
+c29e988 2026-08-25 08:54:31 -0300 chore: merge gap-closure worktree (WR-04)
+cf356a3 2026-08-24 18:53:46 -0300 chore: merge gap-closure worktree (CR-02, WR-01)
+8b509bc 2026-08-24 18:21:03 -0300 chore: merge gap-closure worktree (WR-02)
+8ae9e3c 2026-08-24 17:48:25 -0300 chore: merge gap-closure worktree (CR-01)
+5bd8319 2026-08-24 16:50:00 -0300 chore: merge executor worktree (21-11)
+6f938d4 2026-08-23 20:02:11 -0300 chore: merge executor worktree (21-09)
+5a8f029 2026-08-23 19:33:09 -0300 chore: merge executor worktree (21-10)
+c9d79da 2026-08-23 18:59:12 -0300 chore: merge executor worktree (21-08)
+4725915 2026-08-23 18:59:11 -0300 chore: merge executor worktree (21-07)
+f568f48 2026-08-23 18:59:11 -0300 chore: merge executor worktree (21-06)
+95f9d81 2026-08-23 18:02:57 -0300 chore: merge executor worktree (21-05)
+f8b7888 2026-08-23 18:02:57 -0300 chore: merge executor worktree (21-04)
+d1fa4c0 2026-08-23 18:02:57 -0300 chore: merge executor worktree (21-03)
+519e6a7 2026-08-23 17:11:40 -0300 chore: merge executor worktree (21-02)
+7e1e2c9 2026-08-23 17:11:40 -0300 chore: merge executor worktree (21-01)
