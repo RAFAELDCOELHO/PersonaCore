@@ -78,7 +78,8 @@ _SRC = str(_ROOT / "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-import phase25_prereg  # noqa: E402  (needs the sys.path insert; scripts/ is not a package)
+import mitigation_budget  # noqa: E402  (needs the sys.path insert; scripts/ is not a package)
+import phase25_prereg  # noqa: E402  (same)
 import phase25_record  # noqa: E402  (same)
 import phase25_venue  # noqa: E402  (same) — the launch banner's ONE producer
 
@@ -291,7 +292,7 @@ HEARTBEAT_FIELDS = ("utc", "point", "stage", "shape", "draw_index")
 
 # The stages a beat can name. `train` is the one that matters: it is the 23.05-min leg that emits no
 # draw-loop line at all, and the reason the beat cannot be event-driven.
-STAGES = ("start", "train", "draw", "score", "record", "commit", "done")
+STAGES = ("start", "train", "measure", "draw", "score", "record", "commit", "done")
 
 
 def beat(heartbeat_path, *, point, stage, shape, draw_index):
@@ -454,38 +455,6 @@ def disk_precheck(target=None):
     return free_bytes
 
 
-def train_point(point_key, *, facts, family_ids, seed, prefix, dp_clip_norm, resume_from=None):
-    """Train ONE point's arm through the single production entry, and return its outputs.
-
-    **`train_arm`'s REAL SIGNATURE, resolved from `scripts/teach_persona.py:1655` and not from
-    prose.** ``arm`` is positional; ``facts`` and ``family_ids`` are keyword-only with **NO
-    DEFAULTS**, so a call omitting either raises. ``dp_fn``, ``fact_bin`` and ``n_facts`` are
-    `personacore.training.loop.train`'s kwargs — one layer down — and passing any of them here is a
-    ``TypeError``. The DP mechanism is selected by ``dp_sigma`` / ``dp_clip_norm``, from which
-    `train_arm` constructs the ``DPSGD``.
-
-    `torch` and `teach_persona` are imported HERE rather than at module scope, so `--dry-run` and
-    the whole test battery never touch a GPU.
-    """
-    import teach_persona
-
-    arm, axis, axis_value = phase25_record.parse_point_key(point_key)
-    dp_sigma = axis_value if axis == "sigma" else None
-    adversarial_ratio = axis_value if axis == "ratio" else 0.0
-
-    return teach_persona.train_arm(
-        arm,
-        facts=facts,
-        family_ids=family_ids,
-        adversarial_ratio=adversarial_ratio,
-        seed=seed,
-        prefix=prefix,
-        dp_sigma=dp_sigma,
-        dp_clip_norm=None if dp_sigma is None else dp_clip_norm,
-        resume_from=resume_from,
-    )
-
-
 def draw_point_shapes(
     point_key,
     *,
@@ -625,13 +594,35 @@ def score_point(blob, values):
 
     records = [record for family in blob["shapes"] for record in blob["shapes"][family]["draws"]]
     scored = x18.score_records(records, values)
-    return {
+    # ONE ROW PER QUESTION, the unit every FRONT-03 count is in (416 gated, 448 reported at
+    # CURVE_K): `phase23_run._never_taught_evidence`'s row, so a published count re-derives from
+    # the committed record alone. The per-fact rollup travels beside it under `per_fact`.
+    per_question = {
+        tier: [
+            {
+                "question_id": f"{r['fact_id']}/{r['family']}/{r['seed_index']}",
+                "family": r["family"],
+                "tier": r["tier"],
+                "fact_id": r["fact_id"],
+                "slot": r["slot"],
+                "seed_index": r["seed_index"],
+                "successes": int(sum(r["hits"])),
+                "draws": int(r["n_draws"]),
+                "answered": bool(any(r["hits"])),
+            }
+            for r in scored
+            if r["tier"] == tier
+        ]
+        for tier in (phase25_record.GATED_TIER, phase25_record.REPORTED_TIER)
+    }
+    per_fact = {
         tier: x18.aggregate_questions(scored, tier=tier)
         for tier in (phase25_record.GATED_TIER, phase25_record.REPORTED_TIER)
     }
+    return per_question, per_fact, scored
 
 
-def run_point(point_key, *, dry_run=False, heartbeat_path=None, **record_fields):
+def run_point(point_key, *, dry_run=False, heartbeat_path=None):
     """ONE sweep point, end to end. D-10's refusal runs FIRST; the commit runs LAST.
 
     The seven steps, in the order their failure modes demand:
@@ -679,23 +670,50 @@ def run_point(point_key, *, dry_run=False, heartbeat_path=None, **record_fields)
         )
         return None
 
+    # 2026-09-04: every per-point kwarg below is produced by `phase25_points` — the resolver this
+    # driver was committed without (its module docstring records the measurement).
+    import phase25_points
+
+    plan = phase25_points.point_plan(point_key)
     stop, _thread = start_heartbeat(heartbeat_path, state)
     try:
         state["stage"] = "train"
-        trained = train_point(point_key, **record_fields["training"])
+        training = phase25_points.train_stage(plan)
+
+        # BEFORE the draws: the control's clip check and D-07's reproduction gate halt here, so an
+        # invalid control never spends two hours of scoring (25-15 (a)/(b)).
+        state["stage"] = "measure"
+        measured = phase25_points.measure_stage(plan, training)
 
         state["stage"] = "draw"
-        blob, digests = draw_point_shapes(point_key, state=state, **record_fields["drawing"])
+        corpus, corpus_digest = phase25_points.attack_corpus()
+        blob, digests = draw_point_shapes(
+            point_key,
+            adapter=_ROOT / training["adapter"],
+            adapter_sha256=training["adapter_sha256"],
+            corpus=corpus,
+            corpus_sha256=corpus_digest,
+            k=mitigation_budget.CURVE_K,
+            state=state,
+        )
 
         state["stage"] = "score"
-        per_question = score_point(blob, record_fields["values"])
+        per_question, per_fact, scored = score_point(blob, phase25_points.scoring_values())
 
         state["stage"] = "record"
-        record = phase25_record.build_point_record(
-            point_key_value=point_key,
+        kwargs = phase25_points.record_kwargs(
+            plan,
+            training=training,
+            measured=measured,
+            blob=blob,
             per_question=per_question,
-            **record_fields["record"],
+            scored=scored,
+            tracked=tracked_point_records(),
+            draws_cache=draws_path(point_key),
         )
+        kwargs["extra"]["per_fact"] = per_fact
+        kwargs["extra"]["corpus_sha256"] = corpus_digest
+        record = phase25_record.build_point_record(**kwargs)
         record["shape_block_sha256"] = digests
         record["driver_commit"] = head_sha()
         phase25_record.write_point_record(
@@ -706,7 +724,7 @@ def run_point(point_key, *, dry_run=False, heartbeat_path=None, **record_fields)
         commit_point_record(point_key)
 
         state["stage"] = "done"
-        return trained
+        return record
     finally:
         stop.set()
 
@@ -866,7 +884,9 @@ def main(argv=None):
     """
     print(phase25_venue.launch_banner(), flush=True)
     args = build_parser().parse_args(argv)
-    points = phase25_record.ORDERED_POINT_KEYS() if args.points is None else tuple(args.points)
+    # D-15: the default ORDER is `SWEEP_SCHEDULE()` — a proved permutation of the pinned 44 —
+    # controls first, the six other extremes interleaved, then the interior as pinned.
+    points = phase25_record.SWEEP_SCHEDULE() if args.points is None else tuple(args.points)
     for point in points:
         run_point(point, dry_run=args.dry_run, heartbeat_path=pathlib.Path(args.heartbeat))
     return 0

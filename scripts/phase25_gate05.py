@@ -277,6 +277,20 @@ def gate05_exposure_gaps(exposure):
     return tuple(gaps)
 
 
+FILLER_EXPOSURE_OMITTED = (
+    "NO EXPOSURE IS MEASURABLE FOR A FILLER FACT, AND THIS IS A MEASURED CORRECTION TO "
+    "GATE05_GOVERNS' last sentence (2026-09-04, at the launch checkpoint, before any point ran). "
+    "`phase18_extraction.reference_set_for` — ancestry-guarded, never edited — REFUSES every slot "
+    "outside the eight core ones by design ('a slot name that is not one of them is a typo'), and "
+    "Carlini exposure is a RANK among a same-slot reference set, so a fact with no reference set "
+    "has no rank, no ceiling and no exposure. The 56 filler facts at n=64 share eight filler "
+    "slots (seven facts per slot) and none has a reference set. The reported tier therefore "
+    "carries the eight gated records plus one omission entry per filler fact naming this reason; "
+    "`tier_slot_count` still counts the point's FULL taught set (D-37's in/out population). "
+    "Nothing changes for the gate: the reported tier never entered a verdict (GATE05_GOVERNS)."
+)
+
+
 # =============================================================================================
 # ===== (c) THE FLAG — A PLAIN `bool`, WITH THE TRUTHY-PAIR TRAP REFUSED (T-25-125) =====
 # =============================================================================================
@@ -374,17 +388,22 @@ def measure_gate05(model, tok, device, *, taught, n_facts):
         for slot in gated_slots
     ]
     reported = {record["slot"]: record for record in gated}
+    omitted = 0
     for slot in reported_slots:
         if slot in reported:
             continue
-        reported[slot] = extraction.measure_exposure(
-            model, tok, device, slot=slot, taught_value=taught[slot]
-        )
+        # A non-gated taught entry is a filler fact keyed by its fact id (see
+        # `phase25_points.taught_mapping`): it has no reference set, so the scorer would refuse.
+        reported[slot] = {"slot": slot, "exposure_omitted_reason": FILLER_EXPOSURE_OMITTED}
+        omitted += 1
 
     return {
         "gated": gated,
         "reported": [reported[slot] for slot in reported_slots],
         "gated_slots": gated_slots,
         "reported_slot_count": len(reported_slots),
+        "exposure_measured": len(reported_slots) - omitted,
+        "exposure_omitted": omitted,
+        "omitted_reason": FILLER_EXPOSURE_OMITTED if omitted else None,
         "governs": GATE05_GOVERNS,
     }

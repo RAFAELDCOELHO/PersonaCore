@@ -303,6 +303,41 @@ def ORDERED_POINT_KEYS():
 # ===== (c) D-34's LIVE HALT — FIVE FIELDS, EXACT EQUALITY, NO TOLERANCE ANYWHERE =====
 # =================================================================================================
 
+
+def SWEEP_SCHEDULE():
+    """D-15's EXECUTION ORDER over the same 44 keys: controls, then the six other extremes
+    INTERLEAVED across the four legs, then the 36 interior points in pinned order.
+
+    A FUNCTION over `ORDERED_POINT_KEYS()` and never a second list: the plist deliberately spells
+    no point list ("a list repeated in this file would be a second, un-asserted copy of the
+    sweep's own definition, free to drift"), so the order lives here, derived from the same
+    ladder and grid, and is proved to be a PERMUTATION of the pinned set on every call. The eight
+    extremes are D-15's — the two sigma=0 controls (D-01), the two DP high extremes at
+    ``SIGMA_LADDER[-1]`` (the probed anchor), and the four adversarial corners at ratio 0.0 and at
+    the pool ceiling — and they run before any interior point so a structural problem at any
+    corner appears on day one rather than on day five.
+    """
+    keys = ORDERED_POINT_KEYS()
+    ladder = mitigation_budget.SIGMA_LADDER
+    grid = mitigation_budget.ADVERSARIAL_RATIO_GRID
+    head = (
+        point_key("dp_n8", ladder[0]),
+        point_key("dp_n64", ladder[0]),
+        point_key("dp_n8", ladder[-1]),
+        point_key("adv_n8", grid[0]),
+        point_key("dp_n64", ladder[-1]),
+        point_key("adv_n64", grid[0]),
+        point_key("adv_n8", grid[-1]),
+        point_key("adv_n64", grid[-1]),
+    )
+    schedule = head + tuple(key for key in keys if key not in head)
+    _prove(
+        len(schedule) == len(keys) and set(schedule) == set(keys),
+        f"the schedule is not a permutation of the pinned key set ({len(schedule)} vs {len(keys)})",
+    )
+    return schedule
+
+
 MECHANISM_PIN_FIELDS = ("composed_steps", "composed_lot_sizes", "records_per_lot", "q", "clip_norm")
 
 MECHANISM_PIN_SOURCES = {
@@ -769,8 +804,14 @@ def build_point_record(
     gate05_reported,
     point_epsilon,
     accounting,
+    extra=None,
 ):
     """One point's complete record. D-34's halt runs BEFORE the dict is returned.
+
+    ``extra`` (2026-09-04) is the driver's per-point additions — the control's `taught_recall` and
+    `reproduction_gate` plan 25-15 verifies, the adversarial build statistics plan 25-16 records,
+    the training and timing provenance — merged LAST, refused on any key collision, and proved
+    outside the verdict's kwargs like every other reported column.
 
     ``point_epsilon`` is the value for a noised DP point, or ``None`` at the sigma=0 control and on
     the adversarial arm. Both no-value cases write the key EXPLICITLY with a `null` and a sibling
@@ -888,6 +929,14 @@ def build_point_record(
     )
     record[axis] = float(axis_value)
     record.update(retention_disclosure(condition_c["point_retention_ppl"]))
+    if extra:
+        collisions = sorted(set(extra) & set(record))
+        _prove(
+            not collisions,
+            f"extra field(s) {collisions} collide with the record's own; an extra never overwrites",
+        )
+        prove_names_are_outside_the_gate(set(extra), what="the driver's extra point fields")
+        record.update(extra)
     return record
 
 
