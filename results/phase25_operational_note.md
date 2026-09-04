@@ -48,8 +48,34 @@ that belong to other processes.
 
 ### The after-state: `pmset -g` following `sudo pmset -a sleep 0 disksleep 0 powernap 0`
 
-**PENDING — see §11.** This is `phase25_venue.PMSET_APPLY`, it requires `sudo`, and it is an
-operator act behind a blocking human checkpoint. Nothing in this repository applies it.
+**MEASURED 2026-09-04, read-only.** The `sudo` act itself was performed by the operator between the
+2026-09-01 before-state above and this reading; it left no transcript in this note, so what is
+recorded is the state the machine was found in at the launch checkpoint, verbatim:
+
+```
+$ pmset -g
+System-wide power settings:
+Currently in use:
+ standby              1
+ Sleep On Power Button 1
+ SleepServices        0
+ hibernatefile        /var/vm/sleepimage
+ powernap             0
+ networkoversleep     0
+ disksleep            0
+ sleep                0 (sleep prevented by sharingd, caffeinate, mds_stores, powerd, Claude)
+ hibernatemode        3
+ ttyskeepawake        1
+ displaysleep         10
+ tcpkeepalive         1
+ lowpowermode         0
+ womp                 1
+```
+
+**`sleep 0` / `disksleep 0` / `powernap 0`** — `phase25_venue.PMSET_APPLY`'s target on all three
+fields. `phase25_venue.read_power_settings()` returns `{'sleep': 0, 'disksleep': 0, 'powernap': 0}`
+on the same text. The revert obligation of §7 is unchanged and now live: the machine is in the
+applied state and plan 25-20 owes the revert to `1 / 10 / 1`.
 
 ---
 
@@ -161,7 +187,63 @@ $ ps -o pid,ppid,command -p 7591,58309,91053
 
 ### Post-clearing `pgrep -x caffeinate`, and the post-launch owner list
 
-**PENDING — see §11.** Both require the operator acts of §11 and neither may be simulated.
+**MEASURED 2026-09-04.** The three strays of the 2026-09-01 reading are gone. The 17-day launchd
+job is no longer registered, and the `-is -w 7584` watcher is gone although pid 7584 (an
+unrelated collector) still runs:
+
+```
+$ launchctl print gui/501/com.personacore.caffeinate
+Bad request.
+Could not find service "com.personacore.caffeinate" in domain for user gui: 501
+
+$ launchctl list | grep personacore
+-	0	com.personacore.phase25.sweep
+-	0	com.personacore.phase25.watch
+-	0	com.personacore.phase25.rehearsal
+
+$ pgrep -lf caffeinate
+9760 caffeinate -i -t 300
+
+$ ps -o pid,ppid,pgid,sess,command -p 9760
+  PID  PPID  PGID   SESS COMMAND
+ 9760 95011 95011      0 caffeinate -i -t 300
+
+$ ps -o pid,ppid,command -p 95011
+  PID  PPID COMMAND
+95011 83894 claude
+```
+
+**The one caffeinate present is the operator's console, not residue of an earlier session.** Its
+parent is the `claude` process of the very Claude Code session performing this checkpoint; it is a
+300-second self-releasing assertion re-created around each of that session's tool calls (the pid
+read `96140`, then `9760`, then `22820`, then `58765` across four readings in one hour, always
+`-i -t 300`). It cannot outlive the session by more than 300 s, and `prove_only_our_caffeinate`
+correctly REFUSES on it (quoted in §12), which is the function doing its job: a clean read-back has
+to come from a process that is not the console, and §12 records that read.
+
+The post-launch owner list, by owning process, with the D-03 floor agent live (the sweep agent's
+own is in §12):
+
+```
+$ pmset -g assertions
+Listed by owning process:
+   pid 58765(caffeinate): [0x0057dcee000184ba] 00:01:00 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting for 300 secs
+   pid 59155(caffeinate): [0x0057dd12000184c5] 00:00:25 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 59153)
+   pid 59155(caffeinate): [0x0057dd12000584c6] 00:00:25 PreventUserIdleDisplaySleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 59153)
+   pid 59155(caffeinate): [0x0057dd12000784c7] 00:00:25 PreventSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 59153)
+   pid 59155(caffeinate): [0x0057dd12000f84c8] 00:00:25 PreventDiskIdle named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 59153)
+Kernel Assertions: 0x104=USB,MAGICWAKE
+```
+
+The agent's own wrapper (`59155`) holds all four of `-d`, `-i`, `-m`, `-s` **on behalf of** the
+driver pid `59153` — the phrase that names the relation §9's correction records. System owners at
+this reading, named for `expected_owners=` rather than tolerated: `sharingd`, `mds_stores`,
+`powerd`, `WindowServer`, `Claude` (the operator's desktop app, 48 h idle-sleep assertion).
 
 ---
 
@@ -194,18 +276,70 @@ headroom for the draw caches and per-point records that land beside them.
 
 ## 4. The launch identity, read before any GPU second
 
-**PENDING — see §11.** The triple must be read from a **live** launched process;
-`phase25_venue.launch_identity()` raises rather than return a number about a process that has
-exited, because a triple read after the run died is archaeology.
-
-The relation that will be quoted is stated in advance so it cannot be chosen after seeing the
-output — and it is **not** the relation 23-20 quoted. See §9.
+The relation below was stated in advance so it could not be chosen after seeing the output — and it
+was **measured false** on 2026-09-04 at the first live reading. The original stands as written; the
+measured relation and the correction follow it (§9).
 
 ```
-driver.pgid == driver.sid == wrapper.pid == driver.ppid
+driver.pgid == driver.sid == wrapper.pid == driver.ppid          # SUPERSEDED 2026-09-04
 and wrapper.pid ∈ pgrep -x caffeinate
 and wrapper.pid holds assertions in `pmset -g assertions`
 ```
+
+**MEASURED 2026-09-04 against the D-03 floor agent (`com.personacore.phase25.n64floor`), read
+BEFORE its first GPU second had produced a reading.** The banner from the log, the process table,
+and `launch_identity()` after the correction, verbatim:
+
+```
+$ head -1 logs/phase25_n64_floor.out
+[phase25_launch] pid=59153 ppid=1 pgid=59153 sid=1
+
+$ ps -o pid,ppid,pgid,sess,command -p 59153,59155
+  PID  PPID  PGID   SESS COMMAND
+59153     1 59153      0 /opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python /Users/juliorcoelho/PersonaCore/scripts/phase25_n64_floor.py
+59155 59153 59153      0 /usr/bin/caffeinate -dims /Users/juliorcoelho/PersonaCore/.venv/bin/python /Users/juliorcoelho/PersonaCore/scripts/phase25_n64_floor.py
+
+$ .venv/bin/python -c "import sys,json;sys.path.insert(0,'scripts');import phase25_venue as v;print(json.dumps(v.launch_identity('logs/phase25_n64_floor.out'), indent=1))"
+{
+ "log": "logs/phase25_n64_floor.out",
+ "driver_pid": 59153,
+ "driver_ppid": 1,
+ "driver_pgid": 59153,
+ "driver_sid": 1,
+ "wrapper_pid": 59155,
+ "wrapper_ppid": 59153,
+ "wrapper_pgid": 59153,
+ "wrapper_assertions": ["PreventDiskIdle", "PreventSystemSleep", "PreventUserIdleDisplaySleep", "PreventUserIdleSystemSleep"],
+ "wrapper_is_a_caffeinate_process": true,
+ "wrapper_is_the_drivers_child": true,
+ "same_group_as_wrapper": true,
+ "driver_leads_its_group": true,
+ "driver_parent_is_launchd": true,
+ "wrapper_holds_an_assertion": true
+}
+```
+
+The measured relation, now `phase25_venue.LAUNCH_IDENTITY_PROVENANCE["measured_relation"]`:
+
+```
+wrapper.ppid == driver.pid
+and wrapper.pgid == driver.pgid == driver.pid
+and wrapper ∈ pgrep -x caffeinate, holding its assertions "on behalf of" driver.pid
+and driver.ppid == 1 (launchd)
+```
+
+Before the correction, `launch_identity()` read the wrapper off the banner's `ppid` — launchd — and
+returned `wrapper_pid: 1, wrapper_assertions: [], wrapper_holds_an_assertion: false` while
+hard-coding `wrapper_is_the_parent: true`. It would have reported a protected run as unprotected
+(or, read the other way, would have asserted a parent that does not exist). The 2026-09-01
+rehearsal banners in `logs/phase25_rehearsal.out` — `pid=59902 ppid=1 pgid=59902 sid=1` and three
+more of the same shape — already carried this fact; nobody read the `ppid=1`.
+
+### The sweep agent's own reading
+
+**PENDING — appended in §12 at kickstart.** The reading above is of the D-03 agent, which runs the
+identical wrapper form from the identical plist shape; the sweep agent's own identity is read the
+same way before its first point and quoted there.
 
 The pid comes **from the log** and never from `launchctl print` (which reports the *wrapper's* pid
 under `-dims`) and never from a shell's `$!` (which does not exist for a LaunchAgent at all).
@@ -495,6 +629,21 @@ obligation with no target at all.
 
 ---
 
+### 6c. The three flags, re-read 2026-09-04 before launch
+
+```
+$ defaults read /Library/Preferences/com.apple.SoftwareUpdate
+    AutomaticDownload = 0;
+    AutomaticallyInstallMacOSUpdates = 0;
+    ConfigDataInstall = 1;
+    CriticalUpdateInstall = 0;
+```
+
+Unchanged since §6b's declaration: the three revert-bearing flags are still `0`, `ConfigDataInstall`
+still `1`. Nothing was written.
+
+---
+
 ## 7. The revert obligation — committed, with its verifier named
 
 `sudo pmset -a sleep 0 disksleep 0 powernap 0` is a privileged, system-wide, indefinite change to
@@ -611,6 +760,20 @@ in, and the driver therefore cannot outlive the wake claim protecting it.
 **What did not change.** The pid still comes from the log, and it is still probed rather than
 trusted.
 
+**CORRECTION, 2026-09-04 — the parent/child direction above is inverted, and it was measured, not
+reasoned.** `caffeinate -dims <utility>` does not run the utility as its child. It **forks**: the
+**parent** execs the utility, keeping the pid launchd started (`driver.ppid == 1`, `driver.pgid ==
+driver.pid`), and the **child** is the `caffeinate` that holds the four assertions *on behalf of*
+its parent for the parent's lifetime (`wrapper.ppid == driver.pid`, `wrapper.pgid == driver.pgid`).
+§4 quotes the `ps` table and the assertion rows that say so. The three claims of the paragraph
+above survive with the roles swapped: the assertion holder is the driver's own **child**, not a
+stray; it lives in the group the driver **leads**; and it releases when the driver exits. What does
+not survive is `pid == pgid == sid` being false OF THE DRIVER — the driver does lead its group, and
+`sid` is launchd's session, not the wrapper's. `launch_identity()` was corrected the same day
+(`read_process_parents`, the wrapper found by `ppid == driver.pid`, a driver with no caffeinate
+child refused as UNWRAPPED); the superseded relation text is left standing in
+`LAUNCH_IDENTITY_PROVENANCE["the_relation_that_replaces_it"]` beside `measured_relation`.
+
 ---
 
 ## 10. Open risks before the sweep starts
@@ -629,6 +792,9 @@ not a bug: a first-point smoke run that actually trains and draws is the only th
 `com.personacore.caffeinate` is booted out, no post-launch assertion read-back can distinguish "the
 sweep holds its own assertion" from "something else has held one since 15 August".
 
+**R2 — CLOSED 2026-09-04.** `com.personacore.caffeinate` is no longer registered and `pgrep -x
+caffeinate` names only the console's own 300 s assertion (§2). The read-back can now distinguish.
+
 **R3 — the system assertion-owner set has now been measured four times and disagreed four times.**
 `dasd` (research reading) → `powerd` + `WindowServer` (25-06) → `Claude` (recurring) →
 `runningboardd` (this reading, a WhatsApp background task). `phase25_venue.SYSTEM_ASSERTION_OWNERS`
@@ -642,6 +808,11 @@ design (an automatic restart would re-enter a point outside the driver's deliber
 violate D-10), and the stall watcher is the compensating control. It is also why §5's live
 observation matters more than it looks.
 
+**R5a — the `caffeinate -dims` wrapper leg is now EXERCISED.** The D-03 floor agent runs the
+identical wrapper and §4 shows it holding all four assertions on the driver's behalf. What the
+exercise found is §9's correction: the wrapper is the driver's child, and `launch_identity()` had
+to be fixed before it could read the run as protected.
+
 **R5 — an unintended logout or restart ends the run silently, and D-12 does not protect against it.**
 Measured, not assumed: §6. The launchd domain is destroyed at logout and the agents come back
 re-bootstrapped but not running, with `runs = 0` — indistinguishable at a glance from a clean
@@ -649,6 +820,23 @@ finish, which is R4's ambiguity arriving by a second route. The mitigations are 
 commitment (no logout for 4.5–6.3 days) and three `SoftwareUpdate` flags at 0; neither is enforced
 by anything on the machine. The flags carry their own revert obligation, whose target state is
 **operator-declared rather than measured** — §6b.
+
+**R6 — FOUND AT THE CHECKPOINT, 2026-09-04: the driver's live path was never wired, and R1 was
+its symptom, not its extent.** Read before any GPU second: `phase25_run.run_point` dereferenced
+`record_fields["training"]`, `["drawing"]`, `["values"]` and `["record"]` that `main()` never
+passed — every non-dry-run point would have raised `KeyError` after `prove_first_attempt`. Nothing
+in the phase produced `build_point_record`'s twenty kwargs per point, nor the control's
+`taught_recall` / `reproduction_gate` that plan 25-15 verifies, nor D-50's `seed_spread`. Four
+more defects sat behind that one: `measure_gate05` at n=64 would have refused (the frozen
+`reference_set_for` accepts core slots only, so the 56 filler facts have no exposure reference set
+and D-46's "one extra forward pass" premise was false); `parse_point_key` returns the six-decimal
+label (`1.909091`) where training needs the grid literal (`1.9090909090909092`); the plist
+deliberately spells no point list, so D-15's order had no home; and §9's inversion. All five are
+fixed in commits `c3c7709` (resolver, schedule, gate05, floor leg, 13 tests) and the identity fix
+that follows it. **What is NOT closed: no test reaches `train_stage` / `measure_stage` on a device
+either.** The first control point is the smoke, watched stage by stage through the heartbeat
+(`train` → `measure` → `draw`), and a failure there costs minutes, not the attempt (D-10: no
+record lands until step 7).
 
 ---
 
@@ -660,15 +848,16 @@ appears anywhere above.**
 
 | § | Pending block | Why it cannot be automated |
 |---|---|---|
-| 1 | the **after** `pmset -g` reading `sleep 0` / `disksleep 0` / `powernap 0` | `sudo pmset -a` is privileged; nothing in this repository elevates |
-| 2 | the post-clearing `pgrep -x caffeinate` (must be empty) and the post-launch owner list | booting out a launchd job and killing live processes is machine state, not a test |
-| 4 | `launch_identity()`'s output, quoted before any GPU second | requires a live launched process under the wrapper |
+| 4 (sweep) | the SWEEP agent's own `launch_identity()` output, quoted before its first point | requires the sweep agent live; appended in §12 at kickstart |
 
 **Rows 5 and 6 were performed on 2026-09-01 and have left this table**, each with its command
 output transcribed verbatim beside it in the section that owed it. Row 6 came back **negative** —
 the LaunchAgent did not survive the boundary, and D-12's scope is corrected in §6 rather than here.
 Row 5 came back **positive**: 71 stall detections, `action_taken: "none"` in 71 of 71, nothing
-relaunched, killed or deleted (§5). Rows 1, 2 and 4 remain outstanding and still gate the launch.
+relaunched, killed or deleted (§5). **Rows 1, 2 and 4 were performed on 2026-09-04 and have left
+this table** (§1, §2, §4): row 1 read `0 / 0 / 0`; row 2 found the three strays gone and the
+console's own 300 s assertion in their place; row 4 was read against the D-03 agent and came back
+with §9's correction. Only the sweep agent's own identity remains, and it is read at kickstart.
 
 When those are performed, their outputs are transcribed here **verbatim** and this section shrinks
 to the ones still outstanding. A block that moves out of this table without a quoted command output
