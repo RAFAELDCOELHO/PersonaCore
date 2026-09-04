@@ -80,7 +80,11 @@ _TRAIN_ARM_CALL_SITES = (
     # over a 4.5-6.3-day unattended run must resume its own 200 steps rather than restart them,
     # and D-10 counts that resumption as the SAME attempt. `_RESUME_PASSERS` admits it by name
     # below, at a count of 1.
-    ("scripts/phase25_run.py", "call", "train_point"),
+    # 2026-09-04 (the launch checkpoint): `phase25_run.train_point` was dead code — `main()`
+    # never wired the live path — and moved to `phase25_points.train_stage`, the resolver that
+    # actually runs the 44 points. Same contract: it threads `resume_from` from 23-07's checkpoint
+    # seam when `latest.pt` exists and no adapter does, and D-10 counts that as the same attempt.
+    ("scripts/phase25_points.py", "call", "train_stage"),
     # Plan 25-11's two CALIBRATION call sites. Both run under `phase25_calibrate.CALIBRATION_PREFIX`
     # and are EXCLUDED from the sweep's point set, so neither is a sweep point and neither passes
     # `resume_from`: `measure_per_record_norms` drives one DP pass to read per-record gradient
@@ -173,7 +177,7 @@ _RESUME_PASSERS = {
     # Plan 25-10's `train_point`. ONE passer: the 44-point driver has a single `train_arm` call
     # site, threaded from `run_point`, so a second one appearing here reddens exactly as it would
     # in `phase23_run.py`.
-    "scripts/phase25_run.py": 1,
+    "scripts/phase25_points.py": 1,
 }
 
 # The DP generator's state is **5,056 bytes on CPU and 44 bytes on MPS** (measured, torch 2.7.1 —

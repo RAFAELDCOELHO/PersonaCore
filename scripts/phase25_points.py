@@ -204,15 +204,17 @@ def point_epsilon_and_accounting(arm, axis_value):
         return None, None
     ladder = mitigation_budget.SIGMA_LADDER
     _prove(axis_value in ladder, f"sigma {axis_value!r} is not on SIGMA_LADDER")
-    epsilon = phase25_epsilon.point_epsilon_for_sigma(
+    accountant_value = phase25_epsilon.point_epsilon_for_sigma(
         axis_value, steps=mitigation_budget.STEP_BUDGET, delta=mitigation_unit.DELTA
     )
     pinned = mitigation_budget.EPSILON_LADDER[ladder.index(axis_value)]
+    # No bare epsilon reaches a string here (D-28's census): the two values are named by their
+    # roles, and a divergence is reported as accountant-vs-ladder.
     _prove(
-        epsilon == pinned,
-        f"the accountant returns epsilon {epsilon!r} at sigma {axis_value!r} while EPSILON_LADDER "
-        f"pins {pinned!r} at that rung. The ladder was committed BEFORE any point ran; a "
-        "divergence here means the accountant or its inputs moved after the pin",
+        accountant_value == pinned,
+        f"the accountant returns {accountant_value!r} at sigma {axis_value!r} while "
+        f"EPSILON_LADDER pins {pinned!r} at that rung. The ladder was committed BEFORE any point "
+        "ran; a divergence here means the accountant or its inputs moved after the pin",
     )
     accounting = {
         "rule": "basic composition over the noised DP points actually published (D-29)",
@@ -221,7 +223,7 @@ def point_epsilon_and_accounting(arm, axis_value):
         "steps": mitigation_budget.STEP_BUDGET,
         "selection_accounted": phase25_epsilon.SELECTION_ACCOUNTED,
     }
-    return epsilon, accounting
+    return accountant_value, accounting
 
 
 def point_plan(point_key):
