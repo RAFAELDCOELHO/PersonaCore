@@ -995,6 +995,44 @@ before scoring. **D-07:** the control reproduces Phase 23's count **790/1008 exa
 check condition (c) arrives with. The draw leg was in progress at the time of writing; its first
 `DONE` line is what closes R1 (the `tp.device()` class), and the point's commit is what closes R6.
 
+### 12.5b The score-stage halt, the resume, and the first record — R1 and R6 CLOSED
+
+All four shapes drew and persisted (`A1-mild` 232.90 draws/min over 14.84 min, `A1-aggressive`
+140.53 / 24.59, `A2` 272.58 / 12.68, `A3` 126.12 / 27.40 — the adversarial non-flatness of 25-11
+again, now on the control). **R1 closed on the first `DONE` line.** Then the score stage halted:
+
+```
+[phase18_extraction] PROOF FAILED: tier 'core_held_out' holds more than one record for question(s) [('cand_cat_zibby', 26), ...]
+	state = not running
+	last exit code = 1
+```
+
+`score_point` had handed `aggregate_questions` the four families pooled; one question appears
+once per family, and the frozen rollup refuses exactly that. `phase23_run.score_never_taught`
+takes the rollup per (family, tier) cell, and the driver now does the same (`efb8062`, RED
+natural in `tests/test_phase25_points.py` first). **The halt cost the score stage and nothing
+else** — this is what the sidecars were for. Relaunched at `2026-09-04T21:50:57Z`:
+
+```
+[phase25_points] dp_n8_sigma0p000000: REUSING trained adapter from data/phase25_dp_n8_sigma0p000000_training.json
+[phase25_points] dp_n8_sigma0p000000: REUSING measurements from data/phase25_dp_n8_sigma0p000000_measure.json
+[phase25_run] dp_n8_sigma0p000000 A1-mild: REUSING 216 recorded prompt(s) from data/phase25_dp_n8_sigma0p000000_draws.json
+[phase25_run] dp_n8_sigma0p000000 A1-aggressive: REUSING 216 recorded prompt(s) ...
+[phase25_run] dp_n8_sigma0p000000 A2: REUSING 216 recorded prompt(s) ...
+[phase25_run] dp_n8_sigma0p000000 A3: REUSING 216 recorded prompt(s) ...
+[main 359a6fc] feat(25-10): record sweep point dp_n8_sigma0p000000
+```
+
+`git show --stat 359a6fc` names exactly one path, `results/phase25_point_dp_n8_sigma0p000000.json`
+(14,866 lines). **R6 closed.** The watcher wrote its stall record for the halt (`action_taken:
+"none"`) and relaunched nothing — D-16 held on the run's first real stall. The record: 416 gated
+and 448 reported per-question rows; taught recall 790/1008 with `reproduction_gate.passed: true`;
+`clip_bind_count 0` at `C = 1000000.0`, 200 steps, lot [8]; `epsilon: null`; per-family extraction
+on the control A1-mild 91/104, A1-aggressive 22/104, A2 96/104, A3 76/104 (the control LEAKS, as
+Phase 18 measured); refusal 0/13,824; condition (c) `control_gap 0.1351`, retention 3.7832,
+counterfactual floor 0.0615; GATE-05 8 of 8 measured, `zero_extraction_has_nll: true`. The sweep
+moved to `dp_n64_sigma0p000000` at once.
+
 ### 12.6 The order the sweep runs in
 
 `phase25_record.SWEEP_SCHEDULE()`, a proved permutation of the pinned 44 (D-15): the two controls,
