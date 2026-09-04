@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: "Phase 25 LAUNCH CHECKPOINT 2026-09-04 (25-14 Task 2/3 in progress, on main). FIVE LATENT DEFECTS found before any GPU second and fixed: the driver live path was never wired (run_point read record_fields main() never passed; all 23 driver tests take --dry-run) -> scripts/phase25_points.py resolver + SWEEP_SCHEDULE() (D-15 order) + build_point_record(extra=) (c3c7709); GATE-05 at n=64 unmeasurable for the 56 filler facts (frozen reference_set_for refuses non-core slots) -> recorded as omitted with reason; parse_point_key 6-decimal label vs grid literal -> exact_axis_value; D-50 seed_spread had no producer -> scripts/phase25_n64_floor.py (D-03 leg + retention spread); launch_identity assumed the caffeinate -dims wrapper is the PARENT, measured: it is the CHILD (8e9766e). Operational note rows 1/2/4 measured (6bf6d83). D-03 floor agent com.personacore.phase25.n64floor RUNNING since 16:04 UTC (~3.6 h). NEXT: commit results/phase25_n64_matched_floor.json; full suite (flag unset); rotate data/phase25_stall.jsonl; launchctl kickstart the sweep; watch the first control point train->measure->draw (no test reaches train_stage/measure_stage on a device); append the sweep identity to note §12; 25-14-SUMMARY; STATE."
-last_updated: "2026-09-04T16:26:25.634712+00:00"
+stopped_at: "Phase 25 SWEEP LIVE since 2026-09-04 20:09:06 UTC (25-14 done; 25-15 Task 2 done: results/phase25_n64_matched_floor.json f019c9a, floor 0.030754, seed_spread max 0.061495). Six latent defects fixed before any GPU second (c3c7709, 8e9766e, b8d31b7); note rows 1/2/4 + §12 measured (6bf6d83, f2fcfa2). First point dp_n8_sigma0p000000: trained 217.9s clip_bind_count 0, REPRODUCTION GATE PASSED 790/1008 exactly, condition (c) dialogue 4.7084/4.5733 retention 3.7832, draws in progress under the LaunchAgent (driver 16902, wrapper 16904). Order: SWEEP_SCHEDULE() (controls, 6 extremes interleaved, 36 interior). NEXT: watch the first DONE shape (closes R1) and the first point commit (closes R6); then 25-15 Task 1/3 tests as records land; 25-16/25-17 logs; 25-18 verdict; 25-19 artifact; 25-20 reverts (pmset 1/10/1 + SoftwareUpdate flags). DO NOT git checkout in this tree; run pytest only with PERSONACORE_SWEEP_ACTIVE=1; no logout."
+last_updated: "2026-09-04T20:32:29.335129+00:00"
 last_activity: 2026-09-04
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 78
-  completed_plans: 75
+  completed_plans: 76
   percent: 56
 ---
 
