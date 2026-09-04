@@ -600,10 +600,13 @@ def test_the_note_is_tracked():
     assert tracked == "results/phase25_operational_note.md", tracked
 
 
-def test_no_sweep_point_record_exists():
-    """This plan changes machine state and builds artifacts. It runs NO point, and D-10 keys on the
-    tracked record list, so an accidental point here would spend an attempt permanently."""
+def test_every_tracked_point_record_names_a_pinned_key():
+    """Until the 2026-09-04 kickstart this asserted that NO point record existed (plan 25-14 runs
+    no point of its own). The sweep now lands one record per point on `main`, so the obligation
+    becomes: every tracked record is one of the pinned 44, at its own derived path, never more."""
     import subprocess
+
+    import phase25_record
 
     listed = subprocess.run(
         ["git", "ls-files", phase25_prereg.POINT_RECORD_GLOB],
@@ -612,4 +615,6 @@ def test_no_sweep_point_record_exists():
         text=True,
         check=True,
     ).stdout.split()
-    assert listed == [], listed
+    expected = {phase25_prereg.point_record_path(k) for k in phase25_record.ORDERED_POINT_KEYS()}
+    assert set(listed) <= expected, sorted(set(listed) - expected)
+    assert len(listed) <= len(expected)
