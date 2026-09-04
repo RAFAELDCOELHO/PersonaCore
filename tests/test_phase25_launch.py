@@ -336,42 +336,68 @@ def test_a_stale_banner_refuses(tmp_path):
         encoding="utf-8",
     )
     with pytest.raises(SystemExit) as excinfo:
-        phase25_venue.launch_identity(log, assertions=[], caffeinate_pids=set())
+        phase25_venue.launch_identity(log, assertions=[], caffeinate_pids=set(), parents={})
     assert "launch-identity" in str(excinfo.value)
 
 
-def test_the_identity_names_the_wrapper_as_the_assertion_holder(tmp_path):
-    """The reading the operational note quotes, against INJECTED assertion reads.
+def test_the_process_table_parses_ps_output():
+    text = (
+        "  1     0     1 /sbin/launchd\n59153     1 59153 /x/Python\n"
+        "59155 59153 59153 /usr/bin/caffeinate\n"
+    )
+    table = phase25_venue.read_process_parents(text)
+    assert table[59155] == (59153, 59153, "/usr/bin/caffeinate")
+    assert table[59153][0] == 1
 
-    `assertions=` and `caffeinate_pids=` are passed rather than read from the machine so the test is
-    a fact about the function and not about whatever happens to hold an assertion on the runner.
+
+def test_the_identity_names_the_wrapper_as_the_assertion_holder(tmp_path):
+    """The reading the operational note quotes, against INJECTED reads.
+
+    MEASURED 2026-09-04: the wrapper is the driver's CHILD (`caffeinate -dims` forks; the parent
+    execs the utility, the child holds the assertions on its behalf). A real child stands in for
+    it so the live pgid probe has a process to read; `assertions=`, `caffeinate_pids=` and
+    `parents=` are injected so the test is a fact about the function and not about whatever
+    happens to be running on the runner.
     """
     import os
+    import subprocess
 
-    pid, ppid = os.getpid(), os.getppid()
-    log = tmp_path / "agent.out"
-    log.write_text(
-        f"{phase25_venue.LAUNCH_BANNER_PREFIX} pid={pid} ppid={ppid} "
-        f"pgid={os.getpgid(pid)} sid={os.getsid(pid)}\n",
-        encoding="utf-8",
-    )
-    reading = phase25_venue.launch_identity(
-        log,
-        assertions=[(ppid, "caffeinate", "PreventUserIdleSystemSleep")],
-        caffeinate_pids={ppid},
-    )
-    assert reading["driver_pid"] == pid
-    assert reading["wrapper_pid"] == ppid
-    assert reading["wrapper_is_a_caffeinate_process"] is True
-    assert reading["wrapper_holds_an_assertion"] is True
-    assert reading["same_group_and_session_as_wrapper"] == (
-        os.getpgid(pid) == os.getsid(pid) == ppid
-    )
+    pid = os.getpid()
+    child = subprocess.Popen(["/bin/sleep", "30"])
+    try:
+        log = tmp_path / "agent.out"
+        log.write_text(
+            f"{phase25_venue.LAUNCH_BANNER_PREFIX} pid={pid} ppid={os.getppid()} "
+            f"pgid={os.getpgid(pid)} sid={os.getsid(pid)}\n",
+            encoding="utf-8",
+        )
+        parents = {child.pid: (pid, os.getpgid(child.pid), "/usr/bin/caffeinate")}
+        reading = phase25_venue.launch_identity(
+            log,
+            assertions=[(child.pid, "caffeinate", "PreventUserIdleSystemSleep")],
+            caffeinate_pids={child.pid},
+            parents=parents,
+        )
+        assert reading["driver_pid"] == pid
+        assert reading["wrapper_pid"] == child.pid
+        assert reading["wrapper_is_the_drivers_child"] is True
+        assert reading["same_group_as_wrapper"] is True
+        assert reading["wrapper_is_a_caffeinate_process"] is True
+        assert reading["wrapper_holds_an_assertion"] is True
+        assert "wrapper_is_the_parent" not in reading  # the hard-coded True is gone
 
-    # And the RED half: a wrapper that holds nothing is reported as holding nothing.
-    quiet = phase25_venue.launch_identity(log, assertions=[], caffeinate_pids=set())
-    assert quiet["wrapper_holds_an_assertion"] is False
-    assert quiet["wrapper_is_a_caffeinate_process"] is False
+        # The RED halves: a wrapper holding nothing is reported so; no caffeinate child refuses.
+        quiet = phase25_venue.launch_identity(
+            log, assertions=[], caffeinate_pids=set(), parents=parents
+        )
+        assert quiet["wrapper_holds_an_assertion"] is False
+        assert quiet["wrapper_is_a_caffeinate_process"] is False
+        with pytest.raises(SystemExit) as excinfo:
+            phase25_venue.launch_identity(log, assertions=[], caffeinate_pids=set(), parents={})
+        assert "UNWRAPPED" in str(excinfo.value)
+    finally:
+        child.kill()
+        child.wait()
 
 
 def test_the_provenance_names_the_relocation_of_the_equal_triple():
@@ -387,8 +413,12 @@ def test_the_provenance_names_the_relocation_of_the_equal_triple():
     unchanged = _prose.normalized(provenance["what_is_unchanged"])
     assert _prose.normalized("FROM THE LOG") in unchanged
 
-    relation = _prose.normalized(provenance["the_relation_that_replaces_it"])
-    assert "driver.pgid == driver.sid == wrapper.pid" in relation
+    superseded = _prose.normalized(provenance["the_relation_that_replaces_it"])
+    assert "driver.pgid == driver.sid == wrapper.pid" in superseded  # original, left standing
+    assert _prose.normalized("SUPERSEDED 2026-09-04") in superseded
+    measured = _prose.normalized(provenance["measured_relation"])
+    assert "wrapper.ppid == driver.pid" in measured
+    assert _prose.normalized("the driver's OWN CHILD") in measured
 
 
 # =================================================================================================

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  THE D-03 FLOOR AGENT (plan 25-15 Task 2, run BEFORE the first sweep point — 2026-09-04).
+  Same mechanism as the sweep agent: `caffeinate -dims` wrapper holding its own assertion,
+  KeepAlive FALSE (a crashed leg must look like a stopped job, never restart itself), RunAtLoad
+  FALSE (started only by `launchctl kickstart`), stdout/stderr to file, repo root as cwd,
+  PERSONACORE_SWEEP_ACTIVE=1 so any suite run skips the MPS legs loudly (D-44). It cannot run a
+  sweep point: `phase25_run.py` appears nowhere in its ProgramArguments. It runs ~3.6 h and exits.
+  The installed copy under ~/Library/LaunchAgents is a copy; this file is the record.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.personacore.phase25.n64floor</string>
+  <key>KeepAlive</key>
+  <false/>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-dims</string>
+    <string>/Users/juliorcoelho/PersonaCore/.venv/bin/python</string>
+    <string>/Users/juliorcoelho/PersonaCore/scripts/phase25_n64_floor.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/juliorcoelho/PersonaCore</string>
+  <key>StandardOutPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_n64_floor.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_n64_floor.err</string>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PERSONACORE_SWEEP_ACTIVE</key>
+    <string>1</string>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+</dict>
+</plist>

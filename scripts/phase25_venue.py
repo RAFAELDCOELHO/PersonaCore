@@ -507,11 +507,27 @@ LAUNCH_IDENTITY_PROVENANCE = {
         "is STRUCTURALLY FALSE and a checkpoint asserting it would be asserting a defect"
     ),
     "the_relation_that_replaces_it": (
+        "SUPERSEDED 2026-09-04 — MEASURED FALSE at the launch checkpoint; see `measured_relation`. "
+        "Original text, left standing: "
         "driver.pgid == driver.sid == wrapper.pid, AND wrapper.pid == driver.ppid, AND the wrapper "
         "is a `caffeinate` holding assertions in `pmset -g assertions`. That says three things the "
         "old triple did not: the assertion holder is the driver's own parent (not a stray), it "
         "leads the group and session the driver lives in, and the driver therefore cannot outlive "
         "the wake claim that protects it"
+    ),
+    "measured_relation": (
+        "wrapper.ppid == driver.pid, AND wrapper.pgid == driver.pgid == driver.pid, AND the "
+        "wrapper is a `caffeinate` holding its assertions `on behalf of` the driver pid in "
+        "`pmset -g assertions`, AND driver.ppid == 1 (launchd). MEASURED 2026-09-04 against the "
+        "live D-03 "
+        "agent (`ps -o pid,ppid,pgid,sess`: driver 59153 ppid 1 pgid 59153; wrapper 59155 ppid "
+        "59153 pgid 59153), and identical in shape on the 2026-09-01 rehearsal banners "
+        "(`pid=59902 ppid=1 pgid=59902 sid=1`). `caffeinate -dims <utility>` FORKS: the PARENT "
+        "execs the utility, keeping the pid launchd started, and the CHILD is the caffeinate "
+        "that holds the four assertions for its parent's lifetime — the opposite parent/child "
+        "direction from the one the superseded text assumed. The three claims survive with the "
+        "roles swapped: the assertion holder is the driver's OWN CHILD (not a stray), it lives in "
+        "the group the driver leads, and it releases when the driver exits"
     ),
     "read_before_any_gpu_second": (
         "The triple is quoted at the human checkpoint, BEFORE the first point runs. Read after a "
@@ -559,7 +575,22 @@ def read_launch_banner(log_path):
     return {"pid": pid, "ppid": ppid, "pgid": pgid, "sid": sid}
 
 
-def launch_identity(log_path, *, assertions=None, caffeinate_pids=None):
+def read_process_parents(text=None):
+    """``{pid: (ppid, pgid, command)}`` from ``ps -axo pid=,ppid=,pgid=,comm=``. Injectable."""
+    if text is None:
+        text = subprocess.run(
+            ["ps", "-axo", "pid=,ppid=,pgid=,comm="], capture_output=True, text=True, check=True
+        ).stdout
+    table = {}
+    for line in text.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) < 4:
+            continue
+        table[int(parts[0])] = (int(parts[1]), int(parts[2]), parts[3].strip())
+    return table
+
+
+def launch_identity(log_path, *, assertions=None, caffeinate_pids=None, parents=None):
     """23-20's triple under D-12's wrapping form, read from the log and PROBED from outside.
 
     Returns a dict the operational note quotes verbatim. Raises ``SystemExit`` if the process named
@@ -599,23 +630,45 @@ def launch_identity(log_path, *, assertions=None, caffeinate_pids=None):
         assertions = read_assertions()
     if caffeinate_pids is None:
         caffeinate_pids = read_caffeinate_pids()
+    if parents is None:
+        parents = read_process_parents()
 
-    wrapper_pid = banner["ppid"]
+    # MEASURED 2026-09-04 (`measured_relation`): the wrapper is the driver's CHILD. The banner's
+    # ppid is launchd, so the wrapper is found in the process table, never read off the banner.
+    children = sorted(
+        candidate
+        for candidate, (ppid, _pgid, command) in parents.items()
+        if ppid == pid and command.endswith("caffeinate")
+    )
+    if len(children) != 1:
+        raise SystemExit(
+            f"[venue:launch-identity] driver pid {pid} has {len(children)} caffeinate child(ren) "
+            f"{children}, not exactly one. Under `caffeinate -dims <utility>` the wrapper FORKS: "
+            "the parent execs the utility and the CHILD holds the assertions on its behalf, so a "
+            "driver with no caffeinate child is running UNWRAPPED and holds no wake claim at all"
+        )
+    wrapper_pid = children[0]
+    wrapper_ppid, wrapper_pgid, _command = parents[wrapper_pid]
     wrapper_assertions = sorted(
         assertion for holder, name, assertion in assertions if holder == wrapper_pid
     )
     return {
         "log": str(log_path),
         "driver_pid": pid,
+        "driver_ppid": banner["ppid"],
         "driver_pgid": probed_pgid,
         "driver_sid": probed_sid,
         "wrapper_pid": wrapper_pid,
+        "wrapper_ppid": wrapper_ppid,
+        "wrapper_pgid": wrapper_pgid,
         "wrapper_assertions": wrapper_assertions,
         "wrapper_is_a_caffeinate_process": wrapper_pid in caffeinate_pids,
-        "wrapper_is_the_parent": True,
-        "same_group_and_session_as_wrapper": probed_pgid == probed_sid == wrapper_pid,
+        "wrapper_is_the_drivers_child": wrapper_ppid == pid,
+        "same_group_as_wrapper": wrapper_pgid == probed_pgid,
+        "driver_leads_its_group": probed_pgid == pid,
+        "driver_parent_is_launchd": banner["ppid"] == 1,
         "wrapper_holds_an_assertion": bool(wrapper_assertions),
-        "relation": LAUNCH_IDENTITY_PROVENANCE["the_relation_that_replaces_it"],
+        "relation": LAUNCH_IDENTITY_PROVENANCE["measured_relation"],
     }
 
 
