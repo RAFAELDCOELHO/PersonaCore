@@ -475,6 +475,7 @@ _REQUIRED_BLOCKS = (
     "## 9. The deliberate change from 23-20",
     "## 10. Open risks before the sweep starts",
     "## 11. Pending measurements",
+    "## 12. The launch record",
 )
 
 # Blocks whose figures can only be produced at the blocking human checkpoint. Each must be PRESENT,
@@ -485,7 +486,10 @@ _REQUIRED_BLOCKS = (
 # Their coverage did not evaporate with the move: leaving them here would assert the opposite of
 # what the note now says, so `_MEASURED_AT_THE_CHECKPOINT` below replaces "says PENDING" with the
 # stronger obligation — carry the figure the measurement produced, and say which way it came out.
-_PENDING_BLOCKS = ("## 4. The launch identity, read before any GPU second",)
+# EMPTY since the 2026-09-04 kickstart: §4 moved into `_MEASURED_AT_THE_CHECKPOINT` with the
+# sweep agent's own reading, and §11 says NOTHING PENDING. `test_nothing_is_pending_after_kickstart`
+# replaces the per-block PENDING check, because a parametrize over an empty tuple would SKIP.
+_PENDING_BLOCKS = ()
 
 # A block that leaves §11 must arrive with its evidence. Each entry is (heading, tokens that can
 # only be present if the measurement was actually taken and transcribed).
@@ -497,6 +501,14 @@ _MEASURED_AT_THE_CHECKPOINT = (
     (
         "## 6. The session boundary",
         ("runs = 0", "last exit code = (never exited)", "kern.boottime", "does not survive"),
+    ),
+    (
+        "## 4. The launch identity, read before any GPU second",
+        ("wrapper_is_the_drivers_child", "16904", "59155", "SUPERSEDED 2026-09-04"),
+    ),
+    (
+        "## 12. The launch record",
+        ("REPRODUCTION GATE PASSED", "790/1008", "kickstart at 2026-09-04T20:09:06Z", "4469"),
     ),
 )
 
@@ -511,13 +523,13 @@ def test_the_operational_note_carries_every_required_block(note, heading):
     assert _prose.normalized(heading) in note, heading
 
 
-@pytest.mark.parametrize("heading", _PENDING_BLOCKS)
-def test_every_unmeasured_block_says_so_and_is_registered(note, heading):
-    """A block that moves out of §11 without a quoted command output beside it is a defect in the
-    note, not a measurement."""
-    assert _prose.normalized(heading) in note, heading
-    body = _NOTE.read_text(encoding="utf-8").split(heading, 1)[1].split("\n## ", 1)[0]
-    assert "PENDING" in body, heading
+def test_nothing_is_pending_after_kickstart():
+    """Every block that once said PENDING left §11 with its evidence; §11 says so itself."""
+    assert _PENDING_BLOCKS == ()
+    text = _NOTE.read_text(encoding="utf-8")
+    section_11 = text.split("## 11. Pending measurements", 1)[1].split("\n## ", 1)[0]
+    assert "NOTHING PENDING" in section_11
+    assert "PENDING — see §11" not in text
 
 
 @pytest.mark.parametrize("heading,tokens", _MEASURED_AT_THE_CHECKPOINT)

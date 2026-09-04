@@ -335,11 +335,24 @@ hard-coding `wrapper_is_the_parent: true`. It would have reported a protected ru
 rehearsal banners in `logs/phase25_rehearsal.out` — `pid=59902 ppid=1 pgid=59902 sid=1` and three
 more of the same shape — already carried this fact; nobody read the `ppid=1`.
 
-### The sweep agent's own reading
+### The sweep agent's own reading — MEASURED 2026-09-04 20:09 UTC
 
-**PENDING — appended in §12 at kickstart.** The reading above is of the D-03 agent, which runs the
-identical wrapper form from the identical plist shape; the sweep agent's own identity is read the
-same way before its first point and quoted there.
+Read 20 s after `launchctl kickstart`, before the first point's training had produced anything:
+
+```
+$ head -1 logs/phase25_sweep.out
+[phase25_launch] pid=16902 ppid=1 pgid=16902 sid=1
+
+$ launch_identity('logs/phase25_sweep.out')     # abridged: the relation string is §4's
+ "driver_pid": 16902, "driver_ppid": 1, "driver_pgid": 16902, "driver_sid": 1,
+ "wrapper_pid": 16904, "wrapper_ppid": 16902, "wrapper_pgid": 16902,
+ "wrapper_assertions": ["PreventDiskIdle", "PreventSystemSleep", "PreventUserIdleDisplaySleep", "PreventUserIdleSystemSleep"],
+ "wrapper_is_a_caffeinate_process": true, "wrapper_is_the_drivers_child": true,
+ "same_group_as_wrapper": true, "driver_leads_its_group": true, "driver_parent_is_launchd": true,
+ "wrapper_holds_an_assertion": true
+```
+
+Same shape as the D-03 agent's, every boolean true. The full transcript is §12.
 
 The pid comes **from the log** and never from `launchctl print` (which reports the *wrapper's* pid
 under `-dims`) and never from a shell's `$!` (which does not exist for a LaunchAgent at all).
@@ -846,9 +859,12 @@ Every block below is **PENDING**. Each requires either `sudo` or live process st
 reach, and each is a blocking human checkpoint act in plan 25-14 Task 2. **No figure for any of them
 appears anywhere above.**
 
+**NOTHING PENDING as of 2026-09-04 20:16 UTC.** The last row — the sweep agent's own launch
+identity — was read at kickstart and is quoted in §4 and §12.
+
 | § | Pending block | Why it cannot be automated |
 |---|---|---|
-| 4 (sweep) | the SWEEP agent's own `launch_identity()` output, quoted before its first point | requires the sweep agent live; appended in §12 at kickstart |
+| — | none | — |
 
 **Rows 5 and 6 were performed on 2026-09-01 and have left this table**, each with its command
 output transcribed verbatim beside it in the section that owed it. Row 6 came back **negative** —
@@ -862,3 +878,140 @@ with §9's correction. Only the sweep agent's own identity remains, and it is re
 When those are performed, their outputs are transcribed here **verbatim** and this section shrinks
 to the ones still outstanding. A block that moves out of this table without a quoted command output
 beside it is a defect in this note, not a measurement.
+
+---
+
+## 12. The launch record — 2026-09-04
+
+Everything below is the kickstart transcript, quoted; the commands ran from the operator's console
+in this order.
+
+### 12.1 Preconditions
+
+```
+$ git rev-parse --abbrev-ref HEAD
+main
+$ git status --short | grep -v '^??'          # (empty: clean apart from another session's untracked paper/ and outputs/)
+$ git ls-files 'results/phase25_point_*.json' | wc -l
+0
+$ git ls-files results/phase25_n64_matched_floor.json
+results/phase25_n64_matched_floor.json         # f019c9a — D-03's floor and D-50's seed spread, committed first
+$ pgrep -fl 'phase25_n64_floor|phase25_run'
+(no floor/driver process)
+SWEEP_ACTIVE in this shell: unset
+```
+
+The full suite with the flag unset, run in two chunks because the harness killed two whole-suite
+runs at ~93% for memory (the venue file re-runs the suite in a subprocess; the desktop was
+holding ~52 GB of compressed pages): everything but `tests/test_phase25_venue.py` — **2014 passed,
+1 skipped, 2 failed** in 474 s, the two failures both mine and fixed in `b8d31b7` (a bare
+`epsilon` name in a message; the `train_arm(` register naming the dead `train_point`); then
+`tests/test_phase25_venue.py` alone — **16 passed** in 738 s. The three previously red tests
+re-run green on the clean tree (7 passed).
+
+### 12.2 The stall log, rotated
+
+The watcher had been detecting silence since the 2026-09-01 rehearsal beat, once a minute, for
+three days — every record `action_taken: "none"`, nothing relaunched, killed or deleted (§5 again,
+4,469 times over). Those records describe the machine before the run and would have polluted plan
+25-17's history, so they were moved aside, not deleted:
+
+```
+$ wc -l data/phase25_stall.jsonl
+    4469 data/phase25_stall.jsonl
+$ mv data/phase25_stall.jsonl data/phase25_stall.pre-launch-2026-09-04.jsonl
+-rw-r--r--  1 juliorcoelho  staff  3934924  4 set 17:08 data/phase25_stall.pre-launch-2026-09-04.jsonl
+```
+
+The watcher wrote **one** record into the fresh file at its next tick — the pre-kickstart silence —
+before the first beat landed; it is the run's first stall record and it, too, took no action.
+
+### 12.3 Kickstart
+
+```
+$ launchctl print gui/501/com.personacore.phase25.sweep | grep -iE 'keepalive|runs =|state ='
+	state = not running
+	runs = 0
+== kickstart at 2026-09-04T20:09:06Z
+$ launchctl kickstart gui/501/com.personacore.phase25.sweep
+```
+
+(`launchctl print` emits no `keepalive` line at all for this job — the key is absent from the
+loaded configuration, which is the "as loaded" form of `KeepAlive false`; the committed plist's
+`<false/>` is what `tests/test_phase25_launch.py` asserts.) The banner and the identity are in §4.
+
+### 12.4 The assertion read-back, twice
+
+From the console, 20 s after kickstart — the owner list is §2's shape with the sweep's wrapper in
+the D-03 agent's place, plus the console's own `caffeinate -i -t 300` (pid 15781). As §2 predicts,
+the cross-check REFUSES on it:
+
+```
+$ prove_only_our_caffeinate(our_pid=16904, expected_owners=('Claude','powerd','WindowServer','sharingd','mds_stores','runningboardd'))
+[venue:stray-assertion] stray caffeinate assertion holder(s) [15781] — the sweep's own pid is 16904, so the machine is being held awake by something the sweep does not own and cannot outlive; stray caffeinate process(es) [15781] from `pgrep -x caffeinate` — residue that holds no assertion right now can take one at any moment, and D-43 clears it BEFORE the sweep rather than reasoning about it during. [...]
+```
+
+From a DETACHED process (`os.fork` + `os.setsid`, 420 s later, no console caffeinate alive), the
+same call **passes** and returns the triples — the reading D-43 owes:
+
+```
+$ cat logs/phase25_assertion_readback.txt
+sex  4 set 2026 20:16:26 UTC
+16904 /usr/bin/caffeinate -dims /Users/juliorcoelho/PersonaCore/.venv/bin/python /Users/juliorcoelho/PersonaCore/scripts/phase25_run.py --heartbeat /Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl
+Listed by owning process:
+   pid 56585(Claude): [0x005539fe00019abb] 53:21:07 NoIdleSleepAssertion named: "Electron"
+   pid 16904(caffeinate): [0x0058166a00019148] 00:07:20 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 16902)
+   pid 16904(caffeinate): [0x0058166a00059149] 00:07:20 PreventUserIdleDisplaySleep named: "caffeinate command-line tool"
+   pid 16904(caffeinate): [0x0058166a0007914a] 00:07:20 PreventSystemSleep named: "caffeinate command-line tool"
+   pid 16904(caffeinate): [0x0058166a000f914b] 00:07:20 PreventDiskIdle named: "caffeinate command-line tool"
+   pid 540(powerd): [0x00581329000190bf] 00:21:13 PreventUserIdleSystemSleep named: "Powerd - Prevent sleep while display is on"
+   pid 599(WindowServer): [0x00581329000990be] 00:04:51 UserIsActive named: "com.apple.iohideventsystem.queue.tickle ..."
+Kernel Assertions: 0x104=USB,MAGICWAKE
+[(56585, 'Claude', 'NoIdleSleepAssertion'), (16904, 'caffeinate', 'PreventUserIdleSystemSleep'), (16904, 'caffeinate', 'PreventUserIdleDisplaySleep'), (16904, 'caffeinate', 'PreventSystemSleep'), (16904, 'caffeinate', 'PreventDiskIdle'), (540, 'powerd', 'PreventUserIdleSystemSleep'), (599, 'WindowServer', 'UserIsActive')]
+```
+
+**The only `caffeinate` on the machine is the sweep's own wrapper**, holding all four assertions on
+behalf of the driver. The other owners are the three named system/desktop processes.
+
+### 12.5 The first point, stage by stage — R1 and R6 closing live
+
+The control `dp_n8_sigma0p000000` is the smoke for every stage no test reaches on a device.
+Heartbeat lines landed every 60 s from 20:10:06 UTC carrying all five fields; the stage field moved
+`train` → `measure` → `draw`. From `logs/phase25_sweep.out`:
+
+```
+[teach_persona] DP provenance: arm=dp_n8 sigma=0.0 clip_norm=1000000.0 n_facts=8 grad_accum_steps=8 replay_windows=32 last_lot_records=8 clip_bind_count=0
+[teach_persona] wrote /Users/juliorcoelho/PersonaCore/checkpoints/phase25_sigma0p000000_dp_n8_adapter.pt (1.35 MB)
+[phase25_points] dp_n8_sigma0p000000: trained in 217.9s (resumed_from_step 0), clip_bind_count=0, mechanism matches the pin
+[phase25_points] dp_n8_sigma0p000000: taught recall 790/1008 in 914.5s — REPRODUCTION GATE PASSED
+[phase25_points] dp_n8_sigma0p000000: condition (c) + GATE-05 measured in 87.5s (dialogue 4.7084/4.5733, retention 3.7832, zero_extraction_has_nll=True)
+```
+
+Three things those five lines settle. **D-01 (a):** `clip_bind_count == 0` at `C = 1e6`, checked
+before scoring. **D-07:** the control reproduces Phase 23's count **790/1008 exactly**, under hard
+`==` — the 43 further points are interpretable. **D-45:** the adapter-OFF dialogue reading
+`4.5733` is Phase 19's committed `4.573349214207799` to the printed precision, the free bit-level
+check condition (c) arrives with. The draw leg was in progress at the time of writing; its first
+`DONE` line is what closes R1 (the `tp.device()` class), and the point's commit is what closes R6.
+
+### 12.6 The order the sweep runs in
+
+`phase25_record.SWEEP_SCHEDULE()`, a proved permutation of the pinned 44 (D-15): the two controls,
+then `dp_n8_sigma80p000000`, `adv_n8_ratio0p000000`, `dp_n64_sigma80p000000`,
+`adv_n64_ratio0p000000`, `adv_n8_ratio1p909091`, `adv_n64_ratio1p909091` — the six other extremes
+interleaved across the four legs — then the 36 interior points in `ORDERED_POINT_KEYS()` order.
+Plan 25-16's `interleave_order` is this list's positions 3–8, with timestamps from the point
+records.
+
+### 12.7 Commitments for the next 4.5–6.3 days, none of them enforced by the machine
+
+- **No logout, no restart** (§6: the launchd domain dies with the graphical session).
+- **No `git checkout` in this working tree by anyone** — including the three idle peer Claude
+  sessions (`personacore-3d`, `-e7`, `-bc`) that were open in it at launch. The driver's §O1
+  commit lands on whatever HEAD is; a branch switch mid-run files a point record on the wrong branch.
+- **No `pytest` without `PERSONACORE_SWEEP_ACTIVE=1`** (D-44) — the sweep plist sets it for the
+  driver only; a console suite run must set it itself.
+- **The reverts stand as written:** §7 (`pmset` to `1 / 10 / 1`, plan 25-20, `prove_reverted()`)
+  and §6b (the three `SoftwareUpdate` flags). Nothing here changes either.
+
