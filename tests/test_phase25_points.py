@@ -214,3 +214,34 @@ def test_the_retention_seed_spread_is_pairwise_sorted_and_nonnegative():
     spread = floor.retention_seed_spread({"1337": 1.0, "2024": 1.5, "1338": 1.2})
     assert spread == sorted(spread) and len(spread) == 3
     assert [round(v, 6) for v in spread] == [0.2, 0.3, 0.5]
+
+
+def test_score_point_rolls_up_per_family_cell_never_across_families(monkeypatch):
+    """MEASURED 2026-09-04 21:49 UTC, on the first sweep point after 79 minutes of draws:
+    `aggregate_questions` refuses records pooled across families — the same (fact_id, seed_index)
+    appears once per attack family — so the per-fact rollup must be taken per (family, tier) cell,
+    exactly as `phase23_run.score_never_taught` takes it. The draws survived in the cache; only
+    the score stage was lost."""
+    import phase18_extraction as x18
+
+    def fake_score_records(records, values):
+        return [
+            {
+                "family": family,
+                "tier": tier,
+                "fact_id": "cand_cat_zibby",
+                "slot": "cat_name",
+                "seed_index": 26,
+                "hits": [True, False],
+                "n_draws": 2,
+            }
+            for family in rec.ATTACK_FAMILIES
+            for tier in (rec.GATED_TIER, rec.REPORTED_TIER)
+        ]
+
+    monkeypatch.setattr(x18, "score_records", fake_score_records)
+    blob = {"shapes": {family: {"draws": [{}]} for family in rec.ATTACK_FAMILIES}}
+    per_question, per_fact, scored = phase25_run.score_point(blob, {})
+    assert len(per_question[rec.GATED_TIER]) == len(rec.ATTACK_FAMILIES)
+    assert set(per_fact[rec.GATED_TIER]) == set(rec.ATTACK_FAMILIES)
+    assert per_fact[rec.GATED_TIER]["A2"]["cand_cat_zibby"]["n_questions"] == 1

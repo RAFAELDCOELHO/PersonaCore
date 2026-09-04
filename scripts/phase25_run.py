@@ -615,8 +615,16 @@ def score_point(blob, values):
         ]
         for tier in (phase25_record.GATED_TIER, phase25_record.REPORTED_TIER)
     }
+    # PER (family, tier) CELL, as `phase23_run.score_never_taught` does: `aggregate_questions`
+    # refuses records pooled across families, because one question appears once per family.
+    # MEASURED 2026-09-04 on the first sweep point, after its four shapes had been drawn.
     per_fact = {
-        tier: x18.aggregate_questions(scored, tier=tier)
+        tier: {
+            family: x18.aggregate_questions(
+                [r for r in scored if r["family"] == family and r["tier"] == tier], tier=tier
+            )
+            for family in phase25_record.ATTACK_FAMILIES
+        }
         for tier in (phase25_record.GATED_TIER, phase25_record.REPORTED_TIER)
     }
     return per_question, per_fact, scored
