@@ -609,7 +609,33 @@ def test_the_beat_is_wall_clock_not_event_driven():
 def test_dry_run_touches_no_gpu_and_writes_no_result(tmp_path):
     """Every structural path, no training, no drawing, and nothing written under `results/`."""
     heartbeat = tmp_path / "beat.jsonl"
-    key = "dp_n8_sigma0p000000"
+    # 2026-09-04: the sweep is LIVE and lands one record per point, so a fixed key would go red
+    # the moment its point committed. Take the first key with neither a record nor a draws cache;
+    # once all 44 have run, the dry run must REFUSE the second attempt instead (D-10), and that
+    # refusal is the assertion.
+    untouched = [
+        k
+        for k in phase25_record.ORDERED_POINT_KEYS()
+        if not (_ROOT / phase25_prereg.point_record_path(k)).exists()
+        and not phase25_run.draws_path(k).exists()
+    ]
+    if not untouched:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "scripts/phase25_run.py",
+                "--dry-run",
+                "--points",
+                "dp_n8_sigma0p000000",
+            ],
+            cwd=_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode != 0
+        assert "attempt" in (completed.stderr + completed.stdout).lower()
+        return
+    key = untouched[0]
     record = _ROOT / phase25_prereg.point_record_path(key)
     assert not record.exists(), f"{record} exists; the dry run's no-write assertion is not blind"
 
