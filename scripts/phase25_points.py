@@ -703,7 +703,10 @@ def _adversarial_extras(plan, training):
     _prove(len(upper) == 1, f"{plan['arm']}: {len(upper)} token-budget rows at ratio {grid[-1]!r}")
     return {
         "adversarial_build": {name: stats.get(name) for name in keys},
-        "multiplicity": stats.get("adversarial_multiplicity"),
+        # `multiplicity` is the record's OWN field (D-28's dual-granularity sentence); this is
+        # the BUILD's multiplicity, named for what it is. MEASURED 2026-09-05: the first
+        # adversarial point halted at its record stage on exactly that collision.
+        "adversarial_multiplicity": stats.get("adversarial_multiplicity"),
         "multiplicity_at_upper_extreme": {
             "arm": plan["arm"],
             "ratio": grid[-1],

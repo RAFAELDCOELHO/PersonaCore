@@ -245,3 +245,23 @@ def test_score_point_rolls_up_per_family_cell_never_across_families(monkeypatch)
     assert len(per_question[rec.GATED_TIER]) == len(rec.ATTACK_FAMILIES)
     assert set(per_fact[rec.GATED_TIER]) == set(rec.ATTACK_FAMILIES)
     assert per_fact[rec.GATED_TIER]["A2"]["cand_cat_zibby"]["n_questions"] == 1
+
+
+def test_the_adversarial_extras_never_collide_with_the_records_own_fields():
+    """MEASURED 2026-09-05 on the fourth sweep point: an extra named `multiplicity` collided with
+    the record's own D-28 field and halted the record stage after four shapes had drawn. The extras
+    are built from the real token-budget record and merged through the real builder."""
+    build = _record_builder()
+    plan = pts.point_plan("adv_n8_ratio1p909091")
+    training = {"stats": {"adversarial_multiplicity": 8.0, "mask_fraction": 0.3}}
+    extras = pts._adversarial_extras(plan, training)
+    record = build(
+        point_key_value=plan["point_key"],
+        arm=plan["arm"],
+        axis_value=plan["axis_value"],
+        adapter_path="checkpoints/phase25_ratio1p909091_adv_n8_adapter.pt",
+        extra=extras,
+    )
+    assert record["adversarial_multiplicity"] == 8.0
+    assert record["multiplicity_at_upper_extreme"]["arm"] == "adv_n8"
+    assert "multiplicity" in record and record["multiplicity"] != 8.0
