@@ -895,7 +895,16 @@ def main(argv=None):
     # D-15: the default ORDER is `SWEEP_SCHEDULE()` — a proved permutation of the pinned 44 —
     # controls first, the six other extremes interleaved, then the interior as pinned.
     points = phase25_record.SWEEP_SCHEDULE() if args.points is None else tuple(args.points)
+    # A RELAUNCH OVER THE DEFAULT SCHEDULE SKIPS COMPLETED POINTS; an EXPLICIT key is still refused.
+    # MEASURED 2026-09-05: the second relaunch (three records tracked) died on the schedule's first
+    # point with D-10's ONE ATTEMPT refusal — correct for a second attempt, wrong for a resume that
+    # is walking past points already landed. The refusal stays exactly where it was; only the
+    # default walk consults the tracked list first, and says so per point.
+    tracked = set(tracked_point_records()) if args.points is None else set()
     for point in points:
+        if phase25_prereg.point_record_path(point) in tracked:
+            print(f"[phase25_run] {point}: RECORDED already (tracked) — skipping", flush=True)
+            continue
         run_point(point, dry_run=args.dry_run, heartbeat_path=pathlib.Path(args.heartbeat))
     return 0
 

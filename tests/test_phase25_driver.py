@@ -664,3 +664,36 @@ def test_dry_run_touches_no_gpu_and_writes_no_result(tmp_path):
     # The structural paths it DID exercise: the beat, and the pending-shape resolution.
     assert phase25_watch.read_last_beat(heartbeat)["point"] == key
     assert "4/4 shape(s) pending" in completed.stdout, completed.stdout
+
+
+def test_the_default_schedule_skips_tracked_points_and_an_explicit_key_is_still_refused(tmp_path):
+    """MEASURED 2026-09-05: with three records tracked, a relaunch over the default schedule died on
+    its first point with the ONE ATTEMPT refusal. The default walk now skips what is tracked and
+    says so; naming a tracked key explicitly is still a second attempt and is still refused."""
+    tracked = subprocess.run(
+        ["git", "ls-files", phase25_prereg.POINT_RECORD_GLOB],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    if not tracked:
+        return  # nothing landed yet on this checkout; the refusal half is covered elsewhere
+    completed = subprocess.run(
+        [sys.executable, "scripts/phase25_run.py", "--dry-run", "--heartbeat", str(tmp_path / "b")],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr[-500:]
+    skipped = [line for line in completed.stdout.splitlines() if "RECORDED already" in line]
+    assert len(skipped) == len(tracked)
+    assert completed.stdout.count("DRY RUN") == 44 - len(tracked)
+    key = pathlib.Path(tracked[0]).stem.replace("phase25_point_", "")
+    refused = subprocess.run(
+        [sys.executable, "scripts/phase25_run.py", "--dry-run", "--points", key],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert refused.returncode != 0 and "ONE ATTEMPT" in refused.stderr
