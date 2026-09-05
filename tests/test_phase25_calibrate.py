@@ -129,13 +129,26 @@ def test_no_point_record_path_can_name_the_calibration_prefix():
 
 
 def test_no_sweep_point_record_existed_when_the_calibrations_landed():
-    """No tracked ``results/phase25_point_*.json`` exists at HEAD, read from git rather than
-    asserted. These are CALIBRATION runs and the sweep has not started."""
+    """Until the 2026-09-04 kickstart this asserted that NO tracked point record existed. The sweep
+    now lands records, so the obligation is the ORDER, read from git: every calibration record's
+    commit is an ancestor of the first point record's commit, and the pre-registration's own count
+    at its commit is still zero. These are CALIBRATION runs; the sweep started after them."""
+    import subprocess
+
     tracked = [
         line for line in _git("ls-files", prereg.POINT_RECORD_GLOB).splitlines() if line.strip()
     ]
-    assert tracked == [], tracked
     assert prereg.POINT_RECORDS_AT_COMMIT == 0, prereg.POINT_RECORDS_AT_COMMIT
+    if not tracked:
+        return
+    first_point = _git("log", "--format=%H", "--reverse", "--", *tracked).split()[0]
+    for record in (cal.CLIP_CALIBRATION_RECORD, cal.THROUGHPUT_RECORD):
+        landed = _git("log", "--format=%H", "-1", "--", str(record)).strip()
+        assert landed, record
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", landed, first_point], cwd=_ROOT
+        )
+        assert ancestor.returncode == 0, f"{record} landed after the first sweep point"
 
 
 # =================================================================================================

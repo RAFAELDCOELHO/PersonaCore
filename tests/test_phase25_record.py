@@ -315,10 +315,16 @@ def test_the_halt_is_not_a_warning(tmp_path):
     with pytest.raises(SystemExit):
         _build(live_mechanism=dict(PIN_N8, composed_steps=199))
     assert list(tmp_path.iterdir()) == []
-    assert not rec.point_record_path("dp_n8_sigma0p000000").exists(), (
-        "a per-point record exists on disk while POINT_RECORDS_AT_COMMIT is "
-        f"{prereg.POINT_RECORDS_AT_COMMIT}"
-    )
+    # 2026-09-04: the sweep now lands this key's record on `main`; the halt must leave it exactly
+    # as tracked — nothing staged, nothing modified — rather than "absent".
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--", prereg.point_record_path("dp_n8_sigma0p000000")],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert status == "", status
 
 
 # =================================================================================================
