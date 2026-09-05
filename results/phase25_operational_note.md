@@ -1033,6 +1033,37 @@ Phase 18 measured); refusal 0/13,824; condition (c) `control_gap 0.1351`, retent
 counterfactual floor 0.0615; GATE-05 8 of 8 measured, `zero_extraction_has_nll: true`. The sweep
 moved to `dp_n64_sigma0p000000` at once.
 
+### 12.5c FINDING, 2026-09-05 — the adversarial arm has no replay, and condition (c) shows it
+
+The fourth point, `adv_n8_ratio0p000000` — the adversarial arm's own control, zero adversarial
+episodes — trained in 91.7 s and measured:
+
+```
+[teach_persona] adv_n8: 176 episodes, 7,581 tokens (7,581 teaching + 0 replay), episode length mean 43.1 [24, 69]
+[phase25_points] adv_n8_ratio0p000000: condition (c) + GATE-05 measured in 88.7s (dialogue 14.6600/4.5733, retention 6.3068, zero_extraction_has_nll=True)
+```
+
+Against the DP control at the same capacity (`dp_n8_sigma0p000000`: dialogue 4.7084 / 4.5733,
+retention 3.7832), the adversarial arm's dialogue perplexity is **3.1x** the base model's and its
+retention **1.67x** — the adapter destroyed the dialogue capability. **The cause is the recipe,
+measured in the log line above, not the attack:** the DP arms train through the fact-aligned
+loader with 32 replay windows drawn per optimizer step at train time (`replay_windows` in
+`train_arm`'s `dp_kwargs`, DP arms only), while the adversarial arm is Phase 24's data-mixture
+arm — batch-of-8 random windows over the teaching bin, `replay_ratio 0.0`, and `build_bins`
+refuses `replay_ratio > 0` together with `adversarial_ratio > 0` by design. Two hundred steps on
+facts alone with no replay is the forgetting regime v3.0 measured and replay was built against.
+
+**Consequence, stated before the other five adversarial points run:** condition (c)'s dialogue
+band (`lo = F_C x control_gap`, `hi = control_gap + MARGIN_K x gap_noise_floor`, D-47) will read
+the adversarial arm against a `control_gap` of 0.1351 with a point gap of ~10.09, so every
+adversarial point is expected to fail (c) **for a reason that has nothing to do with the
+adversarial ratio**. The frontier verdict (25-18) must disclose this as a property of the arm's
+recipe, and the arm's `axis_terminus`/`mechanism_note` fields already record that it makes no
+formal claim. **The sweep continues as pinned.** Dropping or re-training the adversarial points
+now would be a reduction chosen with the result on screen — the freedom pre-registration spends —
+and the six points cost ~10 h of the envelope. What the operator may decide, and this note only
+records: whether a replay-bearing adversarial recipe is a Phase 26 measurement.
+
 ### 12.6 The order the sweep runs in
 
 `phase25_record.SWEEP_SCHEDULE()`, a proved permutation of the pinned 44 (D-15): the two controls,
