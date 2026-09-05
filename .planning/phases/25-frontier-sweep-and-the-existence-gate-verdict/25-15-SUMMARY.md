@@ -86,6 +86,7 @@ reference 0.0267857142857143 quoted beside it; 3.33 h against the 3.3 h estimate
 - `.venv/bin/python -m pytest tests/test_phase25_control.py -v`: 19 passed, 0 skipped.
 - Task 1's automated verify over both records: exits 0 (`clip_bind_count 0`, `clip_norm 1e6`, 416/448 rows, gate passed).
 - `git log --oneline -- results/phase25_n64_matched_floor.json | wc -l` = 1, one path.
+- Full suite with `PERSONACORE_SWEEP_ACTIVE=1`, `--ignore=tests/test_phase25_venue.py` (D-44, the sweep owns the device): **2004 passed, 36 skipped, 83 warnings in 290.15s (0:04:50)** — the 36 skips are D-44's MPS legs, by name. Two pre-launch 'no point record exists' assertions became order-in-history invariants first (`c674d22`).
 - The five frozen modules and `pyproject.toml`: untouched.
 
 ## Commits
