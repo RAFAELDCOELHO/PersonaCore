@@ -1064,6 +1064,20 @@ now would be a reduction chosen with the result on screen — the freedom pre-re
 and the six points cost ~10 h of the envelope. What the operator may decide, and this note only
 records: whether a replay-bearing adversarial recipe is a Phase 26 measurement.
 
+### 12.5d Two more halts on the fourth point, each costing one stage (2026-09-05 02:50–03:06 UTC)
+
+`adv_n8_ratio0p000000` drew its four shapes and then halted at the record stage:
+`[phase25_record] extra field(s) ['multiplicity'] collide with the record's own; an extra never
+overwrites` — the driver's adversarial build extra reused the name of D-28's dual-granularity
+field, and the collision refusal did what it is for. Renamed `adversarial_multiplicity`, with a
+test that builds the adversarial record through the real builder (`c78f9ac`). The relaunch then
+died on the schedule's FIRST point with D-10's `ONE ATTEMPT — REFUSED`: correct for a second
+attempt, wrong for a walk past three landed points. The default schedule now skips tracked points
+and says so per point; an explicit `--points` key is still refused (`79ff45a`, tested both ways
+in dry-run). Third kickstart 03:02:14 UTC; every sidecar reused; `a664f03` landed the record two
+minutes later. Stall records for both halts: `action_taken: "none"`. Nine defects found at or
+after the checkpoint so far, all in the new wiring, none in a frozen module.
+
 ### 12.6 The order the sweep runs in
 
 `phase25_record.SWEEP_SCHEDULE()`, a proved permutation of the pinned 44 (D-15): the two controls,
