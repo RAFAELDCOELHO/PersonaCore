@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PLAN 25-18 TASK 0 (D-25-18-RECALL) — the recall-scoring agent for the 42 unscored sweep adapters.
+  Modeled on com.personacore.phase25.sweep.plist: the same caffeinate -dims wrapper, the same
+  heartbeat file (the watcher already polls it), the same working directory, its own log pair.
+  ~11.6 h of MPS time (21 x 914.5 s + 21 x 1070.4 s, the controls' own scoring_seconds).
+
+  IT DOES NOT START ITSELF. RunAtLoad is false and KeepAlive is false: loading starts nothing; the
+  run begins only on `launchctl kickstart` and ends for good when the driver exits.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.personacore.phase25.recall</string>
+
+  <!-- KEEPALIVE IS FALSE FOR THE SAME REASON THE SWEEP'S IS (D-10): a crash must look like a
+       stopped job that a human reads a stall record about, never a supervisor re-entering a point.
+       The driver's resume is sha-pinned per sidecar, but the decision to relaunch is a person's. -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-dims</string>
+    <string>/Users/juliorcoelho/PersonaCore/.venv/bin/python</string>
+    <string>/Users/juliorcoelho/PersonaCore/scripts/phase25_recall.py</string>
+    <string>--heartbeat</string>
+    <string>/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/juliorcoelho/PersonaCore</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_recall.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase25_recall.err</string>
+
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- D-44: any pytest run during the scoring skips the MPS legs loudly instead of contending. -->
+    <key>PERSONACORE_SWEEP_ACTIVE</key>
+    <string>1</string>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+</dict>
+</plist>

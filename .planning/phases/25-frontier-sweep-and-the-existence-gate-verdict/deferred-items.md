@@ -172,3 +172,37 @@ itself. The other three fields (`composed_steps` = STEP_BUDGET, `q` None, `clip_
 pins. The test re-derives the lot from the record's own `training.train_config`
 (batch_size 8 × grad_accum_steps 1 = 8 at BOTH capacities — the adversarial arm trains on 8-window
 lots at n=64 too) so the committed bytes are at least checked against the config they carry.
+
+## D-25-18-RECALL — condition (b) had no per-point producer; all 42 unscored adapters are scored before any verdict
+
+**Found during:** plan 25-18, Task 1 read-first, 2026-09-08. **Disposition:** Rule 4 deviation, decided by the operator 2026-09-08 (Option 1 of three offered); Task 0 of 25-18.
+
+**Measured.** Over the 44 committed `results/phase25_point_*.json`, only `dp_n8_sigma0p000000`
+(taught 790/1008, held-out 346/648) and `dp_n64_sigma0p000000` (87/1008, 35/648) carry
+`taught_recall` / `heldout_recall`; the other **42/44** (21 n=8, 21 n=64, both adversarial controls
+included) carry neither, and the gitignored measure sidecars say `recall: None` for them. Cause:
+`scripts/phase25_points.py::measure_stage` scores recall only under `if plan["is_control"]:`.
+The premise that let it through is `25-14-SUMMARY.md` line 162 — "25-18's verdict consumes ... the
+control's `taught_recall`" — which is false for the frozen pin: `mitigation_point_verdict` takes
+`point_taught_recall` and `point_heldout_recall` PER POINT and `phase25_verdict.POINT_RECORD_FIELDS`
+requires both on every record, so `curve_verdicts` would `SystemExit` on the first record. The
+plan's "measured live on one point" used `tests/test_phase25_verdict.py::_full_kwargs`, i.e.
+fabricated recall values (0.62 / 0.41), never a committed record. The pin has no early return for a
+missing recall, so no honest INCONCLUSIVE path exists and no substitute value was written.
+
+**Cost, from the controls' own `scoring_seconds`:** n=8 914.5 s, n=64 1070.4 s →
+21 × 914.5 + 21 × 1070.4 ≈ **11.58 h** MPS. All 44 adapters are on disk and hash to their records
+(44 match, 0 missing, 0 mismatch), so no retraining.
+
+**Decision.** Score ALL 42 — never a subset chosen after seeing extraction — with the same
+instrument the controls used (`teach_persona.score_arm(arm, fs.LOCKED_FACTS, adapter, device)`),
+before any verdict is seen. Point records stay byte-unchanged; the readings land in
+`results/phase25_recall.json` keyed by point and pinned to each record's `adapter_sha256`, with the
+two controls copied from their records under `source: "point_record"` so the artifact covers 44/44.
+Driver `scripts/phase25_recall.py` (sha-pinned per-point sidecars under `data/`, atomic writes,
+the sweep's heartbeat shape into the same file the watcher polls, `--dry-run`, `--emit`), agent
+`artifacts/com.personacore.phase25.recall.plist` (`KeepAlive`/`RunAtLoad` false), tests
+`tests/test_phase25_recall.py`. The operator launches it; 25-18 resumes when the artifact lands.
+
+**Also observed, not the blocker:** no record carries `replicated_at_second_seed`; it is `False`
+structurally (single seed 1337 per point, no replication run) and the verdict pass will say so.
