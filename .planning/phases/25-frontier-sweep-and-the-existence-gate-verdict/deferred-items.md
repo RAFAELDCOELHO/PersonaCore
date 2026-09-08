@@ -145,3 +145,30 @@ restore in that same step. Full procedure and the pid-reresolution trap: `result
 
 By contrast `com.personacore.caffeinate` (pid 58309, ~17 days, no plist anywhere) is unowned cruft.
 Booted out; **nothing to restore.**
+
+## D-25-17-WATCHER — the stall watcher outlived the driver and appends one record per minute
+
+**Incurred:** 2026-09-08, plan 25-17 (the sweep ended ~05:35 UTC; the driver's last beat 05:33:38 UTC).
+**Discharged by:** plan 25-20's revert step (bootout of `com.personacore.phase25.watch`), by an operator.
+
+`com.personacore.phase25.watch` is a StartInterval job (`run interval = 60 seconds`, `runs = 9283` at
+the time of writing). With the driver gone it reads the same last beat every minute and appends a
+stall record with `action_taken: "none"` to the gitignored `data/phase25_stall.jsonl` — 6 such
+records by the time `results/phase25_interior_log.json` was emitted, one more every minute since.
+Nothing acts on them (D-16), the file is gitignored, and 25-17 did not touch launchd (not its call).
+The log classifies stall records by phase (before first beat / during / after last beat) so the
+count of run-time stalls — **1** — is stable regardless of how long the watcher lives.
+
+## D-25-17-ADV-PIN — the adversarial arm's lot fields are pinned against the live TrainConfig
+
+**Observed:** 2026-09-08, writing `tests/test_phase25_interior.py`.
+**Disposition:** observation; no change (the driver ran; the point records are evidence).
+
+`phase25_points.pinned_mechanism` leaves `composed_lot_sizes` / `records_per_lot` as `None` for
+`adv_*` ("resolved against the live TrainConfig at train time") and `train_point` then sets
+`pinned = dict(plan["pinned_mechanism"], composed_lot_sizes=[lot], records_per_lot=lot)` from the
+same `lot` it just read live — so on that arm D-34's `==` on those two fields compares a value with
+itself. The other three fields (`composed_steps` = STEP_BUDGET, `q` None, `clip_norm` None) are real
+pins. The test re-derives the lot from the record's own `training.train_config`
+(batch_size 8 × grad_accum_steps 1 = 8 at BOTH capacities — the adversarial arm trains on 8-window
+lots at n=64 too) so the committed bytes are at least checked against the config they carry.

@@ -936,19 +936,19 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 25-14-PLAN.md — the venue: two LaunchAgents with `KeepAlive` false (D-12), `caffeinate -dims`, D-13's `pmset` applied, D-43's corrected assertion read-back — blocking human checkpoint
+- [x] 25-14-PLAN.md — the venue: two LaunchAgents with `KeepAlive` false (D-12), `caffeinate -dims`, D-13's `pmset` applied, D-43's corrected assertion read-back — blocking human checkpoint
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 25-15-PLAN.md — D-01's controls at both capacities with the reproduction gate fired, and D-03's n=64 matched floor at five seeds
+- [x] 25-15-PLAN.md — D-01's controls at both capacities with the reproduction gate fired, and D-03's n=64 matched floor at five seeds
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 25-16-PLAN.md — D-15's eight extremes, interleaved across the four legs; ADVT-01's first trained adversarial adapters
+- [x] 25-16-PLAN.md — D-15's eight extremes, interleaved across the four legs; ADVT-01's first trained adversarial adapters
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 25-17-PLAN.md — the 36 interior points as pinned (D-08), with every kill, resume and stall record transcribed
+- [x] 25-17-PLAN.md — the 36 interior points as pinned (D-08), with every kill, resume and stall record transcribed
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
@@ -1062,7 +1062,7 @@ capacities — with every number in prose generated from a committed record rath
 | 22. DP-SGD Core, Accountant, and the Correctness Battery | v4.0 | 19/19 | Complete    | 2026-08-26 |
 | 23. Cost Calibration, the σ=0 Diagnostic, and Budget Pre-Registration | v4.0 | 19/20 | Complete    | 2026-08-29 — **all six requirements closed:** CAL-01 + CAL-05 (23-11/23-12), CAL-02 (23-13), CAL-03 (23-04), DPSGD-06 (23-10), CTRL-03 (23-08 trained, 23-14 scored). Verification `23-VERIFICATION.md` 5/5 must-haves; both `human_needed` items ruled on and CLOSED by the developer the same day — DPSGD-06's stale row retracted in place at `7296b31`, the never-taught positive control landed and watched RED at `17c28c8`. `23-SECURITY.md` at `threats_open: 0` over **113 distinct threat IDs**. Suite `1591 passed, 1 skipped`. *(**19/20, not 20/20** — `phase.complete` wrote 20/20 and re-ticked 23-17; both reverted by hand. **23-17 stays deliberately unticked**: its run was harness-killed at 3/5 and wrote no record, and 23-20 completed the work under a separate continuation pre-registration.)* |
 | 24. Adversarial Extraction-Aware Training + the Held-Out Attack Family | v4.0 | 9/9 | Complete    | 2026-08-30 — **ADVT-02 + ADVT-03 closed; ADVT-01 deliberately NOT** (its subject is *the adapter trained*, and none exists — Phase 25 owns it, ROADMAP:814). 7 planned plans in 4 waves, then 24-08 closing 24-REVIEW's three blockers and 24-09 closing HUMAN-UAT item 4, each with a full RED -> GREEN -> mutated-RED cycle. `24-VERIFICATION.md` `passed`, 4/4 SC disposed after three passes. Suite `1647 passed, 1 skipped`. *(**9/9, and ADVT-01 stays unticked** — `phase.complete` wrote `9/7` AND ticked ADVT-01, claiming a trained adapter that does not exist; both reverted by hand, exactly as the Phase 23 row above records the same handler doing.)* |
-| 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 0/TBD | Not started | - |
+| 25. Frontier Sweep and the Existence-Gate Verdict | v4.0 | 19/22 | In Progress | 2026-09-08 — 25-17 closed: 44/44 point records tracked as a set equality, interior log `efdcbbb`, 538 tests; 25-18/19/20 remain |
 | 26. Empirical Privacy Audit (Canary) | v4.0 | 0/TBD | Not started | - |
 | 27. Relearning Attack | v4.0 | 0/TBD | Not started | - |
 | 28. Report, the Published Null, and Milestone Close | v4.0 | 0/TBD | Not started | - |
