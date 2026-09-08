@@ -1,0 +1,3542 @@
+{
+  "cal03_evidence": {
+    "epsilon_n64": 24.38161088311366,
+    "epsilon_n8": 24.38161088311366,
+    "record": "results/phase23_cal03_wiring.json",
+    "statement": "epsilon_n8 == epsilon_n64 and T == 4 on both sides: the n=64 leg is committable, so the full curve GATE-06 reads is intact rather than truncated into INCONCLUSIVE",
+    "t_n64": 4,
+    "t_n8": 4,
+    "verdict": true
+  },
+  "completeness": {
+    "extra": [],
+    "missing": [],
+    "pinned": 44,
+    "set_equality": true,
+    "statement": "44 == 44, missing [] extra []",
+    "tracked": 44
+  },
+  "counts_from_budget": {
+    "adversarial": 12,
+    "dp": 32
+  },
+  "curve_k": 16,
+  "execution_order": [
+    {
+      "commit": "359a6fc",
+      "committed_at": "2026-09-04T18:50:59-03:00",
+      "point_key": "dp_n8_sigma0p000000",
+      "position": 1
+    },
+    {
+      "commit": "e444a95",
+      "committed_at": "2026-09-04T21:03:32-03:00",
+      "point_key": "dp_n64_sigma0p000000",
+      "position": 2
+    },
+    {
+      "commit": "2130b94",
+      "committed_at": "2026-09-04T23:08:12-03:00",
+      "point_key": "dp_n8_sigma80p000000",
+      "position": 3
+    },
+    {
+      "commit": "a664f03",
+      "committed_at": "2026-09-05T00:02:15-03:00",
+      "point_key": "adv_n8_ratio0p000000",
+      "position": 4
+    },
+    {
+      "commit": "fb025f3",
+      "committed_at": "2026-09-05T02:24:03-03:00",
+      "point_key": "dp_n64_sigma80p000000",
+      "position": 5
+    },
+    {
+      "commit": "f7515ca",
+      "committed_at": "2026-09-05T03:31:06-03:00",
+      "point_key": "adv_n64_ratio0p000000",
+      "position": 6
+    },
+    {
+      "commit": "94167ea",
+      "committed_at": "2026-09-05T04:37:38-03:00",
+      "point_key": "adv_n8_ratio1p909091",
+      "position": 7
+    },
+    {
+      "commit": "6b496fc",
+      "committed_at": "2026-09-05T05:48:31-03:00",
+      "point_key": "adv_n64_ratio1p909091",
+      "position": 8
+    },
+    {
+      "commit": "f5e0479",
+      "committed_at": "2026-09-05T07:52:45-03:00",
+      "point_key": "dp_n8_sigma0p500000",
+      "position": 9
+    },
+    {
+      "commit": "0552799",
+      "committed_at": "2026-09-05T10:04:18-03:00",
+      "point_key": "dp_n8_sigma0p700000",
+      "position": 10
+    },
+    {
+      "commit": "d6672fb",
+      "committed_at": "2026-09-05T12:02:12-03:00",
+      "point_key": "dp_n8_sigma1p000000",
+      "position": 11
+    },
+    {
+      "commit": "c10a599",
+      "committed_at": "2026-09-05T14:03:36-03:00",
+      "point_key": "dp_n8_sigma1p500000",
+      "position": 12
+    },
+    {
+      "commit": "0cb093b",
+      "committed_at": "2026-09-05T16:32:32-03:00",
+      "point_key": "dp_n8_sigma2p000000",
+      "position": 13
+    },
+    {
+      "commit": "814c74b",
+      "committed_at": "2026-09-05T18:43:11-03:00",
+      "point_key": "dp_n8_sigma3p000000",
+      "position": 14
+    },
+    {
+      "commit": "ed0a87a",
+      "committed_at": "2026-09-05T20:46:51-03:00",
+      "point_key": "dp_n8_sigma4p000000",
+      "position": 15
+    },
+    {
+      "commit": "d1decc6",
+      "committed_at": "2026-09-05T22:49:34-03:00",
+      "point_key": "dp_n8_sigma6p000000",
+      "position": 16
+    },
+    {
+      "commit": "e83afd9",
+      "committed_at": "2026-09-06T00:52:45-03:00",
+      "point_key": "dp_n8_sigma8p000000",
+      "position": 17
+    },
+    {
+      "commit": "ee9e2b1",
+      "committed_at": "2026-09-06T02:56:03-03:00",
+      "point_key": "dp_n8_sigma12p000000",
+      "position": 18
+    },
+    {
+      "commit": "0aaf39e",
+      "committed_at": "2026-09-06T04:59:44-03:00",
+      "point_key": "dp_n8_sigma16p000000",
+      "position": 19
+    },
+    {
+      "commit": "26a2256",
+      "committed_at": "2026-09-06T07:03:33-03:00",
+      "point_key": "dp_n8_sigma24p000000",
+      "position": 20
+    },
+    {
+      "commit": "4e478d0",
+      "committed_at": "2026-09-06T09:07:11-03:00",
+      "point_key": "dp_n8_sigma32p000000",
+      "position": 21
+    },
+    {
+      "commit": "7b42943",
+      "committed_at": "2026-09-06T11:11:34-03:00",
+      "point_key": "dp_n8_sigma50p000000",
+      "position": 22
+    },
+    {
+      "commit": "e5f71dc",
+      "committed_at": "2026-09-06T13:28:06-03:00",
+      "point_key": "dp_n64_sigma0p500000",
+      "position": 23
+    },
+    {
+      "commit": "23e95da",
+      "committed_at": "2026-09-06T15:35:56-03:00",
+      "point_key": "dp_n64_sigma0p700000",
+      "position": 24
+    },
+    {
+      "commit": "c2757d1",
+      "committed_at": "2026-09-06T17:42:03-03:00",
+      "point_key": "dp_n64_sigma1p000000",
+      "position": 25
+    },
+    {
+      "commit": "c80c448",
+      "committed_at": "2026-09-06T19:44:31-03:00",
+      "point_key": "dp_n64_sigma1p500000",
+      "position": 26
+    },
+    {
+      "commit": "2651c23",
+      "committed_at": "2026-09-06T21:46:52-03:00",
+      "point_key": "dp_n64_sigma2p000000",
+      "position": 27
+    },
+    {
+      "commit": "e05b875",
+      "committed_at": "2026-09-06T23:54:11-03:00",
+      "point_key": "dp_n64_sigma3p000000",
+      "position": 28
+    },
+    {
+      "commit": "4f53f40",
+      "committed_at": "2026-09-07T02:05:19-03:00",
+      "point_key": "dp_n64_sigma4p000000",
+      "position": 29
+    },
+    {
+      "commit": "e3b18d0",
+      "committed_at": "2026-09-07T04:20:41-03:00",
+      "point_key": "dp_n64_sigma6p000000",
+      "position": 30
+    },
+    {
+      "commit": "d02320a",
+      "committed_at": "2026-09-07T06:36:18-03:00",
+      "point_key": "dp_n64_sigma8p000000",
+      "position": 31
+    },
+    {
+      "commit": "ff37172",
+      "committed_at": "2026-09-07T08:49:53-03:00",
+      "point_key": "dp_n64_sigma12p000000",
+      "position": 32
+    },
+    {
+      "commit": "2fc2390",
+      "committed_at": "2026-09-07T11:05:15-03:00",
+      "point_key": "dp_n64_sigma16p000000",
+      "position": 33
+    },
+    {
+      "commit": "4dc65d8",
+      "committed_at": "2026-09-07T13:20:55-03:00",
+      "point_key": "dp_n64_sigma24p000000",
+      "position": 34
+    },
+    {
+      "commit": "bfc2697",
+      "committed_at": "2026-09-07T15:42:49-03:00",
+      "point_key": "dp_n64_sigma32p000000",
+      "position": 35
+    },
+    {
+      "commit": "64dc094",
+      "committed_at": "2026-09-07T18:08:14-03:00",
+      "point_key": "dp_n64_sigma50p000000",
+      "position": 36
+    },
+    {
+      "commit": "5471c14",
+      "committed_at": "2026-09-07T19:03:44-03:00",
+      "point_key": "adv_n8_ratio0p250000",
+      "position": 37
+    },
+    {
+      "commit": "69d84a7",
+      "committed_at": "2026-09-07T20:01:18-03:00",
+      "point_key": "adv_n8_ratio0p500000",
+      "position": 38
+    },
+    {
+      "commit": "08680f8",
+      "committed_at": "2026-09-07T21:09:20-03:00",
+      "point_key": "adv_n8_ratio1p000000",
+      "position": 39
+    },
+    {
+      "commit": "cb396b5",
+      "committed_at": "2026-09-07T22:13:34-03:00",
+      "point_key": "adv_n8_ratio1p500000",
+      "position": 40
+    },
+    {
+      "commit": "d055cb0",
+      "committed_at": "2026-09-07T23:17:35-03:00",
+      "point_key": "adv_n64_ratio0p250000",
+      "position": 41
+    },
+    {
+      "commit": "fba34bf",
+      "committed_at": "2026-09-08T00:22:30-03:00",
+      "point_key": "adv_n64_ratio0p500000",
+      "position": 42
+    },
+    {
+      "commit": "cca1373",
+      "committed_at": "2026-09-08T01:26:37-03:00",
+      "point_key": "adv_n64_ratio1p000000",
+      "position": 43
+    },
+    {
+      "commit": "8834c4d",
+      "committed_at": "2026-09-08T02:33:53-03:00",
+      "point_key": "adv_n64_ratio1p500000",
+      "position": 44
+    }
+  ],
+  "git_sha": "799aa184c793eb12a815db54fe2553c88c990269",
+  "governs": "D-08's EXECUTION as history: the 36 interior points in the order they ran, each by single-path commit; every kill, resume and stall record as the artifacts show them. Nothing here enters a verdict \u2014 plan 25-18 reads the point records.",
+  "heartbeat_resets_that_are_not_kills": [
+    {
+      "beat_after": {
+        "draw_index": 9,
+        "point": "dp_n8_sigma1p500000",
+        "shape": "A2",
+        "stage": "draw",
+        "utc": "2026-09-05T16:08:13.807612+00:00"
+      },
+      "beat_before": {
+        "draw_index": 215,
+        "point": "dp_n8_sigma1p500000",
+        "shape": "A2",
+        "stage": "draw",
+        "utc": "2026-09-05T16:07:13.802221+00:00"
+      },
+      "gap_seconds": 60.005391,
+      "point_key": "dp_n8_sigma1p500000",
+      "reason": "next beat within 120 s of the previous one: no relaunch gap, no launch banner; prompt 215 is the last of the shape and the `shape` field lags `draw_index` by one beat"
+    },
+    {
+      "beat_after": {
+        "draw_index": 9,
+        "point": "dp_n64_sigma8p000000",
+        "shape": "A2",
+        "stage": "draw",
+        "utc": "2026-09-07T08:42:43.424969+00:00"
+      },
+      "beat_before": {
+        "draw_index": 215,
+        "point": "dp_n64_sigma8p000000",
+        "shape": "A2",
+        "stage": "draw",
+        "utc": "2026-09-07T08:41:43.414408+00:00"
+      },
+      "gap_seconds": 60.010561,
+      "point_key": "dp_n64_sigma8p000000",
+      "reason": "next beat within 120 s of the previous one: no relaunch gap, no launch banner; prompt 215 is the last of the shape and the `shape` field lags `draw_index` by one beat"
+    }
+  ],
+  "interior_points": [
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 0.5,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "f5e0479f5f648b7c7d2d1bd4c51af5ca83c29aff",
+      "committed_at": "2026-09-05T07:52:45-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 31.376396600405375,
+        "A1-mild": 24.572997999191283,
+        "A2": 25.39674532810847,
+        "A3": 37.86581388314565
+      },
+      "epsilon": 519.6981942303134,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0705555555555555,
+      "hours_from_record_fields": 2.069480130738682,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma0p500000",
+      "position": 9,
+      "record": "results/phase25_point_dp_n8_sigma0p500000.json",
+      "record_sha256": "a10b9acc11945f7f00e85545d95ac2daf87f44b26134fe69b80a57474492f7dd",
+      "stop_terminated_n": {
+        "A1-aggressive": 3072,
+        "A1-mild": 3225,
+        "A2": 3283,
+        "A3": 2900
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 209.06438398361206
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 0.7,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "05527993600eaac7c66fa43938eaf08b8eeb566a",
+      "committed_at": "2026-09-05T10:04:18-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 35.587409965197246,
+        "A1-mild": 26.73719729979833,
+        "A2": 28.5751753171285,
+        "A3": 35.40328670342763
+      },
+      "epsilon": 289.33863705009264,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.1925,
+      "hours_from_record_fields": 2.1911567852894467,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma0p700000",
+      "position": 10,
+      "record": "results/phase25_point_dp_n8_sigma0p700000.json",
+      "record_sha256": "6dd15dc77376f3397fef27a8f17f4dbb87f2b628d2b4c51a0cf3443c865fde9d",
+      "stop_terminated_n": {
+        "A1-aggressive": 2997,
+        "A1-mild": 3189,
+        "A2": 3245,
+        "A3": 2841
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 218.3047230243683
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 1.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "d6672fbb0990d02cee71a81a3f7a4f6665ac7e9a",
+      "committed_at": "2026-09-05T12:02:12-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 30.343467847506204,
+        "A1-mild": 26.822685929139457,
+        "A2": 24.10162103176117,
+        "A3": 31.67249508301417
+      },
+      "epsilon": 159.44148628736576,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 1.965,
+      "hours_from_record_fields": 1.9634663781854842,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma1p000000",
+      "position": 11,
+      "record": "results/phase25_point_dp_n8_sigma1p000000.json",
+      "record_sha256": "602db32f6c1d2b2dea69108bb98568ae20aa01fccbbd24fc3ca41bd60066b6f8",
+      "stop_terminated_n": {
+        "A1-aggressive": 2939,
+        "A1-mild": 3141,
+        "A2": 3186,
+        "A3": 2755
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 204.47620916366577
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 1.5,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "c10a5998090b2d665ef0d3144836e8f1160cc736",
+      "committed_at": "2026-09-05T14:03:36-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 32.357418668270114,
+        "A1-mild": 27.748610746860503,
+        "A2": 24.27029558022817,
+        "A3": 32.04796798229218
+      },
+      "epsilon": 83.8305906128762,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0233333333333334,
+      "hours_from_record_fields": 2.021814976930618,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma1p500000",
+      "position": 12,
+      "record": "results/phase25_point_dp_n8_sigma1p500000.json",
+      "record_sha256": "f8052b8d1b5fbc91c10f76873514e7c286391269b3393f4bee226a2ff9df85b4",
+      "stop_terminated_n": {
+        "A1-aggressive": 2879,
+        "A1-mild": 3097,
+        "A2": 3161,
+        "A3": 2675
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 205.7825870513916
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 2.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "0cb093bd2ede7d21671be96bf118661582463f85",
+      "committed_at": "2026-09-05T16:32:32-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 37.44936276674271,
+        "A1-mild": 33.05938385327657,
+        "A2": 31.347530420621236,
+        "A3": 42.09067196448644
+      },
+      "epsilon": 54.37663901498563,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.482222222222222,
+      "hours_from_record_fields": 2.4808513675795663,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma2p000000",
+      "position": 13,
+      "record": "results/phase25_point_dp_n8_sigma2p000000.json",
+      "record_sha256": "b7e37ae02ba9f5fd669ad59f3dad555f581439aae413a8162a658faf6fcc3fa4",
+      "stop_terminated_n": {
+        "A1-aggressive": 2851,
+        "A1-mild": 3091,
+        "A2": 3148,
+        "A3": 2649
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 207.1467628479004
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 3.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "814c74b87da8f9869b1d384228531dba0fbd4afe",
+      "committed_at": "2026-09-05T18:43:11-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 36.175739133358,
+        "A1-mild": 31.75008081595103,
+        "A2": 24.98330500125885,
+        "A3": 32.47544791698456
+      },
+      "epsilon": 30.50627999271221,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.1775,
+      "hours_from_record_fields": 2.1757225318749747,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma3p000000",
+      "position": 14,
+      "record": "results/phase25_point_dp_n8_sigma3p000000.json",
+      "record_sha256": "67868ca19834dde581dbbd8ef451c06f64221fac33b2affc89859d6960968693",
+      "stop_terminated_n": {
+        "A1-aggressive": 2828,
+        "A1-mild": 3079,
+        "A2": 3132,
+        "A3": 2617
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 221.0159559249878
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 4.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "ed0a87aea2403173c0b0625efe6433accaf519ff",
+      "committed_at": "2026-09-05T20:46:51-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 32.25215740203858,
+        "A1-mild": 28.829006481170655,
+        "A2": 25.07021350065867,
+        "A3": 32.54895731608073
+      },
+      "epsilon": 20.675508046994032,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.061111111111111,
+      "hours_from_record_fields": 2.059167058997684,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma4p000000",
+      "position": 15,
+      "record": "results/phase25_point_dp_n8_sigma4p000000.json",
+      "record_sha256": "f52e66720eb9008624eb754489fb5c545998021ded2bebaa7f6bd1644fed941f",
+      "stop_terminated_n": {
+        "A1-aggressive": 2817,
+        "A1-mild": 3067,
+        "A2": 3117,
+        "A3": 2608
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 204.2453441619873
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 6.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "d1decc6c715e4e673f61a21f91be060e44bbb2d1",
+      "committed_at": "2026-09-05T22:49:34-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 31.641458868980408,
+        "A1-mild": 27.96254783074061,
+        "A2": 25.430761082967123,
+        "A3": 32.75894658168157
+      },
+      "epsilon": 12.262332118205716,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0452777777777778,
+      "hours_from_record_fields": 2.0434302722083197,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma6p000000",
+      "position": 16,
+      "record": "results/phase25_point_dp_n8_sigma6p000000.json",
+      "record_sha256": "f0c5fa1191ff1df1910f53f120e13cee07dae209319f26e3b32ca8ac79e8ded5",
+      "stop_terminated_n": {
+        "A1-aggressive": 2807,
+        "A1-mild": 3048,
+        "A2": 3106,
+        "A3": 2591
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 201.16607403755188
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 8.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "e83afd941293a3ac64fa1b96531b264fd1909ade",
+      "committed_at": "2026-09-06T00:52:45-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 31.62476669549942,
+        "A1-mild": 28.10462325414022,
+        "A2": 25.593108932177227,
+        "A3": 32.856194667021434
+      },
+      "epsilon": 8.595865790470416,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0530555555555554,
+      "hours_from_record_fields": 2.050873661372397,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma8p000000",
+      "position": 17,
+      "record": "results/phase25_point_dp_n8_sigma8p000000.json",
+      "record_sha256": "7ecfaa77da865539f90282af480b5b02345e094190682252afda0f2504106c7f",
+      "stop_terminated_n": {
+        "A1-aggressive": 2797,
+        "A1-mild": 3045,
+        "A2": 3100,
+        "A3": 2587
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 205.5241219997406
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 12.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "ee9e2b11e504f8a3db60b13a942b217895e57f85",
+      "committed_at": "2026-09-06T02:56:03-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 31.611055719852448,
+        "A1-mild": 28.158500850200653,
+        "A2": 25.58260391553243,
+        "A3": 32.93872715234757
+      },
+      "epsilon": 5.299979064701441,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.055,
+      "hours_from_record_fields": 2.0528428494930266,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma12p000000",
+      "position": 18,
+      "record": "results/phase25_point_dp_n8_sigma12p000000.json",
+      "record_sha256": "640b91fc8f281055ed75aed868d1d6a6a549e26484a0f55393cd5d2ddd397e87",
+      "stop_terminated_n": {
+        "A1-aggressive": 2786,
+        "A1-mild": 3037,
+        "A2": 3091,
+        "A3": 2573
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 206.00732588768005
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 16.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "0aaf39e2f06a26066f6f40f696592af0d2d3edc4",
+      "committed_at": "2026-09-06T04:59:44-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 31.76123016277949,
+        "A1-mild": 28.295049333572386,
+        "A2": 25.662490967909495,
+        "A3": 32.87991939783096
+      },
+      "epsilon": 3.7965357228934966,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0613888888888887,
+      "hours_from_record_fields": 2.059335236615605,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma16p000000",
+      "position": 19,
+      "record": "results/phase25_point_dp_n8_sigma16p000000.json",
+      "record_sha256": "bdfae6ad36fb0140466526ced78ce53b75d901ff1b1e8e20dfcfcbe6e72bff90",
+      "stop_terminated_n": {
+        "A1-aggressive": 2779,
+        "A1-mild": 3029,
+        "A2": 3089,
+        "A3": 2569
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 210.4441430568695
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 24.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "26a225600063e0f9e33608ef20389d9dd64245e6",
+      "committed_at": "2026-09-06T07:03:33-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 31.677084064483644,
+        "A1-mild": 28.28199004729589,
+        "A2": 25.817484080791473,
+        "A3": 32.96366581122081
+      },
+      "epsilon": 2.3957449097512216,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0636111111111113,
+      "hours_from_record_fields": 2.061378896964921,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma24p000000",
+      "position": 20,
+      "record": "results/phase25_point_dp_n8_sigma24p000000.json",
+      "record_sha256": "19ee323238d6e9743cfa1d9238491a363a3f559178686cf850d8ab7a808b1330",
+      "stop_terminated_n": {
+        "A1-aggressive": 2775,
+        "A1-mild": 3025,
+        "A2": 3080,
+        "A3": 2567
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 209.63756895065308
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 32.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "4e478d00a165dcd90821c253c07a57968df3ce27",
+      "committed_at": "2026-09-06T09:07:11-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 31.513014435768127,
+        "A1-mild": 28.317697203159334,
+        "A2": 25.790822796026866,
+        "A3": 32.8971418539683
+      },
+      "epsilon": 1.7369988136430536,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0605555555555557,
+      "hours_from_record_fields": 2.058358343707191,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma32p000000",
+      "position": 21,
+      "record": "results/phase25_point_dp_n8_sigma32p000000.json",
+      "record_sha256": "77919724ff8efbd7441c2c727006e33f50e1249f42ea06f9cfb43338ee2c63d2",
+      "stop_terminated_n": {
+        "A1-aggressive": 2778,
+        "A1-mild": 3022,
+        "A2": 3075,
+        "A3": 2565
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 209.84218287467957
+    },
+    {
+      "arm": "dp_n8",
+      "axis": "sigma",
+      "axis_value": 50.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 1600,
+      "commit": "7b4294337d80f380451074d5e6c58fb974ef65a5",
+      "committed_at": "2026-09-06T11:11:34-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 31.555506817499797,
+        "A1-mild": 28.367911879221598,
+        "A2": 26.28979864915212,
+        "A3": 33.067442520459494
+      },
+      "epsilon": 1.060789755417757,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0730555555555554,
+      "hours_from_record_fields": 2.070544234779146,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n8_sigma50p000000",
+      "position": 22,
+      "record": "results/phase25_point_dp_n8_sigma50p000000.json",
+      "record_sha256": "93cffd3ebf243d1e3a7667d21d783b530fae4e3d2ff93ac3fe0fd995ca7f689b",
+      "stop_terminated_n": {
+        "A1-aggressive": 2772,
+        "A1-mild": 3021,
+        "A2": 3070,
+        "A3": 2566
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 210.27185010910034
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 0.5,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "e5f71dc7f51e4b840fba0356e9eb8fd2669437a3",
+      "committed_at": "2026-09-06T13:28:06-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 28.47971901098887,
+        "A1-mild": 22.971056481202442,
+        "A2": 21.101397732893627,
+        "A3": 30.717173397541046
+      },
+      "epsilon": 519.6981942303134,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.2755555555555556,
+      "hours_from_record_fields": 2.1203974493344626,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma0p500000",
+      "position": 23,
+      "record": "results/phase25_point_dp_n64_sigma0p500000.json",
+      "record_sha256": "f4af7939028922d096bec107c2cf9499d456bff88ef86316c021c9f5434e4bb5",
+      "stop_terminated_n": {
+        "A1-aggressive": 3054,
+        "A1-mild": 3267,
+        "A2": 3044,
+        "A3": 2749
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1350.5655570030212
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 0.7,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "23e95da1ac0112f02609d8304bf54fa620a30796",
+      "committed_at": "2026-09-06T15:35:56-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 28.939108498891194,
+        "A1-mild": 22.891981613636016,
+        "A2": 20.993907034397125,
+        "A3": 31.27615869839986
+      },
+      "epsilon": 289.33863705009264,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.1305555555555555,
+      "hours_from_record_fields": 2.129604429602623,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma0p700000",
+      "position": 24,
+      "record": "results/phase25_point_dp_n64_sigma0p700000.json",
+      "record_sha256": "58a6b4277ec5c3cc5f3c774c8df22e7ac6a79a9bec8cd7a947592678043331b1",
+      "stop_terminated_n": {
+        "A1-aggressive": 3020,
+        "A1-mild": 3260,
+        "A2": 3169,
+        "A3": 2750
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1332.0454931259155
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 1.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "c2757d1a2b3673f4abc0d7dda6548c9dc2c465e2",
+      "committed_at": "2026-09-06T17:42:03-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 28.689382382233937,
+        "A1-mild": 22.88545466661453,
+        "A2": 20.64739899635315,
+        "A3": 30.140580546855926
+      },
+      "epsilon": 159.44148628736576,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.1019444444444444,
+      "hours_from_record_fields": 2.100667923423979,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma1p000000",
+      "position": 25,
+      "record": "results/phase25_point_dp_n64_sigma1p000000.json",
+      "record_sha256": "ec4cfad7be5e736d6df656e940f5938231df6fff695dde2bd9c7705e51cb12cb",
+      "stop_terminated_n": {
+        "A1-aggressive": 3010,
+        "A1-mild": 3259,
+        "A2": 3252,
+        "A3": 2847
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1334.2318778038025
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 1.5,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "c80c448ef88bc02fa94a648d360df9d5f8a911d6",
+      "committed_at": "2026-09-06T19:44:31-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 27.65950885216395,
+        "A1-mild": 22.402163382371267,
+        "A2": 19.8353888352712,
+        "A3": 28.888145538171134
+      },
+      "epsilon": 83.8305906128762,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0411111111111113,
+      "hours_from_record_fields": 2.0400471109814116,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma1p500000",
+      "position": 26,
+      "record": "results/phase25_point_dp_n64_sigma1p500000.json",
+      "record_sha256": "7937c5e77de1d671e7dc58035ed3adddf9880648732581549df0dfcf6d14d2a9",
+      "stop_terminated_n": {
+        "A1-aggressive": 3082,
+        "A1-mild": 3278,
+        "A2": 3295,
+        "A3": 2930
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1330.7552120685577
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 2.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "2651c2347921aacdda3f7d9d9a8331772852c1c6",
+      "committed_at": "2026-09-06T21:46:52-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 27.491726048787434,
+        "A1-mild": 22.646643515427908,
+        "A2": 19.702454102039336,
+        "A3": 28.481506570180258
+      },
+      "epsilon": 54.37663901498563,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.0391666666666666,
+      "hours_from_record_fields": 2.037636507815785,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma2p000000",
+      "position": 27,
+      "record": "results/phase25_point_dp_n64_sigma2p000000.json",
+      "record_sha256": "e72e2b39e1f8a30f19af5f5391b39bcd8a930eba5a4fcf53c487012b21f0d892",
+      "stop_terminated_n": {
+        "A1-aggressive": 3087,
+        "A1-mild": 3260,
+        "A2": 3309,
+        "A3": 2978
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1347.633197069168
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 3.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "e05b875115e3f01aa6355d403aa7c2c43f8cb878",
+      "committed_at": "2026-09-06T23:54:11-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 28.444479537010192,
+        "A1-mild": 24.30538586775462,
+        "A2": 21.102135582764944,
+        "A3": 29.624364101886748
+      },
+      "epsilon": 30.50627999271221,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.1219444444444444,
+      "hours_from_record_fields": 2.1205035426219303,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma3p000000",
+      "position": 28,
+      "record": "results/phase25_point_dp_n64_sigma3p000000.json",
+      "record_sha256": "2fde12d0a1ad32e77fa0500b71fa29f62b83cbf940b4cb70ab605ca0456c4d5f",
+      "stop_terminated_n": {
+        "A1-aggressive": 3013,
+        "A1-mild": 3211,
+        "A2": 3291,
+        "A3": 2903
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1337.1901140213013
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 4.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "4f53f4018669a4d1f1f395829145c6502674c3d9",
+      "committed_at": "2026-09-07T02:05:19-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 29.085361913839975,
+        "A1-mild": 25.546576464176177,
+        "A2": 22.273900147279104,
+        "A3": 30.423522118727366
+      },
+      "epsilon": 20.675508046994032,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.1855555555555557,
+      "hours_from_record_fields": 2.183924290736516,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma4p000000",
+      "position": 29,
+      "record": "results/phase25_point_dp_n64_sigma4p000000.json",
+      "record_sha256": "a881220f54387fe1dde72510c38e015c1057e81b7a0ad1fed663bc922d796f01",
+      "stop_terminated_n": {
+        "A1-aggressive": 2970,
+        "A1-mild": 3153,
+        "A2": 3230,
+        "A3": 2838
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1332.628425836563
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 6.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "e3b18d0c48ee30a1fa781e4902b3d3502754fb28",
+      "committed_at": "2026-09-07T04:20:41-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 30.077765134970345,
+        "A1-mild": 26.590385830402376,
+        "A2": 23.515047613779704,
+        "A3": 31.280252730846406
+      },
+      "epsilon": 12.262332118205716,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.256111111111111,
+      "hours_from_record_fields": 2.254288317693604,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma6p000000",
+      "position": 30,
+      "record": "results/phase25_point_dp_n64_sigma6p000000.json",
+      "record_sha256": "ce521dcf58ddb69026e4ea2b4e7b96a4e2e97d3cc968028c709b307e982a1b6a",
+      "stop_terminated_n": {
+        "A1-aggressive": 2902,
+        "A1-mild": 3116,
+        "A2": 3167,
+        "A3": 2739
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1339.6449460983276
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 8.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "d02320add503d8b1138916eaaf10251a4232243c",
+      "committed_at": "2026-09-07T06:36:18-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 30.414130413532256,
+        "A1-mild": 26.90764021873474,
+        "A2": 24.11219599644343,
+        "A3": 30.405924379825592
+      },
+      "epsilon": 8.595865790470416,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.2602777777777776,
+      "hours_from_record_fields": 2.258460833231608,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma8p000000",
+      "position": 31,
+      "record": "results/phase25_point_dp_n64_sigma8p000000.json",
+      "record_sha256": "bb6f3ed10fc2afdbab10dcac8a4c3e1f209584121b4ad8341ad125c1810f69f4",
+      "stop_terminated_n": {
+        "A1-aggressive": 2892,
+        "A1-mild": 3092,
+        "A2": 3149,
+        "A3": 2677
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1334.2162261009216
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 12.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "ff3717262144c4bb132749d7a6f201b272602ad1",
+      "committed_at": "2026-09-07T08:49:53-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 29.304294216632844,
+        "A1-mild": 26.208720167477924,
+        "A2": 23.67199339866638,
+        "A3": 30.633096917470297
+      },
+      "epsilon": 5.299979064701441,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.2263888888888888,
+      "hours_from_record_fields": 2.22469705025355,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma12p000000",
+      "position": 32,
+      "record": "results/phase25_point_dp_n64_sigma12p000000.json",
+      "record_sha256": "7130386601396fc227b50afc6ee3cbdc8f88b9584e0ec15dcc2585f706888704",
+      "stop_terminated_n": {
+        "A1-aggressive": 2874,
+        "A1-mild": 3068,
+        "A2": 3129,
+        "A3": 2643
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1336.0248410701752
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 16.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "2fc2390f4c5b3416c9a6abb382bcc4272128e0c5",
+      "committed_at": "2026-09-07T11:05:15-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 29.833559127648673,
+        "A1-mild": 26.74496140082677,
+        "A2": 23.960160569349924,
+        "A3": 31.024655667940774
+      },
+      "epsilon": 3.7965357228934966,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.256111111111111,
+      "hours_from_record_fields": 2.254195394648446,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma16p000000",
+      "position": 33,
+      "record": "results/phase25_point_dp_n64_sigma16p000000.json",
+      "record_sha256": "c043acc12e7364b0c9516af896812b8a0e2c83e0528efe0d3bc2a5147be6830c",
+      "stop_terminated_n": {
+        "A1-aggressive": 2852,
+        "A1-mild": 3048,
+        "A2": 3122,
+        "A3": 2613
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1336.692911863327
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 24.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "4dc65d89d8a2cf6f9da64de02a6d44b08845e4e3",
+      "committed_at": "2026-09-07T13:20:55-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 29.850596348444622,
+        "A1-mild": 26.698139703273775,
+        "A2": 24.326091015338896,
+        "A3": 31.101165866851808
+      },
+      "epsilon": 2.3957449097512216,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.261111111111111,
+      "hours_from_record_fields": 2.259229977197117,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma24p000000",
+      "position": 34,
+      "record": "results/phase25_point_dp_n64_sigma24p000000.json",
+      "record_sha256": "a5dfd413fc402b90a56d0f4eef63d8689d403b22e138c3f9143a02d8f4cbd06d",
+      "stop_terminated_n": {
+        "A1-aggressive": 2819,
+        "A1-mild": 3055,
+        "A2": 3102,
+        "A3": 2596
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1330.8194289207458
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 32.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "bfc2697200a20b8b82b68f06cdd7eb11981507a9",
+      "committed_at": "2026-09-07T15:42:49-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 30.048851120471955,
+        "A1-mild": 26.777895867824554,
+        "A2": 25.9646560827891,
+        "A3": 35.28600524663925
+      },
+      "epsilon": 1.7369988136430536,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.365,
+      "hours_from_record_fields": 2.3629761353466248,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma32p000000",
+      "position": 35,
+      "record": "results/phase25_point_dp_n64_sigma32p000000.json",
+      "record_sha256": "78619e856b15123e771a98f71afd02ebfbac60e8b72e02fb31d9294ed9ebc9cc",
+      "stop_terminated_n": {
+        "A1-aggressive": 2806,
+        "A1-mild": 3044,
+        "A2": 3098,
+        "A3": 2585
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1337.081032037735
+    },
+    {
+      "arm": "dp_n64",
+      "axis": "sigma",
+      "axis_value": 50.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": 12800,
+      "commit": "64dc0941030bf8951a08e5c369d6b682625ccdc9",
+      "committed_at": "2026-09-07T18:08:14-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 30.1459206144015,
+        "A1-mild": 27.740972634156545,
+        "A2": 27.705940115451813,
+        "A3": 33.661359365781145
+      },
+      "epsilon": 1.060789755417757,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          0,
+          104
+        ],
+        "A2": [
+          0,
+          104
+        ],
+        "A3": [
+          0,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 2.423611111111111,
+      "hours_from_record_fields": 2.421761938267284,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "dp_n64_sigma50p000000",
+      "position": 36,
+      "record": "results/phase25_point_dp_n64_sigma50p000000.json",
+      "record_sha256": "136c174cad4a378555ab94ad7e468aa224265d5f2562346fa598fd72a788b239",
+      "stop_terminated_n": {
+        "A1-aggressive": 2792,
+        "A1-mild": 3037,
+        "A2": 3084,
+        "A3": 2595
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 1469.7308847904205
+    },
+    {
+      "arm": "adv_n8",
+      "axis": "ratio",
+      "axis_value": 0.25,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": null,
+      "commit": "5471c14b64aa4a63bd591231a172506bcaa15d78",
+      "committed_at": "2026-09-07T19:03:44-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 15.139220587412517,
+        "A1-mild": 13.199721415837606,
+        "A2": 10.699924949804942,
+        "A3": 13.538076333204906
+      },
+      "epsilon": null,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          84,
+          104
+        ],
+        "A2": [
+          103,
+          104
+        ],
+        "A3": [
+          91,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 0.925,
+      "hours_from_record_fields": 0.9230895868937175,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "adv_n8_ratio0p250000",
+      "position": 37,
+      "record": "results/phase25_point_adv_n8_ratio0p250000.json",
+      "record_sha256": "76d40b7db05356be6d1abea4047569bfc91e54a83c5ec742e225cb449d054143",
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 82.7613627910614
+    },
+    {
+      "arm": "adv_n8",
+      "axis": "ratio",
+      "axis_value": 0.5,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": null,
+      "commit": "69d84a73381113c0acb262d103343f8804aafd4d",
+      "committed_at": "2026-09-07T20:01:18-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 15.38184308608373,
+        "A1-mild": 14.066959536075592,
+        "A2": 10.524996137619018,
+        "A3": 14.676389467716216
+      },
+      "epsilon": null,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          71,
+          104
+        ],
+        "A2": [
+          104,
+          104
+        ],
+        "A3": [
+          66,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 0.9594444444444444,
+      "hours_from_record_fields": 0.9574948074420292,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "adv_n8_ratio0p500000",
+      "position": 38,
+      "record": "results/phase25_point_adv_n8_ratio0p500000.json",
+      "record_sha256": "0f79387c3e70d816db4e530512e305d7e4790ce8912301227a265547209155e9",
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 82.89390110969543
+    },
+    {
+      "arm": "adv_n8",
+      "axis": "ratio",
+      "axis_value": 1.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": null,
+      "commit": "08680f8cbc1060cf51ccc2b145fa924619c64cc3",
+      "committed_at": "2026-09-07T21:09:20-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 17.36067884763082,
+        "A1-mild": 16.08178693453471,
+        "A2": 10.58162028392156,
+        "A3": 16.18461699883143
+      },
+      "epsilon": null,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          31,
+          104
+        ],
+        "A2": [
+          89,
+          104
+        ],
+        "A3": [
+          40,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 1.133888888888889,
+      "hours_from_record_fields": 1.0510774991909664,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "adv_n8_ratio1p000000",
+      "position": 39,
+      "record": "results/phase25_point_adv_n8_ratio1p000000.json",
+      "record_sha256": "576473d6cd85bbf01f5957f3888422b2d9663a81327abd81df6216ae83ff6750",
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3455,
+        "A3": 3456
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 80.21743321418762
+    },
+    {
+      "arm": "adv_n8",
+      "axis": "ratio",
+      "axis_value": 1.5,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": null,
+      "commit": "cb396b5e709634636f16200c9cc88f6d4385d612",
+      "committed_at": "2026-09-07T22:13:34-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 17.53536499738693,
+        "A1-mild": 16.74804731607437,
+        "A2": 10.119330402215322,
+        "A3": 17.051095016797383
+      },
+      "epsilon": null,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          20,
+          104
+        ],
+        "A2": [
+          80,
+          104
+        ],
+        "A3": [
+          28,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 1.0705555555555555,
+      "hours_from_record_fields": 1.0697314129273097,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "adv_n8_ratio1p500000",
+      "position": 40,
+      "record": "results/phase25_point_adv_n8_ratio1p500000.json",
+      "record_sha256": "8ae6846cfd44630a97ae13b3699f375f5c04b7ab4d6101e630a1f69f8e6327b1",
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3448,
+        "A3": 3456
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 78.27187132835388
+    },
+    {
+      "arm": "adv_n64",
+      "axis": "ratio",
+      "axis_value": 0.25,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": null,
+      "commit": "d055cb0a6cb31090e8489f6d89d872f4f0d23a48",
+      "committed_at": "2026-09-07T23:17:35-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 17.44716871579488,
+        "A1-mild": 16.138269213835397,
+        "A2": 11.238323219617207,
+        "A3": 16.40679249763489
+      },
+      "epsilon": null,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          15,
+          104
+        ],
+        "A2": [
+          29,
+          104
+        ],
+        "A3": [
+          22,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 1.0669444444444445,
+      "hours_from_record_fields": 1.0658706125285888,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "adv_n64_ratio0p250000",
+      "position": 41,
+      "record": "results/phase25_point_adv_n64_ratio0p250000.json",
+      "record_sha256": "fdc21204008b82a73ec1268423f1275a72ba8d9c23c9b6cc2238f29223df5c1a",
+      "stop_terminated_n": {
+        "A1-aggressive": 3454,
+        "A1-mild": 3451,
+        "A2": 3445,
+        "A3": 3454
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 79.01138997077942
+    },
+    {
+      "arm": "adv_n64",
+      "axis": "ratio",
+      "axis_value": 0.5,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": null,
+      "commit": "fba34bffb025302d6705c9dd0ff9e7f32c813afc",
+      "committed_at": "2026-09-08T00:22:30-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 17.490558556715648,
+        "A1-mild": 16.557959667841594,
+        "A2": 11.037377468744914,
+        "A3": 17.010624452431998
+      },
+      "epsilon": null,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          8,
+          104
+        ],
+        "A2": [
+          26,
+          104
+        ],
+        "A3": [
+          11,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 1.0819444444444444,
+      "hours_from_record_fields": 1.0809866371419694,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "adv_n64_ratio0p500000",
+      "position": 42,
+      "record": "results/phase25_point_adv_n64_ratio0p500000.json",
+      "record_sha256": "10307d85c2fab91dee7509b75afad54cae795c206a2271e8a78c7e4925889876",
+      "stop_terminated_n": {
+        "A1-aggressive": 3455,
+        "A1-mild": 3449,
+        "A2": 3447,
+        "A3": 3448
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 79.49634003639221
+    },
+    {
+      "arm": "adv_n64",
+      "axis": "ratio",
+      "axis_value": 1.0,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": null,
+      "commit": "cca1373084ade5675207e00330f0fd155596a55a",
+      "committed_at": "2026-09-08T01:26:37-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 16.642928063869476,
+        "A1-mild": 16.431923751036326,
+        "A2": 11.566979114214579,
+        "A3": 16.640207465489706
+      },
+      "epsilon": null,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          1,
+          104
+        ],
+        "A2": [
+          14,
+          104
+        ],
+        "A3": [
+          5,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 1.0686111111111112,
+      "hours_from_record_fields": 1.06755516813861,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "adv_n64_ratio1p000000",
+      "position": 43,
+      "record": "results/phase25_point_adv_n64_ratio1p000000.json",
+      "record_sha256": "539d367ed801bbe190a0c4182f5724637e78f90e20427ca4e23ca4a834a5c8bc",
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3455,
+        "A2": 3420,
+        "A3": 3455
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 80.48520278930664
+    },
+    {
+      "arm": "adv_n64",
+      "axis": "ratio",
+      "axis_value": 1.5,
+      "ceiling_hours": 3.1471532286150796,
+      "clip_bind_count": null,
+      "commit": "8834c4d592ed2772593db15707534b96cd45b52f",
+      "committed_at": "2026-09-08T02:33:53-03:00",
+      "draw_minutes": {
+        "A1-aggressive": 17.430243384838104,
+        "A1-mild": 16.702584501107534,
+        "A2": 13.402055084705353,
+        "A3": 16.923231665293375
+      },
+      "epsilon": null,
+      "extraction_gated": {
+        "A1-aggressive": [
+          0,
+          104
+        ],
+        "A1-mild": [
+          1,
+          104
+        ],
+        "A2": [
+          9,
+          104
+        ],
+        "A3": [
+          4,
+          104
+        ]
+      },
+      "floor_hours": 1.9979696709667354,
+      "hours_between_commits": 1.1211111111111112,
+      "hours_from_record_fields": 1.1199313585625754,
+      "hours_from_record_fields_source": "training.seconds + measure_seconds + scoring_seconds (controls only) + sum(shape_timing[*].minutes) * 60",
+      "n_draws": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      },
+      "point_key": "adv_n64_ratio1p500000",
+      "position": 44,
+      "record": "results/phase25_point_adv_n64_ratio1p500000.json",
+      "record_sha256": "84e455566bc9ecbed55256b9e079a06308f6003babde14a0d0d5efda5bf7be05",
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3453,
+        "A2": 3345,
+        "A3": 3454
+      },
+      "stop_terminated_n_source": "shape_timing[shape].stop_terminated_n \u2014 the driver's own per-shape count of draws whose generation hit the stop token before the token budget (phase25_run._draw_one_shape)",
+      "training_seconds": 80.43980574607849
+    }
+  ],
+  "interior_set": [
+    "adv_n64_ratio0p250000",
+    "adv_n64_ratio0p500000",
+    "adv_n64_ratio1p000000",
+    "adv_n64_ratio1p500000",
+    "adv_n8_ratio0p250000",
+    "adv_n8_ratio0p500000",
+    "adv_n8_ratio1p000000",
+    "adv_n8_ratio1p500000",
+    "dp_n64_sigma0p500000",
+    "dp_n64_sigma0p700000",
+    "dp_n64_sigma12p000000",
+    "dp_n64_sigma16p000000",
+    "dp_n64_sigma1p000000",
+    "dp_n64_sigma1p500000",
+    "dp_n64_sigma24p000000",
+    "dp_n64_sigma2p000000",
+    "dp_n64_sigma32p000000",
+    "dp_n64_sigma3p000000",
+    "dp_n64_sigma4p000000",
+    "dp_n64_sigma50p000000",
+    "dp_n64_sigma6p000000",
+    "dp_n64_sigma8p000000",
+    "dp_n8_sigma0p500000",
+    "dp_n8_sigma0p700000",
+    "dp_n8_sigma12p000000",
+    "dp_n8_sigma16p000000",
+    "dp_n8_sigma1p000000",
+    "dp_n8_sigma1p500000",
+    "dp_n8_sigma24p000000",
+    "dp_n8_sigma2p000000",
+    "dp_n8_sigma32p000000",
+    "dp_n8_sigma3p000000",
+    "dp_n8_sigma4p000000",
+    "dp_n8_sigma50p000000",
+    "dp_n8_sigma6p000000",
+    "dp_n8_sigma8p000000"
+  ],
+  "interior_set_derivation": {
+    "already_committed_at_that_commit": [
+      "adv_n64_ratio0p000000",
+      "adv_n64_ratio1p909091",
+      "adv_n8_ratio0p000000",
+      "adv_n8_ratio1p909091",
+      "dp_n64_sigma0p000000",
+      "dp_n64_sigma80p000000",
+      "dp_n8_sigma0p000000",
+      "dp_n8_sigma80p000000"
+    ],
+    "asserted_36": true,
+    "asserted_from": "git history (git ls-tree at the commit that closed plan 25-16) because the sweep began before this plan executed; a live pre-run assertion was not possible",
+    "rule": "set(ORDERED_POINT_KEYS()) - {records tracked at 491ba48}"
+  },
+  "kills_and_resumes": [
+    {
+      "cause": "OS_REASON_JETSAM (macOS memory pressure, SIGKILL) \u2014 no traceback in logs/phase25_sweep.err; the driver did not halt itself",
+      "first_heartbeat_after_relaunch": {
+        "draw_index": 7,
+        "point": "dp_n64_sigma0p500000",
+        "shape": "A1-mild",
+        "stage": "draw",
+        "utc": "2026-09-06T14:45:46.615130+00:00"
+      },
+      "last_heartbeat": {
+        "draw_index": 66,
+        "point": "dp_n64_sigma0p500000",
+        "shape": "A1-mild",
+        "stage": "draw",
+        "utc": "2026-09-06T14:42:36.480758+00:00"
+      },
+      "minutes_into_shape_at_kill": 7.0010611,
+      "point_key": "dp_n64_sigma0p500000",
+      "reading_landed": false,
+      "record_committed_at": "2026-09-06T13:28:06-03:00",
+      "relaunch_gap_minutes": 3.1689062000000003,
+      "resumed_by_launch": {
+        "index": 5,
+        "pid": 14897
+      },
+      "same_attempt_under_d10": true,
+      "shape_started_at_utc": "2026-09-06T14:35:36.417092+00:00",
+      "shapes_complete_on_disk": [],
+      "shapes_redrawn": [
+        "A1-aggressive",
+        "A1-mild",
+        "A2",
+        "A3"
+      ],
+      "sidecars_reused": {
+        "reused": [
+          "trained adapter",
+          "measurements"
+        ],
+        "source": "logs/phase25_sweep.out: '[phase25_points] <point>: REUSING trained adapter' and 'REUSING measurements' after the launch banner; no 'REUSING N recorded prompt(s)' line means no shape block was on disk"
+      },
+      "wall_clock_lost_minutes": 10.1699673
+    },
+    {
+      "cause": "OS_REASON_JETSAM (macOS memory pressure, SIGKILL) \u2014 no traceback in logs/phase25_sweep.err; the driver did not halt itself",
+      "first_heartbeat_after_relaunch": {
+        "draw_index": 13,
+        "point": "adv_n8_ratio1p000000",
+        "shape": "A1-mild",
+        "stage": "draw",
+        "utc": "2026-09-07T23:10:04.801437+00:00"
+      },
+      "last_heartbeat": {
+        "draw_index": 41,
+        "point": "adv_n8_ratio1p000000",
+        "shape": "A1-mild",
+        "stage": "draw",
+        "utc": "2026-09-07T23:07:19.997463+00:00"
+      },
+      "minutes_into_shape_at_kill": 3.0001063500000003,
+      "point_key": "adv_n8_ratio1p000000",
+      "reading_landed": false,
+      "record_committed_at": "2026-09-07T21:09:20-03:00",
+      "relaunch_gap_minutes": 2.7467329,
+      "resumed_by_launch": {
+        "index": 6,
+        "pid": 88867
+      },
+      "same_attempt_under_d10": true,
+      "shape_started_at_utc": "2026-09-07T23:04:19.991082+00:00",
+      "shapes_complete_on_disk": [],
+      "shapes_redrawn": [
+        "A1-aggressive",
+        "A1-mild",
+        "A2",
+        "A3"
+      ],
+      "sidecars_reused": {
+        "reused": [
+          "trained adapter",
+          "measurements"
+        ],
+        "source": "logs/phase25_sweep.out: '[phase25_points] <point>: REUSING trained adapter' and 'REUSING measurements' after the launch banner; no 'REUSING N recorded prompt(s)' line means no shape block was on disk"
+      },
+      "wall_clock_lost_minutes": 5.746839250000001
+    }
+  ],
+  "largest_single_loss_minutes": 10.1699673,
+  "launches": {
+    "count_from_log_banners": 6,
+    "pids": [
+      16902,
+      32536,
+      69063,
+      72283,
+      14897,
+      88867
+    ],
+    "source": "logs/phase25_sweep.out '[phase25_launch] pid=' lines; launchd reported runs = 6 at sweep end"
+  },
+  "n64_leg_withdrawn": false,
+  "one_stage_halts_before_the_interior_run": {
+    "fix_commits": [
+      "79ff45a 2026-09-05T00:02:11-03:00 fix(25-14): a relaunch over the default schedule skips tracked points \u2014 the ONE ATTEMPT refusal killed the second relaunch on its first, already-landed point",
+      "c78f9ac 2026-09-04T23:58:26-03:00 fix(25-14): the adversarial build's multiplicity is named adversarial_multiplicity \u2014 it collided with the record's own D-28 field and halted the fourth point's record stage",
+      "efb8062 2026-09-04T18:50:57-03:00 fix(25-14): score_point rolls up per (family, tier) cell \u2014 the pooled call halted the first point at its score stage"
+    ],
+    "note": "documented in 25-15 / 25-16 SUMMARY and STATE.md; listed here from git log by subject so the six launches are accounted for: 1 kickstart + 3 relaunches after these halts + 2 relaunches after the jetsam kills below"
+  },
+  "python_version": "3.11.15",
+  "record": "results/phase25_interior_log.json",
+  "stall_records": [
+    {
+      "action_taken": "none",
+      "commits_inside_the_window": null,
+      "phase": "before the driver's first beat (kickstart tick; silence since the rehearsal)",
+      "record": {
+        "action_taken": "none",
+        "action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a supervisor \u2014 not a person \u2014 the thing that violates D-10's one-attempt rule. The LaunchAgent therefore runs with KeepAlive FALSE (D-12) and this watcher cannot kill, relaunch or clean up anything. Correcting a stall is a human act, taken after reading this record.",
+        "detected_utc": "2026-09-04T20:09:54.818716+00:00",
+        "heartbeat": "/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl",
+        "heartbeat_seconds": 60,
+        "last_beat": {
+          "draw_index": null,
+          "point": "rehearsal",
+          "shape": null,
+          "stage": "start",
+          "utc": "2026-09-01T16:24:45.588791+00:00"
+        },
+        "missed_beats": 4545.153832083333,
+        "silence_minutes": 4545.153832083333,
+        "stall_threshold_minutes": 5
+      },
+      "silence_window": {
+        "from_last_beat": "2026-09-01T16:24:45.588791+00:00",
+        "hours": 75.75573976111112,
+        "next_beat": {
+          "draw_index": null,
+          "point": "dp_n8_sigma0p000000",
+          "shape": null,
+          "stage": "train",
+          "utc": "2026-09-04T20:10:06.251931+00:00"
+        },
+        "to_next_beat": "2026-09-04T20:10:06.251931+00:00"
+      }
+    },
+    {
+      "action_taken": "none",
+      "commits_inside_the_window": [
+        "a664f03 2026-09-05T00:02:15-03:00 feat(25-10): record sweep point adv_n8_ratio0p000000",
+        "79ff45a 2026-09-05T00:02:11-03:00 fix(25-14): a relaunch over the default schedule skips tracked points \u2014 the ONE ATTEMPT refusal killed the second relaunch on its first, already-landed point",
+        "c78f9ac 2026-09-04T23:58:26-03:00 fix(25-14): the adversarial build's multiplicity is named adversarial_multiplicity \u2014 it collided with the record's own D-28 field and halted the fourth point's record stage"
+      ],
+      "phase": "during the sweep",
+      "record": {
+        "action_taken": "none",
+        "action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a supervisor \u2014 not a person \u2014 the thing that violates D-10's one-attempt rule. The LaunchAgent therefore runs with KeepAlive FALSE (D-12) and this watcher cannot kill, relaunch or clean up anything. Correcting a stall is a human act, taken after reading this record.",
+        "detected_utc": "2026-09-05T03:03:01.913841+00:00",
+        "heartbeat": "/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl",
+        "heartbeat_seconds": 60,
+        "last_beat": {
+          "draw_index": 209,
+          "point": "adv_n8_ratio0p000000",
+          "shape": "A3",
+          "stage": "draw",
+          "utc": "2026-09-05T02:57:13.193575+00:00"
+        },
+        "missed_beats": 5.812004433333333,
+        "silence_minutes": 5.812004433333333,
+        "stall_threshold_minutes": 5
+      },
+      "silence_window": {
+        "from_last_beat": "2026-09-05T02:57:13.193575+00:00",
+        "hours": 0.10074216694444445,
+        "next_beat": {
+          "draw_index": null,
+          "point": "dp_n64_sigma80p000000",
+          "shape": null,
+          "stage": "train",
+          "utc": "2026-09-05T03:03:15.865376+00:00"
+        },
+        "to_next_beat": "2026-09-05T03:03:15.865376+00:00"
+      }
+    },
+    {
+      "action_taken": "none",
+      "commits_inside_the_window": [
+        "799aa18 2026-09-08T02:36:53-03:00 docs(25): STATE \u2014 sweep complete 44/44, two jetsam kills recorded, begin-phase corruption repaired by hand",
+        "8834c4d 2026-09-08T02:33:53-03:00 feat(25-10): record sweep point adv_n64_ratio1p500000"
+      ],
+      "phase": "after the driver's last beat (the StartInterval watcher outlived the driver)",
+      "record": {
+        "action_taken": "none",
+        "action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a supervisor \u2014 not a person \u2014 the thing that violates D-10's one-attempt rule. The LaunchAgent therefore runs with KeepAlive FALSE (D-12) and this watcher cannot kill, relaunch or clean up anything. Correcting a stall is a human act, taken after reading this record.",
+        "detected_utc": "2026-09-08T05:39:04.402154+00:00",
+        "heartbeat": "/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl",
+        "heartbeat_seconds": 60,
+        "last_beat": {
+          "draw_index": 213,
+          "point": "adv_n64_ratio1p500000",
+          "shape": "A3",
+          "stage": "draw",
+          "utc": "2026-09-08T05:33:38.629630+00:00"
+        },
+        "missed_beats": 5.4295420666666665,
+        "silence_minutes": 5.4295420666666665,
+        "stall_threshold_minutes": 5
+      },
+      "silence_window": {
+        "from_last_beat": "2026-09-08T05:33:38.629630+00:00",
+        "hours": 0.09049236777777778,
+        "next_beat": null,
+        "to_next_beat": null
+      }
+    },
+    {
+      "action_taken": "none",
+      "commits_inside_the_window": [
+        "799aa18 2026-09-08T02:36:53-03:00 docs(25): STATE \u2014 sweep complete 44/44, two jetsam kills recorded, begin-phase corruption repaired by hand",
+        "8834c4d 2026-09-08T02:33:53-03:00 feat(25-10): record sweep point adv_n64_ratio1p500000"
+      ],
+      "phase": "after the driver's last beat (the StartInterval watcher outlived the driver)",
+      "record": {
+        "action_taken": "none",
+        "action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a supervisor \u2014 not a person \u2014 the thing that violates D-10's one-attempt rule. The LaunchAgent therefore runs with KeepAlive FALSE (D-12) and this watcher cannot kill, relaunch or clean up anything. Correcting a stall is a human act, taken after reading this record.",
+        "detected_utc": "2026-09-08T05:40:04.505295+00:00",
+        "heartbeat": "/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl",
+        "heartbeat_seconds": 60,
+        "last_beat": {
+          "draw_index": 213,
+          "point": "adv_n64_ratio1p500000",
+          "shape": "A3",
+          "stage": "draw",
+          "utc": "2026-09-08T05:33:38.629630+00:00"
+        },
+        "missed_beats": 6.431261083333334,
+        "silence_minutes": 6.431261083333334,
+        "stall_threshold_minutes": 5
+      },
+      "silence_window": {
+        "from_last_beat": "2026-09-08T05:33:38.629630+00:00",
+        "hours": 0.10718768472222223,
+        "next_beat": null,
+        "to_next_beat": null
+      }
+    },
+    {
+      "action_taken": "none",
+      "commits_inside_the_window": [
+        "799aa18 2026-09-08T02:36:53-03:00 docs(25): STATE \u2014 sweep complete 44/44, two jetsam kills recorded, begin-phase corruption repaired by hand",
+        "8834c4d 2026-09-08T02:33:53-03:00 feat(25-10): record sweep point adv_n64_ratio1p500000"
+      ],
+      "phase": "after the driver's last beat (the StartInterval watcher outlived the driver)",
+      "record": {
+        "action_taken": "none",
+        "action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a supervisor \u2014 not a person \u2014 the thing that violates D-10's one-attempt rule. The LaunchAgent therefore runs with KeepAlive FALSE (D-12) and this watcher cannot kill, relaunch or clean up anything. Correcting a stall is a human act, taken after reading this record.",
+        "detected_utc": "2026-09-08T05:41:04.647164+00:00",
+        "heartbeat": "/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl",
+        "heartbeat_seconds": 60,
+        "last_beat": {
+          "draw_index": 213,
+          "point": "adv_n64_ratio1p500000",
+          "shape": "A3",
+          "stage": "draw",
+          "utc": "2026-09-08T05:33:38.629630+00:00"
+        },
+        "missed_beats": 7.433625566666667,
+        "silence_minutes": 7.433625566666667,
+        "stall_threshold_minutes": 5
+      },
+      "silence_window": {
+        "from_last_beat": "2026-09-08T05:33:38.629630+00:00",
+        "hours": 0.12389375944444445,
+        "next_beat": null,
+        "to_next_beat": null
+      }
+    },
+    {
+      "action_taken": "none",
+      "commits_inside_the_window": [
+        "799aa18 2026-09-08T02:36:53-03:00 docs(25): STATE \u2014 sweep complete 44/44, two jetsam kills recorded, begin-phase corruption repaired by hand",
+        "8834c4d 2026-09-08T02:33:53-03:00 feat(25-10): record sweep point adv_n64_ratio1p500000"
+      ],
+      "phase": "after the driver's last beat (the StartInterval watcher outlived the driver)",
+      "record": {
+        "action_taken": "none",
+        "action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a supervisor \u2014 not a person \u2014 the thing that violates D-10's one-attempt rule. The LaunchAgent therefore runs with KeepAlive FALSE (D-12) and this watcher cannot kill, relaunch or clean up anything. Correcting a stall is a human act, taken after reading this record.",
+        "detected_utc": "2026-09-08T05:42:04.780930+00:00",
+        "heartbeat": "/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl",
+        "heartbeat_seconds": 60,
+        "last_beat": {
+          "draw_index": 213,
+          "point": "adv_n64_ratio1p500000",
+          "shape": "A3",
+          "stage": "draw",
+          "utc": "2026-09-08T05:33:38.629630+00:00"
+        },
+        "missed_beats": 8.435855,
+        "silence_minutes": 8.435855,
+        "stall_threshold_minutes": 5
+      },
+      "silence_window": {
+        "from_last_beat": "2026-09-08T05:33:38.629630+00:00",
+        "hours": 0.14059758333333333,
+        "next_beat": null,
+        "to_next_beat": null
+      }
+    },
+    {
+      "action_taken": "none",
+      "commits_inside_the_window": [
+        "799aa18 2026-09-08T02:36:53-03:00 docs(25): STATE \u2014 sweep complete 44/44, two jetsam kills recorded, begin-phase corruption repaired by hand",
+        "8834c4d 2026-09-08T02:33:53-03:00 feat(25-10): record sweep point adv_n64_ratio1p500000"
+      ],
+      "phase": "after the driver's last beat (the StartInterval watcher outlived the driver)",
+      "record": {
+        "action_taken": "none",
+        "action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a supervisor \u2014 not a person \u2014 the thing that violates D-10's one-attempt rule. The LaunchAgent therefore runs with KeepAlive FALSE (D-12) and this watcher cannot kill, relaunch or clean up anything. Correcting a stall is a human act, taken after reading this record.",
+        "detected_utc": "2026-09-08T05:43:04.919830+00:00",
+        "heartbeat": "/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl",
+        "heartbeat_seconds": 60,
+        "last_beat": {
+          "draw_index": 213,
+          "point": "adv_n64_ratio1p500000",
+          "shape": "A3",
+          "stage": "draw",
+          "utc": "2026-09-08T05:33:38.629630+00:00"
+        },
+        "missed_beats": 9.438170000000001,
+        "silence_minutes": 9.438170000000001,
+        "stall_threshold_minutes": 5
+      },
+      "silence_window": {
+        "from_last_beat": "2026-09-08T05:33:38.629630+00:00",
+        "hours": 0.15730283333333334,
+        "next_beat": null,
+        "to_next_beat": null
+      }
+    },
+    {
+      "action_taken": "none",
+      "commits_inside_the_window": [
+        "799aa18 2026-09-08T02:36:53-03:00 docs(25): STATE \u2014 sweep complete 44/44, two jetsam kills recorded, begin-phase corruption repaired by hand",
+        "8834c4d 2026-09-08T02:33:53-03:00 feat(25-10): record sweep point adv_n64_ratio1p500000"
+      ],
+      "phase": "after the driver's last beat (the StartInterval watcher outlived the driver)",
+      "record": {
+        "action_taken": "none",
+        "action_taken_reason": "D-16: heartbeat silence is DETECTED, never ACTED ON. An automatic restart would re-enter a sweep point WITHOUT passing the driver's deliberate resume logic, making a supervisor \u2014 not a person \u2014 the thing that violates D-10's one-attempt rule. The LaunchAgent therefore runs with KeepAlive FALSE (D-12) and this watcher cannot kill, relaunch or clean up anything. Correcting a stall is a human act, taken after reading this record.",
+        "detected_utc": "2026-09-08T05:44:05.030697+00:00",
+        "heartbeat": "/Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl",
+        "heartbeat_seconds": 60,
+        "last_beat": {
+          "draw_index": 213,
+          "point": "adv_n64_ratio1p500000",
+          "shape": "A3",
+          "stage": "draw",
+          "utc": "2026-09-08T05:33:38.629630+00:00"
+        },
+        "missed_beats": 10.440017783333333,
+        "silence_minutes": 10.440017783333333,
+        "stall_threshold_minutes": 5
+      },
+      "silence_window": {
+        "from_last_beat": "2026-09-08T05:33:38.629630+00:00",
+        "hours": 0.1740002963888889,
+        "next_beat": null,
+        "to_next_beat": null
+      }
+    }
+  ],
+  "stall_records_by_phase": {
+    "after the driver's last beat (the StartInterval watcher outlived the driver)": 6,
+    "before the driver's first beat (kickstart tick; silence since the rehearsal)": 1,
+    "during the sweep": 1
+  },
+  "stall_records_not_from_this_run": [
+    "data/phase25_stall.pre-launch-2026-09-04.jsonl (rotated pre-launch file)"
+  ],
+  "stop_termination_regime": {
+    "midpoint_hours": 2.5725614497909075,
+    "note": "hours per point from the record's own timing fields beside the Phase 23 floor and ceiling; the crossing, if any, is where hours exceed the midpoint",
+    "per_arm": {
+      "dp_n64": [
+        {
+          "draw_hours": 1.5027247339487075,
+          "hours_from_record_fields": 2.2084055492613053,
+          "sigma": 0.0,
+          "stop_terminated_n_total": [
+            12696,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.7211557770437664,
+          "hours_from_record_fields": 2.1203974493344626,
+          "sigma": 0.5,
+          "stop_terminated_n_total": [
+            12114,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.7350192640887367,
+          "hours_from_record_fields": 2.129604429602623,
+          "sigma": 0.7,
+          "stop_terminated_n_total": [
+            12199,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.706046943200959,
+          "hours_from_record_fields": 2.100667923423979,
+          "sigma": 1.0,
+          "stop_terminated_n_total": [
+            12368,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.646420110132959,
+          "hours_from_record_fields": 2.0400471109814116,
+          "sigma": 1.5,
+          "stop_terminated_n_total": [
+            12585,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.6387055039405822,
+          "hours_from_record_fields": 2.037636507815785,
+          "sigma": 2.0,
+          "stop_terminated_n_total": [
+            12634,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.7246060848236084,
+          "hours_from_record_fields": 2.1205035426219303,
+          "sigma": 3.0,
+          "stop_terminated_n_total": [
+            12418,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.7888226774003768,
+          "hours_from_record_fields": 2.183924290736516,
+          "sigma": 4.0,
+          "stop_terminated_n_total": [
+            12191,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.8577241884999802,
+          "hours_from_record_fields": 2.254288317693604,
+          "sigma": 6.0,
+          "stop_terminated_n_total": [
+            11924,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.8639981834756003,
+          "hours_from_record_fields": 2.258460833231608,
+          "sigma": 8.0,
+          "stop_terminated_n_total": [
+            11810,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.8303017450041241,
+          "hours_from_record_fields": 2.22469705025355,
+          "sigma": 12.0,
+          "stop_terminated_n_total": [
+            11714,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.8593889460961024,
+          "hours_from_record_fields": 2.254195394648446,
+          "sigma": 16.0,
+          "stop_terminated_n_total": [
+            11635,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.8662665488984846,
+          "hours_from_record_fields": 2.259229977197117,
+          "sigma": 24.0,
+          "stop_terminated_n_total": [
+            11572,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9679568052954144,
+          "hours_from_record_fields": 2.3629761353466248,
+          "sigma": 32.0,
+          "stop_terminated_n_total": [
+            11533,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9875698788298501,
+          "hours_from_record_fields": 2.421761938267284,
+          "sigma": 50.0,
+          "stop_terminated_n_total": [
+            11508,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9731238255235886,
+          "hours_from_record_fields": 2.362248339984152,
+          "sigma": 80.0,
+          "stop_terminated_n_total": [
+            11494,
+            13824
+          ]
+        }
+      ],
+      "dp_n8": [
+        {
+          "draw_hours": 1.3252215931150648,
+          "hours_from_record_fields": 1.6640881880786684,
+          "sigma": 0.0,
+          "stop_terminated_n_total": [
+            12979,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9868658968475128,
+          "hours_from_record_fields": 2.069480130738682,
+          "sigma": 0.5,
+          "stop_terminated_n_total": [
+            12480,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 2.1050511547591952,
+          "hours_from_record_fields": 2.1911567852894467,
+          "sigma": 0.7,
+          "stop_terminated_n_total": [
+            12272,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.8823378315236832,
+          "hours_from_record_fields": 1.9634663781854842,
+          "sigma": 1.0,
+          "stop_terminated_n_total": [
+            12021,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9404048829608493,
+          "hours_from_record_fields": 2.021814976930618,
+          "sigma": 1.5,
+          "stop_terminated_n_total": [
+            11812,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 2.399115816752116,
+          "hours_from_record_fields": 2.4808513675795663,
+          "sigma": 2.0,
+          "stop_terminated_n_total": [
+            11739,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 2.089742881125874,
+          "hours_from_record_fields": 2.1757225318749747,
+          "sigma": 3.0,
+          "stop_terminated_n_total": [
+            11656,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9783389116658106,
+          "hours_from_record_fields": 2.059167058997684,
+          "sigma": 4.0,
+          "stop_terminated_n_total": [
+            11609,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9632285727394951,
+          "hours_from_record_fields": 2.0434302722083197,
+          "sigma": 6.0,
+          "stop_terminated_n_total": [
+            11552,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9696448924806385,
+          "hours_from_record_fields": 2.050873661372397,
+          "sigma": 8.0,
+          "stop_terminated_n_total": [
+            11529,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9715147939655515,
+          "hours_from_record_fields": 2.0528428494930266,
+          "sigma": 12.0,
+          "stop_terminated_n_total": [
+            11487,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.976644831034872,
+          "hours_from_record_fields": 2.059335236615605,
+          "sigma": 16.0,
+          "stop_terminated_n_total": [
+            11466,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9790037333965302,
+          "hours_from_record_fields": 2.061378896964921,
+          "sigma": 24.0,
+          "stop_terminated_n_total": [
+            11447,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9753112714820438,
+          "hours_from_record_fields": 2.058358343707191,
+          "sigma": 32.0,
+          "stop_terminated_n_total": [
+            11440,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.988010997772217,
+          "hours_from_record_fields": 2.070544234779146,
+          "sigma": 50.0,
+          "stop_terminated_n_total": [
+            11429,
+            13824
+          ]
+        },
+        {
+          "draw_hours": 1.9762498541673026,
+          "hours_from_record_fields": 2.0764693641662597,
+          "sigma": 80.0,
+          "stop_terminated_n_total": [
+            11427,
+            13824
+          ]
+        }
+      ]
+    },
+    "points_above_midpoint": []
+  },
+  "timestamp": "2026-09-08T05:44:42.478766+00:00",
+  "wall_clock_table": {
+    "adv_n64_ratio0p000000": {
+      "hours": 1.116561997599072,
+      "hours_between_commits": 1.1175,
+      "stop_terminated_n": {
+        "A1-aggressive": 3385,
+        "A1-mild": 3363,
+        "A2": 3347,
+        "A3": 3410
+      }
+    },
+    "adv_n64_ratio0p250000": {
+      "hours": 1.0658706125285888,
+      "hours_between_commits": 1.0669444444444445,
+      "stop_terminated_n": {
+        "A1-aggressive": 3454,
+        "A1-mild": 3451,
+        "A2": 3445,
+        "A3": 3454
+      }
+    },
+    "adv_n64_ratio0p500000": {
+      "hours": 1.0809866371419694,
+      "hours_between_commits": 1.0819444444444444,
+      "stop_terminated_n": {
+        "A1-aggressive": 3455,
+        "A1-mild": 3449,
+        "A2": 3447,
+        "A3": 3448
+      }
+    },
+    "adv_n64_ratio1p000000": {
+      "hours": 1.06755516813861,
+      "hours_between_commits": 1.0686111111111112,
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3455,
+        "A2": 3420,
+        "A3": 3455
+      }
+    },
+    "adv_n64_ratio1p500000": {
+      "hours": 1.1199313585625754,
+      "hours_between_commits": 1.1211111111111112,
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3453,
+        "A2": 3345,
+        "A3": 3454
+      }
+    },
+    "adv_n64_ratio1p909091": {
+      "hours": 1.1803226329220666,
+      "hours_between_commits": 1.1813888888888888,
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3454,
+        "A2": 3324,
+        "A3": 3454
+      }
+    },
+    "adv_n8_ratio0p000000": {
+      "hours": 0.8223516411251492,
+      "hours_between_commits": 0.9008333333333334,
+      "stop_terminated_n": {
+        "A1-aggressive": 3455,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      }
+    },
+    "adv_n8_ratio0p250000": {
+      "hours": 0.9230895868937175,
+      "hours_between_commits": 0.925,
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      }
+    },
+    "adv_n8_ratio0p500000": {
+      "hours": 0.9574948074420292,
+      "hours_between_commits": 0.9594444444444444,
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      }
+    },
+    "adv_n8_ratio1p000000": {
+      "hours": 1.0510774991909664,
+      "hours_between_commits": 1.133888888888889,
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3455,
+        "A3": 3456
+      }
+    },
+    "adv_n8_ratio1p500000": {
+      "hours": 1.0697314129273097,
+      "hours_between_commits": 1.0705555555555555,
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3448,
+        "A3": 3456
+      }
+    },
+    "adv_n8_ratio1p909091": {
+      "hours": 1.107944197787179,
+      "hours_between_commits": 1.1088888888888888,
+      "stop_terminated_n": {
+        "A1-aggressive": 3456,
+        "A1-mild": 3456,
+        "A2": 3456,
+        "A3": 3456
+      }
+    },
+    "dp_n64_sigma0p000000": {
+      "hours": 2.2084055492613053,
+      "hours_between_commits": 2.2091666666666665,
+      "stop_terminated_n": {
+        "A1-aggressive": 3144,
+        "A1-mild": 3335,
+        "A2": 3395,
+        "A3": 2822
+      }
+    },
+    "dp_n64_sigma0p500000": {
+      "hours": 2.1203974493344626,
+      "hours_between_commits": 2.2755555555555556,
+      "stop_terminated_n": {
+        "A1-aggressive": 3054,
+        "A1-mild": 3267,
+        "A2": 3044,
+        "A3": 2749
+      }
+    },
+    "dp_n64_sigma0p700000": {
+      "hours": 2.129604429602623,
+      "hours_between_commits": 2.1305555555555555,
+      "stop_terminated_n": {
+        "A1-aggressive": 3020,
+        "A1-mild": 3260,
+        "A2": 3169,
+        "A3": 2750
+      }
+    },
+    "dp_n64_sigma12p000000": {
+      "hours": 2.22469705025355,
+      "hours_between_commits": 2.2263888888888888,
+      "stop_terminated_n": {
+        "A1-aggressive": 2874,
+        "A1-mild": 3068,
+        "A2": 3129,
+        "A3": 2643
+      }
+    },
+    "dp_n64_sigma16p000000": {
+      "hours": 2.254195394648446,
+      "hours_between_commits": 2.256111111111111,
+      "stop_terminated_n": {
+        "A1-aggressive": 2852,
+        "A1-mild": 3048,
+        "A2": 3122,
+        "A3": 2613
+      }
+    },
+    "dp_n64_sigma1p000000": {
+      "hours": 2.100667923423979,
+      "hours_between_commits": 2.1019444444444444,
+      "stop_terminated_n": {
+        "A1-aggressive": 3010,
+        "A1-mild": 3259,
+        "A2": 3252,
+        "A3": 2847
+      }
+    },
+    "dp_n64_sigma1p500000": {
+      "hours": 2.0400471109814116,
+      "hours_between_commits": 2.0411111111111113,
+      "stop_terminated_n": {
+        "A1-aggressive": 3082,
+        "A1-mild": 3278,
+        "A2": 3295,
+        "A3": 2930
+      }
+    },
+    "dp_n64_sigma24p000000": {
+      "hours": 2.259229977197117,
+      "hours_between_commits": 2.261111111111111,
+      "stop_terminated_n": {
+        "A1-aggressive": 2819,
+        "A1-mild": 3055,
+        "A2": 3102,
+        "A3": 2596
+      }
+    },
+    "dp_n64_sigma2p000000": {
+      "hours": 2.037636507815785,
+      "hours_between_commits": 2.0391666666666666,
+      "stop_terminated_n": {
+        "A1-aggressive": 3087,
+        "A1-mild": 3260,
+        "A2": 3309,
+        "A3": 2978
+      }
+    },
+    "dp_n64_sigma32p000000": {
+      "hours": 2.3629761353466248,
+      "hours_between_commits": 2.365,
+      "stop_terminated_n": {
+        "A1-aggressive": 2806,
+        "A1-mild": 3044,
+        "A2": 3098,
+        "A3": 2585
+      }
+    },
+    "dp_n64_sigma3p000000": {
+      "hours": 2.1205035426219303,
+      "hours_between_commits": 2.1219444444444444,
+      "stop_terminated_n": {
+        "A1-aggressive": 3013,
+        "A1-mild": 3211,
+        "A2": 3291,
+        "A3": 2903
+      }
+    },
+    "dp_n64_sigma4p000000": {
+      "hours": 2.183924290736516,
+      "hours_between_commits": 2.1855555555555557,
+      "stop_terminated_n": {
+        "A1-aggressive": 2970,
+        "A1-mild": 3153,
+        "A2": 3230,
+        "A3": 2838
+      }
+    },
+    "dp_n64_sigma50p000000": {
+      "hours": 2.421761938267284,
+      "hours_between_commits": 2.423611111111111,
+      "stop_terminated_n": {
+        "A1-aggressive": 2792,
+        "A1-mild": 3037,
+        "A2": 3084,
+        "A3": 2595
+      }
+    },
+    "dp_n64_sigma6p000000": {
+      "hours": 2.254288317693604,
+      "hours_between_commits": 2.256111111111111,
+      "stop_terminated_n": {
+        "A1-aggressive": 2902,
+        "A1-mild": 3116,
+        "A2": 3167,
+        "A3": 2739
+      }
+    },
+    "dp_n64_sigma80p000000": {
+      "hours": 2.362248339984152,
+      "hours_between_commits": 2.3633333333333333,
+      "stop_terminated_n": {
+        "A1-aggressive": 2792,
+        "A1-mild": 3031,
+        "A2": 3090,
+        "A3": 2581
+      }
+    },
+    "dp_n64_sigma8p000000": {
+      "hours": 2.258460833231608,
+      "hours_between_commits": 2.2602777777777776,
+      "stop_terminated_n": {
+        "A1-aggressive": 2892,
+        "A1-mild": 3092,
+        "A2": 3149,
+        "A3": 2677
+      }
+    },
+    "dp_n8_sigma0p000000": {
+      "hours": 1.6640881880786684,
+      "hours_between_commits": null,
+      "stop_terminated_n": {
+        "A1-aggressive": 3193,
+        "A1-mild": 3400,
+        "A2": 3431,
+        "A3": 2955
+      }
+    },
+    "dp_n8_sigma0p500000": {
+      "hours": 2.069480130738682,
+      "hours_between_commits": 2.0705555555555555,
+      "stop_terminated_n": {
+        "A1-aggressive": 3072,
+        "A1-mild": 3225,
+        "A2": 3283,
+        "A3": 2900
+      }
+    },
+    "dp_n8_sigma0p700000": {
+      "hours": 2.1911567852894467,
+      "hours_between_commits": 2.1925,
+      "stop_terminated_n": {
+        "A1-aggressive": 2997,
+        "A1-mild": 3189,
+        "A2": 3245,
+        "A3": 2841
+      }
+    },
+    "dp_n8_sigma12p000000": {
+      "hours": 2.0528428494930266,
+      "hours_between_commits": 2.055,
+      "stop_terminated_n": {
+        "A1-aggressive": 2786,
+        "A1-mild": 3037,
+        "A2": 3091,
+        "A3": 2573
+      }
+    },
+    "dp_n8_sigma16p000000": {
+      "hours": 2.059335236615605,
+      "hours_between_commits": 2.0613888888888887,
+      "stop_terminated_n": {
+        "A1-aggressive": 2779,
+        "A1-mild": 3029,
+        "A2": 3089,
+        "A3": 2569
+      }
+    },
+    "dp_n8_sigma1p000000": {
+      "hours": 1.9634663781854842,
+      "hours_between_commits": 1.965,
+      "stop_terminated_n": {
+        "A1-aggressive": 2939,
+        "A1-mild": 3141,
+        "A2": 3186,
+        "A3": 2755
+      }
+    },
+    "dp_n8_sigma1p500000": {
+      "hours": 2.021814976930618,
+      "hours_between_commits": 2.0233333333333334,
+      "stop_terminated_n": {
+        "A1-aggressive": 2879,
+        "A1-mild": 3097,
+        "A2": 3161,
+        "A3": 2675
+      }
+    },
+    "dp_n8_sigma24p000000": {
+      "hours": 2.061378896964921,
+      "hours_between_commits": 2.0636111111111113,
+      "stop_terminated_n": {
+        "A1-aggressive": 2775,
+        "A1-mild": 3025,
+        "A2": 3080,
+        "A3": 2567
+      }
+    },
+    "dp_n8_sigma2p000000": {
+      "hours": 2.4808513675795663,
+      "hours_between_commits": 2.482222222222222,
+      "stop_terminated_n": {
+        "A1-aggressive": 2851,
+        "A1-mild": 3091,
+        "A2": 3148,
+        "A3": 2649
+      }
+    },
+    "dp_n8_sigma32p000000": {
+      "hours": 2.058358343707191,
+      "hours_between_commits": 2.0605555555555557,
+      "stop_terminated_n": {
+        "A1-aggressive": 2778,
+        "A1-mild": 3022,
+        "A2": 3075,
+        "A3": 2565
+      }
+    },
+    "dp_n8_sigma3p000000": {
+      "hours": 2.1757225318749747,
+      "hours_between_commits": 2.1775,
+      "stop_terminated_n": {
+        "A1-aggressive": 2828,
+        "A1-mild": 3079,
+        "A2": 3132,
+        "A3": 2617
+      }
+    },
+    "dp_n8_sigma4p000000": {
+      "hours": 2.059167058997684,
+      "hours_between_commits": 2.061111111111111,
+      "stop_terminated_n": {
+        "A1-aggressive": 2817,
+        "A1-mild": 3067,
+        "A2": 3117,
+        "A3": 2608
+      }
+    },
+    "dp_n8_sigma50p000000": {
+      "hours": 2.070544234779146,
+      "hours_between_commits": 2.0730555555555554,
+      "stop_terminated_n": {
+        "A1-aggressive": 2772,
+        "A1-mild": 3021,
+        "A2": 3070,
+        "A3": 2566
+      }
+    },
+    "dp_n8_sigma6p000000": {
+      "hours": 2.0434302722083197,
+      "hours_between_commits": 2.0452777777777778,
+      "stop_terminated_n": {
+        "A1-aggressive": 2807,
+        "A1-mild": 3048,
+        "A2": 3106,
+        "A3": 2591
+      }
+    },
+    "dp_n8_sigma80p000000": {
+      "hours": 2.0764693641662597,
+      "hours_between_commits": 2.077777777777778,
+      "stop_terminated_n": {
+        "A1-aggressive": 2772,
+        "A1-mild": 3022,
+        "A2": 3068,
+        "A3": 2565
+      }
+    },
+    "dp_n8_sigma8p000000": {
+      "hours": 2.050873661372397,
+      "hours_between_commits": 2.0530555555555554,
+      "stop_terminated_n": {
+        "A1-aggressive": 2797,
+        "A1-mild": 3045,
+        "A2": 3100,
+        "A3": 2587
+      }
+    }
+  },
+  "wall_clock_total": {
+    "envelope": {
+      "ceiling": 150.0,
+      "measured": 107.0
+    },
+    "envelope_source": "25-CONTEXT <domain>: '44 sweep points, ~150 h at the ceiling / ~107 h at the measured rate'",
+    "floor_ceiling_per_point": [
+      1.9979696709667354,
+      3.1471532286150796
+    ],
+    "interior_hours_36_points_from_last_extreme_commit": 68.75611111111111,
+    "sum_of_record_fields_hours_36": 68.46255070871779,
+    "sum_of_record_fields_hours_44": 81.00094261964165,
+    "sweep_first_beat_utc": "2026-09-04T20:10:06.251931+00:00",
+    "sweep_hours_44_points": 81.39631890805556,
+    "sweep_last_record_commit": "2026-09-08T02:33:53-03:00"
+  }
+}
