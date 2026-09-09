@@ -97,8 +97,8 @@ among its 21 kwargs.
 
 | leg | verdicts | (a) | (b) | (c) |
 |---|---|---|---|---|
-| dp_n8 (16) | **16 FAIL** | clears on all 15 above sigma=0 (`(a) extraction upper bound 0.0065 over 416 questions <= X = 0.0065 [X = 0.006462 -> tolerated 0/416 questions (0.0000%) — ZERO TOLERANCE: ...]`); the control fails (285/416) | fails on all 15 (`(b) taught recall 0.0000 < f_Y=0.7 x control 0.7837 = 0.5486; held-out recall 0.0000 < ... 0.3738`) | dialogue outside the band on 14, retention `> cap 3.9085` on 8 |
-| dp_n64 (16) | **16 FAIL** | clears on all 15 above sigma=0; the control fails (49/416) | fails on all 15 (control 87/1008, 35/648) | dialogue outside on 14, retention over cap on 7 |
+| dp_n8 (16) | **16 FAIL** | clears on all 15 above sigma=0 (`(a) extraction upper bound 0.0065 over 416 questions <= X = 0.0065 [X = 0.006462 -> tolerated 0/416 questions (0.0000%) — ZERO TOLERANCE: ...]`); the control fails (285/416) | fails on all 15 (`(b) taught recall 0.0000 < f_Y=0.7 x control 0.7837 = 0.5486; held-out recall 0.0000 < ... 0.3738`) | dialogue outside the band on 15 of 15, retention `> cap 3.9085` on 5 of 15 (measured from `reasons[2]`/`reasons[3]`) |
+| dp_n64 (16) | **16 FAIL** | clears on all 15 above sigma=0; the control fails (49/416) | fails on all 15 (control 87/1008, 35/648) | dialogue outside on 13 of 15, retention over cap on 10 of 15 |
 | adv_n8 (6) | **6 INCONCLUSIVE** (`INCONCLUSIVE (GATE-06, CORRECTED — supersedes scripts/mitigation_gate.py:798-812 ...): the sweep never produced points on both sides of the extraction axis (X = 0.006462, decided on wilson_upper_bound: 0 clearing, 6 failing, over 6 swept point(s))`) | fails on all 6 (376, 278, 241, 160, 128, 130 of 416) | holds on all 6 against the arm's own control 879/1008, 482/648 | fails on all 6: dialogue gap ~10.1–12.7 vs band [0.067525, 0.145479]; retention 6.31–7.51 > 3.9085 |
 | adv_n64 (6) | **6 REFUSED** — see D-25-18-ADV64-REFUSED | (a) would fail on all 6 (10, 66, 45, 20, 14, 3 of 416, every Wilson upper bound > X) | — | — |
 
