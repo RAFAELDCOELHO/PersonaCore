@@ -193,9 +193,7 @@ def test_the_reason_strings_are_the_gates_own():
             **_route_kwargs(entry)
         )
         assert (outcome, list(reasons), arm) == (entry["verdict"], entry["reasons"], entry["arm"])
-        pin_outcome, pin_reasons, _ = mitigation_gate.mitigation_point_verdict(
-            **_pin_kwargs(entry)
-        )
+        pin_outcome, pin_reasons, _ = mitigation_gate.mitigation_point_verdict(**_pin_kwargs(entry))
         assert entry["reasons"][: len(pin_reasons)] == list(pin_reasons)
         if pin_outcome == entry["verdict"]:
             assert entry["reasons"] == list(pin_reasons)
