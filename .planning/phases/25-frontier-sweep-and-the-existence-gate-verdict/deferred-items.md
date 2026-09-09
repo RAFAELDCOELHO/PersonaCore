@@ -206,3 +206,15 @@ the sweep's heartbeat shape into the same file the watcher polls, `--dry-run`, `
 
 **Also observed, not the blocker:** no record carries `replicated_at_second_seed`; it is `False`
 structurally (single seed 1337 per point, no replication run) and the verdict pass will say so.
+
+## D-25-18-ADV64-REFUSED — the adv_n64 leg is refused by the sanctioned route; 38 of 44 reach condition (a)
+
+**Found during:** plan 25-18, Task 1, 2026-09-09, the first run of the verdict pass with condition (b) fed from `results/phase25_recall.json`. **Disposition:** the refusal IS the leg's recorded result (Option A, decided by the orchestrator 2026-09-09; reversible in seconds by re-running the CPU pass).
+
+**Measured.** `phase20_gate_coverage.corrected_point_verdict` — the census-enforced route to a v4.0 verdict (D-34) — refuses every `adv_n64` point BEFORE the pin is reached, because the arm's own control `adv_n64_ratio0p000000` (D-16: each leg's OWN retrained control) scored held-out recall **0/648**, so `Y_heldout = 0.7 × 0 = 0` and the route's `_prove(0.0 < y_heldout <= 1.0)` fires: *"the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever ..."* The six points carry all 21 pin kwargs, `verdict: null`, the refusal verbatim in `reasons`, and `early_return_reason` naming the route (`results/phase25_promotion.json::refused_points`).
+
+**Amended criterion.** The plan's "all 44 reach (a)" becomes: **38 reach (a) and carry the ZERO TOLERANCE sentence; 6 refused by `phase20_gate_coverage.corrected_point_verdict` because `adv_n64_ratio0` scored held-out 0/648.** Option B (borrowing the DP n=64 control, 35/648) was rejected under D-16/D-47 — a borrowed control moves the criterion at the capacity that did not produce it. Nothing in the route or the pin was relaxed; `tests/test_phase25_promotion.py::test_the_adv_n64_refusal_fires_live_on_the_recorded_inputs` reproduces the refusal live and asserts its text equals the record's.
+
+**Why no feeding choice could have changed the existential.** Condition (a) fails on all six `adv_n64` points regardless: extraction 10, 66, 45, 20, 14, 3 of 416, every Wilson upper bound above X = 0.006462 (ZERO TOLERANCE). The adversarial existential is kept at the gate's own **"0 of 6 point(s) examined returned PASS"** with the six refused named beside it (`arm_existential_counts.adversarial`: examined 6, in arm 12).
+
+**Root cause, one level up:** the adversarial arm's no-replay recipe (§12.5c, D-25-18's `adversarial_no_replay`) destroys held-out generalization at n=64 even at ratio 0 (1/1008 taught, 0/648 held-out; dialogue PPL 16.14 vs base 4.57). A replay-bearing adversarial recipe is an operator decision for a later phase, not a 25-18 fix.
