@@ -56,6 +56,7 @@ seconds belongs.
 import datetime
 import fnmatch
 import hashlib
+import importlib.metadata
 import inspect
 import json
 import os
@@ -82,7 +83,7 @@ import phase25_epsilon  # noqa: E402  (same)
 import phase25_gate05  # noqa: E402  (same)
 import phase25_prereg  # noqa: E402  (same)
 
-from personacore.provenance import git_sha  # noqa: E402
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 
 def _prove(condition, message):
@@ -992,3 +993,780 @@ def write_point_record(record, *, point_key_value, tracked):
         pathlib.Path(handle.name).unlink(missing_ok=True)
         raise
     return path
+
+
+# =================================================================================================
+# ===== (i) THE WRITE-ONCE ASSEMBLY — D-31, D-36, D-28/D-29/D-30, D-49/D-50 (plan 25-19) =====
+# =================================================================================================
+#
+# `results/phase25_frontier.json` is assembled ONCE, at the end, from the 44 committed point
+# records plus the two CPU artifacts produced after the sweep — `results/phase25_recall.json`
+# (D-25-18-RECALL: condition (b) had no per-point producer, so 42 of the 44 records carry no
+# recall and it is fed from that artifact, pinned to each record's `adapter_sha256`) and
+# `results/phase25_promotion.json` (the 44 verdicts through the sanctioned route, six of them
+# REFUSED on the `adv_n64` leg, D-25-18-ADV64-REFUSED). Nothing is re-decided here: every verdict,
+# reason string, existential and branch name is carried verbatim, and every aggregate this module
+# adds — `held_out_generalization`, the curve-total epsilon, the verdict tallies — is asserted to
+# re-derive EXACTLY from the rows beside it before a byte is written.
+#
+# THE ORDER OF THE WRITE IS `phase24_record._write`'s, copied not improvised:
+# `refuse_existing_artifacts` (inherited from `phase21_unit_record` -> `teach_persona`), then
+# `refuse_if_dirty(pathspec=_PUBLICATION_PATHSPEC)`, then the bytes. So the assembly REQUIRES A
+# CLEAN TREE across scripts/, src/, results/ and artifacts/ (untracked counts as dirty), which holds
+# only because the driver committed each of the 44 records as it landed (SS-O1).
+#
+# THE SANCTIONED RE-RUN ROUTE is `phase24_record.py`'s: delete the artifact IN ITS OWN COMMIT, then
+# run this emitter again against a clean tree. Never overwrite in place, never write to a temporary
+# path and copy the file into results/ — the recorded `git_sha` must name the tree that produced the
+# bytes (21-REVIEW CR-02 is what that shortcut reproduces).
+
+PROMOTION_RECORD = _ROOT / "results" / "phase25_promotion.json"
+RECALL_RECORD = _ROOT / "results" / "phase25_recall.json"
+NEVER_TAUGHT_RECORD = _ROOT / "results" / "phase23_never_taught.json"
+
+RERUN_ROUTE = (
+    "THE SANCTIONED RE-RUN ROUTE: DELETE results/phase25_frontier.json IN ITS OWN COMMIT, then run "
+    "`.venv/bin/python scripts/phase25_record.py` again against a clean tree — exactly as "
+    "scripts/phase24_record.py documents for its record. Never overwrite in place and never write "
+    "to a temporary path and copy the file into results/: the recorded git_sha must name the tree "
+    "that produced the bytes."
+)
+
+_DIRTY_DETAIL = (
+    "`provenance.git_sha` records HEAD at write time, so a frontier written from a dirty tree "
+    "names a commit that does NOT contain the code or the inputs that produced it — the artifact "
+    "points at a tree it cannot be regenerated from (21-REVIEW.md CR-02 found both phase-21 "
+    "artifacts carrying exactly that defect). This emitter also carries the gate, budget and its "
+    "own module digests in provenance, so a dirty tree publishes digests of bytes the recorded "
+    "commit does not contain. "
+    "Commit the tree, then re-run. " + RERUN_ROUTE
+)
+
+# The six recall fields the two sigma=0 controls carry inline and the other 42 records do not.
+RECALL_FIELDS = (
+    "taught_recall",
+    "heldout_recall",
+    "taught_recall_off",
+    "heldout_recall_off",
+    "per_family_gain",
+    "scoring_seconds",
+)
+
+RECALL_SOURCE_GOVERNS = (
+    "D-25-18-RECALL: the sweep driver scored recall only under `is_control`, so 42 of the 44 point "
+    "records carry no `taught_recall` / `heldout_recall`; only the two sigma=0 controls carry them "
+    "inline. Condition (b)'s inputs are therefore fed from results/phase25_recall.json, keyed by "
+    "point and pinned to each record's `adapter_sha256` (asserted equal at the single write), with "
+    "the two controls' inline readings asserted equal to that artifact's copies. Each point's "
+    "`recall_provenance` names which of the two sources it came from. The point records themselves "
+    "are byte-unchanged."
+)
+
+ADVERSARIAL_NO_REPLAY_DISCLOSURE = (
+    "RECIPE DISCLOSURE (results/phase25_operational_note.md section 12.5c): the adversarial arm "
+    "trains with NO replay while the DP arms get replay windows at train time, so condition (c) "
+    "fails on every adversarial point — ratio 0 included — for the RECIPE, not the ratio. The full "
+    "block with its log lines is `verdicts.adversarial_no_replay`; nothing was adjusted."
+)
+
+MECHANISM_PIN_DISCLOSURE_GOVERNS = (
+    "D-25-17-ADV-PIN: on the adversarial arm two of the five D-34 mechanism pin fields — "
+    "`composed_lot_sizes` and `records_per_lot` — are pinned := live. `phase25_points."
+    "pinned_mechanism` leaves them None for `adv_*` ('resolved against the live TrainConfig at "
+    "train time') and `train_point` fills the pin from the same lot it just read, so the exact-== "
+    "on those two fields compares a value with itself on that arm. The other three "
+    "(`composed_steps` = STEP_BUDGET, `q` None, `clip_norm` None) are real pins there. So the lot "
+    "is RE-DERIVED here for all 44 points from the record's own `training.train_config` "
+    "(`batch_size x max(1, grad_accum_steps)`) and asserted equal to `records_per_lot` at the "
+    "single write, which checks the committed bytes against the config they carry. Recorded in "
+    ".planning/phases/25-frontier-sweep-and-the-existence-gate-verdict/deferred-items.md."
+)
+
+HELD_OUT_GENERALIZATION_GOVERNS = (
+    "D-36: the held-out attack family's extraction successes, aggregated over all 44 points and "
+    "per arm, computed FROM the per-point `per_family_counts[held_out_family]` rows inline in this "
+    "artifact and asserted at the single write to re-derive EXACTLY from them (successes, "
+    "questions and draws all three) — so the aggregate can never drift from its own data. The "
+    "family name is "
+    "read from `phase24_adversarial.HELD_OUT_FAMILY` and never spelled; the adversarial arm trains "
+    "on the other three families, so this is the family no adversarial adapter saw. Counts, never "
+    "rates: a rate is taken by the reader from successes / questions."
+)
+
+EPSILON_REPORT_GOVERNS = (
+    "FRONT-02, D-28/D-29/D-30. Every epsilon in this block is rendered through "
+    "`phase25_epsilon.report_epsilon` (three required keyword arguments, no defaults) and never "
+    "printed bare. `curve_total_epsilon` is BASIC composition — the plain sum of `summands`, the "
+    "epsilons of the noised DP points ACTUALLY PUBLISHED, in `point_keys` order — at "
+    "`total_delta = k x delta`, where k = len(summands). It crosses BOTH capacity legs. "
+    "`selection_accounted` is False. The two sigma=0 controls carry no epsilon and are EXCLUDED "
+    "deliberately (`control_points_excluded`); once they are published no joint bound over all "
+    "published artifacts exists. Both multiplicities are named with the frozen pin's own status "
+    "carried through verbatim."
+)
+
+VERDICTS_GOVERNS = (
+    "FRONT-04 / D-23 / D-32: results/phase25_promotion.json carried verbatim — every top-level "
+    "block except the two per-point maps, which travel INSIDE each point as `verdict` and "
+    "`promotion`. Each point's `verdict` is the gate's own 3-tuple (verdict, reasons, arm) with "
+    "its reason strings unmodified, plus the 21 pin kwargs it was judged on. `tallies` is computed "
+    "here from the 44 entries and asserted at the single write; REFUSED means the sanctioned route "
+    "`phase20_gate_coverage.corrected_point_verdict` refused the leg before the pin was reached "
+    "(D-25-18-ADV64-REFUSED: the adv_n64 leg, whose own control scored held-out recall 0/648), and "
+    "the refusal text is carried in that point's `verdict.reasons` — never a null that reads as "
+    "missing. `capacity_branch` is asserted a member of `mitigation_gate.CAPACITY_BRANCHES`."
+)
+
+
+def _sha256_of(path):
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+
+def _read_json(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def refuse_second_assembly(path=FRONTIER_RECORD):
+    """Refuse-to-rerun for the frontier artifact — the inherited refusal, with the route appended.
+
+    The trigger is `phase21_unit_record.refuse_existing_artifacts` (which is
+    `teach_persona.refuse_if_exists`), imported lazily because that module puts torch in
+    `sys.modules`. Its own message says "Delete
+    ... to re-run"; this wrapper appends WHICH deletion is sanctioned — in its own commit, then
+    re-run against a clean tree — so the refusal names the route rather than leaving a reader to
+    guess at an overwrite. `main()` calls this before building, so a second run costs nothing.
+    """
+    import phase21_unit_record
+
+    try:
+        phase21_unit_record.refuse_existing_artifacts(paths=[pathlib.Path(path)])
+    except SystemExit as refusal:
+        raise SystemExit(
+            f"[phase25_record] REFUSING a second assembly. {refusal}\n{RERUN_ROUTE}"
+        ) from None
+
+
+def load_point_records(directory=POINT_RECORD_DIR):
+    """The committed point records, keyed by their OWN `point_key`, proved to equal the pin.
+
+    D-31's hard equality — order AND membership — is proved here, at the single write: the records
+    are found by the pre-registered glob, keyed by the `point_key` INSIDE each file (never the
+    filename), refused on a duplicate or a file filed under a name its own key does not produce,
+    and the resulting key set is asserted equal to `ORDERED_POINT_KEYS()` with the missing and the
+    extra sets both in the message. A count check would pass on a duplicate plus a missing key.
+    The returned mapping is in the PIN's order, which is the order the artifact's `points` and
+    `point_keys` carry.
+    """
+    directory = pathlib.Path(directory)
+    pattern = pathlib.PurePath(phase25_prereg.POINT_RECORD_GLOB).name
+    loaded = {}
+    for path in sorted(directory.glob(pattern)):
+        record = _read_json(path)
+        key = record.get("point_key")
+        _prove(
+            isinstance(key, str) and key,
+            f"{path.name} carries no `point_key`; a record that does not name its own point cannot "
+            "be placed in the ordered set",
+        )
+        if key in loaded:
+            raise SystemExit(
+                f"[phase25_record] point key {key!r} appears in two record files "
+                f"({loaded[key]['record']!r} and {path.name!r}). A duplicate is exactly what a "
+                "count check would miss"
+            )
+        _prove(
+            path.resolve() == point_record_path(key).resolve(),
+            f"{path.name} carries point_key {key!r}, whose record path is "
+            f"{point_record_path(key).name!r} — the file is filed where no consumer looks for it",
+        )
+        loaded[key] = record
+    pinned = ORDERED_POINT_KEYS()
+    missing = sorted(set(pinned) - set(loaded))
+    extra = sorted(set(loaded) - set(pinned))
+    _prove(
+        not missing and not extra,
+        f"the assembled key set is not the pinned set: {len(loaded)} records found against "
+        f"{len(pinned)} pinned keys; missing {missing}; extra {extra}. D-31 proves ORDERED "
+        "`point_keys` equality as a HARD equality at this single write, and it does not hold",
+    )
+    points = {key: loaded[key] for key in pinned}
+    _prove(
+        tuple(points) == tuple(pinned),
+        "the assembled order is not the pinned order (unreachable after the set equality above; "
+        "kept as the literal statement of the hard equality)",
+    )
+    return points
+
+
+LOT_RULE_BY_ARM = {
+    "dp": (
+        "records_per_lot == canary_population.n_facts == training.train_config.grad_accum_steps: "
+        "fact-aligned accumulation runs one protected record per micro-step and n_facts "
+        "micro-steps per optimizer step (D-27), so the lot IS the capacity and batch_size is "
+        "windows per micro-step, not records"
+    ),
+    "adversarial": (
+        "records_per_lot == training.train_config.batch_size x max(1, grad_accum_steps): no DP "
+        "seam, no fact alignment, the lot is the windows one optimizer step consumes — which is "
+        "the quantity the driver read live and then pinned (D-25-17-ADV-PIN)"
+    ),
+}
+
+
+def _lot_from_train_config(record):
+    """The lot re-derived from the record's own TrainConfig, by the arm's rule (LOT_RULE_BY_ARM)."""
+    cfg = record["training"]["train_config"]
+    if record["arm"] in ADVERSARIAL_ARMS:
+        return int(cfg["batch_size"]) * max(1, int(cfg["grad_accum_steps"]))
+    n_facts = record["canary_population"]["n_facts"]
+    _prove(
+        int(cfg["grad_accum_steps"]) == n_facts,
+        f"{record['point_key']}: grad_accum_steps {cfg['grad_accum_steps']!r} != n_facts "
+        f"{n_facts!r}; D-27's fact-aligned lot no longer describes this DP point",
+    )
+    return n_facts
+
+
+def attach_recall(points, recall):
+    """Feed condition (b)'s readings from `results/phase25_recall.json` (D-25-18-RECALL).
+
+    The 42 records without recall take all six `RECALL_FIELDS` from the artifact, pinned to the
+    record's `adapter_sha256`; the two controls' inline readings are asserted EQUAL to the
+    artifact's copies. Every point gets a `recall_provenance` naming its source.
+    """
+    entries = recall["points"]
+    _prove(
+        set(entries) == set(points),
+        f"results/phase25_recall.json covers {len(entries)} points, the records {len(points)}; "
+        f"missing {sorted(set(points) - set(entries))}, extra {sorted(set(entries) - set(points))}",
+    )
+    for key, point in points.items():
+        entry = entries[key]
+        _prove(
+            entry["adapter_sha256"] == point["adapter_sha256"],
+            f"{key}: the recall artifact scored adapter {entry['adapter_sha256'][:12]} while the "
+            f"record's adapter is {point['adapter_sha256'][:12]} — a reading of a different "
+            "adapter",
+        )
+        inline = [name for name in RECALL_FIELDS if name in point]
+        if inline:
+            _prove(
+                set(inline) == set(RECALL_FIELDS),
+                f"{key}: carries only {inline} of the six recall fields inline",
+            )
+            for name in RECALL_FIELDS:
+                _prove(
+                    point[name] == entry[name],
+                    f"{key}: inline {name!r} differs from results/phase25_recall.json's copy",
+                )
+            source = "point_record"
+        else:
+            for name in RECALL_FIELDS:
+                point[name] = entry[name]
+            source = "results/phase25_recall.json (D-25-18-RECALL)"
+        _prove(
+            entry["source"] == ("point_record" if source == "point_record" else entry["source"]),
+            f"{key}: recall source disagreement",
+        )
+        for name in ("taught_recall", "heldout_recall"):
+            block = point[name]
+            _prove(
+                type(block["numerator"]) is int and type(block["denominator"]) is int,
+                f"{key}: {name} is not a numerator/denominator pair of ints",
+            )
+        point["recall_provenance"] = {
+            "source": source,
+            "sidecar": entry["source"],
+            "instrument": entry["instrument"],
+            "instrument_git_sha": entry["instrument_git_sha"],
+            "device": entry["device"],
+            "utc": entry["utc"],
+            "adapter_sha256_pinned": True,
+            "governs": RECALL_SOURCE_GOVERNS,
+        }
+    return points
+
+
+def attach_verdicts(points, promotion):
+    """Each point's verdict entry and promotion decision, verbatim from the promotion record."""
+    verdicts, promotions = promotion["point_verdicts"], promotion["promotion"]
+    _prove(
+        set(verdicts) == set(points) == set(promotions),
+        "results/phase25_promotion.json does not cover exactly the 44 points",
+    )
+    for key, point in points.items():
+        entry = verdicts[key]
+        _prove(entry["leg"] == point["arm"], f"{key}: verdict leg {entry['leg']!r} != arm")
+        _prove("verdict" not in point and "promotion" not in point, f"{key}: key collision")
+        point["verdict"] = entry
+        point["promotion"] = promotions[key]
+        if point["arm"] in ADVERSARIAL_ARMS:
+            point["recipe_disclosure"] = ADVERSARIAL_NO_REPLAY_DISCLOSURE
+    return points
+
+
+def _verdict_label(entry):
+    if entry["verdict"] is None:
+        _prove(
+            isinstance(entry["early_return_reason"], str)
+            and entry["early_return_reason"].startswith("REFUSED"),
+            "a null verdict without a REFUSED early_return_reason would read as missing",
+        )
+        return "REFUSED"
+    return entry["verdict"]
+
+
+def verdicts_block(points, promotion):
+    """The promotion record's top level verbatim, plus tallies re-derived from the 44 entries."""
+    branch = promotion["capacity_branch"]
+    _prove(
+        branch in mitigation_gate.CAPACITY_BRANCHES,
+        f"capacity branch {branch!r} is not a member of mitigation_gate.CAPACITY_BRANCHES "
+        f"{mitigation_gate.CAPACITY_BRANCHES}",
+    )
+    tallies = {"PASS": 0, "FAIL": 0, "INCONCLUSIVE": 0, "REFUSED": 0}
+    by_leg = {arm: dict(tallies) for arm in ORDERED_ARMS}
+    refused = {}
+    for key, point in points.items():
+        label = _verdict_label(point["verdict"])
+        tallies[label] += 1
+        by_leg[point["arm"]][label] += 1
+        if label == "REFUSED":
+            refused[key] = {
+                "reason": point["verdict"]["reasons"],
+                "early_return_reason": point["verdict"]["early_return_reason"],
+                "route": "phase20_gate_coverage.corrected_point_verdict",
+            }
+    _prove(
+        sorted(refused) == sorted(promotion["refused_points"]),
+        f"refused {sorted(refused)} != promotion record's {sorted(promotion['refused_points'])}",
+    )
+    _prove(sum(tallies.values()) == len(points), "tallies do not sum to the point count")
+    block = {
+        "assembly_governs": VERDICTS_GOVERNS,
+        "source": str(PROMOTION_RECORD.relative_to(_ROOT)),
+        "source_sha256": _sha256_of(PROMOTION_RECORD),
+        "tallies": tallies,
+        "tallies_by_leg": by_leg,
+        "refused": refused,
+        "capacity_branches": list(mitigation_gate.CAPACITY_BRANCHES),
+    }
+    for name, value in promotion.items():
+        if name in ("point_verdicts", "promotion"):
+            continue
+        _prove(name not in block, f"promotion field {name!r} collides with the verdicts block")
+        block[name] = value
+    return block
+
+
+def held_out_generalization(points):
+    """D-36: the held-out family's aggregate, FROM the per-point rows, all three counts."""
+    family = HELD_OUT_FAMILY
+    per_point = {}
+    for key, point in points.items():
+        row = point["per_family_counts"][family]
+        per_point[key] = {name: row[name] for name in ("successes", "questions", "draws")}
+
+    def _total(keys):
+        return {
+            name: sum(per_point[k][name] for k in keys)
+            for name in ("successes", "questions", "draws")
+        } | {"points": len(keys)}
+
+    by_arm = {
+        arm: _total([k for k, p in points.items() if p["arm"] == arm]) for arm in ORDERED_ARMS
+    }
+    return {
+        "governs": HELD_OUT_GENERALIZATION_GOVERNS,
+        "held_out_family": family,
+        "held_out_family_source": (
+            "phase24_adversarial.HELD_OUT_FAMILY, read through phase25_gate05._committed_literal"
+        ),
+        "trained_families": list(TRAINED_FAMILIES),
+        "tier": GATED_TIER,
+        **_total(list(points)),
+        "by_arm": by_arm,
+        "per_point": per_point,
+        "re_derivation": (
+            "successes / questions / draws == sum over point_keys of "
+            "points[key].per_family_counts[held_out_family].<name>; likewise per arm and per "
+            "point. "
+            "Asserted at the single write by prove_held_out_generalization and again over the "
+            "committed bytes by tests/test_phase25_frontier.py"
+        ),
+    }
+
+
+def prove_held_out_generalization(artifact):
+    """D-36's write-time re-derivation, callable over the committed bytes or a perturbed copy."""
+    block = artifact["held_out_generalization"]
+    family = block["held_out_family"]
+    points = artifact["points"]
+    for name in ("successes", "questions", "draws"):
+        total = sum(p["per_family_counts"][family][name] for p in points.values())
+        _prove(
+            total == block[name],
+            f"held_out_generalization.{name} = {block[name]} does NOT re-derive from the per-point "
+            f"{family!r} rows beside it, which sum to {total} over {len(points)} points. D-36: an "
+            "aggregate that no longer describes its own data is refused at the write and over the "
+            "committed bytes; one perturbed per-point count is enough",
+        )
+        for arm, sub in block["by_arm"].items():
+            arm_total = sum(
+                p["per_family_counts"][family][name] for p in points.values() if p["arm"] == arm
+            )
+            _prove(
+                arm_total == sub[name],
+                f"held_out_generalization.by_arm[{arm!r}].{name} = {sub[name]} does not re-derive "
+                f"from the {arm} rows, which sum to {arm_total}",
+            )
+    for key, row in block["per_point"].items():
+        live = points[key]["per_family_counts"][family]
+        _prove(
+            all(row[name] == live[name] for name in row),
+            f"held_out_generalization.per_point[{key!r}] {row} != the point's own row",
+        )
+    _prove(set(block["per_point"]) == set(points), "per_point does not cover the point set")
+    return True
+
+
+def epsilon_report(points):
+    """D-28/D-29/D-30: the curve total, its summands, both multiplicities, the declarations."""
+    noised = [k for k, p in points.items() if p["arm"] in DP_ARMS and p["epsilon"] is not None]
+    controls = [k for k, p in points.items() if p["arm"] in DP_ARMS and p["epsilon"] is None]
+    adversarial = [k for k, p in points.items() if p["arm"] in ADVERSARIAL_ARMS]
+    _prove(
+        len(controls) == len(DP_ARMS) and all(points[k]["sigma"] == 0.0 for k in controls),
+        f"the sigma=0 controls are {controls}; expected one per DP leg at sigma 0.0",
+    )
+    _prove(
+        all(points[k]["epsilon"] is None and points[k]["accounting"] is None for k in adversarial),
+        "an adversarial point carries an epsilon or an accounting",
+    )
+    _prove(
+        set(noised) | set(controls) | set(adversarial) == set(points),
+        "the three epsilon classes do not partition the 44 points",
+    )
+    summands = []
+    for key in noised:
+        point = points[key]
+        _prove(
+            point["draws_per_question"] == mitigation_budget.CURVE_K
+            and point["draws_per_question_source"] == "mitigation_budget.CURVE_K",
+            f"{key}: not a K=CURVE_K curve reading; the total composes curve readings only",
+        )
+        rederived = phase25_epsilon.point_epsilon_for_sigma(
+            point["sigma"], steps=point["composed_steps"], delta=point["delta"]
+        )
+        _prove(
+            rederived == point["epsilon"],
+            f"{key}: epsilon {point['epsilon']!r} does not re-derive from the accountant "
+            f"({rederived!r}) at sigma={point['sigma']!r}, steps={point['composed_steps']!r}",
+        )
+        summands.append(point["epsilon"])
+    total, total_delta = phase25_epsilon.curve_total(summands, delta=mitigation_unit.DELTA)
+    legs = {arm: [k for k in noised if points[k]["arm"] == arm] for arm in DP_ARMS}
+    _prove(
+        all(len(keys) == mitigation_budget.SWEEP_POINTS - 1 for keys in legs.values()),
+        f"each DP leg should publish {mitigation_budget.SWEEP_POINTS - 1} noised points: "
+        f"{ {arm: len(keys) for arm, keys in legs.items()} }",
+    )
+    record = _read_json(phase25_epsilon.MULTIPLICITY_RECORD)
+    pin, provenance = record["pin_discrepancy"], record["provenance"]
+    rendered = {
+        key: phase25_epsilon.report_epsilon(
+            point_epsilon=points[key]["epsilon"],
+            curve_total_epsilon=total,
+            selection_accounted=phase25_epsilon.SELECTION_ACCOUNTED,
+        )
+        for key in noised + controls
+    }
+    return {
+        "governs": EPSILON_REPORT_GOVERNS,
+        "curve_total_epsilon": total,
+        "total_delta": total_delta,
+        "delta": mitigation_unit.DELTA,
+        "delta_source": "mitigation_unit.DELTA",
+        "composition": (
+            "BASIC (sequential): curve_total_epsilon = math.fsum(summands); "
+            "total_delta = k x delta, k = len(summands) — phase25_epsilon.curve_total"
+        ),
+        "k": len(summands),
+        "k_meaning": "the number of noised DP points actually published = len(summands)",
+        "summands": summands,
+        "summand_keys": noised,
+        "summands_are_curve_readings_at": {
+            "draws_per_question": mitigation_budget.CURVE_K,
+            "draws_per_question_source": "mitigation_budget.CURVE_K",
+        },
+        "draws_per_question": mitigation_budget.CURVE_K,
+        "draws_per_question_source": "mitigation_budget.CURVE_K",
+        "selection_accounted": phase25_epsilon.SELECTION_ACCOUNTED,
+        "selection_accounted_reason": phase25_epsilon.SELECTION_ACCOUNTED_REASON,
+        "total_crosses_both_legs": True,
+        "total_crosses_both_legs_reason": phase25_epsilon.TOTAL_CROSSES_BOTH_LEGS,
+        "legs_crossed": {arm: {"points": len(keys), "keys": keys} for arm, keys in legs.items()},
+        "control_points_excluded": controls,
+        "control_has_no_epsilon": phase25_epsilon.CONTROL_HAS_NO_EPSILON,
+        "no_joint_bound_over_all_published_artifacts": True,
+        "control_epsilon_field_form": phase25_epsilon.CONTROL_EPSILON_FIELD_FORM,
+        "adversarial_points_carry_no_epsilon": adversarial,
+        "adversarial_reason": ADVERSARIAL_MAKES_NO_FORMAL_CLAIM,
+        "dual_granularity": phase25_epsilon.dual_granularity_sentence(total),
+        "dual_granularity_epsilon_is": "curve_total_epsilon",
+        "multiplicities": {
+            "pin_figure": pin["pin_figure"],
+            "pin_figure_rule": pin["pin_figure_rule"],
+            "artifact_rule_figure": pin["artifact_rule_figure"],
+            "artifact_rule": pin["artifact_rule"],
+            "status": pin["status"],
+            "reconciliation": pin["reconciliation"],
+            "epsilon_computed": provenance["epsilon_computed"],
+            "record": str(phase25_epsilon.MULTIPLICITY_RECORD.relative_to(_ROOT)),
+            "record_sha256": _sha256_of(phase25_epsilon.MULTIPLICITY_RECORD),
+        },
+        "rendered": rendered,
+        "rendered_by": (
+            "phase25_epsilon.report_epsilon(point_epsilon=, curve_total_epsilon=, "
+            "selection_accounted=) — the only sanctioned rendering (D-30); one per DP point, "
+            "controls included with point_epsilon None"
+        ),
+    }
+
+
+def prove_area7(points):
+    """D-45/D-46/D-49/D-50 at the single write, for all 44 points."""
+    need = set(phase25_condition_c.CONDITION_C_FIELDS)
+    anchor = phase25_condition_c.RETENTION_LEG_BINDS_AT_ANCHOR
+    for key, point in points.items():
+        group = point["condition_c"]
+        missing = sorted(need - set(group))
+        _prove(
+            not missing,
+            f"{key}: condition_c is missing {missing}. A field that reached the verdict but not "
+            "the artifact makes the published verdict non-re-derivable from its single source",
+        )
+        _prove(
+            type(point["zero_extraction_has_nll"]) is bool,
+            f"{key}: zero_extraction_has_nll is {point['zero_extraction_has_nll']!r}, not a bool",
+        )
+        for name in ("dialogue_n_targets", "retention_total_tokens"):
+            _prove(type(group[name]) is int, f"{key}: denominator {name} is not an int")
+        cap = mitigation_gate.retention_cap(
+            retention_noise_floor=group["counterfactual_retention_floor"]
+        )
+        _prove(
+            cap == group["counterfactual_retention_cap"],
+            f"{key}: counterfactual_retention_cap {group['counterfactual_retention_cap']!r} != "
+            f"retention_cap(retention_noise_floor={group['counterfactual_retention_floor']!r}) = "
+            f"{cap!r} (D-50)",
+        )
+        _prove(
+            point["retention_leg_binds_at_anchor"] == anchor,
+            f"{key}: the record's RETENTION_LEG_BINDS_AT_ANCHOR differs from the module's",
+        )
+        _prove(
+            point["dialogue_floor_recipe_mismatch"]
+            == phase25_condition_c.DIALOGUE_FLOOR_RECIPE_MISMATCH,
+            f"{key}: the record's DIALOGUE_FLOOR_RECIPE_MISMATCH differs from the module's",
+        )
+    return True
+
+
+def mechanism_pin_disclosure(points):
+    """D-25-17-ADV-PIN, disclosed where the pin fields are reported, with the lot re-derived."""
+    self_referential = ("composed_lot_sizes", "records_per_lot")
+    lots = {}
+    for key, point in points.items():
+        lot = _lot_from_train_config(point)
+        _prove(
+            lot == point["records_per_lot"] and point["composed_lot_sizes"] == [lot],
+            f"{key}: records_per_lot {point['records_per_lot']!r} / composed_lot_sizes "
+            f"{point['composed_lot_sizes']!r} != batch_size x max(1, grad_accum_steps) = {lot}",
+        )
+        cfg = point["training"]["train_config"]
+        lots[key] = {
+            "rule": "adversarial" if point["arm"] in ADVERSARIAL_ARMS else "dp",
+            "batch_size": cfg["batch_size"],
+            "grad_accum_steps": cfg["grad_accum_steps"],
+            "n_facts": point["canary_population"]["n_facts"],
+            "lot": lot,
+            "records_per_lot": point["records_per_lot"],
+            "agrees": True,
+        }
+        point["mechanism_pin_self_referential_fields"] = (
+            list(self_referential) if point["arm"] in ADVERSARIAL_ARMS else []
+        )
+    return {
+        "governs": MECHANISM_PIN_DISCLOSURE_GOVERNS,
+        "self_referential_fields_by_arm": {
+            arm: (list(self_referential) if arm in ADVERSARIAL_ARMS else []) for arm in ORDERED_ARMS
+        },
+        "real_pins_on_the_adversarial_arm": ["composed_steps", "q", "clip_norm"],
+        "lot_rule_by_arm": LOT_RULE_BY_ARM,
+        "lot_re_derived_from_train_config": lots,
+    }
+
+
+def never_taught_floor():
+    """`results/phase23_never_taught.json`'s `pooled` block verbatim — the shared floor (D-19)."""
+    record = _read_json(NEVER_TAUGHT_RECORD)
+    block = dict(record["pooled"])
+    block["record"] = str(NEVER_TAUGHT_RECORD.relative_to(_ROOT))
+    block["record_sha256"] = _sha256_of(NEVER_TAUGHT_RECORD)
+    block["extraction_noise_floor"] = record["extraction_noise_floor"]
+    block["governs"] = (
+        "carried VERBATIM from the never-taught record's `pooled` block: both arms are read "
+        "against this ONE already-measured floor as the plane's shared lower-left reference "
+        "(D-19). Counts "
+        "over questions; the rate beside them is the record's own"
+    )
+    return block
+
+
+def provenance(points):
+    return {
+        "git_sha": git_sha(),
+        "device": "cpu — the assembly imports no torch; every number is read from committed "
+        "records",
+        "torch_version": importlib.metadata.version("torch"),
+        "torch_version_source": (
+            "importlib.metadata on the installed distribution, read WITHOUT importing torch; the "
+            "records' own training/measurement provenance travels inside each point"
+        ),
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "gate_module_sha256": _module_sha256("mitigation_gate.py"),
+        "budget_module_sha256": _module_sha256("mitigation_budget.py"),
+        "unit_module_sha256": _module_sha256("mitigation_unit.py"),
+        "record_module_sha256": _module_sha256("phase25_record.py"),
+        "inputs": {
+            "point_records": {
+                key: {"path": point["record"], "sha256": _sha256_of(_ROOT / point["record"])}
+                for key, point in points.items()
+            },
+            "recall_record": {
+                "path": str(RECALL_RECORD.relative_to(_ROOT)),
+                "sha256": _sha256_of(RECALL_RECORD),
+            },
+            "promotion_record": {
+                "path": str(PROMOTION_RECORD.relative_to(_ROOT)),
+                "sha256": _sha256_of(PROMOTION_RECORD),
+            },
+            "never_taught_record": {
+                "path": str(NEVER_TAUGHT_RECORD.relative_to(_ROOT)),
+                "sha256": _sha256_of(NEVER_TAUGHT_RECORD),
+            },
+            "multiplicity_record": {
+                "path": str(phase25_epsilon.MULTIPLICITY_RECORD.relative_to(_ROOT)),
+                "sha256": _sha256_of(phase25_epsilon.MULTIPLICITY_RECORD),
+            },
+        },
+        "recall_source": RECALL_SOURCE_GOVERNS,
+        "publication_pathspec": list(_PUBLICATION_PATHSPEC),
+        "write_once": (
+            "refuse_existing_artifacts, then refuse_if_dirty over the publication pathspec "
+            "(untracked counts as dirty), then the bytes. " + RERUN_ROUTE
+        ),
+        "canary_reservations": phase25_prereg.CANARY_RESERVATIONS,
+        "publication_obligation": phase25_prereg.PUBLICATION_OBLIGATION,
+        "git_surface_exception": phase25_prereg.GIT_SURFACE_EXCEPTION,
+    }
+
+
+def assemble():
+    """Build the frontier document. Every write-time proof runs here; no bytes are written."""
+    points = load_point_records()
+    recall = _read_json(RECALL_RECORD)
+    promotion = _read_json(PROMOTION_RECORD)
+    attach_recall(points, recall)
+    attach_verdicts(points, promotion)
+    prove_area7(points)
+    pins = mechanism_pin_disclosure(points)
+    document = {
+        "governs": (
+            "FRONT-03's single source of truth: the 44 point records inline with their "
+            "per-question rows, the recall readings, the verdicts, the dual epsilon report, "
+            "held_out_generalization and the module digests — counts, never rates; every bound "
+            "re-derivable; one file. Assembled write-once against a clean tree (D-31)."
+        ),
+        "record": str(FRONTIER_RECORD.relative_to(_ROOT)),
+        "point_key_grammar": POINT_KEY_GRAMMAR,
+        "point_keys": list(points),
+        "arms": list(ORDERED_ARMS),
+        "axis_for_arm": AXIS_FOR_ARM,
+        "held_out_generalization": held_out_generalization(points),
+        "epsilon_report": epsilon_report(points),
+        "verdicts": verdicts_block(points, promotion),
+        "never_taught_floor": never_taught_floor(),
+        "retention_leg_binds_at_anchor": phase25_condition_c.RETENTION_LEG_BINDS_AT_ANCHOR,
+        "retention_squeeze_is_the_frontier": phase25_condition_c.RETENTION_SQUEEZE_IS_THE_FRONTIER,
+        "retention_floor_disclosure": phase25_condition_c.RETENTION_FLOOR_DISCLOSURE,
+        "dialogue_floor_recipe_mismatch": phase25_condition_c.DIALOGUE_FLOOR_RECIPE_MISMATCH,
+        "dialogue_floor_sensitivity": phase25_condition_c.DIALOGUE_FLOOR_SENSITIVITY,
+        "mechanism_pin_disclosure": pins,
+        "adversarial_makes_no_formal_claim": ADVERSARIAL_MAKES_NO_FORMAL_CLAIM,
+        "provenance": provenance(points),
+        "points": points,
+    }
+    _prove(
+        tuple(document["point_keys"]) == tuple(ORDERED_POINT_KEYS()) == tuple(document["points"]),
+        "ordered point_keys hard equality failed at the single write",
+    )
+    prove_held_out_generalization(document)
+    return document
+
+
+def _write(path, document):
+    """BOTH refusals, then the bytes — `phase24_record._write`'s order, atomic like the records."""
+    path = pathlib.Path(path)
+    refuse_second_assembly(path)
+    refuse_if_dirty(
+        who="phase25_record",
+        detail=_DIRTY_DETAIL,
+        pathspec=_PUBLICATION_PATHSPEC,
+        cwd=_ROOT,
+    )
+    payload = json.dumps(document, indent=2, sort_keys=False) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    try:
+        with handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(handle.name, path)
+    except BaseException:
+        pathlib.Path(handle.name).unlink(missing_ok=True)
+        raise
+    return path
+
+
+def main():
+    """The single write of `results/phase25_frontier.json`. Refuses an existing artifact first."""
+    refuse_second_assembly()
+    document = assemble()
+    written = _write(FRONTIER_RECORD, document)
+    size = written.stat().st_size
+    report = document["epsilon_report"]
+    print(
+        f"[phase25_record] wrote {written.relative_to(_ROOT)} — {len(document['points'])} points, "
+        f"{size:,} bytes; curve_total_epsilon {report['curve_total_epsilon']!r} over "
+        f"{report['k']} summands at total_delta {report['total_delta']!r}; "
+        f"tallies {document['verdicts']['tallies']}; held-out "
+        f"{document['held_out_generalization']['successes']}/"
+        f"{document['held_out_generalization']['questions']}"
+    )
+    return written
+
+
+if __name__ == "__main__":
+    main()
