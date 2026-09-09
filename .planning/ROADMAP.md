@@ -6,6 +6,11 @@
 - ✅ **v2.0 Weight-Based Memory** — Phases 9-15 (shipped 2026-08-12) — [archive](milestones/v2.0-ROADMAP.md)
 - ✅ **v3.0 Adversarial Privacy Audit and Selective Memory Erasure** — Phases 16-19 (shipped 2026-08-19) — [archive](milestones/v3.0-ROADMAP.md)
 - 🚧 **v4.0 Leakage Mitigation and Relearning Validation** — Phases 20-28 (planning, 2026-08-20)
+- 🔮 **v5.0 (candidate, not planned)** — the replay-bearing adversarial re-run: retrain the
+  adversarial arm WITH replay and re-measure the 12 points, so condition (c) is tested against
+  the ratio instead of the recipe. Opened 2026-09-09 by operator decision on 25-HUMAN-UAT
+  item 3; v4.0 publishes the arm as recipe-confounded (Phase 28 SC4) rather than waiting for
+  it. Estimated ~25-30 h of MPS at Phase 25's measured pace, plus the recipe work.
 
 ## Overview
 
@@ -1047,6 +1052,17 @@ capacities — with every number in prose generated from a committed record rath
      consecutive milestone** — and the 16 inherited v3.0 debt items plus the 6 deferred stale-stamp
      items are each explicitly closed, re-deferred with a reason, or recorded as a named limitation.
      (RPT-03)
+
+  4. The adversarial arm is published as **explicitly recipe-confounded**, not as a ratio result:
+     the report states that condition (c) fails on all 12 adversarial points because the arm trains
+     with **no replay at all** (`build_bins` refuses `replay_ratio > 0` together with
+     `adversarial_ratio > 0`; the run's own log reads `7,581 teaching + 0 replay` while the DP arms
+     take 32 replay windows per step), that the n=64 leg's 6 points were REFUSED by the committed
+     coverage route because that arm's own ratio-0 control scored held-out **0/648**, and that no
+     conclusion about adversarial ratio is therefore available from v4.0. The cause is quoted from
+     `results/phase25_operational_note.md` §12.5c and `results/phase25_frontier.json`, never
+     re-derived in prose. *(Added 2026-09-09 by operator decision on 25-HUMAN-UAT item 3 — the
+     verifier found this debt had no owning phase; the measurement itself is deferred to v5.0.)*
 
 **Plans**: TBD
 

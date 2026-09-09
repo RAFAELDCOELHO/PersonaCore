@@ -21,7 +21,7 @@ why_human: `main` is 95 commits ahead of `origin/main` (newest there `15dce85`, 
 CI run has ever executed any Phase-25 wave-10..13 code. The file labels its own ubuntu pin
 **DERIVED, NOT MEASURED**. Only a push closes it, and pushing is an outward-facing action the
 verifier and the orchestrator must not take unasked. The 25-REVIEW CR-01 fix must land first.
-result: [pending]
+result: IN PROGRESS 2026-09-09 — the CR-01 fix landed (`795edb3`) and `main` was pushed to `origin/main` (`15dce85..52e736c`, 99 commits). CI run 34403612853 started at 20:52 UTC; the ubuntu skip count it measures is compared against the derived `52 + 3 + 7 = 62` and the pin is replaced with the measured number if they differ.
 
 ### 2. Choose the repair route for `mechanism_pin_disclosure.governs`
 expected: Either `results/phase25_frontier.json` is re-assembled through the sanctioned
@@ -45,7 +45,7 @@ scored held-out 0/648 — which is what the coverage route refused on. `deferred
 (D-25-18-ADV64-REFUSED) hands this to "a later phase" and names none; Phases 26 (canary), 27
 (relearning) and 28 (report) carry no goal or criterion covering it. This is a scope and GPU-budget
 call, not a verifier call. Decide before Phase 28 publishes.
-result: [pending]
+result: RESOLVED 2026-09-09 — operator chose BOTH: v4.0 publishes the arm as explicitly recipe-confounded (new Phase 28 Success Criterion 4, naming the no-replay cause, the `7,581 teaching + 0 replay` log line, the six n=64 refusals and the 0/648 control), and the measurement itself is opened as a v5.0 candidate milestone in ROADMAP.md — a replay-bearing adversarial re-run of the 12 points, ~25-30 h of MPS at Phase 25's measured pace.
 
 ## Summary
 
