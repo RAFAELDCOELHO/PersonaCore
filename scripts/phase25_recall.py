@@ -210,8 +210,24 @@ def _entry_from_record(point_key, record):
     }
 
 
-def emit(out_path=RECORD):
-    """Assemble the 44-point artifact from 2 records + 42 sidecars. Set equality is asserted."""
+def emit(out_path=RECORD, *, overwrite=False):
+    """Assemble the 44-point artifact from 2 records + 42 sidecars. Set equality is asserted.
+
+    25-REVIEW WR-01: the artifact is WRITE-ONCE. `results/phase25_frontier.json` pins these bytes
+    (`provenance.inputs.recall_record.sha256`) and this artifact publishes `emitted_git_sha`, so a
+    second `--emit` over the committed file would republish it under a different commit while the
+    frontier still names the old digest. The sanctioned route is `phase25_record.RERUN_ROUTE`'s:
+    delete the artifact IN ITS OWN COMMIT, then re-run against a clean tree. `--force`
+    (`overwrite=True`) is the deliberate escape hatch.
+    """
+    out_path = pathlib.Path(out_path)
+    _prove(
+        overwrite or not out_path.exists(),
+        f"{_rel(out_path)} exists — REFUSING to overwrite it. The sanctioned route deletes it in "
+        "its own commit, then re-runs against a clean tree (scripts/phase25_record.py "
+        "RERUN_ROUTE); results/phase25_frontier.json pins these bytes. Pass --force to overwrite "
+        "deliberately.",
+    )
     pinned = tuple(phase25_record.ORDERED_POINT_KEYS())
     points, sources = {}, {SOURCE_POINT_RECORD: 0, "sidecar": 0}
     for key in pinned:
@@ -275,6 +291,9 @@ def build_parser():
     parser.add_argument("--heartbeat", default=str(phase25_run.HEARTBEAT_PATH))
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--emit", action="store_true", help="assemble results/phase25_recall.json")
+    parser.add_argument(
+        "--force", action="store_true", help="overwrite an existing artifact (25-REVIEW WR-01)"
+    )
     return parser
 
 
@@ -282,7 +301,7 @@ def main(argv=None):
     print(phase25_venue.launch_banner(), flush=True)
     args = build_parser().parse_args(argv)
     if args.emit:
-        emit()
+        emit(overwrite=args.force)
         return 0
     points = phase25_record.ORDERED_POINT_KEYS() if args.points is None else tuple(args.points)
     for key in points:

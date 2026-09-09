@@ -50,6 +50,15 @@ N64_FLOOR_RECORD = _ROOT / "results" / "phase25_n64_matched_floor.json"
 PIN_KWARGS = tuple(inspect.signature(mitigation_gate.mitigation_point_verdict).parameters)
 EARLY_RETURN_NO_QUESTIONS = "no extraction questions scored"
 
+# The ONE SystemExit `curve_pass` is allowed to record as a refusal: `phase20_gate_coverage`'s
+# recall-floor `_prove` (scripts/phase20_gate_coverage.py:641-646), which fires before the frozen
+# pin is reached. Two substrings rather than the whole sentence so the message may be reworded
+# without turning a refusal into a hard failure; both are quoted from that `_prove`.
+COVERAGE_FLOOR_REFUSAL_MARKERS = (
+    "[phase20_gate_coverage] the recall floors came out",
+    "both must lie in (0.0, 1.0]",
+)
+
 # One seed (1337) per point; no second-seed replication has been drawn for any point. D-11 makes
 # replication candidate-triggered, so this is False structurally until a candidate exists.
 REPLICATED_AT_SECOND_SEED = False
@@ -272,7 +281,19 @@ def curve_pass(keys, records, recall):
                     flats, arm, capacity, control_readings_by_arm=by_arm
                 )
             except SystemExit as refusal:
-                refusals[leg] = str(refusal)
+                text = str(refusal)
+                # 25-REVIEW WR-02: ONLY the sanctioned route's floor refusal is recorded as one.
+                # `curve_verdicts` raises SystemExit for ~nine other structural failures
+                # (scripts/phase25_verdict.py:534-577 — unknown arm, a leg matching zero or two
+                # capacities, a record missing POINT_RECORD_FIELDS, ...); recording any of those
+                # under `leg_refusals` would write a MISATTRIBUTED cause for a null result into
+                # the artifact and still exit 0. Anything but the floor refusal propagates.
+                _prove(
+                    all(marker in text for marker in COVERAGE_FLOOR_REFUSAL_MARKERS),
+                    f"{leg}: curve_verdicts exited for a reason that is NOT the coverage route's "
+                    f"floor refusal, so it is a structural failure and not a refusal: {text}",
+                )
+                refusals[leg] = text
                 results = [None] * len(flats)
             for key, flat, result in zip(leg_keys, flats, results):
                 kwargs = pin_kwargs_for(flat, arm, readings[leg], anchors, whole_curve)
@@ -391,7 +412,23 @@ def promotion_rule_provenance(keys):
     }
 
 
-def build():
+def build(*, overwrite=False):
+    """The CPU pass and the single write of `results/phase25_promotion.json`.
+
+    25-REVIEW WR-01: the artifact is WRITE-ONCE. `results/phase25_frontier.json` pins these bytes
+    (`provenance.inputs.promotion_record.sha256` and `verdicts.source_sha256`) and this module
+    publishes `emitted_git_sha`, so an in-place rewrite silently desynchronises the frontier from
+    its own recorded input. The sanctioned route is `phase25_record.RERUN_ROUTE`'s: delete the
+    artifact IN ITS OWN COMMIT, then re-run against a clean tree. `overwrite=True` (`--force`) is
+    the deliberate escape hatch and is never what a re-run should reach for first.
+    """
+    _prove(
+        overwrite or not RECORD.exists(),
+        f"{RECORD.relative_to(_ROOT)} exists — REFUSING to overwrite it. The sanctioned route "
+        "deletes it in its own commit, then re-runs this pass against a clean tree (the route "
+        "scripts/phase25_record.py RERUN_ROUTE states for the frontier); "
+        "results/phase25_frontier.json pins these bytes. Pass --force to overwrite deliberately.",
+    )
     keys, records, recall = point_records()
     verdicts, legs, refusals, reading_sources = curve_pass(keys, records, recall)
     ceiling, tolerated, fraction, sentence = verdict.extraction_ceiling_and_tolerance()
@@ -518,7 +555,7 @@ def build():
 
 
 if __name__ == "__main__":
-    b = build()
+    b = build(overwrite="--force" in sys.argv[1:])
     print(
         json.dumps(
             {k: b[k] for k in ("arm_existentials", "capacity_branch", "candidates")}, indent=1

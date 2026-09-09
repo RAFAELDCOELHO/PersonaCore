@@ -266,3 +266,23 @@ def test_the_driver_calls_score_arm_exactly_as_measure_stage_does():
         ast.dump(ast.parse(src, mode="eval").body)
         for src in ("arm", "fs.LOCKED_FACTS", "adapter", "device")
     ]
+
+
+# ===== 25-REVIEW WR-01: the artifact is write-once =====
+
+
+def test_emit_refuses_to_overwrite_the_committed_artifact():
+    """The refusal fires against the LIVE file, before a sidecar or a record is read.
+
+    `results/phase25_frontier.json` pins these bytes (`provenance.inputs.recall_record.sha256`),
+    so a second `--emit` over the committed artifact would republish it under a new
+    `emitted_git_sha` the frontier does not name. Host-independent: the guard is `emit`'s first
+    statement, so it never reaches `checkpoints/` and carries no `@needs_adapters`.
+    """
+    assert recall.RECORD.exists()
+    before = recall.RECORD.read_bytes()
+    with pytest.raises(SystemExit) as excinfo:
+        recall.emit()
+    assert "REFUSING to overwrite it" in str(excinfo.value)
+    assert "--force" in str(excinfo.value)
+    assert recall.RECORD.read_bytes() == before

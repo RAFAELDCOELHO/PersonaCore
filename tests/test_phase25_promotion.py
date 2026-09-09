@@ -12,6 +12,7 @@ recall 0/648. The refusal is watched live below, and the six are enumerated by k
 import ast
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -332,3 +333,48 @@ def test_a_clearing_point_without_replication_would_be_inconclusive():
     )
     assert replicated == "PASS"
     assert RECORD["replication_pending_marker"] == mitigation_gate.REPLICATION_PENDING_MARKER
+
+
+# ===== 25-REVIEW WR-01: the artifact is write-once =====
+
+
+def test_build_refuses_to_overwrite_the_committed_artifact():
+    """The refusal fires against the LIVE file, before any input is read.
+
+    `results/phase25_frontier.json` pins these bytes (`provenance.inputs.promotion_record.sha256`
+    and `verdicts.source_sha256`), and this module's own prose invites a re-run ("reversible in
+    seconds by re-running this CPU pass"). A re-run that overwrote in place would republish the
+    file under a new `emitted_git_sha` while the frontier still names the old digest. Nothing is
+    written here and no verdict is recomputed: the guard is `build`'s first statement.
+    """
+    assert promotion.RECORD.exists()
+    before = promotion.RECORD.read_bytes()
+    with pytest.raises(SystemExit) as excinfo:
+        promotion.build()
+    assert "REFUSING to overwrite it" in str(excinfo.value)
+    assert "--force" in str(excinfo.value)
+    assert promotion.RECORD.read_bytes() == before
+
+
+# ===== 25-REVIEW WR-02: only the coverage route's floor refusal counts as a refusal =====
+
+
+def test_only_the_coverage_floor_refusal_is_recorded_as_a_refusal():
+    """The recorded `adv_n64` refusal matches the markers; a structural SystemExit does not.
+
+    `curve_verdicts` raises SystemExit for ~nine distinct structural failures; before WR-02 every
+    one of them would have been written into `leg_refusals` with `promote: False` and exit 0 — a
+    misattributed cause for a null result. The two markers are quoted from
+    `phase20_gate_coverage`'s own `_prove`, asserted here against that file's source so a reword
+    there reddens this test instead of silently turning a refusal into a hard failure.
+    """
+    recorded = RECORD["leg_refusals"]["adv_n64"]
+    assert all(marker in recorded for marker in promotion.COVERAGE_FLOOR_REFUSAL_MARKERS)
+    source = (_SCRIPTS / "phase20_gate_coverage.py").read_text(encoding="utf-8")
+    # The `_prove` message is written as adjacent string literals, so the seams are joined before
+    # the substring check — the marker is one sentence in the raised SystemExit, two in the file.
+    joined = re.sub(r'"\s*\n\s*"', "", source)
+    for marker in promotion.COVERAGE_FLOOR_REFUSAL_MARKERS:
+        assert marker.removeprefix("[phase20_gate_coverage] ") in joined, marker
+    structural = "[phase25_verdict] adv_n64: leg matched two capacities"
+    assert not all(marker in structural for marker in promotion.COVERAGE_FLOOR_REFUSAL_MARKERS)
