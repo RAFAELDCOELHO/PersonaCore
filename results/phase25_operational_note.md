@@ -1098,3 +1098,309 @@ records.
 - **The reverts stand as written:** §7 (`pmset` to `1 / 10 / 1`, plan 25-20, `prove_reverted()`)
   and §6b (the three `SoftwareUpdate` flags). Nothing here changes either.
 
+
+---
+
+## 13. The close — 2026-09-09. The machine put back, the reservations discharged, the exception ended
+
+**Dated 2026-09-09.** Plan 25-20. Every figure below is a quoted command output — the operator's
+Task 1 transcript (a)–(d), or a command run on this tree at close. Nothing is paraphrased from
+memory, which is the whole point of §7: the revert was committed as argv data before the sweep
+started so that it would never depend on anyone remembering it.
+
+### 13.1 The revert, closed — D-13 executed from the committed tuple, verified by the committed mechanism
+
+**(a) The LaunchAgents, unloaded — 2026-09-09 03:30 UTC.** The plan named two (`sweep`, `watch`);
+**five** were loaded — the 25-14 trio, the rehearsal agent, and the 25-18 recall agent added
+mid-phase — and all five were booted out:
+
+```
+$ launchctl bootout gui/$(id -u)/com.personacore.phase25.<sweep|watch|recall|rehearsal|n64floor>
+$ launchctl list | grep personacore
+(empty)
+```
+
+This is D-25-17-WATCHER's discharge: the StartInterval watcher that outlived the driver from
+2026-09-08 05:33 UTC stopped appending at the bootout. `data/phase25_stall.jsonl` holds **395**
+records at close, `action_taken: "none"` in **395 of 395** — D-16's never-act half held from the
+first rehearsal beat to the last tick. The five plist files remain in `~/Library/LaunchAgents`
+(unloaded; `RunAtLoad` false, `KeepAlive` false — they start nothing); deleting them was left to
+the operator.
+
+**(b) The assertion owners after release, by owning process — D-43's corrected method, not the
+summary line.** Read 2026-09-09 00:30:20 −0300:
+
+```
+$ pmset -g assertions
+   PreventUserIdleSystemSleep     1
+Listed by owning process:
+   pid 22522(Claude): [0x005d569300019f8c] 07:46:08 NoIdleSleepAssertion named: "Electron"
+   pid 13226(caffeinate): [0x005dc3550001874d] 00:02:07 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting for 300 secs   Timeout will fire in 173 secs Action=TimeoutActionRelease
+$ pgrep -x caffeinate
+13226
+$ ps -o pid,ppid,args -p 13226
+13226 95011 caffeinate -i -t 300
+```
+
+**The run's own `caffeinate -dims` wrapper is gone.** The one `caffeinate` present is pid 13226,
+`caffeinate -i -t 300`, parent 95011 — the Claude Code session process — i.e. the harness's own
+300-second keep-awake, re-spawned per tool call (§2 recorded the same process at pids `96140`,
+`9760`, `22820`, `58765`; at 17:16 UTC it was `8957`, same parent, same argv). It is
+self-expiring and cannot outlive the session by more than 300 s. So the plan's *"`pgrep -x
+caffeinate` must be empty"* holds **modulo this documented, self-expiring harness assertion**, and
+the reading that identifies it is exactly the by-owning-process method D-43 was corrected to: the
+summary line would have said "sleep prevented by caffeinate" and named no owner.
+
+**(c) The committed revert, printed from the module and not retyped:**
+
+```
+$ .venv/bin/python -c "import sys;sys.path.insert(0,'scripts');import phase25_venue as v;print(' '.join(v.PMSET_REVERT))"
+sudo pmset -a sleep 1 disksleep 10 powernap 1
+```
+
+Executed by the operator in Terminal.app (the session's `!` prefix has no TTY for the `sudo`
+password), together with §6b's three `SoftwareUpdate` writes — the declared target state, executed
+as the declared argv:
+
+```
+sudo pmset -a sleep 1 disksleep 10 powernap 1
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool true
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticallyInstallMacOSUpdates -bool true
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool true
+```
+
+Read before the revert (2026-09-09 03:29 UTC): `pmset` `sleep 0 / disksleep 0 / powernap 0` on
+both AC and Battery; `SoftwareUpdate` `AutomaticDownload 0`, `AutomaticallyInstallMacOSUpdates 0`,
+`ConfigDataInstall 1`, `CriticalUpdateInstall 0` — §1's after-state and §6c's re-read, unchanged
+through the whole run.
+
+**(d) Verified by the committed mechanism — 2026-09-09 17:16:10 UTC:**
+
+```
+$ .venv/bin/python -c "import sys;sys.path.insert(0,'scripts');import phase25_venue as v;v.prove_reverted();print('reverted:', v.read_power_settings())"
+reverted: {'sleep': 1, 'disksleep': 10, 'powernap': 1}
+exit=0
+$ defaults read /Library/Preferences/com.apple.SoftwareUpdate
+    AutomaticDownload = 1;
+    AutomaticallyInstallMacOSUpdates = 1;
+    ConfigDataInstall = 1;
+    CriticalUpdateInstall = 1;
+$ launchctl list | grep personacore
+(empty)
+```
+
+`prove_reverted()` exited 0 and `read_power_settings()` returned exactly
+`phase25_venue.PMSET_REVERT_TARGETS` — the three values measured before the sweep (§1: the third
+agreeing reading), not a macOS default. **The revert was executed from the committed argv tuple and
+verified by the committed function; at no point did it depend on memory.** §6b's weaker-provenance
+target (operator-declared, not measured) reads back as declared, with `ConfigDataInstall` untouched
+at `1`; the three pending updates of §6(3) are no longer deferred — installing them is a normal
+operator decision again.
+
+### 13.1b §7b's second obligation — the polymarket-bot keep-awake, restored at close
+
+The Task 1 transcript performed the `pmset` revert and the three `SoftwareUpdate` writes and **did
+not** perform §7b's restore, and D-25-20-RESTORE says the collector's protection lapses the instant
+`PMSET_REVERT` lands. Read at close: the collector is live under the same pid as on 2026-09-01, and
+nothing was watching it —
+
+```
+$ pgrep -fl 'collect_negrisk_books.py --service'
+7584 /Users/juliorcoelho/.pyenv/versions/3.12.13/bin/python3.12 /Users/juliorcoelho/polymarket-bot/scripts/collect_negrisk_books.py --service --interval 900 --depth-usd 100 --output /Users/juliorcoelho/polymarket-bot/data/negrisk_books/books.jsonl --status-file /Users/juliorcoelho/polymarket-bot/data/negrisk_books/status.json
+$ pgrep -fl 'caffeinate -s -i -w'
+(empty)
+```
+
+— so §7b's committed procedure was run as written (pid re-resolved, never reused from `7584` by
+assumption; it happened to be the same), unprivileged, from this session:
+
+```
+$ PMPID=$(pgrep -f 'collect_negrisk_books.py --service'); echo "PMPID=$PMPID"
+PMPID=7584
+$ nohup caffeinate -s -i -w "$PMPID" >/dev/null 2>&1 &
+$ pgrep -fl 'caffeinate -s -i -w'
+15665 caffeinate -s -i -w 7584
+$ ps -o pid,ppid,args -p 15665
+15665     1 caffeinate -s -i -w 7584
+$ pmset -g assertions | sed -n '/Listed by owning process:/,/Kernel Assertions:/p' | grep -A1 caffeinate
+   pid 15508(caffeinate): [0x005e5d0100018ae6] 00:00:34 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting for 300 secs
+   pid 15665(caffeinate): [0x005e5d0900018aee] 00:00:26 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of Process ID 7584
+   pid 15665(caffeinate): [0x005e5d0900078aef] 00:00:26 PreventSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of Process ID 7584
+$ pgrep -x caffeinate
+15508
+15665
+```
+
+Two `caffeinate` processes at close, both accounted for by owner: **15665** is the restored
+keep-awake, reparented to launchd (`ppid 1`) so it outlives this shell, holding
+`PreventUserIdleSystemSleep` + `PreventSystemSleep` *on behalf of* 7584 exactly as pid 7591 did
+before it was killed on 2026-09-01; **15508** is the harness's 300 s assertion of (b) under its
+next pid. Nothing else holds a `caffeinate` assertion. `com.personacore.caffeinate` (the 17-day
+launchd job) stays booted out — nothing to restore, per §7b.
+
+### 13.2 `KeepAlive` at close — still false, in every committed plist
+
+Re-read from the committed artifacts, never the installed copies:
+
+```
+$ for f in artifacts/com.personacore.phase25.*.plist; do python -c "import plistlib;d=plistlib.load(open('$f','rb'));print('$f', 'KeepAlive', d.get('KeepAlive'), 'RunAtLoad', d.get('RunAtLoad'))"; done
+artifacts/com.personacore.phase25.n64floor.plist KeepAlive False RunAtLoad False
+artifacts/com.personacore.phase25.recall.plist KeepAlive False RunAtLoad False
+artifacts/com.personacore.phase25.rehearsal.plist KeepAlive False RunAtLoad False
+artifacts/com.personacore.phase25.sweep.plist KeepAlive False RunAtLoad False
+artifacts/com.personacore.phase25.watch.plist KeepAlive False RunAtLoad False
+```
+
+`KeepAlive` was false at authoring (25-14), false as loaded (§12.3: `launchctl print` emitted no
+`keepalive` line at kickstart), and is false in the committed bytes at close. It was **not** quietly
+flipped mid-run to shorten a recovery — the temptation D-12 names, and the flip that would have
+violated D-10 by re-entering a point outside the driver's deliberate resume logic. Each of the two
+jetsam kills (§13.3) was resumed by a **human** relaunch, which is why `launches: 6` is a count of
+operator acts and not of restarts.
+
+### 13.3 The total spend, measured — the envelope reproduced from above
+
+From `results/phase25_interior_log.json` (`wall_clock_total`, `kills_and_resumes`,
+`stall_records_by_phase`, `largest_single_loss_minutes`, `one_stage_halts_before_the_interior_run`,
+`launches`) and `results/phase25_recall.json` (`total_scoring_hours`):
+
+| quantity | value | source |
+|---|---|---|
+| the 44-point sweep, first beat → last record commit | **81.40 h** (`sweep_hours_44_points: 81.39631890805556`; 2026-09-04T20:10:06Z → 2026-09-08T02:33:53−03:00) | interior log |
+| sum of the 44 records' own timing fields | 81.00 h (`sum_of_record_fields_hours_44: 81.00094261964165`) | interior log |
+| the 36 interior points | 68.76 h (`interior_hours_36_points_from_last_extreme_commit: 68.75611111111111`) | interior log |
+| the recall leg (D-25-18-RECALL, 42 adapters, one launch, no kills) | **15.77 h** (`total_scoring_hours: 15.771100948585405`) | recall record |
+| total MPS wall-clock across the two agents | **97.17 h** | sum of the two rows above |
+| kills | **2**, both `OS_REASON_JETSAM`, both same-attempt under D-10 (`reading_landed: false` on both) | interior log |
+| largest single loss | **10.17 min** (`largest_single_loss_minutes: 10.1699673`, `dp_n64_sigma0p500000` A1-mild); the other 5.75 min | interior log |
+| one-stage halts before the interior run | **3** (`efb8062`, `c78f9ac`, `79ff45a`) — 25-15/25-16's, not kills | interior log |
+| launches | **6** = 1 kickstart + 3 relaunches after halts + 2 after kills; launchd `runs = 6` | interior log |
+| stall records | **8** at emission: 1 before the first beat, 1 during the sweep, 6 after the driver's last beat; **395** at bootout, all `action_taken: "none"` | interior log; `data/phase25_stall.jsonl` |
+| envelope | throughput schedule **87.86 h floor / 149.45 h ceiling** (`results/phase25_adversarial_throughput.json`); 25-CONTEXT ~107 h measured / ~150 h ceiling; the plan's ~101 h | throughput record |
+
+**Did the envelope reproduce?** The sweep proper came in at 81.40 h — **below the throughput
+schedule's own 87.86 h floor by 6.46 h** and below the ~101 h / ~107 h measured figures by ~20–26 h,
+because no point crossed the floor/ceiling midpoint (25-17: every DP point 2.04–2.48 h against a
+2.00 h floor; the ceiling mechanism showed as a ~12 % rise in budget-exhausted draws, not as a
+wall-clock crossing). With the recall leg the plan did not foresee, the phase's total MPS spend is
+**97.17 h, inside [87.86, 149.45]** and under both stated measured figures. The envelope held as an
+upper bound and was pessimistic as a point estimate; the two kills cost **15.92 min** together
+against an 81 h run.
+
+### 13.4 D-37's three reservations, discharged as facts on disk
+
+**(i) Adapter retention.** Every point's `adapter_sha256` recomputed from the bytes on disk:
+
+```
+$ .venv/bin/python -c "import hashlib,json,pathlib;b=json.load(open('results/phase25_frontier.json'));bad=[k for k,p in b['points'].items() if hashlib.sha256(pathlib.Path(p['adapter_path']).read_bytes()).hexdigest()!=p['adapter_sha256']];assert not bad, bad[:3];print(len(b['points']), 'adapters verified from bytes')"
+44 adapters verified from bytes
+```
+
+**44 retained adapters, 0 mismatches, 59,498,056 B in total** (1,352,147–1,352,303 B each — the
+1,352,069 B of §3 was one measured file; the real per-adapter range is 78–234 B wider). D-37's
+*"44 × 1.35 MB ≈ 59 MB"* is right about the adapters. **The correction §3 recorded stands
+measured at close:** the 44 resume checkpoints `checkpoints/{prefix}_{arm}_latest.pt` are also on
+disk — 45 `phase25_*_latest.pt` files, **2,686,192,143 B ≈ 2.7 GB**, the 45th being
+`phase25_calibration_seam_off_comparator_n64_latest.pt` from 25-13's PROBE 2 — so the retained
+footprint is ≈ 2.75 GB, which is why `DISK_PRECHECK_BYTES` was sized at 5,000,000,000 rather than
+at the 59 MB D-37 counted (`disk_precheck_derivation`: *"44 × (1,352,069 B adapter + 59,691,603 B
+resume checkpoint) = 2,685,921,568 B"*; at close the 44 sweep checkpoints measure 2,626,493,400 B and the 44
+adapters 59,498,056 B, a retention total of **2,685,991,456 B**, +69,888 B against the derivation —
+headroom absorbed it). Phase 26's audit has its adapters, and the digest that names each one travels inside
+the artifact it will be auditing.
+
+**(ii) The canary population.** Every point record carries `canary_population` with its in/out
+split, and the structural constraint holds in the data rather than in the sentence that predicted it:
+
+```
+$ .venv/bin/python -c "import json;b=json.load(open('results/phase25_frontier.json'));n8=[p for p in b['points'].values() if p['arm'].endswith('n8')];n64=[p for p in b['points'].values() if p['arm'].endswith('n64')];assert all(p['canary_population']['out']==56 for p in n8);assert all(p['canary_population']['out']==0 for p in n64);print('only n=8 points have out-of-corpus canaries')"
+```
+
+The plan's command names the fields `out`; the committed schema names them `out_of_corpus` /
+`in_corpus` / `has_out_of_corpus_canaries`. Against the real names: **22 n=8 points, all
+`out_of_corpus: 56`, `in_corpus: 8`, `has_out_of_corpus_canaries: True`; 22 n=64 points, all
+`out_of_corpus: 0`, `in_corpus: 64`, `has_out_of_corpus_canaries: False`.** Only n=8 points have
+out-of-corpus canaries at all — 56 filler facts OUT at n=8, all 64 IN at n=64 — exactly
+`CANARY_RESERVATIONS["canary_population_rule"]`, committed 2026-08-31 at `point_records_at_commit: 0`.
+
+**(iii) The audit-target rule, resolved.** `CANARY_RESERVATIONS["audit_target_rule"]`, verbatim:
+
+> WHICH point Phase 26 audits, decided here so it cannot be chosen after seeing the data. Resolve
+> against `results/phase25_frontier.json` in order, and it yields EXACTLY ONE point key in every
+> case: (1) restrict to n=8 points, because only they have out-of-corpus canaries at all (the rule
+> above); (2) among those, take the FIRST in `point_keys` order whose verdict is PASS; (3) if NO
+> n=8 point returned PASS — the pre-registered null — take the FIRST n=8 point in `point_keys`
+> order. `point_keys` is itself a committed ordered pin asserted under hard equality at the
+> artifact's single write, so 'first' is not a re-orderable word. No branch of this rule admits a
+> choice made by a human holding the numbers
+
+Resolved against the committed artifact: step (1) yields the 22 n=8 keys; step (2) finds **no**
+n=8 point with `verdict.verdict == "PASS"` (the arm existential: 0 of 32 DP, 0 of 6 adversarial);
+step (3) therefore fires — the pre-registered null — and the first n=8 key in `point_keys` order is
+**`dp_n8_sigma0p000000`**, the σ=0 control. **Phase 26 audits `dp_n8_sigma0p000000`.** The
+resolution is a lookup, not a choice: the rule was committed before any point existed, and
+`tests/test_phase25_close.py::test_the_audit_target_rule_resolves_to_exactly_one_point` re-runs it.
+Said plainly, so the consequence is not discovered in Phase 26: the target is an adapter trained
+with **no privacy mechanism at all** (`epsilon: null`, `clip_norm 1000000.0`, `clip_bind_count 0`),
+so the audit's empirical ε lower bound will be read against a claimed upper bound that does not
+exist for that point — which is CANARY-02's rule to handle, not this note's.
+
+### 13.5 D-40's obligation, handed over — Phase 25 does not write the report
+
+`phase25_prereg.PUBLICATION_OBLIGATION`, the seven fields the Phase 28 report must quote, verbatim
+by path:
+
+1. `verdicts.arm_existentials.dp` — *the DP arm's existential WITH ITS DENOMINATOR — `exists_clearing_point`'s own 'N of M point(s) examined returned PASS' string, carried verbatim.* At close: `0 of 32 point(s) examined returned PASS`.
+2. `verdicts.arm_existentials.adversarial` — *published SEPARATELY for GATE-07's reason: a DP clear carries a FORMAL (epsilon, delta) claim and an adversarial clear carries evidence about the attacks actually run … The report must never union them.* At close: `0 of 6 point(s) examined returned PASS`, with the six refused `adv_n64` points named beside it.
+3. `verdicts.capacity_branch` — *the capacity branch NAME, which must be a member of `mitigation_gate.CAPACITY_BRANCHES`.* At close: `null-at-both-capacities`, a member.
+4. `epsilon_report.curve_total_epsilon` — *the CURVE-TOTAL epsilon by basic composition over the noised DP points actually PUBLISHED … It CROSSES BOTH LEGS.* At close: `2387.299119573244` over 30 summands.
+5. `epsilon_report.selection_accounted` — *`false`, WITH ITS REASON, published beside the total rather than below it.* At close: `false`.
+6. `verdicts.adversarial_capacity_rule_absent` — *LIMITATION 1 (D-23): NO COMMITTED CAPACITY RULE EXISTS FOR THE ADVERSARIAL ARM.*
+7. `epsilon_report.control_has_no_epsilon` — *LIMITATION 2 (D-29): THE CURVE TOTAL IS UNBOUNDED ONCE THE sigma=0 CONTROL IS PUBLISHED.*
+
+The obligation was committed in plan 25-01 (2026-08-31) before any point existed, and it travels
+**inside** `results/phase25_frontier.json` (`tests/test_phase25_frontier.py::test_the_artifact_carries_the_pre_registered_commitments`),
+so it cannot be re-scoped now that the numbers are known. **Phase 25 does not write the report;
+Phase 28 executes this list.** Nothing in this phase has published a rate without its count, an
+existential without its denominator, or a curve total without its selection flag — and the report
+is bound to the same seven fields by the artifact rather than by this paragraph.
+
+### 13.6 §O1's exception ends here
+
+The driver's executable git surface — `{add, commit}` over the one resolved
+`results/phase25_point_<key>.json` path, refused unless under `results/` and already existing; no
+glob, no `-A`, no `.`, no `shell=True` — was a **deliberate, named exception for this phase only**.
+`phase25_prereg.GIT_SURFACE_EXCEPTION` records it in the pre-registration with its three checkable
+reasons (D-12's unattended run has no operator at the process boundary 44 times; D-10's
+`prove_first_attempt` reads *tracked* records; D-31's assembly calls `refuse_if_dirty` over
+`results/`), and its own last clause reads: *"IT ENDS WITH THIS PHASE. The read-only discipline
+resumes at the phase close, which is required to state so explicitly (T-25-115)."*
+
+The scope was proved structurally, not described: `tests/test_phase25_driver.py::test_the_drivers_executable_git_actions_are_exactly_add_and_commit`
+walks the driver's AST and refuses any subcommand outside `ALLOWED_GIT_ACTIONS` + `READ_ONLY_GIT_ACTIONS`,
+watched failing on a planted `git push`. It held across **44 real unattended commits** —
+`git log --format=%s | grep -c 'record sweep point'` → `44`, every one naming exactly one path
+(25-17's `test_phase25_interior.py`, all 44) — plus the driver's zero commits of anything else.
+
+**Stated explicitly, so it cannot drift into precedent: the exception was for this phase only, and
+the read-only-git-surface discipline resumes for later phases.** Phase 26, Phase 27 and Phase 28
+drivers have a read-only git surface — `ls-files`, `show`, `merge-base`, `rev-parse`, `log` — and
+the commit is again the operator's act at the process boundary, exactly as `scripts/phase23_run.py`
+holds to it. Any later plan that needs the driver to commit must record a new, dated exception with
+its own reasons and its own AST guard; it may not cite this one. An exception that is not explicitly
+closed becomes precedent, and this one is closed.
+
+### 13.7 What this note still does not claim
+
+- The five plist files under `~/Library/LaunchAgents/` are unloaded but not deleted; the note
+  records the operator's decision to leave them, not their removal.
+- The harness's own `caffeinate -i -t 300` (pid 8957 / 13226 / 15508 across three readings, parent
+  95011) will exist for as long as this Claude Code session does, and for at most 300 s after.
+  "`pgrep -x caffeinate` is empty" is true of the run's residue and false of the console, and the
+  by-owner reading is what tells the two apart.
+- The restored keep-awake (pid 15665) is another project's, holds two assertions on behalf of pid
+  7584, and exits when that collector does. It is not Phase-25 residue and D-43 does not govern it.
