@@ -194,3 +194,7 @@ Recorded in `deferred-items.md` (D-25-18-RECALL, D-25-18-ADV64-REFUSED).
 ## Commits
 
 `fd1aed9` feat (driver + plist + D-25-18-RECALL) · `4841f00` test (recall) · `3441f79` feat (recall artifact) · `18d4f85` feat (promotion record) · `c5d7bae` test (promotion) · `db6402c` style · `6d5b5d5` test (venue continuation + recall order-independence) · this commit (SUMMARY + deferred-items + STATE/ROADMAP).
+
+## Self-Check: PASSED
+
+All eight created files present; all eight task commits (`fd1aed9` `4841f00` `3441f79` `18d4f85` `c5d7bae` `db6402c` `6d5b5d5` `8eca431`) found in `git log`; STATE/ROADMAP metadata in `a0fa87d`; REQUIREMENTS.md unchanged by design (FRONT-01/FRONT-04 ticks belong to the close plan).
