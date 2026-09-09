@@ -235,10 +235,19 @@ def _counts(completed):
 # Both gate on the HOST (a gitignored directory, a macOS-only binary), not on the device or the
 # flag, so they add 7 to each ubuntu count and 0 to each M3 count — on the sweep machine all 44
 # adapters are on disk and `plutil` is present, so nothing new skips there and 39 / 4 stand
-# unchanged. ubuntu is 52 + 3 + 7 = 62 / 62, DERIVED, NOT MEASURED: `main` is 91 commits ahead of
-# `origin/main` and the newest CI run (2026-09-07T12:40Z) predates every file in wave 10-13, so no
-# CI run has yet seen these tests. The next push is what measures it; if that run reports a number
-# other than 62, THAT number replaces this derivation in a further dated continuation.
+# unchanged. ubuntu is 52 + 3 + 7 = 62 / 62.
+#
+# MEASURED 2026-09-09, dated continuation of the derivation that stood here for one day. The
+# derivation above was written while `main` was 91 commits ahead of `origin/main`, with the newest
+# CI run (2026-09-07T12:40Z) predating every file in waves 10-13 — so it was labelled DERIVED, NOT
+# MEASURED and 25-VERIFICATION held the phase at `human_needed` until a run existed. Two runs now
+# do. Actions `34403612853` (the first CI run ever to execute this code) reported
+# `8 failed, 2682 passed, 62 skipped`, and Actions `34406246073`, after those eight were fixed,
+# reported `2691 passed, 62 skipped, 9 warnings in 1245.48s`. **62 measured, 62 derived — the
+# derivation was right and the literals below are unchanged.** The eight failures it found were
+# real and are recorded in `results/phase25_operational_note.md` §13.9: seven were the epsilon
+# ladder's two glibc twins reaching comparison sites that had never run off the publication host,
+# one was a LaunchAgent plist's absolute path compared against the checkout root.
 _PROMOTION_EMPTY_FRONTIER_SKIPS = 3
 _RECALL_HOST_ONLY_SKIPS = 7  # 6 @needs_adapters + 1 @needs_plutil (25-REVIEW CR-01)
 _M3_SWEEP_ACTIVE_EXPECTED_SKIPS = 36 + _PROMOTION_EMPTY_FRONTIER_SKIPS
