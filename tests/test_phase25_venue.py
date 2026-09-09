@@ -203,10 +203,25 @@ def _counts(completed):
 # soften it into a computed expression, a lower bound, or a value derived at import from a
 # collection pass — the equality assert against a pinned integer IS the mechanism. The platform
 # split is two pinned integers, not a formula.
-_M3_SWEEP_ACTIVE_EXPECTED_SKIPS = 36
-_M3_FLAG_UNSET_EXPECTED_SKIPS = 1
-_UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS = 52
-_UBUNTU_FLAG_UNSET_EXPECTED_SKIPS = 52
+#
+# DATED CONTINUATION, 2026-09-09 (plan 25-18) — THE 25-06 NUMBERS ABOVE STAY AS WRITTEN. The
+# count pinned in advance was 36 sweep-active / 1 flag-unset on the M3 (52 / 52 on ubuntu). Plan
+# 25-18's `tests/test_phase25_promotion.py` added EXACTLY THREE skips, each reached only on the
+# empty-frontier branch (the pre-registered null, `results/phase25_promotion.json::candidates ==
+# []`) and each naming that list in its reason:
+#         tests/test_phase25_promotion.py::test_promoted_readings_are_at_full_fidelity_k
+#         tests/test_phase25_promotion.py::test_no_replication_is_lower_power_than_its_claim
+#         tests/test_phase25_promotion.py::test_the_k16_cache_was_not_reused_for_a_k48_reading
+# They gate on the ARTIFACT, not the device or the flag, so they add 3 to every count on every
+# platform: M3 36 + 3 = 39 and 1 + 3 = 4 (MEASURED by the two inner runs on 2026-09-09);
+# ubuntu 52 + 3 = 55 / 55 (DERIVED from the same three artifact-gated skips, confirmed by CI).
+# When a candidate clears and the three run instead of skipping, this continuation is what to
+# revisit — never the 25-06 attribution.
+_PROMOTION_EMPTY_FRONTIER_SKIPS = 3
+_M3_SWEEP_ACTIVE_EXPECTED_SKIPS = 36 + _PROMOTION_EMPTY_FRONTIER_SKIPS
+_M3_FLAG_UNSET_EXPECTED_SKIPS = 1 + _PROMOTION_EMPTY_FRONTIER_SKIPS
+_UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS = 52 + _PROMOTION_EMPTY_FRONTIER_SKIPS
+_UBUNTU_FLAG_UNSET_EXPECTED_SKIPS = 52 + _PROMOTION_EMPTY_FRONTIER_SKIPS
 
 SWEEP_ACTIVE_EXPECTED_SKIPS = (
     _M3_SWEEP_ACTIVE_EXPECTED_SKIPS if _MPS_PRESENT else _UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS
@@ -389,7 +404,8 @@ def test_the_sweep_active_skip_count_is_the_number_stated_in_advance():
 
 
 def test_with_the_flag_unset_the_baseline_is_unchanged():
-    """INNER RUN 2 OF 2. The flag is ADDITIVE — with it absent the skip count is still 1.
+    """INNER RUN 2 OF 2. The flag is ADDITIVE — with it absent the skip count is still the
+    baseline (1 pinned by 25-06, + the three artifact-gated 25-18 promotion skips = 4).
 
     The env var is **popped** from the child's environment, never merely left unset in the parent:
     this test must hold when the whole outer suite is itself running under the flag.

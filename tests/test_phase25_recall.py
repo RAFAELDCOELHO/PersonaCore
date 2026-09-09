@@ -60,9 +60,12 @@ def _fake_sidecar(key, *, sha=None):
 # ===== (a) the dry run covers every structural path without the device =====
 
 
-def test_the_dry_run_walks_all_44_and_scores_none(tmp_path, capsys):
-    """2 controls come from their records, 42 would be scored; nothing is written anywhere."""
-    assert "torch" not in sys.modules
+def test_the_dry_run_walks_all_44_and_scores_none(tmp_path, capsys, monkeypatch):
+    """2 controls come from their records, 42 would be scored; nothing is written anywhere.
+
+    ``SIDECAR_DIR`` is isolated: once the scoring leg has run, the real ``data/`` holds 42
+    sidecars and the live walk reports ``reused`` — which is the resume path, tested separately."""
+    monkeypatch.setattr(recall, "SIDECAR_DIR", tmp_path)
     statuses = {}
     for key in _KEYS:
         status, blob = recall.score_point(key, dry_run=True, heartbeat_path=tmp_path / "hb.jsonl")
@@ -75,8 +78,43 @@ def test_the_dry_run_walks_all_44_and_scores_none(tmp_path, capsys):
         "dp_n64_sigma0p000000",
     }
     assert not (tmp_path / "hb.jsonl").exists()
-    assert "torch" not in sys.modules
     assert "DRY RUN" in capsys.readouterr().out
+
+
+def test_the_dry_run_and_reuse_paths_never_import_torch():
+    """ORDER-INDEPENDENT: a fresh interpreter walks the dry run and a sidecar reuse, then reports
+    whether torch entered sys.modules. Asserting `"torch" not in sys.modules` in-process is
+    vacuous once any earlier test has imported torch (measured: green alone, red in the suite)."""
+    script = (
+        "import json, pathlib, sys, tempfile\n"
+        f"sys.path.insert(0, {str(_SCRIPTS)!r})\n"
+        "import phase25_recall as r\n"
+        "tmp = pathlib.Path(tempfile.mkdtemp())\n"
+        "r.SIDECAR_DIR = tmp\n"
+        "key = 'dp_n8_sigma0p500000'\n"
+        "rec = r.point_record(key)\n"
+        "side = {'adapter_sha256': rec['adapter_sha256'], 'taught_recall': {}}\n"
+        "r.sidecar_path(key).write_text(json.dumps(side))\n"
+        "assert r.score_point(key, dry_run=False)[0] == 'reused'\n"
+        "assert r.score_point('dp_n64_sigma0p500000', dry_run=True)[0] == 'dry_run'\n"
+        "assert r.score_point('dp_n8_sigma0p000000', dry_run=True)[0] == 'point_record'\n"
+        "print('torch' in sys.modules)\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, cwd=_ROOT
+    )
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert completed.stdout.strip().splitlines()[-1] == "False"
+    # And by AST: every torch-touching import in the driver is INSIDE a function, never at
+    # module scope, so the property is structural rather than a snapshot.
+    tree = ast.parse((_SCRIPTS / "phase25_recall.py").read_text(encoding="utf-8"))
+    top_level = {
+        alias.name
+        for node in tree.body
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        for alias in node.names
+    } | {node.module for node in tree.body if isinstance(node, ast.ImportFrom)}
+    assert not top_level & {"torch", "teach_persona", "phase14_factset", "phase14_recall"}
 
 
 def test_every_adapter_is_on_disk_and_hashes_to_its_record():
@@ -98,7 +136,6 @@ def test_a_matching_sidecar_is_reused(tmp_path, monkeypatch):
     status, blob = recall.score_point(key, dry_run=False)
     assert status == "reused"
     assert blob["taught_recall"]["denominator"] == 1008
-    assert "torch" not in sys.modules
 
 
 def test_a_sidecar_for_a_different_adapter_is_refused(tmp_path, monkeypatch):
