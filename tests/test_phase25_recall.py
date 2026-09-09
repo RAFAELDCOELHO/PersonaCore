@@ -10,6 +10,7 @@ import ast
 import json
 import pathlib
 import plistlib
+import shutil
 import subprocess
 import sys
 
@@ -26,6 +27,20 @@ import phase25_record  # noqa: E402  (same)
 _PLIST = _ROOT / "artifacts" / "com.personacore.phase25.recall.plist"
 _SWEEP_PLIST = _ROOT / "artifacts" / "com.personacore.phase25.sweep.plist"
 _KEYS = tuple(phase25_record.ORDERED_POINT_KEYS())
+
+# 25-REVIEW CR-01: `score_point`'s first `_prove` is `adapter.exists()`, and the 44 adapters live
+# under gitignored `checkpoints/` — present only on the sweep host, absent on a clone and on
+# ubuntu-latest CI. `plutil` is macOS-only. Same idiom as `test_phase25_close.py`'s `pmset` gate.
+# `(_ROOT / "checkpoints").is_dir()` short-circuits the 44 record reads on a clone, where the
+# directory is absent and every one of them would answer False anyway.
+_ADAPTERS_ON_DISK = (_ROOT / "checkpoints").is_dir() and all(
+    (_ROOT / recall.point_record(k)["adapter_path"]).exists() for k in _KEYS
+)
+needs_adapters = pytest.mark.skipif(
+    not _ADAPTERS_ON_DISK,
+    reason="the 44 sweep adapters live under gitignored checkpoints/ — sweep host only",
+)
+needs_plutil = pytest.mark.skipif(shutil.which("plutil") is None, reason="plutil is macOS-only")
 
 
 def _fake_sidecar(key, *, sha=None):
@@ -60,6 +75,7 @@ def _fake_sidecar(key, *, sha=None):
 # ===== (a) the dry run covers every structural path without the device =====
 
 
+@needs_adapters
 def test_the_dry_run_walks_all_44_and_scores_none(tmp_path, capsys, monkeypatch):
     """2 controls come from their records, 42 would be scored; nothing is written anywhere.
 
@@ -81,6 +97,7 @@ def test_the_dry_run_walks_all_44_and_scores_none(tmp_path, capsys, monkeypatch)
     assert "DRY RUN" in capsys.readouterr().out
 
 
+@needs_adapters
 def test_the_dry_run_and_reuse_paths_never_import_torch():
     """ORDER-INDEPENDENT: a fresh interpreter walks the dry run and a sidecar reuse, then reports
     whether torch entered sys.modules. Asserting `"torch" not in sys.modules` in-process is
@@ -117,6 +134,7 @@ def test_the_dry_run_and_reuse_paths_never_import_torch():
     assert not top_level & {"torch", "teach_persona", "phase14_factset", "phase14_recall"}
 
 
+@needs_adapters
 def test_every_adapter_is_on_disk_and_hashes_to_its_record():
     """The precondition the operator's decision rests on: no retraining is needed."""
     for key in _KEYS:
@@ -129,6 +147,7 @@ def test_every_adapter_is_on_disk_and_hashes_to_its_record():
 # ===== (b) resume reuses a matching sidecar and REFUSES a mismatched one =====
 
 
+@needs_adapters
 def test_a_matching_sidecar_is_reused(tmp_path, monkeypatch):
     monkeypatch.setattr(recall, "SIDECAR_DIR", tmp_path)
     key = "dp_n8_sigma0p500000"
@@ -138,6 +157,7 @@ def test_a_matching_sidecar_is_reused(tmp_path, monkeypatch):
     assert blob["taught_recall"]["denominator"] == 1008
 
 
+@needs_adapters
 def test_a_sidecar_for_a_different_adapter_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(recall, "SIDECAR_DIR", tmp_path)
     key = "dp_n8_sigma0p500000"
@@ -149,6 +169,7 @@ def test_a_sidecar_for_a_different_adapter_is_refused(tmp_path, monkeypatch):
     assert "REFUSED, not reused" in str(excinfo.value)
 
 
+@needs_adapters
 def test_a_control_is_never_rescored_even_with_no_sidecar(tmp_path, monkeypatch):
     monkeypatch.setattr(recall, "SIDECAR_DIR", tmp_path)
     status, _ = recall.score_point("dp_n8_sigma0p000000", dry_run=False)
@@ -199,6 +220,7 @@ def _plist(path):
         return plistlib.load(handle)
 
 
+@needs_plutil
 def test_the_recall_agent_does_not_start_itself_and_lints():
     parsed = _plist(_PLIST)
     assert parsed["KeepAlive"] is False

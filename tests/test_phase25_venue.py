@@ -214,14 +214,37 @@ def _counts(completed):
 #         tests/test_phase25_promotion.py::test_the_k16_cache_was_not_reused_for_a_k48_reading
 # They gate on the ARTIFACT, not the device or the flag, so they add 3 to every count on every
 # platform: M3 36 + 3 = 39 and 1 + 3 = 4 (MEASURED by the two inner runs on 2026-09-09);
-# ubuntu 52 + 3 = 55 / 55 (DERIVED from the same three artifact-gated skips, confirmed by CI).
+# ubuntu 52 + 3 = 55 / 55 (DERIVED from the same three artifact-gated skips; see the 2026-09-09
+# 25-REVIEW CR-01 continuation below, which withdraws the "confirmed by CI" this line first
+# carried — no CI run has measured any of these numbers).
 # When a candidate clears and the three run instead of skipping, this continuation is what to
 # revisit — never the 25-06 attribution.
+#
+# DATED CONTINUATION, 2026-09-09 (25-REVIEW CR-01) — AGAIN AN ADDITION, NOT AN EDIT. The two
+# continuations above stay as written. `tests/test_phase25_recall.py` reached `plutil` and the 44
+# gitignored `checkpoints/*.pt` adapters with no guard, so on ubuntu it FAILED rather than skipped;
+# CR-01's fix put two module-level markers on it, and each marker turns a failure into a skip on
+# any host that is not the sweep machine:
+#         @needs_adapters  (6) test_the_dry_run_walks_all_44_and_scores_none
+#                              test_the_dry_run_and_reuse_paths_never_import_torch
+#                              test_every_adapter_is_on_disk_and_hashes_to_its_record
+#                              test_a_matching_sidecar_is_reused
+#                              test_a_sidecar_for_a_different_adapter_is_refused
+#                              test_a_control_is_never_rescored_even_with_no_sidecar
+#         @needs_plutil    (1) test_the_recall_agent_does_not_start_itself_and_lints
+# Both gate on the HOST (a gitignored directory, a macOS-only binary), not on the device or the
+# flag, so they add 7 to each ubuntu count and 0 to each M3 count — on the sweep machine all 44
+# adapters are on disk and `plutil` is present, so nothing new skips there and 39 / 4 stand
+# unchanged. ubuntu is 52 + 3 + 7 = 62 / 62, DERIVED, NOT MEASURED: `main` is 91 commits ahead of
+# `origin/main` and the newest CI run (2026-09-07T12:40Z) predates every file in wave 10-13, so no
+# CI run has yet seen these tests. The next push is what measures it; if that run reports a number
+# other than 62, THAT number replaces this derivation in a further dated continuation.
 _PROMOTION_EMPTY_FRONTIER_SKIPS = 3
+_RECALL_HOST_ONLY_SKIPS = 7  # 6 @needs_adapters + 1 @needs_plutil (25-REVIEW CR-01)
 _M3_SWEEP_ACTIVE_EXPECTED_SKIPS = 36 + _PROMOTION_EMPTY_FRONTIER_SKIPS
 _M3_FLAG_UNSET_EXPECTED_SKIPS = 1 + _PROMOTION_EMPTY_FRONTIER_SKIPS
-_UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS = 52 + _PROMOTION_EMPTY_FRONTIER_SKIPS
-_UBUNTU_FLAG_UNSET_EXPECTED_SKIPS = 52 + _PROMOTION_EMPTY_FRONTIER_SKIPS
+_UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS = 52 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _RECALL_HOST_ONLY_SKIPS
+_UBUNTU_FLAG_UNSET_EXPECTED_SKIPS = 52 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _RECALL_HOST_ONLY_SKIPS
 
 SWEEP_ACTIVE_EXPECTED_SKIPS = (
     _M3_SWEEP_ACTIVE_EXPECTED_SKIPS if _MPS_PRESENT else _UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS
