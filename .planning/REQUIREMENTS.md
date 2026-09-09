@@ -409,9 +409,9 @@ control's position and the never-taught floor are known.
       adversarial point needs to reach that floor personally: the floor is a coordinate on the
       plane both arms are read against, not a destination each arm must arrive at.
       <!-- 25-07-CONTINUATION-FRONT01-SCOPE-END -->
-- [ ] **FRONT-02**: Dual ε reporting — example-level **and** fact-level — so an example-level ε can
+- [x] **FRONT-02**: Dual ε reporting — example-level **and** fact-level — so an example-level ε can
       never be read as if it bounded fact leakage.
-- [ ] **FRONT-03**: A committed frontier JSON artifact carrying counts (not rates), ordered point
+- [x] **FRONT-03**: A committed frontier JSON artifact carrying counts (not rates), ordered point
       keys, `accounting: null` on the adversarial arm as a structural statement that it makes no
       formal claim, and the gate/budget module sha256s. Figures are drawn **only** from this artifact.
 - [ ] **FRONT-04**: The verdict is computed by **importing** the GATE module's constants, never by
@@ -564,8 +564,8 @@ helper, 25 discharges the use.
 | CTRL-01 | Phase 25 | run first, as a sweep point |
 | CTRL-02 | Phase 25 | run first, as a sweep point |
 | FRONT-01 | Phase 25 | |
-| FRONT-02 | Phase 25 | |
-| FRONT-03 | Phase 25 | |
+| FRONT-02 | Phase 25 | **SATISFIED (plan 25-19).** `results/phase25_frontier.json::epsilon_report` (`4030d0e`) names BOTH multiplicities — 262.9437465865647 (the frozen pin's overlap rule) and 207.0180229382851 (first-token-owns-draw, the artifact rule) — with `results/phase21_multiplicity.json`'s own status `RECORDED, NOT RESOLVED — the pin is frozen and is not edited` carried verbatim, and every epsilon in the artifact rendered through `phase25_epsilon.report_epsilon` (32 renderings, each asserted equal to a live call in `tests/test_phase25_frontier.py`). The curve total is BASIC composition over the 30 published noised DP points, `curve_total_epsilon = 2387.299119573244` at `total_delta = 30 x 1e-5`, `selection_accounted: false`, both legs crossed; the two sigma=0 controls are excluded by name and the artifact declares that no joint bound over all published artifacts exists once they are published. |
+| FRONT-03 | Phase 25 | **SATISFIED (plan 25-19).** `results/phase25_frontier.json` (`4030d0e`, 22,311,714 bytes) assembled WRITE-ONCE at `578a1ac` against a clean `scripts/ src/ results/ artifacts/` pathspec: 44 point records inline with their 416 gated + 448 reported per-question rows, `point_keys` equal to `ORDERED_POINT_KEYS()` under hard equality proved at the single write, `accounting: null` on all 12 adversarial points, `gate_module_sha256` / `budget_module_sha256` computed from bytes at write time (both live under `tests/test_phase25_frontier.py::test_both_module_digests_are_live`), `held_out_generalization` re-derived from the per-point A2 rows (756/4576 over 44 points; the perturbed-copy RED watched). Every rate-named key sits beside its counts. Both figures (`6af3fa0`) are drawn by the unmodified `scripts/plot_phase25.py`, whose allow-list guard permits only this file. A second assembly is refused naming the delete-in-its-own-commit route. |
 | FRONT-04 | Phase 25 | |
 | CANARY-01 | Phase 26 | |
 | CANARY-02 | Phase 26 | |
