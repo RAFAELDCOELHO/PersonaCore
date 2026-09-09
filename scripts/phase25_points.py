@@ -210,11 +210,16 @@ def point_epsilon_and_accounting(arm, axis_value):
     pinned = mitigation_budget.EPSILON_LADDER[ladder.index(axis_value)]
     # No bare epsilon reaches a string here (D-28's census): the two values are named by their
     # roles, and a divergence is reported as accountant-vs-ladder.
+    recorded_twin = phase25_epsilon.LADDER_PLATFORM_TWINS.get(axis_value)
     _prove(
-        accountant_value == pinned,
+        phase25_epsilon.epsilon_agrees(pinned, accountant_value, sigma=axis_value),
         f"the accountant returns {accountant_value!r} at sigma {axis_value!r} while "
-        f"EPSILON_LADDER pins {pinned!r} at that rung. The ladder was committed BEFORE any point "
-        "ran; a divergence here means the accountant or its inputs moved after the pin",
+        f"EPSILON_LADDER pins {pinned!r} at that rung"
+        + (f" (recorded platform twin {recorded_twin!r})" if recorded_twin is not None else "")
+        + ". The ladder was committed BEFORE any point ran; a divergence here means the "
+        "accountant or its inputs moved after the pin. Exact `==` against the pin or the "
+        "recorded twin: the two rungs where macOS-libm and glibc differ by 4 ULP are named in "
+        "`phase25_epsilon.LADDER_PLATFORM_TWINS`, and nothing wider is accepted",
     )
     accounting = {
         "rule": "basic composition over the noised DP points actually published (D-29)",

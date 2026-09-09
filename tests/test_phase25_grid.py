@@ -52,6 +52,7 @@ if _SRC not in sys.path:
 import mitigation_budget  # noqa: E402  (needs the sys.path insert; scripts/ is not a package)
 import mitigation_unit  # noqa: E402
 import phase25_calibrate  # noqa: E402
+import phase25_epsilon  # noqa: E402
 import phase25_record  # noqa: E402
 import phase25_sigma_hi  # noqa: E402
 
@@ -72,9 +73,12 @@ _NOISED_RUNGS = tuple(range(1, 16))
 # but the bit distance is 4. EPSILON_LADDER is the PUBLISHED figure and is not rewritten.
 # Exact `==` against the pin OR the recorded glibc twin; never pytest.approx / isclose. A live
 # value that is neither is a real accountant drift, not libm noise.
+# MOVED 2026-09-09 to `scripts/phase25_epsilon.py::LADDER_PLATFORM_TWINS` (keyed by sigma, not by
+# rung index) after CI run 34403612853 found the same two rungs reaching three more comparison
+# sites. One source, same values, same exact-`==`-or-twin rule.
 _EPSILON_LADDER_GLIBC_TWINS = {
-    9: 8.595865790470423,
-    14: 1.060789755417756,
+    index: phase25_epsilon.LADDER_PLATFORM_TWINS[mitigation_budget.SIGMA_LADDER[index]]
+    for index in (9, 14)
 }
 
 
@@ -177,6 +181,29 @@ def test_each_noised_rung_lands_on_its_pinned_epsilon(index):
         f"rung {index}'s epsilon is {pinned!r} — a non-finite or non-positive epsilon is not a "
         "privacy guarantee"
     )
+
+
+def test_the_recorded_twins_are_four_ulps_and_nothing_wider_is_accepted():
+    """The twins are a MEASURED libm difference, not a tolerance, and drift is still refused.
+
+    Both halves matter. If a twin were ever wider than a few ULPs it would stop being libm noise;
+    and if `epsilon_agrees` accepted anything but the pin or the twin, it would accept the
+    hand-edited digit the ladder's assertions exist to refuse. A relative 1e-9 perturbation — a
+    million times wider than the measured 8e-16 and still invisible in most prose — is rejected.
+    """
+    for sigma, twin in phase25_epsilon.LADDER_PLATFORM_TWINS.items():
+        pinned = mitigation_budget.EPSILON_LADDER[mitigation_budget.SIGMA_LADDER.index(sigma)]
+        assert pinned != twin, f"sigma {sigma!r}: the twin equals the pin — nothing to record"
+        ulps = abs(pinned - twin) / math.ulp(pinned)
+        assert ulps <= 4.0, f"sigma {sigma!r}: {ulps!r} ULPs is too wide to be libm noise"
+        assert phase25_epsilon.epsilon_agrees(pinned, twin, sigma=sigma)
+        assert phase25_epsilon.epsilon_agrees(pinned, pinned, sigma=sigma)
+        assert not phase25_epsilon.epsilon_agrees(pinned, pinned * (1 + 1e-9), sigma=sigma)
+
+    off_ladder = 0.7
+    assert off_ladder not in phase25_epsilon.LADDER_PLATFORM_TWINS
+    pinned = mitigation_budget.EPSILON_LADDER[mitigation_budget.SIGMA_LADDER.index(off_ladder)]
+    assert not phase25_epsilon.epsilon_agrees(pinned, pinned * (1 + 1e-15), sigma=off_ladder)
 
 
 def test_the_control_rung_carries_no_epsilon():

@@ -1449,3 +1449,52 @@ catch a frozen-module edit, and it is unchanged.
 `results/phase25_frontier.json` and reads only `governs` still meets the wrong formula; they meet
 the correction only here, in the deferred-items entry `D-25-REVIEW-WR03`, and in the emitter. That
 is the cost of the write-once property, paid deliberately rather than hidden.
+
+---
+
+### 13.9 The first CI run ever to execute this phase's code, and the eight failures it found (2026-09-09)
+
+`main` was 99 commits ahead of `origin/main` when Phase 25 closed. The newest run on the remote was
+`2026-09-07`, before `tests/test_phase25_recall.py` existed — so **no continuous-integration run had
+ever executed any of waves 10-13**, and `tests/test_phase25_venue.py` said so about itself: its
+ubuntu skip pin was labelled DERIVED, NOT MEASURED. 25-VERIFICATION held the phase at
+`human_needed` for this. The operator's decision (25-HUMAN-UAT item 1) was to push once the
+25-REVIEW CR-01 fix had landed and let the run measure.
+
+**The push:** `15dce85..52e736c`, 99 commits, 2026-09-09 20:52 UTC. **The run:** Actions
+`34403612853`, ubuntu-latest, Python 3.11.16 — `8 failed, 2682 passed, 62 skipped in 1081.10s`.
+
+**The derived number was right.** 62 skipped on ubuntu, exactly the `52 + 3 + 7` the venue file
+derived without a run behind it. That pin is now MEASURED.
+
+**Eight failures, two causes, both real and neither visible on the publication host:**
+
+**(a) Seven failures, one cause: the ε ladder is platform-bound in the last bits.** The pinned
+`EPSILON_LADDER` was transcribed from what the accountant returned on Apple Silicon; on x86-64 /
+glibc two of the fifteen noised rungs come back 4 float64 ULPs away — σ=8.0 returns
+`8.595865790470423` against the pinned `8.595865790470416`, σ=50.0 returns `1.060789755417756`
+against `1.060789755417757`. Relative difference 8e-16. **The other thirteen rungs agree bit for
+bit.** Because the comparison is exact `==` by design, `phase25_points.point_epsilon_and_accounting`
+did not merely fail a test on x86 — it REFUSED to resolve the 44 plans at all, which would have
+made the documented Kaggle P100 fallback (an x86 host) unusable for this driver.
+
+This was already known in one place: `tests/test_phase25_grid.py` had recorded both twins from CI
+run `33543052928` in an earlier phase, with an argument this close deliberately keeps — *an
+approximate comparison would accept exactly the hand-edited digit these assertions exist to
+refuse*. What CI showed is that the same two rungs reach three more comparison sites that had never
+been run off the publication host. The repair follows the older decision rather than the operator's
+first instinct toward a relative tolerance, and the operator was told so: the twins moved to
+`scripts/phase25_epsilon.py::LADDER_PLATFORM_TWINS` (keyed by σ, one source), `epsilon_agrees`
+accepts **the pin or the recorded twin under exact `==` and nothing else**, and a new test asserts
+each twin is within 4 ULP while a relative 1e-9 perturbation — a million times wider than the
+measured difference — is still rejected. No published ε changed.
+
+**(b) One failure: a LaunchAgent plist path asserted against this checkout's root.** A plist needs
+absolute paths, so both agent plists carry the sweep host's `/Users/...` repo path; the test
+compared that to `_ROOT`, which on a runner is `/home/runner/work/...`. Split into the half that
+travels (the two plists agree and name the same repo) and the half that is host-bound.
+
+**What this closes and what it does not.** It closes the pin: 62 is measured. It does not turn the
+project cross-platform — it establishes that the published ε figures are reproducible bit-for-bit
+on the host they were published from and to within 4 ULP at two rungs elsewhere, which is a
+statement worth making in the report rather than a defect to hide.

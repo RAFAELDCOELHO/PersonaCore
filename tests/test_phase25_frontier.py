@@ -216,8 +216,13 @@ def test_the_curve_total_re_derives_from_its_summands(artifact):
     for key, value in zip(report["summand_keys"], report["summands"]):
         point = artifact["points"][key]
         assert point["epsilon"] == value
-        assert value == phase25_epsilon.point_epsilon_for_sigma(
+        live = phase25_epsilon.point_epsilon_for_sigma(
             point["sigma"], steps=point["composed_steps"], delta=point["delta"]
+        )
+        # pin-or-recorded-twin, exact on both branches (LADDER_PLATFORM_TWINS): two rungs differ
+        # by 4 ULP between the publication host's libm and glibc.
+        assert phase25_epsilon.epsilon_agrees(value, live, sigma=point["sigma"]), (
+            f"{key}: the artifact publishes {value!r}, the accountant returns {live!r}"
         )
 
 

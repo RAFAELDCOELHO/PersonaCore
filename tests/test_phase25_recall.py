@@ -235,7 +235,15 @@ def test_the_recall_agent_mirrors_the_sweep_agents_wrapper_and_heartbeat():
     assert ours["ProgramArguments"][3].endswith("scripts/phase25_recall.py")
     beat = ours["ProgramArguments"][ours["ProgramArguments"].index("--heartbeat") + 1]
     assert beat == sweep["ProgramArguments"][sweep["ProgramArguments"].index("--heartbeat") + 1]
-    assert ours["WorkingDirectory"] == sweep["WorkingDirectory"] == str(_ROOT)
+    # A LaunchAgent needs ABSOLUTE paths, so both plists carry the sweep host's repo path.
+    # Off that host (CI, a clone) the checkable property is that the two agree and name the
+    # same repo; the equality with this checkout's root only means anything where the plists
+    # are the ones launchd would load. Measured on ubuntu CI run 34403612853, which failed
+    # here asserting "/Users/juliorcoelho/PersonaCore" == "/home/runner/work/PersonaCore/...".
+    assert ours["WorkingDirectory"] == sweep["WorkingDirectory"]
+    assert pathlib.Path(ours["WorkingDirectory"]).name == _ROOT.name
+    if pathlib.Path(ours["WorkingDirectory"]).is_dir():
+        assert ours["WorkingDirectory"] == str(_ROOT)
     assert ours["StandardOutPath"] != sweep["StandardOutPath"]
     assert ours["EnvironmentVariables"]["PERSONACORE_SWEEP_ACTIVE"] == "1"
 

@@ -135,6 +135,37 @@ SIGMA_ZERO_PRECEDENT_CORRECTION = (
 )
 
 
+LADDER_PLATFORM_TWINS = {
+    8.0: 8.595865790470423,
+    50.0: 1.060789755417756,
+}
+"""THE TWO RUNGS WHERE THE PUBLISHED PIN AND A LIVE glibc ACCOUNTANT DISAGREE, KEYED BY SIGMA.
+
+`EPSILON_LADDER` was transcribed at full double precision from what the accountant returned on
+this project's publication host (Apple Silicon / macOS libm). On x86-64 / glibc the same call
+returns a value 4 float64 ULPs away at sigma 8.0 and sigma 50.0; the other 13 noised rungs agree
+BIT FOR BIT. Measured twice on this project's own CI: Actions run 33543052928 (recorded first in
+`tests/test_phase25_grid.py`, where this mapping used to live) and run 34403612853 (2026-09-09,
+the first CI run ever to execute Phase 25's wave-10..13 code, which found the same two rungs
+reaching three more comparison sites and refusing `phase25_points.point_epsilon_and_accounting`
+outright on x86 — see `results/phase25_operational_note.md` §13.9).
+
+The published figure is NOT rewritten and the comparison is NOT loosened. `epsilon_agrees` accepts
+the pin or the recorded twin under exact `==`, and nothing else. That is deliberate and it is the
+older decision of the two: an approximate comparison would accept exactly the hand-edited digit
+these assertions exist to refuse, so a relative tolerance is the one repair this project does not
+make here. A live value that is neither the pin nor its recorded twin is a real accountant drift.
+"""
+
+
+def epsilon_agrees(pinned, live, *, sigma):
+    """``True`` when ``live`` is the published pin for this rung or that rung's recorded twin.
+
+    Exact ``==`` on both branches — never ``pytest.approx``, never ``math.isclose``.
+    """
+    return pinned == live or LADDER_PLATFORM_TWINS.get(sigma) == live
+
+
 EPSILON_NAMES = (
     "epsilon",
     "point_epsilon",

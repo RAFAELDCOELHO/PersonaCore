@@ -19,8 +19,9 @@ sys.path.insert(0, str(_ROOT / "scripts"))
 sys.path.insert(0, str(_ROOT / "src"))
 
 import mitigation_budget  # noqa: E402  (scripts/ is not a package)
-import mitigation_unit  # noqa: E402  (same)
+import mitigation_unit  # noqa: E402
 import phase18_extraction as pe  # noqa: E402  (same)
+import phase25_epsilon  # noqa: E402  (same)
 import phase25_prereg as prereg  # noqa: E402  (same)
 import phase25_record as rec  # noqa: E402  (same)
 
@@ -145,8 +146,12 @@ def test_every_dp_record_carries_a_re_derivable_epsilon(key, records):
     if record["sigma"] == 0.0:
         assert record["epsilon"] is None
         return
-    assert record["epsilon"] == epsilon_for(
-        record["sigma"], mitigation_budget.STEP_BUDGET, mitigation_unit.DELTA
+    live = epsilon_for(record["sigma"], mitigation_budget.STEP_BUDGET, mitigation_unit.DELTA)
+    # Exact `==` against the record's published figure OR that rung's recorded platform twin —
+    # sigma 8.0 and 50.0 differ by 4 float64 ULPs between the publication host's libm and glibc
+    # (`phase25_epsilon.LADDER_PLATFORM_TWINS`). Never approx: see that constant's docstring.
+    assert phase25_epsilon.epsilon_agrees(record["epsilon"], live, sigma=record["sigma"]), (
+        f"{key}: the record publishes {record['epsilon']!r} and the accountant returns {live!r}"
     )
 
 
