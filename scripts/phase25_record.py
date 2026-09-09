@@ -1069,7 +1069,7 @@ ADVERSARIAL_NO_REPLAY_DISCLOSURE = (
     "block with its log lines is `verdicts.adversarial_no_replay`; nothing was adjusted."
 )
 
-MECHANISM_PIN_DISCLOSURE_GOVERNS = (
+MECHANISM_PIN_DISCLOSURE_GOVERNS_AS_PUBLISHED = (
     "D-25-17-ADV-PIN: on the adversarial arm two of the five D-34 mechanism pin fields — "
     "`composed_lot_sizes` and `records_per_lot` — are pinned := live. `phase25_points."
     "pinned_mechanism` leaves them None for `adv_*` ('resolved against the live TrainConfig at "
@@ -1079,6 +1079,30 @@ MECHANISM_PIN_DISCLOSURE_GOVERNS = (
     "is RE-DERIVED here for all 44 points from the record's own `training.train_config` "
     "(`batch_size x max(1, grad_accum_steps)`) and asserted equal to `records_per_lot` at the "
     "single write, which checks the committed bytes against the config they carry. Recorded in "
+    ".planning/phases/25-frontier-sweep-and-the-existence-gate-verdict/deferred-items.md."
+)
+
+# CORRECTION 2026-09-09 — 25-REVIEW WR-03, confirmed independently by 25-VERIFICATION.
+# The sentence above is what `results/phase25_frontier.json` carries at `4030d0e`, and it gives the
+# ADVERSARIAL formula for all 44 points: on `dp_n8_sigma0p000000` `batch_size x grad_accum_steps`
+# reads 8 x 8 = 64 while `records_per_lot` is 8. The CODE was always per-arm
+# (`_lot_from_train_config`) and `LOT_RULE_BY_ARM` beside the field states both rules correctly, so
+# no verdict, count, epsilon or Success Criterion is affected. Operator decision (2026-09-09,
+# 25-HUMAN-UAT item 2): record the discrepancy where a reader of the artifact meets it and correct
+# the wording HERE for any future assembly, rather than re-emit 22.3 MB of write-once bytes. The
+# published bytes stay pinned by `MECHANISM_PIN_DISCLOSURE_GOVERNS_AS_PUBLISHED` above.
+MECHANISM_PIN_DISCLOSURE_GOVERNS = (
+    "D-25-17-ADV-PIN: on the adversarial arm two of the five D-34 mechanism pin fields — "
+    "`composed_lot_sizes` and `records_per_lot` — are pinned := live. `phase25_points."
+    "pinned_mechanism` leaves them None for `adv_*` (\'resolved against the live TrainConfig at "
+    "train time\') and `train_point` fills the pin from the same lot it just read, so the exact-== "
+    "on those two fields compares a value with itself on that arm. The other three "
+    "(`composed_steps` = STEP_BUDGET, `q` None, `clip_norm` None) are real pins there. So the lot "
+    "is RE-DERIVED here for all 44 points from the record\'s own `training.train_config` BY THE "
+    "ARM\'S RULE — `canary_population.n_facts` on the DP arm, `batch_size x max(1, "
+    "grad_accum_steps)` on the adversarial arm, both stated in full in `lot_rule_by_arm` beside "
+    "this field — and asserted equal to `records_per_lot` at the single write, which checks the "
+    "committed bytes against the config they carry. Recorded in "
     ".planning/phases/25-frontier-sweep-and-the-existence-gate-verdict/deferred-items.md."
 )
 
@@ -1578,15 +1602,17 @@ def mechanism_pin_disclosure(points):
     self_referential = ("composed_lot_sizes", "records_per_lot")
     lots = {}
     for key, point in points.items():
+        rule = "adversarial" if point["arm"] in ADVERSARIAL_ARMS else "dp"
         lot = _lot_from_train_config(point)
         _prove(
             lot == point["records_per_lot"] and point["composed_lot_sizes"] == [lot],
             f"{key}: records_per_lot {point['records_per_lot']!r} / composed_lot_sizes "
-            f"{point['composed_lot_sizes']!r} != batch_size x max(1, grad_accum_steps) = {lot}",
+            f"{point['composed_lot_sizes']!r} != the lot LOT_RULE_BY_ARM[{rule!r}] "
+            f"re-derives = {lot}",
         )
         cfg = point["training"]["train_config"]
         lots[key] = {
-            "rule": "adversarial" if point["arm"] in ADVERSARIAL_ARMS else "dp",
+            "rule": rule,
             "batch_size": cfg["batch_size"],
             "grad_accum_steps": cfg["grad_accum_steps"],
             "n_facts": point["canary_population"]["n_facts"],

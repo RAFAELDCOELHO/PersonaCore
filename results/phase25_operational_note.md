@@ -1404,3 +1404,48 @@ closed becomes precedent, and this one is closed.
   by-owner reading is what tells the two apart.
 - The restored keep-awake (pid 15665) is another project's, holds two assertions on behalf of pid
   7584, and exits when that collector does. It is not Phase-25 residue and D-43 does not govern it.
+
+---
+
+### 13.8 A published sentence that contradicts the code it describes — recorded, not re-emitted (2026-09-09)
+
+`results/phase25_frontier.json` is FRONT-03's single source of truth, and one sentence inside it is
+wrong. `mechanism_pin_disclosure.governs` says the lot is
+
+> RE-DERIVED here for all 44 points from the record's own `training.train_config`
+> (`batch_size x max(1, grad_accum_steps)`)
+
+and the code has never done that for all 44 points. `scripts/phase25_record.py::_lot_from_train_config`
+branches on the arm: `canary_population.n_facts` on the DP arm (32 points), `batch_size x max(1,
+grad_accum_steps)` on the adversarial arm (12 points). On `dp_n8_sigma0p000000` the published
+formula reads `8 x 8 = 64`; `records_per_lot` is `8`.
+
+**Found twice, independently.** The code review found it (25-REVIEW WR-03) and the phase verifier
+confirmed it from the artifact's own bytes without reading the review's finding first
+(25-VERIFICATION, human item 2).
+
+**Nothing measured is affected.** `lot_rule_by_arm`, sitting immediately beside the wrong sentence
+in the same block, states both rules correctly, and the assertion the sentence describes ran per-arm
+at the single write — so every one of the 44 points was checked against the rule its own arm uses.
+No verdict, no count, no ε, no Success Criterion moves. What is wrong is the prose, in the one file
+a reader is told to trust.
+
+**The decision (operator, 2026-09-09, `25-HUMAN-UAT` item 2).** Record the discrepancy here, where a
+reader of the artifact meets it, and correct the wording in the emitter for any future assembly —
+rather than delete and re-emit 22.3 MB of write-once, downstream-pinned bytes for a prose fix. The
+published sentence is kept reachable under its own name, `MECHANISM_PIN_DISCLOSURE_GOVERNS_AS_PUBLISHED`,
+and `tests/test_phase25_frontier.py` pins both halves: the artifact still carries the superseded
+wording byte-identically, and the live constant is no longer the one it carries. A silent re-emit
+turns both tests red.
+
+**A consequence, found while landing it.** The artifact pins `provenance.record_module_sha256` — the
+emitter's own digest — so correcting the emitter made `test_both_module_digests_are_live` false for
+that one file. The test now pins every recorded digest to the module bytes at `provenance.git_sha`
+(`578a1ac`), which is what a write-time digest was ever evidence of, and still asserts the three
+ancestry-guarded modules byte-identical in the working tree. That second half is the one that would
+catch a frozen-module edit, and it is unchanged.
+
+**What this does not do.** It does not make the artifact self-consistent. A reader who opens
+`results/phase25_frontier.json` and reads only `governs` still meets the wrong formula; they meet
+the correction only here, in the deferred-items entry `D-25-REVIEW-WR03`, and in the emitter. That
+is the cost of the write-once property, paid deliberately rather than hidden.

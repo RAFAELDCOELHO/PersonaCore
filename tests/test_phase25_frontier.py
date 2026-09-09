@@ -400,18 +400,45 @@ def test_the_dialogue_floor_recipe_mismatch_is_disclosed(artifact):
 
 
 def test_both_module_digests_are_live(artifact):
+    """Every recorded digest pins the module bytes AT THE WRITE, and the three frozen modules are
+    still byte-identical in the working tree.
+
+    CORRECTION 2026-09-09 (25-REVIEW WR-03, operator decision in 25-HUMAN-UAT item 2):
+    `scripts/phase25_record.py` was corrected AFTER the write — the published `governs` sentence
+    gave the adversarial lot formula for all 44 points, while the code was always per-arm. The
+    emitter's digest therefore pins the bytes at `provenance.git_sha`, which is what it was ever
+    evidence of; claiming it still matches the working tree would be false. The three
+    ancestry-guarded modules are unaffected and are still asserted live, which is the stronger
+    half of this test and the half that would catch a frozen-module edit.
+    """
     provenance = artifact["provenance"]
-    drifted = {}
-    for field, name in (
+    write_sha = provenance["git_sha"]
+    modules = (
         ("gate_module_sha256", "mitigation_gate.py"),
         ("budget_module_sha256", "mitigation_budget.py"),
         ("unit_module_sha256", "mitigation_unit.py"),
         ("record_module_sha256", "phase25_record.py"),
-    ):
+    )
+
+    drifted = {}
+    for field, name in modules:
+        at_write = subprocess.run(
+            ["git", "show", f"{write_sha}:scripts/{name}"],
+            capture_output=True,
+            cwd=_ROOT,
+            check=True,
+        ).stdout
+        digest = hashlib.sha256(at_write).hexdigest()
+        if provenance[field] != digest:
+            drifted[field] = (provenance[field], digest)
+    assert drifted == {}, "a recorded digest does not pin the module bytes at the write"
+
+    still_live = {}
+    for field, name in modules[:3]:
         live = hashlib.sha256((_SCRIPTS / name).read_bytes()).hexdigest()
         if provenance[field] != live:
-            drifted[field] = (provenance[field], live)
-    assert drifted == {}
+            still_live[field] = (provenance[field], live)
+    assert still_live == {}, "a frozen module drifted from the bytes the artifact was written by"
 
 
 def test_the_artifact_carries_the_pre_registered_commitments(artifact):
@@ -440,3 +467,45 @@ def test_a_second_assembly_is_refused():
 def test_the_pathspec_covers_the_four_publication_paths(artifact):
     assert {"scripts", "src", "results", "artifacts"} <= set(record._PUBLICATION_PATHSPEC)
     assert artifact["provenance"]["publication_pathspec"] == list(record._PUBLICATION_PATHSPEC)
+
+
+# ===== 25-REVIEW WR-03: the published sentence, pinned as superseded rather than re-emitted =====
+
+
+def test_the_published_lot_sentence_is_pinned_as_superseded(artifact):
+    """The artifact's `governs` is the SUPERSEDED wording, byte-identical to its own constant.
+
+    WR-03: the published sentence gives the adversarial formula for all 44 points. The operator's
+    decision (2026-09-09, 25-HUMAN-UAT item 2) was to record the discrepancy and correct the
+    emitter for any future assembly, NOT to re-emit 22.3 MB of write-once bytes. This test pins
+    both halves of that decision: the published bytes stay reachable under their own name, and the
+    live constant is no longer the one the artifact carries. It goes RED on a silent re-emit.
+    """
+    published = artifact["mechanism_pin_disclosure"]["governs"]
+    assert published == record.MECHANISM_PIN_DISCLOSURE_GOVERNS_AS_PUBLISHED
+    assert published != record.MECHANISM_PIN_DISCLOSURE_GOVERNS
+
+
+def test_the_corrected_sentence_states_the_rule_the_code_applies(artifact):
+    """The corrected wording names BOTH arms' rules, and each matches `_lot_from_train_config`.
+
+    The claim is checked against the code rather than against prose: a DP point's lot is
+    `canary_population.n_facts`, an adversarial point's is `batch_size x max(1, grad_accum_steps)`,
+    and the published sentence's single formula is wrong for the 32 DP points by exactly the
+    factor the review measured.
+    """
+    corrected = _prose.normalized(record.MECHANISM_PIN_DISCLOSURE_GOVERNS)
+    assert "n_facts" in corrected and "batch_size x max(1, grad_accum_steps)" in corrected
+
+    dp = artifact["points"]["dp_n8_sigma0p000000"]
+    cfg = dp["training"]["train_config"]
+    assert record._lot_from_train_config(dp) == dp["canary_population"]["n_facts"]
+    assert record._lot_from_train_config(dp) == dp["records_per_lot"]
+    assert int(cfg["batch_size"]) * max(1, int(cfg["grad_accum_steps"])) != dp["records_per_lot"]
+
+    adv = artifact["points"]["adv_n8_ratio0p000000"]
+    adv_cfg = adv["training"]["train_config"]
+    assert record._lot_from_train_config(adv) == int(adv_cfg["batch_size"]) * max(
+        1, int(adv_cfg["grad_accum_steps"])
+    )
+    assert record._lot_from_train_config(adv) == adv["records_per_lot"]

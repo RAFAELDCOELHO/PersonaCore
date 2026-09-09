@@ -34,7 +34,7 @@ while `records_per_lot` is `8` (`n_facts`). `lot_rule_by_arm` beside it is corre
 contradicts itself inside FRONT-03's single source of truth. **No verdict, count, epsilon or Success
 Criterion is affected.** The artifact is write-once and downstream-pinned, so the route is a
 decision, not a code fix.
-result: [pending]
+result: RESOLVED 2026-09-09 — operator chose: record it in the note and correct the emitter, no re-emit. Landed in the WR-03 commit (note §13.8, `MECHANISM_PIN_DISCLOSURE_GOVERNS_AS_PUBLISHED` pinning the published bytes, the corrected constant naming both arms, two guard tests, and the module-digest test re-pinned to the bytes at the write because the artifact pins the emitter's own sha256).
 
 ### 3. Give the adversarial no-replay recipe an owner, or scope the report around it
 expected: Either a replay-bearing adversarial re-run has an owning phase with a success criterion,
