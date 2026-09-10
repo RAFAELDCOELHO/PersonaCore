@@ -10,7 +10,7 @@ progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 101
-  completed_plans: 98
+  completed_plans: 99
   percent: 67
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 26 (empirical-privacy-audit-canary) — EXECUTING
-Plan: 1 of 5
+Plan: 2 of 5 (26-01 complete: e6a8851, 3198506, 49ef177)
 **2026-09-04 — THE LAUNCH CHECKPOINT (25-14 Task 2/3), SESSION IN PROGRESS, ON `main`.** The
 operator chose "prepare and launch now". Before any GPU second the driver's live path was read end
 to end and found NEVER WIRED: `run_point` dereferenced `record_fields[...]` that `main()` never
