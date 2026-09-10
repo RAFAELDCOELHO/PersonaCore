@@ -32,6 +32,7 @@ CPU-safe at import: torch and every model module are imported inside the functio
 ``--dry-run`` exercises every structural path without touching the device.
 """
 
+import argparse
 import datetime
 import functools
 import hashlib
@@ -52,6 +53,7 @@ if _SRC not in sys.path:
 import phase25_prereg  # noqa: E402  (scripts/ is not a package)
 import phase25_record  # noqa: E402  (same)
 import phase25_run  # noqa: E402  (same — CPU-safe at import; torch stays lazy)
+import phase25_venue  # noqa: E402  (same)
 import phase26_prereg  # noqa: E402  (same — the dated pre-registration, stdlib only)
 
 from personacore.provenance import git_sha  # noqa: E402
@@ -379,3 +381,273 @@ def score_point(point_key, *, dry_run=False, heartbeat_path=None):
     )
     phase25_run.beat(heartbeat_path, point=point_key, stage="done", shape=None, draw_index=None)
     return "scored", blob
+
+
+# =================================================================================================
+# ===== THE ASSEMBLY — the ONLY reader of any verdict (D-19, D-13, D-03, D-05, D-18) =====
+# =================================================================================================
+
+
+def _fact_ids(blob, tier):
+    return set(blob[tier]["per_fact"])
+
+
+def _exclusions(off_blob, tiers, of):
+    """D-07 under EXCLUSION_SCOPE == 'either': any adapter-off answered question in EITHER tier."""
+    excluded = sorted(
+        {
+            fid
+            for tier in tiers
+            for fid, f in off_blob[tier]["per_fact"].items()
+            if f["answered_questions"] > 0
+        }
+    )
+    return {"excluded": excluded, "n": of - len(excluded), "of": of}
+
+
+def _readings(blob, in_tier, out_tier, *, excluded_in, excluded_out, n_in, n_out):
+    """Fact unit (decides) and question unit (reported) for one tier pair, over the non-excluded
+    facts of each population."""
+    in_facts = {f: v for f, v in blob[in_tier]["per_fact"].items() if f not in excluded_in}
+    out_facts = {f: v for f, v in blob[out_tier]["per_fact"].items() if f not in excluded_out}
+    _prove(
+        len(in_facts) == n_in and len(out_facts) == n_out,
+        f"{blob.get('point_key', blob.get('arm'))}: {len(in_facts)} IN / {len(out_facts)} OUT "
+        f"facts after exclusions, expected {n_in} / {n_out}",
+    )
+    fact_unit = phase26_prereg.epsilon_lower(
+        sum(1 for f in in_facts.values() if f["member"]),
+        n_in,
+        sum(1 for f in out_facts.values() if f["member"]),
+        n_out,
+    )
+    question_unit = phase26_prereg.epsilon_lower(
+        sum(f["answered_questions"] for f in in_facts.values()),
+        sum(f["n_questions"] for f in in_facts.values()),
+        sum(f["answered_questions"] for f in out_facts.values()),
+        sum(f["n_questions"] for f in out_facts.values()),
+    )
+    return {"fact_unit": fact_unit, "question_unit": question_unit}
+
+
+def emit(out_path=RECORD, *, overwrite=False):
+    """Assemble ``results/phase26_canary.json`` from the OFF sidecar + 16 point sidecars, or REFUSE.
+
+    WRITE-ONCE (T-26-03; the `phase25_recall.emit` register): a second ``--emit`` over the
+    committed file would republish it under a different commit. ``--force`` is the explicit
+    escape hatch. Nothing below reads a verdict before every sidecar has been proved present and
+    pinned; exclusions -> ceiling -> power gate -> verdicts, in that order.
+    """
+    _prove(
+        overwrite or not pathlib.Path(out_path).exists(),
+        f"{_rel(out_path)} exists — REFUSING to overwrite it. The sanctioned route deletes it in "
+        "its own commit, then re-runs against a clean tree (scripts/phase25_record.py "
+        "RERUN_ROUTE). Pass --force to overwrite deliberately.",
+    )
+    out_path = pathlib.Path(out_path)
+    fr = frontier()
+    pinned = phase26_prereg.audited_point_keys(fr)
+    noised = phase26_prereg.noised_point_keys(fr)
+    control = phase26_prereg.CONTROL_KEY
+
+    off = off_sidecar_path()
+    _prove(
+        off.exists(),
+        f"the adapter-off sidecar {_rel(off)} is missing — the audit is not complete; record the "
+        f"dated D-19 named limitation in {_rel(OPERATIONAL_NOTE)} instead of assembling a "
+        "partial artifact",
+    )
+    off_blob = json.loads(off.read_text(encoding="utf-8"))
+    base = _ROOT / off_blob["base_path"]
+    _prove(base.exists(), f"the OFF sidecar's base {off_blob['base_path']} is not on disk")
+    _prove(
+        off_blob["base_sha256"] == _sha256(base),
+        f"{off.name} describes base {off_blob['base_sha256']!r}, not the bytes at "
+        f"{off_blob['base_path']} — REFUSED (T-26-07)",
+    )
+
+    missing = [key for key in pinned if not sidecar_path(key).exists()]
+    _prove(
+        not missing,
+        f"{len(missing)} of {len(pinned)} point sidecars missing: {missing} — not scored; a "
+        f"partial artifact is NEVER assembled (D-19) — add the dated named-limitation entry to "
+        f"{_rel(OPERATIONAL_NOTE)}",
+    )
+    sidecars = {}
+    for key in pinned:
+        blob = json.loads(sidecar_path(key).read_text(encoding="utf-8"))
+        _prove(
+            blob["adapter_sha256"] == fr["points"][key]["adapter_sha256"],
+            f"{key}: sidecar adapter {blob['adapter_sha256']!r} != frontier "
+            f"{fr['points'][key]['adapter_sha256']!r} — REFUSED (T-26-07)",
+        )
+        sidecars[key] = blob
+    _prove(
+        set(sidecars) == set(pinned) and len(sidecars) == len(pinned),
+        f"{len(sidecars)} entries against {len(pinned)} pinned keys",
+    )
+
+    # (4) exclusions BEFORE anything else is read (D-07).
+    out_x = _exclusions(off_blob, OUT_TIERS, 56)
+    in_x = _exclusions(off_blob, IN_TIERS, 8)
+    n_in, n_out = in_x["n"], out_x["n"]
+    _prove(n_in > 0 and n_out > 0, f"n_in = {n_in}, n_out = {n_out}: a population is empty")
+    exclusions = {
+        "rule": phase26_prereg.EXCLUSION_SCOPE,
+        "rationale": phase26_prereg.EXCLUSION_SCOPE_RATIONALE,
+        "out": out_x,
+        "in": in_x,
+    }
+
+    # (5) the ceiling on the REAL n's, BEFORE any verdict (D-13, Pitfall 6).
+    ceiling = phase26_prereg.auditor_ceiling(n_in, n_out)
+    reachable = [k for k in noised if fr["points"][k]["epsilon"] < ceiling]
+    reachable_claims = f"{len(reachable)}/{len(noised)}"
+
+    # (6) readings per point: taught tier decides, held-out reported (D-10).
+    kw = {"excluded_in": set(in_x["excluded"]), "excluded_out": set(out_x["excluded"])}
+    readings = {
+        k: {
+            **_readings(b, "in_taught", "out_taught", n_in=n_in, n_out=n_out, **kw),
+            "heldout_reported": _readings(
+                b, "in_heldout", "out_heldout", n_in=n_in, n_out=n_out, **kw
+            ),
+        }
+        for k, b in sidecars.items()
+    }
+
+    # (7) the power gate at the control (D-03, D-04).
+    power = phase26_prereg.power_gate(
+        readings[control]["fact_unit"]["epsilon_lower"], phase26_prereg.power_threshold(fr)
+    )
+    print(
+        f"[phase26_canary] {phase26_prereg.POWER_SENTENCE} control epsilon_lower = "
+        f"{power['control_epsilon_lower']!r} vs threshold {power['threshold']!r}: "
+        f"{'PASSED' if power['passed'] else 'FAILED'}"
+    )
+
+    # (8)-(9) verdicts in order, each beside the sanctioned epsilon sentence.
+    import phase25_epsilon  # LAZY — reads results/phase21_multiplicity.json at call time
+
+    curve_total = fr["epsilon_report"]["curve_total_epsilon"]
+    points = {}
+    for key in pinned:
+        record, blob = fr["points"][key], sidecars[key]
+        sentence = phase25_epsilon.report_epsilon(
+            point_epsilon=record["epsilon"],
+            curve_total_epsilon=curve_total,
+            selection_accounted=False,
+        )
+        _prove(
+            sentence == fr["epsilon_report"]["rendered"][key],
+            f"{key}: report_epsilon renders differently from the frontier's epsilon_report",
+        )
+        entry = {
+            "adapter_sha256": record["adapter_sha256"],
+            "adapter_path": record["adapter_path"],
+            "sigma": record["sigma"],
+            "epsilon_upper": record["epsilon"],
+            **readings[key],
+            "epsilon_sentence": sentence,
+            "source": _rel(sidecar_path(key)),
+        }
+        if key == control:
+            entry["verdict"] = None
+            entry["comparison"] = (
+                "VACUOUS BY CONSTRUCTION: the control publishes no epsilon ("
+                + record["epsilon_omitted_reason"]
+                + "); its reading is the power gate's and feeds nothing else (D-01)"
+            )
+            entry["reproduction_gate"] = blob.get("reproduction_gate")
+        else:
+            entry["verdict"] = phase26_prereg.point_verdict(
+                readings[key]["fact_unit"],
+                record["epsilon"],
+                power=power,
+                auditor_ceiling=ceiling,
+            )
+        points[key] = entry
+    summary = {v: 0 for v in phase26_prereg.VERDICTS}
+    for key in noised:
+        summary[points[key]["verdict"]["verdict"]] += 1
+
+    import phase18_extraction  # LAZY — heavy; import-only for the rationale
+    import phase25_gate05  # LAZY — import-only for FILLER_EXPOSURE_OMITTED
+
+    blob = {
+        "governs": {
+            "why_not_nll_exposure_on_filler": phase25_gate05.FILLER_EXPOSURE_OMITTED,
+            "both_denominators": phase18_extraction.CLUSTER_DENOMINATOR_RATIONALE,
+            "one_sided": phase26_prereg.ONE_SIDED_CLAUSE,
+        },
+        "instrument": INSTRUMENT,
+        "audit_target_rule": phase26_prereg.RULE,
+        "resolved_target": phase26_prereg.resolve_audit_target(fr),
+        "extension": phase26_prereg.EXTENSION,
+        "audited_point_keys": list(pinned),
+        "deciding_tier": phase26_prereg.DECIDING_TIER,
+        "membership_rule": phase26_prereg.MEMBERSHIP_RULE,
+        "unit": phase26_prereg.UNIT,
+        "frontier_path": _rel(phase25_record.FRONTIER_RECORD),
+        "frontier_sha256": _sha256(phase25_record.FRONTIER_RECORD),
+        "frontier_bytes": phase25_record.FRONTIER_RECORD.stat().st_size,
+        "base_path": off_blob["base_path"],
+        "base_sha256": off_blob["base_sha256"],
+        "off_sidecar": _rel(off),
+        "prereg_module_sha256": _sha256(PREREG_MODULE),
+        "prereg_committed": phase26_prereg.COMMITTED,
+        "waiver_continuation": phase26_prereg.WAIVER_CONTINUATION,
+        "exclusions": exclusions,
+        "n_in": n_in,
+        "n_out": n_out,
+        "auditor_ceiling": ceiling,
+        "reachable_claims": reachable_claims,
+        "reachable_keys": reachable,
+        "power_gate": power,
+        "joint_coverage": phase26_prereg.JOINT_COVERAGE,
+        "z": phase26_prereg.Z,
+        "delta": phase26_prereg.DELTA,
+        "curve_total_epsilon": curve_total,
+        "curve_total_is_context_only": phase26_prereg.EXTENSION,
+        "emitted_utc": _utc(),
+        "emitted_git_sha": git_sha(),
+        "points": points,
+        "summary": summary,
+    }
+    phase25_run.atomic_write_json(out_path, blob)
+    print(
+        f"[phase26_canary] emitted {_rel(out_path)}: {summary}; reachable claims "
+        f"{reachable_claims} (auditor_ceiling = {ceiling!r}); power gate "
+        f"{'PASSED' if power['passed'] else 'FAILED'}"
+    )
+    return blob
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Phase 26 canary audit: adapter-off once, then adapter-on over 16 dp_n8 points."
+    )
+    parser.add_argument("--points", nargs="+", default=None)
+    parser.add_argument("--heartbeat", default=str(phase25_run.HEARTBEAT_PATH))
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--emit", action="store_true", help="assemble results/phase26_canary.json")
+    parser.add_argument("--force", action="store_true", help="overwrite an existing artifact")
+    return parser
+
+
+def main(argv=None):
+    print(phase25_venue.launch_banner(), flush=True)
+    args = build_parser().parse_args(argv)
+    if args.emit:
+        emit(overwrite=args.force)
+        return 0
+    heartbeat = pathlib.Path(args.heartbeat)
+    points = phase26_prereg.audited_point_keys(frontier()) if args.points is None else args.points
+    score_off_once(dry_run=args.dry_run, heartbeat_path=heartbeat)  # D-17: once, before any point
+    for key in points:
+        score_point(key, dry_run=args.dry_run, heartbeat_path=heartbeat)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
