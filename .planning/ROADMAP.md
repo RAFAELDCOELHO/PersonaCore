@@ -994,10 +994,24 @@ know your from-scratch DP-SGD is correct?"
 **Plans**: 5 plans in 5 waves (planned 2026-09-10)
 
 Plans:
+**Wave 1**
+
 - [ ] 26-01-PLAN.md — `scripts/phase26_prereg.py` + `tests/test_phase26_prereg.py`: the dated continuation (rule by reference, extension to all 15 noised dp_n8, power gate, D-09 arithmetic, verdict domain, D-40 continuation) frozen by ancestry guard
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 26-02-PLAN.md — `scripts/phase26_canary.py` driver (one instrument IN/OUT, OFF once, sidecars by hash, `--dry-run`/`--emit`) + `artifacts/com.personacore.phase26.canary.plist`
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 26-03-PLAN.md — `tests/test_phase26_canary.py`: structural tests, the live-path wiring proof through `main()`, power-gate forged-pass RED, sibling link both ways
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 26-04-PLAN.md — operational note (first tracked Phase-26 result), ≈ 25 h budget stated, LaunchAgent kickstart, early-run human gate (OFF sidecar, consumer refusal on real records, control 790/1008)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 26-05-PLAN.md — `--emit` once when 17 sidecars exist (else the dated D-19 named limitation), operator commits `results/phase26_canary.json` by hand, machine put back
 
 ### Phase 27: Relearning Attack
