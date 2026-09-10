@@ -513,14 +513,17 @@ Not applicable — no external technology choice is open; every mechanism is the
 | A2 | MPS draws are bit-reproducible on this machine at `torch 2.7.1` (evidence: D-07 gate passed exactly at 25-15 and `phase23_sigma_zero` — same count from two separately trained adapters). `[ASSUMED]` beyond that evidence | Pitfall 8 | Reproduction halts at the control; the halt is the designed outcome (D-15 "refused if it fails"). |
 | A3 | ≈ 3.8 s/question for a noised adapter extrapolates from IN questions to OUT questions (same prompt shapes). `[ASSUMED]` | Pitfall 4 | Cost lands between 17 h and 30 h; nothing else changes. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Budget: ≈ 25 h of MPS vs the CONTEXT's ≈ 11 h.**
    - What we know: measured per-question cost on noised adapters (Pitfall 4); OUT adds 1288 questions per arm under D-08 (both tiers).
    - What's unclear: whether the operator accepts ≈ 25 h. D-08 is locked (both tiers), so the held-out OUT tier (504 q/point ≈ 8.5 h in total) cannot be cut by the planner.
    - Recommendation: plan for 25 h, launch under the LaunchAgent, and state the measured figure in the operational note before kickstart; if the operator cuts the held-out OUT tier, that is a decision to record, not a plan-time change.
+   - RESOLVED: plan 26-04 T1 §3 states the measured ≈ 25 h in `results/phase26_operational_note.md` before kickstart and names the CONTEXT's ≈ 11 h as superseded; D-08 stays locked, nothing is cut at plan time; 26-04 T2 is the operator's checkpoint to leave the run unattended.
 2. **Which tier's questions decide at the fact unit (D-14)?** The CONTEXT's arithmetic (n_IN = 112, n_OUT ≈ 784, "~14 questions per fact") is the TAUGHT tier. Recommendation: the taught tier decides; the held-out tier is a second reported reading at both units. Declare it in `phase26_prereg` so it is committed, not chosen.
+   - RESOLVED: plan 26-01 T1 item 8 — `phase26_prereg.DECIDING_TIER = "taught"` with `DECIDING_TIER_RATIONALE`; held-out is reported beside it at both units and never decides; pinned by `tests/test_phase26_prereg.py::test_the_continuations_are_data`.
 3. **D-07 existential scope for exclusion:** "ANY adapter-off success" — recommend any question of EITHER tier (strictest), declared in `phase26_prereg`.
+   - RESOLVED: plan 26-01 T1 item 8 — `phase26_prereg.EXCLUSION_SCOPE = "either"` with `EXCLUSION_SCOPE_RATIONALE`; counted and published as `excluded n / 56`; pinned by `tests/test_phase26_prereg.py::test_the_continuations_are_data`.
 
 ## Environment Availability
 
