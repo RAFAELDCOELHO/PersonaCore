@@ -183,9 +183,140 @@ before the run can produce anything the consumer would have to refuse or assembl
 
 ## 5. The launch record — 2026-09-11
 
-Filled after kickstart in COMMIT B: `launchctl list`, the banner line from `logs/phase26_canary.out`,
-the assertion owner with its parent pid, the first heartbeat line, and the `git rev-parse HEAD` the
-sidecars' `instrument_git_sha` will carry (= this note's first-add commit, COMMIT A).
+Everything below is the kickstart transcript, quoted; the commands ran from the operator's console
+in this order, with COMMIT A (`4c01c43`, this note's first-add) checked out throughout.
+
+### 5.1 Preconditions — COMMIT A and the ancestry guard
+
+```
+$ git log --diff-filter=A --format=%H -- results/phase26_operational_note.md
+4c01c43fd3eae7e2c9e154a4328bd8f16cd21d85
+$ git merge-base --is-ancestor e6a885106fcad5e6d12b676c0febbd954e61f129 4c01c43fd3eae7e2c9e154a4328bd8f16cd21d85 && echo ancestor OK
+ancestor OK
+$ .venv/bin/python -m pytest -q tests/test_phase26_prereg.py
+.................                                                        [100%]
+17 passed in 1.19s
+$ .venv/bin/python -m pytest -q tests/test_phase26_prereg.py tests/test_phase26_canary.py -k "prereg_is_frozen or byte_identical or operational_note" -x
+........                                                                 [100%]
+8 passed, 34 deselected in 0.86s
+```
+
+The guard's `checked` count is `1` (one prereg commit × one tracked artifact) — it was
+`0`, "honest with zero tracked paths", until this note existed.
+
+### 5.2 The stall log, rotated; the heartbeat file, left in place
+
+The Phase-25 close had booted the watcher out on 2026-09-09; its last 395 records describe the
+end of the v4.0 sweep (every one `action_taken: "none"`). They would have polluted this run's stall
+history, so — as Phase 25 §12.2 did — they were moved aside, not deleted. The heartbeat file was
+left in place: the driver appends beats and the watcher reads only the last line.
+
+```
+$ wc -l data/phase25_stall.jsonl
+     395 data/phase25_stall.jsonl
+$ mv data/phase25_stall.jsonl data/phase25_stall.pre-launch-2026-09-11.jsonl
+-rw-r--r--  1 juliorcoelho  staff   351472  9 set 00:30 data/phase25_stall.pre-launch-2026-09-11.jsonl
+$ tail -1 data/phase25_stall.pre-launch-2026-09-11.jsonl | cut -c1-40
+{"action_taken": "none", "action_taken_r
+$ tail -1 data/phase25_heartbeat.jsonl
+{"draw_index": null, "point": "adv_n64_ratio1p909091", "shape": null, "stage": "done", "utc": "2026-09-09T01:36:32.758275+00:00"}
+```
+
+### 5.3 Install and load — nothing starts
+
+```
+$ cp artifacts/com.personacore.phase26.canary.plist ~/Library/LaunchAgents/
+$ cmp artifacts/com.personacore.phase26.canary.plist ~/Library/LaunchAgents/com.personacore.phase26.canary.plist && echo "installed copy byte-identical"
+installed copy byte-identical
+$ launchctl load ~/Library/LaunchAgents/com.personacore.phase26.canary.plist
+$ launchctl load ~/Library/LaunchAgents/com.personacore.phase25.watch.plist
+$ launchctl list | grep personacore
+-	0	com.personacore.phase25.watch
+-	0	com.personacore.phase26.canary
+$ launchctl print gui/501/com.personacore.phase26.canary | grep -iE 'keepalive|runs =|state ='
+	state = not running
+	runs = 0
+```
+
+Loading started nothing (`RunAtLoad false`; the absent `keepalive` line is the as-loaded form of
+`KeepAlive false`, as Phase 25 §12.3 records). The watcher is a `StartInterval 60` job
+(`KeepAlive false`, `RunAtLoad false`) — it ticks once a minute and exits, which is why its
+`launchctl list` PID reads `-`. It detects and never acts (T-26-04).
+
+### 5.4 Kickstart
+
+```
+== kickstart at 2026-09-11T16:23:57Z
+$ launchctl kickstart -k gui/501/com.personacore.phase26.canary
+kickstart exit=0
+$ launchctl list | grep personacore
+-	0	com.personacore.phase25.watch
+70302	0	com.personacore.phase26.canary
+$ head -1 logs/phase26_canary.out
+[phase25_launch] pid=70302 ppid=1 pgid=70302 sid=1
+$ launchctl print gui/501/com.personacore.phase26.canary | grep -iE 'runs =|state =|pid ='
+	state = running
+	runs = 1
+	pid = 70302
+```
+
+### 5.5 The assertion read-back, 18 s after kickstart
+
+The wrapper is the driver's CHILD (STATE.md 2026-09-04, the sixth Phase-25 defect): launchd started
+`caffeinate -dims …` as pid 70302, which forked pid 70304 to hold the assertions "on behalf of"
+70302 and then exec'd the venv python in place — so the banner's `pid=70302 ppid=1` IS the driver,
+and the holder is found by `ppid == driver pid`, not the other way round.
+
+```
+$ pmset -g assertions | grep -i -E 'caffeinate|PreventUserIdleSystemSleep'
+   PreventUserIdleSystemSleep     1
+   pid 69922(caffeinate): [0x0060c758000183b9] 00:00:50 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting for 300 secs
+   pid 70304(caffeinate): [0x0060c778000183c8] 00:00:18 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 70302)
+   pid 70304(caffeinate): [0x0060c778000583c9] 00:00:18 PreventUserIdleDisplaySleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 70302)
+   pid 70304(caffeinate): [0x0060c778000783ca] 00:00:18 PreventSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 70302)
+   pid 70304(caffeinate): [0x0060c778000f83cb] 00:00:18 PreventDiskIdle named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 70302)
+   pid 15665(caffeinate): [0x005e5d0900018aee] 47:04:12 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of Process ID 7584
+   pid 15665(caffeinate): [0x005e5d0900078aef] 47:04:12 PreventSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of Process ID 7584
+$ ps -o pid,ppid,args -p 15665,69922,70304,70302
+  PID  PPID ARGS
+15665     1 caffeinate -s -i -w 7584
+70302     1 /opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python /Users/juliorcoelho/PersonaCore/scripts/phase26_canary.py --heartbeat /Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl
+70304 70302 /usr/bin/caffeinate -dims /Users/juliorcoelho/PersonaCore/.venv/bin/python /Users/juliorcoelho/PersonaCore/scripts/phase26_canary.py --heartbeat /Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl
+69922 86995 caffeinate -i -t 300
+$ pgrep -P 70302 -l
+70304 caffeinate
+```
+
+Four assertions (`-dims`: display, idle, system, disk) held by pid 70304 whose `PPID` is 70302, the
+driver — the run holds its own wake claim and cannot outlive it. The two owners §2 named are still
+there and still not ours: the console's 300-second caffeinate has rotated from pid 58888 to 69922
+(the harness renews it), and the polymarket stray 15665 is unchanged.
+
+### 5.6 The first heartbeat, and the SHA the sidecars carry
+
+```
+$ tail -1 data/phase25_heartbeat.jsonl
+{"draw_index": null, "point": "off", "shape": null, "stage": "score", "utc": "2026-09-11T16:23:58.442696+00:00"}
+$ git rev-parse HEAD
+4c01c43fd3eae7e2c9e154a4328bd8f16cd21d85
+$ ls -la data/phase25_stall.jsonl
+ls: data/phase25_stall.jsonl: No such file or directory
+$ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-09-11T16:24:15Z
+```
+
+The first beat is the adapter-off arm (`point: "off"`, `stage: "score"`), 1 s after kickstart —
+D-17's "once, before any point" is what the heartbeat shows first. No stall record has been written:
+the beat landed before the watcher's first tick, so unlike Phase 25 §12.2 there is no
+pre-kickstart-silence record to carry. `HEAD` at kickstart is `4c01c43` = COMMIT A, so every
+sidecar's `instrument_git_sha` names the commit that contains this note's §1–§4 (T-26-03).
 
 ## 6. The early-run gate — PENDING
 
