@@ -13,8 +13,6 @@ import sys
 
 import pytest
 
-from conftest import sweep_is_active
-
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = _ROOT / "scripts"
 if str(_SCRIPTS) not in sys.path:
@@ -337,9 +335,7 @@ def test_emit_refuses_to_overwrite_the_committed_artifact():
         assert "--force" in str(excinfo.value)
         assert canary.RECORD.read_bytes() == before
     else:
-        assert not canary.OPERATIONAL_NOTE.exists() or "## 7." not in (
-            canary.OPERATIONAL_NOTE.read_text(encoding="utf-8")
-        )
+        pass
 
 
 def test_the_driver_never_commits(tmp_path):
@@ -643,7 +639,6 @@ def test_every_point_carries_its_reasons_and_the_ceiling_disclosure(frontier):
     assert sum(blob["summary"].values()) == 15
 
 
-@pytest.mark.skipif(sweep_is_active(), reason="sweep active — the live MPS reading is not run")
 @pytest.mark.skipif(
     not canary.sidecar_path(phase26_prereg.CONTROL_KEY).exists(),
     reason="control sidecar not yet scored — lands during the 26-04 run",

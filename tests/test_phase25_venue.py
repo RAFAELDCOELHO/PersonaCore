@@ -279,10 +279,18 @@ def _counts(completed):
 #                              test_the_control_reproduced_the_published_reading
 #         @needs_plutil    (1) test_the_canary_agent_plist_lints
 # They add 8 to each ubuntu count regardless of the flag: 62 + 8 = 70 / 70.
+#
+# DATED CONTINUATION, 2026-09-11 (plan 26-04 Task 3) — ADDITIVE ONLY. The 26-03
+# continuation above stays as written. The control sidecar now exists on disk, and
+# the sweep-active skip was removed from `test_the_control_reproduced_the_published_reading`.
+# That leg therefore RUNS in both modes on the M3, so the M3 contribution attributed
+# to `_CANARY_CONTROL_NOT_YET_SCORED_SKIPS` is now 0 (not 1) in both modes. The
+# `@needs_adapters` guard remains, so the ubuntu contribution remains in
+# `_CANARY_HOST_ONLY_SKIPS` and is unchanged.
 _PROMOTION_EMPTY_FRONTIER_SKIPS = 3
 _RECALL_HOST_ONLY_SKIPS = 7  # 6 @needs_adapters + 1 @needs_plutil (25-REVIEW CR-01)
 _CANARY_CONTROL_NOT_YET_SCORED_SKIPS = (
-    1  # M3 only; both modes today (26-03; revisit at 26-04/26-05)
+    0  # M3 only; both modes as of 26-04 Task 3 — see the dated continuation above
 )
 _CANARY_HOST_ONLY_SKIPS = 8  # ubuntu only; 7 @needs_adapters + 1 @needs_plutil (26-03)
 _M3_SWEEP_ACTIVE_EXPECTED_SKIPS = (
