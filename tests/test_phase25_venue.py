@@ -248,12 +248,55 @@ def _counts(completed):
 # real and are recorded in `results/phase25_operational_note.md` §13.9: seven were the epsilon
 # ladder's two glibc twins reaching comparison sites that had never run off the publication host,
 # one was a LaunchAgent plist's absolute path compared against the checkout root.
+# DATED CONTINUATION, 2026-09-11 (plan 26-03) — THE CONTINUATIONS ABOVE STAY AS WRITTEN. Plan
+# 26-03 added `tests/test_phase26_canary.py`. MEASURED on the M3 sweep host, HEAD `63963ce`, by
+# running `tests/test_phase25_venue.py` directly:
+#
+#     sweep-active inner suite: 2733 passed, 40 skipped (register said 39)
+#     flag-unset   inner suite: 2768 passed,  5 skipped (register said 4)
+#
+# The +1 on BOTH M3 counts is the SAME node id for two different reasons, not two separate skips:
+#         tests/test_phase26_canary.py::test_the_control_reproduced_the_published_reading
+# Under `PERSONACORE_SWEEP_ACTIVE=1` it skips via `skipif(sweep_is_active())`, the same shape as
+# every other MPS-gated leg above — that skip is permanent. With the flag unset it ALSO skips
+# today, but for an unrelated, temporary reason: the control sidecar
+# `data/phase26_canary_dp_n8_sigma0p000000.json` has not been scored yet; that lands during the
+# 26-04 run. Once 26-04 scores it, the flag-unset M3 count drops back to 4 + 0 (the sweep-active
+# count stays 40 + 0 — that skip does not depend on the sidecar). Plan 26-05 (the phase close) is
+# what revisits THIS continuation and subtracts `_CANARY_CONTROL_NOT_YET_SCORED_SKIPS` from the
+# flag-unset sum then — never the 25-06 / 25-18 / CR-01 attributions above.
+#
+# ubuntu is DERIVED, NOT MEASURED — no CI run has executed this file yet. `tests/test_phase26_
+# canary.py` carries seven `@needs_adapters` cases and one `@needs_plutil` case, the same
+# host-gating shape CR-01 put on `tests/test_phase25_recall.py`; the control-read test above is
+# one of the seven `@needs_adapters` cases, so it is not double-counted:
+#         @needs_adapters  (7) test_the_dry_run_walks_off_and_sixteen_and_never_imports_torch
+#                              test_a_matching_sidecar_is_reused
+#                              test_a_sidecar_for_a_different_adapter_is_refused
+#                              test_the_live_path_is_wired_end_to_end
+#                              test_the_control_routes_its_in_taught_sum_through_prove_reproduction
+#                              test_the_power_gate_goes_red_on_a_forged_pass
+#                              test_the_control_reproduced_the_published_reading
+#         @needs_plutil    (1) test_the_canary_agent_plist_lints
+# They add 8 to each ubuntu count regardless of the flag: 62 + 8 = 70 / 70.
 _PROMOTION_EMPTY_FRONTIER_SKIPS = 3
 _RECALL_HOST_ONLY_SKIPS = 7  # 6 @needs_adapters + 1 @needs_plutil (25-REVIEW CR-01)
-_M3_SWEEP_ACTIVE_EXPECTED_SKIPS = 36 + _PROMOTION_EMPTY_FRONTIER_SKIPS
-_M3_FLAG_UNSET_EXPECTED_SKIPS = 1 + _PROMOTION_EMPTY_FRONTIER_SKIPS
-_UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS = 52 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _RECALL_HOST_ONLY_SKIPS
-_UBUNTU_FLAG_UNSET_EXPECTED_SKIPS = 52 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _RECALL_HOST_ONLY_SKIPS
+_CANARY_CONTROL_NOT_YET_SCORED_SKIPS = (
+    1  # M3 only; both modes today (26-03; revisit at 26-04/26-05)
+)
+_CANARY_HOST_ONLY_SKIPS = 8  # ubuntu only; 7 @needs_adapters + 1 @needs_plutil (26-03)
+_M3_SWEEP_ACTIVE_EXPECTED_SKIPS = (
+    36 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _CANARY_CONTROL_NOT_YET_SCORED_SKIPS
+)
+_M3_FLAG_UNSET_EXPECTED_SKIPS = (
+    1 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _CANARY_CONTROL_NOT_YET_SCORED_SKIPS
+)
+_UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS = (
+    52 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _RECALL_HOST_ONLY_SKIPS + _CANARY_HOST_ONLY_SKIPS
+)
+_UBUNTU_FLAG_UNSET_EXPECTED_SKIPS = (
+    52 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _RECALL_HOST_ONLY_SKIPS + _CANARY_HOST_ONLY_SKIPS
+)
 
 SWEEP_ACTIVE_EXPECTED_SKIPS = (
     _M3_SWEEP_ACTIVE_EXPECTED_SKIPS if _MPS_PRESENT else _UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS
