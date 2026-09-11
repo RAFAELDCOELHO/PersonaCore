@@ -1,20 +1,27 @@
 """CPU-only tests for the Phase-26 empirical privacy audit canary."""
 
 import ast
+import copy
+import hashlib
 import json
 import pathlib
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
 
 import pytest
 
+from conftest import sweep_is_active
+
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = _ROOT / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+import _prose  # noqa: E402
+import phase25_prereg  # noqa: E402
 import phase25_record  # noqa: E402
 import phase25_run  # noqa: E402, F401
 import phase26_canary as canary  # noqa: E402
@@ -376,3 +383,275 @@ def test_sidecar_paths_refuse_a_path_separator():
         canary.sidecar_path("../x")
     with pytest.raises(SystemExit):
         canary.point_record("dp_n8_sigma0p5")
+
+
+@needs_adapters
+def test_the_live_path_is_wired_end_to_end(tmp_path, monkeypatch, frontier):
+    monkeypatch.setattr(canary, "SIDECAR_DIR", tmp_path)
+    import phase14_recall as pr
+    import torch
+
+    def fake_loader(device, adapter_path=None):
+        return torch.nn.Module(), None, None, frozenset(), None
+
+    def fake_complete(model, tok, question, device, forbid, *, index):
+        return {
+            "question": question,
+            "prompt_ids": [],
+            "completions": [f"answer {index}"] * 9,
+            "stopped": [True] * 9,
+        }
+
+    monkeypatch.setattr(pr, "load_adapted_model", fake_loader)
+    monkeypatch.setattr(pr, "complete_question", fake_complete)
+    recorded = []
+
+    def record_reproduction(k, n):
+        assert isinstance(k, int) and not isinstance(k, bool)
+        assert isinstance(n, int) and not isinstance(n, bool)
+        recorded.append((k, n))
+
+    monkeypatch.setattr(phase25_prereg, "prove_reproduction", record_reproduction)
+    heartbeat = tmp_path / "hb.jsonl"
+    assert (
+        canary.main(
+            [
+                "--points",
+                phase26_prereg.CONTROL_KEY,
+                "dp_n8_sigma80p000000",
+                "--heartbeat",
+                str(heartbeat),
+            ]
+        )
+        == 0
+    )
+    off_blob = json.loads(canary.off_sidecar_path().read_text(encoding="utf-8"))
+    control_blob = json.loads(
+        canary.sidecar_path(phase26_prereg.CONTROL_KEY).read_text(encoding="utf-8")
+    )
+    producer = json.loads(canary.sidecar_path("dp_n8_sigma80p000000").read_text(encoding="utf-8"))
+    expected = {
+        "in_taught": (8, 112),
+        "in_heldout": (8, 72),
+        "out_taught": (56, 784),
+        "out_heldout": (56, 504),
+    }
+    for blob in (off_blob, control_blob, producer):
+        for tier, (n_facts, n_questions) in expected.items():
+            assert len(blob[tier]["per_fact"]) == n_facts
+            assert len(blob[tier]["per_question"]) == n_questions
+            assert blob[tier]["questions"] == n_questions
+            assert blob[tier]["draws_per_question"] == 9
+    assert recorded == [(0, 1008)]
+    assert control_blob["reproduction_gate"]["observed"] == list(recorded[0])
+
+    for key in phase26_prereg.noised_point_keys(frontier):
+        if key == "dp_n8_sigma80p000000":
+            continue
+        clone = copy.deepcopy(producer)
+        record = frontier["points"][key]
+        clone.update(
+            point_key=key,
+            adapter_sha256=record["adapter_sha256"],
+            adapter_path=record["adapter_path"],
+            sigma=record["sigma"],
+            epsilon_upper=record["epsilon"],
+        )
+        canary.sidecar_path(key).write_text(json.dumps(clone), encoding="utf-8")
+
+    emitted = canary.emit(tmp_path / "canary.json")
+    assert emitted["audited_point_keys"] == list(_KEYS)
+    assert re.fullmatch(r"\d+/15", emitted["reachable_claims"])
+    assert isinstance(emitted["auditor_ceiling"], float)
+    assert set(emitted["power_gate"]) == {
+        "threshold",
+        "control_epsilon_lower",
+        "passed",
+        "sentence",
+    }
+    assert emitted["power_gate"]["sentence"] == phase26_prereg.POWER_SENTENCE
+    assert emitted["exclusions"]["out"]["of"] == 56
+    for key in _KEYS:
+        point = emitted["points"][key]
+        assert point["epsilon_sentence"] == frontier["epsilon_report"]["rendered"][key]
+        if key == phase26_prereg.CONTROL_KEY:
+            assert point["verdict"] is None
+            assert point["comparison"].startswith("VACUOUS BY CONSTRUCTION")
+            continue
+        assert point["verdict"]["verdict"] in phase26_prereg.VERDICTS
+        reasons = point["verdict"]["reasons"]
+        assert reasons and all(isinstance(reason, str) for reason in reasons)
+        assert any("/" in reason for reason in reasons)
+        if point["epsilon_upper"] >= emitted["auditor_ceiling"]:
+            assert _prose.normalized(phase26_prereg.CEILING_CLAUSE) in _prose.normalized(
+                "\n".join(reasons)
+            )
+        expected_verdict = phase26_prereg.verdict(
+            point["fact_unit"]["epsilon_lower"],
+            frontier["points"][key]["epsilon"],
+            power_passed=emitted["power_gate"]["passed"],
+        )
+        assert point["verdict"]["verdict"] == expected_verdict
+        assert point["epsilon_upper"] == frontier["points"][key]["epsilon"]
+    assert emitted["curve_total_epsilon"] == frontier["epsilon_report"]["curve_total_epsilon"]
+    assert sum(emitted["summary"].values()) == 15
+    assert (
+        emitted["frontier_sha256"]
+        == hashlib.sha256(phase25_record.FRONTIER_RECORD.read_bytes()).hexdigest()
+    )
+    assert (
+        emitted["prereg_module_sha256"]
+        == hashlib.sha256((_ROOT / "scripts" / "phase26_prereg.py").read_bytes()).hexdigest()
+    )
+    beats = [json.loads(line) for line in heartbeat.read_text(encoding="utf-8").splitlines()]
+    assert len(beats) >= 3
+    assert {beat["stage"] for beat in beats} >= {"score", "done"}
+    evidence_key = phase26_prereg.noised_point_keys(frontier)[0]
+    print(
+        "PHASE26_WIRING_EVIDENCE "
+        + json.dumps(
+            {
+                "power_gate": emitted["power_gate"],
+                "auditor_ceiling": emitted["auditor_ceiling"],
+                "reachable_claims": emitted["reachable_claims"],
+                "point_key": evidence_key,
+                "verdict_reasons": emitted["points"][evidence_key]["verdict"]["reasons"],
+            },
+            sort_keys=True,
+        )
+    )
+
+
+@needs_adapters
+def test_the_control_routes_its_in_taught_sum_through_prove_reproduction(tmp_path, monkeypatch):
+    monkeypatch.setattr(canary, "SIDECAR_DIR", tmp_path)
+    import phase14_recall as pr
+    import torch
+
+    def fake_loader(device, adapter_path=None):
+        return torch.nn.Module(), None, None, frozenset(), None
+
+    def fake_complete(model, tok, question, device, forbid, *, index):
+        return {
+            "question": question,
+            "prompt_ids": [],
+            "completions": [f"answer {index}"] * 9,
+            "stopped": [True] * 9,
+        }
+
+    monkeypatch.setattr(pr, "load_adapted_model", fake_loader)
+    monkeypatch.setattr(pr, "complete_question", fake_complete)
+    calls = []
+
+    def refuse(k, n):
+        calls.append((k, n))
+        raise SystemExit("gate")
+
+    monkeypatch.setattr(phase25_prereg, "prove_reproduction", refuse)
+    with pytest.raises(SystemExit, match="gate"):
+        canary.score_point(phase26_prereg.CONTROL_KEY, heartbeat_path=tmp_path / "refused-hb.jsonl")
+    assert not canary.sidecar_path(phase26_prereg.CONTROL_KEY).exists()
+
+    def pass_gate(k, n):
+        calls.append((k, n))
+
+    monkeypatch.setattr(phase25_prereg, "prove_reproduction", pass_gate)
+    status, blob = canary.score_point(
+        phase26_prereg.CONTROL_KEY, heartbeat_path=tmp_path / "passed-hb.jsonl"
+    )
+    assert status == "scored"
+    assert canary.sidecar_path(phase26_prereg.CONTROL_KEY).exists()
+    assert calls[-1] == (blob["in_taught"]["k"], blob["in_taught"]["n"])
+
+
+@needs_adapters
+def test_the_power_gate_goes_red_on_a_forged_pass(tmp_path, monkeypatch):
+    monkeypatch.setattr(canary, "SIDECAR_DIR", tmp_path)
+    live_record = canary.RECORD.read_bytes() if canary.RECORD.exists() else None
+    base = _convbase_path()
+    canary.off_sidecar_path().write_text(
+        json.dumps(_fake_off_sidecar(base_sha=canary._sha256(base))), encoding="utf-8"
+    )
+    for key in _KEYS:
+        canary.sidecar_path(key).write_text(json.dumps(_fake_sidecar(key)), encoding="utf-8")
+    emitted_path = tmp_path / "emitted.json"
+    canary.emit(emitted_path)
+    forged_path = tmp_path / "forged.json"
+    forged = json.loads(emitted_path.read_text(encoding="utf-8"))
+    forged["power_gate"]["passed"] = True
+    forged["power_gate"]["control_epsilon_lower"] = 0.1
+    forged_path.write_text(json.dumps(forged), encoding="utf-8")
+
+    rederived = phase26_prereg.power_gate(0.1, forged["power_gate"]["threshold"])
+    assert rederived["passed"] is False
+    for key in phase26_prereg.noised_point_keys(_FRONTIER):
+        verdict = phase26_prereg.point_verdict(
+            forged["points"][key]["fact_unit"],
+            forged["points"][key]["epsilon_upper"],
+            power=rederived,
+            auditor_ceiling=forged["auditor_ceiling"],
+        )["verdict"]
+        assert verdict in {"INCONCLUSIVE", "BROKEN"}
+    if live_record is not None:
+        assert canary.RECORD.read_bytes() == live_record
+
+
+def test_the_sibling_is_pinned_to_the_frontier_both_ways(frontier):
+    tracked = _git("ls-files", "results/phase26_canary.json").splitlines()
+    if canary.RECORD.exists():
+        blob = json.loads(canary.RECORD.read_text(encoding="utf-8"))
+        assert (
+            blob["frontier_sha256"]
+            == hashlib.sha256(phase25_record.FRONTIER_RECORD.read_bytes()).hexdigest()
+        )
+        assert blob["frontier_bytes"] == 22311714
+        assert all(
+            blob["points"][key]["adapter_sha256"] == frontier["points"][key]["adapter_sha256"]
+            for key in _KEYS
+        )
+        assert (
+            blob["prereg_module_sha256"]
+            == hashlib.sha256((_ROOT / "scripts" / "phase26_prereg.py").read_bytes()).hexdigest()
+        )
+        assert (
+            len(_git("log", "--oneline", "--", "results/phase25_frontier.json").splitlines()) == 1
+        )
+        added = _git("log", "--diff-filter=A", "--", "results/phase26_canary.json").splitlines()
+        assert bool(tracked) == bool(added)
+    else:
+        assert not tracked
+
+
+def test_every_point_carries_its_reasons_and_the_ceiling_disclosure(frontier):
+    tracked = _git("ls-files", "results/phase26_canary.json").splitlines()
+    if not canary.RECORD.exists():
+        assert not tracked
+        return
+    blob = json.loads(canary.RECORD.read_text(encoding="utf-8"))
+    reachable = []
+    for key in phase26_prereg.noised_point_keys(frontier):
+        point = blob["points"][key]
+        reasons = point["verdict"]["reasons"]
+        assert reasons
+        if point["epsilon_upper"] >= blob["auditor_ceiling"]:
+            assert _prose.normalized(phase26_prereg.CEILING_CLAUSE) in _prose.normalized(
+                "\n".join(reasons)
+            )
+        else:
+            reachable.append(key)
+    assert blob["reachable_claims"] == f"{len(reachable)}/15"
+    assert sum(blob["summary"].values()) == 15
+
+
+@pytest.mark.skipif(sweep_is_active(), reason="sweep active — the live MPS reading is not run")
+@pytest.mark.skipif(
+    not canary.sidecar_path(phase26_prereg.CONTROL_KEY).exists(),
+    reason="control sidecar not yet scored — lands during the 26-04 run",
+)
+@needs_adapters
+def test_the_control_reproduced_the_published_reading():
+    blob = json.loads(canary.sidecar_path(phase26_prereg.CONTROL_KEY).read_text(encoding="utf-8"))
+    assert (blob["in_taught"]["k"], blob["in_taught"]["n"]) == (790, 1008)
+    assert blob["reproduction_gate"]["passed"] is True
+    assert blob["device"] == "mps"
+    assert blob["torch_version"]
