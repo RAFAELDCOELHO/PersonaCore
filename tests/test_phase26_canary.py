@@ -655,3 +655,25 @@ def test_the_control_reproduced_the_published_reading():
     assert blob["reproduction_gate"]["passed"] is True
     assert blob["device"] == "mps"
     assert blob["torch_version"]
+
+
+# The operational note — blocks that must be present. Each heading pins a quoted command transcript
+# (results/phase26_operational_note.md); the shape copies tests/test_phase25_launch.py's register.
+_NOTE_REQUIRED_BLOCKS = (
+    "## 1. The pre-registration state",
+    "## 2. The assertion owners before launch",
+    "## 3. The budget as measured",
+    "## 4. The wiring proof",
+    "## 5. The launch record",
+    "## 6. The early-run gate",
+)
+
+
+@pytest.fixture(scope="module")
+def note():
+    return _prose.normalized(canary.OPERATIONAL_NOTE.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("heading", _NOTE_REQUIRED_BLOCKS)
+def test_the_operational_note_carries_every_required_block(note, heading):
+    assert _prose.normalized(heading) in note, heading
