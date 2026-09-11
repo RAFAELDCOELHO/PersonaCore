@@ -116,6 +116,7 @@ Each task was committed atomically by the supervising process after this sandbox
 - No driver defect was found.
 - Spec gap found by the supervisor's full-suite run (see "Full-suite status" below): landing this plan's one by-design skip moves `tests/test_phase25_venue.py`'s D-44 skip-count register by the plan's own predicted +1, and that register's hardcoded expectations were not updated (its file is outside 26-03's scope) — 2 known, predicted, out-of-scope failures remain in the repo-wide suite; every test this plan owns is green.
 - The sandbox addendum prohibited git writes and the full repository suite inside codex's own run, so task commit hashes, final clean status, and full-suite counts were filled in by the supervising process after the codex run.
+- **2026-09-11 dated continuation:** the D-44 skip-count register gap noted above landed in follow-up commit `61a4d0b` on `tests/test_phase25_venue.py` — `_CANARY_CONTROL_NOT_YET_SCORED_SKIPS = 1` (M3, both modes) and `_CANARY_HOST_ONLY_SKIPS = 8` (ubuntu, both modes) bring the four register literals to M3 sweep-active 40, M3 flag-unset 5, ubuntu sweep-active 70, ubuntu flag-unset 70.
 
 ## Verification Evidence
 
