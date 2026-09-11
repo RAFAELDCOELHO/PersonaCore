@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: executing
-stopped_at: Phase 26 wave 4 — 26-04 AT HUMAN CHECKPOINT (2026-09-11T18:35Z): LaunchAgent com.personacore.phase26.canary running (pid 70302, kickstart 16:23:57Z), OFF + control sidecars landed, REPRODUCTION GATE PASSED 790/1008, emit() refused correctly on 15 missing points; awaiting operator "approved"/"halted" for Task 3 (§6 of the note). Waves 1-3 complete (26-01..26-03 + D-44 register continuation 61a4d0b).
+stopped_at: Phase 26 wave 4 COMPLETE (2026-09-11) — 26-04 done (4c01c43, a7843b3, b6527ef, 3a21995, a3b1e14): LaunchAgent com.personacore.phase26.canary RUNNING pid 70302 (kickstart 16:23:57Z), OFF + control sidecars landed, gate PASSED 790/1008, operator approved the unattended run; §6 of the note filled. NEXT: wave 5 (26-05, emit + close) ONLY after the 16th sidecar data/phase26_canary_dp_n8_sigma80p000000.json exists — projected 2026-09-12 07:45Z (control rate) to 20:54Z (§3 rate); 26-05 has a human-action checkpoint (operator commits results/phase26_canary.json). D-44 register: M3 leg now 0 (39/4), ubuntu 70/70 derived.
 last_updated: "2026-09-10T22:35:19.130Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 101
-  completed_plans: 101
+  completed_plans: 102
   percent: 67
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 ## Current Position
 
 Phase: 26 (empirical-privacy-audit-canary) — EXECUTING
-Plan: 4 of 5 — 26-04 Task 1 committed (4c01c43, a7843b3), Task 2 human-verify gate PRESENTED 2026-09-11, Task 3 pending the answer (26-01 complete: e6a8851, 3198506, 49ef177; 26-02 complete: d438d09, a038182, d794b39; 26-03 complete via codex lane: cae77d8, 4d4c7f9, 63963ce + D-44 register continuation 61a4d0b, 1575c07)
+Plan: 5 of 5 — 26-01..26-04 complete; 26-05 waits for the 16th sidecar (run in progress, pid 70302)
 **2026-09-04 — THE LAUNCH CHECKPOINT (25-14 Task 2/3), SESSION IN PROGRESS, ON `main`.** The
 operator chose "prepare and launch now". Before any GPU second the driver's live path was read end
 to end and found NEVER WIRED: `run_point` dereferenced `record_fields[...]` that `main()` never
