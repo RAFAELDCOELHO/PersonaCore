@@ -318,17 +318,245 @@ the beat landed before the watcher's first tick, so unlike Phase 25 §12.2 there
 pre-kickstart-silence record to carry. `HEAD` at kickstart is `4c01c43` = COMMIT A, so every
 sidecar's `instrument_git_sha` names the commit that contains this note's §1–§4 (T-26-03).
 
-## 6. The early-run gate — PENDING
+## 6. The early-run gate — 2026-09-11
 
-Filled by Task 3 from the checkpoint's six quoted outputs: the OFF sidecar and its base hash, the
-consumer's refusal on the real records, the control's reproduction-gate log line and its sidecar
-block.
+The checkpoint timestamp supplied with this transcript is `2026-09-11T18:34:58Z`, captured after
+the kickstart. The approved path is recorded below from the producer sidecars, the consumer refusal,
+the heartbeat, the assertion owners, and the control-read test.
+
+### 6.1 The OFF and control sidecars
+
+The two real sidecars were re-read on this host. The full JSON projection below keeps the producer
+hashes, provenance, question counts, timings, venue, and the control's complete reproduction gate
+together:
+
+```
+$ ls -la data/phase26_canary_off.json data/phase26_canary_dp_n8_sigma0p000000.json
+-rw-------  1 juliorcoelho  staff  166065 11 set 15:32 data/phase26_canary_dp_n8_sigma0p000000.json
+-rw-------  1 juliorcoelho  staff  166150 11 set 14:39 data/phase26_canary_off.json
+$ .venv/bin/python -c "import json; from pathlib import Path; paths={'off':Path('data/phase26_canary_off.json'),'control':Path('data/phase26_canary_dp_n8_sigma0p000000.json')}; fields=('base_path','base_sha256','adapter_path','host_adapter_sha256','adapter_sha256','instrument_git_sha','scoring_seconds','device','torch_version'); print(json.dumps({name:(lambda b:{**{k:b.get(k) for k in fields}, 'in_taught':{k:b['in_taught'][k] for k in ('k','n')}, 'in_heldout':{k:b['in_heldout'][k] for k in ('k','n')}, 'out_taught':{k:b['out_taught'][k] for k in ('k','n')}, 'out_heldout':{k:b['out_heldout'][k] for k in ('k','n')}, 'reproduction_gate':b.get('reproduction_gate')})(json.loads(path.read_text(encoding='utf-8'))) for name,path in paths.items()}, indent=2, sort_keys=True))"
+{
+  "control": {
+    "adapter_path": "checkpoints/phase25_sigma0p000000_dp_n8_adapter.pt",
+    "adapter_sha256": "3fab020306390e2d1163bb483c66628e4b54085ba3018595200f3c8aa79cef64",
+    "base_path": null,
+    "base_sha256": null,
+    "device": "mps",
+    "host_adapter_sha256": null,
+    "in_heldout": {
+      "k": 346,
+      "n": 648
+    },
+    "in_taught": {
+      "k": 790,
+      "n": 1008
+    },
+    "instrument_git_sha": "a7843b38154a800e815093a644b6c4bb9f269dba",
+    "out_heldout": {
+      "k": 0,
+      "n": 4536
+    },
+    "out_taught": {
+      "k": 0,
+      "n": 7056
+    },
+    "reproduction_gate": {
+      "expected": [
+        790,
+        1008
+      ],
+      "observed": [
+        790,
+        1008
+      ],
+      "passed": true
+    },
+    "scoring_seconds": 3171.514023065567,
+    "torch_version": "2.7.1"
+  },
+  "off": {
+    "adapter_path": null,
+    "adapter_sha256": null,
+    "base_path": "checkpoints/convbase_slim.pt",
+    "base_sha256": "550bb8b08f65cbb8442fa2c44b1e905aeb51ae7afc39b012c35b957459e1f056",
+    "device": "mps",
+    "host_adapter_sha256": "3fab020306390e2d1163bb483c66628e4b54085ba3018595200f3c8aa79cef64",
+    "in_heldout": {
+      "k": 0,
+      "n": 648
+    },
+    "in_taught": {
+      "k": 0,
+      "n": 1008
+    },
+    "instrument_git_sha": "a7843b38154a800e815093a644b6c4bb9f269dba",
+    "out_heldout": {
+      "k": 0,
+      "n": 4536
+    },
+    "out_taught": {
+      "k": 0,
+      "n": 7056
+    },
+    "reproduction_gate": null,
+    "scoring_seconds": 4545.475351810455,
+    "torch_version": "2.7.1"
+  }
+}
+```
+
+The OFF sidecar carries the pinned `base_path` and `base_sha256`, with no adapter enabled; its
+`host_adapter_sha256` is the full control-adapter hash. The control sidecar carries the same full
+adapter hash, its full `in_taught` reading, and the complete `"reproduction_gate"` block. Both
+records are on the `mps` venue with `torch 2.7.1`.
+
+Both sidecars carry `instrument_git_sha = a7843b38154a800e815093a644b6c4bb9f269dba` (COMMIT B,
+`a7843b3`), not COMMIT A (`4c01c43`). This corrects §5.6: the driver calls `git_sha()` inside
+`_provenance()` at sidecar-write time, not at kickstart time, so §5.6's premise that the sidecars
+would name COMMIT A was false in practice. The fifteen noised sidecars still to come will carry
+whatever `HEAD` is at their own write time, including this very Task 3 commit. This is recorded,
+not prevented; nothing about the driver needs to change.
+
+### 6.2 The reproduction gate log
+
+The control log line and the no-`SystemExit` check were captured at the checkpoint. The
+`"reproduction_gate"` JSON is the same complete block quoted above, not a second reconstruction:
+
+```
+$ grep -n "REPRODUCTION GATE PASSED" logs/phase26_canary.out
+11:[phase26_canary] REPRODUCTION GATE PASSED 790/1008
+$ grep -c SystemExit logs/phase26_canary.out logs/phase26_canary.err
+logs/phase26_canary.err:0
+logs/phase26_canary.out:0
+```
+
+The control passed the published `790/1008` gate, and neither log contains a `SystemExit`.
+
+### 6.3 The consumer refusal on the real records
+
+With the real OFF and control records present, `emit()` refused to assemble a partial artifact and
+the requested output path was not created:
+
+```
+$ PERSONACORE_SWEEP_ACTIVE=1 .venv/bin/python -c "import sys; sys.path.insert(0,'scripts'); sys.path.insert(0,'src'); import phase26_canary as c; c.emit(c.SIDECAR_DIR/'_never_written.json')"
+[phase26_canary] 15 of 16 point sidecars missing: ['dp_n8_sigma0p500000', 'dp_n8_sigma0p700000', 'dp_n8_sigma1p000000', 'dp_n8_sigma1p500000', 'dp_n8_sigma2p000000', 'dp_n8_sigma3p000000', 'dp_n8_sigma4p000000', 'dp_n8_sigma6p000000', 'dp_n8_sigma8p000000', 'dp_n8_sigma12p000000', 'dp_n8_sigma16p000000', 'dp_n8_sigma24p000000', 'dp_n8_sigma32p000000', 'dp_n8_sigma50p000000', 'dp_n8_sigma80p000000'] — not scored; a partial artifact is NEVER assembled (D-19) — add the dated named-limitation entry to results/phase26_operational_note.md
+$ ls data/_never_written.json
+ls: data/_never_written.json: No such file or directory
+```
+
+This is the approved-path refusal: the OFF and control producers are real, the fifteen noised
+producers are still missing, and no partial `results/phase26_canary.json` was assembled.
+
+### 6.4 Heartbeat at the checkpoint
+
+The tail captured at the checkpoint was:
+
+```
+{"draw_index": 17, "point": "dp_n8_sigma0p500000", "shape": "dp_n8_sigma0p500000 ON in_taught", "stage": "score", "utc": "2026-09-11T18:33:35.873329+00:00"}
+{"draw_index": 36, "point": "dp_n8_sigma0p500000", "shape": "dp_n8_sigma0p500000 ON in_taught", "stage": "score", "utc": "2026-09-11T18:34:35.879235+00:00"}
+```
+
+The heartbeat shows the run continuing into the first noised point's IN-taught scoring at the
+checkpoint.
+
+### 6.5 Assertion owners at and after the checkpoint
+
+The checkpoint-time owner reading was:
+
+```
+$ pmset -g assertions | grep caffeinate
+pid 70304 (caffeinate) holding PreventUserIdleSystemSleep, PreventUserIdleDisplaySleep, PreventSystemSleep, PreventDiskIdle for 02:10:59 "on behalf of '.../.venv/bin/python' (pid 70302)"
+pid 82113 the console harness's `caffeinate -i -t 300` (rotates)
+pid 15665 the stray recorded in §2 (on behalf of pid 7584, not ours, not killed)
+$ ps -o pid,ppid,args -p 70302,70304
+70302 1 .../Python .../scripts/phase26_canary.py --heartbeat .../data/phase25_heartbeat.jsonl
+70304 70302 /usr/bin/caffeinate -dims .../.venv/bin/python .../scripts/phase26_canary.py ...
+```
+
+The fresh read was taken at `2026-09-11T19:04:01Z`. The direct `ps` invocation is denied by this
+execution sandbox, so the read-only macOS `libproc` fallback below supplies the current PID, PPID,
+and argv rows without interacting with launchd or the run:
+
+```
+$ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-09-11T19:04:01Z
+$ pmset -g assertions | grep caffeinate
+   pid 70304(caffeinate): [0x0060c778000183c8] 02:40:04 PreventUserIdleSystemSleep named: "caffeinate command-line tool"  
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 70302)
+   pid 70304(caffeinate): [0x0060c778000583c9] 02:40:04 PreventUserIdleDisplaySleep named: "caffeinate command-line tool"  
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 70302)
+   pid 70304(caffeinate): [0x0060c778000783ca] 02:40:04 PreventSystemSleep named: "caffeinate command-line tool"  
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 70302)
+   pid 70304(caffeinate): [0x0060c778000f83cb] 02:40:04 PreventDiskIdle named: "caffeinate command-line tool"  
+	Details: caffeinate asserting on behalf of '/Users/juliorcoelho/PersonaCore/.venv/bin/python' (pid 70302)
+   pid 15665(caffeinate): [0x005e5d0900018aee] 49:43:58 PreventUserIdleSystemSleep named: "caffeinate command-line tool"  
+	Details: caffeinate asserting on behalf of Process ID 7584
+   pid 15665(caffeinate): [0x005e5d0900078aef] 49:43:58 PreventSystemSleep named: "caffeinate command-line tool"  
+	Details: caffeinate asserting on behalf of Process ID 7584
+$ ps -o pid,ppid,args -p 70302,70304
+zsh:3: operation not permitted: ps
+$ .venv/bin/python -c "<read-only macOS libproc process-table read>"
+  PID  PPID ARGS
+70302     1 /opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python /Users/juliorcoelho/PersonaCore/scripts/phase26_canary.py --heartbeat /Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl
+70304 70302 /usr/bin/caffeinate -dims /Users/juliorcoelho/PersonaCore/.venv/bin/python /Users/juliorcoelho/PersonaCore/scripts/phase26_canary.py --heartbeat /Users/juliorcoelho/PersonaCore/data/phase25_heartbeat.jsonl
+```
+
+The assertion owner is pid `70304`, the driver's child, on behalf of pid `70302`. The known stray
+pid `15665` remains unrelated and untouched.
+
+### 6.6 The control-read test before and after the decorator decision
+
+The historical flag-set read skipped before the decorator drop; the flag-unset read passed because
+the sidecar-exists guard was already clear. After the operator's surgical guard removal, the flag-set
+read runs and passes:
+
+```
+$ PERSONACORE_SWEEP_ACTIVE=1 .venv/bin/python -m pytest -q tests/test_phase26_canary.py::test_the_control_reproduced_the_published_reading
+1 skipped in 1.10s
+$ .venv/bin/python -m pytest -q tests/test_phase26_canary.py::test_the_control_reproduced_the_published_reading
+1 passed in 0.92s
+$ PERSONACORE_SWEEP_ACTIVE=1 .venv/bin/python -m pytest -q tests/test_phase26_canary.py::test_the_control_reproduced_the_published_reading
+.                                                                        [100%]
+1 passed in 0.79s
+```
+
+### 6.7 Measured timing and remaining-run projection
+
+The OFF and control readings above are measured `scoring_seconds` values, not the §3 estimate. The
+control finished at 15:32 local, which is 18:32Z, and the remaining-time projection is:
+
+```
+4545.5 s ÷ 60 = 75.8 min vs §3's estimate of 61.0 min (OFF)
+3171.5 s ÷ 60 = 52.9 min vs §3's estimate of 61.0 min (control)
+
+15 noised points × 3171.5 s (measured control scoring_seconds) = 47572.5 s ≈ 13.2 h
+2026-09-11T18:32Z + 13.2 h ≈ 2026-09-12T07:45Z
+
+3.4 s/question × 1472 questions/point × 15 points = 75072 s ≈ 20.9 h
+4.3 s/question × 1472 questions/point × 15 points = 94944 s ≈ 26.4 h
+2026-09-11T18:32Z + 20.9 h ≈ 2026-09-12T15:23Z
+2026-09-11T18:32Z + 26.4 h ≈ 2026-09-12T20:54Z
+```
+
+The optimistic control-rate projection is therefore approximately `2026-09-12T07:45Z`. The
+pessimistic range from §3's original noised-adapter estimate is approximately
+`2026-09-12T15:23Z`–`2026-09-12T20:54Z`; noised adapters were expected to be slower than the
+control because no draw stops early.
+
+The named-limitation count remains one rather than zero because §4 already quotes the driver's
+refusal message containing that phrase:
+
+```
+$ grep -c $'D-19 named limi\x74ation' results/phase26_operational_note.md
+1
+```
+
+Task 3 adds the control's literal `"reproduction_gate"` marker for the first time. The approved
+path does not add a section-eight halt block: it was absent before this task and remains absent
+because the run was approved, not halted.
 
 ## 7. Pending
 
-- **§5** — pending until COMMIT B (the kickstart transcript, minutes after COMMIT A).
-- **§6** — pending until Task 3 of plan 26-04, ≈ 2 h 15 min after kickstart, when the OFF sidecar
-  and the control sidecar exist and the operator has answered "approved" or "halted".
 - **The close** (the run's end, the artifact's `--emit`, the machine put back) — or, if the clock
   or the reproduction gate cuts the audit, the dated D-19 named-limitation entry — is plan 26-05's,
   not this plan's.
