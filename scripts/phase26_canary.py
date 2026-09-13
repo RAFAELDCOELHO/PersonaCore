@@ -632,7 +632,23 @@ def emit(out_path=RECORD, *, overwrite=False):
                 + record["epsilon_omitted_reason"]
                 + "); its reading is the power gate's and feeds nothing else (D-01)"
             )
-            entry["reproduction_gate"] = blob.get("reproduction_gate")
+            # 26-REVIEW WR-05: D-15 trusts the control's reading only AFTER reproduction, and
+            # `score_point` enforces that before writing — but emit() reads a FILE. The gate the
+            # file carries is proved passed, at the pinned numbers, and equal to the file's own
+            # in_taught counts; nothing here is taken on faith.
+            gate = blob.get("reproduction_gate")
+            expected = [phase25_prereg.REPRODUCTION_K, phase25_prereg.REPRODUCTION_N]
+            observed = [blob["in_taught"]["k"], blob["in_taught"]["n"]]
+            _prove(
+                isinstance(gate, dict)
+                and gate.get("passed") is True
+                and gate.get("expected") == expected
+                and gate.get("observed") == expected == observed,
+                f"{control}: sidecar carries no PASSED reproduction gate at {expected} (gate = "
+                f"{gate!r}, in_taught = {observed}) — its reading cannot be the power reading "
+                "(D-15)",
+            )
+            entry["reproduction_gate"] = gate
         else:
             entry["verdict"] = phase26_prereg.point_verdict(
                 readings[key]["fact_unit"],

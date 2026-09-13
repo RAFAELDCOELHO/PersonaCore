@@ -106,7 +106,8 @@ def _score_shape(prefix, n_facts, n_questions):
 
 def _fake_sidecar(key, *, sha=None):
     record = canary.point_record(key)
-    return {
+    reproduced = [phase25_prereg.REPRODUCTION_K, phase25_prereg.REPRODUCTION_N]
+    blob = {
         "point_key": key,
         "arm": record["arm"],
         "sigma": record["sigma"],
@@ -125,6 +126,12 @@ def _fake_sidecar(key, *, sha=None):
         "torch_version": "fixture",
         "utc": "fixture",
     }
+    if key == phase26_prereg.CONTROL_KEY:
+        # The D-15 gate emit() proves (26-REVIEW WR-05): passed, at the pinned numbers, equal to
+        # the sidecar's own in_taught counts (fact-level counts stay the fixture's zeros).
+        blob["in_taught"]["k"] = phase25_prereg.REPRODUCTION_K
+        blob["reproduction_gate"] = {"passed": True, "expected": reproduced, "observed": reproduced}
+    return blob
 
 
 def _fake_off_sidecar(*, base_sha, base_path=None):
@@ -454,6 +461,38 @@ def test_emit_refuses_a_sidecar_whose_shape_or_fact_set_is_not_the_off_sidecars(
         canary.emit(tmp_path / "c.json")
 
 
+def test_emit_refuses_a_control_without_a_passed_reproduction_gate(tmp_path, monkeypatch):
+    _complete_fake_audit(tmp_path, monkeypatch)
+    control = canary.sidecar_path(phase26_prereg.CONTROL_KEY)
+    intact = json.loads(control.read_text(encoding="utf-8"))
+
+    blob = copy.deepcopy(intact)
+    del blob["reproduction_gate"]
+    control.write_text(json.dumps(blob), encoding="utf-8")
+    with pytest.raises(SystemExit, match="no PASSED reproduction gate"):
+        canary.emit(tmp_path / "a.json")
+
+    blob = copy.deepcopy(intact)
+    blob["reproduction_gate"]["passed"] = False
+    control.write_text(json.dumps(blob), encoding="utf-8")
+    with pytest.raises(SystemExit, match="no PASSED reproduction gate"):
+        canary.emit(tmp_path / "b.json")
+
+    # A gate that says passed at the pinned numbers over counts that are not those numbers.
+    blob = copy.deepcopy(intact)
+    blob["in_taught"]["k"] = phase25_prereg.REPRODUCTION_K - 1
+    control.write_text(json.dumps(blob), encoding="utf-8")
+    with pytest.raises(SystemExit, match="no PASSED reproduction gate"):
+        canary.emit(tmp_path / "c.json")
+
+    control.write_text(json.dumps(intact), encoding="utf-8")
+    emitted = canary.emit(tmp_path / "d.json")
+    assert (
+        emitted["points"][phase26_prereg.CONTROL_KEY]["reproduction_gate"]
+        == intact["reproduction_gate"]
+    )
+
+
 def test_the_instrument_sha_is_resolved_once_at_import_not_per_write(monkeypatch):
     assert re.fullmatch(r"[0-9a-f]{40}|unknown", canary.INSTRUMENT_GIT_SHA)
     monkeypatch.setattr(canary, "git_sha", lambda default="unknown": "0" * 40)
@@ -508,28 +547,46 @@ def test_sidecar_paths_refuse_a_path_separator():
 @needs_adapters
 def test_the_live_path_is_wired_end_to_end(tmp_path, monkeypatch, frontier):
     monkeypatch.setattr(canary, "SIDECAR_DIR", tmp_path)
+    import phase14_factset as fs
     import phase14_recall as pr
     import torch
 
     def fake_loader(device, adapter_path=None):
         return torch.nn.Module(), None, None, frozenset(), None
 
+    all_values = " ".join(fact.value for fact in fs.LOCKED_FACTS)
+    per_arm = sum(canary.EXPECTED_QUESTIONS.values())
+    calls = {"n": 0}
+
     def fake_complete(model, tok, question, device, forbid, *, index):
+        # Arms are scored in order OFF, control, sigma=80 — `per_arm` questions each, in TIERS
+        # order — so the control's in_taught list is the second arm's first 112 calls and `index`
+        # is the position there (14 questions per fact). The control answers EXACTLY
+        # REPRODUCTION_K of its 1008 in_taught draws (9 x 87 questions + 7 draws of question 98,
+        # fact 7's first) so the REAL D-15 gate passes and all 8 facts are members, which is what
+        # makes the power gate PASS (26-REVIEW WR-05 / WR-06). Nothing else ever answers.
+        arm, within = divmod(calls["n"], per_arm)
+        calls["n"] += 1
+        hits = 0
+        if arm == 1 and within < canary.EXPECTED_QUESTIONS["in_taught"]:
+            hits = 9 if index < 87 else 7 if index == 98 else 0
         return {
             "question": question,
             "prompt_ids": [],
-            "completions": [f"answer {index}"] * 9,
+            "completions": [all_values] * hits + [f"answer {index}"] * (9 - hits),
             "stopped": [True] * 9,
         }
 
     monkeypatch.setattr(pr, "load_adapted_model", fake_loader)
     monkeypatch.setattr(pr, "complete_question", fake_complete)
     recorded = []
+    real_prove_reproduction = phase25_prereg.prove_reproduction
 
     def record_reproduction(k, n):
         assert isinstance(k, int) and not isinstance(k, bool)
         assert isinstance(n, int) and not isinstance(n, bool)
         recorded.append((k, n))
+        real_prove_reproduction(k, n)  # the real gate: a wrong count halts here (D-15)
 
     monkeypatch.setattr(phase25_prereg, "prove_reproduction", record_reproduction)
     heartbeat = tmp_path / "hb.jsonl"
@@ -562,8 +619,9 @@ def test_the_live_path_is_wired_end_to_end(tmp_path, monkeypatch, frontier):
             assert len(blob[tier]["per_question"]) == n_questions
             assert blob[tier]["questions"] == n_questions
             assert blob[tier]["draws_per_question"] == 9
-    assert recorded == [(0, 1008)]
+    assert recorded == [(phase25_prereg.REPRODUCTION_K, phase25_prereg.REPRODUCTION_N)]
     assert control_blob["reproduction_gate"]["observed"] == list(recorded[0])
+    assert control_blob["reproduction_gate"]["passed"] is True
 
     for key in phase26_prereg.noised_point_keys(frontier):
         if key == "dp_n8_sigma80p000000":
