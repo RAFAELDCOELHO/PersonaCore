@@ -59,6 +59,7 @@ import phase26_prereg  # noqa: E402  (same — the dated pre-registration, stdli
 from personacore.provenance import git_sha  # noqa: E402
 
 RECORD = _ROOT / "results" / "phase26_canary.json"
+SOURCES = _ROOT / "results" / "phase26_canary_sources.json"  # the WR-01 continuation of RECORD
 OPERATIONAL_NOTE = _ROOT / "results" / "phase26_operational_note.md"
 SIDECAR_DIR = _ROOT / "data"  # gitignored (`data/`)
 PREREG_MODULE = _ROOT / "scripts" / "phase26_prereg.py"
@@ -69,6 +70,14 @@ INSTRUMENT = (
 TIERS = ("in_taught", "in_heldout", "out_taught", "out_heldout")
 IN_TIERS, OUT_TIERS = TIERS[:2], TIERS[2:]
 EXPECTED_QUESTIONS = {"in_taught": 112, "in_heldout": 72, "out_taught": 784, "out_heldout": 504}
+# What a sidecar says about the process that wrote it; travels with its sha256 (26-REVIEW WR-01).
+_SOURCE_PROVENANCE_KEYS = (
+    "instrument_git_sha",
+    "scoring_seconds",
+    "device",
+    "torch_version",
+    "utc",
+)
 
 
 def _prove(condition, message):
@@ -88,6 +97,15 @@ def _rel(path):
     """Repo-relative when inside the root; the path as given otherwise (tests use tmp dirs)."""
     path = pathlib.Path(path)
     return str(path.relative_to(_ROOT)) if path.is_relative_to(_ROOT) else str(path)
+
+
+def _source_pin(path, blob):
+    """A sidecar named by its bytes and by the provenance it carries — never by path alone."""
+    return {
+        "path": _rel(path),
+        "sha256": _sha256(path),
+        "provenance": {k: blob[k] for k in _SOURCE_PROVENANCE_KEYS},
+    }
 
 
 def sidecar_path(point_key):
@@ -550,6 +568,8 @@ def emit(out_path=RECORD, *, overwrite=False):
             **readings[key],
             "epsilon_sentence": sentence,
             "source": _rel(sidecar_path(key)),
+            "source_sha256": _sha256(sidecar_path(key)),
+            "source_provenance": {k: blob[k] for k in _SOURCE_PROVENANCE_KEYS},
         }
         if key == control:
             entry["verdict"] = None
@@ -594,6 +614,8 @@ def emit(out_path=RECORD, *, overwrite=False):
         "base_path": off_blob["base_path"],
         "base_sha256": off_blob["base_sha256"],
         "off_sidecar": _rel(off),
+        "off_sidecar_sha256": _sha256(off),
+        "off_sidecar_provenance": {k: off_blob[k] for k in _SOURCE_PROVENANCE_KEYS},
         "prereg_module_sha256": _sha256(PREREG_MODULE),
         "prereg_committed": phase26_prereg.COMMITTED,
         "waiver_continuation": phase26_prereg.WAIVER_CONTINUATION,
@@ -623,6 +645,81 @@ def emit(out_path=RECORD, *, overwrite=False):
     return blob
 
 
+def pin_sources(out_path=SOURCES, *, record_path=RECORD, overwrite=False):
+    """DATED CONTINUATION, 2026-09-13 (26-REVIEW WR-01) of the write-once artifact (D-18).
+
+    The committed ``results/phase26_canary.json`` names its 17 gitignored inputs by PATH only. This
+    pins each one — sha256 of the bytes, the provenance the sidecar carries, and the proof that the
+    file on disk RE-DERIVES the artifact's exclusions and fact-unit readings (a re-scored sidecar
+    under the same adapter hash is not the one the artifact was assembled from). Written beside
+    the artifact, never into it; ``--force`` is the escape hatch. Publishes NO git SHA: every
+    field here is a content hash or a copied provenance field, verifiable without a tree.
+    """
+    _prove(
+        overwrite or not pathlib.Path(out_path).exists(),
+        f"{_rel(out_path)} exists — REFUSING to overwrite it. Pass --force to overwrite.",
+    )
+    record_path = pathlib.Path(record_path)
+    _prove(record_path.exists(), f"{_rel(record_path)} is missing — nothing to pin")
+    art = json.loads(record_path.read_text(encoding="utf-8"))
+
+    off = _ROOT / art["off_sidecar"]
+    _prove(off.exists(), f"the OFF sidecar {art['off_sidecar']} is not on disk")
+    off_blob = json.loads(off.read_text(encoding="utf-8"))
+    _prove(
+        off_blob["base_sha256"] == art["base_sha256"],
+        f"{off.name}: base {off_blob['base_sha256']!r} != the artifact's {art['base_sha256']!r}",
+    )
+    for scope, tiers in (("out", OUT_TIERS), ("in", IN_TIERS)):
+        _prove(
+            _exclusions(off_blob, tiers, art["exclusions"][scope]["of"])
+            == art["exclusions"][scope],
+            f"{off.name}: the OFF sidecar on disk does not re-derive the artifact's {scope} "
+            "exclusions — it is not the file the artifact was assembled from",
+        )
+
+    kw = {
+        "excluded_in": set(art["exclusions"]["in"]["excluded"]),
+        "excluded_out": set(art["exclusions"]["out"]["excluded"]),
+        "n_in": art["n_in"],
+        "n_out": art["n_out"],
+    }
+    points = {}
+    for key in art["audited_point_keys"]:
+        entry = art["points"][key]
+        path = _ROOT / entry["source"]
+        _prove(path.exists(), f"{key}: {entry['source']} is not on disk")
+        blob = json.loads(path.read_text(encoding="utf-8"))
+        _prove(
+            blob["adapter_sha256"] == entry["adapter_sha256"],
+            f"{key}: sidecar adapter {blob['adapter_sha256']!r} != the artifact's "
+            f"{entry['adapter_sha256']!r}",
+        )
+        _prove(
+            _readings(blob, "in_taught", "out_taught", **kw)["fact_unit"] == entry["fact_unit"],
+            f"{key}: the sidecar on disk does not re-derive the artifact's fact_unit reading — "
+            "it is not the file the artifact was assembled from",
+        )
+        points[key] = _source_pin(path, blob)
+
+    blob = {
+        "continues": _rel(record_path),
+        "artifact_sha256": _sha256(record_path),
+        "why": (
+            "26-REVIEW WR-01: the artifact names its sidecars by path under gitignored data/; "
+            "this sibling pins each by sha256 and provenance and proves it re-derives the "
+            "artifact's exclusions and fact-unit readings. The artifact is write-once (D-18) and "
+            "is not re-emitted."
+        ),
+        "pinned_utc": _utc(),
+        "off_sidecar": _source_pin(off, off_blob),
+        "points": points,
+    }
+    phase25_run.atomic_write_json(out_path, blob)
+    print(f"[phase26_canary] pinned {len(points)} point sidecars + OFF into {_rel(out_path)}")
+    return blob
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         description="Phase 26 canary audit: adapter-off once, then adapter-on over 16 dp_n8 points."
@@ -631,6 +728,11 @@ def build_parser():
     parser.add_argument("--heartbeat", default=str(phase25_run.HEARTBEAT_PATH))
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--emit", action="store_true", help="assemble results/phase26_canary.json")
+    parser.add_argument(
+        "--pin-sources",
+        action="store_true",
+        help="write results/phase26_canary_sources.json — sha256 + provenance of every sidecar",
+    )
     parser.add_argument("--force", action="store_true", help="overwrite an existing artifact")
     return parser
 
@@ -640,6 +742,9 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     if args.emit:
         emit(overwrite=args.force)
+        return 0
+    if args.pin_sources:
+        pin_sources(overwrite=args.force)
         return 0
     heartbeat = pathlib.Path(args.heartbeat)
     points = phase26_prereg.audited_point_keys(frontier()) if args.points is None else args.points

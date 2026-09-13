@@ -117,11 +117,12 @@ def _fake_sidecar(key, *, sha=None):
     }
 
 
-def _fake_off_sidecar(*, base_sha):
-    base = _convbase_path()
+def _fake_off_sidecar(*, base_sha, base_path=None):
+    if base_path is None:
+        base_path = str(_convbase_path().relative_to(_ROOT))
     return {
         "arm": "off",
-        "base_path": str(base.relative_to(_ROOT)),
+        "base_path": base_path,
         "base_sha256": base_sha,
         "host_point_key": phase26_prereg.CONTROL_KEY,
         "host_adapter_sha256": _FRONTIER["points"][phase26_prereg.CONTROL_KEY]["adapter_sha256"],
@@ -136,6 +137,20 @@ def _fake_off_sidecar(*, base_sha):
         "torch_version": "fixture",
         "utc": "fixture",
     }
+
+
+def _complete_fake_audit(tmp_path, monkeypatch):
+    """OFF + all 16 point sidecars under ``tmp_path`` over a fixture base file, so ``emit()`` runs
+    on any host: no checkpoint is read (the base is pinned by hash, wherever it is)."""
+    monkeypatch.setattr(canary, "SIDECAR_DIR", tmp_path)
+    base = tmp_path / "base.pt"
+    base.write_bytes(b"fixture base")
+    canary.off_sidecar_path().write_text(
+        json.dumps(_fake_off_sidecar(base_sha=canary._sha256(base), base_path=str(base))),
+        encoding="utf-8",
+    )
+    for key in _KEYS:
+        canary.sidecar_path(key).write_text(json.dumps(_fake_sidecar(key)), encoding="utf-8")
 
 
 def _plist(path):
@@ -336,6 +351,41 @@ def test_emit_refuses_to_overwrite_the_committed_artifact():
         assert canary.RECORD.read_bytes() == before
     else:
         pass
+
+
+def test_pin_sources_hashes_every_sidecar_and_refuses_one_that_does_not_re_derive(
+    tmp_path, monkeypatch
+):
+    _complete_fake_audit(tmp_path, monkeypatch)
+    record = tmp_path / "canary.json"
+    emitted = canary.emit(record)
+    assert emitted["off_sidecar_sha256"] == canary._sha256(canary.off_sidecar_path())
+    assert set(emitted["off_sidecar_provenance"]) == set(canary._SOURCE_PROVENANCE_KEYS)
+    for key in _KEYS:
+        assert emitted["points"][key]["source_sha256"] == canary._sha256(canary.sidecar_path(key))
+        assert emitted["points"][key]["source_provenance"]["instrument_git_sha"] == "fixture"
+
+    sources = tmp_path / "sources.json"
+    pinned = canary.pin_sources(sources, record_path=record)
+    assert json.loads(sources.read_text(encoding="utf-8")) == pinned
+    assert pinned["artifact_sha256"] == canary._sha256(record)
+    assert pinned["off_sidecar"]["sha256"] == emitted["off_sidecar_sha256"]
+    assert {k: v["sha256"] for k, v in pinned["points"].items()} == {
+        k: emitted["points"][k]["source_sha256"] for k in _KEYS
+    }
+    assert set(pinned["points"][_KEYS[0]]["provenance"]) == set(canary._SOURCE_PROVENANCE_KEYS)
+    assert "git_sha" not in {k for k in pinned if k != "points"}
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        canary.pin_sources(sources, record_path=record)
+
+    # A re-scored sidecar under the SAME adapter hash is not the file the artifact came from.
+    key = _KEYS[-1]
+    blob = json.loads(canary.sidecar_path(key).read_text(encoding="utf-8"))
+    fact = next(iter(blob["in_taught"]["per_fact"]))
+    blob["in_taught"]["per_fact"][fact]["member"] = True
+    canary.sidecar_path(key).write_text(json.dumps(blob), encoding="utf-8")
+    with pytest.raises(SystemExit, match="does not re-derive"):
+        canary.pin_sources(tmp_path / "sources2.json", record_path=record)
 
 
 def test_the_driver_never_commits(tmp_path):
