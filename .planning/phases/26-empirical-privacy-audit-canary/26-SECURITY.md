@@ -3,7 +3,7 @@ phase: 26
 slug: empirical-privacy-audit-canary
 status: verified
 threats_open: 0
-threats_total_rows: 27
+threats_total_rows: 30
 threats_distinct_ids: 12
 asvs_level: 1
 created: 2026-09-13
@@ -17,7 +17,7 @@ audited_at_head: 0b169fb
 > **verifies** the declared mitigations exist in implemented code. It does **not** scan for
 > new threats.
 
-**Gate status: CLOSED.** `threats_open: 0`. 27 register rows across 5 plans, **12 distinct
+**Gate status: CLOSED.** `threats_open: 0`. 30 register rows across 5 plans, **12 distinct
 threat IDs**, every row resolved to `closed` or to a logged accepted risk. Six accepted-risk rows
 (AR-26-01 … AR-26-06); three of them (AR-26-04 … AR-26-06) are **residuals** the 2026-09-13 code
 review (`26-REVIEW.md` WR-02 … WR-05) surfaced under threats otherwise closed — logged here so
@@ -30,7 +30,7 @@ or by editing the frozen pre-registration.
 
 What was done (auditor: gsd-security-auditor, State B from the plan-time register, HEAD `0b169fb`):
 
-- All 5 `<threat_model>` blocks extracted from `26-01-PLAN.md` … `26-05-PLAN.md` — 27 rows,
+- All 5 `<threat_model>` blocks extracted from `26-01-PLAN.md` … `26-05-PLAN.md` — 30 rows,
   12 distinct IDs (T-26-01 … T-26-11, T-26-SC). IDs recur across plans by design (the same threat
   re-declared per plan with that plan's control); rows keyed on (threat_id, component).
 - Every `mitigate` row traced to a named symbol, plist key, test or git fact at HEAD, with the
@@ -145,7 +145,7 @@ None.
 
 | Audit Date | Threats Total (rows / ids) | Closed | Open | Accepted | Run By |
 |------------|----------------------------|--------|------|----------|--------|
-| 2026-09-13 | 27 / 12 | 27 | 0 | 6 rows | `/gsd:secure-phase 26` — gsd-security-auditor, State B (create) from plan-time register, HEAD `0b169fb` |
+| 2026-09-13 | 30 / 12 | 30 | 0 | 6 rows | `/gsd:secure-phase 26` — gsd-security-auditor, State B (create) from plan-time register, HEAD `0b169fb` |
 
 ---
 
