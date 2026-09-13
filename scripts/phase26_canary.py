@@ -58,6 +58,12 @@ import phase26_prereg  # noqa: E402  (same — the dated pre-registration, stdli
 
 from personacore.provenance import git_sha  # noqa: E402
 
+# Resolved ONCE, at import — the commit the running code was actually loaded from. A per-write
+# `git rev-parse` in a 30-hour run under an operator committing to the same tree named two
+# different SHAs from ONE process, neither the loaded one (26-REVIEW WR-02). The per-write HEAD
+# still travels beside it, under its own honest name (`head_at_write`).
+INSTRUMENT_GIT_SHA = git_sha()
+
 RECORD = _ROOT / "results" / "phase26_canary.json"
 SOURCES = _ROOT / "results" / "phase26_canary_sources.json"  # the WR-01 continuation of RECORD
 OPERATIONAL_NOTE = _ROOT / "results" / "phase26_operational_note.md"
@@ -244,7 +250,8 @@ def _provenance(device, scoring_seconds):
     return {
         "scoring_seconds": scoring_seconds,
         "instrument": INSTRUMENT,
-        "instrument_git_sha": git_sha(),
+        "instrument_git_sha": INSTRUMENT_GIT_SHA,
+        "head_at_write": git_sha(),
         "device": device,
         "torch_version": torch.__version__,
         "platform": platform.platform(),

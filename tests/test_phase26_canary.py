@@ -388,6 +388,14 @@ def test_pin_sources_hashes_every_sidecar_and_refuses_one_that_does_not_re_deriv
         canary.pin_sources(tmp_path / "sources2.json", record_path=record)
 
 
+def test_the_instrument_sha_is_resolved_once_at_import_not_per_write(monkeypatch):
+    assert re.fullmatch(r"[0-9a-f]{40}|unknown", canary.INSTRUMENT_GIT_SHA)
+    monkeypatch.setattr(canary, "git_sha", lambda default="unknown": "0" * 40)
+    provenance = canary._provenance("cpu", 0.0)
+    assert provenance["instrument_git_sha"] == canary.INSTRUMENT_GIT_SHA
+    assert provenance["head_at_write"] == "0" * 40
+
+
 def test_the_driver_never_commits(tmp_path):
     assert _git_argv_subcommands(_DRIVER) == []
     planted = tmp_path / "phase26_canary_planted.py"
