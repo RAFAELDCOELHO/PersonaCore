@@ -287,12 +287,30 @@ def _counts(completed):
 # to `_CANARY_CONTROL_NOT_YET_SCORED_SKIPS` is now 0 (not 1) in both modes. The
 # `@needs_adapters` guard remains, so the ubuntu contribution remains in
 # `_CANARY_HOST_ONLY_SKIPS` and is unchanged.
+#
+# DATED CONTINUATION, 2026-09-13 (26-REVIEW CR-01) — AN ADDITION, NOT AN EDIT; the 26-03 and
+# 26-04 continuations above stay as written. The 26-03 derivation counted DECORATORS and missed
+# a ninth skip that is not a decorator: `test_emit_refuses_a_partial_audit` is undecorated and
+# calls `pytest.skip(...)` in its BODY (tests/test_phase26_canary.py:315) once
+# `_adapters_on_disk()` is false, and pytest reports an in-body skip as `skipped` exactly like a
+# marker. MEASURED on the M3 sweep host, HEAD `4a3b2f0`, by running `tests/test_phase26_canary.py`
+# with `_ADAPTERS_ON_DISK` forced False (plutil present on this host):
+#
+#     18 passed, 8 skipped — the seven `@needs_adapters` cases listed above plus
+#         tests/test_phase26_canary.py::test_emit_refuses_a_partial_audit  (in-body, line 315)
+#
+# On ubuntu plutil is absent, so `test_the_canary_agent_plist_lints` skips too: 8 + 1 = 9, not 8.
+# Nothing changes on the M3 (all 16 adapters and convbase are on disk, so the in-body skip is
+# never reached there): 39 / 4 stand. ubuntu is 62 + 9 = 71 / 71 — STILL DERIVED, NOT MEASURED;
+# no CI run has executed any Phase-26 commit (the newest run, `76a3d0b`, is 2026-09-09, Phase 25).
 _PROMOTION_EMPTY_FRONTIER_SKIPS = 3
 _RECALL_HOST_ONLY_SKIPS = 7  # 6 @needs_adapters + 1 @needs_plutil (25-REVIEW CR-01)
 _CANARY_CONTROL_NOT_YET_SCORED_SKIPS = (
     0  # M3 only; both modes as of 26-04 Task 3 — see the dated continuation above
 )
-_CANARY_HOST_ONLY_SKIPS = 8  # ubuntu only; 7 @needs_adapters + 1 @needs_plutil (26-03)
+_CANARY_HOST_ONLY_SKIPS = 9  # ubuntu only; 7 @needs_adapters + 1 in-body pytest.skip
+#                              (test_emit_refuses_a_partial_audit:315) + 1 @needs_plutil
+#                              (26-03, corrected 2026-09-13 by 26-REVIEW CR-01 — see above)
 _M3_SWEEP_ACTIVE_EXPECTED_SKIPS = (
     36 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _CANARY_CONTROL_NOT_YET_SCORED_SKIPS
 )
