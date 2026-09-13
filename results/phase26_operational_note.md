@@ -557,9 +557,13 @@ because the run was approved, not halted.
 
 ## 7. Pending
 
-- **The close** (the run's end, the artifact's `--emit`, the machine put back) — or, if the clock
-  or the reproduction gate cuts the audit, the dated D-19 named-limitation entry — is plan 26-05's,
-  not this plan's.
+- **Nothing pending** — closed 2026-09-13 by plan 26-05. SUPERSEDED (26-04's entry, kept
+  visible): *the close (the run's end, the artifact's `--emit`, the machine put back) — or, if the
+  clock or the reproduction gate cuts the audit, the dated D-19 named-limitation entry — is plan
+  26-05's.* Branch A was taken: `--emit` once (§8.3), the operator's commit `8652c15` (§8.8a), the
+  machine put back (§8.8b–d), the full suite green on the fully-tracked tree (§8.9). No D-19 entry
+  was needed. The four idle Phase-25 agents named in §8.8(b) are the operator's, not a Phase-26
+  obligation.
 
 ## 8. The close — 2026-09-13
 
@@ -774,3 +778,181 @@ refuse. So `make test` is green again only after the operator's commit — Task 
 reruns it on that tree and quotes the counts there. Against the Phase-25 close on CI
 (2691 passed / 62 skipped, ubuntu register): this M3 run collected 2795 (2787 + 4 + 4), with the
 M3 skip register at 4 (§6.6's D-44 continuation: M3 flag-unset 4).
+
+### 8.8 The machine put back — 2026-09-13
+
+**Dated 2026-09-13, plan 26-05 Task 3, after the operator's commit.** Every line below is a quoted
+command output run on this tree at `HEAD = 8652c15`, `PERSONACORE_SWEEP_ACTIVE` unset.
+
+**(a) The operator's commit (Task 2) — the only git write in the audit's lifetime.** The artifact's
+first-add is exactly one commit, the operator's, and its bytes are the ones §8.3 quoted before the
+commit (`d2a71e2d…`), so nothing rewrote it between `--emit` and `git add`:
+
+```
+$ git log --oneline -1 -- results/phase26_canary.json
+8652c15 results(26): commit the canary audit artifact — 15 CONSISTENT / 0 BROKEN / 0 INCONCLUSIVE, reachable claims 4/15, auditor_ceiling 2.7859, power gate PASSED, exclusions 0/56 — operator commit, the driver's git surface is read-only
+$ git log --diff-filter=A --format="%H %an %ad" --date=iso-strict -- results/phase26_canary.json
+8652c15347cb1d8d1cf32e77570f56a428d74a8c Rafael 2026-09-13T15:12:01-03:00
+$ git ls-files results/phase26_canary.json
+results/phase26_canary.json
+$ shasum -a 256 results/phase26_canary.json
+d2a71e2d40ba28d34b724afaa7083f9321895f0fe2ef4226f3510625003e8e19  results/phase26_canary.json
+$ git log --oneline -- results/phase25_frontier.json
+4030d0e feat(25-19): results/phase25_frontier.json — the frontier, assembled write-once from the 44 records
+$ git log --format=%H -- scripts/phase26_prereg.py
+e6a885106fcad5e6d12b676c0febbd954e61f129
+$ git diff --stat -- results/phase25_frontier.json scripts/phase26_prereg.py results/phase26_canary.json
+(empty)
+```
+
+The frontier stays at one commit (T-26-11); `phase26_prereg.py` at its one commit. The ancestry
+guard now pins two tracked artifacts, and its arithmetic — the same loop the test runs, read-only —
+comes out `checked == len(prereg_commits) * len(tracked)`:
+
+```
+$ .venv/bin/python -c '<the ancestry guard loop of tests/test_phase26_prereg.py, read-only>'
+ARTIFACT_GLOB: results/phase26_*
+tracked: ['results/phase26_canary.json', 'results/phase26_operational_note.md']
+prereg_commits: ['e6a885106fcad5e6d12b676c0febbd954e61f129']
+checked == len(prereg_commits) * len(tracked): 2 == 1 * 2: True
+```
+
+**(b) The LaunchAgents, booted out — 2026-09-13T18:14:52Z.** Plan 26-04 loaded two (§5.3: the
+canary and the Phase-25 watcher, both by `launchctl load`); both are booted out here. The canary
+had exited on its own with status 0 after the 16th point (§8.1) and was still loaded; the watcher
+had ticked 46 times (`runs = 46`, `last exit code = 0`) and detected nothing it had to act on.
+
+```
+$ launchctl bootout gui/501/com.personacore.phase26.canary
+bootout exit=0
+$ launchctl bootout gui/501/com.personacore.phase25.watch
+bootout exit=0
+$ launchctl list | grep phase26
+(exit 1 — empty)
+$ launchctl list | grep personacore
+-	0	com.personacore.phase25.sweep
+-	0	com.personacore.phase25.recall
+-	0	com.personacore.phase25.rehearsal
+-	0	com.personacore.phase25.n64floor
+$ for a in sweep recall rehearsal n64floor; do launchctl print gui/501/com.personacore.phase25.$a | grep -E "runs =|last exit"; done
+-- sweep
+	runs = 0
+	last exit code = (never exited)
+-- recall
+	runs = 0
+	last exit code = (never exited)
+-- rehearsal
+	runs = 0
+	last exit code = (never exited)
+-- n64floor
+	runs = 0
+	last exit code = (never exited)
+$ pgrep -lf phase26_canary
+(exit 1 — no driver process)
+```
+
+**A finding, recorded and not acted on.** `launchctl list` is empty of `phase26` but NOT empty of
+`personacore`: four Phase-25 agents (`sweep`, `recall`, `rehearsal`, `n64floor`) are loaded. They
+were not loaded by this phase — §5.3 loaded exactly two, and §5.4's listing 18 s after kickstart
+showed only `phase25.watch` and `phase26.canary` — and Phase 25 §13.1 recorded all five booted out
+with `launchctl list | grep personacore` empty on 2026-09-09. Their plists are still in
+`~/Library/LaunchAgents/` (dated 1–8 September), so something re-loaded them between
+2026-09-11T16:24Z and now; the machine has not rebooted (`uptime` 96 days). All four report
+`runs = 0` / `last exit code = (never exited)`: none has run, and every one is `RunAtLoad false` /
+`KeepAlive false` by the committed plists, so loaded-and-idle is inert until someone kickstarts
+it. They are outside this plan's scope (the plan names the watcher only, conditional on 26-04
+having loaded it) and are left as found, named here for the operator; T-26-04's claim — nothing
+can re-enter a Phase-26 point after the close — holds because no `phase26` agent is loaded and the
+driver's sidecars are reused by hash, never re-scored.
+
+**(c) The assertion owners.** No caffeinate is owned by the driver or on its behalf; the two
+present are the ones §2 already named before launch:
+
+```
+$ pmset -g assertions | grep -i caffeinate
+   pid 15665(caffeinate): [0x005e5d0900018aee] 96:54:49 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of Process ID 7584
+	Localized=THE CAFFEINATE TOOL IS PREVENTING SLEEP.
+   pid 15665(caffeinate): [0x005e5d0900078aef] 96:54:49 PreventSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting on behalf of Process ID 7584
+	Localized=THE CAFFEINATE TOOL IS PREVENTING SLEEP.
+   pid 84287(caffeinate): [0x006383e50001a741] 00:02:24 PreventUserIdleSystemSleep named: "caffeinate command-line tool"
+	Details: caffeinate asserting for 300 secs
+	Localized=THE CAFFEINATE TOOL IS PREVENTING SLEEP.
+$ pgrep -lf caffeinate
+15665 caffeinate -s -i -w 7584
+84287 caffeinate -i -t 300
+$ ps -o pid,ppid,lstart,command -p 15665,84287,7584
+  PID  PPID STARTED                      COMMAND
+ 7584     1 qua 26 ago 14:38:16 2026     /Users/juliorcoelho/.pyenv/versions/3.12.13/bin/python3.12 /Users/juliorcoelho/polymarket-bot/scripts/collect_negrisk_books.py --service ...
+15665     1 qua  9 set 14:20:03 2026     caffeinate -s -i -w 7584
+84287 37148 dom 13 set 15:12:27 2026     caffeinate -i -t 300
+```
+
+`15665` is the unrelated `polymarket-bot` keep-awake (§2; Phase 25 §13's §7b restored it) and
+`84287` is this Claude session's own `-i -t 300` (its parent `37148` is the harness; it renews every
+five minutes and dies with the session). The `caffeinate -dims` wrapper that held the run's
+assertions (§5.5, §6.5) is gone with the driver — `pgrep -lf caffeinate` shows no `-dims`.
+
+**(d) `pmset` — unchanged, nothing to revert.** No privileged change was made in this phase (§2
+recorded the machine as Phase 25 §13 left it), so the read is the confirmation, not a revert:
+
+```
+$ pmset -g | grep -E "sleep|powernap"
+ hibernatefile        /var/vm/sleepimage
+ powernap             1
+ networkoversleep     0
+ disksleep            10
+ sleep                1 (sleep prevented by caffeinate, caffeinate, sharingd, powerd, caffeinate, Claude)
+ displaysleep         10
+```
+
+`sleep 1 / disksleep 10 / powernap 1` — Phase 25's `PMSET_REVERT` tuple, still in force.
+
+**(e) The wall-clock, restated from §8.2.** Kickstart (§5.4) `2026-09-11T16:23:57Z` → the driver's
+`done` heartbeat `2026-09-12T23:07:28Z` = 30 h 43 min 31 s (110611 s) against §3's ≈ 25 h; the
+close itself — `--emit`, the operator's commit, this bootout — ran on 2026-09-13, 19 h after the
+driver finished, on a machine whose only Phase-26 process had already exited.
+
+### 8.9 The final gate — the full suite on the fully-tracked tree
+
+With the artifact committed, the tree has no `??` line under `results/` and no ` M` under `tests/`,
+so the four clean-tree probes §8.7 named as the residue of Task 1's own uncommitted edits have
+nothing to refuse. Run before the note edit that adds this block (the probes would otherwise refuse
+this block's own ` M results/phase26_operational_note.md`):
+
+```
+$ git status --short
+ D .claude/scheduled_tasks.lock
+ M .planning/STATE.md
+$ env -u PERSONACORE_SWEEP_ACTIVE make test
+2792 passed, 4 skipped, 83 warnings in 1297.92s (0:21:37)
+$ echo EXIT=$?
+EXIT=0
+```
+
+**Green: 0 failed / 2792 passed / 4 skipped, 2796 collected.** Against §8.7's Task-1 run
+(4 failed / 2787 passed / 4 skipped, 2795 collected): the four failures are gone and `passed` rose
+by 5 — the four residue tests, and the one new parametrization (below). The four, rerun by name on
+this tree to show them passing rather than merely absent from a failure list:
+
+```
+$ env -u PERSONACORE_SWEEP_ACTIVE .venv/bin/pytest -q tests/test_phase23_resume.py::test_production_resume_epsilon_bit_identical tests/test_phase25_frontier.py::test_a_perturbed_per_point_count_breaks_the_aggregate tests/test_phase25_grid.py::test_the_from_import_variant_is_invisible_to_the_register_walk tests/test_phase25_probe2.py::test_a_planted_bit_identity_assertion_here_would_fire
+4 passed in 99.90s (0:01:39)
+```
+
+Against the Phase-25 close on CI (`34406246073`, ubuntu: 2691 passed / 62 skipped, 2753
+collected): +43 collected on this M3 tree. The skip registers differ by venue by design (M3
+flag-unset 4 under §6.6's D-44 continuation; ubuntu's derived 62), so the comparison is on
+collected and failed — 0 failed on both — not on skipped.
+
+```
+$ env -u PERSONACORE_SWEEP_ACTIVE .venv/bin/pytest -q tests/test_phase26_prereg.py tests/test_phase26_canary.py tests/test_phase25_close.py -x
+69 passed in 3.95s
+$ env -u PERSONACORE_SWEEP_ACTIVE .venv/bin/pytest -q tests/test_phase25_close.py
+26 passed in 0.39s
+```
+
+The 43 Phase-26 tests are one more than §8.5's 42: the seventh `_NOTE_REQUIRED_BLOCKS`
+parametrization, `test_the_operational_note_carries_every_required_block["## 8. The close"]`, which
+Task 1 appended after its 42-count run (§8.5's last sentence). Nothing pending remains in §7.
