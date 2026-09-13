@@ -661,6 +661,7 @@ _NOTE_REQUIRED_BLOCKS = (
     "## 4. The wiring proof",
     "## 5. The launch record",
     "## 6. The early-run gate",
+    "## 8. The close",
 )
 
 

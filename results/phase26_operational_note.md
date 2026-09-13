@@ -560,3 +560,217 @@ because the run was approved, not halted.
 - **The close** (the run's end, the artifact's `--emit`, the machine put back) — or, if the clock
   or the reproduction gate cuts the audit, the dated D-19 named-limitation entry — is plan 26-05's,
   not this plan's.
+
+## 8. The close — 2026-09-13
+
+**Dated 2026-09-13.** Plan 26-05, Task 1, Branch A. Every figure below is a quoted command output
+run on this tree at `HEAD = c4a5511` with `PERSONACORE_SWEEP_ACTIVE` unset (the run is over;
+`--emit` loads no model). `--emit` ran ONCE; nothing was assembled by hand; `--force` was not used.
+
+### 8.1 The precondition read — 17 sidecars, the agent exited 0, no 26-05 commit
+
+```
+$ ls data/phase26_canary_*.json | wc -l
+      17
+$ ls -la data/phase26_canary_*.json
+-rw-------  1 juliorcoelho  staff  166065 11 set 15:32 data/phase26_canary_dp_n8_sigma0p000000.json
+-rw-------  1 juliorcoelho  staff  166150 11 set 17:05 data/phase26_canary_dp_n8_sigma0p500000.json
+-rw-------  1 juliorcoelho  staff  166151 11 set 18:38 data/phase26_canary_dp_n8_sigma0p700000.json
+-rw-------  1 juliorcoelho  staff  166153 12 set 07:39 data/phase26_canary_dp_n8_sigma12p000000.json
+-rw-------  1 juliorcoelho  staff  166154 12 set 09:19 data/phase26_canary_dp_n8_sigma16p000000.json
+-rw-------  1 juliorcoelho  staff  166151 11 set 20:16 data/phase26_canary_dp_n8_sigma1p000000.json
+-rw-------  1 juliorcoelho  staff  166149 11 set 21:53 data/phase26_canary_dp_n8_sigma1p500000.json
+-rw-------  1 juliorcoelho  staff  166153 12 set 10:57 data/phase26_canary_dp_n8_sigma24p000000.json
+-rw-------  1 juliorcoelho  staff  166150 11 set 23:31 data/phase26_canary_dp_n8_sigma2p000000.json
+-rw-------  1 juliorcoelho  staff  166153 12 set 12:40 data/phase26_canary_dp_n8_sigma32p000000.json
+-rw-------  1 juliorcoelho  staff  166150 12 set 01:08 data/phase26_canary_dp_n8_sigma3p000000.json
+-rw-------  1 juliorcoelho  staff  166151 12 set 02:45 data/phase26_canary_dp_n8_sigma4p000000.json
+-rw-------  1 juliorcoelho  staff  166153 12 set 14:44 data/phase26_canary_dp_n8_sigma50p000000.json
+-rw-------  1 juliorcoelho  staff  166151 12 set 04:22 data/phase26_canary_dp_n8_sigma6p000000.json
+-rw-------  1 juliorcoelho  staff  166154 12 set 20:07 data/phase26_canary_dp_n8_sigma80p000000.json
+-rw-------  1 juliorcoelho  staff  166149 12 set 06:00 data/phase26_canary_dp_n8_sigma8p000000.json
+-rw-------  1 juliorcoelho  staff  166150 11 set 14:39 data/phase26_canary_off.json
+$ launchctl list | grep phase26
+-	0	com.personacore.phase26.canary
+$ tail -5 logs/phase26_canary.out
+[phase26_canary] dp_n8_sigma80p000000 ON in_taught: 0/1008 draws over 112 questions
+[phase26_canary] dp_n8_sigma80p000000 ON in_heldout: 0/648 draws over 72 questions
+[phase26_canary] dp_n8_sigma80p000000 ON out_taught: 0/7056 draws over 784 questions
+[phase26_canary] dp_n8_sigma80p000000 ON out_heldout: 0/4536 draws over 504 questions
+[phase26_canary] dp_n8_sigma80p000000: taught IN 0/1008, OUT 0/7056 in 19390.5s
+$ cat logs/phase26_canary.err
+Python(45076) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+Python(9370) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+$ tail -1 data/phase25_heartbeat.jsonl
+{"draw_index": null, "point": "dp_n8_sigma80p000000", "shape": null, "stage": "done", "utc": "2026-09-12T23:07:28.904851+00:00"}
+$ git log --oneline --grep=26-05
+(empty)
+$ echo "SWEEP=${PERSONACORE_SWEEP_ACTIVE:-<unset>}"
+SWEEP=<unset>
+```
+
+OFF + 16 points = 17: Branch A. The agent is still loaded with `PID = -` and last exit status `0`
+— it exited on its own after the 16th point; Task 3 boots it out. The `.err` file holds only the
+two `MallocStackLogging` lines. The heartbeat's last beat is `stage: "done"` at
+`2026-09-12T23:07:28Z`.
+
+### 8.2 The wall-clock against §3 and §6.7
+
+Kickstart (§5.4) `2026-09-11T16:23:57Z` → `done` beat `2026-09-12T23:07:28Z` = **30 h 43 min 31 s**
+(110611 s), against §3's ≈ 25 h and §6.7's projections (optimistic `07:45Z`, pessimistic
+`15:23Z`–`20:54Z`). The pessimistic bound was missed by 2 h 13 min. The 17 measured
+`scoring_seconds`, quoted from `logs/phase26_canary.out`:
+
+```
+$ grep "taught IN" logs/phase26_canary.out
+[phase26_canary] off: taught IN 0/1008, OUT 0/7056 in 4545.5s
+[phase26_canary] dp_n8_sigma0p000000: taught IN 790/1008, OUT 0/7056 in 3171.5s
+[phase26_canary] dp_n8_sigma0p500000: taught IN 0/1008, OUT 0/7056 in 5556.2s
+[phase26_canary] dp_n8_sigma0p700000: taught IN 0/1008, OUT 0/7056 in 5570.0s
+[phase26_canary] dp_n8_sigma1p000000: taught IN 0/1008, OUT 0/7056 in 5895.2s
+[phase26_canary] dp_n8_sigma1p500000: taught IN 0/1008, OUT 0/7056 in 5833.6s
+[phase26_canary] dp_n8_sigma2p000000: taught IN 0/1008, OUT 0/7056 in 5861.3s
+[phase26_canary] dp_n8_sigma3p000000: taught IN 0/1008, OUT 0/7056 in 5813.4s
+[phase26_canary] dp_n8_sigma4p000000: taught IN 0/1008, OUT 0/7056 in 5833.1s
+[phase26_canary] dp_n8_sigma6p000000: taught IN 0/1008, OUT 0/7056 in 5855.3s
+[phase26_canary] dp_n8_sigma8p000000: taught IN 0/1008, OUT 0/7056 in 5871.7s
+[phase26_canary] dp_n8_sigma12p000000: taught IN 0/1008, OUT 0/7056 in 5896.1s
+[phase26_canary] dp_n8_sigma16p000000: taught IN 0/1008, OUT 0/7056 in 6008.0s
+[phase26_canary] dp_n8_sigma24p000000: taught IN 0/1008, OUT 0/7056 in 5913.3s
+[phase26_canary] dp_n8_sigma32p000000: taught IN 0/1008, OUT 0/7056 in 6186.5s
+[phase26_canary] dp_n8_sigma50p000000: taught IN 0/1008, OUT 0/7056 in 7402.4s
+[phase26_canary] dp_n8_sigma80p000000: taught IN 0/1008, OUT 0/7056 in 19390.5s
+```
+
+Sum 110603.6 s = 30.72 h; the 7 s of difference from the wall-clock is model-load and heartbeat
+overhead. Thirteen of the 15 noised points scored in 5556–6186 s (3.8–4.2 s/question over 1472
+questions — inside §3's 3.4–4.3 s/question band). The two largest σ did not: σ = 50 took 7402.4 s
+and σ = 80 took 19390.5 s, 3.3× the band. The cause was not measured in this phase and is not
+claimed here; the sidecar's `scoring_seconds` is the record.
+
+### 8.3 The one `--emit`
+
+```
+$ env -u PERSONACORE_SWEEP_ACTIVE .venv/bin/python scripts/phase26_canary.py --emit
+[phase25_launch] pid=50981 ppid=50978 pgid=50978 sid=50978
+[phase26_canary] The instrument must resolve at least the smallest claim it checks. control epsilon_lower = 2.7858978325772576 vs threshold 0.6339783761989397: PASSED
+[phase26_canary] emitted results/phase26_canary.json: {'BROKEN': 0, 'CONSISTENT': 15, 'INCONCLUSIVE': 0}; reachable claims 4/15 (auditor_ceiling = 2.7858978325772576); power gate PASSED
+$ git status --short results/
+?? results/phase26_canary.json
+$ ls -la results/phase26_canary.json
+-rw-------  1 juliorcoelho  staff  165830 13 set 14:39 results/phase26_canary.json
+$ shasum -a 256 results/phase26_canary.json
+d2a71e2d40ba28d34b724afaa7083f9321895f0fe2ef4226f3510625003e8e19  results/phase26_canary.json
+```
+
+The artifact is **UNTRACKED** (`??`). This task does not commit it: Task 2 is the operator's
+(§O1, T-26-05 — the driver's git surface is read-only). The digest above is the file the operator
+commits; if it differs at commit time, something rewrote it.
+
+### 8.4 The artifact, read back against the acceptance criteria
+
+```
+$ .venv/bin/python -c '<the probe; each line is one criterion>'
+audited_point_keys: 16
+verdict set: {'CONSISTENT'} <= VERDICTS: True
+summary: {'BROKEN': 0, 'CONSISTENT': 15, 'INCONCLUSIVE': 0} sum: 15
+reachable_claims: 4/15 True
+reachable_keys: ['dp_n8_sigma24p000000', 'dp_n8_sigma32p000000', 'dp_n8_sigma50p000000', 'dp_n8_sigma80p000000']
+power_gate.sentence == POWER_SENTENCE: True
+power_gate: {'control_epsilon_lower': 2.7858978325772576, 'passed': True, 'threshold': 0.6339783761989397}
+frontier_sha256: 1f182b40c9d7c316e57ecd69acd62c7f6407514b9c675bdf8ec677d3f0cb97d5 frontier_bytes: 22311714
+exclusions.out.n: 56 excluded: []
+exclusions.in.n: 8 excluded: []
+n_in/n_out: 8 56 auditor_ceiling: 2.7858978325772576
+emitted_utc: 2026-09-13T17:39:11.878094+00:00 emitted_git_sha: c4a55115db43308fc6f14d458c42c1bdf60636c4
+prereg_module_sha256: b524ad1a6cb5f6b899dacdca17582ebfca0d2bd36d77b6fbd045851666b9bf3b
+```
+
+**The reading, published as it came out (D-05, D-13, D-18).** No exclusions: the adapter-off arm
+answered none of the 8 members and none of the 56 non-members, so `n_in = 8`, `n_out = 56` and
+the ceiling is computed on the full populations. `auditor_ceiling = 2.7859` is ε_lower at
+TPR = 8/8, FPR = 0/56 — and the control (σ = 0) reached exactly it: 790/1008 taught draws over
+the 8 members, 0/7056 over the 56 non-members, `epsilon_lower = 2.7859` ≥ threshold `0.6340`, so
+the power gate PASSED and the instrument resolves the smallest claim it checks (D-03/D-04).
+
+Every one of the 15 noised adapters answered **0/8 members and 0/56 non-members** at the taught
+tier (`members_answered 0`, `nonmembers_answered 0`; the held-out tier is reported alongside and
+is also 0/0). `TPR_lb = 0.0000`, `FPR_ub = 0.0461`, direction 1 undefined, direction 2 gives
+`epsilon_lower = -0.0472` at every point, against ε_upper from 519.70 (σ = 0.5) down to 0.6340
+(σ = 80): **15 × CONSISTENT, 0 BROKEN, 0 INCONCLUSIVE.** Eleven of those verdicts carry the D-13
+disclosure — `epsilon_upper >= auditor_ceiling: this comparison could not have failed` — because
+their ε_upper ≥ 2.7859; the four with ε_upper < 2.7859 (σ = 24, 32, 50, 80) are the
+`reachable_claims 4/15`. Exactly as D-13 pre-registered: 11 unreachable, 4 reachable, no fourth
+verdict value. Every point's `reasons` ends with the one-sided clause: CONSISTENT is not
+"verified correct" — this test can only accuse, and at 0/8 members answered it had nothing to
+accuse with. That the noised adapters answer no member fact at σ = 0.5 is the Phase-25 frontier's
+`recall` column restated by a second instrument (D-06), not a new claim.
+
+### 8.5 The tests in their PRESENT state
+
+```
+$ env -u PERSONACORE_SWEEP_ACTIVE .venv/bin/pytest -q tests/test_phase26_canary.py tests/test_phase26_prereg.py -x
+42 passed in 3.58s
+$ env -u PERSONACORE_SWEEP_ACTIVE .venv/bin/pytest -q -rs tests/test_phase26_canary.py -k "sibling_is_pinned or carries_its_reasons or control_reproduced or operational_note_carries"
+9 passed, 16 deselected in 1.13s
+```
+
+The 9 are the six `_NOTE_REQUIRED_BLOCKS` parametrizations, the two both-state tests now executing
+their present branch (`RECORD.exists()` is true: the frontier's bytes hash to the pinned value, all
+16 `adapter_sha256` equal the frontier's, `prereg_module_sha256` equals the module on disk, the
+frontier's log is one line, `tracked == added == []`), and
+`test_the_control_reproduced_the_published_reading` (790/1008, gate passed, `device == "mps"`) — no
+skips. This task appends `"## 8. The close"` to `_NOTE_REQUIRED_BLOCKS`, making the block above a
+seventh parametrization.
+
+### 8.6 The frontier and the pre-registration, untouched (T-26-11, the ancestry guard)
+
+```
+$ git log --oneline -- results/phase25_frontier.json
+4030d0e feat(25-19): results/phase25_frontier.json — the frontier, assembled write-once from the 44 records
+$ git diff --stat -- results/phase25_frontier.json scripts/phase26_prereg.py
+(empty)
+$ git log --format=%H -- scripts/phase26_prereg.py
+e6a885106fcad5e6d12b676c0febbd954e61f129
+$ git status --short | grep -v '^??'
+ D .claude/scheduled_tasks.lock
+ M .planning/STATE.md
+```
+
+One frontier commit; `phase26_prereg.py` has the single commit §1 recorded, so the operator's
+first-add of the artifact is a descendant of it by construction. The two non-`??` lines are the
+orchestrator's planning state and a scheduler lock — neither is this task's and neither is
+staged by it.
+
+### 8.7 The full suite
+
+```
+$ env -u PERSONACORE_SWEEP_ACTIVE make test
+4 failed, 2787 passed, 4 skipped, 83 warnings in 1343.39s (0:22:23)
+FAILED tests/test_phase23_resume.py::test_production_resume_epsilon_bit_identical
+FAILED tests/test_phase25_frontier.py::test_a_perturbed_per_point_count_breaks_the_aggregate
+FAILED tests/test_phase25_grid.py::test_the_from_import_variant_is_invisible_to_the_register_walk
+FAILED tests/test_phase25_probe2.py::test_a_planted_bit_identity_assertion_here_would_fire
+```
+
+The four failures are one cause, quoted from their assertion lines — each is a clean-tree probe
+that asserts `git status --porcelain` is empty for `results/` (the first two) or `tests/` (the
+last two), and each names only this task's uncommitted files:
+
+```
+E       AssertionError: the probe left artifacts in results/:
+E          M results/phase26_operational_note.md
+E         ?? results/phase26_canary.json
+...
+E       AssertionError: watching the RED must leave no residue in tests/: ' M tests/test_phase26_canary.py\n'
+```
+
+They were rerun in isolation with the same four porcelain lines (`4 failed in 102.13s`). None is
+a Phase-26 test and none reads the artifact; the 42 Phase-26 tests and the 27 Phase-25 close
+tests in §8.5 are green. The `tests/` pair clears with this task's commit. The `results/` pair
+cannot clear before Task 2: this task is REQUIRED to leave `results/phase26_canary.json` as
+`??` for the operator (§8.3), and a `??` line in `results/` is exactly what those two probes
+refuse. So `make test` is green again only after the operator's commit — Task 3's final gate
+reruns it on that tree and quotes the counts there. Against the Phase-25 close on CI
+(2691 passed / 62 skipped, ubuntu register): this M3 run collected 2795 (2787 + 4 + 4), with the
+M3 skip register at 4 (§6.6's D-44 continuation: M3 flag-unset 4).
