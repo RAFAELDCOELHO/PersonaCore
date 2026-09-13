@@ -391,7 +391,11 @@ def test_emit_refuses_to_overwrite_the_committed_artifact():
         assert "--force" in str(excinfo.value)
         assert canary.RECORD.read_bytes() == before
     else:
-        pass
+        # 26-REVIEW WR-07: absent on disk but still tracked is exactly the state the write-once
+        # guard exists to name; the two sibling both-state tests assert the same.
+        assert not _git("ls-files", "results/phase26_canary.json").strip(), (
+            "results/phase26_canary.json is tracked but absent on disk"
+        )
 
 
 def test_pin_sources_hashes_every_sidecar_and_refuses_one_that_does_not_re_derive(
