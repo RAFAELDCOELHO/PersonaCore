@@ -418,6 +418,22 @@ def _fact_ids(blob, tier):
     return set(blob[tier]["per_fact"])
 
 
+def _prove_shape(blob, name):
+    """26-REVIEW WR-04: a sidecar with the right hash can still be truncated or foreign. The
+    question count and the per-fact sum are proved per tier BEFORE any of it is read."""
+    for tier in TIERS:
+        _prove(
+            blob[tier]["questions"] == EXPECTED_QUESTIONS[tier],
+            f"{name}: {tier} has {blob[tier]['questions']} questions, expected "
+            f"{EXPECTED_QUESTIONS[tier]}",
+        )
+        _prove(
+            sum(f["n_questions"] for f in blob[tier]["per_fact"].values())
+            == EXPECTED_QUESTIONS[tier],
+            f"{name}: {tier} per_fact n_questions do not sum to {EXPECTED_QUESTIONS[tier]}",
+        )
+
+
 def _exclusions(off_blob, tiers, of):
     """D-07 under EXCLUSION_SCOPE == 'either': any adapter-off answered question in EITHER tier."""
     excluded = sorted(
@@ -515,6 +531,7 @@ def emit(out_path=RECORD, *, overwrite=False):
         f"partial artifact is NEVER assembled (D-19) — add the dated named-limitation entry to "
         f"{_rel(OPERATIONAL_NOTE)}",
     )
+    _prove_shape(off_blob, off.name)
     sidecars = {}
     for key in pinned:
         blob = json.loads(sidecar_path(key).read_text(encoding="utf-8"))
@@ -523,15 +540,28 @@ def emit(out_path=RECORD, *, overwrite=False):
             f"{key}: sidecar adapter {blob['adapter_sha256']!r} != frontier "
             f"{fr['points'][key]['adapter_sha256']!r} — REFUSED (T-26-07)",
         )
+        _prove_shape(blob, key)
+        for tier in TIERS:
+            # A fact absent from the OFF per_fact would read as "adapter-off never answered it"
+            # — the opposite of D-07's strictest reading. Identity, not cardinality.
+            _prove(
+                _fact_ids(blob, tier) == _fact_ids(off_blob, tier),
+                f"{key}: {tier} fact set differs from the OFF sidecar's — exclusions would be "
+                "computed over a different population",
+            )
         sidecars[key] = blob
     _prove(
         set(sidecars) == set(pinned) and len(sidecars) == len(pinned),
         f"{len(sidecars)} entries against {len(pinned)} pinned keys",
     )
 
-    # (4) exclusions BEFORE anything else is read (D-07).
-    out_x = _exclusions(off_blob, OUT_TIERS, 56)
-    in_x = _exclusions(off_blob, IN_TIERS, 8)
+    # (4) exclusions BEFORE anything else is read (D-07), over the OFF populations as MEASURED.
+    in_of, out_of = len(_fact_ids(off_blob, "in_taught")), len(_fact_ids(off_blob, "out_taught"))
+    _prove(
+        in_of == 8 and out_of == 56, f"OFF populations {in_of} IN / {out_of} OUT, expected 8 / 56"
+    )
+    out_x = _exclusions(off_blob, OUT_TIERS, out_of)
+    in_x = _exclusions(off_blob, IN_TIERS, in_of)
     n_in, n_out = in_x["n"], out_x["n"]
     _prove(n_in > 0 and n_out > 0, f"n_in = {n_in}, n_out = {n_out}: a population is empty")
     exclusions = {

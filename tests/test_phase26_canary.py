@@ -422,6 +422,38 @@ def test_pin_sources_hashes_every_sidecar_and_refuses_one_that_does_not_re_deriv
         canary.pin_sources(tmp_path / "sources2.json", record_path=record)
 
 
+def test_emit_refuses_a_sidecar_whose_shape_or_fact_set_is_not_the_off_sidecars(
+    tmp_path, monkeypatch
+):
+    _complete_fake_audit(tmp_path, monkeypatch)
+    off = canary.off_sidecar_path()
+    intact = off.read_text(encoding="utf-8")
+
+    # A truncated OFF sidecar under the right base hash: one filler fact gone.
+    blob = json.loads(intact)
+    gone = next(iter(blob["out_taught"]["per_fact"]))
+    del blob["out_taught"]["per_fact"][gone]
+    off.write_text(json.dumps(blob), encoding="utf-8")
+    with pytest.raises(SystemExit, match="per_fact n_questions do not sum"):
+        canary.emit(tmp_path / "a.json")
+
+    # The same fact renamed, so counts sum but the population is not the ON sidecars'.
+    blob = json.loads(intact)
+    blob["out_taught"]["per_fact"]["foreign_fact"] = blob["out_taught"]["per_fact"].pop(gone)
+    off.write_text(json.dumps(blob), encoding="utf-8")
+    with pytest.raises(SystemExit, match="fact set differs from the OFF sidecar"):
+        canary.emit(tmp_path / "b.json")
+
+    # An ON sidecar with the wrong question count under the right adapter hash.
+    off.write_text(intact, encoding="utf-8")
+    key = _KEYS[3]
+    blob = json.loads(canary.sidecar_path(key).read_text(encoding="utf-8"))
+    blob["in_taught"]["questions"] = 111
+    canary.sidecar_path(key).write_text(json.dumps(blob), encoding="utf-8")
+    with pytest.raises(SystemExit, match=f"{key}: in_taught has 111 questions"):
+        canary.emit(tmp_path / "c.json")
+
+
 def test_the_instrument_sha_is_resolved_once_at_import_not_per_write(monkeypatch):
     assert re.fullmatch(r"[0-9a-f]{40}|unknown", canary.INSTRUMENT_GIT_SHA)
     monkeypatch.setattr(canary, "git_sha", lambda default="unknown": "0" * 40)
