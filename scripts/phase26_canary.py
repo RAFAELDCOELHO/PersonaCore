@@ -26,7 +26,8 @@ the auditor's ceiling and the power gate are computed BEFORE any verdict (D-13, 
 SURVIVABILITY, CALLED NEVER RE-IMPLEMENTED: ``phase25_run.atomic_write_json`` / ``beat`` /
 ``start_heartbeat`` / ``device``; the beat lands in the SAME ``data/phase25_heartbeat.jsonl`` the
 installed ``com.personacore.phase25.watch`` agent polls. The driver builds NO git argv (T-26-05):
-``git_sha()`` is its only read; the operator commits the artifact (plan 26-05).
+``git_sha()`` and ``refuse_if_dirty()`` (both ``personacore.provenance``) are its only reads; the
+operator commits the artifact (plan 26-05).
 
 CPU-safe at import: torch and every model module are imported inside the functions that score.
 ``--dry-run`` exercises every structural path without touching the device.
@@ -56,7 +57,7 @@ import phase25_run  # noqa: E402  (same — CPU-safe at import; torch stays lazy
 import phase25_venue  # noqa: E402  (same)
 import phase26_prereg  # noqa: E402  (same — the dated pre-registration, stdlib only)
 
-from personacore.provenance import git_sha  # noqa: E402
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 # Resolved ONCE, at import — the commit the running code was actually loaded from. A per-write
 # `git rev-parse` in a 30-hour run under an operator committing to the same tree named two
@@ -470,6 +471,22 @@ def emit(out_path=RECORD, *, overwrite=False):
         "RERUN_ROUTE). Pass --force to overwrite deliberately.",
     )
     out_path = pathlib.Path(out_path)
+    # 26-REVIEW WR-03: `emitted_git_sha` below names a commit; `prereg_module_sha256` and
+    # `frontier_sha256` are hashed from the WORKING TREE. Both are lies from a dirty tree, so the
+    # register's guard (`scripts/phase21_emit.py:77`, `phase25_record._write`) runs BEFORE any
+    # sidecar is read. The record being (re)placed is excluded, exactly as those emitters do.
+    pathspec = ("scripts", "src", "results")
+    if out_path.is_relative_to(_ROOT):
+        pathspec += (f":(exclude){_rel(out_path)}",)
+    refuse_if_dirty(
+        who="phase26_canary",
+        detail=(
+            "emit publishes emitted_git_sha and hashes scripts/ and results/ from the working "
+            "tree; a record emitted from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=pathspec,
+        cwd=_ROOT,
+    )
     fr = frontier()
     pinned = phase26_prereg.audited_point_keys(fr)
     noised = phase26_prereg.noised_point_keys(fr)

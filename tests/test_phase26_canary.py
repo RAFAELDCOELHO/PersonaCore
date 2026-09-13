@@ -40,6 +40,16 @@ def frontier():
     return _FRONTIER
 
 
+@pytest.fixture(autouse=True)
+def clean_tree(monkeypatch):
+    """``emit()`` refuses a dirty tree (26-REVIEW WR-03). This suite runs on dirty trees all day,
+    so the guard is RECORDED here, never exercised; the real refusal is tested where it lives
+    (``tests/test_phase21_unit_record.py``). Returns the calls so one test can prove the wiring."""
+    calls = []
+    monkeypatch.setattr(canary, "refuse_if_dirty", lambda **kw: calls.append(kw) or "")
+    return calls
+
+
 def _convbase_path():
     import phase14_recall as pr
 
@@ -339,6 +349,30 @@ def test_emit_refuses_a_partial_audit(tmp_path, monkeypatch):
         canary.emit(partial_out)
     assert _KEYS[-1] in str(excinfo.value)
     assert not partial_out.exists()
+
+
+def test_emit_refuses_a_dirty_tree_before_reading_any_sidecar(tmp_path, monkeypatch, clean_tree):
+    monkeypatch.setattr(canary, "SIDECAR_DIR", tmp_path)
+    inside = _ROOT / "results" / "phase26_canary_probe_never_written.json"
+    with pytest.raises(SystemExit, match="phase26_operational_note.md"):
+        canary.emit(inside)
+    assert not inside.exists()
+    (call,) = clean_tree
+    assert call["who"] == "phase26_canary"
+    assert call["cwd"] == _ROOT
+    assert call["pathspec"] == (
+        "scripts",
+        "src",
+        "results",
+        ":(exclude)results/phase26_canary_probe_never_written.json",
+    )
+
+    def refuse(**kw):
+        raise SystemExit("[probe] REFUSING: the working tree is dirty")
+
+    monkeypatch.setattr(canary, "refuse_if_dirty", refuse)
+    with pytest.raises(SystemExit, match="dirty"):
+        canary.emit(tmp_path / "canary.json")
 
 
 def test_emit_refuses_to_overwrite_the_committed_artifact():
