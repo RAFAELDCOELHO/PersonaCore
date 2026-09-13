@@ -648,6 +648,11 @@ def test_the_live_path_is_wired_end_to_end(tmp_path, monkeypatch, frontier):
         "sentence",
     }
     assert emitted["power_gate"]["sentence"] == phase26_prereg.POWER_SENTENCE
+    # 26-REVIEW WR-06: the control answered 8/8 vs 0/56, so the power gate PASSES and emit()'s
+    # CONSISTENT branch runs in the suite — not only in production.
+    assert emitted["power_gate"]["passed"] is True
+    assert emitted["power_gate"]["control_epsilon_lower"] == emitted["auditor_ceiling"]
+    assert emitted["summary"] == {"BROKEN": 0, "CONSISTENT": 15, "INCONCLUSIVE": 0}
     assert emitted["exclusions"]["out"]["of"] == 56
     for key in _KEYS:
         point = emitted["points"][key]
@@ -819,6 +824,65 @@ def test_every_point_carries_its_reasons_and_the_ceiling_disclosure(frontier):
             reachable.append(key)
     assert blob["reachable_claims"] == f"{len(reachable)}/15"
     assert sum(blob["summary"].values()) == 15
+
+
+def test_the_committed_readings_verdicts_ceiling_and_power_gate_re_derive(frontier):
+    """26-REVIEW WR-06: shape checks pass an artifact whose numbers were edited consistently. Every
+    reading, verdict (with its reasons), the ceiling, the power gate, the reachable set and the
+    summary are recomputed here from the artifact's OWN counts through the frozen module."""
+    tracked = _git("ls-files", "results/phase26_canary.json").splitlines()
+    if not canary.RECORD.exists():
+        assert not tracked
+        return
+    blob = json.loads(canary.RECORD.read_text(encoding="utf-8"))
+    control, noised = phase26_prereg.CONTROL_KEY, phase26_prereg.noised_point_keys(frontier)
+    assert (blob["n_in"], blob["n_out"]) == (
+        blob["exclusions"]["in"]["n"],
+        blob["exclusions"]["out"]["n"],
+    )
+    assert phase26_prereg.auditor_ceiling(blob["n_in"], blob["n_out"]) == blob["auditor_ceiling"]
+    for key in phase26_prereg.audited_point_keys(frontier):
+        point = blob["points"][key]
+        for unit in ("fact_unit", "question_unit"):
+            reading = point[unit]
+            assert (
+                phase26_prereg.epsilon_lower(
+                    reading["members_answered"],
+                    reading["n_in"],
+                    reading["nonmembers_answered"],
+                    reading["n_out"],
+                )
+                == reading
+            ), (key, unit)
+        assert point["fact_unit"]["n_in"] == blob["n_in"]
+        assert point["fact_unit"]["n_out"] == blob["n_out"]
+        if key == control:
+            assert point["verdict"] is None
+            continue
+        assert point["epsilon_upper"] == frontier["points"][key]["epsilon"]
+        assert (
+            phase26_prereg.point_verdict(
+                point["fact_unit"],
+                point["epsilon_upper"],
+                power=blob["power_gate"],
+                auditor_ceiling=blob["auditor_ceiling"],
+            )
+            == point["verdict"]
+        ), key
+    assert (
+        phase26_prereg.power_gate(
+            blob["points"][control]["fact_unit"]["epsilon_lower"],
+            phase26_prereg.power_threshold(frontier),
+        )
+        == blob["power_gate"]
+    )
+    assert blob["reachable_keys"] == [
+        k for k in noised if frontier["points"][k]["epsilon"] < blob["auditor_ceiling"]
+    ]
+    assert blob["summary"] == {
+        v: sum(1 for k in noised if blob["points"][k]["verdict"]["verdict"] == v)
+        for v in phase26_prereg.VERDICTS
+    }
 
 
 @pytest.mark.skipif(
