@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: ready_to_plan
-stopped_at: Phase 26 COMPLETE (2026-09-13) — verification `passed` (3/3 ROADMAP SC, 24/24 PLAN must-haves, CANARY-01/02 traced, 26-VERIFICATION.md), phase checkbox ticked, ready to discuss Phase 27 (relearning attack). Security gate CLOSED 2026-09-13: 26-SECURITY.md `verified`, 12/12 threats closed at HEAD 0b169fb, threats_open 0, six accepted-risk rows (three are 26-REVIEW residuals AR-26-04..06). Next: /gsd:code-review 26 --fix (CR-01 latent CI red) or /gsd:discuss-phase 27. PRIOR: Phase 26 wave 5 COMPLETE (2026-09-13) — 26-05 done (868ff47, 8652c15 operator, 5477519): Branch A — --emit once, results/phase26_canary.json 15 CONSISTENT / 0 BROKEN / 0 INCONCLUSIVE, reachable claims 4/15, auditor_ceiling 2.7859, power gate PASSED, exclusions 0/56, pinned to the frontier both ways; committed BY THE OPERATOR at 8652c15 (author Rafael, the only git write in the audit's lifetime); canary + watcher agents booted out, launchctl empty of phase26, pmset unchanged; make test 2792 passed / 4 skipped / 0 failed on the fully-tracked tree. Phase 26: 5/5 plans. NEXT: /gsd:verify-work 26. Operator item: four idle Phase-25 LaunchAgents (sweep/recall/rehearsal/n64floor, runs = 0) found loaded at close, left as found (note §8.8b). SUPERSEDED: Phase 26 wave 4 COMPLETE (2026-09-11) — 26-04 done (4c01c43, a7843b3, b6527ef, 3a21995, a3b1e14): LaunchAgent com.personacore.phase26.canary RUNNING pid 70302 (kickstart 16:23:57Z), OFF + control sidecars landed, gate PASSED 790/1008, operator approved the unattended run; §6 of the note filled. NEXT: wave 5 (26-05, emit + close) ONLY after the 16th sidecar data/phase26_canary_dp_n8_sigma80p000000.json exists — projected 2026-09-12 07:45Z (control rate) to 20:54Z (§3 rate); 26-05 has a human-action checkpoint (operator commits results/phase26_canary.json). D-44 register: M3 leg now 0 (39/4), ubuntu 70/70 derived.
-last_updated: "2026-09-13T18:48:56.170Z"
-last_activity: 2026-09-13
+stopped_at: Phase 27 CONTEXT GATHERED (2026-09-14) — 27-CONTEXT.md: 39 decisions D-01..D-39 across 8 areas. Admission gate relearning_is_worth_attempting admits PASS points only, three-valued ADMITTED/MOOT/INCONCLUSIVE, reads results/phase25_frontier.json pinned both ways with a 44-verdict re-derivation tripwire; frontier tallies PASS 0/44 so the phase is expected to read MOOT; full apparatus (Z rule, cost curve, band, shared TrainConfig + on-disk diff + offset-stream sha256) built as CPU-tested code, never run on MPS; operator commits results/phase27_admission.json by hand; RELRN-01 ticks, 02-05 stay unticked with a named limitation. Next: /gsd:plan-phase 27. PRIOR: Phase 26 COMPLETE (2026-09-13) — verification passed (3/3 SC, 24/24 must-haves), security gate closed (26-SECURITY.md verified, 12/12 threats closed at 0b169fb).
+last_updated: "2026-09-14T17:44:38.224Z"
+last_activity: 2026-09-14
 progress:
   total_phases: 9
   completed_phases: 6
@@ -1567,8 +1567,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-09-13T18:50:00Z
-Stopped at: Phase 26 plans COMPLETE 5/5 (2026-09-13) — 26-05 closed on Branch A (868ff47, 8652c15 operator, 5477519); results/phase26_canary.json committed by the operator; machine put back; make test 2792/4/0; next: /gsd:verify-work 26. Superseded stop record (26 context): Phase 26 context gathered (2026-09-10) — 19 decisions D-01..D-19 across 4 areas plus a second round; audit = control sigma=0 as POWER reading + all 15 noised dp_n8 points by dated continuation in scripts/phase26_prereg.py; OUT canaries scored by generation recall with adapter-off=0 precondition; fact unit decides; sibling artifact results/phase26_canary.json pinned to the frontier
+Last session: 2026-09-14T17:44:38.213Z
+Stopped at: Phase 27 context gathered
 Superseded stop record (24-09): Completed 24-09 UAT CLOSURE (no PLAN.md — HUMAN-UAT item 4). The stale
 `provenance.module_sha256` pin on `results/phase24_token_budget.json` is closed under option (a):
 guard AND re-emit. The guard (`tests/test_phase24_record.py::test_the_provenance_pins_match_the_live_module_bytes`) mirrors the live `corpus_sha256`
@@ -1604,7 +1604,7 @@ GATE-REJECTED pool, the first of which an existing test refuses. Next: the phase
 owns the ROADMAP phase-heading checkbox, the progress-row Status cell and frontmatter
 status/completed_phases/percent
 Superseded stop record (24-07): Completed 24-07-PLAN.md (plan 7 of 7) — WAVE 4 AND ALL PLAN WORK IN PHASE 24 COMPLETE. All four D-05 corners measured in 2.22 s before any sweep point exists: `adv_n8` 0.358660 -> 0.241009, `adv_n64` 0.390163 -> 0.251734 (the n=64 column MEASURED, never carried across); binding corner `(adv_n8, upper)` clears `0.15 + MASK_FRACTION_MARGIN` by 0.041009 and the ordering is asserted rather than assumed. 24-06's open question DECIDED: no per-episode fraction gate — the 0.1111 minimum is an A3 episode at 18 scored tokens in 162, every adversarial episode measures 18-23 against a floor of 15, and the CLEAN pool's shortest answer is 11 and has never been gated. `results/phase24_token_budget.json` committed with 12 rows of integer scored-token counts, denominators, and D-07 multiplicity in the same row (8.0x at adv_n64's upper extreme); 3.73x cross-family kept distinct from ADVT-03's 1.40x; SC4's inflation obligation discharged explicitly. Both refusals watched firing with no bytes landing, and the emitter committed BEFORE its artifact so provenance.git_sha 5aed70f contains it. Full suite 1645 passed / 1 skipped, +12 over 1633/1. ADVT-02 and ADVT-03 TICKED; ADVT-01 open for Phase 25. Next: the phase-CLOSE step, which owns the ROADMAP phase-heading checkbox, the progress-row Status cell and frontmatter status/completed_phases/percent
-Resume file: .planning/phases/26-empirical-privacy-audit-canary/26-CONTEXT.md
+Resume file: .planning/phases/27-relearning-attack/27-CONTEXT.md
 
 ## Operator Next Steps
 
