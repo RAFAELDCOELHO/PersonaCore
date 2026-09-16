@@ -266,6 +266,7 @@ def train(
     dp_fn=None,
     checkpoint_extra=None,
     extra_eval_fns=None,
+    on_draw=None,
     return_final_loss=False,
 ):
     """Train the model end-to-end: AdamW + warmup/cosine + grad-clip + grad-accum, fp32 default.
@@ -465,6 +466,13 @@ def train(
             ``_rng_state()``/``_restore_rng`` snapshot and ``model.train()`` is restored
             afterward (``perplexity()`` leaves the model in eval mode — Pitfall 4). None
             reproduces v1.0 bit-for-bit.
+        on_draw: Phase-27 capture point (D-29/D-30), passed to BOTH training draws of
+            ``get_batch_memmap_masked`` — the mask-branch ``batch_fn`` and every ``replay_fn``
+            micro-batch — so it sees every offset a step consumes, in call order. The third
+            caller, ``estimate_loss``, is deliberately NOT threaded: its val draws run inside an
+            RNG snapshot/restore, move no training stream, and would make the recorded stream
+            depend on ``eval_interval`` and ``log_path``. None is inert and not even forwarded
+            (the ``mask_bin`` rule below), so a loader fake without the kwarg still works.
         return_final_loss: when True, return the final step's training loss.
 
     Returns:
@@ -650,6 +658,7 @@ def train(
                     train_config.batch_size,
                     model_cfg.block_size,
                     runtime.device,
+                    **({} if on_draw is None else dict(on_draw=on_draw)),
                 )
         else:
 
@@ -689,7 +698,12 @@ def train(
                 # the total drawn is EXACTLY replay_windows and never a rounded-up overdraw.
                 micro = min(train_config.batch_size, replay_windows - drawn)
                 xb, yb = get_batch_memmap_masked(
-                    replay_bin, replay_mask_bin, micro, model_cfg.block_size, runtime.device
+                    replay_bin,
+                    replay_mask_bin,
+                    micro,
+                    model_cfg.block_size,
+                    runtime.device,
+                    **({} if on_draw is None else dict(on_draw=on_draw)),
                 )
                 with runtime.autocast():
                     _, replay_loss = model(xb, yb)

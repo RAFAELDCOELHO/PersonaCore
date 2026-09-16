@@ -90,7 +90,7 @@ def get_batch_memmap(bin_path, batch_size, block_size, device):
     return x.to(device), y.to(device)
 
 
-def get_batch_memmap_masked(bin_path, mask_path, batch_size, block_size, device):
+def get_batch_memmap_masked(bin_path, mask_path, batch_size, block_size, device, *, on_draw=None):
     """Draw masked ``(x, y)`` windows from aligned token (uint16) and mask (uint8) ``.bin`` files.
 
     The dialogue analog of :func:`get_batch_memmap` (DATA-03 / D-03): identical nanoGPT
@@ -106,6 +106,10 @@ def get_batch_memmap_masked(bin_path, mask_path, batch_size, block_size, device)
     ``y`` is set to ``-100`` — ``F.cross_entropy``'s default ``ignore_index`` — so loss
     masking lives entirely in the data path and the LOCKED ``forward(idx, targets=None)``
     contract needs zero changes.
+
+    ``on_draw(bin_path, ix)``, Phase 27's D-29 capture point for the RELRN-04 data-order proof, runs
+    after the draw; ``None`` (every prior caller's default) changes nothing. The offsets come from
+    the GLOBAL NumPy RNG, so this is the only byte-neutral place the offset stream is observable.
     """
     data = np.memmap(bin_path, dtype=np.uint16, mode="r")
     mask = np.memmap(mask_path, dtype=np.uint8, mode="r")
@@ -115,6 +119,8 @@ def get_batch_memmap_masked(bin_path, mask_path, batch_size, block_size, device)
             f"{mask_path} has {len(mask)} — bins must be element-aligned (T-11-04)"
         )
     ix = np.random.randint(0, len(data) - block_size - 1, size=batch_size)
+    if on_draw is not None:
+        on_draw(bin_path, ix)
     x = torch.stack([torch.from_numpy(data[i : i + block_size].astype(np.int64)) for i in ix])
     y = torch.stack(
         [torch.from_numpy(data[i + 1 : i + 1 + block_size].astype(np.int64)) for i in ix]
