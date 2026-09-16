@@ -262,6 +262,8 @@ INJECT_LORA_CONSUMERS = (
     ("scripts/personalize_demo.py", "build_demo"),
     ("scripts/phase14_recall.py", "load_adapted_model"),
     ("scripts/phase14_recall.py", "run_bit_identity_control"),
+    # Phase 27 (D-22): the relearning attack loads each PINNED adapter at its own artifact config.
+    ("scripts/phase27_relearn.py", "model_from_adapter"),
 )
 
 INJECT_LORA_PRODUCERS = (
