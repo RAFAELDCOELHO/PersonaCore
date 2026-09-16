@@ -523,7 +523,9 @@ def model_from_adapter(start_adapter, *, expected_sha256, device):
     return model, model_cfg, fingerprint, artifact["lora_config"]
 
 
-def train_relearn_arm(*, arm, leg, seed, cfg, start_adapter, expected_sha256, out_dir, device):
+def train_relearn_arm(
+    *, arm, leg, seed, cfg, start_adapter, expected_sha256, out_dir, device, point_key=None
+):
     """Relearn ONE arm from its pinned adapter on the attacker corpus; write + return its readings.
 
     ``tp.train()`` is called DIRECTLY with the leg's shared ``cfg`` (27-RESEARCH OQ1 option B —
@@ -532,6 +534,10 @@ def train_relearn_arm(*, arm, leg, seed, cfg, start_adapter, expected_sha256, ou
     a RESUME CHAIN: one call per rung with ``max_steps_override=rung``, resuming the checkpoint the
     previous call wrote (D-25, OQ2 — plan 27-02 measured the chain equal to one uninterrupted run),
     each rung's LoRA state exported as its own adapter. The recorder rides ``on_draw`` (D-29).
+
+    The mitigated arm REQUIRES ``point_key`` and every other arm refuses one: the mitigated arm's
+    names carry the key (``phase27_{leg}_mitigated_{point_key}_seed{seed}``), so every admitted
+    point in a leg trains and scores beside the others instead of colliding with them (D-22).
 
     Writes (the CPU wiring proof redirects each): bins under ``tp._REPO_ROOT / "data"``, the run CSV
     under ``tp._REPO_ROOT / "results"``, the resume checkpoint under ``tp._REPO_ROOT /
@@ -546,7 +552,13 @@ def train_relearn_arm(*, arm, leg, seed, cfg, start_adapter, expected_sha256, ou
     from personacore.lora import lora_state_dict
 
     _prove(arm in ARMS, f"arm {arm!r} is not one of {ARMS}")
-    name = f"{phase27_prereg.ATTACKER_ARM}_{leg}_{arm}_seed{seed}"
+    _prove(
+        (point_key is not None) == (arm == "mitigated"),
+        f"arm {arm!r} with point_key {point_key!r} — REFUSING: the mitigated arm is named by its "
+        "admitted point key and no other arm carries one (D-22)",
+    )
+    label = arm if point_key is None else f"{arm}_{point_key}"
+    name = f"{phase27_prereg.ATTACKER_ARM}_{leg}_{label}_seed{seed}"
     _tok, _stats, paths = tp.build_arm_bins(
         name,
         fs.LOCKED_FACTS,
@@ -578,7 +590,7 @@ def train_relearn_arm(*, arm, leg, seed, cfg, start_adapter, expected_sha256, ou
         start_adapter, expected_sha256=expected_sha256, device=device
     )
     before = tp.snapshot_params(model)
-    stem = f"phase27_{leg}_{arm}_seed{seed}"
+    stem = f"phase27_{leg}_{label}_seed{seed}"
     recorder, rstate = make_recorder(out_dir / f"{stem}_offsets.bin", teaching_bin=paths["bin"])
     mask_ones = int(np.fromfile(paths["mask"], dtype=np.uint8).sum())
     # personacore.config's RuntimeConfig, never teach_persona's re-exported name: the Phase-22
@@ -649,6 +661,7 @@ def train_relearn_arm(*, arm, leg, seed, cfg, start_adapter, expected_sha256, ou
 
     readings = {
         "arm": arm,
+        "point_key": point_key,
         "leg": leg,
         "seed": seed,
         "device": device,
@@ -863,16 +876,6 @@ def run_curve(*, record, leg, out_dir):
     )
     calibration = json.loads(calibration_path.read_text(encoding="utf-8"))
     keys = [key for key in blob["admitted_point_keys"] if phase27_prereg.leg_of(key) == leg]
-    # ponytail: one mitigated arm per leg. The per-arm names (bins, checkpoint, CSV, readings, rung
-    # adapters, offsets) carry leg, arm and seed but no point key, so a second admitted point in a
-    # leg would collide at build_arm_bins' refuse_if_exists only AFTER the first point had trained
-    # and scored. Refused here, before any device or training; put the point key into
-    # train_relearn_arm's names when a frontier admits two points in one leg.
-    _prove(
-        len(keys) <= 1,
-        f"{len(keys)} admitted points in leg {leg} ({keys}) — REFUSING: the mitigated arm's "
-        "sidecar names carry no point key, so a second point would collide with the first",
-    )
     device = phase25_run.device()
     cfg = shared_train_config()
     values = phase25_points.scoring_values()
@@ -889,6 +892,7 @@ def run_curve(*, record, leg, out_dir):
             expected_sha256=entry["adapter_sha256"],
             out_dir=out_dir,
             device=device,
+            point_key=key,
         )
         rungs = []
         for rung in trained["rungs"]:
@@ -1064,7 +1068,16 @@ def run_structural_proof(*, record, leg, out_dir):
     readings = {}
     for path in sorted(out_dir.glob(f"phase27_{leg}_*_readings.json")):
         reading = json.loads(path.read_text(encoding="utf-8"))
-        readings[f"{reading['arm']}_seed{reading['seed']}"] = reading
+        # The mitigated arms carry their point key, so two admitted points never share a label.
+        arm, point_key = reading["arm"], reading["point_key"]
+        arm_label = arm if point_key is None else f"{arm}_{point_key}"
+        label = f"{arm_label}_seed{reading['seed']}"
+        _prove(
+            label not in readings,
+            f"two readings under {_rel(out_dir)} are labelled {label!r} — REFUSING: one would "
+            "silently replace the other in every proof below",
+        )
+        readings[label] = reading
     arms = sorted({reading["arm"] for reading in readings.values()})
     _prove(
         len(arms) >= 2,
