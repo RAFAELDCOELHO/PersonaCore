@@ -1,16 +1,18 @@
 ---
 phase: 27
 slug: relearning-attack
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-14
+updated: 2026-09-15
+revision: 1
 ---
 
 # Phase 27 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
-> Derived from `27-RESEARCH.md` §"Validation Architecture"; the per-task map is filled by the planner from the PLAN.md files.
+> Derived from `27-RESEARCH.md` §"Validation Architecture"; the per-task map below is filled from the five PLAN.md files (27-01 … 27-05).
 
 ---
 
@@ -20,18 +22,18 @@ created: 2026-09-14
 |----------|-------|
 | **Framework** | pytest ~= 9.0 (`pyproject.toml` `[tool.pytest.ini_options] testpaths = ["tests"]`) |
 | **Config file** | `pyproject.toml`; `tests/conftest.py` |
-| **Quick run command** | `.venv/bin/pytest -q tests/test_phase27_prereg.py tests/test_phase27_relearn.py -x` |
+| **Quick run command** | `.venv/bin/pytest -q tests/test_phase27_prereg.py tests/test_phase27_on_draw.py tests/test_phase27_relearn.py -x` |
 | **Full suite command** | `make test` (= `.venv/bin/pytest -q`) |
-| **Estimated runtime** | quick: seconds (the tripwire loads the 22 MB frontier once per module); full: ~1300 s (last full run 2792 passed / 4 skipped / 0 failed in 1297.92 s at `8652c15`; 2802 collected at `ff38d9a`) |
+| **Estimated runtime** | quick: under 3 min (the tripwire loads the 22 MB frontier once per module; the shared e2e fixture in `test_phase27_relearn.py` is under 120 s on CPU); full: ~1300 s (last full run 2792 passed / 4 skipped / 0 failed in 1297.92 s at `8652c15`; 2802 collected at `ff38d9a`) |
 
 ---
 
 ## Sampling Rate
 
-- **After every task commit:** Run `.venv/bin/pytest -q tests/test_phase27_prereg.py tests/test_phase27_relearn.py -x`
-- **After every plan wave:** Run `make test` (expect 2802 + this phase's new tests collected, 0 failed)
-- **Before `/gsd:verify-work`:** Full suite green AND `tests/test_phase25_close.py`, `tests/test_phase24_record.py`, `tests/test_phase20_correction.py`, `tests/test_phase23_resume.py` explicitly re-run green (frontier at one commit; pin census; `train_arm(` register)
-- **Max feedback latency:** 60 seconds for the quick command
+- **After every task commit:** Run `.venv/bin/pytest -q tests/test_phase27_prereg.py tests/test_phase27_on_draw.py tests/test_phase27_relearn.py -x`
+- **After every plan wave:** Run `make test` (expect 2802 + this phase's new tests collected, 0 failed) — EXCEPT while `results/phase27_admission.json` is present-but-untracked (27-05 Task 1 → Task 2), when the clean-tree probes go RED by construction (26-05 precedent); run the full suite after the operator's commit
+- **Before `/gsd:verify-work`:** Full suite green AND `tests/test_phase25_close.py`, `tests/test_phase24_record.py`, `tests/test_phase20_correction.py`, `tests/test_phase23_resume.py` explicitly re-run green (frontier at one commit; provenance pins; pin census; `train_arm(` register)
+- **Max feedback latency:** 60 seconds for the per-file quick commands (`test_phase27_prereg.py`, `test_phase27_on_draw.py` each under 30 s); the `test_phase27_relearn.py` e2e fixture is the one exception at ≤ 120 s (8 tiny trainings + scoring at K = 2 / 4), run with `-k` selection during 27-03/27-04 development and quoted with `--durations=3`
 
 ---
 
@@ -39,48 +41,64 @@ created: 2026-09-14
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| _(filled by the planner from the PLAN.md task list — one row per task)_ | | | | | | | | | |
+| 27-01-T1 | 27-01 | 1 | RELRN-01..05 (D-01..D-07, D-09, D-12, D-16..D-19, D-21..D-25, D-27, D-28, D-33, D-34) | T-27-01, T-27-02, T-27-05 | Pre-registration module: gate reads MOOT on the committed frontier with INCONCLUSIVE precedence; X by call (no float literal); `recovery_gate(*, ..., baseline)` KEYWORD_ONLY no default, pinned keys only; CPU-only at import; no `train_arm(` substring | unit (inline `python -c`) + lint | `.venv/bin/python -c "...import phase27_prereg as p; assert relearning_is_worth_attempting(f)[0]=='MOOT' ... print('OK')" && ruff check/format scripts/phase27_prereg.py` (27-01 Task 1 `<automated>`) | ❌ Wave 0 (creates `scripts/phase27_prereg.py`) | ⬜ pending |
+| 27-01-T2 | 27-01 | 1 | RELRN-01..05 (D-02, D-04, D-06, D-07, D-12, D-19, D-21, D-23..D-28, D-33) | T-27-01, T-27-02, T-27-03 | Ancestry guard honest-with-zero; frontier both-ways pin (absent state); 44-verdict route tripwire (38 equal, 6 SystemExit); tally + cleared 30/4/1 re-derivation; baselines vs source records; Z-rule table; band; signature pins; corpus sha re-render | unit + git integration | `.venv/bin/pytest -q tests/test_phase27_prereg.py -x && ruff ... && .venv/bin/pytest -q tests/test_phase25_close.py tests/test_phase20_correction.py tests/test_phase23_resume.py -x` | ❌ Wave 0 (creates `tests/test_phase27_prereg.py`) | ⬜ pending |
+| 27-02-T1 | 27-02 | 1 | RELRN-04 (D-26 iii, D-29, D-30) | T-27-10 | `on_draw=None` keyword-only on `get_batch_memmap_masked` and `train()`, threaded to BOTH loader call sites; `None` path is the same code path — golden-trajectory suites byte-identical | unit (signature pins) + regression suites | `.venv/bin/python -c "...assert p.kind is KEYWORD_ONLY ... src.count('on_draw=on_draw')==2" && .venv/bin/pytest -q tests/test_lora_training.py tests/test_loop_penalty_fn.py tests/test_phase22_wiring.py tests/test_phase23_resume.py tests/test_phase21_aligned_bins.py -x && ruff ...` | ✅ (modifies `src/personacore/training/{data,loop}.py`) | ⬜ pending |
+| 27-02-T2 | 27-02 | 1 | RELRN-04 (D-26 iii, D-29, D-30; RESEARCH A1) | T-27-10, T-27-04 | Byte-neutrality of the default; recorder covers every teaching AND replay draw in call order; stream sha equal by seed, differs across seeds; resume chain stream + adapter tensors equal one uninterrupted run; non-callable `on_draw` raises | unit (tiny GPT, CPU, < 20 s) | `.venv/bin/pytest -q tests/test_phase27_on_draw.py -x --durations=3 && ruff ...` | ❌ Wave 0 (creates `tests/test_phase27_on_draw.py`) | ⬜ pending |
+| 27-03-T1 | 27-03 | 2 | RELRN-01 (D-04, D-08, D-11, D-14, D-15, D-17, D-33..D-36) | T-27-06, T-27-07, T-27-08, T-27-12 | Driver CPU half: `_require_admitted` (exists → ADMITTED → tracked), `build_record` re-derives rows/tallies/cleared at the write, `admit` refuses overwrite then dirty tree before any digest, seven module digests, apparatus block with `train_path`, `DISPATCH` + explicit kwargs; torch-free at import | unit (inline `python -c`) + lint | `.venv/bin/python -c "...import phase27_relearn as r; assert 'torch' not in sys.modules; b=r.build_record(r.frontier()); assert b['verdict']['verdict']=='MOOT' ... print('OK')" && ruff ...` (27-03 Task 1 `<automated>`) | ❌ Wave 0 (creates `scripts/phase27_relearn.py`) | ⬜ pending |
+| 27-03-T2 | 27-03 | 2 | RELRN-02, RELRN-04 (D-13, D-20, D-22, D-25, D-26 i, D-29, D-30) | T-27-04, T-27-06, T-27-11, T-27-13 | The train/score helpers on the real train path: ONE shared `TrainConfig`, `tp.train()` direct with `max_steps_override` rung chain + `on_draw` recorder tagged by bin IDENTITY (never the `_train.bin` suffix), driver-built `personacore.config.RuntimeConfig(device=device)` (never `tp.RuntimeConfig`), `load_slim`/`load_adapter` only with sha refusal, `score_rung` under a k-suffixed cache label (`_k{K}`); readings record `device`; the leg stubs untouched | signature/source checks (inline) + lint | `.venv/bin/python -c "...make_recorder teaching_bin KEYWORD_ONLY, no endswith(; train_relearn_arm has RuntimeConfig(device=device) and not tp.RuntimeConfig; score_rung has _k{k}; NotImplementedError(\"plan 27-03 Task 3\") still present..." && ruff ...` | ✅ after 27-03-T1 | ⬜ pending |
+| 27-03-T3 | 27-03 | 2 | RELRN-01..05 (D-09, D-16, D-19, D-21..D-24, D-26 ii/iii, D-27, D-28) | T-27-04, T-27-05, T-27-06, T-27-11, T-27-13 | The four legs: each opens with `_require_admitted`, resolves `device` through `phase25_run.device()` and records it; `run_gate` reads X BY CALL (`extraction_ceiling_x`), promotes through `promote_at_z` and re-scores at `FULL_K` under its own `_k{FULL_K}` cache label; `recovery_gate` called once with exactly its five keywords; `--baseline` a required pinned choice | AST/signature checks (inline) + register suites | `.venv/bin/python -c "...no torch.load by name; no NotImplementedError; run_* signatures; recovery_gate( once, keyword set; extraction_ceiling_x( in run_gate and no [\"extraction_ceiling\"]; FULL_K} / CURVE_K} labels..." && ruff ... && .venv/bin/pytest -q tests/test_phase23_resume.py::test_resume_from_none_is_inert tests/test_phase20_correction.py -x` | ✅ after 27-03-T2 | ⬜ pending |
+| 27-03-T4 | 27-03 | 2 | RELRN-01 (D-08, D-10 kwargs trace, D-12, D-30, D-35, D-36) | T-27-04, T-27-06, T-27-07, T-27-08, T-27-12 | Every leg refuses on forged MOOT / INCONCLUSIVE / absent / moved-pins / untracked naming what it read, before resolving a device (12 parametrizations, ids `{mode}-{verdict}`, plus `test_a_record_with_moved_pins_is_refused`); write-once both-state; dirty tree before hashing; kwargs trace with tmp-copy RED; AST import / `torch.load` / git-surface guards; recorder tag-by-identity on two `_train.bin` paths; full schema to a tmp path with digests recomputed from bytes and `disjointness.scored.gated_prompts == 416` / `gated_questions == 104` | unit | `.venv/bin/pytest -q tests/test_phase27_relearn.py -x --durations=3 && ruff ... && .venv/bin/pytest -q tests/test_phase27_prereg.py tests/test_phase27_on_draw.py tests/test_phase23_resume.py::test_resume_from_none_is_inert tests/test_phase20_correction.py tests/test_phase25_close.py -x` | ❌ Wave 0 (creates `tests/test_phase27_relearn.py`) | ⬜ pending |
+| 27-04-T1 | 27-04 | 3 | RELRN-01..05 (D-10 e2e, D-17, D-26 i/ii/iii, D-31, D-32) | T-27-04, T-27-05, T-27-11 | Live path wired end to end through `main()` on CPU (`phase25_run._DEVICE` pinned to `"cpu"`; every readings JSON records `device == "cpu"`) on the tiny 2-layer GPT + real tokenizer served to both base readers (`relearn.BASE_SLIM`, `phase14_recall.CONVBASE_SLIM`), 2 synthetic facts, 8 `tp.train` calls with one shared config instance, real unstubbed scorers, forged control extraction counts so X by call is 1.0 and the CURVE_K → FULL_K promotion fires under its own `_k4` draw cache (`phase25_run.DRAWS_DIR` under tmp), gate verdict ∈ RECOVERY_VERDICTS; off-disk config diff (tmp-copy RED names `max_steps`); offset-stream digests equal at seed / differ across seeds; disjointness zero over QUESTION STRINGS on the REAL fact set (416 gated prompts / 104 questions; set (ii) = `adversarial_episodes` rows) with planted-row RED | integration (CPU, ≤ 120 s shared fixture — the one disclosed Nyquist exception; `-k`-selected during development) | `.venv/bin/pytest -q tests/test_phase27_relearn.py -x --durations=3 -k "wired_end_to_end or off_disk_config or offset_stream_digests or fixture_is_disjoint" && ruff ... && test -z "$(find data -maxdepth 1 \( -name 'phase27_*' -o -name 'phase25_phase27_*' -o -name 'persona_relearn_attacker_*' \))"` | ✅ after 27-03-T4 (appends) | ⬜ pending |
+| 27-04-T2 | 27-04 | 3 | RELRN-01, RELRN-03 (D-11, D-33..D-36, D-39) | T-27-03, T-27-04, T-27-12, T-27-SC | Apparatus node ids exist in `--collect-only -q`; provenance digests recomputed from bytes, all drifted named (both-state); `pyproject.toml` byte-identical to `HEAD:`; exactly one `recovery_gate(` call with the five keywords inside `run_gate` plus an `extraction_ceiling_x(` call and no `"extraction_ceiling"` subscript; record re-derives from `build_record` (both-state, flip-one-row RED) | unit + subprocess | `.venv/bin/pytest -q tests/test_phase27_relearn.py -x --durations=3 && ruff ... && .venv/bin/pytest -q tests/test_phase27_prereg.py tests/test_phase27_on_draw.py tests/test_phase24_record.py tests/test_phase25_close.py tests/test_phase20_correction.py tests/test_phase23_resume.py::test_resume_from_none_is_inert -x` | ✅ after 27-04-T1 (appends) | ⬜ pending |
+| 27-05-T1 | 27-05 | 4 | RELRN-01 (D-04, D-07, D-09, D-14, D-37) | T-27-02, T-27-04, T-27-07, T-27-08 | `admit` run ONCE on the real frontier with the live dirty-tree guard → MOOT, cleared 30/4/1, zero overlaps; four sub-modes refuse on the real untracked record naming MOOT; nothing under `data/phase27_*`, `data/phase25_phase27_*` or `data/persona_relearn_attacker_*`; no git write | CLI + inline `python -c` | `test -f results/phase27_admission.json && test -z "$(git ls-files results/phase27_admission.json)" && python -c "...assert verdict=='MOOT'..." && test -z "$(find data -maxdepth 1 \( -name 'phase27_*' -o -name 'phase25_phase27_*' -o -name 'persona_relearn_attacker_*' \))" && python scripts/phase27_relearn.py calibrate --leg n8 2>&1 \| grep -q "reads 'MOOT' — REFUSING"` | ✅ after 27-04 | ⬜ pending |
+| 27-05-T2 | 27-05 | 4 | RELRN-01 (D-04, D-06, D-15) | T-27-01, T-27-08 | The OPERATOR commits `results/phase27_admission.json` by hand; the record's first-add strictly descends from the one prereg commit; the both-state guards flip to PRESENT | human-action checkpoint + present-state tests | `git ls-files results/phase27_admission.json \| grep -q . && test "$(git log --diff-filter=A --format=%H -- results/phase27_admission.json \| wc -l)" = "1" && .venv/bin/pytest -q <the five present-state node ids> -x` | ✅ after 27-05-T1 | ⬜ pending |
+| 27-05-T3 | 27-05 | 4 | RELRN-01..05 (D-05, D-09, D-14, D-37, D-38, D-39) | T-27-01, T-27-03, T-27-04, T-27-08, T-27-12, T-27-SC | Present-state guards green; four refusals re-watched on the COMMITTED record; `make test` + `make lint` green with collected == 2802 + Σ deltas; pinned inputs byte-identical; no plist; RELRN-01 ticked, 02–05 unticked with the named limitation, requirement text unchanged; ledgers hand-edited and diffed | full suite + lint + grep gates | `git ls-files results/phase27_admission.json \| grep -q . && .venv/bin/pytest -q tests/test_phase27_prereg.py tests/test_phase27_relearn.py tests/test_phase27_on_draw.py tests/test_phase25_close.py tests/test_phase24_record.py -x && grep -q "^- \[x\] \*\*RELRN-01\*\*" .planning/REQUIREMENTS.md && test "$(grep -c '^- \[ \] \*\*RELRN-0[2-5]\*\*' .planning/REQUIREMENTS.md)" = "4" && test "$(grep -c 'never exercised on a mitigated arm' .planning/REQUIREMENTS.md)" = "4" && test -z "$(git diff --stat HEAD -- scripts/teach_persona.py results/phase25_frontier.json pyproject.toml scripts/phase27_prereg.py)" && test -z "$(find data -maxdepth 1 \( -name 'phase27_*' -o -name 'phase25_phase27_*' -o -name 'persona_relearn_attacker_*' \))" && test "$(ls artifacts \| grep -c phase27)" = "0"` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
-### Requirement → test map (from RESEARCH.md; the per-task rows above must point at these)
+### Requirement → test map (from RESEARCH.md; the per-task rows above point at these)
 
-| Req / Decision | Behavior | Automated assertion | Natural RED state |
-|---|---|---|---|
-| RELRN-01 / D-01, D-03 | gate MOOT on the committed frontier; ADMITTED only on a PASS copy; INCONCLUSIVE on 43 points / tally mismatch / missing file | `tests/test_phase27_prereg.py::test_the_gate_reads_moot_on_the_committed_frontier`, `::test_the_gate_admits_only_pass`, `::test_partial_or_inconsistent_frontier_is_inconclusive` | 43-point copy reads MOOT |
-| D-02 tripwire | 38 reached verdicts re-derive through `phase20_gate_coverage.corrected_point_verdict(**_route_kwargs)`; 6 `adv_n64` refuse | `::test_every_frontier_verdict_re_derives_through_the_route` | edit one `point_taught_recall` in a tmp copy |
-| D-02 tally | tally re-derives from 44 `verdict.verdict` strings, `None + early_return_reason → REFUSED` | `::test_the_tally_re_derives_from_the_entries` | `tallies.FAIL = 31` copy → INCONCLUSIVE |
-| D-04 ancestry | every tracked `results/phase27_*` first-add descends from every `phase27_prereg.py` commit | `::test_phase27_prereg_is_frozen_before_every_phase27_result` | honest-with-zero until the record is committed |
-| D-04 X by reference | `phase27_prereg.X` computed via `mitigation_gate.extraction_ceiling`; no float literal in the module (AST) | `::test_x_is_the_frontier_ceiling_by_call_not_literal` | retyped literal |
-| D-06 both-ways pin | `record.frontier_sha256 == sha256(frontier)`; frontier at one commit | `::test_the_record_is_pinned_to_the_frontier_both_ways` | absent record ⇒ assert untracked |
-| D-07 / D-33 / D-34 | tallies, tallies_by_leg, cleared (a)=30/(b)=4/(c)=1, 44 rows re-derived | `::test_cleared_abc_re_derive_on_every_row`, `::test_moot_reasons_are_generated_from_counts` | flip one `cleared_a` |
-| D-08 / D-37 refusals | each sub-mode exits non-zero naming the verdict unless the committed record reads ADMITTED | `tests/test_phase27_relearn.py::test_each_leg_refuses_unless_admitted[calibrate\|curve\|gate\|structural-proof]` + close-out run on the real record | forged ADMITTED copy ⇒ leg proceeds |
-| D-08 write-once | `admit` refuses when record exists / tree dirty | `::test_admit_refuses_to_overwrite`, `::test_admit_refuses_a_dirty_tree` | — |
-| D-09 baseline required | `baseline` KEYWORD_ONLY, no default, pinned keys only | `::test_gate_baseline_is_required_and_pinned` | a default sneaks in |
-| D-10 e2e | forged ADMITTED record in tmp; tiny GPT + real tokenizer; calibrate → curve → gate through the real train path | `::test_the_live_path_is_wired_end_to_end` | unwired leg raises at first real call |
-| D-10 kwargs trace | every kwarg `main()` passes to `run_<leg>()` exists; every required kwarg supplied | `::test_main_passes_only_kwargs_the_legs_accept` | rename one kwarg |
-| D-11 / D-36 | `apparatus` block node ids all exist in `pytest --collect-only -q` | `::test_every_apparatus_node_id_exists` | a renamed test |
-| D-12 | 5 fresh + 2 control pins equal the source records; seeds `== phase23_run.SEED_LADDER`; on-host adapters hash to the pins | `::test_baselines_are_pinned_from_the_records`, `::test_pinned_seeds_equal_seed_ladder`, `::test_pinned_adapters_hash_on_host` (skipif) | — |
-| D-17 / RELRN-05 | zero string intersection scored vs teaching vs A1/A3 vs attacker corpus | `::test_recovery_fixture_is_disjoint` | plant one teaching row |
-| D-18 | attacker corpus sha256 re-renders | `::test_attacker_corpus_sha_re_renders` | — |
-| D-19 / RELRN-03 | band = `MARGIN_K * noise_floor`; verdict signature has no band/curve parameter | `::test_band_uses_imported_margin_and_noise_floor`, `::test_the_curve_cannot_reach_the_verdict` | — |
-| D-21 | rung K == `mitigation_budget.CURVE_K`; Z reading promoted 16 → 48 | `::test_k_is_curve_k_and_promotion_is_the_gates` | — |
-| D-23 / D-25 / D-28 | rungs `range(50, 401, 50)`; scored-token count; Z = max(first clears); never-clears ⇒ INCONCLUSIVE | `::test_z_rule_table` | — |
-| D-26 (ii) | off-disk `train_config` equal across arms | `::test_off_disk_config_diff_is_empty` | perturb one arm's `max_steps` |
-| D-29 / D-30 / D-26 (iii) | `on_draw=None` byte-neutral; recorder covers teaching AND replay draws; sha256 equal by seed+bin, differs by seed | `::test_on_draw_none_is_byte_neutral`, `::test_offset_stream_hash_covers_every_draw`, `::test_offset_stream_differs_by_seed` | — |
-| D-35 | every `provenance.module_sha256` recomputed from bytes; all drifted collected | `::test_provenance_digests_match_live_bytes` | one byte edited in a tmp copy |
-| D-39 | `pyproject.toml` sha256 unchanged | `::test_pyproject_is_byte_identical` | — |
-| Pitfall 4 (existing) | `_TRAIN_ARM_CALL_SITES` register | `tests/test_phase23_resume.py::test_resume_from_none_is_inert` | RED until registered |
-| Pitfall 1 (existing) | no `mitigation_point_verdict` caller in `scripts/` | `tests/test_phase20_correction.py::test_mitigation_point_verdict_has_no_caller_outside_this_module` | — |
+| Req / Decision | Behavior | Automated assertion | Natural RED state | Plan |
+|---|---|---|---|---|
+| RELRN-01 / D-01, D-03 | gate MOOT on the committed frontier; ADMITTED only on a PASS copy; INCONCLUSIVE on 43 points / tally mismatch / missing file / bare `None` | `tests/test_phase27_prereg.py::test_the_gate_reads_moot_on_the_committed_frontier`, `::test_the_gate_admits_only_pass`, `::test_partial_or_inconsistent_frontier_is_inconclusive` | 43-point copy reads MOOT | 27-01 |
+| D-02 tripwire | 38 reached verdicts re-derive through `phase20_gate_coverage.corrected_point_verdict(**_route_kwargs)`; 6 `adv_n64` refuse with `reasons[0]` | `::test_every_frontier_verdict_re_derives_through_the_route` | edit one `point_taught_recall` in a deep copy | 27-01 |
+| D-02 tally | tally re-derives from 44 `verdict.verdict` strings, `None + early_return_reason → REFUSED` | `::test_the_tally_re_derives_from_the_entries` | `tallies.FAIL = 31` copy → INCONCLUSIVE | 27-01 |
+| D-04 ancestry | every tracked `results/phase27_*` first-add descends from every `phase27_prereg.py` commit | `::test_phase27_prereg_is_frozen_before_every_phase27_result` | honest-with-zero until the record is committed (27-05) | 27-01 → 27-05 |
+| D-04 X by reference | X computed via `mitigation_gate.extraction_ceiling`; no float literal in the module (AST) | `::test_x_is_the_frontier_ceiling_by_call_not_literal` | retyped literal | 27-01 |
+| D-06 both-ways pin | `record.frontier_sha256 == sha256(frontier)`; frontier at one commit | `::test_the_record_is_pinned_to_the_frontier_both_ways` | absent record ⇒ assert untracked | 27-01 → 27-05 |
+| D-07 / D-33 / D-34 | tallies, tallies_by_leg, cleared (a)=30/(b)=4/(c)=1, 44 rows re-derived; reasons generated from counts | `::test_cleared_abc_re_derive_on_every_row`, `::test_moot_reasons_are_generated_from_counts`; `tests/test_phase27_relearn.py::test_admit_writes_the_full_schema_to_a_tmp_path`, `::test_the_record_re_derives_from_build_record` | flip one `cleared_a` in a copy | 27-01, 27-03, 27-04 |
+| D-08 / D-12 / D-37 refusals | each sub-mode exits non-zero naming what it read (verdict, moved pins, untracked) unless the committed record reads ADMITTED with the pinned baselines; no refused leg resolves a device; watched on the REAL record at close | `tests/test_phase27_relearn.py::test_each_leg_refuses_unless_admitted[{calibrate,curve,gate,structural-proof}-{MOOT,INCONCLUSIVE,absent}]`, `::test_a_record_with_moved_pins_is_refused`, `::test_a_leg_refuses_an_untracked_record_inside_the_repo`, `::test_every_leg_opens_with_require_admitted` + 27-05 transcripts | forged ADMITTED copy ⇒ leg proceeds (that is the e2e) | 27-03, 27-05 |
+| D-08 write-once | `admit` refuses when the record exists / tree dirty, dirty BEFORE any digest | `::test_admit_refuses_to_overwrite`, `::test_admit_refuses_a_dirty_tree_before_hashing` | — | 27-03 |
+| D-09 baseline required | `baseline` KEYWORD_ONLY, no default, pinned keys only; `--baseline` a required CLI choice | `tests/test_phase27_prereg.py::test_gate_baseline_is_required_and_pinned`; `tests/test_phase27_relearn.py::test_gate_cli_requires_a_pinned_baseline` | a default sneaks in | 27-01, 27-03 |
+| D-09 CPU only / D-10 e2e | forged ADMITTED record in tmp; `phase25_run._DEVICE = "cpu"`, `phase14_recall.CONVBASE_SLIM` + `relearn.BASE_SLIM` + `phase25_run.DRAWS_DIR` under tmp; tiny GPT + real tokenizer; forged control counts ⇒ X = 1.0 by call; calibrate → curve → gate → structural-proof through the real train path and unstubbed scorers, `device == "cpu"` recorded everywhere | `::test_the_live_path_is_wired_end_to_end` | unwired leg raises at first real call / `NO PROMOTION` at the real X = 0.006462 / stray `data/phase25_phase27_*` file — never an MPS run | 27-04 |
+| D-10 kwargs trace | every kwarg `main()` passes to each `run_<leg>()` exists; every required kwarg supplied | `::test_main_passes_only_kwargs_the_legs_accept` | rename one kwarg in a tmp copy | 27-03 |
+| D-11 / D-36 | `apparatus` block: 4 legs × {name, sub_mode, refusal_node_id, e2e_node_id, train_path}; every node id in `pytest --collect-only -q` | `::test_every_apparatus_node_id_exists` (+ schema test) | a renamed test | 27-03, 27-04 |
+| D-12 | 5 fresh + 2 control pins equal the source records; seeds `== phase23_run.SEED_LADDER`; on-host adapters hash to the pins | `tests/test_phase27_prereg.py::test_baselines_are_pinned_from_the_records`, `::test_pinned_seeds_equal_seed_ladder`, `::test_pinned_adapters_hash_on_host` (skipif) | — | 27-01 |
+| D-13 / D-26 (i) (OQ1-B) | `tp.train()` direct with ONE shared `TrainConfig` instance (`is`) for the designated-seed arms; budget symbols imported | `::test_the_live_path_is_wired_end_to_end` (spy on `tp.train`); 27-03 Task 2/3 source assertions | a second `TrainConfig` per arm | 27-03, 27-04 |
+| D-17 / RELRN-05 | zero QUESTION-STRING intersection scored (416 gated prompts / 104 questions from the fixture text + held-out recall items) vs teaching vs `phase24_adversarial.adversarial_episodes` rows (set (ii); RESEARCH Code Ex. 5 superseded) vs attacker corpus on the REAL fact set; `HELD_OUT_FAMILY` read, `"A2"` absent from the test file | `::test_recovery_fixture_is_disjoint`; record fields `disjointness.overlaps == {0,0,0}`, `scored.gated_prompts == 416`, `scored.gated_questions == 104` | plant one teaching row (monkeypatched `render_episodes`) ⇒ `teaching == 1` and `admit` refuses | 27-03, 27-04 |
+| D-18 | attacker corpus sha256 (rows AND bin) re-renders | `tests/test_phase27_prereg.py::test_attacker_corpus_sha_re_renders` | — | 27-01 |
+| D-19 / RELRN-03 | band = `MARGIN_K * noise_floor`; `recovery_gate` signature has no band/curve parameter; the driver's one `recovery_gate(` call carries exactly five keywords | `::test_band_uses_imported_margin_and_noise_floor`, `::test_the_curve_cannot_reach_the_verdict`; `tests/test_phase27_relearn.py::test_the_curve_cannot_reach_the_verdict_through_the_driver` | — | 27-01, 27-04 |
+| D-21 | rung K == `mitigation_budget.CURVE_K`; Z reading promoted 16 → 48 under its OWN draw-cache label (`_k{K}` — `phase25_run.load_draws`' k identity refuses reuse); `prefix_identical` in the gate output | `::test_k_is_curve_k_and_promotion_is_the_gates`; e2e gate assertions (`promoted is True`, `recovered.k == 4`, two caches `_k2` / `_k4`) | forged control counts omitted ⇒ `NO PROMOTION` | 27-01, 27-03, 27-04 |
+| D-23 / D-25 / D-28 | rungs `range(50, 401, 50)`; scored-token count; Z = max(first clears); never-clears ⇒ INCONCLUSIVE | `::test_z_rule_table`, `::test_recall_threshold_reads_counts_not_rates`, `::test_counts_are_ints_only` | — | 27-01 |
+| D-26 (ii) | off-disk `train_config == checkpoint_train_config` per arm; equal across designated-seed arms; extra fresh seed differs only in `seed` | `::test_off_disk_config_diff_is_empty` | perturb one arm's `max_steps` in a tmp copy | 27-04 |
+| D-29 / D-30 / D-26 (iii) | `on_draw=None` byte-neutral; recorder covers teaching AND replay draws (the RNG-neutral `estimate_loss` eval draw at `loop.py:118` deliberately un-threaded; the coverage test asserts the no-`log_path` precondition); the driver's recorder tags by bin IDENTITY, not the shared `_train.bin` suffix; sha256 equal by seed+bin, differs by seed; resume chain equals one run | `tests/test_phase27_on_draw.py::test_on_draw_none_is_byte_neutral`, `::test_offset_stream_hash_covers_every_draw`, `::test_offset_stream_differs_by_seed_and_equals_by_seed`, `::test_rung_chain_stream_equals_one_run`, `::test_train_accepts_on_draw_as_keyword_only_none`; `tests/test_phase27_relearn.py::test_the_recorder_tags_by_bin_identity_not_suffix`, `::test_offset_stream_digests_prove_data_order` | one-site threading ⇒ the coverage test names the missing replay draws | 27-02, 27-04 |
+| D-35 | every `provenance.module_sha256` recomputed from bytes; all drifted collected | `::test_provenance_digests_match_live_bytes` | one byte edited in a tmp copy | 27-04 |
+| D-39 | `pyproject.toml` sha256 == `git show HEAD:pyproject.toml` | `::test_pyproject_is_byte_identical` | — | 27-04 |
+| T-27-06 / T-27-08 | no top-level torch-touching import; no `torch.load` by name; git surface == `ls-files` only | `::test_the_driver_imports_no_torch_touching_module_at_top_level`, `::test_the_driver_never_calls_torch_load_directly`, `::test_the_drivers_git_surface_is_read_only` | planted `["git", "add", ...]` in a copy | 27-03 |
+| Pitfall 4 (existing) | `_TRAIN_ARM_CALL_SITES` register unchanged (OQ1-B: no `train_arm(` substring lands) | `tests/test_phase23_resume.py::test_resume_from_none_is_inert` | RED if a docstring spells `train_arm(` | all |
+| Pitfall 1 (existing) | no `mitigation_point_verdict` caller in `scripts/` | `tests/test_phase20_correction.py::test_mitigation_point_verdict_has_no_caller_outside_this_module` | — | all |
+| Byte-identity (existing) | golden trajectories unchanged by the `on_draw` edit | `tests/test_lora_training.py`, `tests/test_loop_penalty_fn.py`, `tests/test_phase22_wiring.py`, `tests/test_phase23_resume.py`, `tests/test_phase21_aligned_bins.py`, `tests/test_phase24_record.py` | — | 27-02 |
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/test_phase27_prereg.py` — D-01..D-07, D-12, D-19, D-21, D-23..D-28 (pure + git)
-- [ ] `tests/test_phase27_relearn.py` — D-08..D-11, D-17, D-18, D-26, D-29, D-30, D-35, D-36, D-39
-- [ ] `tests/test_phase23_resume.py::_TRAIN_ARM_CALL_SITES` — append any new `train_arm(` hits (or none, under OQ1 option B)
-- Framework install: none — existing pytest infrastructure covers all phase requirements.
+- [ ] `tests/test_phase27_prereg.py` (plan 27-01 Task 2) — D-01..D-07, D-12, D-16..D-19, D-21..D-28, D-33, D-34 (pure + git)
+- [ ] `tests/test_phase27_on_draw.py` (plan 27-02 Task 2) — D-26 (iii), D-29, D-30, RESEARCH A1 (the `on_draw` byte-neutrality / coverage / seed / resume-chain tests live HERE, not in `test_phase27_relearn.py`)
+- [ ] `tests/test_phase27_relearn.py` (plan 27-03 Task 4, extended by 27-04) — D-08..D-11, D-13, D-17, D-26 (i)/(ii), D-35, D-36, D-39, T-27-06/07/08
+- [ ] `tests/test_phase23_resume.py::_TRAIN_ARM_CALL_SITES` — unchanged under OQ1-B; append a `prose` row ONLY if a `train_arm(` substring is unavoidable (none is planned)
+- Framework install: none — existing pytest infrastructure covers all phase requirements (D-39).
 
 ---
 
@@ -88,19 +106,20 @@ created: 2026-09-14
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| The operator commits `results/phase27_admission.json` by hand (D-15) | RELRN-01 | the driver never touches git; the commit is a human action | run `admit` once on a clean tree, `git add results/phase27_admission.json`, commit; then the ancestry + both-ways tests go from honest-with-zero to real |
-| Each attack sub-mode refuses on the REAL committed record (D-37) | RELRN-01 / D-08 | the CPU tests watch refusals on copies; the real record's refusal is captured once at close | invoke `calibrate`, `curve`, `gate`, `structural-proof` once each; paste stderr into the close-out SUMMARY |
+| The operator commits `results/phase27_admission.json` by hand (D-15) | RELRN-01 | the driver never touches git; the commit is a human action (27-05 Task 2, `checkpoint:human-action`) | run `admit` once on a clean tree (27-05 Task 1), then `git add results/phase27_admission.json` + commit by hand; the ancestry, both-ways, provenance, node-id and re-derivation tests flip from honest-with-zero to PRESENT |
+| Each attack sub-mode refuses on the REAL committed record (D-37) | RELRN-01 / D-08 | the CPU tests watch refusals on copies; the real record's refusal is captured once before and once after the commit | invoke `calibrate`, `curve`, `gate --baseline never_taught_1337`, `structural-proof` with `--leg n8` once each; paste stderr + exit codes into 27-05's SUMMARY |
 | On-host adapter sha256 pins (D-12) | RELRN-02 | the adapters are gitignored and exist only on the sweep host | run `tests/test_phase27_prereg.py::test_pinned_adapters_hash_on_host` on the host (skips elsewhere) |
+| D-38 ledger edits by hand | RELRN-01..05 rows | zero `gsd-sdk` mutation handlers (corruption in five consecutive sessions) | snapshot STATE / ROADMAP / REQUIREMENTS to the scratchpad, edit with asserted replacements, `diff -u` each against its snapshot, repair any stray hunk before the tracking commit |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify (27-05 Task 2 is a checkpoint whose `<automated>` runs the five present-state node ids)
+- [x] Wave 0 covers all MISSING references (three new test files, each created by the task that first needs it)
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s for the per-file quick commands; the ≤ 120 s e2e fixture is the one disclosed exception, `-k`-selectable
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** planned — pending execution

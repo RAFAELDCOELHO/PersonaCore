@@ -1049,7 +1049,25 @@ pre-registered)
      with the attacker corpus pre-registered because the corpus definition *is* the threat model.
      (RELRN-04, RELRN-05)
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 27-01-PLAN.md — Pre-registration: `scripts/phase27_prereg.py` (admission gate, X by call, Z rule, band, rung ladder, pinned baselines, attacker corpus) + `tests/test_phase27_prereg.py` (ancestry guard, 44-verdict route tripwire, cleared 30/4/1)
+- [ ] 27-02-PLAN.md — `on_draw=None` capture point on `get_batch_memmap_masked`, threaded through `train()` to both loader sites + `tests/test_phase27_on_draw.py` (byte-neutrality, coverage, seed, resume-chain identity)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 27-03-PLAN.md — CLI driver `scripts/phase27_relearn.py` (`admit` write-once + calibrate / curve / gate / structural-proof legs on `train()` direct with one shared `TrainConfig`, OQ1-B) + structural tests (per-leg refusals, kwargs trace, AST guards)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 27-04-PLAN.md — D-10 wiring proof: CPU e2e through `main()` on a tiny GPT + real tokenizer, off-disk config diff, offset-stream digests, disjointness, node-id existence, provenance recompute, pyproject byte-identity
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 27-05-PLAN.md — Close-out: `admit` once on the real frontier (expected MOOT), refusals watched on the real record (D-37), operator commits the record by hand (D-15), D-38 ledger edits, full suite + lint gate
 
 ### Phase 28: Report, the Published Null, and Milestone Close
 
