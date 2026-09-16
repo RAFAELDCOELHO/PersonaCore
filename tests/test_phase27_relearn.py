@@ -1,35 +1,55 @@
-"""Plan 27-03: the structural CPU half of ``scripts/phase27_relearn.py`` — nothing here trains.
+"""``scripts/phase27_relearn.py`` on CPU: plan 27-03's structural half, plan 27-04's wiring proof.
 
-Every attack leg refuses a forged MOOT / INCONCLUSIVE / absent record before it resolves a device,
-a record whose pinned baselines moved, and an untracked record inside the repo (D-08, D-12).
-``admit`` refuses an existing record, refuses a dirty tree before it builds or hashes anything, and
-writes the full schema to a tmp path (T-27-07, D-33, D-35). ``main()``'s keyword arguments trace
-into every leg's signature (D-10). The driver imports no torch-touching module at top level, never
-loads through torch by name, and its git surface is read-only (T-27-06, T-27-08). Plan 27-04
-appends the CPU wiring proof.
+Plan 27-03 (nothing trains): every attack leg refuses a forged MOOT / INCONCLUSIVE / absent record
+before it resolves a device, a record whose pinned baselines moved, and an untracked record inside
+the repo (D-08, D-12). ``admit`` refuses an existing record, refuses a dirty tree before it builds
+or hashes anything, and writes the full schema to a tmp path (T-27-07, D-33, D-35). ``main()``'s
+keyword arguments trace into every leg's signature (D-10). The driver imports no torch-touching
+module at top level, never loads through torch by name, and its git surface is read-only (T-27-06,
+T-27-08).
+
+Plan 27-04: ONE CPU run of calibrate -> curve -> gate -> structural-proof through ``main()`` on a
+tiny fixture, on the real train path and the real, unstubbed scorers, read back off disk (D-09,
+D-10, D-21, D-26); the disjointness of the real recovery fixture (D-17); and the node-id,
+provenance, pyproject and record guards, both-state on the not-yet-committed record (D-35, D-36,
+D-39).
 """
 
 import ast
 import collections
 import copy
+import dataclasses
 import hashlib
 import inspect
 import json
+import math
 import pathlib
 import subprocess
 import sys
 
 import numpy as np
 import pytest
+import torch
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 for _path in (_ROOT / "scripts", _ROOT / "src"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-import phase25_run  # noqa: E402  (scripts/ is not a package)
+import phase14_factset as fs  # noqa: E402  (scripts/ is not a package)
+import phase14_recall as pr  # noqa: E402  (same)
+import phase18_extraction as x18  # noqa: E402  (same)
+import phase25_run  # noqa: E402  (same)
 import phase27_prereg  # noqa: E402  (same)
 import phase27_relearn as relearn  # noqa: E402  (same)
+import teach_persona as tp  # noqa: E402  (same)
+
+from personacore import checkpoint as ckpt_mod  # noqa: E402
+from personacore.config import ModelConfig  # noqa: E402
+from personacore.generation import undecodable_ids_mask  # noqa: E402
+from personacore.lora import inject_lora, lora_state_dict  # noqa: E402
+from personacore.model import GPT  # noqa: E402
+from personacore.tokenizer import from_json  # noqa: E402
 
 _DRIVER = _ROOT / "scripts" / "phase27_relearn.py"
 _LEG_MODES = ("calibrate", "curve", "gate", "structural-proof")
@@ -508,8 +528,6 @@ def test_the_drivers_git_surface_is_read_only(tmp_path):
 
 
 def test_base_slim_is_phase14s_choke_point():
-    import phase14_recall as pr  # torch-touching: imported inside the test only
-
     assert relearn.BASE_SLIM == pr.CONVBASE_SLIM
 
 
@@ -549,3 +567,723 @@ def test_gate_cli_requires_a_pinned_baseline():
         parser.parse_args(["gate", "--leg", "n8", "--baseline", "made_up"])
     for key in phase27_prereg.BASELINE_KEYS:
         assert parser.parse_args(["gate", "--leg", "n8", "--baseline", key]).baseline == key
+
+
+# ===== plan 27-04: the CPU wiring proof (D-09, D-10, D-21, D-26, D-31, D-32) =====
+
+# D-31: two layers, and `block_size` is the packer's, or the loader would mis-cut the windows.
+_E2E_CFG = ModelConfig(block_size=tp.BLOCK_SIZE, n_layer=2, n_head=2, n_embd=16)
+# D-22 in the frontier's own point_keys order: TWO admitted points in one leg, so a naming
+# collision between two mitigated arms cannot hide behind a one-point fixture.
+_ADMITTED = ("dp_n8_sigma0p500000", "dp_n8_sigma0p700000")
+# The budget the fixture runs at. K comes from mitigation_gate.K_RUNGS, the closed menu the
+# promotion's ratchet accepts (48, 24, 16, 8); a K off that menu refuses before any promotion.
+_FRESH_SEEDS = (1337, 2024)
+_RUNGS = (1, 2)
+_CURVE_K = 8
+_FULL_K = 16
+# Invented values, 4 ids each under the frozen tokenizer: A2 refuses a value shorter than 4 ids
+# (its injection budget would be 0), and 4 new tokens are enough to hold either value.
+_VALUES = ("orvel", "tobin")
+_RECALL_NEW_TOKENS = 4
+_BASELINE = "never_taught_1337"
+_ARM_LABELS = (
+    *(f"fresh_seed{seed}" for seed in _FRESH_SEEDS),
+    f"control_seed{phase27_prereg.DESIGNATED_SEED}",
+    *(f"mitigated_{key}_seed{phase27_prereg.DESIGNATED_SEED}" for key in _ADMITTED),
+)
+
+
+def _e2e_env(root, monkeypatch):
+    """Point every input and output the four legs touch at ``root``, at fixture scale, on CPU.
+
+    Nothing on the train or score path is stubbed: only paths, budgets, the device cache, the pins,
+    the fact set and a forged frontier copy are redirected. ``tests/test_phase22_wiring.py``'s
+    ``_e2e_env`` is the source of the tiny base and the decodable-id dialogue bins; its
+    ``tp.preflight_device`` / ``tp.RuntimeConfig`` lambdas are not copied, because only
+    ``train_arm`` and ``run_calibration`` read them and this driver builds
+    ``personacore.config.RuntimeConfig(device=...)`` itself.
+    """
+    # D-09, FIRST: phase25_run.device() caches _DEVICE and resolves MPS on the dev box, and every
+    # leg and phase25_run._draw_one_shape resolve through it. No code path may run before this.
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    for sub in ("data", "checkpoints", "results"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(0)
+        base = GPT(_E2E_CFG)
+    convbase = root / "convbase.pt"
+    torch.save(
+        {
+            "model_config": dataclasses.asdict(_E2E_CFG),
+            "model": base.state_dict(),
+            "git_sha": "0" * 40,
+            "step": 7,
+            "val_loss": 1.234,
+        },
+        convbase,
+    )
+    slim_path = root / "convbase_slim.pt"
+    slim = ckpt_mod.export_slim(convbase, slim_path)
+    # BOTH base readers: model_from_adapter loads relearn.BASE_SLIM; tp.score_arm and
+    # phase25_run._draw_one_shape load pr.CONVBASE_SLIM through pr.load_adapted_model (read at call
+    # time). Missing the second, the first score loads the real 13.9M base against a tiny adapter.
+    monkeypatch.setattr(relearn, "BASE_SLIM", slim_path)
+    monkeypatch.setattr(pr, "CONVBASE_SLIM", slim_path)
+    # A generation BUDGET, like K: both scorers decode through pr._complete, which reads it at call
+    # time. Measured on this fixture at the real 48 tokens: tp.score_arm 28.69 s, the K=8 draws
+    # 11.30 s, the K=16 draws 22.40 s, twelve scores per run; at 4 tokens 2.27 / 0.95 / 1.84 s.
+    monkeypatch.setattr(pr, "RECALL_MAX_NEW_TOKENS", _RECALL_NEW_TOKENS)
+
+    # DECODABLE ids only (the Phase-22 helper's reason): a dead target id sends perplexity to inf.
+    live = torch.nonzero(~undecodable_ids_mask(from_json(tp.TOKENIZER_PATH), 8192)[0]).flatten()
+    rng = np.random.default_rng(0)
+
+    def _pair(stem, windows):
+        n = windows * tp.BLOCK_SIZE + 1  # + 1: get_batch_memmap_masked needs a shifted target
+        ids = rng.choice(live.numpy(), size=n).astype(np.uint16)
+        bin_path, mask_path = root / "data" / f"{stem}.bin", root / "data" / f"{stem}_mask.bin"
+        ids.tofile(bin_path)
+        np.ones(n, dtype=np.uint8).tofile(mask_path)
+        return bin_path, mask_path
+
+    # tp._REPO_ROOT is read at call time by arm_outputs: the bins, the run CSV (under RESULTS) and
+    # the resume checkpoint all land under root.
+    monkeypatch.setattr(tp, "_REPO_ROOT", root)
+    for name, stem, windows in (
+        ("DIALOG_VAL", "dialog_val", 3),
+        ("DIALOG_TRAIN", "dialog_train", 4),
+    ):
+        bin_path, mask_path = _pair(stem, windows)
+        monkeypatch.setattr(tp, f"{name}_BIN", bin_path)
+        monkeypatch.setattr(tp, f"{name}_MASK", mask_path)
+    # The recipe symbols the driver reads (shared_train_config, train_relearn_arm). LoRA inits B to
+    # zeros, so A's step-0 gradient is 0.0: the two rungs make two steps, and A moves on the second.
+    for name, value in (("WARMUP_STEPS", 1), ("BATCH_SIZE", 1), ("EVAL_INTERVAL", 1)):
+        monkeypatch.setattr(tp, name, value)
+
+    # D-32: two synthetic facts on two real slots, rendered through the real render_family.
+    facts = tuple(
+        fs.Fact(f"e2e_fact_{index}", real.slot, value, real.tier)
+        for index, (real, value) in enumerate(zip(fs.LOCKED_FACTS, _VALUES))
+    )
+    monkeypatch.setattr(fs, "LOCKED_FACTS", facts)
+    monkeypatch.setattr(fs, "SOFT_TIER_FACTS", ())
+
+    # results/phase16_recall_sample.json's schema for the two fake ids: build_corpus reads
+    # fixture["questions"][tier] for both CORPUS_TIERS, proves len(rows) == fixture["counts"][tier]
+    # and re-derives every row's family by exact render_family match. Two questions per fact per
+    # tier keep the corpus at 16 prompts a tier.
+    families = {x18.REPORTED_TIER: fs.TAUGHT_FAMILY_IDS, x18.GATED_TIER: fs.HELDOUT_FAMILY_IDS}
+    questions = {}
+    for tier in x18.CORPUS_TIERS:
+        rows = [
+            (fact.id, question)
+            for fact in facts
+            for question in [
+                question
+                for family_id in sorted(families[tier])
+                for question, _answer in fs.render_family(family_id, fact)
+                if not pr.contains_value(question, fact.value)
+            ][:2]
+        ]
+        questions[tier] = [
+            {"seed_index": index, "fact_id": fact_id, "question": question, "reserved": False}
+            for index, (fact_id, question) in enumerate(rows)
+        ]
+    fixture = root / "phase16_recall_sample.json"
+    fixture.write_text(
+        json.dumps(
+            {
+                "questions": questions,
+                "counts": {tier: len(rows) for tier, rows in questions.items()},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(x18, "CORPUS_SOURCE_FIXTURE", fixture)
+    # draws_path(label) is DRAWS_DIR / f"phase25_{label}_draws.json": under the real tree the
+    # caches would land as data/phase25_phase27_*, invisible to a data/phase27_* glob.
+    monkeypatch.setattr(phase25_run, "DRAWS_DIR", root / "data")
+
+    # The pre-registration's budget, read at call time by the driver. MAX_STEPS moves with
+    # RELEARN_CAP so the prereg's own RELEARN_CAP == 2 * MAX_STEPS still holds under the patch.
+    for name, value in (
+        ("MAX_STEPS", 1),
+        ("CHECKPOINT_INTERVAL", 1),
+        ("RELEARN_CAP", 2),
+        ("RUNGS", _RUNGS),
+        ("CURVE_K", _CURVE_K),
+        ("FULL_K", _FULL_K),
+        ("FRESH_SEEDS", _FRESH_SEEDS),
+    ):
+        monkeypatch.setattr(phase27_prereg, name, value)
+
+    # Five tiny adapters, one torch seed each, at the recipe's LoRA config (model_from_adapter
+    # refuses any other) and fingerprinted against the slim base export_slim wrote.
+    fingerprint = {key: slim[key] for key in ("git_sha", "step", "val_loss")}
+    names = [f"never_taught_{seed}" for seed in _FRESH_SEEDS] + ["control_n8", *_ADMITTED]
+    adapters = {}
+    for torch_seed, name in enumerate(names):
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(torch_seed)
+            model = GPT(_E2E_CFG)
+            inject_lora(model, tp.LORA_CFG)
+        path = root / f"{name}_adapter.pt"
+        ckpt_mod.export_adapter(
+            path,
+            adapter=lora_state_dict(model),
+            lora_config=dataclasses.asdict(tp.LORA_CFG),
+            base_fingerprint=fingerprint,
+        )
+        adapters[name] = (str(path), hashlib.sha256(path.read_bytes()).hexdigest())
+    pins = {
+        **{
+            f"never_taught_{seed}": {
+                "path": adapters[f"never_taught_{seed}"][0],
+                "sha256": adapters[f"never_taught_{seed}"][1],
+                "seed": seed,
+                "source": "e2e",
+            }
+            for seed in _FRESH_SEEDS
+        },
+        "control_n8": {
+            "path": adapters["control_n8"][0],
+            "sha256": adapters["control_n8"][1],
+            "seed": phase27_prereg.DESIGNATED_SEED,
+            "source": "e2e",
+            "point_key": phase27_prereg.CONTROL_KEYS["n8"],
+        },
+    }
+    monkeypatch.setattr(phase27_prereg, "PINNED_BASELINES", pins)
+    monkeypatch.setattr(phase27_prereg, "BASELINE_KEYS", tuple(pins))
+
+    fr = copy.deepcopy(relearn.frontier())
+    for key in _ADMITTED:
+        fr["points"][key]["adapter_path"], fr["points"][key]["adapter_sha256"] = adapters[key]
+    # Recall threshold 0: the tiny model can never reach F_Y x 790/1008, so with the real counts no
+    # arm clears and Z is undefined. At 0/1008 every rung clears, and the legs reach z_rule, the
+    # promotion and recovery_gate with a real Z.
+    fr["verdicts"]["control_readings"]["dp_n8"]["recall_counts"]["taught"] = [0, 1008]
+    # X by call becomes wilson_upper_bound(416, 416) + MARGIN_K x 0.0 = 1.0. The real X = 0.006462
+    # FAILs every reading with fewer than 416 gated questions, so promote_to_full_fidelity would
+    # never fire and the FULL_K re-score would go unexercised. Both controls, because
+    # extraction_ceiling_x proves they agree.
+    for leg in phase27_prereg.LEGS:
+        verdict = fr["points"][phase27_prereg.CONTROL_KEYS[leg]]["verdict"]
+        verdict["control_extraction_successes"] = verdict["control_extraction_questions"]
+    monkeypatch.setattr(relearn, "frontier", lambda: fr)
+
+    record = root / "phase27_admission.json"
+    record.write_text(
+        json.dumps(
+            {
+                "verdict": {"verdict": "ADMITTED", "reasons": ["forged for the wiring proof"]},
+                "admitted_point_keys": list(_ADMITTED),
+                "baselines": pins,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return {"root": root, "record": record, "out": root / "out", "frontier": fr}
+
+
+def _real_tree_strays():
+    """Every phase-27 write target in the REAL tree, the admission record itself excepted."""
+    patterns = (
+        "data/phase27_*",
+        "data/phase25_phase27_*",
+        "data/persona_relearn_attacker_*",
+        "results/phase27_*",
+        "checkpoints/phase27_*",
+    )
+    return sorted(
+        str(path.relative_to(_ROOT))
+        for pattern in patterns
+        for path in _ROOT.glob(pattern)
+        if path != relearn.RECORD
+    )
+
+
+@pytest.fixture(scope="module")
+def e2e_run(tmp_path_factory):
+    """ONE CPU run of calibrate -> curve -> gate -> structural-proof through ``main()``.
+
+    Every patch is undone before this returns, so the tests that read the run (and every later test
+    in this module) see the real modules. A spy on ``tp.train`` records, per call, the leg it ran
+    under, the arm label read off its teaching bin, the ``TrainConfig`` OBJECT, ``on_draw`` and the
+    runtime device. ``TrainConfig`` identity is PER LEG INVOCATION: each leg builds its own
+    ``shared_train_config()``, and in real use each leg is its own process, so across legs the
+    configs are compared by value and by the off-disk proof.
+    """
+    root = tmp_path_factory.mktemp("e2e")
+    record_before = relearn.RECORD.read_bytes() if relearn.RECORD.exists() else None
+    strays_before = _real_tree_strays()
+    calls, leg = [], {}
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        env = _e2e_env(root, monkeypatch)
+        real_train = tp.train
+
+        def _spy_train(**kwargs):
+            calls.append(
+                {
+                    "mode": leg["mode"],
+                    "label": pathlib.Path(kwargs["train_bin"])
+                    .name.removeprefix("persona_relearn_attacker_n8_")
+                    .removesuffix("_train.bin"),
+                    "train_config": kwargs["train_config"],
+                    "on_draw": kwargs.get("on_draw"),
+                    "device": kwargs["runtime_config"].device,
+                }
+            )
+            return real_train(**kwargs)
+
+        monkeypatch.setattr(tp, "train", _spy_train)
+        shared = ["--record", str(env["record"]), "--leg", "n8", "--out-dir", str(env["out"])]
+        leg["mode"] = "calibrate"
+        assert relearn.main(["calibrate", *shared]) == 0
+        leg["mode"] = "curve"
+        assert relearn.main(["curve", *shared]) == 0
+        leg["mode"] = "gate"
+        assert relearn.main(["gate", *shared, "--baseline", _BASELINE]) == 0
+        leg["mode"] = "structural-proof"
+        assert relearn.main(["structural-proof", *shared]) == 0
+        # Read while the patches are still live: these are the functions the legs called.
+        scorers = {
+            fn.__name__: (fn.__module__, inspect.getsourcefile(fn))
+            for fn in (
+                pr.load_adapted_model,
+                tp.score_arm,
+                phase25_run.draw_point_shapes,
+                phase25_run._draw_one_shape,
+                phase25_run.score_point,
+            )
+        }
+    return {
+        **env,
+        "train_calls": calls,
+        "scorers": scorers,
+        "strays": (strays_before, _real_tree_strays()),
+        "record_bytes": (
+            record_before,
+            relearn.RECORD.read_bytes() if relearn.RECORD.exists() else None,
+        ),
+    }
+
+
+def _leg_output(e2e_run, name):
+    return json.loads((e2e_run["out"] / f"phase27_n8_{name}.json").read_text(encoding="utf-8"))
+
+
+def _readings(directory):
+    """``{arm label: readings}`` re-read OFF DISK from every ``phase27_n8_*_readings.json``."""
+    return {
+        path.name.removeprefix("phase27_n8_").removesuffix("_readings.json"): json.loads(
+            path.read_text(encoding="utf-8")
+        )
+        for path in sorted(directory.glob("phase27_n8_*_readings.json"))
+    }
+
+
+def test_the_live_path_is_wired_end_to_end(e2e_run):
+    """D-10: ``main()`` -> every leg -> ``tp.train()`` and the real scorers -> a recovery verdict.
+
+    Structure only; the tiny model's numbers are meaningless by design (D-31). The node id of this
+    test is the ``e2e_node_id`` the admission record's apparatus block names (D-36).
+    """
+    out, calls = e2e_run["out"], e2e_run["train_calls"]
+    designated = phase27_prereg.DESIGNATED_SEED
+    mitigated = [f"mitigated_{key}_seed{designated}" for key in _ADMITTED]
+
+    # (a) the train calls: which arm, in which leg, in which order (D-22: admitted_point_keys).
+    expected = [
+        *(("calibrate", label) for label in _ARM_LABELS[:3] for _rung in _RUNGS),
+        *(("curve", label) for label in mitigated for _rung in _RUNGS),
+    ]
+    assert [(call["mode"], call["label"]) for call in calls] == expected
+    # (2 fresh seeds + 1 control + 2 mitigated points) x 2 rungs. No literal total: the textual
+    # wall census in tests/test_phase21_sc5.py counts every equality against ten under tests/.
+    assert len(calls) == (len(_FRESH_SEEDS) + 1 + len(_ADMITTED)) * len(_RUNGS)
+    assert all(callable(call["on_draw"]) and call["device"] == "cpu" for call in calls)
+
+    configs = collections.defaultdict(list)
+    for call in calls:
+        configs[call["mode"], call["label"]].append(call["train_config"])
+    calibrate = configs["calibrate", f"fresh_seed{designated}"][0]
+    assert calibrate.seed == designated
+    for label in (f"fresh_seed{designated}", f"control_seed{designated}"):
+        assert all(cfg is calibrate for cfg in configs["calibrate", label]), label
+    for cfg in configs["calibrate", f"fresh_seed{_FRESH_SEEDS[1]}"]:
+        assert cfg is not calibrate
+        assert dataclasses.asdict(cfg) == {
+            **dataclasses.asdict(calibrate),
+            "seed": _FRESH_SEEDS[1],
+        }
+    curve = configs["curve", mitigated[0]][0]
+    assert all(cfg is curve for label in mitigated for cfg in configs["curve", label])
+    assert dataclasses.asdict(curve) == dataclasses.asdict(calibrate)  # across legs: by value
+
+    # (b) every arm's sidecars, every leg's output, and the device each recorded (D-09).
+    readings = _readings(out)
+    assert sorted(readings) == sorted(_ARM_LABELS)
+    for label in _ARM_LABELS:
+        assert readings[label]["device"] == "cpu", label
+        for suffix in (*(f"_rung{rung:04d}_adapter.pt" for rung in _RUNGS), "_offsets.bin"):
+            assert (out / f"phase27_n8_{label}{suffix}").is_file(), label + suffix
+    calibration, curve_out, gate = (
+        _leg_output(e2e_run, n) for n in ("calibration", "curve", "gate")
+    )
+    assert _leg_output(e2e_run, "structural")["data_order"]["devices"] == dict.fromkeys(
+        _ARM_LABELS, "cpu"
+    )
+    assert calibration["device"] == curve_out["device"] == gate["device"] == "cpu"
+
+    # (c) calibration: under threshold 0 both arms clear at the first rung.
+    assert calibration["z"] == 1
+    assert calibration["fresh"]["first_clear"] == calibration["control"]["first_clear"] == 1
+    assert calibration["threshold"]["value"] == 0.0
+    assert (calibration["threshold"]["k"], calibration["threshold"]["n"]) == (0, 1008)
+    assert calibration["train_path"] == relearn.TRAIN_PATH
+
+    # (d) the curve: every admitted point, every rung, counts with their denominators.
+    assert sorted(curve_out["points"]) == sorted(_ADMITTED)
+    assert "not a second gate" in curve_out["finding"]
+    band_keys = {"floor", "half_width", "fresh", "lo", "hi", "inside", "margin_k"}
+    for key, label in zip(_ADMITTED, mitigated):
+        rungs = curve_out["points"][key]["rungs"]
+        assert [row["steps"] for row in rungs] == list(_RUNGS)
+        for row in rungs:
+            assert type(row["steps"]) is int
+            assert row["scored_tokens"] == readings[label]["mask_ones"] * row["steps"]
+            for name in ("taught_recall", "heldout_recall"):
+                assert all(type(row[name][f]) is int for f in ("numerator", "denominator"))
+            assert all(type(row["extraction"][f]) is int for f in ("successes", "questions"))
+            assert set(row["band"]) == band_keys and row["band"]["margin_k"] == 2
+            assert row["draws_cache"].endswith(f"_k{_CURVE_K}_draws.json")
+        assert curve_out["points"][key]["reading_at_z"] == rungs[0]
+
+    # (e) the gate: X by call, the promotion measured, the verdict in its domain.
+    assert gate["x"] == phase27_prereg.extraction_ceiling_x(e2e_run["frontier"]) >= 1.0
+    assert (gate["baseline"], gate["z"], gate["finding_is_not_a_gate"]) == (_BASELINE, 1, True)
+    assert sorted(gate["points"]) == sorted(_ADMITTED)
+    for key in _ADMITTED:
+        point = gate["points"][key]
+        assert (point["provisional"]["verdict"], point["provisional"]["k"]) == ("PASS", _CURVE_K)
+        assert point["promoted"] is True and point["promotion_reason"].startswith("PROMOTE")
+        assert point["recovered"]["k"] == _FULL_K
+        assert point["recovered"]["draws_cache"].endswith(f"_k{_FULL_K}_draws.json")
+        assert point["verdict"] in phase27_prereg.RECOVERY_VERDICTS
+        assert point["reasons"] and "/" in point["reasons"][0]
+        assert point["prefix_identical"] is True
+        assert "taught_recall_reported" in point
+
+    # (f) every rung adapter loads through the weights_only choke point and hashes to its record.
+    for label in _ARM_LABELS:
+        for rung in readings[label]["rungs"]:
+            path = pathlib.Path(rung["adapter_path"])
+            assert ckpt_mod.load_adapter(path)["lora_config"] == dataclasses.asdict(tp.LORA_CFG)
+            assert rung["adapter_sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+    # (g) both caches of the promoted reading exist — k is part of load_draws' cache identity —
+    # and nothing landed in the real tree.
+    for key in _ADMITTED:
+        for k in (_CURVE_K, _FULL_K):
+            cache = e2e_run["root"] / "data" / f"phase25_phase27_n8_{key}_rung0001_k{k}_draws.json"
+            assert cache.is_file(), cache.name
+    assert e2e_run["strays"] == ([], [])
+    assert e2e_run["record_bytes"][0] == e2e_run["record_bytes"][1]
+
+    # (h) the scorers the legs called were the real ones.
+    assert e2e_run["scorers"] == {
+        "load_adapted_model": ("phase14_recall", str(_ROOT / "scripts" / "phase14_recall.py")),
+        "score_arm": ("teach_persona", str(_ROOT / "scripts" / "teach_persona.py")),
+        "draw_point_shapes": ("phase25_run", str(_ROOT / "scripts" / "phase25_run.py")),
+        "_draw_one_shape": ("phase25_run", str(_ROOT / "scripts" / "phase25_run.py")),
+        "score_point": ("phase25_run", str(_ROOT / "scripts" / "phase25_run.py")),
+    }
+
+
+def _config_diffs(readings, reference):
+    """``{label: (fields differing from the reference arm's train_config, fields where the recorded
+    train_config differs from the one train() wrote into the checkpoint)}`` — D-26 (i) and (ii)."""
+    base = readings[reference]["train_config"]
+
+    def differing(left, right):
+        return sorted(f for f in set(left) | set(right) if left.get(f) != right.get(f))
+
+    return {
+        label: (
+            differing(reading["train_config"], base),
+            differing(reading["train_config"], reading["checkpoint_train_config"]),
+        )
+        for label, reading in readings.items()
+    }
+
+
+def test_off_disk_config_diff_is_empty(e2e_run, tmp_path):
+    """D-26 (i)/(ii), RELRN-04: every arm's config READ OFF DISK equals the designated fresh arm's
+    on every field (the extra fresh seed differs in ``seed`` alone) and equals the config
+    ``train()`` wrote into its own checkpoint. Identity of the objects is the wiring test's (per
+    leg); across legs, this value-level proof on the files is what holds."""
+    reference = f"fresh_seed{phase27_prereg.DESIGNATED_SEED}"
+    extra = f"fresh_seed{_FRESH_SEEDS[1]}"
+    expected = {label: ([], []) for label in _ARM_LABELS} | {extra: (["seed"], [])}
+    assert _config_diffs(_readings(e2e_run["out"]), reference) == expected
+
+    structural = _leg_output(e2e_run, "structural")
+    assert structural["shared_config"] == {
+        "reference": reference,
+        "differing_fields": {label: fields for label, (fields, _off_disk) in expected.items()},
+    }
+    assert structural["off_disk"] == dict.fromkeys(_ARM_LABELS, True)
+
+    # WATCHED RED on tmp COPIES: one field of one arm's recorded config moved, same comparison.
+    for path in e2e_run["out"].glob("phase27_n8_*_readings.json"):
+        (tmp_path / path.name).write_bytes(path.read_bytes())
+    edited = tmp_path / f"phase27_n8_{_ARM_LABELS[-1]}_readings.json"
+    blob = json.loads(edited.read_text(encoding="utf-8"))
+    blob["train_config"]["max_steps"] = 99
+    edited.write_text(json.dumps(blob), encoding="utf-8")
+    assert _config_diffs(_readings(tmp_path), reference) == expected | {
+        _ARM_LABELS[-1]: (["max_steps"], ["max_steps"])
+    }
+
+
+def test_offset_stream_digests_prove_data_order(e2e_run):
+    """D-26 (iii), D-30: equal seed and equal bin give equal offset streams across arms; another
+    seed gives another stream. Each stream file is re-read and re-hashed, and its tag bytes name
+    teaching (0) and replay (1) draws in call order."""
+    out = e2e_run["out"]
+    readings = _readings(out)
+    at_designated = [
+        label for label in _ARM_LABELS if readings[label]["seed"] == phase27_prereg.DESIGNATED_SEED
+    ]
+    assert len(at_designated) == len(_ARM_LABELS) - 1
+    # The same two facts render the same attacker bin for every arm and seed.
+    assert len({(r["bin_bytes"], r["bin_sha256"]) for r in readings.values()}) == 1
+    digests = {label: reading["offset_stream"]["sha256"] for label, reading in readings.items()}
+    assert len({digests[label] for label in at_designated}) == 1
+    assert digests[f"fresh_seed{_FRESH_SEEDS[1]}"] != digests[at_designated[0]]
+
+    data_order = _leg_output(e2e_run, "structural")["data_order"]
+    assert data_order["sha256"] == digests
+    assert data_order["equal_across_arms_at_designated_seed"] is True
+    assert data_order["equal_bin_bytes_at_designated_seed"] is True
+    assert data_order["differs_across_seeds"] is True
+
+    for label, reading in readings.items():
+        stream, batch = reading["offset_stream"], reading["train_config"]["batch_size"]
+        assert batch == 1, "one uint64 per draw: the tag positions below assume it"
+        replay = math.ceil(reading["replay_windows"] / batch)
+        assert replay > 0 and stream["draws"] == len(_RUNGS) * (1 + replay), label
+        raw = (out / f"phase27_n8_{label}_offsets.bin").read_bytes()
+        assert len(raw) == stream["draws"] * (1 + 8 * batch), label
+        assert hashlib.sha256(raw).hexdigest() == stream["sha256"], label
+        # Tagged by IDENTITY against the teaching bin: it and the replay bin both end in
+        # _train.bin, so a suffix rule would have tagged every draw 0.
+        assert list(raw[:: 1 + 8 * batch]) == ([0] + [1] * replay) * len(_RUNGS), label
+        assert stream["teaching_bin"] == reading["bin_path"]
+
+
+def test_recovery_fixture_is_disjoint(monkeypatch, tmp_path):
+    """D-17, RELRN-05 on the REAL fact set: zero scored question strings in the teaching rows, the
+    adversarial arm's trained rows or the attacker corpus; a planted scored row is counted and
+    refused at ``admit``. The held-out family is read from the prereg, never spelled here."""
+    report = relearn.disjointness_report()
+    fixture = json.loads(x18.CORPUS_SOURCE_FIXTURE.read_text(encoding="utf-8"))
+    gated = fixture["questions"][phase27_prereg.GATED_TIER]
+    assert report["overlaps"] == {"teaching": 0, "trained_attack": 0, "attacker_corpus": 0}
+    assert report["scored"]["gated_prompts"] == 416
+    assert report["scored"]["gated_questions"] == len({row["question"] for row in gated})
+    assert report["scored"]["heldout_recall"] > 0
+    assert report["trained_attack_rows"] > 0
+    assert "question strings" in report["unit"]
+    assert report["held_out_family"] == phase27_prereg.HELD_OUT_FAMILY
+    assert phase27_prereg.HELD_OUT_FAMILY not in report["trained_families"]
+
+    # PLANTED RED, a monkeypatch and never the tree: the teaching renderer gains one pair whose
+    # question is a scored gated question string (the fixture holds the text; the corpus does not).
+    real_render = tp.render_episodes
+    planted = (gated[0]["question"], "planted")
+    monkeypatch.setattr(tp, "render_episodes", lambda *a, **kw: [*real_render(*a, **kw), planted])
+    # The attacker corpus IS the teaching rows (D-18), rendered by the same function: both count it.
+    assert relearn.disjointness_report()["overlaps"] == {
+        "teaching": 1,
+        "trained_attack": 0,
+        "attacker_corpus": 1,
+    }
+    out = tmp_path / "z.json"
+    with pytest.raises(SystemExit, match="REFUSING to admit"):
+        relearn.admit(out)
+    assert not out.exists()
+
+
+# ===== plan 27-04: the guards the record's apparatus and provenance blocks promise =====
+
+
+def _missing_node_ids(legs, collected):
+    return sorted(
+        {leg[key] for leg in legs for key in ("refusal_node_id", "e2e_node_id")} - collected
+    )
+
+
+def test_every_apparatus_node_id_exists():
+    """D-36, T-27-04: every node id the apparatus block names is collected by a FRESH interpreter,
+    both-state on the record."""
+    completed = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "tests/test_phase27_relearn.py"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout[-2000:] + completed.stderr[-2000:]
+    collected = set(completed.stdout.splitlines())
+    legs = [dict(leg) for leg in relearn.APPARATUS_LEGS]
+    assert len(legs) == len(_LEG_MODES)
+    assert _missing_node_ids(legs, collected) == []
+
+    if relearn.RECORD.exists():
+        record = json.loads(relearn.RECORD.read_text(encoding="utf-8"))
+        assert record["apparatus"]["legs"] == legs
+        assert _missing_node_ids(record["apparatus"]["legs"], collected) == []
+    else:
+        assert not _git("ls-files", "results/phase27_admission.json").strip()
+
+    # WATCHED RED on a copy: one test name misspelled is not collected.
+    misspelled = copy.deepcopy(legs)
+    misspelled[0]["refusal_node_id"] = misspelled[0]["refusal_node_id"].replace(
+        "refuses", "refusez"
+    )
+    assert _missing_node_ids(misspelled, collected) == [misspelled[0]["refusal_node_id"]]
+
+
+def _drifted(pins, root):
+    """``[(module, recorded, live)]`` for EVERY pin whose bytes under ``root`` no longer hash to it,
+    recomputed from bytes here and never through the emitter's own ``_sha256``."""
+    return [
+        (name, recorded, live)
+        for name, recorded in pins.items()
+        if (live := hashlib.sha256((root / name).read_bytes()).hexdigest()) != recorded
+    ]
+
+
+def test_provenance_digests_match_live_bytes(tmp_path):
+    """D-35, T-27-12, both-state (``tests/test_phase24_record.py``'s guard): the record's module
+    digests equal the files on disk, and one failure names every drifted module at once."""
+    if relearn.RECORD.exists():
+        pins = json.loads(relearn.RECORD.read_text(encoding="utf-8"))["provenance"]["module_sha256"]
+        assert pins, "provenance.module_sha256 is empty — this assertion would be vacuous"
+        assert "scripts/phase27_relearn.py" in pins, "the emitter does not pin its own bytes"
+        assert set(pins) == set(relearn.PINNED_MODULES)
+        drifted = _drifted(pins, _ROOT)
+        assert not drifted, (
+            f"{len(drifted)} of {len(pins)} provenance digests no longer match the files on disk:\n"
+            + "".join(
+                f"    {name}\n      recorded {recorded}\n      live     {live}\n"
+                for name, recorded, live in drifted
+            )
+        )
+    else:
+        assert not _git("ls-files", "results/phase27_admission.json").strip()
+
+    # BOTH states — WATCHED RED on tmp COPIES of every pinned module, two of them one byte longer.
+    pins = {
+        rel: hashlib.sha256((_ROOT / rel).read_bytes()).hexdigest()
+        for rel in relearn.PINNED_MODULES
+    }
+    edited = ("scripts/phase27_prereg.py", "scripts/phase27_relearn.py")
+    for rel in relearn.PINNED_MODULES:
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        extra = b"\n# one byte more\n" if rel in edited else b""
+        (tmp_path / rel).write_bytes((_ROOT / rel).read_bytes() + extra)
+    assert [name for name, _recorded, _live in _drifted(pins, tmp_path)] == list(edited)
+    assert _drifted(pins, _ROOT) == []  # ...and the real tree is untouched
+
+
+def test_pyproject_is_byte_identical():
+    """D-39 (RPT-03's fourth milestone): no dependency was added — ``pyproject.toml`` is the
+    committed blob, and its newest commit predates the pre-registration."""
+    live = (_ROOT / "pyproject.toml").read_bytes()
+    committed = subprocess.run(
+        ["git", "show", "HEAD:pyproject.toml"], cwd=_ROOT, capture_output=True, check=True
+    ).stdout
+    assert hashlib.sha256(live).hexdigest() == hashlib.sha256(committed).hexdigest()
+    newest = _git("log", "-1", "--format=%cs", "--", "pyproject.toml").strip()
+    assert newest and newest < phase27_prereg.COMMITTED, newest
+
+
+def _calls(node, name):
+    return [
+        call
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call)
+        and getattr(call.func, "attr", getattr(call.func, "id", None)) == name
+    ]
+
+
+def test_the_curve_cannot_reach_the_verdict_through_the_driver():
+    """RELRN-03, D-19 from the CALLER's side: the driver calls ``recovery_gate`` once, inside
+    ``run_gate``, with exactly the five keywords its signature has; ``run_gate`` calls no band or
+    first-clear reducer and reads X by call, never from the frontier's summary field."""
+    tree = ast.parse(_DRIVER.read_text(encoding="utf-8"))
+    run_gate = next(
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run_gate"
+    )
+    everywhere = _calls(tree, "recovery_gate")
+    assert len(everywhere) == 1 and _calls(run_gate, "recovery_gate") == everywhere
+    (call,) = everywhere
+    keywords = [keyword.arg for keyword in call.keywords]
+    assert call.args == [] and None not in keywords  # no positional, no ** splat
+    assert set(keywords) == {"recovered_successes", "recovered_questions", "x", "z", "baseline"}
+    assert set(keywords) == set(inspect.signature(phase27_prereg.recovery_gate).parameters)
+    assert _calls(run_gate, "band") == _calls(run_gate, "first_clear") == []
+    assert _calls(run_gate, "extraction_ceiling_x")
+    assert not [
+        node
+        for node in ast.walk(run_gate)
+        if isinstance(node, ast.Subscript)
+        and isinstance(node.slice, ast.Constant)
+        and node.slice.value == "extraction_ceiling"
+    ]
+
+
+def test_the_record_re_derives_from_build_record(frontier):
+    """D-33/D-34 tripwire, both-state: the record was GENERATED by ``build_record`` on the committed
+    frontier, never authored — a hand-edited field goes RED. Complements plan 27-01's both-ways
+    frontier pin rather than repeating it."""
+    keys = (
+        "verdict",
+        "admitted_point_keys",
+        "tallies",
+        "tallies_by_leg",
+        "cleared_counts",
+        "rows",
+        "frontier_sha256",
+        "frontier_bytes",
+        "x",
+        "recall_thresholds",
+        "baselines",
+        "fresh_seeds",
+        "designated_seed",
+        "attacker_corpus",
+        "budget",
+    )
+    fresh = json.loads(json.dumps(relearn.build_record(frontier)))
+
+    def moved(candidate):
+        return [key for key in keys if candidate[key] != fresh[key]]
+
+    if relearn.RECORD.exists():
+        record = json.loads(relearn.RECORD.read_text(encoding="utf-8"))
+        assert moved(record) == []
+        assert record["apparatus"]["legs"] == fresh["apparatus"]["legs"]
+    else:
+        assert not _git("ls-files", "results/phase27_admission.json").strip()
+
+    assert fresh["verdict"]["verdict"] == "MOOT"
+    # WATCHED RED on a deep copy: one row's cleared_a flipped, the same comparison names the rows.
+    flipped = copy.deepcopy(fresh)
+    row = next(row for row in flipped["rows"] if not row["refused"])
+    row["cleared_a"] = not row["cleared_a"]
+    assert moved(flipped) == ["rows"]
