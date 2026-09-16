@@ -383,7 +383,7 @@ $ ls artifacts | grep -c phase27
 0
 ```
 
-The diff is empty. By design, `src/personacore/training/data.py` (+8/−2, counting the two deletions with `loop.py` below), `src/personacore/training/loop.py` (+16) and `scripts/phase27_relearn.py` (+1208, new) DID change after `916ad4d`, in 27-02's `on_draw` hook (`58ee800`), 27-03's driver (`7e3d436`) and 27-04's D-22 fix (`c054d8b`). All seven modules in `provenance.module_sha256` equal the live bytes, and `git diff --stat e308675..HEAD -- scripts src` is empty, so the record pins these modules exactly as they stand at `e308675`.
+The diff is empty. By design, `src/personacore/training/data.py` (+7/−1), `src/personacore/training/loop.py` (+15/−1) and `scripts/phase27_relearn.py` (+1208, new) DID change after `916ad4d`, in 27-02's `on_draw` hook (`58ee800`), 27-03's driver (`7e3d436`) and 27-04's D-22 fix (`c054d8b`). All seven modules in `provenance.module_sha256` equal the live bytes, and `git diff --stat e308675..HEAD -- scripts src` is empty, so the record pins these modules exactly as they stand at `e308675`. *(Corrected 2026-09-16 by the orchestrator, flagged by this plan's executor: as first committed at `611141a` this sentence read `data.py` "+8/−2, counting the two deletions with `loop.py` below" and `loop.py` "+16"; measured `git diff --numstat 916ad4d..HEAD` gives 7/1 and 15/1.)*
 
 ### Step 5: the ledger edits (hand, diffed against a snapshot, orchestrator G1–G4)
 
@@ -439,7 +439,7 @@ It covers the 5-file pytest (the three Phase-27 files, `test_phase25_close.py`, 
 | Task 3, G5 planning readers | `88dff77` + the ledger edits | 288 passed in 24.79s |
 | Task 3 `<verify>` | same | 101 passed in 49.98s |
 
-- **Collected is unchanged at 2871 from 27-04's close to now:** 5-01..27-04 added +28 / +5 / +27 / +9 over the 2802 baseline, and this plan added no test. The full-suite reading equals the orchestrator's post-wave-3 run exactly, but now with the record tracked, so every both-state test ran its PRESENT branch.
+- **Collected is unchanged at 2871 from 27-04's close to now:** 27-01..27-04 added +28 / +5 / +27 / +9 over the 2802 baseline, and this plan added no test. The full-suite reading equals the orchestrator's post-wave-3 run exactly, but now with the record tracked, so every both-state test ran its PRESENT branch.
 - **Nothing was red by construction this time.** Unlike 26-05's Task 1, the full suite ran only after the operator's commit on the fully-tracked tree. The clean-tree probes that go red while a `results/` file is `??` (`test_phase23_resume.py::test_production_resume_epsilon_bit_identical`, `test_phase25_frontier.py::test_a_perturbed_per_point_count_breaks_the_aggregate`) passed inside the 2867.
 
 ## Decisions Made
