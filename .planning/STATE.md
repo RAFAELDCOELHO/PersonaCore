@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Leakage Mitigation and Relearning Validation
 status: ready_to_plan
-stopped_at: Phase 27 COMPLETE (2026-09-16) — verification human_needed (5/5 ROADMAP SC, 28/28 PLAN must-haves, RELRN-01..05 accounted, 27-VERIFICATION.md 0ab0e53) resolved by two developer rulings recorded in 27-HUMAN-UAT.md — the 16 code-review findings (27-REVIEW.md a1dec50, all reproduced, none falsified, all latent under MOOT) carried to Phase 28 as named limitations with obligation (a)-(f) for the first ADMITTED phase (todo phase28-carry-phase27-latent-review-findings), and no adv_* point admissible until the v5.0 adversarial re-measurement pins its own control (WR-05); results/phase27_admission.json (operator commit 88dff77) reads MOOT, 0 of 44 PASS; phase checkbox ticked by hand, zero gsd-sdk handlers; security gate still due (/gsd-secure-phase 27); next — /gsd-discuss-phase 28
-last_updated: "2026-09-16T23:30:15.000Z"
-last_activity: 2026-09-16
+stopped_at: Phase 28 CONTEXT GATHERED (2026-09-17) — /gsd-discuss-phase 28 closed with 39 locked decisions across four areas (28-CONTEXT.md, 28-DISCUSSION-LOG.md, commit 72c5162). The Phase 27 ruling is FOLDED IN (limitations CR-01/CR-02/WR-02/WR-03/WR-06 + obligations (a)-(f) + WR-05). Three roadmap premises were measured during the discussion and two are false as written: SC3's sha256 clause (5065bc5 added `license = "MIT"`, pin 81d07d5d->15ffd6b5, deps unchanged at all four tags) and SC4's "32 replay windows" (32 at n=8, 256 at n=64); SC4's "(c) fails on all 12" holds of the readings but 6 adv_n64 points were REFUSED before (c) was applied. Measured and usable: sigma_for(4.0, 200, 1e-5) = 15.289937507119 reproduces the recorded 15.3; c673b4c precedes the first v4.0 result 9bb34ad; make lint green (DEF-17-01 closed at 7b38e38); 24-UAT item 3 closed by measurement. OPEN FOR THE PHASE: main is 27 commits ahead of origin/main, so Phase 27's code has never run in CI and D-38 makes a green CI run a close precondition at a human checkpoint. Next: /gsd-plan-phase 28. Superseded stop record (27 close): Phase 27 COMPLETE (2026-09-16) — verification human_needed (5/5 ROADMAP SC, 28/28 PLAN must-haves, RELRN-01..05 accounted, 27-VERIFICATION.md 0ab0e53) resolved by two developer rulings recorded in 27-HUMAN-UAT.md — the 16 code-review findings (27-REVIEW.md a1dec50, all reproduced, none falsified, all latent under MOOT) carried to Phase 28 as named limitations with obligation (a)-(f) for the first ADMITTED phase (todo phase28-carry-phase27-latent-review-findings), and no adv_* point admissible until the v5.0 adversarial re-measurement pins its own control (WR-05); results/phase27_admission.json (operator commit 88dff77) reads MOOT, 0 of 44 PASS; phase checkbox ticked by hand, zero gsd-sdk handlers; security gate still due (/gsd-secure-phase 27); next — /gsd-discuss-phase 28
+last_updated: "2026-09-17T21:57:46.000Z"
+last_activity: 2026-09-17
 progress:
   total_phases: 9
   completed_phases: 7
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-08-19)
 
 ## Current Position
 
-Phase: 28 (report-the-published-null-and-milestone-close) — NOT STARTED (discuss → plan next)
+Phase: 28 (report-the-published-null-and-milestone-close) — CONTEXT GATHERED 2026-09-17 (plan next)
 Plan: Not started. Phase 27 CLOSED 2026-09-16 — 5 of 5 plans, verification human_needed resolved by two developer rulings (27-HUMAN-UAT.md) (27-05 closed 2026-09-16: `admit` once → MOOT, 0 of 44 PASS, cleared (a) 30 / (b) 4 / (c) 1, apparatus not exercised; the operator's record commit 88dff77; the four attack legs refused before and after it; suite 2867 passed / 4 skipped / 0 failed, 2871 collected). Waves 1-4 of 4 COMPLETE (27-01 916ad4d; 27-02 58ee800 + 835b1d0; 27-03 7e3d436 + c4ba1c6; 27-04 c054d8b + 6d6ffb3; 27-05 88dff77 operator), sequential on main, no worktrees. Phase 27 awaits /gsd:verify-work 27. Phase 26 CLOSED 2026-09-13 — 5 of 5 plans, verification passed (26-05 closed 2026-09-13: 868ff47 Task 1 Branch A, 8652c15 the operator's artifact commit, 5477519 Task 3 the machine put back; the 16th sidecar landed 2026-09-12 20:07 local, LaunchAgent exited 0 and was booted out). Phase 26 awaits /gsd:verify-work 26.
 **2026-09-04 — THE LAUNCH CHECKPOINT (25-14 Task 2/3), SESSION IN PROGRESS, ON `main`.** The
 operator chose "prepare and launch now". Before any GPU second the driver's live path was read end
@@ -1578,8 +1578,8 @@ Items acknowledged and deferred at milestone close on 2026-06-11 (v1.0), with cu
 
 ## Session Continuity
 
-Last session: 2026-09-16T21:03:36Z
-Stopped at: Phase 27 plans COMPLETE 5/5 (2026-09-16) — 27-05 closed: admit once → MOOT (0 of 44 PASS; cleared (a) 30 / (b) 4 / (c) 1; apparatus not exercised); results/phase27_admission.json committed by the operator at 88dff77; the four attack legs refused before and after the commit; make test 2867 passed / 4 skipped / 0 failed; RELRN-01 ticked, RELRN-02..05 named limitation; next: /gsd:verify-work 27. Superseded stop record (27 context): Phase 27 context gathered
+Last session: 2026-09-17T21:57:46.000Z
+Stopped at: Phase 28 context gathered (2026-09-17) — 28-CONTEXT.md + 28-DISCUSSION-LOG.md committed at 72c5162; 39 locked decisions, the Phase 27 ruling folded in, two SC premises measured FALSE as written (SC3 sha256 clause, SC4 replay count) and recorded as decisions D-27 and D-09. Next: /gsd-plan-phase 28. Superseded stop record (27 close): Phase 27 plans COMPLETE 5/5 (2026-09-16) — 27-05 closed: admit once → MOOT (0 of 44 PASS; cleared (a) 30 / (b) 4 / (c) 1; apparatus not exercised); results/phase27_admission.json committed by the operator at 88dff77; the four attack legs refused before and after the commit; make test 2867 passed / 4 skipped / 0 failed; RELRN-01 ticked, RELRN-02..05 named limitation; next: /gsd:verify-work 27. Superseded stop record (27 context): Phase 27 context gathered
 Superseded stop record (24-09): Completed 24-09 UAT CLOSURE (no PLAN.md — HUMAN-UAT item 4). The stale
 `provenance.module_sha256` pin on `results/phase24_token_budget.json` is closed under option (a):
 guard AND re-emit. The guard (`tests/test_phase24_record.py::test_the_provenance_pins_match_the_live_module_bytes`) mirrors the live `corpus_sha256`
@@ -1615,7 +1615,7 @@ GATE-REJECTED pool, the first of which an existing test refuses. Next: the phase
 owns the ROADMAP phase-heading checkbox, the progress-row Status cell and frontmatter
 status/completed_phases/percent
 Superseded stop record (24-07): Completed 24-07-PLAN.md (plan 7 of 7) — WAVE 4 AND ALL PLAN WORK IN PHASE 24 COMPLETE. All four D-05 corners measured in 2.22 s before any sweep point exists: `adv_n8` 0.358660 -> 0.241009, `adv_n64` 0.390163 -> 0.251734 (the n=64 column MEASURED, never carried across); binding corner `(adv_n8, upper)` clears `0.15 + MASK_FRACTION_MARGIN` by 0.041009 and the ordering is asserted rather than assumed. 24-06's open question DECIDED: no per-episode fraction gate — the 0.1111 minimum is an A3 episode at 18 scored tokens in 162, every adversarial episode measures 18-23 against a floor of 15, and the CLEAN pool's shortest answer is 11 and has never been gated. `results/phase24_token_budget.json` committed with 12 rows of integer scored-token counts, denominators, and D-07 multiplicity in the same row (8.0x at adv_n64's upper extreme); 3.73x cross-family kept distinct from ADVT-03's 1.40x; SC4's inflation obligation discharged explicitly. Both refusals watched firing with no bytes landing, and the emitter committed BEFORE its artifact so provenance.git_sha 5aed70f contains it. Full suite 1645 passed / 1 skipped, +12 over 1633/1. ADVT-02 and ADVT-03 TICKED; ADVT-01 open for Phase 25. Next: the phase-CLOSE step, which owns the ROADMAP phase-heading checkbox, the progress-row Status cell and frontmatter status/completed_phases/percent
-Resume file: .planning/phases/27-relearning-attack/27-CONTEXT.md
+Resume file: .planning/phases/28-report-the-published-null-and-milestone-close/28-CONTEXT.md
 
 ## Operator Next Steps
 
