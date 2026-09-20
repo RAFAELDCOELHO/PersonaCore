@@ -1106,12 +1106,29 @@ capacities — with every number in prose generated from a committed record rath
 **Plans**: 7 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 28-01-PLAN.md — D-25 tomllib dependency test + D-26 sha-pin rename; D-32 docstring fixes with tests
 - [ ] 28-02-PLAN.md — D-31/D-39 stamp and archived-artifact repairs; 25-UAT complete; 24-UAT items 2-3 disposed (ruling checkpoint)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 28-03-PLAN.md — results/phase28_ledger.json (one row per open item, closed domain, FIXED requires a test) + tests; developer review checkpoint
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 28-04-PLAN.md — scripts/phase28_report.py renderer + two templates (every number a binding; no bare numeral)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 28-05-PLAN.md — guards: template scan, obligation resolution, constants, digests, confound, lead; D-04/D-05 expectation ancestry test
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 28-06-PLAN.md — publish: install both blocks, byte-identity RED→GREEN, normalized register widened, developer read, publishing commit (frozen)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 28-07-PLAN.md — D-38 push + green CI checkpoint; run id into the ledger; RPT-01/RPT-03, ROADMAP, STATE by hand
 
 ## Progress
