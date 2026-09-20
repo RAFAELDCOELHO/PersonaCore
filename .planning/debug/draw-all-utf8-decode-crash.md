@@ -1,6 +1,6 @@
 ---
 slug: draw-all-utf8-decode-crash
-status: fixing
+status: resolved
 trigger: "draw_all crashes with UnicodeDecodeError on generations ending mid-multi-byte-glyph; apply the D-06 tolerant-prefix policy at the decode site in scripts/phase14_recall.py, RED test first, verify Phase 14 D-01 hit vectors stay bit-identical"
 created: 2026-08-16
 updated: 2026-08-16
@@ -156,3 +156,5 @@ Sites decoding corpus or prompt ids (`build_retention_bin.py:124`, `encode_corpu
 - files_changed: `scripts/phase14_recall.py`, `tests/test_phase14_draw_decode.py` (new)
 - not_committed_yet: the D-01 confirmation above is structural, not a literal re-derivation —
   held for the operator's call before the commit that unfreezes the run.
+
+Resolved 2026-09-20 (Phase 28, D-39): fix landed at c71bade; both Phase 18 arms ran to completion (results/phase18_extraction_report.md:320). Stamp corrected from `fixing`; body above unchanged.

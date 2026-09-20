@@ -28,7 +28,7 @@ why_human: Editing the roadmap's requirement mapping is a planning decision. The
 observe the hole but must not silently reassign a requirement.
 result: resolved (developer decision 2026-08-30; commit e5a2474)
 
-### 2. Decide ADVT-02's ticked wording vs the actual mechanism
+### 2. Decide ADVT-02's ticked wording vs the actual mechanism  [RESOLVED]
 expected: The requirement prose says A2 "is REFUSED at the episode builder, not dropped". The
 mechanism is filter-then-refuse: A2 rows are excluded by the list comprehension at
 scripts/phase24_adversarial.py:289-292 (`row["family"] in TRAINED_FAMILIES`), and the SystemExit
@@ -37,9 +37,17 @@ beside the filter above, not instead of it" — firing only if the filter widens
 property (A2 never trains) holds doubly and is verified. Question is whether the ticked prose
 should read "filtered out AND refused behind the filter".
 why_human: Editorial call on the wording of an already-ticked requirement.
-result: [pending]
+RESOLVED 2026-09-20 (Phase 28, D-37) — traceability note, requirement text stays as ticked. The
+mechanism is the filter (`row["family"] in TRAINED_FAMILIES`) with the `SystemExit` behind it,
+belt-and-braces, so the property the text states ("A2 never trains") holds twice. Requirement prose
+is never rewritten after the mechanism is known (Phase 27 D-05's discipline). Lines measured at HEAD
+(`ba2787f`, the module's last commit, 2026-08-30 — unchanged since this item was written): the
+item's cited `scripts/phase24_adversarial.py:289-292` and `:300` are the list comprehension at
+`:296-301` (condition at `:300`) and the `HELD_OUT_FAMILY` `SystemExit` at `:309`; the original
+line citation was off by the comment block above the comprehension, the mechanism is as described.
+result: pass — traceability note (Phase 28, D-37, 2026-09-20)
 
-### 3. Confirm 24-04's instrumentation is intended for Phase 25 consumption
+### 3. Confirm 24-04's instrumentation is intended for Phase 25 consumption  [RESOLVED]
 expected: `contains_refusal` / `score_refusal` / `clean_frame_probe_populations` in
 scripts/phase14_recall.py are called by Phase 25's sweep driver. Today they are exercised only by
 tests/test_phase24_refusal_rate.py — verified correct in isolation (112 vs 112 distinct,
@@ -47,7 +55,14 @@ budget-matched, disjoint, 0 of 10 published values across 224 questions) but con
 pipeline. No ROADMAP SC required them wired during Phase 24, so this is not a gap against the
 contract.
 why_human: An unconsumed instrument is how a planned measurement quietly never gets taken.
-result: [pending]
+RESOLVED 2026-09-20 (Phase 28, D-37) — CLOSED-EARLIER by measurement. `scripts/phase25_record.py:553`
+calls `phase14_recall.score_refusal` and `:574` calls `phase14_recall.clean_frame_probe_populations`;
+every one of the 44 points in `results/phase25_frontier.json` carries `refusal.by_family` counts
+(measured 2026-09-20: `all('by_family' in p['refusal'] for p in points.values())` is True over 44;
+e.g. `adv_n64_ratio0p000000` → `{"A1-aggressive": {"refusal_k": 0, "refusal_n": 3456}, "A1-mild":
+{"refusal_k": 0, "refusal_n": 3456}, "A2": {"refusal_k": 0, "refusal_n": 3456}, "A3": {"refusal_k":
+0, "refusal_n": 3456}}`). The instrument is consumed by a running pipeline.
+result: pass — CLOSED-EARLIER by measurement (Phase 28, D-37, 2026-09-20)
 
 ### 4. Decide how to close the stale provenance pins in results/phase24_token_budget.json  [RESOLVED]
 expected: `provenance.module_sha256` matches the live modules, and drift is caught by a test.
@@ -89,9 +104,9 @@ result: resolved (developer decision 2026-08-30, closure (a); commits 46f07d5, a
 ## Summary
 
 total: 4
-passed: 2
+passed: 4
 issues: 0
-pending: 2
+pending: 0
 skipped: 0
 blocked: 0
 

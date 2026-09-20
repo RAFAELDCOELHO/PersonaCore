@@ -1,6 +1,7 @@
 ---
 phase: quick-260819-r1u
 plan: 01
+status: complete
 subsystem: published-docs
 tags: [audit-remediation, dated-continuation, append-only, STAT-02]
 requires: [results/phase19_erasure_report.md, scripts/_addendum.py, scripts/phase18_extraction.py]
