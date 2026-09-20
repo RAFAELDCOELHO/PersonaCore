@@ -724,15 +724,17 @@ def install(path, block):
 
 No `[ASSUMED]` package or library claims exist — nothing is installed.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`PUBLICATION_OBLIGATION` has 7 tuples on disk, CONTEXT says 8.**
+All five resolved by the plan set (28-01..28-07); each line names the plan/task that carries the resolution.
+
+1. **`PUBLICATION_OBLIGATION` has 7 tuples on disk, CONTEXT says 8.** — RESOLVED: 28-04 T1 binds `derived.obligation_count` = `len(PUBLICATION_OBLIGATION) + len(PUBLICATION_OBLIGATION_CONTINUATION)`; 28-05 T1 `test_every_obligation_path_resolves` iterates by `len()` with no literal 7/8/14/15.
    - What we know: `scripts/phase25_prereg.py:424-491` carries 7 `(field_path, why)` pairs (dp, adversarial, capacity_branch, curve_total_epsilon, selection_accounted, adversarial_capacity_rule_absent, control_has_no_epsilon); `phase26_prereg.PUBLICATION_OBLIGATION_CONTINUATION` has 7 → 14 total, not 15.
    - Recommendation: the test iterates `len(...)`; the report never types 8 or 15 — bind `${obligation_count}` to `len(PUBLICATION_OBLIGATION) + len(PUBLICATION_OBLIGATION_CONTINUATION)`.
-2. **`24-HUMAN-UAT.md` stamp after D-37.** With items 2 and 3 disposed, it has zero pending items — by D-36's own logic `partial` becomes false. CONTEXT is silent on 24's stamp. Recommendation: the planner rules explicitly (move to `complete` with the dated note, or leave `partial` with a ledger reason) so `audit-open` output is intentional either way.
-3. **The 3 PARTIAL VALIDATION.md files (17 `planned`, 18 `draft`, 19 `draft`)** are in REQUIREMENTS.md's carry-forward sentence but not in SC3's "16 + 6". Recommendation: three `ACCEPTED`/record-only rows so the ledger's v3.0 view is complete.
-4. **The 7th `verify.artifacts` error (19-16 `contains: "Dated continuation"` case)** — in D-31 scope by its own rule but not in the v3.0 audit's six. Recommendation: fix the frontmatter pattern casing (or `contains: "dated continuation"`) and record it as a new row found by measurement.
-5. **`checkpoints/*.pt` PLAN artifacts (19-08, 19-13)** are gitignored and can never verify from a clone. Recommendation: record rather than rename.
+2. **`24-HUMAN-UAT.md` stamp after D-37.** — RESOLVED: 28-02 T3 `checkpoint:decision` (`complete` / `stay-partial`); the ruling and `counts.uat_gaps` are recorded in the ledger row `UAT-24-STAMP` (28-03 T1). With items 2 and 3 disposed, it has zero pending items — by D-36's own logic `partial` becomes false. CONTEXT is silent on 24's stamp. Recommendation: the planner rules explicitly (move to `complete` with the dated note, or leave `partial` with a ledger reason) so `audit-open` output is intentional either way.
+3. **The 3 PARTIAL VALIDATION.md files (17 `planned`, 18 `draft`, 19 `draft`)** — RESOLVED: 28-03 T1 rows `FM-17-VALIDATION-PLANNED`, `FM-18-VALIDATION-DRAFT`, `FM-19-VALIDATION-DRAFT` as `ACCEPTED` (category `found-by-measurement`). are in REQUIREMENTS.md's carry-forward sentence but not in SC3's "16 + 6". Recommendation: three `ACCEPTED`/record-only rows so the ledger's v3.0 view is complete.
+4. **The 7th `verify.artifacts` error (19-16 `contains: "Dated continuation"` case)** — RESOLVED: 28-02 T2 step 2 changes the pattern to `"dated continuation"`; 28-03 T1 row `FM-19-16-CASE` `FIXED` (evidence: 28-02 sha + `tests/test_phase28_ledger.py::test_phase19_plan_result_artifacts_exist`). — in D-31 scope by its own rule but not in the v3.0 audit's six. Recommendation: fix the frontmatter pattern casing (or `contains: "dated continuation"`) and record it as a new row found by measurement.
+5. **`checkpoints/*.pt` PLAN artifacts (19-08, 19-13)** are gitignored and can never verify from a clone. Recommendation: record rather than rename. — RESOLVED: 28-02 T2 step 1 leaves both entries unrenamed and records them in the SUMMARY; 28-03 T1 row `TD-19-W1-ARTIFACT-NAMES`'s reason names them as unverifiable from a clone by design.
 
 ## Environment Availability
 
