@@ -8,8 +8,8 @@ the real held-out token corpus (keep the suite CPU-fast).
 The accounting bugs hide in three places, each pinned here:
   1. ``test_matches_bruteforce`` — perplexity() equals an INDEPENDENT brute-force
      per-token CE reference (hand-written in the test; it never calls perplexity()).
-  2. ``test_token_count`` — the auditable denominator equals ``corpus_len - n_windows``
-     (each scored window loses its first token as unpredictable, D-03).
+  2. ``test_token_count`` — the auditable denominator equals ``corpus_len - 1`` for a
+     cleanly tiling corpus (token 0 is the only unscored token, D-03).
   3. ``test_partial_window`` — the final partial window IS scored; a single dangling
      trailing token (numel < 2) is skipped.
 
@@ -17,6 +17,7 @@ RED until Plan 07-01 Task 2 lands ``personacore.evaluation.perplexity``; GREEN a
 """
 
 import math
+import sys
 
 import numpy as np
 import torch
@@ -144,3 +145,12 @@ def test_partial_window(tmp_path):
     # Scored windows: [0:9] (8 transitions) + [8:17] (8 transitions) = 16; the [16:17]
     # dangling single token is skipped (numel < 2).
     assert ntok_d == 16
+
+
+def test_docstring_states_the_true_denominator():
+    """Phase 28 D-32: the module docstring states the denominator ``test_token_count`` pins
+    (``corpus_len - 1`` for a cleanly tiling corpus — token 0 is the only unscored token), never
+    the old ``corpus_len - n_windows`` claim."""
+    doc = sys.modules[perplexity.__module__].__doc__
+    assert "corpus_len - 1" in doc, "the docstring must state the true denominator"
+    assert "corpus_len - n_windows" not in doc, "the false denominator claim must not survive"

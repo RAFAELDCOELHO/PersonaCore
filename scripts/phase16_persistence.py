@@ -1602,8 +1602,8 @@ def build_overwrite_statement(statement, competitor):
     See ``ADVERSARIAL_OVERWRITE_NOTE`` for why this returns a statement: the fairness control
     builds its own prompt from the ``statements`` map, so this cell routes through that map exactly
     as every dilution cell does. This module therefore adds NO new ``persona=`` call site and NO
-    new ``draw_all`` call site — ``PERSONA_ALLOWLIST`` stays at exactly two entries and the widened
-    D-21 guard in ``tests/test_phase14_scoring.py`` stays green without that file being touched.
+    new ``draw_all`` call site — ``PERSONA_ALLOWLIST`` keeps the entry count the widened D-21
+    guard in ``tests/test_phase14_scoring.py`` asserts, and that file is not touched.
 
     The competitor is placed AFTER the taught value inside the same string, so the taught value is
     still at the head of the span and ``assert_value_in_prompt`` still finds it.

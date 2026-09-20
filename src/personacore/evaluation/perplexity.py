@@ -8,9 +8,10 @@ token with ``reduction="sum"``, and exponentiates the grand total over the EXACT
 auditable token count (D-01..D-03).
 
 Accounting invariants (pinned by ``tests/test_perplexity.py``):
-  - A length-L window predicts L-1 transitions: token 0 is context-only, never
-    scored. So the denominator is ``corpus_len - n_windows`` (each scored window
-    loses its first token as unpredictable).
+  - Each slice is ``block_size + 1`` tokens wide at stride ``block_size``, so the
+    shifted target of one window is the first token of the next. Only corpus token 0
+    is context-only, never scored: for a cleanly tiling corpus the denominator is
+    ``corpus_len - 1`` (``test_token_count``).
   - The final partial window IS scored (it contributes ``len(chunk) - 1``
     transitions); a single dangling trailing token (``numel < 2``) is skipped.
   - ``reduction="sum"`` is MANDATORY — ``GPT.forward(targets=)`` returns a per-window

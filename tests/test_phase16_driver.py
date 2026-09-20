@@ -1813,3 +1813,17 @@ def test_ladder_anomaly_caveat_accompanies_the_monotone_permission(monkeypatch, 
     )
     assert "FALSIFIED" in caveat, "the discarded induction-head reading must be named as falsified"
     assert "not an omission" in caveat, "the conservative reading was declined by explicit decision"
+
+
+def test_overwrite_statement_docstring_does_not_type_the_allowlist_size():
+    """Phase 28 D-32: the ``build_overwrite_statement`` docstring names the ``PERSONA_ALLOWLIST``
+    invariant without typing its size — the count is read from the allowlist, never from prose."""
+    doc = driver.build_overwrite_statement.__doc__
+    assert "exactly two entries" not in doc, "the docstring must not type the allowlist size"
+    assert "PERSONA_ALLOWLIST" in doc
+    scoring = importlib.util.spec_from_file_location(
+        "phase14_scoring_allowlist", _REPO_ROOT / "tests" / "test_phase14_scoring.py"
+    )
+    module = importlib.util.module_from_spec(scoring)
+    scoring.loader.exec_module(module)
+    assert isinstance(len(module.PERSONA_ALLOWLIST), int) and len(module.PERSONA_ALLOWLIST) >= 1
