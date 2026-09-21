@@ -1,0 +1,16 @@
+- **v4.0 — `${frontier.verdicts.capacity_branch}`.** "${frontier.verdicts.arm_existentials.dp}"
+  ${derived.noised_dp_cleared_a} of ${derived.noised_dp_total} noised DP points cleared condition (a)
+  and ${derived.noised_dp_cleared_b} cleared (b) — DP removed the leakage by removing the memory;
+  canary audit ${canary.summary.CONSISTENT} CONSISTENT / ${canary.summary.BROKEN} BROKEN;
+  relearning `${admission.verdict.verdict}`. The n=${derived.capacity_n64} branch is read against a
+  control that learned only ${derived.recall_fraction.dp_n64.taught} taught recall, and the
+  adversarial arm is recipe-confounded (no replay), so **no conclusion about adversarial ratio** is
+  drawn — records in [${path.frontier}](${path.frontier}) and
+  [${path.admission}](${path.admission}), every number bound in
+  [docs/REPORT.md](docs/REPORT.md#${derived.report_anchor})
+- **v3.0 — `LEAKAGE_DEMONSTRATED`, then erasure `FAILURE` and DO NOT SHIP.** The black-box audit's
+  verdict line reads "${quote.v3_extraction_verdict}" and the selective-erasure report's reads
+  "${quote.v3_erasure_verdict}" with the operator's "${quote.v3_ship_decision}" — verdict lines
+  quoted from [${path.extraction_report}](${path.extraction_report}) and
+  [${path.erasure_report}](${path.erasure_report}); no defect count is typed here because no record
+  field carries one

@@ -1,0 +1,131 @@
+## ${derived.report_title}
+
+*Appended additively. No line above this heading is altered. Every number below is a binding to a committed record field or module constant, rendered by `${path.renderer}`; the template is scanned for hand-typed numerals.*
+
+The gate's own output: **`${frontier.verdicts.capacity_branch}`**. DP arm: "${frontier.verdicts.arm_existentials.dp}" Adversarial arm: "${frontier.verdicts.arm_existentials.adversarial}"
+
+The mechanism: ${derived.noised_dp_cleared_a} of ${derived.noised_dp_total} noised DP points cleared condition (a) and ${derived.noised_dp_cleared_b} cleared condition (b) — ${frontier.verdicts.dp_recall_disclosure.finding} DP removed the leakage by removing the memory.
+
+The caveat that travels with the headline: `${frontier.arms.1}`'s own σ=${frontier.points.dp_n64_sigma0p000000.sigma} control learned taught recall ${derived.recall_fraction.dp_n64.taught} (held-out ${derived.recall_fraction.dp_n64.heldout}) against `${frontier.arms.0}`'s ${derived.recall_fraction.dp_n8.taught} (held-out ${derived.recall_fraction.dp_n8.heldout}), so the n=${derived.capacity_n64} branch of `${frontier.verdicts.capacity_branch}` is read against a control that barely learned. The recorded reason n=${derived.capacity_n64} exists at all, quoted from the synthesis at `c673b4c`: "${quote.expectation_lever}"
+
+### The standing expectation, recorded before any run
+
+Quoted verbatim from `${path.research_summary}` at commit `c673b4c` (restated later in the same file; carried into `${path.requirements}` at `e144417` and `${path.roadmap}` at `3c80037` as its milestone-level restatements):
+
+> ${quote.expectation_l8}
+
+The same threshold is published three ways in one row, each beside its canary verdict (no ε appears anywhere in this section without one):
+
+| the quote | the record bracket | reproduced at render time |
+|---|---|---|
+| "${quote.expectation_threshold}" — no grid point sits at that σ; the two committed grid points beside it bracket it | σ=${frontier.points.dp_n8_sigma12p000000.sigma} → ε ${frontier.points.dp_n8_sigma12p000000.epsilon} (canary `${canary.points.dp_n8_sigma12p000000.verdict.verdict}`); σ=${frontier.points.dp_n8_sigma16p000000.sigma} → ε ${frontier.points.dp_n8_sigma16p000000.epsilon} (canary `${canary.points.dp_n8_sigma16p000000.verdict.verdict}`) | `accountant.sigma_for(target ε = ${derived.target_epsilon_fact}, steps = ${frontier.points.dp_n8_sigma16p000000.composed_steps}, δ = ${frontier.points.dp_n8_sigma16p000000.delta})` = ${derived.sigma_for_eps4} |
+
+The renderer refuses to produce this section unless `accountant.epsilon_for(σ = ${derived.reproduce_sigma}, steps, δ)` re-derives the record's ε at σ=${frontier.points.dp_n8_sigma16p000000.sigma} bit-identically — a committed prediction checked by committed code on committed inputs. That `c673b4c` precedes the first add of every committed v4.0 record is a CPU test, not a citation: `${path.prereg_test}`.
+
+### ε per σ, each beside its canary verdict
+
+Every audited point is a `${frontier.arms.0}` point: only n=${derived.capacity_n8} has an out-of-corpus canary population — "${const.phase25_prereg.CANARY_RESERVATIONS.canary_population_rule}" The accountant value at each σ is shared bit-identically by the `${frontier.arms.1}` twin, which is therefore **structurally unauditable**; its gate verdict is shown beside the audited leg's for that reason, not as a second audit.
+
+${table.epsilon_by_sigma}
+
+The bracket point's own sentence, as the canary record carries it beside its verdict `${canary.points.dp_n8_sigma16p000000.verdict.verdict}`: "${derived.canary_epsilon_sentence_bracket}"
+
+Curve total: ε ${frontier.epsilon_report.curve_total_epsilon} at total δ ${frontier.epsilon_report.total_delta} over k = ${frontier.epsilon_report.k} summands. The canary record's own status for it: "${canary.curve_total_is_context_only}"
+
+Selection: `selection_accounted = ${frontier.epsilon_report.selection_accounted}`. "${frontier.epsilon_report.selection_accounted_reason}"
+
+LIMITATION (`${ledger.row.D40-LIMITATION-2.id}`): "${frontier.epsilon_report.control_has_no_epsilon}"
+
+### The adversarial arm is recipe-confounded, not a ratio result
+
+${frontier.verdicts.adversarial_no_replay.finding}
+
+The measured log line, quoted from the frontier record's own field (the sweep log itself is gitignored and is never read by this renderer): `${frontier.verdicts.adversarial_no_replay.log_line}` (`${frontier.verdicts.adversarial_no_replay.log_source}`). Code source: ${frontier.verdicts.adversarial_no_replay.code_source}. The DP arms' replay, from the same record: ${frontier.verdicts.adversarial_no_replay.dp_replay_source} — the replay-window count differs by leg, and the n=${derived.capacity_n8} figure is not the n=${derived.capacity_n64} figure. Record note: ${frontier.verdicts.adversarial_no_replay.note}.
+
+The operational note's finding, sliced from `${path.op_note}` §12.5c:
+
+${blockquote.op_note_12_5c}
+
+The amended criterion, verbatim: ${frontier.verdicts.amended_criterion}
+
+The refusal route's own disclosure for the `${frontier.arms.3}` leg: ${frontier.verdicts.leg_refusals.adv_n64}
+
+Its early return, per point: `${frontier.points.adv_n64_ratio0p000000.verdict.early_return_reason}`. Condition (c) was never applied to the ${derived.adv_n64_refused_count} `${frontier.arms.3}` points (their readings were measured and lie out of band — dialogue perplexity on ${derived.adv_n64_dialogue_range}, retention ${derived.adv_n64_retention_range}); on the `${frontier.arms.2}` points the `reasons` column below carries (c) failing on both the dialogue band and the retention cap.
+
+${table.adv_points}
+
+${table.tallies_by_leg}
+
+### Canary audit
+
+${canary.summary.CONSISTENT} CONSISTENT / ${canary.summary.BROKEN} BROKEN / ${canary.summary.INCONCLUSIVE} INCONCLUSIVE over ${derived.canary_audited_count} `${frontier.arms.0}` points. Reachable claims: ${canary.reachable_claims}; auditor ceiling ${canary.auditor_ceiling}. Power gate — "${canary.power_gate.sentence}" — control ε lower ${canary.power_gate.control_epsilon_lower} ≥ threshold ${canary.power_gate.threshold} (passed: ${canary.power_gate.passed}). Out-of-corpus canary population after exclusions: ${canary.exclusions.out.n} of ${canary.exclusions.out.of} (rule: `${canary.exclusions.rule}`).
+
+Disclosure (`${ledger.row.CANARY-COULD-NOT-HAVE-FAILED.id}`): ${ledger.row.CANARY-COULD-NOT-HAVE-FAILED.reason}
+
+### Relearning: ${admission.verdict.verdict}
+
+`${admission.verdict.verdict}` — ${admission.verdict.reasons.0}.
+
+${table.cleared_by_leg}
+
+The record's own `cleared_counts.b` is ${admission.cleared_counts.b}, beside the ${derived.noised_dp_cleared_b} above: the record count decomposes by leg into the unnoised σ=${frontier.points.dp_n8_sigma0p000000.sigma} controls (`${frontier.arms.0}` ${admission.cleared_counts.by_leg.dp_n8.b}, `${frontier.arms.1}` ${admission.cleared_counts.by_leg.dp_n64.b}) and the adversarial n=${derived.capacity_n8} leg (`${frontier.arms.2}` ${admission.cleared_counts.by_leg.adv_n8.b}; `${frontier.arms.3}` ${admission.cleared_counts.by_leg.adv_n64.b}), all of which the noised-DP count excludes.
+
+Apparatus: `${admission.apparatus.status}` — ${admission.apparatus.reason}. The RELRN-02..RELRN-05 limitation, once (the four rows share it): ${ledger.row.RELRN-02.reason}
+
+### What the milestone corrected about itself
+
+${table.self_corrections}
+
+The in-place retraction, quoted from `${path.requirements}` (its dated continuation sits between the `23-12-CONTINUATION` sentinels there):
+
+> ${quote.req_23_12_retraction}
+
+A retraction is evidence that the process works, not debt.
+
+### Figures
+
+![DP arm](../${path.figure_dp})
+
+*`${frontier.arms.0}`: PASS ${frontier.verdicts.tallies_by_leg.dp_n8.PASS} / FAIL ${frontier.verdicts.tallies_by_leg.dp_n8.FAIL}; `${frontier.arms.1}`: PASS ${frontier.verdicts.tallies_by_leg.dp_n64.PASS} / FAIL ${frontier.verdicts.tallies_by_leg.dp_n64.FAIL}. Figure committed at `6af3fa0`, plotted from `${path.frontier}` alone.*
+
+![Adversarial arm](../${path.figure_adv})
+
+*`${frontier.arms.2}`: INCONCLUSIVE ${frontier.verdicts.tallies_by_leg.adv_n8.INCONCLUSIVE}; `${frontier.arms.3}`: REFUSED ${frontier.verdicts.tallies_by_leg.adv_n64.REFUSED}. Figure committed at `6af3fa0`.*
+
+### Ship block
+
+**Ships:** the published null — `${frontier.verdicts.capacity_branch}` — and the from-scratch apparatus as CPU-tested code: DP-SGD and the accountant (`${path.privacy_pkg}`), the canary audit (`${path.canary_script}`), the relearning apparatus (`${path.relearn_script}`).
+
+**Withholds** (the ledger's `NAMED-LIMITATION` rows plus the two existentials — rendered from the data, so this list cannot drift from the ledger):
+
+${table.withheld_claims}
+
+No claim is made that any mitigation preserves weight-based memory. No conclusion is drawn about the adversarial ratio.
+
+### Named-limitation register
+
+${derived.ledger_named_limitation_count} rows of ${derived.ledger_total} in `${path.ledger}` (${derived.ledger_v3_tech_debt_count} v3.0 tech-debt + ${derived.ledger_v3_stale_stamp_count} v3.0 stale stamps among ${derived.ledger_v3_count} v3.0 rows; ${derived.ledger_v4_count} v4.0 rows).
+
+${table.named_limitations}
+
+${table.ledger_by_disposition}
+
+Dated one-liner (`${ledger.row.SC3-SHA256-CLAUSE.id}`): ${ledger.row.SC3-SHA256-CLAUSE.reason}
+
+### What v5.0 would measure
+
+${blockquote.roadmap_v5}
+
+${ledger.row.WR-05.id}: ${ledger.row.WR-05.reason}
+
+The obligations on the first phase that reads ADMITTED already sit in the register above as their own rows.
+
+### Build decisions — one pointer each
+
+${table.build_pointers}
+
+### Provenance
+
+${table.sources}
+
+Record-carried commits: frontier `${frontier.provenance.git_sha}`, canary `${canary.emitted_git_sha}`, admission `${admission.provenance.git_sha}`. The ledger digest covers `rows` only; its `close` object is outside it so the CI run id (D-38) can land without a re-render.
