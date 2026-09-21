@@ -1,9 +1,9 @@
 ---
-status: partial
+status: complete
 phase: 24-adversarial-extraction-aware-training-the-held-out-attack-fa
 source: [24-VERIFICATION.md]
 started: 2026-08-30T19:23:45Z
-updated: 2026-08-30T21:10:00Z
+updated: 2026-09-21T00:00:00Z
 ---
 
 ## Current Test
