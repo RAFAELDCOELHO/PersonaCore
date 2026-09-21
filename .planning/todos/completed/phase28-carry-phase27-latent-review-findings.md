@@ -3,7 +3,7 @@ id: phase28-carry-phase27-latent-review-findings
 type: decision
 resolves_phase: 28
 created: 2026-09-16
-status: pending
+status: resolved
 decided_by: developer
 ---
 
@@ -42,3 +42,7 @@ The driver would calibrate an adversarial point's Z threshold against the DP con
 until the v5.0 adversarial re-measurement (Phase 28 SC4's deferral) pins the adversarial arm's own
 control; DP-control calibration of adversarial points is not accepted. Latent today: 0 of 12
 adversarial points admissible (6 INCONCLUSIVE, 6 REFUSED).
+
+---
+
+**Resolved 2026-09-21 (plan 28-03):** carried into `results/phase28_ledger.json` as rows CR-01, CR-02, WR-01, WR-02, WR-03, WR-04, WR-05, WR-06 (Ruling 1 and Ruling 2, category `review-finding`) and OBLIG-A, OBLIG-B, OBLIG-C, OBLIG-D, OBLIG-E, OBLIG-F (obligations (a)-(f) verbatim, category `inherited-obligation`), all `NAMED-LIMITATION`; the report renders them via D-30.

@@ -1,0 +1,648 @@
+{
+  "close": {
+    "ci_run": null
+  },
+  "governs": "One disposition row per open item carried into Phase 28 across v3.0 (tech debt, stale stamps) and v4.0 (requirements, review findings, obligations, limitations); every count in prose is len() over a filter of `rows`, the named-limitation register is `disposition == NAMED-LIMITATION`, and FIXED requires a commit and a collectable test (D-28, D-29, D-30).",
+  "rows": [
+    {
+      "category": "tech-debt",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase16_persistence_report.md (V3_ARTIFACT_GLOBS in tests/test_phase16_prereg.py)",
+      "id": "TD-16-I1",
+      "milestone": "v3.0",
+      "reason": "Published results .md under the v3.0 ancestry guard; the claim was independently confirmed true, so the stale line numbers are a citation defect in frozen evidence. Correction route is a dated continuation, never an edit (D-32).",
+      "source": "I-1: stale `phase14_recall.py:1336` citations in phase16_persistence_report.md:111,226,257 — .planning/milestones/v3.0-MILESTONE-AUDIT.md:212"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase16_persistence_report.md (V3_ARTIFACT_GLOBS in tests/test_phase16_prereg.py)",
+      "id": "TD-16-I2",
+      "milestone": "v3.0",
+      "reason": "Published results .md under the v3.0 ancestry guard; WALL_CLOCK_NOTE is a pre-run constant. Correction route is a dated continuation, never an edit (D-32).",
+      "source": "I-2: phase16_persistence_report.md:105 prints a citable '~39 min' four-arm wall clock against condition clocks summing to 137.2 min — .planning/milestones/v3.0-MILESTONE-AUDIT.md:213"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "RE-DEFERRED",
+      "evidence": "scripts/phase16_persistence.py (not ancestry-guarded; no record module_sha256 names it — 28-01-SUMMARY guard re-measurement)",
+      "id": "TD-16-R1",
+      "milestone": "v3.0",
+      "reason": "Behavioural, not prose: closing it means reading the note from 16-CONTEXT.md at runtime so an amended D-28 surfaces as a test failure. Target v5.0 — no v4.0 number depends on it and Phase 28 edits no runtime behaviour.",
+      "source": "R-1: D-28's note rendered as faithful English, not the verbatim Portuguese string, and not read from `_CONTEXT_PATH` — .planning/milestones/v3.0-MILESTONE-AUDIT.md:214"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "ACCEPTED",
+      "evidence": "results/phase16_persistence_report.md (V3_ARTIFACT_GLOBS in tests/test_phase16_prereg.py)",
+      "id": "TD-16-R2",
+      "milestone": "v3.0",
+      "reason": "Deliberate: the paragraph lives in a published results .md and any rewrite would be more post-run text; the self-reference gap is recorded here, where the register can be read, rather than added as a third exception.",
+      "source": "R-2: the pre-registration disclosure paragraph is itself post-run text (amended at 127d60d) and does not name itself in its own two-exception list — .planning/milestones/v3.0-MILESTONE-AUDIT.md:215"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "ACCEPTED",
+      "evidence": "tests/test_phase16_driver.py:1782",
+      "id": "TD-16-R3",
+      "milestone": "v3.0",
+      "reason": "The primary assertion carries the pin and is mutation-proved (audit item text); the weak secondary assertion is redundant, not load-bearing, so sharpening it adds no guarantee.",
+      "source": "R-3: tests/test_phase16_driver.py:1782 `assert \"anomal\" in text.lower()` is also satisfied by the W-2 framing paragraph — .planning/milestones/v3.0-MILESTONE-AUDIT.md:216"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "CLOSED-EARLIER",
+      "evidence": "7b38e38",
+      "id": "TD-17-DEF-17-01",
+      "milestone": "v3.0",
+      "reason": "Closed 2026-08-30 by `build: pin make test/lint to the venv interpreter` (7b38e38). Measured again 2026-09-21 in this plan: `make lint` -> 'All checks passed!' / '284 files already formatted'. The audit's 'CONFIRMED OPEN' reading is stale (D-33).",
+      "source": "DEF-17-01: `make lint` red locally (Makefile ran bare `ruff`, a pyenv shim at 0.1.15) — .planning/milestones/v3.0-MILESTONE-AUDIT.md:219"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "RE-DEFERRED",
+      "evidence": "gsd-sdk query frontmatter.validate .planning/milestones/v3.0-phases/17-multi-persona-isolation-matrix/17-01-SUMMARY.md --schema summary -> {\"valid\":false,\"missing\":[\"duration\",\"completed\"],\"present\":[\"phase\",\"plan\",\"subsystem\",\"tags\"],\"schema\":\"summary\"}",
+      "id": "TD-17-SUMMARY-FRONTMATTER",
+      "milestone": "v3.0",
+      "reason": "Measured 2026-09-21: the tool reports the archived SUMMARY invalid, but for `duration`/`completed` — the `summary` schema does not consume a `requirements` field at all, so the audit's cross-reference gap is not a tool error and the fields the tool does flag belong to an archived phase (out of scope under D-31). Target: v5.0 milestone-audit tooling pass, or the next `/gsd-audit-milestone` that reads archived SUMMARYs.",
+      "source": "None of the 11 Phase-17 SUMMARY files carries a `requirements`/`requirements-completed` frontmatter field — .planning/milestones/v3.0-MILESTONE-AUDIT.md:220"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase18_extraction_report.md (V3_ARTIFACT_GLOBS in tests/test_phase16_prereg.py)",
+      "id": "TD-18-W1-RESIDUAL",
+      "milestone": "v3.0",
+      "reason": "Published results .md under the v3.0 ancestry guard; the load-bearing ORDERING property is intact (12/12, 63/63 milestone-wide per the audit). Correction route is a second dated continuation, never an edit (D-32).",
+      "source": "W1 RESIDUAL: results/phase18_extraction_report.md:5 still attributes K = 48, ASR_RUNGS, the templates and null_result_is_admissible() to commit 13666c4 (4 of 6 misattributions uncorrected) — .planning/milestones/v3.0-MILESTONE-AUDIT.md:223"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "FIXED",
+      "evidence": "dd087f7; tests/test_phase16_driver.py::test_overwrite_statement_docstring_does_not_type_the_allowlist_size",
+      "id": "TD-18-ALLOWLIST-PARENTHETICAL",
+      "milestone": "v3.0",
+      "reason": "Docstring corrected in 28-01 Task 2 (guard status re-measured first: no record module_sha256 and no ancestry test names the module); the regression test was watched RED before the edit (D-32).",
+      "source": "stale parenthetical in scripts/phase16_persistence.py:1605's docstring — `PERSONA_ALLOWLIST` 'stays at exactly two entries' — .planning/milestones/v3.0-MILESTONE-AUDIT.md:224"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "FIXED",
+      "evidence": "64e7162; tests/test_phase28_ledger.py::test_phase19_plan_result_artifacts_exist",
+      "id": "TD-19-W1-ARTIFACT-NAMES",
+      "milestone": "v3.0",
+      "reason": "28-02 Task 2 resolved the names from the module's own constants (arm_record_path, CALIBRATION_CORPUS_PATH) and verify.artifacts now passes on every tracked results/ path. The two `checkpoints/*.pt` entries (19-08 phase19_cal_adapter.pt, 19-13 phase19_m2_retrain_adapter.pt) are gitignored and therefore unverifiable from a clone BY DESIGN — recorded, not renamed (D-31); the regression test skips `checkpoints/` paths for that reason.",
+      "source": "W1: PLAN frontmatter names 6 artifacts under stale names; `gsd-sdk query verify.artifacts` reports 6 missing artifacts that all exist — .planning/milestones/v3.0-MILESTONE-AUDIT.md:227"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "FIXED",
+      "evidence": "dd087f7; tests/test_perplexity.py::test_docstring_states_the_true_denominator",
+      "id": "TD-19-PERPLEXITY-DOCSTRING",
+      "milestone": "v3.0",
+      "reason": "Module docstring corrected in 28-01 Task 2 after confirming the stride from the code (slices data[i:i+block_size+1] at stride block_size, so only token 0 goes unscored); the regression test was watched RED first (D-32).",
+      "source": "src/personacore/evaluation/perplexity.py:11-13 states the denominator as `corpus_len - n_windows`; the true denominator is `corpus_len - 1` — .planning/milestones/v3.0-MILESTONE-AUDIT.md:228"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-phases/19-selective-memory-erasure/19-13-SUMMARY.md:429-430",
+      "id": "TD-19-13-STRAY-TAGS",
+      "milestone": "v3.0",
+      "reason": "Record-only under D-31: prose imperfection in an archived SUMMARY that no tool consumes; editing it would groom the audit trail for no active cost.",
+      "source": "19-13-SUMMARY.md ends with two stray literal `</content>` / `</invoke>` tags — .planning/milestones/v3.0-MILESTONE-AUDIT.md:229"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-REQUIREMENTS.md",
+      "id": "TD-XC-ERASE-CHECKBOXES",
+      "milestone": "v3.0",
+      "reason": "Deliberate and correct per the audit's own words: the Traceability rows carry far more than a checkbox would; a future checkbox-reading tool under-counts v3.0 by two and this row is where that is stated.",
+      "source": "ERASE-01 and ERASE-02 are scoped BULLETS in REQUIREMENTS.md, not checkboxes — .planning/milestones/v3.0-MILESTONE-AUDIT.md:232"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "ACCEPTED",
+      "evidence": "gsd-sdk query frontmatter.validate .planning/milestones/v3.0-phases/16-weight-vs-prompt-persistence-control/16-04-SUMMARY.md --schema summary -> {\"valid\":true,\"missing\":[],...}",
+      "id": "TD-XC-REQCOMPLETED-STRING",
+      "milestone": "v3.0",
+      "reason": "Measured 2026-09-21: the tool reports the file valid and 28-02 measured no tool error on this field either; no active cost (D-31), so the archived frontmatter is recorded, not edited.",
+      "source": "16-04/16-05/16-06 SUMMARY `requirements-completed` values parse as a single string carrying an inline `#` comment — .planning/milestones/v3.0-MILESTONE-AUDIT.md:233"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-phases/19-selective-memory-erasure/19-12-SUMMARY.md:42,89,219",
+      "id": "TD-XC-17-DIGIT",
+      "milestone": "v3.0",
+      "reason": "Record-only under D-31: every PUBLISHED surface carries the correct `77.6370113463966%`; the variant lives in a closed phase's summary and STATE.md and is recorded rather than edited.",
+      "source": "The 77.6% dialogue-destruction figure exists in two forms; a 17-digit variant `77.63701134639661%` appears only in planning artifacts — .planning/milestones/v3.0-MILESTONE-AUDIT.md:234"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "RE-DEFERRED",
+      "evidence": "README.md:109-147 (measured in 28-RESEARCH §3 item 16)",
+      "id": "TD-XC-README-GLANCE",
+      "milestone": "v3.0",
+      "reason": "closed by D-11's rendered bullets in plan 28-06; row flipped to FIXED in 28-06 Task 1, before the publishing commit, with the 28-04 renderer commit + node id (tests/test_phase28_report.py::test_glance_block_is_byte_identical). Not FIXED now because that test does not exist yet and a FIXED row must cite a collectable test.",
+      "source": "`README.md`'s `## Results at a glance` still carries only v2.0 (M1/M2) numbers — no v3.0 headline, no DO NOT SHIP — .planning/milestones/v3.0-MILESTONE-AUDIT.md:235"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "FIXED",
+      "evidence": "64e7162; tests/test_phase28_ledger.py::test_debug_sessions_are_not_left_fixing",
+      "id": "SS-DEBUG-DRAW-ALL",
+      "milestone": "v3.0",
+      "reason": "Stamp set to `status: resolved` in 28-02 Task 1 with the evidence the STATE table already cited: the fix landed at c71bade (2026-08-16), both Phase 18 arms ran to completion, and results/phase18_extraction_report.md:320 records the re-verification (D-39).",
+      "source": "debug `draw-all-utf8-decode-crash` (`status: fixing`, updated 2026-08-16) — .planning/STATE.md (table under 'At v3.0 close (2026-08-19): 6 items acknowledged and deferred.')"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "FIXED",
+      "evidence": "64e7162; tests/test_phase28_ledger.py::test_quick_task_summaries_are_named_for_the_audit_tool",
+      "id": "SS-QUICK-260819-R1U",
+      "milestone": "v3.0",
+      "reason": "Renamed to SUMMARY.md (the filename audit-open.js:78 reads literally) and stamped `status: complete` in 28-02 Task 1; work evidenced at 7af6006, 24d49ad (D-39).",
+      "source": "quick_task `260819-r1u-close-b1-readme-v3-catchup` — SUMMARY complete but no `status:` field and named `<id>-SUMMARY.md` — .planning/STATE.md (table under 'At v3.0 close (2026-08-19): 6 items acknowledged and deferred.')"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "FIXED",
+      "evidence": "64e7162; tests/test_phase28_ledger.py::test_quick_task_summaries_are_named_for_the_audit_tool",
+      "id": "SS-QUICK-260819-SGH",
+      "milestone": "v3.0",
+      "reason": "Renamed to SUMMARY.md and stamped `status: complete` in 28-02 Task 1; work evidenced at 4012a61, c90d0c8, 98d0a60 (D-39).",
+      "source": "quick_task `260819-sgh-close-w2-b1a-b1b` — same defect class — .planning/STATE.md (table under 'At v3.0 close (2026-08-19): 6 items acknowledged and deferred.')"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-phases/17-multi-persona-isolation-matrix/17-VERIFICATION.md:4 (discharged 2026-08-15: 1383773, 3c31648, a260d96)",
+      "id": "SS-17-VERIFICATION",
+      "milestone": "v3.0",
+      "reason": "Archived phase, not scanned by audit-open; the discharge record sits beside the verdict, which stands as what the verifier found — the file's own words. Re-stamping is forbidden by the D-35 precedent.",
+      "source": "verification_gap `17-VERIFICATION.md` — `status: human_needed` — .planning/STATE.md (table under 'At v3.0 close (2026-08-19): 6 items acknowledged and deferred.')"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-phases/18-black-box-adversarial-extraction-audit/18-VERIFICATION.md:4 (discharged: results/phase18_extraction_report.md:307 dated continuation)",
+      "id": "SS-18-VERIFICATION",
+      "milestone": "v3.0",
+      "reason": "Archived phase, not scanned by audit-open; discharge recorded beside the verdict (W2 ship decision, W3 ledger, W1 partially — its residual is TD-18-W1-RESIDUAL). Never re-stamped (D-35).",
+      "source": "verification_gap `18-VERIFICATION.md` — `status: human_needed` — .planning/STATE.md (table under 'At v3.0 close (2026-08-19): 6 items acknowledged and deferred.')"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-phases/19-selective-memory-erasure/19-VERIFICATION.md:4 (discharged: f98ea9f, acd26a0, results/phase19_reference_set_correction.md:224-243)",
+      "id": "SS-19-VERIFICATION",
+      "milestone": "v3.0",
+      "reason": "Archived phase, not scanned by audit-open; the one item no tool can discharge (that the five checkpoint decisions were made by the human at the times recorded) is an operator attestation. Never re-stamped (D-35).",
+      "source": "verification_gap `19-VERIFICATION.md` — `status: human_needed` — .planning/STATE.md (table under 'At v3.0 close (2026-08-19): 6 items acknowledged and deferred.')"
+    },
+    {
+      "category": "found-by-measurement",
+      "disposition": "FIXED",
+      "evidence": "64e7162; tests/test_phase28_ledger.py::test_quick_task_summaries_are_named_for_the_audit_tool",
+      "id": "FM-QUICK-260902-DLO",
+      "milestone": "v3.0",
+      "reason": "Rename only, in 28-02 Task 1; the stamp was already complete. Proves the filename rule, not the status field, was what the tool read.",
+      "source": "quick_task `260902-dlo-pin-model-slim-pt-release-sha256-in-fetc` reported by audit-open although `status: complete` — filename `<id>-SUMMARY.md` was the active cause (28-RESEARCH §3, audit-open.js:78)"
+    },
+    {
+      "category": "found-by-measurement",
+      "disposition": "FIXED",
+      "evidence": "64e7162; tests/test_phase28_ledger.py::test_phase19_plan_result_artifacts_exist",
+      "id": "FM-19-16-CASE",
+      "milestone": "v3.0",
+      "reason": "Pattern corrected to the casing the artifact carries in 28-02 Task 2 (verify.artifacts 1/1); the regression test asserts the `contains:` string is found in the file.",
+      "source": "19-16-PLAN.md `contains: \"Dated continuation\"` failed verify.artifacts because results/phase19_erasure_report.md:355,468,551 read lowercase '(dated continuation, 2026-08-19)' (28-RESEARCH §3 item 10, seventh error)"
+    },
+    {
+      "category": "found-by-measurement",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-phases/17-multi-persona-isolation-matrix/17-VALIDATION.md:4",
+      "id": "FM-17-VALIDATION-PLANNED",
+      "milestone": "v3.0",
+      "reason": "Record-only: an archived VALIDATION stamp no tool scans; the v3.0 audit's nyquist row already records Phase 17 as partial. No measured number, gate or requirement status depends on it.",
+      "source": ".planning/REQUIREMENTS.md:470-472 names 3 PARTIAL VALIDATION.md files; 17-VALIDATION.md:4 reads `status: planned`"
+    },
+    {
+      "category": "found-by-measurement",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-phases/18-black-box-adversarial-extraction-audit/18-VALIDATION.md:4",
+      "id": "FM-18-VALIDATION-DRAFT",
+      "milestone": "v3.0",
+      "reason": "Record-only: archived VALIDATION stamp no tool scans; the audit's nyquist row records Phase 18 as partial.",
+      "source": ".planning/REQUIREMENTS.md:470-472 names 3 PARTIAL VALIDATION.md files; 18-VALIDATION.md:4 reads `status: draft`"
+    },
+    {
+      "category": "found-by-measurement",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/milestones/v3.0-phases/19-selective-memory-erasure/19-VALIDATION.md:4",
+      "id": "FM-19-VALIDATION-DRAFT",
+      "milestone": "v3.0",
+      "reason": "Record-only: archived VALIDATION stamp no tool scans; the audit's nyquist row records Phase 19 as partial.",
+      "source": ".planning/REQUIREMENTS.md:470-472 names 3 PARTIAL VALIDATION.md files; 19-VALIDATION.md:4 reads `status: draft`"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase27_admission.json::apparatus.status",
+      "id": "RELRN-02",
+      "milestone": "v4.0",
+      "reason": "not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == \"not exercised\"`, `reason == \"gate read MOOT\"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05).",
+      "source": ".planning/REQUIREMENTS.md:575 (traceability row) and :424 (unticked box)"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase27_admission.json::apparatus.status",
+      "id": "RELRN-03",
+      "milestone": "v4.0",
+      "reason": "not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == \"not exercised\"`, `reason == \"gate read MOOT\"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05).",
+      "source": ".planning/REQUIREMENTS.md:576 (traceability row) and :427 (unticked box)"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase27_admission.json::apparatus.status",
+      "id": "RELRN-04",
+      "milestone": "v4.0",
+      "reason": "not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == \"not exercised\"`, `reason == \"gate read MOOT\"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05).",
+      "source": ".planning/REQUIREMENTS.md:577 (traceability row) and :430 (unticked box)"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase27_admission.json::apparatus.status",
+      "id": "RELRN-05",
+      "milestone": "v4.0",
+      "reason": "not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == \"not exercised\"`, `reason == \"gate read MOOT\"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05).",
+      "source": ".planning/REQUIREMENTS.md:578 (traceability row) and :433 (unticked box)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "CR-01",
+      "milestone": "v4.0",
+      "reason": "the D-18 attacker-corpus bin pin in `train_relearn_arm` disables itself on row-level corpus drift.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:78 — CR-01: The D-18 attacker-corpus pin turns itself off when the corpus drifts"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "CR-02",
+      "milestone": "v4.0",
+      "reason": "a leg passes `_require_admitted` with a tracked-but-edited record or an out-of-tree `--record`, and trusts the record's admitted keys over the frontier (no leg-time `frontier_sha256` / key re-derivation).",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:126 — CR-02: The committed-record gate can be passed without a committed record, and the legs trust whatever the record and the live frontier say"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "WR-01",
+      "milestone": "v4.0",
+      "reason": "inconsequential — `admit` cannot write an INCONCLUSIVE record — conservative.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:187 — WR-01: `admit` can never write the INCONCLUSIVE reading that the gate returns"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "WR-02",
+      "milestone": "v4.0",
+      "reason": "`structural-proof` exits 0 without every mitigated reading and records (does not refuse) diverging offset streams.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:217 — WR-02: `structural-proof` exits 0 without the mitigated arm and with a false data-order equality"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "WR-03",
+      "milestone": "v4.0",
+      "reason": "a live leg writes `run.csv` under `results/phase27_*` (not gitignored; matches `ARTIFACT_GLOB`).",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:249 — WR-03: A live leg writes run CSVs under `results/phase27_*`, and the wiring proof then stays RED on that host"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "WR-04",
+      "milestone": "v4.0",
+      "reason": "inconsequential — `on_draw` records nothing on the unmasked/fact-aligned branches the driver never takes.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:281 — WR-04: `train(on_draw=...)` silently records nothing on the unmasked, fact-aligned and fixture branches"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 2 (RULING 2026-09-16)",
+      "id": "WR-05",
+      "milestone": "v4.0",
+      "reason": "The driver would calibrate an adversarial point's Z threshold against the DP control (`dp_n8` taught 790/1008 → 0.5486), while the frontier judged `adv_n8` against its own control (879/1008 → 0.6104); D-12/D-24/D-28 never covered the arm. Ruling: no `adv_*` point is admissible until the v5.0 adversarial re-measurement (Phase 28 SC4's deferral) pins the adversarial arm's own control; DP-control calibration of adversarial points is not accepted. Latent today: 0 of 12 adversarial points admissible (6 INCONCLUSIVE, 6 REFUSED).",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:313 — WR-05: The adversarial arm is calibrated against the DP control, not the control the frontier judged it against"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "WR-06",
+      "milestone": "v4.0",
+      "reason": "the required `baseline` never moves the verdict; a re-run of `gate` overwrites the published output.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:348 — WR-06: The required `baseline` never affects the verdict, and a re-run of `gate` silently overwrites the published one"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase27_admission.json::provenance.module_sha256 pins scripts/phase27_relearn.py (tests/test_phase27_relearn.py::test_provenance_digests_match_live_bytes); scripts/phase27_prereg.py is ancestry-guarded by tests/test_phase27_prereg.py",
+      "id": "IN-01",
+      "milestone": "v4.0",
+      "reason": "The fix edits scripts/phase27_relearn.py, whose bytes the write-once record pins; the pin itself cannot produce the all-cleared-FAIL row (all three cleared returns PASS or INCONCLUSIVE), so the vacuous `_prove` is latent. Continuation driver only, when a phase reads ADMITTED.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:376 — IN-01: `build_record`'s cleared-count `_prove` compares `cleared_abc` with itself (scripts/phase27_relearn.py:282-287)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase27_admission.json::provenance.module_sha256 pins scripts/phase27_relearn.py (tests/test_phase27_relearn.py::test_provenance_digests_match_live_bytes); scripts/phase27_prereg.py is ancestry-guarded by tests/test_phase27_prereg.py",
+      "id": "IN-02",
+      "milestone": "v4.0",
+      "reason": "The fix edits scripts/phase27_prereg.py, which is ancestry-guarded (any commit touching it after results/phase27_admission.json reddens the guard permanently). Production count is always 416, so this is latent; the review's own route is a continuation.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:388 — IN-02: `recovery_gate` raises `ValueError` instead of returning FAIL when X is unreachable at the scored question count (scripts/phase27_prereg.py:604-610)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase27_admission.json::provenance.module_sha256 pins scripts/phase27_relearn.py (tests/test_phase27_relearn.py::test_provenance_digests_match_live_bytes); scripts/phase27_prereg.py is ancestry-guarded by tests/test_phase27_prereg.py",
+      "id": "IN-03",
+      "milestone": "v4.0",
+      "reason": "The fix edits scripts/phase27_prereg.py (ancestry-guarded). It cannot happen on the sha-pinned committed frontier (test_the_record_is_pinned_to_the_frontier_both_ways); continuation only.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:402 — IN-03: The admission gate reads MOOT on a frontier with a duplicated point key (scripts/phase27_prereg.py:354-390)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase27_admission.json::provenance.module_sha256 pins scripts/phase27_relearn.py (tests/test_phase27_relearn.py::test_provenance_digests_match_live_bytes); scripts/phase27_prereg.py is ancestry-guarded by tests/test_phase27_prereg.py",
+      "id": "IN-04",
+      "milestone": "v4.0",
+      "reason": "The fix edits scripts/phase27_relearn.py, pinned by the record's provenance digest. Measured overlap with the n64 teaching rows is zero (the review's e11.py), so the record's `overlaps.teaching: 0` is true; the per-arm coverage is owed by the first phase that reads ADMITTED, alongside obligation (a).",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:417 — IN-04: The D-17(i) disjointness check covers only the n=8 teaching rows (scripts/phase27_relearn.py:206)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase27_admission.json::provenance.module_sha256 pins scripts/phase27_relearn.py (tests/test_phase27_relearn.py::test_provenance_digests_match_live_bytes); scripts/phase27_prereg.py is ancestry-guarded by tests/test_phase27_prereg.py; src/personacore/training/data.py is in PINNED_MODULES (scripts/phase27_relearn.py:61-69)",
+      "id": "IN-05",
+      "milestone": "v4.0",
+      "reason": "The fix edits src/personacore/training/data.py, one of the seven modules the write-once record pins; the driver's recorder copies the array (`astype`), so nothing is affected today. Apply `ix.copy()` when data.py next moves legitimately through the sanctioned delete-and-rerun route.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:429 — IN-05: `on_draw` receives the loader's live `ix` array (src/personacore/training/data.py:121-123)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "results/phase27_admission.json::provenance.module_sha256 pins scripts/phase27_relearn.py (tests/test_phase27_relearn.py::test_provenance_digests_match_live_bytes); scripts/phase27_prereg.py is ancestry-guarded by tests/test_phase27_prereg.py",
+      "id": "IN-06",
+      "milestone": "v4.0",
+      "reason": "The fix edits scripts/phase27_relearn.py (pinned). The review marks it HYPOTHESIS, read from the code, not run; `admit` was invoked once with the default out path and is never re-run on the committed record. Continuation only.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:439 — IN-06: `admit` does not resolve `--out`, unlike `_require_admitted` (scripts/phase27_relearn.py:369-379)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "tests/test_phase27_relearn.py:182-194 (a test file; not pinned, not ancestry-guarded)",
+      "id": "IN-07",
+      "milestone": "v4.0",
+      "reason": "A test edit is allowed, but the window (a hard kill between write and unlink) was never exercised and Phase 28 touches no Phase-27 test. Target: v5.0, the first phase that re-opens the relearning apparatus — monkeypatch `relearn._ROOT` to a scratch repository as the review prescribes.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:450 — IN-07: A test writes a probe record into the real `results/phase27_*` glob (tests/test_phase27_relearn.py:182-194)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "scripts/phase27_relearn.py:61-69 PINNED_MODULES; tests/test_phase27_relearn.py::test_provenance_digests_match_live_bytes",
+      "id": "IN-08",
+      "milestone": "v4.0",
+      "reason": "Design choice consistent with the 24-09 guard; the review's own fix is 'none required'. Recorded so the maintenance cost is visible: every Critical and Warning above needs a continuation, not an edit, which is why IN-01..IN-06 read FORBIDDEN-BY-GUARD here.",
+      "source": ".planning/phases/27-relearning-attack/27-REVIEW.md:460 — IN-08: The write-once record freezes seven modules, two more than D-35 named (scripts/phase27_relearn.py:61-69)"
+    },
+    {
+      "category": "inherited-obligation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "OBLIG-A",
+      "milestone": "v4.0",
+      "reason": "(a) refuse unless both corpus pins hold (CR-01);",
+      "source": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md"
+    },
+    {
+      "category": "inherited-obligation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "OBLIG-B",
+      "milestone": "v4.0",
+      "reason": "(b) compare the record's bytes with HEAD, re-derive `admitted_point_keys` and check `frontier_sha256` at leg time (CR-02);",
+      "source": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md"
+    },
+    {
+      "category": "inherited-obligation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "OBLIG-C",
+      "milestone": "v4.0",
+      "reason": "(c) require every expected arm reading and refuse on diverging streams (WR-02);",
+      "source": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md"
+    },
+    {
+      "category": "inherited-obligation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "OBLIG-D",
+      "milestone": "v4.0",
+      "reason": "(d) route run CSVs under the gitignored out-dir (WR-03);",
+      "source": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md"
+    },
+    {
+      "category": "inherited-obligation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "OBLIG-E",
+      "milestone": "v4.0",
+      "reason": "(e) pre-register one gate baseline per leg and refuse to overwrite a gate output (WR-06);",
+      "source": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md"
+    },
+    {
+      "category": "inherited-obligation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16)",
+      "id": "OBLIG-F",
+      "milestone": "v4.0",
+      "reason": "(f) enforce Ruling 2 before any `adv_*` admission.",
+      "source": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md"
+    },
+    {
+      "category": "limitation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase25_frontier.json (one commit 4030d0e); 25-CONTEXT D-40 LIMITATION 1",
+      "id": "D40-LIMITATION-1",
+      "milestone": "v4.0",
+      "reason": "THERE IS NO COMMITTED ADVERSARIAL CAPACITY RULE, AND THIS IS NAMED RATHER THAN PATCHED (D-23). `mitigation_gate.capacity_comparison` is a DP-ONLY instrument: it takes NO `arm` argument at all -- zero occurrences of the name in its body -- and it `_prove`s that all four of MECHANISM_KEYS ('sigma', 'steps', 'delta', 'q') are present in BOTH mechanism mappings and compare exactly equal. The adversarial arm has no sigma, no delta and no q; its sweep axis is a mixture ratio and its record carries `accounting: null`, which states the same fact structurally. So GATE-10 CANNOT RUN ON THE ADVERSARIAL ARM, and inventing a capacity rule for it here would be a threshold authored after the phase that spends the compute had already started -- the one ordering this project's pre-registration discipline exists to forbid. The absence is published beside the DP capacity verdict so a reader does not read it as an omission, and `capacity_verdict` refuses an adversarial point BEFORE the gate is reached.",
+      "source": "results/phase25_frontier.json::verdicts.adversarial_capacity_rule_absent"
+    },
+    {
+      "category": "limitation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase25_frontier.json (one commit 4030d0e); 25-CONTEXT D-40 LIMITATION 2",
+      "id": "D40-LIMITATION-2",
+      "milestone": "v4.0",
+      "reason": "GOVERNS THE sigma = 0 CONTROL. It carries NO epsilon at all, and it is never summed as zero. `personacore.privacy.accountant.epsilon_for(0.0, 200, 1e-5)` returns `math.inf`, which is the mathematically correct value and not a guard: the deterministic mechanism has no finite (epsilon, delta) bound. The control is an adapter trained on the SAME EIGHT LOCKED FACTS with NO PRIVACY AT ALL. So once the control is published, NO JOINT BOUND OVER ALL PUBLISHED ARTIFACTS EXISTS — the curve total below bounds the noised DP points and nothing else, and a reader who adds the control to that set is holding a set with an unbounded member. Summing the control as 0.0 would state the exact opposite of the truth, which is why `curve_total` refuses a `None` entry and an infinite one by name rather than skipping either quietly.",
+      "source": "results/phase25_frontier.json::epsilon_report.control_has_no_epsilon"
+    },
+    {
+      "category": "limitation",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase26_canary.json (8652c15); 26-CONTEXT D-13",
+      "id": "CANARY-COULD-NOT-HAVE-FAILED",
+      "milestone": "v4.0",
+      "reason": "reachable_claims 4/15: at every other audited dp_n8 point the record's last reason reads, verbatim (points.dp_n8_sigma0p500000.verdict.reasons[-1]): epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576). The audit had no accusing power at any noised point, so CONSISTENT means not contradicted, never confirmed.",
+      "source": "results/phase26_canary.json::auditor_ceiling + results/phase26_canary.json::reachable_claims"
+    },
+    {
+      "category": "refusal",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase25_frontier.json (one commit 4030d0e); tests/test_phase25_promotion.py (the refusal watched live)",
+      "id": "ADV-N64-REFUSED",
+      "milestone": "v4.0",
+      "reason": "D-25-18-ADV64-REFUSED: 38 of 44 points reach condition (a) and carry the ZERO TOLERANCE sentence; 6 (the adv_n64 leg) are refused by phase20_gate_coverage.corrected_point_verdict before the pin because the arm's own control adv_n64_ratio0p000000 scored held-out recall 0/648, so Y_heldout = 0.7 x 0 = 0 is a criterion any reading clears. Borrowing the DP n=64 control was rejected under D-16/D-47. Decided by the orchestrator 2026-09-09; reversible in seconds by re-running this CPU pass. Condition (a) fails on all six adv_n64 points regardless (3-66 of 416 > X), so no feeding choice could have produced a clear on that leg.",
+      "source": "results/phase25_frontier.json::verdicts.amended_criterion"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase25_frontier.json::verdicts.arm_existentials (dp '0 of 32', adversarial '0 of 6'); results/phase25_frontier.json::verdicts.arm_existential_counts.adversarial",
+      "id": "FRONT-04-WEAKER-FORM",
+      "milestone": "v4.0",
+      "reason": "Satisfied in a weaker form than the text implies, said plainly: the existential is answered as 0 of 32 DP and 0 of 6 adversarial with 6 refused — not 0 of 44.",
+      "source": ".planning/REQUIREMENTS.md:571 (FRONT-04 traceability row)"
+    },
+    {
+      "category": "warning",
+      "disposition": "RE-DEFERRED",
+      "evidence": "22-VERIFICATION.md:157 (40 000 random (eps, μ) sweep row); 22-19-SUMMARY.md 'WARNING-4 named as genuinely OPEN'",
+      "id": "P22-WARNING-4",
+      "milestone": "v4.0",
+      "reason": "Not on the publishing path: the publishing oracle (`delta_closed`) is correct where checked and `delta_quadrature` is called only by tests and a fixture. Target v5.0 — an accountant round 3 if a published σ ever sits in the breach regime.",
+      "source": ".planning/phases/22-dp-sgd-core-accountant-and-the-correctness-battery/22-VERIFICATION.md:149-183 (WARNING-4, the two-oracle disagreements at δ < 1e-12)"
+    },
+    {
+      "category": "warning",
+      "disposition": "RE-DEFERRED",
+      "evidence": "22-VERIFICATION.md:149 (adjudicated at 60 dps: delta_closed right to 9.5856e-14, delta_quadrature off by 3.7935e-09 at σ=0.05/T=200/δ=1e-5)",
+      "id": "P22-WARNING-5",
+      "milestone": "v4.0",
+      "reason": "Not on the publishing path: `sigma_for` → `epsilon_for` → `delta_closed` never calls the quadrature; the breach regime (σ ≤ 0.078902 at T=200) is no privacy claim and the smallest pinned σ is 0.30. Target v5.0 with WARNING-4.",
+      "source": ".planning/phases/22-dp-sgd-core-accountant-and-the-correctness-battery/22-VERIFICATION.md:149-183 (WARNING-5, `delta_quadrature` degrades at large μ at the frozen δ)"
+    },
+    {
+      "category": "premise",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/ROADMAP.md:706; 23-17-SUMMARY.md `status: INCOMPLETE`; 23-20 completed the run",
+      "id": "P23-17-UNTICKED",
+      "milestone": "v4.0",
+      "reason": "The box stays unticked by design: the 23-17 run was harness-killed at 3/5 and wrote no record, and 23-20 is what completed it. Two gsd-sdk handlers (roadmap.update-plan-progress 2026-08-27, phase.complete 2026-08-29) re-ticked it keying on SUMMARY existence and were hand-reverted both times — which is why Phase 28 calls no mutation handler (D-34).",
+      "source": ".planning/ROADMAP.md:706 (23-17-PLAN.md box, 'STILL UNCHECKED ON PURPOSE')"
+    },
+    {
+      "category": "premise",
+      "disposition": "FORBIDDEN-BY-GUARD",
+      "evidence": "tests/test_phase16_prereg.py::V3_ARTIFACT_GLOBS (results/phase18_*) and the phase18 ancestry guard over scripts/phase18_extraction.py",
+      "id": "P18-THROUGHPUT-COMMENT",
+      "milestone": "v4.0",
+      "reason": "The module is ancestry-frozen; no published result changes (K=48 holds under either set, both under the 13.12 h K=64 rejection). v4.0 uses the artifact's numbers; recorded, never edited.",
+      "source": "scripts/phase18_extraction.py:85-87 (comment cites 146.98 / 127.70 / 178.74 / 130.31 draws/min, blended 143.04, 9.91 h, attributed to results/phase18_preflight_report.md, which reports 145.01 / 134.54 / 183.20 / 140.85 and 9.54 h — .planning/REQUIREMENTS.md:473-482)"
+    },
+    {
+      "category": "premise",
+      "disposition": "ACCEPTED",
+      "evidence": "5065bc5; tests/test_package.py::test_pyproject_sha256_pin_detects_any_change; tests/test_package.py::test_runtime_dependencies_identical_across_four_milestones",
+      "id": "SC3-SHA256-CLAUSE",
+      "milestone": "v4.0",
+      "reason": "The clause is false as written — one line, `license = \"MIT\"`, was added 2026-09-01 at 5065bc5 and PYPROJECT_SHA256 re-set in the same commit; no dependency changed. Published as a dated one-liner (D-27), not a finding; D-25's tomllib equality across v1.0/v2.0/v3.0/HEAD is the substantive guarantee.",
+      "source": ".planning/ROADMAP.md Phase 28 SC3 ('pyproject.toml sha256 unchanged since v2.0 close' clause)"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "CLOSED-EARLIER",
+      "evidence": "64e7162",
+      "id": "UAT-25-STAMP",
+      "milestone": "v4.0",
+      "reason": "Moved partial -> complete in 28-02 Task 2: the field records pending state, not a judgement, and item 1 was RESOLVED 2026-09-09 (CI run 34403612853 reported 8 failed, 2682 passed, 62 skipped; the eight failures fixed the same day), so with zero pending items `partial` was false by the field's own definition.",
+      "source": ".planning/phases/25-frontier-sweep-and-the-existence-gate-verdict/25-HUMAN-UAT.md frontmatter `status: partial` with 0 pending items (D-36)"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "CLOSED-EARLIER",
+      "evidence": "64e7162; scripts/phase24_adversarial.py:296-301 (filter, condition :300); :309 (SystemExit, belt-and-braces)",
+      "id": "UAT-24-ITEM-2",
+      "milestone": "v4.0",
+      "reason": "Requirement text stays as ticked; a dated traceability note records the mechanism. Measured lines differ from D-37's cited :289-292/:300 (the file is unchanged since ba2787f) — the ledger cites the measured lines, and the note names both.",
+      "source": ".planning/phases/24-adversarial-extraction-aware-training-the-held-out-attack-fa/24-HUMAN-UAT.md item 2 (ADVT-02 wording — held-out family filtered from the episode builder)"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "CLOSED-EARLIER",
+      "evidence": "64e7162; scripts/phase25_record.py:553 (score_refusal); :574 (clean_frame_probe_populations)",
+      "id": "UAT-24-ITEM-3",
+      "milestone": "v4.0",
+      "reason": "Closed by measurement: every frontier point carries `refusal.by_family` counts (four families, refusal_n 3456 each per 28-02), so the instrument is consumed, not merely built.",
+      "source": ".planning/phases/24-adversarial-extraction-aware-training-the-held-out-attack-fa/24-HUMAN-UAT.md item 3 (refusal instrument consumed by a running pipeline)"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "ACCEPTED",
+      "evidence": "4b00c80",
+      "id": "UAT-24-STAMP",
+      "milestone": "v4.0",
+      "reason": "Developer ruling, 2026-09-21 (28-02 Task 3, tag UAT-24-STAMP), verbatim: 'Confirma opção 1: status: partial → complete, updated: today. Mesmo raciocínio de Phase 25's UAT nesta mesma discussão — o campo registra estado de pendência (D-36), não veredito de verificador; com pending: 0, manter partial seria falso pela definição do próprio campo. A distinção real (item 2 fechado por ruling, não reteste) permanece visível e precisa na nota de rastreabilidade que ADVT-02 já decidiu escrever — não apagada, só não confundida com o campo errado.' Applied as frontmatter status partial -> complete, updated 2026-09-21T00:00:00Z; no other line changed.",
+      "source": ".planning/phases/24-adversarial-extraction-aware-training-the-held-out-attack-fa/24-HUMAN-UAT.md frontmatter `status: partial` (D-37)"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/phases/23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio/23-HUMAN-UAT.md (two same-day developer rulings, both result: PASS — RULED)",
+      "id": "VER-23-HUMAN-NEEDED",
+      "milestone": "v4.0",
+      "reason": "The verifier's verdict is never re-stamped; the ruling record sits beside it (the v3.0 precedent for 17/18/19). audit-open lists it as a verification_gap by design.",
+      "source": ".planning/phases/23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio/23-VERIFICATION.md:5 `status: human_needed` (D-35)"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "ACCEPTED",
+      "evidence": ".planning/phases/27-relearning-attack/27-HUMAN-UAT.md (items 1-2, both result: pass — RULING (developer, 2026-09-16))",
+      "id": "VER-27-HUMAN-NEEDED",
+      "milestone": "v4.0",
+      "reason": "The verifier's verdict is never re-stamped; the two rulings that discharged it are the CR/WR/OBLIG rows of this ledger. audit-open lists it as a verification_gap by design.",
+      "source": ".planning/phases/27-relearning-attack/27-VERIFICATION.md:5 `status: human_needed` (D-35)"
+    }
+  ],
+  "schema": {
+    "dispositions": [
+      "ACCEPTED",
+      "CLOSED-EARLIER",
+      "FIXED",
+      "FORBIDDEN-BY-GUARD",
+      "NAMED-LIMITATION",
+      "RE-DEFERRED"
+    ],
+    "required_keys": [
+      "category",
+      "disposition",
+      "evidence",
+      "id",
+      "milestone",
+      "reason",
+      "source"
+    ]
+  }
+}
