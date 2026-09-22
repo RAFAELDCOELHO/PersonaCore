@@ -6,8 +6,11 @@ INSTANCES** — plan 25-07's `.planning/ROADMAP.md` + `.planning/REQUIREMENTS.md
 `25-CONTEXT.md` sweep (D-51's `D35-CONDITION-C`) — **so RPT-02's second half is discharged for the
 third and fourth times**, under the requirement's own regulation rather than beside it.
 
-**FOUR INSTANCES, THREE GUARD FILES.** 23-12, 24-03, and this plan's two sweeps. That is D-51's
-counting and it is the only counting used in plan 25-07 or in plan 25-20.
+**FOUR INSTANCES; THE GUARD-FILE REGISTER IS ``_EARLIER_GUARD_FILES`` PLUS THIS FILE.** 23-12,
+24-03, and this plan's two sweeps are D-51's four instances, the only counting used in plan 25-07 or
+in plan 25-20. Plan 28-06 (D-22) WIDENED the guard-file register with the Phase 28 files that CALL
+``normalized`` on prose (report, prereg, ledger tests); the register's width is
+``len(_EARLIER_GUARD_FILES) + 1``, read from the tuple below, never typed as a word.
 
 **EIGHT vs NINE — DO NOT RECONCILE THESE BY CHANGING THE WRONG ONE.** Plan 25-07 WRITES **eight**
 sentinel-bounded continuations. This file guards **NINE** sentinel pairs, because
@@ -369,22 +372,32 @@ def test_rpt02_is_on_phase_25s_requirements_line():
 
 
 # ---------------------------------------------------------------------------------------------
-# (e) THE TWO GUARD FILES THIS ONE JOINS EXIST AND STILL ROUTE THROUGH `normalized`.
+# (e) THE OTHER GUARD FILES OF THE REGISTER EXIST AND STILL ROUTE THROUGH `normalized`.
 # ---------------------------------------------------------------------------------------------
 
-_EARLIER_GUARD_FILES = ("tests/test_phase23_cost.py", "tests/test_phase24_correction.py")
+# 23-12, 24-03, and — added by plan 28-06 (D-22) — the three Phase 28 files that compare prose
+# under `normalized`. The register is this tuple plus this file.
+_EARLIER_GUARD_FILES = (
+    "tests/test_phase23_cost.py",
+    "tests/test_phase24_correction.py",
+    "tests/test_phase28_report.py",
+    "tests/test_phase28_prereg.py",
+    "tests/test_phase28_ledger.py",
+)
 
 
-def test_the_register_is_three_files_wide():
-    """23-12's and 24-03's sweeps still exist and still CALL the helper RPT-02 is about.
+def test_the_register_still_routes_through_normalized():
+    """Every other guard file of the register still exists and still CALLS the helper RPT-02 is
+    about.
 
-    Resolved by AST (mechanic 4). Both files discuss ``normalized`` at length in their own
+    Resolved by AST (mechanic 4). The files discuss ``normalized`` at length in their own
     docstrings, so a substring search would report it present whether or not a single call survived
     — the exact false-GREEN class RPT-02 exists to close.
     """
+    width = len(_EARLIER_GUARD_FILES) + 1
     for relative_path in _EARLIER_GUARD_FILES:
         assert (_ROOT / relative_path).is_file(), (
-            f"{relative_path} is missing; the register this file joins is no longer three files "
+            f"{relative_path} is missing; the register this file joins is no longer {width} files "
             "wide and RPT-02's discharge count is wrong"
         )
         called = _called_names(relative_path)

@@ -500,8 +500,12 @@ def _adv_points(records):
             continue
         v = f["points"][key]["verdict"]
         verdict = v["verdict"] if v["verdict"] is not None else v["early_return_reason"]
-        rows.append((key, f["points"][key]["ratio"], verdict, v["reasons"][0]))
-    return _table(("point", "ratio", "verdict / early return", "reasons[0]"), rows)
+        # The (c) reasons — the ones the prose above the table describes; a REFUSED point carries
+        # only its refusal, so that is what it shows. (a)'s tolerance sentence is not published
+        # here: it carries a bare `0.0000%` that tests/test_phase18_docs.py's STAT-02 guard forbids.
+        reasons = [r for r in v["reasons"] if r.startswith("(c)")] or v["reasons"][:1]
+        rows.append((key, f["points"][key]["ratio"], verdict, "; ".join(reasons)))
+    return _table(("point", "ratio", "verdict / early return", "reasons (c), or the refusal"), rows)
 
 
 def _self_corrections(records):

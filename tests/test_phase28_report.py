@@ -5,11 +5,14 @@ The two TEMPLATE SOURCES carry no bare numeral outside the D-19 grammar (the sca
 output by value); every ``PUBLICATION_OBLIGATION`` path resolves and its scalar is published; every
 constant the report binds equals its module pin; every provenance digest recomputes from bytes; the
 confound and the lead are the records' own words; the renderer is torch-free and clock-free. Every
-prose comparison is ``_prose.normalized(a) in _prose.normalized(b)`` (D-22). The byte-identity tests
-against the installed blocks land in 28-06, once the blocks exist.
+prose comparison is ``_prose.normalized(a) in _prose.normalized(b)`` (D-22), EXCEPT the
+byte-identity tests in section (8), added by plan 28-06: the installed spans in ``docs/REPORT.md``
+and ``README.md`` are compared with a fresh render under plain ``==`` — D-22's byte clause — so a
+re-render that drifts by one byte from the published block is RED (D-17, D-20; T-28-02).
 """
 
 import ast
+import difflib
 import hashlib
 import json
 import pathlib
@@ -451,3 +454,132 @@ def test_every_quote_binding_is_used_or_removed():
     templates = "\n".join(t.read_text(encoding="utf-8") for t in _TEMPLATES)
     dead = [name for name in phase28_report.QUOTES if f"${{quote.{name}}}" not in templates]
     assert not dead, dead
+
+
+# =================================================================================================
+# (8) THE INSTALLED BLOCKS ARE BYTE-IDENTICAL TO A RE-RENDER (plan 28-06; D-17, D-20, D-22's byte
+# clause; T-28-02, T-28-16). RED while the sentinels are absent, GREEN once `write` has run.
+# =================================================================================================
+
+_REPORT_REL = "docs/REPORT.md"
+_README_REL = "README.md"
+
+
+def _markers(stem):
+    return f"<!-- {stem}-BEGIN -->", f"<!-- {stem}-END -->"
+
+
+def _span(relative_path, stem):
+    """``tests/test_phase25_correction.py::_span``'s shape: the text strictly between a stem's own
+    sentinels, each counted with ``str.count`` (exactly one) and BEGIN before END."""
+    text = (_ROOT / relative_path).read_text(encoding="utf-8")
+    begin, end = _markers(stem)
+    for sentinel in (begin, end):
+        found = text.count(sentinel)
+        assert found == 1, (
+            f"{relative_path}: {sentinel} occurs {found} time(s); exactly one is required. A "
+            "missing or duplicated sentinel makes the guard scan the wrong text, which is how a "
+            "guard passes vacuously"
+        )
+    assert text.index(begin) < text.index(end), (
+        f"{relative_path}: {stem}'s END sentinel precedes its BEGIN sentinel, so the span is empty "
+        "or inverted"
+    )
+    return text.split(begin, 1)[1].split(end, 1)[0]
+
+
+def _unified(committed, rendered):
+    return "".join(
+        difflib.unified_diff(
+            committed.splitlines(True), rendered.splitlines(True), "committed", "rendered"
+        )
+    )
+
+
+def test_report_sentinels_occur_exactly_once():
+    _span(_REPORT_REL, phase28_report.REPORT_STEM)
+
+
+def test_glance_sentinels_occur_exactly_once():
+    _span(_README_REL, phase28_report.GLANCE_STEM)
+
+
+def test_report_block_is_byte_identical():
+    committed = _span(_REPORT_REL, phase28_report.REPORT_STEM)
+    rendered = phase28_report.render_report()
+    assert committed == rendered, _unified(committed, rendered)
+
+
+def test_glance_block_is_byte_identical():
+    committed = _span(_README_REL, phase28_report.GLANCE_STEM)
+    rendered = phase28_report.render_glance()
+    assert committed == rendered, _unified(committed, rendered)
+
+
+def test_report_section_is_after_every_prior_heading():
+    """D-01: the section is appended AFTER every existing ``## `` heading — its own ``## `` is the
+    last one in the file, so nothing above the insertion point moved."""
+    span = _span(_REPORT_REL, phase28_report.REPORT_STEM)
+    in_span = [line for line in span.splitlines() if line.startswith("## ")]
+    assert len(in_span) == 1, in_span
+    whole = (_ROOT / _REPORT_REL).read_text(encoding="utf-8")
+    headings = [line for line in whole.splitlines() if line.startswith("## ")]
+    assert headings[-1] == in_span[0], (headings[-1], in_span[0])
+
+
+def test_glance_adds_no_heading():
+    """D-11: the README bullets live INSIDE ``## Results at a glance`` — no new ``## `` heading."""
+    span = _span(_README_REL, phase28_report.GLANCE_STEM)
+    assert "\n## " not in span and not span.startswith("## "), span
+
+
+def _git(*args):
+    return subprocess.run(
+        ["git", "-C", str(_ROOT), *args], check=True, capture_output=True, text=True
+    ).stdout
+
+
+def _glance_section(text):
+    section = _anchored_section(text, phase28_report.GLANCE_HEADING, stop=r"## ")
+    assert section is not None, phase28_report.GLANCE_HEADING
+    return section
+
+
+def _bullets(text):
+    return [line for line in text.splitlines() if line.startswith("- **")]
+
+
+def test_glance_deleted_nothing():
+    """T-28-16: the pre-existing first bullet still follows the END sentinel, and the section's
+    bullet count equals the pre-publish blob's count plus the span's own. The pre-publish revision
+    is DERIVED (``tests/test_phase18_docs.py``'s shape): the newest committed README whose blob
+    lacks the BEGIN sentinel — never a pinned hash."""
+    begin, end = _markers(phase28_report.GLANCE_STEM)
+    before = None
+    for revision in _git("log", "--format=%H", "--", _README_REL).split():
+        blob = _git("show", f"{revision}:{_README_REL}")
+        if begin not in blob:
+            before = blob
+            break
+    assert before is not None, f"no committed {_README_REL} without {begin}"
+    old_section = _glance_section(before)
+    old_bullets = _bullets(old_section)
+    assert old_bullets, old_section
+
+    after = (_ROOT / _README_REL).read_text(encoding="utf-8")
+    tail = after.split(end, 1)[1]
+    first_after = next(line for line in tail.splitlines() if line.strip())
+    assert first_after == old_bullets[0], (first_after, old_bullets[0])
+
+    span = _span(_README_REL, phase28_report.GLANCE_STEM)
+    assert _bullets(span), span
+    assert len(_bullets(_glance_section(after))) == len(old_bullets) + len(_bullets(span))
+
+
+def test_published_date_is_pinned_not_clocked():
+    """T-28-13: ``PUBLISHED`` is an ISO date literal, and the rendered title carries it."""
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", phase28_report.PUBLISHED)
+    title = next(
+        line for line in phase28_report.render_report().splitlines() if line.startswith("## ")
+    )
+    assert phase28_report.PUBLISHED in title, title

@@ -108,6 +108,25 @@ was. The sections below are that record, newest last.
 
 ## Results at a glance
 
+<!-- PHASE28-GLANCE-BEGIN -->
+- **v4.0 — `null-at-both-capacities`.** "NO CLEARING POINT IN THE 'dp' ARM: 0 of 32 point(s) examined returned PASS. Reported with its denominator rather than as a bare 'no', because an existential's strength is the size of the set it searched. Any INCONCLUSIVE among those points is NOT a clear and was not counted as one (D-29)"
+  30 of 30 noised DP points cleared condition (a)
+  and 0 cleared (b) — DP removed the leakage by removing the memory;
+  canary audit 15 CONSISTENT / 0 BROKEN;
+  relearning `MOOT`. The n=64 branch is read against a
+  control that learned only 87/1008 (0.08630952380952381) taught recall, and the
+  adversarial arm is recipe-confounded (no replay), so **no conclusion about adversarial ratio** is
+  drawn — records in [results/phase25_frontier.json](results/phase25_frontier.json) and
+  [results/phase27_admission.json](results/phase27_admission.json), every number bound in
+  [docs/REPORT.md](docs/REPORT.md#v40--the-published-null-null-at-both-capacities-recorded-2026-09-21)
+- **v3.0 — `LEAKAGE_DEMONSTRATED`, then erasure `FAILURE` and DO NOT SHIP.** The black-box audit's
+  verdict line reads "**`LEAKAGE_DEMONSTRATED`** — returned by `null_result_is_admissible` and carried through `assemble_verdict` unchanged." and the selective-erasure report's reads
+  "**FAILURE** — returned by the committed `erasure_succeeded`, with its own reasons, neither recomputed nor paraphrased here:" with the operator's "Phase 19 ship decision: DO NOT SHIP" — verdict lines
+  quoted from [results/phase18_extraction_report.md](results/phase18_extraction_report.md) and
+  [results/phase19_erasure_report.md](results/phase19_erasure_report.md); no defect count is typed here because no record
+  field carries one
+<!-- PHASE28-GLANCE-END -->
+
 - **Held-out recall 0.3483** (326/936) against a pre-registered gate of **0.2000**, taught
   recall **0.4921** (496/1008) against **0.2486**, and a closed-book control — the same
   weights with the adapter switched off — at exactly **0/2430**; both thresholds came from a

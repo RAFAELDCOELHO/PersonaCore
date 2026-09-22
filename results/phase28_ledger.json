@@ -141,11 +141,11 @@
     },
     {
       "category": "tech-debt",
-      "disposition": "RE-DEFERRED",
-      "evidence": "README.md:109-147 (measured in 28-RESEARCH §3 item 16)",
+      "disposition": "FIXED",
+      "evidence": "1a89294; tests/test_phase28_report.py::test_glance_block_is_byte_identical",
       "id": "TD-XC-README-GLANCE",
       "milestone": "v3.0",
-      "reason": "closed by D-11's rendered bullets in plan 28-06; row flipped to FIXED in 28-06 Task 1, before the publishing commit, with the 28-04 renderer commit + node id (tests/test_phase28_report.py::test_glance_block_is_byte_identical). Not FIXED now because that test does not exist yet and a FIXED row must cite a collectable test.",
+      "reason": "Closed by mechanism in plan 28-06 (D-11): `README.md`'s `## Results at a glance` now opens with the v3.0 and v4.0 bullets rendered by scripts/phase28_report.py from the committed records (scripts/phase28_glance.md.tmpl), installed between PHASE28-GLANCE sentinels with zero deletions; the cited test compares the installed span with a fresh render under plain `==`, so the bullets cannot drift from the records without going RED. Flipped in 28-06 Task 1, before the publishing commit.",
       "source": "`README.md`'s `## Results at a glance` still carries only v2.0 (M1/M2) numbers — no v3.0 headline, no DO NOT SHIP — .planning/milestones/v3.0-MILESTONE-AUDIT.md:235"
     },
     {

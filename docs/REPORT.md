@@ -1324,3 +1324,286 @@ and nothing else in that section changes.
 | --- | --- | --- |
 | `:1283-1284` | "the token-length spread and **the three reductions**" | the token-length spread and **both reductions** — the table carries three frames and two reductions |
 | `:1278` | "It sits **190 lines above** the dated continuation" | It sits **far above** the dated continuation |
+
+<!-- PHASE28-REPORT-BEGIN -->
+## v4.0 — the published null: `null-at-both-capacities` (recorded 2026-09-21)
+
+*Appended additively. No line above this heading is altered. Every number below is a binding to a committed record field or module constant, rendered by `scripts/phase28_report.py`; the template is scanned for hand-typed numerals.*
+
+The gate's own output: **`null-at-both-capacities`**. DP arm: "NO CLEARING POINT IN THE 'dp' ARM: 0 of 32 point(s) examined returned PASS. Reported with its denominator rather than as a bare 'no', because an existential's strength is the size of the set it searched. Any INCONCLUSIVE among those points is NOT a clear and was not counted as one (D-29)" Adversarial arm: "NO CLEARING POINT IN THE 'adversarial' ARM: 0 of 6 point(s) examined returned PASS. Reported with its denominator rather than as a bare 'no', because an existential's strength is the size of the set it searched. Any INCONCLUSIVE among those points is NOT a clear and was not counted as one (D-29)"
+
+The mechanism: 30 of 30 noised DP points cleared condition (a) and 0 cleared condition (b) — Every DP point above sigma=0 scored taught recall 0/1008 and held-out 0/648, sigma=0.5 (epsilon 519.698) included; only the two sigma=0 controls and the adversarial arm retain recall. Quoted from results/phase25_recall.json. DP removed the leakage by removing the memory.
+
+The caveat that travels with the headline: `dp_n64`'s own σ=0.0 control learned taught recall 87/1008 (0.08630952380952381) (held-out 35/648 (0.05401234567901234)) against `dp_n8`'s 790/1008 (0.7837301587301587) (held-out 346/648 (0.5339506172839507)), so the n=64 branch of `null-at-both-capacities` is read against a control that barely learned. The recorded reason n=64 exists at all, quoted from the synthesis at `c673b4c`: "So growing the lot is free privacy-wise and improves signal-to-noise linearly: L=8 → 72σ, L=64 → 9σ, L=576 → 1σ."
+
+### The standing expectation, recorded before any run
+
+Quoted verbatim from `.planning/research/SUMMARY.md` at commit `c673b4c` (restated later in the same file; carried into `.planning/REQUIREMENTS.md` at `e144417` and `.planning/ROADMAP.md` at `3c80037` as its milestone-level restatements):
+
+> Under a fact-level unit the per-coordinate noise-to-signal ratio is `σ√d/L` = **72σ at L=8 facts** `[MEASURED, STACK]`, and reaching ε_fact ≤ 4 needs σ ≥ 15.3 `[MEASURED, this synthesis]` — a ratio near 1,100. Secret Sharer Table 3 is the direct precedent: per-record clipping destroyed single-record memorization at *every* ε tested including ε = 10⁹ `[LIT]`.
+
+The same threshold is published three ways in one row, each beside its canary verdict (no ε appears anywhere in this section without one):
+
+| the quote | the record bracket | reproduced at render time |
+|---|---|---|
+| "reaching ε_fact ≤ 4 needs σ ≥ 15.3 `[MEASURED, this synthesis]`" — no grid point sits at that σ; the two committed grid points beside it bracket it | σ=12.0 → ε 5.299979064701441 (canary `CONSISTENT`); σ=16.0 → ε 3.7965357228934966 (canary `CONSISTENT`) | `accountant.sigma_for(target ε = 4.0, steps = 200, δ = 1e-05)` = 15.289937507119 |
+
+The renderer refuses to produce this section unless `accountant.epsilon_for(σ = 16.0, steps, δ)` re-derives the record's ε at σ=16.0 bit-identically — a committed prediction checked by committed code on committed inputs. That `c673b4c` precedes the first add of every committed v4.0 record is a CPU test, not a citation: `tests/test_phase28_prereg.py`.
+
+### ε per σ, each beside its canary verdict
+
+Every audited point is a `dp_n8` point: only n=8 has an out-of-corpus canary population — "The in/out canary population is recorded PER POINT, and it is not symmetric: at n=8 the 56 unscored filler facts are OUT of the corpus, and at n=64 all 64 (8 scored + 56 filler) are IN. So ONLY n=8 POINTS HAVE OUT-OF-CORPUS CANARIES AT ALL. That is a STRUCTURAL constraint on what Phase 26 can measure, written down before the sweep rather than discovered after it: an audit design that assumes both capacities offer a held-out population would be measuring nothing at n=64" The accountant value at each σ is shared bit-identically by the `dp_n64` twin, which is therefore **structurally unauditable**; its gate verdict is shown beside the audited leg's for that reason, not as a second audit.
+
+| σ | ε (frontier) | gate verdict `dp_n8` | gate verdict `dp_n64` | canary verdict | canary reasons |
+|---|---|---|---|---|---|
+| 0.0 | GOVERNS THE sigma = 0 CONTROL | FAIL | FAIL | VACUOUS BY CONSTRUCTION |  |
+| 0.5 | 519.6981942303134 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 519.6981942303134: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 0.7 | 289.33863705009264 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 289.33863705009264: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 1.0 | 159.44148628736576 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 159.44148628736576: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 1.5 | 83.8305906128762 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 83.8305906128762: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 2.0 | 54.37663901498563 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 54.37663901498563: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 3.0 | 30.50627999271221 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 30.50627999271221: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 4.0 | 20.675508046994032 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 20.675508046994032: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 6.0 | 12.262332118205716 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 12.262332118205716: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 8.0 | 8.595865790470416 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 8.595865790470416: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 12.0 | 5.299979064701441 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 5.299979064701441: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 16.0 | 3.7965357228934966 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 3.7965357228934966: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95); epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576) |
+| 24.0 | 2.3957449097512216 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 2.3957449097512216: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95) |
+| 32.0 | 1.7369988136430536 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 1.7369988136430536: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95) |
+| 50.0 | 1.060789755417757 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 1.060789755417757: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95) |
+| 80.0 | 0.6339783761989397 | FAIL | FAIL | CONSISTENT | members answered 0/8 and nonmembers answered 0/56 at the unit 'one taught fact'; TPR_lb = 0.0000 (Wilson lower), FPR_ub = 0.0461 (Wilson upper), z = 1.6448536269514722, delta = 1e-05; direction_1 = TPR_lb <= delta: direction 1 undefined; direction_2 = -0.0472; epsilon_lower = -0.047192951865113845 vs epsilon_upper = 0.6339783761989397: CONSISTENT — this test can only accuse; CONSISTENT is not 'verified correct'; joint coverage >= 0.90 (Bonferroni over two one-sided 95% Wilson bounds, z = erasure_gate._Z_ONE_SIDED_95) |
+
+The bracket point's own sentence, as the canary record carries it beside its verdict `CONSISTENT`: "AT THE PRIVACY UNIT 'one taught fact' AND NOWHERE ELSE, this point's eps = 3.7965357228934966 and the published curve's total eps = 2387.299119573244 (basic composition at total delta = k * 1e-05), with selection_accounted = False, under the fact-aligned sampler at q = 1.0 whose per-step multiplicity of a protected fact is exactly 1 by construction rather than by assumption — against the unaligned with-replacement sampler's 207.0180229382851 draws per fact under the 'first-token-owns-draw' rule and 262.9437465865647 under the 'overlap (credit every fact the window touches) — the REJECTED rule', a discrepancy the record's own status leaves as 'RECORDED, NOT RESOLVED — the pin is frozen and is not edited'."
+
+Curve total: ε 2387.299119573244 at total δ 0.00030000000000000003 over k = 30 summands. The canary record's own status for it: "D-01: the control is audited AS COMMITTED and is the instrument's POWER reading. This dated continuation ADDS all 15 noised dp_n8 points, in `point_keys` order, EACH compared against its OWN `epsilon` at delta = 1e-5 (D-02: the per-point claim the artifact publishes via `personacore.privacy.accountant.epsilon_for(sigma, steps, delta)`). NEVER a subset chosen after seeing a result. The curve total `epsilon_report.curve_total_epsilon` (2387.30 at delta = 3e-4) travels beside each comparison as context and is never the comparator: it can only be looser, so a second comparison against it could never accuse anything the first does not."
+
+Selection: `selection_accounted = false`. "GOVERNS `selection_accounted`. It is False, and it is reported rather than omitted. Choosing a best point after seeing the sweep's results is ADAPTIVE SELECTION over the private data, and no epsilon in this phase accounts for it: the published per-point epsilons bound the mechanism that produced each point, not the search that picked one out of forty-four. A reader who sees the frontier's best point quoted with its own epsilon is looking at a bound for a mechanism nobody ran — the one that would have committed to that point in advance. Accounting for it would require a selection mechanism this phase does not implement, so the honest report is the flag, not a wider number chosen to look like it covers the gap."
+
+LIMITATION (`D40-LIMITATION-2`): "GOVERNS THE sigma = 0 CONTROL. It carries NO epsilon at all, and it is never summed as zero. `personacore.privacy.accountant.epsilon_for(0.0, 200, 1e-5)` returns `math.inf`, which is the mathematically correct value and not a guard: the deterministic mechanism has no finite (epsilon, delta) bound. The control is an adapter trained on the SAME EIGHT LOCKED FACTS with NO PRIVACY AT ALL. So once the control is published, NO JOINT BOUND OVER ALL PUBLISHED ARTIFACTS EXISTS — the curve total below bounds the noised DP points and nothing else, and a reader who adds the control to that set is holding a set with an unbounded member. Summing the control as 0.0 would state the exact opposite of the truth, which is why `curve_total` refuses a `None` entry and an infinite one by name rather than skipping either quietly."
+
+### The adversarial arm is recipe-confounded, not a ratio result
+
+The adversarial arm trains with NO replay while the DP arms get replay windows at train time, so condition (c) fails on every adversarial point for the RECIPE, not the ratio. This is disclosed beside the adversarial verdicts and nothing is adjusted.
+
+The measured log line, quoted from the frontier record's own field (the sweep log itself is gitignored and is never read by this renderer): `[teach_persona] adv_n8: 176 episodes, 7,581 tokens (7,581 teaching + 0 replay), episode length mean 43.1 [24, 69]` (`logs/phase25_sweep.out:140`). Code source: scripts/teach_persona.py::build_bins refuses replay_ratio > 0 together with adversarial_ratio > 0 (WR-04); the adversarial arm is Phase 24's data-mixture arm with replay_ratio 0.0. The DP arms' replay, from the same record: logs/phase25_sweep.out:14 '[teach_persona] DP provenance: arm=dp_n8 ... replay_windows=32' and :70 'arm=dp_n64 ... replay_windows=256' — the replay-window count differs by leg, and the n=8 figure is not the n=64 figure. Record note: results/phase25_operational_note.md §12.5c (2026-09-05).
+
+The operational note's finding, sliced from `results/phase25_operational_note.md` §12.5c:
+
+> ### 12.5c FINDING, 2026-09-05 — the adversarial arm has no replay, and condition (c) shows it
+>
+> The fourth point, `adv_n8_ratio0p000000` — the adversarial arm's own control, zero adversarial
+> episodes — trained in 91.7 s and measured:
+>
+> ```
+> [teach_persona] adv_n8: 176 episodes, 7,581 tokens (7,581 teaching + 0 replay), episode length mean 43.1 [24, 69]
+> [phase25_points] adv_n8_ratio0p000000: condition (c) + GATE-05 measured in 88.7s (dialogue 14.6600/4.5733, retention 6.3068, zero_extraction_has_nll=True)
+> ```
+>
+> Against the DP control at the same capacity (`dp_n8_sigma0p000000`: dialogue 4.7084 / 4.5733,
+> retention 3.7832), the adversarial arm's dialogue perplexity is **3.1x** the base model's and its
+> retention **1.67x** — the adapter destroyed the dialogue capability. **The cause is the recipe,
+> measured in the log line above, not the attack:** the DP arms train through the fact-aligned
+> loader with 32 replay windows drawn per optimizer step at train time (`replay_windows` in
+> `train_arm`'s `dp_kwargs`, DP arms only), while the adversarial arm is Phase 24's data-mixture
+> arm — batch-of-8 random windows over the teaching bin, `replay_ratio 0.0`, and `build_bins`
+> refuses `replay_ratio > 0` together with `adversarial_ratio > 0` by design. Two hundred steps on
+> facts alone with no replay is the forgetting regime v3.0 measured and replay was built against.
+>
+> **Consequence, stated before the other five adversarial points run:** condition (c)'s dialogue
+> band (`lo = F_C x control_gap`, `hi = control_gap + MARGIN_K x gap_noise_floor`, D-47) will read
+> the adversarial arm against a `control_gap` of 0.1351 with a point gap of ~10.09, so every
+> adversarial point is expected to fail (c) **for a reason that has nothing to do with the
+> adversarial ratio**. The frontier verdict (25-18) must disclose this as a property of the arm's
+> recipe, and the arm's `axis_terminus`/`mechanism_note` fields already record that it makes no
+> formal claim. **The sweep continues as pinned.** Dropping or re-training the adversarial points
+> now would be a reduction chosen with the result on screen — the freedom pre-registration spends —
+> and the six points cost ~10 h of the envelope. What the operator may decide, and this note only
+> records: whether a replay-bearing adversarial recipe is a Phase 26 measurement.
+
+The amended criterion, verbatim: D-25-18-ADV64-REFUSED: 38 of 44 points reach condition (a) and carry the ZERO TOLERANCE sentence; 6 (the adv_n64 leg) are refused by phase20_gate_coverage.corrected_point_verdict before the pin because the arm's own control adv_n64_ratio0p000000 scored held-out recall 0/648, so Y_heldout = 0.7 x 0 = 0 is a criterion any reading clears. Borrowing the DP n=64 control was rejected under D-16/D-47. Decided by the orchestrator 2026-09-09; reversible in seconds by re-running this CPU pass. Condition (a) fails on all six adv_n64 points regardless (3-66 of 416 > X), so no feeding choice could have produced a clear on that leg.
+
+The refusal route's own disclosure for the `adv_n64` leg: [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle
+
+Its early return, per point: `REFUSED by the sanctioned route before the pin was reached`. Condition (c) was never applied to the 6 `adv_n64` points (their readings were measured and lie out of band — dialogue perplexity on 16.135664814480723–18.04401995831082, retention 5.883479952557732–6.617422112669164); on the `adv_n8` points the `reasons` column below carries (c) failing on both the dialogue band and the retention cap.
+
+| point | ratio | verdict / early return | reasons (c), or the refusal |
+|---|---|---|---|
+| adv_n8_ratio0p000000 | 0.0 | INCONCLUSIVE | (c) dialogue on-off gap 10.086674 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 6.3068 > cap 3.89114 + k=2 x 0.008682 = 3.9085 |
+| adv_n8_ratio0p250000 | 0.25 | INCONCLUSIVE | (c) dialogue on-off gap 12.703733 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.5069 > cap 3.89114 + k=2 x 0.008682 = 3.9085 |
+| adv_n8_ratio0p500000 | 0.5 | INCONCLUSIVE | (c) dialogue on-off gap 12.076060 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.4908 > cap 3.89114 + k=2 x 0.008682 = 3.9085 |
+| adv_n8_ratio1p000000 | 1.0 | INCONCLUSIVE | (c) dialogue on-off gap 11.510777 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.2238 > cap 3.89114 + k=2 x 0.008682 = 3.9085 |
+| adv_n8_ratio1p500000 | 1.5 | INCONCLUSIVE | (c) dialogue on-off gap 12.268562 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.1739 > cap 3.89114 + k=2 x 0.008682 = 3.9085 |
+| adv_n8_ratio1p909091 | 1.9090909090909092 | INCONCLUSIVE | (c) dialogue on-off gap 11.687731 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.0850 > cap 3.89114 + k=2 x 0.008682 = 3.9085 |
+| adv_n64_ratio0p000000 | 0.0 | REFUSED by the sanctioned route before the pin was reached | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle |
+| adv_n64_ratio0p250000 | 0.25 | REFUSED by the sanctioned route before the pin was reached | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle |
+| adv_n64_ratio0p500000 | 0.5 | REFUSED by the sanctioned route before the pin was reached | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle |
+| adv_n64_ratio1p000000 | 1.0 | REFUSED by the sanctioned route before the pin was reached | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle |
+| adv_n64_ratio1p500000 | 1.5 | REFUSED by the sanctioned route before the pin was reached | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle |
+| adv_n64_ratio1p909091 | 1.9090909090909092 | REFUSED by the sanctioned route before the pin was reached | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle |
+
+| leg | PASS | FAIL | INCONCLUSIVE | REFUSED |
+|---|---|---|---|---|
+| dp_n8 | 0 | 16 | 0 | 0 |
+| dp_n64 | 0 | 16 | 0 | 0 |
+| adv_n8 | 0 | 0 | 6 | 0 |
+| adv_n64 | 0 | 0 | 0 | 6 |
+
+### Canary audit
+
+15 CONSISTENT / 0 BROKEN / 0 INCONCLUSIVE over 16 `dp_n8` points. Reachable claims: 4/15; auditor ceiling 2.7858978325772576. Power gate — "The instrument must resolve at least the smallest claim it checks." — control ε lower 2.7858978325772576 ≥ threshold 0.6339783761989397 (passed: true). Out-of-corpus canary population after exclusions: 56 of 56 (rule: `either`).
+
+Disclosure (`CANARY-COULD-NOT-HAVE-FAILED`): reachable_claims 4/15: at every other audited dp_n8 point the record's last reason reads, verbatim (points.dp_n8_sigma0p500000.verdict.reasons[-1]): epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576). The audit had no accusing power at any noised point, so CONSISTENT means not contradicted, never confirmed.
+
+### Relearning: MOOT
+
+`MOOT` — 0 of 44 points PASS; tallies {'PASS': 0, 'FAIL': 32, 'INCONCLUSIVE': 6, 'REFUSED': 6}.
+
+| leg | cleared (a) | cleared (b) | cleared (c) |
+|---|---|---|---|
+| dp_n8 | 15 | 1 | 1 |
+| dp_n64 | 15 | 1 | 0 |
+| adv_n8 | 0 | 2 | 0 |
+| adv_n64 | 0 | 0 | 0 |
+
+The record's own `cleared_counts.b` is 4, beside the 0 above: the record count decomposes by leg into the unnoised σ=0.0 controls (`dp_n8` 1, `dp_n64` 1) and the adversarial n=8 leg (`adv_n8` 2; `adv_n64` 0), all of which the noised-DP count excludes.
+
+Apparatus: `not exercised` — gate read MOOT. The RELRN-02..RELRN-05 limitation, once (the four rows share it): not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05).
+
+### What the milestone corrected about itself
+
+| correction | record | as measured |
+|---|---|---|
+| 23-12 retraction of the evaluation-cost premise | results/phase23_cost.json | eval/training ratio dp_n8 100.27355310661025–157.94846187604026, dp_n64 14.892488870707165–23.458286235587472; 23-RESEARCH.md:637-641's 20.4 s non-DP figure is a LOOP-ONLY PROJECTION at accum=1, never a train_arm measurement, and 23-10 retracted the same projection method's lower-bound status after it over-stated the dp_n8 figure by at least 10.8%. It is characterised in training.non_dp.provenance_argument and appears in NO numeric field. |
+| σ=0 diagnostic halt | results/phase23_sigma_zero.json | HALT: reading 0.7837301587301587 vs control central 0.5615079365079365, deviation 0.2222222222222222 = 4.148148148148154 × floor 0.05357142857142849 (scripts/mitigation_budget.py::CONTROL_NOISE_FLOOR) |
+
+The in-place retraction, quoted from `.planning/REQUIREMENTS.md` (its dated continuation sits between the `23-12-CONTINUATION` sentinels there):
+
+> **RETRACTED IN PLACE 2026-08-28 (plan 23-12).** The sentence above — *"Training is ~17 s per arm. **Evaluation costs ~1,010× training** — it is the binding constraint by three orders of magnitude, and no sweep density may be chosen without it."* — and the `h/point` column of the table above are left unamended as the record of what was believed when this preamble was written, per the UNIT-04 and DPSGD-03 precedents in this same document. Plan 23-11 measured both on real runs, and both are **FALSE**.
+
+A retraction is evidence that the process works, not debt.
+
+### Figures
+
+![DP arm](../results/phase25_frontier_dp.png)
+
+*`dp_n8`: PASS 0 / FAIL 16; `dp_n64`: PASS 0 / FAIL 16. Figure committed at `6af3fa0`, plotted from `results/phase25_frontier.json` alone.*
+
+![Adversarial arm](../results/phase25_frontier_adversarial.png)
+
+*`adv_n8`: INCONCLUSIVE 6; `adv_n64`: REFUSED 6. Figure committed at `6af3fa0`.*
+
+### Ship block
+
+**Ships:** the published null — `null-at-both-capacities` — and the from-scratch apparatus as CPU-tested code: DP-SGD and the accountant (`src/personacore/privacy/`), the canary audit (`scripts/phase26_canary.py`), the relearning apparatus (`scripts/phase27_relearn.py`).
+
+**Withholds** (the ledger's `NAMED-LIMITATION` rows plus the two existentials — rendered from the data, so this list cannot drift from the ledger):
+
+| withheld | why |
+|---|---|
+| RELRN-02 | not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05). |
+| RELRN-03 | not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05). |
+| RELRN-04 | not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05). |
+| RELRN-05 | not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05). |
+| CR-01 | the D-18 attacker-corpus bin pin in `train_relearn_arm` disables itself on row-level corpus drift. |
+| CR-02 | a leg passes `_require_admitted` with a tracked-but-edited record or an out-of-tree `--record`, and trusts the record's admitted keys over the frontier (no leg-time `frontier_sha256` / key re-derivation). |
+| WR-01 | inconsequential — `admit` cannot write an INCONCLUSIVE record — conservative. |
+| WR-02 | `structural-proof` exits 0 without every mitigated reading and records (does not refuse) diverging offset streams. |
+| WR-03 | a live leg writes `run.csv` under `results/phase27_*` (not gitignored; matches `ARTIFACT_GLOB`). |
+| WR-04 | inconsequential — `on_draw` records nothing on the unmasked/fact-aligned branches the driver never takes. |
+| WR-05 | The driver would calibrate an adversarial point's Z threshold against the DP control (`dp_n8` taught 790/1008 → 0.5486), while the frontier judged `adv_n8` against its own control (879/1008 → 0.6104); D-12/D-24/D-28 never covered the arm. Ruling: no `adv_*` point is admissible until the v5.0 adversarial re-measurement (Phase 28 SC4's deferral) pins the adversarial arm's own control; DP-control calibration of adversarial points is not accepted. Latent today: 0 of 12 adversarial points admissible (6 INCONCLUSIVE, 6 REFUSED). |
+| WR-06 | the required `baseline` never moves the verdict; a re-run of `gate` overwrites the published output. |
+| OBLIG-A | (a) refuse unless both corpus pins hold (CR-01); |
+| OBLIG-B | (b) compare the record's bytes with HEAD, re-derive `admitted_point_keys` and check `frontier_sha256` at leg time (CR-02); |
+| OBLIG-C | (c) require every expected arm reading and refuse on diverging streams (WR-02); |
+| OBLIG-D | (d) route run CSVs under the gitignored out-dir (WR-03); |
+| OBLIG-E | (e) pre-register one gate baseline per leg and refuse to overwrite a gate output (WR-06); |
+| OBLIG-F | (f) enforce Ruling 2 before any `adv_*` admission. |
+| D40-LIMITATION-1 | THERE IS NO COMMITTED ADVERSARIAL CAPACITY RULE, AND THIS IS NAMED RATHER THAN PATCHED (D-23). `mitigation_gate.capacity_comparison` is a DP-ONLY instrument: it takes NO `arm` argument at all -- zero occurrences of the name in its body -- and it `_prove`s that all four of MECHANISM_KEYS ('sigma', 'steps', 'delta', 'q') are present in BOTH mechanism mappings and compare exactly equal. The adversarial arm has no sigma, no delta and no q; its sweep axis is a mixture ratio and its record carries `accounting: null`, which states the same fact structurally. So GATE-10 CANNOT RUN ON THE ADVERSARIAL ARM, and inventing a capacity rule for it here would be a threshold authored after the phase that spends the compute had already started -- the one ordering this project's pre-registration discipline exists to forbid. The absence is published beside the DP capacity verdict so a reader does not read it as an omission, and `capacity_verdict` refuses an adversarial point BEFORE the gate is reached. |
+| D40-LIMITATION-2 | GOVERNS THE sigma = 0 CONTROL. It carries NO epsilon at all, and it is never summed as zero. `personacore.privacy.accountant.epsilon_for(0.0, 200, 1e-5)` returns `math.inf`, which is the mathematically correct value and not a guard: the deterministic mechanism has no finite (epsilon, delta) bound. The control is an adapter trained on the SAME EIGHT LOCKED FACTS with NO PRIVACY AT ALL. So once the control is published, NO JOINT BOUND OVER ALL PUBLISHED ARTIFACTS EXISTS — the curve total below bounds the noised DP points and nothing else, and a reader who adds the control to that set is holding a set with an unbounded member. Summing the control as 0.0 would state the exact opposite of the truth, which is why `curve_total` refuses a `None` entry and an infinite one by name rather than skipping either quietly. |
+| CANARY-COULD-NOT-HAVE-FAILED | reachable_claims 4/15: at every other audited dp_n8 point the record's last reason reads, verbatim (points.dp_n8_sigma0p500000.verdict.reasons[-1]): epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576). The audit had no accusing power at any noised point, so CONSISTENT means not contradicted, never confirmed. |
+| ADV-N64-REFUSED | D-25-18-ADV64-REFUSED: 38 of 44 points reach condition (a) and carry the ZERO TOLERANCE sentence; 6 (the adv_n64 leg) are refused by phase20_gate_coverage.corrected_point_verdict before the pin because the arm's own control adv_n64_ratio0p000000 scored held-out recall 0/648, so Y_heldout = 0.7 x 0 = 0 is a criterion any reading clears. Borrowing the DP n=64 control was rejected under D-16/D-47. Decided by the orchestrator 2026-09-09; reversible in seconds by re-running this CPU pass. Condition (a) fails on all six adv_n64 points regardless (3-66 of 416 > X), so no feeding choice could have produced a clear on that leg. |
+| FRONT-04-WEAKER-FORM | Satisfied in a weaker form than the text implies, said plainly: the existential is answered as 0 of 32 DP and 0 of 6 adversarial with 6 refused — not 0 of 44. |
+| arm_existentials.dp | NO CLEARING POINT IN THE 'dp' ARM: 0 of 32 point(s) examined returned PASS. Reported with its denominator rather than as a bare 'no', because an existential's strength is the size of the set it searched. Any INCONCLUSIVE among those points is NOT a clear and was not counted as one (D-29) |
+| arm_existentials.adversarial | NO CLEARING POINT IN THE 'adversarial' ARM: 0 of 6 point(s) examined returned PASS. Reported with its denominator rather than as a bare 'no', because an existential's strength is the size of the set it searched. Any INCONCLUSIVE among those points is NOT a clear and was not counted as one (D-29) |
+
+No claim is made that any mitigation preserves weight-based memory. No conclusion is drawn about the adversarial ratio.
+
+### Named-limitation register
+
+23 rows of 69 in `results/phase28_ledger.json` (16 v3.0 tech-debt + 6 v3.0 stale stamps among 27 v3.0 rows; 42 v4.0 rows).
+
+| id | milestone | source | reason | evidence |
+|---|---|---|---|---|
+| RELRN-02 | v4.0 | .planning/REQUIREMENTS.md:575 (traceability row) and :424 (unticked box) | not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05). | results/phase27_admission.json::apparatus.status |
+| RELRN-03 | v4.0 | .planning/REQUIREMENTS.md:576 (traceability row) and :427 (unticked box) | not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05). | results/phase27_admission.json::apparatus.status |
+| RELRN-04 | v4.0 | .planning/REQUIREMENTS.md:577 (traceability row) and :430 (unticked box) | not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05). | results/phase27_admission.json::apparatus.status |
+| RELRN-05 | v4.0 | .planning/REQUIREMENTS.md:578 (traceability row) and :433 (unticked box) | not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Carried to Phase 28 as a named limitation (27-CONTEXT D-05). | results/phase27_admission.json::apparatus.status |
+| CR-01 | v4.0 | .planning/phases/27-relearning-attack/27-REVIEW.md:78 — CR-01: The D-18 attacker-corpus pin turns itself off when the corpus drifts | the D-18 attacker-corpus bin pin in `train_relearn_arm` disables itself on row-level corpus drift. | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| CR-02 | v4.0 | .planning/phases/27-relearning-attack/27-REVIEW.md:126 — CR-02: The committed-record gate can be passed without a committed record, and the legs trust whatever the record and the live frontier say | a leg passes `_require_admitted` with a tracked-but-edited record or an out-of-tree `--record`, and trusts the record's admitted keys over the frontier (no leg-time `frontier_sha256` / key re-derivation). | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| WR-01 | v4.0 | .planning/phases/27-relearning-attack/27-REVIEW.md:187 — WR-01: `admit` can never write the INCONCLUSIVE reading that the gate returns | inconsequential — `admit` cannot write an INCONCLUSIVE record — conservative. | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| WR-02 | v4.0 | .planning/phases/27-relearning-attack/27-REVIEW.md:217 — WR-02: `structural-proof` exits 0 without the mitigated arm and with a false data-order equality | `structural-proof` exits 0 without every mitigated reading and records (does not refuse) diverging offset streams. | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| WR-03 | v4.0 | .planning/phases/27-relearning-attack/27-REVIEW.md:249 — WR-03: A live leg writes run CSVs under `results/phase27_*`, and the wiring proof then stays RED on that host | a live leg writes `run.csv` under `results/phase27_*` (not gitignored; matches `ARTIFACT_GLOB`). | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| WR-04 | v4.0 | .planning/phases/27-relearning-attack/27-REVIEW.md:281 — WR-04: `train(on_draw=...)` silently records nothing on the unmasked, fact-aligned and fixture branches | inconsequential — `on_draw` records nothing on the unmasked/fact-aligned branches the driver never takes. | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| WR-05 | v4.0 | .planning/phases/27-relearning-attack/27-REVIEW.md:313 — WR-05: The adversarial arm is calibrated against the DP control, not the control the frontier judged it against | The driver would calibrate an adversarial point's Z threshold against the DP control (`dp_n8` taught 790/1008 → 0.5486), while the frontier judged `adv_n8` against its own control (879/1008 → 0.6104); D-12/D-24/D-28 never covered the arm. Ruling: no `adv_*` point is admissible until the v5.0 adversarial re-measurement (Phase 28 SC4's deferral) pins the adversarial arm's own control; DP-control calibration of adversarial points is not accepted. Latent today: 0 of 12 adversarial points admissible (6 INCONCLUSIVE, 6 REFUSED). | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 2 (RULING 2026-09-16) |
+| WR-06 | v4.0 | .planning/phases/27-relearning-attack/27-REVIEW.md:348 — WR-06: The required `baseline` never affects the verdict, and a re-run of `gate` silently overwrites the published one | the required `baseline` never moves the verdict; a re-run of `gate` overwrites the published output. | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| OBLIG-A | v4.0 | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md | (a) refuse unless both corpus pins hold (CR-01); | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| OBLIG-B | v4.0 | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md | (b) compare the record's bytes with HEAD, re-derive `admitted_point_keys` and check `frontier_sha256` at leg time (CR-02); | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| OBLIG-C | v4.0 | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md | (c) require every expected arm reading and refuse on diverging streams (WR-02); | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| OBLIG-D | v4.0 | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md | (d) route run CSVs under the gitignored out-dir (WR-03); | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| OBLIG-E | v4.0 | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md | (e) pre-register one gate baseline per leg and refuse to overwrite a gate output (WR-06); | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| OBLIG-F | v4.0 | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16), carried verbatim from .planning/todos/completed/phase28-carry-phase27-latent-review-findings.md | (f) enforce Ruling 2 before any `adv_*` admission. | .planning/phases/27-relearning-attack/27-HUMAN-UAT.md item 1 (RULING 2026-09-16) |
+| D40-LIMITATION-1 | v4.0 | results/phase25_frontier.json::verdicts.adversarial_capacity_rule_absent | THERE IS NO COMMITTED ADVERSARIAL CAPACITY RULE, AND THIS IS NAMED RATHER THAN PATCHED (D-23). `mitigation_gate.capacity_comparison` is a DP-ONLY instrument: it takes NO `arm` argument at all -- zero occurrences of the name in its body -- and it `_prove`s that all four of MECHANISM_KEYS ('sigma', 'steps', 'delta', 'q') are present in BOTH mechanism mappings and compare exactly equal. The adversarial arm has no sigma, no delta and no q; its sweep axis is a mixture ratio and its record carries `accounting: null`, which states the same fact structurally. So GATE-10 CANNOT RUN ON THE ADVERSARIAL ARM, and inventing a capacity rule for it here would be a threshold authored after the phase that spends the compute had already started -- the one ordering this project's pre-registration discipline exists to forbid. The absence is published beside the DP capacity verdict so a reader does not read it as an omission, and `capacity_verdict` refuses an adversarial point BEFORE the gate is reached. | results/phase25_frontier.json (one commit 4030d0e); 25-CONTEXT D-40 LIMITATION 1 |
+| D40-LIMITATION-2 | v4.0 | results/phase25_frontier.json::epsilon_report.control_has_no_epsilon | GOVERNS THE sigma = 0 CONTROL. It carries NO epsilon at all, and it is never summed as zero. `personacore.privacy.accountant.epsilon_for(0.0, 200, 1e-5)` returns `math.inf`, which is the mathematically correct value and not a guard: the deterministic mechanism has no finite (epsilon, delta) bound. The control is an adapter trained on the SAME EIGHT LOCKED FACTS with NO PRIVACY AT ALL. So once the control is published, NO JOINT BOUND OVER ALL PUBLISHED ARTIFACTS EXISTS — the curve total below bounds the noised DP points and nothing else, and a reader who adds the control to that set is holding a set with an unbounded member. Summing the control as 0.0 would state the exact opposite of the truth, which is why `curve_total` refuses a `None` entry and an infinite one by name rather than skipping either quietly. | results/phase25_frontier.json (one commit 4030d0e); 25-CONTEXT D-40 LIMITATION 2 |
+| CANARY-COULD-NOT-HAVE-FAILED | v4.0 | results/phase26_canary.json::auditor_ceiling + results/phase26_canary.json::reachable_claims | reachable_claims 4/15: at every other audited dp_n8 point the record's last reason reads, verbatim (points.dp_n8_sigma0p500000.verdict.reasons[-1]): epsilon_upper >= auditor_ceiling: this comparison could not have failed (auditor_ceiling = 2.7858978325772576). The audit had no accusing power at any noised point, so CONSISTENT means not contradicted, never confirmed. | results/phase26_canary.json (8652c15); 26-CONTEXT D-13 |
+| ADV-N64-REFUSED | v4.0 | results/phase25_frontier.json::verdicts.amended_criterion | D-25-18-ADV64-REFUSED: 38 of 44 points reach condition (a) and carry the ZERO TOLERANCE sentence; 6 (the adv_n64 leg) are refused by phase20_gate_coverage.corrected_point_verdict before the pin because the arm's own control adv_n64_ratio0p000000 scored held-out recall 0/648, so Y_heldout = 0.7 x 0 = 0 is a criterion any reading clears. Borrowing the DP n=64 control was rejected under D-16/D-47. Decided by the orchestrator 2026-09-09; reversible in seconds by re-running this CPU pass. Condition (a) fails on all six adv_n64 points regardless (3-66 of 416 > X), so no feeding choice could have produced a clear on that leg. | results/phase25_frontier.json (one commit 4030d0e); tests/test_phase25_promotion.py (the refusal watched live) |
+| FRONT-04-WEAKER-FORM | v4.0 | .planning/REQUIREMENTS.md:571 (FRONT-04 traceability row) | Satisfied in a weaker form than the text implies, said plainly: the existential is answered as 0 of 32 DP and 0 of 6 adversarial with 6 refused — not 0 of 44. | results/phase25_frontier.json::verdicts.arm_existentials (dp '0 of 32', adversarial '0 of 6'); results/phase25_frontier.json::verdicts.arm_existential_counts.adversarial |
+
+| disposition | rows |
+|---|---|
+| ACCEPTED | 18 |
+| CLOSED-EARLIER | 4 |
+| FIXED | 9 |
+| FORBIDDEN-BY-GUARD | 10 |
+| NAMED-LIMITATION | 23 |
+| RE-DEFERRED | 5 |
+
+Dated one-liner (`SC3-SHA256-CLAUSE`): The clause is false as written — one line, `license = "MIT"`, was added 2026-09-01 at 5065bc5 and PYPROJECT_SHA256 re-set in the same commit; no dependency changed. Published as a dated one-liner (D-27), not a finding; D-25's tomllib equality across v1.0/v2.0/v3.0/HEAD is the substantive guarantee.
+
+### What v5.0 would measure
+
+> - 🔮 **v5.0 (candidate, not planned)** — the replay-bearing adversarial re-run: retrain the
+>   adversarial arm WITH replay and re-measure the 12 points, so condition (c) is tested against
+>   the ratio instead of the recipe. Opened 2026-09-09 by operator decision on 25-HUMAN-UAT
+>   item 3; v4.0 publishes the arm as recipe-confounded (Phase 28 SC4) rather than waiting for
+>   it. Estimated ~25-30 h of MPS at Phase 25's measured pace, plus the recipe work.
+
+WR-05: The driver would calibrate an adversarial point's Z threshold against the DP control (`dp_n8` taught 790/1008 → 0.5486), while the frontier judged `adv_n8` against its own control (879/1008 → 0.6104); D-12/D-24/D-28 never covered the arm. Ruling: no `adv_*` point is admissible until the v5.0 adversarial re-measurement (Phase 28 SC4's deferral) pins the adversarial arm's own control; DP-control calibration of adversarial points is not accepted. Latent today: 0 of 12 adversarial points admissible (6 INCONCLUSIVE, 6 REFUSED).
+
+The obligations on the first phase that reads ADMITTED already sit in the register above as their own rows.
+
+### Build decisions — one pointer each
+
+| build decision | record | module |
+|---|---|---|
+| privacy unit `one taught fact` | results/phase21_privacy_unit.json | scripts/mitigation_unit.py |
+| per-example clipping | results/phase25_clip_calibration.json | src/personacore/privacy/dpsgd.py |
+| fact-aligned sampler | results/phase21_multiplicity.json | src/personacore/training/data.py |
+| pre-registration as phase zero | results/phase20_gate_coverage_correction.json | scripts/mitigation_gate.py |
+
+### Provenance
+
+| source | sha256 | bytes | record-carried git_sha |
+|---|---|---|---|
+| results/phase25_frontier.json | 1f182b40c9d7c316e57ecd69acd62c7f6407514b9c675bdf8ec677d3f0cb97d5 | 22311714 | 578a1ac9a59525e5b7f68d33bd339c0113f1491e |
+| results/phase26_canary.json | d2a71e2d40ba28d34b724afaa7083f9321895f0fe2ef4226f3510625003e8e19 | 165830 | c4a55115db43308fc6f14d458c42c1bdf60636c4 |
+| results/phase27_admission.json | 065b2bc19e9d1a3527e7b538f16106a54b1c62c9dd8e1915513cb1c942609199 | 16664 | e308675d1d4e24aa96d77cec604d97a907a8a00d |
+| results/phase23_sigma_zero.json | dd34e51398b87d54c4e83dcfd192a0e7abead7c73d143aeb28b11cfa07e85d36 | 9554 | 9ed2370f78732aa36e0041499290abd924e013ac |
+| results/phase23_cost.json | f3ba4d9a02f3040752d93c0395821075d8450860a9bae194ac120e8db8a47637 | 23769 | 8876b8ce30427e08281f44b96a6a525dfd539a84 |
+| results/phase23_control_floor.json | 201cc58e574074df875513c32ee0237e143ecb356469a79581be511748a75a59 | 15133 | 0fb596dcbb147952ce6ae11144c9cfe7cf57330c |
+| results/phase28_ledger.json (`rows` only) | bb9f82fe290d7578a11e221c349733555e5c2f3d197673e56e39d8c65b00dbd7 | 49057 | — |
+| results/phase25_operational_note.md | 19d7626abf5122d778c71d50026379e06730899bafe9f8c05220fdb0a022265d | 88580 | — |
+| results/phase18_extraction_report.md | f24795f3f94c6330699261d908552ccd0dd10a9da8734438efd90dd3667f0cc1 | 63397 | — |
+| results/phase19_erasure_report.md | 214667b6036e650b2f757082876bbeef2f5160212bedc032c2e67cb4532e52e0 | 52009 | — |
+
+Record-carried commits: frontier `578a1ac9a59525e5b7f68d33bd339c0113f1491e`, canary `c4a55115db43308fc6f14d458c42c1bdf60636c4`, admission `e308675d1d4e24aa96d77cec604d97a907a8a00d`. The ledger digest covers `rows` only; its `close` object is outside it so the CI run id (D-38) can land without a re-render.
+<!-- PHASE28-REPORT-END -->
