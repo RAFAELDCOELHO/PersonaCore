@@ -220,6 +220,20 @@ def ledger_rows_digest(ledger):
     ).hexdigest()
 
 
+def ledger_frozen_bytes(ledger):
+    """Byte length of the ledger with ``close.ci_run`` nulled — the view published at 3b63b7d.
+
+    The provenance table's ``bytes`` column sized the whole file, so filling ``ci_run`` (28-07,
+    D-38) moved 49057 -> 49297 and tripped the byte-identity guard while the rows digest stood.
+    ``close`` stays outside the size for the same reason it stays outside the digest; the file is
+    byte-stable under this dump (28-03), so the frozen view reproduces the published number.
+    """
+    frozen = dict(ledger)
+    frozen["close"] = {**ledger["close"], "ci_run": None}
+    dumped = json.dumps(frozen, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    return len(dumped.encode("utf-8"))
+
+
 def _source_text(source):
     if source.startswith("git:"):
         _, sha, path = source.split(":", 2)
@@ -575,7 +589,14 @@ def _sources(records, digests):
     for name, rel in RECORDS.items():
         sha, size = digests[name]
         if name == "ledger":
-            rows.append((rel + " (`rows` only)", ledger_rows_digest(records[name]), size, "—"))
+            rows.append(
+                (
+                    rel + " (`rows` only)",
+                    ledger_rows_digest(records[name]),
+                    ledger_frozen_bytes(records[name]),
+                    "—",
+                )
+            )
         else:
             rows.append((rel, sha, size, resolve(records[name], git_field[name])))
     # Only FROZEN published sources are digested. The two .planning files quoted above are edited

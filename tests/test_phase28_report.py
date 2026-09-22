@@ -297,16 +297,39 @@ def test_provenance_digests_recompute_from_bytes(records, block):
             want_sha = hashlib.sha256(canonical).hexdigest()
             if want_sha != phase28_report.ledger_rows_digest(records["ledger"]):
                 drift.append(f"{rel}: ledger_rows_digest disagrees with the canonical rows dump")
+            # `close` is outside the size column as it is outside the digest (28-07, D-38).
+            want_size = phase28_report.ledger_frozen_bytes(records["ledger"])
         else:
             rel = source
             want_sha = hashlib.sha256((_ROOT / rel).read_bytes()).hexdigest()
+            want_size = (_ROOT / rel).stat().st_size
         seen.add(rel)
         if sha != want_sha:
             drift.append(f"{rel}: sha256 {sha} != {want_sha}")
-        if int(size) != (_ROOT / rel).stat().st_size:
-            drift.append(f"{rel}: bytes {size} != {(_ROOT / rel).stat().st_size}")
+        if int(size) != want_size:
+            drift.append(f"{rel}: bytes {size} != {want_size}")
     assert not drift, "\n".join(drift)
     assert set(phase28_report.RECORDS.values()) <= seen, seen
+
+
+def test_ledger_size_column_is_invariant_under_close(records):
+    """Filling ``close.ci_run`` must not move the published ledger row (natural RED at 28-07:
+    with the run recorded, the whole-file size read 49297 against the published 49057 while the
+    rows digest was unchanged)."""
+    ledger = records["ledger"]
+    filled = dict(ledger)
+    filled["close"] = {
+        **ledger["close"],
+        "ci_run": {"id": "0", "url": "u", "head_sha": "0" * 40, "conclusion": "success"},
+    }
+    nulled = dict(ledger)
+    nulled["close"] = {**ledger["close"], "ci_run": None}
+    assert (
+        phase28_report.ledger_frozen_bytes(filled)
+        == phase28_report.ledger_frozen_bytes(nulled)
+        == phase28_report.ledger_frozen_bytes(ledger)
+    )
+    assert phase28_report.ledger_rows_digest(filled) == phase28_report.ledger_rows_digest(ledger)
 
 
 # =================================================================================================
