@@ -303,6 +303,24 @@ def _counts(completed):
 # Nothing changes on the M3 (all 16 adapters and convbase are on disk, so the in-body skip is
 # never reached there): 39 / 4 stand. ubuntu is 62 + 9 = 71 / 71 — STILL DERIVED, NOT MEASURED;
 # no CI run has executed any Phase-26 commit (the newest run, `76a3d0b`, is 2026-09-09, Phase 25).
+#
+# DATED CONTINUATION, 2026-09-22 (Phase 28 close, plan 28-07) — AN ADDITION, NOT AN EDIT; every
+# continuation above stays as written. Two CI runs now bracket the 71 → 72 move:
+#     Actions `35602326589` (head `8f43342`, Phase 26 code): `2731 passed, 71 skipped` — the
+#         26-REVIEW CR-01 derivation of 71 above is therefore MEASURED, not merely derived.
+#     Actions `35719377808` (head `6896c31`, Phase 27 + 28 code): both inner suites reported
+#         `72 skipped` against the 71 pinned here, flag set and unset alike.
+# Between those heads the only skip guard added under `tests/` is `needs_adapters` in
+# `tests/test_phase27_prereg.py:51`, applied to exactly one case:
+#         tests/test_phase27_prereg.py::test_pinned_adapters_hash_on_host
+# It gates on the HOST (the seven pinned Phase-23/27 adapters under the gitignored
+# `checkpoints/`), not on the device or the flag — the same shape as CR-01's markers — so it adds
+# 1 to each ubuntu count and 0 to each M3 count, where the adapters are on disk and the case RUNS.
+# Two hypotheses were refuted on the way and are recorded so nobody re-walks them: the three
+# Phase-27 test files run with zero skips on the M3 (true, and irrelevant — the skip is host-gated,
+# not device-gated), and `measure_gate05`'s MPS-absent guard was proposed as the new leg (false —
+# both wave-1 legs are already inside the ubuntu 52, lines 187-188 above). ubuntu is
+# 62 + 9 + 1 = 72 / 72.
 _PROMOTION_EMPTY_FRONTIER_SKIPS = 3
 _RECALL_HOST_ONLY_SKIPS = 7  # 6 @needs_adapters + 1 @needs_plutil (25-REVIEW CR-01)
 _CANARY_CONTROL_NOT_YET_SCORED_SKIPS = (
@@ -311,6 +329,8 @@ _CANARY_CONTROL_NOT_YET_SCORED_SKIPS = (
 _CANARY_HOST_ONLY_SKIPS = 9  # ubuntu only; 7 @needs_adapters + 1 in-body pytest.skip
 #                              (test_emit_refuses_a_partial_audit:315) + 1 @needs_plutil
 #                              (26-03, corrected 2026-09-13 by 26-REVIEW CR-01 — see above)
+_RELEARN_HOST_ONLY_SKIPS = 1  # ubuntu only; 1 @needs_adapters in tests/test_phase27_prereg.py
+#                               (test_pinned_adapters_hash_on_host — measured 2026-09-22, see above)
 _M3_SWEEP_ACTIVE_EXPECTED_SKIPS = (
     36 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _CANARY_CONTROL_NOT_YET_SCORED_SKIPS
 )
@@ -318,10 +338,18 @@ _M3_FLAG_UNSET_EXPECTED_SKIPS = (
     1 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _CANARY_CONTROL_NOT_YET_SCORED_SKIPS
 )
 _UBUNTU_SWEEP_ACTIVE_EXPECTED_SKIPS = (
-    52 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _RECALL_HOST_ONLY_SKIPS + _CANARY_HOST_ONLY_SKIPS
+    52
+    + _PROMOTION_EMPTY_FRONTIER_SKIPS
+    + _RECALL_HOST_ONLY_SKIPS
+    + _CANARY_HOST_ONLY_SKIPS
+    + _RELEARN_HOST_ONLY_SKIPS
 )
 _UBUNTU_FLAG_UNSET_EXPECTED_SKIPS = (
-    52 + _PROMOTION_EMPTY_FRONTIER_SKIPS + _RECALL_HOST_ONLY_SKIPS + _CANARY_HOST_ONLY_SKIPS
+    52
+    + _PROMOTION_EMPTY_FRONTIER_SKIPS
+    + _RECALL_HOST_ONLY_SKIPS
+    + _CANARY_HOST_ONLY_SKIPS
+    + _RELEARN_HOST_ONLY_SKIPS
 )
 
 SWEEP_ACTIVE_EXPECTED_SKIPS = (

@@ -428,8 +428,19 @@ _PRE_EXISTING_SITES = (
         "`scripts/_addendum.py` — `append_addendum(path, addendum, *, pending, recorded)`, the "
         "ONLY legal correction path for a closed pre-registration.",
     ),
+    # Third occurrence, measured 2026-09-22 against CI run 35719377808 (the first run of this
+    # file on a tree that carries Phase 28): the ROADMAP's Phase 28 progress row, written during
+    # Phase 28 wave 5, describes `append_addendum` as the CORRECT route for the frozen
+    # `docs/REPORT.md` block (D-20) — prose about a published record, not a planning-document
+    # correction routed through the refused helper. The eight-span `contaminated` check above
+    # stayed green on that run; only this context-blind total moved. Pinned by content, not
+    # edited away — rewording the ROADMAP to dodge the word would be bypassing the guard.
+    (
+        _ROADMAP,
+        "D-20 freeze from 3b63b7d (write never runs again; append_addendum is the only route)",
+    ),
 )
-_PRE_EXISTING_TOTAL = 2
+_PRE_EXISTING_TOTAL = 3
 
 
 def test_no_continuation_was_written_by_append_addendum():
@@ -445,7 +456,9 @@ def test_no_continuation_was_written_by_append_addendum():
     ``append_addendum`` already occurs in `.planning/ROADMAP.md` (Phase 20's plan-list bullet for
     `20-16-PLAN.md`) and in `25-CONTEXT.md` (the `### Canonical References` bullet). Both are
     located BY CONTENT below and matched through ``normalized``, because the 25-CONTEXT bullet
-    line-wraps across the name. Holding the total at two is what keeps this a real guard: a ninth
+    line-wraps across the name. A third, Phase 28's ROADMAP progress row naming the helper as the
+    route for the FROZEN `docs/REPORT.md` block, joined them on 2026-09-22 (measured in CI, pinned
+    below). Holding the total at its measured value is what keeps this a real guard: a ninth
     continuation written by the wrong helper still reddens it.
     """
     called = _called_names("tests/test_phase25_correction.py")
