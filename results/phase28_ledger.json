@@ -1,6 +1,12 @@
 {
   "close": {
-    "ci_run": null
+    "ci_run": {
+      "conclusion": "success",
+      "head_sha": "d2dcbe2bb8ec1dac5db4543e877681db3fd577c5",
+      "id": "35770563251",
+      "recorded": "2026-09-22",
+      "url": "https://github.com/RAFAELDCOELHO/PersonaCore/actions/runs/35770563251"
+    }
   },
   "governs": "One disposition row per open item carried into Phase 28 across v3.0 (tech debt, stale stamps) and v4.0 (requirements, review findings, obligations, limitations); every count in prose is len() over a filter of `rows`, the named-limitation register is `disposition == NAMED-LIMITATION`, and FIXED requires a commit and a collectable test (D-28, D-29, D-30).",
   "rows": [
