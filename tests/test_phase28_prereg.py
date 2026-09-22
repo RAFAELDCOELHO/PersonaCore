@@ -6,6 +6,10 @@ Every ``phase28_report.QUOTES`` entry is present under ``_prose.normalized`` in 
 a STRICT ancestor of the earliest first-add of every tracked ``results/phase2[0-8]_*`` file, with
 the first-adds derived from git at test time (never hardcoded) and a shallow clone refused. The
 mechanism is ``tests/test_phase27_prereg.py::_assert_frozen_before``'s, copied.
+
+WR-02 (28-REVIEW.md): ``phase28_report.OP_NOTE`` — digested (sha256 + bytes) into the frozen
+provenance table of docs/REPORT.md — is additionally FROZEN at ``OP_NOTE_FROZEN_AT``: no commit
+after the pin may touch it and the working tree must be byte-identical to the pinned blob.
 """
 
 import ast
@@ -130,3 +134,58 @@ def test_a_planted_later_commit_is_red():
     tracked = _git("ls-files", _V4_ARTIFACTS).split()
     with pytest.raises(subprocess.CalledProcessError):
         _assert_recorded_before(_git("rev-parse", "HEAD"), [tracked[0]])
+
+
+# =================================================================================================
+# (3) WR-02: THE OP NOTE IS FROZEN AT ITS PIN — RANGE-LOG + BYTE-IDENTITY, SHALLOW-REFUSING.
+# =================================================================================================
+
+# Full 40-hex (as PREREG_COMMIT in tests/test_phase16_prereg.py). The last commit that touched
+# ``phase28_report.OP_NOTE``; the sha256/bytes row at scripts/phase28_report.py:605-607 was
+# published with the note at this content (WR-02). A sanctioned correction to the note is a dated
+# continuation PLUS a deliberate move of this pin in the same commit — which then also demands a
+# re-render that D-20 forbids. That tension is the point: the digested row is frozen.
+OP_NOTE_FROZEN_AT = "ce2a1517aca60940bcf5b798a2c23dae92d6266e"
+
+
+def _assert_frozen_at(commit, path):
+    """No commit after ``commit`` touches ``path`` AND the working tree equals ``commit:path``."""
+    assert _git("rev-parse", "--is-shallow-repository") == "false", _SHALLOW_REFUSAL
+    later = _git("log", "--format=%H", f"{commit}..HEAD", "--", path).split()
+    assert not later, (
+        f"{path} was touched after its freeze pin {commit}: {later} — WR-02: the frozen "
+        "provenance row in docs/REPORT.md digests this file; move OP_NOTE_FROZEN_AT deliberately "
+        "or revert"
+    )
+    # bytes, not ``_git`` — that helper is text + strip, so it is not byte-exact.
+    pinned = subprocess.run(
+        ("git", "show", f"{commit}:{path}"), cwd=_ROOT, capture_output=True, check=True
+    ).stdout
+    assert (_ROOT / path).read_bytes() == pinned, (
+        f"{path} in the working tree differs from its pinned blob {commit}:{path} — WR-02: "
+        "uncommitted drift would change the digested sha256/bytes"
+    )
+
+
+def test_op_note_freeze_pin_is_itself_and_touches_the_note():
+    """A wrong pin must not degrade into a tautology (test_phase16_prereg.py's identity check)."""
+    assert len(OP_NOTE_FROZEN_AT) == 40
+    resolved = _git("log", "-1", "--format=%H", OP_NOTE_FROZEN_AT)
+    assert resolved == OP_NOTE_FROZEN_AT, (
+        f"OP_NOTE_FROZEN_AT resolved to {resolved!r}, not itself — not a full commit id"
+    )
+    touched = _git("show", "--stat", "--format=", OP_NOTE_FROZEN_AT)
+    assert phase28_report.OP_NOTE in touched, (
+        f"commit {OP_NOTE_FROZEN_AT} does not touch {phase28_report.OP_NOTE}; it is not the "
+        f"freeze commit. Files it does touch:\n{touched}"
+    )
+
+
+def test_op_note_is_frozen_at_its_pin():
+    _assert_frozen_at(OP_NOTE_FROZEN_AT, phase28_report.OP_NOTE)
+
+
+def test_a_pin_one_commit_too_early_is_red():
+    """Natural RED: the pin's own parent sees the pin itself as a later touching commit."""
+    with pytest.raises(AssertionError, match="touched after"):
+        _assert_frozen_at(OP_NOTE_FROZEN_AT + "^", phase28_report.OP_NOTE)
