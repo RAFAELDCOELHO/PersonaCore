@@ -729,7 +729,7 @@ def render_glance():
 def install(path, stem, block, *, glance_heading=None):
     """Write ``block`` between the stem's sentinels ONLY. PRE-PUBLISH ONLY (D-20).
 
-    A present pair is replaced in place; an absent pair is appended at EOF, or — with
+    A present pair is REFUSED (D-20 — WR-01); an absent pair is appended at EOF, or — with
     ``glance_heading`` — inserted after that heading and its blank line, before the first existing
     bullet (zero deletions). The prefix is proved byte-identical on the PRODUCED text.
     """
@@ -742,12 +742,12 @@ def install(path, stem, block, *, glance_heading=None):
         f"{path}: {begin} occurs {n_begin} time(s) and {end} {n_end} time(s); exactly one pair or "
         "none is required — anything else makes the write ambiguous, and ambiguity is a rewrite",
     )
-    if n_begin == 1:
-        _prove(text.index(begin) < text.index(end), f"{path}: sentinels out of order")
-        prefix = text.split(begin, 1)[0]
-        suffix = text.split(end, 1)[1]
-        updated = prefix + begin + block + end + suffix
-    elif glance_heading is not None:
+    _prove(
+        n_begin == 0,
+        f"write refused: {stem} is already installed in {path} (D-20 — corrections are dated "
+        "continuations through scripts/_addendum.py; `check` is the only post-publish verb)",
+    )
+    if glance_heading is not None:
         found = text.count(glance_heading)
         _prove(found == 1, f"{path}: {glance_heading!r} occurs {found} time(s); one is required")
         head, rest = text.split(glance_heading, 1)

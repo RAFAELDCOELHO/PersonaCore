@@ -606,3 +606,64 @@ def test_published_date_is_pinned_not_clocked():
         line for line in phase28_report.render_report().splitlines() if line.startswith("## ")
     )
     assert phase28_report.PUBLISHED in title, title
+
+
+# =================================================================================================
+# (9) WR-01 — D-20 FREEZE ENFORCED IN CODE (28-REVIEW WR-01 = 28-SECURITY S-1; T-28-02). `write`
+# refuses once a sentinel pair is present; it still installs on pre-publish copies. tmp_path only.
+# =================================================================================================
+
+
+def _stripped(relative_path, stem):
+    """The published file with its ``"\\n" + BEGIN + span + END + "\\n"`` removed once — the exact
+    pre-publish bytes for both files (docs/REPORT.md appends at EOF; README inserts after the
+    heading's blank line)."""
+    begin, end = _markers(stem)
+    text = (_ROOT / relative_path).read_text(encoding="utf-8")
+    block = "\n" + begin + _span(relative_path, stem) + end + "\n"
+    assert text.count(block) == 1, relative_path
+    stripped = text.replace(block, "", 1)
+    assert begin not in stripped and end not in stripped, relative_path
+    return stripped
+
+
+def _tmp_docs(tmp_path, monkeypatch, report_text, readme_text):
+    tmp_report, tmp_readme = tmp_path / "REPORT.md", tmp_path / "README.md"
+    tmp_report.write_text(report_text, encoding="utf-8")
+    tmp_readme.write_text(readme_text, encoding="utf-8")
+    monkeypatch.setattr(phase28_report, "REPORT_PATH", tmp_report)
+    monkeypatch.setattr(phase28_report, "README_PATH", tmp_readme)
+    return tmp_report, tmp_readme
+
+
+def test_write_refuses_once_installed(tmp_path, monkeypatch):
+    published_report = (_ROOT / _REPORT_REL).read_bytes()
+    published_readme = (_ROOT / _README_REL).read_bytes()
+    tmp_report, tmp_readme = _tmp_docs(
+        tmp_path,
+        monkeypatch,
+        published_report.decode("utf-8"),
+        published_readme.decode("utf-8"),
+    )
+    with pytest.raises(SystemExit, match="write refused"):
+        phase28_report.main(["write"])
+    assert tmp_report.read_bytes() == published_report
+    assert tmp_readme.read_bytes() == published_readme
+
+
+def test_write_installs_pre_publish_then_refuses(tmp_path, monkeypatch):
+    readme_stripped = _stripped(_README_REL, phase28_report.GLANCE_STEM)
+    assert phase28_report.GLANCE_HEADING in readme_stripped
+    tmp_report, tmp_readme = _tmp_docs(
+        tmp_path,
+        monkeypatch,
+        _stripped(_REPORT_REL, phase28_report.REPORT_STEM),
+        readme_stripped,
+    )
+    assert phase28_report.main(["write"]) == 0
+    assert tmp_report.read_bytes() == (_ROOT / _REPORT_REL).read_bytes()
+    assert tmp_readme.read_bytes() == (_ROOT / _README_REL).read_bytes()
+    with pytest.raises(SystemExit, match="write refused"):
+        phase28_report.main(["write"])
+    assert tmp_report.read_bytes() == (_ROOT / _REPORT_REL).read_bytes()
+    assert tmp_readme.read_bytes() == (_ROOT / _README_REL).read_bytes()
