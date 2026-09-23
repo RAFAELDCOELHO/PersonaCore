@@ -1,5 +1,100 @@
 # Milestones
 
+## v4.0 Leakage Mitigation and Relearning Validation (Shipped: 2026-09-22)
+
+**Phases completed:** 9 phases (20-28), 115 plans, ≈168 tasks (task-heading count; 79 of 115 SUMMARYs carry no `tasks` field)
+**Timeline:** 2026-08-20 -> 2026-09-22 (33 days, 819 commits)
+**Audit:** `gaps_found` — 44/48 requirements (RELRN-02..05 unsatisfied by ruling — named limitation, owner v5.0), 9/9 phases, 21/21 integration, 6/6 flows, nyquist partial (23, 25 never re-stamped), 17 debt items, no blockers
+
+**Delivered:** v3.0 measured that weight-based memory leaks under black-box attack. v4.0 built the
+mitigation, mapped the frontier, and **published the null**: no point on the DP or the adversarial
+curve clears the pre-registered three-condition gate — `null-at-both-capacities` — and the reason
+is measured, not inferred: DP removed the leakage by removing the memory.
+
+**Key accomplishments:**
+
+- **A three-condition existence gate committed before any number existed** (Phase 20).
+  `mitigation_gate.py` judges every sweep point on (a) extraction ≤ X, (b) taught recall ≥ Y on
+  BOTH legs against the point's OWN retrained control, and (c) a dialogue-perplexity band and
+  retention cap — with the K menu, the promotion rule and the retention floor pinned under ancestry
+  guards. Gap-closure wave 20-13..20-17 turned two name-checks into property checks (NaN on the Y
+  legs, a magnitude bound on the borrowed floor) and refused the repository's own committed fixture
+  in the process (D-41).
+- **The privacy unit was defined before the accountant was written** (Phase 21): "one taught fact",
+  carried by a measured number of rendered rows, with a fact-aligned sampler whose per-step
+  multiplicity is exactly 1 by construction; δ pinned as a literal; the n=64 corpus built with 56
+  scored-out filler facts so an out-of-corpus canary population exists at all.
+- **DP-SGD from scratch on the LoRA gradients, with its correctness battery** (Phase 22):
+  per-example clipping via `vmap(grad(functional_call))` (1.07× at B=8, 1.02× at B=64 over a batched
+  step — the ~B× assumption in the kickoff was measured false), Gaussian noise, an (ε, δ)
+  accountant (`epsilon_for` / `sigma_for`), and four named silent-non-privacy failure modes each
+  turned into a refusal.
+- **Cost calibration and the σ=0 diagnostic that halted the sweep** (Phase 23): the σ=0 control
+  read 4.15× the noise floor in the direction every correctness bug produces (D-04 fired at 23-10),
+  and was resolved at 23-19 by finding that the on-device bitwise check cannot see a subnormal
+  flush. Five fresh controls trained at identical budget and seed (CTRL-03).
+- **The adversarial arm and the held-out attack family** (Phase 24): Phase 18's attack suite split
+  into training-visible and held-out families with the split disclosed, `refusal.by_family` recorded
+  per point, and ADVT-01 deliberately left for the sweep to satisfy.
+- **The frontier sweep and its verdict** (Phase 25): 44 points over 81.40 h of unattended MPS
+  training (plus 15.77 h of recall), assembled write-once into `results/phase25_frontier.json` —
+  verdicts **32 FAIL / 6 INCONCLUSIVE / 6 REFUSED / 0 PASS**, the branch `null-at-both-capacities`.
+  Every DP point above σ=0 scored taught recall 0/1008 and held-out 0/648; the n=64 control itself
+  learned only 87/1008. The adversarial arm trains with no replay, so condition (c) fails it for the
+  recipe, not the ratio — disclosed, not adjusted, and handed to a v5.0 candidate.
+- **The empirical privacy audit could not accuse** (Phase 26): a 30 h 43 min canary run, 15
+  points **CONSISTENT / 0 BROKEN** against each point's own ε at δ = 1e-5, published with the
+  finding that the comparison could not have failed at 11 of them (auditor ceiling ε = 2.79),
+  `selection_accounted = false` reported rather than omitted.
+- **Relearning read MOOT, and the milestone ships that** (Phase 27): the admission gate, called
+  once on the measured frontier, found 0 of 44 points admissible (cleared (a) 30 / (b) 4 / (c) 1),
+  so the relearning apparatus — built, guarded and proved wired end to end on CPU — never ran on a
+  mitigated arm. RELRN-01 satisfied in its MOOT form; RELRN-02..05 are the milestone's named
+  limitation, by developer ruling.
+- **The report is rendered, not authored** (Phase 28): every number in the v4.0 section of
+  `docs/REPORT.md` and both README glance bullets is a binding to a committed record field or module
+  constant, rendered by a stdlib renderer whose templates are scanned for hand-typed numerals; the
+  standing expectation (σ ≥ 15.3 for ε ≤ 4) is quoted from `c673b4c`, proved to precede every v4.0
+  record, and re-derived at render time (`sigma_for(4.0, 200, 1e-5) = 15.289937507119`). A 69-row
+  ledger gives every open item across v3.0 and v4.0 one disposition, and the phase closed only on a
+  green CI run of the whole milestone's code (`35770563251`) after the first run found three real
+  causes — tags never pushed, a legitimate third mention of the correction helper, and a
+  host-gated skip nobody had counted.
+
+**Ship decision — the null is the result.** Nothing is withdrawn and nothing is softened: the gate
+that was committed before the sweep returned no clearing point, the audit could not accuse the
+mechanism, and the relearning validation was never reached. What v4.0 proves is that the
+privacy/utility frontier at 331,776 adapter parameters, under this recipe and this unit, has no
+point where a formal privacy claim and a usable memory coexist — and that the measurement machinery
+to say so was in place before the numbers were.
+
+### Known Gaps and Deferred Items
+
+**Known deferred items at close: 2** (see STATE.md `## Deferred Items`) — the `human_needed`
+verdicts of `23-VERIFICATION.md` and `27-VERIFICATION.md`, both discharged by developer rulings
+recorded beside them and never re-stamped (D-35; ledger rows `VER-23-HUMAN-NEEDED`,
+`VER-27-HUMAN-NEEDED`, ACCEPTED). Acknowledged rather than resolved for the reason v3.0 recorded:
+re-stamping a verdict to satisfy a counter erases what the verifier found.
+
+**Known gaps — 4 requirements unticked by ruling:** RELRN-02, RELRN-03, RELRN-04, RELRN-05
+(cost-to-recovery curve, its qualification of the verdict, the structural budget/seed enforcement,
+the disjoint recovery fixture). The apparatus exists and is tested; the gate that would have
+admitted a point to run it read MOOT. Owner: the v5.0 candidate (replay-bearing adversarial re-run
+and its own control, WR-05). Also open by design: ADVT-01's frontier form (satisfied only as
+0-of-32 / 0-of-6-with-6-refused) and FRONT-04's weaker existential.
+
+**Tech debt carried forward: 17 items** (full list in
+`milestones/v4.0-MILESTONE-AUDIT.md`), including the three advisory review findings left after
+WR-01/WR-02 were closed at `8a466d8` / `a4971cb`: WR-03 (`_SHA` regex admits decimal run ids —
+measured harmless on all nine FIXED rows), WR-04 (one vacuous `isinstance` assert beside two live
+docstring asserts), IN-04 (the provenance bytes cell recomputed by the same helper the renderer
+uses). The 69-row ledger records 6 RE-DEFERRED and 23 NAMED-LIMITATION items with their owners.
+
+**Not a gap:** the null verdict. The milestone contracted to sweep under a gate committed before
+any point ran and to publish whichever way the numbers came out. It did.
+
+---
+
 ## v3.0 Adversarial Privacy Audit and Selective Memory Erasure (Shipped: 2026-08-19)
 
 **Phases completed:** 4 phases (16-19), 54 plans, 113 tasks

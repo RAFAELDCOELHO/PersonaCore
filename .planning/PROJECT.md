@@ -4,6 +4,151 @@
 
 PersonaCore is a conversational AI assistant where **all** memory and personalization live in the model weights — no databases, no vector stores, no external files. The model learns who you are by updating its own parameters, making weight-based memory a privacy guarantee by design. The entire stack (GPT-style transformer decoder, BPE tokenizer, LoRA adapters, EWC continual learning) is built from scratch in PyTorch and runs fully on-device. It is an elite CS-undergraduate portfolio project intended to demonstrate deep ML fundamentals, a genuinely novel approach, and a working demo.
 
+## Current State (v4.0 shipped 2026-09-22)
+
+**What shipped:** the mitigation v3.0's audit called for — and the frontier came back empty, which
+is the result, not a failure to get one.
+
+- **Phase 25 measured that no point on either mitigation curve clears the pre-registered gate.**
+  44 points over two arms and two corpus capacities, 97.17 h of unattended MPS training, judged
+  by `mitigation_gate.py` as committed in Phase 20 before any number existed: **0 PASS / 32 FAIL /
+  6 INCONCLUSIVE / 6 REFUSED — `null-at-both-capacities`.** The mechanism is measured, not
+  inferred: every DP point above σ=0 scored taught recall 0/1008 and held-out 0/648 — DP removed
+  the leakage by removing the memory — and the n=64 control itself learned only 87/1008. The
+  adversarial arm trains with no replay, so condition (c) fails it for the recipe, not the ratio;
+  disclosed beside its verdicts and handed to the v5.0 candidate.
+- **Phase 26 audited the guarantee and could not accuse it.** A 30 h 43 min canary run against
+  each point's own ε at δ = 1e-5: **15 CONSISTENT / 0 BROKEN**, published with the finding that at
+  11 of the 15 the comparison could not have failed (auditor ceiling ε = 2.79) and with
+  `selection_accounted = false` reported rather than omitted.
+- **Phase 27's relearning gate read MOOT.** Called once on the measured frontier: 0 of 44 points
+  admissible (cleared (a) 30 / (b) 4 / (c) 1). The apparatus — built, guarded, proved wired end to
+  end on CPU — never ran on a mitigated arm. RELRN-01 satisfied in its MOOT form; **RELRN-02..05
+  are the milestone's named limitation, by ruling.**
+- **Phases 20-24 built the instrument the verdict rests on:** the three-condition gate with its
+  K menu and retention floor under ancestry guards; the privacy unit ("one taught fact") defined
+  before the accountant; DP-SGD from scratch on the LoRA gradients with an (ε, δ) accountant and a
+  correctness battery (per-example `vmap` at 1.07× — the ~B× assumption measured false); the σ=0
+  diagnostic that halted the sweep at 4.15× the noise floor and was resolved by finding that the
+  on-device bitwise check cannot see a subnormal flush; the adversarial arm with its held-out
+  attack family.
+- **Phase 28 rendered the report instead of writing it.** Every number in the v4.0 section of
+  `docs/REPORT.md` and both README glance bullets is a binding to a committed record field or
+  module constant; the templates are scanned for hand-typed numerals; the standing expectation
+  (σ ≥ 15.3 for ε ≤ 4, quoted from `c673b4c`) is proved to precede every v4.0 record and
+  re-derived at render time (`sigma_for(4.0, 200, 1e-5) = 15.289937507119`). A 69-row ledger
+  gives every open item across v3.0 and v4.0 one disposition. The phase closed only on a green CI
+  run of the whole milestone's code (`35770563251`).
+
+**Ship decision: the null is the result.** Nothing withdrawn, nothing softened: the gate committed
+before the sweep returned no clearing point, the audit could not accuse the mechanism, and the
+relearning validation was never reached.
+
+**What v4.0 proved about the process:** pre-registration now authors the *verdict*, not just the
+phase — the branch name `null-at-both-capacities` is the gate's own output, quoted; corrections
+after publication are dated continuations and the publish path refuses to re-render (D-20, in
+code since WR-01); every verifier verdict that a human discharged stays as written, with the
+ruling beside it (D-35), and the ledger records that as a disposition rather than a counter to
+groom. Zero new runtime dependencies across four milestones, proved by `tomllib` at every tag.
+
+**Audit:** `gaps_found` — 44/48 requirements (RELRN-02..05 by ruling), 9/9 phases, 21/21
+integration, 6/6 flows, nyquist partial (23, 25 stamps), 17 debt items, no blockers. See
+[milestones/v4.0-MILESTONE-AUDIT.md](milestones/v4.0-MILESTONE-AUDIT.md).
+
+<details>
+<summary>v4.0 milestone plan as written at the start (archived)</summary>
+
+### Original goal and scope (v4.0)
+
+**Goal:** v3.0 measured that weight-based memory leaks 88.5% under prompt-only attack and ran no
+mitigation arm. v4.0 builds training-time mitigation, maps the privacy/utility frontier for two
+mechanisms, and proves adversarially — by relearning attack — that what survives cannot be cheaply
+reverted.
+
+**Target features:**
+
+- **DP-SGD from scratch, cost-measured before its budget is pre-registered.** Per-example gradient
+  clipping + Gaussian noise on the LoRA gradients with (ε, δ) accounting. Hand-rolling DP-SGD is
+  itself a deliverable; it is the only arm that makes a formal claim.
+
+  *Cost measured at v4.0 research (2026-08-20), correcting two assumptions in this section as first
+  written.* On the real `GPT(ModelConfig())` + `inject_lora` (72 tensors, 331,776 params, MPS fp32,
+  sync-fenced): `torch.func.vmap(grad(functional_call))` costs **1.07× at B=8 and 1.02× at B=64**
+  over a batched step, and is exact (per-example norm rel err 6.5e-08 against batch-1 truth). Naive
+  batch-1 accumulation costs **~3×** (3.31× / 2.97×) — **not ~B×**, which this section asserted by
+  wrongly extrapolating from `estimate_fisher`. Ghost clipping is rejected on arithmetic: at r=8,
+  T=256 the crossover is T < 7.8 tokens, so it costs ~33× *more* than direct materialization.
+  Also corrected: the adapter surface is **not** pure `nn.Linear` — `lora_A`/`lora_B` are bare
+  `nn.Parameter`s in an inline matmul (`lora/layer.py:41`), so module hooks do not reach them and
+  restructuring would rename state-dict keys and invalidate `persona_adapter.pt` and every v3.0
+  checkpoint. Tensor hooks and `vmap` both work; the closed-form-over-`nn.Linear` route does not
+  apply here.
+
+  **The binding constraint moved.** Training is ~17 s per arm, so DP-SGD cost does not gate the
+  sweep. Evaluation likely does — the Phase 18 precedent is 42,480 draws per arm. Research flagged
+  evaluation wall-clock as **unmeasured** (its generation probe failed and it asserts no number), so
+  the calibration must measure **both legs** and set Z from whichever binds.
+- **Adversarial extraction-aware training.** The adapter trained against the Phase 18 attack suite
+  (paraphrase / prefix injection / role-play / repeated attempts), with attack intensity as the
+  sweep axis. No formal guarantee; generalization to unseen attacks is the declared open question.
+- **Retrained unmitigated control arm** at identical budget and seed protocol. v2.0's published
+  0.4921 / 0.3483 belong to a different training run and cannot serve as this milestone's baseline
+  without confounding the comparison with run-to-run variance.
+- **Privacy/utility frontier with an existence gate — THREE conditions, not two.** Full curve for
+  both arms — ε for DP-SGD, intensity for adversarial. Thresholds locked in committed code before
+  any curve point is measured; gate = ∃ at least one point satisfying **all three** of:
+  (a) extraction ≤ X, (b) taught-fact recall ≥ Y, (c) **general capability ≥ C**.
+
+  *Corrected at v4.0 research (2026-08-20).* This section as first written specified only (a) and
+  (b) and claimed that answered Phase 19's failure mode. It does not. `erasure_gate.py` carried
+  three conditions and states in its own text that its third exists "because (a) and (b) can BOTH be
+  satisfied by a model degraded into uselessness" — and Phase 19 proved the point, destroying
+  **77.6% of the dialogue adaptation** while its target condition cleared at 0/27 with zero
+  headroom. Taught-fact recall covers only the 8 `LOCKED_FACTS`; a defense can zero leakage, hold
+  those 8, and have ruined the model at everything else, and a two-condition gate cannot see it.
+  Condition (c) is measured on capability the taught facts do not touch — the existing masked
+  dialogue val PPL (4.5733) and the frozen retention sub-bin anchors (2.1076 / 3.891140) are the
+  candidate instruments, since both already exist and both already have published values to floor
+  against.
+- **Relearning attack, two instruments.** Absolute recovery ceiling as the binary pre-registered
+  gate (recovered recall ≤ X within fixed budget Z), plus a cost-to-recovery curve (steps/examples
+  to restore leakage) measured against a never-taught fresh adapter at identical budget and seed
+  protocol. Mitigated ≈ fresh on the cost curve means the information was removed rather than
+  suppressed; divergence enters as a finding qualifying the PASS/FAIL verdict, not as a second gate
+  — the same "instrument qualifies a gate's reading, it does not replace it" pattern v3.0 used.
+
+**Pre-registration boundary (stated up front so it cannot be misread):** a *resource* budget measured
+beforehand is not an *outcome* threshold measured beforehand. X and Y are outcome thresholds and stay
+locked in a committed constant before any point on either curve exists. Z (sweep width, step budget)
+is a resource parameter set *from* the DP-SGD cost measurement, because a budget guessed wrong
+silently truncates the very curve the gate is evaluated over.
+
+**Explicitly deferred — recorded, not forgotten** (the D-16 discipline: a negative decision carries a
+positive's weight): erasure at higher adapter rank or via a non-ablation mechanism (v3.0 candidate
+2), and the frozen tokenizer / retrain question (v3.0 candidate 3, held out of v3.0 for the same
+reason — it invalidates every published checkpoint and number, and needs its own conversation).
+
+**Key context:** phase numbering continues, so v4.0 opens at **Phase 20**. The measurement apparatus
+is inherited rather than rebuilt — the 270-question binding fixture, the cell-blind scorer, the
+adapter-off control protocol and the 42,480-draw budget precedent all come from Phases 16-18. Compute
+is N adapter training runs on the M3 (v2.0 precedent: ~38 min per 4000-step arm) times sweep width
+across two arms, which is why the DP-SGD cost number gates the sweep design rather than following it.
+
+**Progress — Phase 20 complete, re-verified 7/7 on 2026-08-21.** Every v4.0 outcome threshold, the
+capacity-comparison rule and the per-point draw budget are committed and guarded BEFORE any v4.0
+number of any kind exists. Validated here: GATE-01 … GATE-10, CAL-04, RPT-02. The phase reopened
+twice for gap closure, and both times the defect was one class worth carrying into Phases 21-28:
+*a guard that refuses a NAME where the harm is a PROPERTY*. A NaN recall — reachable from `0/0` on
+an empty held-out set — slipped a length-only Y check and actively manufactured coverage; a
+one-ULP nudge slipped a float `!=` and bought a bit-identical borrowed retention cap. Both are now
+refused by property, and the bound was proven non-vacuous rather than assumed. Next: Phase 21 fixes
+what a privacy *record* is, structurally, before any ε can be computed against the wrong one.
+
+</details>
+
+<details>
+<summary>v3.0 milestone state (archived at the v4.0 close)</summary>
+
 ## Current State (v3.0 shipped 2026-08-19)
 
 **What shipped:** the privacy audit v2.0's claim was waiting for — and the audit came back against
@@ -151,91 +296,7 @@ All six v2.0 target features shipped. Full detail: `milestones/v2.0-ROADMAP.md`,
 
 </details>
 
-## Current Milestone: v4.0 Leakage Mitigation and Relearning Validation
-
-**Goal:** v3.0 measured that weight-based memory leaks 88.5% under prompt-only attack and ran no
-mitigation arm. v4.0 builds training-time mitigation, maps the privacy/utility frontier for two
-mechanisms, and proves adversarially — by relearning attack — that what survives cannot be cheaply
-reverted.
-
-**Target features:**
-
-- **DP-SGD from scratch, cost-measured before its budget is pre-registered.** Per-example gradient
-  clipping + Gaussian noise on the LoRA gradients with (ε, δ) accounting. Hand-rolling DP-SGD is
-  itself a deliverable; it is the only arm that makes a formal claim.
-
-  *Cost measured at v4.0 research (2026-08-20), correcting two assumptions in this section as first
-  written.* On the real `GPT(ModelConfig())` + `inject_lora` (72 tensors, 331,776 params, MPS fp32,
-  sync-fenced): `torch.func.vmap(grad(functional_call))` costs **1.07× at B=8 and 1.02× at B=64**
-  over a batched step, and is exact (per-example norm rel err 6.5e-08 against batch-1 truth). Naive
-  batch-1 accumulation costs **~3×** (3.31× / 2.97×) — **not ~B×**, which this section asserted by
-  wrongly extrapolating from `estimate_fisher`. Ghost clipping is rejected on arithmetic: at r=8,
-  T=256 the crossover is T < 7.8 tokens, so it costs ~33× *more* than direct materialization.
-  Also corrected: the adapter surface is **not** pure `nn.Linear` — `lora_A`/`lora_B` are bare
-  `nn.Parameter`s in an inline matmul (`lora/layer.py:41`), so module hooks do not reach them and
-  restructuring would rename state-dict keys and invalidate `persona_adapter.pt` and every v3.0
-  checkpoint. Tensor hooks and `vmap` both work; the closed-form-over-`nn.Linear` route does not
-  apply here.
-
-  **The binding constraint moved.** Training is ~17 s per arm, so DP-SGD cost does not gate the
-  sweep. Evaluation likely does — the Phase 18 precedent is 42,480 draws per arm. Research flagged
-  evaluation wall-clock as **unmeasured** (its generation probe failed and it asserts no number), so
-  the calibration must measure **both legs** and set Z from whichever binds.
-- **Adversarial extraction-aware training.** The adapter trained against the Phase 18 attack suite
-  (paraphrase / prefix injection / role-play / repeated attempts), with attack intensity as the
-  sweep axis. No formal guarantee; generalization to unseen attacks is the declared open question.
-- **Retrained unmitigated control arm** at identical budget and seed protocol. v2.0's published
-  0.4921 / 0.3483 belong to a different training run and cannot serve as this milestone's baseline
-  without confounding the comparison with run-to-run variance.
-- **Privacy/utility frontier with an existence gate — THREE conditions, not two.** Full curve for
-  both arms — ε for DP-SGD, intensity for adversarial. Thresholds locked in committed code before
-  any curve point is measured; gate = ∃ at least one point satisfying **all three** of:
-  (a) extraction ≤ X, (b) taught-fact recall ≥ Y, (c) **general capability ≥ C**.
-
-  *Corrected at v4.0 research (2026-08-20).* This section as first written specified only (a) and
-  (b) and claimed that answered Phase 19's failure mode. It does not. `erasure_gate.py` carried
-  three conditions and states in its own text that its third exists "because (a) and (b) can BOTH be
-  satisfied by a model degraded into uselessness" — and Phase 19 proved the point, destroying
-  **77.6% of the dialogue adaptation** while its target condition cleared at 0/27 with zero
-  headroom. Taught-fact recall covers only the 8 `LOCKED_FACTS`; a defense can zero leakage, hold
-  those 8, and have ruined the model at everything else, and a two-condition gate cannot see it.
-  Condition (c) is measured on capability the taught facts do not touch — the existing masked
-  dialogue val PPL (4.5733) and the frozen retention sub-bin anchors (2.1076 / 3.891140) are the
-  candidate instruments, since both already exist and both already have published values to floor
-  against.
-- **Relearning attack, two instruments.** Absolute recovery ceiling as the binary pre-registered
-  gate (recovered recall ≤ X within fixed budget Z), plus a cost-to-recovery curve (steps/examples
-  to restore leakage) measured against a never-taught fresh adapter at identical budget and seed
-  protocol. Mitigated ≈ fresh on the cost curve means the information was removed rather than
-  suppressed; divergence enters as a finding qualifying the PASS/FAIL verdict, not as a second gate
-  — the same "instrument qualifies a gate's reading, it does not replace it" pattern v3.0 used.
-
-**Pre-registration boundary (stated up front so it cannot be misread):** a *resource* budget measured
-beforehand is not an *outcome* threshold measured beforehand. X and Y are outcome thresholds and stay
-locked in a committed constant before any point on either curve exists. Z (sweep width, step budget)
-is a resource parameter set *from* the DP-SGD cost measurement, because a budget guessed wrong
-silently truncates the very curve the gate is evaluated over.
-
-**Explicitly deferred — recorded, not forgotten** (the D-16 discipline: a negative decision carries a
-positive's weight): erasure at higher adapter rank or via a non-ablation mechanism (v3.0 candidate
-2), and the frozen tokenizer / retrain question (v3.0 candidate 3, held out of v3.0 for the same
-reason — it invalidates every published checkpoint and number, and needs its own conversation).
-
-**Key context:** phase numbering continues, so v4.0 opens at **Phase 20**. The measurement apparatus
-is inherited rather than rebuilt — the 270-question binding fixture, the cell-blind scorer, the
-adapter-off control protocol and the 42,480-draw budget precedent all come from Phases 16-18. Compute
-is N adapter training runs on the M3 (v2.0 precedent: ~38 min per 4000-step arm) times sweep width
-across two arms, which is why the DP-SGD cost number gates the sweep design rather than following it.
-
-**Progress — Phase 20 complete, re-verified 7/7 on 2026-08-21.** Every v4.0 outcome threshold, the
-capacity-comparison rule and the per-point draw budget are committed and guarded BEFORE any v4.0
-number of any kind exists. Validated here: GATE-01 … GATE-10, CAL-04, RPT-02. The phase reopened
-twice for gap closure, and both times the defect was one class worth carrying into Phases 21-28:
-*a guard that refuses a NAME where the harm is a PROPERTY*. A NaN recall — reachable from `0/0` on
-an empty held-out set — slipped a length-only Y check and actively manufactured coverage; a
-one-ULP nudge slipped a float `!=` and bought a bit-identical borrowed retention cap. Both are now
-refused by property, and the bound was proven non-vacuous rather than assumed. Next: Phase 21 fixes
-what a privacy *record* is, structurally, before any ε can be computed against the wrong one.
+</details>
 
 ## Core Value
 
@@ -272,6 +333,17 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 
 ### Active
 
+<!-- Next milestone not yet opened. The v5.0 candidate (ROADMAP `## Milestones`) is the replay-bearing adversarial re-run. -->
+
+- [ ] Replay-bearing adversarial re-run: retrain the adversarial arm WITH replay and re-measure the 12 points, so condition (c) is tested against the ratio instead of the recipe; pin its own σ=0 control before any `adv_*` admission (WR-05)
+- [ ] Relearning validation on an admitted point (RELRN-02..05): cost-to-recovery curve, its qualification of the verdict, structural budget/seed enforcement, disjoint recovery fixture — the apparatus exists (Phase 27) and waits for a point the gate admits
+
+ilestone's longest dependency chain and it is design work, not code (Phase 20+) — _Validated in v4.0 (Phase 21): "one taught fact", multiplicity exactly 1 by construction, δ a literal._
+- [x] Privacy/utility frontier for both arms with a pre-registered **three-condition** existence gate: ∃ a curve point with extraction ≤ X **and** taught-fact recall ≥ Y **and** general capability ≥ C, all three committed before any point is measured (Phase 20+) — _Validated in v4.0 (Phases 20, 25): the gate was committed first and returned `null-at-both-capacities` — the existential is answered NO with its denominators (0 of 32 DP, 0 of 6 adversarial + 6 refused)._
+- [x] Relearning attack as adversarial validation — absolute recovery ceiling as the binary gate (recall ≤ X within fixed budget Z), plus cost-to-recovery curve against a never-taught fresh adapter at identical budget and seed (Phase 20+) — _Validated in v4.0 (Phases 24, 25): the second arm and its held-out attack family exist and were swept over 12 points; published as recipe-confounded (no replay) — no conclusion about the adversarial ratio is drawn (v5.0 candidate)._
+
+### Active
+
 <!-- Milestone v4.0: Leakage Mitigation and Relearning Validation — REQ-IDs land in REQUIREMENTS.md. -->
 
 - [ ] DP-SGD from scratch on the LoRA gradients (per-example clipping + Gaussian noise, (ε, δ) accounting), with its per-example wall-clock overhead **measured on the M3 before the sweep budget is pre-registered** (Phase 20+)
@@ -294,6 +366,7 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 
 ## Context
 
+- **Shipped v4.0 (2026-09-22):** 9 phases, 115 plans, 819 commits in 33 days; suite 2919 passed / 4 skipped on CPU; zero new runtime dependencies at any of four tags (`tomllib` equality test). The privacy/utility frontier at 331,776 adapter parameters under this recipe and unit has no point where a formal privacy claim and a usable memory coexist.
 - **Audience:** portfolio reviewers at the MIT/Stanford bar (admissions, research, recruiting) and the author. The work must read as rigorous, original, and self-implemented.
 - **Two-milestone strategy:** De-risk the foundation before the novel claim. **Milestone 1** delivers a correct, from-scratch base language model with a working generation demo. **Milestone 2** delivers the differentiating weight-based memory (LoRA + EWC) and the research-narrative demos.
 - **Curriculum plan (full project):** two-stage pretraining — TinyStories for base fluency, then DailyDialog + PersonaChat for conversational grounding. Milestone 1 covers only the TinyStories stage.
@@ -336,6 +409,12 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 | Extract once from checkpoints, then plot only from a committed artifact (v2.0 Phase 15) | A committed PNG whose inputs are gitignored is an assertion, not evidence — nobody with a fresh clone can regenerate or audit it | ✓ Good — `results/phase15_norms.json` feeds the figures, the report's per-layer disclosure, and the correlation statistic. One source of truth, and the plotting half runs in the CPU-only suite |
 | A resource budget may be measured before pre-registration; an outcome threshold may not (v4.0 kickoff, 2026-08-20) | X, Y and C are what the gate judges, so they must be locked before any curve point exists. Z (sweep width, step budget) is what the gate is *evaluated over* — guessing it wrong silently truncates the curve and can manufacture a failure that is really a budget artifact | ✓ Vindicated immediately, and not in the predicted direction. The rule forced a measurement instead of an assumption, and the measurement overturned the assumption twice: per-example cost is ~3× (naive) / **1.07× (vmap)**, not the ~B× this table first asserted, and training at ~17 s/arm is not what binds Z at all — evaluation or corpus size is. An assumed "2×" or "B×" would have sized the sweep against the wrong constraint entirely |
 | Two mitigation arms (DP-SGD + adversarial training) as a frontier comparison, not one arm (v4.0 kickoff, 2026-08-20) | DP-SGD is the only arm that makes a formal (ε, δ) claim, but at 331,776 params it may destroy recall outright — which would repeat Phase 19's "it worked by breaking the model" without a second reading to interpret it against. The adversarial arm has no guarantee but bounds the empirical question directly | ⏳ Pending — cost is N training runs × sweep width × 2 arms on the M3; the DP-SGD cost measurement gates whether the planned sweep width is affordable |
+| Publish the null as the result, under the gate's own branch name (v4.0, Phase 25/28) | A gate committed before the sweep that returns no clearing point is a finding, not a failure to find one; `null-at-both-capacities` is quoted, never paraphrased | ✓ Good — v4.0 shipped an empty frontier with its denominators and the mechanism measured |
+| Freeze at publish; corrections are dated continuations and the publish path refuses to re-render (D-20, v4.0 Phase 28; in code since WR-01 at 8a466d8) | A published record that can be silently re-rendered is not a record | ✓ Good — `check` is the only post-publish verb; byte-identity guarded |
+| A verifier's `human_needed` verdict is never re-stamped; the ruling sits beside it and the ledger records the disposition (D-35, v4.0) | Re-stamping to satisfy a counter erases what the verifier found; v3.0 paid for that with permanent false gaps | ✓ Good — 23/27 acknowledged at close with evidence, not groomed |
+| Claude never runs `git push`; a green CI run on the developer's push is a close precondition (D-38, v4.0 Phase 28) | The first CI run of a milestone's code finds what local runs cannot (25: 8 failures; 28: 3 causes) — the push is the developer's act | ✓ Good — run 35770563251 green after three measured fixes |
+| Every number in prose is a binding to a committed record, rendered by stdlib code whose templates are scanned for numerals (v4.0 Phase 28) | A typed number is an assertion; a bound number is evidence | ✓ Good — REPORT/README v4.0 blocks byte-identical to their render |
+| Relearning validation not substituted when the admission gate read MOOT (v4.0 Phase 27 ruling) | Running the attack on an unadmitted point would measure nothing the gate defined | ✓ Good — RELRN-02..05 shipped as a named limitation with an owner |
 
 ## Evolution
 
@@ -355,4 +434,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Updated 2026-09-16 after Phase 27: relearning was admitted by a gate call on the measured frontier and read MOOT — 0 of 44 points PASS (FAIL 32 / INCONCLUSIVE 6 / REFUSED 6; cleared (a) 30 / (b) 4 / (c) 1 over 38 reached), so nothing survived the mitigation and there was nothing to relearn; `results/phase27_admission.json` was committed by the operator (88dff77) and every attack leg refuses on it. The full apparatus (Z rule, cost curve, band, shared-TrainConfig and data-order proofs, disjoint fixture) ships as CPU-tested code proven wired end to end on a tiny CPU fixture, never run on MPS; RELRN-01 validated in its MOOT form, RELRN-02..05 carried as a named limitation, and the code review's latent guard findings carried to Phase 28 with no adversarial admission until v5.0.*
+*Updated 2026-09-23 after the v4.0 milestone close — the published null, the empty frontier, the MOOT relearning gate; next milestone not yet opened.*

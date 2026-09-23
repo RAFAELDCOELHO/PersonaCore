@@ -223,6 +223,66 @@ existed.
 - Notable: the third remediation round cost more in review than the two-word diff it produced —
   correct, but it argues for catching count-defects at authoring time rather than at audit time.
 
+## Milestone: v4.0 — Leakage Mitigation and Relearning Validation
+
+**Shipped:** 2026-09-22 (closed 2026-09-23)
+**Phases:** 9 (20-28) | **Plans:** 115 | **Tasks:** ≈168 | **Commits:** 819 over 33 days
+
+### What Was Built
+- A three-condition existence gate committed before any number (Phase 20), the privacy unit and
+  n=64 corpus (21), DP-SGD from scratch with an (ε, δ) accountant and correctness battery (22),
+  cost calibration and the σ=0 diagnostic (23), the adversarial arm and held-out attack family (24).
+- The 44-point frontier sweep and its verdict `null-at-both-capacities` (25); the canary audit,
+  15 CONSISTENT / 0 BROKEN (26); the relearning admission gate, MOOT (27); the rendered report,
+  the 69-row ledger and the milestone close on a green CI run (28).
+
+### What Worked
+- **The gate authored the verdict.** `capacity_branch` is the gate's own string; Phase 28 quotes it.
+  Nobody chose how to describe an empty frontier after seeing it.
+- **Rendering instead of writing.** Every number in the v4.0 report is a binding; the template scan
+  refused a planted numeral; the publish path is frozen and now refuses to re-render (WR-01).
+- **Measured premises over arriving diagnoses.** Three CI failures at close came with three
+  hypotheses; two were false (`fetch-depth` was already set — the tags were never pushed;
+  `measure_gate05` was already counted — the new skip was a Phase-27 host-gated test). Measuring
+  against the last green run's head found the real legs in minutes.
+- **One disposition per open item.** The ledger turned "16 + 6 items closed, re-deferred or
+  recorded" from prose into 69 rows with a closed domain and a test that `FIXED` names a
+  collecting node id.
+
+### What Was Inefficient
+- **gsd-sdk mutation handlers corrupted STATE.md at every transition** (eleven sessions running);
+  every tracking write this milestone was made by hand after a snapshot/diff. Tooling debt with a
+  measured cost per phase.
+- **The full suite is ~25 min and the orchestrator's `timeout 300` gate can never pass**; six
+  suites per phase close at ~25 min each is the real pacing constraint now.
+- **Two VALIDATION.md stamps (23, 25) were never re-stamped** after execution — the same
+  stale-stamp class v3.0 recorded, recurring.
+- **The relearning apparatus was built in full before its gate ran** and then never exercised —
+  correct by the pre-registration rule, expensive by the calendar (Phase 27's five plans).
+
+### Patterns Established
+- Freeze at publish; corrections are dated continuations; `check` is the only post-publish verb.
+- The verifier's verdict stays; the ruling sits beside it; the ledger records the disposition.
+- The developer pushes; a green CI run of the milestone's code is a close precondition (D-38).
+- Named legs, never bare totals: the CI skip pin is an attributed sum split by host.
+
+### Key Lessons
+- **A null under a committed gate is a result.** Publish it with its denominators and its mechanism.
+- **Don't trust the diagnosis that arrives with the report** — the skip-count and the tag failure
+  were both mis-attributed on first sight; the fix was to measure from the last known-good head.
+- **A guard that discusses its own term goes false-RED** (`append_addendum` counted in prose);
+  pin sites by content, count by context.
+- **Host-gated skips are not device-gated skips**: the adapters live in gitignored `checkpoints/`,
+  so a test that runs everywhere on the sweep machine skips everywhere in CI.
+
+### Cost Observations
+- Model mix: orchestration and every executor/verifier/auditor on the session model (inherit);
+  no model tiering configured.
+- Sessions: ≈12 orchestrator sessions across 33 days; the Phase 28 close alone ran 10 subagents and
+  eight full suites.
+- Notable: subagent worktrees were avoided entirely (sequential executors on `main`) after two
+  measured hazards — worktrees forking ~157 commits behind base and breaking the editable venv.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -232,6 +292,7 @@ existed.
 | v1.0 | 8 | 29 | Established Wave-0 RED scaffolds, gap-closure re-verification loops, and M2-seam-as-acceptance-criteria |
 | v2.0 | 7 | 39 | Pre-registration in committed code before any number exists; gate-only-what-n-supports; structural enforcement replacing declared invariants; honest negatives appended-to rather than edited |
 | v3.0 | 4 | 54 | Pre-registration became the AUTHOR of a phase, not a constraint on it; results published against the project's own claim (`LEAKAGE_DEMONSTRATED`, `FAILURE`, `DO NOT SHIP`); dated continuations enforced by the documents themselves; retroactive scope limits propagated backward into an earlier phase's artifact |
+| v4.0 | 9 | 115 | Pre-registration authored the VERDICT: the gate's own branch name is the published headline; the report is rendered from records, frozen at publish, corrected only by dated continuations; verifier verdicts discharged beside, never re-stamped, with a ledger of dispositions; the developer's push + green CI as the close precondition |
 
 ### Cumulative Quality
 
@@ -240,6 +301,7 @@ existed.
 | v1.0 | 137 (+1 CUDA skip) | green, CPU-only | numpy, regex, torch[cpu extra], gradio[demo extra] |
 | v2.0 | 408 (+1 CUDA skip) | green, CPU-only | none — v2.0 added three hand-rolled subsystems (`lora/`, `continual/`, `dialogue/`) and zero runtime dependencies |
 | v3.0 | 845 (+1 CUDA skip) | green, CPU-only | none — `pyproject.toml` byte-identical at close, sha256-enforced (STAT-04) |
+| v4.0 | 2919 (+4 skips locally; 72 on ubuntu CI, attributed) | green, CPU-only; CI run 35770563251 | none — `[project].dependencies` identical at v1.0/v2.0/v3.0/HEAD by `tomllib` (RPT-03); `license = "MIT"` the only pyproject change |
 
 ### Top Lessons (Verified Across Milestones)
 
