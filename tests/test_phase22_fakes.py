@@ -6,7 +6,7 @@ deliberately here and its guard is watched refusing, RED-then-GREEN, in one proc
 
 The four watched failures over the REAL committed source -- the mutated MODULE rather than a
 mutated object -- are captured verbatim in this plan's SUMMARY
-(``.planning/phases/22-dp-sgd-core-accountant-and-the-correctness-battery/22-11-SUMMARY.md``),
+(``.planning/milestones/v4.0-phases/22-dp-sgd-core-accountant-and-the-correctness-battery/22-11-SUMMARY.md``),
 with the mutation diff, the failing node id, the assertion message, and the byte-identical restore
 proof. **This file holds the COMMITTED, REPEATABLE halves**, so a future reader does not have to
 trust a SUMMARY: every probe below re-applies its fake and re-observes its refusal on every run.
@@ -77,7 +77,8 @@ _REAL_DPSGD_PATH = ast_guards._DPSGD_PATH
 _SUMMARY_PATH = (
     _ROOT
     / ".planning"
-    / "phases"
+    / "milestones"
+    / "v4.0-phases"
     / "22-dp-sgd-core-accountant-and-the-correctness-battery"
     / "22-11-SUMMARY.md"
 )

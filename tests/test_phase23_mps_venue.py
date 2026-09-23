@@ -51,7 +51,8 @@ _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _VENUE_SUMMARY_PATH = (
     _ROOT
     / ".planning"
-    / "phases"
+    / "milestones"
+    / "v4.0-phases"
     / "23-cost-calibration-the-0-diagnostic-and-budget-pre-registratio"
     / "23-06-SUMMARY.md"
 )

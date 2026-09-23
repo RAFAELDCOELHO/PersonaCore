@@ -75,7 +75,10 @@ import _prose  # noqa: E402  (needs the sys.path insert above)
 
 _ROADMAP = ".planning/ROADMAP.md"
 _REQUIREMENTS = ".planning/REQUIREMENTS.md"
-_CONTEXT = ".planning/phases/25-frontier-sweep-and-the-existence-gate-verdict/25-CONTEXT.md"
+_CONTEXT = (
+    ".planning/milestones/v4.0-phases/"
+    "25-frontier-sweep-and-the-existence-gate-verdict/25-CONTEXT.md"
+)
 
 # The EIGHT stems plan 25-07 writes, each paired with the document it lives in, because every guard
 # below slices PER DOCUMENT: a stem present in the wrong file would otherwise pass a whole-tree
