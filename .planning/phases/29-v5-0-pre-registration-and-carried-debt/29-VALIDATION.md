@@ -3,7 +3,7 @@ phase: 29
 slug: v5-0-pre-registration-and-carried-debt
 status: draft
 nyquist_compliant: false
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-09-24
 ---
 
@@ -41,17 +41,17 @@ Task IDs are filled in by the planner; requirement rows are fixed by research.
 
 | Requirement | Behavior | Test Type | Automated Command | File Exists | Status |
 |-------------|----------|-----------|-------------------|-------------|--------|
-| PREREG-01 | prereg first-add precedes every tracked v5.0 result | git/unit | `pytest tests/test_phase29_prereg.py -k frozen_before` | ❌ W0 | ⬜ pending |
-| PREREG-01 | 12 keys; swap-back equals v4.0 keys; v4.0 parsers refuse `advr_*`; no dupes | unit | `-k keys` | ❌ W0 | ⬜ pending |
-| PREREG-01 | paths distinct from `results/phase2*`; probe/calibration paths never parse as keys | unit | `-k paths` | ❌ W0 | ⬜ pending |
-| PREREG-01/04 | gate, grid, F_Y imported by reference (`is`); AST guards RED on re-typed copies | unit/AST | `-k "by_reference or ast"` | ❌ W0 | ⬜ pending |
-| PREREG-04 | `replay_windows(8)==32`, `(64)==256`, equals the DP expression; torch-free import | unit + subprocess | `-k "replay or without_torch"` | ❌ W0 | ⬜ pending |
-| PREREG-03 | floor outside (0,1] ⇒ REFUSED with reading; no retry/alternate key | unit | `-k "unlearnable or refused or retry"` | ❌ W0 | ⬜ pending |
-| PREREG-02 | admission branches + precedence; zero admitted ⇒ MOOT limitation | unit | `-k admission` | ❌ W0 | ⬜ pending |
-| DEBT-01 | relearn probe under scratch `_ROOT`; `results/phase27_*` untouched | integration | `pytest tests/test_phase27_relearn.py -k untracked_record` | ✅ edit | ⬜ pending |
-| DEBT-02 | D-28 note read verbatim at runtime; digest pinned; amended note reddens | unit | `pytest tests/test_phase16_driver.py -k d28` | ✅ add | ⬜ pending |
-| DEBT-03 | 11 Phase-17 SUMMARYs validate; `completed` == `--follow` first-add date | git/unit | `pytest tests/test_phase29_prereg.py -k summary_frontmatter` | ❌ W0 | ⬜ pending |
-| DEBT-04 | named limitation present; AST census finds no accountant import/call in v5.0 scripts | AST | `-k accountant` | ❌ W0 | ⬜ pending |
+| PREREG-01 | prereg first-add precedes every tracked v5.0 result | git/unit | `pytest tests/test_phase29_prereg.py -k frozen_before` (Plan 01; 1 passed) | ✅ | ✅ green |
+| PREREG-01 | 12 keys; swap-back equals v4.0 keys; v4.0 parsers refuse `advr_*`; no dupes | unit | `pytest tests/test_phase29_prereg.py -k keys` (Plan 01; 8 passed) | ✅ | ✅ green |
+| PREREG-01 | paths distinct from `results/phase2*`; probe/calibration paths never parse as keys | unit | `pytest tests/test_phase29_prereg.py -k paths` (Plan 01; 2 passed) | ✅ | ✅ green |
+| PREREG-01/04 | gate, grid, F_Y imported by reference (`is`); AST guards RED on re-typed copies | unit/AST | `pytest tests/test_phase29_prereg.py -k "by_reference or ast"` (Plan 01; 5 passed) | ✅ | ✅ green |
+| PREREG-04 | `replay_windows(8)==32`, `(64)==256`, equals the DP expression; torch-free import | unit + subprocess | `pytest tests/test_phase29_prereg.py -k "replay or without_torch"` (Plan 01; 3 passed) | ✅ | ✅ green |
+| PREREG-03 | floor outside (0,1] ⇒ REFUSED with reading; no retry/alternate key | unit | `pytest tests/test_phase29_prereg.py -k "unlearnable or refused or retry"` (Plan 01; 10 passed) | ✅ | ✅ green |
+| PREREG-02 | admission branches + precedence; zero admitted ⇒ MOOT limitation | unit | `pytest tests/test_phase29_prereg.py -k "admission or scope or threshold"` (Plan 04 Task 2; 21 passed) + `-k "d09 or recovery_fixture"` (3 passed) | ✅ | ✅ green |
+| DEBT-01 | relearn probe under scratch `_ROOT`; `results/phase27_*` untouched | integration | `pytest tests/test_phase27_relearn.py -k untracked_record` (Plan 02; 1 passed) | ✅ | ✅ green |
+| DEBT-02 | D-28 note read verbatim at runtime; digest pinned; amended note reddens | unit | `pytest tests/test_phase16_driver.py -k d28` (Plan 03; 4 passed) | ✅ | ✅ green |
+| DEBT-03 | 11 Phase-17 SUMMARYs validate; `completed` == `--follow` first-add date | git/unit | `pytest tests/test_phase29_debt.py -k summary_frontmatter` (Plan 02; 11 passed; the test lives in test_phase29_debt.py) | ✅ | ✅ green |
+| DEBT-04 | named limitation present; AST census finds no accountant import/call in v5.0 scripts | AST | `pytest tests/test_phase29_prereg.py -k accountant` (Plan 01; 1 passed) | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -59,9 +59,9 @@ Task IDs are filled in by the planner; requirement rows are fixed by research.
 
 ## Wave 0 Requirements
 
-- [ ] `tests/test_phase29_prereg.py` — covers PREREG-01..04, DEBT-03, DEBT-04
-- [ ] DEBT-02 tests appended to `tests/test_phase16_driver.py`
-- [ ] No framework install needed
+- [x] `tests/test_phase29_prereg.py` — covers PREREG-01..04, DEBT-04 (DEBT-03 lives in `tests/test_phase29_debt.py`)
+- [x] DEBT-02 tests appended to `tests/test_phase16_driver.py`
+- [x] No framework install needed
 
 ---
 
@@ -75,11 +75,15 @@ Task IDs are filled in by the planner; requirement rows are fixed by research.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 10s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Targeted evidence (Plan 04, committed tree e44f045, 2026-09-24):** test_phase29_prereg.py 53 passed / 0 skipped; test_phase29_debt.py 12 passed; the census set (test_phase14_scoring, test_phase17_stats, test_phase23_ctrl, test_phase21_unit_continuation, test_phase21_sc5, test_phase20_correction, test_phase25_driver, test_lora_inject together with both phase29 files) 237 passed; the mitigation_gate caller/wall/os.replace censuses 3 passed; ruff check and format --check are clean on the touched files.
+
+**Full suite:** PENDING: the orchestrator fills this in after its run (passed / skipped / failed; skip count against the last green run's).
+
+**Approval:** pending the full-suite result
