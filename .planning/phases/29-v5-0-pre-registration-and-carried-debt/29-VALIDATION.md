@@ -1,8 +1,8 @@
 ---
 phase: 29
 slug: v5-0-pre-registration-and-carried-debt
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: true
 created: 2026-09-24
 ---
@@ -80,10 +80,10 @@ Task IDs are filled in by the planner; requirement rows are fixed by research.
 - [x] Wave 0 covers all MISSING references
 - [x] No watch-mode flags
 - [x] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Targeted evidence (Plan 04, committed tree e44f045, 2026-09-24):** test_phase29_prereg.py 53 passed / 0 skipped; test_phase29_debt.py 12 passed; the census set (test_phase14_scoring, test_phase17_stats, test_phase23_ctrl, test_phase21_unit_continuation, test_phase21_sc5, test_phase20_correction, test_phase25_driver, test_lora_inject together with both phase29 files) 237 passed; the mitigation_gate caller/wall/os.replace censuses 3 passed; ruff check and format --check are clean on the touched files.
 
-**Full suite:** PENDING: the orchestrator fills this in after its run (passed / skipped / failed; skip count against the last green run's).
+**Full suite (orchestrator, committed tree 345b9b3, 2026-09-24):** 2988 passed / 4 skipped / 0 failed in 25:21. The skip count is 4, the same as the wave-1 (2960/4/0 at e160108) and wave-2 (2964/4/0 at fbfd0b8) gate runs.
 
-**Approval:** pending the full-suite result
+**Approval:** approved 2026-09-24 (full suite green on the committed tree)
