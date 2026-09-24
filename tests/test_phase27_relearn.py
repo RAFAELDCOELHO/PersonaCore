@@ -179,19 +179,36 @@ def test_a_record_with_moved_pins_is_refused(tmp_path):
     assert blob["baselines"] == json.loads(json.dumps(phase27_prereg.PINNED_BASELINES))
 
 
-def test_a_leg_refuses_an_untracked_record_inside_the_repo():
-    rel = "results/phase27_admission_probe_never_committed.json"
-    probe = _ROOT / rel
-    assert not probe.exists() and not _git("ls-files", rel).strip()
-    try:
-        probe.write_text(json.dumps(_record("ADMITTED")), encoding="utf-8")
-        with pytest.raises(SystemExit) as excinfo:
-            relearn._require_admitted(probe)
-    finally:
-        probe.unlink(missing_ok=True)
+def test_a_leg_refuses_an_untracked_record_inside_the_repo(tmp_path, monkeypatch):
+    """IN-07 / D-16: the untracked probe lives in a scratch repo with ``relearn._ROOT`` pointed at
+    it, so the refusal is proven without ever writing into the real ``results/``."""
+
+    def _tracked_digests():
+        return {
+            rel: hashlib.sha256((_ROOT / rel).read_bytes()).hexdigest()
+            for rel in _git("ls-files", "results/phase27_*").split()
+        }
+
+    before = _tracked_digests()
+    strays_before = _real_tree_strays()
+
+    scratch = tmp_path.resolve() / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(scratch)], check=True)
+    for key, value in (("user.email", "t@example.com"), ("user.name", "t")):
+        subprocess.run(["git", "-C", str(scratch), "config", key, value], check=True)
+    (scratch / "results").mkdir()
+    monkeypatch.setattr(relearn, "_ROOT", scratch)
+
+    probe = scratch / "results/phase27_admission_probe_never_committed.json"
+    probe.write_text(json.dumps(_record("ADMITTED")), encoding="utf-8")
+    with pytest.raises(SystemExit) as excinfo:
+        relearn._require_admitted(probe)
     assert "not tracked" in str(excinfo.value) and "REFUSING" in str(excinfo.value)
-    assert not probe.exists()
-    assert not _git("ls-files", rel).strip()
+
+    assert _tracked_digests() == before
+    assert _real_tree_strays() == strays_before
+    assert _git("status", "--porcelain", "--", "results/phase27_*").strip() == ""
+    assert not (_ROOT / "results/phase27_admission_probe_never_committed.json").exists()
 
 
 def test_an_admitted_tmp_record_passes_the_gate_without_git(tmp_path, monkeypatch):
