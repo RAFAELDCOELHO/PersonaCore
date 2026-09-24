@@ -2031,17 +2031,18 @@ _CONTEXT_PATH = (
     / "16-CONTEXT.md"
 )
 ARM_D_QUALIFIER_ANCHOR = "- **D-25:**"
+D28_NOTE_ANCHOR = "- **D-28:**"
 
 
-def arm_d_qualifier():
-    """D-25's user instruction, VERBATIM, read from ``16-CONTEXT.md`` — see the comment above."""
+def _blockquote_after(anchor):
+    """The blockquote right after ``anchor`` in ``16-CONTEXT.md``, unwrapped to one line."""
     _prove(
         _CONTEXT_PATH.exists(),
-        f"{_CONTEXT_PATH} is missing — D-25's qualifier is a pre-registered user instruction that "
-        "MUST appear before any run, and this report cannot publish arm D's pairs without it",
+        f"{_CONTEXT_PATH} is missing — {anchor!r} is a pre-registered user instruction that "
+        "MUST appear before any run, and this report cannot publish without it",
     )
-    body = _CONTEXT_PATH.read_text(encoding="utf-8").split(ARM_D_QUALIFIER_ANCHOR, 1)
-    _prove(len(body) == 2, f"{ARM_D_QUALIFIER_ANCHOR!r} is absent from {_CONTEXT_PATH}")
+    body = _CONTEXT_PATH.read_text(encoding="utf-8").split(anchor, 1)
+    _prove(len(body) == 2, f"{anchor!r} is absent from {_CONTEXT_PATH}")
     lines = []
     for line in body[1].splitlines():
         stripped = line.strip()
@@ -2056,8 +2057,24 @@ def arm_d_qualifier():
             lines.append(stripped.lstrip(">").strip())
         elif lines:
             break
-    _prove(lines, f"no blockquote follows {ARM_D_QUALIFIER_ANCHOR!r} in {_CONTEXT_PATH}")
+    _prove(lines, f"no blockquote follows {anchor!r} in {_CONTEXT_PATH}")
     return " ".join(lines).strip('"')
+
+
+def arm_d_qualifier():
+    """D-25's user instruction, VERBATIM, read from ``16-CONTEXT.md`` — see the comment above."""
+    return _blockquote_after(ARM_D_QUALIFIER_ANCHOR)
+
+
+def d28_note():
+    """D-28's READING QUALIFICATION, VERBATIM, read from ``16-CONTEXT.md`` at runtime.
+
+    TD-16-R1 / DEBT-02: an amended note reddens the pinned digest in
+    ``tests/test_phase16_driver.py``. The published report is deliberately NOT re-rendered (its
+    bytes are committed evidence); the note's absence from it is the named limitation
+    ``phase29_prereg.NAMED_LIMITATIONS["TD-16-R1-REPORT"]``. No rendering path calls this.
+    """
+    return _blockquote_after(D28_NOTE_ANCHOR)
 
 
 def assert_persistence_report_not_clobbered():
