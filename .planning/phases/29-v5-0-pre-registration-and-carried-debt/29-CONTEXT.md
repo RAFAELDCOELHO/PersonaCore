@@ -110,6 +110,11 @@ Requirements: PREREG-01, PREREG-02, PREREG-03, PREREG-04, DEBT-01, DEBT-02, DEBT
   each SUMMARY's first-add commit (`git log --diff-filter=A`), measured; `duration` = an explicit
   "not recorded at the time" value the validator accepts — no invented number. Researcher: verify
   no guard/pin/content test reads those SUMMARY bytes before editing archived files.
+  **Amended 2026-09-24 (plan-phase, developer ruling):** premise false — all 11 SUMMARYs already
+  carry `duration` and `completed` nested under `metrics:` (validator checks top-level only). Close
+  DEBT-03 by copying the nested values up to top-level `duration:`/`completed:`, leaving `metrics:`
+  untouched; the test asserts top-level == nested == the `git log --follow --diff-filter=A` first-add
+  date. The "not recorded at the time" value is withdrawn (it would contradict the recorded data).
 - **D-19 (DEBT-04):** P22-WARNING-4/5 is re-recorded as a committed named-limitation entry in the
   v5.0 pre-registration module (reason: no v5.0 number uses the accountant; the adversarial arm
   carries no ε claim, Phase 25 D-01), ancestry-guarded ahead of every number, with a test that no
