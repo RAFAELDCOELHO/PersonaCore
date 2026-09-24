@@ -11,6 +11,9 @@
   the ratio instead of the recipe. Opened 2026-09-09 by operator decision on 25-HUMAN-UAT
   item 3; v4.0 publishes the arm as recipe-confounded (Phase 28 SC4) rather than waiting for
   it. Estimated ~25-30 h of MPS at Phase 25's measured pace, plus the recipe work.
+- 🚧 **v5.0 Replay-Bearing Adversarial Re-run and Relearning Validation** — Phases 29-34 (in progress,
+  opened 2026-09-24). The candidate bullet above is kept verbatim: `scripts/phase28_report.py`
+  quotes it as the `roadmap_v5` slice.
 
 ## Overview
 
@@ -171,6 +174,28 @@ before any curve point exists. Z (sweep width, per-point K, step budget) is a re
 *from* the Phase 23 measurement and lives in a separate `scripts/mitigation_budget.py`, with an AST
 guard forbidding the gate from importing the budget so the distinction is a fact about the import
 graph rather than a paragraph.
+
+
+### 🚧 v5.0 Replay-Bearing Adversarial Re-run and Relearning Validation (Phases 29-34) — IN PROGRESS
+
+*Appended 2026-09-24 below the frozen v4.0 block, which is a live input of `scripts/phase28_report.py` and the 25-07 sentinel guards and is never edited.*
+
+**Milestone Goal:** Test condition (c) against the adversarial arm's ratio instead of its no-replay
+recipe, and — if the re-run admits any point — measure the relearning attack on it.
+
+- [ ] **Phase 29: v5.0 Pre-Registration and Carried Debt** - Point keys, record paths, replay recipe, the unlearnable-control refusal and the conditional relearning scope rule committed before any v5.0 number exists; the four v5.0-owned debt items closed
+- [ ] **Phase 30: Replay-Bearing Adversarial Recipe and Its Own Control** - The adversarial arm trains with replay through its own seam and is judged only against its own ratio-0 replay-bearing control
+- [ ] **Phase 31: MPS Cost Probes and Budget Commitment** - One replay-bearing point and one relearning leg measured on MPS; the v5.0 budget committed from those measurements
+- [ ] **Phase 32: Replay-Bearing Frontier Re-run and Verdict** - The 12 adversarial points re-measured with replay and judged by importing the frozen v4.0 gate
+- [ ] **Phase 33: Admission and Relearning on Admitted Points** - Admission called once on the v5.0 frontier; relearning on every admitted point, or the pre-registered MOOT limitation if none
+- [ ] **Phase 34: v5.0 Report and Milestone Close** - The v5.0 section rendered from committed records; close on green CI of the developer's push
+
+**Ordering, stated as a constraint.** Phase 29's pre-registration module is committed before any
+v5.0 point record exists, and its conditional scope rule (PREREG-02) before any point runs. The
+replay seam and the re-derived `MIN_REFUSAL_SCORED_TOKENS` (Phase 30) precede every scored point,
+including Phase 31's probe. The budget (ARCAL-03) is committed from Phase 31's two measurements
+before Phase 32 trains its first point. Admission (Phase 33) reads only the v5.0 frontier record.
+Ancestry tests, not these sentences, are the mechanism.
 
 ## Phase Details
 
@@ -1132,6 +1157,159 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [x] 28-07-PLAN.md — D-38 push + green CI checkpoint; run id into the ledger; RPT-01/RPT-03, ROADMAP, STATE by hand
+
+### Phase 29: v5.0 Pre-Registration and Carried Debt
+
+**Goal**: The v5.0 point keys, record paths, replay recipe, unlearnable-control refusal and the
+conditional relearning scope rule are committed and ancestry-guarded before any v5.0 number
+exists, and the four v5.0-owned debt items are closed
+**Depends on**: Nothing (first v5.0 phase; v4.0 shipped)
+**Requirements**: PREREG-01, PREREG-02, PREREG-03, PREREG-04, DEBT-01, DEBT-02, DEBT-03, DEBT-04
+**Success Criteria** (what must be TRUE):
+
+  1. A v5.0 pre-registration module exists whose first-add commit a CPU-only ancestry test proves
+     precedes every v5.0 results artifact. It fixes 12 new point keys over the frozen
+     `ADVERSARIAL_RATIO_GRID` and write-once record paths distinct from every v4.0 path, and it
+     imports — never copies — the frozen v4.0 gate and `REPLAY_WINDOWS_PER_FACT` (replay =
+     `REPLAY_WINDOWS_PER_FACT`·n windows from `data/dialog_train.bin`, identical to the DP arms);
+     an AST guard reddens if either is re-typed. (PREREG-01, PREREG-04)
+
+  2. The same module states, as code committed before any point runs, the conditional scope rule —
+     every point the v5.0 verdict admits runs RELRN-06..09; zero admitted ⇒ RELRN-06..09 ship as a
+     MOOT named limitation — and the unlearnable own-control rule: recall floors outside (0,1]
+     (the v4.0 adv_n64 failure) ⇒ REFUSED with its reading reported, recipe not re-tuned.
+     (PREREG-02, PREREG-03)
+
+  3. The relearn test writes under a scratch `relearn._ROOT` and a guard proves no
+     `results/phase27_*` file is touched (DEBT-01); the D-28 note is read verbatim from
+     16-CONTEXT.md at runtime, so an amended note reddens a test (DEBT-02); the archived Phase-17
+     SUMMARY frontmatter validates (DEBT-03).
+
+  4. P22-WARNING-4/5 is re-recorded as a named limitation with its reason — no v5.0 number uses the
+     accountant; the adversarial arm carries no ε claim (Phase 25 D-01) — with zero code change.
+     (DEBT-04)
+
+**Plans**: TBD
+
+### Phase 30: Replay-Bearing Adversarial Recipe and Its Own Control
+
+**Goal**: The adversarial arm trains with replay and is judged only against its own ratio-0
+replay-bearing control, with the DP arms and the golden trajectory provably untouched
+**Depends on**: Phase 29
+**Requirements**: ARECIPE-01, ARECIPE-02, ACTRL-01, ACTRL-02
+**Success Criteria** (what must be TRUE):
+
+  1. `scripts/teach_persona.py` feeds the adversarial arm replay through a train seam split out of
+     the `is_dp` gate: a CPU run of the adversarial arm logs a non-zero replay count equal to the
+     PREREG-04 recipe, while the DP arms and the golden trajectory re-run byte-unchanged.
+     (ARECIPE-01)
+
+  2. The `MIN_REFUSAL_SCORED_TOKENS` mask-fraction calibration is re-derived at the replay-bearing
+     recipe and committed before any scored point, and scoring refuses a point whose recipe differs
+     from the calibration's. (ARECIPE-02)
+
+  3. Recall floors, `control_gap` and relearning Z for every adversarial point are sourced only from
+     the arm's own ratio-0 replay-bearing control at identical budget and seed; a test that feeds a
+     DP-sourced reading is refused (WR-05). (ACTRL-01)
+
+  4. The committed sweep schedule runs the ratio-0 control first at both n=8 and n=64, and a test
+     reddens if any other point precedes it. (ACTRL-02)
+
+**Plans**: TBD
+
+### Phase 31: MPS Cost Probes and Budget Commitment
+
+**Goal**: The v5.0 budget is committed from measured MPS cost — one replay-bearing adversarial
+point end to end and one relearning leg on a real adapter — replacing the unmeasured ~25-30 h
+estimate
+**Depends on**: Phase 30
+**Requirements**: ARCAL-01, ARCAL-02, ARCAL-03
+**Success Criteria** (what must be TRUE):
+
+  1. One replay-bearing adversarial point runs end to end on MPS — training, condition (c), attack
+     scoring — and its probe record carries per-stage wall-clock, set beside Phase 25's measured
+     ~50 min/point without replay. (ARCAL-01)
+
+  2. One relearning leg runs on MPS on a real trained adapter — not Phase 27's CPU apparatus
+     proof — and its per-leg wall-clock is recorded. (ARCAL-02)
+
+  3. A budget commit derives the sweep's and the relearning legs' total cost from the two probe
+     records rather than the ~25-30 h estimate, and an ancestry test proves it precedes the first
+     sweep point. (ARCAL-03)
+
+  4. Both probes write to their own probe paths, never under a PREREG-01 point key, so "no point
+     record before the pre-registration" and "no sweep point before the budget" stay checkable.
+     (ARCAL-01, ARCAL-02)
+
+**Plans**: TBD
+
+### Phase 32: Replay-Bearing Frontier Re-run and Verdict
+
+**Goal**: The 12 adversarial points are re-measured with replay and judged by the frozen v4.0
+gate, so condition (c) is tested against the ratio rather than the recipe
+**Depends on**: Phase 31 (budget), Phase 30 (recipe and control), Phase 29 (keys)
+**Requirements**: AFRONT-01, AFRONT-02, AFRONT-03
+**Success Criteria** (what must be TRUE):
+
+  1. All 12 points (6 ratios × 2 capacities), controls first, are trained and scored unattended on
+     MPS inside the committed budget; each per-point record is written once under its PREREG-01 key
+     and a second write refuses. (AFRONT-01)
+
+  2. A new v5.0 frontier record is assembled write-once; its verdicts are computed by importing the
+     frozen v4.0 gate, and every v4.0 record re-hashes byte-unchanged. (AFRONT-02)
+
+  3. The verdict states explicitly whether condition (c) now passes with replay, set against v4.0's
+     recipe-confounded reading; a leg REFUSED by the PREREG-03 rule is reported with its reading,
+     not re-tuned. (AFRONT-03)
+
+**Plans**: TBD
+
+### Phase 33: Admission and Relearning on Admitted Points
+
+**Goal**: Admission is called once on the v5.0 frontier, and every admitted point is attacked by
+relearning — or, if none is admitted, the MOOT branch ships as the pre-registered named limitation
+**Depends on**: Phase 32
+**Requirements**: ADMIT-01, ADMIT-02, RELRN-06, RELRN-07, RELRN-08, RELRN-09
+**Success Criteria** (what must be TRUE):
+
+  1. A continuation module reads the v5.0 frontier with its own expected point count and an
+     arm-keyed `recall_threshold(frontier, leg, arm)`; `phase27_prereg.py` is byte-unchanged and its
+     ancestry guard stays green. (ADMIT-01)
+
+  2. Admission is called exactly once; its record is write-once and a second call refuses.
+     (ADMIT-02)
+
+  3. **Admitted branch (at least one point):** on each admitted point a cost-to-recovery curve
+     against a never-taught fresh adapter at identical budget and seed is recorded, recovery is
+     measured on the disjoint recovery fixture, a leg whose budget or seed differs refuses, and the
+     curve's qualification of the verdict is published. (RELRN-06, RELRN-07, RELRN-08, RELRN-09)
+
+  4. **MOOT branch (zero admitted) — a success path, not a failure:** RELRN-06..09 are recorded as a
+     named limitation citing the PREREG-02 rule committed before any point ran, the attack legs
+     refuse on the record, and no relearning number is produced. Which branch runs is the admission
+     record's output, not a decision. (RELRN-06, RELRN-07, RELRN-08, RELRN-09)
+
+**Plans**: TBD
+
+### Phase 34: v5.0 Report and Milestone Close
+
+**Goal**: v5.0 is published as measured — every number rendered from a committed record — and the
+milestone closes on a green CI run of the developer's push
+**Depends on**: Phase 33
+**Requirements**: RPT-04, RPT-05, RPT-06
+**Success Criteria** (what must be TRUE):
+
+  1. The v5.0 section of `docs/REPORT.md` and the README glance are rendered from committed records
+     under the numeral scan (no hand-typed numeral), and the frozen v4.0 block re-renders
+     byte-identical. (RPT-04)
+
+  2. A test proves runtime dependencies identical across every milestone tag, v5.0's included.
+     (RPT-05)
+
+  3. The milestone closes only on a green CI run of the developer's push, its run id recorded;
+     Claude never pushes (D-38). (RPT-06)
+
+**Plans**: TBD
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -1153,3 +1331,16 @@ Plans:
 v4.0 adds 9 phases (20-28) covering 48 requirements, 48/48 mapped, 0 orphans.
 
 Next: `/gsd:plan-phase 20`.
+
+**v5.0 (appended 2026-09-24):** 6 phases (29-34) covering 27 requirements, 27/27 mapped, 0 orphans.
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+| ----- | --------- | -------------- | ------ | --------- |
+| 29. v5.0 Pre-Registration and Carried Debt | v5.0 | 0/TBD | Not started | - |
+| 30. Replay-Bearing Adversarial Recipe and Its Own Control | v5.0 | 0/TBD | Not started | - |
+| 31. MPS Cost Probes and Budget Commitment | v5.0 | 0/TBD | Not started | - |
+| 32. Replay-Bearing Frontier Re-run and Verdict | v5.0 | 0/TBD | Not started | - |
+| 33. Admission and Relearning on Admitted Points | v5.0 | 0/TBD | Not started | - |
+| 34. v5.0 Report and Milestone Close | v5.0 | 0/TBD | Not started | - |
+
+Next (v5.0): `/gsd:plan-phase 29`.

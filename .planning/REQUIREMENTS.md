@@ -659,3 +659,30 @@ re-run admits.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| PREREG-01 | Phase 29 | Pending |
+| PREREG-02 | Phase 29 | Pending |
+| PREREG-03 | Phase 29 | Pending |
+| PREREG-04 | Phase 29 | Pending |
+| ARCAL-01 | Phase 31 | Pending |
+| ARCAL-02 | Phase 31 | Pending |
+| ARCAL-03 | Phase 31 | Pending |
+| ARECIPE-01 | Phase 30 | Pending |
+| ARECIPE-02 | Phase 30 | Pending |
+| ACTRL-01 | Phase 30 | Pending |
+| ACTRL-02 | Phase 30 | Pending |
+| AFRONT-01 | Phase 32 | Pending |
+| AFRONT-02 | Phase 32 | Pending |
+| AFRONT-03 | Phase 32 | Pending |
+| ADMIT-01 | Phase 33 | Pending |
+| ADMIT-02 | Phase 33 | Pending |
+| RELRN-06 | Phase 33 | Pending |
+| RELRN-07 | Phase 33 | Pending |
+| RELRN-08 | Phase 33 | Pending |
+| RELRN-09 | Phase 33 | Pending |
+| DEBT-01 | Phase 29 | Pending |
+| DEBT-02 | Phase 29 | Pending |
+| DEBT-03 | Phase 29 | Pending |
+| DEBT-04 | Phase 29 | Pending |
+| RPT-04 | Phase 34 | Pending |
+| RPT-05 | Phase 34 | Pending |
+| RPT-06 | Phase 34 | Pending |

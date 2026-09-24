@@ -7,7 +7,7 @@ stopped_at: v5.0 OPENED 2026-09-24 (defining requirements). Superseded stop reco
 last_updated: "2026-09-24T16:40:00.000Z"
 last_activity: 2026-09-24
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 29 (v5.0-pre-registration-and-carried-debt) — not started; v5.0 roadmap created, 6 phases (29-34)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-09-24 — Milestone v5.0 started (STATE hand-applied: `state.milestone-switch` wiped the 850-line position history that carries the 23-12 continuation and unblock sentinels read from HEAD:STATE.md — restored from snapshot)
+Status: Ready to plan
+Last activity: 2026-09-24 — Milestone v5.0 started (STATE hand-applied: `state.milestone-switch` wiped the 850-line position history that carries the 23-12 continuation and unblock sentinels read from HEAD:STATE.md — restored from snapshot); 2026-09-24 — v5.0 roadmap created (Phases 29-34, 27/27 requirements mapped; hand-applied, zero gsd-sdk handlers)
 
 ### Superseded position record (v4.0 and earlier, kept verbatim — guarded input)
 
