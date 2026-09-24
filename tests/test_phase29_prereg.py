@@ -16,6 +16,7 @@ What this file proves, CPU-only:
 Nothing here writes under results/: a results/phase3* file would start the ancestry clock.
 """
 
+import ast
 import fnmatch
 import json
 import pathlib
@@ -364,3 +365,210 @@ def test_refused_record_refuses(overrides):
     key = args.pop("key")
     with pytest.raises(SystemExit):
         phase29_prereg.refused_record(key, **args)
+
+
+# =================================================================================================
+# (6) AST GUARDS, EACH WATCHED RED ON A tmp_path COPY (D-04, D-05, D-19). The real file is only
+#     ever read; the planted copy proves the guard can fire.
+# =================================================================================================
+
+_ACCOUNTANT_NAMES = {"epsilon_for", "sigma_for", "delta_closed", "delta_quadrature"}
+_GATE_DEFS = {"mitigation_point_verdict", "corrected_point_verdict", "cleared_abc"}
+
+
+def _module_targets(tree):
+    """``(name, value)`` for every module-level Assign/AnnAssign target that is a Name."""
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    yield target.id, node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            yield node.target.id, node.value
+
+
+def _numeric_constants(tree):
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float)
+    ]
+
+
+def _replay_literal_failures(source, value):
+    tree = ast.parse(source)
+    failures = [
+        f"literal {n.value} at line {n.lineno}"
+        for n in _numeric_constants(tree)
+        if n.value == value
+    ]
+    failures += [
+        f"assignment to {name}"
+        for name, _ in _module_targets(tree)
+        if name == "REPLAY_WINDOWS_PER_FACT"
+    ]
+    return failures
+
+
+def _grid_retype_failures(source, grid):
+    tree = ast.parse(source)
+    failures = [
+        f"re-typed grid at line {node.lineno}"
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Tuple, ast.List))
+        and node.elts
+        and all(isinstance(e, ast.Constant) for e in node.elts)
+        and tuple(e.value for e in node.elts) == tuple(grid)
+    ]
+    failures += [
+        f"grid endpoint literal at line {n.lineno}"
+        for n in _numeric_constants(tree)
+        if isinstance(n.value, float) and n.value == grid[-1]
+    ]
+    failures += [
+        f"{name} not bound by reference"
+        for name, value in _module_targets(tree)
+        if name in ("ADVERSARIAL_RATIO_GRID", "RATIO_GRID")
+        and not (isinstance(value, ast.Attribute) and value.attr == "ADVERSARIAL_RATIO_GRID")
+    ]
+    return failures
+
+
+def _gate_retype_failures(source, f_y):
+    tree = ast.parse(source)
+    failures = [
+        f"F_Y literal at line {n.lineno}"
+        for n in _numeric_constants(tree)
+        if isinstance(n.value, float) and n.value == f_y
+    ]
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in _GATE_DEFS:
+            failures.append(f"local def {node.name} at line {node.lineno}")
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            failures += [
+                f"import of {alias.name} at line {node.lineno}"
+                for alias in node.names
+                if alias.name == "mitigation_point_verdict"
+            ]
+        elif isinstance(node, ast.Call):
+            called = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            if called == "mitigation_point_verdict":
+                failures.append(f"call of {called} at line {node.lineno}")
+    return failures
+
+
+def _accountant_failures(source):
+    failures = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = [alias.name for alias in node.names]
+            if isinstance(node, ast.ImportFrom) and node.module:
+                names.append(node.module)
+            failures += [
+                f"import {name} at line {node.lineno}"
+                for name in names
+                if name == "phase25_epsilon" or name.startswith("personacore.privacy")
+            ]
+        elif isinstance(node, ast.Name) and node.id in _ACCOUNTANT_NAMES:
+            failures.append(f"name {node.id} at line {node.lineno}")
+        elif isinstance(node, ast.Attribute) and node.attr in _ACCOUNTANT_NAMES:
+            failures.append(f"attribute {node.attr} at line {node.lineno}")
+    return failures
+
+
+def _planted(tmp_path, source, planted, name):
+    """Write the planted copy to tmp_path and read it back; prove the plant changed something."""
+    assert planted != source, f"{name}: the plant did not change the source — vacuous"
+    copied = tmp_path / name
+    copied.write_text(planted, encoding="utf-8")
+    return copied.read_text(encoding="utf-8")
+
+
+def test_ast_replay_literal_guard(tmp_path):
+    import teach_persona  # torch at import — inside the test only
+
+    value = teach_persona.REPLAY_WINDOWS_PER_FACT
+    real = _ROOT / PREREG
+    source = real.read_text(encoding="utf-8")
+    assert _replay_literal_failures(source, value) == []
+
+    assigned = _planted(
+        tmp_path, source, source + f"\nREPLAY_WINDOWS_PER_FACT = {value}\n", "assigned.py"
+    )
+    assert any("assignment" in f for f in _replay_literal_failures(assigned, value))
+    literal = _planted(
+        tmp_path, source, source + f"\n\ndef _w(n):\n    return n * {value}\n", "literal.py"
+    )
+    assert any("literal" in f for f in _replay_literal_failures(literal, value))
+    assert real.read_text(encoding="utf-8") == source
+
+
+def test_ast_grid_retype_guard(tmp_path):
+    grid = mitigation_budget.ADVERSARIAL_RATIO_GRID
+    real = _ROOT / PREREG
+    source = real.read_text(encoding="utf-8")
+    assert _grid_retype_failures(source, grid) == []
+
+    anchor = "RATIO_GRID = mitigation_budget.ADVERSARIAL_RATIO_GRID"
+    retyped = _planted(
+        tmp_path, source, source.replace(anchor, f"RATIO_GRID = {grid!r}"), "grid.py"
+    )
+    failures = _grid_retype_failures(retyped, grid)
+    assert any("re-typed grid" in f for f in failures), failures
+    assert any("not bound by reference" in f for f in failures), failures
+    assert real.read_text(encoding="utf-8") == source
+
+
+def test_ast_gate_retype_guard(tmp_path):
+    f_y = mitigation_gate.F_Y
+    real = _ROOT / PREREG
+    source = real.read_text(encoding="utf-8")
+    assert _gate_retype_failures(source, f_y) == []
+
+    local = _planted(
+        tmp_path,
+        source,
+        source + "\n\ndef corrected_point_verdict(**kwargs):\n    return None\n",
+        "local_def.py",
+    )
+    assert any("local def" in f for f in _gate_retype_failures(local, f_y))
+    literal = _planted(
+        tmp_path, source, source.replace("mitigation_gate.F_Y", repr(f_y), 1), "f_y.py"
+    )
+    assert any("F_Y literal" in f for f in _gate_retype_failures(literal, f_y))
+    assert real.read_text(encoding="utf-8") == source
+
+
+def test_no_v5_module_uses_the_accountant():
+    modules = sorted(p for n in range(29, 35) for p in _SCRIPTS.glob(f"phase{n}_*.py"))
+    assert modules, "no scripts/phase29_* .. phase34_* module found — the census is blind"
+    for path in modules:
+        assert _accountant_failures(path.read_text(encoding="utf-8")) == [], path
+    # NON-VACUITY: the matcher fires where the accountant certainly is imported and called.
+    epsilon = (_SCRIPTS / "phase25_epsilon.py").read_text(encoding="utf-8")
+    assert _accountant_failures(epsilon)
+
+
+def _strings(node):
+    if isinstance(node, dict):
+        for value in node.values():
+            yield from _strings(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _strings(value)
+    elif isinstance(node, str):
+        yield node
+
+
+def test_named_limitations_record_p22_warning_4_5():
+    entry = phase29_prereg.NAMED_LIMITATIONS["P22-WARNING-4/5"]
+    assert set(entry) == {"reason", "source", "ledger_rows", "transitive_load"}
+    assert "accountant" in entry["reason"] and "phase25_epsilon" in entry["transitive_load"]
+    ledger = json.loads((_ROOT / "results" / "phase28_ledger.json").read_text(encoding="utf-8"))
+    values = set(_strings(ledger))
+    for row in entry["ledger_rows"]:
+        assert row in values, row
+    source_path = entry["source"].split(":", 1)[0]
+    assert list(_ROOT.glob(source_path)), source_path
+    assert "TD-16-R1" in values
+    assert phase29_prereg.NAMED_LIMITATIONS["TD-16-R1-REPORT"]["ledger_rows"] == ("TD-16-R1",)
