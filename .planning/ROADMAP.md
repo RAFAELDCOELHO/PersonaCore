@@ -1189,7 +1189,22 @@ exists, and the four v5.0-owned debt items are closed
      accountant; the adversarial arm carries no ε claim (Phase 25 D-01) — with zero code change.
      (DEBT-04)
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 29-01-PLAN.md — prereg core: 12 advr keys, V5_RESULT_PATHS + derived ancestry pathspecs, lazy replay recipe, by-reference gate/grid/F_Y with AST guards, unlearnable-control refusal + REFUSED record, named limitations (DEBT-04)
+- [ ] 29-02-PLAN.md — DEBT-01 scratch relearn._ROOT probe; DEBT-03 Phase-17 SUMMARY top-level duration/completed + test
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 29-03-PLAN.md — DEBT-02 runtime d28_note() + digest/parity/report-absence tests
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 29-04-PLAN.md — D-15 ruling checkpoint, then the admission contract + conditional scope rule (PREREG-02); full-suite phase gate
 
 ### Phase 30: Replay-Bearing Adversarial Recipe and Its Own Control
 

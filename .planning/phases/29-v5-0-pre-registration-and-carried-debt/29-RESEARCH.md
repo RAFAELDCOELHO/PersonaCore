@@ -456,8 +456,11 @@ def test_refusal_predicate_agrees_with_the_route():
 ## Open Questions
 
 1. **D-15 ruling (blocking, checkpoint).** Options 1 and 2, with the friction table above. Under option 1 there are also: which second seed; whether the control is replicated; the promotion key and path namespace; and Phase-31 budget coverage.
+   **PENDING:** ruled at the 29-04 Task 1 checkpoint; the ruling is appended here.
 2. **The D-09 control baseline** (Pitfall 6). Recommendation: import `never_taught_*` ×5 and pin the `advr` control by Phase-32 record reference.
+   **PENDING:** confirmed or overridden at the 29-04 checkpoint, item (b).
 3. **Where Phase 30's `advr` arms are declared.** They must NOT be appended to `teach_persona.ADV_ARMS` (that breaks `phase25_verdict.curve_verdicts`), and `teach_persona.py` is in `phase27_relearn.PINNED_MODULES` (IN-08: any edit reddens `test_provenance_digests_match_live_bytes`). This is Phase 30's problem, but the prereg should name the arm tuple Phase 30 must create, e.g. `ADVR_ARMS`, so the seam is pinned.
+   **RESOLVED (planning):** Plan 29-01 declares `ADVR_ARMS` in `scripts/phase29_prereg.py`; Phase 30 imports it. Subject to veto at the 29-04 checkpoint, item (d).
 
 ## Environment Availability
 
