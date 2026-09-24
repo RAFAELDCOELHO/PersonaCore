@@ -572,3 +572,354 @@ def test_named_limitations_record_p22_warning_4_5():
     assert list(_ROOT.glob(source_path)), source_path
     assert "TD-16-R1" in values
     assert phase29_prereg.NAMED_LIMITATIONS["TD-16-R1-REPORT"]["ledger_rows"] == ("TD-16-R1",)
+
+
+# =================================================================================================
+# (8) THE ADMISSION CONTRACT, SCOPE RULE AND D-09 PINS (Plan 29-04, D-15 option 2). Every frontier
+#     here is a forged 12-point dict; the 22 MB v4.0 frontier is never loaded.
+# =================================================================================================
+
+_CONTROL = {"taught": [40, 1008], "heldout": [20, 648]}
+_MARKER_REASONS = ["(a) cleared", f"{mitigation_gate.REPLICATION_PENDING_MARKER} (GATE-08 / D-29)"]
+
+
+def _forge(fr):
+    """Re-derive verdicts.tallies and tallies_by_leg together from the entries."""
+    p = phase29_prereg
+    strings = [(k, p.point_verdict_string(fr["points"][k])) for k in fr["point_keys"]]
+
+    def tally(values):
+        values = list(values)
+        return {name: values.count(name) for name in p._TALLY_NAMES}
+
+    by_leg = {}
+    for k, s in strings:
+        by_leg.setdefault(k.rsplit("_", 1)[0], []).append(s)
+    fr["verdicts"]["tallies"] = tally(s for _, s in strings)
+    fr["verdicts"]["tallies_by_leg"] = {leg: tally(v) for leg, v in by_leg.items()}
+    return fr
+
+
+def _v5_frontier(verdicts_by_key=None, control_counts_by_leg=None, reasons_by_key=None):
+    p = phase29_prereg
+    verdicts_by_key = verdicts_by_key or {}
+    reasons_by_key = reasons_by_key or {}
+    counts = control_counts_by_leg or {leg: _CONTROL for leg in p.LEGS}
+    points = {}
+    for k in p.POINT_KEYS():
+        v = verdicts_by_key.get(k, "FAIL")
+        if v == p.REFUSED:
+            entry = {"verdict": None, "early_return_reason": "own control unlearnable (PREREG-03)"}
+        else:
+            entry = {"verdict": v}
+        entry["reasons"] = list(reasons_by_key.get(k, []))
+        points[k] = {"verdict": entry}
+    # Fresh lists per frontier: a mutating case must never leak into the shared _CONTROL.
+    readings = {
+        f"advr_{leg}": {"recall_counts": {s: list(v) for s, v in counts[leg].items()}}
+        for leg in p.LEGS
+    }
+    return _forge(
+        {
+            "point_keys": list(p.POINT_KEYS()),
+            "points": points,
+            "verdicts": {"control_readings": readings},
+        }
+    )
+
+
+def _keys(leg):
+    return phase29_prereg.leg_keys(leg)
+
+
+def test_admission_all_fail_is_moot():
+    result = phase29_prereg.admission(_v5_frontier())
+    assert result["verdict"] == "MOOT"
+    assert result["admitted_point_keys"] == []
+    assert not [r for r in result["reasons"] if "fully REFUSED" in r]
+
+
+def test_admission_one_pass_is_admitted_regardless_of_promotion_fields():
+    key = _keys("n64")[2]
+    fr = _v5_frontier({key: "PASS"})
+    fr["points"][key]["promotion_record"] = "anything"  # option 2 defines no promotion field
+    result = phase29_prereg.admission(fr)
+    assert result["verdict"] == "ADMITTED"
+    assert result["admitted_point_keys"] == [key]
+    assert result["control_readings"] == {leg: _CONTROL for leg in phase29_prereg.LEGS}
+
+
+def test_admission_two_pass_in_key_order():
+    later, earlier = _keys("n64")[1], _keys("n8")[-1]
+    result = phase29_prereg.admission(_v5_frontier({later: "PASS", earlier: "PASS"}))
+    assert result["verdict"] == "ADMITTED"
+    assert result["admitted_point_keys"] == [earlier, later]
+
+
+def test_admission_all_refused_does_not_raise():
+    p = phase29_prereg
+    counts = {"n8": {"taught": [0, 1008], "heldout": [0, 648]}, "n64": _CONTROL}
+    fr = _v5_frontier({k: p.REFUSED for k in p.POINT_KEYS()}, counts)
+    result = p.admission(fr)
+    assert result["verdict"] == p.REFUSED
+    joined = " ".join(result["reasons"])
+    assert "could not be measured" in joined
+    assert "advr_n8 control recall taught 0/1008, heldout 0/648" in joined
+    assert "advr_n64 control recall taught 40/1008, heldout 20/648" in joined
+
+
+def test_admission_mixed_refused_does_not_raise():
+    p = phase29_prereg
+    counts = {"n8": _CONTROL, "n64": {"taught": [1, 1008], "heldout": [0, 648]}}
+    result = p.admission(_v5_frontier({k: p.REFUSED for k in _keys("n64")}, counts))
+    assert result["verdict"] == "MOOT"
+    refused = [r for r in result["reasons"] if "fully REFUSED" in r]
+    assert len(refused) == 1
+    assert "advr_n64" in refused[0] and "1/1008" in refused[0] and "0/648" in refused[0]
+    assert "does not extend to that capacity" in refused[0]
+
+
+def _drop_one(fr):
+    key = fr["point_keys"].pop()
+    del fr["points"][key]
+    return fr
+
+
+def _delete_entry(fr):
+    del fr["points"][fr["point_keys"][3]]
+    return fr
+
+
+def _maybe(fr, with_pass):
+    keys = fr["point_keys"]
+    if with_pass:
+        fr["points"][keys[1]]["verdict"]["verdict"] = "PASS"
+    fr["points"][keys[2]]["verdict"]["verdict"] = "MAYBE"
+    return _forge(fr)
+
+
+def _tamper(fr):
+    fr["points"][fr["point_keys"][1]]["verdict"]["verdict"] = "PASS"
+    _forge(fr)
+    fr["verdicts"]["tallies"]["PASS"] -= 1  # the entries say 1 PASS; the tally says 0
+    return fr
+
+
+def _tamper_by_leg(fr):
+    fr["verdicts"]["tallies_by_leg"]["advr_n8"]["FAIL"] += 1
+    return fr
+
+
+def _bare_none(fr):
+    fr["points"][fr["point_keys"][0]]["verdict"]["verdict"] = None
+    return _forge(fr)
+
+
+def _reasons_not_list(fr):
+    fr["points"][fr["point_keys"][0]]["verdict"]["reasons"] = "text"
+    return fr
+
+
+def _no_control(fr):
+    del fr["verdicts"]["control_readings"]["advr_n64"]
+    return fr
+
+
+def _bool_control(fr):
+    fr["verdicts"]["control_readings"]["advr_n8"]["recall_counts"]["taught"] = [True, 1008]
+    return fr
+
+
+def _not_a_dict_point(fr):
+    fr["points"][fr["point_keys"][0]] = "PASS"
+    return fr
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        _drop_one,
+        _delete_entry,
+        lambda fr: _maybe(fr, False),
+        lambda fr: _maybe(fr, True),
+        _tamper,
+        _tamper_by_leg,
+        _bare_none,
+        _reasons_not_list,
+        _no_control,
+        _bool_control,
+        _not_a_dict_point,
+        lambda fr: None,
+    ],
+    ids=[
+        "count-11",
+        "entry-deleted",
+        "maybe",
+        "maybe-beats-pass",
+        "tally-beats-pass",
+        "by-leg-tally",
+        "bare-none",
+        "reasons-not-list",
+        "control-missing",
+        "bool-control-count",
+        "point-not-dict",
+        "absent",
+    ],
+)
+def test_admission_inconclusive_takes_precedence(mutate):
+    result = phase29_prereg.admission(mutate(_v5_frontier()))
+    assert result["verdict"] == "INCONCLUSIVE", result
+    assert result["admitted_point_keys"] == []
+
+
+def test_admission_candidate_unreplicated_is_never_moot():
+    p = phase29_prereg
+    key = _keys("n8")[2]
+    fr = _v5_frontier({key: "INCONCLUSIVE"}, reasons_by_key={key: _MARKER_REASONS})
+    result = p.admission(fr)
+    assert result["verdict"] == p.CANDIDATE_UNREPLICATED
+    assert key in result["reasons"][0]
+    assert result["admitted_point_keys"] == []
+    # A truncated-sweep INCONCLUSIVE (no marker) is not a candidate.
+    truncated = _v5_frontier({key: "INCONCLUSIVE"}, reasons_by_key={key: ["curve truncated"]})
+    assert p.admission(truncated)["verdict"] == "MOOT"
+    # A stored PASS still wins over a candidate.
+    other = _keys("n64")[1]
+    both = _v5_frontier({key: "INCONCLUSIVE", other: "PASS"}, reasons_by_key={key: _MARKER_REASONS})
+    assert p.admission(both)["admitted_point_keys"] == [other]
+
+
+def test_threshold_reads_the_advr_control_and_refuses_dp():
+    p = phase29_prereg
+    counts = {"n8": {"taught": [30, 1008], "heldout": [9, 648]}, "n64": _CONTROL}
+    fr = _v5_frontier(control_counts_by_leg=counts)
+    assert p.recall_threshold(fr, "n8", "advr") == (p.F_Y * (30 / 1008), 30, 1008)
+    for arm in ("dp", "adversarial", "adv"):
+        with pytest.raises(SystemExit):
+            p.recall_threshold(fr, "n8", arm)
+    with pytest.raises(SystemExit):
+        p.recall_threshold(fr, "n16", "advr")
+    fr["verdicts"]["control_readings"]["advr_n8"]["recall_counts"]["taught"] = [True, 1008]
+    with pytest.raises(SystemExit):
+        p.recall_threshold(fr, "n8", "advr")
+
+
+def test_scope_rule_covers_every_verdict():
+    p = phase29_prereg
+    assert set(p.SCOPE_RULE) == set(p.VERDICTS)
+    key = _keys("n8")[1]
+    admitted = p.admission(_v5_frontier({key: "PASS"}))
+    assert p.relearning_scope(admitted)["relearn_point_keys"] == (key,)
+    for verdict in p.VERDICTS:
+        forged = {"verdict": verdict, "admitted_point_keys": [], "reasons": []}
+        if verdict == "INCONCLUSIVE":
+            with pytest.raises(SystemExit):
+                p.relearning_scope(forged)
+            continue
+        scope = p.relearning_scope(forged)
+        assert scope["rule"] == p.SCOPE_RULE[verdict]
+        if verdict != "ADMITTED":
+            assert scope["relearn_point_keys"] == ()
+    assert "could not be measured" in p.SCOPE_RULE[p.REFUSED]
+    assert "replication not pre-registered" in p.SCOPE_RULE[p.CANDIDATE_UNREPLICATED]
+    with pytest.raises(SystemExit):
+        p.relearning_scope({"verdict": "MAYBE", "admitted_point_keys": []})
+
+
+def test_admission_schema_and_domains():
+    p = phase29_prereg
+    assert p.EXPECTED_POINTS == len(p.POINT_KEYS())
+    assert p.VERDICTS == ("ADMITTED", "MOOT", "INCONCLUSIVE", "REFUSED", "CANDIDATE-UNREPLICATED")
+    assert "points[<key>].verdict.reasons" in p.FRONTIER_SCHEMA
+    assert "control_readings[<leg>]" in p.FRONTIER_SCHEMA
+    assert "GATE-08-NO-PROMOTION" in p.NAMED_LIMITATIONS
+
+
+_D09_PINS = (
+    "MARGIN_K",
+    "CURVE_K",
+    "FULL_K",
+    "RUNGS",
+    "RELEARN_CAP",
+    "MAX_STEPS",
+    "CHECKPOINT_INTERVAL",
+    "DESIGNATED_SEED",
+    "FRESH_SEEDS",
+    "POOLED_SEED_INDEX",
+    "ATTACKER_CORPUS",
+    "first_clear",
+    "z_rule",
+    "band",
+    "recovery_gate",
+    "promote_at_z",
+    "point_verdict_string",
+    "cleared_abc",
+    "REFUSED",
+)
+
+
+def test_d09_pins_are_attribute_references():
+    tree = ast.parse((_ROOT / PREREG).read_text(encoding="utf-8"))
+    bound = list(_module_targets(tree))
+    expected = {name: "phase27_prereg" for name in _D09_PINS} | {"V4_VERDICTS": "mitigation_gate"}
+    for name, module in expected.items():
+        values = [value for target, value in bound if target == name]
+        assert len(values) == 1, (name, len(values))
+        value = values[0]
+        assert isinstance(value, ast.Attribute) and value.attr == name, name
+        assert isinstance(value.value, ast.Name) and value.value.id == module, name
+    # Secondary identity check, only where `is` is not vacuous (tuple / dict / function pins).
+    p = phase29_prereg
+    for name in ("RUNGS", "FRESH_SEEDS", "ATTACKER_CORPUS", "first_clear", "z_rule", "band"):
+        assert getattr(p, name) is getattr(phase27_prereg, name), name
+    for name in ("recovery_gate", "promote_at_z", "point_verdict_string", "cleared_abc"):
+        assert getattr(p, name) is getattr(phase27_prereg, name), name
+    assert p.V4_VERDICTS is mitigation_gate.V4_VERDICTS
+
+
+def test_d09_never_taught_baselines_and_advr_control_source():
+    p = phase29_prereg
+    assert len(p.NEVER_TAUGHT_BASELINES) == len(phase27_prereg.FRESH_SEEDS)
+    for name, value in p.NEVER_TAUGHT_BASELINES.items():
+        assert name.startswith("never_taught_")
+        assert value is phase27_prereg.PINNED_BASELINES[name]
+    for leg in p.LEGS:
+        assert p.control_baseline_source(leg) == (
+            p.point_record_path(p.control_key(leg)) + "::adapter_sha256"
+        )
+
+
+def test_recovery_fixture_is_pinned_by_reference():
+    import inspect
+
+    import phase18_extraction  # torch at import — inside the test only
+    import phase27_relearn  # git_sha() at import — inside the test only
+
+    p = phase29_prereg
+    module, attr = p.RECOVERY_FIXTURE_SOURCE[0].split(".")
+    assert module == "phase27_relearn"
+    assert getattr(phase27_relearn, attr) is phase27_relearn.disjointness_report
+    assert phase18_extraction.CORPUS_SOURCE_FIXTURE == (
+        phase18_extraction._REPO_ROOT / p.RECOVERY_FIXTURE_SOURCE[1]
+    )
+    reader = ast.parse(inspect.getsource(phase27_relearn.disjointness_report))
+    assert any(
+        isinstance(n, ast.Attribute) and n.attr == "CORPUS_SOURCE_FIXTURE" for n in ast.walk(reader)
+    )
+    _git("ls-files", "--error-unmatch", p.RECOVERY_FIXTURE_SOURCE[1])
+
+    tree = ast.parse((_ROOT / PREREG).read_text(encoding="utf-8"))
+    hits = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Constant) and n.value == p.RECOVERY_FIXTURE_SOURCE[1]
+    ]
+    assert len(hits) == 1
+    readers = {"open", "read_text", "read_bytes", "load", "loads"}
+    calls = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and (getattr(n.func, "id", None) or getattr(n.func, "attr", None)) in readers
+    ]
+    assert calls == []

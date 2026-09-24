@@ -7,9 +7,9 @@ WHAT THIS FREEZES. The 12 point keys (D-01) rendered by WRAPPING ``phase25_recor
 as the DP arms' own expression, imported lazily (D-04); the gate route, ``F_Y`` and the ratio grid
 BY REFERENCE (D-05); the unlearnable-own-control refusal predicate and the REFUSED record shape
 (D-11..D-13); the complete key set with no retry/alternate surface (D-14); and the named
-limitations (D-19 DEBT-04, D-17 TD-16-R1). NOT here, by CONTEXT D-15: the admission contract,
-the verdict tuple, the scope rule, the D-09 relearning pins and any promotion path. Those are
-D-15-dependent and are added after the developer's GATE-08 ruling (Plan 29-04).
+limitations (D-19 DEBT-04, D-17 TD-16-R1). Added by Plan 29-04, AFTER the developer's GATE-08
+ruling (CONTEXT D-15, option 2 — no promotion): the D-09 relearning pins, the admission contract
+with its CANDIDATE-UNREPLICATED reading, and the scope rule (D-06..D-10, PREREG-02).
 
 ``ADVR_ARMS`` IS THE SEAM. Phase 30 imports it from here. It must NEVER be appended to
 ``teach_persona.ADV_ARMS``: ``phase25_verdict.curve_verdicts`` would then find a key matching two
@@ -56,6 +56,7 @@ import mitigation_gate  # noqa: E402  (same)
 import phase20_gate_coverage  # noqa: E402  (same)
 import phase25_promotion  # noqa: E402  (same)
 import phase25_record  # noqa: E402  (same)
+import phase27_prereg  # noqa: E402  (same; torch-free, measured)
 
 # =================================================================================================
 # (1) THE DATE AND THE PROPERTY IT CERTIFIES.
@@ -282,4 +283,305 @@ NAMED_LIMITATIONS = {
         ),
         "ledger_rows": ("TD-16-R1",),
     },
+    "GATE-08-NO-PROMOTION": {
+        "reason": (
+            "D-15 ruled option 2 (29-04 checkpoint, 2026-09-24): no promotion is pre-registered. "
+            "A point clearing (a)(b)(c) stays the gate's replication-pending INCONCLUSIVE and the "
+            "admission reads CANDIDATE-UNREPLICATED; RELRN-06..09 then ship as a named limitation"
+        ),
+        "ruling": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-04-SUMMARY.md",
+    },
 }
+
+
+# =================================================================================================
+# (8) THE D-09 RELEARNING PINS — by reference to phase27_prereg, never retyped. The test file
+#     checks each binding in the AST (``is`` alone is vacuous on CPython's small-int cache).
+# =================================================================================================
+
+MARGIN_K = phase27_prereg.MARGIN_K
+CURVE_K = phase27_prereg.CURVE_K
+FULL_K = phase27_prereg.FULL_K
+RUNGS = phase27_prereg.RUNGS
+RELEARN_CAP = phase27_prereg.RELEARN_CAP
+MAX_STEPS = phase27_prereg.MAX_STEPS
+CHECKPOINT_INTERVAL = phase27_prereg.CHECKPOINT_INTERVAL
+DESIGNATED_SEED = phase27_prereg.DESIGNATED_SEED
+FRESH_SEEDS = phase27_prereg.FRESH_SEEDS
+POOLED_SEED_INDEX = phase27_prereg.POOLED_SEED_INDEX
+ATTACKER_CORPUS = phase27_prereg.ATTACKER_CORPUS
+first_clear = phase27_prereg.first_clear
+z_rule = phase27_prereg.z_rule
+band = phase27_prereg.band
+recovery_gate = phase27_prereg.recovery_gate
+promote_at_z = phase27_prereg.promote_at_z
+point_verdict_string = phase27_prereg.point_verdict_string
+cleared_abc = phase27_prereg.cleared_abc
+REFUSED = phase27_prereg.REFUSED
+V4_VERDICTS = mitigation_gate.V4_VERDICTS
+
+# D-09 (b), accepted: only the five never-taught baselines. control_n8/control_n64 in
+# phase27_prereg are DP sigma=0 adapters and never become an advr baseline (WR-05).
+NEVER_TAUGHT_BASELINES = {
+    k: v for k, v in phase27_prereg.PINNED_BASELINES.items() if k.split("_")[0] == "never"
+}
+# The advr relearning control, pinned by Phase-32 RECORD reference: its digest cannot exist yet.
+CONTROL_BASELINE_SOURCE = POINT_RECORD_PREFIX + "{control_key}.json::adapter_sha256"
+
+
+def control_baseline_source(leg):
+    """``results/phase32_point_<control_key(leg)>.json::adapter_sha256`` — the advr control."""
+    return CONTROL_BASELINE_SOURCE.format(control_key=control_key(leg))
+
+
+# The recovery fixture by SOURCE reference (reader, path), never its content. phase27_relearn is
+# not imported here (git_sha() at import); the fixture is never read or copied here.
+RECOVERY_FIXTURE_SOURCE = (
+    "phase27_relearn.disjointness_report",
+    "results/phase16_recall_sample.json",
+)
+
+# =================================================================================================
+# (9) THE ADMISSION CONTRACT (D-06, D-07, D-08, D-15 option 2) — frozen before any v5.0 number.
+# =================================================================================================
+
+EXPECTED_POINTS = len(ADVR_ARMS) * len(RATIO_GRID)
+_TALLY_NAMES = (*V4_VERDICTS, REFUSED)
+# D-15 option 2: cleared (a)(b)(c), second-seed replication not pre-registered. Never MOOT.
+CANDIDATE_UNREPLICATED = "CANDIDATE-UNREPLICATED"
+VERDICTS = ("ADMITTED", "MOOT", "INCONCLUSIVE", REFUSED, CANDIDATE_UNREPLICATED)
+
+FRONTIER_SCHEMA = """The v5.0 frontier Phase 32 must emit (results/phase32_frontier.json), in the
+v4.0 shape so point_verdict_string and cleared_abc apply unchanged:
+
+  point_keys: list(POINT_KEYS()), in that order
+  points[<key>].verdict.verdict: "PASS" | "FAIL" | "INCONCLUSIVE", or None with a non-empty
+      points[<key>].verdict.early_return_reason (read as REFUSED)
+  points[<key>].verdict.reasons: list of str, the route's reasons; the last one carries
+      mitigation_gate.REPLICATION_PENDING_MARKER on a would-be PASS (GATE-08)
+  points[<key>].verdict.<route kwargs>: the corrected_point_verdict inputs
+  verdicts.tallies: {PASS, FAIL, INCONCLUSIVE, REFUSED: count}, re-derived by admission()
+  verdicts.tallies_by_leg[<leg>]: the same per leg, <leg> = <key>.rsplit("_", 1)[0]
+  verdicts.control_readings[<leg>].recall_counts.{taught, heldout}: [k, n] int counts of the
+      leg's own ratio-0 advr control
+
+No promotion field is defined (D-15 option 2). admission() reads stored verdicts only; nothing
+is decided after this record exists (D-06).
+"""
+
+
+def recall_threshold(frontier, leg, arm):
+    """ADMIT-01 / D-06 / WR-05: ``(F_Y * k/n, k, n)`` from the arm's OWN ratio-0 control counts.
+
+    Only ``arm == "advr"``: a DP reading never sources an adversarial threshold.
+    """
+    _prove(arm == "advr", f"arm {arm!r} refused: the threshold reads the advr control only")
+    _prove(leg in LEGS, f"leg {leg!r} is not one of {LEGS}")
+    k, n = frontier["verdicts"]["control_readings"][f"advr_{leg}"]["recall_counts"]["taught"]
+    _prove_count("k", k)
+    _prove_count("n", n)
+    _prove(0 <= k <= n and n > 0, f"control taught recall {k}/{n} is not a count out of n > 0")
+    return F_Y * (k / n), k, n
+
+
+def _frontier_leg(key):
+    return key.rsplit("_", 1)[0]
+
+
+def _tally(strings):
+    strings = list(strings)
+    return {name: sum(1 for s in strings if s == name) for name in _TALLY_NAMES}
+
+
+def _is_count_pair(pair):
+    return (
+        isinstance(pair, list)
+        and len(pair) == len(("k", "n"))
+        and all(isinstance(x, int) and not isinstance(x, bool) for x in pair)
+        and 0 <= pair[0] <= pair[-1]
+        and pair[-1] > 0
+    )
+
+
+def _control_readings(frontier):
+    """``{leg: {"taught": [k, n], "heldout": [k, n]}}`` from the record, or None if malformed."""
+    readings = (frontier.get("verdicts") or {}).get("control_readings")
+    out = {}
+    for leg in LEGS:
+        entry = readings.get(f"advr_{leg}") if isinstance(readings, dict) else None
+        counts = entry.get("recall_counts") if isinstance(entry, dict) else None
+        if not isinstance(counts, dict):
+            return None
+        if not all(_is_count_pair(counts.get(side)) for side in ("taught", "heldout")):
+            return None
+        out[leg] = {side: list(counts[side]) for side in ("taught", "heldout")}
+    return out
+
+
+def _result(verdict, reasons, admitted=(), readings=None):
+    _prove(verdict in VERDICTS, f"admission verdict {verdict!r} outside {VERDICTS}")
+    return {
+        "verdict": verdict,
+        "reasons": list(reasons),
+        "admitted_point_keys": list(admitted),
+        "control_readings": readings or {},
+    }
+
+
+def _inconclusive(reason):
+    return _result("INCONCLUSIVE", [f"{reason} — could not tell, so not MOOT"])
+
+
+def _leg_line(leg, readings):
+    t, h = readings[leg]["taught"], readings[leg]["heldout"]
+    return f"advr_{leg} control recall taught {t[0]}/{t[1]}, heldout {h[0]}/{h[1]}"
+
+
+def admission(frontier):
+    """THE ADMISSION CONTRACT (ADMIT-02). Returns ``{verdict, reasons, admitted_point_keys,
+    control_readings}``, verdict in ``VERDICTS``. First hit returns, strictly in this order:
+
+    (1a-1c) INCONCLUSIVE on an absent / mis-keyed / mis-shaped record, a verdict string outside
+    PASS / FAIL / INCONCLUSIVE / REFUSED, non-list reasons, or tallies that do not re-derive —
+    returned, never raised (T-29-14). (2) ADMITTED iff >= 1 stored PASS, naming every PASS key in
+    POINT_KEYS() order (D-06). (3) CANDIDATE-UNREPLICATED (D-15 option 2) iff some INCONCLUSIVE is
+    the gate's replication-pending candidate. (4) REFUSED iff every point is REFUSED (D-07: the
+    frontier could not be measured). (5) MOOT, naming every fully-REFUSED leg (D-08).
+    """
+    # (1a) shape
+    if not isinstance(frontier, dict):
+        return _inconclusive("frontier record absent")
+    keys = POINT_KEYS()
+    points = frontier.get("points")
+    if (
+        frontier.get("point_keys") != list(keys)
+        or not isinstance(points, dict)
+        or set(points) != set(keys)
+    ):
+        return _inconclusive(
+            f"point keys / entries do not equal the {EXPECTED_POINTS} pre-registered keys"
+        )
+    malformed = [
+        k
+        for k in keys
+        if not (
+            isinstance(points[k], dict)
+            and isinstance(points[k].get("verdict"), dict)
+            and "verdict" in points[k]["verdict"]
+        )
+    ]
+    if malformed:
+        return _inconclusive(f"point entries without a verdict dict: {malformed}")
+    readings = _control_readings(frontier)
+    if readings is None:
+        return _inconclusive("control_readings lack advr [k, n] counts for every leg")
+    # (1b) closed verdict domain + reasons type
+    strings = {k: point_verdict_string(points[k]) for k in keys}
+    outside = {k: s for k, s in strings.items() if s not in _TALLY_NAMES}
+    if outside:
+        return _inconclusive(f"verdict string(s) outside {_TALLY_NAMES}: {outside}")
+    bad_reasons = [
+        k
+        for k in keys
+        if strings[k] in V4_VERDICTS
+        and not (
+            isinstance(points[k]["verdict"].get("reasons"), list)
+            and all(isinstance(r, str) for r in points[k]["verdict"]["reasons"])
+        )
+    ]
+    if bad_reasons:
+        return _inconclusive(f"verdict.reasons is not a list of str on {bad_reasons}")
+    # (1c) tallies re-derive
+    stored = frontier.get("verdicts") or {}
+    tally = _tally(strings.values())
+    by_leg = {}
+    for k in keys:
+        by_leg.setdefault(_frontier_leg(k), []).append(strings[k])
+    tally_by_leg = {leg: _tally(values) for leg, values in by_leg.items()}
+    if tally != stored.get("tallies") or tally_by_leg != stored.get("tallies_by_leg"):
+        return _inconclusive("verdicts.tallies / tallies_by_leg do not re-derive from the entries")
+
+    # (2) ADMITTED
+    passing = [k for k in keys if strings[k] == "PASS"]
+    if passing:
+        return _result(
+            "ADMITTED",
+            [f"{len(passing)} of {EXPECTED_POINTS} points PASS: {passing}; tallies {tally}"],
+            passing,
+            readings,
+        )
+    # (3) CANDIDATE-UNREPLICATED — only INCONCLUSIVE strings reach the frozen rule.
+    candidates = [
+        k
+        for k in keys
+        if strings[k] == "INCONCLUSIVE"
+        and mitigation_gate.promote_to_full_fidelity(
+            verdict=strings[k],
+            reasons=points[k]["verdict"]["reasons"],
+            curve_k=CURVE_K,
+            full_k=FULL_K,
+        )[0]
+    ]
+    if candidates:
+        return _result(
+            CANDIDATE_UNREPLICATED,
+            [
+                f"{len(candidates)} point(s) cleared (a)(b)(c) with replication pending: "
+                f"{candidates}; tallies {tally}",
+                "no promotion is pre-registered (D-15 option 2): a candidate, never MOOT",
+            ],
+            (),
+            readings,
+        )
+    lines = [_leg_line(leg, readings) for leg in LEGS]
+    # (4) REFUSED
+    if tally[REFUSED] == EXPECTED_POINTS:
+        return _result(
+            REFUSED,
+            [
+                f"all {EXPECTED_POINTS} points REFUSED: the frontier could not be measured "
+                "(not 'the mitigation held')",
+                *lines,
+            ],
+            (),
+            readings,
+        )
+    # (5) MOOT
+    reasons = [f"0 of {EXPECTED_POINTS} points PASS; tallies {tally}"]
+    for leg, line in zip(LEGS, lines):
+        if tally_by_leg[f"advr_{leg}"][REFUSED] == len(leg_keys(leg)):
+            reasons.append(
+                f"advr_{leg} fully REFUSED ({line}); MOOT does not extend to that capacity"
+            )
+    reasons.append("MOOT: no measured point cleared the frontier — nothing to relearn")
+    return _result("MOOT", reasons, (), readings)
+
+
+# =================================================================================================
+# (10) THE SCOPE RULE (D-10, PREREG-02).
+# =================================================================================================
+
+SCOPE_RULE = {
+    "ADMITTED": "run RELRN-06..09 on each of admitted_point_keys",
+    "MOOT": "RELRN-06..09 ship as a MOOT named limitation",
+    REFUSED: "RELRN-06..09 ship as a named limitation: the frontier could not be measured",
+    CANDIDATE_UNREPLICATED: (
+        "RELRN-06..09 ship as a named limitation: candidate cleared (a)(b)(c), replication not "
+        "pre-registered"
+    ),
+    "INCONCLUSIVE": "refuse to proceed: the frontier record is malformed",
+}
+
+
+def relearning_scope(admission_result):
+    """D-10 scope for an ``admission()`` result; refuses (SystemExit) on INCONCLUSIVE."""
+    verdict = admission_result["verdict"]
+    _prove(verdict in VERDICTS, f"admission verdict {verdict!r} outside {VERDICTS}")
+    _prove(verdict != "INCONCLUSIVE", SCOPE_RULE["INCONCLUSIVE"])
+    return {
+        "verdict": verdict,
+        "rule": SCOPE_RULE[verdict],
+        "relearn_point_keys": tuple(admission_result["admitted_point_keys"])
+        if verdict == "ADMITTED"
+        else (),
+    }
