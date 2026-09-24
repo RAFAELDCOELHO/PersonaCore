@@ -4,6 +4,16 @@
 
 PersonaCore is a conversational AI assistant where **all** memory and personalization live in the model weights — no databases, no vector stores, no external files. The model learns who you are by updating its own parameters, making weight-based memory a privacy guarantee by design. The entire stack (GPT-style transformer decoder, BPE tokenizer, LoRA adapters, EWC continual learning) is built from scratch in PyTorch and runs fully on-device. It is an elite CS-undergraduate portfolio project intended to demonstrate deep ML fundamentals, a genuinely novel approach, and a working demo.
 
+## Current Milestone: v5.0 Replay-Bearing Adversarial Re-run and Relearning Validation
+
+**Goal:** Test condition (c) against the adversarial arm's ratio instead of its no-replay recipe, and — if the re-run admits any point — measure the relearning attack on it.
+
+**Target features:**
+- Adversarial arm retrained **with replay** against its **own** σ=0 control (WR-05), its 12 points re-measured under the frozen v4.0 gate (~25-30 h MPS at Phase 25's pace)
+- Pre-registered conditional scope, committed now before any real point exists: every admitted point gets RELRN-02..05 — the "if admitted, then relearn" rule is a scope rule, not a post-hoc decision
+- A cost probe of the relearning leg on MPS before the full budget is committed (only the apparatus was ever proven, never its cost)
+- v5.0-owned debt folded in: IN-07, TD-16-R1, P22-WARNING-4/5, TD-17-SUMMARY-FRONTMATTER
+
 ## Current State (v4.0 shipped 2026-09-22)
 
 **What shipped:** the mitigation v3.0's audit called for — and the frontier came back empty, which
@@ -331,27 +341,21 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [x] Black-box adversarial extraction audit — _Validated in Phase 18, **and it falsified the project's privacy claim.** Programmatic attacks at 42,480 draws per arm against an adapter-off control at identical budget returned `LEAKAGE_DEMONSTRATED` — 92/104 = 88.5%, 95% lower bound 0.8231, against a base arm at exactly `0/104`. The demo toggle was corrected in README, `docs/REPORT.md` and the UI to read **availability, not authorization**. Carries a retroactive scope limit from Phase 19 on any conclusion resting on rank alone — v3.0_
 - [x] Selective erasure of a taught fact from the weights — _Attempted in Phase 19 under a gate committed at `23a830c` before Phase 16 ran; the committed `erasure_succeeded` was called once and returned **`FAILURE`**. M1 rank-1 ablation zeroed 78 of 288 components: condition (a) cleared exactly on its blind-calibrated floor with zero headroom (0/27 questions, 1,296 draws), **all seven gated non-targets failed** (four at total generation loss), and 77.6% of the dialogue adaptation was destroyed. Published unsoftened: **selective erasure is not selective at 331,776 parameters.** Co-headline: the rank/exposure instrument read rank 1 at ceiling on all seven ruined facts while generation collapsed underneath it. Ship decision `DO NOT SHIP` — withholds one claim, withdraws no measurement — v3.0_
 
-### Active
-
-<!-- Next milestone not yet opened. The v5.0 candidate (ROADMAP `## Milestones`) is the replay-bearing adversarial re-run. -->
-
-- [ ] Replay-bearing adversarial re-run: retrain the adversarial arm WITH replay and re-measure the 12 points, so condition (c) is tested against the ratio instead of the recipe; pin its own σ=0 control before any `adv_*` admission (WR-05)
-- [ ] Relearning validation on an admitted point (RELRN-02..05): cost-to-recovery curve, its qualification of the verdict, structural budget/seed enforcement, disjoint recovery fixture — the apparatus exists (Phase 27) and waits for a point the gate admits
-
-ilestone's longest dependency chain and it is design work, not code (Phase 20+) — _Validated in v4.0 (Phase 21): "one taught fact", multiplicity exactly 1 by construction, δ a literal._
+- [x] DP-SGD from scratch on the LoRA gradients (per-example clipping + Gaussian noise, (ε, δ) accounting), with its per-example wall-clock overhead **measured on the M3 before the sweep budget is pre-registered** (Phase 20+) — _Validated in v4.0 (Phases 22, 23): `vmap(grad(functional_call))` per-example clipping at 1.07× (B=8) / 1.02× (B=64) over a batched step, `epsilon_for`/`sigma_for` accountant, four silent-non-privacy failure modes turned into refusals._
+- [x] Adversarial extraction-aware training against the Phase 18 attack suite, attack intensity as the sweep axis (Phase 20+) — _Validated in v4.0 (Phase 24): training-visible and held-out attack families split and disclosed, `refusal.by_family` recorded per point; trains with no replay (recipe confound, v5.0)._
+- [x] Retrained unmitigated control arm at identical budget and seed protocol (Phase 20+) — _Validated in v4.0 (Phase 23, CTRL-03): five fresh controls at identical budget and seed; the adversarial arm's own control is still owed (WR-05, v5.0)._
+- [x] Define the **privacy unit** before any accountant is written — a fact is carried by 22 rendered rows (measured), and `get_batch_memmap_masked` draws overlapping windows with replacement over a flat concatenated bin, so an example-level ε bounds nothing about a fact. This is the milestone's longest dependency chain and it is design work, not code (Phase 20+) — _Validated in v4.0 (Phase 21): "one taught fact", multiplicity exactly 1 by construction, δ a literal._
 - [x] Privacy/utility frontier for both arms with a pre-registered **three-condition** existence gate: ∃ a curve point with extraction ≤ X **and** taught-fact recall ≥ Y **and** general capability ≥ C, all three committed before any point is measured (Phase 20+) — _Validated in v4.0 (Phases 20, 25): the gate was committed first and returned `null-at-both-capacities` — the existential is answered NO with its denominators (0 of 32 DP, 0 of 6 adversarial + 6 refused)._
 - [x] Relearning attack as adversarial validation — absolute recovery ceiling as the binary gate (recall ≤ X within fixed budget Z), plus cost-to-recovery curve against a never-taught fresh adapter at identical budget and seed (Phase 20+) — _Validated in v4.0 (Phases 24, 25): the second arm and its held-out attack family exist and were swept over 12 points; published as recipe-confounded (no replay) — no conclusion about the adversarial ratio is drawn (v5.0 candidate)._
 
 ### Active
 
-<!-- Milestone v4.0: Leakage Mitigation and Relearning Validation — REQ-IDs land in REQUIREMENTS.md. -->
+<!-- Milestone v5.0: Replay-Bearing Adversarial Re-run and Relearning Validation — REQ-IDs land in REQUIREMENTS.md (appended below the v4.0 sections, never overwritten). -->
 
-- [ ] DP-SGD from scratch on the LoRA gradients (per-example clipping + Gaussian noise, (ε, δ) accounting), with its per-example wall-clock overhead **measured on the M3 before the sweep budget is pre-registered** (Phase 20+)
-- [ ] Adversarial extraction-aware training against the Phase 18 attack suite, attack intensity as the sweep axis (Phase 20+)
-- [ ] Retrained unmitigated control arm at identical budget and seed protocol — the baseline the frontier is read against, since v2.0's published recall belongs to a different run (Phase 20+)
-- [ ] Define the **privacy unit** before any accountant is written — a fact is carried by 22 rendered rows (measured), and `get_batch_memmap_masked` draws overlapping windows with replacement over a flat concatenated bin, so an example-level ε bounds nothing about a fact. This is the milestone's longest dependency chain and it is design work, not code (Phase 20+)
-- [ ] Privacy/utility frontier for both arms with a pre-registered **three-condition** existence gate: ∃ a curve point with extraction ≤ X **and** taught-fact recall ≥ Y **and** general capability ≥ C, all three committed before any point is measured (Phase 20+)
-- [ ] Relearning attack as adversarial validation — absolute recovery ceiling as the binary gate (recall ≤ X within fixed budget Z), plus cost-to-recovery curve against a never-taught fresh adapter at identical budget and seed (Phase 20+)
+- [ ] Replay-bearing adversarial re-run: retrain the adversarial arm WITH replay and re-measure its 12 points under the frozen v4.0 gate, so condition (c) is tested against the ratio instead of the recipe; pin the arm's own σ=0 control before any `adv_*` admission (WR-05)
+- [ ] Pre-registered conditional scope, committed before any real point exists: every point the re-run admits gets RELRN-02..05 (cost-to-recovery curve, its qualification of the verdict, structural budget/seed enforcement, disjoint recovery fixture) — not a decision taken after seeing the admission
+- [ ] Measure the relearning leg's MPS cost with its own probe before the full v5.0 budget is committed — only the apparatus was ever proven (Phase 27, CPU), never its cost
+- [ ] Close the v5.0-owned ledger rows: IN-07, TD-16-R1, P22-WARNING-4/5, TD-17-SUMMARY-FRONTMATTER
 
 ### Out of Scope
 
@@ -434,4 +438,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Updated 2026-09-23 after the v4.0 milestone close — the published null, the empty frontier, the MOOT relearning gate; next milestone not yet opened.*
+*Updated 2026-09-24 — milestone v5.0 opened (replay-bearing adversarial re-run + pre-registered conditional relearning).*
