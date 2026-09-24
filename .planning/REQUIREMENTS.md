@@ -578,3 +578,84 @@ helper, 25 discharges the use.
 | RELRN-05 | Phase 27 | **NOT SATISFIED — named limitation:** not admitted by the gate; apparatus built and guarded, never exercised on a mitigated arm (`results/phase27_admission.json::apparatus.status == "not exercised"`, `reason == "gate read MOOT"`). Built as: the attacker corpus pre-registered in `scripts/phase27_prereg.py` and pinned by the two sha256s the record carries (`attacker_corpus.rows_sha256 24e96fa6a3714e02ec3e8239c8d160befa769561067b93151d9b654be7b72fcf`, `bin_sha256 f146d42637c69e9eb1e7ac2248c9056a7966aed48f6498fa9cdb6d3db02d147b`, `n_rows` 176 — `the eight locked facts' full teaching rows exactly as taught`, so the corpus definition IS the threat model), and the recovery fixture's disjointness COMPUTED: `disjointness.overlaps` teaching 0 / trained_attack 0 / attacker_corpus 0 over `checked` 104 question strings, `held_out_family` A2. Guards: `tests/test_phase27_prereg.py::test_attacker_corpus_sha_re_renders`, `tests/test_phase27_relearn.py::test_recovery_fixture_is_disjoint`; exercised end to end only on the CPU tiny fixture (`tests/test_phase27_relearn.py::test_the_live_path_is_wired_end_to_end`). Carried to Phase 28 as a named limitation (D-05). |
 | RPT-01 | Phase 28 | **SATISFIED (plans 28-04, 28-05, 28-06).** The v4.0 section in `docs/REPORT.md` between `<!-- PHASE28-REPORT-BEGIN/END -->` (publishing commit 3b63b7d, frozen under D-20 — `scripts/phase28_report.py write` never runs again; the only correction route is a dated continuation via `scripts/_addendum.py`) is rendered by `scripts/phase28_report.py` from `results/phase25_frontier.json` (`verdicts.capacity_branch` = null-at-both-capacities; `verdicts.arm_existentials` quoted verbatim), `results/phase27_admission.json` (`cleared_counts`; rows), `results/phase26_canary.json` and the phase23 records (`phase23_sigma_zero.json`, `phase23_cost.json`, `phase23_control_floor.json`); every template numeral is a binding (a missing binding raises), and `derived.sigma_for_eps4` proves `epsilon_for` before printing 15.289937507119. The standing expectation is quoted from `.planning/research/SUMMARY.md` at c673b4c and `tests/test_phase28_prereg.py` proves c673b4c precedes every `results/phase2[0-8]_*` first-add (`git merge-base --is-ancestor`). Guards: `tests/test_phase28_report.py` (`test_report_block_is_byte_identical`, `test_glance_block_is_byte_identical`, template numeral scan, obligation resolution by `len()` from the record, constants vs pins, provenance digests recomputed from bytes, confound, lead), `tests/test_phase28_prereg.py`, `tests/test_phase25_correction.py` (normalized register widened 2 → 5). README Results-at-a-glance bullets rendered by the same mechanism between `PHASE28-GLANCE` sentinels (D-11). The developer read both rendered blocks and approved with no wording change (2026-09-21, 28-06 Task 2). |
 | RPT-03 | Phase 28 | **SATISFIED (plans 28-01, 28-03).** `[project].dependencies` equal at v1.0/v2.0/v3.0/HEAD by `tests/test_package.py::test_runtime_dependencies_identical_across_four_milestones` (tomllib; commit d45eaec); the sha256 pin stays as a change detector under its true name (D-26 rename, dd087f7); SC3's sha256 clause is recorded false as written (5065bc5 added `license = "MIT"`, pin 81d07d5d → 15ffd6b5, deps unchanged; ledger row `SC3-SHA256-CLAUSE`). `results/phase28_ledger.json` (rows commit 841e7df; `close.ci_run` filled at the 28-07 close commit) carries one disposition per open item — v3.0 tech-debt and stale-stamp counts by `len()` over `rows` (measured: 16 / 6, equal to the parsed `tech_debt:` block of `v3.0-MILESTONE-AUDIT.md` and the body rows of STATE.md's "6 items acknowledged and deferred" table; 69 rows in all, `close` outside the rows digest) — closed domain guarded by `tests/test_phase28_ledger.py`; CI run 35770563251 green on `origin/main` at head d2dcbe2bb8ec1dac5db4543e877681db3fd577c5, which contains the publishing commit 3b63b7d (D-38; the developer pushed, Claude never ran `git push`). |
+
+---
+
+# Requirements — Milestone v5.0: Replay-Bearing Adversarial Re-run and Relearning Validation
+
+<!-- APPENDED 2026-09-24. Everything above this rule is the v4.0 record — a frozen live input of
+scripts/phase28_report.py and the 25-07 sentinel guards; it is never edited or collapsed. -->
+
+**Defined:** 2026-09-24
+**Core value:** personalization lives in the weights — v5.0 tests condition (c) against the
+adversarial arm's ratio instead of its no-replay recipe, and measures relearning on any point the
+re-run admits.
+
+## v5.0 Requirements
+
+### Pre-registration (PREREG)
+
+- [ ] **PREREG-01**: A v5.0 pre-registration module, ancestry-guarded and committed before any v5.0 point record exists, fixes new point keys over the frozen `ADVERSARIAL_RATIO_GRID`, the record paths, and the frozen v4.0 gate — imported, never copied
+- [ ] **PREREG-02**: The conditional scope rule is committed in the same module before any point runs: every point the v5.0 verdict admits runs RELRN-06..09; zero admitted ⇒ RELRN-06..09 ship as a MOOT named limitation — a scope rule, not a post-hoc decision
+- [ ] **PREREG-03**: An unlearnable own control (recall floors outside (0,1], the v4.0 adv_n64 failure) is pre-registered as REFUSED with its reading reported — the recipe is not re-tuned after seeing it
+- [ ] **PREREG-04**: The replay recipe is pinned as `REPLAY_WINDOWS_PER_FACT`·n windows from `data/dialog_train.bin`, imported rather than re-typed, identical to the DP arms
+
+### Cost probes (ARCAL)
+
+- [ ] **ARCAL-01**: One replay-bearing adversarial point is measured end to end on MPS (training + condition (c) + attack scoring) before the sweep budget is committed
+- [ ] **ARCAL-02**: One relearning leg is measured on MPS on a real adapter before the relearning budget is committed — Phase 27 proved only the apparatus, on CPU
+- [ ] **ARCAL-03**: The total v5.0 budget is committed from ARCAL-01/02, replacing the unmeasured ~25-30 h estimate
+
+### Replay-bearing adversarial recipe (ARECIPE)
+
+- [ ] **ARECIPE-01**: The adversarial arm receives replay through the train seam (the `is_dp` gate split); DP arms and the golden trajectory stay byte-unchanged
+- [ ] **ARECIPE-02**: The `MIN_REFUSAL_SCORED_TOKENS` mask-fraction calibration is re-derived at the replay-bearing recipe and committed before any scored point
+
+### Adversarial arm's own control (ACTRL)
+
+- [ ] **ACTRL-01**: The arm's own ratio-0 replay-bearing control, trained at identical budget and seed, is the sole source of recall floors, `control_gap` and relearning Z for adversarial points — never a DP-sourced reading (WR-05)
+- [ ] **ACTRL-02**: The control runs first in the schedule at both capacities
+
+### Re-measured frontier (AFRONT)
+
+- [ ] **AFRONT-01**: The 12 points (6 ratios × 2 capacities) are trained and scored unattended on MPS, per-point records write-once under the new keys
+- [ ] **AFRONT-02**: A new frontier record is assembled write-once; the verdict is computed by import of the frozen v4.0 gate; every v4.0 record stays byte-unchanged
+- [ ] **AFRONT-03**: The verdict states explicitly whether (c) now passes with replay, against v4.0's recipe-confounded reading
+
+### Admission continuation (ADMIT)
+
+- [ ] **ADMIT-01**: A continuation module reads the v5.0 frontier with its own expected point count and an arm-keyed `recall_threshold(frontier, leg, arm)`, leaving `phase27_prereg.py` untouched (its ancestry guard green)
+- [ ] **ADMIT-02**: Admission is called once and its record is write-once
+
+### Relearning on admitted points (RELRN)
+
+- [ ] **RELRN-06**: Cost-to-recovery curve against a never-taught fresh adapter at identical budget and seed, on each admitted point (carries RELRN-02)
+- [ ] **RELRN-07**: The curve's qualification of the verdict is published (carries RELRN-03)
+- [ ] **RELRN-08**: Budget and seed are structurally enforced on the admitted arm (carries RELRN-04)
+- [ ] **RELRN-09**: Recovery is measured on the disjoint recovery fixture (carries RELRN-05)
+
+### Carried debt (DEBT)
+
+- [ ] **DEBT-01**: IN-07 — the relearn test writes under a scratch `relearn._ROOT`, never the real `results/phase27_*` glob
+- [ ] **DEBT-02**: TD-16-R1 — the D-28 note is read verbatim from 16-CONTEXT.md at runtime, so an amended note reddens a test
+- [ ] **DEBT-03**: TD-17-SUMMARY-FRONTMATTER — the archived Phase-17 SUMMARY frontmatter validates
+- [ ] **DEBT-04**: P22-WARNING-4/5 re-recorded as a named limitation with its reason — no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01); zero code
+
+### Report and close (RPT)
+
+- [ ] **RPT-04**: The v5.0 section of `docs/REPORT.md` and the README glance is rendered from committed records under the numeral scan
+- [ ] **RPT-05**: Runtime dependencies are identical across every milestone tag
+- [ ] **RPT-06**: The milestone closes on a green CI run of the developer's push (D-38)
+
+## v5.0 Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| New DP sweep or accountant changes | v5.0 re-measures the adversarial arm only; no v5.0 number uses ε |
+| New ratio values | The frozen `ADVERSARIAL_RATIO_GRID` is the axis; changing it would re-open the gate |
+| Re-scoring or rewriting v4.0 records | Write-once; v5.0 writes new keys and a new frontier |
+
+## v5.0 Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
