@@ -56,6 +56,8 @@ metrics:
   tasks: 3
   files: 12
   completed: 2026-08-14
+duration: 70min
+completed: 2026-08-14
 ---
 
 # Phase 17 Plan 09: The Isolation Matrix Run and the Cleared Gate Summary

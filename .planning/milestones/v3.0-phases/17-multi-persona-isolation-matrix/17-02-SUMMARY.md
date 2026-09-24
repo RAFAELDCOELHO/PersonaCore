@@ -45,6 +45,8 @@ metrics:
   tasks: 2
   files: 3
   completed: 2026-08-14
+duration: 17min
+completed: 2026-08-14
 ---
 
 # Phase 17 Plan 02: Widen the Training Instrument, Pin the ISO-06 Fix Summary

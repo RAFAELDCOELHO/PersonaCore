@@ -52,6 +52,8 @@ metrics:
   tasks: 2
   files: 3
   completed: 2026-08-14
+duration: 41min
+completed: 2026-08-14
 ---
 
 # Phase 17 Plan 05: ISO-01 Pre-Flight Gate Summary

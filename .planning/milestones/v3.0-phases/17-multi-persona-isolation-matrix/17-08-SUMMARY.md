@@ -55,6 +55,8 @@ metrics:
   tasks: 3
   files: 2
   completed: 2026-08-14
+duration: 32min
+completed: 2026-08-14
 ---
 
 # Phase 17 Plan 08: The Report Mode, the Imported Gate and the D-10 Branch Summary

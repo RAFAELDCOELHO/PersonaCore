@@ -58,6 +58,8 @@ metrics:
   tasks: 3
   files: 15
   completed: 2026-08-15
+duration: 40min
+completed: 2026-08-15
 ---
 
 # Phase 17 Plan 10: The ISO-05 Replication Run Summary

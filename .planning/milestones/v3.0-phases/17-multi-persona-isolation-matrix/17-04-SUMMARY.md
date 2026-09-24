@@ -47,6 +47,8 @@ metrics:
   tasks: 3
   files: 4
   completed: 2026-08-14
+duration: 18min
+completed: 2026-08-14
 ---
 
 # Phase 17 Plan 04: Isolation Scoring Core Summary

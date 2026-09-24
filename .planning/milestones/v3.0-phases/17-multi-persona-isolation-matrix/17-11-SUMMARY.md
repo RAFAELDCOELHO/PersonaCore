@@ -50,6 +50,8 @@ metrics:
   tasks: 2
   files: 2
   completed: 2026-08-15
+duration: 25min
+completed: 2026-08-15
 ---
 
 # Phase 17 Plan 11: The ISO-05 Replication Mode and the Append-Only Writer Summary

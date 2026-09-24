@@ -50,6 +50,8 @@ metrics:
   tasks: 4
   files: 2
   completed: 2026-08-14
+duration: 28min
+completed: 2026-08-14
 ---
 
 # Phase 17 Plan 06: The ISO-04 Swap Canary and the Run Modes Summary

@@ -46,6 +46,8 @@ metrics:
   tasks: 2
   files: 2
   completed: 2026-08-14
+duration: 19min
+completed: 2026-08-14
 ---
 
 # Phase 17 Plan 03: Persona Material Summary

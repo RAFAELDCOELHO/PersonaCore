@@ -44,6 +44,8 @@ metrics:
   tasks: 2
   files: 3
   completed: 2026-08-14
+duration: 60min
+completed: 2026-08-14
 ---
 
 # Phase 17 Plan 07: ISO-01 Pre-Flight Run and GO Verdict Summary
