@@ -1,0 +1,366 @@
+"""Plan 29-01: the v5.0 pre-registration, frozen by ancestry and checked against its sources.
+
+What this file proves, CPU-only:
+- ancestry: every commit touching scripts/phase29_prereg.py precedes the first-add of every
+  tracked results/phase30_* .. phase34_* file (honest-green with none tracked);
+- the pathspecs are DERIVED from V5_RESULT_PATHS, disjoint from every v4.0 path, and no
+  probe/calibration path parses as a point key;
+- the 12 keys wrap phase25_record.point_key, every v4.0 parser refuses them, and leg_keys is the
+  D-12 short-circuit set;
+- the gate route, F_Y, the grid and the floor-refusal markers are imported by reference (`is`);
+- the module imports without torch, and replay_windows is the DP call site's expression;
+- control_is_unlearnable agrees with the route's floor refusal on both sides of the boundary,
+  and the REFUSED record carries counts, the recipe and the v4.0 adv_n64 reading re-read from the
+  frontier;
+- no retry/alternate key or name is exposed (D-14).
+Nothing here writes under results/: a results/phase3* file would start the ancestry clock.
+"""
+
+import fnmatch
+import json
+import pathlib
+import re
+import subprocess
+import sys
+
+import pytest
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_SCRIPTS = _ROOT / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+_SRC = _ROOT / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+import mitigation_budget  # noqa: E402  (scripts/ is not a package)
+import mitigation_gate  # noqa: E402  (same)
+import phase20_gate_coverage  # noqa: E402  (same)
+import phase25_condition_c  # noqa: E402  (same)
+import phase25_promotion  # noqa: E402  (same)
+import phase25_record  # noqa: E402  (same)
+import phase27_prereg  # noqa: E402  (same)
+import phase29_prereg  # noqa: E402  (same)
+
+PREREG = "scripts/phase29_prereg.py"
+FRONTIER = _ROOT / "results" / "phase25_frontier.json"
+_RECIPE = {"replay_windows": 32, "n_facts": 8, "seed": 1337, "max_steps": 200}
+
+
+def _git(*args):
+    """Run git inside the repository and return its stdout, raising on a non-zero exit."""
+    return subprocess.run(
+        ("git", *args), cwd=_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+@pytest.fixture(scope="module")
+def frontier():
+    return json.loads(FRONTIER.read_text(encoding="utf-8"))
+
+
+# =================================================================================================
+# (1) ANCESTRY (PREREG-01 SC1, T-29-01).
+# =================================================================================================
+
+
+def _assert_frozen_before(prereg_artifact, tracked):
+    """The Phase-18 mould: every commit touching `prereg_artifact` is a STRICT ancestor of the
+    earliest add of every path in `tracked`; honest with zero tracked paths."""
+    assert _git("rev-parse", "--is-shallow-repository") == "false", (
+        "shallow clone: the pre-registration commit objects are absent, so this guard cannot "
+        "distinguish 'the ordering holds' from 'the ordering was never checked'. "
+        "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+    )
+    prereg_commits = _git("log", "--format=%H", "--", prereg_artifact).split()
+    assert prereg_commits, f"{prereg_artifact} has no commits — green and blind"
+
+    checked = 0
+    for artifact in tracked:
+        adds = _git("log", "--diff-filter=A", "--format=%H", "--", artifact).split()
+        # git log is newest-first, so the commit that ADDED the file is the last entry. Taking the
+        # earliest add is what makes a delete-and-re-add cycle unable to launder the ordering.
+        first_add = adds[-1]
+        for prereg in prereg_commits:
+            assert prereg != first_add, (
+                f"{prereg_artifact} and {artifact} were committed in the SAME commit {prereg} — "
+                "the pre-registration must land STRICTLY BEFORE the artifact it pins, or it is "
+                "not a pre-registration at all. `git merge-base --is-ancestor X X` exits 0, so "
+                "the ancestry check below cannot see this on its own."
+            )
+            subprocess.run(
+                ("git", "merge-base", "--is-ancestor", prereg, first_add),
+                cwd=_ROOT,
+                check=True,
+            )
+            checked += 1
+
+    assert checked == len(prereg_commits) * len(tracked), (
+        f"checked {checked} pairs but {len(prereg_commits)} pre-registration commit(s) x "
+        f"{len(tracked)} tracked artifact(s) is {len(prereg_commits) * len(tracked)}"
+    )
+    assert bool(checked) == bool(tracked), (
+        f"checked {checked} pair(s) against {len(tracked)} tracked artifact(s) — those disagree"
+    )
+
+
+def test_phase29_prereg_is_frozen_before_every_v5_result():
+    tracked = sorted(
+        {
+            path
+            for spec in phase29_prereg.ARTIFACT_PATHSPECS
+            for path in _git("ls-files", spec).split()
+        }
+    )
+    _assert_frozen_before(PREREG, tracked)
+
+
+# =================================================================================================
+# (2) PATHS (D-02, D-03).
+# =================================================================================================
+
+
+def test_pathspecs_are_derived_and_cover_results_phase30_to_34():
+    p = phase29_prereg
+    expected = tuple(f"results/phase3{n}_*" for n in range(5))
+    assert p.ARTIFACT_PATHSPECS == expected
+    assert p.ARTIFACT_PATHSPECS == tuple(
+        sorted({path.split("_", 1)[0] + "_*" for path in p.V5_RESULT_PATHS})
+    )
+    for path in p.V5_RESULT_PATHS:
+        assert any(fnmatch.fnmatch(path, spec) for spec in expected), path
+
+
+def test_paths_are_distinct_from_every_v4_path():
+    tracked = _git("ls-files", "results").split()
+    assert tracked, "git ls-files results returned nothing — the disjointness check is blind"
+    for path in phase29_prereg.V5_RESULT_PATHS:
+        assert not path.startswith("results/phase2"), path
+        assert not [t for t in tracked if fnmatch.fnmatch(t, path)], path
+
+
+def test_no_probe_or_calibration_path_parses_as_a_point_key():
+    concrete = [p for p in phase29_prereg.V5_RESULT_PATHS if "*" not in p]
+    assert concrete
+    keys = phase29_prereg.POINT_KEYS()
+    for path in concrete:
+        stem = pathlib.PurePosixPath(path).stem.removeprefix("phase32_point_")
+        assert stem not in keys, path
+        with pytest.raises(SystemExit):
+            phase25_record.parse_point_key(stem)
+
+
+def test_point_record_path_is_proved_against_the_key_set():
+    key = phase29_prereg.POINT_KEYS()[0]
+    assert phase29_prereg.point_record_path(key) == f"results/phase32_point_{key}.json"
+    for bad in ("adv_n8_ratio0p000000", "advr_n8_ratio0p000000/../x", "calibration"):
+        with pytest.raises(SystemExit):
+            phase29_prereg.point_record_path(bad)
+
+
+# =================================================================================================
+# (3) KEYS (D-01, D-12, D-14).
+# =================================================================================================
+
+
+def test_keys_are_twelve_and_wrap_the_v4_renderer():
+    p = phase29_prereg
+    keys = p.POINT_KEYS()
+    assert len(keys) == len(set(keys)) == len(p.ADVR_ARMS) * len(p.RATIO_GRID) == 12
+    assert keys[0] == "advr_n8_ratio0p000000" and keys[-1] == "advr_n64_ratio1p909091"
+    rendered = iter(keys)
+    for arm in p.ADVR_ARMS:
+        twin = arm.replace("advr", "adv", 1)
+        for ratio in p.RATIO_GRID:
+            key = next(rendered)
+            assert key.replace("advr", "adv", 1) == phase25_record.point_key(twin, ratio), key
+
+
+def test_keys_are_refused_by_every_v4_parser():
+    for key in phase29_prereg.POINT_KEYS():
+        with pytest.raises(SystemExit):
+            phase25_record.parse_point_key(key)
+        with pytest.raises(SystemExit):
+            phase27_prereg.arm_of(key)
+
+
+@pytest.mark.parametrize(
+    ("arm", "ratio"),
+    [("adv_n8", 0.25), ("advr_n8", float("nan")), ("advr_n8", -0.25), ("advr_n16", 0.25)],
+)
+def test_keys_refuse_foreign_arms_and_bad_ratios(arm, ratio):
+    with pytest.raises(SystemExit):
+        phase29_prereg.point_key(arm, ratio)
+
+
+def test_keys_put_each_legs_control_first():
+    p = phase29_prereg
+    for arm, leg in zip(p.ADVR_ARMS, p.LEGS):
+        first = next(k for k in p.POINT_KEYS() if k.startswith(f"{arm}_"))
+        assert first == p.control_key(leg) == p.point_key(arm, 0.0)
+
+
+def test_leg_keys_are_the_d12_short_circuit_set():
+    p = phase29_prereg
+    joined = ()
+    for leg in p.LEGS:
+        keys = p.leg_keys(leg)
+        assert keys[0] == p.control_key(leg)
+        assert len(keys) == len(p.RATIO_GRID)
+        assert set(keys) <= set(p.POINT_KEYS())
+        assert not set(keys) & set(joined)
+        joined += keys
+    assert joined == tuple(p.POINT_KEYS())
+    with pytest.raises(SystemExit):
+        p.leg_keys("n16")
+    with pytest.raises(SystemExit):
+        p.control_key("n16")
+
+
+def test_no_retry_or_alternate_key_is_exposed():
+    p = phase29_prereg
+    keys = set(p.POINT_KEYS())
+    pattern = re.compile(r"advr_n\d+_ratio")
+    public = [name for name in dir(p) if not name.startswith("_")]
+    for name in public:
+        value = getattr(p, name)
+        strings = (
+            [value]
+            if isinstance(value, str)
+            else [v for v in value if isinstance(v, str)]
+            if isinstance(value, tuple)
+            else []
+        )
+        for s in strings:
+            if pattern.search(s):
+                assert s in keys, (name, s)
+    banned = re.compile(r"retry|alternate|rerun|retune", re.IGNORECASE)
+    assert not [name for name in public if banned.search(name)]
+
+
+# =================================================================================================
+# (4) BY REFERENCE AND CPU-ONLY (D-05, D-04).
+# =================================================================================================
+
+
+def test_constants_are_by_reference():
+    p = phase29_prereg
+    assert p.F_Y is mitigation_gate.F_Y
+    assert p.RATIO_GRID is mitigation_budget.ADVERSARIAL_RATIO_GRID
+    assert p.GATE_ROUTE is phase20_gate_coverage.corrected_point_verdict
+    assert p.COVERAGE_FLOOR_REFUSAL_MARKERS is phase25_promotion.COVERAGE_FLOOR_REFUSAL_MARKERS
+    assert p.RECORDS_AT_COMMIT == 0
+
+
+def test_the_prereg_imports_without_torch():
+    probe = (
+        "import sys; sys.path.insert(0, 'scripts'); import phase29_prereg; "
+        "print('torch' in sys.modules, 'teach_persona' in sys.modules)"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", probe], cwd=_ROOT, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.split() == ["False", "False"], out.stdout
+
+
+def test_replay_windows_equal_the_dp_expression():
+    import teach_persona  # torch at import — inside the test only
+
+    for n in (8, 64):
+        assert (
+            phase29_prereg.replay_windows(n)
+            == teach_persona.replay_window_budget(n) // teach_persona.BLOCK_SIZE
+            == teach_persona.REPLAY_WINDOWS_PER_FACT * n
+        )
+    assert (phase29_prereg.replay_windows(8), phase29_prereg.replay_windows(64)) == (32, 256)
+    for bad in (0, True, 8.0):
+        with pytest.raises(SystemExit):
+            phase29_prereg.replay_windows(bad)
+    resolved = [
+        getattr(teach_persona, name.split(".")[1]).parts[-2:]
+        for name in phase29_prereg.REPLAY_SOURCE
+    ]
+    assert resolved == [("data", "dialog_train.bin"), ("data", "dialog_train_mask.bin")]
+
+
+# =================================================================================================
+# (5) THE REFUSAL (D-11, D-12, D-13).
+# =================================================================================================
+
+
+def _route_kwargs(entry):
+    """tests/test_phase27_prereg.py's `_route_kwargs` shape."""
+    kwargs = {k: entry[k] for k in phase25_promotion.PIN_KWARGS if not k.startswith("sweep_")}
+    curve = entry["whole_curve_inputs"]
+    kwargs.update({k: curve[k] for k in curve if k.startswith("sweep_")})
+    kwargs["retention_floor_provenance"] = {
+        "regime": phase20_gate_coverage.ADAPTER_REGIME,
+        "seeds": phase25_condition_c.RETENTION_FLOOR_DISCLOSURE["seeds"],
+    }
+    return kwargs
+
+
+def test_unlearnable_predicate_agrees_with_the_route(frontier):
+    p = phase29_prereg
+    kwargs = _route_kwargs(frontier["points"]["adv_n64_ratio0p000000"]["verdict"])
+    kwargs["control_taught_recall"] = 1 / 1008
+
+    kwargs["control_heldout_recall"] = 0 / 648
+    assert p.control_is_unlearnable(1, 1008, 0, 648) is True
+    with pytest.raises(SystemExit) as exc:
+        p.GATE_ROUTE(**kwargs)
+    assert all(marker in str(exc.value) for marker in p.COVERAGE_FLOOR_REFUSAL_MARKERS)
+
+    kwargs["control_heldout_recall"] = 1 / 648
+    assert p.control_is_unlearnable(1, 1008, 1, 648) is False
+    try:
+        p.GATE_ROUTE(**kwargs)
+    except SystemExit as other:
+        assert not any(m in str(other) for m in p.COVERAGE_FLOOR_REFUSAL_MARKERS), other
+
+    assert p.control_is_unlearnable(0, 1008, 482, 648) is True
+    for bad in ((1.0, 1008, 0, 648), (True, 1008, 0, 648), (5, 4, 0, 648), (0, 0, 0, 648)):
+        with pytest.raises(SystemExit):
+            p.control_is_unlearnable(*bad)
+
+
+def test_v4_adv_n64_reading_re_reads_from_the_frontier(frontier):
+    counts = frontier["verdicts"]["control_readings"]["adv_n64"]["recall_counts"]
+    reading = phase29_prereg.V4_ADV_N64_READING
+    assert reading["taught"] == tuple(counts["taught"])
+    assert reading["heldout"] == tuple(counts["heldout"])
+
+
+def test_refused_record_shape():
+    p = phase29_prereg
+    key = p.POINT_KEYS()[7]
+    record = p.refused_record(key, taught=(1, 1008), heldout=(0, 648), recipe=_RECIPE)
+    assert set(record) == set(p.REFUSED_RECORD_FIELDS)
+    assert record["point_key"] == key
+    assert record["control_key"] == p.control_key("n64") and key in p.leg_keys("n64")
+    assert record["control_recall_counts"] == {"taught": [1, 1008], "heldout": [0, 648]}
+    assert record["recipe"] == _RECIPE
+    assert record["v4_adv_n64_reading"] is p.V4_ADV_N64_READING
+    assert record["rule"] == "PREREG-03"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"heldout": (482, 648)},  # learnable control: nothing to refuse
+        {"taught": (True, 1008)},  # a bool is not a count
+        {"key": "adv_n64_ratio0p250000"},  # outside POINT_KEYS()
+        {"recipe": {**_RECIPE, "lr": 1e-3}},  # an extra recipe key
+    ],
+)
+def test_refused_record_refuses(overrides):
+    args = {
+        "key": phase29_prereg.POINT_KEYS()[7],
+        "taught": (1, 1008),
+        "heldout": (0, 648),
+        "recipe": _RECIPE,
+        **overrides,
+    }
+    key = args.pop("key")
+    with pytest.raises(SystemExit):
+        phase29_prereg.refused_record(key, **args)
