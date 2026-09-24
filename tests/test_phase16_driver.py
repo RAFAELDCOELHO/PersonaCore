@@ -21,6 +21,7 @@ pre-registration constants MUST live in the committed driver for git history to 
 """
 
 import ast
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -33,6 +34,8 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = str(_REPO_ROOT / "scripts")
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
+
+import phase29_prereg  # noqa: E402
 
 _DRIVER_PATH = _REPO_ROOT / "scripts" / "phase16_persistence.py"
 _CONTEXT_PATH = (
@@ -1827,3 +1830,49 @@ def test_overwrite_statement_docstring_does_not_type_the_allowlist_size():
     module = importlib.util.module_from_spec(scoring)
     scoring.loader.exec_module(module)
     assert isinstance(len(module.PERSONA_ALLOWLIST), int) and len(module.PERSONA_ALLOWLIST) >= 1
+
+
+# ===== 29-03 — DEBT-02 / TD-16-R1: the D-28 note, read verbatim at runtime ======================
+
+_D28_SHA256 = "171725c69ff06241882a0d165c02172d80721b3b33d55ddf7c8bef8609ad4210"
+_D28_ANCHOR = "- **D-28:**"
+
+
+def _sha256(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def test_d28_note_is_read_verbatim_and_pinned():
+    note = driver.d28_note()
+    assert note == _context_blockquote(_D28_ANCHOR)
+    assert _sha256(note) == _D28_SHA256, (
+        "the D-28 READING QUALIFICATION in 16-CONTEXT.md was amended — a closed pre-registration "
+        "note must not change silently"
+    )
+
+
+def test_d28_arm_d_qualifier_unchanged_by_the_refactor():
+    assert driver.arm_d_qualifier() == _context_blockquote("- **D-25:**")
+
+
+def test_d28_report_absence_is_a_named_limitation():
+    match = re.search(r'\*"(.+?)"\*', driver.d28_note(), re.S)
+    assert match, 'the D-28 note has no *"..."* kernel span'
+    kernel = " ".join(match.group(1).split())
+    report = (_REPO_ROOT / "results/phase16_persistence_report.md").read_text(encoding="utf-8")
+    absent = kernel not in " ".join(report.split())
+    assert absent == ("TD-16-R1-REPORT" in phase29_prereg.NAMED_LIMITATIONS)
+    assert absent, "the published Phase-16 report was re-rendered with the D-28 kernel (D-17)"
+
+
+def test_d28_amended_note_reddens(monkeypatch, tmp_path):
+    real_bytes = _CONTEXT_PATH.read_bytes()
+    text = real_bytes.decode("utf-8")
+    head, tail = text.split(_D28_ANCHOR, 1)
+    target = tail.index("licenciou")
+    amended = head + _D28_ANCHOR + tail[:target] + "L" + tail[target + 1 :]
+    copy = tmp_path / "16-CONTEXT.md"
+    copy.write_text(amended, encoding="utf-8")
+    monkeypatch.setattr(driver, "_CONTEXT_PATH", copy)
+    assert _sha256(driver.d28_note()) != _D28_SHA256
+    assert _CONTEXT_PATH.read_bytes() == real_bytes
