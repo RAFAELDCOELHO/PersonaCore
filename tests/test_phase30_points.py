@@ -564,9 +564,20 @@ def _docstring_nodes(tree):
     }
 
 
+_V4_MODULES = ("phase25_points", "phase25_promotion")
+
+
 def _wr05_failures(source):
     tree = ast.parse(source)
     docstrings = _docstring_nodes(tree)
+    # Review WR-06: every name a v4.0 module is bound to, aliases included.
+    modules = set(_V4_MODULES) | {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name in _V4_MODULES
+    }
     failures = []
     for node in ast.walk(tree):
         line = getattr(node, "lineno", "?")
@@ -578,13 +589,19 @@ def _wr05_failures(source):
             isinstance(node, ast.Attribute)
             and node.attr in _V4_PARSERS
             and isinstance(node.value, ast.Name)
-            and node.value.id == "phase25_points"
+            and node.value.id in modules
         ):
-            failures.append(f"v4.0 parser phase25_points.{node.attr} at line {line}")
-        elif isinstance(node, ast.ImportFrom) and node.module in (
-            "phase25_points",
-            "phase25_promotion",
+            failures.append(f"v4.0 parser {node.value.id}.{node.attr} at line {line}")
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and node.args
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id in modules
         ):
+            failures.append(f"getattr on v4.0 module {node.args[0].id} at line {line}")
+        elif isinstance(node, ast.ImportFrom) and node.module in _V4_MODULES:
             failures += [
                 f"import {alias.name} from {node.module} at line {line}"
                 for alias in node.names
@@ -597,6 +614,14 @@ def _wr05_failures(source):
             and _DP_KEY.fullmatch(node.value)
         ):
             failures.append(f"dp key constant {node.value!r} at line {line}")
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in docstrings
+            and (node.value in _CARRIERS or node.value.startswith("dp_n"))
+        ):
+            # getattr / importlib spell a carrier as a string; "dp_n" + ... builds a dp key.
+            failures.append(f"carrier or dp-key string {node.value!r} at line {line}")
         elif (
             isinstance(node, ast.JoinedStr)
             and node.values
@@ -629,6 +654,11 @@ def test_ast_guard_planted_red_per_class(tmp_path):
         ("promotion.py", "\nfrom phase25_promotion import control_readings\n"),
         ("constant.py", f"\n_X = {dp_key!r}\n"),
         ("fstring.py", '\n_X = f"dp_n{8}"\n'),
+        # Review WR-06: an aliased import, getattr, and a concatenated dp key.
+        ("alias.py", '\nimport phase25_points as p25\n_X = p25.point_plan("adv_n8")\n'),
+        ("getattr.py", '\n_X = getattr(phase25_points, "control_key_for")\n'),
+        ("getattr_parser.py", '\n_X = getattr(phase25_points, "point_plan")\n'),
+        ("concat.py", '\n_X = "dp_n" + "8"\n'),
     ):
         planted = _planted(tmp_path, source, source + plant, name)
         assert _wr05_failures(planted), name
