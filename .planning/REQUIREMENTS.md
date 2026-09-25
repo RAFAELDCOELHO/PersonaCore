@@ -608,13 +608,13 @@ re-run admits.
 
 ### Replay-bearing adversarial recipe (ARECIPE)
 
-- [ ] **ARECIPE-01**: The adversarial arm receives replay through the train seam (the `is_dp` gate split); DP arms and the golden trajectory stay byte-unchanged
-- [ ] **ARECIPE-02**: The `MIN_REFUSAL_SCORED_TOKENS` mask-fraction calibration is re-derived at the replay-bearing recipe and committed before any scored point
+- [x] **ARECIPE-01**: The adversarial arm receives replay through the train seam (the `is_dp` gate split); DP arms and the golden trajectory stay byte-unchanged
+- [x] **ARECIPE-02**: The `MIN_REFUSAL_SCORED_TOKENS` mask-fraction calibration is re-derived at the replay-bearing recipe and committed before any scored point
 
 ### Adversarial arm's own control (ACTRL)
 
 - [ ] **ACTRL-01**: The arm's own ratio-0 replay-bearing control, trained at identical budget and seed, is the sole source of recall floors, `control_gap` and relearning Z for adversarial points — never a DP-sourced reading (WR-05)
-- [ ] **ACTRL-02**: The control runs first in the schedule at both capacities
+- [x] **ACTRL-02**: The control runs first in the schedule at both capacities
 
 ### Re-measured frontier (AFRONT)
 
@@ -666,10 +666,10 @@ re-run admits.
 | ARCAL-01 | Phase 31 | Pending |
 | ARCAL-02 | Phase 31 | Pending |
 | ARCAL-03 | Phase 31 | Pending |
-| ARECIPE-01 | Phase 30 | Pending |
-| ARECIPE-02 | Phase 30 | Pending |
-| ACTRL-01 | Phase 30 | Pending |
-| ACTRL-02 | Phase 30 | Pending |
+| ARECIPE-01 | Phase 30 | Complete |
+| ARECIPE-02 | Phase 30 | Complete |
+| ACTRL-01 | Phase 30 | Mechanism delivered (Phase 30); held unticked by developer ruling 2026-09-25 until first used on real data in Phase 32/33 |
+| ACTRL-02 | Phase 30 | Complete |
 | AFRONT-01 | Phase 32 | Pending |
 | AFRONT-02 | Phase 32 | Pending |
 | AFRONT-03 | Phase 32 | Pending |

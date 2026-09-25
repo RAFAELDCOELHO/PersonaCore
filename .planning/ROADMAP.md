@@ -184,7 +184,7 @@ graph rather than a paragraph.
 recipe, and — if the re-run admits any point — measure the relearning attack on it.
 
 - [x] **Phase 29: v5.0 Pre-Registration and Carried Debt** - Point keys, record paths, replay recipe, the unlearnable-control refusal and the conditional relearning scope rule committed before any v5.0 number exists; the four v5.0-owned debt items closed (completed 2026-09-24)
-- [ ] **Phase 30: Replay-Bearing Adversarial Recipe and Its Own Control** - The adversarial arm trains with replay through its own seam and is judged only against its own ratio-0 replay-bearing control
+- [x] **Phase 30: Replay-Bearing Adversarial Recipe and Its Own Control** - The adversarial arm trains with replay through its own seam and is judged only against its own ratio-0 replay-bearing control
 - [ ] **Phase 31: MPS Cost Probes and Budget Commitment** - One replay-bearing point and one relearning leg measured on MPS; the v5.0 budget committed from those measurements
 - [ ] **Phase 32: Replay-Bearing Frontier Re-run and Verdict** - The 12 adversarial points re-measured with replay and judged by importing the frozen v4.0 gate
 - [ ] **Phase 33: Admission and Relearning on Admitted Points** - Admission called once on the v5.0 frontier; relearning on every admitted point, or the pre-registered MOOT limitation if none
@@ -1234,19 +1234,19 @@ replay-bearing control, with the DP arms and the golden trajectory provably unto
 
 **Wave 1**
 
-- [ ] 30-01-PLAN.md — pre-split train() kwargs fixture committed first; `gets_replay` split of the `is_dp` gate; `advr_n8`/`advr_n64` arms + CLI refusal; D-04 measured replay draws (ARECIPE-01)
+- [x] 30-01-PLAN.md — pre-split train() kwargs fixture committed first; `gets_replay` split of the `is_dp` gate; `advr_n8`/`advr_n64` arms + CLI refusal; D-04 measured replay draws (ARECIPE-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 30-02-PLAN.md — v5.0 driver `scripts/phase30_points.py`: recipe identity, `SWEEP_SCHEDULE()` controls-first, own-control reader (WR-05 refusal), D-19 guard, AST guard (ACTRL-01, ACTRL-02, ARECIPE-02 refusal)
+- [x] 30-02-PLAN.md — v5.0 driver `scripts/phase30_points.py`: recipe identity, `SWEEP_SCHEDULE()` controls-first, own-control reader (WR-05 refusal), D-19 guard, AST guard (ACTRL-01, ACTRL-02, ARECIPE-02 refusal)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 30-03-PLAN.md — ARECIPE-02 calibration emitter (live D-05 re-derivation, D-08 refusal, descriptive mix) + D-11 ancestry and emitter-freeze guards; full suite
+- [x] 30-03-PLAN.md — ARECIPE-02 calibration emitter (live D-05 re-derivation, D-08 refusal, descriptive mix) + D-11 ancestry and emitter-freeze guards; full suite
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 30-04-PLAN.md — emit `results/phase30_calibration.json` from the clean tree, developer checkpoint, commit alone; phase gate
+- [x] 30-04-PLAN.md — emit `results/phase30_calibration.json` from the clean tree, developer checkpoint, commit alone; phase gate
 
 ### Phase 31: MPS Cost Probes and Budget Commitment
 
@@ -1368,7 +1368,7 @@ Next: `/gsd:plan-phase 20`.
 | Phase | Milestone | Plans Complete | Status | Completed |
 | ----- | --------- | -------------- | ------ | --------- |
 | 29. v5.0 Pre-Registration and Carried Debt | v5.0 | 4/4 | Complete | 2026-09-24 |
-| 30. Replay-Bearing Adversarial Recipe and Its Own Control | v5.0 | 0/TBD | Not started | - |
+| 30. Replay-Bearing Adversarial Recipe and Its Own Control | v5.0 | 4/4 | Complete | 2026-09-25 |
 | 31. MPS Cost Probes and Budget Commitment | v5.0 | 0/TBD | Not started | - |
 | 32. Replay-Bearing Frontier Re-run and Verdict | v5.0 | 0/TBD | Not started | - |
 | 33. Admission and Relearning on Admitted Points | v5.0 | 0/TBD | Not started | - |
