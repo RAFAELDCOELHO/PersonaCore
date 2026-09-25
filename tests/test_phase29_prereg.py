@@ -367,8 +367,11 @@ def test_refused_record_shape():
     assert record["control_key"] == p.control_key("n64") and key in p.leg_keys("n64")
     assert record["control_recall_counts"] == {"taught": [1, 1008], "heldout": [0, 648]}
     assert record["recipe"] == _RECIPE
-    assert record["v4_adv_n64_reading"] is p.V4_ADV_N64_READING
     assert record["rule"] == "PREREG-03"
+    # IN-01: equal to the pin but never the pin itself — annotating a record can't move it.
+    assert record["v4_adv_n64_reading"] == p.V4_ADV_N64_READING
+    record["v4_adv_n64_reading"]["heldout"] = (600, 648)
+    assert p.V4_ADV_N64_READING["heldout"] == (0, 648)
 
 
 @pytest.mark.parametrize(

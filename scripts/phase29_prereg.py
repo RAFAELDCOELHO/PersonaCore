@@ -262,7 +262,7 @@ def refused_record(key, *, taught, heldout, recipe):
         "control_key": control_key(leg),
         "control_recall_counts": {"taught": list(taught), "heldout": list(heldout)},
         "recipe": dict(recipe),
-        "v4_adv_n64_reading": V4_ADV_N64_READING,
+        "v4_adv_n64_reading": dict(V4_ADV_N64_READING),  # a copy: the pin is never aliased
         "rule": "PREREG-03",
     }
 
