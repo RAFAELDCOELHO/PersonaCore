@@ -613,6 +613,13 @@ def _v5_frontier(verdicts_by_key=None, control_counts_by_leg=None, reasons_by_ke
         else:
             entry = {"verdict": v}
         entry["reasons"] = list(reasons_by_key.get(k, []))
+        # The route kwargs a point graded against its leg's OWN advr control carries (CR-01).
+        leg = next(leg for leg in p.LEGS if k in p.leg_keys(leg))
+        rates = {side: kn[0] / kn[1] for side, kn in counts[leg].items()}
+        prefixes = ("control", "point") if k == p.control_key(leg) else ("control",)
+        for prefix in prefixes:
+            for side, rate in rates.items():
+                entry[f"{prefix}_{side}_recall"] = rate
         points[k] = {"verdict": entry}
     # Fresh lists per frontier: a mutating case must never leak into the shared _CONTROL.
     readings = {
@@ -770,6 +777,89 @@ def test_admission_inconclusive_takes_precedence(mutate):
     result = phase29_prereg.admission(mutate(_v5_frontier()))
     assert result["verdict"] == "INCONCLUSIVE", result
     assert result["admitted_point_keys"] == []
+
+
+_UNLEARNABLE_N64 = {"n8": _CONTROL, "n64": {"taught": [1, 1008], "heldout": [0, 648]}}
+_DP_N8 = {"taught": [790, 1008], "heldout": [346, 648]}  # v4.0 dp_n8 sigma=0 control counts
+
+
+def _unlearnable_all_fail():
+    return _v5_frontier(control_counts_by_leg=_UNLEARNABLE_N64)  # pre-fix: MOOT
+
+
+def _unlearnable_one_pass():
+    return _v5_frontier({_keys("n64")[2]: "PASS"}, _UNLEARNABLE_N64)  # pre-fix: ADMITTED
+
+
+def _unlearnable_candidate():
+    p = phase29_prereg
+    key = _keys("n64")[2]
+    verdicts = {k: p.REFUSED for k in _keys("n64")} | {key: "INCONCLUSIVE"}
+    return _v5_frontier(verdicts, _UNLEARNABLE_N64, {key: _MARKER_REASONS})
+
+
+def _pass_graded_against_dp():
+    key = _keys("n8")[2]
+    fr = _v5_frontier({key: "PASS"})
+    fr["points"][key]["verdict"]["control_taught_recall"] = 790 / 1008  # pre-fix: ADMITTED
+    return fr
+
+
+def _readings_copied_from_dp():
+    fr = _v5_frontier({_keys("n8")[1]: "PASS"})
+    fr["verdicts"]["control_readings"]["advr_n8"]["recall_counts"] = {
+        s: list(v) for s, v in _DP_N8.items()
+    }
+    return fr
+
+
+def _pass_without_control_kwargs():
+    key = _keys("n8")[1]
+    fr = _v5_frontier({key: "PASS"})
+    del fr["points"][key]["verdict"]["control_heldout_recall"]
+    return fr
+
+
+def _bool_control_kwarg():
+    key = _keys("n64")[3]
+    fr = _v5_frontier({key: "PASS"}, {"n8": _CONTROL, "n64": {"taught": [1, 1], "heldout": [1, 1]}})
+    fr["points"][key]["verdict"]["control_taught_recall"] = True  # True == 1.0, but not a rate
+    return fr
+
+
+def _refused_record_cites_foreign_control():
+    p = phase29_prereg
+    fr = _v5_frontier({k: p.REFUSED for k in _keys("n64")}, _UNLEARNABLE_N64)
+    fr["points"][_keys("n64")[1]]["verdict"]["control_recall_counts"] = dict(_DP_N8)
+    return fr
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        _unlearnable_all_fail,
+        _unlearnable_one_pass,
+        _unlearnable_candidate,
+        _pass_graded_against_dp,
+        _readings_copied_from_dp,
+        _pass_without_control_kwargs,
+        _bool_control_kwarg,
+        _refused_record_cites_foreign_control,
+    ],
+)
+def test_admission_reads_only_the_legs_own_control(build):
+    """CR-01 (D-06, D-11, D-12, WR-05): an unlearnable or foreign control never admits, never
+    reads CANDIDATE and never reads MOOT — the record contradicts its own counts: INCONCLUSIVE."""
+    result = phase29_prereg.admission(build())
+    assert result["verdict"] == "INCONCLUSIVE", result
+    assert result["admitted_point_keys"] == []
+
+
+def test_admission_learnable_leg_may_carry_route_refusals():
+    """A learnable leg's REFUSED points (the route's ceiling / retention refusals) stay legal."""
+    p = phase29_prereg
+    fr = _v5_frontier({_keys("n64")[4]: p.REFUSED, _keys("n8")[1]: "PASS"})
+    assert p.admission(fr)["admitted_point_keys"] == [_keys("n8")[1]]
 
 
 def test_admission_candidate_unreplicated_is_never_moot():

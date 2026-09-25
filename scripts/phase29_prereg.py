@@ -42,6 +42,7 @@ them); T-29-05 (re-typed constants — ``is`` tests + AST guards); T-29-06 (an �
 v5.0 number — accountant census).
 """
 
+import math
 import pathlib
 import sys
 
@@ -359,7 +360,9 @@ v4.0 shape so point_verdict_string and cleared_abc apply unchanged:
       points[<key>].verdict.early_return_reason (read as REFUSED)
   points[<key>].verdict.reasons: list of str, the route's reasons; the last one carries
       mitigation_gate.REPLICATION_PENDING_MARKER on a would-be PASS (GATE-08)
-  points[<key>].verdict.<route kwargs>: the corrected_point_verdict inputs
+  points[<key>].verdict.<route kwargs>: the corrected_point_verdict inputs; on every measured
+      (non-REFUSED) point control_taught_recall / control_heldout_recall are k/n of the leg's
+      own advr control counts below, and the control point's point_*_recall are those counts
   verdicts.tallies: {PASS, FAIL, INCONCLUSIVE, REFUSED: count}, re-derived by admission()
   verdicts.tallies_by_leg[<leg>]: the same per leg, <leg> = <key>.rsplit("_", 1)[0]
   verdicts.control_readings[<leg>].recall_counts.{taught, heldout}: [k, n] int counts of the
@@ -418,6 +421,53 @@ def _control_readings(frontier):
     return out
 
 
+def _is_rate(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _own_control_mismatch(frontier, points, strings, readings):
+    """(1d) The stored verdicts must re-derive from each leg's OWN advr ratio-0 control counts.
+
+    D-11/D-12: a control outside (0,1] REFUSES its whole leg, so a measured (non-REFUSED) point
+    beside it contradicts the record's own counts. D-06/WR-05: every measured point was graded
+    against ``F_Y`` x that control, so its stored ``control_*_recall`` must be the counts' k/n,
+    and the control point's own ``point_*_recall`` must be those counts — a point graded against
+    any other reading (a ``dp_*`` one included) is indistinguishable from a forgery. A REFUSED
+    point is checked on the fields it carries only (a D-12 short-circuit record was never routed).
+    A learnable leg MAY carry REFUSED points: the route also refuses on its ceiling and retention
+    floors, which D-11 does not own. Returns the first mismatch, or None.
+    """
+    for leg in LEGS:
+        t, h = readings[leg]["taught"], readings[leg]["heldout"]
+        _, k, n = recall_threshold(frontier, leg, "advr")
+        expected = {"taught": k / n, "heldout": h[0] / h[1]}
+        unlearnable = control_is_unlearnable(*t, *h)
+        for key in leg_keys(leg):
+            entry = points[key]["verdict"]
+            measured = strings[key] != REFUSED
+            if unlearnable and measured:
+                return (
+                    f"{key} reads {strings[key]} but advr_{leg}'s own control taught {t} / "
+                    f"heldout {h} is unlearnable: D-11/D-12 REFUSE the whole leg"
+                )
+            fields = {f"control_{side}_recall": side for side in expected}
+            if key == control_key(leg):
+                fields |= {f"point_{side}_recall": side for side in expected}
+            for field, side in fields.items():
+                if field not in entry and not measured:
+                    continue
+                value = entry.get(field)
+                if not (_is_rate(value) and math.isclose(value, expected[side], rel_tol=1e-12)):
+                    return (
+                        f"{key}.{field} {value!r} is not advr_{leg}'s own control reading "
+                        f"{expected[side]!r} (WR-05)"
+                    )
+            carried = entry.get("control_recall_counts")
+            if carried is not None and carried != readings[leg]:
+                return f"{key}.control_recall_counts {carried!r} is not advr_{leg}'s own control"
+    return None
+
+
 def _result(verdict, reasons, admitted=(), readings=None):
     _prove(verdict in VERDICTS, f"admission verdict {verdict!r} outside {VERDICTS}")
     return {
@@ -443,10 +493,15 @@ def admission(frontier):
 
     (1a-1c) INCONCLUSIVE on an absent / mis-keyed / mis-shaped record, a verdict string outside
     PASS / FAIL / INCONCLUSIVE / REFUSED, non-list reasons, or tallies that do not re-derive —
-    returned, never raised (T-29-14). (2) ADMITTED iff >= 1 stored PASS, naming every PASS key in
-    POINT_KEYS() order (D-06). (3) CANDIDATE-UNREPLICATED (D-15 option 2) iff some INCONCLUSIVE is
-    the gate's replication-pending candidate. (4) REFUSED iff every point is REFUSED (D-07: the
-    frontier could not be measured). (5) MOOT, naming every fully-REFUSED leg (D-08).
+    returned, never raised (T-29-14). (1d) INCONCLUSIVE when the stored verdicts do not re-derive
+    from each leg's OWN advr control: a measured point beside an unlearnable control (D-11/D-12
+    refuse the whole leg), or a point graded against any other reading (D-06/WR-05). An
+    unlearnable or foreign control therefore never reaches ADMITTED, CANDIDATE or MOOT; admission
+    reads stored verdicts and never re-labels them (D-06). (2) ADMITTED iff >= 1 stored PASS,
+    naming every PASS key in POINT_KEYS() order (D-06). (3) CANDIDATE-UNREPLICATED (D-15 option
+    2) iff some INCONCLUSIVE is the gate's replication-pending candidate. (4) REFUSED iff every
+    point is REFUSED (D-07: the frontier could not be measured). (5) MOOT, naming every
+    fully-REFUSED leg (D-08).
     """
     # (1a) shape
     if not isinstance(frontier, dict):
@@ -500,6 +555,10 @@ def admission(frontier):
     tally_by_leg = {leg: _tally(values) for leg, values in by_leg.items()}
     if tally != stored.get("tallies") or tally_by_leg != stored.get("tallies_by_leg"):
         return _inconclusive("verdicts.tallies / tallies_by_leg do not re-derive from the entries")
+    # (1d) the verdicts re-derive from each leg's OWN advr control (D-06, D-11, D-12, WR-05)
+    mismatch = _own_control_mismatch(frontier, points, strings, readings)
+    if mismatch:
+        return _inconclusive(mismatch)
 
     # (2) ADMITTED
     passing = [k for k in keys if strings[k] == "PASS"]
