@@ -22,6 +22,7 @@ findings:
   info: 4
   total: 11
 status: issues_found
+fix_status: partial  # CR-01, WR-01/02/04/05/06 fixed; WR-03 and IN-* carried to Phase 32
 ---
 
 # Phase 30: Code Review Report
@@ -61,6 +62,8 @@ the session scratchpad. No source, test or results file was modified.
 
 ### CR-01: The "tracked only" guard accepts a locally edited record
 
+**Fix status:** FIXED in a7d5c9d. `_tracked_json` reads `git show HEAD:<rel>` and refuses a file whose on-disk bytes differ from that blob, or that has no committed blob. Test fixtures now commit into a tmp git repo.
+
 **File:** `scripts/phase30_points.py:183-189` (reached from `calibration_record` :192, `require_calibrated_recipe` :204, `own_control` :218, and therefore `next_action` :264)
 
 **Issue:** `_tracked_json` checks only that `rel` is in the caller-supplied `tracked` list (i.e. `git ls-files`), then reads `(_ROOT / rel).read_text()`, which is the working-tree bytes. Its own refusal text says: "Only a committed record is read: one borrowed from the working tree could move after the fact." That is exactly the case it lets through. If a tracked file is modified and not committed, the guard still passes. SC2's "scoring refuses a point whose recipe differs from the calibration's" and D-16's control-recipe check then compare against bytes that no commit holds.
@@ -91,6 +94,8 @@ The tests fake `tracked` over a tmp `_ROOT` with no git repo, so they would need
 
 ### WR-01: The calibration's byte-identity "evidence (1)" is equal inputs to a pure function and never runs `build_arm_bins`
 
+**Fix status:** FIXED as a strengthened TEST in 8592610; the emitter and the record are untouched. `test_review_wr01_derive_reproduces_build_arm_bins_real_output` drives `train_arm` -> `build_arm_bins` for advr_n8 and adv_n8 at the top ratio, with `train()` spied out. It asserts that the written bins are byte-identical, and that derive()'s `build_bins` call matches the real call's episodes, kwargs and output bytes.
+
 **File:** `scripts/phase30_calibration.py:105-152`, `scripts/teach_persona.py:1264-1266`; the claim is committed in `results/phase30_calibration.json` `derivation.structural_reason`
 
 **Issue:** `arm_spec("advr_n8")` returns `arm_spec("adv_n8")` by call. `derive()` then feeds both triples into the same `tp.build_bins(...)` call, which it wrote out by hand ("Argument for argument, build_arm_bins' flat-branch call"). Byte equality is therefore guaranteed by construction. It can only fail if `arm_spec` diverges, which `test_replay_arms_mirror_their_adv_twin_spec` already pins. The claim it is filed under is "replay stays out of the teaching bin". That depends on the path that actually writes a trained arm's bins (`train_arm` → `build_arm_bins`), and `derive()` never calls it. The hand-copied argument list can also drift from `build_arm_bins`' real call with nothing going red.
@@ -104,6 +109,8 @@ derive OK, floor 15 identical True
 **Fix:** The record is write-once, so do not edit it. Instead, add a Phase-30 test that drives `train_arm("advr_n8", adversarial_ratio=grid[-1])` under `_e2e_env`, with `tp.train` spied (the `_capture` idiom already in `test_phase30_seam.py`). Hash the bins it actually wrote and compare them with the `adv_n8` twin's. Also add a test asserting that `derive()`'s `build_bins` kwargs equal the ones `build_arm_bins` passes, for example by spying `tp.build_bins` during a `build_arm_bins` call. That closes the drift of the hand-copied argument list. Record the correction as a dated continuation.
 
 ### WR-02: D-04 says "per step", but the test asserts only the run total, and the write-once record cites it as a per-step count
+
+**Fix status:** FIXED in 3562e52. Draws are bucketed per optimizer step and each bucket must equal `replay_windows(n)`. The test also asserts that the review's lopsided sequence fails the new check.
 
 **File:** `tests/test_phase30_seam.py:210-226`; cited in `results/phase30_calibration.json` `structural_reason` ("counts phase29_prereg.replay_windows(n) replay windows per step")
 
@@ -119,6 +126,8 @@ test predicate passes: True | per-step equality holds: False
 **Fix:** Bucket the draws by optimizer step. For example, wrap `on_draw` so that a teaching draw of `BATCH_SIZE` windows (one per step at accum=1) closes a bucket, then `assert per_step_replay == [replay_windows(n)] * tp.MAX_STEPS`.
 
 ### WR-03: An `advr` training run logs `replay_ratio=0.0` and never logs its replay count (SC1 says "logs")
+
+**Fix status:** NOT FIXED (developer ruling 2026-09-25). Carried to Phase 32 as a named item because the fix modifies scripts/teach_persona.py.
 
 **File:** `scripts/teach_persona.py:2054-2061` (the DP-only provenance print), `:2112-2123` (run provenance), `:2124-2132` (return blob)
 
@@ -137,6 +146,8 @@ passed in 3.20s
 
 ### WR-04: The D-16 "identical budget and seed" check reads the control's self-declared `recipe`, not what it actually trained with
 
+**Fix status:** FIXED in 8dd1d30. The check uses the real v4.0 record shape: `seed`, `training.train_config.seed`, `training.train_config.max_steps` and `composed_steps` must each equal the point's recipe. The replay-count check waits on WR-03.
+
 **File:** `scripts/phase30_points.py:234-238`
 
 **Issue:** `own_control` compares `record["recipe"]` with `point_recipe`, and nothing else from the control's training provenance. A control record whose `train_config.max_steps`, `seed` and `live_mechanism.composed_steps` show a different run is accepted, provided its `recipe` field was written correctly. D-16 says the check is "CHECKED AT READ TIME, per point … Not by construction". Comparing a field the writer declares is by construction.
@@ -150,6 +161,8 @@ accepted control trained at max_steps 7 seed 1 ; recipe says 200 1337
 **Fix:** In `own_control`, also require `record["seed"] == point_recipe["seed"]`, `record["train_config"]["max_steps"] == point_recipe["max_steps"]` and `record["live_mechanism"]["composed_steps"] == point_recipe["max_steps"]`. Once WR-03 lands, also check the recorded replay count against `point_recipe["replay_windows"]`, so the measured fields and the declared ones must agree.
 
 ### WR-05: `write_refused_records` is not atomic across files, so a failure part-way leaves the leg permanently unwritable
+
+**Fix status:** FIXED in 00bc4da. The records must be exactly one leg's non-control keys. Every blob is serialised before any write. An existing target is accepted only if it is byte-identical to its blob. Only the missing records are written, through `atomic_write_json`.
 
 **File:** `scripts/phase30_points.py:289-294`
 
@@ -166,6 +179,8 @@ retry: [phase30_points] REFUSING to overwrite existing record(s) ['/private/tmp/
 **Fix:** Serialise every blob first (`json.dumps` all of them, so a bad value fails before any write). On retry, accept a file that already exists only if it is byte-identical to the blob about to be written, and write only the missing ones. Also require that `set(records)` equals the leg's non-control keys.
 
 ### WR-06: The WR-05 AST guard misses an aliased import and `getattr`
+
+**Fix status:** FIXED in 28f8658. The guard now resolves aliased imports, flags `getattr` on phase25_points and phase25_promotion, and flags any non-docstring string that equals a carrier name or starts with `dp_n`. Four planted-RED cases were added.
 
 **File:** `tests/test_phase30_points.py:447-488`
 
@@ -186,6 +201,8 @@ $ .venv/bin/python -c "from test_phase30_points import _wr05_failures; ..."
 
 ### IN-01: The new register entry splits the "THIS file" comment from the entries it describes
 
+**Fix status:** NOT FIXED (developer ruling 2026-09-25). Carried to Phase 32 as a named item.
+
 **File:** `tests/test_phase23_resume.py:131-141`
 
 **Issue:** The comment `# THIS file — the only place ALLOWED to pass resume_from…` now sits directly above the `tests/test_phase30_seam.py` tuple, which is the one entry that passes no `resume_from`. `sed -n 128,143p tests/test_phase23_resume.py` shows the order.
@@ -193,6 +210,8 @@ $ .venv/bin/python -c "from test_phase30_points import _wr05_failures; ..."
 **Fix:** Move the 30-01 comment and its tuple above the "THIS file" comment.
 
 ### IN-02: The provenance of the "structural reason" does not pin the module that makes it true
+
+**Fix status:** NOT FIXED (developer ruling 2026-09-25). Carried to Phase 32 as a named item.
 
 **File:** `scripts/phase30_calibration.py:53-62`
 
@@ -202,6 +221,8 @@ $ .venv/bin/python -c "from test_phase30_points import _wr05_failures; ..."
 
 ### IN-03: The calibration derives the floor at n=8 only; the n=64 floor is not recorded
 
+**Fix status:** NOT FIXED (developer ruling 2026-09-25). Carried to Phase 32 as a named item.
+
 **File:** `scripts/phase30_calibration.py:97`, `results/phase30_calibration.json` `recipe.n64.min_refusal_scored_tokens`
 
 **Issue:** This follows D-06, which asks for the worst corner. I measured the premise live: `advr_n8 {'S': 2719, 'T0': 7581, 'P': 336, 'prompt': 26054} floor 15`, and `advr_n64 {'S': 28128, 'T0': 72093, 'P': 2688, 'prompt': 208432} floor 14`. n8 does bind, but the record states 15 for n64 with no derivation for that leg. Command: `.venv/bin/python scratchpad/n64.py` (the same computation as `derive()`, looped over `ADVR_ARMS`).
@@ -209,6 +230,8 @@ $ .venv/bin/python -c "from test_phase30_points import _wr05_failures; ..."
 **Fix:** A future dated continuation could record the n64 inputs and floor alongside n8.
 
 ### IN-04: `recipe_identity` ignores the module named in `REPLAY_SOURCE`
+
+**Fix status:** NOT FIXED (developer ruling 2026-09-25). Carried to Phase 32 as a named item.
 
 **File:** `scripts/phase30_points.py:93-96`
 
@@ -219,6 +242,10 @@ $ .venv/bin/python -c "...; q.REPLAY_SOURCE=('some_other_module.DIALOG_TRAIN_BIN
 ```
 
 **Fix:** `mod, attr = name.split(".", 1); _prove(mod == "teach_persona", ...)`.
+
+## Fix Status (2026-09-25)
+
+The fixes above were applied in one commit per finding. The phase30_points pin in `results/phase30_calibration.json`, which CR-01, WR-04 and WR-05 made stale, is covered by a dated-continuation tripwire in 16f2c6d (`tests/test_phase30_calibration.py::test_the_phase30_points_pin_continuation_is_a_tripwire`). Any further commit to scripts/phase30_points.py turns that test RED until the allowed set is extended.
 
 ---
 
