@@ -651,10 +651,12 @@ def relearning_scope(admission_result):
     verdict = admission_result["verdict"]
     _prove(verdict in VERDICTS, f"admission verdict {verdict!r} outside {VERDICTS}")
     _prove(verdict != "INCONCLUSIVE", SCOPE_RULE["INCONCLUSIVE"])
-    return {
-        "verdict": verdict,
-        "rule": SCOPE_RULE[verdict],
-        "relearn_point_keys": tuple(admission_result["admitted_point_keys"])
-        if verdict == "ADMITTED"
-        else (),
-    }
+    admitted = admission_result["admitted_point_keys"]
+    _prove(isinstance(admitted, (list, tuple)), f"admitted_point_keys {admitted!r} is not a list")
+    keys = tuple(admitted)
+    _prove(
+        set(keys) <= set(POINT_KEYS()) and len(set(keys)) == len(keys),
+        f"admitted keys {keys} are not distinct v5.0 keys",
+    )
+    _prove((verdict == "ADMITTED") == bool(keys), f"{verdict} with admitted keys {keys}")
+    return {"verdict": verdict, "rule": SCOPE_RULE[verdict], "relearn_point_keys": keys}

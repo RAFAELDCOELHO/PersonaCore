@@ -926,7 +926,8 @@ def test_scope_rule_covers_every_verdict():
     admitted = p.admission(_v5_frontier({key: "PASS"}))
     assert p.relearning_scope(admitted)["relearn_point_keys"] == (key,)
     for verdict in p.VERDICTS:
-        forged = {"verdict": verdict, "admitted_point_keys": [], "reasons": []}
+        admitted = [key] if verdict == "ADMITTED" else []
+        forged = {"verdict": verdict, "admitted_point_keys": admitted, "reasons": []}
         if verdict == "INCONCLUSIVE":
             with pytest.raises(SystemExit):
                 p.relearning_scope(forged)
@@ -939,6 +940,22 @@ def test_scope_rule_covers_every_verdict():
     assert "replication not pre-registered" in p.SCOPE_RULE[p.CANDIDATE_UNREPLICATED]
     with pytest.raises(SystemExit):
         p.relearning_scope({"verdict": "MAYBE", "admitted_point_keys": []})
+
+
+@pytest.mark.parametrize(
+    ("verdict", "admitted"),
+    [
+        ("ADMITTED", ["adv_n64_ratio0p250000"]),  # a v4.0 key
+        ("ADMITTED", []),  # ADMITTED iff >= 1 PASS
+        ("ADMITTED", "advr_n8_ratio0p250000"),  # a bare string, not a list of keys
+        ("ADMITTED", ["advr_n8_ratio0p250000", "advr_n8_ratio0p250000"]),  # duplicated
+        ("MOOT", ["advr_n8_ratio0p250000"]),  # keys on a non-ADMITTED verdict
+    ],
+)
+def test_scope_rule_refuses_foreign_or_empty_admitted_keys(verdict, admitted):
+    """WR-03: the scope rule dispatches RELRN-06..09, so it proves its input's keys."""
+    with pytest.raises(SystemExit):
+        phase29_prereg.relearning_scope({"verdict": verdict, "admitted_point_keys": admitted})
 
 
 def test_admission_schema_and_domains():
