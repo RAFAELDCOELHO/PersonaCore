@@ -244,6 +244,18 @@ def own_control(key, tracked, *, point_recipe):
         f"control recipe differs from the point's at read time on "
         f"{_diff(record.get('recipe'), point_recipe)} (D-16)",
     )
+    # WR-04: the declared recipe is not enough; what the control TRAINED with must agree too.
+    config = (record.get("training") or {}).get("train_config") or {}
+    trained = {
+        "seed": (record.get("seed"), config.get("seed")),
+        "max_steps": (config.get("max_steps"), record.get("composed_steps")),
+    }
+    off = sorted(f for f, got in trained.items() if any(v != point_recipe[f] for v in got))
+    _prove(
+        not off,
+        f"control record trained with {trained}, not the point's recipe on {off} (D-16, WR-04): "
+        "its declared recipe is not what it ran",
+    )
     return record
 
 

@@ -232,6 +232,15 @@ def _good_control(leg, *, taught=(790, 1008), heldout=(346, 648)):
         "q": None,
         "clip_norm": None,
         "recipe": pts.recipe_identity(leg),
+        # What the control TRAINED with, in the v4.0 record shape (WR-04).
+        "seed": phase25_points.SWEEP_SEED,
+        "composed_steps": mitigation_budget.STEP_BUDGET,
+        "training": {
+            "train_config": {
+                "seed": phase25_points.SWEEP_SEED,
+                "max_steps": mitigation_budget.STEP_BUDGET,
+            }
+        },
         "taught_recall": {"numerator": taught[0], "denominator": taught[1]},
         "heldout_recall": {"numerator": heldout[0], "denominator": heldout[1]},
         "condition_c": {"point_dialogue_ppl_on": 5.5, "point_dialogue_ppl_off": 4.5},
@@ -349,6 +358,28 @@ def test_wr05_refuses_recipe_divergence(tmp_path, monkeypatch, field):
     tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": _good_control("n8")})
     with pytest.raises(SystemExit, match=field):
         pts.own_control(_non_control("n8"), tracked, point_recipe=_perturbed(recipe, field))
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("seed",),
+        ("composed_steps",),
+        ("training", "train_config", "seed"),
+        ("training", "train_config", "max_steps"),
+    ],
+)
+def test_wr04_refuses_a_control_that_trained_off_its_recipe(tmp_path, monkeypatch, path):
+    """WR-04: a control whose measured training fields disagree with the point's recipe is refused
+    even when its declared ``recipe`` is correct."""
+    record = copy.deepcopy(_good_control("n8"))
+    leaf = record
+    for step in path[:-1]:
+        leaf = leaf[step]
+    leaf[path[-1]] += 1
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": record})
+    with pytest.raises(SystemExit, match="WR-04"):
+        pts.own_control(_non_control("n8"), tracked, point_recipe=pts.recipe_identity("n8"))
 
 
 def test_recipe_mismatch_against_the_calibration_is_refused(tmp_path, monkeypatch):
