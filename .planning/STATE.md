@@ -10,7 +10,7 @@ progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 17
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 30 (replay-bearing-adversarial-recipe-and-its-own-control) — PLANNED 2026-09-25 (4 plans / 4 waves); Phase 29 COMPLETE 2026-09-24
-Plan: 1 of 4 — wave 1 COMPLETE (30-01 47ed88b/e957832/f8959ea + pin fix ef5800a/0133df4/e171bf3 per developer option-3 ruling; suite 3035/4/0); wave 2 dispatched (sequential gsd-executor on main, no worktrees)
+Plan: 2 of 4 — wave 2 COMPLETE (30-02 2eab254/7e36972/8d96895/a4340bb; suite 3062/4/0); wave 1 COMPLETE (30-01 47ed88b/e957832/f8959ea + pin fix ef5800a/0133df4/e171bf3 per developer option-3 ruling; suite 3035/4/0); wave 3 dispatched (sequential gsd-executor on main, no worktrees)
 Status: Executing Phase 30
 Last activity: 2026-09-25 — Phase 30 planned (/gsd-plan-phase 30; 4 plans / 4 waves; checker 2 iterations; STATE hand-applied after state.planned-phase corruption, restored from snapshot); 2026-09-25 — Phase 30 context gathered (/gsd-discuss-phase 30; 30-CONTEXT.md e5a5adc; hand-applied, zero gsd-sdk handlers); 2026-09-24 — Phase 29 executed and verified (4/4 plans; D-15 option-2; review fixes CR-01/WR-01..04/IN-01; suite 3015/4/0; phase.complete output hand-repaired); 2026-09-24 — Phase 29 planned (4 plans / 3 waves; STATE hand-applied after state.planned-phase corruption, restored from snapshot); 2026-09-24 — Phase 29 context gathered (/gsd-discuss-phase 29; hand-applied, zero gsd-sdk handlers); 2026-09-24 — Milestone v5.0 started (STATE hand-applied: `state.milestone-switch` wiped the 850-line position history that carries the 23-12 continuation and unblock sentinels read from HEAD:STATE.md — restored from snapshot); 2026-09-24 — v5.0 roadmap created (Phases 29-34, 27/27 requirements mapped; hand-applied, zero gsd-sdk handlers)
 
