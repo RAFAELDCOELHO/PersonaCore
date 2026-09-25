@@ -307,8 +307,25 @@ def next_action(key, tracked):
 
 
 def write_refused_records(records):
-    """Write-once: refuses if ANY target exists, before writing any. Returns the written paths."""
+    """Write-once, resumable (WR-05): the WHOLE leg's non-control keys, every blob serialised
+    before any write, and a target that already exists is accepted only if byte-identical to the
+    blob it would receive. A write killed part-way is completed by the retry. Returns the paths
+    written by this call."""
+    legs = {leg_of(key) for key in records}
+    _prove(len(legs) == 1, f"records span legs {sorted(legs)}, not one")
+    (leg,) = legs
+    expected = set(phase29_prereg.leg_keys(leg)) - {phase29_prereg.control_key(leg)}
+    _prove(set(records) == expected, f"records {sorted(records)} are not leg {leg}'s non-controls")
+    # atomic_write_json's own serialisation, so an existing file compares byte for byte.
+    payloads = {key: json.dumps(records[key], sort_keys=True) for key in records}
     outs = {key: _ROOT / phase29_prereg.point_record_path(key) for key in records}
-    existing = sorted(str(out) for out in outs.values() if out.exists())
-    _prove(not existing, f"REFUSING to overwrite existing record(s) {existing}")
-    return [phase25_run.atomic_write_json(outs[key], records[key]) for key in records]
+    existing = [key for key in records if outs[key].exists()]
+    differ = sorted(
+        str(outs[k]) for k in existing if outs[k].read_text(encoding="utf-8") != payloads[k]
+    )
+    _prove(not differ, f"REFUSING to overwrite existing record(s) {differ}")
+    return [
+        phase25_run.atomic_write_json(outs[key], records[key])
+        for key in records
+        if key not in existing
+    ]

@@ -474,10 +474,60 @@ def test_guard_short_circuits_an_unlearnable_leg(tmp_path, monkeypatch):
         assert json.loads(out.read_text(encoding="utf-8")) == json.loads(json.dumps(records[key]))
         before[key] = out.read_bytes()
     assert len(written) == len(records)
+    # An identical re-run writes nothing; a DIFFERENT blob for an existing record is refused.
+    assert pts.write_refused_records(records) == []
+    changed = copy.deepcopy(records)
+    changed[next(iter(changed))]["edited"] = True
     with pytest.raises(SystemExit, match="REFUSING to overwrite"):
-        pts.write_refused_records(records)
+        pts.write_refused_records(changed)
     for key in records:
         assert (tmp_path / phase29_prereg.point_record_path(key)).read_bytes() == before[key]
+
+
+def _refused_leg(leg):
+    recipe = pts.prereg_recipe(pts.recipe_identity(leg))
+    return {
+        k: phase29_prereg.refused_record(k, taught=(0, 1), heldout=(0, 1), recipe=recipe)
+        for k in phase29_prereg.leg_keys(leg)
+        if k != phase29_prereg.control_key(leg)
+    }
+
+
+def test_review_wr05_refused_leg_write_is_all_or_resumable(tmp_path, monkeypatch):
+    """Review WR-05: a failure part-way never leaves the leg permanently unwritable."""
+    monkeypatch.setattr(pts, "_ROOT", tmp_path)
+    records = _refused_leg("n8")
+    keys = list(records)
+    paths = [tmp_path / phase29_prereg.point_record_path(k) for k in keys]
+
+    # An unserialisable blob anywhere fails BEFORE any file lands.
+    with pytest.raises(TypeError):
+        pts.write_refused_records(dict(records, **{keys[1]: {"bad": object()}}))
+    assert not any(path.exists() for path in paths)
+
+    # A write killed after the first file: the retry completes the leg.
+    real = pts.phase25_run.atomic_write_json
+    calls = []
+
+    def _dies_on_second(path, blob):
+        calls.append(path)
+        if len(calls) > 1:
+            raise KeyboardInterrupt
+        return real(path, blob)
+
+    monkeypatch.setattr(pts.phase25_run, "atomic_write_json", _dies_on_second)
+    with pytest.raises(KeyboardInterrupt):
+        pts.write_refused_records(records)
+    monkeypatch.setattr(pts.phase25_run, "atomic_write_json", real)
+    assert [path.exists() for path in paths] == [True] + [False] * (len(paths) - 1)
+    assert pts.write_refused_records(records) == paths[1:]
+    assert all(path.exists() for path in paths)
+
+    # A partial leg or a mixed leg is refused.
+    with pytest.raises(SystemExit, match="non-controls"):
+        pts.write_refused_records({keys[0]: records[keys[0]]})
+    with pytest.raises(SystemExit, match="span legs"):
+        pts.write_refused_records(dict(records, **_refused_leg("n64")))
 
 
 # =================================================================================================
