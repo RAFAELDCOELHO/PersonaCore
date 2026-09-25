@@ -5,6 +5,8 @@ results/phase3* file would start the phase29 ancestry clock.
 """
 
 import ast
+import copy
+import json
 import pathlib
 import subprocess
 import sys
@@ -25,6 +27,8 @@ if _TESTS not in sys.path:
 import mitigation_budget  # noqa: E402  (scripts/ is not a package)
 import phase24_adversarial  # noqa: E402  (same)
 import phase25_points  # noqa: E402  (same)
+import phase25_prereg  # noqa: E402  (same)
+import phase25_record  # noqa: E402  (same)
 import phase29_prereg  # noqa: E402  (same)
 import phase30_points as pts  # noqa: E402  (same)
 
@@ -187,3 +191,219 @@ def test_no_phase30_module_retypes_a_constant(tmp_path):
         planted = _planted(tmp_path, source, source + plant, name)
         assert _literal_failures(planted), name
     assert POINTS_MODULE.read_text(encoding="utf-8") == source
+
+
+# =================================================================================================
+# Task 2: own-control reader, calibration-recipe refusal, D-19 guard (D-14..D-16, D-19, SC2)
+# =================================================================================================
+
+
+def _write(root, rel, blob):
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(blob), encoding="utf-8")
+    return rel
+
+
+def _good_control(leg, *, taught=(790, 1008), heldout=(346, 648)):
+    """A forged own-control record in the v4.0 field shapes, carrying the v5.0 recipe."""
+    return {
+        "point_key": phase29_prereg.control_key(leg),
+        "arm": pts._arm_of_leg(leg),
+        "axis": "ratio",
+        "q": None,
+        "clip_norm": None,
+        "recipe": pts.recipe_identity(leg),
+        "taught_recall": {"numerator": taught[0], "denominator": taught[1]},
+        "heldout_recall": {"numerator": heldout[0], "denominator": heldout[1]},
+        "condition_c": {"point_dialogue_ppl_on": 5.5, "point_dialogue_ppl_off": 4.5},
+        "adapter_sha256": "ab" * 32,
+    }
+
+
+def _v5_tree(tmp_path, monkeypatch, *, controls=None, calibration=True):
+    """tmp_path as _ROOT; the calibration (tracked if asked) and any {leg: record} controls."""
+    monkeypatch.setattr(pts, "_ROOT", tmp_path)
+    tracked = []
+    if calibration:
+        blob = {"recipe": {leg: pts.recipe_identity(leg) for leg in LEGS}}
+        tracked.append(_write(tmp_path, pts.CALIBRATION_PATH, blob))
+    for leg, record in (controls or {}).items():
+        rel = phase29_prereg.point_record_path(phase29_prereg.control_key(leg))
+        tracked.append(_write(tmp_path, rel, record))
+    return tracked
+
+
+def _non_control(leg):
+    return phase29_prereg.leg_keys(leg)[-1]
+
+
+def _perturbed(recipe, field):
+    out = copy.deepcopy(recipe)
+    value = out[field]
+    out[field] = value + ["x"] if isinstance(value, list) else value + 1
+    return out
+
+
+def test_wr05_own_control_accepts_the_own_record(tmp_path, monkeypatch):
+    record = _good_control("n8")
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": record})
+    recipe = pts.recipe_identity("n8")
+    for key in (CONTROLS[0], _non_control("n8")):
+        assert pts.own_control(key, tracked, point_recipe=recipe) == record
+        assert pts.control_floors(key, tracked, point_recipe=recipe) == ((790, 1008), (346, 648))
+        assert pts.control_dialogue_pair(key, tracked, point_recipe=recipe) == {
+            "adapter_on": 5.5,
+            "adapter_off": 4.5,
+        }
+        assert pts.control_baseline(key, tracked, point_recipe=recipe) == {
+            "source": phase29_prereg.control_baseline_source("n8"),
+            "adapter_sha256": record["adapter_sha256"],
+        }
+
+
+def test_wr05_refuses_a_dp_key(tmp_path, monkeypatch):
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": _good_control("n8")})
+    with pytest.raises(SystemExit, match="v5.0 point keys"):
+        pts.own_control(
+            phase25_record.point_key("dp_n8", 0.0),
+            tracked,
+            point_recipe=pts.recipe_identity("n8"),
+        )
+
+
+def test_wr05_refuses_a_relabelled_dp_record(tmp_path, monkeypatch):
+    real = _ROOT / phase25_prereg.point_record_path(phase25_record.point_key("dp_n8", 0.0))
+    record = json.loads(real.read_text(encoding="utf-8"))
+    recipe = pts.recipe_identity("n8")
+    # The recipe check cannot be what refuses it: its pre-registered values equal advr_n8's.
+    assert record["seed"] == recipe["seed"]
+    assert record["training"]["train_config"]["max_steps"] == recipe["max_steps"]
+    assert record["records_per_lot"] == recipe["n_facts"]
+    assert phase29_prereg.replay_windows(record["records_per_lot"]) == recipe["replay_windows"]
+    record.update(point_key=CONTROLS[0], arm=pts._arm_of_leg("n8"), recipe=recipe)
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": record})
+    with pytest.raises(SystemExit, match="axis") as excinfo:
+        pts.own_control(_non_control("n8"), tracked, point_recipe=recipe)
+    assert "WR-05" in str(excinfo.value)
+    # Each of the three DP signatures refuses on its own.
+    for field, value in (("axis", "ratio"), ("q", None), ("clip_norm", None)):
+        partial = dict(_good_control("n8"), **{field: record[field]})
+        assert partial[field] != value
+        tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": partial})
+        with pytest.raises(SystemExit, match="WR-05"):
+            pts.own_control(_non_control("n8"), tracked, point_recipe=recipe)
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("point_key", CONTROLS[1]),
+        ("arm", "adv_n8"),
+        ("axis", "sigma"),
+        ("q", 1.0),
+        ("clip_norm", 1.0),
+    ],
+)
+def test_wr05_refuses_wrong_provenance(tmp_path, monkeypatch, field, value):
+    record = dict(_good_control("n8"), **{field: value})
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": record})
+    with pytest.raises(SystemExit):
+        pts.own_control(_non_control("n8"), tracked, point_recipe=pts.recipe_identity("n8"))
+
+
+def test_wr05_refuses_a_good_record_at_a_non_v5_path(tmp_path, monkeypatch):
+    tracked = _v5_tree(tmp_path, monkeypatch)
+    elsewhere = phase25_prereg.point_record_path(phase25_record.point_key("adv_n8", 0.0))
+    tracked.append(_write(tmp_path, elsewhere, _good_control("n8")))
+    with pytest.raises(SystemExit, match="not TRACKED"):
+        pts.own_control(_non_control("n8"), tracked, point_recipe=pts.recipe_identity("n8"))
+
+
+@pytest.mark.parametrize("field", sorted(pts.RECIPE_FIELDS))
+def test_wr05_refuses_recipe_divergence(tmp_path, monkeypatch, field):
+    recipe = pts.recipe_identity("n8")
+    record = dict(_good_control("n8"), recipe=_perturbed(recipe, field))
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": record})
+    with pytest.raises(SystemExit, match=field):
+        pts.own_control(_non_control("n8"), tracked, point_recipe=recipe)
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": _good_control("n8")})
+    with pytest.raises(SystemExit, match=field):
+        pts.own_control(_non_control("n8"), tracked, point_recipe=_perturbed(recipe, field))
+
+
+def test_recipe_mismatch_against_the_calibration_is_refused(tmp_path, monkeypatch):
+    tracked = _v5_tree(tmp_path, monkeypatch)
+    for leg in LEGS:
+        recipe = pts.recipe_identity(leg)
+        assert pts.require_calibrated_recipe(leg, recipe, tracked) == recipe
+        for field in sorted(pts.RECIPE_FIELDS):
+            with pytest.raises(SystemExit, match=field):
+                pts.require_calibrated_recipe(leg, _perturbed(recipe, field), tracked)
+        with pytest.raises(SystemExit, match="not TRACKED"):
+            pts.require_calibrated_recipe(leg, recipe, [])
+    # The calibration's own recipe differing from the live identity is refused too.
+    drifted = {"recipe": {leg: pts.recipe_identity(leg) for leg in LEGS}}
+    drifted["recipe"]["n8"] = _perturbed(drifted["recipe"]["n8"], "seed")
+    _write(tmp_path, pts.CALIBRATION_PATH, drifted)
+    with pytest.raises(SystemExit, match="seed"):
+        pts.require_calibrated_recipe("n8", pts.recipe_identity("n8"), tracked)
+
+
+def test_guard_refuses_a_point_whose_control_is_untracked(tmp_path, monkeypatch):
+    tracked = _v5_tree(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as excinfo:
+        pts.next_action(_non_control("n8"), tracked)
+    message = str(excinfo.value)
+    assert phase29_prereg.point_record_path(CONTROLS[0]) in message
+    assert "not TRACKED" in message
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": _good_control("n8")})
+    with pytest.raises(SystemExit) as excinfo:
+        pts.next_action(_non_control("n64"), tracked)
+    assert phase29_prereg.point_record_path(CONTROLS[1]) in str(excinfo.value)
+
+
+def test_guard_trains_the_control_first_and_then_its_leg(tmp_path, monkeypatch):
+    tracked = _v5_tree(tmp_path, monkeypatch, calibration=False)
+    with pytest.raises(SystemExit) as excinfo:
+        pts.next_action(CONTROLS[0], tracked)
+    assert pts.CALIBRATION_PATH in str(excinfo.value)
+    tracked = _v5_tree(tmp_path, monkeypatch)
+    assert pts.next_action(CONTROLS[0], tracked) == {
+        "action": "train",
+        "plan": pts.point_plan(CONTROLS[0]),
+    }
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": _good_control("n8")})
+    key = _non_control("n8")
+    assert pts.next_action(key, tracked) == {"action": "train", "plan": pts.point_plan(key)}
+
+
+def test_guard_short_circuits_an_unlearnable_leg(tmp_path, monkeypatch):
+    def _never(*args, **kwargs):
+        raise AssertionError("train_stage reached for an unlearnable leg")
+
+    monkeypatch.setattr(phase25_points, "train_stage", _never)
+    taught, heldout = (0, 1008), (0, 648)
+    control = _good_control("n8", taught=taught, heldout=heldout)
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": control})
+    action = pts.next_action(_non_control("n8"), tracked)
+    assert action["action"] == "refuse"
+    records = action["records"]
+    assert tuple(records) == tuple(k for k in phase29_prereg.leg_keys("n8") if k != CONTROLS[0])
+    recipe = pts.prereg_recipe(pts.recipe_identity("n8"))
+    for key, blob in records.items():
+        assert blob == phase29_prereg.refused_record(
+            key, taught=taught, heldout=heldout, recipe=recipe
+        )
+    written = pts.write_refused_records(records)
+    before = {}
+    for key in records:
+        out = tmp_path / phase29_prereg.point_record_path(key)
+        # JSON round-trip: the builder's (k, n) tuples land as lists.
+        assert json.loads(out.read_text(encoding="utf-8")) == json.loads(json.dumps(records[key]))
+        before[key] = out.read_bytes()
+    assert len(written) == len(records)
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        pts.write_refused_records(records)
+    for key in records:
+        assert (tmp_path / phase29_prereg.point_record_path(key)).read_bytes() == before[key]

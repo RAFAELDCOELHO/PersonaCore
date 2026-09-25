@@ -24,6 +24,7 @@ Trains nothing and writes nothing except, on request, write-once REFUSED records
 import: ``teach_persona`` is imported lazily inside the functions that need it.
 """
 
+import json
 import pathlib
 import sys
 
@@ -38,6 +39,7 @@ if _SRC not in sys.path:
 import mitigation_budget  # noqa: E402  (scripts/ is not a package)
 import phase24_adversarial  # noqa: E402  (same)
 import phase25_points  # noqa: E402  (same)
+import phase25_run  # noqa: E402  (same)
 import phase29_prereg  # noqa: E402  (same)
 
 SWEEP_SEED = phase25_points.SWEEP_SEED
@@ -164,3 +166,129 @@ def point_plan(key):
         "accounting": None,
         "control_key": control,
     }
+
+
+# =================================================================================================
+# THE OWN-CONTROL READER (D-14..D-16, WR-05) and the calibration-recipe refusal (SC2, D-09).
+# =================================================================================================
+
+
+def _diff(a, b):
+    """Field names on which two recipe dicts differ (either side may be a non-dict)."""
+    if not (isinstance(a, dict) and isinstance(b, dict)):
+        return sorted(RECIPE_FIELDS)
+    return sorted(f for f in set(a) | set(b) if a.get(f) != b.get(f))
+
+
+def _tracked_json(rel, tracked, what):
+    _prove(
+        rel in set(tracked),
+        f"{what} {rel} is not TRACKED (git ls-files). Only a committed record is read: one "
+        "borrowed from the working tree could move after the fact",
+    )
+    return json.loads((_ROOT / rel).read_text(encoding="utf-8"))
+
+
+def calibration_record(tracked):
+    return _tracked_json(CALIBRATION_PATH, tracked, "the ARECIPE-02 calibration")
+
+
+def require_calibrated_recipe(leg, recipe, tracked):
+    """SC2's refusal half: ``recipe`` must equal the live identity AND the tracked calibration's."""
+    _prove(
+        isinstance(recipe, dict) and set(recipe) == RECIPE_FIELDS,
+        f"recipe fields {_diff(recipe, dict.fromkeys(RECIPE_FIELDS))} are not RECIPE_FIELDS",
+    )
+    live = recipe_identity(leg)
+    _prove(recipe == live, f"recipe differs from recipe_identity({leg!r}) on {_diff(recipe, live)}")
+    calibrated = calibration_record(tracked)["recipe"][leg]
+    _prove(
+        recipe == calibrated,
+        f"recipe differs from the calibration {CALIBRATION_PATH} for leg {leg!r} on "
+        f"{_diff(recipe, calibrated)}: a point is never scored under an uncalibrated recipe",
+    )
+    return recipe
+
+
+def own_control(key, tracked, *, point_recipe):
+    """The leg's OWN advr ratio-0 control record — the ONLY floor / gap / baseline source."""
+    leg = leg_of(key)
+    ckey = phase29_prereg.control_key(leg)
+    require_calibrated_recipe(leg, point_recipe, tracked)
+    record = _tracked_json(
+        phase29_prereg.point_record_path(ckey), tracked, "the own control record"
+    )
+    _prove(record.get("point_key") == ckey, f"control record names {record.get('point_key')!r}")
+    _prove(
+        record.get("arm") == _arm_of_leg(leg),
+        f"control record arm {record.get('arm')!r} is not {_arm_of_leg(leg)!r}",
+    )
+    _prove(
+        record.get("axis") == "ratio"
+        and record.get("q") is None
+        and record.get("clip_norm") is None,
+        f"control record has axis {record.get('axis')!r}, q {record.get('q')!r}, clip_norm "
+        f"{record.get('clip_norm')!r}: that is a DP sigma-axis record relabelled as the advr "
+        "control (WR-05), refused whatever its recipe says",
+    )
+    _prove(
+        record.get("recipe") == point_recipe,
+        f"control recipe differs from the point's at read time on "
+        f"{_diff(record.get('recipe'), point_recipe)} (D-16)",
+    )
+    return record
+
+
+def control_floors(key, tracked, *, point_recipe):
+    """``((taught_k, taught_n), (heldout_k, heldout_n))`` from the own control."""
+    record = own_control(key, tracked, point_recipe=point_recipe)
+    t, h = record["taught_recall"], record["heldout_recall"]
+    return (t["numerator"], t["denominator"]), (h["numerator"], h["denominator"])
+
+
+def control_dialogue_pair(key, tracked, *, point_recipe):
+    """``control_gap``'s (adapter_on, adapter_off) pair, own-sourced."""
+    cc = own_control(key, tracked, point_recipe=point_recipe)["condition_c"]
+    return {"adapter_on": cc["point_dialogue_ppl_on"], "adapter_off": cc["point_dialogue_ppl_off"]}
+
+
+def control_baseline(key, tracked, *, point_recipe):
+    """The relearning-Z baseline: the own control's adapter digest and its source reference."""
+    record = own_control(key, tracked, point_recipe=point_recipe)
+    return {
+        "source": phase29_prereg.control_baseline_source(leg_of(key)),
+        "adapter_sha256": record["adapter_sha256"],
+    }
+
+
+def next_action(key, tracked):
+    """D-19: what to do for ``key`` now. Trains nothing and writes nothing."""
+    _prove(key in SWEEP_SCHEDULE(), f"{key!r} is not on the v5.0 schedule")
+    leg = leg_of(key)
+    ckey = phase29_prereg.control_key(leg)
+    recipe = recipe_identity(leg)
+    if key == ckey:
+        # D-11/SC2: no control trains before the tracked ARECIPE-02 calibration exists and matches.
+        require_calibrated_recipe(leg, recipe, tracked)
+        return {"action": "train", "plan": point_plan(key)}
+    (tk, tn), (hk, hn) = control_floors(key, tracked, point_recipe=recipe)
+    if phase29_prereg.control_is_unlearnable(tk, tn, hk, hn):
+        return {
+            "action": "refuse",
+            "records": {
+                k: phase29_prereg.refused_record(
+                    k, taught=(tk, tn), heldout=(hk, hn), recipe=prereg_recipe(recipe)
+                )
+                for k in phase29_prereg.leg_keys(leg)
+                if k != ckey
+            },
+        }
+    return {"action": "train", "plan": point_plan(key)}
+
+
+def write_refused_records(records):
+    """Write-once: refuses if ANY target exists, before writing any. Returns the written paths."""
+    outs = {key: _ROOT / phase29_prereg.point_record_path(key) for key in records}
+    existing = sorted(str(out) for out in outs.values() if out.exists())
+    _prove(not existing, f"REFUSING to overwrite existing record(s) {existing}")
+    return [phase25_run.atomic_write_json(outs[key], records[key]) for key in records]
