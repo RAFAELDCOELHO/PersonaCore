@@ -21,11 +21,16 @@ if str(_SCRIPTS) not in sys.path:
 _SRC = _ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
+_TESTS = str(_ROOT / "tests")
+if _TESTS not in sys.path:
+    sys.path.insert(0, _TESTS)
 
 import phase24_adversarial  # noqa: E402  (scripts/ is not a package)
 import phase29_prereg  # noqa: E402  (same)
 import phase30_calibration as cal  # noqa: E402  (same)
 import phase30_points as pts  # noqa: E402  (same)
+
+from test_phase29_prereg import _assert_frozen_before, _git  # noqa: E402
 
 EMITTER = "scripts/phase30_calibration.py"
 
@@ -34,12 +39,6 @@ def _tp():
     import teach_persona  # torch at import — inside tests only
 
     return teach_persona
-
-
-def _git(*args):
-    return subprocess.run(
-        ["git", *args], cwd=_ROOT, capture_output=True, text=True, check=True
-    ).stdout
 
 
 def _data_snapshot():
@@ -235,3 +234,48 @@ def test_emit_refuses_a_dirty_tree_before_measuring(monkeypatch, clean_tree):
     assert call["who"] == "phase30_calibration"
     assert call["cwd"] == _ROOT
     assert call["pathspec"] == ("scripts", "src", "results", f":(exclude){rel}")
+
+
+# =================================================================================================
+# Task 2: D-11 ancestry and the emitter freeze
+# =================================================================================================
+
+
+def _v5_tracked():
+    return sorted(
+        {
+            path
+            for spec in phase29_prereg.ARTIFACT_PATHSPECS
+            for path in _git("ls-files", spec).split()
+        }
+    )
+
+
+def test_ancestry_calibration_precedes_every_later_v5_result():
+    """D-11: the calibration's commits strictly precede the first add of every other v5.0 result."""
+    cal_rel = pts.CALIBRATION_PATH
+    tracked = _v5_tracked()
+    later = [p for p in tracked if p != cal_rel]
+    if cal_rel not in tracked:
+        assert later == [], (
+            f"v5.0 result(s) {later} committed before the ARECIPE-02 calibration {cal_rel} (D-11)"
+        )
+        return
+    _assert_frozen_before(cal_rel, later)
+    # NON-VACUITY (natural RED): a v4.0 result that predates the calibration must fire.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(cal_rel, ["results/phase25_frontier.json"])
+
+
+def test_ancestry_emitter_is_frozen_before_the_calibration():
+    """The emitter is frozen before its record. scripts/phase30_points.py is deliberately NOT
+    frozen (developer ruling 2026-09-25): the driver keeps evolving through Phases 31-34."""
+    cal_rel = pts.CALIBRATION_PATH
+    if cal_rel in _v5_tracked():
+        _assert_frozen_before(EMITTER, [cal_rel])
+    else:
+        _assert_frozen_before(EMITTER, [])  # proves the emitter has commits; honest-green
+    # NON-VACUITY (natural RED): scripts/phase29_prereg.py was first added before the emitter
+    # existed, so the emitter's commits cannot all precede it.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(EMITTER, ["scripts/phase29_prereg.py"])
