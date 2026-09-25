@@ -159,8 +159,16 @@ def test_pathspecs_are_derived_and_cover_results_phase30_to_34():
 
 
 def test_paths_are_distinct_from_every_v4_path():
-    tracked = _git("ls-files", "results").split()
-    assert tracked, "git ls-files results returned nothing — the disjointness check is blind"
+    """Every V5 path is disjoint from every v4.0 result path.
+
+    Dated continuation 2026-09-25 (Phase 30, 30-04, developer ruling): the v4 set was read from
+    ``git ls-files results`` at HEAD, which counted the first committed v5.0 record
+    (results/phase30_calibration.json, 4339f2b) as a "v4 path" and went red on its own declared
+    path. The v4 set is now read at the immutable ``v4.0`` tag, so the check still catches a V5
+    path colliding with any real v4.0 file and cannot be reddened by v5.0 results.
+    """
+    tracked = _git("ls-tree", "-r", "--name-only", "v4.0", "results").split()
+    assert tracked, "git ls-tree v4.0 results returned nothing — the disjointness check is blind"
     for path in phase29_prereg.V5_RESULT_PATHS:
         assert not path.startswith("results/phase2"), path
         assert not [t for t in tracked if fnmatch.fnmatch(t, path)], path
