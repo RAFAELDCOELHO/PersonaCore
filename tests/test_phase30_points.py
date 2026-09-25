@@ -206,6 +206,23 @@ def _write(root, rel, blob):
     return rel
 
 
+def _commit(root):
+    """Commit everything under ``root`` (a tmp repo): the reader reads committed blobs (CR-01)."""
+
+    def git(*args):
+        subprocess.run(
+            ("git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false")
+            + args,
+            cwd=root,
+            capture_output=True,
+            check=True,
+        )
+
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "--allow-empty", "-m", "fixture")
+
+
 def _good_control(leg, *, taught=(790, 1008), heldout=(346, 648)):
     """A forged own-control record in the v4.0 field shapes, carrying the v5.0 recipe."""
     return {
@@ -232,6 +249,7 @@ def _v5_tree(tmp_path, monkeypatch, *, controls=None, calibration=True):
     for leg, record in (controls or {}).items():
         rel = phase29_prereg.point_record_path(phase29_prereg.control_key(leg))
         tracked.append(_write(tmp_path, rel, record))
+    _commit(tmp_path)
     return tracked
 
 
@@ -347,8 +365,29 @@ def test_recipe_mismatch_against_the_calibration_is_refused(tmp_path, monkeypatc
     drifted = {"recipe": {leg: pts.recipe_identity(leg) for leg in LEGS}}
     drifted["recipe"]["n8"] = _perturbed(drifted["recipe"]["n8"], "seed")
     _write(tmp_path, pts.CALIBRATION_PATH, drifted)
+    _commit(tmp_path)
     with pytest.raises(SystemExit, match="seed"):
         pts.require_calibrated_recipe("n8", pts.recipe_identity("n8"), tracked)
+
+
+def test_cr01_refuses_a_tracked_record_edited_on_disk(tmp_path, monkeypatch):
+    """CR-01: a tracked record edited but not committed is refused; the committed blob is read."""
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": _good_control("n8")})
+    recipe = pts.recipe_identity("n8")
+    assert pts.own_control(_non_control("n8"), tracked, point_recipe=recipe)
+    for rel in (pts.CALIBRATION_PATH, phase29_prereg.point_record_path(CONTROLS[0])):
+        committed = (tmp_path / rel).read_bytes()
+        (tmp_path / rel).write_bytes(committed.replace(b"}", b', "edited": 1}', 1))
+        with pytest.raises(SystemExit, match="differs from its committed blob"):
+            pts.own_control(_non_control("n8"), tracked, point_recipe=recipe)
+        (tmp_path / rel).write_bytes(committed)
+    # Tracked by the caller's list but never committed: refused too.
+    rel = phase29_prereg.point_record_path(CONTROLS[1])
+    _write(tmp_path, rel, _good_control("n64"))
+    with pytest.raises(SystemExit, match="no committed blob"):
+        pts.own_control(
+            _non_control("n64"), tracked + [rel], point_recipe=pts.recipe_identity("n64")
+        )
 
 
 def test_guard_refuses_a_point_whose_control_is_untracked(tmp_path, monkeypatch):

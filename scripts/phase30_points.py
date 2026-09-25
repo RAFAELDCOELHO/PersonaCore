@@ -26,6 +26,7 @@ import: ``teach_persona`` is imported lazily inside the functions that need it.
 
 import json
 import pathlib
+import subprocess
 import sys
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -186,7 +187,14 @@ def _tracked_json(rel, tracked, what):
         f"{what} {rel} is not TRACKED (git ls-files). Only a committed record is read: one "
         "borrowed from the working tree could move after the fact",
     )
-    return json.loads((_ROOT / rel).read_text(encoding="utf-8"))
+    # CR-01: the COMMITTED blob is what is read; a tracked file edited on disk is refused.
+    shown = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=_ROOT, capture_output=True)
+    _prove(shown.returncode == 0, f"{what} {rel} has no committed blob at HEAD")
+    _prove(
+        shown.stdout == (_ROOT / rel).read_bytes(),
+        f"{what} {rel} differs from its committed blob: refusing a working-tree edit",
+    )
+    return json.loads(shown.stdout.decode("utf-8"))
 
 
 def calibration_record(tracked):

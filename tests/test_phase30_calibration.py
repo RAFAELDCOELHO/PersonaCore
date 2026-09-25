@@ -31,6 +31,7 @@ import phase30_calibration as cal  # noqa: E402  (same)
 import phase30_points as pts  # noqa: E402  (same)
 
 from test_phase29_prereg import _assert_frozen_before, _git  # noqa: E402
+from test_phase30_points import _commit  # noqa: E402
 
 EMITTER = "scripts/phase30_calibration.py"
 
@@ -166,6 +167,7 @@ def test_recipe_mismatch_round_trips_through_the_scoring_refusal(record, tmp_pat
     path = tmp_path / pts.CALIBRATION_PATH
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps(record), encoding="utf-8")
+    _commit(tmp_path)  # CR-01: the reader reads the committed blob
     tracked = [pts.CALIBRATION_PATH]
     for leg in phase29_prereg.LEGS:
         recipe = pts.recipe_identity(leg)
