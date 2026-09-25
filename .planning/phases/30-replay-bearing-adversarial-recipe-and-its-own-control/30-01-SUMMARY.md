@@ -78,3 +78,12 @@ None.
 
 - FOUND: tests/test_phase30_seam.py, tests/fixtures/phase30_train_kwargs_presplit.json
 - FOUND commits: 47ed88b, e957832
+
+## Post-wave fix (2026-09-25)
+
+The orchestrator's full suite at f8959ea found 2 failures (3032 passed / 4 skipped / 2 failed). Both came from e957832 changing `scripts/teach_persona.py` (pin 3c1e6c55… -> live aabf4381…). Developer ruling "option 3" says to handle each record by its category:
+
+- **ef5800a**: `results/phase24_token_budget.json` can be re-emitted. It was deleted at a clean tree and re-run through `scripts/phase24_record.py`, the route its guard prescribes (precedents aaea029, f968c39). A leaf walk over 538 leaves found 3 differences, all in provenance: `git_sha` 049a6bb -> f8959ea, `written_utc`, and `module_sha256[scripts/teach_persona.py]`. The canonical non-provenance sha256 is 24906743f7ef… both before and after.
+- **0133df4**: `results/phase27_admission.json` is write-once (88dff77), so it was left byte-unchanged. `tests/test_phase27_relearn.py` now has a dated continuation (`_SUPERSEDED_PINS`, `_superseded`). The teach_persona.py mismatch is accepted only if two things hold: the pin hashes `git show e308675:scripts/teach_persona.py`, and `e308675..HEAD -- scripts/teach_persona.py` is exactly {e957832}. All other pins stay strict. A new tripwire test (`test_the_superseded_pin_continuation_is_a_tripwire`) shows that an extra SHA, a missing SHA, or a never-true pin each refuse. The behavioural evidence is `tests/fixtures/phase30_train_kwargs_presplit.json`.
+- Checked before editing: no guard freezes `tests/test_phase27_relearn.py`. `scripts/phase27_relearn.py` only cites node ids, and those are unchanged. No file pins the phase24 record's bytes. Its consumers (phase25_points, phase25_extremes) read `rows`/`band_corners` only, and phase28 does not read it.
+- Verification: 203 passed across test_phase24_record, test_phase27_relearn, test_phase27_prereg, test_phase25_extremes, test_phase28_ledger/report/prereg, test_phase30_seam and test_phase21_sc5. `ruff check` and `ruff format --check` are clean.
