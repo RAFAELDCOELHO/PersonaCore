@@ -408,7 +408,7 @@ def _is_count_pair(pair):
 
 def _control_readings(frontier):
     """``{leg: {"taught": [k, n], "heldout": [k, n]}}`` from the record, or None if malformed."""
-    readings = (frontier.get("verdicts") or {}).get("control_readings")
+    readings = frontier["verdicts"].get("control_readings")
     out = {}
     for leg in LEGS:
         entry = readings.get(f"advr_{leg}") if isinstance(readings, dict) else None
@@ -506,6 +506,8 @@ def admission(frontier):
     # (1a) shape
     if not isinstance(frontier, dict):
         return _inconclusive("frontier record absent")
+    if not isinstance(frontier.get("verdicts"), dict):
+        return _inconclusive("verdicts is absent or not a dict")
     keys = POINT_KEYS()
     points = frontier.get("points")
     if (
@@ -547,7 +549,7 @@ def admission(frontier):
     if bad_reasons:
         return _inconclusive(f"verdict.reasons is not a list of str on {bad_reasons}")
     # (1c) tallies re-derive
-    stored = frontier.get("verdicts") or {}
+    stored = frontier["verdicts"]
     tally = _tally(strings.values())
     by_leg = {}
     for k in keys:

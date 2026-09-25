@@ -742,6 +742,16 @@ def _not_a_dict_point(fr):
     return fr
 
 
+def _verdicts_not_dict(fr):
+    fr["verdicts"] = ["x"]  # WR-01: raised AttributeError before
+    return fr
+
+
+def _verdicts_absent(fr):
+    del fr["verdicts"]
+    return fr
+
+
 @pytest.mark.parametrize(
     "mutate",
     [
@@ -756,6 +766,8 @@ def _not_a_dict_point(fr):
         _no_control,
         _bool_control,
         _not_a_dict_point,
+        _verdicts_not_dict,
+        _verdicts_absent,
         lambda fr: None,
     ],
     ids=[
@@ -770,6 +782,8 @@ def _not_a_dict_point(fr):
         "control-missing",
         "bool-control-count",
         "point-not-dict",
+        "verdicts-not-dict",
+        "verdicts-absent",
         "absent",
     ],
 )
