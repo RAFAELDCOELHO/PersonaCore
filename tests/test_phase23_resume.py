@@ -130,6 +130,15 @@ _TRAIN_ARM_CALL_SITES = (
     ("tests/test_phase22_wiring.py", "prose", "test_cli_names_no_sigma_or_clip_value comment"),
     # THIS file — the only place ALLOWED to pass `resume_from`, and the reason the assertion below
     # is scoped rather than global: a seam nothing exercises is IN-04 again.
+    # Plan 30-01's seam probe. NOT a production consumer and NOT a sweep point: ONE AST call,
+    # `_train`, serves every Phase 30 seam test (the D-03 pre-split kwargs capture, the D-04
+    # measured replay draws, the replay-source guard). It passes NO `resume_from`, so
+    # `_RESUME_PASSERS` names no count for that file and a resume appearing there would redden.
+    (
+        "tests/test_phase30_seam.py",
+        "call",
+        "_train (the single driver call helper, Phase 30 D-03/D-04)",
+    ),
     ("tests/test_phase23_resume.py", "call", "_resume_call (the refusal probes)"),
     ("tests/test_phase23_resume.py", "call", "_run (the production MPS probe)"),
     ("tests/test_phase23_resume.py", "prose", "the grep pattern in the register probe"),
@@ -305,18 +314,22 @@ def test_resume_from_none_is_inert():
     # capacities) committed as a prediction before any point exists. Only the CONTROL half is a
     # `train_arm` call; the comparator half calls `tp.train(...)` directly with the DP seam
     # absent, which is precisely what makes it the seam-off path and why it is not a hit here.
+    # SEVENTEEN from 30-01 (2026-09-25), which added `test_phase30_seam._train` — the single
+    # driver call behind Phase 30's seam tests (D-03 pre-split kwargs, D-04 measured replay draws).
+    # A TEST site rather than a production consumer, and like every site but this file's own it
+    # passes no `resume_from`.
     # The literal is a tripwire against a site vanishing
     # unnoticed, so it is BUMPED with its reason rather than derived from the register — that would
     # make the check restate the register instead of pinning a count against it. Every number is
     # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8 + 1 + 1 + 1 + 1 + 2 + 1 + 1
+        == 8 + 1 + 1 + 1 + 1 + 2 + 1 + 1 + 1
     ), (
         "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling "
         "plus 23-10's σ=0 diagnostic plus 23-11's noised sweep point plus 25-10's 44-point "
         "frontier driver plus 25-11's two calibration probes plus 25-12's anchor probe plus "
-        "25-13's PROBE 2 control leg"
+        "25-13's PROBE 2 control leg plus 30-01's seam probe"
     )
 
     # ...and the AST agrees with the register about which of them are real CALLS.

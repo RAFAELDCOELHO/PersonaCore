@@ -1,0 +1,1178 @@
+{
+  "arms": {
+    "adv_n64": {
+      "checkpoint_interval": 1,
+      "checkpoint_path": "checkpoints/phase30_probe_adv_n64_latest.pt",
+      "eval_interval": 1,
+      "log_path": "results/phase30_probe_adv_n64/run.csv",
+      "model": {
+        "class": "GPT",
+        "params": [
+          [
+            "wte.weight",
+            [
+              8192,
+              16
+            ],
+            false
+          ],
+          [
+            "wpe.weight",
+            [
+              256,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_1.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_1.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.q_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.q_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.q_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.q_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.k_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.k_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.k_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.k_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.v_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.v_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.v_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.v_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.c_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.c_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.c_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.c_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_2.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_2.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_in.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_in.lora_B",
+            [
+              64,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_in.base.weight",
+            [
+              64,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_in.base.bias",
+            [
+              64
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_out.lora_A",
+            [
+              8,
+              64
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_out.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_out.base.weight",
+            [
+              16,
+              64
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_out.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "ln_f.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "ln_f.bias",
+            [
+              16
+            ],
+            false
+          ]
+        ]
+      },
+      "model_config": {
+        "block_size": 256,
+        "dropout": 0.0,
+        "eos_id": 8184,
+        "n_embd": 16,
+        "n_head": 2,
+        "n_layer": 1,
+        "use_pos_emb": true,
+        "vocab_size": 8192,
+        "weight_tying": true
+      },
+      "penalty_fn": null,
+      "resume_from": null,
+      "return_final_loss": true,
+      "runtime_config": {
+        "amp": false,
+        "amp_dtype": "float16",
+        "device": "cpu"
+      },
+      "train_bin": "data/persona_adv_n64_train.bin",
+      "train_config": {
+        "batch_size": 1,
+        "grad_accum_steps": 1,
+        "grad_clip": 1.0,
+        "lr": 0.0003,
+        "max_steps": 2,
+        "seed": 1337,
+        "warmup_steps": 1,
+        "weight_decay": 0.0
+      },
+      "train_mask_bin": "data/persona_adv_n64_train_mask.bin",
+      "val_bin": "data/dialog_val.bin",
+      "val_mask_bin": "data/dialog_val_mask.bin"
+    },
+    "adv_n8": {
+      "checkpoint_interval": 1,
+      "checkpoint_path": "checkpoints/phase30_probe_adv_n8_latest.pt",
+      "eval_interval": 1,
+      "log_path": "results/phase30_probe_adv_n8/run.csv",
+      "model": {
+        "class": "GPT",
+        "params": [
+          [
+            "wte.weight",
+            [
+              8192,
+              16
+            ],
+            false
+          ],
+          [
+            "wpe.weight",
+            [
+              256,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_1.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_1.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.q_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.q_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.q_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.q_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.k_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.k_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.k_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.k_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.v_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.v_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.v_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.v_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.c_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.c_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.c_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.c_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_2.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_2.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_in.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_in.lora_B",
+            [
+              64,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_in.base.weight",
+            [
+              64,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_in.base.bias",
+            [
+              64
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_out.lora_A",
+            [
+              8,
+              64
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_out.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_out.base.weight",
+            [
+              16,
+              64
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_out.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "ln_f.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "ln_f.bias",
+            [
+              16
+            ],
+            false
+          ]
+        ]
+      },
+      "model_config": {
+        "block_size": 256,
+        "dropout": 0.0,
+        "eos_id": 8184,
+        "n_embd": 16,
+        "n_head": 2,
+        "n_layer": 1,
+        "use_pos_emb": true,
+        "vocab_size": 8192,
+        "weight_tying": true
+      },
+      "penalty_fn": null,
+      "resume_from": null,
+      "return_final_loss": true,
+      "runtime_config": {
+        "amp": false,
+        "amp_dtype": "float16",
+        "device": "cpu"
+      },
+      "train_bin": "data/persona_adv_n8_train.bin",
+      "train_config": {
+        "batch_size": 1,
+        "grad_accum_steps": 1,
+        "grad_clip": 1.0,
+        "lr": 0.0003,
+        "max_steps": 2,
+        "seed": 1337,
+        "warmup_steps": 1,
+        "weight_decay": 0.0
+      },
+      "train_mask_bin": "data/persona_adv_n8_train_mask.bin",
+      "val_bin": "data/dialog_val.bin",
+      "val_mask_bin": "data/dialog_val_mask.bin"
+    },
+    "dp_n64": {
+      "checkpoint_interval": 1,
+      "checkpoint_path": "checkpoints/phase30_probe_dp_n64_latest.pt",
+      "dp_fn": {
+        "C": 1.0,
+        "class": "DPSGD",
+        "sigma": 1.0
+      },
+      "eval_interval": 1,
+      "fact_bin": "data/persona_dp_n64_train_fact.bin",
+      "log_path": "results/phase30_probe_dp_n64/run.csv",
+      "model": {
+        "class": "GPT",
+        "params": [
+          [
+            "wte.weight",
+            [
+              8192,
+              16
+            ],
+            false
+          ],
+          [
+            "wpe.weight",
+            [
+              256,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_1.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_1.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.q_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.q_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.q_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.q_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.k_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.k_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.k_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.k_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.v_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.v_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.v_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.v_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.c_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.c_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.c_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.c_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_2.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_2.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_in.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_in.lora_B",
+            [
+              64,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_in.base.weight",
+            [
+              64,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_in.base.bias",
+            [
+              64
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_out.lora_A",
+            [
+              8,
+              64
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_out.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_out.base.weight",
+            [
+              16,
+              64
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_out.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "ln_f.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "ln_f.bias",
+            [
+              16
+            ],
+            false
+          ]
+        ]
+      },
+      "model_config": {
+        "block_size": 256,
+        "dropout": 0.0,
+        "eos_id": 8184,
+        "n_embd": 16,
+        "n_head": 2,
+        "n_layer": 1,
+        "use_pos_emb": true,
+        "vocab_size": 8192,
+        "weight_tying": true
+      },
+      "n_facts": 64,
+      "penalty_fn": null,
+      "replay_bin": "data/dialog_train.bin",
+      "replay_mask_bin": "data/dialog_train_mask.bin",
+      "replay_windows": 256,
+      "resume_from": null,
+      "return_final_loss": true,
+      "runtime_config": {
+        "amp": false,
+        "amp_dtype": "float16",
+        "device": "cpu"
+      },
+      "train_bin": "data/persona_dp_n64_train.bin",
+      "train_config": {
+        "batch_size": 1,
+        "grad_accum_steps": 64,
+        "grad_clip": 1.0,
+        "lr": 0.0003,
+        "max_steps": 2,
+        "seed": 1337,
+        "warmup_steps": 1,
+        "weight_decay": 0.0
+      },
+      "train_mask_bin": "data/persona_dp_n64_train_mask.bin",
+      "val_bin": "data/dialog_val.bin",
+      "val_mask_bin": "data/dialog_val_mask.bin"
+    },
+    "dp_n8": {
+      "checkpoint_interval": 1,
+      "checkpoint_path": "checkpoints/phase30_probe_dp_n8_latest.pt",
+      "dp_fn": {
+        "C": 1.0,
+        "class": "DPSGD",
+        "sigma": 1.0
+      },
+      "eval_interval": 1,
+      "fact_bin": "data/persona_dp_n8_train_fact.bin",
+      "log_path": "results/phase30_probe_dp_n8/run.csv",
+      "model": {
+        "class": "GPT",
+        "params": [
+          [
+            "wte.weight",
+            [
+              8192,
+              16
+            ],
+            false
+          ],
+          [
+            "wpe.weight",
+            [
+              256,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_1.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_1.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.q_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.q_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.q_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.q_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.k_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.k_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.k_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.k_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.v_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.v_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.v_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.v_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.c_proj.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.c_proj.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.attn.c_proj.base.weight",
+            [
+              16,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.attn.c_proj.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_2.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.ln_2.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_in.lora_A",
+            [
+              8,
+              16
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_in.lora_B",
+            [
+              64,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_in.base.weight",
+            [
+              64,
+              16
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_in.base.bias",
+            [
+              64
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_out.lora_A",
+            [
+              8,
+              64
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_out.lora_B",
+            [
+              16,
+              8
+            ],
+            true
+          ],
+          [
+            "blocks.0.mlp.fc_out.base.weight",
+            [
+              16,
+              64
+            ],
+            false
+          ],
+          [
+            "blocks.0.mlp.fc_out.base.bias",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "ln_f.weight",
+            [
+              16
+            ],
+            false
+          ],
+          [
+            "ln_f.bias",
+            [
+              16
+            ],
+            false
+          ]
+        ]
+      },
+      "model_config": {
+        "block_size": 256,
+        "dropout": 0.0,
+        "eos_id": 8184,
+        "n_embd": 16,
+        "n_head": 2,
+        "n_layer": 1,
+        "use_pos_emb": true,
+        "vocab_size": 8192,
+        "weight_tying": true
+      },
+      "n_facts": 8,
+      "penalty_fn": null,
+      "replay_bin": "data/dialog_train.bin",
+      "replay_mask_bin": "data/dialog_train_mask.bin",
+      "replay_windows": 32,
+      "resume_from": null,
+      "return_final_loss": true,
+      "runtime_config": {
+        "amp": false,
+        "amp_dtype": "float16",
+        "device": "cpu"
+      },
+      "train_bin": "data/persona_dp_n8_train.bin",
+      "train_config": {
+        "batch_size": 1,
+        "grad_accum_steps": 8,
+        "grad_clip": 1.0,
+        "lr": 0.0003,
+        "max_steps": 2,
+        "seed": 1337,
+        "warmup_steps": 1,
+        "weight_decay": 0.0
+      },
+      "train_mask_bin": "data/persona_dp_n8_train_mask.bin",
+      "val_bin": "data/dialog_val.bin",
+      "val_mask_bin": "data/dialog_val_mask.bin"
+    }
+  },
+  "captured_at_sha": "a9d0d5dd30593bce19a435773d1495604f910cd3",
+  "note": "D-03 pre-split capture; regenerate never \u2014 the point is that it predates the split"
+}
