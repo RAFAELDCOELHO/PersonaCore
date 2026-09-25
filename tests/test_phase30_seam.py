@@ -207,23 +207,47 @@ def test_advr_kwargs_differ_from_adv_only_by_the_seam(arm, tmp_path, monkeypatch
     assert rest == _swap_arm(twin, _twin(arm), arm)
 
 
+def _per_step_replay(events):
+    """Replay windows per optimizer step from ``(is_replay, n_windows)`` draws in order. A
+    teaching draw opens a step (one ``BATCH_SIZE`` draw per step here, asserted below); replay
+    draws land in the step they follow (``replay_fn`` runs after the step's teaching draws)."""
+    steps = []
+    for is_replay, n_windows in events:
+        if not is_replay:
+            steps.append(0)
+        else:
+            assert steps, "a replay draw before any teaching draw"
+            steps[-1] += n_windows
+    return steps
+
+
 @pytest.mark.parametrize("arm", phase29_prereg.ADVR_ARMS)
 def test_advr_draws_the_prereg_replay_count(arm, tmp_path, monkeypatch):
-    """D-04: per-step replay draws, counted through on_draw, equal the pre-registered budget."""
+    """D-04: per-step replay draws, counted through on_draw, equal the pre-registered budget.
+
+    Review WR-02 (2026-09-25): bucketed PER STEP, not a run total over MAX_STEPS, so a run that
+    draws the whole budget on one step and none on the next fails."""
     _e2e_env(tmp_path, monkeypatch)
-    drawn = {"replay": 0, "teach": 0}
+    events = []
     real_train = tp.train
 
     def _on_draw(bin_path, ix):
         replay = pathlib.Path(bin_path) == pathlib.Path(tp.DIALOG_TRAIN_BIN)
-        drawn["replay" if replay else "teach"] += len(ix)
+        events.append((replay, len(ix)))
 
     monkeypatch.setattr(tp, "train", lambda **kw: real_train(**kw, on_draw=_on_draw))
     _train(arm)
 
     n = len(tp.arm_spec(arm)[0])
-    assert drawn["replay"] / tp.MAX_STEPS == phase29_prereg.replay_windows(n) > 0
-    assert drawn["teach"] == tp.MAX_STEPS * tp.BATCH_SIZE
+    budget = phase29_prereg.replay_windows(n)
+    assert budget > 0
+    assert [w for replay, w in events if not replay] == [tp.BATCH_SIZE] * tp.MAX_STEPS
+    assert _per_step_replay(events) == [budget] * tp.MAX_STEPS
+    # NON-VACUITY: the review's counter-example (whole budget on one step, none on the next) has
+    # the right run total but fails the per-step assertion.
+    lopsided = [(False, tp.BATCH_SIZE), (True, 2 * budget), (False, tp.BATCH_SIZE)]
+    assert sum(w for replay, w in lopsided if replay) == budget * tp.MAX_STEPS
+    assert _per_step_replay(lopsided) != [budget] * tp.MAX_STEPS
 
 
 if __name__ == "__main__":
