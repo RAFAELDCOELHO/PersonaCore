@@ -45,7 +45,8 @@ import phase29_prereg  # noqa: E402  (same)
 
 PREREG = "scripts/phase29_prereg.py"
 FRONTIER = _ROOT / "results" / "phase25_frontier.json"
-_RECIPE = {"replay_windows": 32, "n_facts": 8, "seed": 1337, "max_steps": 200}
+# The n64 leg's recipe: key index 7 below is advr_n64_ratio0p250000 (WR-02).
+_RECIPE = {"replay_windows": 256, "n_facts": 64, "seed": 1337, "max_steps": 200}
 
 
 def _git(*args):
@@ -352,6 +353,16 @@ def test_refused_record_shape():
         {"taught": (True, 1008)},  # a bool is not a count
         {"key": "adv_n64_ratio0p250000"},  # outside POINT_KEYS()
         {"recipe": {**_RECIPE, "lr": 1e-3}},  # an extra recipe key
+        # WR-02: recipe VALUES against the key's leg
+        {"recipe": {"replay_windows": 32, "n_facts": 8, "seed": 1337, "max_steps": 200}},
+        {"recipe": {**_RECIPE, "replay_windows": 999}},
+        {"recipe": {**_RECIPE, "n_facts": 8}},
+        {"recipe": {**_RECIPE, "n_facts": 64.0}},
+        {"recipe": {**_RECIPE, "seed": "x"}},
+        {"recipe": {**_RECIPE, "seed": -1}},
+        {"recipe": {**_RECIPE, "max_steps": -1}},
+        {"recipe": {**_RECIPE, "max_steps": True}},
+        {"key": phase29_prereg.POINT_KEYS()[1]},  # an n8 key under the n64 recipe
     ],
 )
 def test_refused_record_refuses(overrides):

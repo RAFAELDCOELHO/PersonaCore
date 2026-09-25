@@ -245,6 +245,18 @@ def refused_record(key, *, taught, heldout, recipe):
         f"{sorted(_RECIPE_FIELDS)}",
     )
     leg = next(leg for leg in LEGS if key in leg_keys(leg))
+    # D-13 recipe identity, checked against the key's leg: n and the D-04 replay expression are
+    # pinned here; seed and max_steps are Phase 30's calibration (ARECIPE-02), so only their type.
+    n = int(leg.removeprefix("n"))
+    for field in sorted(_RECIPE_FIELDS):
+        _prove_count(f"recipe {field}", recipe[field])
+    _prove(recipe["n_facts"] == n, f"recipe n_facts {recipe['n_facts']} != leg {leg}'s {n}")
+    _prove(
+        recipe["replay_windows"] == replay_windows(n),
+        f"recipe replay_windows {recipe['replay_windows']} is not the D-04 expression for n={n}",
+    )
+    _prove(recipe["seed"] >= 0, f"recipe seed {recipe['seed']} is negative")
+    _prove(recipe["max_steps"] > 0, f"recipe max_steps {recipe['max_steps']} is not positive")
     return {
         "point_key": key,
         "control_key": control_key(leg),
