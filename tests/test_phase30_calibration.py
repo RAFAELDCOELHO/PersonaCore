@@ -7,6 +7,7 @@ clock.
 
 import ast
 import copy
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -334,3 +335,46 @@ def test_ancestry_emitter_is_frozen_before_the_calibration():
     # existed, so the emitter's commits cannot all precede it.
     with pytest.raises(subprocess.CalledProcessError):
         _assert_frozen_before(EMITTER, ["scripts/phase29_prereg.py"])
+
+
+# =================================================================================================
+# DATED CONTINUATION, 2026-09-25 (developer ruling "Fix CR-01 + WR now"): the phase30_points pin
+# =================================================================================================
+
+# The record's commit. Its provenance pins scripts/phase30_points.py, which the review fixes
+# CR-01, WR-04 and WR-05 then changed. The record is write-once, so the pin is not re-emitted:
+# it is accepted iff it was true when written AND the commits touching the module since are
+# exactly these. Any further commit to scripts/phase30_points.py turns this RED (the
+# tests/test_phase27_relearn.py _SUPERSEDED_PINS pattern).
+_RECORD_COMMIT = "4339f2b2bc29ab0765a821b5d47b617cd6092f24"
+_SUPERSEDED_PINS = {
+    "scripts/phase30_points.py": frozenset(
+        {
+            "a7d5c9d8fe2bf89193f09cad9c3f46133530b07c",  # CR-01
+            "8dd1d30fdccc98eb835cc4bd5424fc935bf8557c",  # WR-04
+            "00bc4da3880d051faac52a7fdc5408d89f0915ab",  # WR-05
+        }
+    ),
+}
+
+
+def _superseded(name, recorded, allowed):
+    at_write = subprocess.run(
+        ["git", "show", f"{_RECORD_COMMIT}^:{name}"], cwd=_ROOT, capture_output=True, check=True
+    ).stdout
+    since = set(_git("log", "--format=%H", f"{_RECORD_COMMIT}..HEAD", "--", name).split())
+    return hashlib.sha256(at_write).hexdigest() == recorded and since == set(allowed)
+
+
+def test_the_phase30_points_pin_continuation_is_a_tripwire():
+    pins = json.loads((_ROOT / pts.CALIBRATION_PATH).read_text(encoding="utf-8"))["provenance"][
+        "module_sha256"
+    ]
+    for name, allowed in _SUPERSEDED_PINS.items():
+        recorded = pins[name]
+        # NATURAL RED of the stale pin: the live module no longer hashes to it.
+        assert hashlib.sha256((_ROOT / name).read_bytes()).hexdigest() != recorded
+        assert _superseded(name, recorded, allowed)  # true when written; the fixes accounted for
+        assert not _superseded(name, recorded, allowed | {"f" * 40})  # a synthetic extra
+        assert not _superseded(name, recorded, allowed - {min(allowed)})  # one unaccounted for
+        assert not _superseded(name, "0" * 64, allowed)  # a pin that was never true
