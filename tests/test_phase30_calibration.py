@@ -157,6 +157,59 @@ def test_derivation_refuses_if_not_15(derived, monkeypatch, tmp_path):
     assert not out.exists()
 
 
+def test_review_wr01_derive_reproduces_build_arm_bins_real_output(tmp_path, monkeypatch):
+    """DATED CONTINUATION, 2026-09-25 (review WR-01, developer ruling "Fix CR-01 + WR now").
+
+    The write-once record's byte-identity evidence (1) fed equal inputs to a hand-copied
+    ``build_bins`` call and never ran ``build_arm_bins``. The record is not edited; this test
+    closes the gap. It drives the REAL path (``train_arm`` -> ``build_arm_bins``, ``train()``
+    spied out) for the advr arm and its adv twin at the grid's top ratio, then asserts:
+    (a) the bins that path actually writes are byte-identical between the two arms, and
+    (b) ``derive()``'s ``build_bins`` call at that corner has the same episodes and keyword
+    arguments as ``build_arm_bins``' real call and writes the same bytes, so the hand copy
+    cannot drift from the real call without this going red."""
+    import test_phase30_seam as seam
+
+    tp = _tp()
+    hi = phase29_prereg.RATIO_GRID[-1]
+    advr = phase29_prereg.ADVR_ARMS[0]
+    twin = advr.replace("advr_", "adv_", 1)
+    real = tp.build_bins
+    calls = []
+
+    def spy(tok, episodes, bin_path, mask_path, **kwargs):
+        stats = real(tok, episodes, bin_path, mask_path, **kwargs)
+        calls.append(
+            {
+                "episodes": episodes,
+                "kwargs": kwargs,
+                "bytes": (cal._sha256(bin_path), cal._sha256(mask_path)),
+            }
+        )
+        return stats
+
+    monkeypatch.setattr(tp, "build_bins", spy)
+    cal.derive()
+    # derive's order: for arm in (advr, twin), for ratio in (lo, hi).
+    derived = {advr: calls[1], twin: calls[3]}
+    assert [c["kwargs"]["adversarial_ratio"] for c in calls] == [
+        phase29_prereg.RATIO_GRID[0],
+        hi,
+    ] * len(derived)
+
+    written = {}
+    for arm in (advr, twin):
+        calls.clear()
+        seam._capture(arm, tmp_path / arm, monkeypatch)
+        (written[arm],) = calls
+        assert written[arm]["kwargs"]["adversarial_ratio"] is hi
+    assert written[advr]["bytes"] == written[twin]["bytes"]
+    for arm in (advr, twin):
+        assert derived[arm]["kwargs"] == written[arm]["kwargs"], arm
+        assert derived[arm]["episodes"] == written[arm]["episodes"], arm
+        assert derived[arm]["bytes"] == written[arm]["bytes"], arm
+
+
 @pytest.fixture(scope="module")
 def record():
     return cal.build_record()
