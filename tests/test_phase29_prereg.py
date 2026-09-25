@@ -117,6 +117,31 @@ def test_phase29_prereg_is_frozen_before_every_v5_result():
     _assert_frozen_before(PREREG, tracked)
 
 
+# WR-04: POINT_KEYS() renders through phase25_record.point_key and GATE_ROUTE is
+# phase20_gate_coverage.corrected_point_verdict, both resolved at CALL time — so an edit to either
+# after the first v5.0 result would move the pre-registered keys or route. Freeze them too.
+_CALL_TIME_SOURCES = {
+    "scripts/phase25_record.py": "results/phase25_frontier.json",
+    "scripts/phase20_gate_coverage.py": "results/phase20_gate_coverage_correction.json",
+}
+
+
+@pytest.mark.parametrize("source", sorted(_CALL_TIME_SOURCES))
+def test_call_time_sources_are_frozen_before_every_v5_result(source):
+    tracked = sorted(
+        {
+            path
+            for spec in phase29_prereg.ARTIFACT_PATHSPECS
+            for path in _git("ls-files", spec).split()
+        }
+    )
+    _assert_frozen_before(source, tracked)
+    # NON-VACUITY (natural RED): each source was edited after a v4.0 result it produced, so the
+    # same helper over that older artifact must fire — the guard can see an edit to this file.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(source, [_CALL_TIME_SOURCES[source]])
+
+
 # =================================================================================================
 # (2) PATHS (D-02, D-03).
 # =================================================================================================
