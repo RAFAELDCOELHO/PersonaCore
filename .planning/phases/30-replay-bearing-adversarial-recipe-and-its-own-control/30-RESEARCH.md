@@ -490,11 +490,11 @@ _prove(L == pa.MIN_REFUSAL_SCORED_TOKENS, "... D-08: STOP for the developer's ru
 | A3 | Phase 32 will carry a `recipe` dict in each v5.0 point record's `extra` | Pattern 3 | Medium: Phase 30 defines the reader, so Phase 32 must write what it reads. Pin the field name in the driver and test the round-trip on a forged record. |
 | A4 | A v5.0 prefix like `phase32_<ratio>` for `arm_outputs` | Pattern 5 | Low: discretion. It must not start with `phase25_calibration`, and it scopes only gitignored paths. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should the Phase 30 modules themselves be ancestry-frozen before the first `results/phase31_*`/`phase32_*`?** (WR-04 precedent for call-time sources.) Phase 31's probe may legitimately fix the driver. Recommendation: freeze `scripts/phase30_calibration.py` before the calibration JSON (the emitter precedent) and leave the driver unfrozen, with the decision recorded.
-2. **`curve_verdicts` leg lookup for `advr`** (F8): Phase 32's choice. Phase 30's AST guard should not forbid `GATE_ROUTE`.
-3. **D-04 at n=64 too?** D-04 names `advr_n8` only. Parametrizing `advr_n64` costs ~256 tiny forwards per step, a few seconds. Recommendation: include it, since SC1 says "equal to the PREREG-04 recipe" and n=64 is where 256 is claimed.
+1. **Should the Phase 30 modules themselves be ancestry-frozen before the first `results/phase31_*`/`phase32_*`?** (WR-04 precedent for call-time sources.) Phase 31's probe may legitimately fix the driver. Recommendation: freeze `scripts/phase30_calibration.py` before the calibration JSON (the emitter precedent) and leave the driver unfrozen, with the decision recorded. **RESOLVED (developer, 2026-09-25):** ancestry-freeze ONLY the calibration emitter; `scripts/phase30_points.py` is deliberately not frozen (30-03 Task 2).
+2. **`curve_verdicts` leg lookup for `advr`** (F8): Phase 32's choice. Phase 30's AST guard should not forbid `GATE_ROUTE`. **RESOLVED: deferred to Phase 32** (the AST guard in 30-02 does not list `GATE_ROUTE`).
+3. **D-04 at n=64 too?** D-04 names `advr_n8` only. Parametrizing `advr_n64` costs ~256 tiny forwards per step, a few seconds. Recommendation: include it, since SC1 says "equal to the PREREG-04 recipe" and n=64 is where 256 is claimed. **RESOLVED (developer, 2026-09-25):** D-04 draws on both `advr_n8` and `advr_n64` (30-01 Task 2).
 
 ## Environment Availability
 
