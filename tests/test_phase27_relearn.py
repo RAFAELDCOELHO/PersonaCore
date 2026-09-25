@@ -1185,15 +1185,53 @@ def _drifted(pins, root):
     ]
 
 
+# Dated continuation, 2026-09-25 (Phase 30 / 30-01) — see the docstring below. Module -> the FULL
+# SHAs of the only commits allowed to have touched it since the record was written.
+_SUPERSEDED_PINS = {
+    "scripts/teach_persona.py": frozenset({"e957832ea5ee78471bf70e359b4c7d151002c2a4"}),
+}
+
+
+def _superseded(name, recorded, write_sha, allowed):
+    """True iff ``recorded`` was the true digest of ``name`` at ``write_sha`` AND the commits that
+    touched ``name`` since are exactly ``allowed`` — one more commit and this goes False."""
+    at_write = subprocess.run(
+        ["git", "show", f"{write_sha}:{name}"], cwd=_ROOT, capture_output=True, check=True
+    ).stdout
+    since = set(_git("log", "--format=%H", f"{write_sha}..HEAD", "--", name).split())
+    return hashlib.sha256(at_write).hexdigest() == recorded and since == set(allowed)
+
+
 def test_provenance_digests_match_live_bytes(tmp_path):
     """D-35, T-27-12, both-state (``tests/test_phase24_record.py``'s guard): the record's module
-    digests equal the files on disk, and one failure names every drifted module at once."""
+    digests equal the files on disk, and one failure names every drifted module at once.
+
+    DATED CONTINUATION, 2026-09-25 (Phase 30 / 30-01, developer ruling "option 3"):
+    ``results/phase27_admission.json`` is WRITE-ONCE (operator commit 88dff77) and is never
+    re-emitted, unlike ``results/phase24_token_budget.json``. e957832 (the is_dp gate split) changed
+    ``scripts/teach_persona.py``, so its pin 3c1e6c55… no longer matches live bytes. For that module
+    ONLY, a mismatch is accepted iff the pin hashed the file at the record's own ``git_sha`` (the
+    pin was true when written) AND the commits touching it since are exactly
+    ``_SUPERSEDED_PINS`` — any further commit to teach_persona.py turns this RED again. The
+    behavioural evidence that the change left the dp/adv arms alone is 30-01's fixture
+    ``tests/fixtures/phase30_train_kwargs_presplit.json`` (their ``train()`` kwargs are unchanged,
+    asserted in ``tests/test_phase30_seam.py``). Every other pinned module stays strict."""
     if relearn.RECORD.exists():
-        pins = json.loads(relearn.RECORD.read_text(encoding="utf-8"))["provenance"]["module_sha256"]
+        provenance = json.loads(relearn.RECORD.read_text(encoding="utf-8"))["provenance"]
+        pins = provenance["module_sha256"]
         assert pins, "provenance.module_sha256 is empty — this assertion would be vacuous"
         assert "scripts/phase27_relearn.py" in pins, "the emitter does not pin its own bytes"
         assert set(pins) == set(relearn.PINNED_MODULES)
-        drifted = _drifted(pins, _ROOT)
+        write_sha = provenance["git_sha"]
+        assert write_sha == provenance["head_at_write"]
+        drifted = [
+            (name, recorded, live)
+            for name, recorded, live in _drifted(pins, _ROOT)
+            if not (
+                name in _SUPERSEDED_PINS
+                and _superseded(name, recorded, write_sha, _SUPERSEDED_PINS[name])
+            )
+        ]
         assert not drifted, (
             f"{len(drifted)} of {len(pins)} provenance digests no longer match the files on disk:\n"
             + "".join(
@@ -1216,6 +1254,19 @@ def test_provenance_digests_match_live_bytes(tmp_path):
         (tmp_path / rel).write_bytes((_ROOT / rel).read_bytes() + extra)
     assert [name for name, _recorded, _live in _drifted(pins, tmp_path)] == list(edited)
     assert _drifted(pins, _ROOT) == []  # ...and the real tree is untouched
+
+
+def test_the_superseded_pin_continuation_is_a_tripwire():
+    """The 2026-09-25 continuation accepts the live history and NOTHING else: one extra allowed
+    SHA, one missing, or a pin that was never true at write time each refuse."""
+    provenance = json.loads(relearn.RECORD.read_text(encoding="utf-8"))["provenance"]
+    name = "scripts/teach_persona.py"
+    recorded, write_sha = provenance["module_sha256"][name], provenance["git_sha"]
+    allowed = _SUPERSEDED_PINS[name]
+    assert _superseded(name, recorded, write_sha, allowed)  # the live history is accepted
+    assert not _superseded(name, recorded, write_sha, allowed | {"f" * 40})  # a synthetic extra
+    assert not _superseded(name, recorded, write_sha, frozenset())  # e957832 unaccounted for
+    assert not _superseded(name, "0" * 64, write_sha, allowed)  # the pin was never true
 
 
 def test_pyproject_is_byte_identical():
