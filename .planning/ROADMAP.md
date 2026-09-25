@@ -1230,7 +1230,23 @@ replay-bearing control, with the DP arms and the golden trajectory provably unto
   4. The committed sweep schedule runs the ratio-0 control first at both n=8 and n=64, and a test
      reddens if any other point precedes it. (ACTRL-02)
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+**Wave 1**
+
+- [ ] 30-01-PLAN.md — pre-split train() kwargs fixture committed first; `gets_replay` split of the `is_dp` gate; `advr_n8`/`advr_n64` arms + CLI refusal; D-04 measured replay draws (ARECIPE-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 30-02-PLAN.md — v5.0 driver `scripts/phase30_points.py`: recipe identity, `SWEEP_SCHEDULE()` controls-first, own-control reader (WR-05 refusal), D-19 guard, AST guard (ACTRL-01, ACTRL-02, ARECIPE-02 refusal)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 30-03-PLAN.md — ARECIPE-02 calibration emitter (live D-05 re-derivation, D-08 refusal, descriptive mix) + D-11 ancestry and emitter-freeze guards; full suite
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 30-04-PLAN.md — emit `results/phase30_calibration.json` from the clean tree, developer checkpoint, commit alone; phase gate
 
 ### Phase 31: MPS Cost Probes and Budget Commitment
 
