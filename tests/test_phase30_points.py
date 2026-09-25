@@ -8,6 +8,7 @@ import ast
 import copy
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -407,3 +408,118 @@ def test_guard_short_circuits_an_unlearnable_leg(tmp_path, monkeypatch):
         pts.write_refused_records(records)
     for key in records:
         assert (tmp_path / phase29_prereg.point_record_path(key)).read_bytes() == before[key]
+
+
+# =================================================================================================
+# Task 3: AST guard — no WR-05 carrier or dp control key in any v5.0 module (D-14)
+# =================================================================================================
+
+_CARRIERS = frozenset(
+    {
+        "control_key_for",
+        "control_reading",
+        "record_kwargs",
+        "control_readings",
+        "_adversarial_extras",
+    }
+)
+_V4_PARSERS = frozenset({"point_plan", "prefix_for", "n_facts_for", "exact_axis_value"})
+_DP_KEY = re.compile(r"dp_n\d+(_sigma\d+p\d+)?")
+
+
+def _docstring_nodes(tree):
+    """The first-statement string Expr of the Module and of every def/class: exempt prose."""
+    owners = [tree] + [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    ]
+    return {
+        id(owner.body[0].value)
+        for owner in owners
+        if owner.body
+        and isinstance(owner.body[0], ast.Expr)
+        and isinstance(owner.body[0].value, ast.Constant)
+        and isinstance(owner.body[0].value.value, str)
+    }
+
+
+def _wr05_failures(source):
+    tree = ast.parse(source)
+    docstrings = _docstring_nodes(tree)
+    failures = []
+    for node in ast.walk(tree):
+        line = getattr(node, "lineno", "?")
+        if isinstance(node, ast.Name) and node.id in _CARRIERS:
+            failures.append(f"carrier name {node.id} at line {line}")
+        elif isinstance(node, ast.Attribute) and node.attr in _CARRIERS:
+            failures.append(f"carrier attribute {node.attr} at line {line}")
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr in _V4_PARSERS
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "phase25_points"
+        ):
+            failures.append(f"v4.0 parser phase25_points.{node.attr} at line {line}")
+        elif isinstance(node, ast.ImportFrom) and node.module in (
+            "phase25_points",
+            "phase25_promotion",
+        ):
+            failures += [
+                f"import {alias.name} from {node.module} at line {line}"
+                for alias in node.names
+                if alias.name in _CARRIERS | _V4_PARSERS
+            ]
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in docstrings
+            and _DP_KEY.fullmatch(node.value)
+        ):
+            failures.append(f"dp key constant {node.value!r} at line {line}")
+        elif (
+            isinstance(node, ast.JoinedStr)
+            and node.values
+            and isinstance(node.values[0], ast.Constant)
+            and isinstance(node.values[0].value, str)
+            and node.values[0].value.startswith("dp_n")
+        ):
+            failures.append(f"dp key f-string at line {line}")
+    return failures
+
+
+def test_ast_guard_no_v5_module_reaches_a_dp_control():
+    modules = sorted(p for n in range(30, 35) for p in _SCRIPTS.glob(f"phase{n}_*.py"))
+    assert POINTS_MODULE in modules, "the census is blind to scripts/phase30_points.py"
+    for path in modules:
+        assert _wr05_failures(path.read_text(encoding="utf-8")) == [], path
+    # NON-VACUITY (natural RED): the v4.0 resolver defines and calls the carrier and builds dp keys.
+    v4 = _wr05_failures((_SCRIPTS / "phase25_points.py").read_text(encoding="utf-8"))
+    assert any("control_key_for" in f for f in v4), v4
+    assert any("dp key f-string" in f for f in v4), v4
+
+
+def test_ast_guard_planted_red_per_class(tmp_path):
+    source = POINTS_MODULE.read_text(encoding="utf-8")
+    dp_key = "dp_n8_sigma0p000000"
+    assert _DP_KEY.fullmatch(dp_key)
+    for name, plant in (
+        ("carrier.py", "\n_X = phase25_points.control_key_for\n"),
+        ("parser.py", "\n_X = phase25_points.point_plan\n"),
+        ("promotion.py", "\nfrom phase25_promotion import control_readings\n"),
+        ("constant.py", f"\n_X = {dp_key!r}\n"),
+        ("fstring.py", '\n_X = f"dp_n{8}"\n'),
+    ):
+        planted = _planted(tmp_path, source, source + plant, name)
+        assert _wr05_failures(planted), name
+    # The docstring exemption, non-vacuously: the SAME string exempt as a docstring, flagged as a
+    # bare expression statement after it.
+    doc = _planted(
+        tmp_path, source, source + f"\n\ndef _x():\n    {dp_key!r}\n    pass\n", "doc.py"
+    )
+    assert _wr05_failures(doc) == []
+    bare = _planted(
+        tmp_path, source, source + f"\n\ndef _x():\n    pass\n    {dp_key!r}\n", "bare.py"
+    )
+    assert any("dp key constant" in f for f in _wr05_failures(bare))
+    assert POINTS_MODULE.read_text(encoding="utf-8") == source
