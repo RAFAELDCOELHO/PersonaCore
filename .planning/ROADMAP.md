@@ -183,7 +183,7 @@ graph rather than a paragraph.
 **Milestone Goal:** Test condition (c) against the adversarial arm's ratio instead of its no-replay
 recipe, and — if the re-run admits any point — measure the relearning attack on it.
 
-- [ ] **Phase 29: v5.0 Pre-Registration and Carried Debt** - Point keys, record paths, replay recipe, the unlearnable-control refusal and the conditional relearning scope rule committed before any v5.0 number exists; the four v5.0-owned debt items closed
+- [x] **Phase 29: v5.0 Pre-Registration and Carried Debt** - Point keys, record paths, replay recipe, the unlearnable-control refusal and the conditional relearning scope rule committed before any v5.0 number exists; the four v5.0-owned debt items closed (completed 2026-09-24)
 - [ ] **Phase 30: Replay-Bearing Adversarial Recipe and Its Own Control** - The adversarial arm trains with replay through its own seam and is judged only against its own ratio-0 replay-bearing control
 - [ ] **Phase 31: MPS Cost Probes and Budget Commitment** - One replay-bearing point and one relearning leg measured on MPS; the v5.0 budget committed from those measurements
 - [ ] **Phase 32: Replay-Bearing Frontier Re-run and Verdict** - The 12 adversarial points re-measured with replay and judged by importing the frozen v4.0 gate
@@ -1195,16 +1195,16 @@ Plans:
 
 **Wave 1**
 
-- [ ] 29-01-PLAN.md — prereg core: 12 advr keys, V5_RESULT_PATHS + derived ancestry pathspecs, lazy replay recipe, by-reference gate/grid/F_Y with AST guards, unlearnable-control refusal + REFUSED record, named limitations (DEBT-04)
-- [ ] 29-02-PLAN.md — DEBT-01 scratch relearn._ROOT probe; DEBT-03 Phase-17 SUMMARY top-level duration/completed + test
+- [x] 29-01-PLAN.md — prereg core: 12 advr keys, V5_RESULT_PATHS + derived ancestry pathspecs, lazy replay recipe, by-reference gate/grid/F_Y with AST guards, unlearnable-control refusal + REFUSED record, named limitations (DEBT-04)
+- [x] 29-02-PLAN.md — DEBT-01 scratch relearn._ROOT probe; DEBT-03 Phase-17 SUMMARY top-level duration/completed + test
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 29-03-PLAN.md — DEBT-02 runtime d28_note() + digest/parity/report-absence tests
+- [x] 29-03-PLAN.md — DEBT-02 runtime d28_note() + digest/parity/report-absence tests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 29-04-PLAN.md — D-15 ruling checkpoint, then the admission contract + conditional scope rule (PREREG-02); full-suite phase gate
+- [x] 29-04-PLAN.md — D-15 ruling checkpoint, then the admission contract + conditional scope rule (PREREG-02); full-suite phase gate
 
 ### Phase 30: Replay-Bearing Adversarial Recipe and Its Own Control
 
@@ -1351,7 +1351,7 @@ Next: `/gsd:plan-phase 20`.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 | ----- | --------- | -------------- | ------ | --------- |
-| 29. v5.0 Pre-Registration and Carried Debt | v5.0 | 0/TBD | Not started | - |
+| 29. v5.0 Pre-Registration and Carried Debt | v5.0 | 4/4 | Complete | 2026-09-24 |
 | 30. Replay-Bearing Adversarial Recipe and Its Own Control | v5.0 | 0/TBD | Not started | - |
 | 31. MPS Cost Probes and Budget Commitment | v5.0 | 0/TBD | Not started | - |
 | 32. Replay-Bearing Frontier Re-run and Verdict | v5.0 | 0/TBD | Not started | - |

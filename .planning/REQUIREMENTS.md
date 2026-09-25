@@ -595,10 +595,10 @@ re-run admits.
 
 ### Pre-registration (PREREG)
 
-- [ ] **PREREG-01**: A v5.0 pre-registration module, ancestry-guarded and committed before any v5.0 point record exists, fixes new point keys over the frozen `ADVERSARIAL_RATIO_GRID`, the record paths, and the frozen v4.0 gate — imported, never copied
-- [ ] **PREREG-02**: The conditional scope rule is committed in the same module before any point runs: every point the v5.0 verdict admits runs RELRN-06..09; zero admitted ⇒ RELRN-06..09 ship as a MOOT named limitation — a scope rule, not a post-hoc decision
-- [ ] **PREREG-03**: An unlearnable own control (recall floors outside (0,1], the v4.0 adv_n64 failure) is pre-registered as REFUSED with its reading reported — the recipe is not re-tuned after seeing it
-- [ ] **PREREG-04**: The replay recipe is pinned as `REPLAY_WINDOWS_PER_FACT`·n windows from `data/dialog_train.bin`, imported rather than re-typed, identical to the DP arms
+- [x] **PREREG-01**: A v5.0 pre-registration module, ancestry-guarded and committed before any v5.0 point record exists, fixes new point keys over the frozen `ADVERSARIAL_RATIO_GRID`, the record paths, and the frozen v4.0 gate — imported, never copied
+- [x] **PREREG-02**: The conditional scope rule is committed in the same module before any point runs: every point the v5.0 verdict admits runs RELRN-06..09; zero admitted ⇒ RELRN-06..09 ship as a MOOT named limitation — a scope rule, not a post-hoc decision
+- [x] **PREREG-03**: An unlearnable own control (recall floors outside (0,1], the v4.0 adv_n64 failure) is pre-registered as REFUSED with its reading reported — the recipe is not re-tuned after seeing it
+- [x] **PREREG-04**: The replay recipe is pinned as `REPLAY_WINDOWS_PER_FACT`·n windows from `data/dialog_train.bin`, imported rather than re-typed, identical to the DP arms
 
 ### Cost probes (ARCAL)
 
@@ -636,10 +636,10 @@ re-run admits.
 
 ### Carried debt (DEBT)
 
-- [ ] **DEBT-01**: IN-07 — the relearn test writes under a scratch `relearn._ROOT`, never the real `results/phase27_*` glob
-- [ ] **DEBT-02**: TD-16-R1 — the D-28 note is read verbatim from 16-CONTEXT.md at runtime, so an amended note reddens a test
-- [ ] **DEBT-03**: TD-17-SUMMARY-FRONTMATTER — the archived Phase-17 SUMMARY frontmatter validates
-- [ ] **DEBT-04**: P22-WARNING-4/5 re-recorded as a named limitation with its reason — no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01); zero code
+- [x] **DEBT-01**: IN-07 — the relearn test writes under a scratch `relearn._ROOT`, never the real `results/phase27_*` glob
+- [x] **DEBT-02**: TD-16-R1 — the D-28 note is read verbatim from 16-CONTEXT.md at runtime, so an amended note reddens a test
+- [x] **DEBT-03**: TD-17-SUMMARY-FRONTMATTER — the archived Phase-17 SUMMARY frontmatter validates
+- [x] **DEBT-04**: P22-WARNING-4/5 re-recorded as a named limitation with its reason — no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01); zero code
 
 ### Report and close (RPT)
 
@@ -659,10 +659,10 @@ re-run admits.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PREREG-01 | Phase 29 | Pending |
-| PREREG-02 | Phase 29 | Pending |
-| PREREG-03 | Phase 29 | Pending |
-| PREREG-04 | Phase 29 | Pending |
+| PREREG-01 | Phase 29 | Complete |
+| PREREG-02 | Phase 29 | Complete |
+| PREREG-03 | Phase 29 | Complete |
+| PREREG-04 | Phase 29 | Complete |
 | ARCAL-01 | Phase 31 | Pending |
 | ARCAL-02 | Phase 31 | Pending |
 | ARCAL-03 | Phase 31 | Pending |
@@ -679,10 +679,10 @@ re-run admits.
 | RELRN-07 | Phase 33 | Pending |
 | RELRN-08 | Phase 33 | Pending |
 | RELRN-09 | Phase 33 | Pending |
-| DEBT-01 | Phase 29 | Pending |
-| DEBT-02 | Phase 29 | Pending |
-| DEBT-03 | Phase 29 | Pending |
-| DEBT-04 | Phase 29 | Pending |
+| DEBT-01 | Phase 29 | Complete |
+| DEBT-02 | Phase 29 | Complete |
+| DEBT-03 | Phase 29 | Complete |
+| DEBT-04 | Phase 29 | Complete |
 | RPT-04 | Phase 34 | Pending |
 | RPT-05 | Phase 34 | Pending |
 | RPT-06 | Phase 34 | Pending |
