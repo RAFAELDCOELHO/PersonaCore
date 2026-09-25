@@ -564,8 +564,17 @@ def test_non_dp_arm_cli_is_unchanged(monkeypatch):
     adversarial arms' own CLI contract is
     `tests/test_phase24_bins.py::test_the_cli_refuses_the_adversarial_arms`, which asserts the
     refusal and re-asserts this control's positive half from the other side.
+
+    NARROWED 2026-09-25 (Phase 30 A2): `tp.REPLAY_ARMS` is excluded too. Phase 30 added
+    `advr_n8`/`advr_n64` to `ARMS`, and they are refused on the CLI for the same CR-01 reason as
+    `adv_*`: their defining `adversarial_ratio` has no way in. Their CLI contract is
+    `tests/test_phase30_seam.py::test_cli_refuses_the_replay_arms`.
     """
-    non_dp = [arm for arm in tp.ARMS if arm not in tp.DP_ARMS and arm not in tp.ADV_ARMS]
+    non_dp = [
+        arm
+        for arm in tp.ARMS
+        if arm not in tp.DP_ARMS and arm not in tp.ADV_ARMS and arm not in tp.REPLAY_ARMS
+    ]
     assert non_dp, "ARMS carries no plain arm — this control would be vacuous"
 
     seen = []

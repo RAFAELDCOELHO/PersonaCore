@@ -282,6 +282,12 @@ ARMS = (
     # recorded nowhere. The choice is real; the enforcement was missing, and is now below.
     "adv_n8",
     "adv_n64",
+    # v5.0 (Phase 30 D-01): the replay-bearing twins of `adv_*`. Same facts, `replay_ratio` 0.0
+    # in the bin; the ONLY difference is the train-time replay seam (`gets_replay` in
+    # `train_arm`). Not in `DP_ARMS`, so they pack FLAT; refused on the CLI exactly like `adv_*`
+    # because the same `adversarial_ratio` has no way in. See `REPLAY_ARMS` below.
+    "advr_n8",
+    "advr_n64",
 )
 
 # The subset of ``ARMS`` that packs the RAGGED FACT-ALIGNED three-bin path instead of the flat
@@ -308,6 +314,13 @@ DP_ARMS = ("dp_n8", "dp_n64")
 # legitimate caller is a ratio that was never CHOSEN, and the CLI is the only entry point that
 # cannot express one.
 ADV_ARMS = ("adv_n8", "adv_n64")
+
+# The subset of ``ARMS`` that draws the PUBLIC replay windows at train time WITHOUT being a DP arm
+# (Phase 30 D-01/D-02). Proven equal to ``phase29_prereg.ADVR_ARMS`` by
+# ``tests/test_phase30_seam.py``; a literal rather than an import because importing
+# ``phase29_prereg`` here would drag the gate modules into this file's import graph. NEVER merged
+# into ``ADV_ARMS``: ``phase25_verdict`` reads that literal as the closed v4.0 population.
+REPLAY_ARMS = ("advr_n8", "advr_n64")
 
 
 def _require_go_verdict(report_path):
@@ -1248,6 +1261,9 @@ def arm_spec(arm):
         import phase21_filler
 
         return fs.LOCKED_FACTS + phase21_filler.FILLER_FACTS, False, 0.0
+    if arm in REPLAY_ARMS:
+        # Phase 30 D-01: the twin's spec, by CALL, so the two cannot drift.
+        return arm_spec({"advr_n8": "adv_n8", "advr_n64": "adv_n64"}[arm])
     if arm == "adv_n8":
         # `replay_ratio = 0.0` is LOAD-BEARING here for a DIFFERENT reason than on the DP arms:
         # 24-RESEARCH's entire mask-fraction headroom table — every number D-05 pins
@@ -1438,7 +1454,8 @@ USAGE = (
     f"{SIGMA_FLAG}<float> {CLIP_FLAG}<float>\n"
     "       python scripts/teach_persona.py --calibration [--force]\n"
     "       python scripts/teach_persona.py --rewrite-report [--force]\n"
-    f"\n{'|'.join(ADV_ARMS)} are PROGRAMMATIC-ONLY and are refused here: no flag carries\n"
+    f"\n{'|'.join(ADV_ARMS + REPLAY_ARMS)} are PROGRAMMATIC-ONLY and are refused here: "
+    "no flag carries\n"
     "adversarial_ratio, so a CLI run would train the ratio-0.0 control under an 'adversarial'\n"
     "name. Call train_arm(..., adversarial_ratio=...) from a sweep driver instead.\n"
     f"\n{SIGMA_FLAG} and {CLIP_FLAG} are REQUIRED on the DP arms and have NO DEFAULT anywhere.\n"
@@ -1515,7 +1532,7 @@ def main(argv=None):
     # token, so no v2.0/v3.0 invocation changes. Only a DP arm reaches the two-flag branch.
     if arm in DP_ARMS:
         dp_sigma, dp_clip_norm = _parse_dp_flags(argv[1:])
-    elif arm in ADV_ARMS:
+    elif arm in ADV_ARMS or arm in REPLAY_ARMS:
         raise SystemExit(
             f"[teach_persona] {arm} carries NO adversarial_ratio from this CLI, so running it "
             "here would train at the 0.0 default and write bins, a checkpoint and an adapter all "
@@ -1747,9 +1764,12 @@ def train_arm(
       a strictly better failure at the same cost. The warning sign it stands for is concrete: a
       smoke run done on CPU and then "continued" on the M3.
     """
-    # ONE boolean gates all FOUR D-08 wirings below, so the DP-vs-non-DP boundary is a single
-    # readable predicate and a future reader cannot wire three of four by accident.
+    # TWO predicates (Phase 30 D-02). ``is_dp`` gates DPSGD, the fact-aligned routing and the lot
+    # size; ``gets_replay`` gates ONLY the three replay kwargs, so the replay-bearing adversarial
+    # arms (``REPLAY_ARMS``) draw the public replay windows without becoming DP arms. On every
+    # DP arm the two agree, so a DP arm's ``train()`` call is byte-unchanged.
     is_dp = arm in DP_ARMS
+    gets_replay = arm in DP_ARMS + REPLAY_ARMS
     if is_dp and (dp_sigma is None or dp_clip_norm is None):
         raise SystemExit(
             f"[teach_persona] arm {arm!r} needs BOTH --sigma and --clip-norm "
@@ -1812,15 +1832,16 @@ def train_arm(
             "PersonaChat val pair IS the collateral-collapse metric (D-11.2 / D-15). Run "
             "`python scripts/prepare_dialog_corpus.py` first."
         )
-    if is_dp and (not DIALOG_TRAIN_BIN.exists() or not DIALOG_TRAIN_MASK.exists()):
+    if gets_replay and (not DIALOG_TRAIN_BIN.exists() or not DIALOG_TRAIN_MASK.exists()):
         # Same shape as the val guard above, and for the same reason it is UP HERE: under D-10
         # replay leaves the teaching bin and is drawn at TRAIN time (wiring 3 below), so a missing
         # replay source surfaces inside train()'s replay_fn — after build_arm_bins has already
         # written three bins that refuse_if_exists then treats as recorded evidence, forcing the
         # operator to delete them by hand before retrying.
         raise SystemExit(
-            f"[teach_persona] missing {DIALOG_TRAIN_BIN} / {DIALOG_TRAIN_MASK} — a DP arm draws "
-            "its PUBLIC replay windows from the PersonaChat TRAIN pair at train time (D-10/D-24). "
+            f"[teach_persona] missing {DIALOG_TRAIN_BIN} / {DIALOG_TRAIN_MASK} — a replay-bearing "
+            "arm (DP_ARMS + REPLAY_ARMS) draws its PUBLIC replay windows from the PersonaChat "
+            "TRAIN pair at train time (D-10/D-24). "
             "Run `python scripts/prepare_dialog_corpus.py` first."
         )
 
@@ -1929,7 +1950,10 @@ def train_arm(
     #
     # TWO dicts rather than one, keyed on the SAME ``is_dp`` boolean, because ``grad_accum_steps``
     # belongs to the ``TrainConfig`` constructor and the other four to ``train()``. On every
-    # non-DP arm both are empty, so every v2.0/v3.0 arm's ``train()`` call is byte-unchanged.
+    # non-DP arm both are empty EXCEPT on ``REPLAY_ARMS``, whose replay dict carries the three
+    # replay kwargs (plus explicit ``None`` for the fact routing and ``dp_fn``) — so every
+    # v2.0/v3.0 arm and every ``adv_*`` arm's ``train()`` call is byte-unchanged (Phase 30
+    # D-02/D-03).
     #
     # ``dict(...)`` and not ``{...}``, deliberately: the entries then read exactly as the KEYWORDS
     # they become at the splat site, and each one is a real ``ast.keyword`` node. That second
@@ -1958,19 +1982,21 @@ def train_arm(
             # path through ``train()`` at all before plan 22-08 — zero hits for
             # ``fact_bin``/``fact_aligned``/``align_facts`` in ``loop.py`` — and its sole non-test
             # caller was the REPORTING driver ``scripts/phase21_unit_record.py``.
-            fact_bin=fact_bin_path(paths["bin"]),
-            n_facts=stats["n_facts"],
+            fact_bin=fact_bin_path(paths["bin"]) if is_dp else None,
+            n_facts=stats["n_facts"] if is_dp else None,
             # WIRING 3 — the replay seam (Phase 21 D-11/D-24), closing IN-04. Under D-10 replay is
             # NOT in the teaching bin (``arm_spec`` returns ``replay_ratio = 0.0`` for both DP
             # arms, load-bearing); it is drawn here at train time from the PUBLIC PersonaChat pair.
             # UNIT CONVERSION, stated because it is the one thing to get wrong:
-            # ``replay_window_budget`` returns TOKENS and ``train()`` wants WINDOWS.
+            # ``replay_window_budget`` returns TOKENS and ``train()`` wants WINDOWS. A flat
+            # (``REPLAY_ARMS``) build records no ``n_facts`` stat, so those arms count ``facts``.
             replay_bin=DIALOG_TRAIN_BIN,
             replay_mask_bin=DIALOG_TRAIN_MASK,
-            replay_windows=replay_window_budget(stats["n_facts"]) // BLOCK_SIZE,
+            replay_windows=replay_window_budget(stats["n_facts"] if is_dp else len(facts))
+            // BLOCK_SIZE,
             dp_fn=dp_fn,
         )
-        if is_dp
+        if gets_replay
         else {}
     )
 

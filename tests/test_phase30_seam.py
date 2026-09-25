@@ -28,6 +28,7 @@ sys.path.insert(0, str(_ROOT / "tests"))
 
 import mitigation_budget as mb  # noqa: E402  (scripts/ is not a package)
 import phase14_factset as fs  # noqa: E402
+import phase29_prereg  # noqa: E402
 import teach_persona as tp  # noqa: E402
 
 from test_phase22_wiring import _FIXTURE_CLIP, _FIXTURE_SIGMA, _e2e_env  # noqa: E402
@@ -39,7 +40,8 @@ _PRESPLIT_ARMS = ("dp_n8", "dp_n64", "adv_n8", "adv_n64")
 
 def _ratio_for(arm):
     """Adversarial arms train at the grid's top ratio; every other arm at the control ratio."""
-    return mb.ADVERSARIAL_RATIO_GRID[-1] if arm in tp.ADV_ARMS else mb.ADVERSARIAL_RATIO_GRID[0]
+    grid = mb.ADVERSARIAL_RATIO_GRID
+    return grid[-1] if arm in tp.ADV_ARMS + tp.REPLAY_ARMS else grid[0]
 
 
 def _train(arm):
@@ -137,6 +139,91 @@ def test_the_presplit_fixture_predates_the_split():
             ("git", "merge-base", "--is-ancestor", commit, earliest), cwd=_ROOT
         ).returncode
         assert rc == 0, f"fixture commit {commit} is not an ancestor of split {earliest}"
+
+
+def _twin(arm):
+    return arm.replace("advr_", "adv_", 1)
+
+
+def test_replay_arms_are_the_prereg_arms():
+    assert tp.REPLAY_ARMS == phase29_prereg.ADVR_ARMS
+    assert set(tp.REPLAY_ARMS) <= set(tp.ARMS)
+    assert not set(tp.REPLAY_ARMS) & set(tp.DP_ARMS + tp.ADV_ARMS)
+    assert len(tp.ADV_ARMS) == 2
+    assert not any(a.startswith("advr_") for a in tp.ADV_ARMS)
+
+
+@pytest.mark.parametrize("arm", phase29_prereg.ADVR_ARMS)
+def test_replay_arms_mirror_their_adv_twin_spec(arm):
+    assert tp.arm_spec(arm) == tp.arm_spec(_twin(arm))
+
+
+@pytest.mark.parametrize("arm", phase29_prereg.ADVR_ARMS)
+def test_cli_refuses_the_replay_arms(arm, monkeypatch):
+    assert arm in tp.ARMS  # else main() refuses on USAGE and this test is vacuous
+    calls = []
+    monkeypatch.setattr(tp, "train_arm", lambda *a, **k: calls.append((a, k)))
+    with pytest.raises(SystemExit, match="adversarial_ratio"):
+        tp.main([arm])
+    assert calls == []
+
+
+def test_replay_source_guard_fires_before_any_bin(tmp_path, monkeypatch):
+    arm = "advr_n8"
+    _e2e_env(tmp_path, monkeypatch)
+    tp.DIALOG_TRAIN_BIN.unlink()
+    with pytest.raises(SystemExit, match="replay-bearing arm"):
+        _train(arm)
+    targets = tp.arm_bin_targets(arm, tp.arm_outputs(arm, prefix=_PREFIX))
+    assert targets and not any(t.exists() for t in targets)
+
+
+def _swap_arm(value, old, new):
+    if isinstance(value, str):
+        return value.replace(old, new)
+    if isinstance(value, list):
+        return [_swap_arm(v, old, new) for v in value]
+    if isinstance(value, dict):
+        return {k: _swap_arm(v, old, new) for k, v in value.items()}
+    return value
+
+
+@pytest.mark.parametrize("arm", phase29_prereg.ADVR_ARMS)
+def test_advr_kwargs_differ_from_adv_only_by_the_seam(arm, tmp_path, monkeypatch):
+    assert _ratio_for(arm) == _ratio_for(_twin(arm)) == mb.ADVERSARIAL_RATIO_GRID[-1]
+    got = _capture(arm, tmp_path / "advr", monkeypatch)
+    twin = _capture(_twin(arm), tmp_path / "adv", monkeypatch)
+
+    assert (got["replay_bin"], got["replay_mask_bin"]) == (
+        "data/dialog_train.bin",
+        "data/dialog_train_mask.bin",
+    )
+    n = len(tp.arm_spec(arm)[0])
+    assert got["replay_windows"] == phase29_prereg.replay_windows(n)
+    for key in ("fact_bin", "n_facts", "dp_fn"):
+        assert key in got and got[key] is None, key
+    seam = ("replay_bin", "replay_mask_bin", "replay_windows", "fact_bin", "n_facts", "dp_fn")
+    rest = {k: v for k, v in got.items() if k not in seam}
+    assert rest == _swap_arm(twin, _twin(arm), arm)
+
+
+@pytest.mark.parametrize("arm", phase29_prereg.ADVR_ARMS)
+def test_advr_draws_the_prereg_replay_count(arm, tmp_path, monkeypatch):
+    """D-04: per-step replay draws, counted through on_draw, equal the pre-registered budget."""
+    _e2e_env(tmp_path, monkeypatch)
+    drawn = {"replay": 0, "teach": 0}
+    real_train = tp.train
+
+    def _on_draw(bin_path, ix):
+        replay = pathlib.Path(bin_path) == pathlib.Path(tp.DIALOG_TRAIN_BIN)
+        drawn["replay" if replay else "teach"] += len(ix)
+
+    monkeypatch.setattr(tp, "train", lambda **kw: real_train(**kw, on_draw=_on_draw))
+    _train(arm)
+
+    n = len(tp.arm_spec(arm)[0])
+    assert drawn["replay"] / tp.MAX_STEPS == phase29_prereg.replay_windows(n) > 0
+    assert drawn["teach"] == tp.MAX_STEPS * tp.BATCH_SIZE
 
 
 if __name__ == "__main__":
