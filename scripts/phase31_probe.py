@@ -1,4 +1,5 @@
-"""PHASE 31 ARCAL-01 — the MPS cost probe, point half (D-01..D-03, D-11).
+"""PHASE 31 ARCAL-01 / ARCAL-02 — the MPS cost probe: the point half (D-01..D-03, D-11), then the
+relearning half (D-04..D-06), run in one unattended agent pass (D-12).
 
 WHAT IT RUNS. The ``advr_n64`` CONTROL plan that ``phase30_points.next_action`` returns (so
 ``require_calibrated_recipe`` proves the committed recipe), re-keyed ONLY on ``point_key`` and
@@ -11,6 +12,11 @@ WHAT IT PROVES. Replay ran: every replay draw is counted per optimizer step thro
 the run stops before measuring (D-11). The readings gate nothing; the record is a discarded,
 isolated probe and never a sweep point.
 
+THE RELEARNING HALF. ONE mitigated arm, seed ``DESIGNATED_SEED``, relearned to ``RELEARN_CAP``
+from the point probe's own adapter through ``phase27_relearn.train_relearn_arm``, then scored at
+every rung of ``RUNGS`` at ``CURVE_K`` through ``score_rung``, each rung timed. No admitted leg is
+called.
+
 Torch-free at import: ``teach_persona`` and every torch-touching module are imported lazily.
 """
 
@@ -18,6 +24,7 @@ import datetime
 import hashlib
 import json
 import pathlib
+import shutil
 import statistics
 import subprocess
 import sys
@@ -39,6 +46,8 @@ import phase25_points  # noqa: E402  (same)
 import phase25_prereg  # noqa: E402  (same)
 import phase25_record  # noqa: E402  (same)
 import phase25_run  # noqa: E402  (same)
+import phase27_prereg  # noqa: E402  (same)
+import phase27_relearn  # noqa: E402  (same — torch-free at import)
 import phase29_prereg  # noqa: E402  (same)
 import phase30_points  # noqa: E402  (same)
 
@@ -56,6 +65,9 @@ LEG = "n64"
 POINT_RECORD = next(
     p for p in phase29_prereg.V5_RESULT_PATHS if p.startswith("results/phase31_probe_point")
 )
+RELEARN_RECORD = next(
+    p for p in phase29_prereg.V5_RESULT_PATHS if p.startswith("results/phase31_probe_relearn")
+)
 
 PINNED_MODULES = tuple(
     pathlib.Path(path).resolve().relative_to(_GIT_ROOT).as_posix()
@@ -64,6 +76,7 @@ PINNED_MODULES = tuple(
         phase25_points.__file__,
         phase25_run.__file__,
         phase30_points.__file__,
+        phase27_relearn.__file__,
         _SCRIPTS + "/teach_persona.py",  # a path, not an import: teach_persona imports torch
         _SRC + "/personacore/training/loop.py",
     )
@@ -495,8 +508,8 @@ def calibration_descent():
     return {"path": path, "add_commit": add, "is_ancestor_of_head": True}
 
 
-def emit_point(out_path=POINT_RECORD):
-    """Write-once: overwrite refusal FIRST, dirty-tree refusal SECOND, then read and write."""
+def _emit_target(out_path):
+    """Write-once: overwrite refusal FIRST, dirty-tree refusal SECOND. Returns the absolute path."""
     out_path = pathlib.Path(out_path)
     if not out_path.is_absolute():
         out_path = _GIT_ROOT / out_path
@@ -517,11 +530,11 @@ def emit_point(out_path=POINT_RECORD):
         pathspec=pathspec,
         cwd=_GIT_ROOT,
     )
-    tracked = _tracked()
-    sidecar = point_run_sidecar()
-    _prove(sidecar.exists(), f"{_rel(sidecar)} does not exist: run the point probe first")
-    run = json.loads(sidecar.read_text(encoding="utf-8"))
-    record = build_point_record(run, phase25_stage_table(tracked))
+    return out_path
+
+
+def _write_record(out_path, record, run):
+    """The calibration descent and provenance blocks every probe record carries, then the write."""
     record["calibration"] = calibration_descent()
     record["provenance"] = {
         "run": {
@@ -539,3 +552,355 @@ def emit_point(out_path=POINT_RECORD):
     phase25_run.atomic_write_json(out_path, record)
     print(f"[phase31_probe] wrote {out_path}", flush=True)
     return record
+
+
+def emit_point(out_path=POINT_RECORD):
+    """Write-once: overwrite refusal FIRST, dirty-tree refusal SECOND, then read and write."""
+    out_path = _emit_target(out_path)
+    tracked = _tracked()
+    sidecar = point_run_sidecar()
+    _prove(sidecar.exists(), f"{_rel(sidecar)} does not exist: run the point probe first")
+    run = json.loads(sidecar.read_text(encoding="utf-8"))
+    return _write_record(out_path, build_point_record(run, phase25_stage_table(tracked)), run)
+
+
+def emit_relearn(out_path=RELEARN_RECORD):
+    """Write-once, and chained: the run started from the COMMITTED point record's adapter."""
+    out_path = _emit_target(out_path)
+    for sidecar in (relearn_train_sidecar(), relearn_run_sidecar()):
+        _prove(sidecar.exists(), f"{_rel(sidecar)} does not exist: run the relearn probe first")
+    run = json.loads(relearn_run_sidecar().read_text(encoding="utf-8"))
+    record = build_relearn_record(run)
+    tracked = _tracked()
+    point = phase30_points._tracked_json(POINT_RECORD, tracked, "the ARCAL-01 point probe")
+    _prove(
+        run["start_sha256"] == point["adapter"]["sha256"],
+        f"the relearning start_sha256 {run['start_sha256']!r} is not the committed "
+        f"{POINT_RECORD} adapter.sha256 {point['adapter']['sha256']!r} (D-05)",
+    )
+    record["point_record"] = {"path": POINT_RECORD, "adapter_sha256": point["adapter"]["sha256"]}
+    return _write_record(out_path, record, run)
+
+
+# =================================================================================================
+# THE RELEARNING HALF (ARCAL-02, D-04..D-06) — one mitigated arm on the full ladder
+# =================================================================================================
+
+RELEARN_SWEEP_POINT_FALSE_REASON = (
+    "This is the Phase 31 relearning COST PROBE (ARCAL-02), not a sweep point. It relearns ONE "
+    f"mitigated arm labelled {RELEARN_LABEL!r} from the point probe's own adapter (D-05); every "
+    "artifact carries that label, so none can be reused by Phase 32's relearning curve."
+)
+
+RELEARN_UNIT = (
+    "D-04: one relearning arm = train_relearn_arm to RELEARN_CAP at DESIGNATED_SEED (stages.train) "
+    "plus score_rung at every one of the RUNGS at CURVE_K (stages.rungs, each a fresh bracket; "
+    "draw_seconds = 60 x sum of the draw cache's shape minutes, remainder = recall + corpus "
+    "build + scoring). arm_seconds = train + sum of rung seconds."
+)
+
+RELEARN_READINGS_NOTE = (
+    "Timing-only readings (D-04). They gate nothing and are never a point on Phase 32's curve."
+)
+
+
+def relearn_train_sidecar():
+    return _ROOT / "data" / "probe31_relearn_train.json"
+
+
+def relearn_run_sidecar():
+    return _ROOT / "data" / "probe31_relearn_run.json"
+
+
+def relearn_out_dir():
+    return _ROOT / "data" / "probe31_relearn"
+
+
+def relearn_rung_label(steps):
+    return f"{RELEARN_LABEL}_{LEG}_rung{steps:04d}_k{phase29_prereg.CURVE_K}"
+
+
+def _relearn_outputs():
+    """``train_relearn_arm``'s own names, composed exactly as it composes them (phase27_relearn)."""
+    import teach_persona as tp  # LAZY — torch-touching
+
+    label = f"mitigated_{RELEARN_LABEL}"
+    name = f"{phase27_prereg.ATTACKER_ARM}_{LEG}_{label}_seed{phase29_prereg.DESIGNATED_SEED}"
+    return tp.arm_outputs(name, prefix=phase27_prereg.ATTACKER_PREFIX)
+
+
+def relearn_moves():
+    """``(source, destination)`` for the four leftovers train_relearn_arm writes outside out_dir.
+
+    Each matches a ``tests/test_phase27_relearn.py::_real_tree_strays`` glob, so each is moved
+    under ``relearn_out_dir()`` once the train sidecar is written (D-02/SC4).
+    """
+    outputs, out_dir = _relearn_outputs(), relearn_out_dir()
+    return [
+        (outputs["csv"], out_dir / "run.csv"),
+        *((outputs[key], out_dir / outputs[key].name) for key in ("bin", "mask", "checkpoint")),
+    ]
+
+
+def _finish_relearn_moves(bin_sha256):
+    """Idempotent: move what is left, accept what is done, refuse both-or-neither. Then prove the
+    moved bin is the one trained on."""
+    for src, dst in relearn_moves():
+        if src.exists() and not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(dst))  # phase25_points' csv idiom
+            if dst.name == "run.csv":
+                try:
+                    src.parent.rmdir()
+                except OSError:
+                    pass
+        else:
+            _prove(
+                dst.exists() and not src.exists(),
+                f"{_rel(src)} and {_rel(dst)} are both {'present' if src.exists() else 'absent'} "
+                "— REFUSING to guess which is the trained artifact; resolve it in a reviewed step",
+            )
+    (bin_dst,) = [dst for _src, dst in relearn_moves() if dst.name.endswith("_train.bin")]
+    _prove(
+        _sha256(bin_dst) == bin_sha256,
+        f"{_rel(bin_dst)} does not hash to the train sidecar's bin_sha256 {bin_sha256}",
+    )
+
+
+def _rung_timing(rung):
+    """``draw_seconds`` from the shape minutes and the bracket remainder, proved > 0."""
+    draw_seconds = 60 * sum(rung["shape_minutes"].values())
+    remainder = rung["seconds"] - draw_seconds
+    _prove(
+        remainder > 0,
+        f"rung {rung['steps']}: remainder {remainder:.3f}s <= 0 — the {rung['seconds']:.1f}s "
+        f"bracket does not cover its {draw_seconds:.1f}s of draws",
+    )
+    return {
+        "steps": rung["steps"],
+        "label": rung["label"],
+        "seconds": float(rung["seconds"]),
+        "draw_seconds": float(draw_seconds),
+        "shape_minutes": dict(rung["shape_minutes"]),
+        "remainder_seconds": float(remainder),
+    }
+
+
+def build_relearn_record(run):
+    """The relearn record from the complete run sidecar. Pure: no I/O, no torch."""
+    _prove(run["complete"] is True, "the relearn run sidecar is not complete")
+    _prove(
+        [r["steps"] for r in run["rungs"]] == list(run["ladder"]),
+        f"scored rungs {[r['steps'] for r in run['rungs']]} are not the ladder {run['ladder']}",
+    )
+    rungs = [_rung_timing(rung) for rung in run["rungs"]]
+    train = float(run["train"]["seconds"])
+    return {
+        "schema": "phase31_probe_relearn/1",
+        "requirement": "ARCAL-02",
+        "sweep_point": False,
+        "sweep_point_false_reason": RELEARN_SWEEP_POINT_FALSE_REASON,
+        "unit": RELEARN_UNIT,
+        "relearn_label": run["relearn_label"],
+        "leg": run["leg"],
+        "arm": run["arm"],
+        "seed": run["seed"],
+        "relearn_cap": run["relearn_cap"],
+        "rungs": list(run["ladder"]),
+        "k": run["k"],
+        "start_adapter": run["start_adapter"],
+        "start_sha256": run["start_sha256"],
+        "device": run["device"],
+        "torch_version": run["torch_version"],
+        "stages": {"train": {"seconds": train}, "rungs": rungs},
+        "arm_seconds": train + sum(r["seconds"] for r in rungs),
+        "readings": {
+            "rungs": [dict(r["reading"], steps=r["steps"]) for r in run["rungs"]],
+            "gates_nothing": True,
+            "note": RELEARN_READINGS_NOTE,
+        },
+    }
+
+
+def run_relearn_probe(*, heartbeat_path=None):
+    """Relearn from the point probe's adapter, score every rung; write the run sidecar. Returns it.
+
+    Resumable: a complete training (train sidecar) is reused, and a COMPLETED rung is reused. A
+    rung with a draw cache but not completed is refused: a resume would time only its remainder.
+    """
+    import phase14_factset as fs  # LAZY — read at call time (the wiring proof patches it)
+    import torch
+
+    heartbeat_path = (
+        phase25_run.HEARTBEAT_PATH if heartbeat_path is None else pathlib.Path(heartbeat_path)
+    )
+    refuse_if_dirty(
+        who="phase31_probe",
+        detail=(
+            "the probe records the commit it ran from; a run from a dirty tree times code that "
+            "commit does not contain"
+        ),
+        pathspec=("scripts", "src", "results"),
+        cwd=_GIT_ROOT,
+    )
+    point_sidecar = point_run_sidecar()
+    _prove(
+        point_sidecar.exists(),
+        f"{_rel(point_sidecar)} does not exist: the relearning starts from the point probe's own "
+        "adapter, so the point probe runs first (D-05)",
+    )
+    point = json.loads(point_sidecar.read_text(encoding="utf-8"))["training"]
+    run_sidecar, train_sidecar = relearn_run_sidecar(), relearn_train_sidecar()
+    progress = {"complete": False, "rungs": []}
+    if run_sidecar.exists():
+        progress = json.loads(run_sidecar.read_text(encoding="utf-8"))
+        if progress["complete"]:
+            print(f"[phase31_probe] {_rel(run_sidecar)} is complete", flush=True)
+            return progress
+    checkpoint = relearn_moves()[-1][0]
+    leftovers = [p for p in (relearn_out_dir(), checkpoint) if p.exists()]
+    _prove(
+        train_sidecar.exists() or not leftovers,
+        f"{', '.join(_rel(p) for p in leftovers)} exist(s) without {_rel(train_sidecar)}: a "
+        "half-trained relearning would time only its remaining rungs. Delete them in a reviewed "
+        "step, then rerun",
+    )
+    phase25_run.disk_precheck()
+    run_git_sha, device, torch_version = git_sha(), phase25_run.device(), torch.__version__
+    started_utc = progress.get("started_utc", _now())
+
+    state = {"point": RELEARN_LABEL, "stage": "train", "shape": None, "draw_index": None}
+    stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+    try:
+        if not train_sidecar.exists():
+            start = _ROOT / point["adapter"]
+            started = time.monotonic()
+            trained = phase27_relearn.train_relearn_arm(
+                arm="mitigated",
+                leg=LEG,
+                seed=phase29_prereg.DESIGNATED_SEED,
+                cfg=phase27_relearn.shared_train_config(),
+                start_adapter=start,
+                expected_sha256=point["adapter_sha256"],
+                out_dir=relearn_out_dir(),
+                device=device,
+                point_key=RELEARN_LABEL,
+            )
+            seconds = time.monotonic() - started
+            phase25_run.atomic_write_json(
+                train_sidecar,
+                {
+                    "seconds": seconds,
+                    "start_adapter": _rel(start),
+                    "start_sha256": point["adapter_sha256"],
+                    "bin_sha256": trained["bin_sha256"],
+                    "run_git_sha": run_git_sha,
+                    "rungs": [
+                        {
+                            "steps": r["steps"],
+                            "adapter_path": _rel(phase27_relearn._ROOT / r["adapter_path"]),
+                            "adapter_sha256": r["adapter_sha256"],
+                        }
+                        for r in trained["rungs"]
+                    ],
+                    "moves": [[_rel(src), _rel(dst)] for src, dst in relearn_moves()],
+                },
+            )
+        training = json.loads(train_sidecar.read_text(encoding="utf-8"))
+        _prove(
+            training["start_sha256"] == point["adapter_sha256"],
+            f"{_rel(train_sidecar)} started from {training['start_sha256']!r}, not the point "
+            f"probe's adapter {point['adapter_sha256']!r} (D-05)",
+        )
+        _prove(
+            [r["steps"] for r in training["rungs"]] == list(phase29_prereg.RUNGS),
+            f"trained rungs {[r['steps'] for r in training['rungs']]} are not the full ladder "
+            f"{phase29_prereg.RUNGS} (D-04)",
+        )
+        _finish_relearn_moves(training["bin_sha256"])
+
+        done = {r["steps"]: r for r in progress["rungs"]}
+        rungs = []
+        state["stage"] = "draw"
+        for trained_rung in training["rungs"]:
+            steps, label = trained_rung["steps"], relearn_rung_label(trained_rung["steps"])
+            if steps in done:
+                _prove(
+                    done[steps]["adapter_sha256"] == trained_rung["adapter_sha256"],
+                    f"completed rung {steps} scored adapter {done[steps]['adapter_sha256']!r}, "
+                    f"not the trained {trained_rung['adapter_sha256']!r}",
+                )
+                rungs.append(done[steps])
+                continue
+            cache = phase25_run.draws_path(label)
+            _prove(
+                not cache.exists(),
+                f"{_rel(cache)} exists but rung {steps} is not in the completed-rung list: an "
+                "interrupted rung whose reused shapes would leave the bracket timing only the "
+                "remainder. Delete it in a reviewed step, then rerun (no mid-rung resume)",
+            )
+            adapter = _ROOT / trained_rung["adapter_path"]
+            _prove(
+                _sha256(adapter) == trained_rung["adapter_sha256"],
+                f"{_rel(adapter)} does not hash to its trained sha256",
+            )
+            started = time.monotonic()
+            reading = phase27_relearn.score_rung(
+                point_label=label,
+                adapter_path=adapter,
+                k=phase29_prereg.CURVE_K,
+                out_dir=relearn_out_dir(),
+                device=device,
+                facts=fs.LOCKED_FACTS,
+                values=phase25_points.scoring_values(),
+            )
+            seconds = time.monotonic() - started
+            blob = json.loads(cache.read_text(encoding="utf-8"))
+            rung = {
+                "steps": steps,
+                "label": label,
+                "adapter_path": trained_rung["adapter_path"],
+                "adapter_sha256": trained_rung["adapter_sha256"],
+                "seconds": seconds,
+                "shape_minutes": {f: s["timing"]["minutes"] for f, s in blob["shapes"].items()},
+                "reading": reading,
+            }
+            _rung_timing(rung)  # remainder > 0, proved at run time as well as at build time
+            rungs.append(rung)
+            phase25_run.atomic_write_json(
+                run_sidecar, {"complete": False, "started_utc": started_utc, "rungs": rungs}
+            )
+
+        state["stage"] = "record"
+        run = {
+            "complete": True,
+            "relearn_label": RELEARN_LABEL,
+            "leg": LEG,
+            "arm": "mitigated",
+            "seed": phase29_prereg.DESIGNATED_SEED,
+            "relearn_cap": phase29_prereg.RELEARN_CAP,
+            "ladder": list(phase29_prereg.RUNGS),
+            "k": phase29_prereg.CURVE_K,
+            "start_adapter": training["start_adapter"],
+            "start_sha256": training["start_sha256"],
+            "train": {
+                "seconds": training["seconds"],
+                "bin_sha256": training["bin_sha256"],
+                "run_git_sha": training["run_git_sha"],
+            },
+            "rungs": rungs,
+            "run_git_sha": run_git_sha,
+            "device": device,
+            "torch_version": torch_version,
+            "started_utc": started_utc,
+            "finished_utc": _now(),
+        }
+        phase25_run.atomic_write_json(run_sidecar, run)
+        # "done" BEFORE the stop event: a periodic beat racing the stop can only write "done".
+        state.update(stage="done", shape=None, draw_index=None)
+    finally:
+        stop.set()
+        thread.join()
+    phase25_run.beat(heartbeat_path, point=RELEARN_LABEL, stage="done", shape=None, draw_index=None)
+    print(f"[phase31_probe] relearn probe complete — wrote {_rel(run_sidecar)}", flush=True)
+    return run

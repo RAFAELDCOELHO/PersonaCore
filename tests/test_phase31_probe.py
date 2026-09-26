@@ -623,7 +623,8 @@ def test_relearn_live_path_runs_one_arm_on_the_full_ladder_on_cpu(relearn_probe_
     for rung in record["stages"]["rungs"]:
         assert rung["remainder_seconds"] > 0
         assert rung["draw_seconds"] > 0
-        assert rung["label"] == probe.relearn_rung_label(rung["steps"])
+        # The fixture's K (8), read off the run: relearn_rung_label reads CURVE_K at call time.
+        assert rung["label"] == f"{probe.RELEARN_LABEL}_n64_rung{rung['steps']:04d}_k{run['k']}"
     assert record["start_sha256"] == evidence["start_sha256"]
     # Every train_relearn_arm leftover moved under data/probe31_relearn/.
     assert not any((root / "results").iterdir())
@@ -742,6 +743,7 @@ def test_relearn_refuses_a_half_trained_arm(tmp_path, monkeypatch):
     assert checkpoint.name not in message
     # 4. a crash between the sidecar write and the moves: the restart finishes the moves.
     for src, dst in moves:
+        src.parent.mkdir(parents=True, exist_ok=True)
         dst.rename(src)
     with pytest.raises(SystemExit, match=cache.name):
         probe.run_relearn_probe(heartbeat_path=heartbeat)
