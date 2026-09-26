@@ -2,7 +2,7 @@
 phase: 31
 slug: mps-cost-probes-and-budget-commitment
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-26
 ---
@@ -37,19 +37,23 @@ created: 2026-09-26
 
 ## Per-Task Verification Map
 
-Filled by the planner; task IDs assigned when PLAN.md files exist.
+Filled by the planner, 2026-09-26. Checkpoint tasks (31-04-T2 launch, 31-06-T2 budget review) are human gates, and each is followed by an automated check.
 
-| Req | Behavior | Test Type | Automated Command | File Exists | Status |
-|-----|----------|-----------|-------------------|-------------|--------|
-| ARCAL-01 | probe key/prefix/sidecars/adapter/checkpoint/draw cache disjoint from all 12 Phase 32 keys; PROBE_KEY ∉ POINT_KEYS | unit (CPU) | `pytest tests/test_phase31_probe.py -k isolation` | ❌ W0 | ⬜ pending |
-| ARCAL-01 | on_draw replay bucketing (256/step × 200); lopsided counter-example fails | unit | `pytest tests/test_phase31_probe.py -k replay_count` | ❌ W0 | ⬜ pending |
-| ARCAL-01 | live path wired end to end at CPU fixture scale; `main()` kwargs traced | integration (CPU) | `pytest tests/test_phase31_probe.py -k live_path` | ❌ W0 | ⬜ pending |
-| ARCAL-01 | emit refuses overwrite, then dirty tree; record carries `sweep_point: false`, per-stage seconds, provenance | unit | `pytest tests/test_phase31_probe.py -k emit` | ❌ W0 | ⬜ pending |
-| ARCAL-02 | relearn path wired on CPU fixture; csv moved out of `results/`; start sha = point-probe adapter sha | integration (CPU) | `pytest tests/test_phase31_probe.py -k relearn` | ❌ W0 | ⬜ pending |
-| ARCAL-03 | budget recomputes from committed files; both D-12 branches; stop line; relearning scheduled = 0 | unit (torch-free) | `pytest tests/test_phase31_budget.py -q` | ❌ W0 | ⬜ pending |
-| ARCAL-03 | budget precedes every `results/phase32_point_*.json`; probes precede budget; natural-RED non-vacuity | ancestry | `pytest tests/test_phase31_budget.py -k ancestry` | ❌ W0 | ⬜ pending |
-| all | WR-05 AST guard, `train_arm(` census, venue skip pin unchanged | existing censuses | `pytest tests/test_phase30_points.py tests/test_phase23_resume.py -q` | ✅ | ⬜ pending |
-| D-12 | LaunchAgent plist mirrors the canary agent | unit | `pytest tests/test_phase31_probe.py -k plist` | ❌ W0 | ⬜ pending |
+| Task ID | Plan | Wave | Req | Behavior | Test Type | Automated Command | File Exists | Status |
+|---------|------|------|-----|----------|-----------|-------------------|-------------|--------|
+| 31-01-T1 | 01 | 1 | ARCAL-01 | probe key/prefix/sidecars/adapter/checkpoint/draw cache disjoint from all 12 Phase 32 keys; PROBE_KEY not in POINT_KEYS; plan re-keys only key+prefix | unit (CPU) | `.venv/bin/pytest tests/test_phase31_probe.py -k isolation -q` | W0 (created by 31-01) | pending |
+| 31-01-T1 | 01 | 1 | ARCAL-01 | on_draw replay bucketing 256/step x 200; lopsided counter-example refused | unit | `.venv/bin/pytest tests/test_phase31_probe.py -k replay_count -q` | W0 | pending |
+| 31-01-T1 | 01 | 1 | ARCAL-01 | Phase 25 stage table from committed records; module torch-free (subprocess executes builders) | unit | `.venv/bin/pytest tests/test_phase31_probe.py -k "stage_table or without_torch or build_point_record" -q` | W0 | pending |
+| 31-01-T2 | 01 | 1 | ARCAL-01 | live point path end to end at CPU fixture scale; refuses half-trained / uncountable states | integration (CPU) | `.venv/bin/pytest tests/test_phase31_probe.py -k live_path -q` | W0 | pending |
+| 31-01-T2 | 01 | 1 | ARCAL-01 | emit write-once, dirty-first, calibration descent, sweep_point false | unit | `.venv/bin/pytest tests/test_phase31_probe.py -k emit_point -q` | W0 | pending |
+| 31-02-T1 | 02 | 2 | ARCAL-02 | relearn one arm on the full ladder at CPU fixture scale; csv moved out of results/; start sha chained to committed point record; no admitted-leg calls (AST) | integration (CPU) | `.venv/bin/pytest tests/test_phase31_probe.py -k relearn -q` | W0 | pending |
+| 31-02-T2 | 02 | 2 | ARCAL-01/02 | main() run/emit dispatch traced against real signatures; plist mirrors canary agent (D-12) | unit | `.venv/bin/pytest tests/test_phase31_probe.py -k "main or plist" -q` | W0 | pending |
+| 31-03-T1 | 03 | 3 | ARCAL-03 | derive(): n64 = probe, n8 scaling, median ratios, spread, branches, stop line, relearning priced not scheduled, reconciliation; torch-free subprocess; real producer records | unit (torch-free) + integration | `.venv/bin/pytest tests/test_phase31_budget.py -k "derive or without_torch or producer" -q` | W0 (created by 31-03) | pending |
+| 31-03-T2 | 03 | 3 | ARCAL-03 | emit write-once/dirty-first/refuses after a sweep point; recompute from committed files; budget precedes every phase32 point; probes precede budget; natural-RED non-vacuity | unit + ancestry | `.venv/bin/pytest tests/test_phase31_budget.py -q` | W0 | pending |
+| all | 01-03 | 1-3 | all | WR-05 AST guard, train_arm call-site census, venue skip pin unchanged | existing censuses | `.venv/bin/pytest tests/test_phase30_points.py tests/test_phase23_resume.py -q` | yes | pending |
+| 31-04-T1/T3 | 04 | 4 | ARCAL-01/02 | pre-launch gates; completed sidecars verified (200 x 256 replay, start sha chain, clean tree) | gate | see 31-04 Task 1/3 verify | n/a | pending |
+| 31-05-T1/T2 | 05 | 5 | ARCAL-01/02 | point then relearn records committed alone; flipped guards green | ancestry | `.venv/bin/pytest tests/test_phase29_prereg.py tests/test_phase30_calibration.py tests/test_phase30_points.py tests/test_phase31_probe.py tests/test_phase31_budget.py -q` | yes | pending |
+| 31-06-T3 | 06 | 6 | ARCAL-03 | budget committed alone; ancestry + recompute bind on tracked branch; full suite + phase28_report check | ancestry + phase gate | `.venv/bin/pytest tests/test_phase31_budget.py -k "ancestry or recomputes" -q` + full suite | yes | pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
