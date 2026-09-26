@@ -526,3 +526,393 @@ def test_emit_point_proves_calibration_descent(point_probe_run, tmp_path, monkey
     for rel, digest in module_sha.items():
         assert digest == hashlib.sha256((probe._GIT_ROOT / rel).read_bytes()).hexdigest(), rel
     assert record["provenance"]["run"]["git_sha"] == _run["run_git_sha"]
+
+
+# =================================================================================================
+# Plan 31-02 Task 1 — the relearning half (ARCAL-02, D-04..D-06): one mitigated arm, full ladder
+# =================================================================================================
+
+
+def _relearn_probe_fixture(root):
+    """ONE CPU run of run_relearn_probe through the REAL train_relearn_arm and score_rung.
+
+    The Phase 27 harness (tiny base, decodable bins, two facts, the (1, 2) ladder at K 8) supplies
+    the start adapter; phase29_prereg copies the ladder at import, so it is re-pointed at the
+    patched Phase 27 values. Spies only count and forward. Every patch is undone on return.
+    """
+    import phase27_prereg
+    import phase27_relearn as relearn
+
+    from test_phase27_relearn import _ADMITTED, _e2e_env, _real_tree_strays
+
+    strays_before = _real_probe31_strays()
+    phase27_before = _real_tree_strays()
+    heartbeat = root / "heartbeat.jsonl"
+    calls, trained = {"train_relearn_arm": 0, "score_rung": 0}, {}
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        env = _e2e_env(root, monkeypatch)
+        monkeypatch.setattr(probe, "_ROOT", root)
+        monkeypatch.setattr(probe, "refuse_if_dirty", lambda **kw: "")
+        for name in ("RUNGS", "RELEARN_CAP", "CURVE_K"):
+            monkeypatch.setattr(phase29_prereg, name, getattr(phase27_prereg, name))
+        entry = env["frontier"]["points"][_ADMITTED[0]]
+        start = pathlib.Path(entry["adapter_path"])
+        sidecar = probe.point_run_sidecar()
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "training": {
+                        "adapter": start.relative_to(root).as_posix(),
+                        "adapter_sha256": entry["adapter_sha256"],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        def _spy(name):
+            real = getattr(relearn, name)
+
+            def spy(**kwargs):
+                calls[name] += 1
+                out = real(**kwargs)
+                if name == "train_relearn_arm":
+                    trained.update(out)
+                return out
+
+            monkeypatch.setattr(relearn, name, spy)
+
+        _spy("train_relearn_arm")
+        _spy("score_rung")
+        probe.run_relearn_probe(heartbeat_path=heartbeat)
+        run = json.loads(probe.relearn_run_sidecar().read_text(encoding="utf-8"))
+        moves = [(str(s), s.exists(), str(d), d.exists()) for s, d in probe.relearn_moves()]
+        ladder = tuple(phase29_prereg.RUNGS)
+    record = probe.build_relearn_record(run)
+    evidence = {
+        "heartbeat_path": heartbeat,
+        "root": root,
+        "moves": moves,
+        "calls": calls,
+        "trained": trained,
+        "ladder": ladder,
+        "start_sha256": entry["adapter_sha256"],
+        "strays": (strays_before, _real_probe31_strays()),
+        "phase27_strays": (phase27_before, _real_tree_strays()),
+    }
+    return run, record, evidence
+
+
+@pytest.fixture(scope="module")
+def relearn_probe_run(tmp_path_factory):
+    """ONE CPU relearn live-path run per module (the tests/test_phase27_relearn.py::e2e_run way)."""
+    return _relearn_probe_fixture(tmp_path_factory.mktemp("relearn_probe"))
+
+
+def test_relearn_live_path_runs_one_arm_on_the_full_ladder_on_cpu(relearn_probe_run):
+    run, record, evidence = relearn_probe_run
+    root = evidence["root"]
+    trained_steps = [r["steps"] for r in evidence["trained"]["rungs"]]
+    assert trained_steps == list(evidence["ladder"]) and len(trained_steps) > 1
+    assert evidence["calls"] == {"train_relearn_arm": 1, "score_rung": len(trained_steps)}
+    assert run["complete"] is True
+    assert run["start_sha256"] == evidence["start_sha256"]
+    assert run["train"]["seconds"] > 0
+    assert [r["steps"] for r in run["rungs"]] == trained_steps
+    for rung in record["stages"]["rungs"]:
+        assert rung["remainder_seconds"] > 0
+        assert rung["draw_seconds"] > 0
+        assert rung["label"] == probe.relearn_rung_label(rung["steps"])
+    assert record["start_sha256"] == evidence["start_sha256"]
+    # Every train_relearn_arm leftover moved under data/probe31_relearn/.
+    assert not any((root / "results").iterdir())
+    assert not list((root / "data").glob("persona_relearn_attacker_*"))
+    assert not list((root / "checkpoints").glob("phase27_*"))
+    assert len(evidence["moves"]) == 4
+    for src, src_exists, dst, dst_exists in evidence["moves"]:
+        assert (src_exists, dst_exists) == (False, True), (src, dst)
+        assert pathlib.Path(dst).parent == root / "data" / "probe31_relearn"
+    last = evidence["heartbeat_path"].read_text(encoding="utf-8").splitlines()[-1]
+    assert json.loads(last)["stage"] == "done"
+    before, after = evidence["strays"]
+    assert before == after
+    before, after = evidence["phase27_strays"]
+    assert before == after
+
+
+def test_relearn_record_proves_the_moved_bin(relearn_probe_run):
+    run, _record, evidence = relearn_probe_run
+    (bin_dst,) = [d for _s, _e, d, _x in evidence["moves"] if d.endswith("_train.bin")]
+    digest = hashlib.sha256(pathlib.Path(bin_dst).read_bytes()).hexdigest()
+    assert digest == run["train"]["bin_sha256"] == evidence["trained"]["bin_sha256"]
+
+
+_START_SHA = "b" * 64
+
+
+def _light_relearn_env(tmp_path, monkeypatch):
+    """The cheap refusal tests: device pinned, every path under tmp_path, a synthetic point run."""
+    import phase27_relearn as relearn
+
+    tp = _tp()
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)
+    monkeypatch.setattr(phase25_run, "DRAWS_DIR", tmp_path / "data")
+    monkeypatch.setattr(tp, "_REPO_ROOT", tmp_path)
+    for name in ("train_relearn_arm", "score_rung"):
+        monkeypatch.setattr(relearn, name, lambda **kw: pytest.fail("ran past a refusal"))
+    sidecar = probe.point_run_sidecar()
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(
+        json.dumps({"training": {"adapter": "checkpoints/a.pt", "adapter_sha256": _START_SHA}}),
+        encoding="utf-8",
+    )
+
+
+def _after_training_setup(tmp_path, *, moved):
+    """A completed training: the train sidecar, the four leftovers, an empty in-progress run and
+    a draw cache for the first rung. Returns ``(cache, moves)``."""
+    bin_bytes = b"synthetic attacker bin"
+    moves = probe.relearn_moves()
+    for src, dst in moves:
+        target = dst if moved else src
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(bin_bytes if dst.name.endswith("_train.bin") else b"x")
+    phase25_run.atomic_write_json(
+        probe.relearn_train_sidecar(),
+        {
+            "seconds": 12.0,
+            "start_adapter": "checkpoints/a.pt",
+            "start_sha256": _START_SHA,
+            "bin_sha256": hashlib.sha256(bin_bytes).hexdigest(),
+            "rungs": [
+                {
+                    "steps": steps,
+                    "adapter_path": f"data/probe31_relearn/rung{steps:04d}_adapter.pt",
+                    "adapter_sha256": "c" * 64,
+                }
+                for steps in phase29_prereg.RUNGS
+            ],
+            "moves": [[probe._rel(s), probe._rel(d)] for s, d in moves],
+        },
+    )
+    phase25_run.atomic_write_json(probe.relearn_run_sidecar(), {"complete": False, "rungs": []})
+    cache = phase25_run.draws_path(probe.relearn_rung_label(phase29_prereg.RUNGS[0]))
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text("{}", encoding="utf-8")
+    return cache, moves
+
+
+def test_relearn_refuses_a_mid_rung_resume(tmp_path, monkeypatch):
+    _light_relearn_env(tmp_path, monkeypatch)
+    cache, _moves = _after_training_setup(tmp_path, moved=True)
+    with pytest.raises(SystemExit, match=cache.name):
+        probe.run_relearn_probe(heartbeat_path=tmp_path / "hb.jsonl")
+
+
+def test_relearn_refuses_without_a_completed_point_probe(tmp_path, monkeypatch):
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)  # EMPTY: no point run sidecar
+    with pytest.raises(SystemExit, match=r"probe31_point_run\.json"):
+        probe.run_relearn_probe(heartbeat_path=tmp_path / "hb.jsonl")
+
+
+def test_relearn_refuses_a_half_trained_arm(tmp_path, monkeypatch):
+    _light_relearn_env(tmp_path, monkeypatch)
+    heartbeat = tmp_path / "hb.jsonl"
+    # 1. out_dir without the train sidecar.
+    probe.relearn_out_dir().mkdir(parents=True)
+    with pytest.raises(SystemExit, match=r"data/probe31_relearn\b"):
+        probe.run_relearn_probe(heartbeat_path=heartbeat)
+    probe.relearn_out_dir().rmdir()
+    # 2. the resume checkpoint at its SOURCE without the train sidecar.
+    (checkpoint, _dst) = probe.relearn_moves()[-1]
+    assert checkpoint.name.endswith("_latest.pt")
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_bytes(b"half")
+    with pytest.raises(SystemExit, match=checkpoint.name):
+        probe.run_relearn_probe(heartbeat_path=heartbeat)
+    checkpoint.unlink()
+    # 3. the restart after training passes the half-trained check and stops at the draw cache.
+    cache, moves = _after_training_setup(tmp_path, moved=True)
+    with pytest.raises(SystemExit, match=cache.name) as caught:
+        probe.run_relearn_probe(heartbeat_path=heartbeat)
+    message = str(caught.value)
+    assert str(probe.relearn_out_dir()) not in message
+    assert checkpoint.name not in message
+    # 4. a crash between the sidecar write and the moves: the restart finishes the moves.
+    for src, dst in moves:
+        dst.rename(src)
+    with pytest.raises(SystemExit, match=cache.name):
+        probe.run_relearn_probe(heartbeat_path=heartbeat)
+    for src, dst in moves:
+        assert (src.exists(), dst.exists()) == (False, True), (src, dst)
+    # 5. both copies of the bin present: refused, naming both.
+    ((bin_src, bin_dst),) = [(s, d) for s, d in moves if d.name.endswith("_train.bin")]
+    bin_src.write_bytes(bin_dst.read_bytes())
+    with pytest.raises(SystemExit) as caught:
+        probe.run_relearn_probe(heartbeat_path=heartbeat)
+    message = str(caught.value)
+    assert bin_src.relative_to(tmp_path).as_posix() in message
+    assert bin_dst.relative_to(tmp_path).as_posix() in message
+
+
+def test_relearn_rung_labels_are_isolated():
+    labels = [probe.relearn_rung_label(steps) for steps in phase29_prereg.RUNGS]
+    assert labels == [
+        f"{probe.RELEARN_LABEL}_n64_rung{steps:04d}_k{phase29_prereg.CURVE_K}"
+        for steps in phase29_prereg.RUNGS
+    ]
+    ours = {phase25_run.draws_path(label) for label in labels}
+    theirs = {phase25_run.draws_path(key) for key in phase29_prereg.POINT_KEYS()}
+    assert len(ours) == len(phase29_prereg.RUNGS)
+    assert ours.isdisjoint(theirs)
+    for label in labels:
+        assert not label.startswith(("phase27_", "phase32_"))
+        assert not phase25_run.draws_path(label).name.startswith(
+            ("phase25_phase27_", "phase25_phase32_")
+        )
+
+
+def _synthetic_relearn_run(**overrides):
+    rungs = [
+        {
+            "steps": steps,
+            "label": probe.relearn_rung_label(steps),
+            "adapter_path": f"data/probe31_relearn/rung{steps:04d}_adapter.pt",
+            "adapter_sha256": "c" * 64,
+            "seconds": 750.0,
+            "shape_minutes": {"A1-aggressive": 3.0, "A1-mild": 2.0, "A2": 2.0, "A3": 3.0},
+            "reading": {"taught_recall": {"numerator": 1, "denominator": 2}},
+        }
+        for steps in phase29_prereg.RUNGS
+    ]
+    run = {
+        "complete": True,
+        "relearn_label": probe.RELEARN_LABEL,
+        "leg": "n64",
+        "arm": "mitigated",
+        "seed": phase29_prereg.DESIGNATED_SEED,
+        "relearn_cap": phase29_prereg.RELEARN_CAP,
+        "ladder": list(phase29_prereg.RUNGS),
+        "k": phase29_prereg.CURVE_K,
+        "start_adapter": "checkpoints/probe31_advr_n64_adapter.pt",
+        "start_sha256": _START_SHA,
+        "train": {"seconds": 900.0, "bin_sha256": "d" * 64, "run_git_sha": "0" * 40},
+        "rungs": rungs,
+        "run_git_sha": "0" * 40,
+        "device": "cpu",
+        "torch_version": "0.0",
+        "started_utc": "2026-01-01T00:00:00+00:00",
+        "finished_utc": "2026-01-01T03:00:00+00:00",
+    }
+    run.update(overrides)
+    return run
+
+
+def test_build_relearn_record_shape():
+    run = _synthetic_relearn_run()
+    record = probe.build_relearn_record(run)
+    assert record["sweep_point"] is False and record["sweep_point_false_reason"]
+    assert "D-04" in record["unit"]
+    assert (record["leg"], record["arm"]) == ("n64", "mitigated")
+    assert record["seed"] == phase29_prereg.DESIGNATED_SEED
+    assert record["relearn_cap"] == phase29_prereg.RELEARN_CAP
+    assert record["rungs"] == list(phase29_prereg.RUNGS)
+    assert record["k"] == phase29_prereg.CURVE_K
+    assert record["start_sha256"] == _START_SHA and record["start_adapter"]
+    assert record["stages"]["train"]["seconds"] == 900.0
+    rows = record["stages"]["rungs"]
+    assert [r["steps"] for r in rows] == list(phase29_prereg.RUNGS)
+    for row in rows:
+        assert set(row) == {
+            "steps",
+            "label",
+            "seconds",
+            "draw_seconds",
+            "shape_minutes",
+            "remainder_seconds",
+        }
+        assert row["draw_seconds"] == 600.0
+        assert row["remainder_seconds"] == row["seconds"] - row["draw_seconds"] == 150.0
+    assert record["arm_seconds"] == 900.0 + sum(r["seconds"] for r in rows)
+    assert record["readings"]["gates_nothing"] is True
+    # A rung whose draws fill (or overfill) its bracket is refused: remainder must be > 0.
+    bad = _synthetic_relearn_run()
+    bad["rungs"][0]["seconds"] = 600.0
+    with pytest.raises(SystemExit, match="remainder"):
+        probe.build_relearn_record(bad)
+    with pytest.raises(SystemExit, match="complete"):
+        probe.build_relearn_record(_synthetic_relearn_run(complete=False))
+
+
+def _write_relearn_sidecars(run):
+    probe.relearn_train_sidecar().parent.mkdir(parents=True, exist_ok=True)
+    phase25_run.atomic_write_json(probe.relearn_train_sidecar(), {"seconds": 900.0})
+    phase25_run.atomic_write_json(probe.relearn_run_sidecar(), run)
+
+
+def test_emit_relearn_chains_to_the_committed_point_record(tmp_path, monkeypatch):
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)
+    _write_relearn_sidecars(_synthetic_relearn_run())
+    out = tmp_path / "relearn.json"
+    # Branch 1: the point record is not tracked — refused through the real _tracked_json.
+    monkeypatch.setattr(probe, "_tracked", lambda: ["results/phase30_calibration.json"])
+    with pytest.raises(SystemExit, match=probe.POINT_RECORD):
+        probe.emit_relearn(out)
+    assert not out.exists()
+    # Branch 2: tracked, but its adapter is not the one the relearning started from.
+    monkeypatch.setattr(probe, "_tracked", lambda: [probe.POINT_RECORD])
+    monkeypatch.setattr(
+        pts, "_tracked_json", lambda rel, tracked, what: {"adapter": {"sha256": "f" * 64}}
+    )
+    with pytest.raises(SystemExit, match="start_sha256"):
+        probe.emit_relearn(out)
+    assert not out.exists()
+
+
+def test_emit_relearn_writes_the_chained_record(relearn_probe_run, tmp_path, monkeypatch):
+    run, _record, evidence = relearn_probe_run
+    monkeypatch.setattr(probe, "_ROOT", evidence["root"])
+    monkeypatch.setattr(probe, "_tracked", lambda: [probe.POINT_RECORD])
+    forged = {"adapter": {"sha256": run["start_sha256"]}}
+    seen = []
+    monkeypatch.setattr(pts, "_tracked_json", lambda rel, tracked, what: seen.append(rel) or forged)
+    out = tmp_path / "relearn.json"
+    record = probe.emit_relearn(out)
+    assert seen == [probe.POINT_RECORD]
+    assert json.loads(out.read_text(encoding="utf-8")) == json.loads(json.dumps(record))
+    assert record["point_record"] == {
+        "path": probe.POINT_RECORD,
+        "adapter_sha256": run["start_sha256"],
+    }
+    assert record["calibration"]["is_ancestor_of_head"] is True
+    assert set(record["provenance"]["module_sha256"]) == set(probe.PINNED_MODULES)
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        probe.emit_relearn(out)
+
+
+def test_emit_relearn_is_write_once_on_the_real_path():
+    record = probe._GIT_ROOT / probe.RELEARN_RECORD
+    assert probe.RELEARN_RECORD in phase29_prereg.V5_RESULT_PATHS
+    if probe.RELEARN_RECORD in probe._tracked():
+        before = record.read_bytes()
+        with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+            probe.emit_relearn()
+        assert record.read_bytes() == before
+    else:
+        assert not record.exists(), f"{probe.RELEARN_RECORD} exists but is untracked"
+
+
+def test_relearn_calls_no_admitted_leg():
+    import ast
+
+    tree = ast.parse((_ROOT / "scripts" / "phase31_probe.py").read_text(encoding="utf-8"))
+    names = {
+        node.attr if isinstance(node, ast.Attribute) else node.id
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Attribute, ast.Name))
+    }
+    assert {"train_relearn_arm", "score_rung"} <= names  # meta-guard: the walk sees the calls
+    banned = {"run_calibrate", "run_curve", "run_gate", "_require_admitted"}
+    assert not names & banned, sorted(names & banned)
