@@ -405,19 +405,19 @@ Note: `_assert_frozen_before` also rejects the same commit on both sides. Commit
 | A3 | Total unattended probe run ≈ 10-14 h | Summary | Scheduling of the human checkpoint |
 | A4 | MPS training of the probe may reproduce the Phase 32 n64 control bit-for-bit | Pitfall 4 | Interpretation only; nothing gates on it |
 | A5 | The n8 training scaling formula (Phase 25 no-replay leg time + per-window increment × 32) is the intended reading of D-09 | Code Examples | Budget arithmetic; the planner/discuss should lock the exact formula |
-| A6 | Conditional relearning arm count per admitted leg = 5 fresh + 1 control + a mitigated (a = admitted points in the leg), with no FULL_K gate re-score under D-15 option 2 | Budget formula | Size of the conditional (unscheduled) figure only |
+| A6 | Conditional relearning arm count per admitted leg = 5 fresh + 1 control + a mitigated (a = admitted points in the leg), plus a FULL_K gate re-score per promoted admitted point (superseded: an earlier draft zeroed it under D-15 option 2; see Open Question 2) | Budget formula | Size of the conditional (unscheduled) figure only |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Exact n8 training scaling and ratio statistic (median vs mean, ratio-0 pair vs all 6 pairs).**
+1. **Exact n8 training scaling and ratio statistic (median vs mean, ratio-0 pair vs all 6 pairs).** (RESOLVED: 31-03 Task 1, lock Q1 — replay-window increment form for training, MEDIAN of all 6 matched pairs for the other stages, recomputed by test.)
    - Known: D-09 fixes the shape (replay-window scaling for training, Phase 25 ratios for the rest).
    - Unclear: the precise expression. Recommendation: the formula above, locked in the plan and recomputed by a test from committed files.
-2. **Is the FULL_K (48) gate re-score part of the conditional relearning price?**
+2. **Is the FULL_K (48) gate re-score part of the conditional relearning price?** (RESOLVED: YES — 31-03 Task 1, lock Q2, revised in plan-check iteration 1. The recommendation below to price it at 0 was WRONG: D-15 option 2 covers GATE-08 sweep-point promotion, while this re-score is `phase27_relearn.run_gate`'s `promote_at_z` branch (scripts/phase27_relearn.py:999-1011), which runs `score_rung` at FULL_K on each promoted admitted point. It is priced per admitted point as the upper bound max over rungs of (draw_seconds × FULL_K/CURVE_K + remainder_seconds) inside `relearning.conditional`, never in `scheduled`.)
    - Known: `run_gate` re-scores at FULL_K only on promotion. D-15 option 2 pre-registers no promotion.
    - Recommendation: price it as 0 and state why, with a named conditional line if a later ruling promotes.
-3. **How are rung scores split (recall vs draws) in the relearn record?**
+3. **How are rung scores split (recall vs draws) in the relearn record?** (RESOLVED: 31-02 Task 1 — draw-cache per-shape minutes plus a bracket remainder proved > 0, no `tp.score_arm` patching, no mid-rung resume.)
    - Recommendation: the draw cache's per-shape `timing.minutes` (no patching), with recall + corpus + scoring as the bracket remainder. Wrap `tp.score_arm` only if an exact recall figure is wanted.
-4. **Emit the point record before the relearn run starts, or after both?**
+4. **Emit the point record before the relearn run starts, or after both?** (RESOLVED: 31-02 Task 2 — one LaunchAgent run, point then relearn; 31-05 emits and commits point then relearn; 31-06 emits and commits the budget.)
    - Recommendation: one LaunchAgent run of both probes (D-12 timing hygiene, no interactive gap), then three separate emit + commit steps: point → relearn → budget. The relearn emit proves its `start_sha256` equals the committed point record's `adapter_sha256`.
 
 ## Environment Availability
