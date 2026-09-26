@@ -13,6 +13,7 @@ Torch-free at import AND at derive: replay windows come from the committed calib
 steps from ``mitigation_budget.STEP_BUDGET`` (never the torch-importing helpers).
 """
 
+import datetime
 import hashlib
 import itertools
 import pathlib
@@ -28,11 +29,12 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 import mitigation_budget  # noqa: E402  (scripts/ is not a package)
+import phase25_run  # noqa: E402  (same)
 import phase29_prereg  # noqa: E402  (same)
 import phase30_points  # noqa: E402  (same)
 import phase31_probe  # noqa: E402  (same — torch-free at import)
 
-from personacore.provenance import git_sha  # noqa: E402
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 INSTRUMENT_GIT_SHA = git_sha()
 
@@ -312,3 +314,107 @@ def derive(*, point, relearn, table, recipe, max_steps):
             "this budget already prices recall at every trained point.",
         ],
     }
+
+
+# =================================================================================================
+# THE RECORD — committed blobs only — and the write-once emit (no --force)
+# =================================================================================================
+
+
+def require_no_sweep_point(tracked):
+    """The budget precedes the sweep: refuse once any Phase 32 point record is tracked."""
+    swept = [p for p in tracked if p.startswith(phase29_prereg.POINT_RECORD_PREFIX)]
+    _prove(
+        not swept,
+        f"sweep point {swept[0] if swept else ''} is already tracked: the ARCAL-03 budget must "
+        "precede every Phase 32 point, so it is never emitted after the sweep starts",
+    )
+
+
+def build_record(tracked):
+    """A pure recompute from COMMITTED records, valid at any later commit (no sweep-point check)."""
+    point = phase30_points._tracked_json(
+        phase31_probe.POINT_RECORD, tracked, "the ARCAL-01 point probe"
+    )
+    relearn = phase30_points._tracked_json(
+        phase31_probe.RELEARN_RECORD, tracked, "the ARCAL-02 relearn probe"
+    )
+    _prove(
+        relearn["k"] == phase29_prereg.CURVE_K and relearn["rungs"] == list(phase29_prereg.RUNGS),
+        f"the relearn record's k {relearn['k']} / rungs {relearn['rungs']} are not CURVE_K / RUNGS",
+    )
+    table = phase31_probe.phase25_stage_table(tracked)
+    recipe = phase30_points.calibration_record(tracked)["recipe"]
+    for leg in phase29_prereg.LEGS:
+        _prove(
+            recipe[leg]["max_steps"] == mitigation_budget.STEP_BUDGET,
+            f"calibration recipe {leg} max_steps {recipe[leg]['max_steps']} != STEP_BUDGET",
+        )
+    record = derive(
+        point=point,
+        relearn=relearn,
+        table=table,
+        recipe=recipe,
+        max_steps=mitigation_budget.STEP_BUDGET,
+    )
+    read = [
+        phase31_probe.POINT_RECORD,
+        phase31_probe.RELEARN_RECORD,
+        *(row["source"] for row in table["points"].values()),
+        table["recall_source"],
+        phase30_points.CALIBRATION_PATH,
+    ]
+    # _tracked_json proved each working file == its HEAD blob, so these are the committed bytes.
+    record["sources"] = {rel: _sha256(_GIT_ROOT / rel) for rel in read}
+    return record
+
+
+def emit(out_path=BUDGET_RECORD):
+    """Write-once: overwrite refusal, dirty refusal, sweep-point refusal, then build and write."""
+    out_path = pathlib.Path(out_path)
+    if not out_path.is_absolute():
+        out_path = _GIT_ROOT / out_path
+    _prove(
+        not out_path.exists(),
+        f"{out_path} exists — REFUSING to overwrite it. The budget is write-once; corrections are "
+        "dated continuations",
+    )
+    pathspec = ("scripts", "src", "results")
+    if out_path.is_relative_to(_GIT_ROOT):
+        pathspec += (f":(exclude){out_path.relative_to(_GIT_ROOT).as_posix()}",)
+    refuse_if_dirty(
+        who="phase31_budget",
+        detail=(
+            "the budget publishes git_sha and hashes its pinned modules from the working tree; a "
+            "record written from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=pathspec,
+        cwd=_GIT_ROOT,
+    )
+    tracked = phase31_probe._tracked()
+    require_no_sweep_point(tracked)
+    record = build_record(tracked)
+    record["calibration"] = phase31_probe.calibration_descent()
+    record["provenance"] = {
+        "module_sha256": {rel: _sha256(_GIT_ROOT / rel) for rel in PINNED_MODULES},
+        "git_sha": INSTRUMENT_GIT_SHA,
+        "head_at_write": git_sha(),
+        "written_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    phase25_run.atomic_write_json(out_path, record)
+    print(
+        f"[phase31_budget] stop line {record['stop_line']['hours']:.2f} h — wrote {out_path}",
+        flush=True,
+    )
+    return record
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    _prove(not argv, f"usage: python scripts/phase31_budget.py (no arguments; got {argv})")
+    emit()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
