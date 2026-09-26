@@ -14,11 +14,14 @@ isolated probe and never a sweep point.
 Torch-free at import: ``teach_persona`` and every torch-touching module are imported lazily.
 """
 
+import datetime
 import hashlib
+import json
 import pathlib
 import statistics
 import subprocess
 import sys
+import time
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 # The git root. Same value as _ROOT at import, but never patched: every git call and every module
@@ -31,14 +34,15 @@ _SRC = str(_GIT_ROOT / "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-import phase25_points  # noqa: E402  (scripts/ is not a package)
+import mitigation_budget  # noqa: E402  (scripts/ is not a package)
+import phase25_points  # noqa: E402  (same)
 import phase25_prereg  # noqa: E402  (same)
 import phase25_record  # noqa: E402  (same)
 import phase25_run  # noqa: E402  (same)
 import phase29_prereg  # noqa: E402  (same)
 import phase30_points  # noqa: E402  (same)
 
-from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402, F401  (Task 2)
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 INSTRUMENT_GIT_SHA = git_sha()
 
@@ -290,3 +294,248 @@ def build_point_record(run, table):
         "phase25_per_point_minutes": per_point,
         "phase25_recall_source": table["recall_source"],
     }
+
+
+# =================================================================================================
+# THE LIVE RUN — phase25_run.run_point's stage sequence, re-keyed, without run_point itself
+# =================================================================================================
+
+
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def run_point_probe(*, heartbeat_path=None):
+    """Train -> measure -> draw -> score the re-keyed control; write the run sidecar. Returns it.
+
+    Resumable per stage through the frozen stages' own sidecars and draw cache; a stage reused
+    that way keeps its inner seconds and loses its outer bracket (flagged ``reused``).
+    """
+    import teach_persona as tp
+    import torch
+
+    heartbeat_path = (
+        phase25_run.HEARTBEAT_PATH if heartbeat_path is None else pathlib.Path(heartbeat_path)
+    )
+    refuse_if_dirty(
+        who="phase31_probe",
+        detail=(
+            "the probe records the commit it ran from; a run from a dirty tree times code that "
+            "commit does not contain"
+        ),
+        pathspec=("scripts", "src", "results"),
+        cwd=_GIT_ROOT,
+    )
+    phase25_run.disk_precheck()
+    run_git_sha, device, torch_version = git_sha(), phase25_run.device(), torch.__version__
+    started_utc = _now()
+
+    sidecar = point_run_sidecar()
+    if sidecar.exists():
+        print(f"[phase31_probe] {_rel(sidecar)} exists: the point probe is complete", flush=True)
+        return json.loads(sidecar.read_text(encoding="utf-8"))
+
+    tracked = _tracked()
+    plan = probe_plan(tracked)
+    paths = tp.arm_outputs(plan["arm"], prefix=PROBE_PREFIX)
+    train_sidecar = phase25_points.training_sidecar(PROBE_KEY)
+    replay_sidecar = point_replay_sidecar()
+    _prove(
+        train_sidecar.exists() or not paths["checkpoint"].exists(),
+        f"{_rel(paths['checkpoint'])} exists without {_rel(train_sidecar)}: a resume would time "
+        "only the remaining steps and could not count the earlier steps' replay. Delete "
+        f"{_rel(paths['checkpoint'])} and {_rel(paths['adapter'])} (if present) in a reviewed "
+        "step, then rerun",
+    )
+    _prove(
+        replay_sidecar.exists() or not train_sidecar.exists(),
+        f"{_rel(train_sidecar)} exists without {_rel(replay_sidecar)}: the per-step replay counts "
+        f"of that training cannot be recovered. Delete {_rel(train_sidecar)}, "
+        f"{_rel(paths['adapter'])} and {_rel(paths['checkpoint'])} in a reviewed step, then rerun",
+    )
+    expected = phase30_points.calibration_record(tracked)["recipe"][LEG]["replay_windows"]
+    n_facts = len(tp.arm_spec(plan["arm"])[0])
+    _prove(
+        expected == phase29_prereg.replay_windows(n_facts),
+        f"the calibration's replay_windows {expected} != replay_windows({n_facts})",
+    )
+    reused = {
+        "train": train_sidecar.exists(),
+        "measure": phase25_points.measure_sidecar(PROBE_KEY).exists(),
+        "draw": phase25_run.draws_path(PROBE_KEY).exists(),
+    }
+
+    state = {"point": PROBE_KEY, "stage": "train", "shape": None, "draw_index": None}
+    outer = {}
+    stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+    try:
+        # TRAIN, with every draw counted through train()'s on_draw hook (D-11).
+        events = []
+        real_train = tp.train
+
+        def _counting_train(**kwargs):
+            def _on_draw(bin_path, ix):
+                replay = pathlib.Path(bin_path) == pathlib.Path(tp.DIALOG_TRAIN_BIN)
+                events.append((replay, len(ix)))
+
+            return real_train(**kwargs, on_draw=_on_draw)
+
+        tp.train = _counting_train
+        started = time.monotonic()
+        try:
+            training = phase25_points.train_stage(plan)
+        finally:
+            tp.train = real_train
+        outer["train"] = time.monotonic() - started
+        if reused["train"]:
+            _prove(not events, "a reused training drew windows")
+            replay = json.loads(replay_sidecar.read_text(encoding="utf-8"))
+            _prove(
+                replay["adapter_sha256"] == training["adapter_sha256"],
+                f"{_rel(replay_sidecar)} counts adapter {replay['adapter_sha256']!r}, not the "
+                f"trained {training['adapter_sha256']!r}",
+            )
+        else:
+            replay = {
+                "per_step": prove_replay_counts(
+                    events, expected, batch_size=tp.BATCH_SIZE, steps=tp.MAX_STEPS
+                ),
+                "expected_per_step": expected,
+                "steps": tp.MAX_STEPS,
+                "teaching_windows_per_step": tp.BATCH_SIZE,
+                "adapter_sha256": training["adapter_sha256"],
+            }
+            phase25_run.atomic_write_json(replay_sidecar, replay)
+        _prove(
+            replay["per_step"] == [expected] * tp.MAX_STEPS,
+            f"{_rel(replay_sidecar)} does not hold {expected} replay windows on all "
+            f"{tp.MAX_STEPS} steps",
+        )
+
+        # MEASURE: condition (c) + GATE-05 (measure_seconds), then recall (scoring_seconds), D-03.
+        state["stage"] = "measure"
+        started = time.monotonic()
+        measured = phase25_points.measure_stage(plan, training)
+        outer["measure"] = time.monotonic() - started
+        _prove(measured["scoring_seconds"] is not None, "the control's recall was not scored")
+
+        state["stage"] = "draw"
+        corpus, corpus_sha256 = phase25_points.attack_corpus()
+        started = time.monotonic()
+        blob, _digests = phase25_run.draw_point_shapes(
+            PROBE_KEY,
+            adapter=_ROOT / training["adapter"],
+            adapter_sha256=training["adapter_sha256"],
+            corpus=corpus,
+            corpus_sha256=corpus_sha256,
+            k=mitigation_budget.CURVE_K,
+            state=state,
+        )
+        outer["draw"] = time.monotonic() - started
+        state["shape"] = state["draw_index"] = None
+
+        state["stage"] = "score"
+        started = time.monotonic()
+        phase25_run.score_point(blob, phase25_points.scoring_values())
+        score_seconds = time.monotonic() - started
+        outer["score"] = score_seconds
+
+        state["stage"] = "record"
+        run = {
+            "probe_key": PROBE_KEY,
+            "probe_prefix": PROBE_PREFIX,
+            "control_key": phase29_prereg.control_key(LEG),
+            "arm": plan["arm"],
+            "recipe": phase30_points.calibration_record(tracked)["recipe"][LEG],
+            "k": mitigation_budget.CURVE_K,
+            "run_git_sha": run_git_sha,
+            "device": device,
+            "torch_version": torch_version,
+            "started_utc": started_utc,
+            "finished_utc": _now(),
+            "reused": reused,
+            "training": {
+                "seconds": training["seconds"],
+                "resumed_from_step": training["resumed_from_step"],
+                "adapter": training["adapter"],
+                "adapter_sha256": training["adapter_sha256"],
+            },
+            "outer_seconds": outer,
+            "measured": measured,
+            "shape_minutes": {f: s["timing"]["minutes"] for f, s in blob["shapes"].items()},
+            "score_seconds": score_seconds,
+            "replay": {k: v for k, v in replay.items() if k != "adapter_sha256"},
+        }
+        phase25_run.atomic_write_json(sidecar, run)
+        # "done" BEFORE the stop event: a periodic beat racing the stop can only write "done".
+        state.update(stage="done", shape=None, draw_index=None)
+    finally:
+        stop.set()
+        thread.join()
+    phase25_run.beat(heartbeat_path, point=PROBE_KEY, stage="done", shape=None, draw_index=None)
+    print(f"[phase31_probe] point probe complete — wrote {_rel(sidecar)}", flush=True)
+    return run
+
+
+# =================================================================================================
+# THE WRITE-ONCE EMIT (Phase 29 D-14: no retry, so no --force)
+# =================================================================================================
+
+
+def calibration_descent():
+    """The add commit of the ARECIPE-02 calibration, derived, and proof HEAD descends from it."""
+    path = phase30_points.CALIBRATION_PATH
+    adds = _git("log", "--diff-filter=A", "--format=%H", "--", path).split()
+    _prove(adds, f"{path} was never added in this history")
+    add = adds[-1]
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", add, "HEAD"], cwd=_GIT_ROOT, capture_output=True
+    )
+    _prove(ancestor.returncode == 0, f"HEAD does not descend from {path}'s add commit {add}")
+    return {"path": path, "add_commit": add, "is_ancestor_of_head": True}
+
+
+def emit_point(out_path=POINT_RECORD):
+    """Write-once: overwrite refusal FIRST, dirty-tree refusal SECOND, then read and write."""
+    out_path = pathlib.Path(out_path)
+    if not out_path.is_absolute():
+        out_path = _GIT_ROOT / out_path
+    _prove(
+        not out_path.exists(),
+        f"{out_path} exists — REFUSING to overwrite it. The probe record is write-once; "
+        "corrections are dated continuations",
+    )
+    pathspec = ("scripts", "src", "results")
+    if out_path.is_relative_to(_GIT_ROOT):
+        pathspec += (f":(exclude){out_path.relative_to(_GIT_ROOT).as_posix()}",)
+    refuse_if_dirty(
+        who="phase31_probe",
+        detail=(
+            "the probe record publishes git_sha and hashes its pinned modules from the working "
+            "tree; a record written from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=pathspec,
+        cwd=_GIT_ROOT,
+    )
+    tracked = _tracked()
+    sidecar = point_run_sidecar()
+    _prove(sidecar.exists(), f"{_rel(sidecar)} does not exist: run the point probe first")
+    run = json.loads(sidecar.read_text(encoding="utf-8"))
+    record = build_point_record(run, phase25_stage_table(tracked))
+    record["calibration"] = calibration_descent()
+    record["provenance"] = {
+        "run": {
+            "git_sha": run["run_git_sha"],
+            "device": run["device"],
+            "torch_version": run["torch_version"],
+            "started_utc": run["started_utc"],
+            "finished_utc": run["finished_utc"],
+        },
+        "module_sha256": {rel: _sha256(_GIT_ROOT / rel) for rel in PINNED_MODULES},
+        "git_sha": INSTRUMENT_GIT_SHA,
+        "head_at_write": git_sha(),
+        "written_utc": _now(),
+    }
+    phase25_run.atomic_write_json(out_path, record)
+    print(f"[phase31_probe] wrote {out_path}", flush=True)
+    return record
