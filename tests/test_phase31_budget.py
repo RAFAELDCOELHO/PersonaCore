@@ -273,3 +273,156 @@ def test_budget_never_calls_torch_touching_helpers():
         if isinstance(n, ast.Attribute) and n.attr == "MAX_STEPS"
     ]
     assert bad == []
+
+
+# =================================================================================================
+# Task 2 — build_record / emit from committed files, and the ARCAL-03 ancestry guards
+# =================================================================================================
+
+from test_phase29_prereg import _assert_frozen_before, _git  # noqa: E402
+
+BUDGET = budget.BUDGET_RECORD
+POINT, RELEARN = probe.POINT_RECORD, probe.RELEARN_RECORD
+
+
+@pytest.fixture(autouse=True)
+def clean_tree(monkeypatch):
+    """emit refuses a dirty tree and this suite runs on dirty trees, so the guard is RECORDED."""
+    calls = []
+    monkeypatch.setattr(budget, "refuse_if_dirty", lambda **kw: calls.append(kw) or "")
+    return calls
+
+
+def _is_tracked(rel):
+    return rel in _git("ls-files", rel).split()
+
+
+def test_budget_path_is_the_preregistered_one():
+    assert BUDGET == "results/phase31_budget.json"
+    assert BUDGET in phase29_prereg.V5_RESULT_PATHS
+
+
+def test_emit_budget_is_write_once(tmp_path):
+    out = tmp_path / "budget.json"
+    out.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        budget.emit(out)
+    assert out.read_text(encoding="utf-8") == "{}"
+    if _is_tracked(BUDGET):
+        path = probe._GIT_ROOT / BUDGET
+        before = path.read_bytes()
+        with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+            budget.emit()
+        assert path.read_bytes() == before
+
+
+def test_emit_budget_refuses_a_dirty_tree_first(monkeypatch, clean_tree):
+    def stop():
+        raise SystemExit("[probe] stopped after the dirty check")
+
+    monkeypatch.setattr(probe, "_tracked", stop)
+    monkeypatch.setattr(
+        budget, "build_record", lambda t: pytest.fail("built before the dirty check")
+    )
+    rel = "results/phase31_never_written_budget.json"
+    inside = probe._GIT_ROOT / rel
+    with pytest.raises(SystemExit, match="stopped after the dirty check"):
+        budget.emit(inside)
+    assert not inside.exists()
+    (call,) = clean_tree
+    assert call["cwd"] == probe._GIT_ROOT
+    assert call["pathspec"] == ("scripts", "src", "results", f":(exclude){rel}")
+
+
+def _forged_point():
+    return probe.build_point_record(
+        _synthetic_run(training=dict(_synthetic_run()["training"], seconds=900.0)),
+        _synthetic_table(),
+    )
+
+
+def test_emit_budget_refuses_untracked_probes(monkeypatch):
+    real = probe._tracked()
+    with pytest.raises(SystemExit, match=POINT):
+        budget.build_record([p for p in real if p != POINT])
+    real_json = pts._tracked_json
+    forged = _forged_point()
+    monkeypatch.setattr(
+        pts,
+        "_tracked_json",
+        lambda rel, tracked, what: forged if rel == POINT else real_json(rel, tracked, what),
+    )
+    with pytest.raises(SystemExit, match=RELEARN):
+        budget.build_record([p for p in real if p != RELEARN])
+
+
+def test_emit_budget_refuses_after_a_sweep_point(monkeypatch, tmp_path):
+    sweep = phase29_prereg.point_record_path(phase29_prereg.control_key("n8"))
+    assert sweep.startswith(phase29_prereg.POINT_RECORD_PREFIX)
+    with pytest.raises(SystemExit, match=sweep):
+        budget.require_no_sweep_point(["results/phase30_calibration.json", sweep])
+    assert budget.require_no_sweep_point(["results/phase30_calibration.json"]) is None
+    built = []
+    monkeypatch.setattr(probe, "_tracked", lambda: ["results/phase30_calibration.json", sweep])
+    monkeypatch.setattr(budget, "build_record", lambda t: built.append(t) or pytest.fail("built"))
+    out = tmp_path / "budget.json"
+    with pytest.raises(SystemExit, match=sweep):
+        budget.emit(out)
+    assert built == [] and not out.exists()
+
+
+def _strip(record):
+    return {k: v for k, v in record.items() if k not in ("provenance", "calibration")}
+
+
+def test_committed_budget_recomputes_from_committed_files(monkeypatch):
+    if _is_tracked(BUDGET):
+        committed = json.loads((probe._GIT_ROOT / BUDGET).read_text(encoding="utf-8"))
+        rebuilt = json.loads(json.dumps(budget.build_record(probe._tracked())))
+        assert _strip(rebuilt) == _strip(committed)
+        return
+    # Honest branch: no committed budget yet. build_record over forged-tracked synthetic probes is
+    # deterministic and names every source it read.
+    forged = {POINT: _forged_point(), RELEARN: probe.build_relearn_record(_synthetic_relearn_run())}
+    real_json, real_sha = pts._tracked_json, budget._sha256
+    monkeypatch.setattr(
+        pts,
+        "_tracked_json",
+        lambda rel, tracked, what: forged[rel] if rel in forged else real_json(rel, tracked, what),
+    )
+    monkeypatch.setattr(
+        budget, "_sha256", lambda p: real_sha(p) if pathlib.Path(p).exists() else "f" * 64
+    )
+    tracked = [*probe._tracked(), POINT, RELEARN]
+    first, second = budget.build_record(tracked), budget.build_record(tracked)
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+    assert "provenance" not in first and "calibration" not in first
+    table = probe.phase25_stage_table(probe._tracked())
+    expected = {POINT, RELEARN, table["recall_source"], pts.CALIBRATION_PATH}
+    expected |= {row["source"] for row in table["points"].values()}
+    assert set(first["sources"]) == expected
+
+
+def test_ancestry_budget_precedes_every_sweep_point():
+    points = sorted(_git("ls-files", phase29_prereg.POINT_RECORD_PREFIX + "*.json").split())
+    if not _is_tracked(BUDGET):
+        assert points == [], f"sweep point(s) {points} committed before the ARCAL-03 budget"
+        return
+    _assert_frozen_before(BUDGET, points)
+    # NON-VACUITY (natural RED): the calibration was added before the budget existed.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(BUDGET, [pts.CALIBRATION_PATH])
+
+
+def test_ancestry_probes_precede_the_budget():
+    if not _is_tracked(BUDGET):
+        later = _git("ls-files", "results/phase32_*").split()
+        assert later == [], f"{later} tracked before the ARCAL-03 budget"
+        return
+    for probe_record in (POINT, RELEARN):
+        _assert_frozen_before(probe_record, [BUDGET])
+    if _is_tracked(RELEARN):
+        _assert_frozen_before(POINT, [RELEARN])
+    # NON-VACUITY (natural RED): the point probe was added before the budget existed.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(BUDGET, [POINT])
