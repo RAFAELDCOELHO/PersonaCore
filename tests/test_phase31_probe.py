@@ -4,7 +4,9 @@ CPU-only. Nothing here writes under the real results/, data/ or checkpoints/: ev
 adapter, checkpoint, draw cache and emitted record lands under a tmp directory.
 """
 
+import hashlib
 import json
+import math
 import pathlib
 import statistics
 import subprocess
@@ -270,3 +272,257 @@ def test_module_imports_without_torch():
     )
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.strip() == "False", completed.stdout
+
+
+# =================================================================================================
+# Task 2 — the live run at CPU fixture scale, its refusals, and the write-once emit
+# =================================================================================================
+
+_PROBE31_GLOBS = (
+    "data/*probe31*",
+    "data/probe31_relearn/*",
+    "checkpoints/*probe31*",
+    "results/*probe31*",
+    "results/phase31_probe_*",
+)
+
+
+def _real_probe31_strays():
+    """Every probe31 write target in the REAL tree (the test module's _ROOT, never patched)."""
+    return sorted(
+        {
+            path.relative_to(_ROOT).as_posix()
+            for pattern in _PROBE31_GLOBS
+            for path in _ROOT.glob(pattern)
+        }
+    )
+
+
+def _one_prompt_per_cell(corpus):
+    seen, prompts = set(), []
+    for entry in corpus["prompts"]:
+        if (entry["family"], entry["tier"]) not in seen:
+            seen.add((entry["family"], entry["tier"]))
+            prompts.append(entry)
+    return dict(corpus, prompts=prompts)
+
+
+def _point_probe_fixture(root):
+    """ONE CPU run of run_point_probe through the REAL stages. Every patch is undone on return."""
+    import phase14_recall
+    import phase18_extraction as x18
+    import phase19_erasure
+
+    from personacore.checkpoint import export_slim
+    from test_phase22_wiring import _e2e_env
+
+    tp = _tp()
+    strays_before = _real_probe31_strays()
+    # Fact (a): on the REAL modules, before any patch (MAX_STEPS == STEP_BUDGET, real _REPO_ROOT).
+    tracked = probe._tracked()
+    real_plan = probe.probe_plan(tracked)
+    calls = {"train_stage": 0, "measure_stage": 0, "draw_point_shapes": 0, "score_point": 0}
+    outputs, seen = {}, {}
+    heartbeat = root / "heartbeat.jsonl"
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+        _e2e_env(root, monkeypatch)
+        slim = root / "convbase_slim.pt"
+        export_slim(root / "convbase.pt", slim)
+        monkeypatch.setattr(phase14_recall, "CONVBASE_SLIM", slim)
+        monkeypatch.setattr(phase14_recall, "RECALL_MAX_NEW_TOKENS", 4)
+        monkeypatch.setattr(phase25_run, "DRAWS_DIR", root / "data")
+        # Fact (c): the gitignored retention bin is absent on CI; the fixture's decodable bin.
+        monkeypatch.setattr(phase19_erasure, "RETENTION_BIN", tp.DIALOG_VAL_BIN)
+        monkeypatch.setattr(probe, "_ROOT", root)
+        monkeypatch.setattr(phase25_points, "_ROOT", root)
+        subset = _one_prompt_per_cell(json.loads(x18.CORPUS_PATH.read_text(encoding="utf-8")))
+        monkeypatch.setattr(
+            phase25_points, "attack_corpus", lambda: (subset, x18.corpus_sha256(subset))
+        )
+        monkeypatch.setattr(probe, "refuse_if_dirty", lambda **kw: "")
+
+        def _fixture_plan(tracked_):
+            assert isinstance(tracked_, list)
+            # Fact (b): the ONLY plan field the fixture changes.
+            pinned = dict(real_plan["pinned_mechanism"], composed_steps=tp.MAX_STEPS)
+            return dict(real_plan, pinned_mechanism=pinned)
+
+        monkeypatch.setattr(probe, "probe_plan", _fixture_plan)
+
+        def _spy(module, name):
+            real = getattr(module, name)
+
+            def spy(*args, **kwargs):
+                calls[name] += 1
+                if name == "train_stage":
+                    seen["trained_plan"] = args[0]
+                outputs[name] = real(*args, **kwargs)
+                return outputs[name]
+
+            monkeypatch.setattr(module, name, spy)
+
+        _spy(phase25_points, "train_stage")
+        _spy(phase25_points, "measure_stage")
+        _spy(phase25_run, "draw_point_shapes")
+        _spy(phase25_run, "score_point")
+        fixture_steps = tp.MAX_STEPS
+        probe.run_point_probe(heartbeat_path=heartbeat)
+        run = json.loads(probe.point_run_sidecar().read_text(encoding="utf-8"))
+    record = probe.build_point_record(run, probe.phase25_stage_table(tracked))
+    evidence = {
+        "calls": calls,
+        "outputs": outputs,
+        "real_plan": real_plan,
+        "trained_plan": seen["trained_plan"],
+        "fixture_max_steps": fixture_steps,
+        "heartbeat_path": heartbeat,
+        "root": root,
+        "strays": (strays_before, _real_probe31_strays()),
+    }
+    return run, record, evidence
+
+
+@pytest.fixture(scope="module")
+def point_probe_run(tmp_path_factory):
+    """ONE CPU live-path run per module (the tests/test_phase27_relearn.py::e2e_run pattern)."""
+    return _point_probe_fixture(tmp_path_factory.mktemp("point_probe"))
+
+
+def test_live_path_point_probe_runs_end_to_end_on_cpu(point_probe_run):
+    run, record, evidence = point_probe_run
+    root, outputs = evidence["root"], evidence["outputs"]
+    assert evidence["calls"] == {
+        "train_stage": 1,
+        "measure_stage": 1,
+        "draw_point_shapes": 1,
+        "score_point": 1,
+    }
+    # The spies forwarded to the REAL stages: their outputs are real artifacts.
+    training = outputs["train_stage"]
+    adapter = root / training["adapter"]
+    assert hashlib.sha256(adapter.read_bytes()).hexdigest() == training["adapter_sha256"]
+    retention = outputs["measure_stage"]["capability"]["retention_ppl"]
+    assert isinstance(retention, float) and math.isfinite(retention)
+    blob, _digests = outputs["draw_point_shapes"]
+    assert set(blob["shapes"]) == set(phase25_run.ATTACK_FAMILIES)
+    assert all(blob["shapes"][f]["timing"]["minutes"] > 0 for f in phase25_run.ATTACK_FAMILIES)
+    # D-11: the per-step replay count through the real train_stage.
+    expected = pts.calibration_record(probe._tracked())["recipe"]["n64"]["replay_windows"]
+    steps = evidence["fixture_max_steps"]
+    assert run["replay"]["per_step"] == [expected] * steps
+    assert record["replay"]["per_step"] == [expected] * steps
+    assert run["reused"] == {"train": False, "measure": False, "draw": False}
+    assert all(stage["reused"] is False for stage in record["stages"].values())
+    assert record["stages"]["draw"]["outer_seconds"] >= record["stages"]["draw"]["seconds"]
+    # The plan train_stage received differs from the real probe plan ONLY on composed_steps.
+    trained, real = evidence["trained_plan"], evidence["real_plan"]
+    assert {k: v for k, v in trained.items() if k != "pinned_mechanism"} == {
+        k: v for k, v in real.items() if k != "pinned_mechanism"
+    }
+    assert trained["pinned_mechanism"] == dict(real["pinned_mechanism"], composed_steps=steps)
+    last = evidence["heartbeat_path"].read_text(encoding="utf-8").splitlines()[-1]
+    assert json.loads(last)["stage"] == "done"
+    assert not any((root / "results").iterdir())
+    before, after = evidence["strays"]
+    assert before == after
+
+
+def _light_env(tmp_path, monkeypatch):
+    """Plan FIRST on the unpatched modules, then every path redirected to tmp_path."""
+    real_plan = probe.probe_plan(probe._tracked())
+    tp = _tp()
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)
+    monkeypatch.setattr(phase25_points, "_ROOT", tmp_path)
+    monkeypatch.setattr(tp, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(phase25_run, "DRAWS_DIR", tmp_path / "data")
+    monkeypatch.setattr(probe, "probe_plan", lambda tracked: real_plan)
+    monkeypatch.setattr(
+        phase25_points, "train_stage", lambda plan: pytest.fail("trained past a refusal")
+    )
+    return tp, real_plan
+
+
+def test_live_path_refuses_a_half_trained_probe(tmp_path, monkeypatch):
+    tp, plan = _light_env(tmp_path, monkeypatch)
+    checkpoint = tp.arm_outputs(plan["arm"], prefix=probe.PROBE_PREFIX)["checkpoint"]
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_bytes(b"half")
+    with pytest.raises(SystemExit, match=r"probe31_advr_n64_latest\.pt.*Delete"):
+        probe.run_point_probe(heartbeat_path=tmp_path / "hb.jsonl")
+
+
+def test_live_path_refuses_training_reuse_without_replay_counts(tmp_path, monkeypatch):
+    _light_env(tmp_path, monkeypatch)
+    sidecar = phase25_points.training_sidecar(probe.PROBE_KEY)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"probe31_point_replay\.json"):
+        probe.run_point_probe(heartbeat_path=tmp_path / "hb.jsonl")
+
+
+def test_emit_point_is_write_once(tmp_path):
+    out = tmp_path / "p.json"
+    out.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        probe.emit_point(out)
+    assert out.read_text(encoding="utf-8") == "{}"
+    record = probe._GIT_ROOT / probe.POINT_RECORD
+    if probe.POINT_RECORD in probe._tracked():
+        before = record.read_bytes()
+        with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+            probe.emit_point()
+        assert record.read_bytes() == before
+    else:
+        assert not record.exists(), f"{probe.POINT_RECORD} exists but is untracked"
+
+
+def test_emit_point_refuses_a_dirty_tree_before_reading_sidecars(tmp_path, monkeypatch):
+    calls = []
+
+    def _dirty(**kwargs):
+        calls.append(kwargs)
+        raise SystemExit("[probe] stopped at the dirty check")
+
+    monkeypatch.setattr(probe, "refuse_if_dirty", _dirty)
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)  # EMPTY: the sidecar is genuinely missing
+    rel = "results/phase31_never_written_point.json"
+    out = probe._GIT_ROOT / rel
+    with pytest.raises(SystemExit, match="stopped at the dirty check"):
+        probe.emit_point(out)
+    assert not out.exists()
+    (call,) = calls
+    assert call["cwd"] == probe._GIT_ROOT
+    assert call["pathspec"] == ("scripts", "src", "results", f":(exclude){rel}")
+    # And with the dirty check passing, the missing sidecar is what refuses next.
+    monkeypatch.setattr(probe, "refuse_if_dirty", lambda **kw: "")
+    with pytest.raises(SystemExit, match=r"probe31_point_run\.json"):
+        probe.emit_point(out)
+    assert not out.exists()
+
+
+def test_emit_point_proves_calibration_descent(point_probe_run, tmp_path, monkeypatch):
+    _run, _record, evidence = point_probe_run
+    monkeypatch.setattr(probe, "_ROOT", evidence["root"])
+    out = tmp_path / "point.json"
+    record = probe.emit_point(out)
+    assert json.loads(out.read_text(encoding="utf-8")) == json.loads(json.dumps(record))
+    adds = subprocess.run(
+        ["git", "log", "--diff-filter=A", "--format=%H", "--", pts.CALIBRATION_PATH],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert record["calibration"] == {
+        "path": pts.CALIBRATION_PATH,
+        "add_commit": adds[-1],
+        "is_ancestor_of_head": True,
+    }
+    assert record["sweep_point"] is False
+    module_sha = record["provenance"]["module_sha256"]
+    assert set(module_sha) == set(probe.PINNED_MODULES)
+    for rel, digest in module_sha.items():
+        assert digest == hashlib.sha256((probe._GIT_ROOT / rel).read_bytes()).hexdigest(), rel
+    assert record["provenance"]["run"]["git_sha"] == _run["run_git_sha"]
