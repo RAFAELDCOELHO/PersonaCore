@@ -1272,7 +1272,31 @@ estimate
      record before the pre-registration" and "no sweep point before the budget" stay checkable.
      (ARCAL-01, ARCAL-02)
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+**Wave 1**
+
+- [ ] 31-01-PLAN.md — point half of `scripts/phase31_probe.py`: re-keyed isolated `advr_n64` control (`probe31_advr_n64`), on_draw replay counting, per-stage timing, write-once point emit; CPU live-path tests (ARCAL-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 31-02-PLAN.md — relearning half: one mitigated arm on the full ladder from the probe's own adapter, artifacts moved under `data/probe31_relearn/`, CLI `run`/`emit`, D-12 LaunchAgent plist (ARCAL-01, ARCAL-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 31-03-PLAN.md — torch-free `scripts/phase31_budget.py`: sweep + conditional relearning cost (incl. FULL_K re-score), stop line 1.5× upper bound, ancestry tests (ARCAL-03)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 31-04-PLAN.md — pre-launch gates, human-action checkpoint: the long MPS point-then-relearn run (ARCAL-01, ARCAL-02)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 31-05-PLAN.md — emit + commit the point record, then the relearn record, each alone, guards after each (ARCAL-01, ARCAL-02)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 31-06-PLAN.md — emit the budget, developer review checkpoint, commit alone, full suite + `phase28_report.py check` (ARCAL-03)
 
 ### Phase 32: Replay-Bearing Frontier Re-run and Verdict
 
