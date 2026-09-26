@@ -20,6 +20,7 @@ called.
 Torch-free at import: ``teach_persona`` and every torch-touching module are imported lazily.
 """
 
+import argparse
 import datetime
 import hashlib
 import json
@@ -904,3 +905,38 @@ def run_relearn_probe(*, heartbeat_path=None):
     phase25_run.beat(heartbeat_path, point=RELEARN_LABEL, stage="done", shape=None, draw_index=None)
     print(f"[phase31_probe] relearn probe complete — wrote {_rel(run_sidecar)}", flush=True)
     return run
+
+
+# =================================================================================================
+# THE CLI (D-12): one agent run measures the point, then the relearning arm from its adapter
+# =================================================================================================
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Phase 31 MPS cost probe: the point probe, then one relearning arm (D-12)."
+    )
+    sub = parser.add_subparsers(dest="mode", required=True)
+    run = sub.add_parser("run", help="run the point probe, then the relearn probe (resumable)")
+    run.add_argument("--heartbeat", default=str(phase25_run.HEARTBEAT_PATH))
+    emit = sub.add_parser("emit", help="write one write-once probe record under results/")
+    emit.add_argument("target", choices=("point", "relearn"))
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    if args.mode == "emit":
+        (emit_point if args.target == "point" else emit_relearn)()
+        return 0
+    import phase25_venue  # torch-free; the banner lets the launch identity be read off the log
+
+    print(phase25_venue.launch_banner(), flush=True)
+    heartbeat = pathlib.Path(args.heartbeat)
+    run_point_probe(heartbeat_path=heartbeat)  # D-05: the relearning starts from its adapter
+    run_relearn_probe(heartbeat_path=heartbeat)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
