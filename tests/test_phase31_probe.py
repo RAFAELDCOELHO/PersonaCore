@@ -918,3 +918,84 @@ def test_relearn_calls_no_admitted_leg():
     assert {"train_relearn_arm", "score_rung"} <= names  # meta-guard: the walk sees the calls
     banned = {"run_calibrate", "run_curve", "run_gate", "_require_admitted"}
     assert not names & banned, sorted(names & banned)
+
+
+# =================================================================================================
+# Plan 31-02 Task 2 — the CLI (run / emit) and the D-12 LaunchAgent
+# =================================================================================================
+
+_PROBE_PLIST = _ROOT / "artifacts" / "com.personacore.phase31.probe.plist"
+_CANARY_PLIST = _ROOT / "artifacts" / "com.personacore.phase26.canary.plist"
+
+
+def _recorders(monkeypatch, *, point_raises=False):
+    import inspect
+
+    calls = []
+    for name, tag in (("run_point_probe", "point"), ("run_relearn_probe", "relearn")):
+        signature = inspect.signature(getattr(probe, name))
+
+        def recorder(*args, _tag=tag, _sig=signature, **kwargs):
+            _sig.bind(*args, **kwargs)  # the kwargs main() passes must fit the REAL function
+            calls.append((_tag, kwargs))
+            if _tag == "point" and point_raises:
+                raise SystemExit("[probe] point failed")
+
+        monkeypatch.setattr(probe, name, recorder)
+    return calls
+
+
+def test_main_run_dispatches_point_then_relearn(tmp_path, monkeypatch):
+    calls = _recorders(monkeypatch)
+    beat = tmp_path / "hb.jsonl"
+    assert probe.main(["run", "--heartbeat", str(beat)]) == 0
+    assert calls == [("point", {"heartbeat_path": beat}), ("relearn", {"heartbeat_path": beat})]
+
+
+def test_main_run_stops_before_relearn_when_point_fails(tmp_path, monkeypatch):
+    calls = _recorders(monkeypatch, point_raises=True)
+    with pytest.raises(SystemExit, match="point failed"):
+        probe.main(["run", "--heartbeat", str(tmp_path / "hb.jsonl")])
+    assert [tag for tag, _kw in calls] == ["point"]
+
+
+def test_main_emit_dispatches(monkeypatch):
+    calls = []
+    monkeypatch.setattr(probe, "emit_point", lambda: calls.append("point"))
+    monkeypatch.setattr(probe, "emit_relearn", lambda: calls.append("relearn"))
+    assert probe.main(["emit", "point"]) == 0
+    assert probe.main(["emit", "relearn"]) == 0
+    assert calls == ["point", "relearn"]
+    with pytest.raises(SystemExit) as caught:
+        probe.main(["emit", "budget"])
+    assert caught.value.code != 0
+    assert calls == ["point", "relearn"]
+
+
+def test_main_run_defaults_to_the_shared_heartbeat(monkeypatch):
+    calls = _recorders(monkeypatch)
+    assert probe.main(["run"]) == 0
+    assert [kw for _tag, kw in calls] == [{"heartbeat_path": phase25_run.HEARTBEAT_PATH}] * 2
+
+
+def test_plist_mirrors_the_canary_agent():
+    import plistlib
+
+    ours = plistlib.loads(_PROBE_PLIST.read_bytes())
+    canary = plistlib.loads(_CANARY_PLIST.read_bytes())
+    assert ours["Label"] == "com.personacore.phase31.probe"
+    assert ours["KeepAlive"] is False and ours["RunAtLoad"] is False
+    args, canary_args = ours["ProgramArguments"], canary["ProgramArguments"]
+    assert args[:3] == canary_args[:3]
+    assert args[3].endswith("scripts/phase31_probe.py") and args[4] == "run"
+    assert (
+        args[args.index("--heartbeat") + 1]
+        == canary_args[canary_args.index("--heartbeat") + 1]
+        == str(phase25_run.HEARTBEAT_PATH)
+    )
+    assert ours["WorkingDirectory"] == canary["WorkingDirectory"]
+    for key in ("StandardOutPath", "StandardErrorPath"):
+        assert "/logs/" in ours[key] and ours[key] != canary[key]
+    assert ours["EnvironmentVariables"] == canary["EnvironmentVariables"]
+    assert ours["EnvironmentVariables"]["PERSONACORE_SWEEP_ACTIVE"] == "1"
+    assert ours["ProcessType"] == canary["ProcessType"]
