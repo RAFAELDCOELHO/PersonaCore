@@ -507,3 +507,449 @@ def test_census_gates_over_the_v5_driver():
             (_SCRIPTS / name).read_text(encoding="utf-8"), mitigation_gate.F_Y
         )
         assert any(gate in f for f in failures), (name, failures)
+
+
+# =================================================================================================
+# Plan 32-04 Task 1 — run_point (counted train -> recall-on measure -> ... -> commit) and run()
+# =================================================================================================
+
+import inspect  # noqa: E402
+
+import phase25_run  # noqa: E402  (scripts/ is not a package)
+
+from test_phase30_points import _good_control  # noqa: E402
+
+LEGS = phase29_prereg.LEGS
+SCHEDULE = phase30_points.SWEEP_SCHEDULE()
+N8C, N64C = (phase29_prereg.control_key(leg) for leg in LEGS)
+N8_POINTS = [k for k in SCHEDULE if phase30_points.leg_of(k) == "n8" and k != N8C]
+N64_POINTS = [k for k in SCHEDULE if phase30_points.leg_of(k) == "n64" and k != N64C]
+_path = phase29_prereg.point_record_path
+
+
+def _tp():
+    import teach_persona
+
+    return teach_persona
+
+
+def _control(leg, seconds=1.0, **counts):
+    """A forged committed control that own_control accepts, with a D-03 stages block."""
+    return dict(_good_control(leg, **counts), stages=_stages(seconds))
+
+
+def _learnable_n8(seconds=1.0):
+    return _control("n8", seconds)
+
+
+def _unlearnable_n64(seconds=1.0):
+    return _control("n64", seconds, taught=(0, 1008), heldout=(0, 648))
+
+
+def _sweep_repo(root, *, stop_line=1e9, committed=None, budget=True):
+    """The scratch results repo: the calibration, the budget (a FLOAT stop line) and records."""
+    blobs = {
+        phase30_points.CALIBRATION_PATH: {
+            "recipe": {leg: phase30_points.recipe_identity(leg) for leg in LEGS}
+        }
+    }
+    if budget:
+        blobs[p32.BUDGET_PATH] = {"stop_line": {"seconds": float(stop_line)}}
+    blobs.update({_path(k): r for k, r in (committed or {}).items()})
+    for rel, blob in blobs.items():
+        (root / rel).write_text(json.dumps(blob), encoding="utf-8")
+    _git_out(root, "add", "results")
+    _git_out(root, "commit", "-q", "-m", "fixture")
+    return _git_out(root, "rev-parse", "HEAD").strip()
+
+
+def _run_point_recorder(monkeypatch, root, *, seconds=1.0):
+    """run_point, signature-bound: writes and commits a forged record per key."""
+    signature = inspect.signature(p32.run_point)
+    calls = []
+
+    def recorder(*args, **kwargs):
+        bound = signature.bind(*args, **kwargs).arguments
+        key = bound["plan"]["point_key"]
+        calls.append(dict(bound, tracked_now=p32.tracked_results()))
+        (root / _path(key)).write_text(
+            json.dumps({"point_key": key, "stages": _stages(seconds)}), encoding="utf-8"
+        )
+        p32.commit_path(_path(key), p32.commit_message(key))
+
+    monkeypatch.setattr(p32, "run_point", recorder)
+    return calls
+
+
+@pytest.fixture
+def sweep(scratch, monkeypatch):
+    monkeypatch.setattr(phase25_run, "disk_precheck", lambda *a, **k: 0)
+    return scratch
+
+
+def _keys(calls):
+    return [c["plan"]["point_key"] for c in calls]
+
+
+def _commits_since(root, base):
+    return _git_out(root, "log", "--format=%H", f"{base}..HEAD").split()
+
+
+def _names(root, sha):
+    return _git_out(root, "show", "--name-only", "--format=", sha).split()
+
+
+def test_schedule_walk_trains_n8_and_refuses_the_n64_leg(sweep, monkeypatch, tmp_path, clean_tree):
+    base = _sweep_repo(sweep, committed={N8C: _learnable_n8(), N64C: _unlearnable_n64()})
+    calls = _run_point_recorder(monkeypatch, sweep)
+    assert p32.run(heartbeat_path=tmp_path / "hb.jsonl") == 0
+    assert _keys(calls) == N8_POINTS  # schedule order, n8 non-controls only
+    commits = _commits_since(sweep, base)
+    refused = [
+        sha for sha in commits if "PREREG-03" in _git_out(sweep, "log", "-1", "--format=%s", sha)
+    ]
+    assert len(refused) == len(N64_POINTS)
+    assert sorted(_names(sweep, sha)[0] for sha in refused) == sorted(_path(k) for k in N64_POINTS)
+    assert all(len(_names(sweep, sha)) == 1 for sha in commits)
+    tracked = p32.tracked_results()
+    assert all(_path(k) in tracked for k in SCHEDULE)
+    for key in N64_POINTS:
+        blob = json.loads((sweep / _path(key)).read_text(encoding="utf-8"))
+        assert blob["rule"] == "PREREG-03" and blob["control_key"] == N64C
+        assert blob["control_recall_counts"] == {"taught": [0, 1008], "heldout": [0, 648]}
+    # The run-start dirty check: derived excludes for the csv dirs and the pending records.
+    start = clean_tree[0]
+    assert start["cwd"] == p32._CODE_ROOT
+    spec = start["pathspec"]
+    assert spec[:3] == ("scripts", "src", "results")
+    plan = phase30_points.point_plan(N8_POINTS[0])
+    assert f":(exclude)results/{plan['prefix']}_{plan['arm']}" in spec
+    assert ":(exclude)" + phase29_prereg.POINT_RECORD_PREFIX + "*.json" in spec
+    assert len(spec) == 3 + len(SCHEDULE) + 1
+
+
+def test_refused_leg_retry_commits_only_the_uncommitted(sweep, monkeypatch, tmp_path):
+    _sweep_repo(sweep, committed={N8C: _learnable_n8(), N64C: _unlearnable_n64()})
+    act = phase30_points.next_action(N64_POINTS[0], p32.tracked_results())
+    assert act["action"] == "refuse"
+    phase30_points.write_refused_records(act["records"])
+    done = [_path(k) for k in sorted(act["records"])[:2]]
+    _git_out(sweep, "add", *done)
+    _git_out(sweep, "commit", "-q", "-m", "two refused")
+    base = _git_out(sweep, "rev-parse", "HEAD").strip()
+    calls = _run_point_recorder(monkeypatch, sweep)
+    assert p32.run(heartbeat_path=tmp_path / "hb.jsonl") == 0
+    refused = [
+        sha
+        for sha in _commits_since(sweep, base)
+        if "PREREG-03" in _git_out(sweep, "log", "-1", "--format=%s", sha)
+    ]
+    rest = sorted(set(_path(k) for k in act["records"]) - set(done))
+    assert len(rest) == 3
+    assert sorted(_names(sweep, sha)[0] for sha in refused) == rest
+    assert _keys(calls) == N8_POINTS
+
+
+def test_interrupted_commit_is_committed_before_any_point(sweep, monkeypatch, tmp_path):
+    _sweep_repo(sweep, committed={N8C: _learnable_n8(), N64C: _unlearnable_n64()})
+    stranded = N8_POINTS[2]
+    (sweep / _path(stranded)).write_text(
+        json.dumps({"point_key": stranded, "stages": _stages(1)}), encoding="utf-8"
+    )
+    calls = _run_point_recorder(monkeypatch, sweep)
+    assert p32.run(heartbeat_path=tmp_path / "hb.jsonl") == 0
+    assert _path(stranded) in calls[0]["tracked_now"]
+    assert stranded not in _keys(calls)
+    subject = _git_out(sweep, "log", "--format=%s", "-1", "--", _path(stranded)).strip()
+    assert subject == p32.commit_message(stranded)
+
+
+def test_stop_line_refuses_a_relaunch_past_the_line_without_a_ruling(sweep, monkeypatch, tmp_path):
+    _sweep_repo(sweep, stop_line=50.0, committed={N8C: _learnable_n8(seconds=20.0)})
+    calls = _run_point_recorder(monkeypatch, sweep)
+    with pytest.raises(SystemExit, match="--past-stop-line"):
+        p32.run(heartbeat_path=tmp_path / "hb.jsonl")
+    assert calls == []
+
+
+def test_stop_line_pauses_before_the_next_point(sweep, monkeypatch, tmp_path):
+    _sweep_repo(sweep, stop_line=150.0, committed={N8C: _learnable_n8(seconds=20.0)})
+    calls = _run_point_recorder(monkeypatch, sweep, seconds=20.0)
+    heartbeat = tmp_path / "hb.jsonl"
+    assert p32.run(heartbeat_path=heartbeat) == 0
+    assert _keys(calls) == [N64C]
+    assert calls[0]["stop_line"] == {
+        "seconds": 150.0,
+        "cumulative_before_point": 100.0,
+        "past_line_ruling": None,
+    }
+    last = json.loads(heartbeat.read_text(encoding="utf-8").splitlines()[-1])
+    clock = p32.cumulative_seconds(p32.tracked_results())
+    assert clock == 200.0
+    assert last["stage"] == "stop_line" and last["shape"] == f"cumulative_seconds={clock}"
+    assert last["point"] == N8_POINTS[0]
+
+
+def test_past_stop_line_cannot_be_pre_armed(sweep, monkeypatch, tmp_path):
+    _sweep_repo(sweep, stop_line=150.0, committed={N8C: _learnable_n8(seconds=20.0)})
+    calls = _run_point_recorder(monkeypatch, sweep)
+    with pytest.raises(SystemExit, match="cannot be pre-armed"):
+        p32.run(heartbeat_path=tmp_path / "hb.jsonl", past_stop_line="go on")
+    assert calls == []
+
+
+def test_past_stop_line_ruling_reaches_every_later_point(sweep, monkeypatch, tmp_path):
+    _sweep_repo(
+        sweep,
+        stop_line=50.0,
+        committed={N8C: _learnable_n8(seconds=20.0), N64C: _unlearnable_n64(seconds=0.0)},
+    )
+    calls = _run_point_recorder(monkeypatch, sweep, seconds=0.0)
+    assert p32.run(heartbeat_path=tmp_path / "hb.jsonl", past_stop_line="ruling text") == 0
+    assert _keys(calls) == N8_POINTS
+    assert [c["stop_line"] for c in calls] == [
+        {"seconds": 50.0, "cumulative_before_point": 100.0, "past_line_ruling": "ruling text"}
+    ] * len(N8_POINTS)
+
+
+def test_complete_sweep_returns_0_without_reading_the_stop_line(sweep, monkeypatch, capsys):
+    _sweep_repo(sweep, budget=False, committed={k: {"stages": _stages(1)} for k in SCHEDULE})
+    calls = _run_point_recorder(monkeypatch, sweep)
+    assert p32.run() == 0
+    assert calls == []
+    assert "complete" in capsys.readouterr().out
+
+
+# ----- run_point on light fixtures -------------------------------------------------------------
+
+
+@pytest.fixture
+def point_env(sweep, tmp_path, monkeypatch):
+    """The calibration committed; every stage path redirected under tmp_path."""
+    tp = _tp()
+    _sweep_repo(sweep, committed={N8C: _learnable_n8(), N64C: _unlearnable_n64()})
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    monkeypatch.setattr(phase25_points, "_ROOT", tmp_path)
+    # arm_outputs, not tp._REPO_ROOT: recipe_identity reads the replay source relative to it.
+    real_outputs = tp.arm_outputs
+    monkeypatch.setattr(
+        tp,
+        "arm_outputs",
+        lambda arm, **kw: {
+            name: tmp_path / path.relative_to(tp._REPO_ROOT)
+            for name, path in real_outputs(arm, **kw).items()
+        },
+    )
+    monkeypatch.setattr(phase25_run, "DRAWS_DIR", tmp_path / "data")
+    (tmp_path / "data").mkdir(exist_ok=True)
+    return tp
+
+
+def _fake_train(tp, *, windows, short_step=None):
+    """teach_persona.train's stand-in: one teaching draw and one replay draw per step."""
+
+    def train(*, on_draw, **_kwargs):
+        for step in range(tp.MAX_STEPS):
+            on_draw("data/teaching.bin", [0] * tp.BATCH_SIZE)
+            on_draw(tp.DIALOG_TRAIN_BIN, [0] * (windows - (step == short_step)))
+
+    return train
+
+
+def _spy_measure(monkeypatch):
+    calls = []
+
+    class Reached(Exception):
+        pass
+
+    def spy(plan, training):
+        calls.append(plan)
+        raise Reached
+
+    monkeypatch.setattr(phase25_points, "measure_stage", spy)
+    return calls, Reached
+
+
+def _point(key=None):
+    return phase30_points.point_plan(key or N8_POINTS[0])
+
+
+def test_replay_short_on_one_step_halts_before_measure(point_env, monkeypatch, tmp_path):
+    tp = point_env
+    windows = phase29_prereg.replay_windows(8)
+    fake = _fake_train(tp, windows=windows, short_step=3)
+    monkeypatch.setattr(tp, "train", fake)
+    _plan, kw = _inputs(tmp_path)
+    monkeypatch.setattr(phase25_points, "train_stage", lambda plan: (tp.train(), kw["training"])[1])
+    measured, _reached = _spy_measure(monkeypatch)
+    with pytest.raises(SystemExit, match="replay windows per step"):
+        p32.run_point(
+            _point(), p32.tracked_results(), heartbeat_path=tmp_path / "hb.jsonl", stop_line={}
+        )
+    assert measured == []
+    assert tp.train is fake
+    assert not p32.replay_sidecar(N8_POINTS[0]).exists()
+
+
+def test_replay_counted_per_step_reaches_measure(point_env, monkeypatch, tmp_path):
+    tp = point_env
+    windows = phase29_prereg.replay_windows(8)
+    monkeypatch.setattr(tp, "train", _fake_train(tp, windows=windows))
+    _plan, kw = _inputs(tmp_path)
+    monkeypatch.setattr(phase25_points, "train_stage", lambda plan: (tp.train(), kw["training"])[1])
+    measured, reached = _spy_measure(monkeypatch)
+    with pytest.raises(reached):
+        p32.run_point(
+            _point(), p32.tracked_results(), heartbeat_path=tmp_path / "hb.jsonl", stop_line={}
+        )
+    assert [p["is_control"] for p in measured] == [True]  # D-01: recall on
+    replay = json.loads(p32.replay_sidecar(N8_POINTS[0]).read_text(encoding="utf-8"))
+    assert replay["per_step"] == [windows] * tp.MAX_STEPS
+    assert replay["adapter_sha256"] == kw["training"]["adapter_sha256"]
+    assert replay["teaching_windows_per_step"] == tp.BATCH_SIZE
+
+
+def test_half_trained_checkpoint_without_training_sidecar_refuses(point_env, monkeypatch, tmp_path):
+    tp = point_env
+    monkeypatch.setattr(phase25_points, "train_stage", lambda plan: pytest.fail("trained"))
+    plan = _point()
+    checkpoint = tp.arm_outputs(plan["arm"], prefix=plan["prefix"])["checkpoint"]
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_bytes(b"half")
+    with pytest.raises(SystemExit, match=r"_latest\.pt exists without .*Delete"):
+        p32.run_point(plan, p32.tracked_results(), heartbeat_path=tmp_path / "h", stop_line={})
+
+
+def test_half_trained_training_sidecar_without_replay_refuses(point_env, monkeypatch, tmp_path):
+    monkeypatch.setattr(phase25_points, "train_stage", lambda plan: pytest.fail("trained"))
+    sidecar = phase25_points.training_sidecar(N8_POINTS[0])
+    sidecar.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"phase32_.*_replay\.json"):
+        p32.run_point(_point(), p32.tracked_results(), heartbeat_path=tmp_path / "h", stop_line={})
+
+
+@pytest.mark.parametrize("matches", [True, False])
+def test_reused_training_proves_the_replay_sidecar_adapter(
+    point_env, monkeypatch, tmp_path, matches
+):
+    tp = point_env
+    _plan, kw = _inputs(tmp_path)
+    training = kw["training"]
+    phase25_points.training_sidecar(N8_POINTS[0]).write_text("{}", encoding="utf-8")
+    windows = phase29_prereg.replay_windows(8)
+    p32.replay_sidecar(N8_POINTS[0]).parent.mkdir(parents=True, exist_ok=True)
+    p32.replay_sidecar(N8_POINTS[0]).write_text(
+        json.dumps(
+            {
+                "per_step": [windows] * tp.MAX_STEPS,
+                "expected_per_step": windows,
+                "steps": tp.MAX_STEPS,
+                "teaching_windows_per_step": tp.BATCH_SIZE,
+                "adapter_sha256": training["adapter_sha256"] if matches else "f" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(tp, "train", lambda **kw: pytest.fail("a reused training drew"))
+    monkeypatch.setattr(phase25_points, "train_stage", lambda plan: training)
+    measured, reached = _spy_measure(monkeypatch)
+    expect = (
+        pytest.raises(reached) if matches else pytest.raises(SystemExit, match="counts adapter")
+    )
+    with expect:
+        p32.run_point(_point(), p32.tracked_results(), heartbeat_path=tmp_path / "h", stop_line={})
+    assert len(measured) == (1 if matches else 0)
+
+
+def _full_chain(point_env, monkeypatch, tmp_path, sweep):
+    """Every stage faked at its frozen seam; the REAL run_point, build, write and commit."""
+    tp = point_env
+    key = N8_POINTS[-1]
+    windows = phase29_prereg.replay_windows(8)
+    monkeypatch.setattr(tp, "train", _fake_train(tp, windows=windows))
+    _plan, kw = _inputs(tmp_path, key=key)
+    training = dict(kw["training"], git_sha=_head())
+    seen = {}
+
+    def train_stage(plan):
+        tp.train()
+        return training
+
+    def measure(plan, training_):
+        seen["measure_plan"] = plan
+        return kw["measured"]
+
+    def draw(point_key, *, adapter, adapter_sha256, corpus, corpus_sha256, k, state):
+        seen["draw"] = {"key": point_key, "k": k, "adapter_sha256": adapter_sha256}
+        phase25_run.draws_path(point_key).write_text("{}", encoding="utf-8")
+        return kw["blob"], {}
+
+    monkeypatch.setattr(phase25_points, "train_stage", train_stage)
+    monkeypatch.setattr(phase25_points, "measure_stage", measure)
+    monkeypatch.setattr(phase25_points, "attack_corpus", lambda: ({}, "c" * 64))
+    monkeypatch.setattr(phase25_points, "scoring_values", lambda: {})
+    monkeypatch.setattr(phase25_run, "draw_point_shapes", draw)
+    monkeypatch.setattr(
+        phase25_run, "score_point", lambda blob, values: (kw["per_question"], {}, kw["scored"])
+    )
+    return key, seen
+
+
+def _commit_all_but(root, key, *, stop_line):
+    """Controls, the 5 refused n64 records and 4 n8 points committed; ``key`` left to run."""
+    committed = {N8C: _learnable_n8(seconds=20.0), N64C: _unlearnable_n64(seconds=0.0)}
+    committed.update({k: {"rule": "PREREG-03"} for k in N64_POINTS})
+    committed.update({k: {"stages": _stages(0)} for k in N8_POINTS if k != key})
+    return _sweep_repo(root, stop_line=stop_line, committed=committed)
+
+
+def test_run_point_full_chain_writes_the_record_with_the_ruling(
+    point_env, monkeypatch, tmp_path, sweep
+):
+    key, seen = _full_chain(point_env, monkeypatch, tmp_path, sweep)
+    # point_env already committed a fixture: start again on a fresh scratch history.
+    base = _commit_all_but(sweep, key, stop_line=50.0)
+    heartbeat = tmp_path / "hb.jsonl"
+    assert p32.run(heartbeat_path=heartbeat, past_stop_line="ruling text") == 0
+    commits = _commits_since(sweep, base)
+    assert len(commits) == 1 and _names(sweep, commits[0]) == [_path(key)]
+    record = json.loads((sweep / _path(key)).read_text(encoding="utf-8"))
+    prov = record["provenance"]
+    assert prov["stop_line"] == {
+        "seconds": 50.0,
+        "cumulative_before_point": 100.0,
+        "past_line_ruling": "ruling text",
+    }
+    assert prov["device"] == "cpu" and prov["torch_version"]
+    assert prov["head_at_write"] == _head() and prov["git_sha"] == p32.INSTRUMENT_GIT_SHA
+    assert set(prov["module_sha256"]) == set(p32.PINNED_MODULES)
+    assert prov["calibration"]["is_ancestor_of_head"] is True
+    assert [s["git_sha"] for s in prov["sessions"]] == [_head()]
+    assert seen["measure_plan"]["is_control"] is True
+    assert seen["draw"] == {"key": key, "k": mitigation_budget.CURVE_K, "adapter_sha256": "a" * 64}
+    assert record["replay"]["per_step"] == [phase29_prereg.replay_windows(8)] * 200
+    # Non-control control_gap: its own leg's committed control (5.5 - 4.5).
+    assert record["condition_c"]["control_gap"] == 1.0
+    assert json.loads(heartbeat.read_text(encoding="utf-8").splitlines()[-1])["stage"] == "done"
+
+
+def _called_inside(tree, callee):
+    """{enclosing top-level function name} for every call to ``callee``."""
+    owners = set()
+    for top in tree.body:
+        if isinstance(top, ast.FunctionDef):
+            for node in ast.walk(top):
+                if (
+                    isinstance(node, ast.Call)
+                    and (getattr(node.func, "id", None) or getattr(node.func, "attr", None))
+                    == callee
+                ):
+                    owners.add(top.name)
+    return owners
+
+
+def test_ast_run_point_only_from_run_and_run_dispatches_on_next_action():
+    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    assert _called_inside(tree, "run_point") == {"run"}
+    assert "run" in _called_inside(tree, "next_action")
+    assert "run" in _called_inside(tree, "write_refused_records")
