@@ -462,7 +462,9 @@ The only code snippets needed are in Patterns 2, 4 and 6. All are adapted from c
 | A2 | The Phase 32 n64 control reproduces the probe's 0/1008 on MPS | Pitfall 6 | Only the run time changes (≈23 h, not ≈13 h); both branches are implemented anyway |
 | A3 | `phase25_watch` treats `shape` as opaque text, so the stop-line beat can carry the cumulative seconds there | Pattern 3 | The watcher mis-renders one line; cosmetic only |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All four RESOLVED 2026-09-27 by developer ruling at plan time; see 32-CONTEXT.md D-17 (1: dated guard continuation), D-18 (2: both counts, k of 5 leads), D-19 (3: WR-04 in `own_control`), D-20 (4: documented manual command).
 
 1. **The `"control_readings"` guard conflict (Pitfall 1).** We know the schema requires the key and the guard flags the literal. It is unclear whether the developer prefers a guard amendment or another route. Recommendation: rule on it at plan time. Option (a) is a dated continuation to `_wr05_failures` with a planted RED.
 2. **The D-15 count at ratio 0 (Pitfall 5).** It is unclear whether the headline sentence counts 6 or 5 ratios per leg. Recommendation: emit both counts in the block, and have the template name the self-reference. The developer confirms at the D-16 checkpoint.

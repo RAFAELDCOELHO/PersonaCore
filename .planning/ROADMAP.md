@@ -1317,7 +1317,32 @@ gate, so condition (c) is tested against the ratio rather than the recipe
      recipe-confounded reading; a leg REFUSED by the PREREG-03 rule is reported with its reading,
      not re-tuned. (AFRONT-03)
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+**Wave 1**
+
+- [ ] 32-01-PLAN.md — pre-launch rulings: D-17 `_wr05_failures` dated continuation (`control_readings` only as a JSON key), D-19 WR-04 replay check in `phase30_points.own_control` + D-10 IN-04, `_SUPERSEDED_PINS` SHA registration (AFRONT-01, AFRONT-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 32-02-PLAN.md — `scripts/phase32_points.py` library: D-01 recall-on measure override, record builder (consumer field contract), D-03 clock + stop-line read, D-08 session-sha check, write-once write, D-11 one-path commit, git-surface AST (AFRONT-01)
+- [ ] 32-03-PLAN.md — `scripts/phase32_frontier.py`: verdicts via `curve_verdicts` with own advr readings, PREREG-03 / route-refused legs, `condition_c_vs_v4` (D-13/D-14), count-derived statement (D-15/D-18), write-once emit, v4.0 byte guard (AFRONT-02, AFRONT-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 32-04-PLAN.md — driver `run_point` / `run()` / CLI: on_draw replay counting (D-07), schedule walk, PREREG-03 leg commits, stop line + `--past-stop-line` (D-03..D-06, D-20), LaunchAgent plist (AFRONT-01)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 32-05-PLAN.md — D-12 CPU live-path test: real driver via `main()` over all 12 keys into a scratch repo, real records fed to the frontier assembler and `admission()` (AFRONT-01, AFRONT-02, AFRONT-03)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 32-06-PLAN.md — pre-launch gates + 32-RUNBOOK.md, human-action checkpoint: the 12-point MPS sweep, then record verification (AFRONT-01)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 32-07-PLAN.md — emit the frontier, D-16 developer review checkpoint, commit alone, full suite + `phase28_report.py check` (AFRONT-02, AFRONT-03)
 
 ### Phase 33: Admission and Relearning on Admitted Points
 
