@@ -12,6 +12,7 @@ Nothing here writes under the real results/, data/, checkpoints/ or logs/: a bef
 ``Path.glob`` snapshot of the real root proves it.
 """
 
+import copy
 import hashlib
 import json
 import pathlib
@@ -35,6 +36,7 @@ import mitigation_budget  # noqa: E402  (scripts/ is not a package)
 import phase25_condition_c  # noqa: E402  (same)
 import phase25_points  # noqa: E402  (same)
 import phase25_run  # noqa: E402  (same)
+import phase25_verdict  # noqa: E402  (same)
 import phase29_prereg  # noqa: E402  (same)
 import phase30_points  # noqa: E402  (same)
 import phase32_frontier  # noqa: E402  (same)
@@ -122,7 +124,7 @@ def _sweep_fixture(root):
 
     strays_before = _real_strays()
     heartbeat = root / "heartbeat.jsonl"
-    forced, scored_calls, dirty_calls = [], [], []
+    forced, forced_gap, scored_calls, dirty_calls = [], [], [], []
     with pytest.MonkeyPatch.context() as monkeypatch:
         tp = _patch_env(root, monkeypatch)
         monkeypatch.setattr(p32, "refuse_if_dirty", lambda **kw: dirty_calls.append(kw) or "")
@@ -160,6 +162,32 @@ def _sweep_fixture(root):
             return result
 
         monkeypatch.setattr(tp, "score_arm", score_spy)
+
+        # THE SECOND FORCED READING, measured necessary (see the frontier natural-RED test): at
+        # fixture scale the random-init base makes any adapter LOWER the dialogue perplexity, so
+        # the n8 control's real adapter_on - adapter_off is negative and the frozen route's
+        # dialogue_gap_band raises ValueError. Scoped like the recall forcing: the n8 control's
+        # adapter by exact file name, identified from the load that precedes the reading.
+        # adapter_off (the base model) stays real; adapter_on becomes off + |real gap|.
+        loaded = []
+        real_load = phase14_recall.load_adapted_model
+        real_condition_c = phase25_condition_c.measure_condition_c
+
+        def load_spy(device, adapter_path=None):
+            loaded.append(None if adapter_path is None else pathlib.Path(adapter_path).name)
+            return real_load(device, adapter_path)
+
+        def condition_c_spy(*args, **kwargs):
+            result = real_condition_c(*args, **kwargs)
+            wanted = tp.arm_outputs(control["arm"], prefix=control["prefix"])["adapter"].name
+            if loaded[-1] != wanted:
+                return result
+            gap = result["adapter_on"] - result["adapter_off"]
+            forced_gap.append((loaded[-1], gap))
+            return dict(result, adapter_on=result["adapter_off"] + abs(gap))
+
+        monkeypatch.setattr(phase14_recall, "load_adapted_model", load_spy)
+        monkeypatch.setattr(phase25_condition_c, "measure_condition_c", condition_c_spy)
         fixture_steps = tp.MAX_STEPS
         exit_code = p32.main(["run", "--heartbeat", str(heartbeat)])
         tracked = p32.tracked_results()
@@ -183,6 +211,7 @@ def _sweep_fixture(root):
             for sha in reversed(shas)
         ],
         "forced": forced,
+        "forced_gap": forced_gap,
         "scored_calls": scored_calls,
         "fixture_max_steps": fixture_steps,
         "n_seeded": n_seeded,
@@ -257,6 +286,10 @@ def test_live_path_every_trained_record_carries_its_own_recall(sweep_run):
     # arm_outputs' file name does not depend on the root, so it is read unpatched here.
     expected = (c["arm"], tp.arm_outputs(c["arm"], prefix=c["prefix"])["adapter"].name)
     assert ev["forced"] == [expected]
+    # The dialogue-pair forcing hit the same adapter once, and only because the real gap was
+    # non-positive (the premise that made it necessary, re-measured on every run).
+    ((name, gap),) = ev["forced_gap"]
+    assert name == expected[1] and gap <= 0
     assert len(ev["scored_calls"]) == 7
     # The forced reading is what the n8 control record carries; the n64 control stayed natural.
     for field in ("taught_recall", "heldout_recall"):
@@ -349,6 +382,91 @@ def _v4():
     return json.loads(blob), hashlib.sha256(blob).hexdigest()
 
 
+def _questions(record):
+    """``point_extraction_questions`` as ``phase25_promotion.flat_record`` computes it."""
+    return sum(v["questions"] for v in record["per_family_counts"].values())
+
+
+def _fixture_scale_anchors(monkeypatch, records):
+    """THE ONE CONSUMER-SIDE PATCH, measured necessary (see the test below): the never-taught
+    anchor's question count is scaled to the fixture corpus. The producer drew one prompt per
+    cell (4 questions); the real anchor pools 416, so ``tolerance_report`` refuses every
+    fixture-scale point (no outcome over 4 questions clears a ceiling built at 416). Successes,
+    noise floor and provenance stay the committed ones; the count is derived, never typed."""
+    (n,) = {_questions(r) for r in _trained(records).values()}
+    real = phase25_verdict.never_taught_anchors
+
+    def anchors():
+        return dict(real(), control_extraction_questions=n)
+
+    monkeypatch.setattr(phase25_verdict, "never_taught_anchors", anchors)
+    return n
+
+
 def _frontier(ev):
     v4, v4_sha = _v4()
     return phase32_frontier.build_frontier(ev["records"], v4, v4_sha)
+
+
+def test_live_path_frontier_refuses_fixture_scale_without_the_anchor_patch(sweep_run):
+    """Natural RED for the one consumer patch: the real anchor against 4-question points."""
+    real_n = phase25_verdict.never_taught_anchors()["control_extraction_questions"]
+    (n,) = {_questions(r) for r in _trained(sweep_run["records"]).values()}
+    assert n < real_n
+    with pytest.raises(ValueError, match=rf"wilson_upper_bound\(0, {n}\)"):
+        _frontier(sweep_run)
+
+
+def test_live_path_frontier_from_real_producer_records(sweep_run, monkeypatch):
+    ev = sweep_run
+    records = ev["records"]
+    _fixture_scale_anchors(monkeypatch, records)
+    frontier = _frontier(ev)
+    admitted = phase29_prereg.admission(frontier)
+    assert admitted["verdict"] in phase29_prereg.VERDICTS
+    assert admitted["verdict"] != "INCONCLUSIVE", admitted["reasons"]
+    assert frontier["point_keys"] == list(KEYS)
+    points = frontier["points"]
+
+    control = points[N64C]
+    assert phase29_prereg.point_verdict_string(control) == phase29_prereg.REFUSED
+    entry = control["verdict"]
+    assert entry["early_return_reason"] == phase32_frontier.ROUTE_REFUSAL
+    assert entry["early_return_reason"] == (
+        "REFUSED by the sanctioned route before the pin was reached"
+    )
+    assert all(m in entry["reasons"][0] for m in phase29_prereg.COVERAGE_FLOOR_REFUSAL_MARKERS)
+
+    n64_counts = _counts(records[N64C])
+    for key in _leg("n64"):
+        if key == N64C:
+            continue
+        assert points[key]["rule"] == "PREREG-03", key
+        assert points[key]["verdict"]["control_recall_counts"] == n64_counts, key
+
+    # WR-05 own-sourcing: every n8 entry was graded against the FORCED n8 control reading.
+    taught = records[N8C]["taught_recall"]
+    assert taught["numerator"] == taught["denominator"] // 2
+    for key in _leg("n8"):
+        got = points[key]["verdict"]["control_taught_recall"]
+        assert got == taught["numerator"] / taught["denominator"], key
+
+    block = frontier["verdicts"]["condition_c_vs_v4"]
+    assert len(block["rows"]) == len(KEYS)
+    assert block["by_leg"]["n64"]["v5_state"] == "refused_prereg03"
+    rebuilt = " ".join(
+        phase32_frontier.TEMPLATES[(b["v5_state"], b["v4_state"])].format(**b)
+        for b in (block["by_leg"][leg] for leg in phase29_prereg.LEGS)
+    )
+    assert block["statement"] and block["statement"] == rebuilt
+
+
+def test_live_path_admission_reads_the_real_tallies(sweep_run, monkeypatch):
+    _fixture_scale_anchors(monkeypatch, sweep_run["records"])
+    frontier = _frontier(sweep_run)
+    assert phase29_prereg.admission(frontier)["verdict"] != "INCONCLUSIVE"
+    forged = copy.deepcopy(frontier)
+    tally = forged["verdicts"]["tallies_by_leg"]["advr_n8"]
+    name = next(iter(tally))
+    tally[name] += 1
+    assert phase29_prereg.admission(forged)["verdict"] == "INCONCLUSIVE"
