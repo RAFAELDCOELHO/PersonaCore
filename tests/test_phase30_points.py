@@ -225,13 +225,14 @@ def _commit(root):
 
 def _good_control(leg, *, taught=(790, 1008), heldout=(346, 648)):
     """A forged own-control record in the v4.0 field shapes, carrying the v5.0 recipe."""
+    recipe = pts.recipe_identity(leg)
     return {
         "point_key": phase29_prereg.control_key(leg),
         "arm": pts._arm_of_leg(leg),
         "axis": "ratio",
         "q": None,
         "clip_norm": None,
-        "recipe": pts.recipe_identity(leg),
+        "recipe": recipe,
         # What the control TRAINED with, in the v4.0 record shape (WR-04).
         "seed": phase25_points.SWEEP_SEED,
         "composed_steps": mitigation_budget.STEP_BUDGET,
@@ -240,6 +241,12 @@ def _good_control(leg, *, taught=(790, 1008), heldout=(346, 648)):
                 "seed": phase25_points.SWEEP_SEED,
                 "max_steps": mitigation_budget.STEP_BUDGET,
             }
+        },
+        # Phase 32 D-19: what the control's training drew, counted per step
+        "replay": {
+            "per_step": [recipe["replay_windows"]] * recipe["max_steps"],
+            "expected_per_step": recipe["replay_windows"],
+            "steps": recipe["max_steps"],
         },
         "taught_recall": {"numerator": taught[0], "denominator": taught[1]},
         "heldout_recall": {"numerator": heldout[0], "denominator": heldout[1]},
@@ -380,6 +387,39 @@ def test_wr04_refuses_a_control_that_trained_off_its_recipe(tmp_path, monkeypatc
     tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": record})
     with pytest.raises(SystemExit, match="WR-04"):
         pts.own_control(_non_control("n8"), tracked, point_recipe=pts.recipe_identity("n8"))
+
+
+def _no_replay(record):
+    del record["replay"]  # the fixture shape before Phase 32 D-19: natural RED
+
+
+def _one_step_short(record):
+    record["replay"]["per_step"].pop()
+
+
+def _one_step_low(record):
+    record["replay"]["per_step"][0] -= 1
+
+
+@pytest.mark.parametrize("breaks", [_no_replay, _one_step_short, _one_step_low])
+def test_wr04_own_control_refuses_a_control_without_replay_counts(tmp_path, monkeypatch, breaks):
+    """Phase 32 D-19: a control is refused unless its per-step replay equals its recipe's."""
+    record = copy.deepcopy(_good_control("n8"))
+    breaks(record)
+    tracked = _v5_tree(tmp_path, monkeypatch, controls={"n8": record})
+    with pytest.raises(SystemExit, match=r"D-19, WR-04.*replay"):
+        pts.own_control(_non_control("n8"), tracked, point_recipe=pts.recipe_identity("n8"))
+
+
+def test_in04_recipe_identity_refuses_a_foreign_replay_module(monkeypatch):
+    """D-10 IN-04: the module part of every REPLAY_SOURCE name must be teach_persona."""
+    foreign = "other_module.DIALOG_TRAIN_BIN"
+    monkeypatch.setattr(
+        phase29_prereg, "REPLAY_SOURCE", (foreign, "teach_persona.DIALOG_TRAIN_MASK")
+    )
+    with pytest.raises(SystemExit, match="IN-04") as excinfo:
+        pts.recipe_identity("n8")
+    assert foreign in str(excinfo.value)
 
 
 def test_recipe_mismatch_against_the_calibration_is_refused(tmp_path, monkeypatch):

@@ -85,6 +85,12 @@ def recipe_identity(leg):
         f"teach_persona.MAX_STEPS {tp.MAX_STEPS} != mitigation_budget.STEP_BUDGET",
     )
     _prove(tp.SEED == SWEEP_SEED, f"teach_persona.SEED {tp.SEED} != the sweep seed {SWEEP_SEED}")
+    # D-10 IN-04: the replay source is read from teach_persona, so every name must say so.
+    for name in phase29_prereg.REPLAY_SOURCE:
+        _prove(
+            name.split(".", 1)[0] == "teach_persona",
+            f"REPLAY_SOURCE entry {name!r} does not name teach_persona (IN-04)",
+        )
     recipe = {
         "n_facts": n,
         "replay_windows": phase29_prereg.replay_windows(n),
@@ -255,6 +261,14 @@ def own_control(key, tracked, *, point_recipe):
         not off,
         f"control record trained with {trained}, not the point's recipe on {off} (D-16, WR-04): "
         "its declared recipe is not what it ran",
+    )
+    # D-19, WR-04: the control must also have drawn its recipe's replay on every step.
+    per_step = (record.get("replay") or {}).get("per_step")
+    _prove(
+        per_step == [point_recipe["replay_windows"]] * point_recipe["max_steps"],
+        "control record's declared replay recipe is not what its training drew, counted per step "
+        f"through on_draw (D-07) (D-19, WR-04): replay per_step {per_step!r} != "
+        f"[{point_recipe['replay_windows']}] * {point_recipe['max_steps']}",
     )
     return record
 
