@@ -1321,7 +1321,7 @@ gate, so condition (c) is tested against the ratio rather than the recipe
 
 **Wave 1**
 
-- [ ] 32-01-PLAN.md — pre-launch rulings: D-17 `_wr05_failures` dated continuation (`control_readings` only as a JSON key), D-19 WR-04 replay check in `phase30_points.own_control` + D-10 IN-04, `_SUPERSEDED_PINS` SHA registration (AFRONT-01, AFRONT-02)
+- [x] 32-01-PLAN.md — pre-launch rulings: D-17 `_wr05_failures` dated continuation (`control_readings` only as a JSON key), D-19 WR-04 replay check in `phase30_points.own_control` + D-10 IN-04, `_SUPERSEDED_PINS` SHA registration (AFRONT-01, AFRONT-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
