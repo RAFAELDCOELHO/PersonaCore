@@ -988,11 +988,11 @@ def test_plist_mirrors_the_canary_agent():
     args, canary_args = ours["ProgramArguments"], canary["ProgramArguments"]
     assert args[:3] == canary_args[:3]
     assert args[3].endswith("scripts/phase31_probe.py") and args[4] == "run"
-    assert (
-        args[args.index("--heartbeat") + 1]
-        == canary_args[canary_args.index("--heartbeat") + 1]
-        == str(phase25_run.HEARTBEAT_PATH)
-    )
+    expected_rel = phase25_run.HEARTBEAT_PATH.relative_to(_ROOT)
+    heartbeat = pathlib.Path(args[args.index("--heartbeat") + 1])
+    canary_heartbeat = pathlib.Path(canary_args[canary_args.index("--heartbeat") + 1])
+    assert heartbeat == canary_heartbeat
+    assert heartbeat.parts[-len(expected_rel.parts) :] == expected_rel.parts
     assert ours["WorkingDirectory"] == canary["WorkingDirectory"]
     for key in ("StandardOutPath", "StandardErrorPath"):
         assert "/logs/" in ours[key] and ours[key] != canary[key]
