@@ -29,10 +29,20 @@ import mitigation_gate  # noqa: E402  (scripts/ is not a package)
 import phase25_record  # noqa: E402  (same)
 import phase25_verdict  # noqa: E402  (same)
 import phase29_prereg  # noqa: E402  (same)
+import phase30_points  # noqa: E402  (same)
 import phase32_frontier as fr  # noqa: E402  (same)
 
-from test_phase25_driver import _git_argv_subcommands, _git_surface_failure  # noqa: E402
-from test_phase29_prereg import _gate_retype_failures, _planted  # noqa: E402
+from test_phase25_driver import (  # noqa: E402
+    _git_argv_subcommands,
+    _git_surface_failure,
+    _scratch_repo,
+)
+from test_phase29_prereg import (  # noqa: E402
+    _assert_frozen_before,
+    _gate_retype_failures,
+    _git,
+    _planted,
+)
 from test_phase30_points import _wr05_failures  # noqa: E402
 
 MODULE = _SCRIPTS / "phase32_frontier.py"
@@ -310,3 +320,336 @@ def test_ast_module_is_torch_free_at_import():
         "import phase32_frontier; assert 'torch' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", code], cwd=_ROOT, check=True)
+
+
+# =================================================================================================
+# Task 2 — condition_c_vs_v4, the statement templates, write-once emit, v4 bytes, recompute, CLI
+# =================================================================================================
+
+C_FIELDS = (
+    "point_dialogue_ppl_on",
+    "point_dialogue_ppl_off",
+    "point_retention_ppl",
+    "control_gap",
+    "gap_noise_floor",
+    "retention_noise_floor",
+)
+
+
+def _block():
+    return _default_frontier()["verdicts"]["condition_c_vs_v4"]
+
+
+def test_condition_c_vs_v4_rows_against_the_committed_v4_frontier():
+    frontier, v4 = _default_frontier(), _v4()
+    block = frontier["verdicts"]["condition_c_vs_v4"]
+    rows = block["rows"]
+    expected = [(leg, ratio) for leg in P.LEGS for ratio in P.RATIO_GRID]
+    assert [(r["v5_key"], r["v4_key"], r["ratio"]) for r in rows] == [
+        (P.point_key(f"advr_{leg}", ratio), phase25_record.point_key(_twin(leg), ratio), ratio)
+        for leg, ratio in expected
+    ]
+    for row in rows:
+        assert row["control_self_referential_dialogue"] is (row["ratio"] == P.RATIO_GRID[0])
+        # cleared_abc is handed the verdict ENTRY, never the point dict.
+        assert (
+            row["v5"]["cleared_c"] == P.cleared_abc(frontier["points"][row["v5_key"]]["verdict"])[2]
+        )
+        assert row["v4"]["cleared_c"] == P.cleared_abc(v4["points"][row["v4_key"]]["verdict"])[2]
+        assert row["v5"]["verdict"] == P.point_verdict_string(frontier["points"][row["v5_key"]])
+        source = v4["points"][row["v4_key"]]
+        assert row["v4"]["condition_c"] == {f: source["condition_c"][f] for f in C_FIELDS}
+        assert row["v4"]["verdict"] == P.point_verdict_string(source)
+    n8 = [r for r in rows if r["v5_key"] in P.leg_keys("n8")]
+    n64 = [r for r in rows if r["v5_key"] in P.leg_keys("n64")]
+    for row in n8:
+        assert row["v4"]["cleared_c"] is False and row["v4"]["verdict"] == "INCONCLUSIVE"
+        assert row["v4"]["quoted_reasons"]
+        assert all(r.startswith("(c)") for r in row["v4"]["quoted_reasons"])
+        assert row["v5"]["state"] == "measured"
+    refusal = v4["verdicts"]["leg_refusals"]["adv_n64"]
+    for row in n64:
+        reasons = v4["points"][row["v4_key"]]["verdict"]["reasons"]
+        assert row["v4"]["cleared_c"] is None
+        assert row["v4"]["label"] == "(c) measured, not evaluated"
+        assert row["v4"]["quoted_reasons"] == [reasons[0]] == [refusal]
+    assert n64[0]["v5"]["state"] == "refused_by_route"
+    assert {r["v5"]["state"] for r in n64[1:]} == {"refused_prereg03"}
+    for row in n64[1:]:
+        assert row["v5"]["cleared_c"] is None
+        assert row["v5"]["control_recall_counts"] == {
+            s: list(v) for s, v in _counts("unlearnable").items()
+        }
+    assert block["v4_source"] == {"path": fr.V4_FRONTIER_PATH, "sha256": _v4_sha()}
+
+
+def test_condition_c_vs_v4_cleared_abc_on_a_point_dict_raises():
+    point = _v4()["points"][phase25_record.point_key("adv_n8", P.RATIO_GRID[1])]
+    with pytest.raises(KeyError, match="point_extraction_successes"):
+        P.cleared_abc(point)
+
+
+def test_condition_c_vs_v4_leg_state_branches():
+    one_route = ["refused_by_route"] + ["refused_prereg03"] * (len(P.RATIO_GRID) - 1)
+    assert fr.v5_leg_state(one_route) == "refused_prereg03"
+    assert fr.v5_leg_state(["refused_by_route"] * len(P.RATIO_GRID)) == "refused_by_route"
+    assert fr.v5_leg_state(["measured"] * len(P.RATIO_GRID)) == "measured"
+    mixed = ["measured", "refused_by_route"] * (len(P.RATIO_GRID) // 2)
+    assert fr.v5_leg_state(mixed) == "measured"
+    assert fr.v4_leg_state([False, True, False, False, True, False]) == "evaluated"
+    assert fr.v4_leg_state([None] * len(P.RATIO_GRID)) == "not_evaluated"
+    with pytest.raises(SystemExit, match="mixed"):
+        fr.v4_leg_state([None, False, None, None, None, None])
+
+
+def test_condition_c_vs_v4_summary_counts():
+    block, v4 = _block(), _v4()
+    rows = block["rows"]
+    for leg in P.LEGS:
+        summary = block["by_leg"][leg]
+        mine = [r for r in rows if r["v5_key"] in P.leg_keys(leg)]
+        assert summary["k6"] == sum(r["v5"]["cleared_c"] is True for r in mine)
+        assert summary["k5"] == sum(r["v5"]["cleared_c"] is True for r in mine[1:])
+        assert summary["v4_k"] == sum(r["v4"]["cleared_c"] is True for r in mine)
+        assert summary["v4_n_evaluated"] == sum(r["v4"]["cleared_c"] is not None for r in mine)
+        counts = v4["verdicts"]["control_readings"][_twin(leg)]["recall_counts"]
+        assert [summary["v4_tk"], summary["v4_tn"]] == counts["taught"]
+        assert [summary["v4_hk"], summary["v4_hn"]] == counts["heldout"]
+    assert block["by_leg"]["n8"]["v5_state"] == "measured"
+    assert block["by_leg"]["n8"]["v4_state"] == "evaluated"
+    assert block["by_leg"]["n64"]["v5_state"] == "refused_prereg03"
+    assert block["by_leg"]["n64"]["v4_state"] == "not_evaluated"
+
+
+def _summary(v5_state, v4_state, k5=2, k6=3):
+    return {
+        "leg": "advr_n8",
+        "twin": "adv_n8",
+        "v5_state": v5_state,
+        "v4_state": v4_state,
+        "k5": k5,
+        "k6": k6,
+        "v4_k": 1,
+        "v4_n_evaluated": 6,
+        "tk": 11,
+        "tn": 1008,
+        "hk": 13,
+        "hn": 648,
+        "v4_tk": 17,
+        "v4_tn": 1008,
+        "v4_hk": 19,
+        "v4_hn": 648,
+    }
+
+
+def test_statement_templates_cover_every_state():
+    assert set(fr.TEMPLATES) == {(a, b) for a in fr.V5_STATES for b in fr.V4_STATES}
+    assert len(fr.TEMPLATES) == len(fr.V5_STATES) * len(fr.V4_STATES)
+    for v5_state, v4_state in fr.TEMPLATES:
+        s = _summary(v5_state, v4_state)
+        text = fr.statement({leg: dict(s, leg=f"advr_{leg}") for leg in P.LEGS})
+        assert text.startswith("At advr_n8, ")
+        if v5_state == "measured":
+            assert "self-reference" in text
+        if v5_state in ("refused_prereg03", "refused_by_route"):
+            assert "taught 11/1008" in text and "held-out 13/648" in text
+        if v5_state == "refused_prereg03":
+            assert "PREREG-03" in text and "not re-tuned" in text
+        if v4_state == "evaluated":
+            assert "at 1 of 6" in text
+        else:
+            assert "taught 17/1008" in text and "held-out 19/648" in text
+            assert "measured but not evaluated" in text
+
+
+def test_statement_measured_k5_leads_k6_for_every_k5():
+    for k5 in range(len(P.RATIO_GRID)):
+        for v4_state in fr.V4_STATES:
+            s = _summary("measured", v4_state, k5=k5, k6=k5 + 1)
+            text = fr.TEMPLATES[("measured", v4_state)].format(**s)
+            first, second = f"{k5} of 5 non-control ratios", f"{k5 + 1} of 6 counting"
+            assert text.index(first) < text.index(second)
+            assert "ratio-0 control" in text and "self-reference" in text
+
+
+def test_statement_is_the_table_joined_on_the_forged_frontier():
+    block = _block()
+    by_leg = block["by_leg"]
+    expected = " ".join(
+        fr.TEMPLATES[(by_leg[leg]["v5_state"], by_leg[leg]["v4_state"])].format(**by_leg[leg])
+        for leg in P.LEGS
+    )
+    assert block["statement"] == fr.statement(by_leg) == expected
+    v4_n64 = _v4()["verdicts"]["control_readings"]["adv_n64"]["recall_counts"]
+    tk, tn = v4_n64["taught"]
+    hk, hn = v4_n64["heldout"]
+    assert f"taught {tk}/{tn}, held-out {hk}/{hn}" in block["statement"]
+    assert "not re-tuned" in block["statement"]
+
+
+# ----- write-once emit ----------------------------------------------------------------------
+
+
+def _is_tracked(rel):
+    return rel in _git("ls-files", rel).split()
+
+
+def _point_paths():
+    return [P.point_record_path(k) for k in KEYS]
+
+
+def test_emit_write_once_refuses_an_existing_target_first(tmp_path, clean_tree):
+    out = tmp_path / "frontier.json"
+    out.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        fr.emit(out_path=out)
+    assert clean_tree == []
+    assert out.read_text(encoding="utf-8") == "{}"
+
+
+def _commit(root, rel, data, message):
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    subprocess.run(["git", "-C", str(root), "add", rel], check=True)
+    subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", message], check=True)
+
+
+def test_emit_write_once_scratch_repo(tmp_path, monkeypatch, clean_tree):
+    root = _scratch_repo(tmp_path)
+    monkeypatch.setattr(fr, "_GIT_ROOT", root)
+    monkeypatch.setattr(phase30_points, "_ROOT", root)
+    _commit(root, phase30_points.CALIBRATION_PATH, b"{}", "calibration")
+    _commit(root, fr.BUDGET_PATH, b"{}", "budget")
+    _commit(root, fr.V4_FRONTIER_PATH, _v4_bytes(), "v4 frontier")
+    records = _forged_records()
+    for key in KEYS[:-1]:
+        _commit(root, P.point_record_path(key), json.dumps(records[key]).encode(), key)
+    out = tmp_path / "frontier.json"
+    with pytest.raises(SystemExit, match="UNTRACKED"):
+        fr.emit(out_path=out)
+    assert not out.exists()
+    (call,) = clean_tree
+    assert call["cwd"] == root
+    assert call["pathspec"] == ("scripts", "src", "results", f":(exclude){fr.FRONTIER_PATH}")
+    _commit(root, P.point_record_path(KEYS[-1]), json.dumps(records[KEYS[-1]]).encode(), "last")
+    written = fr.emit(out_path=out)
+    assert json.loads(out.read_text(encoding="utf-8")) == json.loads(json.dumps(written))
+    assert not (root / fr.FRONTIER_PATH).exists()
+    assert set(written["sources"]) == {*_point_paths(), fr.V4_FRONTIER_PATH, fr.BUDGET_PATH}
+    assert written["sources"][fr.V4_FRONTIER_PATH] == _v4_sha()
+    assert written["calibration"]["path"] == phase30_points.CALIBRATION_PATH
+    assert set(written["provenance"]["module_sha256"]) == set(fr.PROVENANCE_MODULES)
+    strip = {"provenance", "calibration", "sources"}
+    rebuilt = json.loads(json.dumps(fr.build_frontier(records, _v4(), _v4_sha())))
+    assert {k: v for k, v in written.items() if k not in strip} == rebuilt
+
+
+def test_emit_write_once_real_state(tmp_path, clean_tree):
+    tracked = set(_git("ls-files", "results").split())
+    target = _ROOT / fr.FRONTIER_PATH
+    if target.exists():  # (c) present untracked, or (d) tracked
+        before = target.read_bytes()
+        with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+            fr.emit(out_path=fr.FRONTIER_PATH)
+        assert clean_tree == [] and target.read_bytes() == before
+        return
+    out = tmp_path / "f.json"
+    if not set(_point_paths()) <= tracked:  # (a) some point record untracked
+        with pytest.raises(SystemExit, match="UNTRACKED"):
+            fr.emit(out_path=out)
+        assert not out.exists()
+    else:  # (b) all 12 tracked, frontier absent
+        fr.emit(out_path=out)
+        assert out.exists()
+    assert not target.exists()
+
+
+def test_emit_never_commits_and_the_git_surface_is_read_only():
+    used = {row[0] for row in _git_argv_subcommands(MODULE)}
+    assert {"ls-files", "show", "log", "merge-base"} <= used  # non-vacuous
+    assert used <= READ_ONLY_GIT
+    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    emit = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "emit")
+    strings = {n.value for n in ast.walk(emit) if isinstance(n, ast.Constant)}
+    assert not strings & {"add", "commit", "push"}
+
+
+# ----- v4 bytes, committed recompute, ancestry ---------------------------------------------
+
+
+def test_v4_bytes_unchanged_since_the_v4_tag():
+    argv = [
+        "git",
+        "diff",
+        "--quiet",
+        "v4.0",
+        "HEAD",
+        "--",
+        "results",
+        ":(exclude)results/phase24_token_budget.json",
+        ":(exclude)results/phase3*",
+    ]
+    assert subprocess.run(argv, cwd=_ROOT).returncode == 0
+    # NATURAL RED: phase24_token_budget.json was re-emitted in Phase 30, so the check sees changes.
+    red = ["git", "diff", "--quiet", "v4.0", "HEAD", "--", "results/phase24_token_budget.json"]
+    assert subprocess.run(red, cwd=_ROOT).returncode == 1
+
+
+def _strip(record):
+    return {k: v for k, v in record.items() if k not in ("provenance", "calibration", "sources")}
+
+
+def _committed(rel):
+    return subprocess.run(
+        ["git", "show", f"HEAD:{rel}"], cwd=_ROOT, capture_output=True, check=True
+    ).stdout
+
+
+def test_recompute_committed_frontier_both_states():
+    import hashlib
+
+    if _is_tracked(fr.FRONTIER_PATH):
+        records = {k: json.loads(_committed(P.point_record_path(k))) for k in KEYS}
+        rebuilt = json.loads(json.dumps(fr.build_frontier(records, _v4(), _v4_sha())))
+        committed = json.loads(_committed(fr.FRONTIER_PATH))
+        assert _strip(rebuilt) == _strip(committed)
+        sources = committed["sources"]
+        assert set(sources) == {*_point_paths(), fr.V4_FRONTIER_PATH, fr.BUDGET_PATH}
+        for rel, digest in sources.items():
+            assert digest == hashlib.sha256(_committed(rel)).hexdigest(), rel
+        return
+    first = json.loads(json.dumps(fr.build_frontier(_forged_records(), _v4(), _v4_sha())))
+    second = json.loads(json.dumps(fr.build_frontier(_forged_records(), _v4(), _v4_sha())))
+    assert first == second
+    assert not {"provenance", "calibration", "sources"} & set(first)
+
+
+def test_ancestry_frontier_follows_its_inputs():
+    if not _is_tracked(fr.FRONTIER_PATH):
+        assert _git("ls-files", "results/phase32_frontier*").split() == []
+        return
+    for rel in [*_point_paths(), fr.BUDGET_PATH]:
+        _assert_frozen_before(rel, [fr.FRONTIER_PATH])
+    # NATURAL RED: the calibration was added before the budget existed.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(fr.BUDGET_PATH, [phase30_points.CALIBRATION_PATH])
+
+
+# ----- CLI -----------------------------------------------------------------------------------
+
+
+def test_cli_main_dispatches_emit(monkeypatch):
+    import inspect
+
+    calls = []
+    real = inspect.signature(fr.emit)
+
+    def recorder(*args, **kwargs):
+        real.bind(*args, **kwargs)
+        calls.append(kwargs)
+
+    monkeypatch.setattr(fr, "emit", recorder)
+    assert fr.main(["emit"]) == 0
+    assert fr.main(["emit", "--out", "/tmp/x.json"]) == 0
+    assert calls == [{"out_path": fr.FRONTIER_PATH}, {"out_path": "/tmp/x.json"}]
