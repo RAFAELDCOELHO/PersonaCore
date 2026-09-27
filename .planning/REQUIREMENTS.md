@@ -602,9 +602,9 @@ re-run admits.
 
 ### Cost probes (ARCAL)
 
-- [ ] **ARCAL-01**: One replay-bearing adversarial point is measured end to end on MPS (training + condition (c) + attack scoring) before the sweep budget is committed
-- [ ] **ARCAL-02**: One relearning leg is measured on MPS on a real adapter before the relearning budget is committed — Phase 27 proved only the apparatus, on CPU
-- [ ] **ARCAL-03**: The total v5.0 budget is committed from ARCAL-01/02, replacing the unmeasured ~25-30 h estimate
+- [x] **ARCAL-01**: One replay-bearing adversarial point is measured end to end on MPS (training + condition (c) + attack scoring) before the sweep budget is committed
+- [x] **ARCAL-02**: One relearning leg is measured on MPS on a real adapter before the relearning budget is committed — Phase 27 proved only the apparatus, on CPU
+- [x] **ARCAL-03**: The total v5.0 budget is committed from ARCAL-01/02, replacing the unmeasured ~25-30 h estimate
 
 ### Replay-bearing adversarial recipe (ARECIPE)
 
@@ -663,9 +663,9 @@ re-run admits.
 | PREREG-02 | Phase 29 | Complete |
 | PREREG-03 | Phase 29 | Complete |
 | PREREG-04 | Phase 29 | Complete |
-| ARCAL-01 | Phase 31 | Pending |
-| ARCAL-02 | Phase 31 | Pending |
-| ARCAL-03 | Phase 31 | Pending |
+| ARCAL-01 | Phase 31 | Complete |
+| ARCAL-02 | Phase 31 | Complete |
+| ARCAL-03 | Phase 31 | Complete |
 | ARECIPE-01 | Phase 30 | Complete |
 | ARECIPE-02 | Phase 30 | Complete |
 | ACTRL-01 | Phase 30 | Mechanism delivered (Phase 30); held unticked by developer ruling 2026-09-25 until first used on real data in Phase 32/33 |
