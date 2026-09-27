@@ -1325,8 +1325,8 @@ gate, so condition (c) is tested against the ratio rather than the recipe
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 32-02-PLAN.md — `scripts/phase32_points.py` library: D-01 recall-on measure override, record builder (consumer field contract), D-03 clock + stop-line read, D-08 session-sha check, write-once write, D-11 one-path commit, git-surface AST (AFRONT-01)
-- [ ] 32-03-PLAN.md — `scripts/phase32_frontier.py`: verdicts via `curve_verdicts` with own advr readings, PREREG-03 / route-refused legs, `condition_c_vs_v4` (D-13/D-14), count-derived statement (D-15/D-18), write-once emit, v4.0 byte guard (AFRONT-02, AFRONT-03)
+- [x] 32-02-PLAN.md — `scripts/phase32_points.py` library: D-01 recall-on measure override, record builder (consumer field contract), D-03 clock + stop-line read, D-08 session-sha check, write-once write, D-11 one-path commit, git-surface AST (AFRONT-01)
+- [x] 32-03-PLAN.md — `scripts/phase32_frontier.py`: verdicts via `curve_verdicts` with own advr readings, PREREG-03 / route-refused legs, `condition_c_vs_v4` (D-13/D-14), count-derived statement (D-15/D-18), write-once emit, v4.0 byte guard (AFRONT-02, AFRONT-03)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
