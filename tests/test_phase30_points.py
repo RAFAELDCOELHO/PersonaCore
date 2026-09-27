@@ -578,6 +578,24 @@ def _wr05_failures(source):
         for alias in node.names
         if alias.name in _V4_MODULES
     }
+    # Dated continuation, 2026-09-27 (Phase 32 D-17): FRONTIER_SCHEMA (phase29_prereg) requires
+    # the frontier to carry ``verdicts.control_readings``. That key is data, not a carrier call,
+    # so the literal "control_readings" is exempt in exactly two JSON-field positions: a dict
+    # literal key and a subscript string. getattr, a bare string, the Name, the Attribute and the
+    # import stay flagged, and every OTHER carrier stays flagged even as a dict key.
+    json_key_ids = {
+        id(k)
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Dict)
+        for k in n.keys
+        if isinstance(k, ast.Constant) and k.value == "control_readings"
+    } | {
+        id(n.slice)
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Subscript)
+        and isinstance(n.slice, ast.Constant)
+        and n.slice.value == "control_readings"
+    }
     failures = []
     for node in ast.walk(tree):
         line = getattr(node, "lineno", "?")
@@ -618,6 +636,7 @@ def _wr05_failures(source):
             isinstance(node, ast.Constant)
             and isinstance(node.value, str)
             and id(node) not in docstrings
+            and id(node) not in json_key_ids
             and (node.value in _CARRIERS or node.value.startswith("dp_n"))
         ):
             # getattr / importlib spell a carrier as a string; "dp_n" + ... builds a dp key.
@@ -659,6 +678,13 @@ def test_ast_guard_planted_red_per_class(tmp_path):
         ("getattr.py", '\n_X = getattr(phase25_points, "control_key_for")\n'),
         ("getattr_parser.py", '\n_X = getattr(phase25_points, "point_plan")\n'),
         ("concat.py", '\n_X = "dp_n" + "8"\n'),
+        # Phase 32 D-17: planted because no scripts/ module spells this form; the other forms use
+        # natural occurrences, see test_ast_guard_d17_natural_cases. (The ImportFrom form of
+        # control_readings is already planted above as promotion.py.)
+        ("d17_getattr.py", '\n_X = getattr(phase25_promotion, "control_readings")\n'),
+        ("d17_attribute.py", "\n_X = phase25_promotion.control_readings\n"),
+        # Only "control_readings" is exempt as a dict key; every other carrier stays flagged there.
+        ("d17_other_key.py", '\n_X = {"record_kwargs": 1}\n'),
     ):
         planted = _planted(tmp_path, source, source + plant, name)
         assert _wr05_failures(planted), name
@@ -673,3 +699,57 @@ def test_ast_guard_planted_red_per_class(tmp_path):
     )
     assert any("dp key constant" in f for f in _wr05_failures(bare))
     assert POINTS_MODULE.read_text(encoding="utf-8") == source
+
+
+def test_ast_guard_d17_allows_control_readings_only_as_a_json_key(tmp_path):
+    """Phase 32 D-17: FRONTIER_SCHEMA's ``verdicts.control_readings`` key is writable as data."""
+    source = POINTS_MODULE.read_text(encoding="utf-8")
+    for name, plant in (
+        ("d17_dict_key.py", '\n_X = {"control_readings": 1}\n'),
+        ("d17_subscript.py", '\n_Y = {}\n_Y["control_readings"] = 1\n'),
+    ):
+        assert _wr05_failures(_planted(tmp_path, source, source + plant, name)) == [], name
+    assert POINTS_MODULE.read_text(encoding="utf-8") == source
+
+
+def _control_readings_lines(source):
+    """``(json_lines, other_lines)`` of every "control_readings" occurrence, by AST position."""
+    tree = ast.parse(source)
+    docstrings = _docstring_nodes(tree)
+    json_ids = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            json_ids |= {id(k) for k in node.keys if k is not None}
+        elif isinstance(node, ast.Subscript):
+            json_ids.add(id(node.slice))
+    json_lines, other_lines = set(), set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and node.value == "control_readings":
+            if id(node) in json_ids:
+                json_lines.add(node.lineno)
+            elif id(node) not in docstrings:
+                other_lines.add(node.lineno)
+        elif (isinstance(node, ast.Name) and node.id == "control_readings") or (
+            isinstance(node, ast.Attribute) and node.attr == "control_readings"
+        ):
+            other_lines.add(node.lineno)
+    return json_lines, other_lines
+
+
+def test_ast_guard_d17_natural_cases():
+    """Phase 32 D-17, natural RED/GREEN in three unedited scripts: the JSON-key positions are
+    exempt, every other spelling of control_readings stays flagged. Lines are computed by AST."""
+    for name in ("phase29_prereg.py", "phase23_matched_prereg.py", "phase25_promotion.py"):
+        src = (_SCRIPTS / name).read_text(encoding="utf-8")
+        json_lines, other_lines = _control_readings_lines(src)
+        assert other_lines, name
+        if name != "phase23_matched_prereg.py":
+            assert json_lines, name
+        flagged = {
+            int(m)
+            for f in _wr05_failures(src)
+            if "control_readings" in f
+            for m in re.findall(r"at line (\d+)", f)
+        }
+        assert flagged == other_lines, (name, flagged, other_lines)
+        assert not (flagged & json_lines), (name, flagged, json_lines)
