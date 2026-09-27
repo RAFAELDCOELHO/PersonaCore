@@ -347,12 +347,19 @@ def test_ancestry_emitter_is_frozen_before_the_calibration():
 # exactly these. Any further commit to scripts/phase30_points.py turns this RED (the
 # tests/test_phase27_relearn.py _SUPERSEDED_PINS pattern).
 _RECORD_COMMIT = "4339f2b2bc29ab0765a821b5d47b617cd6092f24"
+# DATED CONTINUATION, 2026-09-27 (Phase 32 D-19, plan-time developer ruling): the WR-04 replay
+# check lives in own_control, the root cause, which Phase 33 consumes too; D-10 IN-04 landed in
+# the same commit. The calibration record is write-once and is not re-emitted, so the fix SHA is
+# accounted for here. This registration commit touches only tests/, so it does not count against
+# itself in the git log of scripts/phase30_points.py.
 _SUPERSEDED_PINS = {
     "scripts/phase30_points.py": frozenset(
         {
             "a7d5c9d8fe2bf89193f09cad9c3f46133530b07c",  # CR-01
             "8dd1d30fdccc98eb835cc4bd5424fc935bf8557c",  # WR-04
             "00bc4da3880d051faac52a7fdc5408d89f0915ab",  # WR-05
+            # Phase 32 D-19 WR-04 replay + D-10 IN-04, 2026-09-27
+            "f3785da23a6afe2bdf8ae62907bbe34d043eca20",
         }
     ),
 }
