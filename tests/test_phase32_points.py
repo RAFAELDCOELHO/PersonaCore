@@ -304,3 +304,206 @@ def test_import_is_torch_free():
         "assert 'torch' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", code], cwd=_ROOT, check=True)
+
+
+# =================================================================================================
+# Task 2 — D-08 session shas, write-once, D-11 one-path commit, git-surface and census gates
+# =================================================================================================
+
+import mitigation_gate  # noqa: E402  (scripts/ is not a package)
+
+from test_phase25_driver import _git_argv_subcommands, _git_surface_failure  # noqa: E402
+from test_phase29_prereg import _gate_retype_failures, _planted  # noqa: E402
+
+V5_DRIVER_MODULES = sorted(_SCRIPTS.glob("phase32_*.py"))
+
+
+def _head():
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def _pre_fix_sha():
+    """The parent of the newest commit touching scripts/phase30_points.py (the 32-01 fix)."""
+    newest = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", "scripts/phase30_points.py"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    return subprocess.run(
+        ["git", "rev-parse", newest + "^"], cwd=_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def test_record_session_appends(tmp_path, monkeypatch):
+    monkeypatch.setattr(p32, "_ROOT", tmp_path)
+    first = p32.record_session(KEYS[0])
+    second = p32.record_session(KEYS[0])
+    assert len(first) == 1 and len(second) == 2 and second[0] == first[0]
+    assert {s["git_sha"] for s in second} == {_head()}
+    assert all(s["started_utc"] for s in second)
+    on_disk = json.loads(p32.sessions_sidecar(KEYS[0]).read_text(encoding="utf-8"))
+    assert on_disk == second
+    assert p32.sessions_sidecar(KEYS[0]).is_relative_to(tmp_path / "data")
+    with pytest.raises(SystemExit):
+        p32.sessions_sidecar("not_a_key")
+
+
+def test_wr02_pinned_unchanged_passes_for_head():
+    p32.prove_pinned_unchanged([_head(), _head()])
+
+
+def test_wr02_natural_red_on_the_pre_fix_commit():
+    with pytest.raises(SystemExit, match="D-08") as refused:
+        p32.prove_pinned_unchanged([_head(), _pre_fix_sha()])
+    assert "scripts/phase30_points.py" in str(refused.value)
+
+
+def test_wr02_unknown_sha_refuses():
+    with pytest.raises(SystemExit, match="unknown sha"):
+        p32.prove_pinned_unchanged(["f" * 40])
+
+
+def _record_for_write():
+    return {"point_key": KEYS[0], "training": {"git_sha": _head()}}
+
+
+def test_write_once_refuses_an_existing_target_before_the_dirty_check(scratch, clean_tree):
+    out = scratch / phase29_prereg.point_record_path(KEYS[0])
+    out.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        p32.write_point_record(KEYS[0], _record_for_write(), shas=[_head()])
+    assert clean_tree == []
+    assert out.read_text(encoding="utf-8") == "{}"
+
+
+def test_write_once_dirty_check_then_d08_then_write(scratch, clean_tree):
+    rel = p32.write_point_record(KEYS[0], _record_for_write(), shas=[_head()])
+    assert rel == phase29_prereg.point_record_path(KEYS[0])
+    assert json.loads((scratch / rel).read_text(encoding="utf-8")) == _record_for_write()
+    assert len(clean_tree) == 1
+    call = clean_tree[0]
+    assert call["pathspec"] == ("scripts", "src", "results", f":(exclude){rel}")
+    assert call["cwd"] == p32._CODE_ROOT
+    assert call["who"] == "phase32_points" and call["detail"]
+
+
+def test_write_once_refuses_on_a_stale_session_sha(scratch, clean_tree):
+    with pytest.raises(SystemExit, match="D-08"):
+        p32.write_point_record(KEYS[0], _record_for_write(), shas=[_pre_fix_sha()])
+    assert not (scratch / phase29_prereg.point_record_path(KEYS[0])).exists()
+    # The training sidecar's own git_sha is checked even when the session list is clean.
+    stale = {"point_key": KEYS[0], "training": {"git_sha": _pre_fix_sha()}}
+    with pytest.raises(SystemExit, match="D-08"):
+        p32.write_point_record(KEYS[0], stale, shas=[_head()])
+
+
+def _git_out(root, *argv):
+    return subprocess.run(
+        ["git", "-C", str(root), *argv], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def test_commit_path_commits_exactly_one_path(scratch):
+    rel = phase29_prereg.point_record_path(KEYS[0])
+    (scratch / rel).write_text("{}", encoding="utf-8")
+    (scratch / "results" / "other.json").write_text("{}", encoding="utf-8")
+    _git_out(scratch, "add", "results/other.json")
+    p32.commit_path(rel, p32.commit_message(KEYS[0]))
+    assert _git_out(scratch, "show", "--name-only", "--format=", "HEAD").split() == [rel]
+    assert _git_out(scratch, "log", "-1", "--format=%s").strip() == (
+        f"feat(32): record sweep point {KEYS[0]}"
+    )
+    assert "results/other.json" in _git_out(scratch, "diff", "--cached", "--name-only")
+    # No-op: already committed and unchanged.
+    with pytest.raises(SystemExit, match="NO-OP"):
+        p32.commit_path(rel, "x")
+
+
+def test_commit_path_refusals(scratch):
+    (scratch / "stray.json").write_text("{}", encoding="utf-8")
+    for bad in ("stray.json", "results/../stray.json"):
+        with pytest.raises(SystemExit, match="not under results/"):
+            p32.commit_path(bad, "x")
+    with pytest.raises(SystemExit, match="does not exist"):
+        p32.commit_path(phase29_prereg.point_record_path(KEYS[1]), "x")
+    rel = phase29_prereg.point_record_path(KEYS[2])
+    (scratch / rel).write_text("{}", encoding="utf-8")
+    _git_out(scratch, "checkout", "-q", "-b", "scratch-branch")
+    with pytest.raises(SystemExit, match="not main"):
+        p32.commit_path(rel, "x")
+
+
+def test_commit_untracked_commits_only_the_uncommitted(scratch):
+    done, fresh = (phase29_prereg.point_record_path(k) for k in KEYS[:2])
+    _commit_file(scratch, done, {"rule": "PREREG-03"})
+    (scratch / fresh).write_text("{}", encoding="utf-8")
+    committed = p32.commit_untracked([done, fresh], lambda rel: f"feat(32): {rel}")
+    assert committed == [fresh]
+    assert _git_out(scratch, "show", "--name-only", "--format=", "HEAD").split() == [fresh]
+    assert p32.commit_untracked([done, fresh], lambda rel: "x") == []
+
+
+def test_commit_messages():
+    assert p32.commit_message(KEYS[0]) == f"feat(32): record sweep point {KEYS[0]}"
+    assert p32.commit_message(KEYS[0], refused=True) == (
+        f"feat(32): record PREREG-03 refused point {KEYS[0]}"
+    )
+
+
+def _git_helper_calls(path):
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (getattr(node.func, "id", None) or getattr(node.func, "attr", None)) == "_git"
+    ]
+
+
+def test_git_surface_is_bounded(tmp_path):
+    allowed = set(p32.ALLOWED_GIT_ACTIONS) | set(p32.READ_ONLY_GIT_ACTIONS)
+    offenders, message = _git_surface_failure(MODULE, allowed)
+    assert offenders == [], message
+    used = {row[0] for row in _git_argv_subcommands(MODULE)}
+    assert {"add", "commit"} <= used  # non-vacuous
+    assert V5_DRIVER_MODULES, "no scripts/phase32_*.py found — the census is blind"
+    for path in V5_DRIVER_MODULES:
+        assert _git_helper_calls(path) == [], path
+    # Natural RED: the Phase 31 probe calls its _git helper.
+    assert _git_helper_calls(_SCRIPTS / "phase31_probe.py")
+    # Planted RED: a push is outside the surface.
+    source = MODULE.read_text(encoding="utf-8")
+    planted = _planted(tmp_path, source, source + '\n_X = ["git", "push"]\n', "push.py")
+    (tmp_path / "push.py").write_text(planted, encoding="utf-8")
+    offenders, _ = _git_surface_failure(tmp_path / "push.py", allowed)
+    assert [row[0] for row in offenders] == ["push"]
+
+
+def test_census_gates_over_the_v5_driver():
+    needle = "train_arm" + "("
+    for path in V5_DRIVER_MODULES:
+        source = path.read_text(encoding="utf-8")
+        assert _gate_retype_failures(source, mitigation_gate.F_Y) == [], path
+        assert needle not in source, path
+        replaces = [
+            node.lineno
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Attribute)
+            and node.attr == "replace"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "os"
+        ]
+        assert replaces == [], path
+    # Natural REDs: the same helper fires on the two modules that define gate functions.
+    for name, gate in (
+        ("phase27_prereg.py", "cleared_abc"),
+        ("phase20_gate_coverage.py", "corrected_point_verdict"),
+    ):
+        failures = _gate_retype_failures(
+            (_SCRIPTS / name).read_text(encoding="utf-8"), mitigation_gate.F_Y
+        )
+        assert any(gate in f for f in failures), (name, failures)
