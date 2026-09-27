@@ -25,6 +25,7 @@ Torch-free at import: ``teach_persona`` and every torch-touching module are impo
 
 import datetime
 import hashlib
+import json
 import math
 import pathlib
 import subprocess
@@ -50,7 +51,7 @@ import phase29_prereg  # noqa: E402  (same)
 import phase30_points  # noqa: E402  (same)
 import phase31_probe  # noqa: E402  (same; per_step_replay / prove_replay_counts are public)
 
-from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402, F401
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 INSTRUMENT_GIT_SHA = git_sha()
 
@@ -317,3 +318,144 @@ def stop_line_seconds(tracked):
         f"{BUDGET_PATH} stop_line.seconds {value!r} is not a positive finite float",
     )
     return value
+
+
+# =================================================================================================
+# D-08 (Phase 31 WR-02): the stages ran on the code that writes the record
+# =================================================================================================
+
+
+def sessions_sidecar(key):
+    """``data/phase32_<key>_sessions.json``; the key is validated by the pre-registration."""
+    phase29_prereg.point_record_path(key)
+    return _ROOT / "data" / f"phase32_{key}_sessions.json"
+
+
+def record_session(key):
+    """Append this session's ``{git_sha, started_utc}`` to the point's sessions sidecar."""
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=_CODE_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    path = sessions_sidecar(key)
+    sessions = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    sessions.append({"git_sha": head, "started_utc": _now()})
+    phase25_run.atomic_write_json(path, sessions)
+    return sessions
+
+
+def prove_pinned_unchanged(shas):
+    """D-08: no pinned module differs between any recorded session commit and HEAD."""
+    for sha in dict.fromkeys(shas):
+        diff = subprocess.run(
+            ["git", "diff", "--name-only", sha, "HEAD", "--", *PINNED_MODULES],
+            cwd=_CODE_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        _prove(
+            diff.returncode == 0, f"unknown sha {sha!r}: git diff failed ({diff.stderr.strip()})"
+        )
+        changed = diff.stdout.split()
+        _prove(
+            not changed,
+            f"pinned modules {changed} changed between session commit {sha} and HEAD (D-08, "
+            "WR-02): code changed between the session that ran the stages and the write, so the "
+            "record would name code its numbers did not come from. Every scripts/ change must "
+            "land before launch",
+        )
+
+
+# =================================================================================================
+# WRITE-ONCE, THEN D-11'S ONE-PATH COMMIT
+# =================================================================================================
+
+
+def write_point_record(key, record, *, shas):
+    """Overwrite refusal FIRST, dirty refusal SECOND, D-08 THIRD, then the atomic write."""
+    rel = phase29_prereg.point_record_path(key)
+    out = _GIT_ROOT / rel
+    _prove(
+        not out.exists(),
+        f"{rel} exists — REFUSING to overwrite it. A point record is write-once; corrections are "
+        "dated continuations",
+    )
+    refuse_if_dirty(
+        who="phase32_points",
+        detail=(
+            "a point record names the commit its stages ran from; a record written from a dirty "
+            "tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=("scripts", "src", "results", f":(exclude){rel}"),
+        cwd=_CODE_ROOT,
+    )
+    prove_pinned_unchanged([*shas, record["training"]["git_sha"]])
+    phase25_run.atomic_write_json(out, record)
+    return rel
+
+
+def commit_message(key, *, refused=False):
+    phase29_prereg.point_record_path(key)
+    kind = "PREREG-03 refused point" if refused else "sweep point"
+    return f"feat(32): record {kind} {key}"
+
+
+def commit_path(relative, message):
+    """Stage and commit EXACTLY ``relative`` (one path under results/) on main. Returns the sha."""
+    path = (_GIT_ROOT / relative).resolve()
+    _prove(
+        relative.startswith("results/") and path.is_relative_to((_GIT_ROOT / "results").resolve()),
+        f"{relative!r} is not under results/: D-11 bounds the unattended driver to one results "
+        "path",
+    )
+    _prove(path.exists(), f"{relative} does not exist, so there is nothing to commit")
+    branch = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=_GIT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    _prove(branch == "main", f"the results repository is on branch {branch!r}, not main (D-11)")
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--", relative],
+        cwd=_GIT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    _prove(
+        status,
+        f"{relative} is already committed and unchanged, so this commit would be a NO-OP",
+    )
+    subprocess.run(["git", "add", "--", relative], cwd=_GIT_ROOT, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", message, "--", relative], cwd=_GIT_ROOT, check=True
+    )
+    named = subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        cwd=_GIT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    _prove(named == [relative], f"the commit just made names {named}, not exactly [{relative!r}]")
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=_GIT_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def commit_untracked(paths, message_for):
+    """Pitfall 9: commit each given path that ``git status`` still reports, one commit each."""
+    committed = []
+    for relative in paths:
+        pending = subprocess.run(
+            ["git", "status", "--porcelain", "--", relative],
+            cwd=_GIT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        if pending:
+            commit_path(relative, message_for(relative))
+            committed.append(relative)
+    return committed
