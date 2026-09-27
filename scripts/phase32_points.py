@@ -27,6 +27,7 @@ hashes and the dirty-tree refusal all read it. In production all three are the s
 Torch-free at import: ``teach_persona`` and every torch-touching module are imported lazily.
 """
 
+import argparse
 import datetime
 import hashlib
 import json
@@ -762,3 +763,39 @@ def run(*, heartbeat_path=phase25_run.HEARTBEAT_PATH, past_stop_line=None):
             )
         tracked = tracked_results()
     return 0
+
+
+# =================================================================================================
+# THE CLI (D-05): the one command the LaunchAgent runs; D-20's manual relaunch adds the ruling
+# =================================================================================================
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Phase 32 v5.0 sweep: the 12 advr points in the D-17 order (AFRONT-01)."
+    )
+    sub = parser.add_subparsers(dest="mode", required=True)
+    run_parser = sub.add_parser("run", help="walk the schedule, resuming point by point")
+    run_parser.add_argument("--heartbeat", default=str(phase25_run.HEARTBEAT_PATH))
+    run_parser.add_argument(
+        "--past-stop-line",
+        metavar="RULING",
+        default=None,
+        help=(
+            "D-06/D-20: developer ruling text, accepted only once the cumulative clock has "
+            "reached the committed stop line; recorded in every later point's provenance"
+        ),
+    )
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    import phase25_venue  # torch-free; the banner lets the launch identity be read off the log
+
+    print(phase25_venue.launch_banner(), flush=True)
+    return run(heartbeat_path=pathlib.Path(args.heartbeat), past_stop_line=args.past_stop_line)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
