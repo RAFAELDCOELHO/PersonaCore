@@ -1334,7 +1334,7 @@ gate, so condition (c) is tested against the ratio rather than the recipe
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 32-05-PLAN.md — D-12 CPU live-path test: real driver via `main()` over all 12 keys into a scratch repo, real records fed to the frontier assembler and `admission()` (AFRONT-01, AFRONT-02, AFRONT-03)
+- [x] 32-05-PLAN.md — D-12 CPU live-path test: real driver via `main()` over all 12 keys into a scratch repo, real records fed to the frontier assembler and `admission()` (AFRONT-01, AFRONT-02, AFRONT-03)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
