@@ -1330,7 +1330,7 @@ gate, so condition (c) is tested against the ratio rather than the recipe
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 32-04-PLAN.md — driver `run_point` / `run()` / CLI: on_draw replay counting (D-07), schedule walk, PREREG-03 leg commits, stop line + `--past-stop-line` (D-03..D-06, D-20), LaunchAgent plist (AFRONT-01)
+- [x] 32-04-PLAN.md — driver `run_point` / `run()` / CLI: on_draw replay counting (D-07), schedule walk, PREREG-03 leg commits, stop line + `--past-stop-line` (D-03..D-06, D-20), LaunchAgent plist (AFRONT-01)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
