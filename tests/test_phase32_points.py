@@ -953,3 +953,129 @@ def test_ast_run_point_only_from_run_and_run_dispatches_on_next_action():
     assert _called_inside(tree, "run_point") == {"run"}
     assert "run" in _called_inside(tree, "next_action")
     assert "run" in _called_inside(tree, "write_refused_records")
+
+
+# =================================================================================================
+# Plan 32-04 Task 2 — the CLI (main -> run kwargs, signature-bound) and the D-05 LaunchAgent
+# =================================================================================================
+
+import phase25_venue  # noqa: E402  (scripts/ is not a package)
+
+_SWEEP_PLIST = _ROOT / "artifacts" / "com.personacore.phase32.sweep.plist"
+_CANARY_PLIST = _ROOT / "artifacts" / "com.personacore.phase26.canary.plist"
+_PROBE_PLIST = _ROOT / "artifacts" / "com.personacore.phase31.probe.plist"
+
+
+def _run_recorder(monkeypatch, capsys):
+    signature = inspect.signature(p32.run)
+    calls = []
+
+    def recorder(*args, **kwargs):
+        signature.bind(*args, **kwargs)  # main()'s kwargs must fit the REAL run()
+        calls.append((kwargs, capsys.readouterr().out))
+        return 0
+
+    monkeypatch.setattr(p32, "run", recorder)
+    monkeypatch.setattr(phase25_venue, "launch_banner", lambda: "BANNER-32")
+    return calls, signature
+
+
+def test_main_cli_run_binds_heartbeat_and_no_ruling(monkeypatch, capsys, tmp_path):
+    calls, _sig = _run_recorder(monkeypatch, capsys)
+    beat = tmp_path / "hb.jsonl"
+    assert p32.main(["run", "--heartbeat", str(beat)]) == 0
+    assert [kw for kw, _out in calls] == [{"heartbeat_path": beat, "past_stop_line": None}]
+
+
+def test_main_cli_past_stop_line_and_default_heartbeat(monkeypatch, capsys):
+    calls, _sig = _run_recorder(monkeypatch, capsys)
+    assert p32.main(["run", "--past-stop-line", "ruling text"]) == 0
+    assert [kw for kw, _out in calls] == [
+        {"heartbeat_path": phase25_run.HEARTBEAT_PATH, "past_stop_line": "ruling text"}
+    ]
+
+
+def test_main_cli_prints_the_launch_banner_before_run(monkeypatch, capsys):
+    calls, _sig = _run_recorder(monkeypatch, capsys)
+    p32.main(["run"])
+    assert "BANNER-32" in calls[0][1]
+
+
+def test_main_cli_recorder_binds_against_the_real_signature(monkeypatch, capsys):
+    _calls, signature = _run_recorder(monkeypatch, capsys)
+    with pytest.raises(TypeError):
+        signature.bind(heartbeat=pathlib.Path("x"))  # a planted wrong kwarg
+
+
+def test_main_cli_unknown_subcommand_exits_nonzero(monkeypatch, capsys):
+    calls, _sig = _run_recorder(monkeypatch, capsys)
+    for argv in (["sweep"], []):
+        with pytest.raises(SystemExit) as caught:
+            p32.main(argv)
+        assert caught.value.code != 0
+    assert calls == []
+
+
+def test_main_drives_the_real_run_and_run_point(point_env, monkeypatch, tmp_path, sweep):
+    """The Phase 25 lesson: main() -> run() -> run_point() with only the stages faked."""
+    key, _seen = _full_chain(point_env, monkeypatch, tmp_path, sweep)
+    base = _commit_all_but(sweep, key, stop_line=50.0)
+    monkeypatch.setattr(phase25_venue, "launch_banner", lambda: "BANNER-32")
+    heartbeat = tmp_path / "hb.jsonl"
+    argv = ["run", "--heartbeat", str(heartbeat), "--past-stop-line", "main ruling"]
+    assert p32.main(argv) == 0
+    commits = _commits_since(sweep, base)
+    assert len(commits) == 1 and _names(sweep, commits[0]) == [_path(key)]
+    record = json.loads((sweep / _path(key)).read_text(encoding="utf-8"))
+    assert record["provenance"]["stop_line"]["past_line_ruling"] == "main ruling"
+    assert heartbeat.exists()
+
+
+def test_plist_mirrors_the_canary_agent():
+    import plistlib
+
+    ours = plistlib.loads(_SWEEP_PLIST.read_bytes())
+    canary = plistlib.loads(_CANARY_PLIST.read_bytes())
+    probe = plistlib.loads(_PROBE_PLIST.read_bytes())
+    assert ours["Label"] == "com.personacore.phase32.sweep"
+    assert ours["KeepAlive"] is False and ours["RunAtLoad"] is False
+    args, canary_args = ours["ProgramArguments"], canary["ProgramArguments"]
+    assert args[:3] == canary_args[:3]
+    assert args[3].endswith("scripts/phase32_points.py") and args[4] == "run"
+    assert (
+        args[args.index("--heartbeat") + 1]
+        == canary_args[canary_args.index("--heartbeat") + 1]
+        == str(phase25_run.HEARTBEAT_PATH)
+    )
+    assert "--past-stop-line" not in args  # D-20: the argv is fixed
+    for key in ("WorkingDirectory", "EnvironmentVariables", "ProcessType"):
+        assert ours[key] == canary[key], key
+    for key in ("StandardOutPath", "StandardErrorPath"):
+        assert "/logs/phase32_sweep." in ours[key]
+        assert ours[key] != canary[key] and ours[key] != probe[key]
+
+
+def _host_gated_legs(path):
+    """``skip``/``skipif`` attributes and ``plutil`` argv constants, by AST."""
+    needle = "plu" + "til"
+    tree = ast.parse(pathlib.Path(path).read_text(encoding="utf-8"))
+    skips = [
+        n.lineno
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Attribute) and n.attr in ("skip", "skipif")
+    ]
+    argv = [
+        n.lineno
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Constant)
+        and isinstance(n.value, str)
+        and n.value.rsplit("/", 1)[-1] == needle
+    ]
+    return skips, argv
+
+
+def test_no_host_gated_leg_in_phase32_points_tests():
+    assert _host_gated_legs(__file__) == ([], [])
+    # Natural RED: the canary tests carry both classes.
+    skips, argv = _host_gated_legs(_ROOT / "tests" / "test_phase26_canary.py")
+    assert skips and argv
