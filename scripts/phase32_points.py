@@ -1,7 +1,7 @@
 """Phase 32 v5.0 sweep driver (AFRONT-01): import-and-override of the frozen v4.0 stages
 (Phase 30 D-13).
 
-THE LIBRARY HALF. Everything the v5.0 run loop needs except the loop itself (plan 32-04 wires it):
+THE LIBRARY HALF (plan 32-02). Everything the v5.0 run loop needs except the loop itself:
 
 * ``measure_stage``: D-01/D-02, the frozen v4.0 measurement stage with recall scored for EVERY
   point, by handing it the plan with ``is_control`` forced on. No v4.0 code is edited.
@@ -14,6 +14,10 @@ THE LIBRARY HALF. Everything the v5.0 run loop needs except the loop itself (pla
   between any of those commits and HEAD.
 * ``write_point_record`` / ``commit_path`` / ``commit_untracked``: write-once, then D-11's
   one-path commit on main. The git surface is literal argv only, bounded by an AST test.
+
+THE LOOP (plan 32-04): ``run_point`` (counted train -> recall-on measure -> draws -> score ->
+record -> write -> commit), ``run`` (the D-17 schedule walk with PREREG-03, the D-03/D-04 stop
+line and the D-06 ruling), and ``main`` (the CLI the D-05 LaunchAgent runs).
 
 THREE ROOTS. ``_ROOT`` holds the data/ sidecars and ``_GIT_ROOT`` is the results repository; both
 are patchable (tests patch ``_GIT_ROOT`` together with ``phase30_points._ROOT``). ``_CODE_ROOT`` is
@@ -30,6 +34,7 @@ import math
 import pathlib
 import subprocess
 import sys
+import time
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _GIT_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -459,3 +464,301 @@ def commit_untracked(paths, message_for):
             commit_path(relative, message_for(relative))
             committed.append(relative)
     return committed
+
+
+# =================================================================================================
+# ONE POINT (plan 32-04): phase31_probe.run_point_probe's stage sequence, re-keyed per point
+# =================================================================================================
+
+
+def replay_sidecar(key):
+    """``data/phase32_<key>_replay.json``: the per-step replay counts of the point's training."""
+    phase29_prereg.point_record_path(key)
+    return _ROOT / "data" / f"phase32_{key}_replay.json"
+
+
+def calibration_descent():
+    """The ARECIPE-02 calibration's add commit, derived, and proof HEAD descends from it."""
+    path = phase30_points.CALIBRATION_PATH
+    adds = subprocess.run(
+        ["git", "log", "--diff-filter=A", "--format=%H", "--", path],
+        cwd=_GIT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    _prove(adds, f"{path} was never added in this history")
+    add = adds[-1]
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", add, "HEAD"], cwd=_GIT_ROOT, capture_output=True
+    )
+    _prove(ancestor.returncode == 0, f"HEAD does not descend from {path}'s add commit {add}")
+    return {"path": path, "add_commit": add, "is_ancestor_of_head": True}
+
+
+def run_point(plan, tracked, *, heartbeat_path, stop_line):
+    """Train (replay counted per step) -> measure with recall -> draw -> score -> record -> write ->
+    commit, for ONE v5.0 point. Returns the record. Called only by :func:`run`.
+
+    Resumable per stage through the frozen stages' own sidecars and draw cache, EXCEPT a
+    half-finished training: a checkpoint without a training sidecar (its resume would time only the
+    tail and could not count the earlier steps' replay) or a training sidecar without its replay
+    counts. Both are refused before any stage runs.
+    """
+    import teach_persona as tp
+    import torch
+
+    key = plan["point_key"]
+    leg = phase30_points.leg_of(key)
+    recipe = phase30_points.require_calibrated_recipe(
+        leg, phase30_points.recipe_identity(leg), tracked
+    )
+    expected = phase30_points.calibration_record(tracked)["recipe"][leg]["replay_windows"]
+    _prove(
+        expected == phase29_prereg.replay_windows(plan["n_facts"]),
+        f"{key}: the calibration's replay_windows {expected} != replay_windows({plan['n_facts']})",
+    )
+    paths = tp.arm_outputs(plan["arm"], prefix=plan["prefix"])
+    train_sidecar = phase25_points.training_sidecar(key)
+    counts_sidecar = replay_sidecar(key)
+    _prove(
+        train_sidecar.exists() or not paths["checkpoint"].exists(),
+        f"{paths['checkpoint']} exists without {train_sidecar}: a resume would time only the "
+        "remaining steps and could not count the earlier steps' replay (Pitfall 10, D-07). Delete "
+        f"{paths['checkpoint']} and {paths['adapter']} (if present) in a reviewed step, then rerun",
+    )
+    _prove(
+        counts_sidecar.exists() or not train_sidecar.exists(),
+        f"{train_sidecar} exists without {counts_sidecar}: the per-step replay counts of that "
+        f"training cannot be recovered (D-07). Delete {train_sidecar}, {paths['adapter']} and "
+        f"{paths['checkpoint']} in a reviewed step, then rerun",
+    )
+    reused_train = train_sidecar.exists()
+    sessions = record_session(key)
+
+    state = {"point": key, "stage": "train", "shape": None, "draw_index": None}
+    stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+    try:
+        # TRAIN, with every draw counted through train()'s on_draw hook (D-07).
+        events = []
+        real_train = tp.train
+
+        def _counting_train(**kwargs):
+            def _on_draw(bin_path, ix):
+                replay = pathlib.Path(bin_path) == pathlib.Path(tp.DIALOG_TRAIN_BIN)
+                events.append((replay, len(ix)))
+
+            return real_train(**kwargs, on_draw=_on_draw)
+
+        tp.train = _counting_train
+        try:
+            training = phase25_points.train_stage(plan)
+        finally:
+            tp.train = real_train
+        if reused_train:
+            _prove(not events, f"{key}: a reused training drew windows")
+            replay = json.loads(counts_sidecar.read_text(encoding="utf-8"))
+            _prove(
+                replay["adapter_sha256"] == training["adapter_sha256"],
+                f"{counts_sidecar} counts adapter {replay['adapter_sha256']!r}, not the trained "
+                f"{training['adapter_sha256']!r}",
+            )
+        else:
+            replay = {
+                "per_step": phase31_probe.prove_replay_counts(
+                    events, expected, batch_size=tp.BATCH_SIZE, steps=tp.MAX_STEPS
+                ),
+                "expected_per_step": expected,
+                "steps": tp.MAX_STEPS,
+                "teaching_windows_per_step": tp.BATCH_SIZE,
+                "adapter_sha256": training["adapter_sha256"],
+            }
+            phase25_run.atomic_write_json(counts_sidecar, replay)
+        _prove(
+            replay["per_step"] == [expected] * tp.MAX_STEPS,
+            f"{counts_sidecar} does not hold {expected} replay windows on all {tp.MAX_STEPS} steps",
+        )
+
+        # MEASURE: condition (c) + GATE-05, then recall at EVERY point (D-01).
+        state["stage"] = "measure"
+        measured = measure_stage(plan, training)
+        _prove(measured["scoring_seconds"] is not None, f"{key}: recall was not scored (D-01)")
+
+        state["stage"] = "draw"
+        corpus, corpus_sha256 = phase25_points.attack_corpus()
+        blob, _digests = phase25_run.draw_point_shapes(
+            key,
+            adapter=_ROOT / training["adapter"],
+            adapter_sha256=training["adapter_sha256"],
+            corpus=corpus,
+            corpus_sha256=corpus_sha256,
+            k=mitigation_budget.CURVE_K,
+            state=state,
+        )
+        state["shape"] = state["draw_index"] = None
+
+        state["stage"] = "score"
+        started = time.monotonic()
+        per_question, _per_fact, scored = phase25_run.score_point(
+            blob, phase25_points.scoring_values()
+        )
+        score_seconds = time.monotonic() - started
+
+        state["stage"] = "record"
+        # D-01 / ACTRL-01: the control's gap is its own reading; a non-control's is its own
+        # leg's committed control's.
+        control_gap = phase25_condition_c.control_gap_for_capacity(
+            measured["capability"]
+            if plan["is_control"]
+            else phase30_points.control_dialogue_pair(key, tracked, point_recipe=recipe)
+        )
+        provenance = {
+            "module_sha256": {rel: _sha256(_CODE_ROOT / rel) for rel in PINNED_MODULES},
+            "git_sha": INSTRUMENT_GIT_SHA,
+            "sessions": sessions,
+            "stop_line": stop_line,
+            "device": phase25_run.device(),
+            "torch_version": torch.__version__,
+            "calibration": calibration_descent(),
+            "written_utc": _now(),
+        }
+        record = build_point_record(
+            plan,
+            recipe=recipe,
+            training=training,
+            measured=measured,
+            replay=replay,
+            blob=blob,
+            per_question=per_question,
+            scored=scored,
+            score_seconds=score_seconds,
+            control_gap=control_gap,
+            draws_cache=phase25_run.draws_path(key),
+            provenance=provenance,
+        )
+        provenance["head_at_write"] = git_sha()
+        rel = write_point_record(key, record, shas=[s["git_sha"] for s in sessions])
+
+        state["stage"] = "commit"
+        commit_path(rel, commit_message(key))
+        # "done" BEFORE the stop event: a periodic beat racing the stop can only write "done".
+        state.update(stage="done", shape=None, draw_index=None)
+    finally:
+        stop.set()
+        thread.join()
+    phase25_run.beat(heartbeat_path, point=key, stage="done", shape=None, draw_index=None)
+    print(f"[phase32_points] {key}: recorded and committed {rel}", flush=True)
+    return record
+
+
+# =================================================================================================
+# THE SCHEDULE WALK (AFRONT-01, D-03..D-06, D-11, D-17, PREREG-03)
+# =================================================================================================
+
+
+# D-20: the documented manual command past the line (32-RUNBOOK.md). Never in the plist.
+MANUAL_RELAUNCH = (
+    'caffeinate -dims .venv/bin/python scripts/phase32_points.py run --past-stop-line "<ruling>"'
+)
+
+
+def _run_excludes():
+    """Pitfall 3: the per-point training csv dirs and the point records awaiting commit."""
+    dirs = []
+    for key in phase29_prereg.POINT_KEYS():
+        plan = phase30_points.point_plan(key)
+        dirs.append(":(exclude)results/" + plan["prefix"] + "_" + plan["arm"])
+    return (*dirs, ":(exclude)" + phase29_prereg.POINT_RECORD_PREFIX + "*.json")
+
+
+def _is_refused(rel):
+    return json.loads((_GIT_ROOT / rel).read_text(encoding="utf-8")).get("rule") == "PREREG-03"
+
+
+def run(*, heartbeat_path=phase25_run.HEARTBEAT_PATH, past_stop_line=None):
+    """Walk ``SWEEP_SCHEDULE()`` once: skip tracked, refuse or train each key, commit each record
+    alone, and exit 0 at the committed stop line unless a ruling was given. Returns 0."""
+    heartbeat_path = pathlib.Path(heartbeat_path)
+    phase25_run.disk_precheck()
+    refuse_if_dirty(
+        who="phase32_points",
+        detail=(
+            "every point record names the commit its stages ran from; a sweep started from a "
+            "dirty tree runs code that commit does not contain"
+        ),
+        pathspec=("scripts", "src", "results", *_run_excludes()),
+        cwd=_CODE_ROOT,
+    )
+    schedule = phase30_points.SWEEP_SCHEDULE()
+    record_of = {key: phase29_prereg.point_record_path(key) for key in schedule}
+    key_of = {rel: key for key, rel in record_of.items()}
+    tracked = tracked_results()
+
+    # D-11 interrupted commit: a TRAINED record written but not committed is committed first.
+    # PREREG-03 records are left to the refuse branch, whose write_refused_records byte-checks
+    # them before commit_untracked commits them.
+    pending = [
+        rel
+        for rel in record_of.values()
+        if rel not in tracked and (_GIT_ROOT / rel).exists() and not _is_refused(rel)
+    ]
+    if pending:
+        commit_untracked(pending, lambda rel: commit_message(key_of[rel]))
+        tracked = tracked_results()
+
+    if all(rel in tracked for rel in record_of.values()):
+        print(f"[phase32_points] all {len(schedule)} point records are tracked: complete")
+        return 0
+
+    line, clock = stop_line_seconds(tracked), cumulative_seconds(tracked)
+    manual = MANUAL_RELAUNCH
+    _prove(
+        clock < line or past_stop_line is not None,
+        f"the cumulative clock {clock} s has reached the committed stop line {line} s (D-04). "
+        f"Continuing needs the developer's ruling (D-06, D-20): {manual}",
+    )
+    _prove(
+        past_stop_line is None or clock >= line,
+        f"--past-stop-line given while the cumulative clock {clock} s is below the stop line "
+        f"{line} s: a ruling cannot be pre-armed (D-06)",
+    )
+
+    for key in schedule:
+        if record_of[key] in tracked:
+            print(f"[phase32_points] {key}: RECORDED already (tracked) — skipping", flush=True)
+            continue
+        clock = cumulative_seconds(tracked)
+        if clock >= line and past_stop_line is None:
+            phase25_run.beat(
+                heartbeat_path,
+                point=key,
+                stage="stop_line",
+                shape=f"cumulative_seconds={clock}",
+                draw_index=None,
+            )
+            print(
+                f"[phase32_points] STOP LINE: cumulative {clock} s >= {line} s before {key} "
+                f"(D-04). Relaunch past it only with a ruling: {manual}",
+                flush=True,
+            )
+            return 0
+        act = phase30_points.next_action(key, tracked)
+        if act["action"] == "refuse":
+            phase30_points.write_refused_records(act["records"])
+            commit_untracked(
+                [record_of[k] for k in sorted(act["records"])],
+                lambda rel: commit_message(key_of[rel], refused=True),
+            )
+        else:
+            run_point(
+                act["plan"],
+                tracked,
+                heartbeat_path=heartbeat_path,
+                stop_line={
+                    "seconds": line,
+                    "cumulative_before_point": clock,
+                    "past_line_ruling": past_stop_line,
+                },
+            )
+        tracked = tracked_results()
+    return 0
