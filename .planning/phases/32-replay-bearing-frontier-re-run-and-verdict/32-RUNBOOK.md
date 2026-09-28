@@ -102,6 +102,13 @@ The Claude harness spawns its own `caffeinate -i -t 300`. That process is not th
   `PINNED_MODULES`. A dirty tree, or a pinned module changed between a session's commit and HEAD,
   makes the write refuse, and the point's work is lost. Every code change lands before launch or
   after the sweep.
+  - **Dated correction, 2026-09-28 (Phase 32 security gate, T-32-25 / review CR-01, WR-01):** the
+    sentence above overstates D-08. `prove_pinned_unchanged` compares the session shas and the
+    training sha with HEAD. It does not compare the load-time `INSTRUMENT_GIT_SHA` (the commit the
+    running process imported its code from), and it does not see stage modules outside
+    `PINNED_MODULES`. A commit that lands *between* points therefore passes D-08 while old code
+    runs. The procedural ban in this bullet (no `scripts/` or `src/` commits during the run) is the
+    actual control, not D-08. It held for the committed sweep (32-SECURITY.md AR-32-03).
 - Do not delete or edit anything under `data/` or `results/`, and do not change the branch. The
   driver commits only on `main` (D-11).
 
