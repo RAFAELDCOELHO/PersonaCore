@@ -618,9 +618,9 @@ re-run admits.
 
 ### Re-measured frontier (AFRONT)
 
-- [ ] **AFRONT-01**: The 12 points (6 ratios × 2 capacities) are trained and scored unattended on MPS, per-point records write-once under the new keys
-- [ ] **AFRONT-02**: A new frontier record is assembled write-once; the verdict is computed by import of the frozen v4.0 gate; every v4.0 record stays byte-unchanged
-- [ ] **AFRONT-03**: The verdict states explicitly whether (c) now passes with replay, against v4.0's recipe-confounded reading
+- [x] **AFRONT-01**: The 12 points (6 ratios × 2 capacities) are trained and scored unattended on MPS, per-point records write-once under the new keys
+- [x] **AFRONT-02**: A new frontier record is assembled write-once; the verdict is computed by import of the frozen v4.0 gate; every v4.0 record stays byte-unchanged
+- [x] **AFRONT-03**: The verdict states explicitly whether (c) now passes with replay, against v4.0's recipe-confounded reading
 
 ### Admission continuation (ADMIT)
 
@@ -670,9 +670,9 @@ re-run admits.
 | ARECIPE-02 | Phase 30 | Complete |
 | ACTRL-01 | Phase 30 | Mechanism delivered (Phase 30); held unticked by developer ruling 2026-09-25 until first used on real data in Phase 32/33 |
 | ACTRL-02 | Phase 30 | Complete |
-| AFRONT-01 | Phase 32 | Pending |
-| AFRONT-02 | Phase 32 | Pending |
-| AFRONT-03 | Phase 32 | Pending |
+| AFRONT-01 | Phase 32 | Complete |
+| AFRONT-02 | Phase 32 | Complete |
+| AFRONT-03 | Phase 32 | Complete |
 | ADMIT-01 | Phase 33 | Pending |
 | ADMIT-02 | Phase 33 | Pending |
 | RELRN-06 | Phase 33 | Pending |
