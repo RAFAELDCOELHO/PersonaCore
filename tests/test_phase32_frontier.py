@@ -476,7 +476,9 @@ def test_statement_is_the_table_joined_on_the_forged_frontier():
     block = _block()
     by_leg = block["by_leg"]
     expected = " ".join(
-        fr.TEMPLATES[(by_leg[leg]["v5_state"], by_leg[leg]["v4_state"])].format(**by_leg[leg])
+        fr.TEMPLATES[(by_leg[leg]["v5_state"], by_leg[leg]["v4_state"])].format(
+            **fr.statement_fields(by_leg[leg])
+        )
         for leg in P.LEGS
     )
     assert block["statement"] == fr.statement(by_leg) == expected
@@ -485,6 +487,61 @@ def test_statement_is_the_table_joined_on_the_forged_frontier():
     hk, hn = v4_n64["heldout"]
     assert f"taught {tk}/{tn}, held-out {hk}/{hn}" in block["statement"]
     assert "not re-tuned" in block["statement"]
+    # D-18 precision: the v4.0 side names its failing recall, derived from the committed counts.
+    failed = [
+        f"the {n} recall {k}/{d}"
+        for n, k, d in (("taught", tk, tn), ("held-out", hk, hn))
+        if not 0.0 < P.F_Y * (k / d) <= 1.0
+    ]
+    assert failed and all(f in block["statement"] for f in failed)
+
+
+_INEQ = "0 < F_Y × recall <= 1"
+
+
+def _n64_summary(tk, hk, v4_tk, v4_hk):
+    return dict(
+        _summary("refused_prereg03", "not_evaluated"),
+        leg="advr_n64",
+        twin="adv_n64",
+        tk=tk,
+        hk=hk,
+        v4_tk=v4_tk,
+        v4_hk=v4_hk,
+    )
+
+
+def test_statement_names_the_failing_recall_per_side():
+    """The developer's D-16 ruling: v5 n64 taught 0/1008 fails, held-out 1/648 passes;
+    v4 n64 held-out 0/648 fails, taught 1/1008 passes."""
+    s = _n64_summary(tk=0, hk=1, v4_tk=1, v4_hk=0)
+    text = fr.TEMPLATES[("refused_prereg03", "not_evaluated")].format(**fr.statement_fields(s))
+    v5, v4 = text.split("; in v4.0")
+    assert "the taught recall 0/1008 violates and the held-out recall 1/648 satisfies" in v5
+    assert _INEQ in v5 and f"F_Y = {P.F_Y}" in v5
+    assert "the held-out recall 0/648 violates and the taught recall 1/1008 satisfies" in v4
+    assert _INEQ in v4
+    assert "outside (0,1]" not in text
+
+
+def test_statement_floor_words_are_derived_not_typed():
+    """Swapping the counts swaps the words: nothing about which recall failed is typed."""
+    s = _n64_summary(tk=1, hk=0, v4_tk=0, v4_hk=1)
+    text = fr.TEMPLATES[("refused_prereg03", "not_evaluated")].format(**fr.statement_fields(s))
+    v5, v4 = text.split("; in v4.0")
+    assert "the held-out recall 0/648 violates and the taught recall 1/1008 satisfies" in v5
+    assert "the taught recall 0/1008 violates and the held-out recall 1/648 satisfies" in v4
+
+
+def test_recall_floors_agree_with_control_is_unlearnable():
+    for tk in (0, 1, 500, 1008):
+        for hk in (0, 1, 300, 648):
+            floors = fr.recall_floors(tk, 1008, hk, 648)
+            assert set(floors) == {"taught", "held-out"}
+            failed = [name for name, ok in floors.items() if not ok]
+            assert bool(failed) == P.control_is_unlearnable(tk, 1008, hk, 648)
+            assert floors["taught"] == (0.0 < P.F_Y * (tk / 1008) <= 1.0)
+            assert floors["held-out"] == (0.0 < P.F_Y * (hk / 648) <= 1.0)
 
 
 # ----- write-once emit ----------------------------------------------------------------------

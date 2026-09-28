@@ -455,7 +455,9 @@ def test_live_path_frontier_from_real_producer_records(sweep_run, monkeypatch):
     assert len(block["rows"]) == len(KEYS)
     assert block["by_leg"]["n64"]["v5_state"] == "refused_prereg03"
     rebuilt = " ".join(
-        phase32_frontier.TEMPLATES[(b["v5_state"], b["v4_state"])].format(**b)
+        phase32_frontier.TEMPLATES[(b["v5_state"], b["v4_state"])].format(
+            **phase32_frontier.statement_fields(b)
+        )
         for b in (block["by_leg"][leg] for leg in phase29_prereg.LEGS)
     )
     assert block["statement"] and block["statement"] == rebuilt
