@@ -131,6 +131,38 @@ and the rendered report (Phase 34).
   copy that carries the import, never planted in the real file. See the memory rules
   natural-red-beats-planted-red and grep-criteria-measure-prose, and use AST, not grep.
 
+### Plan-time rulings (2026-09-28, after 33-RESEARCH.md)
+- **D-13:** **D-06 strengthening: refuse if the record is tracked but absent.** The researcher measured the gap and it was confirmed in
+  `phase27_relearn.admit:369-380`. If the committed record is deleted but the deletion is not
+  committed, the overwrite check passes and the `:(exclude)` pathspec hides the deletion from
+  `refuse_if_dirty`, so `admit` would re-run without the "delete it in its own commit" step.
+  Phase 33 `admit` therefore **also refuses when the record path is tracked in HEAD
+  (`git ls-files`) but missing on disk**, and tells the user to commit the deletion first. The
+  refusal order is: overwrite, then tracked-but-absent, then dirty, all before any digest. The new
+  refusal gets its own test.
+- **D-14:** **WR-02 and WR-04 ledger dispositions (the researcher's split).**
+  - **P32-WR-02** (the frontier's `module_sha256` omits the gate modules) enters the Phase 34
+    ledger as a row citing 32-VERIFICATION.md:13 ("`git_sha` is the authoritative pin"), by
+    reference. It gets no code fix and no continuation.
+  - **P32-WR-04** (a non-positive control gap crashes the frontier with a `ValueError`; latent,
+    since the n8 gap is +0.134325) is **RE-DEFERRED** with target "the milestone that reuses
+    `phase32_frontier`".
+- **D-15:** **ACTRL-01 stays unticked, as a named limitation of partial exercise** (the developer's
+  wording, 2026-09-28).
+  - Exercised on real data: the recall floors and `control_gap` came from each leg's own advr
+    control (32-07-SUMMARY.md:80, cited by reference).
+  - Not exercised: the relearning Z baseline, because admission read MOOT and no relearning leg
+    ran.
+  - The text **must not** claim the DP-origin refusal fired on real data.
+  - It enters the Phase 34 ledger as **NAMED-LIMITATION** with id `ACTRL-01`. Phase 33 records the
+    state and does not take the requirement.
+- **D-16 (defaults the developer did not contest):**
+  - **IN-03** gets a dated continuation note, staged as a ledger row in the Phase 33 SUMMARY. It
+    carries the measured evidence: one add `4339f2b`, zero deletes, all 8 published
+    `calibration.add_commit` values equal. No pinned file changes.
+  - The leg sub-commands mirror Phase 27's `calibrate`, `curve`, `gate` and `structural-proof`.
+    Each maps to its RELRN-06..09 id in a module tuple.
+
 ### Claude's Discretion
 - Module and sub-command names (e.g. `scripts/phase33_admission.py` with `admit` + leg sub-commands),
   as long as the record path is imported from `phase29_prereg`.
