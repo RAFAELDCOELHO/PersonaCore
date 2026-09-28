@@ -1042,11 +1042,13 @@ def test_plist_mirrors_the_canary_agent():
     args, canary_args = ours["ProgramArguments"], canary["ProgramArguments"]
     assert args[:3] == canary_args[:3]
     assert args[3].endswith("scripts/phase32_points.py") and args[4] == "run"
-    assert (
-        args[args.index("--heartbeat") + 1]
-        == canary_args[canary_args.index("--heartbeat") + 1]
-        == str(phase25_run.HEARTBEAT_PATH)
-    )
+    # 2026-09-28 (R-2): suffix comparison so the heartbeat assertion is host-independent (the CI
+    # root is /home/runner/...); ported from f47468b.
+    expected_rel = phase25_run.HEARTBEAT_PATH.relative_to(_ROOT)
+    heartbeat = pathlib.Path(args[args.index("--heartbeat") + 1])
+    canary_heartbeat = pathlib.Path(canary_args[canary_args.index("--heartbeat") + 1])
+    assert heartbeat == canary_heartbeat
+    assert heartbeat.parts[-len(expected_rel.parts) :] == expected_rel.parts
     assert "--past-stop-line" not in args  # D-20: the argv is fixed
     for key in ("WorkingDirectory", "EnvironmentVariables", "ProcessType"):
         assert ours[key] == canary[key], key
