@@ -8,10 +8,14 @@ What this file proves:
   and on a forged ADMITTED one, and its message on a MOOT record does not change with the commit
   (D-01, D-02).
 - the limitation is bound from the record, never typed (D-08).
+- the once-proofs (three-state, shallow-first), the provenance pins, the by-reference imports,
+  the AR-32-02 census and the read-only git surface (ADMIT-01, ADMIT-02, D-05, D-07, D-12).
 Nothing here writes under the real results/: a results/phase33_* file would start the ancestry
 clock.
 """
 
+import ast
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -27,8 +31,17 @@ _SRC = _ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-import phase29_prereg  # noqa: E402  (scripts/ is not a package)
+import mitigation_budget  # noqa: E402  (scripts/ is not a package)
+import phase25_run  # noqa: E402  (same)
+import phase27_prereg  # noqa: E402  (same)
+import phase29_prereg  # noqa: E402  (same)
 import phase33_admission as driver  # noqa: E402  (same)
+
+_DRIVER = _SCRIPTS / "phase33_admission.py"
+_SHALLOW = (
+    "shallow clone: commit history cannot be read, so this guard cannot tell 'once' from "
+    "'never checked'. Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
+)
 
 _ADMITTED = phase29_prereg.VERDICTS[0]
 _READINGS = (*phase29_prereg.VERDICTS[1:], "absent")
@@ -278,3 +291,246 @@ def test_every_leg_names_one_relrn_requirement():
     requirements = [req for _sub, req in driver.LEGS]
     assert set(requirements) == {"RELRN-06", "RELRN-07", "RELRN-08", "RELRN-09"}
     assert len(requirements) == len(set(requirements)) == len(driver.LEGS)
+
+
+# ===== called exactly once, pinned both ways (ADMIT-02, D-07) =====
+
+
+def _assert_not_shallow():
+    assert _git("rev-parse", "--is-shallow-repository") == "false", _SHALLOW
+
+
+def test_the_record_was_committed_exactly_once_alone():
+    _assert_not_shallow()
+    record = driver.RECORD_PATH
+    tracked = _git("ls-files", "--", record).split()
+    commits = _git("log", "--format=%H", "--", record).split()
+    if not (_ROOT / record).exists():
+        assert not tracked and not commits, "record absent from disk but known to git"
+        return
+    if not tracked:  # D-05 review checkpoint: written, not yet committed
+        assert commits == [], "an untracked record has history — it was deleted after a commit"
+        return
+    assert len(commits) == 1, commits
+    touched = _git("show", "--name-only", "--format=", commits[0]).split()
+    assert touched == [record], touched
+
+
+def test_the_record_is_pinned_to_the_frontier_both_ways():
+    _assert_not_shallow()
+    record, frontier_path = driver.RECORD_PATH, driver.FRONTIER_PATH
+    frontier_commits = _git("log", "--format=%H", "--", frontier_path).split()
+    assert len(frontier_commits) == 1, frontier_commits
+    tracked = _git("ls-files", "--", record)
+    if not (_ROOT / record).exists():
+        assert not tracked, f"{record} is tracked but absent from the working tree"
+        return
+    blob = json.loads((_ROOT / record).read_text(encoding="utf-8"))
+    raw = (_ROOT / frontier_path).read_bytes()
+    assert blob["frontier"]["sha256"] == hashlib.sha256(raw).hexdigest()
+    assert blob["frontier"]["bytes"] == len(raw)
+    live = phase29_prereg.admission(json.loads(raw))
+    assert blob["admission"] == json.loads(json.dumps(live))
+    assert blob["scope"] == json.loads(json.dumps(phase29_prereg.relearning_scope(live)))
+    if tracked:
+        record_commit = _git("log", "--format=%H", "--", record).split()[-1]
+        subprocess.run(
+            ("git", "merge-base", "--is-ancestor", frontier_commits[0], record_commit),
+            cwd=_ROOT,
+            check=True,
+        )
+
+
+def test_phase27_prereg_is_byte_unchanged():
+    _assert_not_shallow()
+    rel = pathlib.Path(phase27_prereg.__file__).resolve().relative_to(_ROOT).as_posix()
+    assert len(_git("log", "--format=%H", "--", rel).split()) == 1
+    assert subprocess.run(("git", "diff", "--quiet", "HEAD", "--", rel), cwd=_ROOT).returncode == 0
+
+
+# ===== by reference, and the reach of admission() (ADMIT-01, D-03, D-04) =====
+
+
+def _docstring_nodes(tree):
+    """The first-statement string Expr of the Module and of every def/class: exempt prose."""
+    owners = [tree] + [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    ]
+    return {
+        id(owner.body[0].value)
+        for owner in owners
+        if owner.body
+        and isinstance(owner.body[0], ast.Expr)
+        and isinstance(owner.body[0].value, ast.Constant)
+        and isinstance(owner.body[0].value.value, str)
+    }
+
+
+def test_the_contract_is_imported_by_reference():
+    assert driver.phase29_prereg is phase29_prereg
+    assert phase29_prereg.RATIO_GRID is mitigation_budget.ADVERSARIAL_RATIO_GRID
+    tree = ast.parse(_DRIVER.read_text(encoding="utf-8"))
+    docs = _docstring_nodes(tree)
+    defined = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    assert not defined & {"admission", "relearning_scope", "recall_threshold"}, defined
+    typed = [
+        n.value
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Constant)
+        and n.value in (driver.RECORD_PATH, driver.FRONTIER_PATH)
+        and id(n) not in docs
+    ]
+    assert typed == []
+
+
+def _trace_admission():
+    """``(file, function)`` for every Python call under scripts/ during admission + scope."""
+    frontier = json.loads((_ROOT / driver.FRONTIER_PATH).read_text(encoding="utf-8"))
+    scripts = str(_SCRIPTS) + "/"
+    calls = set()
+
+    def _profile(frame, event, _arg):
+        if event == "call" and frame.f_code.co_filename.startswith(scripts):
+            rel = pathlib.Path(frame.f_code.co_filename).relative_to(_ROOT).as_posix()
+            calls.add((rel, frame.f_code.co_name))
+
+    sys.setprofile(_profile)
+    try:
+        phase29_prereg.relearning_scope(phase29_prereg.admission(frontier))
+    finally:
+        sys.setprofile(None)
+    return calls
+
+
+def test_admission_reaches_recall_threshold():
+    prereg = pathlib.Path(phase29_prereg.__file__).relative_to(_ROOT).as_posix()
+    assert (prereg, "recall_threshold") in _trace_admission()
+
+
+def test_provenance_trace_is_inside_the_pinned_modules():
+    files = {rel for rel, _fn in _trace_admission()}
+    assert files and files <= set(driver.PINNED_MODULES), files - set(driver.PINNED_MODULES)
+    assert "scripts/mitigation_gate.py" in files
+
+
+def test_provenance_digests_match_live_bytes():
+    record = _ROOT / driver.RECORD_PATH
+    if not record.exists():
+        assert _git("ls-files", "--", driver.RECORD_PATH) == ""
+        assert all((_ROOT / rel).is_file() for rel in driver.PINNED_MODULES)
+        return
+    pins = json.loads(record.read_text(encoding="utf-8"))["provenance"]["module_sha256"]
+    assert set(pins) == set(driver.PINNED_MODULES)
+    for rel, digest in pins.items():
+        assert digest == hashlib.sha256((_ROOT / rel).read_bytes()).hexdigest(), rel
+
+
+# ===== AR-32-02: no phase33 module reuses phase32_points (D-12) =====
+
+
+def _phase32_points_imports(source):
+    tree = ast.parse(source)
+    docs = _docstring_nodes(tree)
+    hits = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            hits += [
+                f"import {a.name} at line {n.lineno}"
+                for a in n.names
+                if a.name == "phase32_points" or a.name.startswith("phase32_points.")
+            ]
+        elif isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] == "phase32_points":
+            hits.append(f"from {n.module} import at line {n.lineno}")
+        elif isinstance(n, ast.Constant) and n.value == "phase32_points" and id(n) not in docs:
+            hits.append(f"string 'phase32_points' at line {n.lineno} (importlib/sys.modules)")
+    return [f"{h} — AR-32-02 (32-SECURITY.md): fix CR-01/WR-01/WR-05 first" for h in hits]
+
+
+def test_no_phase33_module_imports_phase32_points(tmp_path):
+    modules = sorted(_SCRIPTS.glob("phase33_*.py"))
+    assert modules, "census blind: no scripts/phase33_*.py"
+    for path in modules:
+        assert _phase32_points_imports(path.read_text(encoding="utf-8")) == [], path
+
+    # natural RED: an existing importer, copied
+    natural = tmp_path / "natural.py"
+    natural.write_text(
+        (_ROOT / "tests/test_phase32_points.py").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    hits = _phase32_points_imports(natural.read_text(encoding="utf-8"))
+    assert hits and all("AR-32-02" in h for h in hits), hits
+
+    # no natural occurrence of these two forms exists anywhere, so they are tmp-copy plants
+    driver_source = _DRIVER.read_text(encoding="utf-8")
+    for name, plant in (
+        ("from_import.py", "\nfrom phase32_points import emit\n"),
+        ("importlib.py", '\nimport importlib\n_P = importlib.import_module("phase32_points")\n'),
+    ):
+        planted = tmp_path / name
+        planted.write_text(driver_source + plant, encoding="utf-8")
+        hits = _phase32_points_imports(planted.read_text(encoding="utf-8"))
+        assert len(hits) == 1 and "AR-32-02" in hits[0], (name, hits)
+
+
+def test_phase33_imports_neither_phase32_points_nor_torch():
+    probe = (
+        "import sys; sys.path.insert(0, 'scripts'); import phase33_admission; "
+        "print('phase32_points' in sys.modules, 'torch' in sys.modules)"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", probe], cwd=_ROOT, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.split() == ["False", "False"], out.stdout
+
+
+# ===== admit never commits: the git surface is read-only (D-05) =====
+
+
+def _enclosing_function(tree, node):
+    """The innermost ``FunctionDef`` lexically containing ``node``, or ``'<module>'``."""
+    best = None
+    for candidate in ast.walk(tree):
+        if not isinstance(candidate, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if candidate.lineno <= node.lineno <= candidate.end_lineno:
+            if best is None or candidate.lineno > best.lineno:
+                best = candidate
+    return best.name if best is not None else "<module>"
+
+
+def _git_argv_subcommands(path):
+    """Every ``(subcommand, lineno, enclosing_function)`` of a ``["git", ...]`` literal."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.List, ast.Tuple)) or not node.elts:
+            continue
+        first = node.elts[0]
+        if not (isinstance(first, ast.Constant) and first.value == "git"):
+            continue
+        for element in node.elts[1:]:
+            if isinstance(element, ast.Constant) and isinstance(element.value, str):
+                found.append((element.value, element.lineno, _enclosing_function(tree, element)))
+                break
+    return found
+
+
+def test_the_drivers_git_surface_is_read_only(tmp_path):
+    found = _git_argv_subcommands(_DRIVER)
+    assert all(sub in phase25_run.READ_ONLY_GIT_ACTIONS for sub, _lineno, _fn in found), found
+    assert [(sub, fn) for sub, _lineno, fn in found] == [("rev-parse", "_committed")]
+
+    planted = tmp_path / "phase33_admission_planted.py"
+    planted.write_text(
+        _DRIVER.read_text(encoding="utf-8")
+        + '\n\ndef _planted():\n    subprocess.run(["git", "add", "x"])\n',
+        encoding="utf-8",
+    )
+    offenders = [
+        (sub, fn)
+        for sub, _lineno, fn in _git_argv_subcommands(planted)
+        if sub not in phase25_run.READ_ONLY_GIT_ACTIONS
+    ]
+    assert offenders == [("add", "_planted")]
