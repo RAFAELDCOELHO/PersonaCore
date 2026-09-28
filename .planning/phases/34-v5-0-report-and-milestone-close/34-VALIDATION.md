@@ -40,11 +40,11 @@ created: 2026-09-28
 
 | Req | Behavior | Test Type | Automated Command | File Exists | Status |
 |-----|----------|-----------|-------------------|-------------|--------|
-| RPT-04 | templates carry no bare numeral (+ planted RED) | unit | `pytest tests/test_phase34_report.py -k numeral` | ❌ W0 | ⬜ pending |
+| RPT-04 | templates carry no bare numeral (+ planted RED) | unit | `pytest tests/test_phase34_report.py -k "numeral or template_scan"` | ❌ W0 | ⬜ pending |
 | RPT-04 | every CONTRACT path resolves and is bound | unit | `pytest tests/test_phase34_report.py -k contract` | ❌ W0 | ⬜ pending |
 | RPT-04 | lead: per-leg lines precede `admission.reasons`; n64 "not measured" | unit | `pytest tests/test_phase34_report.py -k lead` | ❌ W0 | ⬜ pending |
 | RPT-04 | installed spans == fresh render | unit | `pytest tests/test_phase34_report.py -k byte_identical` | ❌ W0 | ⬜ pending |
-| RPT-04 | placement after PHASE28-REPORT-END / above PHASE28-GLANCE-BEGIN, zero deletions | unit | `pytest tests/test_phase34_report.py -k placement` | ❌ W0 | ⬜ pending |
+| RPT-04 | placement after PHASE28-REPORT-END / above PHASE28-GLANCE-BEGIN, zero deletions | unit | `pytest tests/test_phase34_report.py -k "placement or deleted_nothing"` | ❌ W0 | ⬜ pending |
 | RPT-04 | v4.0 frozen block byte-identical | unit | `pytest tests/test_phase28_report.py` (3 guards amended per R-1) | ✅ edit | ⬜ pending |
 | RPT-04 | renderer torch-free, clock-free | unit | `pytest tests/test_phase34_report.py -k "torch or clock"` | ❌ W0 | ⬜ pending |
 | RPT-04 | provenance digests recompute | unit | `pytest tests/test_phase34_report.py -k provenance` | ❌ W0 | ⬜ pending |

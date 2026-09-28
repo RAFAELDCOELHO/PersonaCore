@@ -518,7 +518,9 @@ Write `{"id": "<ID>", "url": …, "head_sha": …, "conclusion": "success", "rec
 | A2 | The developer accepts amending three `tests/test_phase28_report.py` placement guards (a test edit, not an engine edit) | Pitfall 1 | If refused, D-02 placement must change, which still breaks the glance-count and write-install tests. No placement avoids it |
 | A3 | Applying f47468b's approach to both plist tests is acceptable before push 1 | Pitfall 2 | Otherwise push 1 is RED on ≥2 known failures |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Resolutions (2026-09-28): Q1 → R-1 (amend after natural RED); Q2 → planner adopts the recommendation (v4 label+quoted_reasons, v5 state+verdict+cleared_c), surfaced at the 34-05 read; Q3 → planner adopts the recommended mapping, surfaced at the 34-05 read; Q4 → R-3 (push-1 id in SUMMARY only); Q5 → rename + v5.0 ACCEPTED ledger row, surfaced at the 34-05 read. See § Developer Rulings.
 
 1. **The three Phase 28 guard amendments (Pitfall 1).** CONTEXT does not anticipate them.
    - Recommendation: amend in the publishing commit with dated-continuation comments, after natural RED. Surface this to the developer at the 28-06-style read checkpoint.
