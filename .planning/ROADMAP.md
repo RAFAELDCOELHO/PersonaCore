@@ -1338,7 +1338,7 @@ gate, so condition (c) is tested against the ratio rather than the recipe
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 32-06-PLAN.md — pre-launch gates + 32-RUNBOOK.md, human-action checkpoint: the 12-point MPS sweep, then record verification (AFRONT-01)
+- [x] 32-06-PLAN.md — pre-launch gates + 32-RUNBOOK.md, human-action checkpoint: the 12-point MPS sweep, then record verification (AFRONT-01)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
