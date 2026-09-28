@@ -1,6 +1,14 @@
-# Phase 33 Plan 02: Admission record (DRAFT: awaiting D-05 review)
+---
+phase: 33-admission-and-relearning-on-admitted-points
+plan: 02
+requirements-completed: []  # ADMIT ticks belong to 33-03 Task 2; RELRN-06..09 are never ticked on the MOOT branch
+---
 
-> DRAFT: awaiting D-05 review. Nothing is committed or staged. Task 3 completes this file.
+# Phase 33 Plan 02: Admission record — MOOT, committed alone at `f48b738`
+
+## D-05 review
+
+Developer reply, verbatim: "aprooved" (read as "approved"; it also accepts the item-5 `_LEG_LINE` / `_SURFACE_LINE` wording). The record was committed alone after that reply; nothing pushed.
 
 ## Precondition (Task 1 step 0)
 
