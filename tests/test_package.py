@@ -2,6 +2,7 @@
 
 import hashlib
 import pathlib
+import re
 import subprocess
 
 import tomllib
@@ -26,6 +27,19 @@ def _deps(rev):
     return tomllib.loads(_git("show", f"{rev}:pyproject.toml"))["project"]["dependencies"]
 
 
+_MILESTONES = _ROOT / ".planning/MILESTONES.md"
+_SHIPPED = re.compile(r"^## (v\d+\.\d+)\b[^\n]*\(Shipped: \d{4}-\d{2}-\d{2}\)\s*$", re.MULTILINE)
+
+
+def _required_tags(text):
+    """Milestone tags named by `## vX.Y ... (Shipped: YYYY-MM-DD)` headings, in file order."""
+    return _SHIPPED.findall(text)
+
+
+def _missing_tags(required, present):
+    return sorted(set(required) - set(present))
+
+
 def test_import_personacore():
     import personacore
 
@@ -39,39 +53,65 @@ def test_version_is_nonempty_string():
     assert personacore.__version__ != ""
 
 
-def test_runtime_dependencies_identical_across_four_milestones():
-    """RPT-03 (Phase 28 D-25): zero new runtime dependencies across v1.0, v2.0, v3.0 and HEAD.
+def test_runtime_dependencies_identical_across_every_milestone_tag():
+    """RPT-05 (D-10): zero new runtime dependencies across every shipped milestone tag and HEAD.
 
-    The claim is the EQUALITY of `[project].dependencies` parsed from each tagged pyproject.toml
-    with stdlib `tomllib`; the dependency names are deliberately not typed here.
+    The tag set is read from the `## vX.Y ... (Shipped: YYYY-MM-DD)` headings of
+    .planning/MILESTONES.md, never typed; HEAD stands in for the milestone in progress. The claim
+    is the EQUALITY of `[project].dependencies` parsed with stdlib `tomllib`; the dependency names
+    are deliberately not typed here.
     """
     assert _git("rev-parse", "--is-shallow-repository") == "false", (
         "shallow clone: the tagged pyproject.toml objects are absent, so this guard cannot "
         "distinguish 'the dependencies are identical' from 'the comparison was never made'. "
         "Set `fetch-depth: 0` on actions/checkout (see .github/workflows/ci.yml)."
     )
-    tags = set(_git("tag", "-l").split())
-    assert tags >= {"v1.0", "v2.0", "v3.0"}, (
-        f"milestone tags missing from this clone (have {sorted(tags)}): a tagless clone must "
-        "refuse loudly rather than pass vacuously. Set `fetch-depth: 0` on actions/checkout so "
-        "tags are fetched."
+    required = _required_tags(_MILESTONES.read_text(encoding="utf-8"))
+    assert required, (
+        "no `## vX.Y ... (Shipped: YYYY-MM-DD)` heading parsed from MILESTONES.md: the tag "
+        "derivation is blind, so this guard would pass vacuously."
     )
-    head = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"][
-        "dependencies"
+    missing = _missing_tags(required, _git("tag", "-l").split())
+    assert missing == [], (
+        f"shipped milestone tags missing from this clone: {missing}. The developer must push "
+        "them together with main (the v2.0/v3.0 lesson of 28-07); CI also needs "
+        "`fetch-depth: 0` on actions/checkout so tags are fetched."
+    )
+    by_rev = {tag: _deps(tag) for tag in required}
+    by_rev["HEAD"] = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]["dependencies"]
+    assert all(deps == by_rev["HEAD"] for deps in by_rev.values()), (
+        f"[project].dependencies drifted across milestones: {by_rev}. RPT-05 requires zero new "
+        "runtime dependencies across every shipped milestone."
+    )
+
+
+def test_required_tags_are_derived_not_typed():
+    text = _MILESTONES.read_text(encoding="utf-8")
+    required = _required_tags(text)
+    assert {"v1.0", "v2.0", "v3.0", "v4.0"} <= set(required)
+    assert all(re.fullmatch(r"v\d+\.\d+", tag) for tag in required)
+    assert len(set(required)) == len(required)
+    shipped_lines = [
+        line for line in text.splitlines() if line.startswith("## v") and "(Shipped:" in line
     ]
-    by_rev = {rev: _deps(rev) for rev in ("v1.0", "v2.0", "v3.0")}
-    by_rev["HEAD"] = head
-    assert by_rev["v1.0"] == by_rev["v2.0"] == by_rev["v3.0"] == head, (
-        f"[project].dependencies drifted across milestones: {by_rev}. RPT-03 requires zero new "
-        "runtime dependencies for a fourth milestone."
-    )
+    assert len(shipped_lines) == len(required)
+    assert _required_tags("## v9.9 Name (Shipped: 2099-01-01)\n" + text)[0] == "v9.9"
+
+
+def test_a_missing_required_tag_is_red():
+    required = _required_tags(_MILESTONES.read_text(encoding="utf-8"))
+    present = set(_git("tag", "-l").split())
+    assert _missing_tags(required, present) == []
+    assert _missing_tags(required, present - {"v4.0"}) == ["v4.0"]
 
 
 def test_pyproject_sha256_pin_detects_any_change():
     """STAT-04 change detector: any byte of pyproject.toml changing turns a committed test red.
 
-    This pin is a CHANGE DETECTOR, not RPT-03's proof — the four-milestone dependency equality is
-    `test_runtime_dependencies_identical_across_four_milestones`. 2026-09-01, commit 5065bc5,
+    This pin is a CHANGE DETECTOR, not RPT-03's proof — the every-milestone dependency equality is
+    `test_runtime_dependencies_identical_across_every_milestone_tag`. 2026-09-01, commit 5065bc5,
     added the single line `license = "MIT"` and re-pinned this constant in the same commit; the
     dependency table did not change — the reviewed decision stands.
 
