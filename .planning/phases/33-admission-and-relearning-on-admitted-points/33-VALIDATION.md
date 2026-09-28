@@ -40,20 +40,20 @@ created: 2026-09-28
 
 The planner fills in the Task IDs. Rows are keyed by behavior.
 
-| Behavior | Requirement | Test Type | Automated Command | File Exists | Status |
-|----------|-------------|-----------|-------------------|-------------|--------|
-| Constants and functions imported by reference from `phase29_prereg`; record path derived from `V5_RESULT_PATHS`; admission reaches `recall_threshold` | ADMIT-01 | unit + AST | `pytest tests/test_phase33_admission.py -k "by_reference or reaches" -x` | ❌ W0 | ⬜ pending |
-| `phase27_prereg.py` byte-unchanged; its ancestry guard green | ADMIT-01 | git | `pytest tests/test_phase27_prereg.py -k frozen -x` + new assert | partial | ⬜ pending |
-| Refusal order overwrite → tracked-but-absent (D-13) → dirty, all before any digest | ADMIT-02 | unit | `pytest tests/test_phase33_admission.py -k refuses -x` | ❌ W0 | ⬜ pending |
-| Pathspec exclusion on an untracked record; sibling untracked still dirty; uncommitted deletion refused (scratch repo) | ADMIT-02 | git (scratch) | `pytest tests/test_phase33_admission.py -k pathspec -x` | ❌ W0 | ⬜ pending |
-| Exactly one commit, touching only the record; checks shallow first (fails loudly); handles the written-untracked state | ADMIT-02 | git | `pytest tests/test_phase33_admission.py -k exactly_once -x` | ❌ W0 | ⬜ pending |
-| Record pinned to the frontier both ways; admission and scope re-derived live | ADMIT-02 | git + unit | `pytest tests/test_phase33_admission.py -k pinned -x` | ❌ W0 | ⬜ pending |
-| `module_sha256` equals live bytes; traced reach set ⊆ pinned modules (`mitigation_budget` added by hand) | ADMIT-02 | unit | `pytest tests/test_phase33_admission.py -k provenance -x` | ❌ W0 | ⬜ pending |
-| Git surface read-only (no add/commit/push in the module) | ADMIT-02 | AST | `pytest tests/test_phase33_admission.py -k git_surface -x` | ❌ W0 | ⬜ pending |
-| Every leg refuses on MOOT/REFUSED/CANDIDATE-UNREPLICATED/INCONCLUSIVE/absent/untracked/forged-ADMITTED and writes nothing | RELRN-06..09 | unit (parametrized) | `pytest tests/test_phase33_admission.py -k refuses_unless -x` | ❌ W0 | ⬜ pending |
-| Limitation bound from reasons/tallies; no "never exercised" / "apparatus built"; n64 never "held" | RELRN-06..09 | unit | `pytest tests/test_phase33_admission.py -k limitation -x` | ❌ W0 | ⬜ pending |
-| No `phase32_points` import in any form (AST, natural RED from a temporary copy) | D-12 | AST + runtime | `pytest tests/test_phase33_admission.py -k phase32_points -x` | ❌ W0 | ⬜ pending |
-| New files pass the accountant, `_wr05`, os.replace and `== 10` censuses | (census) | existing | guard set | ✅ | ⬜ pending |
+| Task ID | Behavior | Requirement | Test Type | Automated Command | File Exists | Status |
+|---------|----------|-------------|-----------|-------------------|-------------|--------|
+| 33-01-T2 | Constants and functions imported by reference from `phase29_prereg`; record path derived from `V5_RESULT_PATHS`; admission reaches `recall_threshold` | ADMIT-01 | unit + AST | `pytest tests/test_phase33_admission.py -k "by_reference or reaches" -x` | ❌ W0 | ⬜ pending |
+| 33-01-T2 | `phase27_prereg.py` byte-unchanged; its ancestry guard green | ADMIT-01 | git | `pytest tests/test_phase27_prereg.py -k frozen -x` + new assert | partial | ⬜ pending |
+| 33-01-T1 | Refusal order overwrite → tracked-but-absent (D-13) → dirty, all before any digest | ADMIT-02 | unit | `pytest tests/test_phase33_admission.py -k refuses -x` | ❌ W0 | ⬜ pending |
+| 33-01-T1 | Pathspec exclusion on an untracked record; sibling untracked still dirty; uncommitted deletion refused (scratch repo) | ADMIT-02 | git (scratch) | `pytest tests/test_phase33_admission.py -k pathspec -x` | ❌ W0 | ⬜ pending |
+| 33-01-T2, 33-02-T1/T3 | Exactly one commit, touching only the record; checks shallow first (fails loudly); handles the written-untracked state | ADMIT-02 | git | `pytest tests/test_phase33_admission.py -k exactly_once -x` | ❌ W0 | ⬜ pending |
+| 33-01-T2, 33-02-T3 | Record pinned to the frontier both ways; admission and scope re-derived live | ADMIT-02 | git + unit | `pytest tests/test_phase33_admission.py -k pinned -x` | ❌ W0 | ⬜ pending |
+| 33-01-T2, 33-02-T3 | `module_sha256` equals live bytes; traced reach set ⊆ pinned modules (`mitigation_budget` added by hand) | ADMIT-02 | unit | `pytest tests/test_phase33_admission.py -k provenance -x` | ❌ W0 | ⬜ pending |
+| 33-01-T2 | Git surface read-only (no add/commit/push in the module) | ADMIT-02 | AST | `pytest tests/test_phase33_admission.py -k git_surface -x` | ❌ W0 | ⬜ pending |
+| 33-01-T1 | Every leg refuses on MOOT/REFUSED/CANDIDATE-UNREPLICATED/INCONCLUSIVE/absent/untracked/forged-ADMITTED and writes nothing | RELRN-06..09 | unit (parametrized) | `pytest tests/test_phase33_admission.py -k refuses_unless -x` | ❌ W0 | ⬜ pending |
+| 33-01-T1 | Limitation bound from reasons/tallies; no "never exercised" / "apparatus built"; n64 never "held" | RELRN-06..09 | unit | `pytest tests/test_phase33_admission.py -k limitation -x` | ❌ W0 | ⬜ pending |
+| 33-01-T2 | No `phase32_points` import in any form (AST, natural RED from a temporary copy) | D-12 | AST + runtime | `pytest tests/test_phase33_admission.py -k phase32_points -x` | ❌ W0 | ⬜ pending |
+| 33-01-T2 | New files pass the accountant, `_wr05`, os.replace and `== 10` censuses | (census) | existing | guard set | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -70,8 +70,8 @@ The planner fills in the Task IDs. Rows are keyed by behavior.
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Live stderr capture of every leg on the real record, before and after its commit: byte-identical, exit 1 | RELRN-06..09 | Spans the developer review checkpoint and the commit (27-05 precedent) | For each leg: `.venv/bin/python scripts/phase33_admission.py <leg> 2> e_<leg>_<state>; echo $?`, then `shasum -a 256` for each pair; record in the SUMMARY |
-| Developer review of the written record before commit | ADMIT-02 | D-05 human checkpoint | `admit` prints verdict, reasons and control readings; the developer says "approved"; Claude commits the record alone |
+| Live stderr capture (33-02-T1/T3) of every leg on the real record, before and after its commit: byte-identical, exit 1 | RELRN-06..09 | Spans the developer review checkpoint and the commit (27-05 precedent) | For each leg: `.venv/bin/python scripts/phase33_admission.py <leg> 2> e_<leg>_<state>; echo $?`, then `shasum -a 256` for each pair; record in the SUMMARY |
+| Developer review (33-02-T2) of the written record before commit | ADMIT-02 | D-05 human checkpoint | `admit` prints verdict, reasons and control readings; the developer says "approved"; Claude commits the record alone |
 
 ---
 
