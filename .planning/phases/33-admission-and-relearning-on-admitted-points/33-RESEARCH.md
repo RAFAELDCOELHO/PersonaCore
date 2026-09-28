@@ -694,26 +694,26 @@ def test_no_phase33_module_imports_phase32_points(tmp_path):
 | A2 | WR-02, WR-04 and IN-* are RE-DEFERRED ledger rows even though D-11 names only CR-01/WR-01/WR-05 explicitly | Finding 4 | Ledger wording may need a developer ruling |
 | A3 | IN-03's "dated continuation" can be a note that records the measured-correct value, with no code or byte change | Finding 4 | If a code fix is demanded, it costs a pin continuation on `phase32_frontier.py` + `phase32_points.py` |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **The tracked-but-absent conjunct in `admit` (Finding 2).**
+1. **The tracked-but-absent conjunct in `admit` (Finding 2).** RESOLVED: D-13
    - Known: the D-06 exclusion is inert in the untracked state. It is reachable only as an
      uncommitted deletion, where it lets `admit` proceed.
    - Recommendation: add the conjunct and name it in the plan as a D-06 strengthening, so the
      developer confirms it at plan review.
-2. **Dispositions for WR-02 and WR-04.** D-11 lists CR-01/WR-01/WR-05 explicitly and says "the open
+2. **Dispositions for WR-02 and WR-04.** RESOLVED: D-14. D-11 lists CR-01/WR-01/WR-05 explicitly and says "the open
    32-REVIEW findings go to the Phase 34 ledger".
    - Recommendation: WR-02 is a ledger row citing 32-VERIFICATION:13 ("git_sha is the authoritative
      pin"). WR-04 is RE-DEFERRED with target "the milestone that reuses `phase32_frontier`".
-3. **Where IN-03's dated continuation lives.**
+3. **Where IN-03's dated continuation lives.** RESOLVED: D-16
    - Recommendation: a dated note row staged in the Phase 33 SUMMARY for the Phase 34 ledger. It
      carries the measured evidence (one add `4339f2b`, zero deletes, 8 published values equal),
      because no pinned file changes.
-4. **ACTRL-01** stays unticked "until first used on real data in Phase 32/33"
+4. **ACTRL-01** (RESOLVED: D-15) stays unticked "until first used on real data in Phase 32/33"
    (REQUIREMENTS:671). Phase 33's admission reads the own advr control through
    `recall_threshold`. ACTRL-01 is not in Phase 33's IDs, so the developer rules. Out of scope
    unless raised.
-5. **Leg names.**
+5. **Leg names.** RESOLVED: D-16
    - Recommendation: mirror Phase 27's four sub-modes (`calibrate`, `curve`, `gate`,
      `structural-proof`), each mapped in a module tuple to its RELRN-06..09 requirement(s). The
      record's limitation then names every leg by id.

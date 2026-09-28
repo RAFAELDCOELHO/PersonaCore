@@ -137,7 +137,10 @@ and the rendered report (Phase 34).
   committed, the overwrite check passes and the `:(exclude)` pathspec hides the deletion from
   `refuse_if_dirty`, so `admit` would re-run without the "delete it in its own commit" step.
   Phase 33 `admit` therefore **also refuses when the record path is tracked in HEAD
-  (`git ls-files`) but missing on disk**, and tells the user to commit the deletion first. The
+  (`git rev-parse --verify -q HEAD:<rel>`) but missing on disk**, and tells the user to commit the deletion first. *(Amended
+  2026-09-28 by the plan checker: the original parenthetical `git ls-files` reads the index, so a
+  staged `git rm` passes it, which was measured in a scratch repo. HEAD is what "tracked in HEAD"
+  means. The leg guard's "COMMITTED record" check (D-01) uses the same HEAD check.)* The
   refusal order is: overwrite, then tracked-but-absent, then dirty, all before any digest. The new
   refusal gets its own test.
 - **D-14:** **WR-02 and WR-04 ledger dispositions (the researcher's split).**
