@@ -1373,15 +1373,15 @@ relearning — or, if none is admitted, the MOOT branch ships as the pre-registe
 
 **Wave 1**
 
-- [ ] 33-01-PLAN.md — `scripts/phase33_admission.py` (`admit` write-once: overwrite → tracked-but-absent → dirty; four refusal-only legs; bound limitation) + `tests/test_phase33_admission.py` (three-state once-proofs, provenance trace, D-12 `phase32_points` AST census) (ADMIT-01, ADMIT-02, RELRN-06..09)
+- [x] 33-01-PLAN.md — `scripts/phase33_admission.py` (`admit` write-once: overwrite → tracked-but-absent → dirty; four refusal-only legs; bound limitation) + `tests/test_phase33_admission.py` (three-state once-proofs, provenance trace, D-12 `phase32_points` AST census) (ADMIT-01, ADMIT-02, RELRN-06..09)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 33-02-PLAN.md — run `admit` once, D-05 developer review checkpoint, commit the record alone, D-02 before/after leg captures, full suite (ADMIT-02, RELRN-06..09)
+- [x] 33-02-PLAN.md — run `admit` once, D-05 developer review checkpoint, commit the record alone, D-02 before/after leg captures, full suite (ADMIT-02, RELRN-06..09)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 33-03-PLAN.md — Phase 34 ledger rows staged in SUMMARY (P31-WR-01, P32 CR/WR/IN, ACTRL-01), hand-edited ADMIT ticks + RELRN-06..09 named-limitation cells, `phase28_report.py check` (ADMIT-01, ADMIT-02, RELRN-06..09)
+- [x] 33-03-PLAN.md — Phase 34 ledger rows staged in SUMMARY (P31-WR-01, P32 CR/WR/IN, ACTRL-01), hand-edited ADMIT ticks + RELRN-06..09 named-limitation cells, `phase28_report.py check` (ADMIT-01, ADMIT-02, RELRN-06..09)
 
 ### Phase 34: v5.0 Report and Milestone Close
 

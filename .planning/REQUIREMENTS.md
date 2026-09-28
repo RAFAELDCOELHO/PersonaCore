@@ -624,8 +624,8 @@ re-run admits.
 
 ### Admission continuation (ADMIT)
 
-- [ ] **ADMIT-01**: A continuation module reads the v5.0 frontier with its own expected point count and an arm-keyed `recall_threshold(frontier, leg, arm)`, leaving `phase27_prereg.py` untouched (its ancestry guard green)
-- [ ] **ADMIT-02**: Admission is called once and its record is write-once
+- [x] **ADMIT-01**: A continuation module reads the v5.0 frontier with its own expected point count and an arm-keyed `recall_threshold(frontier, leg, arm)`, leaving `phase27_prereg.py` untouched (its ancestry guard green)
+- [x] **ADMIT-02**: Admission is called once and its record is write-once
 
 ### Relearning on admitted points (RELRN)
 
@@ -668,17 +668,17 @@ re-run admits.
 | ARCAL-03 | Phase 31 | Complete |
 | ARECIPE-01 | Phase 30 | Complete |
 | ARECIPE-02 | Phase 30 | Complete |
-| ACTRL-01 | Phase 30 | Mechanism delivered (Phase 30); held unticked by developer ruling 2026-09-25 until first used on real data in Phase 32/33 |
+| ACTRL-01 | Phase 30 | Mechanism delivered (Phase 30); held unticked (developer ruling 2026-09-25). Named limitation of partial exercise: own-control recall floors and control_gap exercised on real data (32-07-SUMMARY); relearning Z baseline not exercised because admission read MOOT (results/phase33_admission.json); staged as a Phase 34 ledger row (33-03-SUMMARY, D-15) |
 | ACTRL-02 | Phase 30 | Complete |
 | AFRONT-01 | Phase 32 | Complete |
 | AFRONT-02 | Phase 32 | Complete |
 | AFRONT-03 | Phase 32 | Complete |
-| ADMIT-01 | Phase 33 | Pending |
-| ADMIT-02 | Phase 33 | Pending |
-| RELRN-06 | Phase 33 | Pending |
-| RELRN-07 | Phase 33 | Pending |
-| RELRN-08 | Phase 33 | Pending |
-| RELRN-09 | Phase 33 | Pending |
+| ADMIT-01 | Phase 33 | Complete |
+| ADMIT-02 | Phase 33 | Complete |
+| RELRN-06 | Phase 33 | NOT SATISFIED — named limitation: admission read MOOT (results/phase33_admission.json, commit f48b738; scope rule PREREG-02, phase29_prereg.SCOPE_RULE). Only the refusal surface exists: the curve leg of scripts/phase33_admission.py refuses on the record (captures in 33-02-SUMMARY); no relearning number was produced. |
+| RELRN-07 | Phase 33 | NOT SATISFIED — named limitation: admission read MOOT (results/phase33_admission.json, commit f48b738; scope rule PREREG-02, phase29_prereg.SCOPE_RULE). Only the refusal surface exists: the gate leg of scripts/phase33_admission.py refuses on the record (captures in 33-02-SUMMARY); no relearning number was produced. |
+| RELRN-08 | Phase 33 | NOT SATISFIED — named limitation: admission read MOOT (results/phase33_admission.json, commit f48b738; scope rule PREREG-02, phase29_prereg.SCOPE_RULE). Only the refusal surface exists: the structural-proof leg of scripts/phase33_admission.py refuses on the record (captures in 33-02-SUMMARY); no relearning number was produced. |
+| RELRN-09 | Phase 33 | NOT SATISFIED — named limitation: admission read MOOT (results/phase33_admission.json, commit f48b738; scope rule PREREG-02, phase29_prereg.SCOPE_RULE). Only the refusal surface exists: the calibrate leg of scripts/phase33_admission.py refuses on the record (captures in 33-02-SUMMARY); no relearning number was produced. |
 | DEBT-01 | Phase 29 | Complete |
 | DEBT-02 | Phase 29 | Complete |
 | DEBT-03 | Phase 29 | Complete |
