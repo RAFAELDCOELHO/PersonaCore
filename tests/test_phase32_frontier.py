@@ -466,7 +466,7 @@ def test_statement_measured_k5_leads_k6_for_every_k5():
     for k5 in range(len(P.RATIO_GRID)):
         for v4_state in fr.V4_STATES:
             s = _summary("measured", v4_state, k5=k5, k6=k5 + 1)
-            text = fr.TEMPLATES[("measured", v4_state)].format(**s)
+            text = fr.TEMPLATES[("measured", v4_state)].format(**fr.statement_fields(s))
             first, second = f"{k5} of 5 non-control ratios", f"{k5 + 1} of 6 counting"
             assert text.index(first) < text.index(second)
             assert "ratio-0 control" in text and "self-reference" in text

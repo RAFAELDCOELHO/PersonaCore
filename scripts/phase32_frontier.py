@@ -289,7 +289,7 @@ _V5_CLAUSES = {
     ),
     "refused_prereg03": (
         "At {leg}, the v5.0 leg is REFUSED under PREREG-03: its own control read taught {tk}/{tn} "
-        "and held-out {hk}/{hn}, which puts the recall floors outside (0,1], and it was not "
+        "and held-out {hk}/{hn}; {v5_floors} 0 < F_Y × recall <= 1 (F_Y = {f_y}), and it was not "
         "re-tuned, so (c) with replay was not evaluated"
     ),
 }
@@ -298,7 +298,7 @@ _V4_CLAUSES = {
     "not_evaluated": (
         "; in v4.0, (c) was measured but not evaluated at any of 6 ratios at {twin}: the route "
         "refused on the control's recall floors (taught {v4_tk}/{v4_tn}, held-out "
-        "{v4_hk}/{v4_hn})."
+        "{v4_hk}/{v4_hn}): {v4_floors} 0 < F_Y × recall <= 1."
     ),
 }
 # THE FIXED TABLE (D-15): selected by computed state, numbers bound, nothing typed afterwards.
@@ -417,10 +417,49 @@ def condition_c_vs_v4(frontier, v4_frontier, v4_sha256):
     }
 
 
+def recall_floors(taught_k, taught_n, heldout_k, heldout_n):
+    """``{"taught": ok, "held-out": ok}`` per recall, from the very inequality
+    ``phase29_prereg.control_is_unlearnable`` applies, ``0.0 < F_Y * recall <= 1.0``; proven
+    consistent with it (a recall fails iff the control is unlearnable)."""
+    pairs = (("taught", taught_k, taught_n), ("held-out", heldout_k, heldout_n))
+    floors = {name: 0.0 < phase29_prereg.F_Y * (k / n) <= 1.0 for name, k, n in pairs}
+    unlearnable = phase29_prereg.control_is_unlearnable(taught_k, taught_n, heldout_k, heldout_n)
+    _prove(
+        (not all(floors.values())) == unlearnable,
+        f"per-recall floors {floors} disagree with control_is_unlearnable = {unlearnable}",
+    )
+    return floors
+
+
+def _floor_words(tk, tn, hk, hn):
+    """Each recall named with the verb its own floor computed; violating recalls first (D-18)."""
+    floors = recall_floors(tk, tn, hk, hn)
+    counts = {"taught": (tk, tn), "held-out": (hk, hn)}
+    named = sorted(floors, key=lambda name: floors[name])
+    return " and ".join(
+        f"the {name} recall {counts[name][0]}/{counts[name][1]} "
+        f"{'satisfies' if floors[name] else 'violates'}"
+        for name in named
+    )
+
+
+def statement_fields(summary):
+    """A ``by_leg`` summary plus the per-side floor words the templates bind (D-18)."""
+    s = summary
+    return {
+        **s,
+        "f_y": phase29_prereg.F_Y,
+        "v5_floors": _floor_words(s["tk"], s["tn"], s["hk"], s["hn"]),
+        "v4_floors": _floor_words(s["v4_tk"], s["v4_tn"], s["v4_hk"], s["v4_hn"]),
+    }
+
+
 def statement(by_leg):
     """One sentence per leg from ``TEMPLATES``, in ``LEGS`` order."""
     return " ".join(
-        TEMPLATES[(by_leg[leg]["v5_state"], by_leg[leg]["v4_state"])].format(**by_leg[leg])
+        TEMPLATES[(by_leg[leg]["v5_state"], by_leg[leg]["v4_state"])].format(
+            **statement_fields(by_leg[leg])
+        )
         for leg in phase29_prereg.LEGS
     )
 
