@@ -723,6 +723,19 @@ def test_ast_guard_planted_red_per_class(tmp_path):
         # control_readings is already planted above as promotion.py.)
         ("d17_getattr.py", '\n_X = getattr(phase25_promotion, "control_readings")\n'),
         ("d17_attribute.py", "\n_X = phase25_promotion.control_readings\n"),
+        # Dated continuation, 2026-09-28 (Phase 32 security gate, T-32-01 / review WR-03): the
+        # D-17 subscript exemption accepted ANY X["control_readings"], so these four module-
+        # namespace reads of the carrier returned []. Each must be flagged.
+        ("wr03_vars.py", '\n_X = vars(phase25_promotion)["control_readings"]\n'),
+        ("wr03_dunder_dict.py", '\n_X = phase25_promotion.__dict__["control_readings"]\n'),
+        (
+            "wr03_vars_alias.py",
+            '\nimport phase25_promotion as p25p\n_X = vars(p25p)["control_readings"]\n',
+        ),
+        (
+            "wr03_sys_modules.py",
+            '\nimport sys\n_X = sys.modules["phase25_promotion"].__dict__["control_readings"]\n',
+        ),
         # Only "control_readings" is exempt as a dict key; every other carrier stays flagged there.
         ("d17_other_key.py", '\n_X = {"record_kwargs": 1}\n'),
     ):
