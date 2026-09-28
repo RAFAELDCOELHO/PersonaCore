@@ -2,7 +2,7 @@
 phase: 32
 slug: replay-bearing-frontier-re-run-and-verdict
 status: executed
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: true
 created: 2026-09-27
 ---
@@ -58,7 +58,7 @@ Bound to the plan task IDs (revision 1, 2026-09-27). All commands run as `.venv/
 | 32-06-T3 | AFRONT-01 | 12 records tracked, single-path, controls first; provenance.device == "mps"; ancestry guards | unit (tracked branch) | `tests/test_phase31_budget.py -k ancestry` | ✅ file | ✅ |
 | 32-07-T1 | AFRONT-02 | Frontier emitted untracked; admission not INCONCLUSIVE; untracked branches green | unit | `tests/test_phase32_frontier.py` | ✅ file | ✅ |
 | 32-07-T2 | AFRONT-02 / AFRONT-03 | D-16 developer review | manual | see Manual-Only | — | ✅ manual |
-| 32-07-T3 | AFRONT-02 / AFRONT-03 | Single-path frontier commit; recompute + ancestry on tracked branches; v4.0 bytes; full suite EXIT=0 | unit + full suite | `tests/test_phase32_frontier.py` then the full-suite command | ✅ file | ✅ unit (tracked branches, 237 passed) · ⬜ full suite run by the orchestrator |
+| 32-07-T3 | AFRONT-02 / AFRONT-03 | Single-path frontier commit; recompute + ancestry on tracked branches; v4.0 bytes; full suite EXIT=0 | unit + full suite | `tests/test_phase32_frontier.py` then the full-suite command | ✅ file | ✅ unit (tracked branches, 237 passed) · ✅ full suite 3221 passed / 4 skipped / 0 failed at fd47e6b (orchestrator, 36:20) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -90,9 +90,9 @@ Bound to the plan task IDs (revision 1, 2026-09-27). All commands run as `.venv/
 - [ ] Wave 0 covers all MISSING references
 - [ ] No watch-mode flags
 - [ ] Feedback latency < 130 s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending the full suite (orchestrator).
+**Approval:** full suite EXIT=0 at fd47e6b (3221/4/0, orchestrator, 2026-09-28).
 
 ### Observed at plan 32-07 Task 3 (2026-09-28, frontier commit on the committed tree)
 
