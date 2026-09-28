@@ -618,11 +618,23 @@ def _wr05_failures(source):
         for alias in node.names
         if alias.name in _V4_MODULES
     }
+
     # Dated continuation, 2026-09-27 (Phase 32 D-17): FRONTIER_SCHEMA (phase29_prereg) requires
     # the frontier to carry ``verdicts.control_readings``. That key is data, not a carrier call,
     # so the literal "control_readings" is exempt in exactly two JSON-field positions: a dict
     # literal key and a subscript string. getattr, a bare string, the Name, the Attribute and the
     # import stay flagged, and every OTHER carrier stays flagged even as a dict key.
+    # Dated continuation, 2026-09-28 (Phase 32 security gate, T-32-01 / review WR-03): the subscript
+    # form is exempt only when its value is a chain of subscripts rooted at a plain Name that is
+    # not a v4.0 module binding nor ``sys`` (``frontier["verdicts"]["control_readings"]``). Any
+    # Call (``vars(m)``), Attribute (``m.__dict__``, ``sys.modules``) or module Name in the chain
+    # can name a module namespace, so it stays flagged. Residual: a namespace first bound to a
+    # plain name (``d = vars(m); d["control_readings"]``) needs dataflow and is not caught here.
+    def _json_root(value):
+        while isinstance(value, ast.Subscript):
+            value = value.value
+        return isinstance(value, ast.Name) and value.id not in modules | {"sys"}
+
     json_key_ids = {
         id(k)
         for n in ast.walk(tree)
@@ -635,6 +647,7 @@ def _wr05_failures(source):
         if isinstance(n, ast.Subscript)
         and isinstance(n.slice, ast.Constant)
         and n.slice.value == "control_readings"
+        and _json_root(n.value)
     }
     failures = []
     for node in ast.walk(tree):
