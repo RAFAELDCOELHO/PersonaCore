@@ -1,0 +1,71 @@
+## ${derived.report_title}
+
+*Appended additively. No line above this heading is altered. Every number below is a binding to a committed record field, rendered by `${path.renderer}`; the template is scanned for hand-typed numerals.*
+
+${derived.lead_lines}
+
+Admission: `${admission.admission.verdict}`. Its reasons, quoted verbatim from `${path.admission}` in record order:
+
+${derived.admission_reasons_quoted}
+
+### `${frontier.verdicts.condition_c_vs_v4.by_leg.n64.leg}` — not measured
+
+This leg was refused, not measured. Its refusal, quoted verbatim from `verdicts.leg_refusals`:
+
+> ${frontier.verdicts.leg_refusals.advr_n64}
+
+Each leg's own control, as the frontier record carries it:
+
+${table.control_readings}
+
+The `${derived.leg_label.advr_n64}` control is recorded unlearnable (`${frontier.verdicts.control_readings.advr_n64.unlearnable}`): taught recall ${derived.recall.advr_n64.taught}, heldout recall ${derived.recall.advr_n64.heldout}. With its own control recorded unlearnable, no point at that capacity could be read, and no conclusion is drawn at that capacity — neither that the mitigation worked there nor that it failed.
+
+### v4.0 → v5.0: condition (c) with and without replay
+
+The frontier record's own statement:
+
+> ${frontier.verdicts.condition_c_vs_v4.statement}
+
+One row per ratio, rendered from the frontier record's comparison rows (v4.0 source `${frontier.verdicts.condition_c_vs_v4.v4_source.path}`); the v4.0 reasons are quoted, never parsed, and `null` marks a point that never reached the pin:
+
+${table.condition_c_vs_v4}
+
+${table.condition_c_by_leg}
+
+The record's notes, verbatim:
+
+> ${frontier.verdicts.condition_c_vs_v4.notes}
+
+Replicated at a second seed: `${frontier.verdicts.replicated_at_second_seed}`. Route: `${frontier.verdicts.route}`.
+
+### Relearning: ${admission.scope.verdict}
+
+Scope rule: "${admission.scope.rule}". Points admitted for relearning: ${derived.relearn_scope_count}. Per leg, as the admission record states its limitation:
+
+${derived.limitation_legs}
+
+> ${admission.limitation.surface}
+
+### Ship block
+
+**Ships:** the replay-bearing adversarial recipe (`${path.recipe}`); each leg's own control (`${frontier.verdicts.control_readings.advr_n8.source}`, `${frontier.verdicts.control_readings.advr_n64.source}`); and the refusal surface (`${path.refusal_surface}`) — all as CPU-tested code.
+
+**Withholds** (the ledger's `NAMED-LIMITATION` rows, the frontier's leg refusals and the admission reasons — rendered from the data, so this list cannot drift from the records):
+
+${table.withheld_claims}
+
+No claim is made that replay-bearing adversarial training preserves weight-based memory while removing leakage. No conclusion is drawn at the `${derived.leg_label.advr_n64}` capacity.
+
+### Named-limitation register
+
+${derived.ledger_named_limitation_count} rows of ${derived.ledger_total} in `${path.ledger}` (${derived.ledger_v5_count} v5.0 rows; ${derived.ledger_by_reference_count} earlier-milestone rows carried by reference).
+
+${table.named_limitations}
+
+${table.ledger_by_disposition}
+
+### Provenance
+
+${table.sources}
+
+Record-carried commits: frontier `${frontier.provenance.git_sha}`, admission `${admission.provenance.git_sha}`. The admission record names the frontier it read by sha256 `${admission.frontier.sha256}`. The ledger digest covers `rows` only; its `close` object is outside it so the CI run id can land without a re-render. No figure is published for this milestone.
