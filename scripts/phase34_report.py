@@ -35,7 +35,7 @@ for _sub in ("scripts", "src"):
 import phase28_report as p28  # noqa: E402  (scripts/ is not a package)
 
 # ---- pinned constants (carried D-24: a clock in the template breaks byte-identity) -------------
-PUBLISHED = "2026-09-28"
+PUBLISHED = "2026-09-29"
 REPORT_STEM = "PHASE34-REPORT"
 GLANCE_STEM = "PHASE34-GLANCE"
 REPORT_PATH = _ROOT / "docs/REPORT.md"

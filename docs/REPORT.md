@@ -1607,3 +1607,131 @@ The obligations on the first phase that reads ADMITTED already sit in the regist
 
 Record-carried commits: frontier `578a1ac9a59525e5b7f68d33bd339c0113f1491e`, canary `c4a55115db43308fc6f14d458c42c1bdf60636c4`, admission `e308675d1d4e24aa96d77cec604d97a907a8a00d`. The ledger digest covers `rows` only; its `close` object is outside it so the CI run id (D-38) can land without a re-render.
 <!-- PHASE28-REPORT-END -->
+
+<!-- PHASE34-REPORT-BEGIN -->
+## v5.0 — admission MOOT: advr n8 PASS 0 of 6, INCONCLUSIVE 6 of 6; advr n64 REFUSED 6 of 6 (recorded 2026-09-29)
+
+*Appended additively. No line above this heading is altered. Every number below is a binding to a committed record field, rendered by `scripts/phase34_report.py`; the template is scanned for hand-typed numerals.*
+
+- `advr_n8`: PASS 0 of 6, INCONCLUSIVE 6 of 6.
+- `advr_n64`: REFUSED 6 of 6 — NOT MEASURED: refused under `refused_prereg03` (`verdicts.leg_refusals.advr_n64`, quoted below).
+
+Admission: `MOOT`. Its reasons, quoted verbatim from `results/phase33_admission.json` in record order:
+
+> "0 of 12 points PASS; tallies {'PASS': 0, 'FAIL': 0, 'INCONCLUSIVE': 6, 'REFUSED': 6}"
+> "advr_n64 fully REFUSED (advr_n64 control recall taught 0/1008, heldout 1/648); MOOT does not extend to that capacity"
+> "MOOT: no measured point cleared the frontier — nothing to relearn"
+
+### `advr_n64` — not measured
+
+This leg was refused, not measured. Its refusal, quoted verbatim from `verdicts.leg_refusals`:
+
+> [phase20_gate_coverage] the recall floors came out Y_taught=0.0, Y_heldout=0.0010802469135802468; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle
+
+Each leg's own control, as the frontier record carries it:
+
+| leg | source | unlearnable | taught | heldout | adapter_off | adapter_on |
+|---|---|---|---|---|---|---|
+| advr_n8 | results/phase32_point_advr_n8_ratio0p000000.json | false | 777/1008 | 334/648 | 4.573349214207799 | 4.707673871211244 |
+| advr_n64 | results/phase32_point_advr_n64_ratio0p000000.json | true | 0/1008 | 1/648 | 4.573349214207799 | 4.757501263320228 |
+
+The `advr n64` control is recorded unlearnable (`true`): taught recall 0/1008, heldout recall 1/648. With its own control recorded unlearnable, no point at that capacity could be read, and no conclusion is drawn at that capacity — neither that the mitigation worked there nor that it failed.
+
+### v4.0 → v5.0: condition (c) with and without replay
+
+The frontier record's own statement:
+
+> At advr_n8, with replay, (c) passes at 0 of 5 non-control ratios, and at 1 of 6 counting the ratio-0 control, whose dialogue half passes by self-reference (the control_gap is its own gap); in v4.0, without replay, (c) passed at 0 of 6 at adv_n8. At advr_n64, the v5.0 leg is REFUSED under PREREG-03: its own control read taught 0/1008 and held-out 1/648; the taught recall 0/1008 violates and the held-out recall 1/648 satisfies 0 < F_Y × recall <= 1 (F_Y = 0.7), and it was not re-tuned, so (c) with replay was not evaluated; in v4.0, (c) was measured but not evaluated at any of 6 ratios at adv_n64: the route refused on the control's recall floors (taught 1/1008, held-out 0/648): the held-out recall 0/648 violates and the taught recall 1/1008 satisfies 0 < F_Y × recall <= 1.
+
+One row per ratio, rendered from the frontier record's comparison rows (v4.0 source `results/phase25_frontier.json`); the v4.0 reasons are quoted, never parsed, and `null` marks a point that never reached the pin:
+
+| ratio | v4.0 key | v4.0 verdict | v4.0 (c) label | v4.0 quoted_reasons | v5.0 key | v5.0 state | v5.0 verdict | v5.0 cleared_c |
+|---|---|---|---|---|---|---|---|---|
+| 0.0 | adv_n8_ratio0p000000 | INCONCLUSIVE | (c) failed | (c) dialogue on-off gap 10.086674 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 6.3068 > cap 3.89114 + k=2 x 0.008682 = 3.9085 | advr_n8_ratio0p000000 | measured | INCONCLUSIVE | true |
+| 0.25 | adv_n8_ratio0p250000 | INCONCLUSIVE | (c) failed | (c) dialogue on-off gap 12.703733 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.5069 > cap 3.89114 + k=2 x 0.008682 = 3.9085 | advr_n8_ratio0p250000 | measured | INCONCLUSIVE | false |
+| 0.5 | adv_n8_ratio0p500000 | INCONCLUSIVE | (c) failed | (c) dialogue on-off gap 12.076060 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.4908 > cap 3.89114 + k=2 x 0.008682 = 3.9085 | advr_n8_ratio0p500000 | measured | INCONCLUSIVE | false |
+| 1.0 | adv_n8_ratio1p000000 | INCONCLUSIVE | (c) failed | (c) dialogue on-off gap 11.510777 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.2238 > cap 3.89114 + k=2 x 0.008682 = 3.9085 | advr_n8_ratio1p000000 | measured | INCONCLUSIVE | false |
+| 1.5 | adv_n8_ratio1p500000 | INCONCLUSIVE | (c) failed | (c) dialogue on-off gap 12.268562 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.1739 > cap 3.89114 + k=2 x 0.008682 = 3.9085 | advr_n8_ratio1p500000 | measured | INCONCLUSIVE | false |
+| 1.9090909090909092 | adv_n8_ratio1p909091 | INCONCLUSIVE | (c) failed | (c) dialogue on-off gap 11.687731 OUTSIDE the band [0.067525, 0.145479]: lo = f_C=0.5 x control_gap 0.135050 = 0.067525, hi = control_gap + k=2 x 0.005214 = 0.145479. NOT APPLIED, published so the supersession is not taken on trust: the GATE-02 one-sided cap D-01 replaced, superseded_dialogue_cap(gap_noise_floor=0.005214) = 4.5837; (c) retention PPL 7.0850 > cap 3.89114 + k=2 x 0.008682 = 3.9085 | advr_n8_ratio1p909091 | measured | INCONCLUSIVE | false |
+| 0.0 | adv_n64_ratio0p000000 | REFUSED | (c) measured, not evaluated | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle | advr_n64_ratio0p000000 | refused_by_route | REFUSED | null |
+| 0.25 | adv_n64_ratio0p250000 | REFUSED | (c) measured, not evaluated | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle | advr_n64_ratio0p250000 | refused_prereg03 | REFUSED | null |
+| 0.5 | adv_n64_ratio0p500000 | REFUSED | (c) measured, not evaluated | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle | advr_n64_ratio0p500000 | refused_prereg03 | REFUSED | null |
+| 1.0 | adv_n64_ratio1p000000 | REFUSED | (c) measured, not evaluated | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle | advr_n64_ratio1p000000 | refused_prereg03 | REFUSED | null |
+| 1.5 | adv_n64_ratio1p500000 | REFUSED | (c) measured, not evaluated | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle | advr_n64_ratio1p500000 | refused_prereg03 | REFUSED | null |
+| 1.9090909090909092 | adv_n64_ratio1p909091 | REFUSED | (c) measured, not evaluated | [phase20_gate_coverage] the recall floors came out Y_taught=0.0006944444444444444, Y_heldout=0.0; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle | advr_n64_ratio1p909091 | refused_prereg03 | REFUSED | null |
+
+| leg | twin | tk/tn | hk/hn | v4_state | v5_state | k5 | k6 |
+|---|---|---|---|---|---|---|---|
+| advr_n8 | adv_n8 | 777/1008 | 334/648 | evaluated | measured | 0 | 1 |
+| advr_n64 | adv_n64 | 0/1008 | 1/648 | not_evaluated | refused_prereg03 | 0 | 0 |
+
+The record's notes, verbatim:
+
+> cleared_c is phase29_prereg.cleared_abc(verdict entry)[2]; None where the point never reached the pin. quoted_reasons are quoted, never parsed. k5 excludes the ratio-0 control, whose dialogue half passes by self-reference (D-18).
+
+Replicated at a second seed: `false`. Route: `phase20_gate_coverage.corrected_point_verdict (D-34)`.
+
+### Relearning: MOOT
+
+Scope rule: "RELRN-06..09 ship as a MOOT named limitation". Points admitted for relearning: 0. Per leg, as the admission record states its limitation:
+
+> "advr_n8 measured: 0 FAIL, 6 INCONCLUSIVE, 0 PASS, 0 REFUSED of 6; admission verdict MOOT"
+> "advr_n64 fully REFUSED (advr_n64 control recall taught 0/1008, heldout 1/648); MOOT does not extend to that capacity"
+
+> only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT
+
+### Ship block
+
+**Ships:** the replay-bearing adversarial recipe (`scripts/phase30_points.py`); each leg's own control (`results/phase32_point_advr_n8_ratio0p000000.json`, `results/phase32_point_advr_n64_ratio0p000000.json`); and the refusal surface (`scripts/phase33_admission.py`) — all as CPU-tested code.
+
+**Withholds** (the ledger's `NAMED-LIMITATION` rows, the frontier's leg refusals and the admission reasons — rendered from the data, so this list cannot drift from the records):
+
+| withheld | why |
+|---|---|
+| ACTRL-01 | Exercised on real data: the recall floors and `control_gap` came from each leg's own advr control (32-07-SUMMARY.md:80, by reference). Not exercised: the relearning Z baseline, because admission read MOOT and no relearning leg ran. Per leg: advr_n8 measured: 0 FAIL, 6 INCONCLUSIVE, 0 PASS, 0 REFUSED of 6; admission verdict MOOT. advr_n64 fully REFUSED (advr_n64 control recall taught 0/1008, heldout 1/648); MOOT does not extend to that capacity. |
+| RELRN-06 | RELRN-06..09 ship as a MOOT named limitation. The RELRN-06 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT. |
+| RELRN-07 | RELRN-06..09 ship as a MOOT named limitation. The RELRN-07 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT. |
+| RELRN-08 | RELRN-06..09 ship as a MOOT named limitation. The RELRN-08 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT. |
+| RELRN-09 | RELRN-06..09 ship as a MOOT named limitation. The RELRN-09 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT. |
+| P28-P22-WARNING-4 | Re-recorded in Phase 29 (DEBT-04) as a named limitation: the two accountant oracles disagree at δ < 1e-12, off the publishing path; no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01). |
+| P28-P22-WARNING-5 | Re-recorded in Phase 29 (DEBT-04) as a named limitation: `delta_quadrature` degrades at large μ at the frozen δ, off the publishing path; no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01). |
+| verdicts.leg_refusals.advr_n64 | [phase20_gate_coverage] the recall floors came out Y_taught=0.0, Y_heldout=0.0010802469135802468; both must lie in (0.0, 1.0]. A non-positive floor is cleared by any reading whatsoever and one above 1.0 is cleared by none. It is ALSO the precondition that makes SUPERSEDED_SWEEP_SENTINEL (0.0, 1.0) provably bracket the taught-recall axis the pin still reads, so the sentinel is never passed against a criterion it might not straddle |
+| admission.reasons[0] | 0 of 12 points PASS; tallies {'PASS': 0, 'FAIL': 0, 'INCONCLUSIVE': 6, 'REFUSED': 6} |
+| admission.reasons[1] | advr_n64 fully REFUSED (advr_n64 control recall taught 0/1008, heldout 1/648); MOOT does not extend to that capacity |
+| admission.reasons[2] | MOOT: no measured point cleared the frontier — nothing to relearn |
+
+No claim is made that replay-bearing adversarial training preserves weight-based memory while removing leakage. No conclusion is drawn at the `advr n64` capacity.
+
+### Named-limitation register
+
+7 rows of 61 in `results/phase34_ledger.json` (56 v5.0 rows; 5 earlier-milestone rows carried by reference).
+
+| id | milestone | source | reason | evidence |
+|---|---|---|---|---|
+| ACTRL-01 | v5.0 | REQUIREMENTS.md ACTRL-01; results/phase33_admission.json::limitation.legs.advr_n8; results/phase33_admission.json::limitation.legs.advr_n64 | Exercised on real data: the recall floors and `control_gap` came from each leg's own advr control (32-07-SUMMARY.md:80, by reference). Not exercised: the relearning Z baseline, because admission read MOOT and no relearning leg ran. Per leg: advr_n8 measured: 0 FAIL, 6 INCONCLUSIVE, 0 PASS, 0 REFUSED of 6; admission verdict MOOT. advr_n64 fully REFUSED (advr_n64 control recall taught 0/1008, heldout 1/648); MOOT does not extend to that capacity. | Staged label NAMED-LIMITATION (partial exercise), mapped to NAMED-LIMITATION in plan 34-03; 32-07-SUMMARY.md:80 by reference; Phase 33 does not take the requirement and it stays unticked (33 D-15) |
+| RELRN-06 | v5.0 | REQUIREMENTS.md RELRN-06; results/phase33_admission.json::limitation.scope_rule; results/phase33_admission.json::limitation.surface; results/phase33_admission.json::scope.rule | RELRN-06..09 ship as a MOOT named limitation. The RELRN-06 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT. | results/phase33_admission.json::limitation.requirements lists RELRN-06; admission.verdict MOOT; unticked in REQUIREMENTS.md |
+| RELRN-07 | v5.0 | REQUIREMENTS.md RELRN-07; results/phase33_admission.json::limitation.scope_rule; results/phase33_admission.json::limitation.surface; results/phase33_admission.json::scope.rule | RELRN-06..09 ship as a MOOT named limitation. The RELRN-07 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT. | results/phase33_admission.json::limitation.requirements lists RELRN-07; admission.verdict MOOT; unticked in REQUIREMENTS.md |
+| RELRN-08 | v5.0 | REQUIREMENTS.md RELRN-08; results/phase33_admission.json::limitation.scope_rule; results/phase33_admission.json::limitation.surface; results/phase33_admission.json::scope.rule | RELRN-06..09 ship as a MOOT named limitation. The RELRN-08 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT. | results/phase33_admission.json::limitation.requirements lists RELRN-08; admission.verdict MOOT; unticked in REQUIREMENTS.md |
+| RELRN-09 | v5.0 | REQUIREMENTS.md RELRN-09; results/phase33_admission.json::limitation.scope_rule; results/phase33_admission.json::limitation.surface; results/phase33_admission.json::scope.rule | RELRN-06..09 ship as a MOOT named limitation. The RELRN-09 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT. | results/phase33_admission.json::limitation.requirements lists RELRN-09; admission.verdict MOOT; unticked in REQUIREMENTS.md |
+| P28-P22-WARNING-4 | v4.0 | results/phase28_ledger.json::rows[id=P22-WARNING-4] (by reference; file sha256 a459cc2296cb7590b46ba3f608c22d84b6258d3ffc9aa4a804042425b991b2a0, rows digest bb9f82fe290d7578a11e221c349733555e5c2f3d197673e56e39d8c65b00dbd7) | Re-recorded in Phase 29 (DEBT-04) as a named limitation: the two accountant oracles disagree at δ < 1e-12, off the publishing path; no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01). | 63ca8de; tests/test_phase29_prereg.py::test_named_limitations_record_p22_warning_4_5; scripts/phase29_prereg.py NAMED_LIMITATIONS['P22-WARNING-4/5']; DEBT-04 (REQUIREMENTS.md ticked, zero code) |
+| P28-P22-WARNING-5 | v4.0 | results/phase28_ledger.json::rows[id=P22-WARNING-5] (by reference; file sha256 a459cc2296cb7590b46ba3f608c22d84b6258d3ffc9aa4a804042425b991b2a0, rows digest bb9f82fe290d7578a11e221c349733555e5c2f3d197673e56e39d8c65b00dbd7) | Re-recorded in Phase 29 (DEBT-04) as a named limitation: `delta_quadrature` degrades at large μ at the frozen δ, off the publishing path; no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01). | 63ca8de; tests/test_phase29_prereg.py::test_named_limitations_record_p22_warning_4_5; scripts/phase29_prereg.py NAMED_LIMITATIONS['P22-WARNING-4/5']; DEBT-04 (REQUIREMENTS.md ticked, zero code) |
+
+| disposition | rows |
+|---|---|
+| ACCEPTED | 15 |
+| CLOSED-EARLIER | 0 |
+| FIXED | 19 |
+| FORBIDDEN-BY-GUARD | 0 |
+| NAMED-LIMITATION | 7 |
+| RE-DEFERRED | 20 |
+
+### Provenance
+
+| source | sha256 | bytes | record-carried git_sha |
+|---|---|---|---|
+| results/phase32_frontier.json | 4a4bcb60f9b8bd9a1a63d9525c1d80fee9baec121ac15358a972dd625dc97be9 | 56857 | fd76e0d2bed129913d1edb29c62c11fdc1a3a7af |
+| results/phase33_admission.json | ae81eada54f2eda3b8dc7bed881f7aeb9e81f8fd8d660af8e877e3132f6ca973 | 2167 | 92fe48b8f7795aebb0d39c421703c6f58935fe98 |
+| results/phase34_ledger.json (`rows` only) | 372bbbf2ba43276b5fb51326c6b39025a1ecde6a468209ae3850f0d64feb75fa | 45802 | — |
+
+Record-carried commits: frontier `fd76e0d2bed129913d1edb29c62c11fdc1a3a7af`, admission `92fe48b8f7795aebb0d39c421703c6f58935fe98`. The admission record names the frontier it read by sha256 `4a4bcb60f9b8bd9a1a63d9525c1d80fee9baec121ac15358a972dd625dc97be9`. The ledger digest covers `rows` only; its `close` object is outside it so the CI run id can land without a re-render. No figure is published for this milestone.
+<!-- PHASE34-REPORT-END -->

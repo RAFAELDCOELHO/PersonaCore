@@ -4,7 +4,7 @@ The two template sources carry no bare numeral (the phase28 numeral grammar, imp
 grammar); every ``CONTRACT`` path resolves and is bound; the lead is per leg and precedes the
 admission reasons; the refused leg is NOT MEASURED; the v4.0 -> v5.0 comparison is the record's
 rows; every provenance digest recomputes from bytes; the renderer is torch-free and clock-free; and
-the frozen v4.0 block still checks. The byte-identity and install tests are added in plan 34-05.
+the frozen v4.0 block still checks. The byte-identity and install tests are section (8).
 Prose comparisons use ``_prose.normalized(a) in _prose.normalized(b)``.
 """
 
@@ -27,7 +27,7 @@ import _prose  # noqa: E402  (scripts/ is not a package)
 import phase28_report  # noqa: E402
 import phase34_report  # noqa: E402
 
-from test_phase28_report import _bare_numerals  # noqa: E402
+from test_phase28_report import _bare_numerals, _git, _markers, _span, _unified  # noqa: E402
 
 _RENDERER = _ROOT / "scripts/phase34_report.py"
 _TEMPLATES = (phase34_report.TEMPLATE_REPORT, phase34_report.TEMPLATE_GLANCE)
@@ -326,3 +326,150 @@ def test_rendered_blocks_pass_the_docs_number_rules(block, glance):
     assert len(bullets) == 1 and bullets[0].startswith("- **v5.0 — "), bullets
     anchor = phase34_report.Bindings(phase34_report.load()[0])["derived.report_anchor"]
     assert f"(docs/REPORT.md#{anchor})" in glance
+
+
+# =================================================================================================
+# (8) THE INSTALLED BLOCKS (plan 34-05; D-02, D-03, carried D-17/D-20/D-24). RED while the PHASE34
+# sentinels are absent ("occurs 0 time(s)"), GREEN once `write` has run.
+# =================================================================================================
+
+_REPORT_REL = "docs/REPORT.md"
+_README_REL = "README.md"
+
+
+def test_report_sentinels_occur_exactly_once():
+    _span(_REPORT_REL, phase34_report.REPORT_STEM)
+
+
+def test_glance_sentinels_occur_exactly_once():
+    _span(_README_REL, phase34_report.GLANCE_STEM)
+
+
+def test_report_block_is_byte_identical():
+    committed = _span(_REPORT_REL, phase34_report.REPORT_STEM)
+    rendered = phase34_report.render_report()
+    assert committed == rendered, _unified(committed, rendered)
+
+
+def test_glance_block_is_byte_identical():
+    committed = _span(_README_REL, phase34_report.GLANCE_STEM)
+    rendered = phase34_report.render_glance()
+    assert committed == rendered, _unified(committed, rendered)
+
+
+def test_placement_report_block_follows_the_v4_block():
+    span = _span(_REPORT_REL, phase34_report.REPORT_STEM)
+    text = (_ROOT / _REPORT_REL).read_text(encoding="utf-8")
+    begin34 = _markers(phase34_report.REPORT_STEM)[0]
+    end28 = _markers(phase28_report.REPORT_STEM)[1]
+    assert text.index(begin34) > text.index(end28)
+    headings = [line for line in span.splitlines() if line.startswith("## ")]
+    assert len(headings) == 1, headings
+
+
+def test_placement_glance_sits_directly_above_the_v4_glance():
+    span = _span(_README_REL, phase34_report.GLANCE_STEM)
+    text = (_ROOT / _README_REL).read_text(encoding="utf-8")
+    end34 = _markers(phase34_report.GLANCE_STEM)[1]
+    begin28 = _markers(phase28_report.GLANCE_STEM)[0]
+    assert text.count(end34 + "\n" + begin28) == 1
+    assert "\n## " not in span and not span.startswith("## "), span
+
+
+def _install_inverse(relative_path, text, stem):
+    """Remove the stem's block by the exact inverse of `write` (REPORT: EOF append with a leading
+    newline; README: inserted directly above the v4.0 anchor)."""
+    begin, end = _markers(stem)
+    for sentinel in (begin, end):
+        found = text.count(sentinel)
+        assert found == 1, f"{relative_path}: {sentinel} occurs {found} time(s); exactly one"
+    span = text.split(begin, 1)[1].split(end, 1)[0]
+    block = begin + span + end + "\n"
+    if relative_path == _REPORT_REL:
+        block = "\n" + block
+    assert text.count(block) == 1, relative_path
+    stripped = text.replace(block, "", 1)
+    assert begin not in stripped and end not in stripped, relative_path
+    return stripped
+
+
+_STEMS = ((_REPORT_REL, phase34_report.REPORT_STEM), (_README_REL, phase34_report.GLANCE_STEM))
+
+
+@pytest.mark.parametrize(("relative_path", "stem"), _STEMS)
+def test_install_deleted_nothing(relative_path, stem):
+    """History-based (a later sanctioned edit never reddens it): the OLDEST commit whose blob holds
+    the BEGIN sentinel, minus its block, equals its parent's blob. Before any such commit exists the
+    working tree stands in for it and HEAD for its parent."""
+    begin = _markers(stem)[0]
+    pub = None
+    for revision in _git("log", "--format=%H", "--", relative_path).split():
+        if begin in _git("show", f"{revision}:{relative_path}"):
+            pub = revision  # keep walking: the last match is the oldest
+    if pub is None:
+        text = (_ROOT / relative_path).read_text(encoding="utf-8")
+        parent = _git("show", f"HEAD:{relative_path}")
+    else:
+        text = _git("show", f"{pub}:{relative_path}")
+        parent = _git("show", f"{pub}~1:{relative_path}")
+    assert _install_inverse(relative_path, text, stem) == parent
+
+
+def _tmp_docs34(tmp_path, monkeypatch, report_text, readme_text):
+    tmp_report, tmp_readme = tmp_path / "REPORT.md", tmp_path / "README.md"
+    tmp_report.write_text(report_text, encoding="utf-8")
+    tmp_readme.write_text(readme_text, encoding="utf-8")
+    monkeypatch.setattr(phase34_report, "REPORT_PATH", tmp_report)
+    monkeypatch.setattr(phase34_report, "README_PATH", tmp_readme)
+    return tmp_report, tmp_readme
+
+
+def test_write_refuses_once_installed(tmp_path, monkeypatch):
+    for relative_path, stem in _STEMS:
+        _span(relative_path, stem)  # installed, else this is vacuous
+    published_report = (_ROOT / _REPORT_REL).read_bytes()
+    published_readme = (_ROOT / _README_REL).read_bytes()
+    tmp_report, tmp_readme = _tmp_docs34(
+        tmp_path, monkeypatch, published_report.decode("utf-8"), published_readme.decode("utf-8")
+    )
+    with pytest.raises(SystemExit, match="refused"):
+        phase34_report.main(["write"])
+    assert tmp_report.read_bytes() == published_report
+    assert tmp_readme.read_bytes() == published_readme
+
+
+def test_write_installs_pre_publish_then_refuses(tmp_path, monkeypatch):
+    texts = {rel: (_ROOT / rel).read_text(encoding="utf-8") for rel, _ in _STEMS}
+    stripped = {rel: _install_inverse(rel, texts[rel], stem) for rel, stem in _STEMS}
+    tmp_report, tmp_readme = _tmp_docs34(
+        tmp_path, monkeypatch, stripped[_REPORT_REL], stripped[_README_REL]
+    )
+    assert phase34_report.main(["write"]) == 0
+    assert tmp_report.read_bytes() == (_ROOT / _REPORT_REL).read_bytes()
+    assert tmp_readme.read_bytes() == (_ROOT / _README_REL).read_bytes()
+    with pytest.raises(SystemExit, match="refused"):
+        phase34_report.main(["write"])
+    assert tmp_report.read_bytes() == (_ROOT / _REPORT_REL).read_bytes()
+    assert tmp_readme.read_bytes() == (_ROOT / _README_REL).read_bytes()
+
+
+def test_published_date_is_pinned_not_clocked(block):
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", phase34_report.PUBLISHED)
+    title = next(line for line in block.splitlines() if line.startswith("## "))
+    assert phase34_report.PUBLISHED in title, title
+
+
+def test_install_glance_refuses_without_exactly_one_v4_anchor(tmp_path):
+    readme = (_ROOT / _README_REL).read_text(encoding="utf-8")
+    anchor = _markers(phase28_report.GLANCE_STEM)[0]
+    begin34, end34 = _markers(phase34_report.GLANCE_STEM)
+    if begin34 in readme:
+        readme = _install_inverse(_README_REL, readme, phase34_report.GLANCE_STEM)
+    assert readme.count(anchor) == 1
+    tmp_readme = tmp_path / "README.md"
+    tmp_readme.write_text(readme.replace(anchor, "", 1), encoding="utf-8")
+    before = tmp_readme.read_bytes()
+    with pytest.raises(SystemExit, match="exactly once"):
+        phase34_report.install_glance(tmp_readme, phase34_report.GLANCE_STEM, "- **x**\n")
+    assert tmp_readme.read_bytes() == before
+    assert end34 not in tmp_readme.read_text(encoding="utf-8")

@@ -108,6 +108,18 @@ was. The sections below are that record, newest last.
 
 ## Results at a glance
 
+<!-- PHASE34-GLANCE-BEGIN -->
+- **v5.0 — admission `MOOT`, per leg.** `advr_n8`:
+  0 of 6 PASS,
+  6 of 6
+  INCONCLUSIVE; `advr_n64`:
+  6 of 6 REFUSED —
+  NOT MEASURED, its own control unlearnable (taught 0/1008), so no
+  conclusion is drawn at that capacity. Condition (c) with replay against v4.0 without it is a
+  table of the record's rows, not a prose claim — records in [results/phase32_frontier.json](results/phase32_frontier.json)
+  and [results/phase33_admission.json](results/phase33_admission.json), every number bound in
+  [docs/REPORT.md](docs/REPORT.md#v50--admission-moot-advr-n8-pass-0-of-6-inconclusive-6-of-6-advr-n64-refused-6-of-6-recorded-2026-09-29)
+<!-- PHASE34-GLANCE-END -->
 <!-- PHASE28-GLANCE-BEGIN -->
 - **v4.0 — `null-at-both-capacities`.** "NO CLEARING POINT IN THE 'dp' ARM: 0 of 32 point(s) examined returned PASS. Reported with its denominator rather than as a bare 'no', because an existential's strength is the size of the set it searched. Any INCONCLUSIVE among those points is NOT a clear and was not counted as one (D-29)"
   30 of 30 noised DP points cleared condition (a)

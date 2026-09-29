@@ -539,13 +539,50 @@ def test_glance_block_is_byte_identical():
     assert committed == rendered, _unified(committed, rendered)
 
 
+def _later_stems(text, kind):
+    """Stems of later milestones' blocks (``PHASE<n>-<kind>`` with n > 28), derived from the text —
+    never a typed stem (Phase 34 R-1)."""
+    found = re.findall(rf"<!-- (PHASE(\d+)-{kind})-BEGIN -->", text)
+    return [stem for stem, number in found if int(number) > 28]
+
+
+def _without_later(text, kind):
+    """``text`` with every later milestone's block removed by the exact inverse of its install
+    (REPORT: ``"\\n" + BEGIN + span + END + "\\n"`` at EOF; README: ``BEGIN + span + END + "\\n"``
+    above the v4.0 glance)."""
+    for stem in _later_stems(text, kind):
+        begin, end = _markers(stem)
+        assert text.count(begin) == 1 and text.count(end) == 1, stem
+        block = begin + text.split(begin, 1)[1].split(end, 1)[0] + end + "\n"
+        if kind == "REPORT":
+            block = "\n" + block
+        assert text.count(block) == 1, stem
+        text = text.replace(block, "", 1)
+    return text
+
+
+def _stripped_text(text, stem):
+    """``_stripped``'s logic over a given string: the stem's ``"\\n" + BEGIN + span + END + "\\n"``
+    removed exactly once, markers asserted gone."""
+    begin, end = _markers(stem)
+    assert text.count(begin) == 1 and text.count(end) == 1, stem
+    block = "\n" + begin + text.split(begin, 1)[1].split(end, 1)[0] + end + "\n"
+    assert text.count(block) == 1, stem
+    stripped = text.replace(block, "", 1)
+    assert begin not in stripped and end not in stripped, stem
+    return stripped
+
+
+# Dated continuation, 2026-09-29 (Phase 34 R-1): this guard encoded "the v4.0 block is the last
+# thing installed". A later milestone's block now follows it by design (Phase 34 D-02), so the
+# guard is scoped to the v4.0 block: later blocks are removed by their exact install inverse first.
 def test_report_section_is_after_every_prior_heading():
     """D-01: the section is appended AFTER every existing ``## `` heading — its own ``## `` is the
     last one in the file, so nothing above the insertion point moved."""
     span = _span(_REPORT_REL, phase28_report.REPORT_STEM)
     in_span = [line for line in span.splitlines() if line.startswith("## ")]
     assert len(in_span) == 1, in_span
-    whole = (_ROOT / _REPORT_REL).read_text(encoding="utf-8")
+    whole = _without_later((_ROOT / _REPORT_REL).read_text(encoding="utf-8"), "REPORT")
     headings = [line for line in whole.splitlines() if line.startswith("## ")]
     assert headings[-1] == in_span[0], (headings[-1], in_span[0])
 
@@ -572,6 +609,9 @@ def _bullets(text):
     return [line for line in text.splitlines() if line.startswith("- **")]
 
 
+# Dated continuation, 2026-09-29 (Phase 34 R-1): this guard encoded "the v4.0 block is the last
+# thing installed". A later milestone's glance block now sits above it by design (Phase 34 D-02), so
+# the guard is scoped to the v4.0 block: later GLANCE spans' bullets are subtracted from the count.
 def test_glance_deleted_nothing():
     """T-28-16: the pre-existing first bullet still follows the END sentinel, and the section's
     bullet count equals the pre-publish blob's count plus the span's own. The pre-publish revision
@@ -596,7 +636,9 @@ def test_glance_deleted_nothing():
 
     span = _span(_README_REL, phase28_report.GLANCE_STEM)
     assert _bullets(span), span
-    assert len(_bullets(_glance_section(after))) == len(old_bullets) + len(_bullets(span))
+    later = sum(len(_bullets(_span(_README_REL, s))) for s in _later_stems(after, "GLANCE"))
+    section = len(_bullets(_glance_section(after))) - later
+    assert section == len(old_bullets) + len(_bullets(span))
 
 
 def test_published_date_is_pinned_not_clocked():
@@ -651,19 +693,24 @@ def test_write_refuses_once_installed(tmp_path, monkeypatch):
     assert tmp_readme.read_bytes() == published_readme
 
 
+# Dated continuation, 2026-09-29 (Phase 34 R-1): this guard encoded "the v4.0 block is the last
+# thing installed". Later milestones' blocks now sit beside it by design (Phase 34 D-02), so the
+# guard is scoped to the v4.0 block: its inputs and expected bytes are the files without them.
 def test_write_installs_pre_publish_then_refuses(tmp_path, monkeypatch):
-    readme_stripped = _stripped(_README_REL, phase28_report.GLANCE_STEM)
+    report_v4 = _without_later((_ROOT / _REPORT_REL).read_text(encoding="utf-8"), "REPORT")
+    readme_v4 = _without_later((_ROOT / _README_REL).read_text(encoding="utf-8"), "GLANCE")
+    readme_stripped = _stripped_text(readme_v4, phase28_report.GLANCE_STEM)
     assert phase28_report.GLANCE_HEADING in readme_stripped
     tmp_report, tmp_readme = _tmp_docs(
         tmp_path,
         monkeypatch,
-        _stripped(_REPORT_REL, phase28_report.REPORT_STEM),
+        _stripped_text(report_v4, phase28_report.REPORT_STEM),
         readme_stripped,
     )
     assert phase28_report.main(["write"]) == 0
-    assert tmp_report.read_bytes() == (_ROOT / _REPORT_REL).read_bytes()
-    assert tmp_readme.read_bytes() == (_ROOT / _README_REL).read_bytes()
+    assert tmp_report.read_text(encoding="utf-8") == report_v4
+    assert tmp_readme.read_text(encoding="utf-8") == readme_v4
     with pytest.raises(SystemExit, match="write refused"):
         phase28_report.main(["write"])
-    assert tmp_report.read_bytes() == (_ROOT / _REPORT_REL).read_bytes()
-    assert tmp_readme.read_bytes() == (_ROOT / _README_REL).read_bytes()
+    assert tmp_report.read_text(encoding="utf-8") == report_v4
+    assert tmp_readme.read_text(encoding="utf-8") == readme_v4
