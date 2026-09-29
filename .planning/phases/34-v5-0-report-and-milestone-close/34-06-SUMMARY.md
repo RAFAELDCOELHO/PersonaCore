@@ -84,13 +84,13 @@ Snapshot: `$SCRATCH/snap/{STATE,ROADMAP,REQUIREMENTS}.md`, then python exact-anc
 
 ## Continuation 2026-09-29: 34-REVIEW WR-01/02/03 carried past the v5.0 close
 
-Added after the close commit, at the milestone audit (`.planning/v5.0-MILESTONE-AUDIT.md`, `a00d293`), by developer ruling on option A. These rows live here, not in `results/phase34_ledger.json`, because the published block renders the ledger's `rows` digest (`scripts/phase34_report.py:299`). A new row would redden `phase34_report.py check`. The ledger stays at 61 rows. Source: `34-REVIEW.md` (`4d0ab76`). Disposition: RE-DEFERRED, advisory, no published number changes.
+Added after the close commit, at the milestone audit (`.planning/v5.0-MILESTONE-AUDIT.md`, `a00d293`), by developer ruling on option A. These rows live here, not in `results/phase34_ledger.json`, because the published block renders the ledger's `rows` digest (`scripts/phase34_report.py:299`). A new row would redden `phase34_report.py check`. The ledger stays at 61 rows. Source: `34-REVIEW.md` (`4d0ab76`). Dispositions below are the developer's ruling of 2026-09-29 (it supersedes the blanket RE-DEFERRED this entry first carried at `6d2a97e`). No published number changes.
 
-| ID | Finding | Anchor | Why deferred |
-|----|---------|--------|--------------|
-| P34-WR-01 | `write` is not atomic: if the README anchor fails, REPORT.md stays installed and every retry refuses | `scripts/phase34_report.py:450-459` | `write` already ran once in `226b489` and is frozen. The only risk is a future re-install, and that must go through `_addendum.py` |
-| P34-WR-02 | The templates hand-type verdict categories and states, which the bound values could contradict | `scripts/phase34_glance.md.tmpl:1-7`, `scripts/phase34_report.md.tmpl:11-21` | The published render matches the committed records (`check` exit 0). The fix is a template change, which needs a dated continuation of the block |
-| P34-WR-03 | The per-leg table shows `k5`/`k6` = `0` for the NOT-MEASURED n64 leg and drops the v4.0 per-leg counts | `scripts/phase34_report.py:239-255`, `COVERED_BY` at :345 | The n64 leg is stated as not measured elsewhere in the block. Correcting the table means `_addendum.py` on the frozen block |
+| ID | Disposition | Finding | Anchor | Reason |
+|----|-------------|---------|--------|--------|
+| P34-WR-01 | RE-DEFERRED | `write` is not atomic: if the README anchor fails, REPORT.md stays installed and every retry refuses | `scripts/phase34_report.py:450-459` | The write ran once (`226b489`) and `check` exits 0, so the published result is undamaged. The only risk is a future re-install, and that must go through `_addendum.py` |
+| P34-WR-02 | ACCEPTED | The templates hand-type verdict categories and states, which the bound values could contradict | `scripts/phase34_glance.md.tmpl:1-7`, `scripts/phase34_report.md.tmpl:11-21` | The published render matches the committed records (`check` exit 0). The fix is a template change, which needs a dated continuation of the block |
+| P34-WR-03 | ACCEPTED | The per-leg table shows `k5`/`k6` = `0` for the NOT-MEASURED n64 leg and drops the v4.0 per-leg counts | `scripts/phase34_report.py:239-255`, `COVERED_BY` at :345 | The n64 leg is stated as not measured elsewhere in the block. Correcting the table means `_addendum.py` on the frozen block |
 
 ## Obsidian
 
