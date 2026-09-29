@@ -1405,27 +1405,27 @@ milestone closes on a green CI run of the developer's push
 
 **Wave 1**
 
-- [ ] 34-01-PLAN.md — plist heartbeat assertions host-independent in both plist tests (port of f47468b, R-2) + RPT-05 tag set derived from MILESTONES Shipped headings (RPT-05, RPT-06)
+- [x] 34-01-PLAN.md — plist heartbeat assertions host-independent in both plist tests (port of f47468b, R-2) + RPT-05 tag set derived from MILESTONES Shipped headings (RPT-05, RPT-06)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 34-02-PLAN.md — pre-push checklist + push 1 by the developer; run read with gh, recorded in SUMMARY only (R-3) (RPT-06)
+- [x] 34-02-PLAN.md — pre-push checklist + push 1 by the developer; run read with gh, recorded in SUMMARY only (R-3) (RPT-06)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 34-03-PLAN.md — `results/phase34_ledger.json` + `tests/test_phase34_ledger.py`: closed domain, derived census over 29..33 review/security/staged rows, phase28 open rows by reference (RPT-04, RPT-06)
+- [x] 34-03-PLAN.md — `results/phase34_ledger.json` + `tests/test_phase34_ledger.py`: closed domain, derived census over 29..33 review/security/staged rows, phase28 open rows by reference (RPT-04, RPT-06)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 34-04-PLAN.md — `scripts/phase34_report.py` over the frozen phase28 engine + two templates + pre-install tests (per-leg lead, n64 not measured, condition_c_vs_v4 table, post-hoc contract) (RPT-04)
+- [x] 34-04-PLAN.md — `scripts/phase34_report.py` over the frozen phase28 engine + two templates + pre-install tests (per-leg lead, n64 not measured, condition_c_vs_v4 table, post-hoc contract) (RPT-04)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 34-05-PLAN.md — developer read checkpoint, `write` once, three Phase 28 placement guards amended after natural RED (R-1), publishing commit, full suite (RPT-04)
+- [x] 34-05-PLAN.md — developer read checkpoint, `write` once, three Phase 28 placement guards amended after natural RED (R-1), publishing commit, full suite (RPT-04)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 34-06-PLAN.md — push 2 by the developer, `close.ci_run`, RPT-04..06 ticked by hand, ROADMAP + STATE (RPT-04, RPT-05, RPT-06)
+- [x] 34-06-PLAN.md — push 2 by the developer, `close.ci_run`, RPT-04..06 ticked by hand, ROADMAP + STATE (RPT-04, RPT-05, RPT-06)
 
 ## Progress
 
@@ -1458,6 +1458,6 @@ Next: `/gsd:plan-phase 20`.
 | 31. MPS Cost Probes and Budget Commitment | v5.0 | 6/6 | Complete | 2026-09-27 |
 | 32. Replay-Bearing Frontier Re-run and Verdict | v5.0 | 7/7 | Complete | 2026-09-28 |
 | 33. Admission and Relearning on Admitted Points | v5.0 | 3/3 | Complete | 2026-09-28 |
-| 34. v5.0 Report and Milestone Close | v5.0 | 0/6 | Planned | - |
+| 34. v5.0 Report and Milestone Close | v5.0 | 6/6 | Plans complete — verification pending | 2026-09-29 — v5.0 published (publishing 226b489), CI run 36562323069 green on origin/main, close.ci_run recorded, RPT-04..06 ticked by hand; zero gsd-sdk mutation handlers |
 
 Next (v5.0): `/gsd:plan-phase 29`.

@@ -643,9 +643,9 @@ re-run admits.
 
 ### Report and close (RPT)
 
-- [ ] **RPT-04**: The v5.0 section of `docs/REPORT.md` and the README glance is rendered from committed records under the numeral scan
-- [ ] **RPT-05**: Runtime dependencies are identical across every milestone tag
-- [ ] **RPT-06**: The milestone closes on a green CI run of the developer's push (D-38)
+- [x] **RPT-04**: The v5.0 section of `docs/REPORT.md` and the README glance is rendered from committed records under the numeral scan
+- [x] **RPT-05**: Runtime dependencies are identical across every milestone tag
+- [x] **RPT-06**: The milestone closes on a green CI run of the developer's push (D-38)
 
 ## v5.0 Out of Scope
 
@@ -683,6 +683,6 @@ re-run admits.
 | DEBT-02 | Phase 29 | Complete |
 | DEBT-03 | Phase 29 | Complete |
 | DEBT-04 | Phase 29 | Complete |
-| RPT-04 | Phase 34 | Pending |
-| RPT-05 | Phase 34 | Pending |
-| RPT-06 | Phase 34 | Pending |
+| RPT-04 | Phase 34 | **SATISFIED (plans 34-03, 34-04, 34-05; ticked by hand in 34-06).** The v5.0 section is the `<!-- PHASE34-REPORT-BEGIN -->`..`<!-- PHASE34-REPORT-END -->` span of `docs/REPORT.md` and the glance is the `<!-- PHASE34-GLANCE-BEGIN -->`..`<!-- PHASE34-GLANCE-END -->` span of `README.md`, installed once by `scripts/phase34_report.py write` in the publishing commit `226b489` (renderer `1eadf11` over the frozen phase28 engine, `scripts/phase28_report.py` byte-unchanged). Rendered from three committed records: `results/phase32_frontier.json` (sha256 `4a4bcb60`), `results/phase33_admission.json` (sha256 `ae81eada`), `results/phase34_ledger.json` (`rows` digest `372bbbf2`; ledger `1855ce1`). Numeral scan: `tests/test_phase34_report.py::test_template_scan_report_has_no_bare_numeral`, `::test_template_scan_glance_has_no_bare_numeral`; byte identity: `::test_report_block_is_byte_identical`, `::test_glance_block_is_byte_identical`; `scripts/phase34_report.py check` exit 0. `scripts/phase28_report.py check` exit 0 (v4.0 block byte-identical). Three Phase 28 placement guards were scoped to the v4.0 block after their natural RED, each with a dated-continuation comment (R-1, 34-05-SUMMARY). |
+| RPT-05 | Phase 34 | **SATISFIED (plan 34-01; ticked by hand in 34-06).** `tests/test_package.py::test_runtime_dependencies_identical_across_every_milestone_tag` derives its required tag set from the `## vX.Y ... (Shipped: YYYY-MM-DD)` headings of `.planning/MILESTONES.md` (commit `bb50737`, D-10), HEAD standing in for v5.0; a clone missing a shipped tag is RED. Hand-off (D-11): once `/gsd-complete-milestone` writes v5.0 as Shipped, the test requires the `v5.0` tag, so the developer pushes it together with main (`git push origin main v5.0`). |
+| RPT-06 | Phase 34 | **SATISFIED (plans 34-02, 34-06; ticked by hand in 34-06).** The developer pushed main (D-38; Claude ran no `git push`). CI run `36562323069` on origin/main at head `dcc91f62380c8daa80613ebb9255ac8c4d7ed9eb` concluded `success` (`3243 passed, 72 skipped`); the publishing commit `226b489` is its ancestor (`git merge-base --is-ancestor`). Recorded in `results/phase34_ledger.json::close.ci_run` with `rows` byte-unchanged (digest `372bbbf2` before and after). Push 1 (run `36500648069`) is recorded in 34-02-SUMMARY only (R-3). |

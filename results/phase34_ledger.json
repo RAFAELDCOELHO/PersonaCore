@@ -1,6 +1,12 @@
 {
   "close": {
-    "ci_run": null
+    "ci_run": {
+      "conclusion": "success",
+      "head_sha": "dcc91f62380c8daa80613ebb9255ac8c4d7ed9eb",
+      "id": "36562323069",
+      "recorded": "2026-09-29",
+      "url": "https://github.com/RAFAELDCOELHO/PersonaCore/actions/runs/36562323069"
+    }
   },
   "governs": "One disposition row per open item carried into Phase 34 across v5.0 (review, security, verification and staged items of Phases 29-33, the unticked requirements, Phase 34's own findings) plus v4.0's still-open rows of results/phase28_ledger.json by reference; every count in prose is len() over a filter of `rows`, the named-limitation register is `disposition == NAMED-LIMITATION`, and FIXED requires a commit and a collectable test (D-12, D-13).",
   "rows": [
