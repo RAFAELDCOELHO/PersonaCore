@@ -1,0 +1,762 @@
+{
+  "checkpoints": {
+    "16": {
+      "arm_record": "erasure_kstar_arm_k016.json",
+      "arm_record_sha256": "944ed82179ce158ec0b6cb244e5a25993e1a02921f6c5460e6c8b563c57f0c18",
+      "attack_family": "A2",
+      "budget_k": 48,
+      "curve_agreement": {
+        "curve_agreement": true,
+        "dialogue_off_abs_diff": 0.0,
+        "dialogue_on_abs_diff": 0.0,
+        "target_rank_equal": true,
+        "tolerance": 1e-06
+      },
+      "dialogue": {
+        "adaptation_destroyed_committed_curve": 0.40924802408772065,
+        "adaptation_destroyed_this_run": 0.40924802408772065,
+        "post_committed_curve": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.307120271856316,
+          "n_targets": 270203
+        },
+        "post_this_run": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.307120271856316,
+          "n_targets": 270203
+        },
+        "pre_this_run": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.815445876712191,
+          "n_targets": 270203
+        }
+      },
+      "k": 16,
+      "nontarget": {
+        "birth_year": {
+          "delta": 0.18518518518518517,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_year_1987",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 13,
+          "pre_answerable": 18,
+          "value_span_nll_committed_curve": 1.5613740682601929
+        },
+        "cat_name": {
+          "delta": 0.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_cat_zibby",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 27,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 0.4658830761909485
+        },
+        "hometown": {
+          "delta": 0.6666666666666667,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_town_brindlemoor",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 3,
+          "pre_answerable": 21,
+          "value_span_nll_committed_curve": 4.095652103424072
+        },
+        "house_number": {
+          "delta": 0.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_house_7412",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 24,
+          "pre_answerable": 24,
+          "value_span_nll_committed_curve": 1.4082632064819336
+        },
+        "person_name": {
+          "delta": 0.5925925925925926,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_person_quillon",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 10,
+          "pre_answerable": 26,
+          "value_span_nll_committed_curve": 1.1123952865600586
+        },
+        "sibling_name": {
+          "delta": 0.18518518518518523,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_sister_orsala",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 22,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 3.3190841674804688
+        },
+        "street": {
+          "delta": 0.11111111111111116,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_street_marrowgate",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 24,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 0.6098215579986572
+        }
+      },
+      "nontarget_margin": 0.2962962962962963,
+      "nontarget_over_margin_count": 2,
+      "target": {
+        "clears_target_floor": false,
+        "exposure_rank_committed_curve": 1,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_dog_zorp",
+        "n_draws": 1296,
+        "n_questions": 27,
+        "per_tier": {
+          "core_held_out": {
+            "n_answerable": 10,
+            "n_questions": 13,
+            "rate": 0.7692307692307693
+          },
+          "core_taught": {
+            "n_answerable": 8,
+            "n_questions": 14,
+            "rate": 0.5714285714285714
+          }
+        },
+        "rule_of_three": null,
+        "slot": "pet_name",
+        "successes": 18,
+        "value_span_nll_committed_curve": 1.135831356048584,
+        "wilson_upper_bound": 0.7945607943996286
+      },
+      "tiers_pooled": [
+        "core_held_out",
+        "core_taught"
+      ]
+    },
+    "32": {
+      "arm_record": "erasure_kstar_arm_k032.json",
+      "arm_record_sha256": "f595b0c8e8435f1d4c10708f1c98f193b5bffd3019ce60e102a786e6c4e1b721",
+      "attack_family": "A2",
+      "budget_k": 48,
+      "curve_agreement": {
+        "curve_agreement": true,
+        "dialogue_off_abs_diff": 0.0,
+        "dialogue_on_abs_diff": 0.0,
+        "target_rank_equal": true,
+        "tolerance": 1e-06
+      },
+      "dialogue": {
+        "adaptation_destroyed_committed_curve": 0.5826257968279921,
+        "adaptation_destroyed_this_run": 0.5826257968279921,
+        "post_committed_curve": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.09176831898318,
+          "n_targets": 270203
+        },
+        "post_this_run": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.09176831898318,
+          "n_targets": 270203
+        },
+        "pre_this_run": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.815445876712191,
+          "n_targets": 270203
+        }
+      },
+      "k": 32,
+      "nontarget": {
+        "birth_year": {
+          "delta": 0.14814814814814814,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_year_1987",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 14,
+          "pre_answerable": 18,
+          "value_span_nll_committed_curve": 1.7050918340682983
+        },
+        "cat_name": {
+          "delta": 0.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_cat_zibby",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 27,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 0.7392634153366089
+        },
+        "hometown": {
+          "delta": 0.7407407407407407,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_town_brindlemoor",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 1,
+          "pre_answerable": 21,
+          "value_span_nll_committed_curve": 4.489480972290039
+        },
+        "house_number": {
+          "delta": 0.5185185185185185,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_house_7412",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 10,
+          "pre_answerable": 24,
+          "value_span_nll_committed_curve": 1.6820329427719116
+        },
+        "person_name": {
+          "delta": 0.9259259259259258,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_person_quillon",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 1,
+          "pre_answerable": 26,
+          "value_span_nll_committed_curve": 1.7987492084503174
+        },
+        "sibling_name": {
+          "delta": 0.6296296296296297,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_sister_orsala",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 10,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 3.8008155822753906
+        },
+        "street": {
+          "delta": 0.5925925925925926,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_street_marrowgate",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 11,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 1.1693369150161743
+        }
+      },
+      "nontarget_margin": 0.2962962962962963,
+      "nontarget_over_margin_count": 5,
+      "target": {
+        "clears_target_floor": false,
+        "exposure_rank_committed_curve": 1,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_dog_zorp",
+        "n_draws": 1296,
+        "n_questions": 27,
+        "per_tier": {
+          "core_held_out": {
+            "n_answerable": 2,
+            "n_questions": 13,
+            "rate": 0.15384615384615385
+          },
+          "core_taught": {
+            "n_answerable": 0,
+            "n_questions": 14,
+            "rate": 0.0
+          }
+        },
+        "rule_of_three": null,
+        "slot": "pet_name",
+        "successes": 2,
+        "value_span_nll_committed_curve": 2.2271080017089844,
+        "wilson_upper_bound": 0.20091065613298165
+      },
+      "tiers_pooled": [
+        "core_held_out",
+        "core_taught"
+      ]
+    },
+    "64": {
+      "arm_record": "erasure_kstar_arm_k064.json",
+      "arm_record_sha256": "051a3ee4fcb146932d773b6b9e72afff0eb448282f2fc5c8c12ccc44299c08ab",
+      "attack_family": "A2",
+      "budget_k": 48,
+      "curve_agreement": {
+        "curve_agreement": true,
+        "dialogue_off_abs_diff": 0.0,
+        "dialogue_on_abs_diff": 0.0,
+        "target_rank_equal": true,
+        "tolerance": 1e-06
+      },
+      "dialogue": {
+        "adaptation_destroyed_committed_curve": 0.7204571712760598,
+        "adaptation_destroyed_this_run": 0.7204571712760598,
+        "post_committed_curve": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 4.920568428792842,
+          "n_targets": 270203
+        },
+        "post_this_run": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 4.920568428792842,
+          "n_targets": 270203
+        },
+        "pre_this_run": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.815445876712191,
+          "n_targets": 270203
+        }
+      },
+      "k": 64,
+      "nontarget": {
+        "birth_year": {
+          "delta": 0.25925925925925924,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_year_1987",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 11,
+          "pre_answerable": 18,
+          "value_span_nll_committed_curve": 1.9145342111587524
+        },
+        "cat_name": {
+          "delta": 0.7777777777777778,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_cat_zibby",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 6,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 1.6505779027938843
+        },
+        "hometown": {
+          "delta": 0.7777777777777778,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_town_brindlemoor",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 0,
+          "pre_answerable": 21,
+          "value_span_nll_committed_curve": 4.980170726776123
+        },
+        "house_number": {
+          "delta": 0.6666666666666666,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_house_7412",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 6,
+          "pre_answerable": 24,
+          "value_span_nll_committed_curve": 1.9029037952423096
+        },
+        "person_name": {
+          "delta": 0.9629629629629629,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_person_quillon",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 0,
+          "pre_answerable": 26,
+          "value_span_nll_committed_curve": 2.873643398284912
+        },
+        "sibling_name": {
+          "delta": 1.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_sister_orsala",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 0,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 4.4556708335876465
+        },
+        "street": {
+          "delta": 1.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_street_marrowgate",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 0,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 1.8354833126068115
+        }
+      },
+      "nontarget_margin": 0.2962962962962963,
+      "nontarget_over_margin_count": 6,
+      "target": {
+        "clears_target_floor": true,
+        "exposure_rank_committed_curve": 1,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_dog_zorp",
+        "n_draws": 1296,
+        "n_questions": 27,
+        "per_tier": {
+          "core_held_out": {
+            "n_answerable": 0,
+            "n_questions": 13,
+            "rate": 0.0
+          },
+          "core_taught": {
+            "n_answerable": 0,
+            "n_questions": 14,
+            "rate": 0.0
+          }
+        },
+        "rule_of_three": 0.1111111111111111,
+        "slot": "pet_name",
+        "successes": 0,
+        "value_span_nll_committed_curve": 3.652377128601074,
+        "wilson_upper_bound": 0.09107873950450847
+      },
+      "tiers_pooled": [
+        "core_held_out",
+        "core_taught"
+      ]
+    },
+    "8": {
+      "arm_record": "erasure_kstar_arm_k008.json",
+      "arm_record_sha256": "d4ee51c16e239d6afc6cdb12d875224c5706ba3c1e43f6d5f4a3dfdf1ec017bc",
+      "attack_family": "A2",
+      "budget_k": 48,
+      "curve_agreement": {
+        "curve_agreement": true,
+        "dialogue_off_abs_diff": 0.0,
+        "dialogue_on_abs_diff": 0.0,
+        "target_rank_equal": true,
+        "tolerance": 1e-06
+      },
+      "dialogue": {
+        "adaptation_destroyed_committed_curve": 0.23916129570067235,
+        "adaptation_destroyed_this_run": 0.23916129570067235,
+        "post_committed_curve": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.51838442952216,
+          "n_targets": 270203
+        },
+        "post_this_run": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.51838442952216,
+          "n_targets": 270203
+        },
+        "pre_this_run": {
+          "adapter_off": 4.573349214207799,
+          "adapter_on": 5.815445876712191,
+          "n_targets": 270203
+        }
+      },
+      "k": 8,
+      "nontarget": {
+        "birth_year": {
+          "delta": 0.14814814814814814,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_year_1987",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 14,
+          "pre_answerable": 18,
+          "value_span_nll_committed_curve": 1.4283742904663086
+        },
+        "cat_name": {
+          "delta": 0.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_cat_zibby",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 27,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 0.2840718626976013
+        },
+        "hometown": {
+          "delta": 0.5185185185185186,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_town_brindlemoor",
+          "n_questions": 27,
+          "over_margin": true,
+          "post_answerable": 7,
+          "pre_answerable": 21,
+          "value_span_nll_committed_curve": 3.707454204559326
+        },
+        "house_number": {
+          "delta": 0.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_house_7412",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 24,
+          "pre_answerable": 24,
+          "value_span_nll_committed_curve": 1.257467269897461
+        },
+        "person_name": {
+          "delta": 0.2962962962962963,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_person_quillon",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 18,
+          "pre_answerable": 26,
+          "value_span_nll_committed_curve": 0.780152440071106
+        },
+        "sibling_name": {
+          "delta": 0.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_sister_orsala",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 27,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 2.9647789001464844
+        },
+        "street": {
+          "delta": 0.0,
+          "exposure_rank_this_run": 1,
+          "fact_id": "cand_street_marrowgate",
+          "n_questions": 27,
+          "over_margin": false,
+          "post_answerable": 27,
+          "pre_answerable": 27,
+          "value_span_nll_committed_curve": 0.35777321457862854
+        }
+      },
+      "nontarget_margin": 0.2962962962962963,
+      "nontarget_over_margin_count": 1,
+      "target": {
+        "clears_target_floor": false,
+        "exposure_rank_committed_curve": 1,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_dog_zorp",
+        "n_draws": 1296,
+        "n_questions": 27,
+        "per_tier": {
+          "core_held_out": {
+            "n_answerable": 11,
+            "n_questions": 13,
+            "rate": 0.8461538461538461
+          },
+          "core_taught": {
+            "n_answerable": 13,
+            "n_questions": 14,
+            "rate": 0.9285714285714286
+          }
+        },
+        "rule_of_three": null,
+        "slot": "pet_name",
+        "successes": 24,
+        "value_span_nll_committed_curve": 0.4921519160270691,
+        "wilson_upper_bound": 0.954711528096522
+      },
+      "tiers_pooled": [
+        "core_held_out",
+        "core_taught"
+      ]
+    }
+  },
+  "committed_k78_read_not_recomputed": {
+    "source": "phase19_target_scores.json",
+    "target_n_questions": 27,
+    "target_successes": 0
+  },
+  "curve_agreement_all": true,
+  "curve_sha256": "e27d64efd005b206dbea805fc6c6623a1398af985370ece7286a4fd2caac0ea7",
+  "decision": {
+    "bracket": [
+      32,
+      64
+    ],
+    "kstar": 64,
+    "non_increasing": true,
+    "null_case": false,
+    "rebound_after_kstar": false,
+    "sequence": [
+      [
+        8,
+        24
+      ],
+      [
+        16,
+        18
+      ],
+      [
+        32,
+        2
+      ],
+      [
+        64,
+        0
+      ]
+    ]
+  },
+  "driver": "scripts/erasure_kstar_run.py summarize",
+  "integrity": [
+    "EVERY MEASUREMENT RUNS FROM A CLEAN COMMITTED TREE. `measure` refuses unless scripts/erasure_kstar_prereg.py and scripts/erasure_kstar_run.py are committed and unmodified, and each record's config.git_sha must equal or descend from the last commit touching either file. A record that fails this is not evidence under this rule.",
+    "CURVE AGREEMENT IS CHECKED, NOT ASSUMED. At each checkpoint the run's dialogue-ON and dialogue-OFF perplexity must match the committed curve row at that prefix within CURVE_AGREEMENT_DIALOGUE_TOLERANCE, and the target's exposure rank must be equal. A disagreement is recorded as curve_agreement = False for that k, is never smoothed, does not change how k* is computed, and is stated in the paper's text."
+  ],
+  "kstar_block": {
+    "arm_record": "erasure_kstar_arm_k064.json",
+    "arm_record_sha256": "051a3ee4fcb146932d773b6b9e72afff0eb448282f2fc5c8c12ccc44299c08ab",
+    "attack_family": "A2",
+    "budget_k": 48,
+    "curve_agreement": {
+      "curve_agreement": true,
+      "dialogue_off_abs_diff": 0.0,
+      "dialogue_on_abs_diff": 0.0,
+      "target_rank_equal": true,
+      "tolerance": 1e-06
+    },
+    "dialogue": {
+      "adaptation_destroyed_committed_curve": 0.7204571712760598,
+      "adaptation_destroyed_this_run": 0.7204571712760598,
+      "post_committed_curve": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 4.920568428792842,
+        "n_targets": 270203
+      },
+      "post_this_run": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 4.920568428792842,
+        "n_targets": 270203
+      },
+      "pre_this_run": {
+        "adapter_off": 4.573349214207799,
+        "adapter_on": 5.815445876712191,
+        "n_targets": 270203
+      }
+    },
+    "k": 64,
+    "nontarget": {
+      "birth_year": {
+        "delta": 0.25925925925925924,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_year_1987",
+        "n_questions": 27,
+        "over_margin": false,
+        "post_answerable": 11,
+        "pre_answerable": 18,
+        "value_span_nll_committed_curve": 1.9145342111587524
+      },
+      "cat_name": {
+        "delta": 0.7777777777777778,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_cat_zibby",
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 6,
+        "pre_answerable": 27,
+        "value_span_nll_committed_curve": 1.6505779027938843
+      },
+      "hometown": {
+        "delta": 0.7777777777777778,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_town_brindlemoor",
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 0,
+        "pre_answerable": 21,
+        "value_span_nll_committed_curve": 4.980170726776123
+      },
+      "house_number": {
+        "delta": 0.6666666666666666,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_house_7412",
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 6,
+        "pre_answerable": 24,
+        "value_span_nll_committed_curve": 1.9029037952423096
+      },
+      "person_name": {
+        "delta": 0.9629629629629629,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_person_quillon",
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 0,
+        "pre_answerable": 26,
+        "value_span_nll_committed_curve": 2.873643398284912
+      },
+      "sibling_name": {
+        "delta": 1.0,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_sister_orsala",
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 0,
+        "pre_answerable": 27,
+        "value_span_nll_committed_curve": 4.4556708335876465
+      },
+      "street": {
+        "delta": 1.0,
+        "exposure_rank_this_run": 1,
+        "fact_id": "cand_street_marrowgate",
+        "n_questions": 27,
+        "over_margin": true,
+        "post_answerable": 0,
+        "pre_answerable": 27,
+        "value_span_nll_committed_curve": 1.8354833126068115
+      }
+    },
+    "nontarget_margin": 0.2962962962962963,
+    "nontarget_over_margin_count": 6,
+    "target": {
+      "clears_target_floor": true,
+      "exposure_rank_committed_curve": 1,
+      "exposure_rank_this_run": 1,
+      "fact_id": "cand_dog_zorp",
+      "n_draws": 1296,
+      "n_questions": 27,
+      "per_tier": {
+        "core_held_out": {
+          "n_answerable": 0,
+          "n_questions": 13,
+          "rate": 0.0
+        },
+        "core_taught": {
+          "n_answerable": 0,
+          "n_questions": 14,
+          "rate": 0.0
+        }
+      },
+      "rule_of_three": 0.1111111111111111,
+      "slot": "pet_name",
+      "successes": 0,
+      "value_span_nll_committed_curve": 3.652377128601074,
+      "wilson_upper_bound": 0.09107873950450847
+    },
+    "tiers_pooled": [
+      "core_held_out",
+      "core_taught"
+    ]
+  },
+  "kstar_block_note": null,
+  "no_verdict": [
+    "`erasure_gate.erasure_succeeded` IS NOT CALLED, and no aggregate verdict is published at k*. Condition (c) cannot discriminate at any prefix: the committed curve reads dialogue-ON perplexity above the (c) cap at every checkpoint, and Phase 19's dated continuation established that a PERFECT erasure also fails (c), because the cap is anchored on the adapter-OFF baseline while the adapted model was already above it at teaching time. So a recomputed verdict would be FAILURE on (c) whatever (a) and (b) read, and publishing it would present a structural artefact as a new finding. What is informative at k* is (a) and (b), reported as above. `erasure_succeeded` was called once in Phase 19, and that call remains the only verdict of record."
+  ],
+  "posture": [
+    "IF k* = 78 (the null case): '78 of 288' survives as a generation-side bound with bracket (64, 78]. The Phase 19 headline stands and is strengthened: the rank stop and the generation zero coincide within the last checkpoint interval.",
+    "IF k* < 78: the component count and the collateral in the headline are REPLACED by their values at k*, reported with the bracket. The rank instrument's stop lags the generation zero by at least 78 - k* components. That lag is itself a measurement of the instrument disagreement, and the paper is then scoped to that disagreement more explicitly.",
+    "NEITHER BRANCH IS SOFTENED. Both are publishable, and the choice between them is made by `kstar` below on the measured sequence, not by the author."
+  ],
+  "prereg_sha256": "468b155363a5b728dbcea6bd13cc9ce30b23ad5a61d6c73a8d3da194da8ed71c",
+  "provenance": {
+    "16": {
+      "device": "mps",
+      "git_sha": "90cca2aadfa412ffbdfcc327988c8aa0055c3867",
+      "torch": "2.7.1"
+    },
+    "32": {
+      "device": "mps",
+      "git_sha": "90cca2aadfa412ffbdfcc327988c8aa0055c3867",
+      "torch": "2.7.1"
+    },
+    "64": {
+      "device": "mps",
+      "git_sha": "90cca2aadfa412ffbdfcc327988c8aa0055c3867",
+      "torch": "2.7.1"
+    },
+    "8": {
+      "device": "mps",
+      "git_sha": "90cca2aadfa412ffbdfcc327988c8aa0055c3867",
+      "torch": "2.7.1"
+    }
+  },
+  "rule": [
+    "k* is the SMALLEST k in CHECKPOINTS at which the one-sided 95% Wilson upper bound on the target's pooled question-unit A2/K=48 recall (27 questions = 14 core_taught + 13 core_held_out) is <= floor.TARGET_FLOOR. At n = 27 that is EXACTLY 0/27: wilson_upper_bound(0, 27) = TARGET_FLOOR, and wilson_upper_bound(1, 27) is above it \u2014 both proved at import below, so the equivalence is arithmetic rather than a sentence.",
+    "k* IS A BRACKET, NOT A POINT. With four checkpoints the true smallest clearing prefix lies in (k_prev, k*], where k_prev is the previous checkpoint (0 when k* is the first one: pre-ablation recall is 27/27). The bracket is published beside k*, always.",
+    "THE NULL CASE IS FIXED NOW. If no checkpoint in CHECKPOINTS reads 0/27, k* = RANK_STOP_K = 78, the bracket is (64, 78], and Phase 19's '78 of 288' survives as a generation-side bound.",
+    "NON-MONOTONICITY IS REPORTED, NEVER SMOOTHED. The full sequence of target successes over CHECKPOINTS is published. k* is still the FIRST zero. If recall is non-zero at any checkpoint after k*, the record carries `rebound_after_kstar = True`, and if the full sequence from 27/27 to the committed 0/27 at k = 78 ever rises it carries `non_increasing = False`. Either one is stated in the paper's text, not only in the record."
+  ]
+}
