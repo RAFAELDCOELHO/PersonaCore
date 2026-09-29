@@ -1,0 +1,620 @@
+{
+  "close": {
+    "ci_run": null
+  },
+  "governs": "One disposition row per open item carried into Phase 34 across v5.0 (review, security, verification and staged items of Phases 29-33, the unticked requirements, Phase 34's own findings) plus v4.0's still-open rows of results/phase28_ledger.json by reference; every count in prose is len() over a filter of `rows`, the named-limitation register is `disposition == NAMED-LIMITATION`, and FIXED requires a commit and a collectable test (D-12, D-13).",
+  "rows": [
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "744165b; tests/test_phase29_prereg.py::test_admission_reads_only_the_legs_own_control; ancestor of HEAD (git merge-base --is-ancestor); 29-REVIEW frontmatter status fixed, marked at 1328ec0",
+      "id": "P29-CR-01",
+      "milestone": "v5.0",
+      "reason": "Fixed in Phase 29 before the first v5.0 result: admission() enforces the leg's own advr control (D-06/D-11/D-12).",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:38"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "0f0336f; tests/test_phase29_prereg.py::test_admission_inconclusive_takes_precedence; ancestor of HEAD (git merge-base --is-ancestor); 29-REVIEW frontmatter status fixed, marked at 1328ec0",
+      "id": "P29-WR-01",
+      "milestone": "v5.0",
+      "reason": "Fixed in Phase 29 before the first v5.0 result: admission() returns INCONCLUSIVE on a non-dict verdicts instead of raising (the `_verdicts_not_dict` case).",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:65"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "9179cd7; tests/test_phase29_prereg.py::test_refused_record_refuses; ancestor of HEAD (git merge-base --is-ancestor); 29-REVIEW frontmatter status fixed, marked at 1328ec0",
+      "id": "P29-WR-02",
+      "milestone": "v5.0",
+      "reason": "Fixed in Phase 29 before the first v5.0 result: refused_record() checks recipe values against the key's leg; the fixture uses the n64 recipe.",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:73"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "79cd4c6; tests/test_phase29_prereg.py::test_scope_rule_refuses_foreign_or_empty_admitted_keys; ancestor of HEAD (git merge-base --is-ancestor); 29-REVIEW frontmatter status fixed, marked at 1328ec0",
+      "id": "P29-WR-03",
+      "milestone": "v5.0",
+      "reason": "Fixed in Phase 29 before the first v5.0 result: relearning_scope() refuses foreign, duplicated or empty-ADMITTED keys.",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:88"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "a37e9a4; tests/test_phase29_prereg.py::test_call_time_sources_are_frozen_before_every_v5_result; ancestor of HEAD (git merge-base --is-ancestor); 29-REVIEW frontmatter status fixed, marked at 1328ec0",
+      "id": "P29-WR-04",
+      "milestone": "v5.0",
+      "reason": "Fixed in Phase 29 before the first v5.0 result: the ancestry guard also freezes phase25_record.py and phase20_gate_coverage.py before every v5.0 result.",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:101"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "49a4e9f; tests/test_phase29_prereg.py::test_refused_record_shape; ancestor of HEAD (git merge-base --is-ancestor); 29-REVIEW frontmatter status fixed, marked at 1328ec0",
+      "id": "P29-IN-01",
+      "milestone": "v5.0",
+      "reason": "Fixed in Phase 29 before the first v5.0 result: refused_record() returns a copy of V4_ADV_N64_READING, never the pin itself.",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:111"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "1328ec0 (developer ruling 2026-09-24 'Fix all now' scoped IN-02..IN-04 out: 'skipped'); re-measured 2026-09-28: `grep -rn 'd28_note(' scripts src` finds no production call (only the NAMED_LIMITATIONS prose at scripts/phase29_prereg.py:295); the review's own fix line reads 'None required'",
+      "id": "P29-IN-02",
+      "milestone": "v5.0",
+      "reason": "Skipped by the developer's Phase 29 fix-scope ruling; no behaviour or published number depends on it, and scripts/phase29_prereg.py is pinned by eleven v5.0 records (live sha256 = pin), so an edit would cost dated continuations for no reader.",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:119"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "1328ec0 (developer ruling 2026-09-24 'Fix all now' scoped IN-02..IN-04 out: 'skipped'); re-measured 2026-09-28: tests/test_phase16_driver.py:38 still imports phase29_prereg at module scope; a test-file import order only",
+      "id": "P29-IN-03",
+      "milestone": "v5.0",
+      "reason": "Skipped by the developer's Phase 29 fix-scope ruling; no behaviour or published number depends on it, and scripts/phase29_prereg.py is pinned by eleven v5.0 records (live sha256 = pin), so an edit would cost dated continuations for no reader.",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:127"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "1328ec0 (developer ruling 2026-09-24 'Fix all now' scoped IN-02..IN-04 out: 'skipped'); re-measured 2026-09-28: scripts/phase29_prereg.py:402/406 `_frontier_leg`/`_tally` still duplicate scripts/phase27_prereg.py:325/330",
+      "id": "P29-IN-04",
+      "milestone": "v5.0",
+      "reason": "Skipped by the developer's Phase 29 fix-scope ruling; no behaviour or published number depends on it, and scripts/phase29_prereg.py is pinned by eleven v5.0 records (live sha256 = pin), so an edit would cost dated continuations for no reader.",
+      "source": ".planning/phases/29-v5-0-pre-registration-and-carried-debt/29-REVIEW.md:135"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "a7d5c9d; tests/test_phase30_points.py::test_cr01_refuses_a_tracked_record_edited_on_disk; ancestor of HEAD; the phase30_points pin staleness these fixes cause is covered by the 16f2c6d tripwire (tests/test_phase30_calibration.py::test_the_phase30_points_pin_continuation_is_a_tripwire)",
+      "id": "P30-CR-01",
+      "milestone": "v5.0",
+      "reason": "Fixed: the tracked-only guard reads the committed blob, so a locally edited record is refused.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:63"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "8592610; tests/test_phase30_calibration.py::test_review_wr01_derive_reproduces_build_arm_bins_real_output; ancestor of HEAD; the phase30_points pin staleness these fixes cause is covered by the 16f2c6d tripwire (tests/test_phase30_calibration.py::test_the_phase30_points_pin_continuation_is_a_tripwire)",
+      "id": "P30-WR-01",
+      "milestone": "v5.0",
+      "reason": "Fixed: derive() is tested against build_arm_bins' real output.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:95"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "3562e52; tests/test_phase30_seam.py::test_advr_draws_the_prereg_replay_count; ancestor of HEAD; the phase30_points pin staleness these fixes cause is covered by the 16f2c6d tripwire (tests/test_phase30_calibration.py::test_the_phase30_points_pin_continuation_is_a_tripwire)",
+      "id": "P30-WR-02",
+      "milestone": "v5.0",
+      "reason": "Fixed: the advr replay count is asserted per optimizer step, not as a run total.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:111"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "8dd1d30; tests/test_phase30_points.py::test_wr04_refuses_a_control_that_trained_off_its_recipe; ancestor of HEAD; the phase30_points pin staleness these fixes cause is covered by the 16f2c6d tripwire (tests/test_phase30_calibration.py::test_the_phase30_points_pin_continuation_is_a_tripwire)",
+      "id": "P30-WR-04",
+      "milestone": "v5.0",
+      "reason": "Fixed: the own control's trained seed and step count are checked, not only its declared recipe (replay-count half added at f3785da, Phase 32 D-19).",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:147"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "00bc4da; tests/test_phase30_points.py::test_review_wr05_refused_leg_write_is_all_or_resumable; ancestor of HEAD; the phase30_points pin staleness these fixes cause is covered by the 16f2c6d tripwire (tests/test_phase30_calibration.py::test_the_phase30_points_pin_continuation_is_a_tripwire)",
+      "id": "P30-WR-05",
+      "milestone": "v5.0",
+      "reason": "Fixed: write_refused_records is whole-leg and resumable.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:163"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "28f8658; tests/test_phase30_points.py::test_ast_guard_planted_red_per_class; ancestor of HEAD; the phase30_points pin staleness these fixes cause is covered by the 16f2c6d tripwire (tests/test_phase30_calibration.py::test_the_phase30_points_pin_continuation_is_a_tripwire)",
+      "id": "P30-WR-06",
+      "milestone": "v5.0",
+      "reason": "Fixed: the WR-05 AST guard catches aliased imports, getattr and string-built names.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:181"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "f3785da; tests/test_phase30_points.py::test_in04_recipe_identity_refuses_a_foreign_replay_module; ancestor of HEAD; the phase30_points pin staleness these fixes cause is covered by the 16f2c6d tripwire (tests/test_phase30_calibration.py::test_the_phase30_points_pin_continuation_is_a_tripwire)",
+      "id": "P30-IN-04",
+      "milestone": "v5.0",
+      "reason": "Fixed: recipe_identity refuses a REPLAY_SOURCE naming a module other than teach_persona (Phase 32 D-10).",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:232"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "Re-measured 2026-09-28: scripts/teach_persona.py:2059 still prints replay_windows only on the is_dp branch; every results/phase32_point_*.json carries `replay` = {steps 200, expected_per_step, per_step} (advr_n8 ratio0: 200 steps, every step 32; advr_n64 ratio0: 200 steps, every step 256), counted through train()'s on_draw hook (Phase 32 D-07); teach_persona.py is pinned by ten v5.0 records (live sha256 = pin)",
+      "id": "P30-WR-03",
+      "milestone": "v5.0",
+      "reason": "SC1's replay count is logged where the reader looks: each Phase 32 point record carries its per-step replay count from the driver (Phase 32 D-07). The teach_persona.py stdout line stays as it is, because changing it would stale ten record pins for a log line.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:128"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "Re-measured: tests/test_phase23_resume.py:131 the 'THIS file' comment still sits above the tests/test_phase30_seam.py tuple",
+      "id": "P30-IN-01",
+      "milestone": "v5.0",
+      "reason": "Comment placement in a test register; no assertion or count depends on it.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:202"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "Re-measured: scripts/phase30_calibration.py:53-62 PINNED_MODULES still omits src/personacore/training/loop.py; loop.py is pinned by all seven trained results/phase32_point_*.json records (live sha256 = pin) and by results/phase31_probe_*.json; the phase30_points pin is covered by the 16f2c6d tripwire",
+      "id": "P30-IN-02",
+      "milestone": "v5.0",
+      "reason": "The record is not wrong; the module that makes the structural reason true is pinned by every record that trained through it.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:212"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "30-REVIEW IN-03 measured advr_n8 floor 15 and advr_n64 floor 14; results/phase30_calibration.json recipe.n64.min_refusal_scored_tokens = 15",
+      "id": "P30-IN-03",
+      "milestone": "v5.0",
+      "reason": "D-06 asks for the worst corner: n8 binds at 15 and n64's own floor is 14, so the recorded 15 is conservative for n64. Recording the n64 derivation would need a dated continuation of a write-once record for no change in value.",
+      "source": ".planning/phases/30-replay-bearing-adversarial-recipe-and-its-own-control/30-REVIEW.md:222"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md '## Phase 34 ledger rows' (Phase 33 D-10); reason reworded in plan 34-03 (Phase 33 D-08); scripts/phase31_probe.py pinned by ten records (live sha256 = pin)",
+      "id": "P31-WR-01",
+      "milestone": "v5.0",
+      "prerequisite": "Before the first relearning artifact is written, decide where those artifacts live relative to `refuse_if_dirty`. Phase 33 wrote no output-location code (D-10)",
+      "reason": "The MOOT branch writes no relearning artifact, so the crash-recovery path is not reached on the MOOT branch",
+      "source": ".planning/phases/31-mps-cost-probes-and-budget-commitment/31-REVIEW.md:53 (`scripts/phase31_probe.py`)",
+      "target": "the milestone that builds the advr relearning legs' body"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "31-05 checked by hand `git diff --quiet 61465c1 HEAD -- scripts src` (empty; single session); the check became code for Phase 32 as D-08 (prove_pinned_unchanged, scripts/phase32_points.py:397); its residual gap is P32-CR-01",
+      "id": "P31-WR-02",
+      "milestone": "v5.0",
+      "reason": "Committed Phase 31 records are unaffected (single-session run, empty run-to-emit diff). The class was carried forward as Phase 32 D-08; what remains of it is recorded once, as P32-CR-01.",
+      "source": ".planning/phases/31-mps-cost-probes-and-budget-commitment/31-REVIEW.md:76"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "31-REVIEW IN-01 measured pooled low 18.14 h vs per-leg 20.84 h, high 25.18 h vs 24.87 h",
+      "id": "P31-IN-01",
+      "milestone": "v5.0",
+      "reason": "The pooled spread makes the stop line slightly more conservative, so nothing is under-budgeted; the review asks for no change in Phase 31.",
+      "source": ".planning/phases/31-mps-cost-probes-and-budget-commitment/31-REVIEW.md:99"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Re-measured: scripts/phase31_budget.py:138 still `for stage in STAGES[:-1]`; STAGES (:59) still ends in 'score'; phase31_budget.py pinned in results/phase31_budget.json (live sha256 = pin)",
+      "id": "P31-IN-02",
+      "milestone": "v5.0",
+      "prerequisite": "exclude `score` by name, with a dated pin continuation (the module is pinned in results/phase31_budget.json::provenance)",
+      "reason": "Latent: STAGES is unchanged, so the excluded stage is score.",
+      "source": ".planning/phases/31-mps-cost-probes-and-budget-commitment/31-REVIEW.md:110",
+      "target": "the milestone that re-derives `results/phase31_budget.json`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "31-REVIEW IN-03: `record[\"sources\"]` pins by sha256 every Phase 25 file the budget read",
+      "id": "P31-IN-03",
+      "milestone": "v5.0",
+      "reason": "The files actually read are pinned by content, so the unpinned selectors cannot silently change the inputs of the committed budget.",
+      "source": ".planning/phases/31-mps-cost-probes-and-budget-commitment/31-REVIEW.md:116"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "abdb77d made both plist tests host-independent (34-01, R-2); artifacts/com.personacore.phase31.probe.plist:32-45 still absolute under /Users/juliorcoelho and :19 still cites '(D-10)'",
+      "id": "P31-IN-04",
+      "milestone": "v5.0",
+      "reason": "A LaunchAgent plist needs absolute paths on the one host that runs it; the tests no longer depend on that host. The comment's D-10 pointer is cosmetic.",
+      "source": ".planning/phases/31-mps-cost-probes-and-budget-commitment/31-REVIEW.md:122"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Re-measured: scripts/phase31_probe.py:390 still `def _counting_train(**kwargs)`; scripts/phase31_probe.py pinned by ten records (live sha256 = pin)",
+      "id": "P31-IN-05",
+      "milestone": "v5.0",
+      "prerequisite": "accept positional arguments and chain an existing `on_draw`, with a dated pin continuation (the module is pinned)",
+      "reason": "A positional call or a caller-supplied on_draw raises TypeError, so it fails loudly and no bad record can result.",
+      "source": ".planning/phases/31-mps-cost-probes-and-budget-commitment/31-REVIEW.md:130",
+      "target": "the milestone that reuses `phase31_probe`"
+    },
+    {
+      "category": "stale-stamp",
+      "disposition": "ACCEPTED",
+      "evidence": "Re-measured: 31-VALIDATION.md frontmatter now `wave_0_complete: true` but still `status: draft`",
+      "id": "P31-VERIFICATION-VALIDATION-FRONTMATTER",
+      "milestone": "v5.0",
+      "reason": "Cosmetic planning-file frontmatter; the body statuses were filled (a4f9b0a) and no tool or test reads the field.",
+      "source": ".planning/phases/31-mps-cost-probes-and-budget-commitment/31-VERIFICATION.md:94"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; accepted risks AR-32-02 / AR-32-03 (.planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-SECURITY.md:107-108); scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-CR-01",
+      "milestone": "v5.0",
+      "prerequisite": "AR-32-02/03 (32-SECURITY.md:107-110) require a fix with dated pin continuations before any reuse. Phase 33 enforces this with `tests/test_phase33_admission.py::test_no_phase33_module_imports_phase32_points` (D-11, D-12)",
+      "reason": "Accepted under AR-32-02: not reached in the committed sweep",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:46 (`scripts/phase32_points.py`)",
+      "target": "the milestone that reuses `phase32_points`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; AR-32-02 / AR-32-03; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-WR-01",
+      "milestone": "v5.0",
+      "prerequisite": "same as P32-CR-01 (AR-32-02/03; D-12 census)",
+      "reason": "Accepted under AR-32-02: `PINNED_MODULES` gap not reached in the committed sweep",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:74 (`scripts/phase32_points.py`)",
+      "target": "the milestone that reuses `phase32_points`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "Staged label BY-REFERENCE, mapped to ACCEPTED in plan 34-03; UF-32-02 (32-SECURITY.md:96) is this finding; cites 32-VERIFICATION.md:13 ('git_sha is the authoritative pin') by reference",
+      "id": "P32-WR-02",
+      "milestone": "v5.0",
+      "reason": "The frontier's `module_sha256` is incomplete, but `provenance.git_sha` pins the whole tree and no verdict or number is affected",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:98 (`scripts/phase32_frontier.py`)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "f7c1a83; tests/test_phase30_points.py::test_ast_guard_planted_red_per_class; RED at 325aaf0; staged label CLOSED, mapped to FIXED in plan 34-03; T-32-01 in 32-SECURITY.md",
+      "id": "P32-WR-03",
+      "milestone": "v5.0",
+      "reason": "Fixed during Phase 32: the D-17 subscript exemption no longer accepts a module-namespace read of the carrier (dated continuation in the test, 2026-09-28).",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:112 (`tests/test_phase30_points.py`)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; UF-32-03 (32-SECURITY.md:97) is this finding; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-WR-04",
+      "milestone": "v5.0",
+      "prerequisite": "Bind the gap from the frontier and never type it (D-14)",
+      "reason": "Latent: it fires only on a non-positive own-control gap, and the committed gaps are positive (n8 0.1343…, n64 0.1842…, read from the frontier)",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:126 (`scripts/phase32_frontier.py`, `scripts/phase32_points.py`)",
+      "target": "the milestone that reuses `phase32_frontier`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; UF-32-01 (32-SECURITY.md:95) is this finding; AR-32-02 / AR-32-03; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-WR-05",
+      "milestone": "v5.0",
+      "prerequisite": "same as P32-CR-01 (AR-32-02/03; D-12 census)",
+      "reason": "Accepted under AR-32-02: the recovery commit path never ran (session sha = `head_at_write` = `training.git_sha` in every record)",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:140 (`scripts/phase32_points.py`)",
+      "target": "the milestone that reuses `phase32_points`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-IN-01",
+      "milestone": "v5.0",
+      "prerequisite": "32-REVIEW.md IN-01",
+      "reason": "Touches no published frontier field (`past_line_ruling` is null in the 7 point records, absent from the frontier)",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:151",
+      "target": "the milestone that reuses `phase32_points`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-IN-02",
+      "milestone": "v5.0",
+      "prerequisite": "32-REVIEW.md IN-02",
+      "reason": "Touches no published field (`stop_line_seconds`: 0 occurrences)",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:157",
+      "target": "the milestone that reuses `phase32_points`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-IN-04",
+      "milestone": "v5.0",
+      "prerequisite": "32-REVIEW.md IN-04",
+      "reason": "Touches no published field (heartbeat file under `data/`)",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:169",
+      "target": "the milestone that reuses `phase32_points`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-IN-05",
+      "milestone": "v5.0",
+      "prerequisite": "32-REVIEW.md IN-05",
+      "reason": "Touches no published field (dirty-check cwd)",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:175",
+      "target": "the milestone that reuses `phase32_frontier`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records); tests/test_phase32_frontier.py still has 3 `_is_tracked` references",
+      "id": "P32-IN-06",
+      "milestone": "v5.0",
+      "prerequisite": "32-REVIEW.md IN-06",
+      "reason": "Dead test branches; no published field",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:181",
+      "target": "the milestone that reuses `phase32_frontier`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged in .planning/phases/33-admission-and-relearning-on-admitted-points/33-03-SUMMARY.md; scripts/phase32_points.py pinned by all seven trained results/phase32_point_*.json records and scripts/phase32_frontier.py by results/phase32_frontier.json (live sha256 = pin: no code changed since the records)",
+      "id": "P32-IN-07",
+      "milestone": "v5.0",
+      "prerequisite": "32-REVIEW.md IN-07",
+      "reason": "PREREG-03 records carry no provenance, so nothing is published",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:187",
+      "target": "the milestone that reuses `phase32_points`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "Staged label DATED-CONTINUATION (2026-09-28), mapped to RE-DEFERRED (code fix) in plan 34-03. Continuation evidence: `git log --diff-filter=A` on results/phase30_calibration.json gives 4339f2b, `--diff-filter=D` gives none, and the census gives count 8 distinct ['4339f2b…'] (1 frontier + 7 point records); no pinned file changed (D-16)",
+      "id": "P32-IN-03",
+      "milestone": "v5.0",
+      "prerequisite": "deduplicate the calibration-descent logic and prove every add, with dated pin continuations (both modules are pinned)",
+      "reason": "The published `calibration.add_commit` was measured correct: one add (`4339f2b`), zero deletes, and all 8 published values equal (1 frontier + 7 point records)",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-REVIEW.md:163 (`scripts/phase32_frontier.py`, `scripts/phase32_points.py`)",
+      "target": "code fix: the milestone that reuses `phase32_frontier`/`phase32_points`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "ACCEPTED",
+      "evidence": "32-SECURITY.md Accepted Risks Log; `past_line_ruling: None` on all 7 trained records; scripts/phase32_points.py:716-762 stores the ruling as JSON data only",
+      "id": "P32-AR-01",
+      "milestone": "v5.0",
+      "reason": "The --past-stop-line ruling text is data, never executed or put into argv, and no ruling was ever given.",
+      "source": ".planning/phases/32-replay-bearing-frontier-re-run-and-verdict/32-SECURITY.md:105 (AR-32-01, T-32-20)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "AR-33-02 (.planning/phases/33-admission-and-relearning-on-admitted-points/33-SECURITY.md:62) accepts it; scripts/phase33_admission.py sha256 2041aecca6d3ab12fbf8ccb04ce613de0b35675fd56bc9f55c5ac4e094fca43c = results/phase33_admission.json::provenance.module_sha256 (guarded at tests/test_phase33_admission.py:424); the record's git_sha = head_at_write = 92fe48b (written from the repo root)",
+      "id": "P33-WR-01",
+      "milestone": "v5.0",
+      "prerequisite": "fix with a dated pin continuation before reuse (module pinned in results/phase33_admission.json::provenance.module_sha256)",
+      "reason": "`git_sha()` reads the process cwd; the one real call ran from the repo root, so the committed record's git_sha holds. Fixing it now reddens the module pin.",
+      "source": ".planning/phases/33-admission-and-relearning-on-admitted-points/33-REVIEW.md:46",
+      "target": "the milestone that reuses `phase33_admission`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "AR-33-01 (.planning/phases/33-admission-and-relearning-on-admitted-points/33-SECURITY.md:61) accepts it; scripts/phase33_admission.py sha256 2041aecca6d3ab12fbf8ccb04ce613de0b35675fd56bc9f55c5ac4e094fca43c = results/phase33_admission.json::provenance.module_sha256 (guarded at tests/test_phase33_admission.py:424); the record has one commit (f48b738) and the canonical path refuses a rewrite",
+      "id": "P33-WR-02",
+      "milestone": "v5.0",
+      "prerequisite": "fix with a dated pin continuation before reuse (module pinned in results/phase33_admission.json::provenance.module_sha256)",
+      "reason": "`--out` bypasses write-once only for a path other than the committed record; the committed record cannot change. Fixing it now reddens the module pin.",
+      "source": ".planning/phases/33-admission-and-relearning-on-admitted-points/33-REVIEW.md:78",
+      "target": "the milestone that reuses `phase33_admission`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "scripts/phase33_admission.py sha256 2041aecca6d3ab12fbf8ccb04ce613de0b35675fd56bc9f55c5ac4e094fca43c = results/phase33_admission.json::provenance.module_sha256 (guarded at tests/test_phase33_admission.py:424)",
+      "id": "P33-IN-01",
+      "milestone": "v5.0",
+      "prerequisite": "fix with a dated pin continuation before reuse (module pinned in results/phase33_admission.json::provenance.module_sha256)",
+      "reason": "A malformed or keyless record crashes a leg with a traceback instead of a named refusal; the committed record is well-formed, so no published field is affected.",
+      "source": ".planning/phases/33-admission-and-relearning-on-admitted-points/33-REVIEW.md:110",
+      "target": "the milestone that reuses `phase33_admission`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "scripts/phase33_admission.py sha256 2041aecca6d3ab12fbf8ccb04ce613de0b35675fd56bc9f55c5ac4e094fca43c = results/phase33_admission.json::provenance.module_sha256 (guarded at tests/test_phase33_admission.py:424)",
+      "id": "P33-IN-02",
+      "milestone": "v5.0",
+      "prerequisite": "fix with a dated pin continuation before reuse (module pinned in results/phase33_admission.json::provenance.module_sha256)",
+      "reason": "The admit refusal message names a redo route the suite then fails on; it prints only on a refusal and no published field is affected.",
+      "source": ".planning/phases/33-admission-and-relearning-on-admitted-points/33-REVIEW.md:123",
+      "target": "the milestone that reuses `phase33_admission`"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "RE-DEFERRED",
+      "evidence": "scripts/phase33_admission.py sha256 2041aecca6d3ab12fbf8ccb04ce613de0b35675fd56bc9f55c5ac4e094fca43c = results/phase33_admission.json::provenance.module_sha256 (guarded at tests/test_phase33_admission.py:424)",
+      "id": "P33-IN-03",
+      "milestone": "v5.0",
+      "prerequisite": "fix with a dated pin continuation before reuse (module pinned in results/phase33_admission.json::provenance.module_sha256)",
+      "reason": "`limitation()` keeps only the first leg-prefixed reason; the committed record's `limitation.legs` is bound from the admission reasons as published.",
+      "source": ".planning/phases/33-admission-and-relearning-on-admitted-points/33-REVIEW.md:142",
+      "target": "the milestone that reuses `phase33_admission`"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "Staged label NAMED-LIMITATION (partial exercise), mapped to NAMED-LIMITATION in plan 34-03; 32-07-SUMMARY.md:80 by reference; Phase 33 does not take the requirement and it stays unticked (33 D-15)",
+      "id": "ACTRL-01",
+      "milestone": "v5.0",
+      "reason": "Exercised on real data: the recall floors and `control_gap` came from each leg's own advr control (32-07-SUMMARY.md:80, by reference). Not exercised: the relearning Z baseline, because admission read MOOT and no relearning leg ran. Per leg: advr_n8 measured: 0 FAIL, 6 INCONCLUSIVE, 0 PASS, 0 REFUSED of 6; admission verdict MOOT. advr_n64 fully REFUSED (advr_n64 control recall taught 0/1008, heldout 1/648); MOOT does not extend to that capacity.",
+      "source": "REQUIREMENTS.md ACTRL-01; results/phase33_admission.json::limitation.legs.advr_n8; results/phase33_admission.json::limitation.legs.advr_n64"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase33_admission.json::limitation.requirements lists RELRN-06; admission.verdict MOOT; unticked in REQUIREMENTS.md",
+      "id": "RELRN-06",
+      "milestone": "v5.0",
+      "reason": "RELRN-06..09 ship as a MOOT named limitation. The RELRN-06 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT.",
+      "source": "REQUIREMENTS.md RELRN-06; results/phase33_admission.json::limitation.scope_rule; results/phase33_admission.json::limitation.surface; results/phase33_admission.json::scope.rule"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase33_admission.json::limitation.requirements lists RELRN-07; admission.verdict MOOT; unticked in REQUIREMENTS.md",
+      "id": "RELRN-07",
+      "milestone": "v5.0",
+      "reason": "RELRN-06..09 ship as a MOOT named limitation. The RELRN-07 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT.",
+      "source": "REQUIREMENTS.md RELRN-07; results/phase33_admission.json::limitation.scope_rule; results/phase33_admission.json::limitation.surface; results/phase33_admission.json::scope.rule"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase33_admission.json::limitation.requirements lists RELRN-08; admission.verdict MOOT; unticked in REQUIREMENTS.md",
+      "id": "RELRN-08",
+      "milestone": "v5.0",
+      "reason": "RELRN-06..09 ship as a MOOT named limitation. The RELRN-08 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT.",
+      "source": "REQUIREMENTS.md RELRN-08; results/phase33_admission.json::limitation.scope_rule; results/phase33_admission.json::limitation.surface; results/phase33_admission.json::scope.rule"
+    },
+    {
+      "category": "requirement",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "results/phase33_admission.json::limitation.requirements lists RELRN-09; admission.verdict MOOT; unticked in REQUIREMENTS.md",
+      "id": "RELRN-09",
+      "milestone": "v5.0",
+      "reason": "RELRN-06..09 ship as a MOOT named limitation. The RELRN-09 leg refuses unless admitted; only the refusal surface exists: the advr relearning legs (calibrate, curve, gate, structural-proof) were not built because the scope rule read MOOT.",
+      "source": "REQUIREMENTS.md RELRN-09; results/phase33_admission.json::limitation.scope_rule; results/phase33_admission.json::limitation.surface; results/phase33_admission.json::scope.rule"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "FIXED",
+      "evidence": "b8027b8; tests/test_phase16_driver.py::test_d28_amended_note_reddens; DEBT-02 (REQUIREMENTS.md ticked); test commit 85ddf7a; the report-absence half is recorded as phase29_prereg.NAMED_LIMITATIONS['TD-16-R1-REPORT']",
+      "id": "P28-TD-16-R1",
+      "milestone": "v3.0",
+      "reason": "Closed in Phase 29 by DEBT-02: d28_note() reads the D-28 note verbatim from 16-CONTEXT.md at runtime, so an amended note reddens a test.",
+      "source": "results/phase28_ledger.json::rows[id=TD-16-R1] (by reference; file sha256 a459cc2296cb7590b46ba3f608c22d84b6258d3ffc9aa4a804042425b991b2a0, rows digest bb9f82fe290d7578a11e221c349733555e5c2f3d197673e56e39d8c65b00dbd7)"
+    },
+    {
+      "category": "tech-debt",
+      "disposition": "FIXED",
+      "evidence": "5523d50; tests/test_phase29_debt.py::test_all_eleven_phase17_summaries_are_covered; tests/test_phase29_debt.py::test_phase17_summary_frontmatter_validates; DEBT-03 (REQUIREMENTS.md ticked)",
+      "id": "P28-TD-17-SUMMARY-FRONTMATTER",
+      "milestone": "v3.0",
+      "reason": "Closed in Phase 29 by DEBT-03: the eleven archived Phase-17 SUMMARYs carry top-level duration/completed and validate.",
+      "source": "results/phase28_ledger.json::rows[id=TD-17-SUMMARY-FRONTMATTER] (by reference; file sha256 a459cc2296cb7590b46ba3f608c22d84b6258d3ffc9aa4a804042425b991b2a0, rows digest bb9f82fe290d7578a11e221c349733555e5c2f3d197673e56e39d8c65b00dbd7)"
+    },
+    {
+      "category": "review-finding",
+      "disposition": "FIXED",
+      "evidence": "5e0a1f3; tests/test_phase27_relearn.py::test_a_leg_refuses_an_untracked_record_inside_the_repo; DEBT-01 (REQUIREMENTS.md ticked)",
+      "id": "P28-IN-07",
+      "milestone": "v4.0",
+      "reason": "Closed in Phase 29 by DEBT-01: the relearn probe writes under a scratch `relearn._ROOT`, never the real results/phase27_* glob.",
+      "source": "results/phase28_ledger.json::rows[id=IN-07] (by reference; file sha256 a459cc2296cb7590b46ba3f608c22d84b6258d3ffc9aa4a804042425b991b2a0, rows digest bb9f82fe290d7578a11e221c349733555e5c2f3d197673e56e39d8c65b00dbd7)"
+    },
+    {
+      "category": "warning",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "63ca8de; tests/test_phase29_prereg.py::test_named_limitations_record_p22_warning_4_5; scripts/phase29_prereg.py NAMED_LIMITATIONS['P22-WARNING-4/5']; DEBT-04 (REQUIREMENTS.md ticked, zero code)",
+      "id": "P28-P22-WARNING-4",
+      "milestone": "v4.0",
+      "reason": "Re-recorded in Phase 29 (DEBT-04) as a named limitation: the two accountant oracles disagree at δ < 1e-12, off the publishing path; no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01).",
+      "source": "results/phase28_ledger.json::rows[id=P22-WARNING-4] (by reference; file sha256 a459cc2296cb7590b46ba3f608c22d84b6258d3ffc9aa4a804042425b991b2a0, rows digest bb9f82fe290d7578a11e221c349733555e5c2f3d197673e56e39d8c65b00dbd7)"
+    },
+    {
+      "category": "warning",
+      "disposition": "NAMED-LIMITATION",
+      "evidence": "63ca8de; tests/test_phase29_prereg.py::test_named_limitations_record_p22_warning_4_5; scripts/phase29_prereg.py NAMED_LIMITATIONS['P22-WARNING-4/5']; DEBT-04 (REQUIREMENTS.md ticked, zero code)",
+      "id": "P28-P22-WARNING-5",
+      "milestone": "v4.0",
+      "reason": "Re-recorded in Phase 29 (DEBT-04) as a named limitation: `delta_quadrature` degrades at large μ at the frozen δ, off the publishing path; no v5.0 number uses the accountant (the adversarial arm carries no ε claim, Phase 25 D-01).",
+      "source": "results/phase28_ledger.json::rows[id=P22-WARNING-5] (by reference; file sha256 a459cc2296cb7590b46ba3f608c22d84b6258d3ffc9aa4a804042425b991b2a0, rows digest bb9f82fe290d7578a11e221c349733555e5c2f3d197673e56e39d8c65b00dbd7)"
+    },
+    {
+      "category": "found-by-measurement",
+      "disposition": "FIXED",
+      "evidence": "abdb77d; tests/test_phase31_probe.py::test_plist_mirrors_the_canary_agent; tests/test_phase32_points.py::test_plist_mirrors_the_canary_agent; RED in a scratch clone at a foreign root before the edit (34-01-SUMMARY)",
+      "id": "P34-PLIST-HOST-PATH",
+      "milestone": "v5.0",
+      "reason": "Both plist tests compared the heartbeat path against this host's absolute root; they now compare by path suffix and pass on any checkout.",
+      "source": "tests/test_phase31_probe.py:981, tests/test_phase32_points.py:1034 (34-01 Task 1, port of f47468b, R-2)"
+    },
+    {
+      "category": "found-by-measurement",
+      "disposition": "FIXED",
+      "evidence": "bb50737; tests/test_package.py::test_runtime_dependencies_identical_across_every_milestone_tag; tests/test_package.py::test_a_missing_required_tag_is_red",
+      "id": "P34-RPT05-DERIVED-TAGS",
+      "milestone": "v5.0",
+      "reason": "RPT-05's dependency-equality test hardcoded v1.0/v2.0/v3.0 and omitted v4.0; its tag set is now derived from the MILESTONES.md Shipped headings and a clone missing a shipped tag is RED.",
+      "source": "tests/test_package.py (34-01 Task 2, D-10)"
+    },
+    {
+      "category": "found-by-measurement",
+      "disposition": "ACCEPTED",
+      "evidence": "bb50737 renamed tests/test_package.py::test_runtime_dependencies_identical_across_four_milestones to ::test_runtime_dependencies_identical_across_every_milestone_tag; the frozen phase28 row's evidence still names the old node",
+      "id": "P34-RPT05-SUPERSEDED-NODE",
+      "milestone": "v5.0",
+      "reason": "The phase28 ledger is frozen (its rows digest is embedded in the published v4.0 block), so the superseded node name stays there and is recorded here by reference; that row is ACCEPTED, so no FIXED check collects it.",
+      "source": "results/phase28_ledger.json::rows[id=SC3-SHA256-CLAUSE] (by reference; file sha256 a459cc2296cb7590b46ba3f608c22d84b6258d3ffc9aa4a804042425b991b2a0)"
+    },
+    {
+      "category": "inherited-obligation",
+      "disposition": "RE-DEFERRED",
+      "evidence": "The required tag set is derived from `## vX.Y … (Shipped: …)` headings of .planning/MILESTONES.md (34-01, bb50737); the v2.0/v3.0 'tags never pushed' lesson of 28-07",
+      "id": "P34-V5-TAG-HANDOFF",
+      "milestone": "v5.0",
+      "prerequisite": "the developer creates the `v5.0` tag and pushes it together with main (`git push origin main v5.0`); otherwise the derived RPT-05 test is RED in CI",
+      "reason": "From the moment MILESTONES.md says v5.0 shipped, RPT-05 requires the `v5.0` tag in every clone, CI's included.",
+      "source": ".planning/phases/34-v5-0-report-and-milestone-close/34-CONTEXT.md D-11; tests/test_package.py `_required_tags` (D-10)",
+      "target": "/gsd-complete-milestone v5.0"
+    }
+  ],
+  "schema": {
+    "dispositions": [
+      "ACCEPTED",
+      "CLOSED-EARLIER",
+      "FIXED",
+      "FORBIDDEN-BY-GUARD",
+      "NAMED-LIMITATION",
+      "RE-DEFERRED"
+    ],
+    "re_deferred_keys": [
+      "prerequisite",
+      "target"
+    ],
+    "required_keys": [
+      "category",
+      "disposition",
+      "evidence",
+      "id",
+      "milestone",
+      "reason",
+      "source"
+    ]
+  }
+}
