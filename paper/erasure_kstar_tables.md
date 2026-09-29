@@ -29,6 +29,20 @@ Recall, Wilson bound and non-target counts exist only where the k* extension mea
 
 Cells read `pre→post (|Δrate|)` over 27 questions per fact. Bold: strictly above the (b) margin 0.296296. `=`: exactly at the margin, which does not count.
 
+### Collateral damage per non-target fact, by instrument
+
+| non-target fact | 8 | 16 | 32 | 64 |
+|---|---|---|---|---|
+| birth_year | 14/27 · r1 · 1.43 | 13/27 · r1 · 1.56 | 14/27 · r1 · 1.71 | 11/27 · r1 · 1.91 |
+| cat_name | 27/27 · r1 · 0.28 | 27/27 · r1 · 0.47 | 27/27 · r1 · 0.74 | 6/27 · r1 · 1.65 |
+| hometown | 7/27 · r1 · 3.71 | 3/27 · r1 · 4.10 | 1/27 · r1 · 4.49 | 0/27 · r1 · 4.98 |
+| house_number | 24/27 · r1 · 1.26 | 24/27 · r1 · 1.41 | 10/27 · r1 · 1.68 | 6/27 · r1 · 1.90 |
+| person_name | 18/27 · r1 · 0.78 | 10/27 · r1 · 1.11 | 1/27 · r1 · 1.80 | 0/27 · r1 · 2.87 |
+| sibling_name | 27/27 · r1 · 2.96 | 22/27 · r1 · 3.32 | 10/27 · r1 · 3.80 | 0/27 · r1 · 4.46 |
+| street | 27/27 · r1 · 0.36 | 24/27 · r1 · 0.61 | 11/27 · r1 · 1.17 | 0/27 · r1 · 1.84 |
+
+Cells read `generation recall · exposure rank · value-span NLL`. Recall and rank are this extension's own measurements; NLL is the committed curve's. The three instruments do not share a scale, so no threshold is implied between them.
+
 ### Composition of the ablated prefix, by layer
 
 | k | layer 0 | layer 1 | layer 2 | layer 3 | layer 4 | layer 5 | layers touched |
@@ -58,6 +72,8 @@ Cells read `pre→post (|Δrate|)` over 27 questions per fact. Bold: strictly ab
 - target successes by k: 8: 24, 16: 18, 32: 2, 64: 0
 - rank-instrument stop: k = 78; it lags the generation zero by at least 14 components
 - curve agreement at every measured k: True
+- non-target exposure rank other than 1 at a measured k: none
+- non-target value-span NLL decreases between adjacent curve checkpoints (unrounded): cat_name, k 1→2: 0.2257→0.2104; person_name, k 1→2: 0.4371→0.4325
 - run provenance: git_sha 90cca2aadfa412ffbdfcc327988c8aa0055c3867, torch 2.7.1, device mps
 - rule sha256 (`prereg_sha256`): 468b155363a5b728dbcea6bd13cc9ce30b23ad5a61d6c73a8d3da194da8ed71c
 - curve sha256: e27d64efd005b206dbea805fc6c6623a1398af985370ece7286a4fd2caac0ea7

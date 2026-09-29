@@ -49,10 +49,21 @@ def _curve():
             "target_rank": 2 if k == STOP else 1,
             "target_ans1_mean_nll": 0.13 + k / 20,
             "dialogue_ppl": {"adapter_on": ON[k], "adapter_off": OFF},
+            "slots": {
+                "pet_name": {"ans1_mean_nll": 0.1 + k / 20},
+                "person_name": {"ans1_mean_nll": 0.4 + k / 100},
+                "street": {"ans1_mean_nll": 0.3 + k / 100},
+            },
         }
         for k in (1, 2, 4, 8, 16, 32, 64, 78)
     ]
-    return {"k": STOP, "stopped": True, "ordered_prefix": _prefix(), "checkpoints": rows}
+    return {
+        "k": STOP,
+        "slot": "pet_name",
+        "stopped": True,
+        "ordered_prefix": _prefix(),
+        "checkpoints": rows,
+    }
 
 
 def _block(k):
@@ -61,6 +72,8 @@ def _block(k):
         "street": {"pre_answerable": 27, "post_answerable": 0, "n_questions": 27},
     }
     for entry in nontarget.values():
+        entry["exposure_rank_this_run"] = 1
+        entry["value_span_nll_committed_curve"] = 0.5 + k / 100
         entry["delta"] = abs(entry["post_answerable"] - entry["pre_answerable"]) / 27
         entry["over_margin"] = entry["delta"] > MARGIN
     return {
@@ -197,3 +210,20 @@ def test_a_counter_that_disagrees_with_its_own_cells_is_refused():
     summary["checkpoints"]["16"]["nontarget_over_margin_count"] += 1
     with pytest.raises(SystemExit, match="its own cells"):
         _render(summary)
+
+
+def test_the_instrument_table_reads_recall_rank_and_nll_from_the_summary():
+    text = _render()
+    section = text.split("by instrument")[1].split("###")[0]
+    assert "| street | 0/27 · r1 · 0.58 |" in section
+
+
+def test_nll_decreases_and_off_ceiling_ranks_are_generated_from_the_records():
+    assert "adjacent curve checkpoints (unrounded): none" in _render()
+    assert "measured k: none" in _render()
+    curve = _curve()
+    curve["checkpoints"][1]["slots"]["person_name"]["ans1_mean_nll"] = 0.1
+    assert "person_name, k 1→2:" in _render(curve=curve)
+    summary = _summary()
+    summary["checkpoints"]["32"]["nontarget"]["street"]["exposure_rank_this_run"] = 2
+    assert "street at k = 32: rank 2" in _render(summary)
