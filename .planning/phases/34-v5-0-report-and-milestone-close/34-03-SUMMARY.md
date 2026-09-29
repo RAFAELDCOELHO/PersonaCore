@@ -128,3 +128,7 @@ Push-1 (34-02) found no CI-only causes, so there are no "FIXED per push-1 cause"
 ## Self-Check: PASSED
 
 - results/phase34_ledger.json and tests/test_phase34_ledger.py exist and are committed in 1855ce1 (`git show --stat` lists exactly these two files).
+
+## Orchestrator addendum — plan step 6 (full suite)
+
+Run by the orchestrator on the committed, clean tree at 72b7542 (the executor was told not to run it): `3280 passed, 4 skipped, 83 warnings in 2432.73s (0:40:32)`, EXIT=0.
