@@ -4,7 +4,46 @@
 
 PersonaCore is a conversational AI assistant where **all** memory and personalization live in the model weights — no databases, no vector stores, no external files. The model learns who you are by updating its own parameters, making weight-based memory a privacy guarantee by design. The entire stack (GPT-style transformer decoder, BPE tokenizer, LoRA adapters, EWC continual learning) is built from scratch in PyTorch and runs fully on-device. It is an elite CS-undergraduate portfolio project intended to demonstrate deep ML fundamentals, a genuinely novel approach, and a working demo.
 
-## Current Milestone: v5.0 Replay-Bearing Adversarial Re-run and Relearning Validation
+## Current State (v5.0 shipped 2026-09-29)
+
+**What shipped:** the replay-bearing re-run v4.0 handed forward, and it admitted nothing, which is
+the pre-registered result, not a failure to get one.
+
+- **Phase 32 re-measured the adversarial arm with replay against its own control.** 12 points,
+  ~11.1 h unattended on MPS inside a budget committed from measured probes (Phase 31: 22.98 h,
+  stop line 37.77 h), judged by the frozen v4.0 gate imported by reference: **0 PASS / 0 FAIL /
+  6 INCONCLUSIVE / 6 REFUSED.** At n=8 the own control learned (taught 777/1008) and every point
+  read INCONCLUSIVE; at n=64 the own control was unlearnable (taught 0/1008), so the whole leg is
+  REFUSED under PREREG-03 and reported with its reading, not re-tuned.
+- **Phase 33 called admission once and it read MOOT** (`f48b738`): 0 admitted, the four relearning
+  legs refuse on the record, RELRN-06..09 ship as the named limitation PREREG-02 committed before
+  any point ran.
+- **Phases 29-31 built what the verdict rests on:** keys, paths, recipe and gate pinned before any
+  number; replay routed through the adversarial arm's own seam with the DP arms and golden
+  trajectory byte-unchanged; the refusal calibration re-derived at the new recipe; DP-sourced
+  control readings refused (WR-05).
+- **Phase 34 rendered the v5.0 section** of `docs/REPORT.md` and the README glance from committed
+  records over the frozen Phase 28 engine (`226b489`), with a 61-row ledger, and closed on the
+  developer's green CI run `36562323069`.
+
+**Ship decision: the MOOT branch is the result.** Zero new runtime dependencies across five
+milestones.
+
+**Audit:** `tech_debt` — 22/27 requirements plus 5 pre-registered named limitations, 6/6 phases,
+17/17 integration, 1/1 flow, no blockers. See
+[milestones/v5.0-MILESTONE-AUDIT.md](milestones/v5.0-MILESTONE-AUDIT.md).
+
+## Next Milestone Goals
+
+Not opened. Start with `/gsd-new-milestone`, and **append** its requirements below the v5.0 block
+of `.planning/REQUIREMENTS.md` — that file and the v4.0/v5.0 ROADMAP sections are live inputs of
+`scripts/phase28_report.py` and the 25-07 sentinel guards. Carried owners: P32-CR-01 before any
+reuse of `phase32_points`; P34-WR-01 before any re-install of the published block.
+
+<details>
+<summary>v5.0 milestone plan as written at the start (archived)</summary>
+
+### Current Milestone: v5.0 Replay-Bearing Adversarial Re-run and Relearning Validation
 
 **Goal:** Test condition (c) against the adversarial arm's ratio instead of its no-replay recipe, and — if the re-run admits any point — measure the relearning attack on it.
 
@@ -13,6 +52,11 @@ PersonaCore is a conversational AI assistant where **all** memory and personaliz
 - Pre-registered conditional scope, committed now before any real point exists: every admitted point gets RELRN-02..05 — the "if admitted, then relearn" rule is a scope rule, not a post-hoc decision
 - A cost probe of the relearning leg on MPS before the full budget is committed (only the apparatus was ever proven, never its cost)
 - v5.0-owned debt folded in: IN-07, TD-16-R1, P22-WARNING-4/5, TD-17-SUMMARY-FRONTMATTER
+
+</details>
+
+<details>
+<summary>v4.0 milestone state (archived at the v5.0 close)</summary>
 
 ## Current State (v4.0 shipped 2026-09-22)
 
@@ -64,6 +108,8 @@ groom. Zero new runtime dependencies across four milestones, proved by `tomllib`
 **Audit:** `gaps_found` — 44/48 requirements (RELRN-02..05 by ruling), 9/9 phases, 21/21
 integration, 6/6 flows, nyquist partial (23, 25 stamps), 17 debt items, no blockers. See
 [milestones/v4.0-MILESTONE-AUDIT.md](milestones/v4.0-MILESTONE-AUDIT.md).
+
+</details>
 
 <details>
 <summary>v4.0 milestone plan as written at the start (archived)</summary>

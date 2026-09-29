@@ -283,6 +283,51 @@ existed.
 - Notable: subagent worktrees were avoided entirely (sequential executors on `main`) after two
   measured hazards — worktrees forking ~157 commits behind base and breaking the editable venv.
 
+## Milestone: v5.0 — Replay-Bearing Adversarial Re-run and Relearning Validation
+
+**Shipped:** 2026-09-29
+**Phases:** 6 (29-34) | **Plans:** 30 | **Tasks:** 74 | **Commits:** 207 over 6 days
+
+### What Was Built
+- The v5.0 pre-registration and four closed debt items (29); replay through the adversarial arm's
+  own seam and its own ratio-0 control (30); MPS cost probes and a measured budget (31).
+- The 12-point replay-bearing frontier, 0 PASS / 6 INCONCLUSIVE / 6 REFUSED (32); admission MOOT,
+  called once (33); the rendered v5.0 report and close on a green CI run (34).
+
+### What Worked
+- **The scope rule decided the ending.** Zero admitted points meant RELRN-06..09 became a named
+  limitation by a rule committed in Phase 29, so the close needed no judgment call.
+- **Measured budget.** The two Phase 31 probes turned a ~25-30 h guess into 22.98 h with a stop
+  line; the sweep ran in ~11.1 h of wall clock, well inside it.
+- **Reuse over rewrite.** Phase 34 imported the frozen Phase 28 engine instead of forking it; the
+  v4.0 block re-renders byte-identical.
+
+### What Was Inefficient
+- **The n=64 own control was unlearnable (taught 0/1008)**, so half the sweep bought a REFUSED leg.
+  It was the v4.0 adv_n64 failure mode, and PREREG-03 anticipated it; nothing probed it before the
+  sweep.
+- **gsd-sdk mutation handlers still unusable**: every tracking write, this close included, was made
+  by hand after a snapshot/diff.
+- **Review findings pile up as RE-DEFERRED** (20 ledger rows): latent for the committed records,
+  but they are the debt any reuse of the v5.0 drivers inherits.
+
+### Patterns Established
+- Probe cost on the real device before committing a budget; ancestry-test the budget before the
+  first point.
+- A pre-registered MOOT branch is a success path, and the audit says so explicitly rather than
+  letting the FAIL gate call it a gap.
+- Post-publish review findings go into a dated SUMMARY continuation when adding ledger rows would
+  change a rendered digest.
+
+### Key Lessons
+- **Probe the control before the sweep.** An unlearnable own control costs a whole capacity leg.
+- **A frozen block constrains every later correction**: the ledger's rows digest is rendered, so
+  even bookkeeping has to route around it.
+
+### Cost Observations
+- Model mix: session model throughout (inherit); no tiering.
+- Notable: sequential executors on `main`, no worktrees, zero gsd-sdk mutation handlers.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -293,6 +338,7 @@ existed.
 | v2.0 | 7 | 39 | Pre-registration in committed code before any number exists; gate-only-what-n-supports; structural enforcement replacing declared invariants; honest negatives appended-to rather than edited |
 | v3.0 | 4 | 54 | Pre-registration became the AUTHOR of a phase, not a constraint on it; results published against the project's own claim (`LEAKAGE_DEMONSTRATED`, `FAILURE`, `DO NOT SHIP`); dated continuations enforced by the documents themselves; retroactive scope limits propagated backward into an earlier phase's artifact |
 | v4.0 | 9 | 115 | Pre-registration authored the VERDICT: the gate's own branch name is the published headline; the report is rendered from records, frozen at publish, corrected only by dated continuations; verifier verdicts discharged beside, never re-stamped, with a ledger of dispositions; the developer's push + green CI as the close precondition |
+| v5.0 | 6 | 30 | A pre-registered MOOT branch as the success path; budgets committed from on-device probes; the frozen report engine reused by import rather than forked |
 
 ### Cumulative Quality
 
@@ -302,6 +348,7 @@ existed.
 | v2.0 | 408 (+1 CUDA skip) | green, CPU-only | none — v2.0 added three hand-rolled subsystems (`lora/`, `continual/`, `dialogue/`) and zero runtime dependencies |
 | v3.0 | 845 (+1 CUDA skip) | green, CPU-only | none — `pyproject.toml` byte-identical at close, sha256-enforced (STAT-04) |
 | v4.0 | 2919 (+4 skips locally; 72 on ubuntu CI, attributed) | green, CPU-only; CI run 35770563251 | none — `[project].dependencies` identical at v1.0/v2.0/v3.0/HEAD by `tomllib` (RPT-03); `license = "MIT"` the only pyproject change |
+| v5.0 | 3315 (3311 passed + 4 skips locally; 72 skips on ubuntu CI) | green, CPU-only; CI run 36562323069 | none — RPT-05 proves `[project].dependencies` identical across every shipped tag |
 
 ### Top Lessons (Verified Across Milestones)
 

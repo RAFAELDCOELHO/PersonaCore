@@ -1,5 +1,61 @@
 # Milestones
 
+## v5.0 Replay-Bearing Adversarial Re-run and Relearning Validation (Shipped: 2026-09-29)
+
+**Phases completed:** 6 phases (29-34), 30 plans, 74 tasks (`<task>` count over the 30 PLANs)
+**Timeline:** 2026-09-24 -> 2026-09-29 (6 days, 207 commits after the v4.0 tag)
+**Audit:** `tech_debt` — 22/27 requirements satisfied plus 5 pre-registered named limitations (ACTRL-01 partial exercise by ruling; RELRN-06..09 the MOOT branch), 6/6 phases, 17/17 integration links, 1/1 E2E flow, nyquist partial (30, 33, 34 drafts), no blockers
+
+**Delivered:** v4.0 left condition (c) confounded with the adversarial arm's no-replay recipe. v5.0
+retrained that arm **with replay**, judged it only against its **own** ratio-0 control under the
+frozen v4.0 gate, and published the result as measured: nothing admitted, so the relearning attack
+ships as the named limitation the milestone pre-registered before any point ran.
+
+**Key accomplishments:**
+
+- **Pre-registration before any v5.0 number** (Phase 29): 12 `advr` point keys, write-once record
+  paths disjoint from every v4.0 path, the replay recipe and the frozen v4.0 gate imported by
+  reference under AST guards; the conditional relearning scope rule and the unlearnable-control
+  refusal committed ahead of the first point; four carried debt items closed.
+- **Replay through the adversarial arm's own seam** (Phase 30): the `is_dp` gate split by
+  `gets_replay`, DP arms and the golden trajectory byte-unchanged; `MIN_REFUSAL_SCORED_TOKENS`
+  re-derived at the replay-bearing recipe; DP-sourced readings refused (WR-05); controls scheduled
+  first at both capacities.
+- **A budget from measurement, not estimate** (Phase 31): one replay-bearing point and one
+  relearning leg on a real adapter measured on MPS replaced the ~25-30 h estimate with 22.98 h
+  (18.14-25.18 h) and a 37.77 h stop line, committed before the first sweep point.
+- **The replay-bearing frontier** (Phase 32): 12 points in ~11.1 h of unattended MPS wall clock,
+  assembled write-once into `results/phase32_frontier.json` through the frozen gate with every v4.0
+  record byte-unchanged — **0 PASS / 0 FAIL / 6 INCONCLUSIVE / 6 REFUSED**. At n=8 the own control
+  learned (taught 777/1008) and all six points read INCONCLUSIVE; at n=64 the own control was
+  unlearnable (taught 0/1008), so all six are REFUSED by the pre-registered rule and reported,
+  not re-tuned.
+- **Admission MOOT, called once** (Phase 33): `results/phase33_admission.json` (`f48b738`) admits
+  0 points; the four relearning legs refuse on the record and no relearning number exists.
+- **Published as measured** (Phase 34): the v5.0 section of `docs/REPORT.md` and the README glance
+  rendered from committed records over the frozen Phase 28 engine (publishing commit `226b489`),
+  the v4.0 block re-rendering byte-identical; a 61-row ledger; close on the developer's green CI
+  run `36562323069`.
+
+**Ship decision — the MOOT branch is the result.** The rule that decided it was committed in
+Phase 29 before any point ran; which branch ran was the admission record's output.
+
+### Known Gaps and Deferred Items
+
+**Known deferred items at close: 0** (`audit-open` clear at close).
+
+**Known gaps — 5 requirements unticked by ruling:** ACTRL-01 (mechanism delivered and exercised
+for floors and `control_gap`; the relearning-Z baseline never exercised because admission read
+MOOT) and RELRN-06..09 (the pre-registered MOOT named limitation, PREREG-02). Ledger rows
+NAMED-LIMITATION in `results/phase34_ledger.json`.
+
+**Tech debt carried forward:** 20 RE-DEFERRED ledger rows (P31/P32/P33 review findings, all latent
+for the committed records; P32-CR-01 must be fixed before `phase32_points` is reused) plus the
+Phase 34 review, disposed by developer ruling in `34-06-SUMMARY.md`: WR-01 RE-DEFERRED, WR-02 and
+WR-03 ACCEPTED. Full list in `milestones/v5.0-MILESTONE-AUDIT.md`.
+
+---
+
 ## v4.0 Leakage Mitigation and Relearning Validation (Shipped: 2026-09-22)
 
 **Phases completed:** 9 phases (20-28), 115 plans, ≈168 tasks (task-heading count; 79 of 115 SUMMARYs carry no `tasks` field)
