@@ -188,7 +188,7 @@ recipe, and — if the re-run admits any point — measure the relearning attack
 - [x] **Phase 31: MPS Cost Probes and Budget Commitment** - One replay-bearing point and one relearning leg measured on MPS; the v5.0 budget committed from those measurements
 - [x] **Phase 32: Replay-Bearing Frontier Re-run and Verdict** - The 12 adversarial points re-measured with replay and judged by importing the frozen v4.0 gate (completed 2026-09-28)
 - [x] **Phase 33: Admission and Relearning on Admitted Points** - Admission called once on the v5.0 frontier; relearning on every admitted point, or the pre-registered MOOT limitation if none (completed 2026-09-28; admission MOOT, record f48b738)
-- [ ] **Phase 34: v5.0 Report and Milestone Close** - The v5.0 section rendered from committed records; close on green CI of the developer's push
+- [x] **Phase 34: v5.0 Report and Milestone Close** - The v5.0 section rendered from committed records; close on green CI of the developer's push (completed 2026-09-29; published 226b489, CI run 36562323069)
 
 **Ordering, stated as a constraint.** Phase 29's pre-registration module is committed before any
 v5.0 point record exists, and its conditional scope rule (PREREG-02) before any point runs. The
@@ -1458,6 +1458,6 @@ Next: `/gsd:plan-phase 20`.
 | 31. MPS Cost Probes and Budget Commitment | v5.0 | 6/6 | Complete | 2026-09-27 |
 | 32. Replay-Bearing Frontier Re-run and Verdict | v5.0 | 7/7 | Complete | 2026-09-28 |
 | 33. Admission and Relearning on Admitted Points | v5.0 | 3/3 | Complete | 2026-09-28 |
-| 34. v5.0 Report and Milestone Close | v5.0 | 6/6 | Plans complete — verification pending | 2026-09-29 — v5.0 published (publishing 226b489), CI run 36562323069 green on origin/main, close.ci_run recorded, RPT-04..06 ticked by hand; zero gsd-sdk mutation handlers |
+| 34. v5.0 Report and Milestone Close | v5.0 | 6/6 | Complete | 2026-09-29 — verification passed 3/3 SC (b8b6335); v5.0 published (publishing 226b489), CI run 36562323069 green on origin/main, close.ci_run recorded, RPT-04..06 ticked by hand; zero gsd-sdk mutation handlers |
 
 Next (v5.0): `/gsd:plan-phase 29`.
