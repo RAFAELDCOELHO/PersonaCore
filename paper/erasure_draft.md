@@ -170,10 +170,10 @@ delete-and-re-add cycle cannot launder the ordering. Pre-registration here is a 
 object graph, not a claim made in prose.
 
 The rule deliberately adopts no success threshold from the unlearning literature: published
-benchmarks target models three to four orders of magnitude larger, and a threshold lifted from them
-would be a borrowed intuition wearing a decimal point. Every floor is either a number this project
-had already published or the output of a blind calibration procedure fixed in advance on a fact set
-disjoint from the target.
+benchmarks target models orders of magnitude larger, and a threshold lifted from them would be a
+borrowed intuition wearing a decimal point. Every floor is either a number this project had already
+published or the output of a blind calibration procedure fixed in advance on a fact set disjoint
+from the target.
 
 ### 3.2 The three conditions
 
@@ -183,7 +183,7 @@ calibration on a disjoint fact set.
 
 **(b) Non-targets preserved.** Post-erasure recall of every non-target taught fact must stay within
 k = 2 × the noise floor measured in the same run. Reported per fact with its own denominator, never
-pooled: a single rate can hide one destroyed fact behind six intact ones.
+pooled: a single rate can hide one destroyed fact behind the intact ones.
 
 **(c) Capability preserved.** Masked dialogue validation perplexity and retention perplexity must
 not exceed the published baselines by more than k = 2 × the relevant noise floor. This condition
@@ -192,9 +192,10 @@ exists because (a) and (b) can both be satisfied by a model degraded into useles
 Representational consistency (ΔW cosine, Fisher overlap) is **descriptive and explicitly not
 gated**; at n = 8 facts and n = 3 personas the sample cannot support a threshold, and three
 committed AST/artifact scans enforce the non-gating structurally rather than by assertion. The
-verdict domain is SUCCESS / FAILURE / INCONCLUSIVE, where INCONCLUSIVE is a real outcome required
-whenever a zero-extraction result arrives without an accompanying teacher-forced NLL to distinguish
-"absent" from "attack too weak".
+verdict domain is SUCCESS / FAILURE / INCONCLUSIVE, where INCONCLUSIVE is a real outcome, required
+whenever the precondition was not met, a required measurement is missing, or a zero-extraction
+result arrives without an accompanying teacher-forced NLL to distinguish "absent" from "attack too
+weak".
 
 ### 3.3 The (a) floor
 
@@ -747,9 +748,14 @@ of their two source files.
 
 ## 7. Related work
 
-*Citation pass pending — the works below are the ones the committed rule and the audit cite, plus
-the canonical references for each mechanism. Verify each entry against the published version before
-submission.*
+*Citation pass in progress. Identifiers checked against arXiv on 2026-09-30: 2410.02879 (Thaker, Hu,
+Kale, Maurya, Wu, Smith), 2406.13356 (Hu, Fu, Wu, Smith; the final version is titled "Unlearning or
+Obfuscating? Jogging the Memory of Unlearned LLMs via Benign Relearning", ICLR 2025) and 2401.06121
+(Maini, Feng, Schwarzschild, Lipton, Kolter). Not yet checked: the other identifiers, every venue
+and year, and whether each work says what this section attributes to it. Two different first authors
+are both cited as Hu et al. (LoRA and the relearning paper); the typeset version must tell them
+apart by year. **[TODO]** State the model sizes of the benchmarks in Sections 3.1 and 7 once each is
+verified; the count was removed because it is probably too large.*
 
 **Memorization and extraction.** The exposure metric this paper's rank instrument implements comes
 from Carlini et al., *The Secret Sharer* (USENIX Security 2019), and the canonical verbatim
@@ -760,12 +766,12 @@ adapters that differ completely in generation, because it saturates at small can
 
 **Unlearning and its evaluation.** TOFU (Maini et al., 2024) is the canonical fictitious-unlearning
 benchmark; our committed rule cites it as context and explicitly declines to adopt its thresholds,
-which are calibrated for models three to four orders of magnitude larger. *Position: LLM Unlearning
-Benchmarks are Weak Measures of Progress* (arXiv:2410.02879) is the reason the recorded goal is
-"auditable forgetting with a measurable bound" rather than "indistinguishable from
-never-having-learned." Our instrument-disagreement result is direct empirical support for that
-position paper's thesis, from a different direction: not that the benchmarks are too easy, but that
-a standard instrument can be structurally blind to the damage an intervention causes.
+which are calibrated for models orders of magnitude larger. *Position: LLM Unlearning Benchmarks are
+Weak Measures of Progress* (arXiv:2410.02879) is the reason the recorded goal is "auditable
+forgetting with a measurable bound" rather than "indistinguishable from never-having-learned." Our
+instrument-disagreement result is direct empirical support for that position paper's thesis, from a
+different direction: not that the benchmarks are too easy, but that a standard instrument can be
+structurally blind to the damage an intervention causes.
 
 **Relearning.** Hu et al. (arXiv:2406.13356) recover a large fraction of supposedly removed
 information with a few fine-tuning samples. We did not run this attack and our bound does not cover
