@@ -696,29 +696,33 @@ C, so that its readings are the same quantity as Phase 19's, and a committed tes
 
 One claim is withheld: **that this verdict is mechanically reproducible by the closed pin alone.**
 It is not. The verdict was reached along a hand-driven path around defects in the closed pin, which
-publishes four defects, A to D, on the path from the committed artifacts to the verdict **[TODO: the
-v1 draft counted five, A–E; find where E is published, or drop it]**. A reader cannot check out the
-repository, run the pinned CLI over the committed artifacts, and watch this verdict come back. Each
-routing is disclosed and every governing number was re-derived through a pinned function before the
-gate was called — but disclosure is not mechanical reproducibility, and we do not publish the weaker
-claim under the stronger word. The pin is closed at 15 commits and is not repaired to flip this:
-editing a closed pin after the numbers exist would void the pre-registration ordering that makes
-every other figure here credible.
+publishes five distinct defects (labelled A–E; four of them, A–D, are independent ways the pin's own
+report path cannot reproduce this verdict). A reader cannot check out the repository, run the pinned
+CLI over the committed artifacts, and watch this verdict come back. Each routing is disclosed and
+every governing number was re-derived through a pinned function before the gate was called — but
+disclosure is not mechanical reproducibility, and we do not publish the weaker claim under the
+stronger word. The pin is closed at 15 commits and is not repaired to flip this: editing a closed
+pin after the numbers exist would void the pre-registration ordering that makes every other figure
+here credible.
 
-The defects, as far as the committed report and code state them; the rest of each description is
-still to be read into this table.
+The five defects, as `results/phase19_erasure_report.md` publishes them (line numbers are the closed
+pin's), with the way each reaches this paper.
 
 | defect | what the pin does | reaches the paper through | routed by |
 | --- | --- | --- | --- |
-| A | `zero_results_have_nll` reads False on key order alone; `run_erasure_arm` writes records with `sort_keys=True` | **[TODO: the rest of the report's description]** | measured on the record and worked around at the one place it bites |
-| B | `_calibration_rate` reads Phase 18's candidate recall (0.8846153846153846, branch `ceiling`) instead of the calibration arm's own rate, so the pin's floor is 0.2 | the (a) floor: 0.0911 governs, and 0.2 is published beside it as superseded | the corrected blind rate is used |
-| C | the committed `per_fact` block carries one tier's count: `rows.update` lets `core_taught` (14 questions) overwrite the other tier | every pooled count: 27 questions for the target and for each non-target | `_pooled_rows`, which the k* driver also uses |
-| D | a fourth defect, on `[ppl, n]` | **[TODO]** | **[TODO]** |
-| E | **[TODO: not found in the Phase 19 report or in `phase19_run.py`]** | | |
+| A | `zero_results_have_nll` (`:1562` vs `:2948`) compares an ordered tuple with records serialised with `sort_keys=True`, so it reads False on key order alone while every NLL is present | the zero-extraction-with-NLL branch of the verdict: False on disk, True once order-normalised | both readings measured; the order-normalised one is passed to the gate |
+| B | `_calibration_rate()` (`:3850-3855`) reads Phase 18's candidate recall (0.8846153846153846) instead of the calibration arm's own rate, so the pin's floor is 0.2 | the (a) floor: 0.0911 governs, and 0.2 is published beside it as superseded | the corrected blind rate, 0.0 |
+| C | `rows.update(per_fact_rows(...))` (`:2922`) lets one (b) tier overwrite the other, so the committed `per_fact` rows carry one tier's 14 questions instead of the pooled 27, and the pinned `report` subcommand exits on them | every pooled (a) and (b) count: 27 questions for the target and for each non-target | pooled rows from `_pooled_rows`, which the k* driver also uses |
+| D | `_cmd_report` (`:3811`) passes `retention_perplexity`'s `[ppl, n]` pair into the gate's scalar `retention_ppl=`, which raises `TypeError` | the retention leg of (c) | the scalar `[0]` is passed |
+| E | `_selected_components` (`:3576`) reads the target's stopping rule on the calibration twin's 6 candidates and every bystander on 8, inside one call | none of the committed numbers: the committed selection used \|R\| = 8 (the k* driver asserts `reference_set_size == 8`), and the resweep finds the ordering identical at both sizes | not on the report path; published in `results/phase19_reference_set_correction.md` |
 
-**[TODO]** Fill the rows marked TODO, and state for each headline figure whether it needs the
-hand-driven route. From what is stated so far, the governing (a) floor (defect B) and every pooled
-(a) and (b) count (defect C) reach the paper through the recoveries.
+A to D are the four ways the pin's own report path cannot reproduce the verdict; E sits in the
+selection path and touches none of the committed numbers. The governing (a) floor (B) and every
+pooled (a) and (b) count (C) reach the paper through the recoveries, and the k* extension shares
+C's. **[TODO]** State the k that the |R| = 6 reading gives, from
+`results/phase19_reference_set_resweep.json`: the ordering is invariant to |R|, while |R| enters the
+stopping condition through the rank, so if the two readings differ, k = 78 is partly a property of
+the instrument's candidate-set size.
 
 **Provenance.** Run at git `465cb2dd71baf4299be435a2670f7738fdd35de8`, device `mps`, torch 2.7.1,
 seed 1337, corpus digest `ff8e6e3c…`, mask digest `79b55770…`, K = 48, ASR rungs (1, 4, 16, 48),
