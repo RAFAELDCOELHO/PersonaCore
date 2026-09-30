@@ -595,13 +595,15 @@ done: k = 78 was not re-measured, and only one ordering and one seed were run.
 
 ### 5.1 What this establishes about weight-based memory
 
-Three measurements now bound the same design. The memory is **real**: taught recall 0.4921 and
-held-out recall 0.3483 against a closed-book control of exactly 0 of 2,430 **[TODO: confirm these
-Phase 14 numbers are for the adapter ablated here]**. It is **extractable** by an attacker holding
-nothing but prompt access: 92 of 104 against a control of 0 of 104. And under the ablation tested
-here it was **not selectively removable**: the rank-based stop needed 78 of 288 rank-1 components,
-the generation-side zero lies above 32 and at or below 64, and at every measured prefix at least one
-non-target fact exceeded the (b) margin (six of seven at k = 64).
+Three measurements now bound the same design. The memory is **real**: taught recall 0.4921
+(496/1008) and held-out recall 0.3483 (326/936) against a closed-book control of exactly 0 of 2,430
+(Phase 14). The adapter measured there, `persona_adapter.pt`, has sha256 `226f2ae5…84ebfb`,
+identical to the `adapter_in_sha256` of the committed collateral curve, so it is the adapter this
+paper ablates. It is **extractable** by an attacker holding nothing but prompt access: 92 of 104
+against a control of 0 of 104. And under the ablation tested here it was **not selectively
+removable**: the rank-based stop needed 78 of 288 rank-1 components, the generation-side zero lies
+above 32 and at or below 64, and at every measured prefix at least one non-target fact exceeded the
+(b) margin (six of seven at k = 64).
 
 A store-based design deletes one row. This design has no row to delete, and the ablation tested here
 does not make one. We do not conclude that no better mechanism exists: the ordering is a greedy
@@ -686,23 +688,37 @@ the untouched adapter, which is why every table prints pre beside post.
 
 **Every measurement above stands as published.** The verdict, the component counts, the 77.64%
 destroyed adaptation, the instrument disagreement and its retroactive scope limit are not withdrawn,
-softened, or held pending anything. The extension of Section 4.8 uses the pinned `run_erasure_arm`
-and a committed driver that never calls the gate; whether it avoids the pin's report path and its
-`erase` subcommand, where the defects sit, is **[TODO: confirm against defects A–E]**.
+softened, or held pending anything. The extension of Section 4.8 shares the verdict's route in one
+respect: its pooled question-unit rows come from `phase19_run._pooled_rows`, the recovery for defect
+C, so that its readings are the same quantity as Phase 19's, and a committed test reproduces Phase
+19's k = 78 numbers from the committed M1 record with the same reduction. It uses the pinned
+`run_erasure_arm` and never calls the gate.
 
 One claim is withheld: **that this verdict is mechanically reproducible by the closed pin alone.**
 It is not. The verdict was reached along a hand-driven path around defects in the closed pin, which
-publishes five distinct defects (labelled A–E; four of them are independent ways the pin's own
-report path cannot reproduce this verdict). A reader cannot check out the repository, run the
-pinned CLI over the committed artifacts, and watch this verdict come back. Each routing is
-disclosed and every governing number was re-derived through a pinned function before the gate was
-called — but disclosure is not mechanical reproducibility, and we do not publish the weaker claim
-under the stronger word. The pin is closed at 15 commits and is not repaired to flip this: editing
-a closed pin after the numbers exist would void the pre-registration ordering that makes every
-other figure here credible.
+publishes four defects, A to D, on the path from the committed artifacts to the verdict **[TODO: the
+v1 draft counted five, A–E; find where E is published, or drop it]**. A reader cannot check out the
+repository, run the pinned CLI over the committed artifacts, and watch this verdict come back. Each
+routing is disclosed and every governing number was re-derived through a pinned function before the
+gate was called — but disclosure is not mechanical reproducibility, and we do not publish the weaker
+claim under the stronger word. The pin is closed at 15 commits and is not repaired to flip this:
+editing a closed pin after the numbers exist would void the pre-registration ordering that makes
+every other figure here credible.
 
-**[TODO]** Map defects A–E to the numbers they touch: which figures come from committed artifacts
-alone, and which needed the hand-driven route.
+The defects, as far as the committed report and code state them; the rest of each description is
+still to be read into this table.
+
+| defect | what the pin does | reaches the paper through | routed by |
+| --- | --- | --- | --- |
+| A | `zero_results_have_nll` reads False on key order alone; `run_erasure_arm` writes records with `sort_keys=True` | **[TODO: the rest of the report's description]** | measured on the record and worked around at the one place it bites |
+| B | `_calibration_rate` reads Phase 18's candidate recall (0.8846153846153846, branch `ceiling`) instead of the calibration arm's own rate, so the pin's floor is 0.2 | the (a) floor: 0.0911 governs, and 0.2 is published beside it as superseded | the corrected blind rate is used |
+| C | the committed `per_fact` block carries one tier's count: `rows.update` lets `core_taught` (14 questions) overwrite the other tier | every pooled count: 27 questions for the target and for each non-target | `_pooled_rows`, which the k* driver also uses |
+| D | a fourth defect, on `[ppl, n]` | **[TODO]** | **[TODO]** |
+| E | **[TODO: not found in the Phase 19 report or in `phase19_run.py`]** | | |
+
+**[TODO]** Fill the rows marked TODO, and state for each headline figure whether it needs the
+hand-driven route. From what is stated so far, the governing (a) floor (defect B) and every pooled
+(a) and (b) count (defect C) reach the paper through the recoveries.
 
 **Provenance.** Run at git `465cb2dd71baf4299be435a2670f7738fdd35de8`, device `mps`, torch 2.7.1,
 seed 1337, corpus digest `ff8e6e3c…`, mask digest `79b55770…`, K = 48, ASR rungs (1, 4, 16, 48),
@@ -777,6 +793,7 @@ winner. *(From `results/phase19_arm_erased.json`.)*
 | `scripts/erasure_kstar_prereg.py` (rule, `7b543de`) | `468b155363a5b728dbcea6bd13cc9ce30b23ad5a61d6c73a8d3da194da8ed71c` | — |
 | `results/erasure_kstar_summary.json` | `844520de0b9440f4da8863767617a797e3809dd8329d59b94bafbb1f897b3688` | — |
 | `results/phase19_collateral_curve.json` | `e27d64efd005b206dbea805fc6c6623a1398af985370ece7286a4fd2caac0ea7` | — |
+| `persona_adapter.pt` (the adapter ablated; Phase 14 report and the curve's `adapter_in_sha256`) | `226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb` | — |
 
 Decision rule: `scripts/erasure_gate.py` at `23a830c`, 2026-08-12, one commit, unamended.
 
