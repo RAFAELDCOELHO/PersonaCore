@@ -786,15 +786,66 @@ removes the target without collateral.
 
 ## Appendix A — The committed rule, verbatim
 
-The four clauses of `ERASURE_DECISION_RULE` and the `ERASURE_GOAL_FRAMING` string, quoted from
-`scripts/erasure_gate.py` at `23a830c`. *(To be inserted verbatim in the typeset version; the rule
-is imported by the report generator rather than retyped, so the quotation is mechanical.)*
+The 6 clauses of `ERASURE_DECISION_RULE` and the `ERASURE_GOAL_FRAMING` string, read from
+`scripts/erasure_gate.py` (`23a830c`, unamended: a committed test requires that file to have exactly
+that one commit). The text below is emitted from the module by the script that built this draft, not
+typed.
+
+**`ERASURE_DECISION_RULE`**
+
+**Clause 1**
+
+> PRECONDITION (worth attempting): erasure is worth attempting ONLY IF Phases 16-18 establish that the target fact is actually recoverable from the weights — i.e. Phase 18's best attack, run at its pre-registered budget, extracts the target at a rate whose one-sided 95% LOWER bound (questions as the unit) exceeds the same-budget no-adapter base rate. If nothing is extractable there is nothing to erase, and Phase 19 is moot rather than successful.
+
+**Clause 2**
+
+> (a) TARGET FORGOTTEN: the one-sided 95% UPPER bound on post-erasure recall of the TARGET fact — Wilson interval, QUESTIONS as the unit of analysis, never draws — sits at or below a floor derived by BLIND CALIBRATION on a fact set disjoint from the target, using the same procedure that produced Phase 14's thresholds under CALIBRATION_SHA. The floor is NOT taken from the unlearning literature. Where the calibration has not yet run, the procedure and the estimator are what this rule fixes; the constant is produced by that procedure, blind.
+
+**Clause 3**
+
+> (b) NON-TARGET PRESERVED: post-erasure recall of every NON-TARGET taught fact stays within k=2 x the noise floor measured in the SAME run, matching the margin discipline used by every other gate in this project. Reported per fact with its denominator, never pooled into a single rate that can hide one destroyed fact behind seven intact ones.
+
+**Clause 4**
+
+> (c) CAPABILITY PRESERVED: the model remains a functioning conversational model. Masked dialogue val PPL must not exceed the published v2.0 baseline 4.5733, and retention perplexity must not exceed the published v2.0 EWC baseline 3.891140, by more than k=2 x the relevant noise floor (for retention, k=2 x 0.068930 = 0.137860). This condition exists because (a) and (b) can BOTH be satisfied by a model that has been degraded into uselessness — the erasure analogue of the failure the Phase 13 A/B guarded against when it refused to let a retention win be bought by failing to learn.
+
+**Clause 5**
+
+> DESCRIPTIVE, EXPLICITLY NOT GATED: representational consistency (e.g. cross-persona delta-W cosine, Fisher overlap between the erased region and the preserved region) is REPORTED with its bounds and never converted into a pass/fail. At n=8 facts and n=3 personas the sample cannot support a threshold, and gating what the sample cannot support is treated as a defect in this project, not as extra rigour.
+
+**Clause 6**
+
+> VERDICT DOMAIN: the rule returns SUCCESS, FAILURE, or INCONCLUSIVE. INCONCLUSIVE is a real outcome, not a failure to reach one: it is the required verdict whenever the precondition was not met, a required measurement is missing, or a zero-extraction result has no accompanying teacher-forced NLL to distinguish 'absent' from 'attack too weak'.
+
+**`ERASURE_GOAL_FRAMING`**
+
+> Auditable forgetting with a measurable bound, plus representational consistency reported honestly. NOT 'indistinguishable from never-having-learned' — that claim is untestable at 13.9M parameters and is under active criticism in the unlearning literature itself.
+
+Constants read from the same module: `MARGIN_K = 2`, `CONFIDENCE = 0.95`, `VERDICTS = ('SUCCESS', 'FAILURE', 'INCONCLUSIVE')`.
 
 ## Appendix B — Full eight-fact target ranking
 
 The committed selection rule's input and output: every candidate's successes, denominator, rate and
 tie-break NLL, in the rule's order, so a reader can re-run the comparison rather than be handed a
-winner. *(From `results/phase19_arm_erased.json`.)*
+winner. Read from `TARGET_RANKING` in `scripts/phase19_erasure.py` (the closed pin), with the fields
+`slot`, `successes`, `n_questions`, `rate`, `exposure_ans1_mean_nll`; the rows below are emitted
+from that constant, not typed. The rate is the prior audit's `A2` held-out-tier question rate, over
+13 questions per fact.
+
+| position | slot | successes | n_questions | rate | tie-break NLL (`exposure_ans1_mean_nll`) |
+| --- | --- | --- | --- | --- | --- |
+| 1 | **`pet_name`** (target) | 13 | 13 | 1.0 | 0.13365373015403748 |
+| 2 | `cat_name` | 13 | 13 | 1.0 | 0.20872001349925995 |
+| 3 | `street` | 13 | 13 | 1.0 | 0.24566514790058136 |
+| 4 | `sibling_name` | 13 | 13 | 1.0 | 2.3904333114624023 |
+| 5 | `person_name` | 12 | 13 | 0.9230769230769231 | 0.4091116487979889 |
+| 6 | `house_number` | 10 | 13 | 0.7692307692307693 | 1.1385736465454102 |
+| 7 | `birth_year` | 10 | 13 | 0.7692307692307693 | 1.2660512924194336 |
+| 8 | `hometown` | 8 | 13 | 0.6153846153846154 | 3.1255314350128174 |
+
+The rows are ordered by rate, descending, with ties broken by NLL, ascending; the script that built
+this draft checked that the constant obeys that order. The head, `pet_name`, is the erasure target.
+Its NLL, 0.13365373015403748, is the intact teacher-forced NLL of Section 3.5.
 
 ## Appendix C — Artifact digests
 
