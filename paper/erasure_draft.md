@@ -22,14 +22,15 @@ Using rank-1 component ablation ordered by leave-one-out contribution to the tar
 on the target fell from 27 of 27 to 0 of 27 questions (1,296 draws; one-sided 95% Wilson upper bound
 0.0911, which clears the pre-registered condition exactly on the boundary a perfect erasure can
 attain at that denominator). The ablation stopped at 78 of the adapter's 288 addressable rank-1
-components, but that stop is set by exposure rank, the instrument this paper criticizes. A post-hoc
-extension, with its rule committed before its measurements, measured generation recall at four
-intermediate prefixes: 24, 18, 2 and 0 of 27 at k = 8, 16, 32 and 64, so the first generation-side
-zero lies in (32, 64]. The collateral does not hinge on where the stop falls. At k = 64, six of the
-seven gated non-target facts exceed the pre-registered degradation margin and 72.05% of the dialogue
-adaptation is destroyed; at k = 78 all seven exceed it and 77.64% is destroyed. At k = 8, while the
-target still generates 24 of 27, one non-target already exceeds the margin. The committed gate,
-called at k = 78, returned **FAILURE**.
+components, but that stop is set by exposure rank, the instrument this paper criticizes, and it
+moves with the candidate set: on the same ordering it falls at 78 components against 8 candidates
+and at 120 against 6. A post-hoc extension, with its rule committed before its measurements,
+measured generation recall at four intermediate prefixes: 24, 18, 2 and 0 of 27 at k = 8, 16, 32 and
+64, so the first generation-side zero lies in (32, 64]. The collateral does not hinge on where the
+stop falls. At k = 64, six of the seven gated non-target facts exceed the pre-registered degradation
+margin and 72.05% of the dialogue adaptation is destroyed; at k = 78 all seven exceed it and 77.64%
+is destroyed. At k = 8, while the target still generates 24 of 27, one non-target already exceeds
+the margin. The committed gate, called at k = 78, returned **FAILURE**.
 
 The second finding is methodological. Read through canary exposure rank, the same ablations look
 selective: all seven non-target facts hold rank 1 at all eight sweep checkpoints, and at the four
@@ -242,7 +243,10 @@ reading the production adapter.
 The stopping instrument is the exposure rank whose blindness Section 4.4 reports. **k = 78 is
 therefore the rank instrument's stop, not a measured minimum for generation-side removal**:
 generation recall of the target was read only before ablation (27/27) and at k = 78 (0/27). Section
-3.8 describes the post-hoc extension that measures it at intermediate prefixes.
+3.8 describes the post-hoc extension that measures it at intermediate prefixes. The stop also
+depends on the candidate set. The committed sweep used the 8-member set that the exposure readings
+use and stopped at k = 78; the same 288-address ordering, identical in both runs, swept against the
+6-member calibration-twin set stops at k = 120 (`results/phase19_reference_set_resweep.json`).
 
 ### 3.6 Instruments
 
@@ -549,10 +553,11 @@ D5, in the order of its headings); the counts below are read from it.
 
 **The target.** Attack recall on the target is 24, 18, 2 and 0 of 27 at k = 8, 16, 32 and 64. The
 first zero is at k = 64, so **k\* = 64 with bracket (32, 64]**. The sequence never rises and does
-not rebound. The rank instrument's stop at k = 78 therefore lags the generation-side zero by between
-14 and 45 components (78 − 64 to 78 − 33). At k = 64 the target generates in none of 27 questions
-while its exposure rank is still 1 and its value-span NLL is 3.65: the disagreement between the
-instruments is measured on the target itself, and not only on its bystanders.
+not rebound. The rank instrument's stop at k = 78 (8 candidates) therefore lags the generation-side
+zero by between 14 and 45 components (78 − 64 to 78 − 33); at k = 120 (6 candidates) it lags by
+between 56 and 87. At k = 64 the target generates in none of 27 questions while its exposure rank is
+still 1 and its value-span NLL is 3.65: the disagreement between the instruments is measured on the
+target itself, and not only on its bystanders.
 
 **The collateral does not depend on the stop.** The number of non-targets beyond the (b) margin is
 1, 2, 5 and 6 of 7 at k = 8, 16, 32 and 64, and 7 of 7 at k = 78 (Phase 19). Dialogue adaptation
@@ -623,8 +628,9 @@ any of them. That is what happened here: all seven non-target ranks stay at 1 at
 checkpoints while generation recall falls in steps, and in the M2 comparison the rank instrument
 returned the same readings for two adapters with completely different behaviour. Part of that is
 saturation: with candidate sets of 6 to 8 the instrument has at most about 3 bits of range, and
-seven of eight slots sit at the ceiling in every state we read. A larger candidate set would give it
-more resolution; whether that closes the gap is untested.
+seven of eight slots sit at the ceiling in every state we read. The candidate-set size does move the
+stopping decision (Section 3.5): the larger set stops earlier, at 78 components against 120, but
+still after the generation-side zero. Whether a much larger set would close the gap is untested.
 
 Concretely, for anyone reporting an unlearning result:
 
@@ -719,10 +725,10 @@ pin's), with the way each reaches this paper.
 A to D are the four ways the pin's own report path cannot reproduce the verdict; E sits in the
 selection path and touches none of the committed numbers. The governing (a) floor (B) and every
 pooled (a) and (b) count (C) reach the paper through the recoveries, and the k* extension shares
-C's. **[TODO]** State the k that the |R| = 6 reading gives, from
-`results/phase19_reference_set_resweep.json`: the ordering is invariant to |R|, while |R| enters the
-stopping condition through the rank, so if the two readings differ, k = 78 is partly a property of
-the instrument's candidate-set size.
+C's. Defect E matters for a different reason: the pin's own `erase` path reads the target's stopping
+rule on the 6-member set, where the resweep (`results/phase19_reference_set_resweep.json`) stops at
+k = 120, while the committed selection, on 8, stops at k = 78. The ordering is identical in both, so
+the defect changes where the rank-based stop falls and not which components come first.
 
 **Provenance.** Run at git `465cb2dd71baf4299be435a2670f7738fdd35de8`, device `mps`, torch 2.7.1,
 seed 1337, corpus digest `ff8e6e3c…`, mask digest `79b55770…`, K = 48, ASR rungs (1, 4, 16, 48),
@@ -798,6 +804,7 @@ winner. *(From `results/phase19_arm_erased.json`.)*
 | `results/erasure_kstar_summary.json` | `844520de0b9440f4da8863767617a797e3809dd8329d59b94bafbb1f897b3688` | — |
 | `results/phase19_collateral_curve.json` | `e27d64efd005b206dbea805fc6c6623a1398af985370ece7286a4fd2caac0ea7` | — |
 | `persona_adapter.pt` (the adapter ablated; Phase 14 report and the curve's `adapter_in_sha256`) | `226f2ae59938e389b396d999bc5f3e1e464874db5f3352d513dc5cd85984ebfb` | — |
+| `results/phase19_reference_set_resweep.json` | `3fada88fdbbed62fca5288cdee2ee23b6a58403070f3bb22a73848dfea522309` | 75,924 |
 
 Decision rule: `scripts/erasure_gate.py` at `23a830c`, 2026-08-12, one commit, unamended.
 
