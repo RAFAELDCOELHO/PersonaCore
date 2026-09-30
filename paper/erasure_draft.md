@@ -1,4 +1,4 @@
-# Exposure rank cannot see collateral damage from LoRA adapter ablation: a pre-registered single-fact erasure audit at 331,776 adapter parameters
+# Exposure rank did not register collateral damage from LoRA adapter ablation: a pre-registered single-fact erasure audit at 331,776 adapter parameters
 
 **Rafael D. Coelho**
 
@@ -797,15 +797,15 @@ The project's code, including the experiments reported here, was written by AI t
 author's direction: Claude Code (Anthropic); the author reports that no line of it was typed by
 hand. The post-hoc extension (Section 3.8) was designed in conversation with Claude (Anthropic), and
 its measurements were launched by the author on the author's machine. Its rule, driver and tests
-were written with RESPOSTA 3; the table, figure and audit scripts, and the scripted edits to this
-text, were written with Claude (Anthropic) in a chat interface. The first draft of the text was
-written by RESPOSTA 1; the LaTeX conversion was produced by RESPOSTA 2. The numbers of the extension
-(Sections 3.8 and 4.8, Figure 1 and Appendices A, B and D) are emitted by scripts from committed
-records; the other numbers were transcribed from committed artifacts, and the LaTeX conversion was
-checked against the Markdown draft by a script that flags any number the draft does not contain. A
-Cursor agent contributed continuous-integration, demo, license and citation-file changes to the
-repository; the paper describes none of them. The author is responsible for every claim in this
-paper.
+were written with Claude (Anthropic) in the Claude Science app; the table, figure and audit scripts,
+and the scripted edits to this text, were written with Claude (Anthropic) in a chat interface. The
+first draft of the text and the LaTeX conversion were produced by Claude (Anthropic) in the Claude
+Science app. The numbers of the extension (Sections 3.8 and 4.8, Figure 1 and Appendices A, B and D)
+are emitted by scripts from committed records; the other numbers were transcribed from committed
+artifacts, and the LaTeX conversion was checked against the Markdown draft by a script that flags
+any number the draft does not contain. A Cursor agent contributed continuous-integration, demo,
+license and citation-file changes to the repository; the paper describes none of them. The author is
+responsible for every claim in this paper.
 
 ## Code and data availability
 
