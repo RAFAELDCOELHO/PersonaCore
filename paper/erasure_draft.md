@@ -790,6 +790,32 @@ and reports fact-localized structure at much larger scale; whether that structur
 adapter parameters is what we probe, and for this fact and this ordering we did not find a set that
 removes the target without collateral.
 
+## AI-use statement
+
+The author directed this work, decided which measurements to run and what to report, and ran them.
+The project's code, including the experiments reported here, was written by AI tools under the
+author's direction: Claude Code (Anthropic); the author reports that no line of it was typed by
+hand. The post-hoc extension (Section 3.8) was designed in conversation with Claude (Anthropic), and
+its measurements were launched by the author on the author's machine. Its rule, driver and tests
+were written with RESPOSTA 3; the table, figure and audit scripts, and the scripted edits to this
+text, were written with Claude (Anthropic) in a chat interface. The first draft of the text was
+written by RESPOSTA 1; the LaTeX conversion was produced by RESPOSTA 2. The numbers of the extension
+(Sections 3.8 and 4.8, Figure 1 and Appendices A, B and D) are emitted by scripts from committed
+records; the other numbers were transcribed from committed artifacts, and the LaTeX conversion was
+checked against the Markdown draft by a script that flags any number the draft does not contain. A
+Cursor agent contributed continuous-integration, demo, license and citation-file changes to the
+repository; the paper describes none of them. The author is responsible for every claim in this
+paper.
+
+## Code and data availability
+
+The repository (github.com/RAFAELDCOELHO/PersonaCore) contains the code, the committed records under
+`results/`, and the scripts that generate the tables and the figure. The pretrained and fine-tuned
+weights, including the adapter `persona_adapter.pt` (sha256 in Appendix C), and the training corpora
+are not in the repository: they exist on the author's machine only, and no external archive is
+referenced. Reproducing the pipeline from scratch means retraining; every step is scripted, and we
+do not claim bit-identical results on other hardware.
+
 ---
 
 ## Appendix A — The committed rule, verbatim
