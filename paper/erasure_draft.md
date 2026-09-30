@@ -96,10 +96,10 @@ attempting rather than moot — the pre-registered precondition, not a threshold
 We do not claim the fact is gone. Condition (a) is a one-sided upper bound on recall with its
 denominator published, never a point estimate and never an equivalence claim. The recorded goal of
 the committed rule is *auditable forgetting with a measurable bound*, explicitly not
-"indistinguishable from never-having-learned" — a framing that is untestable at 13.9M parameters
-and is under active criticism in the unlearning literature. We ran no relearning attack; a few
-fine-tuning samples are documented to recover a large fraction of supposedly removed information,
-and our bound does not cover that attacker.
+"indistinguishable from never-having-learned" — a framing that the rule calls untestable at 13.9M
+parameters and under active criticism in the unlearning literature. We ran no relearning attack;
+fine-tuning on a small, loosely related set of data is documented to reverse the effects of
+unlearning in LLMs, and our bound does not cover that attacker.
 
 We also do not claim that fact-localized structure is absent at this capacity. The ablation order is
 a greedy leave-one-out ranking on the target alone, we compared it with no other ordering, and
@@ -113,16 +113,17 @@ not answered here.
 
 ### 2.1 Model and adapter
 
-The base model is a 13,891,584-parameter GPT-style decoder built from scratch in PyTorch: 6
-pre-norm blocks, 6 attention heads, 384-dimensional embeddings, 256-token context, weight tying as
-shared storage, and a byte-level BPE tokenizer with 547 live ids. It was pretrained on TinyStories
-and then dialogue-fine-tuned with an EWC anchor guarding retention of the pretraining task. All
-training ran on-device on Apple Silicon in fp32.
+The base model is a 13,891,584-parameter GPT-style decoder built from scratch in PyTorch: 6 pre-norm
+blocks, 6 attention heads, 384-dimensional embeddings, 256-token context, weight tying as shared
+storage, and a byte-level BPE tokenizer with 547 live ids. It was pretrained on TinyStories (Eldan &
+Li, arXiv:2305.07759) and then dialogue-fine-tuned with an EWC anchor (Kirkpatrick et al., PNAS
+2017) guarding retention of the pretraining task. All training ran on-device on Apple Silicon in
+fp32.
 
-Personalization is written through a from-scratch LoRA implementation at rank 8 over six named
-projections per block — `q_proj`, `k_proj`, `v_proj`, `c_proj`, `fc_in`, `fc_out` — for 36 wrapped
-linear layers and 331,776 trainable parameters against a base held bit-identical. The taught
-adapter is a 1.35 MB file.
+Personalization is written through a from-scratch LoRA implementation (Hu et al., arXiv:2106.09685)
+at rank 8 over six named projections per block — `q_proj`, `k_proj`, `v_proj`, `c_proj`, `fc_in`,
+`fc_out` — for 36 wrapped linear layers and 331,776 trainable parameters against a base held
+bit-identical. The taught adapter is a 1.35 MB file.
 
 ### 2.2 Taught facts
 
@@ -259,13 +260,14 @@ with parity of corpus digest, forbidden-id mask digest, K, ASR rungs, stop ids, 
 top-p 0.95 and seed stride asserted programmatically against that phase's committed values rather
 than compared by eye.
 
-**Canary exposure rank.** Carlini-style exposure adapted to a finite same-slot candidate set:
-`exposure_bits = log₂(|R|) − log₂(rank)`, where the taught value is ranked ascending by
-teacher-forced NLL among |R| = 6 to 8 same-slot candidates including itself. Rank 1 gives exposure
-at the ceiling log₂(|R|), i.e. 2.5850 bits at |R| = 6 through 3.0000 at |R| = 8. Ties break on the
-candidate string so the rank is reproducible across processes. Two length confounds are published
-as required fields on every exposure record and neither is corrected — the reference set cannot be
-length-matched without dropping |R| below the bit ceiling the resolution depends on.
+**Canary exposure rank.** Carlini-style exposure (Carlini et al., USENIX Security 2019) adapted to a
+finite same-slot candidate set: `exposure_bits = log₂(|R|) − log₂(rank)`, where the taught value is
+ranked ascending by teacher-forced NLL among |R| = 6 to 8 same-slot candidates including itself.
+Rank 1 gives exposure at the ceiling log₂(|R|), i.e. 2.5850 bits at |R| = 6 through 3.0000 at |R| =
+8. Ties break on the candidate string so the rank is reproducible across processes. Two length
+confounds are published as required fields on every exposure record and neither is corrected — the
+reference set cannot be length-matched without dropping |R| below the bit ceiling the resolution
+depends on.
 
 **Teacher-forced value-span NLL.** The mean negative log-probability of the value span given the
 question, reported as `ans1`/mean. This is what distinguishes a zero-extraction result from a
@@ -663,7 +665,6 @@ is what makes them safe, and this result is the argument for why it was never op
 
 The verdict is bounded on seven counts; the first six were recorded before the ship decision and the
 seventh describes the post-hoc extension:
-afterward:
 
 1. **One fact.** n = 1 target, selected by a committed rule as the most extractable of eight.
 2. **One mechanism.** Rank-1 component ablation with a single greedy leave-one-out ordering; no
@@ -673,8 +674,7 @@ afterward:
    make no claim about whether fact-localized structure appears at larger capacity, and the
    experiment that would settle it — the same sweep at several adapter ranks — is the obvious next
    one.
-4. **No relearning attack.** A few fine-tuning samples are documented to recover a large fraction
-   of removed information. Our (a) bound covers a prompt-only attacker and nothing stronger.
+4. **No relearning attack.** Fine-tuning on a small, loosely related set of data is documented to reverse the effects of unlearning in LLMs. Our (a) bound covers a prompt-only attacker and nothing stronger.
 5. **A retrain is a different adapter, not an edited one.** M2's non-target recall differs from the
    taught adapter's by seed and data-order noise as well as by the omission, and one run cannot
    separate them. Two adapters at two seeds would bound that noise; one does not.
@@ -767,15 +767,17 @@ adapters that differ completely in generation, because it saturates at small can
 **Unlearning and its evaluation.** TOFU (Maini et al., 2024) is the canonical fictitious-unlearning
 benchmark; our committed rule cites it as context and explicitly declines to adopt its thresholds,
 which are calibrated for models orders of magnitude larger. *Position: LLM Unlearning Benchmarks are
-Weak Measures of Progress* (arXiv:2410.02879) is the reason the recorded goal is "auditable
-forgetting with a measurable bound" rather than "indistinguishable from never-having-learned." Our
-instrument-disagreement result is direct empirical support for that position paper's thesis, from a
-different direction: not that the benchmarks are too easy, but that a standard instrument can be
-structurally blind to the damage an intervention causes.
+Weak Measures of Progress* (arXiv:2410.02879) is cited by the committed rule for its goal framing:
+the recorded goal is "auditable forgetting with a measurable bound" rather than "indistinguishable
+from never-having-learned." The paper's own stated position is narrower: that existing unlearning
+benchmarks give an overly optimistic view of candidate methods. Our instrument-disagreement result
+is consistent with its concern about evaluation, from a different direction: not that the benchmarks
+are too easy, but that a standard instrument can be structurally blind to the damage an intervention
+causes.
 
-**Relearning.** Hu et al. (arXiv:2406.13356) recover a large fraction of supposedly removed
-information with a few fine-tuning samples. We did not run this attack and our bound does not cover
-it; it is the single most important missing arm.
+**Relearning.** Hu et al. (arXiv:2406.13356) show that fine-tuning on a small, loosely related set
+of data can reverse the effects of unlearning in LLMs. We did not run this attack and our bound does
+not cover it; it is the single most important missing arm.
 
 **Membership inference.** Shokri et al. (IEEE S&P 2017) is cited in our rule to explain why MIA is
 *not* used: at n = 8 members it is uninformative.

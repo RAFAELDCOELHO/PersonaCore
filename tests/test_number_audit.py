@@ -71,3 +71,32 @@ def test_the_exit_status_fails_only_on_new_numbers(tmp_path):
     dropped = tmp_path / "dropped.md"
     dropped.write_text("Recall fell to 0/27.", encoding="utf-8")
     assert na.main([str(ref), str(dropped)]) == 0
+
+
+def test_latex_view_restores_percent_and_drops_comments_and_the_preamble():
+    tex = "\\usepackage[margin=2.5cm]{geometry}\n\\begin{document}\n72.05\\% left % 99.99 hidden\n"
+    view = na.latex_view(tex)
+    assert "72.05%" in view and "99.99" not in view and "2.5" not in view
+
+
+def test_latex_view_removes_the_arguments_of_content_free_commands():
+    tex = (
+        "\\begin{document}\\includegraphics[width=0.9\\linewidth]{fig1.pdf} \\cite[p.~3]{a2019} "
+        "\\ref{sec:3} \\VerbatimInput[fontsize=\\small]{tables.md} 0.0911"
+    )
+    assert [t for t, _ in na.occurrences(na.latex_view(tex))] == ["0.0911"]
+
+
+def test_latex_view_reads_thousands_separators_and_nonbreaking_spaces():
+    view = na.latex_view("\\begin{document}k~=~64, 1\\,296 draws and 2{,}430 controls")
+    assert [t for t, _ in na.occurrences(view)] == ["64", "1296", "2430"]
+
+
+def test_the_latex_flag_makes_escaped_percent_agree_with_the_markdown_reference(tmp_path):
+    ref, tex = tmp_path / "ref.md", tmp_path / "main.tex"
+    ref.write_text("72.05% destroyed at k = 64.", encoding="utf-8")
+    tex.write_text("\\begin{document}72.05\\% destroyed at $k = 64$.", encoding="utf-8")
+    assert na.main([str(ref), str(tex)]) == 1
+    assert na.main([str(ref), str(tex), "--latex"]) == 0
+    tex.write_text("\\begin{document}72.5\\% destroyed at $k = 64$.", encoding="utf-8")
+    assert na.main([str(ref), str(tex), "--latex"]) == 1

@@ -1,6 +1,6 @@
 """Compare the numbers of a rewritten paper against the reference draft.
 
-    python paper/number_audit.py REFERENCE REWRITTEN [--strict] [--skip REGEX]
+    python paper/number_audit.py REFERENCE REWRITTEN [--strict] [--skip REGEX] [--latex]
 
 The reference draft is the only text whose numbers were bound to records, so any number in the
 rewrite that the draft does not contain is a candidate for a retyped, rounded or invented value.
@@ -12,6 +12,10 @@ at least three digits, plus 40+ character hex digests. It does NOT see bare smal
 the results live partly there ("24, 18, 2 and 0 of 27"). `--strict` compares every number by
 occurrence count, which catches a changed 24 but also fires on section numbers and references.
 `--skip REGEX` drops matching lines from both texts (use it for a bibliography).
+`--latex` reads REWRITTEN as LaTeX: it drops everything before \\begin{document} and every comment,
+turns \\% back into %, removes the arguments of commands that carry no content (\\cite, \\ref,
+\\label, \\includegraphics, \\VerbatimInput, \\input and the like), and treats ~ and \\, as spaces
+(except between digits, where \\, is a thousands separator). Nothing else is normalised.
 """
 
 import re
@@ -21,6 +25,23 @@ from collections import Counter
 HEX = re.compile(r"\b(?=[0-9a-f]*[a-f])[0-9a-f]{6,}\b")
 DIGEST = re.compile(r"\b[0-9a-f]{40,64}\b")
 NUMBER = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?(?:/\d[\d,]*)?%?")
+
+
+ARGUMENT_COMMANDS = (
+    "cite[a-z]*|ref|cref|Cref|eqref|label|includegraphics|VerbatimInput|input|include|"
+    "bibliographystyle|bibliography|usepackage|documentclass|geometry|hypersetup|url|href"
+)
+
+
+def latex_view(text):
+    """The plain text whose numbers a Markdown reference would carry, from a LaTeX source."""
+    body = text.split(r"\begin{document}", 1)[-1]
+    body = "\n".join(re.sub(r"(?<!\\)%.*$", "", line) for line in body.splitlines())
+    body = re.sub(rf"\\(?:{ARGUMENT_COMMANDS})\*?(?:\[[^\]]*\])*\{{[^}}]*\}}", " ", body)
+    body = body.replace("{,}", ",")
+    body = re.sub(r"(?<=\d)\\,(?=\d)", "", body)
+    body = body.replace(r"\%", "%").replace(r"\_", "_").replace(r"\&", "&").replace("~", " ")
+    return re.sub(r"\\[,;: ]", " ", body)
 
 
 def significant(token):
@@ -75,15 +96,20 @@ def report(result):
 def main(argv):
     args = list(argv)
     strict = "--strict" in args
-    args = [a for a in args if a != "--strict"]
+    latex = "--latex" in args
+    args = [a for a in args if a not in ("--strict", "--latex")]
     skip = None
     if "--skip" in args:
         at = args.index("--skip")
         skip = args[at + 1]
         del args[at : at + 2]
     if len(args) != 2:
-        raise SystemExit("usage: number_audit.py REFERENCE REWRITTEN [--strict] [--skip REGEX]")
+        raise SystemExit(
+            "usage: number_audit.py REFERENCE REWRITTEN [--strict] [--skip REGEX] [--latex]"
+        )
     texts = [open(path, encoding="utf-8").read() for path in args]
+    if latex:
+        texts[1] = latex_view(texts[1])
     result = audit(texts[0], texts[1], strict=strict, skip=skip)
     print(report(result))
     return 1 if result["new"] else 0
