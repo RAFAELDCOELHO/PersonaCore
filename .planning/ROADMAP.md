@@ -1485,6 +1485,13 @@ source, and no E3/E4 threshold is locked without the research it rests on
      once, the `seed_list` (1337 plus the new seeds) that Phases 40 and 41 import. (PREREG-05;
      reworded 2026-10-01 in discuss-phase 35 — the earlier "fixes every front's rule, record paths
      and thresholds" contradicted Phases 37, 40 and 41, which derive their thresholds later)
+     (Hand-note 2026-10-01, approved by Rafael in the Phase 35 review: "committed before any of
+     that phase's records" is read per fill file — an owner may fill its slots from several
+     scripts/phase{owner}_*prereg.py files; a slot with no input record of its own phase precedes
+     every record of that phase; only slots that consume an in-phase input are exempt from that
+     input, per fill file; each such input precedes the file that consumes it; and once any
+     non-input record of the phase exists every slot of that phase is filled; enforced by
+     tests/test_phase35_prereg.py.)
 
   2. Every threshold has a written derivation committed before measurement and never changes after;
      a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C
