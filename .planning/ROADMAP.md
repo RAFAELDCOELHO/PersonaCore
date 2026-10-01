@@ -13,6 +13,7 @@
   it. Estimated ~25-30 h of MPS at Phase 25's measured pace, plus the recipe work.
 - ✅ **v5.0 Replay-Bearing Adversarial Re-run and Relearning Validation** — Phases 29-34 (shipped 2026-09-29) — [archive](milestones/v5.0-ROADMAP.md). The candidate bullet above is kept verbatim: `scripts/phase28_report.py`
   quotes it as the `roadmap_v5` slice.
+- 🚧 **v6.0 Robustness and Public Reproducibility of the v3.0–v5.0 Results** — Phases 35-45 (opened 2026-10-01)
 
 ## Overview
 
@@ -1426,6 +1427,351 @@ milestone closes on a green CI run of the developer's push
 
 - [x] 34-06-PLAN.md — push 2 by the developer, `close.ci_run`, RPT-04..06 ticked by hand, ROADMAP + STATE (RPT-04, RPT-05, RPT-06)
 
+### 🚧 v6.0 Robustness and Public Reproducibility of the v3.0–v5.0 Results (Phases 35-45)
+
+*Appended 2026-10-01 below the frozen v4.0 and v5.0 blocks, which are live inputs of `scripts/phase28_report.py`, `scripts/phase34_report.py` and the 25-07 sentinel guards and are never edited. Scope proposed by Claude (claude.ai), adopted by Rafael.*
+
+**Milestone Goal:** Find out whether the v3.0–v5.0 results survive more seeds, more facts, better
+recipes and stronger instruments, and make every published number reproducible by an outsider.
+FAILURE (v3.0), MOOT (v4.0) and MOOT/REFUSED (v5.0) stay published; v6.0 publishes beside them,
+never over them.
+
+- [ ] **Phase 35: v6.0 Pre-Registration and the Research It Rests On** - Every front's rule, record paths and thresholds committed and ancestry-guarded before any v6.0 record exists, with the one-run-audit bound and E3 selection-accounting research on record before any E3/E4 threshold is locked
+- [ ] **Phase 36: MPS Cost Probes and Budget Commitment** - Every MPS front priced by a probe on the M3; the v6.0 budget and stop line committed inside the 90 h MPS ceiling, or the work halts and the cut options go to Rafael
+- [ ] **Phase 37: Clean Reproduction of the Phase 19 Verdict** - R1a: one CPU command re-derives the Phase 19 verdict exactly; R1b: an MPS replica of k = 78 under a pre-registered tolerance, published beside the verdict
+- [ ] **Phase 38: Exposure Rank at Larger Minted Sets** - E5: the committed ablation prefixes re-scored against same-slot sets minted by a pre-registered rule
+- [ ] **Phase 39: Instrument × Context 2×2** - E6: NLL, rank and generation at the answer anchor and the full A2 question on the same adapters
+- [ ] **Phase 40: M2 Seed Noise Floor** - E2: M2 retrained at S seeds, published beside v3.0's sampling floor
+- [ ] **Phase 41: Erasure Across Facts, Orderings and Seeds** - E1: the four facts tied at 13/13, two orderings, two seeds, no PASS without second-seed replication
+- [ ] **Phase 42: DP-SGD Recipe Search at Large ε** - E3: a pre-registered grid at σ ∈ {0.5, 1}, n = 8, each configuration's ε published with `selection_accounted = false`
+- [ ] **Phase 43: One-Run Privacy Audit (Conditional)** - E4: runs only if its CPU-computed ceiling could reprove a point Phase 26 could not; otherwise the cut is published with the computed number
+- [ ] **Phase 44: Public Deposit Package** - R2: per-table inventory, SHA-256 manifest and verifier, model and data cards; no PersonaChat bytes; the deposit is Rafael's act
+- [ ] **Phase 45: v6.0 Report and Milestone Close** - The v6.0 section rendered from committed records beside v3.0–v5.0; close on a green CI run of Rafael's push
+
+**Ordering, stated as a constraint.** Phase 35's pre-registration module and its ancestry test are
+committed before any v6.0 record exists, Phase 36's probe records included. No E3 or E4 threshold
+is locked before PREREG-09's research is on record. No MPS work of Phases 37-43 starts before
+Phase 36 commits the budget and its stop line, and the whole milestone, probes included, stays
+inside Rafael's 90 h MPS ceiling. Phase 44 needs no MPS: it may start beside Phases 37-43 and
+closes after them. Carried owners: P32-CR-01 before any reuse of `phase32_points`; P34-WR-01
+before any re-install of the published block. Ancestry tests, not these sentences, are the
+mechanism.
+
+**Approvals (Rafael, 2026-10-01).** Every MPS phase needs one "approved" from Rafael after he
+has read that phase's plan. The plan lists in advance any automatic per-point commits; outside
+that list nothing is committed without his "approved". Seeds are fixed once in Phase 35's
+`seed_list`; Phase 40 trains the shared `pet_name` adapters and Phase 41 reuses them by SHA-256.
+
+### Phase 35: v6.0 Pre-Registration and the Research It Rests On
+
+**Goal**: Every v6.0 front's rule, record paths and thresholds are committed and ancestry-guarded
+before any v6.0 result record exists, every threshold carries its written derivation and its
+proposer, and no E3/E4 threshold is locked without the research it rests on
+**Depends on**: Nothing (first v6.0 phase; v5.0 shipped)
+**Requirements**: PREREG-05, PREREG-06, PREREG-07, PREREG-08, PREREG-09
+**Success Criteria** (what must be TRUE):
+
+  1. A v6.0 pre-registration module exists, ancestry-guarded in the `phase29_prereg.py` pattern: a
+     CPU-only ancestry test proves its first-add commit precedes every v6.0 result record. It fixes
+     every front's rule, record paths and thresholds, and imports the closed pins (`erasure_gate`,
+     `phase19_erasure`, `mitigation_gate`, `mitigation_budget`, `phase18_extraction`,
+     `phase26_canary`) — never copies them; it fixes, once, the `seed_list` (1337 plus the new
+     seeds) that Phases 40 and 41 import. (PREREG-05)
+
+  2. Every threshold has a written derivation committed before measurement and never changes after;
+     a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C
+     precedent). (PREREG-06)
+
+  3. Every locked decision records its proposer (Rafael, Claude Code, or Claude via claude.ai), and
+     nothing drafted by another assistant is recorded as "selected by THE USER, verbatim".
+     (PREREG-07)
+
+  4. Every rule module has a CPU test; MPS-only tests are skipped in CI with an attributed count.
+     (PREREG-08)
+
+  5. Before any E3 or E4 threshold is locked, research is on record on (a) the one-run audit bound
+     of Steinke, Nasr and Jagielski (2023) and (b) the method of accounting for E3's selection; no
+     E3/E4 threshold is locked without it. (PREREG-09)
+
+**Plans**: TBD
+
+### Phase 36: MPS Cost Probes and Budget Commitment
+
+**Goal**: Every MPS front is priced by a measured probe on the M3, and the v6.0 budget and its stop
+line are committed from those probes inside Rafael's 90 h MPS ceiling — or the work halts and the
+cut options go to Rafael
+**Depends on**: Phase 35
+**Requirements**: COST-01, COST-02
+**Success Criteria** (what must be TRUE):
+
+  1. Every MPS front is priced by a probe on the M3 before any budget, each with its wall-clock on
+     record: the exact E1 reading (A2 only, on the eight facts' questions, at K = 16 and at K = 48)
+     with fixed cost and per-draw cost separated, an M2 retrain plus its measurement, one DP
+     configuration at the grid's longest step count, a sample of minting clearance and E5 scoring,
+     and anchor-context generation; E1 is priced under the ERASE-07 design from that probe, and the
+     Phase 31 probe (a different reading: 416 extraction questions in four families plus taught and
+     held-out recall) is recorded beside it for comparison, never extrapolated from. (COST-01)
+
+  2. The v6.0 budget and its stop line are committed from the probe records before the first
+     measured point (the ARCAL pattern), inside Rafael's ceiling of 90 h of MPS for the whole
+     milestone, probes included. (COST-02)
+
+  3. If the probes show the fronts do not fit, the work halts and the cut options go to Rafael; no
+     front is cut unilaterally. (COST-02)
+
+  4. No record exists before the pre-registration module and its ancestry test are committed;
+     result records are write-once and committed only after Rafael writes approved. (COST-01,
+     COST-02)
+
+**Plans**: TBD
+
+### Phase 37: Clean Reproduction of the Phase 19 Verdict
+
+**Goal**: An outsider can re-derive the Phase 19 verdict exactly with one CPU command, and an MPS
+replica of k = 78 is published beside the verdict under a tolerance fixed before it ran
+**Depends on**: Phase 35 (R1a, CPU); Phase 36 (R1b, the MPS replica)
+**Requirements**: REPRO-01, REPRO-02, REPRO-03
+**Success Criteria** (what must be TRUE):
+
+  1. One command on CPU re-derives the Phase 19 verdict from the committed draws, importing the pin
+     and the gate, and asserts exactly k = 78, target 0/27, 7/7 non-targets beyond
+     0.2962962962962963, and 77.6370113463966% of the adaptation destroyed; any divergence halts
+     the run with a root-cause investigation, never an adjustment. (REPRO-01)
+
+  2. Each of defects A–E is routed by a named function, and removing any routing turns a test red —
+     a natural red, not a planted one. (REPRO-02)
+
+  3. The tolerance and the definition of "replicated" for the MPS replica of k = 78 are
+     pre-registered before it runs, and the replica is published beside the verdict, never over it.
+     (REPRO-03)
+
+  4. No record exists before the pre-registration module and its ancestry test are committed;
+     result records are write-once and committed only after Rafael writes approved. (REPRO-03)
+
+**Plans**: TBD
+
+### Phase 38: Exposure Rank at Larger Minted Sets
+
+**Goal**: The exposure rank of the committed ablation prefixes is re-measured against larger
+same-slot sets minted by a pre-registered rule, and the report says whether the rank moves before
+generation collapses
+**Depends on**: Phase 36
+**Requirements**: RANK-01, RANK-02, RANK-03
+**Success Criteria** (what must be TRUE):
+
+  1. A minting rule is pre-registered: numeric slots are enumerated; name and place slots receive
+     candidates minted by rule and cleared against the base as in Phase 17; the set sizes (up to
+     512, as far as minting allows) are declared before any scoring. (RANK-01)
+
+  2. The prefixes k = 0, 8, 16, 32, 64, 78 are re-scored with the `ans1` frame and mean reduction,
+     reconstructed from `persona_adapter.pt` and the committed `ordered_prefix` with SHA-256
+     verified, and the report states whether the rank moves before generation collapses, against
+     the committed A2 counts. (RANK-02)
+
+  3. `reference_set_for` and `phase18_extraction.py` stay untouched; the larger sets live in a new
+     module that imports them. (RANK-03)
+
+  4. No record exists before the pre-registration module and its ancestry test are committed;
+     result records are write-once and committed only after Rafael writes approved. (RANK-01,
+     RANK-02)
+
+**Plans**: TBD
+
+### Phase 39: Instrument × Context 2×2
+
+**Goal**: The rank/generation disagreement is split into its instrument part and its context part,
+measured on the same adapters at the answer anchor and at the full A2 question
+**Depends on**: Phase 36
+**Requirements**: CTX-01, CTX-02, CTX-03
+**Success Criteria** (what must be TRUE):
+
+  1. Which of the 216 A2 corpus entries enter the full-context NLL is pre-registered before any
+     scoring. (CTX-01)
+
+  2. On the same adapters (k = 0, 8, 16, 32, 64, 78 and M2), NLL and rank are scored at (a) the
+     answer anchor without the question and (b) the full A2 question, and generation runs in both
+     contexts where it is defined. (CTX-02)
+
+  3. The report separates how much of the rank/generation disagreement comes from the instrument
+     and how much from the context. (CTX-03)
+
+  4. No record exists before the pre-registration module and its ancestry test are committed;
+     result records are write-once and committed only after Rafael writes approved. (CTX-02)
+
+**Plans**: TBD
+
+### Phase 40: M2 Seed Noise Floor
+
+**Goal**: M2's training-seed noise floor is measured at S seeds and published beside v3.0's
+sampling floor, without amending v3.0's (b) margin
+**Depends on**: Phase 36 (S fixed from COST-01); Phase 35 (the `seed_list`)
+**Requirements**: NOISE-01, NOISE-02
+**Success Criteria** (what must be TRUE):
+
+  1. The full taught adapter and the M2 adapter without `pet_name` are retrained at S seeds imported
+     from Phase 35's `seed_list` (S fixed from COST-01 and pre-registered; S = 5 acceptable), and each
+     non-target's A2 recall is reported per seed with its denominator. (NOISE-01)
+
+  2. The training-seed noise floor is published beside v3.0's sampling floor (0.14814814814814814)
+     without amending v3.0's (b) margin. (NOISE-02)
+
+  3. No record exists before the pre-registration module and its ancestry test are committed;
+     result records are write-once and committed only after Rafael writes approved. (NOISE-01)
+
+**Plans**: TBD
+
+### Phase 41: Erasure Across Facts, Orderings and Seeds
+
+**Goal**: Erasure is re-measured on the four facts tied at 13/13 across two orderings and two
+teaching seeds, with each floor derived before measurement and no cell read PASS without
+replication at the second seed
+**Depends on**: Phase 36; Phase 40 (the shared `pet_name` taught and M2 adapters, reused by SHA-256)
+**Requirements**: ERASE-03, ERASE-04, ERASE-05, ERASE-06, ERASE-07, ERASE-08, ERASE-09, ERASE-10
+**Success Criteria** (what must be TRUE):
+
+  1. The targets are the four facts at 13/13 in Phase 19's committed `TARGET_RANKING` (`pet_name`,
+     `cat_name`, `street`, `sibling_name`), selected by a rule committed before measurement that
+     reads the committed ranking; two orderings (the existing greedy leave-one-out ordering and one
+     alternative) are pre-registered; the two teaching seeds (seed 1337 plus one new seed) are imported
+     from Phase 35's `seed_list`, and the `pet_name` taught and M2 adapters trained in Phase 40 are
+     reused, verified by SHA-256, never retrained. (ERASE-03, ERASE-04, ERASE-05)
+
+  2. Each target's condition-(a) floor is derived in writing before measurement — calibrated per
+     ordering (and per seed if the derivation requires it) and budgeted when it depends on the
+     calibration rate; the rank never enters the stopping rule and is recorded at every checkpoint,
+     under the checkpoint design settled in E1's discuss phase from the ERASE-07 proposal (a fixed,
+     pre-registered grid read with A2 at K = 16; the first zero confirmed at K = 48; a non-zero
+     K = 48 continues to the next checkpoint). (ERASE-06, ERASE-07)
+
+  3. Defect E is routed by a wrapper that imports the pin, and a test proves
+     `scripts/phase19_erasure.py` byte-unchanged; the new condition (c) is a bilateral dialogue band
+     anchored on the adapted model, with the D-01 logic imported from `mitigation_gate`.
+     (ERASE-08, ERASE-09)
+
+  4. Damage is reported per non-target fact, each with its own denominator, and no cell reads PASS
+     without replication at the second seed. (ERASE-10)
+
+  5. No record exists before the pre-registration module and its ancestry test are committed;
+     result records are write-once and committed only after Rafael writes approved. (ERASE-06,
+     ERASE-10)
+
+**Plans**: TBD
+
+### Phase 42: DP-SGD Recipe Search at Large ε
+
+**Goal**: A minimal pre-registered DP-SGD recipe grid answers whether any recipe keeps recall where
+the guarantee is vacuous, with every ε published unselected and null answers given the same weight
+**Depends on**: Phase 36; Phase 35 (PREREG-09 research on record)
+**Requirements**: RECIPE-01, RECIPE-02, RECIPE-03, RECIPE-04
+**Success Criteria** (what must be TRUE):
+
+  1. A grid of about 12 configurations (learning rate × steps × batch size, a pre-registered
+     subset) at σ ∈ {0.5, 1}, n = 8, at the one-taught-fact unit, is committed before any
+     configuration runs. (RECIPE-01)
+
+  2. If any configuration uses T ≠ 200, the pre-registration carries an assertion that runs the P22
+     check (the σ at which the WARNING-4/5 region begins) for every T used and fails before any
+     training if the grid crosses that region. (RECIPE-04)
+
+  3. Each configuration publishes ε at δ = 1e-5 with `selection_accounted = false`, with basic
+     composition over the whole grid published beside it; a finer selection accountant enters only
+     if the PREREG-09 research finds a cited, verified method. (RECIPE-02)
+
+  4. "Does any recipe keep recall where the guarantee is vacuous?" is answered against a recall
+     threshold pre-registered and imported from the v4.0 gate, null answers reported with the same
+     weight. (RECIPE-03)
+
+  5. No record exists before the pre-registration module and its ancestry test are committed;
+     result records are write-once and committed only after Rafael writes approved. (RECIPE-02,
+     RECIPE-03)
+
+**Plans**: TBD
+
+### Phase 43: One-Run Privacy Audit (Conditional)
+
+**Goal**: A committed, derived rule decides whether the one-run audit could reprove a point Phase 26
+could not; it runs only then, and otherwise the cut is published with the computed ceiling — a
+success path, not a failure
+**Depends on**: Phase 35 (parameters and PREREG-09 research); Phase 36 (budget, used only if the
+AUDIT-02 rule admits the run)
+**Requirements**: AUDIT-01, AUDIT-02, AUDIT-03
+**Success Criteria** (what must be TRUE):
+
+  1. The audit's parameters (number of canaries including any minted under the Phase 17 clearance,
+     inclusion probability, guesser, confidence) are pre-registered, and the maximum detectable ε
+     (Steinke, Nasr, Jagielski 2023) is computed on CPU and published before any run. (AUDIT-01)
+
+  2. A committed, derived rule decides whether the audit runs: E4 runs only if the CPU-computed
+     ceiling is strictly greater than ε = 3.7965357228934966 — the smallest of the 11 of 15 noised
+     Phase 26 points where `epsilon_upper >= auditor_ceiling` held (σ = 16) — read from
+     `results/phase26_canary.json` and never retyped. (AUDIT-02)
+
+  3. **Cut branch:** otherwise E4 is cut and the cut is published with the computed ceiling, with
+     no MPS audit run; which branch runs is the rule's output, not a decision. (AUDIT-02)
+
+  4. **Run branch:** if it runs, every point where the audit could not have failed is declared as
+     such (the Phase 26 precedent). (AUDIT-03)
+
+  5. No record exists before the pre-registration module and its ancestry test are committed;
+     result records are write-once and committed only after Rafael writes approved. (AUDIT-02,
+     AUDIT-03)
+
+**Plans**: TBD
+
+### Phase 44: Public Deposit Package
+
+**Goal**: An outsider can verify every artifact behind each published table against a SHA-256
+manifest and rebuild what cannot be redistributed, with the licenses read at the source and the
+deposit left to Rafael
+**Depends on**: Phase 35; needs no MPS, may start beside Phases 37-43 and closes after them
+**Requirements**: PKG-01, PKG-02, PKG-03, PKG-04, PKG-05, PKG-06, PKG-07, PKG-08
+**Success Criteria** (what must be TRUE):
+
+  1. Every checkpoint, adapter, corpus and teaching file that feeds each published table (REPORT
+     v3.0–v5.0 sections and the paper) is inventoried per table with its SHA-256 and the record that
+     cites it; `phase25_calibration_adv_n8_adapter.pt` and `phase25_calibration_dp_n64_adapter.pt`
+     are recorded in the manifest as absent and cited only by records outside the report and the
+     paper, and neither is regenerated. (PKG-01, PKG-07)
+
+  2. A CPU verifier script checks a package directory against the SHA-256 manifest, and a tampered
+     file turns the verifier's test red. (PKG-02)
+
+  3. No PersonaChat bytes are packaged (neither the raw corpus nor `data/dialog_*.bin`): the
+     manifest carries their hashes and the rebuild scripts, and a rebuild from the source reproduces
+     those hashes; weights trained with PersonaChat (`convbase_*.pt` and every adapter trained with
+     dialogue replay) are listed separately with each one's origin, and whether to publish them is
+     recorded as Rafael's ruling. (PKG-03, PKG-04)
+
+  4. The TinyStories license text (CDLA-Sharing-1.0) is read at the source with its conditions
+     recorded, especially share-alike; PersonaChat's license status is recorded as read; a model
+     card and a data card are written. (PKG-05, PKG-06)
+
+  5. Claude never uploads or pushes; the deposit (Zenodo / Hugging Face) is Rafael's act. (PKG-08)
+
+**Plans**: TBD
+
+### Phase 45: v6.0 Report and Milestone Close
+
+**Goal**: v6.0 is published as measured beside the v3.0–v5.0 sections — every number rendered from
+a committed record, with what changed and the errata listed — and the milestone closes on a green
+CI run of Rafael's push
+**Depends on**: Phases 37-44
+**Requirements**: RPT-07, RPT-08, RPT-09
+**Success Criteria** (what must be TRUE):
+
+  1. The v6.0 section of `docs/REPORT.md` is rendered from committed records beside the v3.0–v5.0
+     sections, under the numeral scan and byte guards (the Phase 34 pattern). (RPT-07)
+
+  2. A list of what changed relative to v5.0 is published with the section, with an errata list
+     that includes the stale prose citation `.planning/PROJECT.md:187-189` in
+     `scripts/mitigation_gate.py:557` (the cited passage sat at `:151` at `c51fd11`), recorded
+     without touching the pin. (RPT-08)
+
+  3. The milestone closes on a green CI run of Rafael's push, its run id recorded; Claude never
+     pushes, and the paper text is not edited (its update is a separate later step). (RPT-09)
+
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -1460,3 +1806,21 @@ Next: `/gsd:plan-phase 20`.
 | 34. v5.0 Report and Milestone Close | v5.0 | 6/6 | Complete | 2026-09-29 — verification passed 3/3 SC (b8b6335); v5.0 published (publishing 226b489), CI run 36562323069 green on origin/main, close.ci_run recorded, RPT-04..06 ticked by hand; zero gsd-sdk mutation handlers |
 
 Next (v5.0): `/gsd:plan-phase 29`.
+
+**v6.0 (appended 2026-10-01):** 11 phases (35-45) covering 44 requirements, 44/44 mapped, 0 orphans.
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+| ----- | --------- | -------------- | ------ | --------- |
+| 35. v6.0 Pre-Registration and the Research It Rests On | v6.0 | 0/TBD | Not started | - |
+| 36. MPS Cost Probes and Budget Commitment | v6.0 | 0/TBD | Not started | - |
+| 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 0/TBD | Not started | - |
+| 38. Exposure Rank at Larger Minted Sets | v6.0 | 0/TBD | Not started | - |
+| 39. Instrument × Context 2×2 | v6.0 | 0/TBD | Not started | - |
+| 40. M2 Seed Noise Floor | v6.0 | 0/TBD | Not started | - |
+| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 0/TBD | Not started | - |
+| 42. DP-SGD Recipe Search at Large ε | v6.0 | 0/TBD | Not started | - |
+| 43. One-Run Privacy Audit (Conditional) | v6.0 | 0/TBD | Not started | - |
+| 44. Public Deposit Package | v6.0 | 0/TBD | Not started | - |
+| 45. v6.0 Report and Milestone Close | v6.0 | 0/TBD | Not started | - |
+
+Next (v6.0): `/gsd:discuss-phase 35`.

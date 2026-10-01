@@ -704,7 +704,7 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### Pre-registration (PREREG)
 
-- [ ] **PREREG-05**: A v6.0 pre-registration module, ancestry-guarded in the `phase29_prereg.py` pattern, is committed before any v6.0 result record exists; it fixes every front's rule, record paths and thresholds, and imports the closed pins (`erasure_gate`, `phase19_erasure`, `mitigation_gate`, `mitigation_budget`, `phase18_extraction`, `phase26_canary`) — never copies them
+- [ ] **PREREG-05**: A v6.0 pre-registration module, ancestry-guarded in the `phase29_prereg.py` pattern, is committed before any v6.0 result record exists; it fixes every front's rule, record paths and thresholds, and imports the closed pins (`erasure_gate`, `phase19_erasure`, `mitigation_gate`, `mitigation_budget`, `phase18_extraction`, `phase26_canary`) — never copies them; it fixes, once, a single `seed_list` (1337 plus the new seeds) that Phases 40 and 41 import
 - [ ] **PREREG-06**: Every threshold is derived in writing before measurement and never changes after; a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C precedent)
 - [ ] **PREREG-07**: Every locked decision records its proposer (Rafael, Claude Code, or Claude via claude.ai); nothing drafted by another assistant is recorded as "selected by THE USER, verbatim"
 - [ ] **PREREG-08**: Every rule module has a CPU test; MPS-only tests are skipped in CI with an attributed count
@@ -729,14 +729,14 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### Cost probes and budget (COST)
 
-- [ ] **COST-01**: Every MPS front is priced by a probe on the M3 before any budget: an A2 arm at a new target and a new seed, an M2 retrain plus its measurement, one DP configuration at the grid's longest step count, a sample of minting clearance and E5 scoring, and anchor-context generation
+- [ ] **COST-01**: Every MPS front is priced by a probe on the M3 before any budget: the exact E1 reading (A2 only, on the eight facts' questions, at K = 16 and at K = 48) with its fixed cost separated from its per-draw cost, an M2 retrain plus its measurement, one DP configuration at the grid's longest step count, a sample of minting clearance and E5 scoring, and anchor-context generation; the Phase 31 probe, a different reading (416 extraction questions in four families plus taught and held-out recall), is recorded beside the E1 probe for comparison and never extrapolated from
 - [ ] **COST-02**: The v6.0 budget and its stop line are committed from the probes before the first measured point (the ARCAL pattern), inside Rafael's ceiling of 90 h of MPS for the whole milestone, probes included; if the probes show the fronts do not fit, the work halts and the cut options go to Rafael — no front is cut unilaterally
 
 ### Erasure across facts, orderings and seeds (ERASE) — E1
 
 - [ ] **ERASE-03**: The targets are the four facts at 13/13 in Phase 19's committed `TARGET_RANKING` (`pet_name`, `cat_name`, `street`, `sibling_name`), selected by a rule committed before measurement that reads the committed ranking
 - [ ] **ERASE-04**: Two ablation orderings are pre-registered: the existing greedy leave-one-out ordering and one alternative
-- [ ] **ERASE-05**: Two teaching seeds are pre-registered (seed 1337 plus one new seed)
+- [ ] **ERASE-05**: The two teaching seeds are imported from Phase 35's `seed_list` (seed 1337 plus one new seed); the `pet_name` taught adapter and M2 adapter trained in Phase 40 are reused, verified by SHA-256, never retrained
 - [ ] **ERASE-06**: Each target's condition-(a) floor is derived in writing before measurement; if it depends on the calibration rate, the calibration is run per ordering (and per seed if the derivation requires it) and budgeted
 - [ ] **ERASE-07**: The rank never enters the stopping rule (v3.0 showed it saturated); it is recorded at every checkpoint. Proposed for the E1 discuss phase (Rafael, from Claude (claude.ai)): a fixed, pre-registered grid of checkpoints, each read with A2 at K = 16 (precedent: v4.0 `CURVE_K`); at the first checkpoint reading zero, confirm at K = 48; if K = 48 is not zero, continue to the next checkpoint. E1 is re-priced under this design by COST-01
 - [ ] **ERASE-08**: Defect E is routed by a wrapper that imports the pin; `scripts/phase19_erasure.py` stays byte-unchanged and a test proves it
@@ -745,7 +745,7 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### M2 seed noise floor (NOISE) — E2
 
-- [ ] **NOISE-01**: The full taught adapter and the M2 adapter without `pet_name` are retrained at S seeds (S fixed from COST-01 and pre-registered; S = 5 acceptable), reusing E1's `pet_name` seeds, and each non-target's A2 recall is reported per seed with its denominator
+- [ ] **NOISE-01**: The full taught adapter and the M2 adapter without `pet_name` are retrained at S seeds imported from Phase 35's `seed_list` (S fixed from COST-01 and pre-registered; S = 5 acceptable) — Phase 40 runs before Phase 41, so E1 reuses these adapters, not the reverse — and each non-target's A2 recall is reported per seed with its denominator
 - [ ] **NOISE-02**: The training-seed noise floor is published beside v3.0's sampling floor (0.14814814814814814) without amending v3.0's (b) margin
 
 ### DP-SGD recipe search (RECIPE) — E3
@@ -799,3 +799,47 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| PREREG-05 | Phase 35 | Pending |
+| PREREG-06 | Phase 35 | Pending |
+| PREREG-07 | Phase 35 | Pending |
+| PREREG-08 | Phase 35 | Pending |
+| PREREG-09 | Phase 35 | Pending |
+| REPRO-01 | Phase 37 | Pending |
+| REPRO-02 | Phase 37 | Pending |
+| REPRO-03 | Phase 37 | Pending |
+| PKG-01 | Phase 44 | Pending |
+| PKG-02 | Phase 44 | Pending |
+| PKG-03 | Phase 44 | Pending |
+| PKG-04 | Phase 44 | Pending |
+| PKG-05 | Phase 44 | Pending |
+| PKG-06 | Phase 44 | Pending |
+| PKG-07 | Phase 44 | Pending |
+| PKG-08 | Phase 44 | Pending |
+| COST-01 | Phase 36 | Pending |
+| COST-02 | Phase 36 | Pending |
+| ERASE-03 | Phase 41 | Pending |
+| ERASE-04 | Phase 41 | Pending |
+| ERASE-05 | Phase 41 | Pending |
+| ERASE-06 | Phase 41 | Pending |
+| ERASE-07 | Phase 41 | Pending |
+| ERASE-08 | Phase 41 | Pending |
+| ERASE-09 | Phase 41 | Pending |
+| ERASE-10 | Phase 41 | Pending |
+| NOISE-01 | Phase 40 | Pending |
+| NOISE-02 | Phase 40 | Pending |
+| RECIPE-01 | Phase 42 | Pending |
+| RECIPE-02 | Phase 42 | Pending |
+| RECIPE-04 | Phase 42 | Pending |
+| RECIPE-03 | Phase 42 | Pending |
+| AUDIT-01 | Phase 43 | Pending |
+| AUDIT-02 | Phase 43 | Pending |
+| AUDIT-03 | Phase 43 | Pending |
+| RANK-01 | Phase 38 | Pending |
+| RANK-02 | Phase 38 | Pending |
+| RANK-03 | Phase 38 | Pending |
+| CTX-01 | Phase 39 | Pending |
+| CTX-02 | Phase 39 | Pending |
+| CTX-03 | Phase 39 | Pending |
+| RPT-07 | Phase 45 | Pending |
+| RPT-08 | Phase 45 | Pending |
+| RPT-09 | Phase 45 | Pending |
