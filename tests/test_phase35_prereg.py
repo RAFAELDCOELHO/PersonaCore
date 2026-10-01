@@ -1453,8 +1453,8 @@ def test_e1_stop_at_the_first_confirmed_zero(tmp_path, monkeypatch):
         phase35_prereg.e1_stop(grid={"checkpoints": _CHECKPOINTS}, readings=good)
 
 
-# ERASE-06's floors, COMPUTED from each cell's own calibration record (Rafael's review and his
-# option-A ruling, 2026-10-01). Records are planted under tmp_path only.
+# ERASE-06's floors, COMPUTED from the calibration record of the cell's (ordering, seed) (Rafael's
+# reviews and his option-A ruling, 2026-10-01). Records are planted under tmp_path only.
 
 _CAL_ARM = "results/phase19_arm_cal-erased.json"
 _CAL_CORPUS = "results/phase19_calibration_corpus.json"
@@ -1467,44 +1467,59 @@ def _cal_draws():
     return json.loads((_ROOT / _CAL_ARM).read_text(encoding="utf-8"))["draws"]
 
 
-def _calibration_payload(key, draws, family="A2"):
+def _calibration_payload(cal_key, draws, family="A2", corpus=_CAL_CORPUS):
+    """A calibration record keyed by (ordering[, seed]); no target field."""
     return {
-        "target": key[0],
-        "ordering": key[1],
-        "seed": key[2] if len(key) == 3 else None,
+        "ordering": cal_key[0],
+        "seed": cal_key[1] if len(cal_key) == 2 else None,
         "family": family,
-        "corpus": _CAL_CORPUS,
+        "corpus": corpus,
         "draws": draws,
     }
 
 
-def _fill_floors(root, monkeypatch, floors, payloads, corpus=None):
+def _fill_floors(root, monkeypatch, floors, payloads, *, corpora=None, consumed=None, named=None):
+    """Plant `payloads` and `corpora` ({relpath: bytes}, default the real corpus) under `root`.
+    input_records is `consumed` (default every planted path); the derivation's source names
+    `named` (default input_records)."""
     records = {f"results/phase41_calibration_{i}.json": p for i, p in enumerate(payloads)}
-    if corpus is None:
-        corpus = (_ROOT / _CAL_CORPUS).read_bytes()
-    _inputs(root, monkeypatch, {**records, _CAL_CORPUS: corpus})
-    paths = tuple(records)
+    if corpora is None:
+        corpora = {_CAL_CORPUS: (_ROOT / _CAL_CORPUS).read_bytes()}
+    _inputs(root, monkeypatch, {**records, **corpora})
+    paths = (*records, *corpora) if consumed is None else consumed
     return phase35_prereg.fill(
         "e1_condition_a_floors",
         floors=floors,
         input_records=paths,
-        derivation=_measured(tuple(floors), paths),
+        derivation=_measured(tuple(floors), paths if named is None else named),
     )
 
 
-def _target_keys():
-    return [(target, _ORDERING) for target in phase35_prereg.e1_targets()]
+def _target_keys(*cal_key):
+    return [(target, *(cal_key or (_ORDERING,))) for target in phase35_prereg.e1_targets()]
+
+
+def test_e1_floors_declare_phase19_calibration_corpus():
+    import phase19_erasure  # torch at import: inside the test only
+
+    declared = phase35_prereg.SLOTS["e1_condition_a_floors"]["input_records"]
+    corpus = phase19_erasure.CALIBRATION_CORPUS_PATH.relative_to(_ROOT).as_posix()
+    assert declared == ("results/phase41_calibration_*.json", corpus)
+    assert corpus == _CAL_CORPUS
 
 
 def test_e1_floors_reproduce_phase19_corrected_floor(tmp_path, monkeypatch):
-    """Positive control: the real cal-erased draws, through the rule, give Phase 19's CORRECTED
-    floor (0/23, reachability-min), never the pin's defect-B floor."""
+    """Positive control: ONE calibration record (the real cal-erased draws) serves the FOUR targets
+    and gives Phase 19's CORRECTED floor (0/23, reachability-min), never the defect-B floor."""
     import phase19_erasure  # torch at import: inside the test only
 
     keys = _target_keys()
-    draws = _cal_draws()
+    assert len(keys) == len(phase35_prereg.e1_targets())
     out = _fill_floors(
-        tmp_path, monkeypatch, dict.fromkeys(keys), [_calibration_payload(k, draws) for k in keys]
+        tmp_path,
+        monkeypatch,
+        dict.fromkeys(keys),
+        [_calibration_payload((_ORDERING,), _cal_draws())],
     )
     correction = json.loads((_ROOT / _CORRECTION).read_text(encoding="utf-8"))
     defect_b = phase19_erasure.lock_erasure_floor(phase19_erasure._calibration_rate())
@@ -1517,8 +1532,8 @@ def test_e1_floors_reproduce_phase19_corrected_floor(tmp_path, monkeypatch):
         assert row["calibration_rate"] == 0.0
         assert row["calibration_successes"] == correction["calibration_successes"]
         assert row["calibration_questions"] == correction["calibration_questions"]
+        assert row["calibration_record"] == "results/phase41_calibration_0.json"
         assert row["floor"] != defect_b
-    assert out[keys[0]]["calibration_record"] == "results/phase41_calibration_0.json"
     with pytest.raises(TypeError):
         out[keys[0]]["floor"] = 0.0
 
@@ -1527,50 +1542,86 @@ def test_e1_floors_refuse_a_typed_floor_or_a_mismatched_record(tmp_path, monkeyp
     targets = phase35_prereg.e1_targets()
     keys = _target_keys()
     draws = _cal_draws()
-    payloads = [_calibration_payload(k, draws) for k in keys]
-    seeded = [(t, _ORDERING, phase35_prereg.e1_teaching_seeds()[1]) for t in targets]
+    one = [_calibration_payload((_ORDERING,), draws)]
     floor = phase19_floor.TARGET_FLOOR
 
-    # A supplied value equal to the computed floor is accepted, seeded keys included.
+    # A supplied value equal to the computed floor is accepted.
     out = _fill_floors(
-        tmp_path / "equal", monkeypatch, {**dict.fromkeys(keys), keys[0]: floor}, payloads
+        tmp_path / "equal", monkeypatch, {**dict.fromkeys(keys), keys[0]: floor}, one
     )
     assert out[keys[0]]["floor"] == floor
+    # One record per (ordering, seed): 4 targets x 2 seeds -> 8 rows from 2 records.
+    seeds = phase35_prereg.e1_teaching_seeds()
+    seeded = [key for seed in seeds for key in _target_keys(_ORDERING, seed)]
     out = _fill_floors(
         tmp_path / "seeded",
         monkeypatch,
         dict.fromkeys(seeded),
-        [_calibration_payload(k, draws) for k in seeded],
+        [_calibration_payload((_ORDERING, seed), draws) for seed in seeds],
     )
     assert set(out) == set(seeded)
+    for key in seeded:
+        index = seeds.index(key[2])
+        assert out[key]["calibration_record"] == f"results/phase41_calibration_{index}.json"
 
     with pytest.raises(SystemExit) as refused:
         _fill_floors(
-            tmp_path / "typed", monkeypatch, {**dict.fromkeys(keys), keys[0]: floor * 2}, payloads
+            tmp_path / "typed", monkeypatch, {**dict.fromkeys(keys), keys[0]: floor * 2}, one
         )
     assert "computed" in str(refused.value)
 
     other = json.loads((_ROOT / _CAL_CORPUS).read_text(encoding="utf-8"))
     other["fact_id"] = "cal_planted_other"
-    for name, floors, planted, corpus in (
-        ("missing", dict.fromkeys(keys), payloads[1:], None),
-        ("duplicate", dict.fromkeys(keys), [*payloads, payloads[0]], None),
+    for name, floors, planted, expected in (
+        ("missing", dict.fromkeys(_target_keys(_ORDERING, seeds[0])), one, "without a"),
+        ("duplicate", dict.fromkeys(keys), [*one, *one], "two calibration records"),
         (
-            "extra",
+            "orphan",
             dict.fromkeys(keys),
-            [*payloads, _calibration_payload((targets[0], "other"), draws)],
-            None,
+            [*one, _calibration_payload(("other",), draws)],
+            "serving no floor",
         ),
-        (
-            "family",
-            dict.fromkeys(keys),
-            [_calibration_payload(keys[0], draws, "A0"), *payloads[1:]],
-            None,
-        ),
-        ("corpus", dict.fromkeys(keys), payloads, json.dumps(other).encode("utf-8")),
+        ("target", dict.fromkeys(keys), [{**one[0], "target": targets[0]}], "target field"),
+        ("family", dict.fromkeys(keys), [_calibration_payload((_ORDERING,), draws, "A0")], "A2"),
     ):
-        with pytest.raises(SystemExit):
-            _fill_floors(tmp_path / name, monkeypatch, floors, planted, corpus)
+        with pytest.raises(SystemExit) as refused:
+            _fill_floors(tmp_path / name, monkeypatch, floors, planted)
+        assert expected in str(refused.value), (name, str(refused.value))
+    with pytest.raises(SystemExit) as refused:
+        _fill_floors(
+            tmp_path / "fact",
+            monkeypatch,
+            dict.fromkeys(keys),
+            one,
+            corpora={_CAL_CORPUS: json.dumps(other).encode("utf-8")},
+        )
+    assert "calibration fact" in str(refused.value)
+
+
+def test_e1_floors_corpus_is_a_declared_consumed_input(tmp_path, monkeypatch):
+    """Planted RED: the corpus a calibration record names must be consumed through the slot's
+    declared inputs and named in the derivation's source."""
+    keys = dict.fromkeys(_target_keys())
+    record = "results/phase41_calibration_0.json"
+    one = [_calibration_payload((_ORDERING,), _cal_draws())]
+    assert _fill_floors(tmp_path / "ok", monkeypatch, keys, one)
+
+    with pytest.raises(SystemExit) as refused:  # the record's corpus is not in input_records
+        _fill_floors(tmp_path / "unconsumed", monkeypatch, keys, one, consumed=(record,))
+    assert "not a consumed input" in str(refused.value)
+    with pytest.raises(SystemExit) as refused:  # the derivation's source omits the corpus
+        _fill_floors(tmp_path / "unnamed", monkeypatch, keys, one, named=(record,))
+    assert "source omits" in str(refused.value)
+    stray = "results/phase19_other_corpus.json"
+    with pytest.raises(SystemExit) as refused:  # a corpus outside the declared pattern
+        _fill_floors(
+            tmp_path / "stray",
+            monkeypatch,
+            keys,
+            [_calibration_payload((_ORDERING,), _cal_draws(), corpus=stray)],
+            corpora={stray: (_ROOT / _CAL_CORPUS).read_bytes()},
+        )
+    assert "not a declared input" in str(refused.value)
 
 
 def _synthetic_fixture_draws(answerable):
@@ -1589,7 +1640,7 @@ def _synthetic_fixture_draws(answerable):
 @pytest.mark.parametrize("branch", ("discount", "ceiling"))
 def test_e1_floors_synthetic_fixture_cover_discount_and_ceiling(tmp_path, monkeypatch, branch):
     """SYNTHETIC TEST FIXTURE: not a reading, never cite as a measurement. Real draws only exercise
-    reachability-min; these planted records cover the other two branches through the real route.
+    reachability-min; this planted record covers the other two branches through the real route.
     The expected floor is lock_erasure_floor / floor_branch of the rate this test planted."""
     import phase19_erasure  # torch at import: inside the test only
 
@@ -1604,11 +1655,11 @@ def test_e1_floors_synthetic_fixture_cover_discount_and_ceiling(tmp_path, monkey
 
     answerable = next(k for k in range(questions + 1) if lands(k))
     keys = _target_keys()
-    payloads = [
-        {**_calibration_payload(k, _synthetic_fixture_draws(answerable)), "fixture": _FIXTURE}
-        for k in keys
-    ]
-    out = _fill_floors(tmp_path, monkeypatch, dict.fromkeys(keys), payloads)
+    payload = {
+        **_calibration_payload((_ORDERING,), _synthetic_fixture_draws(answerable)),
+        "fixture": _FIXTURE,
+    }
+    out = _fill_floors(tmp_path, monkeypatch, dict.fromkeys(keys), [payload])
     rate = answerable / questions
     for key in keys:
         row = out[key]

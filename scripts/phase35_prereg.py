@@ -61,13 +61,18 @@ THE BUDGET-RECORD CONTRACT. Phase 36 publishes ``results/phase36_budget.json`` h
 ``results/phase42_control_*.json`` carries ``recipe`` = {lr, steps, batch}, ``seed``, ``sigma`` =
 0.0 and ``taught_recall`` / ``heldout_recall`` each with ``numerator`` and ``denominator`` (the
 field shape of the v4.0 point record). THE PHASE 41 CALIBRATION-RECORD CONTRACT. Each
-``results/phase41_calibration_*.json`` carries ``target`` (an ``e1_targets()`` slot), ``ordering``
-(str), ``seed`` (an ``e1_teaching_seeds()`` int, or null for a ``(target, ordering)`` key),
+``results/phase41_calibration_*.json`` is keyed by ``(ordering, seed)`` and carries ``ordering``
+(str), ``seed`` (an ``e1_teaching_seeds()`` int, or null for ``(target, ordering)`` floor keys),
 ``family`` ("A2"), ``corpus`` (the repo-relative path of the calibration corpus its draws were
-built from) and ``draws`` (THE ARM'S OWN draws). Every Phase 41 calibration runs on Phase 19's
-calibration fact, ``phase19_erasure.select_calibration_fact()`` (chosen by rule, reads no result):
-the corpus's ``fact_id`` must be that fact's id and its ``n_questions`` / ``question_counts`` must
-equal the questions re-derived from the draws (option A, ruled by Rafael 2026-10-01).
+built from, itself a declared and consumed input of the slot) and ``draws`` (THE ARM'S OWN draws),
+and NO ``target`` field: one record serves every ``e1_targets()`` of its ``(ordering, seed)``.
+Every Phase 41 calibration runs on Phase 19's calibration fact,
+``phase19_erasure.select_calibration_fact()`` (chosen by rule, reads no result), with the
+calibration adapter; the ordering and the stop are computed against that fact and nothing of the
+target enters (``phase19_erasure._cmd_cal_erase`` / ``_selected_components`` /
+``select_ablation_prefix``). The corpus's ``fact_id`` must be that fact's id and its
+``n_questions`` / ``question_counts`` must equal the questions re-derived from the draws (option
+A and the (ordering, seed) keying, ruled by Rafael 2026-10-01).
 
 D-04 CLASSIFICATION. e1_alternative_ordering and e6_entry_subset are design choices, but no
 decision on record names the alternative ordering and CTX-01's subset exists to fit the Phase 36
@@ -754,6 +759,11 @@ _prove_entries()
 V6_MPS_FRONTS = ("probes", "R1b", "E1", "E2", "E3", "E4", "E5", "E6")
 _BUDGET_RECORD = "results/phase36_budget.json"
 _prove(_BUDGET_RECORD in V6_RESULT_PATHS, f"{_BUDGET_RECORD} is not a declared v6.0 record path")
+_CALIBRATION_RECORDS = "results/phase41_calibration_*.json"
+_prove(_CALIBRATION_RECORDS in V6_RESULT_PATHS, f"{_CALIBRATION_RECORDS} is not a v6.0 record path")
+# phase19_erasure.CALIBRATION_CORPUS_PATH, repo-relative; typed because phase19_erasure imports
+# torch (the test proves the two agree). Write-once since v5.0.
+_CALIBRATION_CORPUS = "results/phase19_calibration_corpus.json"
 
 # E3 scope (RECIPE-01, W5): n is the dp_n8 arm's locked-fact count, never typed.
 E3_N = len(phase25_gate05.GATE05_SLOTS)
@@ -1093,22 +1103,35 @@ def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
     target. The floor is COMPUTED, never typed: the caller supplies only the keys (each value
     ``None``); a supplied number that differs from the computed floor is refused.
 
-    Each key maps to exactly one consumed ``results/phase41_calibration_*.json`` with equal
-    (target, ordering, seed), and each consumed record to exactly one key (the Phase 41
-    calibration-record contract in the module docstring). The rate is the defect-B correction's
-    route (results/phase19_calibration_correction.json ``evidence.re_derivation``), on THE ARM'S
-    OWN draws: values ``{fact.id: fact.value}`` with
-    ``fact = phase19_erasure.select_calibration_fact()``,
+    CALIBRATION IS KEYED BY (ordering, seed), NOT BY TARGET (Rafael 2026-10-01). The calibration
+    runs on ``phase19_erasure.select_calibration_fact()`` with the calibration adapter; the ordering
+    and the stop are computed against that fact, and nothing of the target enters
+    (``phase19_erasure._cmd_cal_erase`` -> ``_selected_components`` -> ``select_ablation_prefix``:
+    ``ordered`` and ``k`` read only the fact's slot, value and references; ``collateral`` is the
+    same for every target and is re-scored only after ``k`` is fixed). So one calibration record
+    serves every ``e1_targets()`` of its (ordering, seed): exactly one record per (ordering, seed),
+    no ``target`` field, a key with no record or a record serving no key refused. This holds by
+    construction only while the ordering is a rule over the fact being erased; the alternative
+    ordering (``e1_alternative_ordering``, D-04 deferred to Phase 41) must be one too, since an
+    ordering that read the target would need a calibration per target.
+
+    THE CORPUS IS A DECLARED INPUT. Each record's ``corpus`` must be a consumed input of this slot
+    (so it matches a declared pattern, exists and is named in the derivation's source); a consumed
+    corpus no record names is refused. Under option A the one declared corpus is Phase 19's
+    write-once calibration corpus, the corpus of ``select_calibration_fact()``.
+
+    The rate is the defect-B correction's route (results/phase19_calibration_correction.json
+    ``evidence.re_derivation``), on THE ARM'S OWN draws: values ``{fact.id: fact.value}``,
     ``phase19_erasure.per_fact_rows(draws, values, family="A2", tier=tier)`` once per tier of
     ``phase18_extraction.CORPUS_TIERS``, successes / questions pooled; never Phase 19's
     ``_calibration_rate`` (defect B). The floor is ``phase19_erasure.lock_erasure_floor(rate)``,
-    its branch ``phase19_erasure.floor_branch(rate)``.
+    its branch ``phase19_erasure.floor_branch(rate)``, computed once per record.
 
     The reachability clamp sits on the 27-question TARGET denominator: ``ERASURE_FLOOR_MIN`` is
     ``wilson_upper_bound(0, N_TARGET_QUESTIONS)``, 27 = 14 core_taught + 13 core_held_out per
     target, proved here; the test measures that every e1 target pools to those 27 questions.
-    Returns key -> {floor, floor_branch, calibration_rate, calibration_successes,
-    calibration_questions, calibration_record}, read-only.
+    Returns (target, ordering[, seed]) -> {floor, floor_branch, calibration_rate,
+    calibration_successes, calibration_questions, calibration_record}, read-only.
     """
     _prove(isinstance(floors, collections.abc.Mapping) and floors, "floors must be a mapping")
     teaching = e1_teaching_seeds()
@@ -1124,6 +1147,8 @@ def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
         "the floors do not cover exactly e1_targets()",
     )
     records = _consume_inputs("e1_condition_a_floors", tuple(floors), input_records, derivation)
+    calibrations = {p: r for p, r in records.items() if fnmatch.fnmatch(p, _CALIBRATION_RECORDS)}
+    corpora = {p: r for p, r in records.items() if p not in calibrations}
 
     import phase18_extraction  # torch at import: lazy
     import phase19_erasure  # torch at import: lazy
@@ -1136,27 +1161,38 @@ def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
     fact = phase19_erasure.select_calibration_fact()
     values = {fact.id: fact.value}
     path_of = {}
-    for path, record in records.items():
-        key = (record["target"], record["ordering"])
-        if record["seed"] is not None:
-            key += (record["seed"],)
-        _prove(key not in path_of, f"two calibration records for {key!r}")
-        _prove(key in floors, f"calibration record {path} has key {key!r}, which no floor names")
-        path_of[key] = path
-    _prove(
-        set(path_of) == set(floors),
-        f"floors without a calibration record: {sorted(set(floors) - set(path_of), key=repr)}",
-    )
-    computed = {}
-    for key, path in path_of.items():
-        record = records[path]
-        _prove(record["family"] == "A2", f"{path}: family {record['family']!r} is not A2")
-        corpus_path = pathlib.PurePosixPath(record["corpus"])
+    for path, record in calibrations.items():
         _prove(
-            not corpus_path.is_absolute() and ".." not in corpus_path.parts,
-            f"{path}: corpus {record['corpus']!r} is not repo-relative",
+            "target" not in record,
+            f"{path} carries a target field: a calibration is keyed by (ordering, seed) and "
+            "serves every target",
         )
-        corpus = json.loads((_REPO_ROOT / corpus_path).read_text(encoding="utf-8"))
+        _prove(
+            record["corpus"] in corpora,
+            f"{path}: corpus {record['corpus']!r} is not a consumed input of this slot",
+        )
+        cal_key = (record["ordering"],)
+        if record["seed"] is not None:
+            cal_key += (record["seed"],)
+        _prove(cal_key not in path_of, f"two calibration records for (ordering, seed) {cal_key!r}")
+        path_of[cal_key] = path
+    named = {record["corpus"] for record in calibrations.values()}
+    _prove(
+        set(corpora) <= named, f"consumed corpora no record names: {sorted(set(corpora) - named)}"
+    )
+    wanted = {key[1:] for key in floors}
+    _prove(
+        wanted <= set(path_of),
+        f"(ordering, seed) without a calibration record: {sorted(wanted - set(path_of), key=repr)}",
+    )
+    _prove(
+        set(path_of) <= wanted,
+        f"calibration records serving no floor: {sorted(set(path_of) - wanted, key=repr)}",
+    )
+    measured = {}
+    for path, record in calibrations.items():
+        _prove(record["family"] == "A2", f"{path}: family {record['family']!r} is not A2")
+        corpus = corpora[record["corpus"]]
         _prove(
             corpus["fact_id"] == fact.id,
             f"{path}: the corpus is for {corpus['fact_id']!r} but the calibration fact is "
@@ -1182,15 +1218,9 @@ def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
             f"{path}: {questions} pooled questions, the corpus declares {corpus['n_questions']}",
         )
         rate = successes / questions
-        floor = phase19_erasure.lock_erasure_floor(rate)
-        supplied = floors[key]
-        _prove(
-            supplied is None or supplied == floor,
-            f"floor {key!r}: supplied {supplied!r}, computed {floor!r}; the floor is computed",
-        )
-        computed[key] = types.MappingProxyType(
+        measured[path] = types.MappingProxyType(
             {
-                "floor": floor,
+                "floor": phase19_erasure.lock_erasure_floor(rate),
                 "floor_branch": phase19_erasure.floor_branch(rate),
                 "calibration_rate": rate,
                 "calibration_successes": successes,
@@ -1198,6 +1228,15 @@ def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
                 "calibration_record": path,
             }
         )
+    computed = {}
+    for key, supplied in floors.items():
+        row = measured[path_of[key[1:]]]
+        _prove(
+            supplied is None or supplied == row["floor"],
+            f"floor {key!r}: supplied {supplied!r}, computed {row['floor']!r}; the floor is "
+            "computed",
+        )
+        computed[key] = row
     return types.MappingProxyType(computed)
 
 
@@ -1528,7 +1567,7 @@ _SLOTS = {
     "e1_condition_a_floors": {
         "owner_phase": 41,
         "rule": _rule_e1_condition_a_floors,
-        "input_records": ("results/phase41_calibration_*.json",),
+        "input_records": (_CALIBRATION_RECORDS, _CALIBRATION_CORPUS),
     },
     "e1_alternative_ordering": {
         "owner_phase": 41,
