@@ -30,6 +30,7 @@ import inspect
 import json
 import math
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -1678,5 +1679,347 @@ def test_slot_fill_dispatches_only_the_declared_rule(tmp_path):
     planted = _replace_lines(source, ret.lineno, ret.end_lineno, [line])
     ast.parse(planted)
     assert _dispatch_failures(_planted(tmp_path, source, planted, "dispatch.py"))
+
+    assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (13) PLAN 04 — PER-FILL-FILE ORDERING (D-02, B1/B2/B6/B7). Legs: (a) a fill file precedes every
+# record of its phase, minus its slots' declared inputs only when EVERY slot it fills consumes an
+# in-phase input; (b) every tracked declared input precedes the fill file's first commit; (c) a
+# phase-O record outside the inputs of all O's slots requires every O slot filled.
+# =================================================================================================
+
+
+def _fill_sites(run):
+    """``{fill file: frozenset(declared slots it fills)}`` for the tracked fill files at HEAD."""
+    sites = {}
+    for path in run("ls-files", "scripts").stdout.split():
+        if re.fullmatch(r"scripts/phase(3[6-9]|4[0-5])_[A-Za-z0-9_]*prereg\.py", path):
+            source = run("show", f"HEAD:{path}").stdout
+            slots = frozenset(s for s, _ in _fill_calls(source) if s in phase35_prereg.SLOTS)
+            if slots:
+                sites[path] = slots
+    return sites
+
+
+def _slot_ordering_failures(run):
+    """``(failures, pairs_checked)``; each leg failure starts with its marker (a), (b) or (c)."""
+    slots = phase35_prereg.SLOTS
+    failures, pairs = [], 0
+    if run("rev-parse", "--is-shallow-repository").stdout.strip() != "false":
+        failures.append("(shallow) shallow clone: no leg can be checked (fetch-depth: 0)")
+
+    def first_add(path):
+        return run("log", "--diff-filter=A", "--format=%H", "--", path).stdout.split()[-1]
+
+    def before(x, y):
+        return x != y and run("merge-base", "--is-ancestor", x, y, check=False).returncode == 0
+
+    def records(owner):
+        return run("ls-files", f"results/phase{owner}_*").stdout.split()
+
+    def inputs(names):
+        return {pat for s in names for pat in slots[s]["input_records"]}
+
+    def is_input(record, pats):
+        return any(fnmatch.fnmatch(record, p) for p in pats)
+
+    sites = _fill_sites(run)
+    filled = {slot for names in sites.values() for slot in names}
+    for owner in sorted({s["owner_phase"] for s in slots.values()}):
+        owner_slots = {name for name, s in slots.items() if s["owner_phase"] == owner}
+        tracked = [r for r in records(owner) if not is_input(r, inputs(owner_slots))]
+        failures += [
+            f"(c) slot {slot} is unfilled while phase {owner} record {r} is tracked"
+            for slot in sorted(owner_slots - filled)
+            for r in tracked
+        ]
+
+    for path, names in sorted(sites.items()):
+        owner = int(path.removeprefix("scripts/phase").split("_", 1)[0])
+        commits = run("log", "--format=%H", "--", path).stdout.split()
+        pats = inputs(names)
+        own = f"results/phase{owner}_"
+        free = sorted(
+            s for s in names if not any(p.startswith(own) for p in slots[s]["input_records"])
+        )
+        exempt = set() if free else pats
+        note = f" (slots {', '.join(free)} have no phase-{owner} input)" if free else ""
+        for record in records(owner):
+            if is_input(record, exempt):
+                continue
+            added = first_add(record)
+            for commit in commits:
+                pairs += 1
+                if not before(commit, added):
+                    failures.append(
+                        f"(a) fill file {path} commit {commit} does not strictly precede "
+                        f"record {record}{note}"
+                    )
+        for i in sorted({i for p in pats for i in run("ls-files", p).stdout.split()}):
+            pairs += 1
+            if not before(first_add(i), commits[-1]):
+                failures.append(
+                    f"(b) declared input {i} of {path} is not first added strictly before "
+                    f"{path}'s first commit"
+                )
+    return failures, pairs
+
+
+def _ordering_after_every_commit(run):
+    """The verdict as of every commit, oldest first. Detaches HEAD: planted repositories only."""
+    top = pathlib.Path(run("rev-parse", "--show-toplevel").stdout.strip()).resolve()
+    phase35_prereg._prove(top != _ROOT.resolve(), "refusing to detach HEAD in the real repository")
+    verdicts = []
+    for sha in run("rev-list", "--reverse", "HEAD").stdout.split():
+        run("checkout", "-q", "--detach", sha)
+        verdicts.append(_slot_ordering_failures(run))
+    return verdicts
+
+
+def test_slot_ordering_every_commit_refuses_the_real_repo():
+    head = _git("rev-parse", "HEAD")
+    with pytest.raises(SystemExit, match="real repository"):
+        _ordering_after_every_commit(_git_in(_ROOT))
+    assert _git("rev-parse", "HEAD") == head
+
+
+def test_slot_ordering_is_green_on_the_real_repo():
+    failures, pairs = _slot_ordering_failures(_git_in(_ROOT))
+    assert failures == []
+    assert isinstance(pairs, int)  # 0 today is honest-green: no fill file, no v6.0 record
+
+
+def _fill_file(path, *slots):
+    lines = "".join(f'{s.upper()} = phase35_prereg.fill("{s}")\n' for s in slots)
+    return (path, "import phase35_prereg\n" + lines)
+
+
+def _record(path):
+    return (f"results/{path}", "{}")
+
+
+_P41_FIRST = _fill_file(
+    "scripts/phase41_prereg.py",
+    "e1_checkpoint_grid",
+    "e1_alternative_ordering",
+    "e1_condition_b_margin",
+)
+_P41_FLOORS = _fill_file(
+    "scripts/phase41_floors_prereg.py", "e1_condition_a_floors", "e1_condition_c_band_inputs"
+)
+
+
+def test_slot_ordering_reds_on_a_planted_repo(tmp_path):
+    greens = {
+        "g36": [
+            [_record("phase36_probe_a.json")],
+            [_fill_file("scripts/phase36_prereg.py", "v6_budget_and_stop_line")],
+            [_record("phase36_budget.json")],
+        ],
+        "g41": [
+            [_P41_FIRST],
+            [_record("phase41_calibration_a.json")],
+            [_record("phase41_band_inputs_a.json")],
+            [_P41_FLOORS],
+            [_record("phase41_erasure_a.json")],
+        ],
+        "g42": [
+            [_fill_file("scripts/phase42_prereg.py", "e3_grid_subset")],
+            [_record("phase42_control_a.json")],
+            [_fill_file("scripts/phase42_threshold_prereg.py", "e3_recall_threshold")],
+            [_record("phase42_point_a.json")],
+        ],
+        "g38": [
+            [
+                _fill_file(
+                    "scripts/phase38_prereg.py",
+                    "e5_minting_rule",
+                    "e5_rank_moves_and_generation_collapses",
+                )
+            ],
+            [_record("phase38_minting.json")],
+            [_fill_file("scripts/phase38_sizes_prereg.py", "e5_set_sizes")],
+            [_record("phase38_rank_a.json")],
+        ],
+    }
+    for name, commits in greens.items():
+        verdicts = _ordering_after_every_commit(_planted_repo(tmp_path / name, commits))
+        assert len(verdicts) == len(commits), name
+        assert [failures for failures, _ in verdicts] == [[]] * len(commits), (name, verdicts)
+        assert verdicts[-1][1] > 0, name
+
+    def red(name, commits, leg):
+        failures, _ = _slot_ordering_failures(_planted_repo(tmp_path / name, commits))
+        assert failures and all(f.startswith(leg) for f in failures), (name, failures)
+        return failures
+
+    red("c40", [[_record("phase40_seeds.json")]], "(c)")
+    c41 = red(
+        "c41", [[_P41_FIRST], [_record("phase41_erasure_a.json")]], "(c)"
+    )  # B6: leg (c) still bites on a non-input Phase 41 record
+    for slot in ("e1_condition_a_floors", "e1_condition_c_band_inputs"):
+        assert any(f"slot {slot} " in f for f in c41), (slot, c41)
+
+    p40 = _fill_file("scripts/phase40_prereg.py", "e2_S", "e2_noise_floor_estimator")
+    red("a40", [[_record("phase40_seeds.json")], [p40]], "(a)")
+    red("a40_same", [[_record("phase40_seeds.json"), p40]], "(a)")
+    red(  # B2: an own-phase INPUT after its fill file, no non-input record anywhere
+        "b36",
+        [
+            [_fill_file("scripts/phase36_prereg.py", "v6_budget_and_stop_line")],
+            [_record("phase36_probe_a.json")],
+        ],
+        "(b)",
+    )
+
+    def names(failures, path, record):
+        return any(path in f and record in f for f in failures)
+
+    a41 = red(  # B1: the alternative ordering came after its calibration
+        "a41",
+        [
+            [_record("phase41_calibration_a.json")],
+            [_P41_FIRST],
+            [_record("phase41_band_inputs_a.json")],
+            [_P41_FLOORS],
+        ],
+        "(a)",
+    )
+    assert names(a41, "scripts/phase41_prereg.py", "phase41_calibration_a.json"), a41
+
+    b7_38 = red(  # B7: the minting rule cannot ride on e5_set_sizes' exemption
+        "b7_38",
+        [
+            [_record("phase38_minting.json")],
+            [
+                _fill_file(
+                    "scripts/phase38_prereg.py",
+                    "e5_minting_rule",
+                    "e5_set_sizes",
+                    "e5_rank_moves_and_generation_collapses",
+                )
+            ],
+            [_record("phase38_rank_a.json")],
+        ],
+        "(a)",
+    )
+    assert names(b7_38, "scripts/phase38_prereg.py", "phase38_minting.json"), b7_38
+
+    b7_41 = red(  # B7: the alternative ordering cannot ride on the floors' exemption
+        "b7_41",
+        [
+            [
+                _fill_file(
+                    "scripts/phase41_prereg.py", "e1_checkpoint_grid", "e1_condition_b_margin"
+                )
+            ],
+            [_record("phase41_calibration_a.json")],
+            [_record("phase41_band_inputs_a.json")],
+            [
+                _fill_file(
+                    "scripts/phase41_floors_prereg.py",
+                    "e1_alternative_ordering",
+                    "e1_condition_a_floors",
+                    "e1_condition_c_band_inputs",
+                )
+            ],
+            [_record("phase41_erasure_a.json")],
+        ],
+        "(a)",
+    )
+    assert names(b7_41, "scripts/phase41_floors_prereg.py", "phase41_calibration_a.json"), b7_41
+
+
+def test_every_slot_input_is_a_v6_path_or_a_v5_record():
+    v5 = set(_git("ls-tree", "-r", "--name-only", "v5.0", "results").split())
+    assert v5, "v5.0 tracks no results file: this registry check would be blind"
+    v6 = phase35_prereg.V6_RESULT_PATHS
+    seen = {"v6": 0, "v5": 0}
+    for name, slot in phase35_prereg.SLOTS.items():
+        for pat in slot["input_records"]:
+            declared = pat in v6 or any(fnmatch.fnmatch(pat, v) for v in v6)
+            assert declared or pat in v5, (name, pat)
+            seen["v6" if declared else "v5"] += 1
+            number = pat.removeprefix("results/phase").split("_", 1)[0]
+            if number.isdigit() and 36 <= int(number) <= 45:
+                assert declared, (name, pat)
+    assert seen["v6"] and seen["v5"], seen
+
+
+# =================================================================================================
+# (14) PLAN 04 — EVERY PREREG FUNCTION HAS A CPU TEST (D-13 / PREREG-08).
+# =================================================================================================
+
+
+def _untested_functions(prereg_source, test_source):
+    """Module-level defs of the prereg that the test source never names. A ``_rule_<slot>``
+    counts as tested through a ``phase35_prereg.fill("<slot>", ...)`` call."""
+    test_tree = ast.parse(test_source)
+    named = {n.id for n in ast.walk(test_tree) if isinstance(n, ast.Name)}
+    named |= {n.attr for n in ast.walk(test_tree) if isinstance(n, ast.Attribute)}
+    named |= {"_rule_" + slot for slot, _ in _fill_calls(test_source) if slot is not None}
+    defs = [n.name for n in ast.parse(prereg_source).body if isinstance(n, ast.FunctionDef)]
+    return sorted(name for name in defs if name not in named)
+
+
+def test_prereg_helpers_behave(monkeypatch):
+    with pytest.raises(SystemExit) as refused:
+        phase35_prereg._prove(False, "x")
+    assert str(refused.value).startswith("[phase35_prereg]")
+    assert abs(math.fsum(phase35_prereg._binom_pmf(i, 16, 0.3) for i in range(17)) - 1.0) < 1e-12
+    assert phase35_prereg._binom_pmf(17, 16, 0.3) == 0.0
+    for bad in (True, 1.0):
+        with pytest.raises(SystemExit):
+            phase35_prereg._prove_count("x", bad)
+    phase35_prereg._prove_count("x", 3)
+    for bad in (True, "1"):
+        with pytest.raises(SystemExit):
+            phase35_prereg._prove_real("x", bad)
+    phase35_prereg._prove_real("x", 0.5)
+    for bad in (math.inf, math.nan, True):
+        with pytest.raises(SystemExit):
+            phase35_prereg._prove_finite("x", bad)
+    phase35_prereg._prove_finite("x", 0.5)
+    phase35_prereg._prove_one_run_inputs(100, 50, 50, 1e-5)
+    with pytest.raises(SystemExit):
+        phase35_prereg._prove_one_run_inputs(100, 50, 51, 1e-5)  # v > r
+    assert phase35_prereg._p_value(100, 50, 40, 1.0, 1e-5) == phase35_prereg.p_value_one_run(
+        100, 50, 40, 1.0, 1e-5
+    )
+    assert phase35_prereg._prove_entries() is None
+    assert phase35_prereg._prove_slots() is None
+    bad_entries = {**phase35_prereg.ENTRIES, "x": {**_good_entry(), "kind": "guess"}}
+    monkeypatch.setattr(phase35_prereg, "ENTRIES", bad_entries)
+    with pytest.raises(SystemExit):
+        phase35_prereg._prove_entries()
+
+    # The design rules, each through a literal fill("<slot>") call (the census below counts these).
+    design = {slot: kwargs(_entry("rule text")) for slot, kwargs in _DESIGN_SLOTS.items()}
+    assert phase35_prereg.fill(
+        "r1b_tolerance_and_replicated", **design["r1b_tolerance_and_replicated"]
+    )
+    assert phase35_prereg.fill("e5_minting_rule", **design["e5_minting_rule"])
+    assert phase35_prereg.fill("e2_noise_floor_estimator", **design["e2_noise_floor_estimator"])
+    assert phase35_prereg.fill(
+        "e5_rank_moves_and_generation_collapses",
+        **design["e5_rank_moves_and_generation_collapses"],
+    )
+    assert phase35_prereg.fill("e6_decomposition_rule", **design["e6_decomposition_rule"])
+
+
+def test_every_rule_has_a_cpu_test(tmp_path):
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    defs = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]
+    assert defs, "meta-guard: the prereg defines no function, the census would be vacuous"
+    assert _untested_functions(source, test_source) == []
+
+    planted = source + '\n\ndef _rule_planted_untested(*, entry):\n    """Planted."""\n'
+    copied = _planted(tmp_path, source, planted, "untested.py")
+    assert _untested_functions(copied, test_source) == ["_rule_planted_untested"]
 
     assert real.read_bytes() == before
