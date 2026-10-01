@@ -94,6 +94,31 @@ abstentions (r < m) and the 2mδ term; PIN 2 uses the δ and the 95% confidence 
 Fig. 10 "3.87" row is **not** pinned: p. 28 does not state m for it, so reproducing it requires an
 assumption about the input.
 
+#### The pinned values, verbatim from the PDF
+
+Re-read 2026-10-01 at the source (arXiv abs page: v1, "Submitted on 15 May 2023", the only
+version): the PDF was downloaded through gstack `/browse` and its text layer extracted with macOS
+PDFKit. That text layer renders `get_eps_audit`'s underscores as spaces and drops superscripts, so
+δ = 10⁻⁴ / 10⁻⁵ appear as "10−4" / "10−5". Each quote below is the single PDF line carrying the
+value, exactly as extracted.
+
+PIN 1, Appendix D, p. 46:
+
+> obtain a lower bound of ε≥0.673 for δ = 10−4 and 95% confidence. (This is slightly
+
+The rest of that sentence and the next: "Suppose the auditor correctly guesses v = 75 out of
+r = 100 guesses, but with a total of m = 1000 examples", and "This is obtained by calling get eps
+audit(1000,100,75,1e-4,0.05)."
+
+PIN 2, §7, p. 28:
+
+> In Figure 11, the highest value of the lower bound is ε ≥2.675 for δ = 10−5, which is
+
+The sentence ends "attained by 1439 correct guesses out of 1510" (v = 1439, r = 1510). Its 95%
+confidence and m = 100,000 are stated in Figure 11's caption, on PDF page 30: "For the lower
+bound, we plot the bound of Theorem 5.2 with 95% confidence for varying numbers of guesses r. We
+consider a total of m= 100,000 randomized examples".
+
 ### Why the reproduction tolerance is one unit in the last printed digit
 
 The tolerance is declared only as `ENTRIES["one_run_tolerance"]` in `scripts/phase35_prereg.py`;

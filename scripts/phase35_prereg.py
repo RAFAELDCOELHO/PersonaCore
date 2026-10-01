@@ -60,7 +60,14 @@ THE BUDGET-RECORD CONTRACT. Phase 36 publishes ``results/phase36_budget.json`` h
 ``total_hours`` and ``stop_line_hours``. THE PHASE 42 CONTROL-RECORD CONTRACT. Each
 ``results/phase42_control_*.json`` carries ``recipe`` = {lr, steps, batch}, ``seed``, ``sigma`` =
 0.0 and ``taught_recall`` / ``heldout_recall`` each with ``numerator`` and ``denominator`` (the
-field shape of the v4.0 point record).
+field shape of the v4.0 point record). THE PHASE 41 CALIBRATION-RECORD CONTRACT. Each
+``results/phase41_calibration_*.json`` carries ``target`` (an ``e1_targets()`` slot), ``ordering``
+(str), ``seed`` (an ``e1_teaching_seeds()`` int, or null for a ``(target, ordering)`` key),
+``family`` ("A2"), ``corpus`` (the repo-relative path of the calibration corpus its draws were
+built from) and ``draws`` (THE ARM'S OWN draws). Every Phase 41 calibration runs on Phase 19's
+calibration fact, ``phase19_erasure.select_calibration_fact()`` (chosen by rule, reads no result):
+the corpus's ``fact_id`` must be that fact's id and its ``n_questions`` / ``question_counts`` must
+equal the questions re-derived from the draws (option A, ruled by Rafael 2026-10-01).
 
 D-04 CLASSIFICATION. e1_alternative_ordering and e6_entry_subset are design choices, but no
 decision on record names the alternative ordering and CTX-01's subset exists to fit the Phase 36
@@ -710,6 +717,20 @@ _ENTRIES = {
             "35-RESEARCH.md §PREREG-09 (a); .planning/research/V6-PREREG-09.md"
         ),
     },
+    "e4_beta": {
+        "value": 0.05,
+        "derivation": (
+            "The one-sided 95% level: the level Phase 26 used (z = erasure_gate._Z_ONE_SIDED_95, "
+            "so beta = 1 - Phi(z)), and the level of both reproduced paper pins (App. D p. 46; "
+            "§7 p. 28 with the Fig. 11 caption p. 30), both at beta = 0.05."
+        ),
+        "kind": "preference",
+        "source": (
+            "scripts/erasure_gate.py:90 (_Z_ONE_SIDED_95); scripts/phase26_prereg.py:211-214; "
+            "arXiv:2305.08846v1 App. D p. 46, §7 p. 28 and Fig. 11 caption p. 30; "
+            ".planning/research/V6-PREREG-09.md"
+        ),
+    },
 }
 
 ENTRIES = types.MappingProxyType(
@@ -903,6 +924,71 @@ def p22_onset_sigma(steps):
     return hi
 
 
+# ERASE-07's outcome when no checkpoint confirms zero at K = FULL_FIDELITY_K. Not a verdict: it is
+# proved distinct from every verdict an E1 cell could be read against.
+NOT_REACHED = "NOT_REACHED"
+_prove(
+    NOT_REACHED
+    not in (
+        *erasure_gate.VERDICTS,
+        *mitigation_gate.V4_VERDICTS,
+        *phase29_prereg.VERDICTS,
+        phase29_prereg.REFUSED,
+    ),
+    "NOT_REACHED collides with a verdict string; it must never count as PASS nor as FAIL",
+)
+
+
+def e1_stop(*, grid, readings):
+    """ERASE-07's stop. ``grid`` is the ``fill("e1_checkpoint_grid", ...)`` result; ``readings``
+    maps each checkpoint, in grid order and read until the stop, to ``{"curve_k_zero": bool,
+    "full_fidelity_k_zero": bool | None}``: the K = CURVE_K read, and the K = FULL_FIDELITY_K
+    confirmation, present iff the CURVE_K read is zero. The stop is the first checkpoint whose
+    CURVE_K read is zero AND whose confirmation is zero; a non-zero confirmation continues to the
+    next checkpoint. When no checkpoint confirms zero at FULL_FIDELITY_K the cell records
+    ``NOT_REACHED``: it receives no (b) or (c) verdict at a stopping point and never counts as PASS
+    nor as FAIL. Returns ``{"stop": <checkpoint> or NOT_REACHED, "judged": bool}``, ``judged``
+    False exactly for NOT_REACHED. Malformed readings are refused."""
+    _prove(
+        isinstance(grid, collections.abc.Mapping)
+        and set(grid) == {"checkpoints", "read_k", "confirm_k", "not_reached"},
+        "grid must be the fill('e1_checkpoint_grid', ...) result",
+    )
+    checkpoints = grid["checkpoints"]
+    _prove(isinstance(readings, collections.abc.Mapping), "readings must be a mapping")
+    _prove(
+        set(readings) <= set(checkpoints),
+        f"readings for checkpoints outside the grid: {sorted(set(readings) - set(checkpoints))}",
+    )
+    for index, checkpoint in enumerate(checkpoints):
+        _prove(checkpoint in readings, f"checkpoint {checkpoint} has no reading before the stop")
+        reading = readings[checkpoint]
+        _prove(
+            isinstance(reading, collections.abc.Mapping)
+            and set(reading) == {"curve_k_zero", "full_fidelity_k_zero"},
+            f"reading {checkpoint} must have exactly curve_k_zero and full_fidelity_k_zero",
+        )
+        curve, confirm = reading["curve_k_zero"], reading["full_fidelity_k_zero"]
+        _prove(isinstance(curve, bool), f"reading {checkpoint}: curve_k_zero is not a bool")
+        if not curve:
+            _prove(
+                confirm is None,
+                f"reading {checkpoint}: a FULL_FIDELITY_K confirmation without a zero CURVE_K read",
+            )
+            continue
+        _prove(
+            isinstance(confirm, bool),
+            f"reading {checkpoint}: a zero CURVE_K read without its FULL_FIDELITY_K confirmation",
+        )
+        if confirm:
+            _prove(
+                set(readings) == set(checkpoints[: index + 1]),
+                f"readings past the stop at checkpoint {checkpoint}",
+            )
+            return types.MappingProxyType({"stop": checkpoint, "judged": True})
+    return types.MappingProxyType({"stop": NOT_REACHED, "judged": False})
+
+
 # The 17 rules. Keyword-only; every refusal goes through _prove; every container returned is
 # read-only.
 
@@ -979,7 +1065,9 @@ def _rule_e1_checkpoint_grid(*, checkpoints, input_records, derivation):
     """ERASE-07: the ablation-prefix checkpoints, strictly increasing counts >= 1, funded by the
     Phase 36 budget. Each checkpoint is read with A2 at K = CURVE_K; the first zero is confirmed
     at K = FULL_FIDELITY_K; a non-zero confirmation continues to the next checkpoint; the rank
-    never enters the stopping rule and is recorded at every checkpoint."""
+    never enters the stopping rule and is recorded at every checkpoint. When no checkpoint
+    confirms zero at K = FULL_FIDELITY_K the cell records ``NOT_REACHED`` (``e1_stop``): no (b) or
+    (c) verdict at a stopping point, and it never counts as PASS nor as FAIL."""
     _prove(isinstance(checkpoints, tuple) and checkpoints, "checkpoints must be a non-empty tuple")
     for value in checkpoints:
         _prove_count("checkpoint", value)
@@ -991,27 +1079,126 @@ def _rule_e1_checkpoint_grid(*, checkpoints, input_records, derivation):
     records = _consume_inputs("e1_checkpoint_grid", checkpoints, input_records, derivation)
     _prove(_budget_front_hours(records, "E1") > 0, "the Phase 36 budget gives E1 no MPS hours")
     return types.MappingProxyType(
-        {"checkpoints": checkpoints, "read_k": CURVE_K, "confirm_k": FULL_FIDELITY_K}
+        {
+            "checkpoints": checkpoints,
+            "read_k": CURVE_K,
+            "confirm_k": FULL_FIDELITY_K,
+            "not_reached": NOT_REACHED,
+        }
     )
 
 
 def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
-    """ERASE-06: condition (a)'s floors, one written entry per (target, ordering[, seed]), covering
-    every E1 target, calibrated on the Phase 41 calibration records."""
+    """ERASE-06: condition (a)'s floors, one per (target, ordering[, seed]) key, covering every E1
+    target. The floor is COMPUTED, never typed: the caller supplies only the keys (each value
+    ``None``); a supplied number that differs from the computed floor is refused.
+
+    Each key maps to exactly one consumed ``results/phase41_calibration_*.json`` with equal
+    (target, ordering, seed), and each consumed record to exactly one key (the Phase 41
+    calibration-record contract in the module docstring). The rate is the defect-B correction's
+    route (results/phase19_calibration_correction.json ``evidence.re_derivation``), on THE ARM'S
+    OWN draws: values ``{fact.id: fact.value}`` with
+    ``fact = phase19_erasure.select_calibration_fact()``,
+    ``phase19_erasure.per_fact_rows(draws, values, family="A2", tier=tier)`` once per tier of
+    ``phase18_extraction.CORPUS_TIERS``, successes / questions pooled; never Phase 19's
+    ``_calibration_rate`` (defect B). The floor is ``phase19_erasure.lock_erasure_floor(rate)``,
+    its branch ``phase19_erasure.floor_branch(rate)``.
+
+    The reachability clamp sits on the 27-question TARGET denominator: ``ERASURE_FLOOR_MIN`` is
+    ``wilson_upper_bound(0, N_TARGET_QUESTIONS)``, 27 = 14 core_taught + 13 core_held_out per
+    target, proved here; the test measures that every e1 target pools to those 27 questions.
+    Returns key -> {floor, floor_branch, calibration_rate, calibration_successes,
+    calibration_questions, calibration_record}, read-only.
+    """
     _prove(isinstance(floors, collections.abc.Mapping) and floors, "floors must be a mapping")
     teaching = e1_teaching_seeds()
-    for key, entry in floors.items():
+    for key, supplied in floors.items():
         _prove(isinstance(key, tuple) and len(key) in (2, 3), f"floor key {key!r} malformed")
         _prove(isinstance(key[1], str) and key[1], f"floor key {key!r} has no ordering")
         if len(key) == 3:
             _prove(key[2] in teaching, f"floor key {key!r}: seed not in e1_teaching_seeds()")
-        _prove_entry(f"floor {key!r}", entry)
+        if supplied is not None:
+            _prove_finite(f"supplied floor {key!r}", supplied)
     _prove(
         {key[0] for key in floors} == set(e1_targets()),
         "the floors do not cover exactly e1_targets()",
     )
-    _consume_inputs("e1_condition_a_floors", floors, input_records, derivation)
-    return types.MappingProxyType(dict(floors))
+    records = _consume_inputs("e1_condition_a_floors", tuple(floors), input_records, derivation)
+
+    import phase18_extraction  # torch at import: lazy
+    import phase19_erasure  # torch at import: lazy
+
+    _prove(
+        phase19_erasure.ERASURE_FLOOR_MIN
+        == erasure_gate.wilson_upper_bound(0, phase19_erasure.N_TARGET_QUESTIONS),
+        "the reachability clamp no longer sits on the 27-question target denominator",
+    )
+    fact = phase19_erasure.select_calibration_fact()
+    values = {fact.id: fact.value}
+    path_of = {}
+    for path, record in records.items():
+        key = (record["target"], record["ordering"])
+        if record["seed"] is not None:
+            key += (record["seed"],)
+        _prove(key not in path_of, f"two calibration records for {key!r}")
+        _prove(key in floors, f"calibration record {path} has key {key!r}, which no floor names")
+        path_of[key] = path
+    _prove(
+        set(path_of) == set(floors),
+        f"floors without a calibration record: {sorted(set(floors) - set(path_of), key=repr)}",
+    )
+    computed = {}
+    for key, path in path_of.items():
+        record = records[path]
+        _prove(record["family"] == "A2", f"{path}: family {record['family']!r} is not A2")
+        corpus_path = pathlib.PurePosixPath(record["corpus"])
+        _prove(
+            not corpus_path.is_absolute() and ".." not in corpus_path.parts,
+            f"{path}: corpus {record['corpus']!r} is not repo-relative",
+        )
+        corpus = json.loads((_REPO_ROOT / corpus_path).read_text(encoding="utf-8"))
+        _prove(
+            corpus["fact_id"] == fact.id,
+            f"{path}: the corpus is for {corpus['fact_id']!r} but the calibration fact is "
+            f"{fact.id!r}; the draws and the scoring would be about different facts",
+        )
+        successes = questions = 0
+        for tier in phase18_extraction.CORPUS_TIERS:
+            rows = phase19_erasure.per_fact_rows(
+                record["draws"], values, family=record["family"], tier=tier
+            )
+            _prove(fact.id in rows, f"{path}: no {tier} row for {fact.id!r}")
+            row = rows[fact.id]
+            _prove(
+                row["n_questions"] == corpus["question_counts"][tier],
+                f"{path}: {tier} re-derives {row['n_questions']} questions, the corpus declares "
+                f"{corpus['question_counts'][tier]}",
+            )
+            successes += row["n_answerable"]
+            questions += row["n_questions"]
+        _prove(questions > 0, f"{path}: no calibration question")
+        _prove(
+            questions == corpus["n_questions"],
+            f"{path}: {questions} pooled questions, the corpus declares {corpus['n_questions']}",
+        )
+        rate = successes / questions
+        floor = phase19_erasure.lock_erasure_floor(rate)
+        supplied = floors[key]
+        _prove(
+            supplied is None or supplied == floor,
+            f"floor {key!r}: supplied {supplied!r}, computed {floor!r}; the floor is computed",
+        )
+        computed[key] = types.MappingProxyType(
+            {
+                "floor": floor,
+                "floor_branch": phase19_erasure.floor_branch(rate),
+                "calibration_rate": rate,
+                "calibration_successes": successes,
+                "calibration_questions": questions,
+                "calibration_record": path,
+            }
+        )
+    return types.MappingProxyType(computed)
 
 
 def _rule_e1_alternative_ordering(*, ordering):
@@ -1176,7 +1363,8 @@ def _rule_e4_parameters(
 ):
     """AUDIT-01, D-11: E4's one-run parameters and its maximum detectable epsilon, computed ONLY
     when the port reproduces the published values. Inclusion probability is
-    ``ENTRIES["e4_inclusion_probability"]`` (Algorithm 1). The ceiling is
+    ``ENTRIES["e4_inclusion_probability"]`` (Algorithm 1); beta is ``ENTRIES["e4_beta"]``, any
+    other beta refused. The ceiling is
     ``eps_lower_one_run(m, r, r, DELTA, beta)`` with r = k_plus + k_minus (a perfect guesser),
     and ``runs`` is ``e4_runs(ceiling)`` (AUDIT-02)."""
     _prove(
@@ -1193,8 +1381,11 @@ def _rule_e4_parameters(
         inclusion_probability == ENTRIES["e4_inclusion_probability"]["value"],
         f"inclusion_probability {inclusion_probability!r} is not Algorithm 1's",
     )
-    _prove_real("beta", beta)
-    _prove(0 < beta < 1, f"beta is {beta!r}; need 0 < beta < 1")
+    _prove_finite("beta", beta)
+    _prove(
+        beta == ENTRIES["e4_beta"]["value"],
+        f"beta is {beta!r}, not ENTRIES['e4_beta'] (the one-sided 95% level)",
+    )
     _consume_inputs("e4_parameters", m, input_records, derivation)
     ceiling = eps_lower_one_run(m, r, r, DELTA, beta)
     return types.MappingProxyType(

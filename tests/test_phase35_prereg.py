@@ -215,6 +215,9 @@ def test_research_note_cites_both_sources_with_pages():
         "Theorem 6",
         "p. 46",
         "p. 28",
+        # The single PDF line carrying each pinned value, verbatim (Rafael's review, 2026-10-01).
+        "obtain a lower bound of ε≥0.673 for δ = 10−4 and 95% confidence. (This is slightly",
+        "In Figure 11, the highest value of the lower bound is ε ≥2.675 for δ = 10−5, which is",
     ):
         assert needed in text, f"{NOTE} does not cite {needed!r}"
     assert "não verificado" not in text
@@ -1292,14 +1295,14 @@ def test_e4_parameters_gate_on_the_reproduction(tmp_path, monkeypatch):
     paths = _inputs(tmp_path, monkeypatch, {"results/phase38_minting.json": {"m": 16}})
     delta = phase35_prereg.DELTA
 
-    def e4(m, k_plus, k_minus, inclusion=0.5):
+    def e4(m, k_plus, k_minus, inclusion=0.5, beta=0.05):
         return phase35_prereg.fill(
             "e4_parameters",
             m=m,
             inclusion_probability=inclusion,
             k_plus=k_plus,
             k_minus=k_minus,
-            beta=0.05,
+            beta=beta,
             input_records=paths,
             derivation=_measured(m, paths),
         )
@@ -1311,7 +1314,13 @@ def test_e4_parameters_gate_on_the_reproduction(tmp_path, monkeypatch):
     large = e4(184, 92, 92)
     assert large["runs"] is True
     assert large["ceiling"] > phase35_prereg.audit02_cut()
-    for args, kwargs in (((16, 8, 8), {"inclusion": 0.25}), ((16, 9, 8), {})):
+    for args, kwargs in (
+        ((16, 8, 8), {"inclusion": 0.25}),
+        ((16, 9, 8), {}),
+        ((16, 8, 8), {"beta": 0.1}),
+        ((16, 8, 8), {"beta": True}),
+        ((16, 8, 8), {"beta": math.nan}),
+    ):
         with pytest.raises(SystemExit):
             e4(*args, **kwargs)
     monkeypatch.setattr(phase35_prereg, "one_run_reproduction_holds", lambda: False)
@@ -1320,18 +1329,37 @@ def test_e4_parameters_gate_on_the_reproduction(tmp_path, monkeypatch):
     assert "D-11" in str(refused.value)
 
 
-def test_slot_e1_rules(tmp_path, monkeypatch):
-    paths = _inputs(tmp_path / "grid", monkeypatch, {_BUDGET: _budget_payload()})
-    checkpoints = (8, 16, 32, 64, 78)  # ablation prefix counts, not K
+def test_e4_beta_is_the_one_sided_95_level_of_phase26_and_both_pins():
+    entry = phase35_prereg.ENTRIES["e4_beta"]
+    assert entry["kind"] == "preference"
+    assert set(entry) == {"value", "derivation", "kind", "source"}
+    z = erasure_gate._Z_ONE_SIDED_95
+    assert phase26_prereg.Z is z
+    assert abs(0.5 * math.erfc(z / math.sqrt(2)) - entry["value"]) < 1e-12
+    for pin in phase35_prereg.ONE_RUN_PUBLISHED.values():
+        assert pin["inputs"][4] == entry["value"]
+
+
+_CHECKPOINTS = (8, 16, 32, 64, 78)  # ablation prefix counts, not K
+
+
+def _fill_checkpoint_grid(root, monkeypatch):
+    paths = _inputs(root, monkeypatch, {_BUDGET: _budget_payload()})
     grid = phase35_prereg.fill(
         "e1_checkpoint_grid",
-        checkpoints=checkpoints,
+        checkpoints=_CHECKPOINTS,
         input_records=paths,
-        derivation=_measured(checkpoints, paths),
+        derivation=_measured(_CHECKPOINTS, paths),
     )
-    assert grid["checkpoints"] == checkpoints
+    return grid, paths
+
+
+def test_slot_e1_rules(tmp_path, monkeypatch):
+    grid, paths = _fill_checkpoint_grid(tmp_path / "grid", monkeypatch)
+    assert grid["checkpoints"] == _CHECKPOINTS
     assert grid["read_k"] == mitigation_budget.CURVE_K
     assert grid["confirm_k"] == mitigation_budget.FULL_FIDELITY_K
+    assert grid["not_reached"] == phase35_prereg.NOT_REACHED
     with pytest.raises(SystemExit):
         phase35_prereg.fill(
             "e1_checkpoint_grid",
@@ -1340,28 +1368,9 @@ def test_slot_e1_rules(tmp_path, monkeypatch):
             derivation=_measured((8, 8, 16), paths),
         )
 
-    paths = _inputs(tmp_path / "floors", monkeypatch, {"results/phase41_calibration_a.json": {}})
-    targets = phase35_prereg.e1_targets()
     off_seed = next(
         s for s in phase35_prereg.seed_list() if s not in phase35_prereg.e1_teaching_seeds()
     )
-
-    def floors_fill(floors):
-        return phase35_prereg.fill(
-            "e1_condition_a_floors",
-            floors=floors,
-            input_records=paths,
-            derivation=_measured(floors, paths),
-        )
-
-    floors = {(t, "greedy_loo"): _entry(0.1) for t in targets}
-    assert dict(floors_fill(floors)) == floors
-    for bad in (
-        {(t, "greedy_loo"): _entry(0.1) for t in targets[1:]},
-        {**floors, (targets[0], "greedy_loo", off_seed): _entry(0.1)},
-    ):
-        with pytest.raises(SystemExit):
-            floors_fill(bad)
 
     paths = _inputs(tmp_path / "band", monkeypatch, {"results/phase41_band_inputs_a.json": {}})
     teaching = phase35_prereg.e1_teaching_seeds()[0]
@@ -1381,6 +1390,285 @@ def test_slot_e1_rules(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         band_fill(off_seed)
     assert phase35_prereg.fill("e1_alternative_ordering", ordering=_entry("x")) == _entry("x")
+
+
+# ERASE-07's NOT_REACHED outcome (Rafael's review, 2026-10-01).
+
+
+def _readings(*zero_at, confirmed=()):
+    """A CURVE_K read per grid checkpoint up to the last one named: zero at `zero_at`, its
+    FULL_FIDELITY_K confirmation zero exactly at `confirmed`."""
+    last = max((*zero_at, *confirmed), default=_CHECKPOINTS[-1])
+    return {
+        c: {
+            "curve_k_zero": c in zero_at,
+            "full_fidelity_k_zero": (c in confirmed) if c in zero_at else None,
+        }
+        for c in _CHECKPOINTS
+        if c <= last
+    }
+
+
+def test_e1_stop_not_reached_is_neither_pass_nor_fail(tmp_path, monkeypatch):
+    grid, _ = _fill_checkpoint_grid(tmp_path, monkeypatch)
+    # One checkpoint reads zero at CURVE_K but its FULL_FIDELITY_K confirmation is non-zero.
+    readings = {c: {"curve_k_zero": False, "full_fidelity_k_zero": None} for c in _CHECKPOINTS}
+    readings[_CHECKPOINTS[1]] = {"curve_k_zero": True, "full_fidelity_k_zero": False}
+    out = phase35_prereg.e1_stop(grid=grid, readings=readings)
+    assert out["stop"] == phase35_prereg.NOT_REACHED == grid["not_reached"]
+    assert out["judged"] is False
+    passed, failed = mitigation_gate.V4_VERDICTS[:2]
+    assert (passed, failed) == ("PASS", "FAIL")
+    assert out["stop"] not in (passed, failed)
+    for domain in (
+        erasure_gate.VERDICTS,
+        mitigation_gate.V4_VERDICTS,
+        phase29_prereg.VERDICTS,
+        (phase29_prereg.REFUSED,),
+    ):
+        assert phase35_prereg.NOT_REACHED not in domain
+    with pytest.raises(TypeError):
+        out["judged"] = True
+
+
+def test_e1_stop_at_the_first_confirmed_zero(tmp_path, monkeypatch):
+    grid, _ = _fill_checkpoint_grid(tmp_path, monkeypatch)
+    first, second, third = _CHECKPOINTS[:3]
+    stop = phase35_prereg.e1_stop(grid=grid, readings=_readings(third, confirmed=(third,)))
+    assert dict(stop) == {"stop": third, "judged": True}
+    # A non-zero confirmation continues to the next checkpoint.
+    stop = phase35_prereg.e1_stop(grid=grid, readings=_readings(first, second, confirmed=(second,)))
+    assert dict(stop) == {"stop": second, "judged": True}
+
+    good = _readings(second, confirmed=(second,))
+    missing = {k: v for k, v in good.items() if k != first}
+    confirm_without_zero = {**good, first: {"curve_k_zero": False, "full_fidelity_k_zero": False}}
+    zero_without_confirm = {**good, first: {"curve_k_zero": True, "full_fidelity_k_zero": None}}
+    outside = {**good, first + 1: {"curve_k_zero": False, "full_fidelity_k_zero": None}}
+    past_stop = {**good, third: {"curve_k_zero": False, "full_fidelity_k_zero": None}}
+    for bad in (missing, confirm_without_zero, zero_without_confirm, outside, past_stop):
+        with pytest.raises(SystemExit):
+            phase35_prereg.e1_stop(grid=grid, readings=bad)
+    with pytest.raises(SystemExit):
+        phase35_prereg.e1_stop(grid={"checkpoints": _CHECKPOINTS}, readings=good)
+
+
+# ERASE-06's floors, COMPUTED from each cell's own calibration record (Rafael's review and his
+# option-A ruling, 2026-10-01). Records are planted under tmp_path only.
+
+_CAL_ARM = "results/phase19_arm_cal-erased.json"
+_CAL_CORPUS = "results/phase19_calibration_corpus.json"
+_CORRECTION = "results/phase19_calibration_correction.json"
+_ORDERING = "greedy_loo"
+_FIXTURE = "synthetic test fixture — not a reading, never cite as a measurement"
+
+
+def _cal_draws():
+    return json.loads((_ROOT / _CAL_ARM).read_text(encoding="utf-8"))["draws"]
+
+
+def _calibration_payload(key, draws, family="A2"):
+    return {
+        "target": key[0],
+        "ordering": key[1],
+        "seed": key[2] if len(key) == 3 else None,
+        "family": family,
+        "corpus": _CAL_CORPUS,
+        "draws": draws,
+    }
+
+
+def _fill_floors(root, monkeypatch, floors, payloads, corpus=None):
+    records = {f"results/phase41_calibration_{i}.json": p for i, p in enumerate(payloads)}
+    if corpus is None:
+        corpus = (_ROOT / _CAL_CORPUS).read_bytes()
+    _inputs(root, monkeypatch, {**records, _CAL_CORPUS: corpus})
+    paths = tuple(records)
+    return phase35_prereg.fill(
+        "e1_condition_a_floors",
+        floors=floors,
+        input_records=paths,
+        derivation=_measured(tuple(floors), paths),
+    )
+
+
+def _target_keys():
+    return [(target, _ORDERING) for target in phase35_prereg.e1_targets()]
+
+
+def test_e1_floors_reproduce_phase19_corrected_floor(tmp_path, monkeypatch):
+    """Positive control: the real cal-erased draws, through the rule, give Phase 19's CORRECTED
+    floor (0/23, reachability-min), never the pin's defect-B floor."""
+    import phase19_erasure  # torch at import: inside the test only
+
+    keys = _target_keys()
+    draws = _cal_draws()
+    out = _fill_floors(
+        tmp_path, monkeypatch, dict.fromkeys(keys), [_calibration_payload(k, draws) for k in keys]
+    )
+    correction = json.loads((_ROOT / _CORRECTION).read_text(encoding="utf-8"))
+    defect_b = phase19_erasure.lock_erasure_floor(phase19_erasure._calibration_rate())
+    assert defect_b == correction["pin_internal_target_floor"]
+    assert set(out) == set(keys)
+    for key in keys:
+        row = out[key]
+        assert row["floor"] == phase19_floor.TARGET_FLOOR
+        assert row["floor_branch"] == phase19_floor.FLOOR_BRANCH
+        assert row["calibration_rate"] == 0.0
+        assert row["calibration_successes"] == correction["calibration_successes"]
+        assert row["calibration_questions"] == correction["calibration_questions"]
+        assert row["floor"] != defect_b
+    assert out[keys[0]]["calibration_record"] == "results/phase41_calibration_0.json"
+    with pytest.raises(TypeError):
+        out[keys[0]]["floor"] = 0.0
+
+
+def test_e1_floors_refuse_a_typed_floor_or_a_mismatched_record(tmp_path, monkeypatch):
+    targets = phase35_prereg.e1_targets()
+    keys = _target_keys()
+    draws = _cal_draws()
+    payloads = [_calibration_payload(k, draws) for k in keys]
+    seeded = [(t, _ORDERING, phase35_prereg.e1_teaching_seeds()[1]) for t in targets]
+    floor = phase19_floor.TARGET_FLOOR
+
+    # A supplied value equal to the computed floor is accepted, seeded keys included.
+    out = _fill_floors(
+        tmp_path / "equal", monkeypatch, {**dict.fromkeys(keys), keys[0]: floor}, payloads
+    )
+    assert out[keys[0]]["floor"] == floor
+    out = _fill_floors(
+        tmp_path / "seeded",
+        monkeypatch,
+        dict.fromkeys(seeded),
+        [_calibration_payload(k, draws) for k in seeded],
+    )
+    assert set(out) == set(seeded)
+
+    with pytest.raises(SystemExit) as refused:
+        _fill_floors(
+            tmp_path / "typed", monkeypatch, {**dict.fromkeys(keys), keys[0]: floor * 2}, payloads
+        )
+    assert "computed" in str(refused.value)
+
+    other = json.loads((_ROOT / _CAL_CORPUS).read_text(encoding="utf-8"))
+    other["fact_id"] = "cal_planted_other"
+    for name, floors, planted, corpus in (
+        ("missing", dict.fromkeys(keys), payloads[1:], None),
+        ("duplicate", dict.fromkeys(keys), [*payloads, payloads[0]], None),
+        (
+            "extra",
+            dict.fromkeys(keys),
+            [*payloads, _calibration_payload((targets[0], "other"), draws)],
+            None,
+        ),
+        (
+            "family",
+            dict.fromkeys(keys),
+            [_calibration_payload(keys[0], draws, "A0"), *payloads[1:]],
+            None,
+        ),
+        ("corpus", dict.fromkeys(keys), payloads, json.dumps(other).encode("utf-8")),
+    ):
+        with pytest.raises(SystemExit):
+            _fill_floors(tmp_path / name, monkeypatch, floors, planted, corpus)
+
+
+def _synthetic_fixture_draws(answerable):
+    """SYNTHETIC TEST FIXTURE: not a reading, never cite as a measurement. The real cal-erased
+    draws with the first ``answerable`` questions given one completion naming the calibration
+    fact's value, so the REAL scorer (per_fact_rows -> score_records) counts them answerable."""
+    import phase19_erasure  # torch at import: inside the test only
+
+    value = phase19_erasure.select_calibration_fact().value
+    draws = _cal_draws()
+    for draw in draws[:answerable]:
+        draw["completions"][0] = " " + value
+    return draws
+
+
+@pytest.mark.parametrize("branch", ("discount", "ceiling"))
+def test_e1_floors_synthetic_fixture_cover_discount_and_ceiling(tmp_path, monkeypatch, branch):
+    """SYNTHETIC TEST FIXTURE: not a reading, never cite as a measurement. Real draws only exercise
+    reachability-min; these planted records cover the other two branches through the real route.
+    The expected floor is lock_erasure_floor / floor_branch of the rate this test planted."""
+    import phase19_erasure  # torch at import: inside the test only
+
+    questions = len(_cal_draws())  # one draw record per question
+    lo, hi = phase19_erasure.ERASURE_FLOOR_MIN, phase19_erasure.FLOOR_CEILING
+
+    def lands(k):
+        if phase19_erasure.floor_branch(k / questions) != branch:
+            return False
+        # discount: the discounted floor strictly between the clamp and the ceiling.
+        return branch == "ceiling" or lo < phase19_erasure.lock_erasure_floor(k / questions) < hi
+
+    answerable = next(k for k in range(questions + 1) if lands(k))
+    keys = _target_keys()
+    payloads = [
+        {**_calibration_payload(k, _synthetic_fixture_draws(answerable)), "fixture": _FIXTURE}
+        for k in keys
+    ]
+    out = _fill_floors(tmp_path, monkeypatch, dict.fromkeys(keys), payloads)
+    rate = answerable / questions
+    for key in keys:
+        row = out[key]
+        assert row["calibration_successes"] == answerable
+        assert row["calibration_questions"] == questions
+        assert row["calibration_rate"] == rate
+        assert row["floor"] == phase19_erasure.lock_erasure_floor(rate)
+        assert row["floor_branch"] == phase19_erasure.floor_branch(rate) == branch
+    if branch == "discount":
+        assert lo < out[keys[0]]["floor"] < hi
+    else:
+        assert out[keys[0]]["floor"] == hi
+
+
+def _calibration_rate_references(source):
+    rule = _function(ast.parse(source), "_rule_e1_condition_a_floors")
+    return [
+        node.lineno
+        for node in ast.walk(rule)
+        if (isinstance(node, ast.Name) and node.id == "_calibration_rate")
+        or (isinstance(node, ast.Attribute) and node.attr == "_calibration_rate")
+    ]
+
+
+def test_e1_floors_never_reference_the_defect_b_rate(tmp_path):
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    assert _calibration_rate_references(source) == []
+
+    rule = _function(ast.parse(source), "_rule_e1_condition_a_floors")
+    anchor = _import_of(ast.walk(rule), "phase19_erasure")
+    line = " " * anchor.col_offset + "_ = phase19_erasure._calibration_rate()"
+    planted = _replace_lines(source, anchor.end_lineno + 1, anchor.end_lineno, [line])
+    ast.parse(planted)
+    assert _calibration_rate_references(_planted(tmp_path, source, planted, "defect_b.py"))
+    assert real.read_bytes() == before
+
+
+def test_e1_targets_pool_to_the_27_question_target_denominator():
+    import phase18_extraction  # torch at import: inside the test only
+    import phase19_erasure  # same
+
+    draws = json.loads((_ROOT / "results/phase18_arm_adapter-on.json").read_text(encoding="utf-8"))[
+        "draws"
+    ]
+    fixture = json.loads((_ROOT / "results/phase16_recall_sample.json").read_text(encoding="utf-8"))
+    assert phase19_erasure.N_TARGET_QUESTIONS == sum(
+        phase19_erasure.TARGET_QUESTION_COUNTS.values()
+    )
+    assert phase19_erasure.ERASURE_FLOOR_MIN == erasure_gate.wilson_upper_bound(
+        0, phase19_erasure.N_TARGET_QUESTIONS
+    )
+    for target in phase35_prereg.e1_targets():
+        fact_ids = {draw["fact_id"] for draw in draws if draw["slot"] == target}
+        assert len(fact_ids) == 1, (target, fact_ids)
+        counts = phase19_erasure.target_question_counts(
+            fixture, fact_ids.pop(), phase18_extraction.CORPUS_TIERS
+        )
+        assert counts["pooled"] == phase19_erasure.N_TARGET_QUESTIONS, (target, counts)
 
 
 def test_slot_e1_condition_b_margin_is_the_core_read():
