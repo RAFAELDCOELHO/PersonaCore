@@ -16,6 +16,9 @@ What this file proves, CPU-only:
 - (Plan 03) the deferred-slot registry: 17 slots reachable only through fill(), every rule
   exercised through fill() with each refusal (D-06, D-11, D-16, D-17 incl. B4, RECIPE-04,
   COST-02, D-14, W3) watched firing on records planted under tmp_path.
+- (Plan 04) D-02 made mechanical: the slot census (undeclared, outside owner, different rule) over
+  scripts/ and src/, the per-fill-file ordering legs (a)/(b)/(c) on throwaway repos, the
+  input-record registry, and the census that every prereg function has a CPU test, each watched RED.
 
 It reads only tracked files and git history and writes nothing under results/. A shallow clone
 FAILS, never skips.
@@ -1460,3 +1463,220 @@ def test_slot_design_entries_refuse_a_proposer(slot):
     assert phase35_prereg.fill(slot, **kwargs(_entry("rule text")))
     with pytest.raises(SystemExit):
         phase35_prereg.fill(slot, **kwargs({**_entry("rule text"), "proposer": "Rafael"}))
+
+
+# =================================================================================================
+# (12) PLAN 04 — THE SLOT CENSUS (D-02's three red cases, PREREG-05 SC1). Every file that could fill
+# a slot is parsed; planted owner files live under tmp_path only.
+# =================================================================================================
+
+
+def _fill_calls(source):
+    """``(slot or None, Call)`` for every ``phase35_prereg.fill(...)`` call in `source`."""
+    calls = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and _is_attribute(node.func, "phase35_prereg", "fill"):
+            first = node.args[0] if node.args else None
+            constant = isinstance(first, ast.Constant) and isinstance(first.value, str)
+            calls.append((first.value if constant else None, node))
+    return calls
+
+
+def _scanned_sources(root):
+    """``(posix relpath, source)`` for scripts/*.py (minus the prereg itself) and src/**/*.py."""
+    paths = [p for p in (root / "scripts").glob("*.py") if p.name != "phase35_prereg.py"]
+    paths += (root / "src").rglob("*.py")
+    return sorted((p.relative_to(root).as_posix(), p.read_text(encoding="utf-8")) for p in paths)
+
+
+def _reaches_slots(node):
+    while isinstance(node, (ast.Subscript, ast.Attribute)):
+        if _is_attribute(node, "phase35_prereg", "SLOTS"):
+            return True
+        node = node.value
+    return False
+
+
+def _is_fill_of(node, slot):
+    return (
+        isinstance(node, ast.Call)
+        and _is_attribute(node.func, "phase35_prereg", "fill")
+        and bool(node.args)
+        and isinstance(node.args[0], ast.Constant)
+        and node.args[0].value == slot
+    )
+
+
+def _span(node):
+    return (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset)
+
+
+def _slot_census_failures(sources):
+    """D-02 checks 1-3 over ``(relpath, source)`` pairs: (1) undeclared or non-constant slot,
+    (2) a fill outside its owner's fill files, a slot filled twice, a write to SLOTS, (3) a slot
+    name bound to anything but its own fill call, a ``_rule_*`` reached directly, an alias."""
+    slots = phase35_prereg.SLOTS
+    upper = {name.upper(): name for name in slots}
+    failures, sites = [], {}
+    for relpath, source in sources:
+        tree = ast.parse(source)
+        bound = {  # keyed by position: _fill_calls parses its own tree
+            _span(node.value): node.targets[0].id
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        }
+        for slot, call in _fill_calls(source):
+            where = f"{relpath}:{call.lineno}"
+            if slot is None:
+                failures.append(f"{where}: non-constant slot argument to phase35_prereg.fill")
+                continue
+            if slot not in slots:
+                failures.append(f"{where}: undeclared slot {slot!r}")
+                continue
+            glob = phase35_prereg.owner_prereg_glob(slot)
+            if not fnmatch.fnmatch(relpath, glob):
+                failures.append(f"{where}: fills {slot} outside its owner ({glob})")
+            sites.setdefault(slot, []).append(where)
+            if bound.get(_span(call)) != slot.upper():
+                failures.append(
+                    f"{where}: different rule: fill({slot!r}) is not the whole value of the "
+                    f"module-level binding {slot.upper()}"
+                )
+        for name, value in _module_targets(tree):
+            if name in upper and not _is_fill_of(value, upper[name]):
+                failures.append(
+                    f"{relpath}:{value.lineno}: different rule: {name} is bound to something "
+                    f"other than phase35_prereg.fill({upper[name]!r}, ...)"
+                )
+        for node in ast.walk(tree):
+            where = f"{relpath}:{getattr(node, 'lineno', '?')}"
+            if (
+                isinstance(node, (ast.Subscript, ast.Attribute))
+                and isinstance(node.ctx, (ast.Store, ast.Del))
+                and _reaches_slots(node)
+            ):
+                failures.append(f"{where}: registry write to phase35_prereg.SLOTS")
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr.startswith("_rule_")
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "phase35_prereg"
+            ):
+                failures.append(f"{where}: _rule_ reference phase35_prereg.{node.attr}")
+            if isinstance(node, ast.Import):
+                failures += [
+                    f"{where}: alias: import phase35_prereg as {a.asname}"
+                    for a in node.names
+                    if a.name == "phase35_prereg" and a.asname not in (None, "phase35_prereg")
+                ]
+            if isinstance(node, ast.ImportFrom) and node.module == "phase35_prereg":
+                for a in node.names:
+                    if a.name.startswith("_rule_"):
+                        failures.append(f"{where}: _rule_ import {a.name} from phase35_prereg")
+                    elif a.name in ("fill", "*"):
+                        failures.append(f"{where}: alias: from phase35_prereg import {a.name}")
+                    elif a.name == "SLOTS":
+                        failures.append(f"{where}: registry import of SLOTS (registry write risk)")
+    failures += [
+        f"slot {slot} filled twice: {', '.join(where)}"
+        for slot, where in sorted(sites.items())
+        if len(where) > 1
+    ]
+    return failures
+
+
+def test_slot_census_is_green_on_the_real_tree():
+    sources = _scanned_sources(_ROOT)
+    assert len(sources) > 1, "meta-guard: the census scanned nothing"
+    assert any(path.startswith("src/") for path, _ in sources), "meta-guard: src/ not scanned"
+    assert PREREG not in dict(sources)
+    assert _slot_census_failures(sources) == []
+
+
+_E2_S_FILL = 'E2_S = phase35_prereg.fill("e2_S", s=5)'
+
+
+def test_slot_census_reds_on_planted_owner_files(tmp_path):
+    def owner_file(name, *lines):
+        text = "\n".join(("import phase35_prereg", *lines)) + "\n"
+        return _planted(tmp_path, "", text, name)
+
+    count = iter(range(1000))
+
+    def sources(*files):
+        return [(rel, owner_file(f"{next(count)}.py", *lines)) for rel, *lines in files]
+
+    p40, p41 = "scripts/phase40_prereg.py", "scripts/phase41_prereg.py"
+    assert _slot_census_failures(sources((p40, _E2_S_FILL))) == []
+    multi_file = sources(
+        (
+            p41,
+            "E1_ALTERNATIVE_ORDERING = "
+            'phase35_prereg.fill("e1_alternative_ordering", ordering=None)',
+        ),
+        (
+            "scripts/phase41_floors_prereg.py",
+            'E1_CONDITION_A_FLOORS = phase35_prereg.fill("e1_condition_a_floors", floors=None)',
+        ),
+    )
+    assert _slot_census_failures(multi_file) == []
+
+    for expected, files in (
+        ("undeclared", [(p40, 'E9_UNDECLARED = phase35_prereg.fill("e9_undeclared")')]),
+        ("non-constant", [(p40, 'S = "e2_S"', "E2_S = phase35_prereg.fill(S, s=5)")]),
+        ("outside its owner", [(p41, _E2_S_FILL)]),
+        ("outside its owner", [("scripts/phase40_driver.py", _E2_S_FILL)]),
+        ("filled twice", [(p40, _E2_S_FILL), ("scripts/phase40_seeds_prereg.py", _E2_S_FILL)]),
+        ("filled twice", [(p40, _E2_S_FILL, _E2_S_FILL.replace("E2_S =", "E2_S_AGAIN ="))]),
+        ("different rule", [(p40, "E2_S = 5")]),
+        ("_rule_ reference", [(p40, "E2_S = phase35_prereg._rule_e2_S(s=5)")]),
+        ("_rule_ import", [(p40, "from phase35_prereg import _rule_e2_S")]),
+        ("different rule", [(p40, _E2_S_FILL.replace("E2_S =", "S ="))]),
+        ("registry write", [(p40, 'phase35_prereg.SLOTS["e2_S"] = None')]),
+        ("alias", [(p40, "from phase35_prereg import fill", 'E2_S = fill("e2_S", s=5)')]),
+    ):
+        failures = _slot_census_failures(sources(*files))
+        assert any(expected in f for f in failures), (expected, files, failures)
+
+
+def _dispatch_failures(source):
+    tree = ast.parse(source)
+    calls = [n for n in ast.walk(_function(tree, "fill")) if isinstance(n, ast.Call)]
+    dispatch = [c for c in calls if isinstance(c.func, ast.Subscript)]
+    failures = []
+    if [ast.unparse(c.func) for c in dispatch] != ["SLOTS[slot]['rule']"]:
+        failures.append(f"fill dispatches {[ast.unparse(c.func) for c in dispatch]}")
+    failures += [
+        f"fill calls {ast.unparse(c.func)} at line {c.lineno}"
+        for c in calls
+        if not isinstance(c.func, ast.Subscript)
+        and not (isinstance(c.func, ast.Name) and c.func.id in ("_prove", "isinstance"))
+    ]
+    defined = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+    failures += [
+        f"rule {slot['rule'].__name__} is not a module-level def"
+        for slot in phase35_prereg.SLOTS.values()
+        if slot["rule"].__name__ not in defined
+    ]
+    return failures
+
+
+def test_slot_fill_dispatches_only_the_declared_rule(tmp_path):
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    assert _dispatch_failures(source) == []
+
+    returns = [
+        n for n in ast.walk(_function(ast.parse(source), "fill")) if isinstance(n, ast.Return)
+    ]
+    assert len(returns) == 1, "meta-guard: fill has one return"
+    ret = returns[0]
+    line = " " * ret.col_offset + "return _rule_e2_S(**inputs)"
+    planted = _replace_lines(source, ret.lineno, ret.end_lineno, [line])
+    ast.parse(planted)
+    assert _dispatch_failures(_planted(tmp_path, source, planted, "dispatch.py"))
+
+    assert real.read_bytes() == before
