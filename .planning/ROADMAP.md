@@ -1443,7 +1443,7 @@ never over them.
 - [ ] **Phase 39: Instrument × Context 2×2** - E6: NLL, rank and generation at the answer anchor and the full A2 question on the same adapters
 - [ ] **Phase 40: M2 Seed Noise Floor** - E2: M2 retrained at S seeds, published beside v3.0's sampling floor
 - [ ] **Phase 41: Erasure Across Facts, Orderings and Seeds** - E1: the four facts tied at 13/13, two orderings, two seeds, no PASS without second-seed replication
-- [ ] **Phase 42: DP-SGD Recipe Search at Large ε** - E3: a pre-registered grid at σ ∈ {0.5, 1}, n = 8, each configuration's ε published with `selection_accounted = false`
+- [ ] **Phase 42: DP-SGD Recipe Search at Large ε** - E3: a pre-registered grid of 4 recipes × σ ∈ {0, 0.5, 1} (σ = 0 is each recipe's own control), n = 8, each configuration's ε published with `selection_accounted = false`
 - [ ] **Phase 43: One-Run Privacy Audit (Conditional)** - E4: runs only if its CPU-computed ceiling could reprove a point Phase 26 could not; otherwise the cut is published with the computed number
 - [ ] **Phase 44: Public Deposit Package** - R2: per-table inventory, SHA-256 manifest and verifier, model and data cards; no PersonaChat bytes; the deposit is Rafael's act
 - [ ] **Phase 45: v6.0 Report and Milestone Close** - The v6.0 section rendered from committed records beside v3.0–v5.0; close on a green CI run of Rafael's push

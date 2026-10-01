@@ -791,7 +791,7 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 | Redistributing PersonaChat or regenerating the two absent calibration adapters | Rafael's R2 ruling |
 | Upload, deposit or `git push` by Claude | Rafael's act |
 | E1 on all eight facts, more than two orderings or seeds | Cut by Rafael to the four facts tied at 13/13 |
-| E3 at n = 64 or σ outside {0.5, 1} | Cut by Rafael to the minimal grid |
+| E3 at n = 64 or σ outside {0, 0.5, 1} (σ = 0 only as each recipe's own control; reworded 2026-10-01 in plan-phase 35) | Cut by Rafael to the minimal grid |
 
 ## v6.0 Traceability
 
