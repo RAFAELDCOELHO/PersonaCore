@@ -1503,7 +1503,28 @@ source, and no E3/E4 threshold is locked without the research it rests on
      of Steinke, Nasr and Jagielski (2023) and (b) the method of accounting for E3's selection; no
      E3/E4 threshold is locked without it. (PREREG-09)
 
-**Plans**: TBD
+**Plans**: 5 plans in 5 waves (sequential — they share `scripts/phase35_prereg.py` and its test)
+
+Plans:
+**Wave 1**
+
+- [ ] 35-01-PLAN.md — PREREG-09 note on record first; the one-run-audit bound reproducing Steinke et al. App. D / §7; E3 basic composition; the four-field entry schema (no proposer field)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 35-02-PLAN.md — the v6.0 CORE: record paths and derived pathspecs, closed pins by import, `seed_list()` locked against 5303819, E1 target rule, AUDIT-02 cut, R1a assertions, core entries
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 35-03-PLAN.md — the registry of 17 deferred slots, each rule a coded refusal (D-06, D-16, D-17)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 35-04-PLAN.md — slot census (undeclared / wrong owner / different rule) and the per-fill-file ordering legs, each watched RED on planted repos
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 35-05-PLAN.md — Rafael reviews entries, slots and the planner readings; full suite once on a clean tree; validation sign-off
 
 ### Phase 36: MPS Cost Probes and Budget Commitment
 

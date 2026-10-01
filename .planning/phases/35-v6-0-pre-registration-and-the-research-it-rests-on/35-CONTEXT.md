@@ -121,7 +121,7 @@ registry of deferred slots". The v4.0/v5.0 prefixes were verified byte-identical
 
   A `.md` of derivations may explain in prose, but the VALUE exists only in the module. The test
   requires every field and rejects a missing or unknown `kind`.
-- **D-08:** [informational] SUPERSEDED by D-14 (2026-10-01, plan-phase 35). Nothing below enters
+- **D-08 [informational]:** SUPERSEDED by D-14 (2026-10-01, plan-phase 35). Nothing below enters
   the code. It is kept only as the record of what was discussed. Provenance for decisions already on record:
   - Decisions that entered REQUIREMENTS from Rafael's pasted answers: `proposer` = "Claude
     (claude.ai)", `adopted_by` = "Rafael", `source` = commit `a9cd408` plus the checkpoint where
