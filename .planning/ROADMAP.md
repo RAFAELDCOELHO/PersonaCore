@@ -1466,7 +1466,7 @@ that list nothing is committed without his "approved". Seeds are fixed once in P
 
 **Goal**: Every v6.0 front's rule, record paths and thresholds are committed and ancestry-guarded
 before any v6.0 result record exists, every threshold carries its written derivation and its
-proposer, and no E3/E4 threshold is locked without the research it rests on
+source, and no E3/E4 threshold is locked without the research it rests on
 **Depends on**: Nothing (first v6.0 phase; v5.0 shipped)
 **Requirements**: PREREG-05, PREREG-06, PREREG-07, PREREG-08, PREREG-09
 **Success Criteria** (what must be TRUE):
@@ -1490,9 +1490,11 @@ proposer, and no E3/E4 threshold is locked without the research it rests on
      a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C
      precedent). (PREREG-06)
 
-  3. Every locked decision records its proposer (Rafael, Claude Code, or Claude via claude.ai), and
-     nothing drafted by another assistant is recorded as "selected by THE USER, verbatim".
-     (PREREG-07)
+  3. No pre-registration entry carries a proposer field: each entry holds `value`, `derivation`,
+     `kind` ∈ {derived, preference} and `source`; who suggested what stays in the discussion logs and
+     the git history, and nothing drafted by another assistant is recorded as "selected by THE USER,
+     verbatim". (PREREG-07; reworded 2026-10-01 in plan-phase 35 — the earlier "records its proposer (Rafael, Claude Code,
+     or Claude via claude.ai)" was dropped from the schema by Rafael)
 
   4. Every rule module has a CPU test; MPS-only tests are skipped in CI with an attributed count.
      (PREREG-08)
@@ -1673,9 +1675,11 @@ the guarantee is vacuous, with every ε published unselected and null answers gi
 **Requirements**: RECIPE-01, RECIPE-02, RECIPE-03, RECIPE-04
 **Success Criteria** (what must be TRUE):
 
-  1. A grid of about 12 configurations (learning rate × steps × batch size, a pre-registered
-     subset) at σ ∈ {0.5, 1}, n = 8, at the one-taught-fact unit, is committed before any
-     configuration runs. (RECIPE-01)
+  1. A grid of 4 recipes (learning rate × steps × batch size, a pre-registered subset) × σ ∈
+     {0, 0.5, 1} — about 12 runs, the σ = 0 controls included — n = 8, at the one-taught-fact unit,
+     is committed before any configuration runs; if the v4.0 recipe (lr 3e-4, T = 200, batch 8) is
+     one of the 4, its σ = 0 control is reused from the v4.0 record verified by SHA-256, and the
+     saved run funds a 5th recipe only if it fits the Phase 36 budget. (RECIPE-01; reworded 2026-10-01 in plan-phase 35)
 
   2. If any configuration uses T ≠ 200, the pre-registration carries an assertion that runs the P22
      check (the σ at which the WARNING-4/5 region begins) for every T used and fails before any
@@ -1687,7 +1691,9 @@ the guarantee is vacuous, with every ε published unselected and null answers gi
 
   4. "Does any recipe keep recall where the guarantee is vacuous?" is answered against a recall
      threshold pre-registered and imported from the v4.0 gate, null answers reported with the same
-     weight. (RECIPE-03)
+     weight: recall ≥ `F_Y` × the recall of the σ = 0 control of the SAME recipe (same learning rate,
+     steps, batch and seed), never a control borrowed from another recipe; a recipe whose control
+     does not learn has its points REFUSED, as in v4.0. (RECIPE-03; reworded 2026-10-01 in plan-phase 35)
 
   5. No record exists before the pre-registration module and its ancestry test are committed;
      result records are write-once and committed only after Rafael writes approved. (RECIPE-02,

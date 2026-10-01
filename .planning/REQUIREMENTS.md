@@ -706,7 +706,7 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 - [ ] **PREREG-05**: A v6.0 pre-registration module, ancestry-guarded in the `phase29_prereg.py` pattern, is committed before any v6.0 result record exists; it fixes every v6.0 record path and every rule and threshold that does not depend on a v6.0 measurement, and declares every other threshold as a deferred slot (name, owning phase, derivation rule, input record) that only the owning phase's own ancestry-guarded pre-registration fills (reworded 2026-10-01, discuss-phase 35); it imports the closed pins (`erasure_gate`, `phase19_erasure`, `mitigation_gate`, `mitigation_budget`, `phase18_extraction`, `phase26_canary`) — never copies them; it fixes, once, a single `seed_list` (1337 plus the new seeds) that Phases 40 and 41 import
 - [ ] **PREREG-06**: Every threshold is derived in writing before measurement and never changes after; a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C precedent)
-- [ ] **PREREG-07**: Every locked decision records its proposer (Rafael, Claude Code, or Claude via claude.ai); nothing drafted by another assistant is recorded as "selected by THE USER, verbatim"
+- [ ] **PREREG-07**: No pre-registration entry carries a proposer field: each entry holds `value`, `derivation`, `kind` ∈ {derived, preference} and `source`; who suggested what stays in the discussion logs and the git history; nothing drafted by another assistant is recorded as "selected by THE USER, verbatim" (reworded 2026-10-01 in plan-phase 35 — Rafael dropped `proposer`/`adopted_by` from the schema)
 - [ ] **PREREG-08**: Every rule module has a CPU test; MPS-only tests are skipped in CI with an attributed count
 - [ ] **PREREG-09**: The pre-registration phase records, before any E3 or E4 threshold is locked, research on (a) the one-run audit bound of Steinke, Nasr and Jagielski (2023) and (b) the method of accounting for E3's selection; no E3/E4 threshold is locked without that research on record
 
@@ -750,10 +750,10 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### DP-SGD recipe search (RECIPE) — E3
 
-- [ ] **RECIPE-01**: A grid of about 12 configurations (learning rate × steps × batch size, a pre-registered subset) at σ ∈ {0.5, 1}, n = 8, at the one-taught-fact unit, is committed before any configuration runs
+- [ ] **RECIPE-01**: A grid of 4 recipes (learning rate × steps × batch size, a pre-registered subset) × σ ∈ {0, 0.5, 1} — about 12 runs, the σ = 0 controls included — n = 8, at the one-taught-fact unit, is committed before any configuration runs; if the v4.0 recipe (lr 3e-4, T = 200, batch 8) is one of the 4, its σ = 0 control is reused from the v4.0 record verified by SHA-256, and the saved run funds a 5th recipe only if it fits the Phase 36 budget (reworded 2026-10-01 in plan-phase 35)
 - [ ] **RECIPE-02**: Each configuration publishes ε at δ = 1e-5 with `selection_accounted = false`, and basic composition over the whole grid is published beside it; a finer selection accountant enters only if research finds a cited, verified method
 - [ ] **RECIPE-04**: If any configuration uses T ≠ 200, the pre-registration carries an assertion that runs the P22 check (the σ at which the WARNING-4/5 region begins) for every T used and fails before any training if the grid crosses that region
-- [ ] **RECIPE-03**: The question "does any recipe keep recall where the guarantee is vacuous?" is answered against a recall threshold pre-registered and imported from the v4.0 gate, null answers reported with the same weight
+- [ ] **RECIPE-03**: The question "does any recipe keep recall where the guarantee is vacuous?" is answered against a recall threshold pre-registered and imported from the v4.0 gate, null answers reported with the same weight; the v4.0 rule is imported literally — recall ≥ `F_Y` × the recall of the σ = 0 control of the SAME recipe (same learning rate, steps, batch and seed), never a control borrowed from another recipe — and a recipe whose control does not learn has its points REFUSED, as in v4.0 (reworded 2026-10-01 in plan-phase 35)
 
 ### One-run privacy audit (AUDIT) — E4, conditional
 

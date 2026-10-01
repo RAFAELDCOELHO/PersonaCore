@@ -70,3 +70,15 @@ discussion's answers.
 ## Deferred Ideas
 
 None.
+
+---
+## Plan-phase follow-up (2026-10-01, /gsd-plan-phase 35, after research `8986fe3`)
+
+Four questions were asked before the planner ran. Rafael's answers, recorded as CONTEXT D-14..D-17:
+
+| Question | Answer |
+|----------|--------|
+| Proposer of F_Y / F_C | Neither option. `proposer` and `adopted_by` are removed from the schema in every entry. Entries are {value, derivation, kind, source}. PREREG-07 and SC3 are reworded and checked against the byte-identical prefix. F_Y and F_C are `kind = preference`. Rafael asked not to be asked about proposers again (deferred to the next article version). |
+| The 6 slots missing from D-02 | Declare all 6. |
+| E1 condition (b) margin | v3.0's margin. It holds for E1 because (b) compares the same adapter before and after ablation (sampling noise). Phase 40's floor is used only in M1 × M2. |
+| E3 control recall | The same recipe's σ = 0 control, with the v4.0 rule imported literally. A recipe whose control does not learn is REFUSED. The grid is 4 recipes × σ ∈ {0, 0.5, 1}, ~12 runs with the controls included. The v4.0 recipe's control is reused by SHA-256 if that recipe is in the grid, and the saved run funds a 5th recipe only within the Phase 36 budget. |

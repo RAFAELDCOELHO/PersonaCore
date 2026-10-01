@@ -109,8 +109,9 @@ registry of deferred slots". The v4.0/v5.0 prefixes were verified byte-identical
   list.** This is a coded refusal in the S slot's rule, not a prose note.
 
 ### Derivations and proposers (PREREG-06, PREREG-07)
-- **D-07:** Every threshold is a structured entry in the module and is checked by a test. Each
-  entry has six fields:
+- **D-07:** *(amended by D-14: the six fields became four; `proposer` and `adopted_by` are gone.)*
+  Every threshold is a structured entry in the module and is checked by a test. Each
+  entry had six fields:
   - `value`;
   - `derivation` (short text plus the record or calculation it comes from);
   - `kind` ∈ {`derived`, `preference`};
@@ -120,7 +121,8 @@ registry of deferred slots". The v4.0/v5.0 prefixes were verified byte-identical
 
   A `.md` of derivations may explain in prose, but the VALUE exists only in the module. The test
   requires every field and rejects a missing or unknown `kind`.
-- **D-08:** Provenance for decisions already on record:
+- **D-08:** [informational] SUPERSEDED by D-14 (2026-10-01, plan-phase 35). Nothing below enters
+  the code. It is kept only as the record of what was discussed. Provenance for decisions already on record:
   - Decisions that entered REQUIREMENTS from Rafael's pasted answers: `proposer` = "Claude
     (claude.ai)", `adopted_by` = "Rafael", `source` = commit `a9cd408` plus the checkpoint where
     they entered. This applies, for example, to ERASE-07's K = 16 / K = 48 design, RECIPE-04 and
@@ -160,6 +162,48 @@ registry of deferred slots". The v4.0/v5.0 prefixes were verified byte-identical
 ### CPU tests (PREREG-08)
 - **D-13:** Every rule module has a CPU test. MPS-only tests are skipped in CI with an attributed
   count, following the repository's existing skip-attribution mechanism (planner locates it).
+
+### Plan-phase amendments (Rafael, 2026-10-01, /gsd-plan-phase 35)
+- **D-14 (replaces D-07's schema and all of D-08):** No pre-registration entry carries `proposer` or
+  `adopted_by`, in ANY entry. Each entry has exactly four fields:
+  - `value`;
+  - `derivation`;
+  - `kind` ∈ {`derived`, `preference`};
+  - `source`.
+
+  F_Y = 0.7 and F_C = 0.5 enter as `kind = "preference"`, as `mitigation_gate` already labels them.
+  Who suggested what stays in the discussion logs and git, with no record in the code. PREREG-07
+  and ROADMAP P35 SC3 were reworded to match. The test must reject an entry that has a `proposer`
+  or `adopted_by` key, and must still forbid the phrase "selected by THE USER, verbatim" in entry
+  values. **Do not ask Rafael about proposers again.** That is deferred to the next version of
+  the article.
+- **D-15:** All six slots that research found missing are declared now as deferred slots, with the
+  four D-02 fields:
+  - `e3_recall_threshold` (Phase 42);
+  - `e1_condition_b_margin` (Phase 41);
+  - `e1_condition_c_band_inputs` (Phase 41);
+  - `e2_noise_floor_estimator` (Phase 40);
+  - `e5_rank_moves_and_generation_collapses` (Phase 38);
+  - `e6_decomposition_rule` (Phase 39).
+- **D-16 (`e1_condition_b_margin`):** E1's condition (b) uses v3.0's margin 0.2962962962962963. It
+  is read from `results/phase19_noise_floors.json::margin_at_gate`, never retyped.
+  - The derivation must say why: condition (b) compares the SAME adapter before and after ablation,
+    so the relevant noise is sampling noise, not training noise.
+  - Phase 40's training-seed floor is used ONLY in the M1 × M2 comparison, never as E1's gate.
+  - Because the rule and its input are fixed, the planner may lock this in the core. If it does, it
+    must still declare the slot name, so nothing else can fill it.
+- **D-17 (`e3_recall_threshold`, E3 grid):** the v4.0 rule is imported literally: recall ≥ `F_Y` ×
+  the recall of the σ = 0 control of the SAME recipe (same LR, steps, batch and seed). The control
+  is never borrowed from another recipe. If a recipe's control does not learn, that recipe's
+  points are REFUSED, as in v4.0.
+  - The slot depends on each recipe's control record, in Phase 42.
+  - The grid is 4 recipes × σ ∈ {0, 0.5, 1}, about 12 runs with the controls included. This
+    replaces the "σ ∈ {0.5, 1}" in D-02's E3 row; RECIPE-01, RECIPE-03 and ROADMAP P42 SC1/SC4
+    were reworded to match.
+  - If the v4.0 recipe (lr 3e-4 = `teach_persona.LR`, T = 200, batch 8) is one of the 4, its σ = 0
+    control is reused from the v4.0 record, verified by SHA-256. The saved run funds a 5th recipe
+    only if it fits the Phase 36 budget.
+  - The `e3_grid_subset` slot's rule must encode the 4-recipe × 3-σ shape and the reuse condition.
 
 ### Claude's Discretion
 - Module and test file names (e.g. `scripts/phase35_prereg.py`, `tests/test_phase35_prereg.py`)
