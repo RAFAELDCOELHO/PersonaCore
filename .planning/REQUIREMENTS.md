@@ -686,3 +686,116 @@ re-run admits.
 | RPT-04 | Phase 34 | **SATISFIED (plans 34-03, 34-04, 34-05; ticked by hand in 34-06).** The v5.0 section is the `<!-- PHASE34-REPORT-BEGIN -->`..`<!-- PHASE34-REPORT-END -->` span of `docs/REPORT.md` and the glance is the `<!-- PHASE34-GLANCE-BEGIN -->`..`<!-- PHASE34-GLANCE-END -->` span of `README.md`, installed once by `scripts/phase34_report.py write` in the publishing commit `226b489` (renderer `1eadf11` over the frozen phase28 engine, `scripts/phase28_report.py` byte-unchanged). Rendered from three committed records: `results/phase32_frontier.json` (sha256 `4a4bcb60`), `results/phase33_admission.json` (sha256 `ae81eada`), `results/phase34_ledger.json` (`rows` digest `372bbbf2`; ledger `1855ce1`). Numeral scan: `tests/test_phase34_report.py::test_template_scan_report_has_no_bare_numeral`, `::test_template_scan_glance_has_no_bare_numeral`; byte identity: `::test_report_block_is_byte_identical`, `::test_glance_block_is_byte_identical`; `scripts/phase34_report.py check` exit 0. `scripts/phase28_report.py check` exit 0 (v4.0 block byte-identical). Three Phase 28 placement guards were scoped to the v4.0 block after their natural RED, each with a dated-continuation comment (R-1, 34-05-SUMMARY). |
 | RPT-05 | Phase 34 | **SATISFIED (plan 34-01; ticked by hand in 34-06).** `tests/test_package.py::test_runtime_dependencies_identical_across_every_milestone_tag` derives its required tag set from the `## vX.Y ... (Shipped: YYYY-MM-DD)` headings of `.planning/MILESTONES.md` (commit `bb50737`, D-10), HEAD standing in for v5.0; a clone missing a shipped tag is RED. Hand-off (D-11): once `/gsd-complete-milestone` writes v5.0 as Shipped, the test requires the `v5.0` tag, so the developer pushes it together with main (`git push origin main v5.0`). |
 | RPT-06 | Phase 34 | **SATISFIED (plans 34-02, 34-06; ticked by hand in 34-06).** The developer pushed main (D-38; Claude ran no `git push`). CI run `36562323069` on origin/main at head `dcc91f62380c8daa80613ebb9255ac8c4d7ed9eb` concluded `success` (`3243 passed, 72 skipped`); the publishing commit `226b489` is its ancestor (`git merge-base --is-ancestor`). Recorded in `results/phase34_ledger.json::close.ci_run` with `rows` byte-unchanged (digest `372bbbf2` before and after). Push 1 (run `36500648069`) is recorded in 34-02-SUMMARY only (R-3). |
+
+# Requirements — Milestone v6.0: Robustness and Public Reproducibility of the v3.0–v5.0 Results
+
+<!-- APPENDED 2026-10-01 — approved by Rafael 2026-10-01 with four adjustments (ERASE-07, AUDIT-02, RECIPE-04, PREREG-09) plus the COST-02 ceiling and the RPT-08 errata line. Everything above this rule is the
+v4.0/v5.0 record — a frozen live input of scripts/phase28_report.py, scripts/phase34_report.py and
+the 25-07 sentinel guards; it is never edited or collapsed. -->
+
+**Defined:** 2026-10-01 (approved 2026-10-01)
+**Provenance:** scope proposed by Claude (claude.ai) from an external review of the paper; inventoried
+against the disk by Claude Code; cuts and decisions proposed by Claude (claude.ai), adopted by Rafael.
+**Core value:** personalization lives in the weights — v6.0 asks whether the v3.0–v5.0 results survive
+more seeds, more facts, better recipes and stronger instruments, and makes every published number
+reproducible by an outsider. No closed verdict is reopened; v6.0 publishes beside them.
+
+## v6.0 Requirements
+
+### Pre-registration (PREREG)
+
+- [ ] **PREREG-05**: A v6.0 pre-registration module, ancestry-guarded in the `phase29_prereg.py` pattern, is committed before any v6.0 result record exists; it fixes every front's rule, record paths and thresholds, and imports the closed pins (`erasure_gate`, `phase19_erasure`, `mitigation_gate`, `mitigation_budget`, `phase18_extraction`, `phase26_canary`) — never copies them
+- [ ] **PREREG-06**: Every threshold is derived in writing before measurement and never changes after; a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C precedent)
+- [ ] **PREREG-07**: Every locked decision records its proposer (Rafael, Claude Code, or Claude via claude.ai); nothing drafted by another assistant is recorded as "selected by THE USER, verbatim"
+- [ ] **PREREG-08**: Every rule module has a CPU test; MPS-only tests are skipped in CI with an attributed count
+- [ ] **PREREG-09**: The pre-registration phase records, before any E3 or E4 threshold is locked, research on (a) the one-run audit bound of Steinke, Nasr and Jagielski (2023) and (b) the method of accounting for E3's selection; no E3/E4 threshold is locked without that research on record
+
+### Reproduction of the Phase 19 verdict (REPRO) — R1
+
+- [ ] **REPRO-01**: One command on CPU re-derives the Phase 19 verdict from the committed draws, importing the pin and the gate, and asserts exactly k = 78, target 0/27, 7/7 non-targets beyond 0.2962962962962963, and 77.6370113463966% of the adaptation destroyed; any divergence halts the run with a root-cause investigation, never an adjustment
+- [ ] **REPRO-02**: Each of defects A–E is routed by a named function, and removing any routing turns a test red (a natural red, not a planted one)
+- [ ] **REPRO-03**: An MPS replica of k = 78 runs under a tolerance and a definition of "replicated" pre-registered before it runs, and is published as a replica beside the verdict, never over it
+
+### Public deposit package (PKG) — R2
+
+- [ ] **PKG-01**: Every checkpoint, adapter, corpus and teaching file that feeds each published table (REPORT v3.0–v5.0 sections and the paper) is inventoried per table with its SHA-256 and the record that cites it
+- [ ] **PKG-02**: A SHA-256 manifest and a CPU verifier script check a package directory against it, and a tampered file turns the verifier's test red
+- [ ] **PKG-03**: No PersonaChat bytes are packaged (neither the raw corpus nor `data/dialog_*.bin`); the manifest carries their hashes and the rebuild scripts, and a rebuild from the source reproduces those hashes
+- [ ] **PKG-04**: Weights trained with PersonaChat (`convbase_*.pt` and every adapter trained with dialogue replay) are listed separately with each one's origin; whether to publish them is recorded as Rafael's ruling
+- [ ] **PKG-05**: The TinyStories license text (CDLA-Sharing-1.0, per the dataset page) is read at the source and its conditions are recorded, especially share-alike; PersonaChat's license status is recorded as read
+- [ ] **PKG-06**: A model card and a data card are written
+- [ ] **PKG-07**: `phase25_calibration_adv_n8_adapter.pt` and `phase25_calibration_dp_n64_adapter.pt` are recorded in the manifest as absent and cited only by records outside the report and the paper; neither is regenerated
+- [ ] **PKG-08**: Claude never uploads or pushes; deposit (Zenodo / Hugging Face) is Rafael's act
+
+### Cost probes and budget (COST)
+
+- [ ] **COST-01**: Every MPS front is priced by a probe on the M3 before any budget: an A2 arm at a new target and a new seed, an M2 retrain plus its measurement, one DP configuration at the grid's longest step count, a sample of minting clearance and E5 scoring, and anchor-context generation
+- [ ] **COST-02**: The v6.0 budget and its stop line are committed from the probes before the first measured point (the ARCAL pattern), inside Rafael's ceiling of 90 h of MPS for the whole milestone, probes included; if the probes show the fronts do not fit, the work halts and the cut options go to Rafael — no front is cut unilaterally
+
+### Erasure across facts, orderings and seeds (ERASE) — E1
+
+- [ ] **ERASE-03**: The targets are the four facts at 13/13 in Phase 19's committed `TARGET_RANKING` (`pet_name`, `cat_name`, `street`, `sibling_name`), selected by a rule committed before measurement that reads the committed ranking
+- [ ] **ERASE-04**: Two ablation orderings are pre-registered: the existing greedy leave-one-out ordering and one alternative
+- [ ] **ERASE-05**: Two teaching seeds are pre-registered (seed 1337 plus one new seed)
+- [ ] **ERASE-06**: Each target's condition-(a) floor is derived in writing before measurement; if it depends on the calibration rate, the calibration is run per ordering (and per seed if the derivation requires it) and budgeted
+- [ ] **ERASE-07**: The rank never enters the stopping rule (v3.0 showed it saturated); it is recorded at every checkpoint. Proposed for the E1 discuss phase (Rafael, from Claude (claude.ai)): a fixed, pre-registered grid of checkpoints, each read with A2 at K = 16 (precedent: v4.0 `CURVE_K`); at the first checkpoint reading zero, confirm at K = 48; if K = 48 is not zero, continue to the next checkpoint. E1 is re-priced under this design by COST-01
+- [ ] **ERASE-08**: Defect E is routed by a wrapper that imports the pin; `scripts/phase19_erasure.py` stays byte-unchanged and a test proves it
+- [ ] **ERASE-09**: The new condition (c) is a bilateral dialogue band anchored on the adapted model, with the D-01 logic imported from `mitigation_gate`
+- [ ] **ERASE-10**: Damage is reported per non-target fact, each with its own denominator, and no cell reads PASS without replication at the second seed
+
+### M2 seed noise floor (NOISE) — E2
+
+- [ ] **NOISE-01**: The full taught adapter and the M2 adapter without `pet_name` are retrained at S seeds (S fixed from COST-01 and pre-registered; S = 5 acceptable), reusing E1's `pet_name` seeds, and each non-target's A2 recall is reported per seed with its denominator
+- [ ] **NOISE-02**: The training-seed noise floor is published beside v3.0's sampling floor (0.14814814814814814) without amending v3.0's (b) margin
+
+### DP-SGD recipe search (RECIPE) — E3
+
+- [ ] **RECIPE-01**: A grid of about 12 configurations (learning rate × steps × batch size, a pre-registered subset) at σ ∈ {0.5, 1}, n = 8, at the one-taught-fact unit, is committed before any configuration runs
+- [ ] **RECIPE-02**: Each configuration publishes ε at δ = 1e-5 with `selection_accounted = false`, and basic composition over the whole grid is published beside it; a finer selection accountant enters only if research finds a cited, verified method
+- [ ] **RECIPE-04**: If any configuration uses T ≠ 200, the pre-registration carries an assertion that runs the P22 check (the σ at which the WARNING-4/5 region begins) for every T used and fails before any training if the grid crosses that region
+- [ ] **RECIPE-03**: The question "does any recipe keep recall where the guarantee is vacuous?" is answered against a recall threshold pre-registered and imported from the v4.0 gate, null answers reported with the same weight
+
+### One-run privacy audit (AUDIT) — E4, conditional
+
+- [ ] **AUDIT-01**: The audit's parameters (number of canaries including any minted under the Phase 17 clearance, inclusion probability, guesser, confidence) are pre-registered, and the maximum detectable ε (Steinke, Nasr, Jagielski 2023) is computed on CPU and published before any run
+- [ ] **AUDIT-02**: A committed, derived rule decides whether the audit runs. Phase 26 could not reprove a point when `epsilon_upper >= auditor_ceiling`, which held at 11 of 15 noised points, the smallest of them σ = 16 with ε = 3.7965357228934966 (`results/phase26_canary.json`). E4 runs only if the CPU-computed ceiling is strictly greater than that value, read from the record and never retyped — i.e. it could reprove at least one point Phase 26 could not; otherwise E4 is cut and the cut is published with the computed ceiling
+- [ ] **AUDIT-03**: If it runs, every point where the audit could not have failed is declared as such (the Phase 26 precedent)
+
+### Exposure rank at larger sets (RANK) — E5
+
+- [ ] **RANK-01**: A minting rule is pre-registered: numeric slots are enumerated; name and place slots receive candidates minted by rule and cleared against the base as in Phase 17; the set sizes (up to 512, as far as minting allows) are declared before any scoring
+- [ ] **RANK-02**: The prefixes k = 0, 8, 16, 32, 64, 78 are re-scored with the `ans1` frame and mean reduction, reconstructed from `persona_adapter.pt` and the committed `ordered_prefix` with SHA-256 verified; the report states whether the rank moves before generation collapses, against the committed A2 counts
+- [ ] **RANK-03**: `reference_set_for` and `phase18_extraction.py` stay untouched; the larger sets live in a new module that imports them
+
+### Instrument × context (CTX) — E6
+
+- [ ] **CTX-01**: Which of the 216 A2 corpus entries enter the full-context NLL is pre-registered before any scoring
+- [ ] **CTX-02**: On the same adapters (k = 0, 8, 16, 32, 64, 78 and M2), NLL and rank are scored at (a) the answer anchor without the question and (b) the full A2 question, and generation runs in both contexts where it is defined
+- [ ] **CTX-03**: The report separates how much of the rank/generation disagreement comes from the instrument and how much from the context
+
+### Report and close (RPT)
+
+- [ ] **RPT-07**: The v6.0 section of `docs/REPORT.md` is rendered from committed records beside the v3.0–v5.0 sections, under the numeral scan and byte guards (the Phase 34 pattern)
+- [ ] **RPT-08**: A list of what changed relative to v5.0 is published with the section, with an errata list that includes the stale prose citation `.planning/PROJECT.md:187-189` in `scripts/mitigation_gate.py:557` (the cited passage sat at `:151` at `c51fd11`), recorded without touching the pin
+- [ ] **RPT-09**: The milestone closes on a green CI run of Rafael's push; the paper text is not edited (its update is a separate later step)
+
+## v6.0 Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Reopening FAILURE (v3.0), MOOT (v4.0) or MOOT/REFUSED (v5.0) | Closed verdicts stay published; v6.0 publishes beside them |
+| Editing `erasure_gate.py`, `phase19_erasure.py` or any closed pin | Would void the pre-registration ordering; defects are routed by imported wrappers |
+| Editing the paper text | A separate step after the results |
+| Adapter-rank / capacity sweep (paper §6 item 3) | Not among the eight adopted fronts |
+| Relearning attack on erased adapters (paper §6 item 4) | Not among the eight adopted fronts |
+| Redistributing PersonaChat or regenerating the two absent calibration adapters | Rafael's R2 ruling |
+| Upload, deposit or `git push` by Claude | Rafael's act |
+| E1 on all eight facts, more than two orderings or seeds | Cut by Rafael to the four facts tied at 13/13 |
+| E3 at n = 64 or σ outside {0.5, 1} | Cut by Rafael to the minimal grid |
+
+## v6.0 Traceability
+
+<!-- Filled by the roadmap after the requirements are approved. -->
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
