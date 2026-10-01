@@ -33,12 +33,49 @@ note's first add precedes every commit of this file, checked in git); T-35-03 (p
 published pins, a closed form, and a dropped-delta mutant outside the tolerance); T-35-04
 (misattributed provenance — four-field schema proved at import); T-35-05 (composition re-implemented
 — ``is`` bindings to the v4.0 objects).
+
+SLOT REGISTRY (D-02, D-15; Plan 03). ``SLOTS`` declares the 17 thresholds that depend on a later
+input, each with its owning phase, its rule (a module-level ``_rule_<slot>`` function whose
+docstring states the derivation) and its input records. ``fill(slot, **inputs)`` is the only door:
+it refuses an undeclared slot and dispatches ``SLOTS[slot]["rule"]``. Every slot with declared
+input records (except ``e1_condition_b_margin``, read in the core, D-16) takes ``input_records``
+and a four-field ``derivation`` whose value is the filled value and whose source names every
+record it read (``_consume_inputs``, W3, PREREG-06).
+
+OWNER FILL FILES. An owner fills its slots from one or several files matching
+``scripts/phase{owner}_*prereg.py`` (``owner_prereg_glob``), each binding
+``<SLOT NAME UPPER-CASED> = phase35_prereg.fill("<slot>", ...)`` at module level after a plain
+``import phase35_prereg``. The per-fill-file ordering rule (the planner's reading of D-02 for
+multi-step phases, enforced by Plan 04): (a) a slot with no input record of its own phase
+precedes every record of that phase; only slots that consume an in-phase input are exempt from
+that input, per fill file. A fill file holding any slot without a declared
+``results/phase{owner}_*`` input precedes every ``results/phase{owner}_*`` record, and one whose
+slots all consume in-phase inputs precedes every such record except those inputs. (b) Each
+declared input precedes the first commit of the file that consumes it. A slot is filled exactly
+once, anywhere. (c) Once a phase-O record that is not a declared input of ANY phase-O slot is
+tracked, every phase-O slot is filled.
+
+THE BUDGET-RECORD CONTRACT. Phase 36 publishes ``results/phase36_budget.json`` holding the
+``_rule_v6_budget_and_stop_line`` output keys ``front_hours`` (keyed by ``V6_MPS_FRONTS``),
+``total_hours`` and ``stop_line_hours``. THE PHASE 42 CONTROL-RECORD CONTRACT. Each
+``results/phase42_control_*.json`` carries ``recipe`` = {lr, steps, batch}, ``seed``, ``sigma`` =
+0.0 and ``taught_recall`` / ``heldout_recall`` each with ``numerator`` and ``denominator`` (the
+field shape of the v4.0 point record).
+
+D-04 CLASSIFICATION. e1_alternative_ordering and e6_entry_subset are design choices, but no
+decision on record names the alternative ordering and CTX-01's subset exists to fit the Phase 36
+budget, so both stay owned by Phases 41 and 39; e1_condition_b_margin is the one slot locked in
+the core (D-16).
 """
 
 import collections.abc
+import fnmatch
+import hashlib
+import inspect
 import json
 import math
 import pathlib
+import subprocess
 import sys
 import types
 
@@ -58,7 +95,12 @@ import mitigation_gate  # noqa: E402  (same; torch-free)
 import mitigation_unit  # noqa: E402  (same)
 import phase19_floor  # noqa: E402  (same; torch-free)
 import phase25_epsilon  # noqa: E402  (same; loads the torch-free accountant transitively)
+import phase25_gate05  # noqa: E402  (same; torch-free, no subprocess at import)
+import phase25_record  # noqa: E402  (same; torch-free)
 import phase26_prereg  # noqa: E402  (same; torch-free, no subprocess at import)
+import phase29_prereg  # noqa: E402  (same; torch-free, no subprocess at import)
+
+from personacore.privacy import accountant  # noqa: E402  (src/ on sys.path above; torch-free)
 
 # =================================================================================================
 # (1) THE DATE AND THE PROPERTY IT CERTIFIES.
@@ -628,6 +670,46 @@ _ENTRIES = {
         "kind": "preference",
         "source": "RANK-01 (a9cd408)",
     },
+    "p22_two_oracle_budget": {
+        "value": 1e-9,
+        "derivation": (
+            "P22's two-oracle agreement budget, |delta_quadrature - delta_closed| <= 1e-9 x "
+            "|delta_closed|; WARNING-4/5's region is where it is breached. It is not "
+            "delta_quadrature's rel_tol, an integration truncation budget that only shares the "
+            "value."
+        ),
+        "kind": "derived",
+        "source": (
+            "tests/test_phase22_accountant.py:536; .planning/milestones/v4.0-phases/"
+            "22-dp-sgd-core-accountant-and-the-correctness-battery/22-VERIFICATION.md:149-175"
+        ),
+    },
+    "e2_min_seeds": {
+        "value": 2,
+        "derivation": (
+            "A noise floor across training seeds is a spread over seeds, undefined for a single "
+            "seed, so S needs at least two."
+        ),
+        "kind": "derived",
+        "source": (
+            "NOISE-01/NOISE-02 (.planning/REQUIREMENTS.md, a9cd408); the upper bound is "
+            "35-CONTEXT D-06 (36ab0b4)"
+        ),
+    },
+    "e4_inclusion_probability": {
+        "value": 0.5,
+        "derivation": (
+            "Algorithm 1 includes each canary independently with probability 1/2, and Appendix "
+            "D's p_value_DP_audit/get_eps_audit, the method D-11 reproduces, assumes it; other "
+            "probabilities need Proposition 5.7, which is not reproduced. A different quantity "
+            "from F_C."
+        ),
+        "kind": "derived",
+        "source": (
+            "arXiv:2305.08846v1 Algorithm 1 p. 3 and Appendix D pp. 45-46, as recorded in "
+            "35-RESEARCH.md §PREREG-09 (a); .planning/research/V6-PREREG-09.md"
+        ),
+    },
 }
 
 ENTRIES = types.MappingProxyType(
@@ -641,3 +723,727 @@ def _prove_entries():
 
 
 _prove_entries()
+
+# =================================================================================================
+# (14) THE REGISTRY OF DEFERRED SLOTS (D-02, D-15). After ENTRIES: the rules read ENTRIES at call
+# time, and the registry comes last so every rule exists when it is built.
+# =================================================================================================
+
+# COST-01's MPS fronts plus the probes; E4 may be budgeted 0 h when the AUDIT-02 rule cuts it.
+V6_MPS_FRONTS = ("probes", "R1b", "E1", "E2", "E3", "E4", "E5", "E6")
+_BUDGET_RECORD = "results/phase36_budget.json"
+_prove(_BUDGET_RECORD in V6_RESULT_PATHS, f"{_BUDGET_RECORD} is not a declared v6.0 record path")
+
+# E3 scope (RECIPE-01, W5): n is the dp_n8 arm's locked-fact count, never typed.
+E3_N = len(phase25_gate05.GATE05_SLOTS)
+_prove(
+    f"dp_n{E3_N}" in phase25_record.DP_ARMS,
+    f"E3_N = {E3_N} names no v4.0 DP arm in {phase25_record.DP_ARMS}",
+)
+E3_UNIT = mitigation_unit.PRIVACY_UNIT
+_V4_CONTROL_RECORD = str(
+    phase25_record.point_record_path(
+        phase25_record.point_key(f"dp_n{E3_N}", E3_SIGMAS[0])
+    ).relative_to(_REPO_ROOT)
+)
+_V5_TAG = "v5.0"
+
+
+def _is_hex_digest(text):
+    """True iff ``text`` is a str of 64 lower-case hex characters."""
+    return isinstance(text, str) and len(text) == 64 and all(c in "0123456789abcdef" for c in text)
+
+
+def _v4_control():
+    """The reused v4.0 sigma = 0 control: ``(record, recipe)``, admitted only when byte-identical
+    to its copy at tag v5.0.
+
+    What is reused is the control's RECORD (its recall), not the adapter. D-17's "verified by
+    SHA-256" is read as the reused record's SHA-256 against tag v5.0, the adapter's own hash being
+    carried in the record (``adapter_sha256``); the adapter ``.pt`` is untracked and never hashed.
+    ``git show`` runs in the real repository (``-C _SCRIPTS``), so the tag is read from there even
+    when a test patches ``_REPO_ROOT``. No caller supplies a digest (W15).
+    """
+    data = (_REPO_ROOT / _V4_CONTROL_RECORD).read_bytes()
+    shown = subprocess.run(
+        ["git", "-C", _SCRIPTS, "show", f"{_V5_TAG}:{_V4_CONTROL_RECORD}"],
+        capture_output=True,
+        check=False,
+    )
+    _prove(shown.returncode == 0, f"git show {_V5_TAG}:{_V4_CONTROL_RECORD} failed")
+    _prove(
+        hashlib.sha256(data).hexdigest() == hashlib.sha256(shown.stdout).hexdigest(),
+        "the reused v4.0 control record is not byte-identical to its copy at tag v5.0 (D-17: "
+        "verified by SHA-256)",
+    )
+    record = json.loads(data)
+    _prove(
+        _is_hex_digest(record["adapter_sha256"]),
+        "the v4.0 control record carries no 64-hex adapter_sha256",
+    )
+    tc = record["training"]["train_config"]
+    _prove(record["sigma"] == E3_SIGMAS[0], "the v4.0 control record is not at sigma = 0")
+    _prove(
+        record["canary_population"]["n_facts"] == E3_N,
+        f"the v4.0 control record's n_facts is not E3_N = {E3_N}",
+    )
+    _prove(tc["seed"] == record["seed"], "the v4.0 control's train_config seed is not its seed")
+    _prove(
+        record["composed_steps"] == tc["max_steps"],
+        "the v4.0 control's composed_steps is not its max_steps",
+    )
+    recipe = types.MappingProxyType(
+        {"lr": tc["lr"], "steps": tc["max_steps"], "batch": tc["batch_size"]}
+    )
+    return record, recipe
+
+
+SLOT_FIELDS = ("owner_phase", "rule", "input_records")
+
+
+def owner_prereg_glob(slot):
+    """The glob an owner's fill files match: ``scripts/phase{owner}_*prereg.py``."""
+    _prove(slot in SLOTS, f"slot {slot!r} is not declared in the Phase 35 registry (D-02)")
+    return f"scripts/phase{SLOTS[slot]['owner_phase']}_*prereg.py"
+
+
+def _prove_finite(name, value):
+    _prove_real(name, value)
+    _prove(math.isfinite(value), f"{name} is {value!r}, not finite")
+
+
+def _consume_inputs(slot, value, input_records, derivation):
+    """W3: prove the written derivation is OF the filled value and names every input it read;
+    prove each input is a declared, existing, repo-relative record; return the parsed records."""
+    _prove_entry(slot, derivation)
+    _prove(
+        derivation["value"] == value,
+        f"{slot}: the derivation's value {derivation['value']!r} is not the filled value",
+    )
+    _prove(
+        isinstance(input_records, tuple)
+        and input_records
+        and all(isinstance(path, str) for path in input_records),
+        f"{slot}: input_records must be a non-empty tuple of str, got {input_records!r}",
+    )
+    for path in input_records:
+        pure = pathlib.PurePosixPath(path)
+        _prove(
+            not pure.is_absolute() and ".." not in pure.parts,
+            f"{slot}: input {path!r} is not repo-relative",
+        )
+        _prove(
+            any(fnmatch.fnmatch(path, pat) for pat in SLOTS[slot]["input_records"]),
+            f"{path!r} is not a declared input of {slot}",
+        )
+        _prove(path in derivation["source"], f"{slot}: the derivation's source omits {path!r}")
+        _prove((_REPO_ROOT / path).is_file(), f"{slot}: input {path!r} does not exist")
+    return types.MappingProxyType(
+        {
+            path: json.loads((_REPO_ROOT / path).read_text(encoding="utf-8"))
+            for path in input_records
+        }
+    )
+
+
+def _budget_front_hours(records, front):
+    """The hours the Phase 36 budget record gives ``front``."""
+    _prove(_BUDGET_RECORD in records, f"{_BUDGET_RECORD} was not consumed")
+    hours = records[_BUDGET_RECORD]["front_hours"]
+    _prove(
+        set(hours) == set(V6_MPS_FRONTS),
+        f"the budget record's fronts {sorted(hours)} are not V6_MPS_FRONTS {V6_MPS_FRONTS}",
+    )
+    return hours[front]
+
+
+# P22's onset (RECIPE-04, W4).
+
+
+def _p22_breached(sigma, steps):
+    """True iff P22's two oracles disagree beyond ``ENTRIES["p22_two_oracle_budget"]`` at
+    eps = ``epsilon_for(sigma, steps, DELTA)``, relative to ``delta_closed`` (W13: never
+    ``delta_quadrature``'s ``rel_tol`` default, an integration truncation budget)."""
+    eps = accountant.epsilon_for(sigma, steps, DELTA)
+    mu = math.sqrt(steps) / sigma
+    closed = accountant.delta_closed(eps, mu)
+    budget = ENTRIES["p22_two_oracle_budget"]["value"]
+    return abs(accountant.delta_quadrature(eps, mu) - closed) / closed > budget
+
+
+def p22_onset_sigma(steps):
+    """The P22 WARNING-4/5 onset at T = ``steps``: the boundary of the small-sigma region where
+    ``|delta_quadrature - delta_closed| / delta_closed`` exceeds P22's two-oracle budget
+    ``ENTRIES["p22_two_oracle_budget"]`` (the assertion at tests/test_phase22_accountant.py:536),
+    sigma swept at fixed T and delta = DELTA, as 22-VERIFICATION.md:149-183 (WARNING-5) defines
+    it. The error is monotone in mu (:163), so the region is sigma <= onset. Bracketed, then 30
+    bisection steps; returns the smallest sigma known to lie OUTSIDE the region.
+    ``p22_onset_sigma(STEP_BUDGET)`` reproduces P22's bisected 0.078902 (:175).
+    """
+    _prove_count("steps", steps)
+    _prove(steps >= 1, f"steps is {steps}; need >= 1")
+    hi = min(s for s in E3_SIGMAS if s > 0)
+    for _ in range(64):
+        if not _p22_breached(hi, steps):
+            break
+        hi *= 2
+    _prove(not _p22_breached(hi, steps), f"no unbreached sigma within 64 doublings at T={steps}")
+    lo = hi / 2
+    for _ in range(64):
+        if _p22_breached(lo, steps):
+            break
+        lo /= 2
+    _prove(_p22_breached(lo, steps), f"no breached sigma within 64 halvings at T={steps}")
+    for _ in range(30):
+        mid = (lo + hi) / 2
+        if _p22_breached(mid, steps):
+            lo = mid
+        else:
+            hi = mid
+    return hi
+
+
+# The 17 rules. Keyword-only; every refusal goes through _prove; every container returned is
+# read-only.
+
+
+def _rule_v6_budget_and_stop_line(*, front_hours, stop_line_hours, input_records, derivation):
+    """COST-02: the per-front MPS hours, their total and the stop line, derived from the Phase 36
+    probes. Refuses a total above the stop line, and a stop line above Rafael's MPS ceiling
+    (HALT: no front is cut unilaterally). The output keys ``front_hours``, ``total_hours`` and
+    ``stop_line_hours`` are what Phase 36 publishes as ``results/phase36_budget.json``.
+    """
+    _prove(
+        isinstance(front_hours, collections.abc.Mapping) and set(front_hours) == set(V6_MPS_FRONTS),
+        f"front_hours must be keyed by exactly V6_MPS_FRONTS {V6_MPS_FRONTS}",
+    )
+    for front, hours in front_hours.items():
+        _prove_finite(f"front_hours[{front!r}]", hours)
+        _prove(hours >= 0, f"front_hours[{front!r}] is negative")
+    total = math.fsum(front_hours.values())
+    _prove_finite("stop_line_hours", stop_line_hours)
+    _prove(total <= stop_line_hours, f"the fronts total {total} h, above the stop line")
+    _prove(
+        stop_line_hours <= ENTRIES["mps_ceiling_hours"]["value"],
+        "the fronts do not fit Rafael's MPS ceiling: HALT and take the cut options to Rafael "
+        "(COST-02); no front is cut unilaterally",
+    )
+    _consume_inputs("v6_budget_and_stop_line", front_hours, input_records, derivation)
+    return types.MappingProxyType(
+        {
+            "front_hours": types.MappingProxyType(dict(front_hours)),
+            "total_hours": total,
+            "stop_line_hours": stop_line_hours,
+        }
+    )
+
+
+def _rule_e2_S(*, s, input_records, derivation):
+    """D-06, NOISE-01: E2's seed count S, read from the Phase 36 budget. S >= ENTRIES
+    ["e2_min_seeds"] (a spread needs two seeds) and S <= len(seed_list()); a larger S is a STOP,
+    refused before any input is read, because the seed list is never extended."""
+    _prove_count("s", s)
+    _prove(s >= ENTRIES["e2_min_seeds"]["value"], f"S = {s} is below ENTRIES['e2_min_seeds']")
+    _prove(
+        s <= len(seed_list()),
+        "the Phase 36 probe calls for S > len(seed_list()): STOP and ask Rafael (D-06); the seed "
+        "list is never extended",
+    )
+    records = _consume_inputs("e2_S", s, input_records, derivation)
+    _prove(_budget_front_hours(records, "E2") > 0, "the Phase 36 budget gives E2 no MPS hours")
+    return s
+
+
+def _rule_r1b_tolerance_and_replicated(*, tolerance, replicated_definition):
+    """REPRO-03: R1b's per-assertion tolerance (keys among R1A_ASSERTIONS, finite >= 0) and the
+    written definition of "replicated", settled in Phase 37's discuss before measurement."""
+    _prove(
+        isinstance(tolerance, collections.abc.Mapping)
+        and tolerance
+        and set(tolerance) <= set(R1A_ASSERTIONS),
+        f"tolerance must be a non-empty mapping keyed among {sorted(R1A_ASSERTIONS)}",
+    )
+    for key, value in tolerance.items():
+        _prove_finite(f"tolerance[{key!r}]", value)
+        _prove(value >= 0, f"tolerance[{key!r}] is negative")
+    _prove_entry("replicated_definition", replicated_definition)
+    return types.MappingProxyType(
+        {
+            "tolerance": types.MappingProxyType(dict(tolerance)),
+            "replicated_definition": replicated_definition,
+        }
+    )
+
+
+def _rule_e1_checkpoint_grid(*, checkpoints, input_records, derivation):
+    """ERASE-07: the ablation-prefix checkpoints, strictly increasing counts >= 1, funded by the
+    Phase 36 budget. Each checkpoint is read with A2 at K = CURVE_K; the first zero is confirmed
+    at K = FULL_FIDELITY_K; a non-zero confirmation continues to the next checkpoint; the rank
+    never enters the stopping rule and is recorded at every checkpoint."""
+    _prove(isinstance(checkpoints, tuple) and checkpoints, "checkpoints must be a non-empty tuple")
+    for value in checkpoints:
+        _prove_count("checkpoint", value)
+        _prove(value >= 1, f"checkpoint {value} is below 1")
+    _prove(
+        all(a < b for a, b in zip(checkpoints, checkpoints[1:])),
+        f"checkpoints {checkpoints} are not strictly increasing",
+    )
+    records = _consume_inputs("e1_checkpoint_grid", checkpoints, input_records, derivation)
+    _prove(_budget_front_hours(records, "E1") > 0, "the Phase 36 budget gives E1 no MPS hours")
+    return types.MappingProxyType(
+        {"checkpoints": checkpoints, "read_k": CURVE_K, "confirm_k": FULL_FIDELITY_K}
+    )
+
+
+def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
+    """ERASE-06: condition (a)'s floors, one written entry per (target, ordering[, seed]), covering
+    every E1 target, calibrated on the Phase 41 calibration records."""
+    _prove(isinstance(floors, collections.abc.Mapping) and floors, "floors must be a mapping")
+    teaching = e1_teaching_seeds()
+    for key, entry in floors.items():
+        _prove(isinstance(key, tuple) and len(key) in (2, 3), f"floor key {key!r} malformed")
+        _prove(isinstance(key[1], str) and key[1], f"floor key {key!r} has no ordering")
+        if len(key) == 3:
+            _prove(key[2] in teaching, f"floor key {key!r}: seed not in e1_teaching_seeds()")
+        _prove_entry(f"floor {key!r}", entry)
+    _prove(
+        {key[0] for key in floors} == set(e1_targets()),
+        "the floors do not cover exactly e1_targets()",
+    )
+    _consume_inputs("e1_condition_a_floors", floors, input_records, derivation)
+    return types.MappingProxyType(dict(floors))
+
+
+def _rule_e1_alternative_ordering(*, ordering):
+    """ERASE-04, D-04 deferred to Phase 41: the alternative ablation ordering, a written entry
+    whose value is a non-empty str."""
+    _prove_entry("e1_alternative_ordering", ordering)
+    _prove(
+        isinstance(ordering["value"], str) and ordering["value"],
+        "the alternative ordering's value must be a non-empty str",
+    )
+    return ordering
+
+
+def _rule_e3_grid_subset(*, recipes, seed, input_records, derivation, fifth_recipe_derivation=None):
+    """RECIPE-01, RECIPE-04, D-17, W5, W15: E3's grid, recipes x E3_SIGMAS at n = E3_N and the
+    unit E3_UNIT, ONE seed for the whole grid (every recipe's sigma = 0 control shares its noised
+    points' seed). Exactly 4 recipes; 5 only when the reused v4.0 sigma = 0 cell exists (the v4.0
+    recipe at the v4.0 control record's own seed, that record consumed as a declared input,
+    byte-identical to tag v5.0) AND a fifth-recipe derivation cites the Phase 36 budget record
+    (B4). Refused before any training when a noised sigma is at or below P22's onset for any T
+    the grid uses (RECIPE-04)."""
+    _prove(isinstance(recipes, tuple) and recipes, "recipes must be a non-empty tuple")
+    for recipe in recipes:
+        _prove(
+            isinstance(recipe, collections.abc.Mapping) and set(recipe) == {"lr", "steps", "batch"},
+            f"recipe {recipe!r} must have exactly the keys lr, steps, batch",
+        )
+        _prove_finite("lr", recipe["lr"])
+        _prove(recipe["lr"] > 0, f"recipe {dict(recipe)} has lr <= 0")
+        for name in ("steps", "batch"):
+            _prove_count(name, recipe[name])
+            _prove(recipe[name] >= 1, f"recipe {dict(recipe)} has {name} < 1")
+    plain = [dict(recipe) for recipe in recipes]
+    _prove(
+        all(plain[i] != plain[j] for i in range(len(plain)) for j in range(i)),
+        "the grid repeats a recipe",
+    )
+    _prove(seed in seed_list(), f"seed {seed!r} is not in seed_list()")
+    records = _consume_inputs("e3_grid_subset", recipes, input_records, derivation)
+    _prove(_budget_front_hours(records, "E3") > 0, "the Phase 36 budget gives E3 no MPS hours")
+
+    import teach_persona  # torch at import: lazy
+
+    v4_recipe = {"lr": teach_persona.LR, "steps": STEP_BUDGET, "batch": teach_persona.BATCH_SIZE}
+    reused = False
+    if v4_recipe in plain:
+        v4_record, recorded = _v4_control()
+        _prove(dict(recorded) == v4_recipe, "the v4.0 control record did not run the v4.0 recipe")
+        reused = seed == v4_record["seed"]
+    if reused:
+        _prove(
+            _V4_CONTROL_RECORD in input_records,
+            "the reused v4.0 control must be consumed as a declared input (D-17)",
+        )
+    else:
+        _prove(
+            _V4_CONTROL_RECORD not in input_records,
+            "a v4.0 control consumed without an admissible reuse",
+        )
+    if len(recipes) == 4:
+        _prove(fifth_recipe_derivation is None, "a fifth-recipe derivation on a 4-recipe grid")
+    else:
+        _prove(len(recipes) == 5, f"E3's grid has {len(recipes)} recipes; 4, or 5 with a reuse")
+        _prove(
+            reused,
+            "the saved run funds a 5th recipe only if it fits the Phase 36 budget; no reused "
+            "control, no saved run",
+        )
+        _prove_entry("fifth_recipe_derivation", fifth_recipe_derivation)
+        _prove(
+            _BUDGET_RECORD in fifth_recipe_derivation["source"],
+            f"the fifth-recipe derivation does not cite {_BUDGET_RECORD}",
+        )
+    onsets = {}
+    for steps in sorted({recipe["steps"] for recipe in recipes} | {STEP_BUDGET}):
+        onset = p22_onset_sigma(steps)
+        _prove(
+            all(s > onset for s in E3_SIGMAS if s > 0),
+            f"the grid crosses the P22 WARNING-4/5 region at T={steps} (onset {onset}): refused "
+            "before any training (RECIPE-04)",
+        )
+        onsets[steps] = onset
+    cells = tuple(
+        types.MappingProxyType(
+            {
+                "recipe": types.MappingProxyType(recipe),
+                "sigma": sigma,
+                "seed": seed,
+                "n": E3_N,
+                "reuse": _V4_CONTROL_RECORD
+                if reused and recipe == v4_recipe and sigma == E3_SIGMAS[0]
+                else None,
+            }
+        )
+        for recipe in plain
+        for sigma in E3_SIGMAS
+    )
+    return types.MappingProxyType(
+        {
+            "cells": cells,
+            "p22_onset_sigma": types.MappingProxyType(onsets),
+            "n": E3_N,
+            "unit": E3_UNIT,
+        }
+    )
+
+
+def _rule_e3_recall_threshold(*, grid, input_records, derivation):
+    """RECIPE-03, D-17, W14: the utility threshold of every grid recipe, F_Y x THAT recipe's
+    sigma = 0 control recall on each leg (taught, held-out), or ``phase29_prereg.REFUSED`` when
+    ``phase29_prereg.control_is_unlearnable`` holds. One control per recipe, keyed by the recipe
+    (lr, steps, batch, seed) READ FROM ITS RECORD, never from the caller and never by position; the
+    key set must equal the grid's. The reused v4.0 record is consumed exactly when the grid reuses
+    it, and admitted only byte-identical to tag v5.0."""
+    _prove(
+        isinstance(grid, collections.abc.Mapping)
+        and set(grid) == {"cells", "p22_onset_sigma", "n", "unit"},
+        "grid must be the fill('e3_grid_subset', ...) result",
+    )
+    wanted = {
+        (c["recipe"]["lr"], c["recipe"]["steps"], c["recipe"]["batch"], c["seed"])
+        for c in grid["cells"]
+    }
+    records = _consume_inputs(
+        "e3_recall_threshold", tuple(input_records), input_records, derivation
+    )
+    keys = []
+    for path, record in records.items():
+        if path == _V4_CONTROL_RECORD:
+            v4_record, recorded = _v4_control()
+            key = (recorded["lr"], recorded["steps"], recorded["batch"], v4_record["seed"])
+        else:
+            _prove(record["sigma"] == E3_SIGMAS[0], f"control {path} is not at sigma = 0")
+            recipe = record["recipe"]
+            key = (recipe["lr"], recipe["steps"], recipe["batch"], record["seed"])
+        keys.append((key, path))
+    _prove(
+        len({key for key, _ in keys}) == len(keys) and {key for key, _ in keys} == wanted,
+        "a control keyed to a recipe outside the grid, or a grid recipe without its own control, "
+        "is refused (D-17)",
+    )
+    _prove(
+        (_V4_CONTROL_RECORD in records) == any(c["reuse"] for c in grid["cells"]),
+        "the reused v4.0 control must be the one consumed, and only when the grid reuses it",
+    )
+    thresholds = {}
+    for key, path in keys:
+        record = records[path]
+        tk, tn = record["taught_recall"]["numerator"], record["taught_recall"]["denominator"]
+        hk, hn = record["heldout_recall"]["numerator"], record["heldout_recall"]["denominator"]
+        if phase29_prereg.control_is_unlearnable(tk, tn, hk, hn):
+            thresholds[key] = phase29_prereg.REFUSED
+        else:
+            thresholds[key] = types.MappingProxyType(
+                {"control": path, "taught": F_Y * tk / tn, "heldout": F_Y * hk / hn}
+            )
+    return types.MappingProxyType(thresholds)
+
+
+def _rule_e4_parameters(
+    *, m, inclusion_probability, k_plus, k_minus, beta, input_records, derivation
+):
+    """AUDIT-01, D-11: E4's one-run parameters and its maximum detectable epsilon, computed ONLY
+    when the port reproduces the published values. Inclusion probability is
+    ``ENTRIES["e4_inclusion_probability"]`` (Algorithm 1). The ceiling is
+    ``eps_lower_one_run(m, r, r, DELTA, beta)`` with r = k_plus + k_minus (a perfect guesser),
+    and ``runs`` is ``e4_runs(ceiling)`` (AUDIT-02)."""
+    _prove(
+        one_run_reproduction_holds(),
+        "D-11: the published Steinke-Nasr-Jagielski values are not reproduced; the AUDIT-01 "
+        "ceiling is not computed and E4 does not advance",
+    )
+    for name, value in (("m", m), ("k_plus", k_plus), ("k_minus", k_minus)):
+        _prove_count(name, value)
+    r = k_plus + k_minus
+    _prove(1 <= r <= m, f"need 1 <= k_plus + k_minus <= m, got r={r}, m={m}")
+    _prove_real("inclusion_probability", inclusion_probability)
+    _prove(
+        inclusion_probability == ENTRIES["e4_inclusion_probability"]["value"],
+        f"inclusion_probability {inclusion_probability!r} is not Algorithm 1's",
+    )
+    _prove_real("beta", beta)
+    _prove(0 < beta < 1, f"beta is {beta!r}; need 0 < beta < 1")
+    _consume_inputs("e4_parameters", m, input_records, derivation)
+    ceiling = eps_lower_one_run(m, r, r, DELTA, beta)
+    return types.MappingProxyType(
+        {
+            "m": m,
+            "inclusion_probability": inclusion_probability,
+            "k_plus": k_plus,
+            "k_minus": k_minus,
+            "beta": beta,
+            "delta": DELTA,
+            "ceiling": ceiling,
+            "runs": e4_runs(ceiling),
+        }
+    )
+
+
+def _rule_e5_minting_rule(*, minting_rule):
+    """RANK-01, W16: the written minting rule. It has no input record, and a slot with no input
+    record of its own phase precedes every record of that phase; only slots that consume an
+    in-phase input are exempt from that input, per fill file (Plan 04 leg (a), B7). So its fill
+    file precedes the minting record, it cannot share a fill file with e5_set_sizes (which
+    consumes that record), and the rule cannot be fitted to what was minted."""
+    _prove_entry("e5_minting_rule", minting_rule)
+    return minting_rule
+
+
+def _rule_e5_set_sizes(*, set_sizes, input_records, derivation):
+    """RANK-01, W16: each minted same-slot set's size, 1..ENTRIES["e5_max_set_size"], read from
+    the minting record; declared after minting ("as far as minting allows") and before any
+    scoring."""
+    _prove(
+        isinstance(set_sizes, collections.abc.Mapping) and set_sizes,
+        "set_sizes must be a non-empty mapping",
+    )
+    for name, size in set_sizes.items():
+        _prove(isinstance(name, str) and name, f"set name {name!r} is not a non-empty str")
+        _prove_count(f"set_sizes[{name!r}]", size)
+        _prove(
+            1 <= size <= ENTRIES["e5_max_set_size"]["value"],
+            f"set_sizes[{name!r}] = {size} is outside 1..e5_max_set_size",
+        )
+    _consume_inputs("e5_set_sizes", set_sizes, input_records, derivation)
+    return types.MappingProxyType(dict(set_sizes))
+
+
+def _rule_e6_entry_subset(*, entry_indices, input_records, derivation):
+    """CTX-01, D-04 deferred to Phase 39: the A2 corpus entries E6 runs on, strictly increasing
+    indices into ``a2_corpus_entries()``, sized to fit the Phase 36 budget."""
+    _prove(
+        isinstance(entry_indices, tuple) and entry_indices,
+        "entry_indices must be a non-empty tuple",
+    )
+    size = len(a2_corpus_entries())
+    for index in entry_indices:
+        _prove_count("entry index", index)
+        _prove(0 <= index < size, f"entry index {index} is outside the {size} A2 entries")
+    _prove(
+        all(a < b for a, b in zip(entry_indices, entry_indices[1:])),
+        f"entry_indices {entry_indices} are not strictly increasing",
+    )
+    _consume_inputs("e6_entry_subset", entry_indices, input_records, derivation)
+    return entry_indices
+
+
+def _rule_e1_condition_b_margin():
+    """D-16: locked in the core. Condition (b)'s margin is ``e1_condition_b_margin()``, the read
+    of results/phase19_noise_floors.json::margin_at_gate; it takes no input."""
+    return e1_condition_b_margin()
+
+
+def _rule_e1_condition_c_band_inputs(*, band_inputs, input_records, derivation):
+    """ERASE-09: condition (c)'s band per (seed, ordering), DIALOGUE_GAP_BAND applied to the
+    control gap and the Phase 40 gap noise floor."""
+    _prove(
+        isinstance(band_inputs, collections.abc.Mapping) and band_inputs,
+        "band_inputs must be a non-empty mapping",
+    )
+    teaching = e1_teaching_seeds()
+    for key, inputs in band_inputs.items():
+        _prove(
+            isinstance(key, tuple) and len(key) == 2, f"band key {key!r} is not (seed, ordering)"
+        )
+        _prove(key[0] in teaching, f"band key {key!r}: seed not in e1_teaching_seeds()")
+        _prove(isinstance(key[1], str) and key[1], f"band key {key!r} has no ordering")
+        _prove(
+            isinstance(inputs, collections.abc.Mapping)
+            and set(inputs) == {"control_gap", "gap_noise_floor"},
+            f"band inputs {key!r} must have exactly control_gap and gap_noise_floor",
+        )
+        for name, value in inputs.items():
+            _prove_finite(f"{key!r}.{name}", value)
+    _consume_inputs("e1_condition_c_band_inputs", band_inputs, input_records, derivation)
+    return types.MappingProxyType(
+        {
+            key: DIALOGUE_GAP_BAND(
+                control_gap=inputs["control_gap"], gap_noise_floor=inputs["gap_noise_floor"]
+            )
+            for key, inputs in band_inputs.items()
+        }
+    )
+
+
+def _rule_e2_noise_floor_estimator(*, estimator):
+    """NOISE-02: the written estimator of the training-seed noise floor, published beside v3.0's
+    sampling floor, never amending the (b) margin (D-16)."""
+    _prove_entry("e2_noise_floor_estimator", estimator)
+    return estimator
+
+
+def _rule_e5_rank_moves_and_generation_collapses(*, moves, collapses):
+    """RANK-02: the written definitions of a rank move and a generation collapse."""
+    _prove_entry("moves", moves)
+    _prove_entry("collapses", collapses)
+    return types.MappingProxyType({"moves": moves, "collapses": collapses})
+
+
+def _rule_e6_decomposition_rule(*, decomposition):
+    """CTX-03: the written decomposition rule."""
+    _prove_entry("e6_decomposition_rule", decomposition)
+    return decomposition
+
+
+_SLOTS = {
+    "v6_budget_and_stop_line": {
+        "owner_phase": 36,
+        "rule": _rule_v6_budget_and_stop_line,
+        "input_records": ("results/phase36_probe_*.json",),
+    },
+    "e2_S": {"owner_phase": 40, "rule": _rule_e2_S, "input_records": (_BUDGET_RECORD,)},
+    "r1b_tolerance_and_replicated": {
+        "owner_phase": 37,
+        "rule": _rule_r1b_tolerance_and_replicated,
+        "input_records": (),
+    },
+    "e1_checkpoint_grid": {
+        "owner_phase": 41,
+        "rule": _rule_e1_checkpoint_grid,
+        "input_records": (_BUDGET_RECORD,),
+    },
+    "e1_condition_a_floors": {
+        "owner_phase": 41,
+        "rule": _rule_e1_condition_a_floors,
+        "input_records": ("results/phase41_calibration_*.json",),
+    },
+    "e1_alternative_ordering": {
+        "owner_phase": 41,
+        "rule": _rule_e1_alternative_ordering,
+        "input_records": (),
+    },
+    "e3_grid_subset": {
+        "owner_phase": 42,
+        "rule": _rule_e3_grid_subset,
+        "input_records": (_BUDGET_RECORD, _V4_CONTROL_RECORD),
+    },
+    "e4_parameters": {
+        "owner_phase": 43,
+        "rule": _rule_e4_parameters,
+        "input_records": ("results/phase38_minting*.json",),
+    },
+    "e5_minting_rule": {"owner_phase": 38, "rule": _rule_e5_minting_rule, "input_records": ()},
+    "e5_set_sizes": {
+        "owner_phase": 38,
+        "rule": _rule_e5_set_sizes,
+        "input_records": ("results/phase38_minting*.json",),
+    },
+    "e6_entry_subset": {
+        "owner_phase": 39,
+        "rule": _rule_e6_entry_subset,
+        "input_records": ("results/phase36_probe_*.json",),
+    },
+    "e3_recall_threshold": {
+        "owner_phase": 42,
+        "rule": _rule_e3_recall_threshold,
+        "input_records": ("results/phase42_control_*.json", _V4_CONTROL_RECORD),
+    },
+    "e1_condition_b_margin": {
+        "owner_phase": 41,
+        "rule": _rule_e1_condition_b_margin,
+        "input_records": (phase19_floor.EVIDENCE_ARTIFACT["NONTARGET_NOISE_FLOOR"],),
+    },
+    "e1_condition_c_band_inputs": {
+        "owner_phase": 41,
+        "rule": _rule_e1_condition_c_band_inputs,
+        # W21: the ONE Phase 40 record that carries the gap noise floor (NOISE-02), never the
+        # broad results/phase40_*, which would make leg (b) require every Phase 40 record ever
+        # tracked to precede the band fill file.
+        "input_records": ("results/phase40_noise_floor.json", "results/phase41_band_inputs_*.json"),
+    },
+    "e2_noise_floor_estimator": {
+        "owner_phase": 40,
+        "rule": _rule_e2_noise_floor_estimator,
+        "input_records": (),
+    },
+    "e5_rank_moves_and_generation_collapses": {
+        "owner_phase": 38,
+        "rule": _rule_e5_rank_moves_and_generation_collapses,
+        "input_records": (),
+    },
+    "e6_decomposition_rule": {
+        "owner_phase": 39,
+        "rule": _rule_e6_decomposition_rule,
+        "input_records": (),
+    },
+}
+
+SLOTS = types.MappingProxyType(
+    {name: types.MappingProxyType(slot) for name, slot in _SLOTS.items()}
+)
+
+
+def fill(slot, **inputs):
+    """The only door to a deferred slot (D-02): refuse an undeclared slot, dispatch its rule."""
+    _prove(
+        isinstance(slot, str) and slot in SLOTS,
+        f"slot {slot!r} is not declared in the Phase 35 registry (D-02)",
+    )
+    return SLOTS[slot]["rule"](**inputs)
+
+
+def _prove_slots():
+    rules = [slot["rule"] for slot in SLOTS.values()]
+    _prove(len(set(rules)) == len(rules), "a rule is shared by two slots")
+    for name, slot in SLOTS.items():
+        _prove(tuple(slot) == SLOT_FIELDS, f"slot {name} has fields {tuple(slot)}")
+        owner = slot["owner_phase"]
+        _prove(
+            isinstance(owner, int) and not isinstance(owner, bool) and 36 <= owner <= 45,
+            f"slot {name} has owner_phase {owner!r}, not a phase in 36..45",
+        )
+        rule = slot["rule"]
+        _prove(
+            rule.__name__ == "_rule_" + name and rule.__module__ == __name__,
+            f"slot {name}'s rule is {rule.__module__}.{rule.__name__}, not _rule_{name}",
+        )
+        records = slot["input_records"]
+        _prove(
+            isinstance(records, tuple) and all(isinstance(p, str) for p in records),
+            f"slot {name}'s input_records is not a tuple of str",
+        )
+        keyword_only = {
+            p.name
+            for p in inspect.signature(rule).parameters.values()
+            if p.kind is inspect.Parameter.KEYWORD_ONLY
+        }
+        measured = bool(records) and name != "e1_condition_b_margin"
+        _prove(
+            ({"input_records", "derivation"} <= keyword_only) == measured,
+            f"slot {name}: input_records/derivation parameters do not match its inputs (W3)",
+        )
+
+
+_prove_slots()

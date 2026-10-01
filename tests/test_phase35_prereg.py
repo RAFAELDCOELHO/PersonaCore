@@ -13,6 +13,9 @@ What this file proves, CPU-only:
 - (Plan 02) the module is frozen before every results/phase36_* .. phase45_* file; the closed
   pins are imported, never copied; seeds, targets, the AUDIT-02 cut and the (b) margin are read
   from their sources, never retyped (AST, RED on planted copies); R1a re-derives from its record.
+- (Plan 03) the deferred-slot registry: 17 slots reachable only through fill(), every rule
+  exercised through fill() with each refusal (D-06, D-11, D-16, D-17 incl. B4, RECIPE-04,
+  COST-02, D-14, W3) watched firing on records planted under tmp_path.
 
 It reads only tracked files and git history and writes nothing under results/. A shallow clone
 FAILS, never skips.
@@ -20,6 +23,7 @@ FAILS, never skips.
 
 import ast
 import fnmatch
+import inspect
 import json
 import math
 import pathlib
@@ -45,7 +49,10 @@ import mitigation_gate  # noqa: E402  (same)
 import mitigation_unit  # noqa: E402  (same)
 import phase19_floor  # noqa: E402  (same)
 import phase25_epsilon  # noqa: E402  (same)
+import phase25_gate05  # noqa: E402  (same)
+import phase25_record  # noqa: E402  (same)
 import phase26_prereg  # noqa: E402  (same)
+import phase29_prereg  # noqa: E402  (same)
 import phase35_prereg  # noqa: E402  (same)
 
 from test_phase29_prereg import (  # noqa: E402  (underscore names only)
@@ -862,3 +869,594 @@ def test_entries_bind_f_y_f_c_and_delta_by_attribute(tmp_path):
         assert any(expected in f for f in failures), (name, failures)
 
     assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (11) PLAN 03 — THE REGISTRY OF DEFERRED SLOTS (D-02, D-15). Every rule is called through fill(),
+# the way owners will call it. Records are planted under tmp_path only.
+# =================================================================================================
+
+_BUDGET = "results/phase36_budget.json"
+
+_SLOT_OWNERS = {
+    "v6_budget_and_stop_line": 36,
+    "e2_S": 40,
+    "r1b_tolerance_and_replicated": 37,
+    "e1_checkpoint_grid": 41,
+    "e1_condition_a_floors": 41,
+    "e1_alternative_ordering": 41,
+    "e3_grid_subset": 42,
+    "e4_parameters": 43,
+    "e5_minting_rule": 38,
+    "e5_set_sizes": 38,
+    "e6_entry_subset": 39,
+    "e3_recall_threshold": 42,
+    "e1_condition_b_margin": 41,
+    "e1_condition_c_band_inputs": 41,
+    "e2_noise_floor_estimator": 40,
+    "e5_rank_moves_and_generation_collapses": 38,
+    "e6_decomposition_rule": 39,
+}
+
+
+def _entry(value, source="test source"):
+    return {"value": value, "derivation": "test derivation", "kind": "preference", "source": source}
+
+
+def _inputs(root, monkeypatch, records):
+    """Plant `{relpath: payload}` under `root` (JSON, or verbatim bytes) and point the module's
+    `_REPO_ROOT` at it. `_v4_control()` still runs `git show` in the REAL repository."""
+    for relpath, payload in records.items():
+        target = root / relpath
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(payload, bytes):
+            target.write_bytes(payload)
+        else:
+            target.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(phase35_prereg, "_REPO_ROOT", root)
+    return tuple(records)
+
+
+def _v4_path():
+    return phase25_record.point_record_path(phase25_record.point_key("dp_n8", 0.0))
+
+
+def _v4_bytes():
+    return _v4_path().read_bytes()
+
+
+def _v4_record():
+    return json.loads(_v4_bytes())
+
+
+def _control_payload(recipe, seed, taught, heldout):
+    return {
+        "recipe": dict(recipe),
+        "seed": seed,
+        "sigma": 0.0,
+        "taught_recall": {"numerator": taught[0], "denominator": taught[1]},
+        "heldout_recall": {"numerator": heldout[0], "denominator": heldout[1]},
+    }
+
+
+def _budget_payload(**hours):
+    front_hours = {f: hours.get(f, 5.0) for f in phase35_prereg.V6_MPS_FRONTS}
+    return {
+        "front_hours": front_hours,
+        "total_hours": math.fsum(front_hours.values()),
+        "stop_line_hours": 60.0,
+    }
+
+
+def _measured(value, paths):
+    """A derivation that names every input it read."""
+    return _entry(value, source=" ".join(paths))
+
+
+def test_slot_registry_declares_the_seventeen_slots():
+    slots = phase35_prereg.SLOTS
+    assert len(slots) == 17
+    assert set(slots) == set(_SLOT_OWNERS)
+    for name, slot in slots.items():
+        assert slot["owner_phase"] == _SLOT_OWNERS[name], name
+        assert set(slot) == {"owner_phase", "rule", "input_records"}, name
+        assert slot["rule"].__name__ == "_rule_" + name
+        assert slot["rule"].__module__ == "phase35_prereg"
+    with pytest.raises(TypeError):
+        slots["planted"] = {}
+    with pytest.raises(TypeError):
+        slots["e2_S"]["owner_phase"] = 36
+
+
+def test_slot_fill_refuses_an_undeclared_or_non_string_slot():
+    for bad in ("e9_undeclared", None):
+        with pytest.raises(SystemExit) as refused:
+            phase35_prereg.fill(bad)
+        assert "not declared" in str(refused.value)
+    glob = phase35_prereg.owner_prereg_glob("e2_S")
+    assert glob == "scripts/phase40_*prereg.py"
+    assert fnmatch.fnmatch("scripts/phase40_prereg.py", glob)
+    assert fnmatch.fnmatch("scripts/phase40_seeds_prereg.py", glob)
+    assert not fnmatch.fnmatch("scripts/phase40_driver.py", glob)
+    assert not fnmatch.fnmatch("scripts/phase41_prereg.py", glob)
+
+
+def test_slot_d04_deferred_slots_stay_with_their_phases():
+    slots = phase35_prereg.SLOTS
+    assert slots["e1_alternative_ordering"]["owner_phase"] == 41
+    assert slots["e6_entry_subset"]["owner_phase"] == 39
+    for name in ("e1_alternative_ordering", "e6_entry_subset"):
+        assert name not in phase35_prereg.ENTRIES
+
+
+def test_slot_measured_rules_consume_their_inputs(tmp_path, monkeypatch):
+    for name, slot in phase35_prereg.SLOTS.items():
+        params = inspect.signature(slot["rule"]).parameters.values()
+        keyword_only = {p.name for p in params if p.kind is inspect.Parameter.KEYWORD_ONLY}
+        measured = bool(slot["input_records"]) and name != "e1_condition_b_margin"
+        assert ({"input_records", "derivation"} <= keyword_only) == measured, name
+
+    minting = "results/phase38_minting.json"
+    paths = _inputs(tmp_path, monkeypatch, {minting: {"m": 16}, "results/phase39_x.json": {}})
+    consume = phase35_prereg._consume_inputs
+    good = consume("e5_set_sizes", 7, (minting,), _measured(7, (minting,)))
+    assert dict(good) == {minting: {"m": 16}}
+
+    missing = "results/phase38_minting_missing.json"
+    absolute = str(tmp_path / minting)
+    for records, derivation in (
+        (("results/phase39_x.json",), _measured(7, paths)),  # matches no declared pattern
+        ((absolute,), _measured(7, (absolute,))),  # absolute
+        (("../" + minting,), _measured(7, ("../" + minting,))),  # a `..` part
+        ((missing,), _measured(7, (missing,))),  # missing file
+        ((minting,), _entry(7, source="names nothing")),  # source omits the path
+        ((minting,), _measured(8, (minting,))),  # value is not the filled value
+        ((minting,), {**_measured(7, (minting,)), "proposer": "Rafael"}),  # D-14
+        ((), _measured(7, (minting,))),  # no input at all
+    ):
+        with pytest.raises(SystemExit):
+            consume("e5_set_sizes", 7, records, derivation)
+
+    with pytest.raises(SystemExit):
+        phase35_prereg._budget_front_hours({_BUDGET: {"front_hours": {"E1": 1.0}}}, "E1")
+
+
+def test_e2_S_refuses_more_seeds_than_the_list(tmp_path, monkeypatch):
+    most = len(phase35_prereg.seed_list())
+    _inputs(tmp_path / "empty", monkeypatch, {})
+    with pytest.raises(SystemExit) as refused:
+        phase35_prereg.fill("e2_S", s=most + 1, input_records=(_BUDGET,), derivation={})
+    assert "D-06" in str(refused.value) and "never extended" in str(refused.value)
+
+    paths = _inputs(tmp_path / "ok", monkeypatch, {_BUDGET: _budget_payload()})
+    least = phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
+    assert least == 2
+    for s in (most, least):
+        assert phase35_prereg.fill("e2_S", s=s, input_records=paths, derivation=_measured(s, paths))
+        assert (
+            phase35_prereg.fill("e2_S", s=s, input_records=paths, derivation=_measured(s, paths))
+            == s
+        )
+    for bad in (least - 1, True, float(most)):
+        with pytest.raises(SystemExit):
+            phase35_prereg.fill(
+                "e2_S", s=bad, input_records=paths, derivation=_measured(bad, paths)
+            )
+
+    paths = _inputs(tmp_path / "noe2", monkeypatch, {_BUDGET: _budget_payload(E2=0.0)})
+    with pytest.raises(SystemExit):
+        phase35_prereg.fill(
+            "e2_S", s=least, input_records=paths, derivation=_measured(least, paths)
+        )
+
+
+def _v4_recipe():
+    import teach_persona  # torch at import: inside the e3 tests only
+
+    return {
+        "lr": teach_persona.LR,
+        "steps": phase35_prereg.STEP_BUDGET,
+        "batch": teach_persona.BATCH_SIZE,
+    }
+
+
+def _others(count, steps=None):
+    """Recipes kept off the v4 recipe by batch 16."""
+    steps = phase35_prereg.STEP_BUDGET if steps is None else steps
+    lrs = (1e-4, 3e-4, 1e-3, 3e-3, 1e-2)
+    return [{"lr": lr, "steps": steps, "batch": 16} for lr in lrs[:count]]
+
+
+def _fill_grid(root, monkeypatch, recipes, seed, *, list_v4=False, v4_payload=None, fifth=None):
+    """Plant the budget record (and the v4.0 record when the grid holds the v4 recipe or the case
+    lists it), then fill e3_grid_subset. The v4.0 record is LISTED only when `list_v4`."""
+    records = {_BUDGET: _budget_payload()}
+    v4 = phase35_prereg._V4_CONTROL_RECORD
+    if list_v4 or _v4_recipe() in [dict(r) for r in recipes]:
+        records[v4] = _v4_bytes() if v4_payload is None else v4_payload
+    _inputs(root, monkeypatch, records)
+    paths = (_BUDGET, v4) if list_v4 else (_BUDGET,)
+    return phase35_prereg.fill(
+        "e3_grid_subset",
+        recipes=tuple(recipes),
+        seed=seed,
+        input_records=paths,
+        derivation=_measured(tuple(recipes), paths),
+        fifth_recipe_derivation=fifth,
+    )
+
+
+def test_e3_grid_is_four_recipes_by_three_sigmas(tmp_path, monkeypatch):
+    seeds = phase35_prereg.seed_list()
+    record_seed = _v4_record()["seed"]
+    grid = _fill_grid(tmp_path / "g4", monkeypatch, _others(4), seeds[0])
+    sigmas = phase35_prereg.E3_SIGMAS
+    assert len(grid["cells"]) == 12
+    for i, recipe in enumerate(_others(4)):
+        cells = grid["cells"][i * len(sigmas) : (i + 1) * len(sigmas)]
+        assert tuple(c["sigma"] for c in cells) == sigmas
+        assert all(dict(c["recipe"]) == recipe for c in cells)
+    assert all(c["reuse"] is None for c in grid["cells"])
+    assert phase35_prereg.E3_N == len(phase25_gate05.GATE05_SLOTS)
+    assert all(c["n"] == phase35_prereg.E3_N for c in grid["cells"])
+    assert grid["n"] == phase35_prereg.E3_N
+    assert grid["unit"] == mitigation_unit.PRIVACY_UNIT
+
+    fifth = _entry("the saved run fits", source=_BUDGET)
+    for name, recipes, seed, kwargs in (
+        ("three", _others(3), seeds[0], {}),
+        ("five_no_v4", _others(5), seeds[0], {}),
+        ("five_no_fifth", [_v4_recipe(), *_others(4)], record_seed, {"list_v4": True}),
+        ("duplicate", [*_others(3), _others(1)[0]], seeds[0], {}),
+        ("off_list_seed", _others(4), max(seeds) + 1, {}),
+        ("four_plus_fifth", _others(4), seeds[0], {"fifth": fifth}),
+    ):
+        with pytest.raises(SystemExit):
+            _fill_grid(tmp_path / name, monkeypatch, recipes, seed, **kwargs)
+
+    five = _fill_grid(
+        tmp_path / "g5",
+        monkeypatch,
+        [_v4_recipe(), *_others(4)],
+        record_seed,
+        list_v4=True,
+        fifth=fifth,
+    )
+    assert len(five["cells"]) == 15
+
+
+def test_e3_grid_refuses_a_fifth_recipe_without_a_reused_control(tmp_path, monkeypatch):
+    record_seed = _v4_record()["seed"]
+    other_seed = next(s for s in phase35_prereg.seed_list() if s != record_seed)
+    with pytest.raises(SystemExit):
+        _fill_grid(
+            tmp_path,
+            monkeypatch,
+            [_v4_recipe(), *_others(4)],
+            other_seed,
+            fifth=_entry("the saved run fits", source=_BUDGET),
+        )
+
+
+def test_e3_grid_reuses_the_v4_control_only_when_byte_identical_to_v5(tmp_path, monkeypatch):
+    record = _v4_record()
+    digest = record["adapter_sha256"]
+    assert phase35_prereg._is_hex_digest(digest) is True
+    for bad in (digest[:63], digest.upper(), None):
+        assert phase35_prereg._is_hex_digest(bad) is False
+    real_record, recorded = phase35_prereg._v4_control()  # the unpatched real tree
+    assert real_record["seed"] == record["seed"]
+    assert dict(recorded) == _v4_recipe()
+    assert phase35_prereg._V4_CONTROL_RECORD == str(_v4_path().relative_to(_ROOT))
+
+    recipes = [_v4_recipe(), *_others(3)]
+    grid = _fill_grid(tmp_path / "reuse", monkeypatch, recipes, record["seed"], list_v4=True)
+    reused = [c for c in grid["cells"] if c["reuse"] is not None]
+    assert len(reused) == 1
+    assert reused[0]["reuse"] == phase35_prereg._V4_CONTROL_RECORD
+    assert dict(reused[0]["recipe"]) == _v4_recipe()
+    assert reused[0]["sigma"] == phase35_prereg.E3_SIGMAS[0]
+
+    with pytest.raises(SystemExit):  # the reuse happens, the record is not consumed
+        _fill_grid(tmp_path / "unlisted", monkeypatch, recipes, record["seed"])
+    with pytest.raises(SystemExit) as refused:  # a modified copy, still valid JSON
+        _fill_grid(
+            tmp_path / "modified",
+            monkeypatch,
+            recipes,
+            record["seed"],
+            list_v4=True,
+            v4_payload=_v4_bytes() + b"\n",
+        )
+    assert "v5.0" in str(refused.value)
+
+    other_seed = next(s for s in phase35_prereg.seed_list() if s != record["seed"])
+    with pytest.raises(SystemExit):  # listed, but no reuse at another seed
+        _fill_grid(tmp_path / "other_listed", monkeypatch, recipes, other_seed, list_v4=True)
+    other = _fill_grid(tmp_path / "other", monkeypatch, recipes, other_seed)
+    assert all(c["reuse"] is None for c in other["cells"])
+    with pytest.raises(SystemExit):  # listed with no v4 recipe in the grid
+        _fill_grid(tmp_path / "no_v4", monkeypatch, _others(4), record["seed"], list_v4=True)
+
+
+def test_e3_grid_refuses_a_p22_crossing(tmp_path, monkeypatch):
+    budget = phase35_prereg.STEP_BUDGET
+    assert abs(phase35_prereg.p22_onset_sigma(budget) - 0.078902) < 1e-6  # 22-VERIFICATION :175
+    assert phase35_prereg.ENTRIES["p22_two_oracle_budget"]["value"] == 1e-9
+    line = (_ROOT / "tests/test_phase22_accountant.py").read_text(encoding="utf-8").splitlines()
+    assert "1e-9 * abs(b)" in line[535]
+    assert phase35_prereg._p22_breached(0.05, budget) is True
+    assert phase35_prereg._p22_breached(0.3, budget) is False
+
+    seed = phase35_prereg.seed_list()[0]
+    with pytest.raises(SystemExit) as refused:
+        _fill_grid(tmp_path / "t9000", monkeypatch, [*_others(3), *_others(1, 9000)], seed)
+    assert "RECIPE-04" in str(refused.value)
+    grid = _fill_grid(tmp_path / "t400", monkeypatch, [*_others(3), *_others(1, 400)], seed)
+    assert set(grid["p22_onset_sigma"]) == {budget, 400}
+
+    entry = phase35_prereg.ENTRIES["p22_two_oracle_budget"]
+    monkeypatch.setattr(
+        phase35_prereg,
+        "ENTRIES",
+        {**phase35_prereg.ENTRIES, "p22_two_oracle_budget": {**entry, "value": 1e-6}},
+    )
+    assert phase35_prereg.p22_onset_sigma(budget) < 0.07  # the rule reads the entry
+
+
+def _fill_threshold(root, monkeypatch, grid, controls):
+    paths = _inputs(root, monkeypatch, controls)
+    return phase35_prereg.fill(
+        "e3_recall_threshold", grid=grid, input_records=paths, derivation=_measured(paths, paths)
+    )
+
+
+def test_e3_recall_threshold_keys_each_control_by_its_recorded_recipe(tmp_path, monkeypatch):
+    f_y = phase35_prereg.F_Y
+    seed = phase35_prereg.seed_list()[0]
+    recipes = _others(4)
+    grid = _fill_grid(tmp_path, monkeypatch, recipes, seed)
+
+    def key(recipe, s=seed):
+        return (recipe["lr"], recipe["steps"], recipe["batch"], s)
+
+    order = (2, 0, 3, 1)  # NOT the grid's order: a positional pairing would mismatch
+    controls = {
+        f"results/phase42_control_{tag}.json": _control_payload(
+            recipes[i], seed, (0, 48) if i == 3 else (40, 48), (20, 40)
+        )
+        for tag, i in zip("abcd", order, strict=True)
+    }
+    result = _fill_threshold(tmp_path, monkeypatch, grid, controls)
+    assert set(result) == {key(r) for r in recipes}
+    for tag, i in zip("abcd", order, strict=True):
+        if i == 3:
+            assert result[key(recipes[i])] == phase29_prereg.REFUSED
+        else:
+            assert dict(result[key(recipes[i])]) == {
+                "control": f"results/phase42_control_{tag}.json",
+                "taught": f_y * 40 / 48,
+                "heldout": f_y * 20 / 40,
+            }
+
+    stranger = {"lr": 5e-2, "steps": phase35_prereg.STEP_BUDGET, "batch": 16}
+    good = [_control_payload(r, seed, (40, 48), (20, 40)) for r in recipes]
+    v4 = phase35_prereg._V4_CONTROL_RECORD
+    for name, payloads, extra in (
+        ("stranger", [*good[:3], _control_payload(stranger, seed, (40, 48), (20, 40))], {}),
+        ("twice", [*good, good[0]], {}),
+        ("three", good[:3], {}),
+        ("noised", [*good[:3], {**good[3], "sigma": 0.5}], {}),
+        ("v4_listed", good, {v4: _v4_bytes()}),
+    ):
+        planted = {
+            f"results/phase42_control_{name}_{i}.json": p for i, p in enumerate(payloads)
+        } | extra
+        with pytest.raises(SystemExit):
+            _fill_threshold(tmp_path / name, monkeypatch, grid, planted)
+
+    record = _v4_record()
+    reuse_grid = _fill_grid(
+        tmp_path / "reuse", monkeypatch, [_v4_recipe(), *recipes[:3]], record["seed"], list_v4=True
+    )
+    third = {
+        f"results/phase42_control_r{i}.json": _control_payload(
+            r, record["seed"], (40, 48), (20, 40)
+        )
+        for i, r in enumerate(recipes[:3])
+    }
+    reused = _fill_threshold(
+        tmp_path / "reuse", monkeypatch, reuse_grid, {**third, v4: _v4_bytes()}
+    )
+    taught, heldout = record["taught_recall"], record["heldout_recall"]
+    assert dict(reused[key(_v4_recipe(), record["seed"])]) == {
+        "control": v4,
+        "taught": f_y * taught["numerator"] / taught["denominator"],
+        "heldout": f_y * heldout["numerator"] / heldout["denominator"],
+    }
+    rerun = {
+        **third,
+        "results/phase42_control_v4.json": _control_payload(
+            _v4_recipe(), record["seed"], (40, 48), (20, 40)
+        ),
+    }
+    with pytest.raises(SystemExit):  # the reused control is the one consumed
+        _fill_threshold(tmp_path / "rerun", monkeypatch, reuse_grid, rerun)
+
+
+def test_e4_parameters_gate_on_the_reproduction(tmp_path, monkeypatch):
+    paths = _inputs(tmp_path, monkeypatch, {"results/phase38_minting.json": {"m": 16}})
+    delta = phase35_prereg.DELTA
+
+    def e4(m, k_plus, k_minus, inclusion=0.5):
+        return phase35_prereg.fill(
+            "e4_parameters",
+            m=m,
+            inclusion_probability=inclusion,
+            k_plus=k_plus,
+            k_minus=k_minus,
+            beta=0.05,
+            input_records=paths,
+            derivation=_measured(m, paths),
+        )
+
+    assert phase35_prereg.ENTRIES["e4_inclusion_probability"]["value"] == 0.5
+    small = e4(16, 8, 8)
+    assert small["ceiling"] == phase35_prereg.eps_lower_one_run(16, 16, 16, delta, 0.05)
+    assert small["runs"] is False
+    large = e4(184, 92, 92)
+    assert large["runs"] is True
+    assert large["ceiling"] > phase35_prereg.audit02_cut()
+    for args, kwargs in (((16, 8, 8), {"inclusion": 0.25}), ((16, 9, 8), {})):
+        with pytest.raises(SystemExit):
+            e4(*args, **kwargs)
+    monkeypatch.setattr(phase35_prereg, "one_run_reproduction_holds", lambda: False)
+    with pytest.raises(SystemExit) as refused:
+        e4(16, 8, 8)
+    assert "D-11" in str(refused.value)
+
+
+def test_slot_e1_rules(tmp_path, monkeypatch):
+    paths = _inputs(tmp_path / "grid", monkeypatch, {_BUDGET: _budget_payload()})
+    checkpoints = (8, 16, 32, 64, 78)  # ablation prefix counts, not K
+    grid = phase35_prereg.fill(
+        "e1_checkpoint_grid",
+        checkpoints=checkpoints,
+        input_records=paths,
+        derivation=_measured(checkpoints, paths),
+    )
+    assert grid["checkpoints"] == checkpoints
+    assert grid["read_k"] == mitigation_budget.CURVE_K
+    assert grid["confirm_k"] == mitigation_budget.FULL_FIDELITY_K
+    with pytest.raises(SystemExit):
+        phase35_prereg.fill(
+            "e1_checkpoint_grid",
+            checkpoints=(8, 8, 16),
+            input_records=paths,
+            derivation=_measured((8, 8, 16), paths),
+        )
+
+    paths = _inputs(tmp_path / "floors", monkeypatch, {"results/phase41_calibration_a.json": {}})
+    targets = phase35_prereg.e1_targets()
+    off_seed = next(
+        s for s in phase35_prereg.seed_list() if s not in phase35_prereg.e1_teaching_seeds()
+    )
+
+    def floors_fill(floors):
+        return phase35_prereg.fill(
+            "e1_condition_a_floors",
+            floors=floors,
+            input_records=paths,
+            derivation=_measured(floors, paths),
+        )
+
+    floors = {(t, "greedy_loo"): _entry(0.1) for t in targets}
+    assert dict(floors_fill(floors)) == floors
+    for bad in (
+        {(t, "greedy_loo"): _entry(0.1) for t in targets[1:]},
+        {**floors, (targets[0], "greedy_loo", off_seed): _entry(0.1)},
+    ):
+        with pytest.raises(SystemExit):
+            floors_fill(bad)
+
+    paths = _inputs(tmp_path / "band", monkeypatch, {"results/phase41_band_inputs_a.json": {}})
+    teaching = phase35_prereg.e1_teaching_seeds()[0]
+
+    def band_fill(seed):
+        band = {(seed, "greedy_loo"): {"control_gap": 1.0, "gap_noise_floor": 0.1}}
+        return phase35_prereg.fill(
+            "e1_condition_c_band_inputs",
+            band_inputs=band,
+            input_records=paths,
+            derivation=_measured(band, paths),
+        )
+
+    assert band_fill(teaching)[(teaching, "greedy_loo")] == mitigation_gate.dialogue_gap_band(
+        control_gap=1.0, gap_noise_floor=0.1
+    )
+    with pytest.raises(SystemExit):
+        band_fill(off_seed)
+    assert phase35_prereg.fill("e1_alternative_ordering", ordering=_entry("x")) == _entry("x")
+
+
+def test_slot_e1_condition_b_margin_is_the_core_read():
+    assert phase35_prereg.fill("e1_condition_b_margin") == phase35_prereg.e1_condition_b_margin()
+    rule = phase35_prereg.SLOTS["e1_condition_b_margin"]["rule"]
+    assert not inspect.signature(rule).parameters
+
+
+def test_slot_budget_halts_above_the_ceiling(tmp_path, monkeypatch):
+    paths = _inputs(tmp_path, monkeypatch, {"results/phase36_probe_a.json": {}})
+    fronts = {f: 5.0 for f in phase35_prereg.V6_MPS_FRONTS}
+
+    def budget(front_hours, stop_line_hours):
+        return phase35_prereg.fill(
+            "v6_budget_and_stop_line",
+            front_hours=front_hours,
+            stop_line_hours=stop_line_hours,
+            input_records=paths,
+            derivation=_measured(front_hours, paths),
+        )
+
+    out = budget(fronts, 60.0)
+    assert out["total_hours"] == 40.0 and out["stop_line_hours"] == 60.0
+    assert dict(out["front_hours"]) == fronts
+    missing = {f: h for f, h in fronts.items() if f != "E6"}
+    for front_hours, stop in ((missing, 60.0), (fronts, 30.0)):
+        with pytest.raises(SystemExit):
+            budget(front_hours, stop)
+    with pytest.raises(SystemExit) as refused:
+        budget(fronts, 91.0)
+    assert "HALT" in str(refused.value)
+
+
+def test_slot_e5_e6_set_sizes_and_entry_subset(tmp_path, monkeypatch):
+    minting = _inputs(tmp_path / "m", monkeypatch, {"results/phase38_minting.json": {}})
+    most = phase35_prereg.ENTRIES["e5_max_set_size"]["value"]
+    assert most == 512
+
+    def sizes(set_sizes):
+        return phase35_prereg.fill(
+            "e5_set_sizes",
+            set_sizes=set_sizes,
+            input_records=minting,
+            derivation=_measured(set_sizes, minting),
+        )
+
+    assert dict(sizes({"a": 1, "b": most})) == {"a": 1, "b": most}
+    for bad in ({"a": most + 1}, {"a": 0}):
+        with pytest.raises(SystemExit):
+            sizes(bad)
+
+    probe = _inputs(tmp_path / "p", monkeypatch, {"results/phase36_probe_a.json": {}})
+    size = len(phase35_prereg.a2_corpus_entries())
+
+    def subset(indices):
+        return phase35_prereg.fill(
+            "e6_entry_subset",
+            entry_indices=indices,
+            input_records=probe,
+            derivation=_measured(indices, probe),
+        )
+
+    assert subset((0, size - 1)) == (0, size - 1)
+    for bad in ((size,), (1, 0)):
+        with pytest.raises(SystemExit):
+            subset(bad)
+
+
+_DESIGN_SLOTS = {
+    "r1b_tolerance_and_replicated": lambda e: {"tolerance": {"k": 0}, "replicated_definition": e},
+    "e5_minting_rule": lambda e: {"minting_rule": e},
+    "e2_noise_floor_estimator": lambda e: {"estimator": e},
+    "e5_rank_moves_and_generation_collapses": lambda e: {"moves": e, "collapses": e},
+    "e6_decomposition_rule": lambda e: {"decomposition": e},
+}
+
+
+@pytest.mark.parametrize("slot", sorted(_DESIGN_SLOTS))
+def test_slot_design_entries_refuse_a_proposer(slot):
+    kwargs = _DESIGN_SLOTS[slot]
+    assert phase35_prereg.fill(slot, **kwargs(_entry("rule text")))
+    with pytest.raises(SystemExit):
+        phase35_prereg.fill(slot, **kwargs({**_entry("rule text"), "proposer": "Rafael"}))
