@@ -386,6 +386,7 @@ Measured torch/side effects at import (`.venv` 3.11.15, torch 2.7.1):
 | `phase25_epsilon` | no | loads the accountant (torch-free) |
 
 ## Provenance of inherited entries (D-08)
+> **Superseded by D-14 (plan-phase 35, 2026-10-01):** entries carry no `proposer`/`adopted_by` field; the provenance below stays as the record of the research, not as entry content.
 - **`F_Y`, `F_C`.** v4.0 `20-DISCUSSION-LOG.md:189-208` shows Claude Code's option menu, with **"User's choice: `f_Y = 0.7`"** and **"User's choice: `f_C = 0.5`"**. CONTEXT `20-CONTEXT.md:159-185` (D-15..D-18) records them. Whether that answer was drafted elsewhere is not recorded. `[ASSUMED]` proposer = "Claude Code" (the menu), adopted_by = "Rafael". **Confirm with Rafael**, and never write "selected by THE USER, verbatim".
 - **AUDIT-02 cut.** proposer "Claude Code", adopted_by "Rafael", source a9cd408 + the v6.0-opening transcript (CONTEXT D-08).
 - **ERASE-07 K = 16/48, RECIPE-04, PREREG-09.** proposer "Claude (claude.ai)", adopted_by "Rafael", source a9cd408 (CONTEXT D-08).
@@ -650,7 +651,7 @@ Validate the inputs with `_prove_count` and `0 <= v <= r <= m`, as App. D's `ass
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | F_Y/F_C proposer = "Claude Code" (option menu), adopted_by = "Rafael" | Provenance | A PREREG-07 misattribution. Confirm with Rafael before the entry is committed (it becomes permanent) |
+| A1 | F_Y/F_C proposer = "Claude Code" (option menu), adopted_by = "Rafael" | Provenance | A PREREG-07 misattribution. Confirm with Rafael before the entry is committed (it becomes permanent). **Moot under D-14:** the proposer field was removed from every entry, so nothing is confirmed or recorded |
 | A2 | `seed_list` entry source = `36ab0b4` (35-CONTEXT) + `5303819` | Provenance | Low; the planner can verify by git |
 | A3 | Fig. 10's "3.87" uses m = r = 10000 (m not stated, p. 28) | PREREG-09 (a) | None if not pinned (recommended) |
 | A4 | Proposed slot names, file names (`V6-PREREG-09.md`) and the `fill()` shape | Slot design | Discretion area; low |
@@ -658,11 +659,11 @@ Validate the inputs with `_prove_count` and `0 <= v <= r <= m`, as App. D's `ass
 
 ## Open Questions
 
-1. **Missing slots (six, listed above).** Do they enter the registry now?
+1. **RESOLVED (D-15).** **Missing slots (six, listed above).** Do they enter the registry now? All six are declared as deferred slots.
    - Recommendation: declare all six as deferred slots. Declaring costs nothing, and an undeclared one becomes unfillable after Phase 35 freezes. Raise `e3_recall_threshold`'s control reading and `e1_condition_b_margin` with Rafael at a plan checkpoint.
-2. **The v6.0 record names are unknown beyond the slot inputs.**
+2. **RESOLVED (`V6_RESULT_PATHS`, Plan 35-02).** **The v6.0 record names are unknown beyond the slot inputs.** Concrete paths for slot inputs plus one glob per phase.
    - Recommendation: concrete names for slot inputs, phase globs for the rest. The derived pathspecs are then complete regardless.
-3. **Does E4's canary pool have m ≥ 136 independently-randomizable facts?**
+3. **RESOLVED (deferred to Phases 38/43; not blocking Phase 35).** **Does E4's canary pool have m ≥ 136 independently-randomizable facts?**
    - It is not answerable here (Phase 38 minting, Phase 43). It is flagged so Phase 36 does not price an E4 run that the rule would cut.
 
 ## Environment Availability
