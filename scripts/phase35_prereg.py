@@ -36,6 +36,7 @@ published pins, a closed form, and a dropped-delta mutant outside the tolerance)
 """
 
 import collections.abc
+import json
 import math
 import pathlib
 import sys
@@ -51,8 +52,13 @@ _SRC = str(_REPO_ROOT / "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-import mitigation_unit  # noqa: E402  (needs the sys.path insert above)
+import erasure_gate  # noqa: E402  (needs the sys.path insert above; torch-free)
+import mitigation_budget  # noqa: E402  (same; torch-free)
+import mitigation_gate  # noqa: E402  (same; torch-free)
+import mitigation_unit  # noqa: E402  (same)
+import phase19_floor  # noqa: E402  (same; torch-free)
 import phase25_epsilon  # noqa: E402  (same; loads the torch-free accountant transitively)
+import phase26_prereg  # noqa: E402  (same; torch-free, no subprocess at import)
 
 # =================================================================================================
 # (1) THE DATE AND THE PROPERTY IT CERTIFIES.
@@ -241,7 +247,213 @@ def one_run_reproduction_holds():
 
 
 # =================================================================================================
-# (5) ENTRIES — the last block of the file. A plain dict literal so the AST tests can walk it.
+# (5) THE v6.0 RECORD PATHS (D-01). ONE tuple; the ancestry pathspecs are DERIVED from it. Later
+# phases import these names and never retype them.
+# =================================================================================================
+
+V6_RESULT_PATHS = (
+    "results/phase36_probe_*.json",  # COST-01
+    "results/phase36_budget.json",  # COST-02
+    "results/phase37_*",  # REPRO-01..03
+    "results/phase38_minting*.json",  # RANK-01
+    "results/phase38_*",  # RANK-02
+    "results/phase39_*",  # CTX-01..03
+    "results/phase40_*",  # NOISE-01/02
+    "results/phase41_calibration_*.json",  # ERASE-06
+    "results/phase41_band_inputs_*.json",  # ERASE-09
+    "results/phase41_*",  # ERASE-03..10
+    "results/phase42_control_*.json",  # RECIPE-01/03, the sigma = 0 controls
+    "results/phase42_*",  # RECIPE-01..04
+    "results/phase43_*",  # AUDIT-01..03
+    "results/phase44_*",  # PKG-01..08
+    "results/phase45_*",  # RPT-07..09
+)
+
+# DERIVED, not typed: exactly results/phase36_* .. results/phase45_*.
+ARTIFACT_PATHSPECS = tuple(sorted({p.split("_", 1)[0] + "_*" for p in V6_RESULT_PATHS}))
+
+# =================================================================================================
+# (6) CLOSED PINS, BY REFERENCE. Plain attribute bindings; never a retyped value.
+# =================================================================================================
+
+F_Y = mitigation_gate.F_Y
+F_C = mitigation_gate.F_C
+DIALOGUE_GAP_BAND = mitigation_gate.dialogue_gap_band
+CEILING_CLAUSE = phase26_prereg.CEILING_CLAUSE
+STEP_BUDGET = mitigation_budget.STEP_BUDGET
+CURVE_K = mitigation_budget.CURVE_K
+FULL_FIDELITY_K = mitigation_budget.FULL_FIDELITY_K
+SIGMA_LADDER = mitigation_budget.SIGMA_LADDER
+MARGIN_K = erasure_gate.MARGIN_K
+
+# =================================================================================================
+# (7) THE SEED LIST (D-05, D-06).
+# =================================================================================================
+
+
+def seed_list():
+    """The v6.0 seed list IS ``phase23_run.SEED_LADDER``, returned by identity.
+
+    Its first two seeds, 1337 and 2024, are already Phase 19's pair
+    (``phase19_erasure.DIALOGUE_NOISE_FLOOR_SEEDS``), which was itself Phase 12's own second seed,
+    reused rather than minted. The ladder was committed at 5303819 (2026-08-27), before any v6.0
+    result existed. The list is NEVER extended (D-06): a phase that needs more seeds than it holds
+    reports the shortfall instead of minting one.
+    """
+    import phase23_run  # teach_persona -> torch at import: lazy, so this module stays CPU-only
+
+    return phase23_run.SEED_LADDER
+
+
+def e1_teaching_seeds():
+    """ERASE-05: E1 teaches on seed 1337 plus ONE new seed, the first two of ``seed_list()``.
+    ERASE-10: no E1 PASS is reported without the second seed's run."""
+    return seed_list()[:2]
+
+
+# =================================================================================================
+# (8) THE E1 TARGETS (D-03): every slot at ceiling recall in Phase 19's published ranking.
+# =================================================================================================
+
+
+def e1_targets():
+    """The ``slot`` of every ``phase19_erasure.TARGET_RANKING`` row with ``successes ==
+    n_questions``, in ranking order. Read, never typed: the names are this function's output."""
+    import phase19_erasure  # torch at import: lazy
+
+    rows = [
+        dict(zip(phase19_erasure.TARGET_RANKING_FIELDS, row, strict=True))
+        for row in phase19_erasure.TARGET_RANKING
+    ]
+    targets = tuple(row["slot"] for row in rows if row["successes"] == row["n_questions"])
+    _prove(targets, "no TARGET_RANKING row is at ceiling recall: the D-03 premise is gone")
+    return targets
+
+
+# =================================================================================================
+# (9) THE AUDIT-02 CUT AND THE E4 RULE (D-09).
+# =================================================================================================
+
+
+def audit02_cut():
+    """The smallest ``epsilon_upper`` among Phase 26's points whose claim "could not have failed"
+    (``epsilon_upper >= auditor_ceiling``), read from ``phase26_canary.RECORD`` at call time. On
+    the committed record that is 11 points with minimum 3.7965357228934966."""
+    import phase26_canary  # git_sha() subprocess at import: lazy
+
+    record = json.loads(phase26_canary.RECORD.read_text(encoding="utf-8"))
+    ceiling = record["auditor_ceiling"]
+    uppers = [
+        point["epsilon_upper"]
+        for point in record["points"].values()
+        if point.get("epsilon_upper") is not None and point["epsilon_upper"] >= ceiling
+    ]
+    _prove(
+        uppers,
+        "no Phase 26 point has epsilon_upper >= auditor_ceiling: the AUDIT-02 premise is gone",
+    )
+    return min(uppers)
+
+
+def e4_runs(one_run_ceiling):
+    """AUDIT-02: E4 runs iff the CPU-computed one-run ceiling is STRICTLY greater than
+    ``audit02_cut()``, i.e. it could reprove at least one point Phase 26 could not."""
+    _prove_real("one_run_ceiling", one_run_ceiling)
+    _prove(math.isfinite(one_run_ceiling), f"one_run_ceiling is {one_run_ceiling!r}, not finite")
+    return one_run_ceiling > audit02_cut()
+
+
+# =================================================================================================
+# (10) E1 CONDITION (b)'s MARGIN (D-16) AND THE R1a ASSERTIONS (D-01).
+# =================================================================================================
+
+
+def e1_condition_b_margin():
+    """Condition (b)'s margin: ``nontarget_noise_floor.margin_at_gate`` of the Phase 19 record.
+
+    D-16: condition (b) compares the SAME adapter before and after ablation, so the noise that
+    matters is SAMPLING noise (v3.0's margin, MARGIN_K x the sampling floor), not training noise.
+    Phase 40's training-seed floor is used ONLY in the M1 x M2 comparison, never as E1's gate.
+    On the committed record this reads 0.2962962962962963 = 2 x 0.14814814814814814.
+    """
+    path = _REPO_ROOT / phase19_floor.EVIDENCE_ARTIFACT["NONTARGET_NOISE_FLOOR"]
+    floor = json.loads(path.read_text(encoding="utf-8"))["nontarget_noise_floor"]
+    _prove(
+        floor["margin_at_gate"] == MARGIN_K * floor["value"],
+        f"margin_at_gate {floor['margin_at_gate']!r} is not MARGIN_K x value {floor['value']!r}",
+    )
+    return floor["margin_at_gate"]
+
+
+# Asserted values: the published R1a claim Phase 37 must reproduce exactly. The margin the seven
+# non-targets are "beyond" is `e1_condition_b_margin()`, never typed.
+R1A_ASSERTIONS = types.MappingProxyType(
+    {
+        "k": 78,
+        "target_correct": (0, 27),
+        "nontargets_beyond_margin": (7, 7),
+        "destroyed_pct": 77.6370113463966,
+    }
+)
+
+
+def r1a_rederive():
+    """Re-derive ``k`` and the destroyed percentage from ``arm_record_path("erased")``.
+
+    ``k`` is ``len(config.ablated_components)``, NOT ``config.k`` (48, the A2 attack budget).
+    destroyed = (1 - g1 / g0) x 100 with g0 / g1 the dialogue on-off gap before / after erasure.
+    0/27 and 7/7 are NOT re-derivable from this record (its per-fact cell reads 0/14, defect C);
+    Phase 37 owns their routed re-derivation.
+    """
+    import phase19_erasure  # torch at import: lazy
+
+    record = json.loads(phase19_erasure.arm_record_path("erased").read_text(encoding="utf-8"))
+    k = len(record["config"]["ablated_components"])
+    pre, post = record["pre_erasure"]["dialogue_ppl"], record["dialogue_ppl"]
+    g0 = pre["adapter_on"] - pre["adapter_off"]
+    g1 = post["adapter_on"] - post["adapter_off"]
+    destroyed = (1 - g1 / g0) * 100
+    _prove(
+        k == R1A_ASSERTIONS["k"],
+        f"erased record has k = {k}, R1a asserts {R1A_ASSERTIONS['k']}",
+    )
+    _prove(
+        destroyed == R1A_ASSERTIONS["destroyed_pct"],
+        f"erased record destroys {destroyed!r}%, R1a asserts {R1A_ASSERTIONS['destroyed_pct']!r}",
+    )
+    return types.MappingProxyType(
+        {"k": k, "destroyed_pct": destroyed, "margin": e1_condition_b_margin()}
+    )
+
+
+# =================================================================================================
+# (11) E3's sigmas (RECIPE-01 as reworded by D-17), each a member of the v4.0 ladder.
+# =================================================================================================
+
+E3_SIGMAS = (0.0, 0.5, 1.0)
+_prove(
+    all(s in SIGMA_LADDER for s in E3_SIGMAS),
+    f"E3_SIGMAS {E3_SIGMAS} is not a subset of mitigation_budget.SIGMA_LADDER",
+)
+
+# =================================================================================================
+# (12) THE A2 CORPUS (CTX-01 / E6 population): depends on no v6.0 measurement.
+# =================================================================================================
+
+
+def a2_corpus_entries():
+    """Every Phase 18 corpus prompt of family A2, in corpus order."""
+    import phase18_extraction  # torch at import: lazy
+
+    _prove("A2" in phase18_extraction.ATTACK_FAMILIES, "A2 is no longer a Phase 18 attack family")
+    corpus = json.loads(phase18_extraction.CORPUS_PATH.read_text(encoding="utf-8"))
+    entries = tuple(p for p in corpus["prompts"] if p["family"] == "A2")
+    _prove(entries, "the Phase 18 corpus holds no A2 prompt")
+    return entries
+
+
+# =================================================================================================
+# (13) ENTRIES — the last block of the file. A plain dict literal so the AST tests can walk it.
 # =================================================================================================
 
 _ENTRIES = {
@@ -289,6 +501,132 @@ _ENTRIES = {
         ),
         "kind": "preference",
         "source": "scripts/mitigation_unit.py:171 (v4.0 SC4 / UNIT-05)",
+    },
+    "F_Y": {
+        "value": mitigation_gate.F_Y,
+        "derivation": (
+            "Utility rule: recall >= F_Y x the same recipe's sigma = 0 control recall, ONE "
+            "fraction applied to BOTH legs (taught and held-out), each against its own control. "
+            "mitigation_gate labels it 'PREFERENCE, not a derivation'."
+        ),
+        "kind": "preference",
+        "source": "scripts/mitigation_gate.py:203 (v4.0 D-15/D-16/D-18)",
+    },
+    "F_C": {
+        "value": mitigation_gate.F_C,
+        "derivation": (
+            "Catastrophe detector: the dialogue gap's lower bound is F_C x the control gap. "
+            "mitigation_gate labels it 'PREFERENCE, not a derivation'."
+        ),
+        "kind": "preference",
+        "source": "scripts/mitigation_gate.py:217 (v4.0 D-17/D-18)",
+    },
+    "dialogue_gap_band": {
+        "value": mitigation_gate.dialogue_gap_band,
+        "derivation": (
+            "D-01's bilateral band lo = F_C x control_gap, hi = control_gap + MARGIN_K x "
+            "gap_noise_floor, imported for ERASE-09."
+        ),
+        "kind": "derived",
+        "source": "scripts/mitigation_gate.py:526; ERASE-09 (a9cd408)",
+    },
+    "audit02_cut": {
+        "value": audit02_cut,
+        "derivation": (
+            "D-09: the minimum epsilon_upper over Phase 26's points with epsilon_upper >= "
+            "auditor_ceiling, read at use from phase26_canary.RECORD."
+        ),
+        "kind": "derived",
+        "source": "AUDIT-02 (a9cd408); results/phase26_canary.json",
+    },
+    "e4_runs": {
+        "value": e4_runs,
+        "derivation": (
+            "E4 runs iff the CPU-computed one-run ceiling is strictly greater than audit02_cut(), "
+            "i.e. it could reprove at least one point Phase 26 could not."
+        ),
+        "kind": "derived",
+        "source": "AUDIT-02 (a9cd408)",
+    },
+    "audit03_ceiling_clause": {
+        "value": phase26_prereg.CEILING_CLAUSE,
+        "derivation": "Phase 26's ceiling clause, imported so AUDIT-03 states it verbatim.",
+        "kind": "derived",
+        "source": "scripts/phase26_prereg.py:290; AUDIT-03",
+    },
+    "seed_list": {
+        "value": seed_list,
+        "derivation": (
+            "phase23_run.SEED_LADDER by identity; its second seed, 2024, was already Phase 19's "
+            "(DIALOGUE_NOISE_FLOOR_SEEDS, Phase 12's own second seed, reused). Never extended "
+            "(D-06)."
+        ),
+        "kind": "preference",
+        "source": (
+            "scripts/phase23_run.py:146, first added 5303819 (2026-08-27); adopted for v6.0 in "
+            "35-CONTEXT D-05 (36ab0b4)"
+        ),
+    },
+    "e1_teaching_seeds": {
+        "value": e1_teaching_seeds,
+        "derivation": "seed_list()[:2], seed 1337 plus one new seed (ERASE-05)",
+        "kind": "derived",
+        "source": "35-CONTEXT D-05 (36ab0b4); ERASE-05 (a9cd408)",
+    },
+    "e1_targets": {
+        "value": e1_targets,
+        "derivation": (
+            "Every TARGET_RANKING row at ceiling recall (successes == n_questions), in ranking "
+            "order (D-03)."
+        ),
+        "kind": "derived",
+        "source": "scripts/phase19_erasure.py:604 TARGET_RANKING; 35-CONTEXT D-03 (36ab0b4)",
+    },
+    "e1_condition_b_margin": {
+        "value": e1_condition_b_margin,
+        "derivation": (
+            "Condition (b) compares the SAME adapter before and after ablation, so its noise is "
+            "sampling noise: v3.0's margin, MARGIN_K x the sampling floor. Phase 40's "
+            "training-seed floor enters only the M1 x M2 comparison, never E1's gate (D-16)."
+        ),
+        "kind": "derived",
+        "source": (
+            "results/phase19_noise_floors.json::nontarget_noise_floor.margin_at_gate; "
+            "35-CONTEXT D-16 (c012883)"
+        ),
+    },
+    "r1a_assertions": {
+        "value": R1A_ASSERTIONS,
+        "derivation": (
+            "The published R1a claim Phase 37 must reproduce exactly; k and destroyed_pct are "
+            "re-derived from the erased record by r1a_rederive()."
+        ),
+        "kind": "derived",
+        "source": (
+            "results/phase19_erasure_report.md:17,134,146; results/phase19_arm_erased.json; "
+            "REPRO-01 (a9cd408)"
+        ),
+    },
+    "e3_sigmas": {
+        "value": E3_SIGMAS,
+        "derivation": (
+            "E3's noise grid: the sigma = 0 control plus two noised points, each a member of the "
+            "v4.0 SIGMA_LADDER."
+        ),
+        "kind": "preference",
+        "source": "RECIPE-01 (a9cd408, reworded c012883, D-17)",
+    },
+    "mps_ceiling_hours": {
+        "value": 90,
+        "derivation": "Rafael's ceiling for all v6.0 MPS work, probes included",
+        "kind": "preference",
+        "source": "COST-02 (a9cd408)",
+    },
+    "e5_max_set_size": {
+        "value": 512,
+        "derivation": "RANK-01's upper bound on each minted same-slot set",
+        "kind": "preference",
+        "source": "RANK-01 (a9cd408)",
     },
 }
 
