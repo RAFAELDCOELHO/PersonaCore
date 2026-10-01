@@ -33,12 +33,44 @@ milestones.
 17/17 integration, 1/1 flow, no blockers. See
 [milestones/v5.0-MILESTONE-AUDIT.md](milestones/v5.0-MILESTONE-AUDIT.md).
 
-## Next Milestone Goals
+## Current Milestone: v6.0 Robustness and Public Reproducibility of the v3.0–v5.0 Results
 
-Not opened. Start with `/gsd-new-milestone`, and **append** its requirements below the v5.0 block
-of `.planning/REQUIREMENTS.md` — that file and the v4.0/v5.0 ROADMAP sections are live inputs of
-`scripts/phase28_report.py` and the 25-07 sentinel guards. Carried owners: P32-CR-01 before any
-reuse of `phase32_points`; P34-WR-01 before any re-install of the published block.
+**Goal:** Find out whether the v3.0–v5.0 results survive more seeds, more facts, better recipes and
+stronger instruments, and make every published number reproducible by an outsider — not a new
+result. FAILURE (v3.0), MOOT (v4.0) and MOOT/REFUSED (v5.0) stay published; v6.0 publishes beside
+them, never over them.
+
+**Provenance:** scope proposed by Claude (claude.ai) from an external review of the paper (10
+improvements, 4 already handled in the paper text), inventoried by Claude Code against the disk
+(2026-10-01: 841 artifacts hashed, every cited adapter/corpus SHA-256 on the published path
+matches), cut and adopted by Rafael — "proposto pelo Claude (claude.ai), adotado por Rafael".
+
+**Target features:**
+- R1 — a clean reproduction of the Phase 19 verdict: R1a one-command CPU re-derivation from the
+  committed draws with defects A–E as code and exact assertions (k = 78, 0/27, 7/7 beyond
+  0.296296, 77.64%); R1b an MPS replica of k = 78 under a tolerance pre-registered before it runs
+- R2 — a public deposit package: per-table artifact inventory, SHA-256 manifest, model and data
+  cards, a verifier; PersonaChat never redistributed (rebuild scripts + hashes only), TinyStories
+  CDLA-Sharing-1.0 conditions recorded; the upload is Rafael's act
+- E1 — erasure on the four facts tied at 13/13 in Phase 19's committed ranking, 2 orderings × 2
+  seeds, per-fact (a) floor derived before measurement, a dialogue band anchored on the adapted
+  model (D-01 imported), no PASS without a second-seed replication
+- E2 — M2's seed noise floor at S seeds (S from the cost probe; reuses E1's pet_name seeds)
+- E3 — a minimal DP-SGD recipe grid (~12 configs, σ ∈ {0.5, 1}, n = 8), ε per config with
+  `selection_accounted = false` plus basic composition over the grid
+- E4 — conditional: the one-run audit (Steinke, Nasr, Jagielski 2023) runs only if its
+  CPU-computed ceiling beats Phase 26's ε ≈ 2.79 in a way that could change the result; otherwise
+  the cut is published with the computed number
+- E5 — exposure rank at larger same-slot sets (minted by a pre-registered rule, cleared against
+  the base as in Phase 17), score-only on the committed ablation prefixes
+- E6 — instrument × context 2×2 (answer anchor vs full A2 question) on the same adapters
+
+Discipline carried from v4.0/v5.0: rule as code before data, ancestry-guarded pre-registration
+first (phase29_prereg pattern), write-once records, corrections only as dated continuations
+(`scripts/_addendum.py`), MPS cost probes and a committed stop line before any budget, and a
+verdict allowed to say "not measured". Carried owners: P32-CR-01 before any reuse of
+`phase32_points`; P34-WR-01 before any re-install of the published block. REQUIREMENTS.md and the
+v4.0/v5.0 ROADMAP sections stay live inputs of `scripts/phase28_report.py` — append only.
 
 <details>
 <summary>v5.0 milestone plan as written at the start (archived)</summary>
@@ -394,14 +426,20 @@ The novel claim must be true and demonstrable: **personalization lives in the we
 - [x] Privacy/utility frontier for both arms with a pre-registered **three-condition** existence gate: ∃ a curve point with extraction ≤ X **and** taught-fact recall ≥ Y **and** general capability ≥ C, all three committed before any point is measured (Phase 20+) — _Validated in v4.0 (Phases 20, 25): the gate was committed first and returned `null-at-both-capacities` — the existential is answered NO with its denominators (0 of 32 DP, 0 of 6 adversarial + 6 refused)._
 - [x] Relearning attack as adversarial validation — absolute recovery ceiling as the binary gate (recall ≤ X within fixed budget Z), plus cost-to-recovery curve against a never-taught fresh adapter at identical budget and seed (Phase 20+) — _Validated in v4.0 (Phases 24, 25): the second arm and its held-out attack family exist and were swept over 12 points; published as recipe-confounded (no replay) — no conclusion about the adversarial ratio is drawn (v5.0 candidate)._
 
+- [x] Replay-bearing adversarial re-run against the arm's own σ=0 control (WR-05) — _Validated in v5.0 (Phases 30-32): 12 points re-measured under the frozen v4.0 gate, 0 PASS / 0 FAIL / 6 INCONCLUSIVE (n=8) / 6 REFUSED (n=64, own control unlearnable, PREREG-03)._
+- [x] Pre-registered conditional relearning scope — _Validated in v5.0 (Phases 29, 33): committed before any point; admission read MOOT (`f48b738`), RELRN-06..09 ship as the named limitation._
+- [x] Relearning leg's MPS cost measured before the budget — _Validated in v5.0 (Phase 31): relearn arm 12.07 h measured, budget 22.98 h, stop line 37.77 h._
+- [x] v5.0-owned ledger rows (IN-07, TD-16-R1, P22-WARNING-4/5, TD-17-SUMMARY-FRONTMATTER) — _Handled in v5.0 (Phase 29): IN-07, TD-16-R1, TD-17 fixed (DEBT-01..03); P22-WARNING-4/5 re-recorded as a named limitation, zero code (DEBT-04)._
+
 ### Active
 
-<!-- Milestone v5.0: Replay-Bearing Adversarial Re-run and Relearning Validation — REQ-IDs land in REQUIREMENTS.md (appended below the v4.0 sections, never overwritten). -->
+<!-- Milestone v6.0: Robustness and Public Reproducibility of the v3.0–v5.0 Results — REQ-IDs land in REQUIREMENTS.md (appended below the v5.0 block, never overwritten). Scope proposed by Claude (claude.ai), adopted by Rafael. -->
 
-- [ ] Replay-bearing adversarial re-run: retrain the adversarial arm WITH replay and re-measure its 12 points under the frozen v4.0 gate, so condition (c) is tested against the ratio instead of the recipe; pin the arm's own σ=0 control before any `adv_*` admission (WR-05)
-- [ ] Pre-registered conditional scope, committed before any real point exists: every point the re-run admits gets RELRN-02..05 (cost-to-recovery curve, its qualification of the verdict, structural budget/seed enforcement, disjoint recovery fixture) — not a decision taken after seeing the admission
-- [ ] Measure the relearning leg's MPS cost with its own probe before the full v5.0 budget is committed — only the apparatus was ever proven (Phase 27, CPU), never its cost
-- [ ] Close the v5.0-owned ledger rows: IN-07, TD-16-R1, P22-WARNING-4/5, TD-17-SUMMARY-FRONTMATTER
+- [ ] Reproduce the Phase 19 verdict mechanically (CPU re-derivation, exact) and replicate k = 78 on MPS under a pre-registered tolerance (R1)
+- [ ] Ship a verifiable public deposit package that never redistributes PersonaChat (R2)
+- [ ] Re-test erasure selectivity across facts, orderings and seeds (E1), with M2's seed noise floor measured (E2)
+- [ ] Search a minimal DP-SGD recipe grid at large ε with selection disclosed (E3); run the one-run privacy audit only if its pre-computed ceiling can change the result (E4)
+- [ ] Re-score the instruments: rank at larger minted sets (E5) and instrument × context (E6)
 
 ### Out of Scope
 
@@ -484,4 +522,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Updated 2026-09-24 — milestone v5.0 opened (replay-bearing adversarial re-run + pre-registered conditional relearning).*
+*Updated 2026-10-01 — milestone v6.0 opened (robustness and public reproducibility of the v3.0–v5.0 results; scope proposed by Claude (claude.ai), adopted by Rafael).*
