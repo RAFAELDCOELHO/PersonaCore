@@ -1473,10 +1473,18 @@ proposer, and no E3/E4 threshold is locked without the research it rests on
 
   1. A v6.0 pre-registration module exists, ancestry-guarded in the `phase29_prereg.py` pattern: a
      CPU-only ancestry test proves its first-add commit precedes every v6.0 result record. It fixes
-     every front's rule, record paths and thresholds, and imports the closed pins (`erasure_gate`,
-     `phase19_erasure`, `mitigation_gate`, `mitigation_budget`, `phase18_extraction`,
-     `phase26_canary`) — never copies them; it fixes, once, the `seed_list` (1337 plus the new
-     seeds) that Phases 40 and 41 import. (PREREG-05)
+     the CORE — every v6.0 record path, every rule and threshold that does not depend on a v6.0
+     measurement, and a confirmation that the inherited pins, guards and values (F_Y, F_C, the
+     AUDIT-02 cut) still hold — plus a REGISTRY OF DEFERRED SLOTS: each threshold that does depend
+     on a later input is declared now with its name, owning phase, the rule that will derive it and
+     the input record it depends on, and is filled only by that phase's own ancestry-guarded
+     pre-registration, committed before any of that phase's records; a test reddens on an
+     undeclared slot, or on a slot filled outside its owning phase or by a different rule. It
+     imports the closed pins (`erasure_gate`, `phase19_erasure`, `mitigation_gate`,
+     `mitigation_budget`, `phase18_extraction`, `phase26_canary`) — never copies them; it fixes,
+     once, the `seed_list` (1337 plus the new seeds) that Phases 40 and 41 import. (PREREG-05;
+     reworded 2026-10-01 in discuss-phase 35 — the earlier "fixes every front's rule, record paths
+     and thresholds" contradicted Phases 37, 40 and 41, which derive their thresholds later)
 
   2. Every threshold has a written derivation committed before measurement and never changes after;
      a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C
