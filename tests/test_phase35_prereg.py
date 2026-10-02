@@ -1506,11 +1506,35 @@ def test_band_inputs_are_read_from_their_records(tmp_path, monkeypatch):
             "seed",
         ),
         ("float_seed", {(float(teaching[0]), _BAND_ORDERING): None}, records, {}, "int"),
-        ("value", dict.fromkeys(keys), records, {"value": dict.fromkeys(keys)}, "chosen value"),
+        ("value", dict.fromkeys(keys), records, {"value": dict.fromkeys(keys)}, "slot's keys"),
+        ("value_twice", dict.fromkeys(keys), records, {"value": (*keys, keys[0])}, "slot's keys"),
+        # re-review IN-02: a malformed band record is a _prove refusal, never a KeyError
+        ("no_gap", dict.fromkeys(keys), [{"seed": teaching[0], "ordering": "g"}], {}, "carrying"),
+        ("list_record", dict.fromkeys(keys), [[teaching[0]], records[1]], {}, "carrying"),
     ):
         with pytest.raises(SystemExit) as refused:
             _fill_band(tmp_path / name, monkeypatch, band, planted, **kwargs)
         assert expected in str(refused.value), (name, str(refused.value))
+    # re-review IN-04: the keys in another order are the same derivation value
+    reverse = _fill_band(
+        tmp_path / "reverse", monkeypatch, dict.fromkeys(keys), records, value=tuple(keys[::-1])
+    )
+    assert reverse == out
+    # re-review IN-02: a malformed Phase 40 noise-floor record
+    for name, noise in (("no_field", {"floor": 0.1}), ("list", [0.1])):
+        planted = {
+            **{f"results/phase41_band_inputs_{i}.json": r for i, r in enumerate(records)},
+            _NOISE: noise,
+        }
+        paths = _inputs(tmp_path / f"noise_{name}", monkeypatch, planted)
+        with pytest.raises(SystemExit) as refused:
+            phase35_prereg.fill(
+                "e1_condition_c_band_inputs",
+                band_inputs=dict.fromkeys(keys),
+                input_records=paths,
+                derivation=_measured(tuple(keys), paths),
+            )
+        assert "carrying" in str(refused.value), name
 
 
 # ERASE-07's NOT_REACHED outcome (Rafael's review, 2026-10-01).
@@ -1694,7 +1718,24 @@ def test_e1_floors_refuse_a_typed_floor_or_a_mismatched_record(tmp_path, monkeyp
     other = json.loads((_ROOT / _CAL_CORPUS).read_text(encoding="utf-8"))
     other["fact_id"] = "cal_planted_other"
     for name, floors, planted, expected in (
-        ("missing", dict.fromkeys(_target_keys(_ORDERING, seeds[0])), one, "without a"),
+        (
+            "missing",
+            dict.fromkeys(seeded),
+            [_calibration_payload((_ORDERING, seeds[0]), draws)],
+            "without a",
+        ),
+        (  # re-review WR-03: a seeded ordering keyed for one teaching seed only
+            "one_seed",
+            dict.fromkeys(_target_keys(_ORDERING, seeds[0])),
+            [_calibration_payload((_ORDERING, seeds[0]), draws)],
+            "needs every e1 teaching seed",
+        ),
+        (  # re-review IN-02: a malformed calibration record
+            "no_draws",
+            dict.fromkeys(keys),
+            [{k: v for k, v in one[0].items() if k != "draws"}],
+            "carrying",
+        ),
         ("duplicate", dict.fromkeys(keys), [*one, *one], "two calibration records"),
         (
             "orphan",
@@ -1981,6 +2022,17 @@ def test_design_slots_return_read_only_copies():
     with pytest.raises(TypeError):
         out["value"] = ""
     assert phase35_prereg._frozen_entry("x", _entry(1))["value"] == 1
+    # re-review IN-01: frozen at every depth, lists included
+    entry = _entry({"steps": ["a"], "parts": {"a": 1}})
+    out = phase35_prereg.fill("e6_decomposition_rule", decomposition=entry)
+    entry["value"]["steps"].append("b")
+    entry["value"]["parts"]["proposer"] = "planted"
+    assert out["value"]["steps"] == ("a",) and dict(out["value"]["parts"]) == {"a": 1}
+    with pytest.raises(TypeError):
+        out["value"]["parts"]["proposer"] = "planted"
+    with pytest.raises(AttributeError):
+        out["value"]["steps"].append("b")
+    assert phase35_prereg._deep_frozen([{"a": [1]}]) == ({"a": (1,)},)
 
 
 def test_every_declared_input_pattern_is_consumed_unless_optional(tmp_path, monkeypatch):
@@ -2018,11 +2070,18 @@ def test_grids_must_be_fill_results(tmp_path, monkeypatch):
     """Review IN-04: e1_stop and e3_recall_threshold refuse a hand-built grid with the right
     keys."""
     grid, _ = _fill_checkpoint_grid(tmp_path / "e1", monkeypatch)
-    assert isinstance(grid, phase35_prereg._Filled)
+    assert phase35_prereg._is_filled(grid)
     readings = _readings(_CHECKPOINTS[0], confirmed=(_CHECKPOINTS[0],))
     assert phase35_prereg.e1_stop(grid=grid, readings=readings)["judged"] is True
-    with pytest.raises(SystemExit):
-        phase35_prereg.e1_stop(grid=dict(grid), readings=readings)
+    # re-review WR-01: a copy, a hand-built proxy, or a mutation are all refused
+    with pytest.raises(TypeError):
+        grid["checkpoints"] = (1,)
+    assert not hasattr(grid, "_data")
+    hand = type(grid)(dict(grid))  # a MappingProxyType the rules never produced
+    assert not phase35_prereg._is_filled(hand)
+    for forged in (dict(grid), hand):
+        with pytest.raises(SystemExit):
+            phase35_prereg.e1_stop(grid=forged, readings=readings)
 
     seed = phase35_prereg.seed_list()[0]
     recipes = _others(4)
@@ -2036,6 +2095,12 @@ def test_grids_must_be_fill_results(tmp_path, monkeypatch):
         _fill_threshold(tmp_path / "hand", monkeypatch, dict(e3), controls)
     with pytest.raises(SystemExit):  # review WR-06: the derivation value is the grid's keys
         _fill_threshold(tmp_path / "paths", monkeypatch, e3, controls, value=tuple(controls))
+    reverse = _grid_keys(e3)[::-1]  # re-review IN-04: in any order
+    assert len(_fill_threshold(tmp_path / "rev", monkeypatch, e3, controls, value=reverse)) == 4
+    bad = {**controls, "results/phase42_control_0.json": {"seed": seed}}  # re-review IN-02
+    with pytest.raises(SystemExit) as refused:
+        _fill_threshold(tmp_path / "malformed", monkeypatch, e3, bad)
+    assert "carrying" in str(refused.value)
 
 
 @pytest.mark.parametrize("slot", sorted(_DESIGN_SLOTS))
@@ -2070,6 +2135,10 @@ def _scanned_sources(root):
     paths = [p for p in (root / "scripts").rglob("*.py") if p != prereg]
     paths += (root / "src").rglob("*.py")
     return sorted((p.relative_to(root).as_posix(), p.read_text(encoding="utf-8")) for p in paths)
+
+
+def _is_module(node):
+    return isinstance(node, ast.Name) and node.id == "phase35_prereg"
 
 
 def _reaches_slots(node):
@@ -2143,30 +2212,41 @@ def _slot_census_failures(sources):
                 failures.append(f"{where}: registry write to phase35_prereg.SLOTS")
             if isinstance(node, ast.Attribute) and node.attr.startswith("_rule_"):
                 failures.append(f"{where}: _rule_ reference .{node.attr}")
-            if isinstance(node, ast.Call) and _reaches_slots(node.func):
-                failures.append(f"{where}: registry call through phase35_prereg.SLOTS")
+            if _is_module(getattr(node, "value", None)) and isinstance(node, ast.Attribute):
+                if node.attr.startswith("_"):  # _SLOTS, _FILLED_GRIDS, _rule_*, ... (WR-02)
+                    failures.append(f"{where}: private access phase35_prereg.{node.attr}")
+            # Reads of the registry (.items(), ["input_records"], .index(...)) are fine (re-review
+            # IN-03); reaching a rule through it is not.
             if (
                 isinstance(node, ast.Subscript)
                 and _reaches_slots(node)
                 and isinstance(node.slice, ast.Constant)
                 and node.slice.value == "rule"
+            ) or (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "get"
+                and _reaches_slots(node.func.value)
+                and any(isinstance(a, ast.Constant) and a.value == "rule" for a in node.args)
             ):
                 failures.append(f"{where}: registry rule access phase35_prereg.SLOTS[...]['rule']")
-            if isinstance(node, ast.Call) and node.args:
-                func = getattr(node.func, "attr", getattr(node.func, "id", None))
-                first = node.args[0]
-                if (
-                    func == "getattr"
-                    and isinstance(first, ast.Name)
-                    and first.id == "phase35_prereg"
-                ):
-                    failures.append(f"{where}: dynamic access getattr(phase35_prereg, ...)")
-                if (
-                    func in ("import_module", "__import__")
-                    and isinstance(first, ast.Constant)
-                    and first.value == "phase35_prereg"
-                ):
-                    failures.append(f"{where}: dynamic import of phase35_prereg")
+            if isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr)) and _is_module(
+                node.value
+            ):
+                failures.append(f"{where}: alias: a name bound to the module phase35_prereg")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in ("getattr", "setattr", "delattr", "vars")
+                and node.args
+                and _is_module(node.args[0])
+            ):
+                failures.append(f"{where}: dynamic access {node.func.id}(phase35_prereg, ...)")
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if node.value == "phase35_prereg":  # importlib, __import__, sys.modules[...]
+                    failures.append(f"{where}: dynamic import of phase35_prereg by name")
+                elif node.value.startswith("_rule_"):
+                    failures.append(f"{where}: _rule_ reference by name {node.value!r}")
             if isinstance(node, ast.Import):
                 failures += [
                     f"{where}: alias: import phase35_prereg as {a.asname}"
@@ -2189,6 +2269,32 @@ def _slot_census_failures(sources):
     return failures
 
 
+def test_slot_census_lets_registry_reads_pass(tmp_path):
+    """Re-review IN-03: reading the registry is not reaching a rule."""
+    for line in (
+        "OWN = [s for s, v in phase35_prereg.SLOTS.items() if v['owner_phase'] == 41]",
+        "I = phase35_prereg.SLOTS['e2_S']['input_records'].index('results/phase36_budget.json')",
+        "R = phase35_prereg.SLOTS['e2_S']['input_records']",
+        "G = phase35_prereg.owner_prereg_glob('e2_S')",
+    ):
+        text = _planted(tmp_path, "", f"import phase35_prereg\n{line}\n", "read.py")
+        assert _slot_census_failures([("scripts/phase41_x_prereg.py", text)]) == [], line
+
+
+def test_registry_is_built_from_copies():
+    """Re-review WR-02: no module attribute holds the registry's source dicts, and SLOTS itself
+    takes no write, so nothing can change what fill dispatches."""
+    assert not hasattr(phase35_prereg, "_SLOTS")
+    rule = phase35_prereg.SLOTS["e2_S"]["rule"]
+    for write in (
+        lambda: phase35_prereg.SLOTS["e2_S"].__setitem__("rule", print),
+        lambda: phase35_prereg.SLOTS.__setitem__("e2_S", {}),
+    ):
+        with pytest.raises((TypeError, AttributeError)):
+            write()
+    assert phase35_prereg.SLOTS["e2_S"]["rule"] is rule
+
+
 def test_slot_census_scans_scripts_recursively(tmp_path):
     """Review WR-05: a file under scripts/<sub>/ matches owner_prereg_glob and is scanned."""
     (tmp_path / "scripts" / "sub").mkdir(parents=True)
@@ -2200,7 +2306,7 @@ def test_slot_census_scans_scripts_recursively(tmp_path):
     (tmp_path / PREREG).write_text("ignored = 1\n", encoding="utf-8")
     sources = _scanned_sources(tmp_path)
     assert [path for path, _ in sources] == ["scripts/sub/x.py"]
-    assert any("registry call" in f for f in _slot_census_failures(sources))
+    assert any("registry rule access" in f for f in _slot_census_failures(sources))
     assert fnmatch.fnmatch("scripts/phase40_sub/x_prereg.py", "scripts/phase40_*prereg.py")
 
 
@@ -2255,8 +2361,20 @@ def test_slot_census_reds_on_planted_owner_files(tmp_path):
         ("alias", [(p40, "from phase35_prereg import fill", 'E2_S = fill("e2_S", s=5)')]),
         # review WR-05: reaching a rule without fill, under any name, from any file.
         (
-            "registry call",
+            "registry rule access",
             [("scripts/phase37_driver.py", 'S = phase35_prereg.SLOTS["e2_S"]["rule"](s=5)')],
+        ),
+        ("registry rule access", [(p40, 'S = phase35_prereg.SLOTS["e2_S"].get("rule")(s=5)')]),
+        # re-review WR-02: the private registry, an alias by assignment, vars(), sys.modules
+        ("private access", [(p40, "S = phase35_prereg._SLOTS['e2_S']['rule'](s=5)")]),
+        ("private access", [(p40, "phase35_prereg._SLOTS['e2_S']['rule'] = print")]),
+        ("private access", [(p40, "G = phase35_prereg._filled({})")]),
+        ("alias", [(p40, "M = phase35_prereg", "S = M.SLOTS['e2_S']['rule'](s=5)")]),
+        ("dynamic access vars", [(p40, "S = vars(phase35_prereg)['fill']('e2_S', s=5)")]),
+        ("_rule_ reference by name", [(p40, "S = vars(phase35_prereg)['_rule_e2_S'](s=5)")]),
+        (
+            "dynamic import",
+            [(p40, "import sys", "S = sys.modules['phase35_prereg'].fill('e2_S', s=5)")],
         ),
         ("registry rule access", [(p40, 'R = phase35_prereg.SLOTS["e2_S"]["rule"]')]),
         ("getattr", [(p40, 'S = getattr(phase35_prereg, "fill")("e2_S", s=5)')]),
@@ -2608,9 +2726,18 @@ def _untested_functions(prereg_source, test_source):
     """Module-level defs of the prereg that the test source never CALLS (review IN-05: a bare
     mention, e.g. an ``is`` assert, is not a test). A ``_rule_<slot>`` counts as tested through a
     ``phase35_prereg.fill("<slot>", ...)`` call."""
-    calls = [n.func for n in ast.walk(ast.parse(test_source)) if isinstance(n, ast.Call)]
-    named = {f.id for f in calls if isinstance(f, ast.Name)}
-    named |= {f.attr for f in calls if isinstance(f, ast.Attribute)}
+    tree = ast.parse(test_source)
+    imported = {
+        alias.asname or alias.name
+        for n in ast.walk(tree)
+        if isinstance(n, ast.ImportFrom) and n.module == "phase35_prereg"
+        for alias in n.names
+    }
+    calls = [n.func for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    # re-review IN-05: `phase35_prereg.<def>(...)`, or a bare call of a name imported from it;
+    # never `anything.<def>(...)`.
+    named = {f.id for f in calls if isinstance(f, ast.Name) and f.id in imported}
+    named |= {f.attr for f in calls if isinstance(f, ast.Attribute) and _is_module(f.value)}
     named |= {"_rule_" + slot for slot, _ in _fill_calls(test_source) if slot is not None}
     defs = [n.name for n in ast.parse(prereg_source).body if isinstance(n, ast.FunctionDef)]
     return sorted(name for name in defs if name not in named)
@@ -2643,6 +2770,16 @@ def test_prereg_helpers_behave(monkeypatch):
     assert phase35_prereg._prove_entries() is None
     assert phase35_prereg._prove_slots() is None
     assert phase35_prereg._prove_derivation_value("x", _entry(1), 1) is None
+    made = phase35_prereg._filled({"a": 1})
+    assert phase35_prereg._is_filled(made) and not phase35_prereg._is_filled({"a": 1})
+    assert phase35_prereg._prove_record("p", {"a": 1, "b": 2}, ("a",)) is None
+    for bad in ([1], {"b": 2}):
+        with pytest.raises(SystemExit):
+            phase35_prereg._prove_record("p", bad, ("a",))
+    assert phase35_prereg._prove_keys_value("x", _entry([(2,), (1,)]), [(1,), (2,)]) is None
+    for bad in ([(1,)], [(1,), (1,), (2,)], {(1,): None, (2,): None}):
+        with pytest.raises(SystemExit):
+            phase35_prereg._prove_keys_value("x", _entry(bad), [(1,), (2,)])
     with pytest.raises(SystemExit):
         phase35_prereg._prove_derivation_value("x", _entry(1), 2)
     fronts = {f: 5.0 for f in phase35_prereg.V6_MPS_FRONTS}
@@ -2694,5 +2831,9 @@ def test_every_rule_has_a_cpu_test(tmp_path):
     assert _untested_functions(copied, mentioned) == ["planted_helper"]
     called = test_source + "\nphase35_prereg.planted_helper()\n"
     assert _untested_functions(copied, called) == []
+    other = test_source + "\nother.planted_helper()\n"  # re-review IN-05: not the module
+    assert _untested_functions(copied, other) == ["planted_helper"]
+    imported = test_source + "\nfrom phase35_prereg import planted_helper\nplanted_helper()\n"
+    assert _untested_functions(copied, imported) == []
 
     assert real.read_bytes() == before

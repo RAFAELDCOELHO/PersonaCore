@@ -60,10 +60,11 @@ tracked, every phase-O slot is filled.
 
 THE BUDGET-RECORD CONTRACT. Phase 36 publishes ``results/phase36_budget.json`` holding the
 ``_rule_v6_budget_and_stop_line`` output keys ``front_hours`` (keyed by ``V6_MPS_FRONTS``),
-``total_hours``, ``stop_line_hours`` and ``e2_seed_count`` (int, E2's seed count S, read by
-``e2_S``); every consumer re-applies the budget invariants to it (``_budget_record``). THE PHASE 40
-NOISE-FLOOR CONTRACT. ``results/phase40_noise_floor.json`` carries ``gap_noise_floor`` (finite >=
-0), the NOISE-02 training-seed gap noise floor. THE PHASE 41 BAND-INPUT CONTRACT. Each
+``total_hours``, ``stop_line_hours`` and ``e2_seed_count`` (int, E2's seed count S, CHOSEN in Phase
+36 and only read by ``e2_S``, 35-CONTEXT Addendum to D-15); every consumer re-applies the budget
+invariants to it (``_budget_record``). THE PHASE 40 NOISE-FLOOR CONTRACT.
+``results/phase40_noise_floor.json`` carries ``gap_noise_floor`` (finite >= 0), the NOISE-02
+training-seed gap noise floor. THE PHASE 41 BAND-INPUT CONTRACT. Each
 ``results/phase41_band_inputs_*.json`` carries ``seed`` (an ``e1_teaching_seeds()`` int),
 ``ordering`` (str) and ``control_gap`` (finite), one record per (seed, ordering). THE PHASE 42
 CONTROL-RECORD CONTRACT. Each ``results/phase42_control_*.json`` carries ``recipe`` = {lr, steps,
@@ -854,22 +855,43 @@ def _prove_finite(name, value):
     _prove(math.isfinite(value), f"{name} is {value!r}, not finite")
 
 
-class _Filled(collections.abc.Mapping):
-    """A read-only mapping that only this module's grid rules construct. ``e1_stop`` and
-    ``e3_recall_threshold`` accept a grid iff it is one, so a hand-built dict with the right keys
-    is refused (review IN-04)."""
+# Every grid the grid rules produced, kept alive so identity is meaningful. `e1_stop` and
+# `e3_recall_threshold` accept a grid iff it IS one of these (review IN-04, re-review WR-01): a
+# hand-built mapping, or a copy, is refused, and each grid is a MappingProxyType over a private
+# copy, so it cannot be rewritten after the fill.
+_FILLED_GRIDS = []
 
-    def __init__(self, data):
-        self._data = dict(data)
 
-    def __getitem__(self, key):
-        return self._data[key]
+def _filled(data):
+    grid = types.MappingProxyType(dict(data))
+    _FILLED_GRIDS.append(grid)
+    return grid
 
-    def __iter__(self):
-        return iter(self._data)
 
-    def __len__(self):
-        return len(self._data)
+def _is_filled(grid):
+    return any(grid is filled for filled in _FILLED_GRIDS)
+
+
+def _prove_record(path, record, fields):
+    """A consumed record is a mapping carrying ``fields``: a malformed record is a ``_prove``
+    refusal, never a KeyError or TypeError (re-review IN-02)."""
+    _prove(
+        isinstance(record, collections.abc.Mapping) and set(fields) <= set(record),
+        f"{path} must be a mapping carrying {sorted(fields)}",
+    )
+
+
+def _prove_keys_value(slot, derivation, keys):
+    """A key-valued slot's derivation value lists exactly its keys, once each, in ANY order
+    (re-review IN-04)."""
+    value = derivation["value"]
+    _prove(
+        isinstance(value, (tuple, list))
+        and len({repr(k) for k in value}) == len(value)
+        and sorted(map(repr, value)) == sorted(map(repr, keys)),
+        f"{slot}: the derivation's value {value!r} is not the slot's keys {tuple(keys)!r} "
+        "(any order, each once)",
+    )
 
 
 # `_consume_inputs`'s value for a slot whose value is READ from its records: the rule proves the
@@ -1061,8 +1083,7 @@ def e1_stop(*, grid, readings):
     nor as FAIL. Returns ``{"stop": <checkpoint> or NOT_REACHED, "judged": bool}``, ``judged``
     False exactly for NOT_REACHED. Malformed readings are refused."""
     _prove(
-        isinstance(grid, _Filled)
-        and set(grid) == {"checkpoints", "read_k", "confirm_k", "not_reached"},
+        _is_filled(grid) and set(grid) == {"checkpoints", "read_k", "confirm_k", "not_reached"},
         "grid must be the fill('e1_checkpoint_grid', ...) result",
     )
     checkpoints = grid["checkpoints"]
@@ -1100,15 +1121,21 @@ def e1_stop(*, grid, readings):
     return types.MappingProxyType({"stop": NOT_REACHED, "judged": False})
 
 
+def _deep_frozen(value):
+    """A read-only copy at every depth: mappings -> MappingProxyType, lists/tuples -> tuples."""
+    if isinstance(value, collections.abc.Mapping):
+        return types.MappingProxyType({k: _deep_frozen(v) for k, v in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_deep_frozen(v) for v in value)
+    return value
+
+
 def _frozen_entry(name, entry):
-    """A design slot's written entry, proved (D-14) and returned as a read-only copy, its value
-    copied and frozen too when it is a mapping, so neither the caller's later edits nor a holder
-    of the result can change it after the fill (review WR-04)."""
+    """A design slot's written entry, proved (D-14) and returned as a read-only copy at every
+    depth, so neither the caller's later edits nor a holder of the result can change it after the
+    fill (review WR-04, re-review IN-01)."""
     _prove_entry(name, entry)
-    frozen = dict(entry)
-    if isinstance(frozen["value"], collections.abc.Mapping):
-        frozen["value"] = types.MappingProxyType(dict(frozen["value"]))
-    return types.MappingProxyType(frozen)
+    return _deep_frozen(entry)
 
 
 # The 17 rules. Keyword-only; every refusal goes through _prove; every container returned is
@@ -1144,11 +1171,12 @@ def _rule_v6_budget_and_stop_line(
 
 
 def _rule_e2_S(*, input_records, derivation, s=None):
-    """D-06, NOISE-01: E2's seed count S, READ from the consumed budget record's ``e2_seed_count``
-    (review WR-03), never typed: the caller supplies no S, and a supplied S that differs from the
-    read one is refused. The re-validated record keeps S >= ENTRIES["e2_min_seeds"] (a spread
-    needs two seeds) and S <= len(seed_list()), a STOP because the seed list is never extended
-    (D-06). Derivation value: S as read."""
+    """D-06, NOISE-01: E2's seed count S. S is CHOSEN in Phase 36, inside the budget record's
+    ``e2_seed_count``, and checked there against D-06 (S <= len(seed_list()), a STOP: the list is
+    never extended) and ENTRIES["e2_min_seeds"] (a spread needs two seeds); this slot keeps owner
+    40 as a READ of that field (35-CONTEXT Addendum to D-15, Rafael 2026-10-01). The caller
+    supplies no S, and a supplied S that differs from the read one is refused; the consumed
+    record is re-validated (``_budget_record``). Derivation value: S as read."""
     if s is not None:
         _prove_count("s", s)
     records = _consume_inputs("e2_S", _READ, input_records, derivation)
@@ -1187,7 +1215,8 @@ def _rule_e1_checkpoint_grid(*, checkpoints, input_records, derivation):
     never enters the stopping rule and is recorded at every checkpoint. When no checkpoint
     confirms zero at K = FULL_FIDELITY_K the cell records ``NOT_REACHED`` (``e1_stop``): no (b) or
     (c) verdict at a stopping point, and it never counts as PASS nor as FAIL. Derivation value:
-    the checkpoints (caller-chosen). Returns a ``_Filled`` grid, the only kind ``e1_stop`` takes."""
+    the checkpoints (caller-chosen). Returns a registered grid (``_filled``), the only kind
+    ``e1_stop`` takes."""
     _prove(isinstance(checkpoints, tuple) and checkpoints, "checkpoints must be a non-empty tuple")
     for value in checkpoints:
         _prove_count("checkpoint", value)
@@ -1198,7 +1227,7 @@ def _rule_e1_checkpoint_grid(*, checkpoints, input_records, derivation):
     )
     records = _consume_inputs("e1_checkpoint_grid", checkpoints, input_records, derivation)
     _prove(_budget_front_hours(records, "E1") > 0, "the Phase 36 budget gives E1 no MPS hours")
-    return _Filled(
+    return _filled(
         {
             "checkpoints": checkpoints,
             "read_k": CURVE_K,
@@ -1210,7 +1239,8 @@ def _rule_e1_checkpoint_grid(*, checkpoints, input_records, derivation):
 
 def _prove_cells_cover_targets(name, floors):
     """Review WR-02: the keys are exactly e1_targets() x the (ordering[, seed]) cells that appear,
-    with one key length per ordering."""
+    with one key length per ordering; a seeded ordering covers BOTH e1_teaching_seeds(), as the
+    band does (ERASE-10, re-review WR-03)."""
     cells = {key[1:] for key in floors}
     _prove(
         set(floors) == {(target, *cell) for target in e1_targets() for cell in cells},
@@ -1220,6 +1250,11 @@ def _prove_cells_cover_targets(name, floors):
         _prove(
             len({len(cell) for cell in cells if cell[0] == ordering}) == 1,
             f"{name}: ordering {ordering!r} mixes seeded and unseeded keys",
+        )
+        seeds = {cell[1] for cell in cells if cell[0] == ordering and len(cell) == 2}
+        _prove(
+            not seeds or seeds == set(e1_teaching_seeds()),
+            f"{name}: seeded ordering {ordering!r} needs every e1 teaching seed (ERASE-10)",
         )
 
 
@@ -1256,8 +1291,9 @@ def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
     ``wilson_upper_bound(0, N_TARGET_QUESTIONS)``, 27 = 14 core_taught + 13 core_held_out per
     target, proved here; the test measures that every e1 target pools to those 27 questions.
     Coverage is per cell (review WR-02): every (ordering[, seed]) that appears has a key for
-    every e1 target, and one ordering never mixes seeded and unseeded keys. Derivation value: the
-    keys (the floors are computed). Returns (target, ordering[, seed]) -> {floor, floor_branch,
+    every e1 target, one ordering never mixes seeded and unseeded keys, and a seeded ordering
+    covers both e1 teaching seeds. Derivation value: the keys, in any order (the floors are
+    computed). Returns (target, ordering[, seed]) -> {floor, floor_branch,
     calibration_rate, calibration_successes, calibration_questions, calibration_record},
     read-only.
     """
@@ -1272,9 +1308,14 @@ def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
         if supplied is not None:
             _prove_finite(f"supplied floor {key!r}", supplied)
     _prove_cells_cover_targets("floors", floors)
-    records = _consume_inputs("e1_condition_a_floors", tuple(floors), input_records, derivation)
+    records = _consume_inputs("e1_condition_a_floors", _READ, input_records, derivation)
+    _prove_keys_value("e1_condition_a_floors", derivation, floors)
     calibrations = {p: r for p, r in records.items() if fnmatch.fnmatch(p, _CALIBRATION_RECORDS)}
     corpora = {p: r for p, r in records.items() if p not in calibrations}
+    for path, record in calibrations.items():
+        _prove_record(path, record, ("ordering", "seed", "family", "corpus", "draws"))
+    for path, corpus in corpora.items():
+        _prove_record(path, corpus, ("fact_id", "n_questions", "question_counts"))
 
     import phase18_extraction  # torch at import: lazy
     import phase19_erasure  # torch at import: lazy
@@ -1284,6 +1325,10 @@ def _rule_e1_condition_a_floors(*, floors, input_records, derivation):
         == erasure_gate.wilson_upper_bound(0, phase19_erasure.N_TARGET_QUESTIONS),
         "the reachability clamp no longer sits on the 27-question target denominator",
     )
+    for path, corpus in corpora.items():
+        _prove_record(
+            f"{path} question_counts", corpus["question_counts"], phase18_extraction.CORPUS_TIERS
+        )
     fact = phase19_erasure.select_calibration_fact()
     values = {fact.id: fact.value}
     path_of = {}
@@ -1386,8 +1431,8 @@ def _rule_e3_grid_subset(*, recipes, seed, input_records, derivation, fifth_reci
     byte-identical to tag v5.0) AND a fifth-recipe derivation cites the Phase 36 budget record
     (B4). Refused before any training when a noised sigma is at or below P22's onset for any T
     the grid uses (RECIPE-04). The v4.0 control record is an OPTIONAL declared input: consumed
-    exactly when reused. Derivation value: the recipes (caller-chosen). Returns a ``_Filled`` grid,
-    the only kind ``e3_recall_threshold`` takes."""
+    exactly when reused. Derivation value: the recipes (caller-chosen). Returns a registered grid
+    (``_filled``), the only kind ``e3_recall_threshold`` takes."""
     _prove(isinstance(recipes, tuple) and recipes, "recipes must be a non-empty tuple")
     for recipe in recipes:
         _prove(
@@ -1467,7 +1512,7 @@ def _rule_e3_grid_subset(*, recipes, seed, input_records, derivation, fifth_reci
         for recipe in plain
         for sigma in E3_SIGMAS
     )
-    return _Filled(
+    return _filled(
         {
             "cells": cells,
             "p22_onset_sigma": types.MappingProxyType(onsets),
@@ -1485,9 +1530,9 @@ def _rule_e3_recall_threshold(*, grid, input_records, derivation):
     key set must equal the grid's. The reused v4.0 record is consumed exactly when the grid reuses
     it, and admitted only byte-identical to tag v5.0 (an OPTIONAL declared input: consumed exactly
     when reused). Derivation value: the tuple of grid recipe keys (lr, steps, batch, seed) it
-    thresholds, in grid order (review WR-06; never the input paths)."""
+    thresholds, in any order (review WR-06; never the input paths)."""
     _prove(
-        isinstance(grid, _Filled) and set(grid) == {"cells", "p22_onset_sigma", "n", "unit"},
+        _is_filled(grid) and set(grid) == {"cells", "p22_onset_sigma", "n", "unit"},
         "grid must be the fill('e3_grid_subset', ...) result",
     )
     chosen = tuple(
@@ -1499,17 +1544,22 @@ def _rule_e3_recall_threshold(*, grid, input_records, derivation):
     wanted = set(chosen)
     records = _consume_inputs(
         "e3_recall_threshold",
-        chosen,
+        _READ,
         input_records,
         derivation,
         optional=(_V4_CONTROL_RECORD,),
     )
+    _prove_keys_value("e3_recall_threshold", derivation, chosen)
     keys = []
     for path, record in records.items():
         if path == _V4_CONTROL_RECORD:
             v4_record, recorded = _v4_control()
             key = (recorded["lr"], recorded["steps"], recorded["batch"], v4_record["seed"])
         else:
+            _prove_record(
+                path, record, ("recipe", "seed", "sigma", "taught_recall", "heldout_recall")
+            )
+            _prove_record(f"{path} recipe", record["recipe"], ("lr", "steps", "batch"))
             _prove(record["sigma"] == E3_SIGMAS[0], f"control {path} is not at sigma = 0")
             recipe = record["recipe"]
             key = (recipe["lr"], recipe["steps"], recipe["batch"], record["seed"])
@@ -1661,7 +1711,7 @@ def _rule_e1_condition_c_band_inputs(*, band_inputs, input_records, derivation):
     orphan or a missing record is refused); ``gap_noise_floor`` from
     ``results/phase40_noise_floor.json`` (``gap_noise_floor``, finite >= 0, NOISE-02). Both
     declared patterns must be consumed and named in the derivation's source (``_consume_inputs``).
-    Derivation value: the keys.
+    Derivation value: the keys, in any order (``_prove_keys_value``).
     """
     _prove(
         isinstance(band_inputs, collections.abc.Mapping) and band_inputs,
@@ -1686,10 +1736,10 @@ def _rule_e1_condition_c_band_inputs(*, band_inputs, input_records, derivation):
         set(band_inputs) == {(seed, o) for seed in teaching for o in orderings},
         "every ordering needs a band for every e1 teaching seed",
     )
-    records = _consume_inputs(
-        "e1_condition_c_band_inputs", tuple(band_inputs), input_records, derivation
-    )
+    records = _consume_inputs("e1_condition_c_band_inputs", _READ, input_records, derivation)
+    _prove_keys_value("e1_condition_c_band_inputs", derivation, band_inputs)
     noise = records[_NOISE_FLOOR_RECORD]
+    _prove_record(_NOISE_FLOOR_RECORD, noise, ("gap_noise_floor",))
     gap_noise_floor = noise["gap_noise_floor"]
     _prove_finite("gap_noise_floor", gap_noise_floor)
     _prove(gap_noise_floor >= 0, "the Phase 40 gap noise floor is negative")
@@ -1697,6 +1747,7 @@ def _rule_e1_condition_c_band_inputs(*, band_inputs, input_records, derivation):
     for path, record in records.items():
         if path == _NOISE_FLOOR_RECORD:
             continue
+        _prove_record(path, record, ("seed", "ordering", "control_gap"))
         _prove_count(f"{path} seed", record["seed"])
         key = (record["seed"], record["ordering"])
         _prove(key not in control, f"two band-input records for (seed, ordering) {key!r}")
@@ -1820,9 +1871,12 @@ _SLOTS = {
     },
 }
 
+# Built from COPIES and the build dict deleted: nothing outside can change what `fill`
+# dispatches by writing into the registry's source (re-review WR-02).
 SLOTS = types.MappingProxyType(
-    {name: types.MappingProxyType(slot) for name, slot in _SLOTS.items()}
+    {name: types.MappingProxyType(dict(slot)) for name, slot in _SLOTS.items()}
 )
+del _SLOTS
 
 
 def fill(slot, **inputs):
