@@ -371,6 +371,9 @@ def run_front(front, *, heartbeat_path, ledger_path):
         "would add an end line whose seconds the write-once record cannot carry (CR-01). A "
         "correction is a dated continuation",
     )
+    # WR-02: no run sidecar means a fresh attempt (stages never resume), so a crashed attempt's
+    # session owns none of the seconds this attempt prices: start a fresh sessions list.
+    sessions_sidecar(front).unlink(missing_ok=True)
     record_session(front)
     rid = phase36_ledger.run_id(36, "probes", front)
     phase36_ledger.append("start", run_id=rid, phase=36, front="probes", ledger_path=ledger_path)

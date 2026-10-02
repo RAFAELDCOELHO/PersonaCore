@@ -289,6 +289,30 @@ def test_run_front_crash_leaves_an_open_start(tmp_path, monkeypatch):
     assert not probe.run_sidecar("e5").exists()
 
 
+def test_a_crashed_attempts_session_never_poisons_a_clean_rerun(tmp_path, monkeypatch):
+    """WR-02: a crashed attempt at a pre-fix sha leaves its session in the sidecar; stages never
+    resume, so the clean rerun at HEAD owns every priced second and emits without refusing."""
+
+    def crash(state):
+        raise RuntimeError("stage died")
+
+    paths = _planted(tmp_path, monkeypatch, crash)
+    with pytest.raises(RuntimeError):
+        probe.run_front("e5", **paths)
+    crashed = [{"git_sha": _pre_fix_sha(), "started_utc": "2026-10-01T00:00:00+00:00"}]
+    probe.sessions_sidecar("e5").write_text(json.dumps(crashed), encoding="utf-8")
+    phase36_ledger.reconcile(
+        ledger_path=paths["ledger_path"], heartbeat_path=paths["heartbeat_path"]
+    )
+    monkeypatch.setitem(probe.STAGES, "e5", _fake_stage)
+    probe.run_front("e5", **paths)
+    out = tmp_path / "out" / "record.json"
+    probe.emit("e5", out_path=out)
+    assert out.exists()
+    sessions = json.loads(probe.sessions_sidecar("e5").read_text(encoding="utf-8"))
+    assert [s["git_sha"] for s in sessions] == [_head()]
+
+
 def test_run_front_beats_before_the_thread(tmp_path, monkeypatch):
     """B1: the 60-s thread first beats after wait(60); a front dying at once still has a beat."""
 
