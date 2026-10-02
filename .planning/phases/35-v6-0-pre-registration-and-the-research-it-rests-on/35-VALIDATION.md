@@ -87,11 +87,11 @@ All phase behaviors have automated verification.
 - [x] Feedback latency < 60s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** signed off 2026-10-01 (35-05, after Rafael's review: approved with corrections f13ad62 and d850d0c; SC1 hand-note 7275ba1).
+**Approval:** signed off 2026-10-01 on the FINAL commit `bbcec95` (re-signed at Rafael's request; the first sign-off at `9dd04eb` was against the suite at `7275ba1`, before the code-review fixes `1e1e1c5` and `3805beb`). Review history: Rafael's corrections `f13ad62`, `d850d0c`; SC1 hand-note `7275ba1`; code review `b2684bc` (1 blocker / 6 warnings / 5 info, all reproduced) fixed in `1e1e1c5`; re-review `0fb5ad2` (4 warnings / 5 info, all reproduced; WR-04 ruled by Rafael, CONTEXT addendum `14a7b7f`) fixed in `3805beb`; short re-review `bbcec95` clean under Rafael's stopping rule (0 blocking, 9 known limitations recorded in `35-REVIEW-FIX.md`).
 
 ---
 
-## Tests per selector (collected at 7275ba1, `tests/test_phase35_prereg.py`, 79 tests, 0 skipped)
+## Tests per selector (collected at `bbcec95`, `tests/test_phase35_prereg.py`, 88 tests, 0 skipped)
 
 | Selector | Tests |
 |----------|-------|
@@ -103,7 +103,7 @@ All phase behaviors have automated verification.
 | `-k e1_targets` | `test_e1_targets_are_the_13_of_13_rows`, `test_e1_targets_pool_to_the_27_question_target_denominator` |
 | `-k audit02` | `test_audit02_cut_is_read_from_the_canary_record` |
 | `-k r1a` | `test_r1a_assertions_rederive_from_the_erased_record`, `test_r1a_margin_is_the_noise_floor_record_read` |
-| `-k slot` | `test_every_slot_input_is_a_v6_path_or_a_v5_record`, `test_slot_budget_halts_above_the_ceiling`, `test_slot_census_is_green_on_the_real_tree`, `test_slot_census_reds_on_planted_owner_files`, `test_slot_d04_deferred_slots_stay_with_their_phases`, `test_slot_design_entries_refuse_a_proposer`, `test_slot_e1_condition_b_margin_is_the_core_read`, `test_slot_e1_rules`, `test_slot_e5_e6_set_sizes_and_entry_subset`, `test_slot_fill_dispatches_only_the_declared_rule`, `test_slot_fill_refuses_an_undeclared_or_non_string_slot`, `test_slot_measured_rules_consume_their_inputs`, `test_slot_ordering_every_commit_refuses_the_real_repo`, `test_slot_ordering_is_green_on_the_real_repo`, `test_slot_ordering_reds_on_a_planted_repo`, `test_slot_registry_declares_the_seventeen_slots` |
+| `-k slot` | `test_design_slots_return_read_only_copies`, `test_every_slot_input_is_a_v6_path_or_a_v5_record`, `test_slot_budget_halts_above_the_ceiling`, `test_slot_census_is_green_on_the_real_tree`, `test_slot_census_lets_registry_reads_pass`, `test_slot_census_reds_on_planted_owner_files`, `test_slot_census_scans_scripts_recursively`, `test_slot_d04_deferred_slots_stay_with_their_phases`, `test_slot_design_entries_refuse_a_proposer`, `test_slot_e1_condition_b_margin_is_the_core_read`, `test_slot_e1_rules`, `test_slot_e5_e6_set_sizes_and_entry_subset`, `test_slot_fill_dispatches_only_the_declared_rule`, `test_slot_fill_refuses_an_undeclared_or_non_string_slot`, `test_slot_measured_rules_consume_their_inputs`, `test_slot_ordering_every_commit_refuses_the_real_repo`, `test_slot_ordering_is_green_on_the_real_repo`, `test_slot_ordering_reds_on_a_planted_repo`, `test_slot_registry_declares_the_seventeen_slots` |
 | `-k e2_S or e3_grid` | `test_e2_S_refuses_more_seeds_than_the_list`, `test_e3_grid_is_four_recipes_by_three_sigmas`, `test_e3_grid_refuses_a_fifth_recipe_without_a_reused_control`, `test_e3_grid_refuses_a_p22_crossing`, `test_e3_grid_reuses_the_v4_control_only_when_byte_identical_to_v5` |
 | `-k entries` | `test_a2_corpus_entries_are_the_216_a2_prompts`, `test_entries_bind_f_y_f_c_and_delta_by_attribute`, `test_entries_f_y_f_c_equal_their_v4_tag_values`, `test_entries_have_exactly_the_four_fields`, `test_entries_label_f_y_and_f_c_as_preferences`, `test_entries_refuse_an_unknown_kind_or_missing_field`, `test_slot_design_entries_refuse_a_proposer` |
 | `-k no_proposer` | `test_no_proposer_or_adopted_by_in_any_entry` |
@@ -114,11 +114,11 @@ All phase behaviors have automated verification.
 
 ---
 
-## Phase Gate Result
+## Phase Gate Result (final, `bbcec95`)
 
-- Full suite on the committed, clean tree at `7275ba1` (filtered `git status --porcelain` empty; only the harness file `.claude/scheduled_tasks.lock` shown as ` D`): `.venv/bin/pytest -q -p no:cacheprovider` → **3478 passed, 4 skipped, 0 failed** in 2363.73 s (39:23), `EXIT=0`.
-- Skip comparison: **4 skipped = the last green run's 4** (v5.0 close, b8b6335: 3311 passed / 4 skipped / 0 failed). Phase 35 adds zero skips; `tests/test_phase25_venue.py` has no commit in this phase (`git log 4d49ba5^..HEAD -- tests/test_phase25_venue.py` empty).
-- Passed delta 3311 → 3478 (+167): 79 are `tests/test_phase35_prereg.py`; the remaining 88 (by subtraction, not separately collected) come from tests added between b8b6335 and the phase start 4d49ba5 by the post-v5.0 paper / k* commits (9 test files changed in that range).
+- Full suite on the committed, clean tree at `bbcec95` (filtered `git status --porcelain` empty; only the harness file `.claude/scheduled_tasks.lock` shown as ` D`): `.venv/bin/pytest -q -p no:cacheprovider` → **3487 passed, 4 skipped, 0 failed** in 2358.13 s (39:18), `EXIT=0`.
+- Skip comparison: **4 skipped = the last green run's 4** (v5.0 close, b8b6335: 3311 / 4 / 0; and the first Phase 35 gate at 7275ba1: 3478 / 4 / 0). Phase 35 adds zero skips; `tests/test_phase25_venue.py` has no commit in this phase.
+- Passed delta: 3478 → 3487 (+9) is `tests/test_phase35_prereg.py` growing 79 → 88 in the review fixes. Since b8b6335 (+176): 88 are this file; the other 88 (by subtraction) come from the post-v5.0 paper / k* commits between b8b6335 and the phase start 4d49ba5.
 - No v6.0 record exists: `git ls-files 'results/phase3[5-9]_*' 'results/phase4[0-5]_*'` and `find results -name 'phase3[5-9]_*' -o -name 'phase4[0-5]_*'` both print nothing, so every Phase 35 commit to `scripts/phase35_prereg.py` precedes every v6.0 record.
 - `.venv/bin/python scripts/phase28_report.py check` → exit 0; `.venv/bin/python scripts/phase34_report.py check` → exit 0.
 - `ruff check .` / `ruff format --check .` → clean.
