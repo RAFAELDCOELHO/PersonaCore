@@ -1435,3 +1435,275 @@ def test_e5_readings_are_never_bound_into_the_record():
         n for n in ast.walk(stage) if isinstance(n, ast.Delete) and "probed" in ast.unparse(n)
     ]
     assert deleted
+
+
+# =================================================================================================
+# Plan 36-04 Task 3 — E5 and E6 live on CPU: main -> run_all -> run_front -> stage -> real emit
+# =================================================================================================
+
+
+def _e5_e6_live_fixture(root):
+    """ONE CPU run of E5 then E6 through main(), then the REAL emit of both. Every patch is undone.
+
+    DOCUMENTED SUBSTITUTION: ``probe.adapted_model`` is a stand-in bound against the real
+    signature. It runs the REAL ``prove_published_adapter`` on a fixture adapter and returns the
+    fixture base with the real tokenizer and forbid mask, because CI has no persona_adapter.pt and
+    the real 78 components address a full-size adapter the fixture base cannot carry; the ablation
+    route is exercised by the MPS run and by Phase 19's own tests. Every other call is REAL:
+    build_unadapted_base, probe_guessability, exact_match_clean, reference_set_for,
+    value_span_nll_mean, assert_no_value_in_prompt and draw_all through DrawTimer.
+    """
+    import phase14_factset
+    import phase14_factset_gate
+    import phase14_recall
+    import phase16_persistence
+    import phase17_persona_gate
+    import phase19_erasure
+
+    from personacore.checkpoint import export_slim
+    from personacore.config import ModelConfig
+    from personacore.tokenizer import from_json
+    from test_phase22_wiring import _e2e_env
+
+    strays_before = _real_probe36_strays()
+    # B1: from the committed JSON alone, before any patch — never from the gitignored .pt.
+    real_components = probe.e1_components()
+    adapter_signature = inspect.signature(probe.adapted_model)
+    log = []
+    spies = {"guess": [], "match": [], "nll": [], "adapter": [], "hashed": []}
+    heartbeat = root / "heartbeat.jsonl"
+    ledger = root / "ledger" / "v6_mps_ledger.jsonl"
+    buf = io.StringIO()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(phase25_run, "_DEVICE", "cpu")
+        _e2e_env(root, mp)
+        slim = root / "convbase_slim.pt"
+        export_slim(root / "convbase.pt", slim)
+        mp.setattr(phase14_recall, "CONVBASE_SLIM", slim)
+        mp.setattr(phase17_persona_gate, "CONVBASE_SLIM", slim)
+        # The SHAPE is scaled, not the instrument: generation budgets cut to 4 tokens.
+        mp.setattr(phase14_recall, "RECALL_MAX_NEW_TOKENS", 4)
+        mp.setattr(phase14_factset_gate, "PROBE_MAX_NEW_TOKENS", 4)
+        mp.setattr(probe, "_ROOT", root)
+        # W1: this module-scoped fixture runs before the autouse clean_tree patch applies.
+        mp.setattr(probe, "refuse_if_dirty", lambda **kw: "")
+        mp.setattr(phase25_run, "disk_precheck", lambda target=None: None)
+        # Redirects of gitignored inputs (absent on CI; never a skipif — the ubuntu skip pin):
+        # checkpoints/persona_adapter.pt -> a fixture adapter, and the published sha -> its sha;
+        # checkpoints/convbase_slim.pt -> the fixture slim base above; data/probe36_e1_run.json
+        # (the E1 sidecar E6's beside reads) -> a planted numbers-only sidecar under root.
+        adapter = root / "checkpoints" / "fixture_adapter.pt"
+        adapter.write_bytes(b"fixture adapter bytes")
+        sha = hashlib.sha256(adapter.read_bytes()).hexdigest()
+        mp.setattr(phase14_recall, "ADAPTER_PATH", adapter)
+        mp.setattr(probe, "published_adapter_sha256", lambda: sha)
+        mp.setattr(probe, "e1_components", lambda: real_components)
+        real_sha256 = probe._sha256
+        mp.setattr(
+            probe,
+            "_sha256",
+            lambda path: spies["hashed"].append(pathlib.Path(path)) or real_sha256(path),
+        )
+
+        def stand_in(*args, **kwargs):
+            arguments = adapter_signature.bind(*args, **kwargs).arguments
+            assert arguments["k"] in (0, len(real_components))
+            spies["adapter"].append(arguments["k"])
+            probe.prove_published_adapter()  # the real adapted_model's first line
+            model, _cfg, _ckpt = phase17_persona_gate.build_unadapted_base(arguments["device"])
+            tok = from_json(phase14_recall.TOKENIZER_PATH)
+            forbid = phase16_persistence.resolve_forbid(tok, ModelConfig.vocab_size)[0]
+            return model, tok, forbid
+
+        mp.setattr(probe, "adapted_model", stand_in)
+        # The fixture base has RANDOM weights, so it emits lone UTF-8 continuation-byte tokens
+        # that the real instrument's strict tok.decode (phase14_factset_gate._probe) refuses; the
+        # real base decoded all 416 published completions. The fixture mask also forbids every id
+        # whose standalone decode fails, so any sampled sequence decodes. Fixture-only.
+        real_forbid = phase16_persistence.resolve_forbid
+
+        def fixture_forbid(tok, vocab_size):
+            mask, digest = real_forbid(tok, vocab_size)
+            mask = mask.clone()
+            for idx in (~mask[0]).nonzero().flatten().tolist():
+                try:
+                    tok.decode([idx])
+                except UnicodeDecodeError:
+                    mask[0, idx] = True
+            return mask, digest
+
+        mp.setattr(phase16_persistence, "resolve_forbid", fixture_forbid)
+
+        def forward(module, name, on_call):
+            real = getattr(module, name)
+
+            def spy(*args, **kwargs):
+                on_call(*args, **kwargs)
+                return real(*args, **kwargs)
+
+            mp.setattr(module, name, spy)
+
+        forward(
+            phase14_recall,
+            "assert_no_value_in_prompt",
+            lambda tok, question, values, *, prompt_ids=None: log.append(
+                ("assert", list(prompt_ids))
+            ),
+        )
+        forward(
+            phase14_recall,
+            "draw_all",
+            lambda model, tok, prompt_ids, *a, **kw: log.append(("draw", list(prompt_ids))),
+        )
+        forward(
+            phase14_factset_gate, "probe_guessability", lambda *a, **kw: spies["guess"].append(1)
+        )
+        forward(phase14_factset, "exact_match_clean", lambda t, v: spies["match"].append(v))
+        forward(phase19_erasure, "value_span_nll_mean", lambda *a, **kw: spies["nll"].append(1))
+        _planted_e1_sidecar()
+        argv = ["run", "--heartbeat", str(heartbeat), "--ledger", str(ledger)]
+        argv += ["--front", "e5", "e6"]
+        with contextlib.redirect_stdout(buf):
+            assert probe.main(argv) == 0
+        sidecars = {
+            f: json.loads(probe.run_sidecar(f).read_text(encoding="utf-8")) for f in ("e5", "e6")
+        }
+        records = {}
+        for front in ("e5", "e6"):
+            out = root / "emitted" / f"phase36_probe_{front}.json"
+            probe.emit(front, out_path=out)  # the REAL _emit_target -> _write_record (W10)
+            records[front] = json.loads(out.read_text(encoding="utf-8"))
+    return {
+        "root": root,
+        "sidecars": sidecars,
+        "records": records,
+        "log": log,
+        "spies": spies,
+        "strays": (strays_before, _real_probe36_strays()),
+        "stdout": buf.getvalue(),
+        "ledger": ledger,
+        "components": real_components,
+    }
+
+
+@pytest.fixture(scope="module")
+def e5_e6_live(tmp_path_factory):
+    return _e5_e6_live_fixture(tmp_path_factory.mktemp("e5_e6_live"))
+
+
+def test_live_e5_e6_reach_every_instrument(e5_e6_live):
+    import phase17_persona_facts
+    import phase17_personas
+    import phase18_extraction
+
+    spies, slots = e5_e6_live["spies"], phase17_personas.CORE_SLOTS
+    k78 = len(e5_e6_live["components"])
+    assert spies["adapter"] == [0, k78, k78]  # E5 scoring k = 0 and k = 78, then E6 at k = 78
+    assert len(spies["guess"]) == len(slots)
+    published = [f.value for facts in phase17_persona_facts.PERSONA_FACTS.values() for f in facts]
+    anchors = [f.value for f in phase17_persona_facts.PERSONA_FACTS[phase17_personas.PERSONAS[0]]]
+    # probe_guessability calls exact_match_clean once itself per slot, on that slot's anchor.
+    assert sorted(spies["match"]) == sorted(published + anchors)
+    sizes = [len(phase18_extraction.reference_set_for(s)) for s in slots]
+    assert len(spies["nll"]) == 2 * sum(sizes)
+
+
+def test_live_e6_asserts_each_anchor_before_its_draw(e5_e6_live):
+    import phase14_factset
+
+    log, slots = e5_e6_live["log"], phase14_factset.LOCKED_FACTS
+    assert [kind for kind, _ids in log] == ["assert", "draw"] * len(slots)
+    for i in range(len(slots)):
+        assert log[2 * i][1] == log[2 * i + 1][1]
+    stages = e5_e6_live["sidecars"]["e6"]["stages"]
+    assert stages["draws"] == len(slots) * phase36_prereg.phase35_prereg.FULL_FIDELITY_K
+    assert len(stages["per_slot_draw_seconds_mean"]) == len(slots)
+
+
+def test_live_e5_timed_every_slot_and_every_match(e5_e6_live):
+    import phase17_personas
+
+    clearance = e5_e6_live["sidecars"]["e5"]["stages"]["clearance"]
+    assert len(clearance["per_slot_seconds"]) == len(phase17_personas.CORE_SLOTS)
+    assert clearance["candidates_matched"] == clearance["match_seconds_spread"]["n"]
+    assert clearance["candidates_matched"] == 3 * len(phase17_personas.CORE_SLOTS)  # 24 values
+    assert all(s > 0 for s in clearance["per_slot_seconds"])
+    assert e5_e6_live["sidecars"]["e5"]["reused"] == {"e5": False}
+
+
+def test_live_e5_e6_records_pass_the_gate_with_provenance(e5_e6_live):
+    for front, record in e5_e6_live["records"].items():
+        probe.prove_no_reading(record)
+        assert record["front"] == front and record["gates_nothing"] is True
+        assert record["provenance"]["run"]["device"] == "cpu"
+        assert set(record["provenance"]["module_sha256"]) == set(probe.PINNED_MODULES)
+    beside = e5_e6_live["records"]["e6"]["a2_context_from_e1"]
+    assert beside == {
+        "a2_context_question_k48_seconds_high": 4.0,
+        "path": "data/probe36_e1_run.json",
+    }
+    assert e5_e6_live["records"]["e5"]["repetitions"] == e5_e6_live["records"]["e6"]["repetitions"]
+
+
+def test_live_e5_e6_stdout_holds_no_reading(e5_e6_live):
+    text = e5_e6_live["stdout"]
+    for front in ("e5", "e6"):  # not blind: run_front's own lines were captured
+        assert re.search(rf"^\[phase36_probe\] {front} \d+\.\d s$", text, re.MULTILINE), text
+    for word in ("clean", "hits", "per_fact"):
+        assert word not in text, text
+    assert not re.search(r"\d+/\d+ = ", text), text
+
+
+def test_live_e5_e6_ledger(e5_e6_live):
+    lines = phase36_ledger.read_ledger(e5_e6_live["ledger"])
+    expected = []
+    for front in ("e5", "e6"):
+        rid = phase36_ledger.run_id(36, "probes", front)
+        expected += [("start", rid, None), ("end", rid, phase36_prereg.probe_record(front))]
+    assert [(x["event"], x["run_id"], x.get("record")) for x in lines] == expected
+
+
+def test_live_e5_e6_writes_nothing_in_the_real_tree(e5_e6_live):
+    before, after = e5_e6_live["strays"]
+    assert before == after
+    assert not any((e5_e6_live["root"] / "results").iterdir())
+
+
+def test_live_e5_e6_never_hashed_the_gitignored_adapter(e5_e6_live):
+    hashed = e5_e6_live["spies"]["hashed"]
+    assert e5_e6_live["root"] / "checkpoints" / "fixture_adapter.pt" in hashed  # non-vacuous
+    assert not [p for p in hashed if p.is_relative_to(probe._GIT_ROOT / "checkpoints")]
+
+
+# =================================================================================================
+# Plan 36-04 Task 3 — the unattended LaunchAgent (D-16)
+# =================================================================================================
+
+
+def test_plist_mirrors_the_phase31_probe_agent():
+    import plistlib
+
+    ours = plistlib.loads((_ROOT / "artifacts/com.personacore.phase36.probe.plist").read_bytes())
+    phase31 = plistlib.loads((_ROOT / "artifacts/com.personacore.phase31.probe.plist").read_bytes())
+    assert ours["Label"] == "com.personacore.phase36.probe"
+    assert ours["KeepAlive"] is False and ours["RunAtLoad"] is False
+    args, phase31_args = ours["ProgramArguments"], phase31["ProgramArguments"]
+    assert args[:3] == phase31_args[:3] and args[:2] == ["/usr/bin/caffeinate", "-dims"]
+    assert args[2].endswith("/.venv/bin/python")
+    assert args[3].endswith("scripts/phase36_probe.py") and args[4] == "run"
+    # R-2: a suffix comparison, so the assertion is host-independent (CI's root is elsewhere).
+    expected = phase36_ledger.HEARTBEAT_PATH.relative_to(_ROOT).parts
+    heartbeat = pathlib.Path(args[args.index("--heartbeat") + 1])
+    assert heartbeat.parts[-len(expected) :] == expected
+    assert args == [*args[:5], "--heartbeat", str(heartbeat)]  # runs every front in RUN_ORDER
+    assert ours["WorkingDirectory"] == phase31["WorkingDirectory"]
+    for key in ("StandardOutPath", "StandardErrorPath"):
+        assert "/logs/" in ours[key] and ours[key] != phase31[key]
+    assert ours["StandardOutPath"].endswith("logs/phase36_probe.out")
+    assert ours["StandardErrorPath"].endswith("logs/phase36_probe.err")
+    assert ours["EnvironmentVariables"] == phase31["EnvironmentVariables"]
+    assert ours["EnvironmentVariables"]["PERSONACORE_SWEEP_ACTIVE"] == "1"
+    assert ours["ProcessType"] == phase31["ProcessType"]
+    # main() parses exactly these arguments into a run over the default RUN_ORDER.
+    parsed = probe.build_parser().parse_args(args[4:])
+    assert parsed.mode == "run" and tuple(parsed.front) == probe.RUN_ORDER
