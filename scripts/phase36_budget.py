@@ -375,13 +375,8 @@ def unit_prices(probes, historical):
     e3_runs = (e3["t_step_budget"], e3["t_max_steps"])
     score = e3["t_step_budget"]
     adapters = e5["scoring"]["adapters"]
+    # WR-01: priced from the E1 record (authoritative); E6's copy is context, surfaced by derive.
     a2_question = max(statistics.fmean(r["per_question_k48_seconds"]) for r in runs)
-    beside = probes["e6"]["a2_context_from_e1"]["a2_context_question_k48_seconds_high"]
-    _prove(
-        beside == a2_question,
-        f"the E6 record's A2-context unit {beside} is not the E1 record's {a2_question}: E6 was "
-        "emitted beside a different E1 run",
-    )
     m2 = max(r["outer_seconds"] for r in reps)
     prices = {
         "a2_k48_high": max(totals),
@@ -749,6 +744,10 @@ def derive(
     r1b_cut = _apply_cuts(caps, cuts)
 
     seconds = {"probes": probes_spent_seconds, **_front_seconds(prices, caps, r1b_cut)}
+    # WR-01: E6 (emitted first, write-once) copied E1's sidecar unit; an E1 re-probe after it
+    # leaves the copy stale forever. The price is E1's; a stale copy is shown to Rafael.
+    beside = probes["e6"]["a2_context_from_e1"]["a2_context_question_k48_seconds_high"]
+    a2_question = prices["a2_question_k48_high"]
     front_hours = {f: seconds[f] / 3600 for f in phase35_prereg.V6_MPS_FRONTS}
     total = math.fsum(front_hours.values())
     fits = total <= CEILING
@@ -769,6 +768,9 @@ def derive(
         "overflow_hours": None if fits else total - CEILING,
         "cut_table": [] if fits else cut_table(prices, caps, front_hours, total),
         "formula": FORMULA,
+        "a2_context_mismatch": (
+            None if beside == a2_question else {"e6_record": beside, "e1_record": a2_question}
+        ),
     }
 
 
@@ -983,6 +985,8 @@ def dry(ruling_path=None):
     _show("total_hours", derived["total_hours"])
     _show("stop_line_hours", derived["stop_line_hours"])
     _show("e2_seed_count", derived["e2_seed_count"])
+    if derived["a2_context_mismatch"] is not None:
+        _show("a2_context_mismatch", derived["a2_context_mismatch"])
     for text in SURFACED:
         _show("surfaced for Rafael", text)
     for name, pair in RULING_ALTERNATIVES.items():

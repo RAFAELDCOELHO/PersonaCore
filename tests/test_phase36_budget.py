@@ -320,10 +320,22 @@ def test_derive_unit_prices_and_the_e4_point(planted):
     assert real["e1_ordering_seconds"] == 60 * 6.959359816710154
 
 
-def test_derive_refuses_an_e6_record_beside_another_e1(planted):
+def test_derive_prices_e1_and_surfaces_an_e6_record_beside_another_e1(planted, monkeypatch, capsys):
+    """WR-01: E6 is emitted (write-once) before E1, so an E1 re-probe after E6 is committed leaves
+    E6's copy stale forever. The budget prices the E1 record (authoritative) and surfaces the
+    mismatch for Rafael rather than refusing."""
     records = copy.deepcopy(planted)
     records["e6"]["a2_context_from_e1"]["a2_context_question_k48_seconds_high"] = 2015.0
-    with pytest.raises(SystemExit, match="different E1 run"):
+    out = _derive(records)
+    assert _derive(planted)["a2_context_mismatch"] is None
+    assert out["a2_context_mismatch"] == {"e6_record": 2015.0, "e1_record": 2016.0}
+    assert out["unit_prices"]["a2_question_k48_high"] == 2016.0
+    assert out["front_hours"] == _derive(planted)["front_hours"]
+    _committed_inputs(monkeypatch, records)
+    phase36_budget.dry()
+    assert '[phase36_budget] a2_context_mismatch: {"e1_record": 2016.0' in capsys.readouterr().out
+    del records["e1"]
+    with pytest.raises(SystemExit, match="exactly"):
         _derive(records)
 
 
