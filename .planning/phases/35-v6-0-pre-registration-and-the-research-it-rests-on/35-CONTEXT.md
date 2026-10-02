@@ -205,6 +205,15 @@ registry of deferred slots". The v4.0/v5.0 prefixes were verified byte-identical
     only if it fits the Phase 36 budget.
   - The `e3_grid_subset` slot's rule must encode the 4-recipe × 3-σ shape and the reuse condition.
 
+### Addendum to D-15 (Rafael, 2026-10-01, Phase 35 code review, WR-04 of 35-REVIEW-FIX.md)
+- **E2's `S` is chosen in Phase 36**, inside the budget record: `results/phase36_budget.json`
+  carries `e2_seed_count`, which the `v6_budget_and_stop_line` rule (owner 36) receives, checks
+  against D-06 (S ≤ `len(seed_list())`, STOP and ask Rafael otherwise; never extended) and the
+  `e2_min_seeds` floor, and publishes. The `e2_S` slot keeps owner Phase 40, as a READ of that
+  field: Phase 40 fills it from the consumed budget record and cannot type a different S. This
+  supersedes the "Phase 40" owner reading of the D-02 row "E2 `S`" above for the CHOICE of S;
+  Phase 40 still owns the fill.
+
 ### Claude's Discretion
 - Module and test file names (e.g. `scripts/phase35_prereg.py`, `tests/test_phase35_prereg.py`)
   and where the research note lives under `.planning/research/`.
