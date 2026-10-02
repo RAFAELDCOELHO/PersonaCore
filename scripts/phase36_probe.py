@@ -1,0 +1,656 @@
+"""PHASE 36 COST-01 — the v6.0 MPS cost probes: time and counts only, never a reading (D-01).
+
+THE SPLIT (Phase 31's). ``run`` executes each front's stage inside ``run_front`` — a ledger start
+line, one heartbeat at once, a beat every 60 s, then the end line naming the front's record — and
+writes a gitignored ``data/probe36_<front>_run.json`` sidecar. ``emit`` turns one sidecar into the
+write-once ``results/phase36_probe_<front>.json`` (overwrite refusal first, dirty refusal second,
+WR-02 third). ``emit-all`` commits the ledger, then each record in ``RUN_ORDER``, one path per
+commit, and resumes after an abort (D-16, W4).
+
+WHAT SURVIVES (D-01, D-18). Seconds and counts. The pin's draws are written to a ``data/`` file the
+stage deletes after timing, its returned payload is never bound, and its stdout goes to a buffer
+that is dropped. ``prove_no_reading`` refuses any record key that names a reading.
+
+Torch-free at import: every torch-touching module is imported inside the stage functions.
+"""
+
+import argparse
+import contextlib
+import datetime
+import hashlib
+import io
+import json
+import pathlib
+import statistics
+import subprocess
+import sys
+import time
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+# The git root. Same value as _ROOT at import, but never patched in production: every git call and
+# every module hash reads it, so a test that redirects _ROOT (the data/ sidecars) changes no git
+# answer.
+_GIT_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_SCRIPTS = str(_GIT_ROOT / "scripts")
+if _SCRIPTS not in sys.path:
+    sys.path.insert(0, _SCRIPTS)
+_SRC = str(_GIT_ROOT / "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+import phase25_points  # noqa: E402  (scripts/ is not a package; torch-free)
+import phase25_run  # noqa: E402  (same)
+import phase30_points  # noqa: E402  (same)
+import phase36_caps  # noqa: E402  (same)
+import phase36_ledger  # noqa: E402  (same)
+import phase36_prereg  # noqa: E402  (same)
+
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
+
+INSTRUMENT_GIT_SHA = git_sha()
+
+# =================================================================================================
+# IDENTITY AND ISOLATION (COST-01)
+# =================================================================================================
+
+PROBE_PREFIX = "probe36"
+# Cheap fronts first, so a wiring failure surfaces in minutes rather than after the E1 hours.
+RUN_ORDER = ("e5", "e6", "e3", "e2", "e1")
+# front -> stage function. Each stage takes the live heartbeat ``state`` and returns a dict with
+# "configuration", its own numbers, and "reused" ({front: bool}); run_front moves "reused" to the
+# sidecar's top level. Plans 36-04/36-05 register e5, e6, e3, e2.
+STAGES = {}
+# front -> builder(stages) -> (record stages, repetitions). Filled beside each stage.
+RECORD_BUILDERS = {}
+
+# Committed inputs, read only through _committed_json (a tracked blob, never the working tree).
+CURVE_RECORD = "results/phase19_collateral_curve.json"  # phase19_run.TARGET_CURVE_PATH
+ERASED_RECORD = "results/phase19_arm_erased.json"  # phase19_erasure.arm_record_path("erased")
+PHASE31_POINT_RECORD = "results/phase31_probe_point.json"  # COST-01: beside, never an input
+
+PINNED_MODULES = tuple(
+    pathlib.Path(path).resolve().relative_to(_GIT_ROOT).as_posix()
+    for path in (
+        __file__,
+        phase36_prereg.__file__,
+        phase36_ledger.__file__,
+        _SCRIPTS + "/phase35_prereg.py",  # a path: the census refuses phase35_prereg._* reads
+        phase25_run.__file__,
+        phase25_points.__file__,
+        # Paths, not imports: these import torch.
+        _SCRIPTS + "/phase19_erasure.py",
+        _SCRIPTS + "/phase14_recall.py",
+        _SCRIPTS + "/phase18_extraction.py",
+        _SCRIPTS + "/phase14_factset_gate.py",
+        _SCRIPTS + "/phase17_persona_gate.py",
+        _SCRIPTS + "/teach_persona.py",
+        _SRC + "/personacore/training/loop.py",
+    )
+)
+
+# D-16: the only EXECUTABLE git actions, and the read-only ones (AST-checked by the tests).
+ALLOWED_GIT_ACTIONS = ("add", "commit")
+READ_ONLY_GIT_ACTIONS = ("ls-files", "show", "rev-parse", "status", "diff", "log", "merge-base")
+
+# D-01 / D-18: no record key names a reading, and strings live only where they describe the run.
+READING_TOKENS = frozenset(
+    {
+        "hit",
+        "hits",
+        "success",
+        "successes",
+        "recall",
+        "rate",
+        "rates",
+        "rank",
+        "ranks",
+        "nll",
+        "text",
+        "texts",
+        "completion",
+        "completions",
+        "exposure",
+        "gain",
+        "extracted",
+        "reading",
+        "readings",
+        "verdict",
+        "loss",
+        "ppl",
+        "fact",
+    }
+)
+STR_KEYS = frozenset(
+    {
+        "front",
+        "probe_key",
+        "run_id",
+        "sweep_point_false_reason",
+        "no_result_note",
+        "path",
+        "sha256",
+        "device",
+        "torch_version",
+        "unit",
+    }
+)
+STR_SUBTREES = ("provenance", "configuration")
+# The one key-token exemption: Phase 31's own published stage names ("recall" there names a timed
+# stage, not a reading). Their values must still be numbers.
+BESIDE_KEY = "beside_never_extrapolated"
+BESIDE_STAGES_KEY = "stage_seconds"
+
+SWEEP_POINT_FALSE_REASON = (
+    "a timing probe on an already-published configuration; it gates nothing and no verdict reads "
+    "it (D-01, Phase 31 D-02)"
+)
+NO_RESULT_NOTE = (
+    "seconds and counts only; draws, generated text and success counts were discarded (D-01, D-18)"
+)
+
+
+def _prove(condition, message):
+    """``SystemExit`` on a broken invariant. Never ``assert``: ``python -O`` strips it."""
+    if not condition:
+        raise SystemExit(f"[phase36_probe] {message}")
+
+
+def _sha256(path):
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+
+def _rel(path):
+    path = pathlib.Path(path)
+    return path.relative_to(_ROOT).as_posix() if path.is_relative_to(_ROOT) else str(path)
+
+
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _spread(values):
+    return {
+        "n": len(values),
+        "min": min(values),
+        "median": statistics.median(values),
+        "max": max(values),
+    }
+
+
+def _committed_json(rel):
+    """A TRACKED file's committed blob, refused if the working tree differs (CR-01)."""
+    return phase30_points._tracked_json(rel, phase36_caps.tracked_files(), "the committed input")
+
+
+_prove(set(RUN_ORDER) == set(phase36_prereg.PROBE_FRONTS), "RUN_ORDER is not PROBE_FRONTS")
+
+
+def prove_isolated_label(label):
+    """COST-01: every probe label starts ``probe36`` and none resolves under a sweep prefix."""
+    for banned in ("phase3", "phase4", phase25_points.CALIBRATION_PREFIX_LITERAL):
+        _prove(
+            not label.startswith(banned),
+            f"probe label {label!r} resolves under {banned!r}: a probe output could collide with "
+            "a published or later-phase artifact",
+        )
+    _prove(label.startswith(PROBE_PREFIX), f"probe label {label!r} does not start {PROBE_PREFIX}")
+    return label
+
+
+def _data_path(name):
+    return _ROOT / "data" / prove_isolated_label(name)
+
+
+def run_sidecar(front):
+    _prove(front in phase36_prereg.PROBE_FRONTS, f"front {front!r} is not a probe front")
+    return _data_path(f"{PROBE_PREFIX}_{front}_run.json")
+
+
+def sessions_sidecar(front):
+    _prove(front in phase36_prereg.PROBE_FRONTS, f"front {front!r} is not a probe front")
+    return _data_path(f"{PROBE_PREFIX}_{front}_sessions.json")
+
+
+def arm_record_path(front, rep):
+    _prove(front in phase36_prereg.PROBE_FRONTS, f"front {front!r} is not a probe front")
+    return _data_path(f"{PROBE_PREFIX}_{front}_rep{rep}_arm.json")
+
+
+# =================================================================================================
+# D-01 / D-18: THE READING GATE, THE SILENCER AND THE DRAW TIMER
+# =================================================================================================
+
+
+def prove_no_reading(blob):
+    """Refuse a reading key anywhere in ``blob``, and a str leaf outside the allowed places."""
+
+    def walk(node, key, path, free):
+        if isinstance(node, dict):
+            exempt = path[-2:] == (BESIDE_KEY, BESIDE_STAGES_KEY)
+            for child_key, child in node.items():
+                _prove(isinstance(child_key, str), f"non-str key {child_key!r} at {path}")
+                if exempt:
+                    _prove(
+                        isinstance(child, (int, float)) and not isinstance(child, bool),
+                        f"{'.'.join(path)}.{child_key} is {child!r}, not a number",
+                    )
+                    continue
+                hits = set(child_key.split("_")) & READING_TOKENS
+                _prove(
+                    not hits,
+                    f"key {'.'.join((*path, child_key))!r} names a reading ({sorted(hits)}): a "
+                    "probe record carries seconds and counts only (D-01, D-18)",
+                )
+                walk(child, child_key, (*path, child_key), free or child_key in STR_SUBTREES)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child, key, path, free)
+        elif isinstance(node, str):
+            _prove(
+                free or key in STR_KEYS,
+                f"string at {'.'.join(path)!r} outside provenance/configuration and STR_KEYS: a "
+                "probe record never carries text (D-01, D-18)",
+            )
+        else:
+            _prove(
+                node is None or isinstance(node, (bool, int, float)),
+                f"{'.'.join(path)!r} holds a {type(node).__name__}",
+            )
+
+    walk(blob, None, (), False)
+    return blob
+
+
+@contextlib.contextmanager
+def silenced():
+    """D-18: the pin's stdout goes to a buffer that is never read, so no reading reaches the log."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        yield
+
+
+class DrawTimer:
+    """Times every ``phase14_recall._complete`` call (no file edited); restores it on exit.
+
+    Each row is ``{"seconds", "tokens", "at_cap"}`` — the generated ids are never kept.
+    """
+
+    def __enter__(self):
+        import phase14_recall  # torch at import: lazy
+
+        self._module, self._real, self.rows = phase14_recall, phase14_recall._complete, []
+        real, rows = self._real, self.rows
+
+        def timed(*args, **kwargs):
+            started = time.monotonic()
+            gen, stopped = real(*args, **kwargs)
+            rows.append(
+                {"seconds": time.monotonic() - started, "tokens": len(gen), "at_cap": not stopped}
+            )
+            return gen, stopped
+
+        phase14_recall._complete = timed
+        return self
+
+    def __exit__(self, *exc):
+        self._module._complete = self._real
+        return False
+
+
+# =================================================================================================
+# WR-02: the stages ran on the code that writes the record (scripts/phase32_points.py:334-376)
+# =================================================================================================
+
+
+def record_session(front):
+    """Append this session's ``{git_sha, started_utc}`` to the front's sessions sidecar."""
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=_GIT_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    path = sessions_sidecar(front)
+    sessions = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    sessions.append({"git_sha": head, "started_utc": _now()})
+    phase25_run.atomic_write_json(path, sessions)
+    return sessions
+
+
+def prove_pinned_unchanged(shas):
+    """WR-02: no pinned module differs between any recorded session commit and HEAD."""
+    for sha in dict.fromkeys(shas):
+        diff = subprocess.run(
+            ["git", "diff", "--name-only", sha, "HEAD", "--", *PINNED_MODULES],
+            cwd=_GIT_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        _prove(
+            diff.returncode == 0, f"unknown sha {sha!r}: git diff failed ({diff.stderr.strip()})"
+        )
+        changed = diff.stdout.split()
+        _prove(
+            not changed,
+            f"pinned modules {changed} changed between session commit {sha} and HEAD (WR-02): the "
+            "record would name code its seconds did not come from. Every scripts/ change must land "
+            "before launch",
+        )
+
+
+# =================================================================================================
+# THE RUN (D-11, D-12, B1)
+# =================================================================================================
+
+
+def run_front(front, *, heartbeat_path, ledger_path):
+    """One front: ledger start, one beat at once, the 60-s beats, the stage, sidecar, end line."""
+    sidecar = run_sidecar(front)
+    if sidecar.exists():
+        print(f"[phase36_probe] {front} skipped: {_rel(sidecar)} exists", flush=True)
+        return json.loads(sidecar.read_text(encoding="utf-8"))
+    _prove(front in STAGES, f"front {front!r} has no registered stage")
+    record_session(front)
+    rid = phase36_ledger.run_id(36, "probes", front)
+    phase36_ledger.append("start", run_id=rid, phase=36, front="probes", ledger_path=ledger_path)
+    state = {"point": rid, "stage": "start", "shape": None, "draw_index": None}
+    # B1: the thread's first beat comes only after wait(60) (phase25_run._heartbeat_loop), so a
+    # stage dying in its first minute would leave no beat after its own start: beat once now.
+    phase25_run.beat(heartbeat_path, **state)
+    stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+    started_utc, started = _now(), time.monotonic()
+    try:
+        stages = STAGES[front](state)
+        import torch  # every stage has imported it already
+
+        reused = stages.pop("reused")
+        run = {
+            "front": front,
+            "run_id": rid,
+            "run_git_sha": git_sha(),
+            "device": str(phase25_run.device()),
+            "torch_version": torch.__version__,
+            "started_utc": started_utc,
+            "finished_utc": _now(),
+            "reused": reused,
+            "stages": stages,
+        }
+        phase25_run.atomic_write_json(sidecar, run)
+        state.update(stage="done", shape=None, draw_index=None)
+    finally:
+        stop.set()
+        thread.join()
+    phase36_ledger.append(
+        "end",
+        run_id=rid,
+        phase=36,
+        front="probes",
+        record=phase36_prereg.probe_record(front),
+        ledger_path=ledger_path,
+    )
+    print(f"[phase36_probe] {front} {time.monotonic() - started:.1f} s", flush=True)
+    return run
+
+
+def run_all(*, heartbeat_path=None, ledger_path=None, fronts=RUN_ORDER):
+    """Every front in order, after the dirty and disk refusals."""
+    for front in fronts:
+        _prove(front in STAGES, f"front {front!r} has no registered stage")
+    refuse_if_dirty(
+        who="phase36_probe",
+        detail=(
+            "a probe record names the commit it ran from; a run from a dirty tree times code that "
+            "commit does not contain"
+        ),
+        pathspec=("scripts", "src", "results"),
+        cwd=_GIT_ROOT,
+    )
+    phase25_run.disk_precheck()
+    heartbeat_path = phase36_ledger.HEARTBEAT_PATH if heartbeat_path is None else heartbeat_path
+    ledger_path = _GIT_ROOT / phase36_ledger.LEDGER_PATH if ledger_path is None else ledger_path
+    return [run_front(f, heartbeat_path=heartbeat_path, ledger_path=ledger_path) for f in fronts]
+
+
+# =================================================================================================
+# THE RECORD (D-01): pure, then gated
+# =================================================================================================
+
+
+def build_record(front, run, *, beside=None):
+    """The probe record from one run sidecar. Pure; refuses a reading key (D-01)."""
+    _prove(run["front"] == front, f"the sidecar is front {run['front']!r}, not {front!r}")
+    _prove(front in RECORD_BUILDERS, f"front {front!r} has no record builder")
+    stages, repetitions = RECORD_BUILDERS[front](run["stages"])
+    record = {
+        "front": front,
+        "probe_key": run["run_id"],
+        "gates_nothing": True,
+        "sweep_point": False,
+        "sweep_point_false_reason": SWEEP_POINT_FALSE_REASON,
+        "no_result_note": NO_RESULT_NOTE,
+        "configuration": run["stages"]["configuration"],
+        "stages": stages,
+        "repetitions": int(repetitions),
+        "reused": run["reused"],
+    }
+    if beside is not None:
+        record.update(beside)
+    return prove_no_reading(record)
+
+
+def phase31_beside():
+    """COST-01: the Phase 31 probe recorded BESIDE the E1 record — never an input to any price."""
+    blob = _committed_json(PHASE31_POINT_RECORD)
+    return {
+        BESIDE_KEY: {
+            "path": PHASE31_POINT_RECORD,
+            "sha256": _sha256(_GIT_ROOT / PHASE31_POINT_RECORD),
+            BESIDE_STAGES_KEY: {stage: v["seconds"] for stage, v in blob["stages"].items()},
+            "total_seconds": blob["total_seconds"],
+        }
+    }
+
+
+def _emit_target(out_path):
+    """Write-once: overwrite refusal FIRST, dirty-tree refusal SECOND. Returns the absolute path."""
+    out_path = pathlib.Path(out_path)
+    if not out_path.is_absolute():
+        out_path = _GIT_ROOT / out_path
+    _prove(
+        not out_path.exists(),
+        f"{out_path} exists — REFUSING to overwrite it. A probe record is write-once; corrections "
+        "are dated continuations",
+    )
+    pathspec = ("scripts", "src", "results")
+    if out_path.is_relative_to(_GIT_ROOT):
+        pathspec += (f":(exclude){out_path.relative_to(_GIT_ROOT).as_posix()}",)
+    refuse_if_dirty(
+        who="phase36_probe",
+        detail=(
+            "the probe record publishes git_sha and hashes its pinned modules from the working "
+            "tree; a record written from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=pathspec,
+        cwd=_GIT_ROOT,
+    )
+    return out_path
+
+
+def _write_record(out_path, record, run):
+    """WR-02, the reuse refusal, the provenance block, the gate, then the atomic write."""
+    sessions = sessions_sidecar(run["front"])
+    _prove(sessions.exists(), f"{_rel(sessions)} is missing: WR-02 cannot name the run sessions")
+    shas = [s["git_sha"] for s in json.loads(sessions.read_text(encoding="utf-8"))]
+    prove_pinned_unchanged([*shas, run["run_git_sha"]])
+    _prove(
+        not any(run["reused"].values()),
+        f"reused stages {run['reused']}: a front is never priced from a reused stage (Pitfall 5)",
+    )
+    record["provenance"] = {
+        "run": {
+            "git_sha": run["run_git_sha"],
+            "device": run["device"],
+            "torch_version": run["torch_version"],
+            "started_utc": run["started_utc"],
+            "finished_utc": run["finished_utc"],
+        },
+        "module_sha256": {rel: _sha256(_GIT_ROOT / rel) for rel in PINNED_MODULES},
+        "git_sha": INSTRUMENT_GIT_SHA,
+        "head_at_write": git_sha(),
+        "written_utc": _now(),
+    }
+    prove_no_reading(record)
+    phase25_run.atomic_write_json(out_path, record)
+    print(f"[phase36_probe] wrote {out_path}", flush=True)
+    return record
+
+
+def emit(front, out_path=None):
+    """The one record writer: a front's sidecar -> a write-once record (default its listed path)."""
+    target = _emit_target(phase36_prereg.probe_record(front) if out_path is None else out_path)
+    sidecar = run_sidecar(front)
+    _prove(sidecar.exists(), f"{_rel(sidecar)} is missing: run the {front} probe first")
+    run = json.loads(sidecar.read_text(encoding="utf-8"))
+    beside = phase31_beside() if front == "e1" else None
+    return _write_record(target, build_record(front, run, beside=beside), run)
+
+
+# =================================================================================================
+# D-16: ONE PATH PER COMMIT, RESUMABLE (scripts/phase32_points.py:408-467)
+# =================================================================================================
+
+
+def commit_path(relative, message):
+    """Stage and commit EXACTLY ``relative`` (a listed probe record or the ledger) on main."""
+    _prove(
+        relative in phase36_prereg.PROBE_RECORDS + (phase36_ledger.LEDGER_PATH,),
+        f"{relative!r} is not a listed probe record or the ledger: D-16 bounds the automatic "
+        "commits to those paths",
+    )
+    _prove(
+        (_GIT_ROOT / relative).exists(), f"{relative} does not exist, so there is nothing to commit"
+    )
+    branch = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=_GIT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    _prove(branch == "main", f"the repository is on branch {branch!r}, not main (D-16)")
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--", relative],
+        cwd=_GIT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    _prove(
+        status, f"{relative} is already committed and unchanged, so this commit would be a NO-OP"
+    )
+    subprocess.run(["git", "add", "--", relative], cwd=_GIT_ROOT, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", message, "--", relative], cwd=_GIT_ROOT, check=True
+    )
+    named = subprocess.run(
+        ["git", "show", "--name-only", "--format=", "HEAD"],
+        cwd=_GIT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    _prove(named == [relative], f"the commit just made names {named}, not exactly [{relative!r}]")
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=_GIT_ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def _path_state(relative):
+    """ "committed", "modified", "untracked" or "absent" — emit_all's one git/disk reader."""
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", relative],
+        cwd=_GIT_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    if tracked:
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--", relative],
+            cwd=_GIT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        return "modified" if status else "committed"
+    return "untracked" if (_GIT_ROOT / relative).exists() else "absent"
+
+
+def emit_all():
+    """Reconcile, commit the ledger FIRST (W9), then each record in RUN_ORDER; resumable (W4)."""
+    phase36_ledger.reconcile()
+    ledger = phase36_ledger.LEDGER_PATH
+    state = _path_state(ledger)
+    _prove(state != "absent", f"{ledger} is absent: no probe ran, so there is nothing to emit")
+    if state != "committed":
+        commit_path(ledger, "data(36): v6.0 MPS ledger after the probe run")
+    for front in RUN_ORDER:
+        record = phase36_prereg.probe_record(front)
+        state = _path_state(record)
+        if state == "committed":
+            continue
+        _prove(
+            state != "modified",
+            f"{record} is committed and changed on disk: a probe record is write-once",
+        )
+        if state == "absent":
+            emit(front)
+        commit_path(record, f"data(36): probe record {front} (D-16 automatic, listed in 36-07)")
+
+
+# =================================================================================================
+# THE CLI
+# =================================================================================================
+
+
+def preflight():
+    """Print the run order and refuse an unregistered front (plan 36-04 adds the live checks)."""
+    print(f"[phase36_probe] RUN_ORDER {' '.join(RUN_ORDER)}", flush=True)
+    missing = [front for front in RUN_ORDER if front not in STAGES]
+    _prove(not missing, f"fronts {missing} have no registered stage")
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="Phase 36 MPS cost probes (COST-01).")
+    sub = parser.add_subparsers(dest="mode", required=True)
+    run = sub.add_parser("run", help="run every front in RUN_ORDER (resumable per front)")
+    run.add_argument("--heartbeat", default=str(phase36_ledger.HEARTBEAT_PATH))
+    run.add_argument("--ledger", default=None)
+    run.add_argument("--front", nargs="+", choices=RUN_ORDER, default=list(RUN_ORDER))
+    emit_parser = sub.add_parser("emit", help="write one write-once probe record")
+    emit_parser.add_argument("front", choices=phase36_prereg.PROBE_FRONTS)
+    sub.add_parser("emit-all", help="commit the ledger, then every record (resumable)")
+    sub.add_parser("preflight", help="check the stages before a launch; writes nothing")
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    if args.mode == "emit":
+        emit(args.front)
+        return 0
+    if args.mode == "emit-all":
+        emit_all()
+        return 0
+    if args.mode == "preflight":
+        preflight()
+        return 0
+    import phase25_venue  # torch-free; the banner lets the launch identity be read off the log
+
+    print(phase25_venue.launch_banner(), flush=True)
+    run_all(
+        heartbeat_path=pathlib.Path(args.heartbeat),
+        ledger_path=None if args.ledger is None else pathlib.Path(args.ledger),
+        fronts=tuple(args.front),
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
