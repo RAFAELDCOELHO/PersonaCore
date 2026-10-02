@@ -104,8 +104,12 @@ def _write_line(line, ledger_path):
 
 
 def read_ledger(path=None):
-    """Every line as a dict. A non-JSON LAST line (torn tail) is skipped; an earlier one refuses."""
+    """Every line as a dict. A non-JSON LAST line (torn tail) is skipped; an earlier one refuses.
+    The real ledger is proved append-only first (WR-04, T-36-05); every reader and writer of it
+    (append, reconcile, spent, require_launch, rule, report, emit-all) routes through here."""
     path = pathlib.Path(path or _ROOT / LEDGER_PATH)
+    if path.resolve() == (_ROOT / LEDGER_PATH).resolve():
+        prove_append_only(path=path)
     if not path.exists():
         return []
     texts = [t for t in path.read_text(encoding="utf-8").splitlines() if t.strip()]
@@ -137,7 +141,8 @@ def prove_append_only(tracked=None, path=None):
     if LEDGER_PATH not in tracked:
         return 0
     committed = _committed_bytes(LEDGER_PATH)
-    working = pathlib.Path(path or _ROOT / LEDGER_PATH).read_bytes()
+    working = pathlib.Path(path or _ROOT / LEDGER_PATH)
+    working = working.read_bytes() if working.exists() else b""  # deleted: the most truncated
     _prove(
         working.startswith(committed),
         f"{LEDGER_PATH}'s committed bytes are not a prefix of the working file: the ledger was "

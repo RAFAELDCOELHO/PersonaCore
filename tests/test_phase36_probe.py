@@ -624,6 +624,21 @@ def test_emit_all_never_closes_a_live_attempt(tmp_path, monkeypatch):
     assert set(states.values()) == {"committed"}
 
 
+def test_emit_all_refuses_a_rewritten_committed_ledger(tmp_path, monkeypatch):
+    """WR-04 (T-36-05): emit-all never reconciles onto, nor commits, a ledger whose committed
+    bytes are not a prefix of the working file."""
+    monkeypatch.setattr(phase36_ledger, "_ROOT", tmp_path)
+    real = tmp_path / phase36_ledger.LEDGER_PATH
+    real.parent.mkdir(parents=True)
+    real.write_bytes(b"")
+    monkeypatch.setattr(probe.phase36_caps, "tracked_files", lambda: [phase36_ledger.LEDGER_PATH])
+    monkeypatch.setattr(phase36_ledger, "_committed_bytes", lambda rel: b'{"dropped": 1}\n')
+    calls = _emit_all_env(monkeypatch, _absent_states())
+    with pytest.raises(SystemExit, match="T-36-05"):
+        probe.emit_all()
+    assert calls == []
+
+
 def test_emit_all_refuses_an_absent_ledger(monkeypatch):
     states = _absent_states()
     states[phase36_ledger.LEDGER_PATH] = "absent"

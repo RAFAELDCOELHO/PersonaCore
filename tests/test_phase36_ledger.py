@@ -660,6 +660,43 @@ def test_prove_append_only(tmp_path, monkeypatch):
         phase36_ledger.prove_append_only([phase36_ledger.LEDGER_PATH], working)
 
 
+def test_every_reader_of_the_real_ledger_proves_it_append_only(
+    clock, tmp_path, planted, monkeypatch
+):
+    """WR-04 (T-36-05): a working ledger whose committed bytes are not its prefix (a dropped lost
+    line hides hours; a deleted file hides all of them) is refused by every path that reads or
+    writes the real ledger, never read silently. A tmp/scratch ledger is not the real one."""
+    scratch = tmp_path / "scratch.jsonl"
+    _spend(scratch, "E5", 1.0, unit="hidden")
+    _spend(scratch, "E1", 2.0, unit="kept")
+    committed = scratch.read_bytes()
+    real = tmp_path / phase36_ledger.LEDGER_PATH
+    real.parent.mkdir(parents=True)
+    monkeypatch.setattr(phase36_ledger, "_ROOT", tmp_path)
+    monkeypatch.setattr(phase36_caps, "tracked_files", lambda: [phase36_ledger.LEDGER_PATH])
+    monkeypatch.setattr(phase36_ledger, "_committed_bytes", lambda rel: committed)
+    tracked = [phase36_ledger.LEDGER_PATH]
+    calls = (
+        lambda: phase36_ledger.spent(tracked),
+        lambda: phase36_ledger.require_launch("E5", tracked=tracked),
+        lambda: phase36_ledger.rule("E5", "a", "go", tracked=tracked),
+        lambda: phase36_ledger.reconcile(),
+        lambda: phase36_ledger.report_rows(tracked),
+        lambda: _start("E2", "x", None),
+    )
+    for working in (b"".join(committed.splitlines(keepends=True)[2:]), None):
+        if working is None:
+            real.unlink()
+        else:
+            real.write_bytes(working)
+        for call in calls:
+            with pytest.raises(SystemExit, match="T-36-05"):
+                call()
+    real.write_bytes(committed)  # appended-to (here: equal) passes
+    assert phase36_ledger.spent(tracked)["by_front"]["E5"] == 3600.0
+    assert phase36_ledger.spent(tracked, ledger_path=scratch)["by_front"]["E1"] == 7200.0
+
+
 def _git_ls(*patterns):
     out = subprocess.run(
         ["git", "ls-files", *patterns], cwd=_ROOT, capture_output=True, text=True, check=True
