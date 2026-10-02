@@ -1002,6 +1002,23 @@ def test_dry_writes_nothing_and_prints_every_number(planted, monkeypatch, tmp_pa
         phase36_budget.dry(_ROOT / "results" / "ruling.json")
 
 
+def test_dry_applies_ruled_cuts_once_in_the_e3_recipes_loop(planted, monkeypatch, tmp_path, capsys):
+    """WR-05: the D-15 flow (HALT, Rafael rules cuts, dry --ruling) re-derives the E3 recipe
+    alternatives from the PRE-cut caps, so each ruled cut is applied exactly once."""
+    _committed_inputs(monkeypatch, planted)
+    ruling = tmp_path / "ruling.json"
+    for cuts in ({"e2_seeds_to_3": 1}, {"e6_anchor_adapters": 4}):
+        ruling.write_text(json.dumps({"cuts": cuts}), encoding="utf-8")
+        derived = phase36_budget.dry(ruling)
+        out = capsys.readouterr().out
+        assert derived["cuts_applied"] == cuts
+        for recipes in (phase36_budget.E3_RECIPES, phase36_budget.E3_RECIPES + 1):
+            caps = phase36_budget.proposed_unit_caps(planted)
+            caps["E3"]["recipes"] = recipes
+            hours = _derive(planted, cuts=cuts, unit_caps=caps)["front_hours"]["E3"]
+            assert f"E3 hours at recipes {recipes}: {json.dumps(hours)}\n" in out
+
+
 def test_dry_prints_the_comparisons_before_a_divergence_refusal(tmp_path, monkeypatch, capsys):
     _committed_inputs(monkeypatch, _plant(tmp_path, e1_totals=(1.3 * 4115.04, 4064.0)))
     with pytest.raises(SystemExit, match="investigate BEFORE"):

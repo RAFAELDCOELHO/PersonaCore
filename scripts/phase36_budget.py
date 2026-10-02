@@ -1007,7 +1007,9 @@ def dry(ruling_path=None):
                 {"front_hours": alt["front_hours"], "total_hours": alt["total_hours"]},
             )
     for recipes in (E3_RECIPES, E3_RECIPES + 1):
-        caps = {f: dict(b) for f, b in derived["unit_caps"].items()}
+        # WR-05: the PRE-cut caps; derived["unit_caps"] already carries the cuts derive reapplies.
+        base = kwargs.get("unit_caps") or proposed_unit_caps(probes)
+        caps = {f: dict(b) for f, b in base.items()}
         caps["E3"]["recipes"] = recipes
         alt = derive(
             probes, historical, probes_spent_seconds=spent, **{**kwargs, "unit_caps": caps}
