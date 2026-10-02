@@ -83,7 +83,7 @@ CHECKPOINTS_PER_CELL = 5  # D-09 proposal (ERASE-07 grid), overrulable at the ch
 K48_CONFIRMS_PER_CELL = 1  # ERASE-07: the first zero is confirmed once at K = 48
 E3_RECIPES = 4  # RECIPE-01: a grid of 4 recipes
 
-CAP_RULING_KEYS = ("E3.max_batch",)
+CAP_RULING_KEYS = ("E3.max_batch", "E6.a2_regenerated_entries")
 RULING_KEYS = (
     "unit_caps",
     "cuts",
@@ -202,11 +202,12 @@ FORMULA = {
         "+ prefixes x (adapter_setup_high + sets x max_set_size x e5_nll_high)"
     ),
     "E6": (
-        "adapters x (adapter_setup_high + entries x a2_question_k48_high x max_k / "
+        "adapters x (adapter_setup_high + a2_regenerated_entries x a2_question_k48_high x max_k / "
         "FULL_FIDELITY_K + (entries + anchor_slots) x e5_candidates_per_slot_max x e5_nll_high) + "
         "anchor_adapters x anchor_slots x max_k x e6_anchor_draw_high. The A2-context generation "
-        "is priced in full at entries x max_k; reusing the committed K = 48 A2 records for k in "
-        "{8,16,32,64,78} and M2 is Phase 39's call and would be savings"
+        "is priced at a2_regenerated_entries x max_k (default a2_regenerated_entries = entries, "
+        "in full); a cap ruling of 0 reuses the committed K = 48 A2 records instead, verified by "
+        "SHA-256, and Phase 39 pauses for Rafael rather than regenerate"
     ),
     "hours": "front_hours = seconds / 3600 per V6_MPS_FRONTS, unrounded; total = math.fsum",
     "stop_line": "D-13: min(stop_line_factor x total, mps_ceiling_hours), only when total fits",
@@ -236,6 +237,11 @@ CAP_DERIVATIONS = {
     "E6.anchor_slots": "the E6 probe record's configuration anchor_slots",
     "E6.entries": "the E1 probe record's configuration questions (the A2 corpus, CTX-01)",
     "E6.max_k": "FULL_FIDELITY_K",
+    "E6.a2_regenerated_entries": (
+        "E6.entries (the A2-context generation in full); only Rafael's cap ruling "
+        "(cap_rulings['E6.a2_regenerated_entries']) lowers it, 0 = reuse the committed K = 48 "
+        "A2 records"
+    ),
 }
 
 SURFACED = (
@@ -247,7 +253,8 @@ SURFACED = (
     "E1 calibration: priced from the calibration curve + cal-erased records + the E2 training unit "
     "(default records; alternative probe_scaled)",
     "E5 clearance premise: one cached probe pass per slot prices each minted set's clearance",
-    "E6: the A2-context generation is priced in full at entries x max_k",
+    "E6: the A2-context generation is priced at a2_regenerated_entries x max_k (default = entries, "
+    "in full; a cap ruling may set 0 and reuse the committed K = 48 A2 records)",
     "R1b scope: one erased-arm reading; retrain / replicate arms or the M1 re-sweep need Rafael's "
     "approved",
     "E2 full adapter: MAX_STEPS loop like M2 + M2's overhead x n_facts_real / n_facts_m2",
@@ -527,6 +534,7 @@ def proposed_unit_caps(probes):
             "anchor_slots": probes["e6"]["configuration"]["anchor_slots"],
             "entries": c1["questions"],
             "max_k": phase35_prereg.FULL_FIDELITY_K,
+            "a2_regenerated_entries": c1["questions"],
         },
     }
 
@@ -558,7 +566,7 @@ def _front_seconds(p, caps, r1b_cut):
         "E6": e6["adapters"]
         * (
             p["adapter_setup_high"]
-            + e6["entries"] * p["a2_question_k48_high"] * e6["max_k"] / full_k
+            + e6["a2_regenerated_entries"] * p["a2_question_k48_high"] * e6["max_k"] / full_k
             + (e6["entries"] + e6["anchor_slots"])
             * p["e5_candidates_per_slot_max"]
             * p["e5_nll_high"]
@@ -643,6 +651,18 @@ def _prove_caps(caps, cap_rulings, probed_batch):
     for key, text in cap_rulings.items():
         _prove(key in CAP_RULING_KEYS, f"cap ruling {key!r} is not one of {CAP_RULING_KEYS}")
         _prove(isinstance(text, str) and text.strip(), f"cap ruling {key} is empty")
+    _prove(
+        caps["E6"]["a2_regenerated_entries"] <= caps["E6"]["entries"],
+        f"E6 a2_regenerated_entries {caps['E6']['a2_regenerated_entries']} is above E6 entries "
+        f"{caps['E6']['entries']}: only the scored entries can be regenerated",
+    )
+    _prove(
+        caps["E6"]["a2_regenerated_entries"] == caps["E6"]["entries"]
+        or "E6.a2_regenerated_entries" in cap_rulings,
+        f"E6 a2_regenerated_entries {caps['E6']['a2_regenerated_entries']} is below E6 entries "
+        f"{caps['E6']['entries']}: only Rafael's cap ruling "
+        "(cap_rulings['E6.a2_regenerated_entries']) lowers it, naming the reused records",
+    )
     _prove(
         caps["E3"]["max_batch"] <= probed_batch or "E3.max_batch" in cap_rulings,
         f"E3 max_batch {caps['E3']['max_batch']} is above the probed batch {probed_batch}: only "
@@ -890,7 +910,7 @@ def _describe(ruling):
         default = RULING_ALTERNATIVES[name][0]
         lines.append(f"price ruling {name}: {choice} (default {default})")
     for key, text in sorted((ruling.get("cap_rulings") or {}).items()):
-        lines.append(f"cap ruling {key}: {text} (default: the probed value)")
+        lines.append(f"cap ruling {key}: {text} (default: CAP_DERIVATIONS)")
     return lines
 
 

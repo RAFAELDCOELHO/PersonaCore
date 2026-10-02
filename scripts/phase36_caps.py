@@ -49,7 +49,14 @@ CAP_FIELDS = types.MappingProxyType(
         "E3": ("recipes", "sigmas", "max_steps", "max_batch"),
         "E4": ("points",),
         "E5": ("sets", "max_set_size", "prefixes"),
-        "E6": ("adapters", "anchor_adapters", "anchor_slots", "entries", "max_k"),
+        "E6": (
+            "adapters",
+            "anchor_adapters",
+            "anchor_slots",
+            "entries",
+            "max_k",
+            "a2_regenerated_entries",
+        ),
     }
 )
 

@@ -510,7 +510,14 @@ def test_derive_proposed_caps_follow_d09_and_the_records(planted):
         "E3": {"recipes": 4, "sigmas": 3, "max_steps": 800, "max_batch": 8},
         "E4": {"points": 3},
         "E5": {"sets": 8, "max_set_size": 512, "prefixes": 6},
-        "E6": {"adapters": 7, "anchor_adapters": 7, "anchor_slots": 8, "entries": 2, "max_k": 48},
+        "E6": {
+            "adapters": 7,
+            "anchor_adapters": 7,
+            "anchor_slots": 8,
+            "entries": 2,
+            "max_k": 48,
+            "a2_regenerated_entries": 2,
+        },
     }
     assert set(phase36_budget.CAP_DERIVATIONS) == {
         f"{front}.{name}"
@@ -557,6 +564,24 @@ def test_derive_cap_ruling_raises_e3_max_batch(planted):
     for bad, pattern in (({"E3.max_steps": "x"}, "is not one of"), ({"E3.max_batch": ""}, "empty")):
         with pytest.raises(SystemExit, match=pattern):
             _derive(planted, unit_caps=caps, cap_rulings=bad)
+
+
+def test_derive_cap_ruling_lowers_e6_a2_regenerated_entries(planted):
+    caps = phase36_budget.proposed_unit_caps(planted)
+    caps["E6"]["a2_regenerated_entries"] = 0
+    with pytest.raises(SystemExit, match="only Rafael's cap ruling"):
+        _derive(planted, unit_caps=caps)
+    ruling = {
+        "E6.a2_regenerated_entries": "Rafael: reuse the committed K = 48 A2 records (planted)"
+    }
+    out = _derive(planted, unit_caps=caps, cap_rulings=ruling)
+    # 7 x (8 + 0 regenerated + (2 + 8) x 12 x 0.25) + 7 x 8 x 48 x 0.5: scoring and anchor kept
+    assert out["front_hours"]["E6"] == (7 * (8.0 + (2 + 8) * 12 * 0.25) + 7 * 8 * 48 * 0.5) / 3600
+    assert out["unit_caps"]["E6"]["entries"] == 2
+    assert out["cap_rulings"] == ruling
+    caps["E6"]["a2_regenerated_entries"] = 3
+    with pytest.raises(SystemExit, match="above E6 entries 2"):
+        _derive(planted, unit_caps=caps, cap_rulings=ruling)
 
 
 def test_derive_price_rulings_swap_in_each_alternative(planted):
