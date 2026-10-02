@@ -22,6 +22,7 @@ import io
 import json
 import math
 import pathlib
+import shutil
 import statistics
 import subprocess
 import sys
@@ -960,6 +961,155 @@ def _e3_stages(stages):
 
 STAGES["e3"] = stage_e3
 RECORD_BUILDERS["e3"] = _e3_stages
+
+
+# =================================================================================================
+# E2 (D-08): the published Phase 19 M2 retrain, twice, plus one K = 48 A2 pass on it
+# =================================================================================================
+
+
+def train_e2_rep(arm, facts, second_person, replay_ratio):
+    """One M2 training repetition under a probe36 arm name: seconds only (D-08, T-36-19).
+
+    The ONE new call site of the teaching driver in this module, registered in
+    tests/test_phase23_resume.py. Its return value is never bound, so no loss or PPL reaches a
+    record. The csv it writes under results/ moves under data/ before this returns (WR-01)."""
+    import phase14_factset  # lazy: fact material
+    import teach_persona as tp  # torch at import: lazy
+
+    _prove(
+        arm != "real" and arm.startswith(f"{PROBE_PREFIX}_"),
+        f"arm {arm!r} is not a probe36 arm name: 'real' writes the shippable persona_adapter.pt "
+        "and any other name could collide with a published adapter",
+    )
+    prove_isolated_label(arm)
+    paths = tp.arm_outputs(arm, prefix=PROBE_PREFIX)
+    for key in ("adapter", "checkpoint"):
+        _prove(
+            not paths[key].exists(),
+            f"{_rel(paths[key])} exists: stale probe output from an interrupted run. Delete it in "
+            "a reviewed step, then rerun",
+        )
+    csv_dst = _data_path(f"{PROBE_PREFIX}_e2") / arm / "run.csv"
+    _prove(not csv_dst.exists(), f"{_rel(csv_dst)} exists: stale probe output")
+    with loop_timer(tp) as loop, silenced():
+        started = time.monotonic()
+        tp.train_arm(
+            arm,
+            facts=facts,
+            family_ids=phase14_factset.TAUGHT_FAMILY_IDS,
+            second_person=second_person,
+            replay_ratio=replay_ratio,
+            prefix=PROBE_PREFIX,
+        )
+        outer = time.monotonic() - started
+    _prove(loop["calls"] == 1, f"the training loop ran {loop['calls']} times, not once")
+    csv_dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(paths["csv"]), str(csv_dst))
+    paths["csv"].parent.rmdir()  # WR-01: empty after the move; anything else left there refuses
+    return {
+        "outer_seconds": outer,
+        "loop_seconds": loop["seconds"],
+        "overhead_seconds": outer - loop["seconds"],
+    }
+
+
+def stage_e2(state):
+    """D-08: two M2 training reps, then the published A2 pass on the first adapter; time only."""
+    import phase14_factset  # lazy: fact material
+    import phase14_recall  # torch at import: lazy
+    import phase19_erasure  # same
+    import teach_persona as tp  # same
+
+    # The published recipe (phase19_run.retrain_train): the `real` arm minus the target fact.
+    target = {f.slot: f for f in phase14_factset.LOCKED_FACTS}[phase19_erasure.TARGET_SLOT]
+    facts, second_person, replay_ratio = phase19_erasure.retrain_arm_spec(target.id)
+    real_facts, real_second_person, real_replay = tp.arm_spec("real")
+    dropped = sorted({f.id for f in real_facts} - {f.id for f in facts})
+    _prove(
+        dropped == [target.id] and len(facts) == len(real_facts) - 1,
+        f"the retrain spec dropped {dropped}, not exactly [{target.id!r}]: M2 must be the `real` "
+        "arm minus one fact",
+    )
+    _prove(
+        (second_person, replay_ratio) == (real_second_person, real_replay),
+        "the retrain spec changed second_person / replay_ratio against the `real` arm",
+    )
+    questions, k = e1_shape()
+    path = arm_record_path("e2", 1)
+    _prove(
+        not path.exists(),
+        f"{_rel(path)} exists: stale probe output from an interrupted run. Delete it, then rerun",
+    )
+    device = phase25_run.device()
+    before = _sha256(phase14_recall.ADAPTER_PATH)  # T-36-19: the shippable adapter is read-only
+    reps = []
+    for rep, arm in enumerate(E2_ARMS, start=1):
+        state.update(stage=f"e2_train_rep{rep}", shape=None, draw_index=None)
+        reps.append(train_e2_rep(arm, facts, second_person, replay_ratio))
+    state.update(stage="e2_a2_pass", shape=None, draw_index=None)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with DrawTimer() as timer, silenced():
+            started = time.monotonic()
+            phase19_erasure.run_erasure_arm(
+                "retrain",
+                device,
+                adapter_path=tp.arm_outputs(E2_ARMS[0], prefix=PROBE_PREFIX)["adapter"],
+                record_path=path,
+            )
+            total = time.monotonic() - started
+    finally:
+        path.unlink(missing_ok=True)  # D-01 / D-18: the draws are discarded
+    _prove(
+        _sha256(phase14_recall.ADAPTER_PATH) == before,
+        f"{phase14_recall.ADAPTER_PATH} changed during the E2 probe (T-36-19)",
+    )
+    draw_seconds = [float(row["seconds"]) for row in timer.rows]
+    _prove(
+        len(draw_seconds) == questions * k,
+        f"the draw timer counted {len(draw_seconds)} draws, not {questions} x {k} (D-08)",
+    )
+    configuration = {
+        "arm": "retrain (M2: the real arm minus the target fact)",
+        "target_slot": phase19_erasure.TARGET_SLOT,
+        "n_facts_real": len(real_facts),
+        "n_facts_m2": len(facts),
+        "steps": tp.MAX_STEPS,
+        "seed": tp.SEED,
+        "K": k,
+        "questions": questions,
+        "full_adapter_derivation": (
+            "the full taught adapter trains MAX_STEPS steps like M2 (loop cost independent of the "
+            "fact count); its non-loop overhead (bin build, export, PPL sweep) is priced as M2's "
+            "overhead x n_facts_real / n_facts_m2"
+        ),
+    }
+    return {
+        "configuration": configuration,
+        "train_reps": reps,
+        # B3: "a2_pass", never "reading" (a READING_TOKENS token build_record refuses).
+        "a2_pass": {
+            "total_seconds": total,
+            "fixed_seconds": total - math.fsum(draw_seconds),
+            "draws": len(draw_seconds),
+            "draws_per_question": k,
+            "draw_seconds": draw_seconds,
+            "draw_seconds_spread": _spread(draw_seconds),
+        },
+        "reused": {"e2": False},
+    }
+
+
+def _e2_stages(stages):
+    """The two training reps and the A2 pass as measured; two reps (H1)."""
+    out = {key: value for key, value in stages.items() if key != "configuration"}
+    _prove(len(out["train_reps"]) == 2, f"E2 holds {len(out['train_reps'])} training reps, not 2")
+    return out, len(out["train_reps"])
+
+
+STAGES["e2"] = stage_e2
+RECORD_BUILDERS["e2"] = _e2_stages
 
 
 # =================================================================================================

@@ -114,6 +114,8 @@ _TRAIN_ARM_CALL_SITES = (
     # `phase25_sigma_hi.py`, it lives in its OWN module rather than in `phase25_calibrate.py`:
     # that module's sha256 is pinned inside two committed calibration records.
     ("scripts/phase25_probe2.py", "call", "train_control_path"),
+    # Plan 36-05's E2 timing probe: two M2 reps under probe36 arm names, no `resume_from`.
+    ("scripts/phase36_probe.py", "call", "train_e2_rep (Phase 36's E2 timing probe, COST-01)"),
     ("scripts/teach_persona.py", "call", "main"),
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
@@ -318,18 +320,20 @@ def test_resume_from_none_is_inert():
     # driver call behind Phase 30's seam tests (D-03 pre-split kwargs, D-04 measured replay draws).
     # A TEST site rather than a production consumer, and like every site but this file's own it
     # passes no `resume_from`.
+    # EIGHTEEN from 36-05 (2026-10-02), which added `phase36_probe.train_e2_rep` — the E2 cost
+    # probe's two M2 retrains under `probe36` arm names: a timing probe, no `resume_from`.
     # The literal is a tripwire against a site vanishing
     # unnoticed, so it is BUMPED with its reason rather than derived from the register — that would
     # make the check restate the register instead of pinning a count against it. Every number is
     # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8 + 1 + 1 + 1 + 1 + 2 + 1 + 1 + 1
+        == 8 + 1 + 1 + 1 + 1 + 2 + 1 + 1 + 1 + 1
     ), (
         "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling "
         "plus 23-10's σ=0 diagnostic plus 23-11's noised sweep point plus 25-10's 44-point "
         "frontier driver plus 25-11's two calibration probes plus 25-12's anchor probe plus "
-        "25-13's PROBE 2 control leg plus 30-01's seam probe"
+        "25-13's PROBE 2 control leg plus 30-01's seam probe plus 36-05's E2 timing probe"
     )
 
     # ...and the AST agrees with the register about which of them are real CALLS.

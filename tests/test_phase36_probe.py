@@ -1928,6 +1928,7 @@ def _live_env(root, mp, spies):
     times real _complete calls) and adapted_model (the 78 real components address a full-size
     adapter; Phase 19's own tests cover the ablation).
     """
+    import numpy as np
     import phase14_factset_gate
     import phase14_recall
     import phase16_persistence
@@ -1947,6 +1948,12 @@ def _live_env(root, mp, spies):
     entries = phase36_prereg.phase35_prereg.a2_corpus_entries()[:LIVE_QUESTIONS]
     mp.setattr(phase25_run, "_DEVICE", "cpu")
     _e2e_env(root, mp)
+    # The published M2 recipe bakes replay into its bin at the `real` arm's ratio (legacy sizing,
+    # teach_persona._prepend_replay): ~9.2k tokens, more than _e2e_env's four windows. Same
+    # decodable ids, tiled (the tests/test_phase21_replay_volume.py 20,000-element precedent).
+    replay = np.resize(np.fromfile(tp.DIALOG_TRAIN_BIN, dtype=np.uint16), 20_000)
+    replay.tofile(tp.DIALOG_TRAIN_BIN)
+    np.ones(replay.size, dtype=np.uint8).tofile(tp.DIALOG_TRAIN_MASK)
     slim = root / "convbase_slim.pt"
     export_slim(root / "convbase.pt", slim)
     mp.setattr(phase14_recall, "CONVBASE_SLIM", slim)
@@ -2147,3 +2154,233 @@ def test_live_e3_writes_nothing_in_the_real_tree(e3_live):
     assert before == after
     hashed = e3_live["spies"]["hashed"]
     assert hashed and not [p for p in hashed if p.is_relative_to(probe._GIT_ROOT / "checkpoints")]
+
+
+# =================================================================================================
+# Plan 36-05 Task 2 — E2 (D-08): two M2 retrains + one K = 48 A2 pass, light (no model)
+# =================================================================================================
+
+_E2_SENTINEL = "SENTINEL taught ON: 3/4 = 0.75"
+
+
+def _e2_light(tmp_path, monkeypatch, *, draws=6, on_pin=None):
+    """stage_e2 with the teaching driver and the pin faked and recorded; no model, no training."""
+    import phase14_recall
+    import phase19_erasure
+    import teach_persona as tp
+
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)
+    monkeypatch.setattr(tp, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    adapter = tmp_path / "checkpoints" / "fixture_adapter.pt"
+    adapter.parent.mkdir(parents=True, exist_ok=True)
+    adapter.write_bytes(b"fixture adapter")
+    monkeypatch.setattr(phase14_recall, "ADAPTER_PATH", adapter)
+    monkeypatch.setattr(probe, "e1_shape", lambda: (2, 3))
+    monkeypatch.setattr(tp, "train", lambda **kw: "the fake loop")
+    monkeypatch.setattr(phase14_recall, "_complete", lambda *a, **kw: ([3, 3], True))
+    calls = {"teach": [], "pin": [], "loop": tp.train}
+
+    def fake_teach(arm, **kwargs):
+        calls["teach"].append((arm, kwargs))
+        tp.train()
+        paths = tp.arm_outputs(arm, prefix=kwargs["prefix"])
+        for key in ("csv", "checkpoint", "adapter"):
+            paths[key].parent.mkdir(parents=True, exist_ok=True)
+            paths[key].write_text(arm, encoding="utf-8")
+        print(_E2_SENTINEL)
+        return {"final_train_loss": 1.0, "ppl_adapter_on": 2.0}
+
+    def pin(arm, device, **kwargs):
+        calls["pin"].append((arm, device, kwargs))
+        for _ in range(draws):
+            phase14_recall._complete(None, [0], device, None)
+        pathlib.Path(kwargs["record_path"]).write_text(_E2_SENTINEL, encoding="utf-8")
+        if on_pin is not None:
+            on_pin(adapter)
+        print(_E2_SENTINEL)
+        return {"per_fact": [1]}
+
+    monkeypatch.setattr(tp, "train_arm", fake_teach)
+    monkeypatch.setattr(phase19_erasure, "run_erasure_arm", pin)
+    return calls
+
+
+@pytest.mark.parametrize(
+    "arm", ["real", "erase_reference", "phase19_m2", "probe36", "probe31_m2", "xprobe36_m2"]
+)
+def test_train_e2_rep_refuses_real_and_foreign_arm_names(tmp_path, monkeypatch, arm):
+    calls = _e2_light(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit):
+        probe.train_e2_rep(arm, (), False, 0.0)
+    assert calls["teach"] == []
+
+
+@pytest.mark.parametrize("which", ["adapter", "checkpoint", "csv"])
+def test_train_e2_rep_refuses_stale_outputs(tmp_path, monkeypatch, which):
+    import teach_persona as tp
+
+    calls = _e2_light(tmp_path, monkeypatch)
+    arm = probe.E2_ARMS[0]
+    if which == "csv":
+        path = tmp_path / "data" / "probe36_e2" / arm / "run.csv"
+    else:
+        path = tp.arm_outputs(arm, prefix=probe.PROBE_PREFIX)[which]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("stale", encoding="utf-8")
+    with pytest.raises(SystemExit, match="stale probe output"):
+        probe.train_e2_rep(arm, (), False, 0.0)
+    assert calls["teach"] == []
+
+
+def test_train_e2_rep_moves_the_csv_under_data(tmp_path, monkeypatch, capsys):
+    import phase14_factset
+    import teach_persona as tp
+
+    calls = _e2_light(tmp_path, monkeypatch)
+    arm = probe.E2_ARMS[1]
+    rep = probe.train_e2_rep(arm, ("f",), True, 0.25)
+    assert capsys.readouterr().out == ""
+    ((called, kwargs),) = calls["teach"]
+    assert called == arm and kwargs == {
+        "facts": ("f",),
+        "family_ids": phase14_factset.TAUGHT_FAMILY_IDS,
+        "second_person": True,
+        "replay_ratio": 0.25,
+        "prefix": "probe36",
+    }
+    assert set(rep) == {"outer_seconds", "loop_seconds", "overhead_seconds"}
+    assert rep["overhead_seconds"] == rep["outer_seconds"] - rep["loop_seconds"]
+    assert tp.train is calls["loop"]  # restored
+    csv = tp.arm_outputs(arm, prefix=probe.PROBE_PREFIX)["csv"]
+    assert not csv.parent.exists()  # WR-01: results/<prefix>_<arm>/ is gone
+    assert (tmp_path / "data" / "probe36_e2" / arm / "run.csv").read_text(encoding="utf-8") == arm
+    assert not list((tmp_path / "checkpoints").glob("phase19_*"))
+    assert not (tmp_path / "checkpoints" / "persona_adapter.pt").exists()
+
+
+def test_stage_e2_light_times_two_reps_and_one_a2_pass(tmp_path, monkeypatch, capsys):
+    import phase14_factset
+    import phase19_erasure
+    import teach_persona as tp
+
+    calls = _e2_light(tmp_path, monkeypatch)
+    adapter_before = (tmp_path / "checkpoints" / "fixture_adapter.pt").read_bytes()
+    state = {"point": "x", "stage": "start", "shape": None, "draw_index": None}
+    out = probe.stage_e2(state)
+    assert capsys.readouterr().out == ""
+    target = {f.slot: f for f in phase14_factset.LOCKED_FACTS}[phase19_erasure.TARGET_SLOT]
+    facts, second_person, replay_ratio = phase19_erasure.retrain_arm_spec(target.id)
+    assert [arm for arm, _kw in calls["teach"]] == list(probe.E2_ARMS)
+    for _arm, kwargs in calls["teach"]:
+        assert kwargs["facts"] == facts and kwargs["second_person"] == second_person
+        assert kwargs["replay_ratio"] == replay_ratio
+    ((arm, device, kwargs),) = calls["pin"]
+    assert arm == "retrain" and device == "cpu"
+    assert kwargs["adapter_path"] == tp.arm_outputs("probe36_m2_a", prefix="probe36")["adapter"]
+    assert kwargs["record_path"] == probe.arm_record_path("e2", 1)
+    assert not probe.arm_record_path("e2", 1).exists()  # the draws are discarded
+    assert (tmp_path / "checkpoints" / "fixture_adapter.pt").read_bytes() == adapter_before
+    passed = out["a2_pass"]
+    assert passed["draws"] == 6 == len(passed["draw_seconds"]) and passed["draws_per_question"] == 3
+    assert all(type(s) is float for s in passed["draw_seconds"])
+    assert passed["fixed_seconds"] == pytest.approx(
+        passed["total_seconds"] - sum(passed["draw_seconds"])
+    )
+    assert passed["draw_seconds_spread"]["n"] == 6
+    assert len(out["train_reps"]) == 2
+    config = out["configuration"]
+    real_facts = tp.arm_spec("real")[0]
+    assert config["n_facts_real"] == len(real_facts) == config["n_facts_m2"] + 1
+    assert (config["target_slot"], config["K"], config["questions"]) == (target.slot, 3, 2)
+    assert config["steps"] == tp.MAX_STEPS and config["seed"] == 1337
+    assert out["reused"] == {"e2": False} and state["stage"] == "e2_a2_pass"
+    run = {"front": "e2", "run_id": "v6/36/probes/e2", "reused": out.pop("reused"), "stages": out}
+    record = probe.build_record("e2", run)
+    assert set(record["stages"]) == {"train_reps", "a2_pass"} and record["repetitions"] == 2
+    assert "reading" not in set(_keys(record)) and "SENTINEL" not in json.dumps(record)
+    assert probe._e2_stages(out) == (record["stages"], 2)
+    out["train_reps"].pop()
+    with pytest.raises(SystemExit, match="not 2"):
+        probe._e2_stages(out)
+
+
+def test_stage_e2_refuses_a_short_pass_a_stale_record_and_a_changed_adapter(tmp_path, monkeypatch):
+    _e2_light(tmp_path, monkeypatch, draws=5)
+    with pytest.raises(SystemExit, match="draw timer counted 5"):
+        probe.stage_e2({})
+    assert not probe.arm_record_path("e2", 1).exists()
+    calls = _e2_light(tmp_path / "stale", monkeypatch)
+    stale = probe.arm_record_path("e2", 1)
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="stale probe output"):
+        probe.stage_e2({})
+    assert calls["teach"] == []  # refused before any training
+    _e2_light(tmp_path / "tamper", monkeypatch, on_pin=lambda a: a.write_bytes(b"changed"))
+    with pytest.raises(SystemExit, match="T-36-19"):
+        probe.stage_e2({})
+
+
+def test_e2_driver_and_pin_calls_are_unbound_and_silenced():
+    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    driver = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "train_arm"
+    ]
+    assert len(driver) == 1  # the one registered call site (tests/test_phase23_resume.py)
+    (call,), parents = _stage_calls("train_e2_rep", "train_arm")
+    assert isinstance(parents[call], ast.Expr) and call.args[0].id == "arm"
+    assert {"silenced()", "loop_timer(tp)"} <= set(_with_items(call, parents))
+    assert not [k for k in call.keywords if k.arg == "resume_from"]
+    (pin,), parents = _stage_calls("stage_e2", "run_erasure_arm")
+    assert isinstance(parents[pin], ast.Expr) and pin.args[0].value == "retrain"
+    assert {"silenced()", "DrawTimer()"} <= set(_with_items(pin, parents))
+
+
+@pytest.fixture(scope="module")
+def e2_live(tmp_path_factory):
+    return _live_run(tmp_path_factory.mktemp("e2_live"), ("e2",))
+
+
+def test_live_e2_trains_two_reps_and_runs_one_a2_pass(e2_live):
+    root = e2_live["root"]
+    (call,) = e2_live["spies"]["pin_calls"]
+    assert call["arm"] == "retrain" and call["device"] == "cpu"
+    assert not pathlib.Path(call["record_path"]).exists()
+    for arm in probe.E2_ARMS:
+        assert (root / "data" / "probe36_e2" / arm / "run.csv").exists()
+        assert (root / "checkpoints" / f"probe36_{arm}_adapter.pt").exists()
+    stages = e2_live["records"]["e2"]["stages"]
+    assert len(stages["train_reps"]) == 2
+    for rep in stages["train_reps"]:
+        assert 0 < rep["loop_seconds"] < rep["outer_seconds"]
+    assert stages["a2_pass"]["draws"] == LIVE_DRAWS == len(stages["a2_pass"]["draw_seconds"])
+    assert stages["a2_pass"]["draws_per_question"] == LIVE_K
+    config = e2_live["records"]["e2"]["configuration"]
+    assert config["n_facts_m2"] == config["n_facts_real"] - 1
+
+
+def test_live_e2_record_passes_the_gate_with_provenance(e2_live):
+    record = e2_live["records"]["e2"]
+    probe.prove_no_reading(record)
+    assert record["provenance"]["run"]["device"] == "cpu" and record["repetitions"] == 2
+    assert e2_live["sidecars"]["e2"]["reused"] == {"e2": False}
+    text = e2_live["stdout"]
+    assert re.search(r"^\[phase36_probe\] e2 \d+\.\d s$", text, re.MULTILINE), text
+    assert "per_fact" not in text and not re.search(r"\d+/\d+ = ", text), text
+
+
+def test_live_e2_never_touches_published_adapters(e2_live):
+    root = e2_live["root"]
+    assert not any((root / "results").iterdir())  # WR-01: both csvs moved under data/
+    assert not list((root / "checkpoints").glob("phase19_*"))
+    assert not (root / "checkpoints" / "persona_adapter.pt").exists()
+    fixture = root / "checkpoints" / "fixture_adapter.pt"
+    assert fixture.read_bytes() == b"fixture adapter bytes"
+    hashed = e2_live["spies"]["hashed"]
+    assert fixture in hashed  # non-vacuous: the before/after identity check ran
+    assert not [p for p in hashed if p.is_relative_to(probe._GIT_ROOT / "checkpoints")]
+    before, after = e2_live["strays"]
+    assert before == after
