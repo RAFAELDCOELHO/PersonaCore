@@ -249,6 +249,33 @@ def test_run_front_writes_ledger_and_heartbeat(tmp_path, monkeypatch):
     assert len(phase36_ledger.read_ledger(paths["ledger_path"])) == len(lines)
 
 
+def test_run_front_reprobe_is_priced_once_and_refused_once_the_record_exists(tmp_path, monkeypatch):
+    """CR-01: the WR-02 re-probe (sidecar deleted, front rerun) writes a second end line naming the
+    same record; spent prices it without refusing. Once the record exists (emitted or committed),
+    a re-probe is refused BEFORE its start line: the write-once record could not carry its
+    seconds, so the last end line would name a record another attempt wrote."""
+    paths = _planted(tmp_path, monkeypatch)
+    states = {}
+    monkeypatch.setattr(probe, "_path_state", lambda rel: states.get(rel, "absent"))
+    probe.run_front("e5", **paths)
+    probe.run_sidecar("e5").unlink()  # the documented re-probe
+    probe.run_front("e5", **paths)
+    record = phase36_prereg.probe_record("e5")
+    lines = phase36_ledger.read_ledger(paths["ledger_path"])
+    assert [x["record"] for x in lines if x["event"] == "end"] == [record, record]
+    totals = phase36_ledger.spent([], ledger_path=paths["ledger_path"], fronts=("probes",))
+    assert [r["flag"] for r in totals["rows"]] == [
+        phase36_ledger.SUPERSEDED_FLAG,
+        phase36_ledger.PENDING_FLAG,
+    ]
+    for state in ("untracked", "committed", "modified"):
+        states[record] = state
+        probe.run_sidecar("e5").unlink(missing_ok=True)
+        with pytest.raises(SystemExit, match="CR-01"):
+            probe.run_front("e5", **paths)
+        assert phase36_ledger.read_ledger(paths["ledger_path"]) == lines
+
+
 def test_run_front_crash_leaves_an_open_start(tmp_path, monkeypatch):
     def crash(state):
         state.update(stage="e5_fake")

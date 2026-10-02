@@ -360,6 +360,17 @@ def run_front(front, *, heartbeat_path, ledger_path):
         print(f"[phase36_probe] {front} skipped: {_rel(sidecar)} exists", flush=True)
         return json.loads(sidecar.read_text(encoding="utf-8"))
     _prove(front in STAGES, f"front {front!r} has no registered stage")
+    record = phase36_prereg.probe_record(front)
+    ended = any(
+        x["event"] == "end" and x["record"] == record
+        for x in phase36_ledger.read_ledger(ledger_path)
+    )
+    _prove(
+        not (ended and _path_state(record) != "absent"),
+        f"{record} already exists and the ledger names it in an end line: a re-probe of {front} "
+        "would add an end line whose seconds the write-once record cannot carry (CR-01). A "
+        "correction is a dated continuation",
+    )
     record_session(front)
     rid = phase36_ledger.run_id(36, "probes", front)
     phase36_ledger.append("start", run_id=rid, phase=36, front="probes", ledger_path=ledger_path)
@@ -395,7 +406,7 @@ def run_front(front, *, heartbeat_path, ledger_path):
         run_id=rid,
         phase=36,
         front="probes",
-        record=phase36_prereg.probe_record(front),
+        record=record,
         ledger_path=ledger_path,
     )
     print(f"[phase36_probe] {front} {time.monotonic() - started:.1f} s", flush=True)

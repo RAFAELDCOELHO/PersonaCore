@@ -435,14 +435,29 @@ def test_closed_row_sources(clock, ledger, monkeypatch):
         phase36_ledger._closed_row(start, end, [PROBE_E1])
 
 
-def test_spent_refuses_a_record_named_twice(clock, ledger):
-    for unit in ("a", "b"):
-        rid = _start("probes", unit, ledger)
+def test_spent_counts_a_superseded_end_line_by_its_own_span(clock, ledger, monkeypatch):
+    """CR-01: a re-probe writes a second end line naming the same record. The earlier attempt's
+    hours were really spent (D-12): counted once by its own ledger span; only the LAST end line is
+    counted by the record's provenance.run clock. Never refused, never double counted."""
+    for began, ended in ((0, 1000), (2000, 3000)):
+        clock.value = _at(began)
+        rid = _start("probes", "e1", ledger)
+        clock.value = _at(ended)
         phase36_ledger.append(
             "end", run_id=rid, phase=36, front="probes", record=PROBE_E1, ledger_path=ledger
         )
-    with pytest.raises(SystemExit, match="two end lines"):
-        phase36_ledger.spent([], ledger_path=ledger)
+    record = _provenance(_at(2010), _at(2910))
+    monkeypatch.setattr(phase30_points, "_tracked_json", lambda rel, tracked, what: record)
+    totals = phase36_ledger.spent([PROBE_E1], ledger_path=ledger, fronts=("probes",))
+    assert totals["by_front"]["probes"] == 1000.0 + 900.0
+    first, last = totals["rows"]
+    assert first["seconds"] == 1000.0 and first["flag"] == phase36_ledger.SUPERSEDED_FLAG
+    assert last["seconds"] == 900.0 and last["flag"] is None
+    report = phase36_ledger.report_rows([PROBE_E1], ledger_path=ledger, heartbeat_path=ledger)
+    assert report["rows"] == totals["rows"] and report["by_front"]["probes"] == 1900.0
+    attempts = phase36_ledger._attempts(phase36_ledger.read_ledger(ledger))
+    assert phase36_ledger._superseded(attempts) == {0}
+    assert phase36_ledger._superseded(attempts[1:]) == set()
 
 
 def test_report_lists_open_attempts_without_refusing(clock, ledger, beats, monkeypatch, capsys):

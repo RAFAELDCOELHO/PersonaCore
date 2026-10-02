@@ -60,6 +60,9 @@ STOPS = ("a", "b", "c")
 LOST_FLAG = "sem registro de resultado"
 NO_BEAT_FLAG = "sem registro de resultado; no heartbeat after its start (0 s counted)"
 PENDING_FLAG = "record not yet tracked"
+# CR-01: a re-probe's second end line names the same record. The earlier attempt's hours were
+# spent (D-12) but its result was superseded: counted by its own ledger span, never by the record.
+SUPERSEDED_FLAG = LOST_FLAG + "; superseded by a later end line naming the same record"
 # Every v6.0 MPS record carries provenance.run.started_utc / finished_utc / device.
 RECORD_CLOCK = ("provenance", "run")
 
@@ -255,9 +258,23 @@ def reconcile(*, ledger_path=None, heartbeat_path=None):
     return appended
 
 
-def _closed_row(start, close, tracked):
+def _superseded(attempts):
+    """CR-01: indices of closed attempts whose end line names a record a LATER end line names."""
+    last = {}
+    for index, (_, close) in enumerate(attempts):
+        if close is not None and close["event"] == "end":
+            last[close["record"]] = index
+    return {
+        index
+        for index, (_, close) in enumerate(attempts)
+        if close is not None and close["event"] == "end" and last[close["record"]] != index
+    }
+
+
+def _closed_row(start, close, tracked, superseded=False):
     """One closed attempt's seconds: a lost line's own; a tracked record's provenance.run span;
-    an untracked record's end minus start utc, flagged pending."""
+    an untracked record's end minus start utc, flagged pending; a superseded end line's own ledger
+    span (CR-01: the record's clock belongs to the last end line naming it)."""
     row = {
         "run_id": start["run_id"],
         "phase": start["phase"],
@@ -269,7 +286,9 @@ def _closed_row(start, close, tracked):
     }
     if close["event"] == "lost":
         return {**row, "seconds": close["seconds"], "flag": close["flag"]}
-    if close["record"] in tracked:
+    if superseded:
+        started, finished, flag = start["utc"], close["utc"], SUPERSEDED_FLAG
+    elif close["record"] in tracked:
         clock = phase30_points._tracked_json(close["record"], tracked, "the run record")
         for key in RECORD_CLOCK:
             clock = clock.get(key) if isinstance(clock, dict) else None
@@ -303,10 +322,11 @@ def spent(tracked=None, *, ledger_path=None, fronts=None):
         f"attempts still open: {still}. Wait for their end lines, or run `phase36_ledger.py "
         "reconcile` once the run is dead; `phase36_ledger.py report` shows progress",
     )
-    records = [close["record"] for _, close in attempts if close["event"] == "end"]
-    twice = sorted({r for r in records if records.count(r) > 1})
-    _prove(not twice, f"records named by two end lines (double count): {twice}")
-    rows = [_closed_row(start, close, tracked) for start, close in attempts]
+    superseded = _superseded(attempts)
+    rows = [
+        _closed_row(start, close, tracked, i in superseded)
+        for i, (start, close) in enumerate(attempts)
+    ]
     by_front = {
         front: math.fsum(r["seconds"] for r in rows if r["front"] == front) for front in scope
     }
@@ -440,10 +460,12 @@ def report_rows(tracked=None, *, ledger_path=None, heartbeat_path=None):
     attempts. Never refuses on an open attempt."""
     tracked = phase36_caps.tracked_files() if tracked is None else tracked
     lines = read_ledger(ledger_path)
+    attempts = _attempts(lines)
+    superseded = _superseded(attempts)
     rows = []
-    for start, close in _attempts(lines):
+    for index, (start, close) in enumerate(attempts):
         if close is not None:
-            rows.append(_closed_row(start, close, tracked))
+            rows.append(_closed_row(start, close, tracked, index in superseded))
             continue
         began = datetime.datetime.fromisoformat(start["utc"])
         beat = last_beat_since(start["run_id"], began, heartbeat_path)
