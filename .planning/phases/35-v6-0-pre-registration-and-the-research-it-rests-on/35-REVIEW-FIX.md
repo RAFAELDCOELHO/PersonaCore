@@ -7,12 +7,20 @@ files_reviewed: 2
 files_reviewed_list:
   - scripts/phase35_prereg.py
   - tests/test_phase35_prereg.py
-findings:
-  critical: 0
+rereviewed: 2026-10-02T00:41:16Z
+rereview_scope: "git diff 14a7b7f 3805beb (fix of WR-01..03, IN-01..05; WR-04 ruled by Rafael, docstring only)"
+prior_findings_1e1e1c5:
   warning: 4
   info: 5
   total: 9
-status: issues_found
+findings:
+  critical: 0
+  warning: 0
+  info: 2
+  total: 2
+  blocking: 0
+  known_limitations: 9
+status: clean
 ---
 
 # Phase 35: Code Review Report (re-review of fix commit 1e1e1c5)
@@ -228,5 +236,101 @@ N5 band derivation lists the same keys in reverse order -> SystemExit: ... the d
 ---
 
 _Reviewed: 2026-10-02T00:15:13Z_
+_Reviewer: Claude (gsd-code-reviewer)_
+_Depth: standard_
+
+## Re-review of 3805beb (2026-10-01)
+
+**Scope:** `git diff 14a7b7f 3805beb`, covering `scripts/phase35_prereg.py` and `tests/test_phase35_prereg.py`. This commit fixes WR-01..03 and IN-01..05 above. WR-04 was ruled by Rafael and changes only the docstrings.
+
+**Stopping rule (Rafael, verbatim):** "só bloqueia o congelamento um achado que mude um valor lido ou um veredito emitido num fill real. Achado de endurecimento contra contorno deliberado vira limitação conhecida registrada no 35-REVIEW-FIX, sem novo commit no módulo."
+
+**Classification used below:**
+- **BLOCKING:** a one-command experiment shows a real fill reading a different value or emitting a different verdict. A real fill is an owner fill file calling `phase35_prereg.fill(...)` with honest records. A legal fill that is refused, or an illegal value that the normal API accepts, also counts.
+- **Known limitation:** the issue only shows up when someone deliberately bypasses the API: private names, forged objects, monkeypatching, dynamic access, or deliberate census evasion.
+
+**Baseline.** HEAD is `3805beb`.
+- `.venv/bin/pytest -q tests/test_phase35_prereg.py` gives **88 passed in 17.92s**.
+- After every experiment, `git status --short` shows only the pre-existing ` D .claude/scheduled_tasks.lock`.
+
+**Probes.** All of them live in the session scratchpad: `probe_fix.py`, `probe_fix_after.py`, `probe_rr3805.py` and `probe_rr3805b.py`. Records are planted under `tempfile.mkdtemp()` with `_REPO_ROOT` repointed there. Nothing was written under `scripts/`, `tests/` or `results/`.
+
+### (a) Closure of each finding
+
+| ID | Result | Evidence |
+|----|--------|----------|
+| WR-01 | CLOSED | Grids are now `MappingProxyType` over a private copy, registered by identity in `_FILLED_GRIDS`. `probe_fix.py` now dies at its first step with `AttributeError: 'mappingproxy' object has no attribute '_data'`. `probe_fix_after` N1: `grid['checkpoints'] = (1,)` raises `TypeError`, and `e1_stop` refuses the readings for checkpoint 1 because the grid was not changed. N1b: a hand-built grid is refused with `grid must be the fill('e1_checkpoint_grid', ...) result`. `probe_rr3805` R4: a real grid still judges, giving `{'stop': 8, 'judged': True}`. Residual: KL-01. |
+| WR-02 | CLOSED for the runtime hijack and the five named census bypasses | `_SLOTS` is deleted, and `probe_fix_after` N7 dies with `module 'phase35_prereg' has no attribute '_SLOTS'`. `SLOTS` inner proxies wrap `dict(slot)` copies, and `test_registry_is_built_from_copies` passes. In N6 the census now flags alias-by-assignment, private `_SLOTS` read and write, `vars()` (also flagged as a `_rule_` reference by name), and `sys.modules['phase35_prereg']`. Residuals: KL-02..KL-05. |
+| WR-03 | CLOSED | `probe_fix_after` N3 is refused with `floors: seeded ordering 'greedy_loo' needs every e1 teaching seed (ERASE-10)`. The legal floors fill seeded for both teaching seeds is still accepted (`tests/test_phase35_prereg.py:1700-1708`, `-k floors`: 7 passed). The check `len(cell) == 2` is correct because `cell = key[1:]`. |
+| WR-04 | RULED (docstring only) | Only the module docstring (`:61-67`) and `_rule_e2_S`'s docstring changed; the signature and body are unchanged. The **D-06 STOP is intact through both doors.** `probe_rr3805` D1 (`_prove_budget`) and D2 (`fill("e2_S")` on a record with S = len(seed_list()) + 1) both print `the Phase 36 probe calls for S > len(seed_list()): STOP and ask Rafael (D-06); the seed list is never extended`. |
+| IN-01 | CLOSED | `_deep_frozen` recurses through Mapping and list/tuple. `probe_fix_after` N2: the list value after the fill is `('step a',)`, and `append` raises `AttributeError`. N2b: the nested mapping is unchanged (`{'a': 1}`) and assignment raises `TypeError`. No design rule tests `isinstance(value, list)` after freezing; the only post-freeze check is the `str` check at `:1418-1421`, so a legal design fill is not refused. |
+| IN-02 | CLOSED for every field the rules read at top level | `probe_fix_after` N4 and N4b: `must be a mapping carrying ['gap_noise_floor']`. The new tests cover a malformed band record, a malformed calibration record (`no_draws`) and a malformed e3 control. Every field `_prove_record` now requires was already read unguarded before, so an honest record that used to pass still passes. Residual: N-02. |
+| IN-03 | CLOSED | `probe_fix_after` N6 FP: `SLOTS.items()` and `.index(...)` now give `[]`. `test_slot_census_lets_registry_reads_pass` passes. |
+| IN-04 | CLOSED | `probe_fix_after` N5: the reversed band keys are ACCEPTED, with bands equal to the forward fill. The test accepts the reversed e3 keys (`:2098-2099`). A duplicated key is refused (`value_twice`). See N-01 for the strictness change. |
+| IN-05 | CLOSED | `_untested_functions` counts only `phase35_prereg.<def>(...)` and bare calls of names imported from the module. The test asserts that `other.planted_helper()` does not count and that `from phase35_prereg import planted_helper; planted_helper()` does. |
+
+**No false refusal of a legal fill, checked for all 17 slots:**
+- Every one of the 17 slots has a `phase35_prereg.fill(...)` call in the test file (`_fill_calls`: no slot missing), and the suite is green.
+- **Slots whose behaviour changed:**
+  - The key-valued slots (`e1_condition_a_floors`, `e1_condition_c_band_inputs`, `e3_recall_threshold`) now go through `_READ` plus `_prove_keys_value`.
+  - The grid slots (`e1_checkpoint_grid`, `e3_grid_subset`) now go through `_filled`.
+  - The design slots (`e1_alternative_ordering`, `e2_noise_floor_estimator`, `e5_minting_rule`, `e5_rank_moves_and_generation_collapses`, `e6_decomposition_rule`, `r1b_tolerance_and_replicated`) now go through `_deep_frozen`.
+  - Each of these slots has a positive acceptance assertion in the suite.
+- `_READ` only moves the derivation-value check from `_consume_inputs` into `_prove_keys_value`. It runs after input validation, so the refusal message order changes, but nothing new is accepted or refused (apart from N-01).
+
+**No false positive on the real tree or on a legitimate owner fill file:**
+- The real-tree census is green.
+- `probe_rr3805` L1 is a planted `scripts/phase40_x_prereg.py`. It does `import phase35_prereg`, reads `SLOTS['e2_S']['input_records']`, `owner_prereg_glob('e2_S')`, `V6_RESULT_PATHS` and `seed_list()`, and binds `E2_S = phase35_prereg.fill('e2_S', ...)`. The census returns `[]`.
+
+**Copying and pickling a grid** (stated as relevant, not required):
+- `copy.copy(grid)` and `pickle.dumps(grid)` both raise `TypeError: cannot pickle 'mappingproxy' object` (R2, R3).
+- This does not matter for the API, because a copy would be refused by the identity check anyway. A consumer has to pass the object `fill` returned, in the same process (KL-07).
+
+### (b) BLOCKING findings
+
+None. No experiment changed a value read or a verdict emitted by a real fill.
+
+### Non-blocking notes (behavioural, not bypass hardening)
+
+- **N-01:** `_prove_keys_value` compares by `repr`, so it is stricter than the old `==`.
+  - A derivation value that writes an equal number with a different type is now refused, where the old check accepted it. `probe_rr3805` K1: the old `==` is True. K2: `((1e-4, 300.0, 8, 1337),)` against key `((1e-4, 300, 8, 1337),)` is now refused.
+  - This fails closed, and only on a derivation that does not list the slot's actual keys. Seeds, steps and batch are proven `int` by `_prove_count`, and the honest form `tuple(floors)`, `_grid_keys(grid)` or a copy of the keys is accepted, as K3 and the tests show.
+  - It is not BLOCKING. It could be relaxed later with `==` on a multiset if a phase ever needs it.
+- **N-02:** in `e3_recall_threshold`, `record["taught_recall"]["numerator"]` and the `heldout_recall` equivalent (`:1579-1580`) are not shape-guarded.
+  - A control whose `taught_recall` is not a mapping would raise a raw `TypeError`/`KeyError` instead of a `_prove` refusal.
+  - This is found by reading the code, not demonstrated. It fails closed and does not change a value or a verdict.
+
+### Known limitations (accepted under Rafael's stopping rule)
+
+- **KL-01 Forging a grid by appending to `_FILLED_GRIDS`:**
+  - `phase35_prereg._FILLED_GRIDS.append(types.MappingProxyType({...}))` makes `e1_stop` and `e3_recall_threshold` accept a grid no rule produced. `probe_rr3805b` R1'': `{'stop': 1, 'judged': True}` on a never-filled grid.
+  - The census flags the dotted `phase35_prereg._FILLED_GRIDS`, but not the routes in KL-02 and KL-03.
+- **KL-02 Module passed as a function argument:**
+  - `def f(m): m._FILLED_GRIDS.append(...)` (or `m.SLOTS[...]...`) followed by `f(phase35_prereg)` is invisible to the census, which only recognises the literal name `phase35_prereg`. `probe_rr3805b` G1': `[]`.
+- **KL-03 From-import of private names other than `_rule_*`:**
+  - `from phase35_prereg import _filled, _FILLED_GRIDS` is not flagged (`probe_rr3805` G3: `[]`). After that, `_filled({...})` mints a registered grid.
+- **KL-04 Reaching a rule by iterating the registry:**
+  - `for v in phase35_prereg.SLOTS.values(): v["rule"](...)` calls a rule without `fill`. The census flags only `SLOTS[...]["rule"]` and `.get("rule")` on a chain rooted at `phase35_prereg.SLOTS` (`probe_rr3805` G2: `[]`).
+- **KL-05 Reaching module state through a public function's `__globals__`:**
+  - `phase35_prereg.e1_stop.__globals__["_FILLED_GRIDS"]` is not flagged (`probe_rr3805` G4: `[]`). The `"_rule_"` string-constant check does catch the rule variant.
+- **KL-06 The census is over-strict on honest code** (fails loud in the test only, and no fill value is affected):
+  - A string constant exactly `"phase35_prereg"`, for example a provenance field `{'prereg': 'phase35_prereg'}`, is flagged as "dynamic import" (`probe_rr3805` F1).
+  - Any string constant that starts with `_rule_` is flagged.
+  - Dunder reads such as `phase35_prereg.__file__` are flagged as "private access" (F2).
+  - An owner who hits one of these has to rephrase the code. The census never passes a bypass because of this.
+- **KL-07 Grid identity is per module object and per process:**
+  - A grid filled through one copy of the module (after `importlib.reload`, or with the module imported under a second dotted name) is refused by the other copy's `e1_stop`/`e3_recall_threshold`.
+  - A grid cannot be copied or pickled across processes (R2, R3).
+  - The old `isinstance(grid, _Filled)` check had the same per-module-object property. A real consumer must call `fill(...)` in the process that judges, or import the fill file's binding.
+- **KL-08 `_deep_frozen` covers Mapping, list and tuple only:**
+  - A `set`, `bytearray` or custom mutable object inside a design entry's value stays shared and mutable after the fill. A `namedtuple` is flattened to a plain tuple.
+  - This is not demonstrated as harmful, because no design slot's rule reads such a value.
+- **KL-09 Runtime monkeypatching of module globals is out of scope:**
+  - Rebinding `phase35_prereg.SLOTS`, `phase35_prereg.fill` or `_REPO_ROOT` changes what is dispatched or read, and the probes use exactly this for planting.
+  - The census flags the dotted private writes (`_REPO_ROOT`, `_FILLED_GRIDS`), but the KL-02 and KL-03 routes reach them unseen.
+
+**Counts for this re-review:** 0 BLOCKING, 2 non-blocking notes (N-01, N-02), 9 known limitations (KL-01..KL-09). Status: **clean** under the stopping rule.
+
+_Re-reviewed: 2026-10-02T00:41:16Z (2026-10-01 local)_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
