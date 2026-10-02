@@ -6,11 +6,14 @@ writers run against a scratch repository.
 """
 
 import ast
+import contextlib
 import datetime
 import hashlib
 import inspect
+import io
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -889,3 +892,194 @@ def test_e1_pin_call_runs_inside_silenced():
         if isinstance(node, ast.With):
             items += [ast.unparse(item.context_expr) for item in node.items]
     assert "silenced()" in items and "DrawTimer()" in items
+
+
+# =================================================================================================
+# Task 3 — the E1 live path on CPU: main -> run_all -> run_front -> stage_e1 -> emit (W10)
+# =================================================================================================
+
+_PROBE36_GLOBS = (
+    "data/*probe36*",
+    "checkpoints/*probe36*",
+    "results/*probe36*",
+    "results/phase36_probe_*",
+)
+# The SHAPE is scaled, not the instrument: 216 x 48 CPU draws would dominate the suite.
+LIVE_QUESTIONS, LIVE_K = 3, 4
+LIVE_DRAWS = LIVE_QUESTIONS * LIVE_K
+
+
+def _real_probe36_strays():
+    """Every probe36 write target in the REAL tree (the test module's _ROOT, never patched)."""
+    return sorted(
+        {p.relative_to(_ROOT).as_posix() for pattern in _PROBE36_GLOBS for p in _ROOT.glob(pattern)}
+    )
+
+
+def _e1_live_fixture(root):
+    """ONE CPU run of the E1 probe through main(), then the REAL emit. Every patch is undone."""
+    import phase14_recall
+    import phase16_persistence
+    import phase17_persona_gate
+    import phase19_erasure
+
+    from personacore.checkpoint import export_slim
+    from personacore.config import ModelConfig
+    from personacore.tokenizer import from_json
+    from test_phase22_wiring import _e2e_env
+
+    strays_before = _real_probe36_strays()
+    # B1: from the committed JSON alone, before any patch — never from the gitignored .pt.
+    real_components = probe.e1_components()
+    pin_signature = inspect.signature(phase19_erasure.run_erasure_arm)
+    entries = phase36_prereg.phase35_prereg.a2_corpus_entries()[:LIVE_QUESTIONS]
+    spies = {"pin_calls": [], "hashed": []}
+    heartbeat = root / "heartbeat.jsonl"
+    ledger = root / "ledger" / "v6_mps_ledger.jsonl"
+    out = root / "emitted" / "phase36_probe_e1.json"
+    buf = io.StringIO()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(phase25_run, "_DEVICE", "cpu")
+        _e2e_env(root, mp)
+        slim = root / "convbase_slim.pt"
+        export_slim(root / "convbase.pt", slim)
+        mp.setattr(phase14_recall, "CONVBASE_SLIM", slim)
+        mp.setattr(phase17_persona_gate, "CONVBASE_SLIM", slim)
+        mp.setattr(phase14_recall, "RECALL_MAX_NEW_TOKENS", 4)
+        mp.setattr(probe, "_ROOT", root)
+        # W1: this module-scoped fixture runs before the autouse clean_tree patch applies.
+        mp.setattr(probe, "refuse_if_dirty", lambda **kw: "")
+        mp.setattr(phase25_run, "disk_precheck", lambda target=None: None)
+        # Redirects of gitignored inputs (absent on CI; never a skipif — the ubuntu skip pin):
+        # checkpoints/persona_adapter.pt -> a fixture adapter, and the published sha -> its sha.
+        # checkpoints/convbase_slim.pt -> the fixture slim base above. Nothing reads data/.
+        adapter = root / "checkpoints" / "fixture_adapter.pt"
+        adapter.write_bytes(b"fixture adapter bytes")
+        sha = hashlib.sha256(adapter.read_bytes()).hexdigest()
+        mp.setattr(phase14_recall, "ADAPTER_PATH", adapter)
+        mp.setattr(probe, "published_adapter_sha256", lambda: sha)
+        mp.setattr(probe, "e1_shape", lambda: (LIVE_QUESTIONS, LIVE_K))
+        mp.setattr(probe, "e1_components", lambda: real_components)
+        real_sha256 = probe._sha256
+        mp.setattr(
+            probe,
+            "_sha256",
+            lambda path: spies["hashed"].append(pathlib.Path(path)) or real_sha256(path),
+        )
+
+        def stand_in(*args, **kwargs):
+            """The pin's signature and call shape; the REAL draw_all, so DrawTimer times real
+            _complete calls; a reading written, printed and returned — all of which must vanish."""
+            bound = pin_signature.bind(*args, **kwargs)
+            arguments = bound.arguments
+            assert arguments["arm"] == "erased"
+            assert arguments["components"] == real_components
+            record_path = pathlib.Path(arguments["record_path"])
+            assert record_path.parent == root / "data"
+            assert record_path.name.startswith("probe36_e1_rep")
+            spies["pin_calls"].append(dict(arguments))
+            model, _cfg, _ckpt = phase17_persona_gate.build_unadapted_base("cpu")
+            tok = from_json(phase14_recall.TOKENIZER_PATH)
+            forbid = phase16_persistence.resolve_forbid(tok, ModelConfig.vocab_size)[0]
+            for entry in entries:
+                phase14_recall.draw_all(
+                    model,
+                    tok,
+                    entry["prompt_ids"],
+                    arguments["device"],
+                    forbid,
+                    entry["seed_index"] * LIVE_K,
+                    n_samples=LIVE_K - 1,
+                )
+            record_path.write_text(json.dumps({"completions": ["Biscuit"]}), encoding="utf-8")
+            print("taught ON: 3/4 = 0.75 per_fact hits")
+            return {"per_fact": [{"hits": 3}]}
+
+        mp.setattr(phase19_erasure, "run_erasure_arm", stand_in)
+        argv = ["run", "--heartbeat", str(heartbeat), "--ledger", str(ledger), "--front", "e1"]
+        with contextlib.redirect_stdout(buf):
+            assert probe.main(argv) == 0
+        sidecar = json.loads(probe.run_sidecar("e1").read_text(encoding="utf-8"))
+        arm_paths = [probe.arm_record_path("e1", rep) for rep in (1, 2)]
+        probe.emit("e1", out_path=out)  # the REAL _emit_target -> _write_record (W10)
+    return {
+        "root": root,
+        "sidecar": sidecar,
+        "record": json.loads(out.read_text(encoding="utf-8")),
+        "spies": spies,
+        "strays": (strays_before, _real_probe36_strays()),
+        "stdout": buf.getvalue(),
+        "ledger": ledger,
+        "heartbeat": heartbeat,
+        "arm_paths": arm_paths,
+    }
+
+
+@pytest.fixture(scope="module")
+def e1_live(tmp_path_factory):
+    """ONE CPU live-path E1 run per module (the tests/test_phase31_probe.py:386-389 shape)."""
+    return _e1_live_fixture(tmp_path_factory.mktemp("e1_live"))
+
+
+def test_live_e1_calls_the_pin_twice_and_deletes_its_draws(e1_live):
+    calls = e1_live["spies"]["pin_calls"]
+    assert len(calls) == 2
+    paths = [pathlib.Path(c["record_path"]) for c in calls]
+    assert paths == e1_live["arm_paths"] and paths[0] != paths[1]
+    assert not any(p.exists() for p in paths)
+    assert all(c["device"] == "cpu" for c in calls)
+
+
+def test_live_e1_sidecar_counts_every_draw_and_keeps_fixed_costs_apart(e1_live):
+    runs = e1_live["sidecar"]["stages"]["runs"]
+    assert len(runs) == 2
+    for run in runs:
+        assert run["draws"] == LIVE_DRAWS and len(run["draw_seconds"]) == LIVE_DRAWS
+        assert all(type(t) is int and 0 <= t <= 4 for t in run["draw_tokens"])
+        assert run["fixed_seconds"] == run["total_seconds"] - run["draw_seconds_sum"]
+        assert run["fixed_seconds"] > 0
+    assert e1_live["sidecar"]["reused"] == {"e1": False}
+    assert e1_live["sidecar"]["device"] == "cpu"
+
+
+def test_live_e1_stdout_holds_no_reading(e1_live):
+    text = e1_live["stdout"]
+    assert re.search(r"^\[phase36_probe\] e1 \d+\.\d s$", text, re.MULTILINE), text  # not blind
+    assert "per_fact" not in text and "hits" not in text
+    assert not re.search(r"\d+/\d+ = ", text), text
+
+
+def test_live_e1_record_passes_the_gate_with_provenance(e1_live):
+    record = e1_live["record"]
+    probe.prove_no_reading(record)
+    assert record["provenance"]["run"]["device"] == "cpu"
+    assert set(record["provenance"]["module_sha256"]) == set(probe.PINNED_MODULES)
+    for run in record["stages"]["runs"]:
+        assert len(run["draw_seconds"]) == LIVE_DRAWS
+        assert all(type(s) is float for s in run["draw_seconds"])
+    assert record["stages"]["r1b_k48_totals"] == [
+        r["total_seconds"] for r in e1_live["sidecar"]["stages"]["runs"]
+    ]
+    assert record[probe.BESIDE_KEY]["path"] == probe.PHASE31_POINT_RECORD
+    assert record["repetitions"] == 2 and record["gates_nothing"] is True
+
+
+def test_live_e1_ledger_and_heartbeat(e1_live):
+    rid = phase36_ledger.run_id(36, "probes", "e1")
+    lines = phase36_ledger.read_ledger(e1_live["ledger"])
+    assert [(x["event"], x["run_id"]) for x in lines] == [("start", rid), ("end", rid)]
+    assert lines[1]["record"] == "results/phase36_probe_e1.json"
+    last = e1_live["heartbeat"].read_text(encoding="utf-8").splitlines()[-1]
+    assert json.loads(last)["point"] == rid
+
+
+def test_live_e1_writes_nothing_in_the_real_tree(e1_live):
+    before, after = e1_live["strays"]
+    assert before == after
+    assert not any((e1_live["root"] / "results").iterdir())
+
+
+def test_live_e1_never_hashed_the_gitignored_adapter(e1_live):
+    hashed = e1_live["spies"]["hashed"]
+    assert e1_live["root"] / "checkpoints" / "fixture_adapter.pt" in hashed  # non-vacuous
+    assert not [p for p in hashed if p.is_relative_to(probe._GIT_ROOT / "checkpoints")]
