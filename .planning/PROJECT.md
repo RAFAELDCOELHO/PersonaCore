@@ -522,4 +522,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Updated 2026-10-01 — milestone v6.0 opened (robustness and public reproducibility of the v3.0–v5.0 results; scope proposed by Claude (claude.ai), adopted by Rafael).*
+*Updated 2026-10-01 — Phase 35 complete: the v6.0 pre-registration (`scripts/phase35_prereg.py`: core + 17 deferred slots, reviewed by Rafael, frozen at Phase 36's first record) and the PREREG-09 research note are on record; PREREG-05..09 validated. Earlier 2026-10-01 — milestone v6.0 opened (robustness and public reproducibility of the v3.0–v5.0 results; scope proposed by Claude (claude.ai), adopted by Rafael).*
