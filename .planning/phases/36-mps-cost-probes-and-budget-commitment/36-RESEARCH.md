@@ -627,7 +627,7 @@ def test_phase36_prereg_is_frozen_before_every_phase36_record():
 | A5 | Training time ≈ 80 s for M2/full adapter at 200 steps (only prose + phase23 control record) | E2 | Small; E2 is reading-dominated |
 | A6 | Per-draw timing via a runtime wrapper of `phase14_recall._complete` is acceptable under "pins are never edited" | Fixed vs per-draw | If Rafael rules runtime patching of a pin's private as editing, use option (B), a port |
 
-## Open Questions
+## Open Questions (RESOLVED — 36-CONTEXT Addendum: Q1 D-18, Q2 D-19 by Rafael; Q3–Q6 Claude's discretion defaults)
 
 1. **What does "at K = 16" require: a separate K = 16 process, or K = 16 measured as the first 16 draws of a K = 48 run (prefix-stable)?**
    - Known: the pin hardcodes K from the Phase 18 record (`phase19_erasure.py:2825`), and prefix stability is test-asserted.
