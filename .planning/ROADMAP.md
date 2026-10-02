@@ -1561,7 +1561,40 @@ cut options go to Rafael
      result records are write-once and committed only after Rafael writes approved. (COST-01,
      COST-02)
 
-**Plans**: TBD
+**Plans**: 8 plans in 8 waves (sequential — they share `scripts/phase36_probe.py` and its test, and the commit order is load-bearing)
+
+Plans:
+**Wave 1**
+
+- [ ] 36-01-PLAN.md — `scripts/phase36_prereg.py` + ancestry test committed first: the D-17/D-19 four-field entries, comparator table, probe record paths, P22 at T = 800
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 36-02-PLAN.md — unit caps (D-09) and the milestone MPS ledger (D-11..D-13): lost runs "sem registro de resultado", three stops as pauses lifted only by Rafael's ruling
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 36-03-PLAN.md — probe driver core (isolation, no-reading gate, write-once emit, WR-02) + E1: two K = 48 runs, K = 16 as the first-16-draw prefix, two fixed-cost samples (D-18)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 36-04-PLAN.md — E6 anchor generation (timing only), E5 clearance + scoring samples, LaunchAgent plist
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 36-05-PLAN.md — E3 at T = 200 (train + recall) and T = 800 (train only), E2 M2 retrain + A2 pass, preflight and full `main` dispatch
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 36-06-PLAN.md — budget derivation: 25% comparisons, high bounds, caps, stop line min(1.5Σ, 90), D-15 cut table, HALT path; consumer chain through `fill`
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 36-07-PLAN.md — pre-launch gate, Rafael loads the LaunchAgent on the M3, ledger + 5 probe records committed, dry budget
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 36-08-PLAN.md — Rafael's checkpoint: on "approved", the fill file and then `results/phase36_budget.json` (two commits); otherwise the cut table
 
 ### Phase 37: Clean Reproduction of the Phase 19 Verdict
 
@@ -1854,7 +1887,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | Phase | Milestone | Plans Complete | Status | Completed |
 | ----- | --------- | -------------- | ------ | --------- |
 | 35. v6.0 Pre-Registration and the Research It Rests On | v6.0 | 5/5 | Complete | 2026-10-01 — verification passed 5/5 SC (a4c7beb); Rafael's review corrections f13ad62/d850d0c + code-review fixes 1e1e1c5/3805beb; suite 3487/4/0 at bbcec95; zero gsd-sdk mutation handlers |
-| 36. MPS Cost Probes and Budget Commitment | v6.0 | 0/TBD | Not started | - |
+| 36. MPS Cost Probes and Budget Commitment | v6.0 | 0/8 | Planned | - |
 | 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 0/TBD | Not started | - |
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 0/TBD | Not started | - |
 | 39. Instrument × Context 2×2 | v6.0 | 0/TBD | Not started | - |
