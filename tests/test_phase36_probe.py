@@ -419,11 +419,12 @@ def test_emit_target_and_write_record_direct(tmp_path, monkeypatch, clean_tree):
 
 
 def test_build_record_refuses_a_front_mismatch_and_an_unbuilt_front():
-    run = {"front": "e5", "run_id": "x", "stages": {"configuration": {}}, "reused": {}}
+    # e4 is never a probe front (36-01), so it never has a builder; e5 got one in 36-04.
+    run = {"front": "e4", "run_id": "x", "stages": {"configuration": {}}, "reused": {}}
     with pytest.raises(SystemExit, match="not 'e6'"):
         probe.build_record("e6", run)
     with pytest.raises(SystemExit, match="no record builder"):
-        probe.build_record("e5", run)
+        probe.build_record("e4", run)
 
 
 # =================================================================================================
@@ -1293,3 +1294,144 @@ def test_e6_record_and_the_a2_context_beside(tmp_path, monkeypatch):
     sidecar.write_text(json.dumps({"stages": {"runs": [{}]}}), encoding="utf-8")
     with pytest.raises(SystemExit, match="not 2"):
         probe.e6_a2_context_beside()
+
+
+# =================================================================================================
+# Plan 36-04 Task 2 — stage_e5: the Phase 17 clearance sample + the E5 scoring sample (D-08)
+# =================================================================================================
+
+_E5_SENTINEL_TEXT = "SENTINEL completion text"
+_E5_SENTINEL_NLL = 987.654321
+
+
+def _e5_light(monkeypatch):
+    """stage_e5 with every model-touching call faked and recorded; the real fixture material,
+    tokenizer, forbid mask, held-out questions and reference sets."""
+    import phase14_factset
+    import phase14_factset_gate
+    import phase17_persona_gate
+    import phase19_erasure
+
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    calls = {"probe": [], "match": [], "adapter": [], "nll": []}
+    monkeypatch.setattr(
+        phase17_persona_gate, "build_unadapted_base", lambda device: ("base", None, None)
+    )
+
+    def guess(model, tok, device, forbid, value, questions, *, start_index=0):
+        calls["probe"].append((value, len(questions), start_index))
+        probes = [
+            {"question": q, "prompt_ids": [1], "completions": [_E5_SENTINEL_TEXT] * 4}
+            for q in questions
+        ]
+        return {"value": value, "probes": probes, "clean": "SENTINEL verdict"}
+
+    monkeypatch.setattr(phase14_factset_gate, "probe_guessability", guess)
+    monkeypatch.setattr(
+        phase14_factset,
+        "exact_match_clean",
+        lambda texts, value: calls["match"].append((len(texts), value)) or "SENTINEL verdict",
+    )
+    monkeypatch.setattr(
+        probe, "adapted_model", lambda device, k: calls["adapter"].append(k) or ("m", "tok", None)
+    )
+    monkeypatch.setattr(
+        phase19_erasure,
+        "value_span_nll_mean",
+        lambda model, tok, device, *, slot, value: (
+            calls["nll"].append((model, slot, value)) or _E5_SENTINEL_NLL
+        ),
+    )
+    return calls
+
+
+def test_stage_e5_light_times_both_samples_and_keeps_no_reading(tmp_path, monkeypatch, capsys):
+    import phase17_persona_facts
+    import phase17_personas
+    import phase18_extraction
+
+    calls = _e5_light(monkeypatch)
+    out = probe.stage_e5({"point": "x", "stage": "start", "shape": None, "draw_index": None})
+    assert capsys.readouterr().out == ""
+    slots = phase17_personas.CORE_SLOTS
+    per_slot = phase17_personas.QUESTIONS_PER_SLOT
+    # Clearance: one cached probe pass per slot over its 13 fresh questions, anchored on
+    # PERSONAS[0]'s value, with disjoint seeding windows (phase17_persona_gate.py:285-299).
+    anchors = {
+        f.slot: f.value for f in phase17_persona_facts.PERSONA_FACTS[phase17_personas.PERSONAS[0]]
+    }
+    assert calls["probe"] == [(anchors[s], per_slot, i * per_slot) for i, s in enumerate(slots)]
+    published = [f for facts in phase17_persona_facts.PERSONA_FACTS.values() for f in facts]
+    assert sorted(value for _n, value in calls["match"]) == sorted(f.value for f in published)
+    assert {n for n, _value in calls["match"]} == {per_slot * 4}
+    clearance = out["clearance"]
+    assert len(clearance["per_slot_seconds"]) == len(slots)
+    assert clearance["candidates_matched"] == len(published)
+    assert clearance["match_seconds_spread"]["n"] == len(published)
+    assert clearance["total_seconds"] >= clearance["setup_seconds"] >= 0
+    # Scoring: k = 0 then k = 78, every reference-set candidate of every locked slot.
+    k78 = len(probe.e1_components())
+    assert calls["adapter"] == [0, k78]
+    sizes = [len(phase18_extraction.reference_set_for(s)) for s in slots]
+    assert len(calls["nll"]) == 2 * sum(sizes)
+    rows = out["scoring"]["adapters"]
+    assert [r["k"] for r in rows] == [0, k78]
+    for row in rows:
+        assert row["candidates_per_slot"] == sizes and row["candidates"] == sum(sizes)
+        assert len(row["per_slot_mean_candidate_seconds"]) == len(slots)
+    assert out["scoring"]["candidate_seconds_spread"]["n"] == 2 * sum(sizes)
+    config = out["configuration"]
+    assert config["slots"] == len(slots) and config["published_values"] == len(published)
+    assert config["questions_per_slot"] == per_slot
+    assert config["scoring_frame"] == phase18_extraction.ADMISSIBLE_NLL_FRAME
+    assert "per slot" in config["clearance_unit"] and "per candidate" in config["clearance_unit"]
+    # No verdict, completion or NLL reaches the sidecar or the record.
+    run = {"front": "e5", "run_id": "v6/36/probes/e5", "reused": out.pop("reused")}
+    run["stages"] = out
+    blob = json.dumps(run)
+    assert "SENTINEL" not in blob and str(_E5_SENTINEL_NLL) not in blob
+    record = probe.build_record("e5", run)
+    assert record["repetitions"] == len(slots)
+    assert set(record["stages"]) == {"clearance", "scoring"}
+    assert probe._e5_stages(out) == (record["stages"], len(slots))
+
+
+def test_stage_e5_refuses_a_short_clearance(monkeypatch):
+    import phase17_isolation
+
+    calls = _e5_light(monkeypatch)
+    held = phase17_isolation.held_out_by_slot()
+    monkeypatch.setattr(
+        phase17_isolation, "held_out_by_slot", lambda: {s: v[:-1] for s, v in held.items()}
+    )
+    with pytest.raises(SystemExit, match="questions probed"):
+        probe.stage_e5({})
+    assert calls["adapter"] == []  # refused before any scoring adapter loads
+
+
+def test_e5_readings_are_never_bound_into_the_record():
+    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    (stage,) = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "stage_e5"]
+    parents = {child: node for node in ast.walk(stage) for child in ast.iter_child_nodes(node)}
+    found = {}
+    for node in ast.walk(stage):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            found.setdefault(node.func.attr, []).append(node)
+    for name in ("exact_match_clean", "value_span_nll_mean"):
+        assert len(found[name]) == 1 and isinstance(parents[found[name][0]], ast.Expr), name
+        assert "silenced()" in _with_items(found[name][0], parents), name
+    (guess,) = found["probe_guessability"]
+    assign = parents[guess]
+    assert isinstance(assign, ast.Assign) and [ast.unparse(t) for t in assign.targets] == ["probed"]
+    assert "silenced()" in _with_items(guess, parents)
+    # `probed` is read only for its completions and then deleted.
+    uses = [
+        parents[n]
+        for n in ast.walk(stage)
+        if isinstance(n, ast.Name) and n.id == "probed" and isinstance(n.ctx, ast.Load)
+    ]
+    assert [ast.unparse(u) for u in uses] == ["probed['probes']"]
+    deleted = [
+        n for n in ast.walk(stage) if isinstance(n, ast.Delete) and "probed" in ast.unparse(n)
+    ]
+    assert deleted

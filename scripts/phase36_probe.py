@@ -662,8 +662,135 @@ def e6_a2_context_beside():
     }
 
 
+def stage_e5(state):
+    """D-08: Phase 17's clearance re-run on the un-adapted base, then the E5 scoring sample."""
+    import phase14_factset  # lazy: fact material
+    import phase14_factset_gate  # torch at import: lazy
+    import phase16_persistence  # same
+    import phase17_isolation  # same
+    import phase17_persona_facts  # lazy: fact material
+    import phase17_persona_gate as gate  # torch at import: lazy
+    import phase17_personas  # same
+    import phase18_extraction  # same
+    import phase19_erasure  # same
+
+    from personacore.config import ModelConfig
+    from personacore.tokenizer import from_json
+
+    device = phase25_run.device()
+    slots = phase17_personas.CORE_SLOTS
+    personas = phase17_persona_facts.PERSONA_FACTS
+    published_values = sum(len(facts) for facts in personas.values())
+
+    # Clearance (phase17_persona_gate.py:285-345): one cached probe pass per slot, then one string
+    # check per published value. The cache holds completions in memory only and is never written.
+    state.update(stage="e5_clearance", shape=None, draw_index=None)
+    started = time.monotonic()
+    model, _cfg, _ckpt = gate.build_unadapted_base(device)
+    tok = from_json(gate.TOKENIZER_PATH)
+    forbid = phase16_persistence.resolve_forbid(tok, ModelConfig.vocab_size)[0].to(device)
+    setup_seconds = time.monotonic() - started
+    by_slot = phase17_isolation.held_out_by_slot()
+    questions = {slot: tuple(item.question for item in items) for slot, items in by_slot.items()}
+    cache, per_slot, match_seconds = {}, [], []
+    with silenced():
+        for i, slot in enumerate(slots):
+            state.update(shape=slot, draw_index=i)
+            anchor = next(f.value for f in personas[phase17_personas.PERSONAS[0]] if f.slot == slot)
+            fresh = tuple(q for q in questions[slot] if q not in cache)
+            slot_started = time.monotonic()
+            probed = phase14_factset_gate.probe_guessability(
+                model, tok, device, forbid, anchor, fresh, start_index=len(cache)
+            )
+            per_slot.append(time.monotonic() - slot_started)
+            for entry in probed["probes"]:
+                cache[entry["question"]] = entry["completions"]
+            del probed
+            texts = [text for question in questions[slot] for text in cache[question]]
+            for facts in personas.values():
+                for fact in facts:
+                    if fact.slot != slot:
+                        continue
+                    match_started = time.monotonic()
+                    phase14_factset.exact_match_clean(texts, fact.value)
+                    match_seconds.append(time.monotonic() - match_started)
+            del texts
+    clearance_total = time.monotonic() - started
+    _prove(
+        len(cache) == phase17_personas.QUESTIONS_PER_SLOT * len(slots),
+        f"{len(cache)} questions probed, not {phase17_personas.QUESTIONS_PER_SLOT} x {len(slots)}",
+    )
+    _prove(
+        len(match_seconds) == published_values,
+        f"{len(match_seconds)} candidates matched, not the {published_values} published values",
+    )
+    del cache, model
+
+    # The E5 scoring sample: value_span_nll_mean per reference-set candidate, on k = 0 and k = 78.
+    locked = [f.slot for f in phase14_factset.LOCKED_FACTS]
+    adapters, every = [], []
+    with silenced():
+        for k in (0, len(e1_components())):
+            state.update(stage=f"e5_scoring_k{k}", shape=None, draw_index=None)
+            adapter_started = time.monotonic()
+            model, tok, _forbid = adapted_model(device, k)
+            adapter_setup = time.monotonic() - adapter_started
+            means, sizes = [], []
+            for i, slot in enumerate(locked):
+                state.update(shape=slot, draw_index=i)
+                seconds = []
+                for value in phase18_extraction.reference_set_for(slot):
+                    candidate_started = time.monotonic()
+                    phase19_erasure.value_span_nll_mean(model, tok, device, slot=slot, value=value)
+                    seconds.append(time.monotonic() - candidate_started)
+                means.append(statistics.fmean(seconds))
+                sizes.append(len(seconds))
+                every += seconds
+            adapters.append(
+                {
+                    "k": k,
+                    "setup_seconds": adapter_setup,
+                    "per_slot_mean_candidate_seconds": means,
+                    "candidates_per_slot": sizes,
+                    "candidates": sum(sizes),
+                }
+            )
+            del model
+    configuration = {
+        "slots": len(slots),
+        "questions_per_slot": phase17_personas.QUESTIONS_PER_SLOT,
+        "published_values": published_values,
+        "clearance_unit": (
+            "per slot: one cached probe_guessability pass over the slot's held-out questions; per "
+            "candidate: an exact_match_clean string check (phase17_persona_gate.py:285-345)"
+        ),
+        "scoring_frame": phase18_extraction.ADMISSIBLE_NLL_FRAME,
+        "scoring_instrument": "phase19_erasure.value_span_nll_mean",
+    }
+    return {
+        "configuration": configuration,
+        "clearance": {
+            "setup_seconds": setup_seconds,
+            "per_slot_seconds": per_slot,
+            "match_seconds_spread": _spread(match_seconds),
+            "candidates_matched": len(match_seconds),
+            "total_seconds": clearance_total,
+        },
+        "scoring": {"adapters": adapters, "candidate_seconds_spread": _spread(every)},
+        "reused": {"e5": False},
+    }
+
+
+def _e5_stages(stages):
+    """The clearance and scoring blocks as measured; one H3 block per slot."""
+    out = {key: value for key, value in stages.items() if key != "configuration"}
+    return out, len(out["clearance"]["per_slot_seconds"])
+
+
 STAGES["e6"] = stage_e6
 RECORD_BUILDERS["e6"] = _e6_stages
+STAGES["e5"] = stage_e5
+RECORD_BUILDERS["e5"] = _e5_stages
 
 
 # =================================================================================================
