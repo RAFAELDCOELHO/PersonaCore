@@ -704,11 +704,11 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### Pre-registration (PREREG)
 
-- [ ] **PREREG-05**: A v6.0 pre-registration module, ancestry-guarded in the `phase29_prereg.py` pattern, is committed before any v6.0 result record exists; it fixes every v6.0 record path and every rule and threshold that does not depend on a v6.0 measurement, and declares every other threshold as a deferred slot (name, owning phase, derivation rule, input record) that only the owning phase's own ancestry-guarded pre-registration fills (reworded 2026-10-01, discuss-phase 35); it imports the closed pins (`erasure_gate`, `phase19_erasure`, `mitigation_gate`, `mitigation_budget`, `phase18_extraction`, `phase26_canary`) — never copies them; it fixes, once, a single `seed_list` (1337 plus the new seeds) that Phases 40 and 41 import
-- [ ] **PREREG-06**: Every threshold is derived in writing before measurement and never changes after; a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C precedent)
-- [ ] **PREREG-07**: No pre-registration entry carries a proposer field: each entry holds `value`, `derivation`, `kind` ∈ {derived, preference} and `source`; who suggested what stays in the discussion logs and the git history; nothing drafted by another assistant is recorded as "selected by THE USER, verbatim" (reworded 2026-10-01 in plan-phase 35 — Rafael dropped `proposer`/`adopted_by` from the schema)
-- [ ] **PREREG-08**: Every rule module has a CPU test; MPS-only tests are skipped in CI with an attributed count
-- [ ] **PREREG-09**: The pre-registration phase records, before any E3 or E4 threshold is locked, research on (a) the one-run audit bound of Steinke, Nasr and Jagielski (2023) and (b) the method of accounting for E3's selection; no E3/E4 threshold is locked without that research on record
+- [x] **PREREG-05**: A v6.0 pre-registration module, ancestry-guarded in the `phase29_prereg.py` pattern, is committed before any v6.0 result record exists; it fixes every v6.0 record path and every rule and threshold that does not depend on a v6.0 measurement, and declares every other threshold as a deferred slot (name, owning phase, derivation rule, input record) that only the owning phase's own ancestry-guarded pre-registration fills (reworded 2026-10-01, discuss-phase 35); it imports the closed pins (`erasure_gate`, `phase19_erasure`, `mitigation_gate`, `mitigation_budget`, `phase18_extraction`, `phase26_canary`) — never copies them; it fixes, once, a single `seed_list` (1337 plus the new seeds) that Phases 40 and 41 import
+- [x] **PREREG-06**: Every threshold is derived in writing before measurement and never changes after; a constant that is a preference rather than a derivation is labelled as such (the f_Y / f_C precedent)
+- [x] **PREREG-07**: No pre-registration entry carries a proposer field: each entry holds `value`, `derivation`, `kind` ∈ {derived, preference} and `source`; who suggested what stays in the discussion logs and the git history; nothing drafted by another assistant is recorded as "selected by THE USER, verbatim" (reworded 2026-10-01 in plan-phase 35 — Rafael dropped `proposer`/`adopted_by` from the schema)
+- [x] **PREREG-08**: Every rule module has a CPU test; MPS-only tests are skipped in CI with an attributed count
+- [x] **PREREG-09**: The pre-registration phase records, before any E3 or E4 threshold is locked, research on (a) the one-run audit bound of Steinke, Nasr and Jagielski (2023) and (b) the method of accounting for E3's selection; no E3/E4 threshold is locked without that research on record
 
 ### Reproduction of the Phase 19 verdict (REPRO) — R1
 
@@ -799,11 +799,11 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PREREG-05 | Phase 35 | Pending |
-| PREREG-06 | Phase 35 | Pending |
-| PREREG-07 | Phase 35 | Pending |
-| PREREG-08 | Phase 35 | Pending |
-| PREREG-09 | Phase 35 | Pending |
+| PREREG-05 | Phase 35 | Complete |
+| PREREG-06 | Phase 35 | Complete |
+| PREREG-07 | Phase 35 | Complete |
+| PREREG-08 | Phase 35 | Complete |
+| PREREG-09 | Phase 35 | Complete |
 | REPRO-01 | Phase 37 | Pending |
 | REPRO-02 | Phase 37 | Pending |
 | REPRO-03 | Phase 37 | Pending |

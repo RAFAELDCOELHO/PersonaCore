@@ -1436,7 +1436,7 @@ recipes and stronger instruments, and make every published number reproducible b
 FAILURE (v3.0), MOOT (v4.0) and MOOT/REFUSED (v5.0) stay published; v6.0 publishes beside them,
 never over them.
 
-- [ ] **Phase 35: v6.0 Pre-Registration and the Research It Rests On** - Every front's rule, record paths and thresholds committed and ancestry-guarded before any v6.0 record exists, with the one-run-audit bound and E3 selection-accounting research on record before any E3/E4 threshold is locked
+- [x] **Phase 35: v6.0 Pre-Registration and the Research It Rests On** - Every front's rule, record paths and thresholds committed and ancestry-guarded before any v6.0 record exists, with the one-run-audit bound and E3 selection-accounting research on record before any E3/E4 threshold is locked (completed 2026-10-01; verification passed 5/5 SC, a4c7beb; suite 3487/4/0 at bbcec95)
 - [ ] **Phase 36: MPS Cost Probes and Budget Commitment** - Every MPS front priced by a probe on the M3; the v6.0 budget and stop line committed inside the 90 h MPS ceiling, or the work halts and the cut options go to Rafael
 - [ ] **Phase 37: Clean Reproduction of the Phase 19 Verdict** - R1a: one CPU command re-derives the Phase 19 verdict exactly; R1b: an MPS replica of k = 78 under a pre-registered tolerance, published beside the verdict
 - [ ] **Phase 38: Exposure Rank at Larger Minted Sets** - E5: the committed ablation prefixes re-scored against same-slot sets minted by a pre-registered rule
@@ -1515,23 +1515,23 @@ source, and no E3/E4 threshold is locked without the research it rests on
 Plans:
 **Wave 1**
 
-- [ ] 35-01-PLAN.md — PREREG-09 note on record first; the one-run-audit bound reproducing Steinke et al. App. D / §7; E3 basic composition; the four-field entry schema (no proposer field)
+- [x] 35-01-PLAN.md — PREREG-09 note on record first; the one-run-audit bound reproducing Steinke et al. App. D / §7; E3 basic composition; the four-field entry schema (no proposer field)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 35-02-PLAN.md — the v6.0 CORE: record paths and derived pathspecs, closed pins by import, `seed_list()` locked against 5303819, E1 target rule, AUDIT-02 cut, R1a assertions, core entries
+- [x] 35-02-PLAN.md — the v6.0 CORE: record paths and derived pathspecs, closed pins by import, `seed_list()` locked against 5303819, E1 target rule, AUDIT-02 cut, R1a assertions, core entries
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 35-03-PLAN.md — the registry of 17 deferred slots, each rule a coded refusal (D-06, D-16, D-17)
+- [x] 35-03-PLAN.md — the registry of 17 deferred slots, each rule a coded refusal (D-06, D-16, D-17)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 35-04-PLAN.md — slot census (undeclared / wrong owner / different rule) and the per-fill-file ordering legs, each watched RED on planted repos
+- [x] 35-04-PLAN.md — slot census (undeclared / wrong owner / different rule) and the per-fill-file ordering legs, each watched RED on planted repos
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 35-05-PLAN.md — Rafael reviews entries, slots and the planner readings; full suite once on a clean tree; validation sign-off
+- [x] 35-05-PLAN.md — Rafael reviews entries, slots and the planner readings; full suite once on a clean tree; validation sign-off
 
 ### Phase 36: MPS Cost Probes and Budget Commitment
 
@@ -1853,7 +1853,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 | ----- | --------- | -------------- | ------ | --------- |
-| 35. v6.0 Pre-Registration and the Research It Rests On | v6.0 | 0/TBD | Not started | - |
+| 35. v6.0 Pre-Registration and the Research It Rests On | v6.0 | 5/5 | Complete | 2026-10-01 — verification passed 5/5 SC (a4c7beb); Rafael's review corrections f13ad62/d850d0c + code-review fixes 1e1e1c5/3805beb; suite 3487/4/0 at bbcec95; zero gsd-sdk mutation handlers |
 | 36. MPS Cost Probes and Budget Commitment | v6.0 | 0/TBD | Not started | - |
 | 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 0/TBD | Not started | - |
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 0/TBD | Not started | - |
