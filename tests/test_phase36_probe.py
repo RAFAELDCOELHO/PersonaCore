@@ -604,16 +604,6 @@ def test_main_dispatch_binds_real_signatures(tmp_path, monkeypatch):
     assert probe.build_parser().parse_args(["emit", "e6"]).front == "e6"
 
 
-def test_preflight_refuses_an_unregistered_front(monkeypatch, capsys):
-    for front in probe.RUN_ORDER:
-        monkeypatch.setitem(probe.STAGES, front, _fake_stage)
-    probe.preflight()
-    assert "RUN_ORDER e5 e6 e3 e2 e1" in capsys.readouterr().out
-    monkeypatch.delitem(probe.STAGES, "e3")
-    with pytest.raises(SystemExit, match=r"\['e3'\]"):
-        probe.preflight()
-
-
 def test_small_helpers(tmp_path, monkeypatch):
     monkeypatch.setattr(probe, "_ROOT", tmp_path)
     assert probe._rel(tmp_path / "data" / "x.json") == "data/x.json"
@@ -2384,3 +2374,260 @@ def test_live_e2_never_touches_published_adapters(e2_live):
     assert not [p for p in hashed if p.is_relative_to(probe._GIT_ROOT / "checkpoints")]
     before, after = e2_live["strays"]
     assert before == after
+
+
+# =================================================================================================
+# Plan 36-05 Task 3 — preflight (T-36-24, W3) and the main(['run']) dispatch (Pitfall 9)
+# =================================================================================================
+
+
+def _preflight_env(tmp_path, monkeypatch):
+    """A tmp tree with every input preflight checks; the device string is "mps" (never touched).
+
+    B1: every gitignored input — persona_adapter.pt included — is a tmp fixture file, and the
+    published sha is the fixture's; the committed JSON inputs are the real tracked files."""
+    import phase14_recall
+    import phase19_erasure
+    import phase25_points
+    import teach_persona as tp
+
+    root = tmp_path / "tree"
+    for module in (probe, phase25_points, phase36_ledger):
+        monkeypatch.setattr(module, "_ROOT", root)
+    monkeypatch.setattr(tp, "_REPO_ROOT", root)
+    monkeypatch.setattr(phase25_run, "_DEVICE", "mps")  # a string; nothing here builds a device
+    monkeypatch.setattr(phase25_run, "disk_precheck", lambda target=None: None)
+    inputs = {
+        (phase14_recall, "ADAPTER_PATH"): "persona_adapter.pt",
+        (phase14_recall, "CONVBASE_SLIM"): "convbase_slim.pt",
+        (phase19_erasure, "RETENTION_BIN"): "retention_val.bin",
+        (phase19_erasure, "PHASE18_CORPUS_PATH"): "phase18_corpus.json",
+        (phase19_erasure, "PHASE18_ARM_RECORD_PATH"): "phase18_arm_adapter-on.json",
+        (tp, "CONVBASE_BEST"): "convbase_best.pt",
+        (tp, "FACTSET_REPORT"): "factset.md",
+        (tp, "DIALOG_TRAIN_BIN"): "dialog_train.bin",
+        (tp, "DIALOG_TRAIN_MASK"): "dialog_train_mask.bin",
+        (tp, "DIALOG_VAL_BIN"): "dialog_val.bin",
+        (tp, "DIALOG_VAL_MASK"): "dialog_val_mask.bin",
+    }
+    for (module, name), filename in inputs.items():
+        path = tmp_path / "inputs" / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(filename.encode())
+        monkeypatch.setattr(module, name, path)
+    sha = hashlib.sha256(b"persona_adapter.pt").hexdigest()
+    monkeypatch.setattr(probe, "published_adapter_sha256", lambda: sha)
+    (root / "data").mkdir(parents=True)
+    return root, inputs
+
+
+def _listing(root):
+    return sorted((p.relative_to(root).as_posix(), p.stat().st_mtime_ns) for p in root.rglob("*"))
+
+
+def _plant(root, *relatives):
+    for rel in relatives:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}", encoding="utf-8")
+
+
+def test_preflight_passes_on_a_clean_tree_and_writes_nothing(
+    tmp_path, monkeypatch, capsys, clean_tree
+):
+    root, _inputs = _preflight_env(tmp_path, monkeypatch)
+    before = _listing(tmp_path)
+    probe.preflight()
+    assert _listing(tmp_path) == before
+    out = capsys.readouterr().out
+    assert f"PREFLIGHT OK {_head()} fronts=e5,e6,e3,e2,e1" in out, out
+    (call,) = clean_tree
+    assert call["pathspec"] == ("scripts", "src", "results") and call["cwd"] == probe._GIT_ROOT
+
+
+def test_preflight_refuses_a_non_mps_device_and_a_dirty_tree(tmp_path, monkeypatch, clean_tree):
+    _preflight_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    with pytest.raises(SystemExit, match="not 'mps'"):
+        probe.preflight()
+    assert clean_tree == []  # refused before the dirty check
+    monkeypatch.setattr(phase25_run, "_DEVICE", "mps")
+
+    def dirty(**kwargs):
+        raise SystemExit("[provenance] the tree is dirty")
+
+    monkeypatch.setattr(probe, "refuse_if_dirty", dirty)
+    with pytest.raises(SystemExit, match="dirty"):
+        probe.preflight()
+
+
+def test_preflight_refuses_an_open_ledger_run_until_reconcile(tmp_path, monkeypatch, capsys):
+    root, _inputs = _preflight_env(tmp_path, monkeypatch)
+    ledger = root / phase36_ledger.LEDGER_PATH
+    rid = phase36_ledger.run_id(36, "probes", "e3")
+    phase36_ledger.append("start", run_id=rid, phase=36, front="probes", ledger_path=ledger)
+    with pytest.raises(SystemExit, match="phase36_ledger.py reconcile"):
+        probe.preflight()
+    # W3 / B1: reconcile closes even an attempt with no beat after its start, so it never sticks.
+    phase36_ledger.reconcile(ledger_path=ledger, heartbeat_path=tmp_path / "hb.jsonl")
+    probe.preflight()
+    assert "PREFLIGHT OK" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("index", range(11))
+def test_preflight_refuses_a_missing_input(tmp_path, monkeypatch, index):
+    _root, inputs = _preflight_env(tmp_path, monkeypatch)
+    module, name = list(inputs)[index]
+    monkeypatch.setattr(module, name, tmp_path / "absent" / name)
+    with pytest.raises(SystemExit, match="missing"):
+        probe.preflight()
+
+
+def test_preflight_refuses_a_missing_committed_input_and_the_wrong_adapter(tmp_path, monkeypatch):
+    _preflight_env(tmp_path, monkeypatch)
+    real = probe.CURVE_RECORD
+    monkeypatch.setattr(probe, "CURVE_RECORD", "results/phase36_never_written_curve.json")
+    with pytest.raises(SystemExit, match="phase36_never_written_curve"):
+        probe.preflight()
+    monkeypatch.setattr(probe, "CURVE_RECORD", real)
+    monkeypatch.setattr(probe, "published_adapter_sha256", lambda: "0" * 64)
+    with pytest.raises(SystemExit, match="adapter_in_sha256"):
+        probe.preflight()
+
+
+def test_preflight_refuses_an_unregistered_or_extra_front(tmp_path, monkeypatch):
+    _preflight_env(tmp_path, monkeypatch)
+    monkeypatch.delitem(probe.STAGES, "e3")
+    with pytest.raises(SystemExit, match=r"\['e3'\]"):
+        probe.preflight()
+    monkeypatch.setitem(probe.STAGES, "e3", probe.stage_e3)
+    monkeypatch.setitem(probe.STAGES, "e4", _fake_stage)
+    with pytest.raises(SystemExit, match=r"\['e4'\]"):
+        probe.preflight()
+
+
+@pytest.mark.parametrize(
+    "stray",
+    [
+        "data/probe36_e1_rep1_arm.json",
+        "data/probe36_e2/probe36_m2_a/run.csv",
+        "checkpoints/probe36_t200_dp_n8_latest.pt",
+        "data/phase25_probe36_e3_t800_training.json",
+        "data/persona_probe36_m2_b_train.bin",
+        "results/probe36_probe36_m2_a/run.csv",
+    ],
+)
+def test_preflight_refuses_a_stale_probe_output(tmp_path, monkeypatch, capsys, stray):
+    root, _inputs = _preflight_env(tmp_path, monkeypatch)
+    _plant(root, *(f"data/probe36_{f}_sessions.json" for f in probe.RUN_ORDER))
+    probe.preflight()  # session sidecars alone are never strays
+    assert "PREFLIGHT OK" in capsys.readouterr().out
+    _plant(root, stray)
+    with pytest.raises(SystemExit, match="stale probe output") as refused:
+        probe.preflight()
+    assert stray.split("/")[1] in str(refused.value)
+
+
+def _e2_e3_outputs():
+    """One file per front-specific output name of E2 and E3, repo-relative, by front."""
+    e2 = ["data/probe36_e2/probe36_m2_a/run.csv"]
+    for arm in probe.E2_ARMS:
+        e2 += [f"data/persona_{arm}_train.bin", f"data/persona_{arm}_train_mask.bin"]
+        e2 += [f"checkpoints/probe36_{arm}_adapter.pt", f"checkpoints/probe36_{arm}_latest.pt"]
+    e3 = []
+    for steps in probe.e3_steps():
+        e3 += [f"data/phase25_probe36_e3_t{steps}_training.json"]
+        e3 += [f"checkpoints/probe36_t{steps}_dp_n8_{kind}.pt" for kind in ("adapter", "latest")]
+    return {"e2": e2, "e3": e3}
+
+
+def test_front_outputs_attribute_every_stray_glob_match_to_exactly_one_front(tmp_path, monkeypatch):
+    root, _inputs = _preflight_env(tmp_path, monkeypatch)
+    rels = [f"data/probe36_{f}_{name}" for f in probe.RUN_ORDER for name in ("run.json", "x.json")]
+    outputs = _e2_e3_outputs()
+    _plant(root, *rels, *outputs["e2"], *outputs["e3"])
+    owned = {front: probe.front_outputs(front) for front in probe.RUN_ORDER}
+    matched = sorted({p for pattern in probe.STRAY_GLOBS for p in root.glob(pattern)})
+    assert len(matched) >= len(rels)  # non-vacuous: every planted name is under a stray glob
+    for path in matched:
+        owners = [front for front, paths in owned.items() if path in paths]
+        assert len(owners) == 1, (path, owners)
+    with pytest.raises(SystemExit, match="not a probe front"):
+        probe.front_outputs("e4")
+
+
+def test_preflight_relaunch_keeps_finished_fronts_and_refuses_the_crashed_one(
+    tmp_path, monkeypatch, capsys
+):
+    """W3: e5, e6 and e3 finished; e2 crashed mid-training (its run sidecar never written)."""
+    root, _inputs = _preflight_env(tmp_path, monkeypatch)
+    finished = [f"data/probe36_{f}_run.json" for f in ("e5", "e6", "e3")]
+    e3 = _e2_e3_outputs()["e3"]
+    _plant(root, *finished, *e3, *(f"data/probe36_{f}_sessions.json" for f in probe.RUN_ORDER))
+    partial = [
+        "checkpoints/probe36_probe36_m2_a_adapter.pt",
+        "checkpoints/probe36_probe36_m2_a_latest.pt",
+        "data/persona_probe36_m2_a_train.bin",
+    ]
+    _plant(root, *partial, "results/probe36_probe36_m2_a/run.csv")
+    with pytest.raises(SystemExit, match="stale probe output") as refused:
+        probe.preflight()
+    for rel in partial:
+        assert rel in str(refused.value)
+    assert not [rel for rel in e3 if rel in str(refused.value)]  # e3 finished: its outputs stay
+    for rel in partial:
+        (root / rel).unlink()
+    with pytest.raises(SystemExit, match="results/probe36_probe36_m2_a"):
+        probe.preflight()  # results/probe36_* belongs to no front and always refuses
+    (root / "results/probe36_probe36_m2_a/run.csv").unlink()
+    (root / "results/probe36_probe36_m2_a").rmdir()
+    probe.preflight()
+    assert "PREFLIGHT OK" in capsys.readouterr().out
+    assert all((root / rel).exists() for rel in finished + e3)
+
+
+def test_main_run_defaults(monkeypatch):
+    calls = []
+    signature = inspect.signature(probe.run_front)
+
+    def recorder(*args, **kwargs):
+        signature.bind(*args, **kwargs)  # run_all's kwargs must fit the REAL run_front
+        calls.append((args, kwargs))
+
+    monkeypatch.setattr(probe, "run_front", recorder)
+    monkeypatch.setattr(phase25_run, "disk_precheck", lambda target=None: None)
+    assert probe.main(["run"]) == 0
+    defaults = {
+        "heartbeat_path": phase36_ledger.HEARTBEAT_PATH,
+        "ledger_path": probe._GIT_ROOT / phase36_ledger.LEDGER_PATH,
+    }
+    assert calls == [((front,), defaults) for front in probe.RUN_ORDER]
+
+
+def test_main_run_dispatches_every_front(tmp_path):
+    """Pitfall 9: main(['run']) with no --front reaches every REAL stage in RUN_ORDER on CPU —
+    each STAGES entry wrapped by a recorder that binds (state,) against the real stage and
+    forwards to it — then the REAL emit of all five records."""
+    assert all(probe.STAGES[f] is getattr(probe, f"stage_{f}") for f in probe.RUN_ORDER)
+    live = _live_run(tmp_path / "all", None, wrap_stages=True)
+    assert live["spies"]["stages"] == list(probe.RUN_ORDER)
+    assert len(live["sidecars"]) == len(probe.RUN_ORDER)
+    lines = phase36_ledger.read_ledger(live["ledger"])
+    assert len(lines) == 2 * len(probe.RUN_ORDER)
+    assert [x["event"] for x in lines] == ["start", "end"] * len(probe.RUN_ORDER)
+    for front in probe.RUN_ORDER:
+        assert re.search(rf"^\[phase36_probe\] {front} \d+\.\d s$", live["stdout"], re.MULTILINE)
+        record = live["records"][front]
+        probe.prove_no_reading(record)
+        assert record["reused"] == {front: False}
+    # E6's beside is the E1 probe that ran here, not a planted sidecar.
+    runs = live["sidecars"]["e1"]["stages"]["runs"]
+    high = max(sum(r["per_question_k48_seconds"]) / LIVE_QUESTIONS for r in runs)
+    beside = live["records"]["e6"]["a2_context_from_e1"]
+    assert beside["a2_context_question_k48_seconds_high"] == pytest.approx(high)
+    assert [c["arm"] for c in live["spies"]["pin_calls"]] == ["retrain", "erased", "erased"]
+    assert not any((live["root"] / "results").iterdir())
+    before, after = live["strays"]
+    assert before == after
+    hashed = live["spies"]["hashed"]
+    assert not [p for p in hashed if p.is_relative_to(probe._GIT_ROOT / "checkpoints")]

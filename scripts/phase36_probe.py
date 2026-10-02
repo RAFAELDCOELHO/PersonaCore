@@ -1314,11 +1314,84 @@ def emit_all():
 # =================================================================================================
 
 
+def front_outputs(front):
+    """The paths a FINISHED ``front`` leaves on disk, by name (W3: a relaunch keeps them)."""
+    import teach_persona as tp  # torch at import: lazy
+
+    _prove(front in RUN_ORDER, f"front {front!r} is not a probe front")
+    owned = set((_ROOT / "data").glob(f"{PROBE_PREFIX}_{front}_*"))
+    if front == "e2":
+        owned.add(_data_path(f"{PROBE_PREFIX}_e2"))
+        for arm in E2_ARMS:
+            owned.update(tp.arm_outputs(arm, prefix=PROBE_PREFIX).values())
+    elif front == "e3":
+        for steps in e3_steps():
+            plan = e3_plan(steps)
+            owned.add(phase25_points.training_sidecar(plan["point_key"]))
+            owned.update(tp.arm_outputs(plan["arm"], prefix=plan["prefix"]).values())
+    return owned
+
+
 def preflight():
-    """Print the run order and refuse an unregistered front (plan 36-04 adds the live checks)."""
-    print(f"[phase36_probe] RUN_ORDER {' '.join(RUN_ORDER)}", flush=True)
-    missing = [front for front in RUN_ORDER if front not in STAGES]
-    _prove(not missing, f"fronts {missing} have no registered stage")
+    """Everything the M3 run needs, checked before the LaunchAgent loads; writes nothing."""
+    import phase14_recall  # torch at import: lazy
+    import phase19_erasure  # same
+    import teach_persona as tp  # same
+
+    device = str(phase25_run.device())
+    _prove(
+        device == "mps",
+        f"the device resolves to {device!r}, not 'mps': the probes price the M3 run (COST-01). "
+        "Run preflight on the M3, outside any CPU-forcing environment",
+    )
+    refuse_if_dirty(
+        who="phase36_probe",
+        detail=(
+            "a probe record names the commit it ran from; a run from a dirty tree times code that "
+            "commit does not contain. Commit every change before loading the LaunchAgent"
+        ),
+        pathspec=("scripts", "src", "results"),
+        cwd=_GIT_ROOT,
+    )
+    phase25_run.disk_precheck()
+    opened = phase36_ledger.open_runs(phase36_ledger.read_ledger())
+    _prove(
+        not opened,
+        f"the ledger holds open run(s) {sorted(opened)}: a crashed attempt is closed by "
+        "`python scripts/phase36_ledger.py reconcile` (its lost line, W3) before a relaunch",
+    )
+    allowed = {sessions_sidecar(front) for front in RUN_ORDER}
+    for front in RUN_ORDER:
+        if run_sidecar(front).exists():  # run_front skips a finished front: keep its outputs
+            allowed |= front_outputs(front)
+    found = {path for pattern in STRAY_GLOBS for path in _ROOT.glob(pattern)}
+    strays = sorted(found - allowed) + sorted(_ROOT.glob(RESULTS_STRAY_GLOB))
+    _prove(
+        not strays,
+        f"stale probe output {[_rel(p) for p in strays]}: an unfinished front left them, and a "
+        "stage would refuse, reuse or resume them. Delete them in a reviewed step, then rerun",
+    )
+    inputs = (
+        phase14_recall.ADAPTER_PATH,
+        phase14_recall.CONVBASE_SLIM,
+        phase19_erasure.RETENTION_BIN,
+        phase19_erasure.PHASE18_CORPUS_PATH,
+        phase19_erasure.PHASE18_ARM_RECORD_PATH,
+        tp.CONVBASE_BEST,
+        tp.FACTSET_REPORT,
+        tp.DIALOG_TRAIN_BIN,
+        tp.DIALOG_TRAIN_MASK,
+        tp.DIALOG_VAL_BIN,
+        tp.DIALOG_VAL_MASK,
+        *(_GIT_ROOT / rel for rel in (CURVE_RECORD, ERASED_RECORD, PHASE31_POINT_RECORD)),
+    )
+    missing = [str(path) for path in inputs if not pathlib.Path(path).exists()]
+    _prove(not missing, f"required input(s) missing: {missing}. A front would die hours in")
+    prove_published_adapter()
+    unregistered = sorted(set(RUN_ORDER) ^ set(STAGES))
+    _prove(not unregistered, f"fronts {unregistered} differ between RUN_ORDER and STAGES")
+    phase36_prereg.prove_p22(phase36_prereg.ENTRIES["e3_max_steps"]["value"])
+    print(f"[phase36_probe] PREFLIGHT OK {git_sha()} fronts={','.join(RUN_ORDER)}", flush=True)
 
 
 def build_parser():
