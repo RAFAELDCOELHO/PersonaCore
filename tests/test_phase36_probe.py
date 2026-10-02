@@ -640,3 +640,252 @@ def test_every_probe_function_has_a_cpu_test():
     assert [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]
     test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
     assert _untested_functions("probe", source, test_source) == []
+
+
+# =================================================================================================
+# Task 2 — stage_e1 and the E1 record (D-03, D-04, D-18), pure and light (no model)
+# =================================================================================================
+
+
+def _rows(questions, k, *, at_cap_every=5):
+    return [
+        {"seconds": 0.01 * (i + 1), "tokens": 4 + i % 3, "at_cap": i % at_cap_every == 0}
+        for i in range(questions * k)
+    ]
+
+
+def test_e1_run_separates_fixed_and_prefix_cost():
+    import math
+
+    questions, k = 3, 18  # k above CURVE_K so the K = 16 prefix is a strict prefix
+    rows = _rows(questions, k)
+    run = probe._e1_run(100.0, rows, questions, k)
+    seconds = [r["seconds"] for r in rows]
+    assert run["fixed_seconds"] == run["total_seconds"] - run["draw_seconds_sum"]
+    assert run["draw_seconds_sum"] == math.fsum(seconds)
+    first = [
+        s for q in range(questions) for s in seconds[q * k : q * k + probe.phase35_prereg.CURVE_K]
+    ]
+    assert run["k16_seconds"] == pytest.approx(run["fixed_seconds"] + math.fsum(first), rel=1e-12)
+    assert len(run["per_question_k48_seconds"]) == questions
+    assert len(run["per_question_k16_seconds"]) == questions
+    assert run["draws"] == len(run["draw_seconds"]) == len(run["draw_tokens"]) == questions * k
+    assert all(type(s) is float for s in run["draw_seconds"])
+    assert all(type(t) is int for t in run["draw_tokens"])
+    assert run["at_cap_draws"] == sum(r["at_cap"] for r in rows)
+    assert run["at_cap_seconds_spread"]["n"] == run["at_cap_draws"]
+    none_at_cap = probe._e1_run(100.0, _rows(1, 2, at_cap_every=99)[1:] * 2, 1, 2)
+    assert none_at_cap["at_cap_draws"] == 0 and none_at_cap["at_cap_seconds_spread"] is None
+    with pytest.raises(SystemExit, match="draw timer counted"):
+        probe._e1_run(100.0, rows[:-1], questions, k)
+    with pytest.raises(SystemExit, match="longer than the run"):
+        probe._e1_run(0.001, rows, questions, k)
+
+
+def _planted_e1_run():
+    runs = [probe._e1_run(total, _rows(2, 3), 2, 3) for total in (50.0, 61.0)]
+    stages = {"configuration": {"arm": "erased", "K": 3, "questions": 2}, "runs": runs}
+    return {"front": "e1", "run_id": "v6/36/probes/e1", "stages": stages, "reused": {"e1": False}}
+
+
+def _keys(node):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield key
+            yield from _keys(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _keys(value)
+
+
+def test_build_record_e1_keeps_the_two_fixed_costs_separate():
+    run = _planted_e1_run()
+    record = probe.build_record("e1", run, beside=probe.phase31_beside())
+    runs = record["stages"]["runs"]
+    assert [r["fixed_seconds"] for r in runs] == [r["fixed_seconds"] for r in run["stages"]["runs"]]
+    assert runs[0]["fixed_seconds"] != runs[1]["fixed_seconds"]
+    assert not [key for key in _keys(record) if "mean" in key or "average" in key]
+    assert record["stages"]["r1b_k48_totals"] == [50.0, 61.0]
+    assert record["repetitions"] == 2
+    beside = record[probe.BESIDE_KEY]
+    point = json.loads((_ROOT / probe.PHASE31_POINT_RECORD).read_text(encoding="utf-8"))
+    assert beside["path"] == probe.PHASE31_POINT_RECORD
+    assert beside["total_seconds"] == point["total_seconds"]
+    assert beside["stage_seconds"] == {s: v["seconds"] for s, v in point["stages"].items()}
+    assert (
+        beside["sha256"]
+        == hashlib.sha256((_ROOT / probe.PHASE31_POINT_RECORD).read_bytes()).hexdigest()
+    )
+    probe.prove_no_reading(record)
+    leaky = _planted_e1_run()
+    leaky["stages"]["configuration"]["per_fact"] = {"pet_name": 1}
+    with pytest.raises(SystemExit, match="names a reading"):
+        probe.build_record("e1", leaky)
+    one = _planted_e1_run()
+    one["stages"]["runs"].pop()
+    with pytest.raises(SystemExit, match="not 2"):
+        probe.build_record("e1", one)
+    assert probe.RECORD_BUILDERS["e1"] is probe._e1_stages and probe.STAGES["e1"] is probe.stage_e1
+    stages, repetitions = probe._e1_stages(run["stages"])
+    assert stages == record["stages"] and repetitions == 2
+
+
+def test_e1_shape_reads_the_pins_own_k():
+    questions, k = probe.e1_shape()
+    assert k == phase36_prereg.phase35_prereg.FULL_FIDELITY_K
+    erased = json.loads((_ROOT / probe.ERASED_RECORD).read_text(encoding="utf-8"))["config"]
+    assert (
+        questions
+        == erased["corpus_entries"]
+        == len(phase36_prereg.phase35_prereg.a2_corpus_entries())
+    )
+
+
+def test_e1_components_reads_committed_json_and_hashes_nothing(monkeypatch):
+    hashed = []
+    real = probe._sha256
+    monkeypatch.setattr(probe, "_sha256", lambda path: hashed.append(path) or real(path))
+    components = probe.e1_components()
+    assert hashed == []
+    erased = json.loads((_ROOT / probe.ERASED_RECORD).read_text(encoding="utf-8"))["config"]
+    assert [list(c) for c in components] == erased["ablated_components"]
+    assert all(isinstance(c, tuple) for c in components)
+
+
+def test_published_adapter_identity(tmp_path, monkeypatch):
+    import phase14_recall
+
+    curve = json.loads((_ROOT / probe.CURVE_RECORD).read_text(encoding="utf-8"))
+    assert probe.published_adapter_sha256() == curve["adapter_in_sha256"]
+    adapter = tmp_path / "fixture_adapter.pt"
+    adapter.write_bytes(b"fixture adapter")
+    monkeypatch.setattr(phase14_recall, "ADAPTER_PATH", adapter)
+    with pytest.raises(SystemExit, match="adapter_in_sha256"):
+        probe.prove_published_adapter()
+    sha = hashlib.sha256(b"fixture adapter").hexdigest()
+    monkeypatch.setattr(probe, "published_adapter_sha256", lambda: sha)
+    probe.prove_published_adapter()
+    monkeypatch.setattr(phase14_recall, "ADAPTER_PATH", tmp_path / "absent.pt")
+    with pytest.raises(SystemExit, match="is missing"):
+        probe.prove_published_adapter()
+
+
+def _e1_light(tmp_path, monkeypatch, *, calls=6, on_call=None):
+    """stage_e1 with a stand-in pin calling a fake _complete; no model, no gitignored input."""
+    import phase14_recall
+    import phase19_erasure
+
+    real_components = probe.e1_components()  # before any patch, from the committed JSON alone
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    adapter = tmp_path / "checkpoints" / "fixture_adapter.pt"
+    adapter.parent.mkdir(parents=True)
+    adapter.write_bytes(b"fixture adapter")
+    sha = hashlib.sha256(b"fixture adapter").hexdigest()
+    monkeypatch.setattr(phase14_recall, "ADAPTER_PATH", adapter)
+    monkeypatch.setattr(probe, "published_adapter_sha256", lambda: sha)
+    monkeypatch.setattr(probe, "e1_shape", lambda: (2, 3))
+    monkeypatch.setattr(probe, "e1_components", lambda: real_components)
+    monkeypatch.setattr(phase14_recall, "_complete", lambda *a, **kw: ([7, 7], True))
+    seen = []
+
+    def stand_in(arm, device, **kwargs):
+        seen.append((arm, device, kwargs))
+        for _ in range(calls):
+            phase14_recall._complete(None, [0], device, None)
+        pathlib.Path(kwargs["record_path"]).write_text("completions", encoding="utf-8")
+        print("taught ON: 3/4 = 0.75 per_fact hits")
+        if on_call is not None:
+            on_call(len(seen), adapter)
+        return {"per_fact": [1]}
+
+    monkeypatch.setattr(phase19_erasure, "run_erasure_arm", stand_in)
+    return seen, real_components
+
+
+def test_stage_e1_light_times_two_runs_and_discards_the_draws(tmp_path, monkeypatch, capsys):
+    seen, components = _e1_light(tmp_path, monkeypatch)
+    state = {"point": "x", "stage": "start", "shape": None, "draw_index": None}
+    out = probe.stage_e1(state)
+    assert capsys.readouterr().out == ""
+    assert [s[0] for s in seen] == ["erased", "erased"]
+    assert [s[2]["record_path"] for s in seen] == [probe.arm_record_path("e1", r) for r in (1, 2)]
+    assert all(s[2]["components"] == components for s in seen)
+    assert not any(probe.arm_record_path("e1", r).exists() for r in (1, 2))
+    assert out["reused"] == {"e1": False} and len(out["runs"]) == 2
+    for run in out["runs"]:
+        assert run["draws"] == 6 and len(run["draw_seconds"]) == 6
+        assert run["draw_tokens"] == [2] * 6 and run["at_cap_draws"] == 0
+    config = out["configuration"]
+    assert config["k"] == len(components) and config["K"] == 3 and config["questions"] == 2
+    assert config["k16"] == phase36_prereg.phase35_prereg.CURVE_K
+    assert config["seed"] == 1337 and state["stage"] == "e1_rep2"
+    probe.prove_no_reading({"configuration": config, "stages": {"runs": out["runs"]}})
+
+
+def test_stage_e1_refuses_a_short_draw_count(tmp_path, monkeypatch):
+    _e1_light(tmp_path, monkeypatch, calls=5)
+    with pytest.raises(SystemExit, match="draw timer counted 5"):
+        probe.stage_e1({})
+    assert not probe.arm_record_path("e1", 1).exists()
+
+
+def test_stage_e1_refuses_the_wrong_adapter_before_and_after(tmp_path, monkeypatch):
+    seen, _ = _e1_light(tmp_path, monkeypatch)
+    monkeypatch.setattr(probe, "published_adapter_sha256", lambda: "0" * 64)
+    with pytest.raises(SystemExit, match="adapter_in_sha256"):
+        probe.stage_e1({})
+    assert seen == []
+
+    def tamper(n, adapter):
+        if n == 2:
+            adapter.write_bytes(b"changed during the run")
+
+    seen, _ = _e1_light(tmp_path / "after", monkeypatch, on_call=tamper)
+    with pytest.raises(SystemExit, match="adapter_in_sha256"):
+        probe.stage_e1({})
+    assert len(seen) == 2
+
+
+def test_stage_e1_refuses_other_components_and_a_stale_arm_record(tmp_path, monkeypatch):
+    seen, components = _e1_light(tmp_path, monkeypatch)
+    monkeypatch.setattr(probe, "e1_components", lambda: components[:-1])
+    with pytest.raises(SystemExit, match="ablated_components"):
+        probe.stage_e1({})
+    monkeypatch.setattr(probe, "e1_components", lambda: components)
+    stale = probe.arm_record_path("e1", 1)
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="stale probe output"):
+        probe.stage_e1({})
+    assert seen == []
+
+
+def _stage_e1_pin_calls():
+    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    (stage,) = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "stage_e1"]
+    parents = {child: node for node in ast.walk(stage) for child in ast.iter_child_nodes(node)}
+    calls = [
+        n
+        for n in ast.walk(stage)
+        if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "run_erasure_arm"
+    ]
+    return calls, parents
+
+
+def test_e1_pin_payload_is_never_bound():
+    calls, parents = _stage_e1_pin_calls()
+    assert len(calls) == 1
+    (call,) = calls
+    assert isinstance(parents[call], ast.Expr)
+    assert call.args[0].value == "erased"
+
+
+def test_e1_pin_call_runs_inside_silenced():
+    (call,), parents = _stage_e1_pin_calls()
+    node, items = call, []
+    while node in parents:
+        node = parents[node]
+        if isinstance(node, ast.With):
+            items += [ast.unparse(item.context_expr) for item in node.items]
+    assert "silenced()" in items and "DrawTimer()" in items

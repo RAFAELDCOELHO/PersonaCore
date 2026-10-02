@@ -20,6 +20,7 @@ import datetime
 import hashlib
 import io
 import json
+import math
 import pathlib
 import statistics
 import subprocess
@@ -41,6 +42,7 @@ if _SRC not in sys.path:
 import phase25_points  # noqa: E402  (scripts/ is not a package; torch-free)
 import phase25_run  # noqa: E402  (same)
 import phase30_points  # noqa: E402  (same)
+import phase35_prereg  # noqa: E402  (same)
 import phase36_caps  # noqa: E402  (same)
 import phase36_ledger  # noqa: E402  (same)
 import phase36_prereg  # noqa: E402  (same)
@@ -405,6 +407,152 @@ def run_all(*, heartbeat_path=None, ledger_path=None, fronts=RUN_ORDER):
     heartbeat_path = phase36_ledger.HEARTBEAT_PATH if heartbeat_path is None else heartbeat_path
     ledger_path = _GIT_ROOT / phase36_ledger.LEDGER_PATH if ledger_path is None else ledger_path
     return [run_front(f, heartbeat_path=heartbeat_path, ledger_path=ledger_path) for f in fronts]
+
+
+# =================================================================================================
+# E1 (D-03, D-04, D-18): the pin itself, twice at K = 48, with K = 16 by prefix stability
+# =================================================================================================
+
+
+def e1_shape():
+    """``(questions, K)``: the A2 corpus size and the pin's own K source (phase19_erasure :2825)."""
+    import phase19_erasure  # torch at import: lazy
+
+    questions = len(phase35_prereg.a2_corpus_entries())
+    record = json.loads(phase19_erasure.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    k = record["config"]["k"]
+    _prove(k == phase35_prereg.FULL_FIDELITY_K, f"the pin's K {k} is not FULL_FIDELITY_K")
+    erased = _committed_json(ERASED_RECORD)["config"]
+    _prove(
+        erased["attack_family"] == "A2" and erased["corpus_entries"] == questions,
+        f"{ERASED_RECORD} drew {erased['corpus_entries']} {erased['attack_family']} questions, not "
+        f"the {questions} A2 entries",
+    )
+    return questions, k
+
+
+def e1_components():
+    """The published ablation: the curve's ordered prefix cut at the erased arm's own length.
+
+    Reads ONLY the two committed JSON files — never the adapter (B1: the .pt is gitignored)."""
+    curve = _committed_json(CURVE_RECORD)
+    erased = _committed_json(ERASED_RECORD)["config"]["ablated_components"]
+    components = [tuple(a) for a in curve["ordered_prefix"][: len(erased)]]
+    _prove(
+        [list(c) for c in components] == erased,
+        f"{CURVE_RECORD}'s ordered prefix is not {ERASED_RECORD}'s ablated_components",
+    )
+    return components
+
+
+def published_adapter_sha256():
+    return _committed_json(CURVE_RECORD)["adapter_in_sha256"]
+
+
+def prove_published_adapter():
+    """The adapter on disk is the one the committed curve was swept on (read at call time)."""
+    import phase14_recall  # torch at import: lazy
+
+    path = phase14_recall.ADAPTER_PATH
+    _prove(pathlib.Path(path).exists(), f"{path} is missing: E1 times the published adapter")
+    _prove(
+        _sha256(path) == published_adapter_sha256(),
+        f"{path} is not the adapter {CURVE_RECORD} was swept on (adapter_in_sha256)",
+    )
+
+
+def _e1_run(total_seconds, rows, questions, k):
+    """One pin run's numbers from its total and the timer's rows, in call order (pure)."""
+    _prove(
+        len(rows) == questions * k,
+        f"the draw timer counted {len(rows)} draws, not {questions} x {k} (D-18)",
+    )
+    seconds = [float(r["seconds"]) for r in rows]
+    per_question = [seconds[q * k : (q + 1) * k] for q in range(questions)]
+    draw_sum = math.fsum(seconds)
+    fixed = total_seconds - draw_sum
+    _prove(fixed >= 0, f"the draws took {draw_sum} s, longer than the run's {total_seconds} s")
+    first = [q[: phase35_prereg.CURVE_K] for q in per_question]
+    at_cap = [s for s, r in zip(seconds, rows, strict=True) if r["at_cap"]]
+    return {
+        "total_seconds": total_seconds,
+        "draws": len(rows),
+        "draw_seconds_sum": draw_sum,
+        "fixed_seconds": fixed,
+        "k16_seconds": fixed + math.fsum(s for q in first for s in q),
+        "per_question_k16_seconds": [math.fsum(q) for q in first],
+        "per_question_k48_seconds": [math.fsum(q) for q in per_question],
+        "draw_seconds_spread": _spread(seconds),
+        "at_cap_draws": len(at_cap),
+        "at_cap_seconds_spread": _spread(at_cap) if at_cap else None,
+        "draw_seconds": seconds,
+        "draw_tokens": [int(r["tokens"]) for r in rows],
+    }
+
+
+def stage_e1(state):
+    """Two K = 48 runs of the pin on the published ablation; only time and counts survive."""
+    import phase14_recall  # torch at import: lazy
+    import phase19_erasure  # same
+
+    questions, k = e1_shape()
+    components = e1_components()
+    erased = _committed_json(ERASED_RECORD)["config"]["ablated_components"]
+    _prove(
+        [list(c) for c in components] == erased,
+        f"the components are not {ERASED_RECORD}'s config.ablated_components (D-03)",
+    )
+    prove_published_adapter()
+    device = phase25_run.device()
+    runs = []
+    for rep in (1, 2):
+        path = arm_record_path("e1", rep)
+        _prove(
+            not path.exists(),
+            f"{_rel(path)} exists: stale probe output from an interrupted run. Delete it, then "
+            "rerun",
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        state.update(stage=f"e1_rep{rep}", shape=None, draw_index=None)
+        try:
+            with DrawTimer() as timer, silenced():
+                started = time.monotonic()
+                phase19_erasure.run_erasure_arm(
+                    "erased", device, components=components, record_path=path
+                )
+                total = time.monotonic() - started
+        finally:
+            path.unlink(missing_ok=True)  # D-01 / D-18: the draws are discarded
+        runs.append(_e1_run(total, timer.rows, questions, k))
+    prove_published_adapter()
+    configuration = {
+        "arm": "erased",
+        "k": len(components),
+        "K": k,
+        "k16": phase35_prereg.CURVE_K,
+        "questions": questions,
+        "seed": phase14_recall.SEED,
+        "ordering": f"greedy (Phase 19 M1, {CURVE_RECORD} ordered_prefix)",
+        "target_slot": phase19_erasure.TARGET_SLOT,
+        "adapter_in_sha256": published_adapter_sha256(),
+        "components_sha256": hashlib.sha256(
+            json.dumps([list(c) for c in components]).encode("utf-8")
+        ).hexdigest(),
+        "e1_targets": len(phase35_prereg.e1_targets()),
+        "e1_teaching_seeds": len(phase35_prereg.e1_teaching_seeds()),
+    }
+    return {"configuration": configuration, "runs": runs, "reused": {"e1": False}}
+
+
+def _e1_stages(stages):
+    """The two runs unchanged (fixed costs stay separate, D-18) + R1b's K = 48 totals (D-04)."""
+    runs = stages["runs"]
+    _prove(len(runs) == 2, f"E1 holds {len(runs)} runs, not 2")
+    return {"runs": runs, "r1b_k48_totals": [r["total_seconds"] for r in runs]}, len(runs)
+
+
+STAGES["e1"] = stage_e1
+RECORD_BUILDERS["e1"] = _e1_stages
 
 
 # =================================================================================================
