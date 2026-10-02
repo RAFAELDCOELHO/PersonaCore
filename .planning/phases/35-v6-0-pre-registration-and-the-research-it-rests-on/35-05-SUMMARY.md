@@ -119,6 +119,32 @@ the orchestrator's contract had assumed it did):**
 - The dead-for-now refusal "a consumed corpus no record names" cannot fire while only one corpus is
   declared; it stays for when more are.
 
+## Code review rounds (after the first gate) and the final gate
+
+The execute-phase code-review gate found real defects in the module while it was still editable, so
+they were fixed before the freeze, each round shown to Rafael before the suite:
+
+| Round | Commit | Result |
+|-------|--------|--------|
+| Review | `b2684bc` | 1 blocker / 6 warnings / 5 info, all reproduced. CR-01: the (c) band used caller-typed numbers and never read `results/phase40_noise_floor.json` |
+| Fix 1 | `1e1e1c5` | Rafael: "Opção 2" (fix all), CR-01 in the floors pattern, S read from the budget record's `e2_seed_count` |
+| Re-review | `0fb5ad2` | 4 warnings (1 regression: mutable/forgeable `_Filled` grids) / 5 info, all reproduced |
+| Ruling | `14a7b7f` | Rafael on WR-04: "decisão (a). S é escolhido na Fase 36, dentro do registro de orçamento (e2_seed_count), e a Fase 40 só lê" — 35-CONTEXT addendum to D-15 |
+| Fix 2 | `3805beb` | Rafael: "Opção 1" + stopping rule: "só bloqueia o congelamento um achado que mude um valor lido ou um veredito emitido num fill real. Achado de endurecimento contra contorno deliberado vira limitação conhecida registrada no 35-REVIEW-FIX, sem novo commit no módulo." |
+| Short re-review | `bbcec95` | clean under the stopping rule: 0 blocking, 2 non-blocking notes, 9 known limitations recorded in `35-REVIEW-FIX.md` |
+
+New record contracts fixed by these rounds (Phases 36/40/41 must follow them):
+`results/phase36_budget.json` carries `e2_seed_count`; `results/phase40_noise_floor.json` carries
+`gap_noise_floor`; each `results/phase41_band_inputs_*.json` carries `seed`, `ordering`,
+`control_gap`; each `results/phase41_calibration_*.json` carries `ordering`, `seed`, `family`,
+`corpus`, `draws` (no `target`).
+
+**Final gate at `bbcec95`:** full suite **3487 passed, 4 skipped, 0 failed** (39:18, EXIT=0); skips
+equal the last green run's 4; the +9 over 7275ba1 is the phase test file growing 79 → 88. No v6.0
+record exists. `35-VALIDATION.md` re-signed on `bbcec95` at Rafael's request (commit `6cf5498`,
+whose message also names this SUMMARY: the SUMMARY edit was blocked by a hook and landed in the
+next commit).
+
 ## Obsidian
 
 Recorded by the orchestrator in `01-Projects/PersonaCore — memória em pesos.md` after this commit.
