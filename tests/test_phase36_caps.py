@@ -175,10 +175,8 @@ def test_prove_budget_shape_refuses(label):
 
 
 def test_committed_budget_refuses_an_untracked_record():
-    tracked = phase36_caps.tracked_files()
-    assert phase36_caps.BUDGET_RECORD not in tracked  # today: no budget until plan 08
-    with pytest.raises(SystemExit, match="results/phase36_budget.json"):
-        phase36_caps.committed_budget()
+    # State-independent since 36-08 committed the record: untracked is simulated by the listing.
+    tracked = [p for p in phase36_caps.tracked_files() if p != phase36_caps.BUDGET_RECORD]
     with pytest.raises(SystemExit, match="not TRACKED"):
         phase36_caps.committed_budget(tracked)
 
